@@ -58,4 +58,17 @@
  * }} SharePointClient
  */
 
+/**
+ * @typedef {{ verdict: 'pass' | 'fail' }} OutcomeResult
+ */
+
+/**
+ * Shape every Case Type module must satisfy.
+ *
+ * @typedef {{
+ *   questions: QuestionDefinition[],
+ *   computeOutcome: (answers: Record<string, Answer>) => OutcomeResult
+ * }} CaseTypeConfig
+ */
+
 export {};
