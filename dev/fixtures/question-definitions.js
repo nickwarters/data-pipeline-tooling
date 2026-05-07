@@ -27,7 +27,7 @@ export const questionDefinitions = [
     id: 'q-resolve',
     text: 'Was the issue resolved to the customer\'s satisfaction?',
     responseType: 'yes-no-na',
-    showWhen: { questionId: 'q-needs', equals: 'Yes' },
+    showWhen: { 'q-needs': { equals: 'Yes' } },
     failureCriteria: 'No',
     remediationActions: ['Escalate unresolved case to senior agent.'],
     deprecated: false,
