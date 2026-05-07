@@ -54,8 +54,13 @@
  *   patchCase: (id: string, fields: Partial<CaseRow>, etag: string) => Promise<PatchResult>,
  *   getQuestionDefinitions: (ids: string[]) => Promise<QuestionDefinition[]>,
  *   listCases: (filter: ListCasesFilter) => Promise<CaseRow[]>,
- *   getCurrentUserGroups: () => Promise<string[]>
+ *   getCurrentUserGroups: () => Promise<string[]>,
+ *   getCurrentUser: () => Promise<CurrentUser>
  * }} SharePointClient
+ */
+
+/**
+ * @typedef {{ id: string, displayName: string }} CurrentUser
  */
 
 /**

@@ -9,7 +9,7 @@ export class MockSharePointClient {
    * @param {{
    *   cases: CaseRow[],
    *   questionDefinitions: QuestionDefinition[],
-   *   personas: Record<string, { groups: string[] }>,
+   *   personas: Record<string, { groups: string[], userId?: string, displayName?: string }>,
    *   persona?: string
    * }} opts
    */
@@ -83,5 +83,14 @@ export class MockSharePointClient {
   /** @returns {Promise<string[]>} */
   async getCurrentUserGroups() {
     return this._personas[this._persona]?.groups ?? [];
+  }
+
+  /** @returns {Promise<import('./sharepoint-client.js').CurrentUser>} */
+  async getCurrentUser() {
+    const p = this._personas[this._persona];
+    return {
+      id: p?.userId ?? this._persona,
+      displayName: p?.displayName ?? this._persona,
+    };
   }
 }

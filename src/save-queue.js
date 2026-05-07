@@ -50,6 +50,15 @@ export class SaveQueue {
   }
 
   /**
+   * Returns the last committed ETag for a case, or '' if none loaded.
+   * @param {string} caseId
+   * @returns {string}
+   */
+  getEtag(caseId) {
+    return this._state[caseId]?.etag ?? '';
+  }
+
+  /**
    * Enqueue a field mutation. Resets the debounce timer for that field.
    * @param {string} caseId
    * @param {string} fieldName

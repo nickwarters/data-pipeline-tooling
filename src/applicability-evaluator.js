@@ -20,6 +20,21 @@ export function evaluate(catalogue, answers) {
 }
 
 /**
+ * Returns true if every applicable question has an Answer value.
+ *
+ * @param {QuestionDefinition[]} catalogue
+ * @param {Record<string, Answer>} answers
+ * @returns {boolean}
+ */
+export function allApplicableAnswered(catalogue, answers) {
+  const applicable = evaluate(catalogue, answers);
+  for (const id of applicable) {
+    if (!answers[id]?.value) return false;
+  }
+  return true;
+}
+
+/**
  * Returns true if the catalogue's showWhen graph contains a cycle.
  *
  * @param {QuestionDefinition[]} catalogue

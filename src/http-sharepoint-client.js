@@ -21,4 +21,7 @@ export class HttpSharePointClient {
 
   /** @returns {Promise<string[]>} */
   async getCurrentUserGroups() { throw new Error('HttpSharePointClient not yet implemented — see issue #10'); }
+
+  /** @returns {Promise<import('./sharepoint-client.js').CurrentUser>} */
+  async getCurrentUser() { throw new Error('HttpSharePointClient not yet implemented — see issue #10'); }
 }

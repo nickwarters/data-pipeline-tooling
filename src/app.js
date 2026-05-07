@@ -22,8 +22,48 @@ async function boot() {
     client = new HttpSharePointClient();
   }
 
-  // Router registration and view wiring — added in issue #9 (tracer bullet).
-  console.log('[RALPH] Case Review Framework booted', { mockMode, persona, client });
+  const { Router } = await import('./router.js');
+  const { SaveQueue } = await import('./save-queue.js');
+  await import('./cr-dashboard.js');
+  await import('./cr-case-review.js');
+
+  const saveQueue = new SaveQueue(client);
+  const router = new Router();
+  const currentUser = await client.getCurrentUser();
+
+  const appEl = /** @type {Element} */ (document.getElementById('app'));
+
+  router.register('#/', {
+    mount() { location.hash = '#/dashboard'; },
+    unmount() {},
+  });
+
+  router.register('#/dashboard', {
+    mount(container) {
+      const el = /** @type {import('./cr-dashboard.js').CRDashboard} */ (
+        document.createElement('cr-dashboard')
+      );
+      el.client = client;
+      el.currentUserId = currentUser.id;
+      container.replaceChildren(el);
+    },
+    unmount() {},
+  });
+
+  router.register('#/case/:id', {
+    mount(container, params) {
+      const el = /** @type {import('./cr-case-review.js').CRCaseReview} */ (
+        document.createElement('cr-case-review')
+      );
+      el.client = client;
+      el.saveQueue = saveQueue;
+      el.caseId = params.id;
+      container.replaceChildren(el);
+    },
+    unmount() {},
+  });
+
+  router.init(appEl);
 }
 
 boot().catch(err => console.error('[RALPH] Boot error:', err));

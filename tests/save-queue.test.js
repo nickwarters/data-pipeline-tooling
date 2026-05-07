@@ -58,6 +58,7 @@ function makeClient({ patchResponses = [], getCaseRow } = {}) {
     async getQuestionDefinitions() { return []; },
     async listCases() { return []; },
     async getCurrentUserGroups() { return []; },
+    async getCurrentUser() { return { id: 'user-test', displayName: 'Test User' }; },
   };
 }
 
