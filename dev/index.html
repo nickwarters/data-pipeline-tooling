@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Case Review — Dev Harness</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; }
+    #app { min-height: 200px; }
+  </style>
+</head>
+<body>
+  <!--
+    Dev harness for the Case Review Framework.
+    Add ?mock=1 to use MockSharePointClient seeded from dev/fixtures/.
+    Add ?asUser=reviewer (default) or ?asUser=owner to switch personas.
+
+    Serve this directory with any static file server — e.g.:
+      npx serve .
+    Then open: http://localhost:3000/dev/?mock=1
+  -->
+  <div id="app"></div>
+  <script type="module" src="../src/app.js"></script>
+</body>
+</html>
