@@ -1,0 +1,14 @@
+{
+  "name": "case-review-frontend-framework",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit --checkJs --allowJs",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.1",
+    "typescript": "^6.0.3"
+  }
+}
