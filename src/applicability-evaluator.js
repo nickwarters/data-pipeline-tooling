@@ -21,6 +21,7 @@ export function evaluate(catalogue, answers) {
 
 /**
  * Returns true if every applicable question has an Answer value.
+ * Multi-choice answers count as unanswered when the array is empty.
  *
  * @param {QuestionDefinition[]} catalogue
  * @param {Record<string, Answer>} answers
@@ -29,7 +30,8 @@ export function evaluate(catalogue, answers) {
 export function allApplicableAnswered(catalogue, answers) {
   const applicable = evaluate(catalogue, answers);
   for (const id of applicable) {
-    if (!answers[id]?.value) return false;
+    const v = answers[id]?.value;
+    if (Array.isArray(v) ? v.length === 0 : !v) return false;
   }
   return true;
 }
@@ -97,9 +99,16 @@ function evalCondition(cond, answers) {
  */
 function evalOp(op, answer) {
   const value = answer?.value ?? '';
-  if ('in' in op) return /** @type {string[]} */ (op['in']).includes(value);
+  if ('in' in op) {
+    const list = /** @type {string[]} */ (op['in']);
+    if (Array.isArray(value)) return value.some(v => list.includes(v));
+    return list.includes(value);
+  }
   if ('equals' in op) return value === op['equals'];
-  if ('answered' in op && op['answered'] === true) return value !== '';
+  if ('answered' in op && op['answered'] === true) {
+    if (Array.isArray(value)) return value.length > 0;
+    return value !== '';
+  }
   return false;
 }
 

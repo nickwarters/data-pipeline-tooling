@@ -111,7 +111,12 @@ test('allApplicableAnswered: returns true for empty catalogue', () => {
 });
 
 test('allApplicableAnswered: returns true when all non-conditional questions answered', () => {
-  const answers = { 'q-welcome': { value: 'Yes' }, 'q-needs': { value: 'No' } };
+  const answers = {
+    'q-welcome': { value: 'Yes' },
+    'q-needs': { value: 'No' },
+    'q-channel': { value: 'Phone' },
+    'q-products': { value: ['Billing'] },
+  };
   // q-resolve not applicable because q-needs !== Yes
   assert.equal(allApplicableAnswered(CATALOGUE, answers), true);
 });
@@ -131,11 +136,13 @@ test('allApplicableAnswered: conditional question unanswered → false when its 
   assert.equal(allApplicableAnswered(CATALOGUE, answers), false);
 });
 
-test('allApplicableAnswered: all three applicable questions answered → true', () => {
+test('allApplicableAnswered: all applicable questions answered → true', () => {
   const answers = {
     'q-welcome': { value: 'Yes' },
     'q-needs': { value: 'Yes' },
     'q-resolve': { value: 'Yes' },
+    'q-channel': { value: 'Phone' },
+    'q-products': { value: ['Billing'] },
   };
   assert.equal(allApplicableAnswered(CATALOGUE, answers), true);
 });

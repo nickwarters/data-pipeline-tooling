@@ -32,4 +32,18 @@ export const questionDefinitions = [
     remediationActions: ['Escalate unresolved case to senior agent.'],
     deprecated: false,
   },
+  {
+    id: 'q-channel',
+    text: 'Which channel was the customer using?',
+    responseType: 'single-choice',
+    options: ['Phone', 'Email', 'Chat'],
+    deprecated: false,
+  },
+  {
+    id: 'q-products',
+    text: 'Which products were discussed during the interaction?',
+    responseType: 'multi-choice',
+    options: ['Account', 'Billing', 'Support'],
+    deprecated: false,
+  },
 ];

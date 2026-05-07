@@ -16,12 +16,24 @@ function ans(value) {
 
 // --- catalogue shape ---
 
-test('hello-review: catalogue has exactly 3 questions', () => {
-  assert.strictEqual(config.questions.length, 3);
+test('hello-review: catalogue has exactly 5 questions', () => {
+  assert.strictEqual(config.questions.length, 5);
 });
 
-test('hello-review: all questions are yes-no-na type', () => {
-  assert.ok(config.questions.every(q => q.responseType === 'yes-no-na'));
+test('hello-review: catalogue covers all three response types', () => {
+  const types = new Set(config.questions.map(q => q.responseType));
+  assert.ok(types.has('yes-no-na'));
+  assert.ok(types.has('single-choice'));
+  assert.ok(types.has('multi-choice'));
+});
+
+test('hello-review: every choice question carries a non-empty options[]', () => {
+  for (const q of config.questions) {
+    if (q.responseType === 'single-choice' || q.responseType === 'multi-choice') {
+      assert.ok(Array.isArray(q.options) && q.options.length > 0,
+        `${q.id} (${q.responseType}) should have options[]`);
+    }
+  }
 });
 
 test('hello-review: exactly one question has a showWhen rule', () => {

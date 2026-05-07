@@ -97,7 +97,7 @@ export class CRCaseReview extends CRElement {
 
     section.addEventListener('cr-answer', (ev) => {
       const { questionId, value } =
-        /** @type {CustomEvent<{ questionId: string, value: string }>} */ (ev).detail;
+        /** @type {CustomEvent<{ questionId: string, value: string | string[] }>} */ (ev).detail;
       const newAnswers = { ...answersSignal.get(), [questionId]: { value } };
       answersSignal.set(newAnswers);
       saveQueue.enqueue(caseRow.id, 'answers', newAnswers);

@@ -18,7 +18,7 @@ function q(id, showWhen) {
 }
 
 /**
- * @param {string} value
+ * @param {string | string[]} value
  * @returns {Answer}
  */
 function ans(value) {
@@ -75,6 +75,26 @@ test('evaluate: showWhen in — excluded when answer is not in array', () => {
   assert.ok(!result.has('q2'));
 });
 
+// --- evaluate: in operator with multi-choice (array) answers ---
+
+test('evaluate: showWhen in — multi-choice answer with matching element → applicable', () => {
+  const catalogue = [q('q1'), q('q2', { q1: { in: ['Phone', 'Email'] } })];
+  const result = evaluate(catalogue, { q1: ans(['Chat', 'Email']) });
+  assert.ok(result.has('q2'));
+});
+
+test('evaluate: showWhen in — multi-choice answer with no matching element → not applicable', () => {
+  const catalogue = [q('q1'), q('q2', { q1: { in: ['Phone', 'Email'] } })];
+  const result = evaluate(catalogue, { q1: ans(['Chat', 'SMS']) });
+  assert.ok(!result.has('q2'));
+});
+
+test('evaluate: showWhen in — empty multi-choice array → not applicable', () => {
+  const catalogue = [q('q1'), q('q2', { q1: { in: ['Phone', 'Email'] } })];
+  const result = evaluate(catalogue, { q1: ans([]) });
+  assert.ok(!result.has('q2'));
+});
+
 // --- evaluate: answered operator ---
 
 test('evaluate: showWhen answered:true — included when question has any non-empty answer', () => {
@@ -93,6 +113,18 @@ test('evaluate: showWhen answered:true — excluded when answer value is empty s
   const catalogue = [q('q1'), q('q2', { q1: { answered: true } })];
   const result = evaluate(catalogue, { q1: ans('') });
   assert.ok(!result.has('q2'));
+});
+
+test('evaluate: showWhen answered:true — excluded when multi-choice value is empty array', () => {
+  const catalogue = [q('q1'), q('q2', { q1: { answered: true } })];
+  const result = evaluate(catalogue, { q1: ans([]) });
+  assert.ok(!result.has('q2'));
+});
+
+test('evaluate: showWhen answered:true — included when multi-choice value is non-empty array', () => {
+  const catalogue = [q('q1'), q('q2', { q1: { answered: true } })];
+  const result = evaluate(catalogue, { q1: ans(['Phone']) });
+  assert.ok(result.has('q2'));
 });
 
 // --- evaluate: $and composition ---

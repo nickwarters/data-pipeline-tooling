@@ -1,7 +1,10 @@
 // @ts-check
 
 /**
- * @typedef {{ value: string, justification?: string, remediationActions?: Array<{id: string, text: string, completed: boolean}> }} Answer
+ * The `value` is a string for `yes-no-na` and `single-choice` questions, and a
+ * string[] for `multi-choice` questions. Empty array == unanswered.
+ *
+ * @typedef {{ value: string | string[], justification?: string, remediationActions?: Array<{id: string, text: string, completed: boolean}> }} Answer
  */
 
 /**

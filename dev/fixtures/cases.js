@@ -51,6 +51,8 @@ export const cases = [
     answers: {
       'q-welcome': { value: 'Yes' },
       'q-needs': { value: 'No', justification: 'Agent jumped straight to resolution without confirming the issue.' },
+      'q-channel': { value: 'Phone' },
+      'q-products': { value: ['Billing'] },
     },
     conversation: [],
     notes: 'All applicable questions answered — ready to complete.',

@@ -35,7 +35,8 @@ export class CRQuestionList extends CRElement {
         document.createElement('cr-question')
       );
       el.question = q;
-      el.currentValue = this.answers[q.id]?.value ?? '';
+      const v = this.answers[q.id]?.value;
+      el.currentValue = v ?? (q.responseType === 'multi-choice' ? [] : '');
       return el;
     });
     this.replaceChildren(...elements);
