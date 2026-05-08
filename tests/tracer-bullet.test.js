@@ -256,8 +256,8 @@ test('CRCaseReview: complete button is hidden when not all applicable questions 
 
   await el.connectedCallback();
 
-  // children: header(0), statusEl(1), section(2), remediationSection(3), conversationEl(4), completeBtn(5)
-  const completeBtn = (/** @type {any} */ (el))._children[5];
+  // children: header(0), statusEl(1), section(2), remediationSection(3), conversationEl(4), notesEl(5), completeBtn(6)
+  const completeBtn = (/** @type {any} */ (el))._children[6];
   assert.equal(completeBtn.hidden, true);
 });
 
@@ -272,8 +272,8 @@ test('CRCaseReview: complete button is visible when all applicable questions ans
 
   await el.connectedCallback();
 
-  // children: header(0), statusEl(1), section(2), remediationSection(3), conversationEl(4), completeBtn(5)
-  const completeBtn = (/** @type {any} */ (el))._children[5];
+  // children: header(0), statusEl(1), section(2), remediationSection(3), conversationEl(4), notesEl(5), completeBtn(6)
+  const completeBtn = (/** @type {any} */ (el))._children[6];
   assert.equal(completeBtn.hidden, false);
 });
 
@@ -376,7 +376,7 @@ test('CRCaseReview: layout includes a cr-remediation-section', async () => {
   el.caseId = caseUntouched.id;
   await el.connectedCallback();
 
-  // children: header(0), statusEl(1), section(2), remediationSection(3), conversationEl(4), completeBtn(5)
+  // children: header(0), statusEl(1), section(2), remediationSection(3), conversationEl(4), notesEl(5), completeBtn(6)
   const remediationSection = (/** @type {any} */ (el))._children[3];
   assert.ok(remediationSection, 'remediation section should exist');
   // The stub's update method should have been called with catalogue + answers
@@ -393,11 +393,28 @@ test('CRCaseReview: layout includes a cr-conversation element with case messages
   el.caseId = cases[1].id;
   await el.connectedCallback();
 
-  // children: header(0), statusEl(1), section(2), remediationSection(3), conversationEl(4), completeBtn(5)
+  // children: header(0), statusEl(1), section(2), remediationSection(3), conversationEl(4), notesEl(5), completeBtn(6)
   const conversationEl = (/** @type {any} */ (el))._children[4];
   assert.ok(conversationEl, 'conversation element should exist');
   assert.ok(Array.isArray(conversationEl._messages), '_messages should be set');
   assert.equal(conversationEl._messages.length, 2);
+});
+
+test('CRCaseReview: layout includes a cr-notes element with case notes value', async () => {
+  const client = makeStubClient({ getRow: cases[2] }); // case-3 has a non-empty notes value
+  const saveQueue = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = cases[2].id;
+  await el.connectedCallback();
+
+  // children: header(0), statusEl(1), section(2), remediationSection(3), conversationEl(4), notesEl(5), completeBtn(6)
+  const notesEl = (/** @type {any} */ (el))._children[5];
+  assert.ok(notesEl, 'notes element should exist');
+  assert.equal(notesEl.notes, cases[2].notes);
+  assert.equal(notesEl.caseId, cases[2].id);
 });
 
 test('CRCaseReview: _completeCase navigates to #/dashboard on success', async () => {

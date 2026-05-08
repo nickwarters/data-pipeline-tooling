@@ -6,6 +6,7 @@ import { materializeRemediationActions } from './failure-evaluator.js';
 import './cr-question-list.js';
 import './cr-remediation-section.js';
 import './cr-conversation.js';
+import './cr-notes.js';
 
 /** @typedef {import('./sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('./sharepoint-client.js').CaseRow} CaseRow */
@@ -158,7 +159,14 @@ export class CRCaseReview extends CRElement {
     conversationEl.currentUser = currentUser;
     conversationEl._messages = caseRow.conversation.slice();
 
-    this.replaceChildren(header, statusEl, section, remediationSection, conversationEl, completeBtn);
+    const notesEl = /** @type {import('./cr-notes.js').CRNotes} */ (
+      document.createElement('cr-notes')
+    );
+    notesEl.notes = caseRow.notes;
+    notesEl.saveQueue = saveQueue;
+    notesEl.caseId = caseRow.id;
+
+    this.replaceChildren(header, statusEl, section, remediationSection, conversationEl, notesEl, completeBtn);
   }
 
   /**
