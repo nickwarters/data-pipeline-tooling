@@ -66,6 +66,7 @@ export class CRDashboard extends CRElement {
       allocationEl.client = this.client;
       allocationEl.currentUserId = this.currentUserId;
       allocationEl.eligibleCaseTypes = this.eligibleCaseTypes;
+      allocationEl.addEventListener('cr-allocated', () => this.connectedCallback());
       children.push(allocationEl);
     }
 

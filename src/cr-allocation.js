@@ -34,7 +34,7 @@ export class CRAllocation extends CRElement {
     for (const c of candidates) {
       const result = await this.client.patchCase(c.id, { assignedReviewer: this.currentUserId }, c.etag);
       if (result.ok) {
-        location.hash = `#/case/${c.id}`;
+        this.dispatchEvent(new CustomEvent('cr-allocated', { detail: { caseId: c.id }, bubbles: true }));
         return;
       }
       // 412 — another reviewer won the race; try the next candidate

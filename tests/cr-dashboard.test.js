@@ -142,3 +142,33 @@ test('CRDashboard: connectedCallback does nothing when client is null', async ()
   await el.connectedCallback();
   assert.equal((/** @type {any} */ (el))._children.length, 0);
 });
+
+test('CRDashboard: cr-allocation element listens for cr-allocated and re-fetches cases on allocation', async () => {
+  let fetchCount = 0;
+  const client = {
+    async listCases() {
+      fetchCount++;
+      return [];
+    },
+  };
+
+  const el = new CRDashboard();
+  el.client = /** @type {any} */ (client);
+  el.currentUserId = 'user-reviewer';
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [] };
+  el.eligibleCaseTypes = ['hello-review'];
+
+  await el.connectedCallback();
+  const initialFetchCount = fetchCount;
+
+  // Find the cr-allocation element and fire the cr-allocated event on it
+  const allocationEls = findAll(el, 'cr-allocation');
+  assert.equal(allocationEls.length, 1, 'should have allocation element');
+
+  const allocEvent = { type: 'cr-allocated', detail: { caseId: 'c-new' } };
+  for (const h of (/** @type {any} */ (allocationEls[0]))._listeners['cr-allocated'] ?? []) {
+    await h(allocEvent);
+  }
+
+  assert.ok(fetchCount > initialFetchCount, 'should re-fetch cases after cr-allocated event');
+});

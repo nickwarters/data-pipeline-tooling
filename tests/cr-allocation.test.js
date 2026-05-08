@@ -21,6 +21,10 @@ class StubEl {
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
   }
+  dispatchEvent(/** @type {any} */ e) {
+    (this._listeners[e.type] ?? []).forEach(h => h(e));
+    return true;
+  }
 }
 
 (/** @type {any} */ (globalThis)).HTMLElement = StubEl;
@@ -32,6 +36,16 @@ class StubEl {
 };
 (/** @type {any} */ (globalThis)).customElements = { define() {} };
 (/** @type {any} */ (globalThis)).location = { hash: '' };
+
+class StubCustomEvent {
+  /** @param {string} type @param {{ detail?: any, bubbles?: boolean }} [init] */
+  constructor(type, init) {
+    this.type = type;
+    this.detail = init?.detail ?? null;
+    this.bubbles = init?.bubbles ?? false;
+  }
+}
+(/** @type {any} */ (globalThis)).CustomEvent = StubCustomEvent;
 
 // ===== IMPORTS (after stubs) =====
 const { CRAllocation } = await import('../src/cr-allocation.js');
@@ -100,7 +114,7 @@ test('CRAllocation: connectedCallback renders "Request next Case" button', async
   assert.equal(btn.textContent, 'Request next Case');
 });
 
-test('CRAllocation: _requestNextCase assigns the oldest unassigned case and navigates to it', async () => {
+test('CRAllocation: _requestNextCase assigns the oldest unassigned case and dispatches cr-allocated', async () => {
   const older = unassignedCase('c-older', '2026-01-01T00:00:00Z');
   const newer = unassignedCase('c-newer', '2026-06-01T00:00:00Z');
   const client = makeClient([older, newer]);
@@ -110,16 +124,22 @@ test('CRAllocation: _requestNextCase assigns the oldest unassigned case and navi
   el.currentUserId = 'user-reviewer';
   el.eligibleCaseTypes = ['hello-review'];
 
+  /** @type {any[]} */
+  const dispatched = [];
+  el.addEventListener('cr-allocated', (e) => dispatched.push(e));
+
   (/** @type {any} */ (globalThis)).location.hash = '';
   await el._requestNextCase();
 
   assert.equal(client.patchCalls.length, 1, 'should patch exactly once');
   assert.equal(client.patchCalls[0].id, 'c-older', 'should assign the oldest case first');
   assert.deepEqual(client.patchCalls[0].fields, { assignedReviewer: 'user-reviewer' });
-  assert.equal((/** @type {any} */ (globalThis)).location.hash, '#/case/c-older');
+  assert.equal((/** @type {any} */ (globalThis)).location.hash, '', 'should not navigate away');
+  assert.equal(dispatched.length, 1, 'should dispatch cr-allocated');
+  assert.equal(dispatched[0].detail.caseId, 'c-older');
 });
 
-test('CRAllocation: _requestNextCase retries with next case on 412', async () => {
+test('CRAllocation: _requestNextCase retries with next case on 412 and dispatches cr-allocated for winner', async () => {
   const first = unassignedCase('c-first', '2026-01-01T00:00:00Z');
   const second = unassignedCase('c-second', '2026-06-01T00:00:00Z');
 
@@ -141,13 +161,19 @@ test('CRAllocation: _requestNextCase retries with next case on 412', async () =>
   el.currentUserId = 'user-reviewer';
   el.eligibleCaseTypes = ['hello-review'];
 
+  /** @type {any[]} */
+  const dispatched = [];
+  el.addEventListener('cr-allocated', (e) => dispatched.push(e));
+
   (/** @type {any} */ (globalThis)).location.hash = '';
   await el._requestNextCase();
 
   assert.equal(client.patchCalls.length, 2, 'should attempt two patches');
   assert.equal(client.patchCalls[0].id, 'c-first', 'first attempt is oldest case');
   assert.equal(client.patchCalls[1].id, 'c-second', 'second attempt is next case');
-  assert.equal((/** @type {any} */ (globalThis)).location.hash, '#/case/c-second');
+  assert.equal((/** @type {any} */ (globalThis)).location.hash, '', 'should not navigate away');
+  assert.equal(dispatched.length, 1, 'should dispatch cr-allocated once for the winner');
+  assert.equal(dispatched[0].detail.caseId, 'c-second');
 });
 
 test('CRAllocation: _requestNextCase shows "No Cases available" when no unassigned cases exist', async () => {
@@ -217,4 +243,25 @@ test('CRAllocation: patchCase is called with the correct etag', async () => {
   await el._requestNextCase();
 
   assert.equal(client.patchCalls[0].etag, 'specific-etag');
+});
+
+test('CRAllocation: _requestNextCase does not navigate and dispatches cr-allocated event with caseId', async () => {
+  const c = unassignedCase('c-nav', '2026-01-01T00:00:00Z');
+  const client = makeClient([c]);
+
+  const el = new CRAllocation();
+  el.client = /** @type {any} */ (client);
+  el.currentUserId = 'user-reviewer';
+  el.eligibleCaseTypes = ['hello-review'];
+
+  /** @type {any[]} */
+  const dispatched = [];
+  el.addEventListener('cr-allocated', (e) => dispatched.push(e));
+
+  (/** @type {any} */ (globalThis)).location.hash = '';
+  await el._requestNextCase();
+
+  assert.equal((/** @type {any} */ (globalThis)).location.hash, '', 'should NOT navigate away from dashboard');
+  assert.equal(dispatched.length, 1, 'should dispatch cr-allocated event once');
+  assert.equal(dispatched[0].detail.caseId, 'c-nav', 'event detail should carry the allocated case id');
 });
