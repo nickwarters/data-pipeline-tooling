@@ -423,6 +423,71 @@ test('CRCaseReview: changing a failed Answer to a passing value strips remediati
   assert.equal(saved['q-needs'].remediationActions, undefined);
 });
 
+test('CRCaseReview: hiding a conditional question clears its previous Answer', async () => {
+  const client = makeStubClient({ getRow: caseUntouched });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
+
+  /** @type {any[]} */
+  const enqueued = [];
+  const origEnqueue = saveQueue.enqueue.bind(saveQueue);
+  saveQueue.enqueue = (/** @type {string} */ id, /** @type {string} */ f, /** @type {unknown} */ v) => {
+    enqueued.push({ id, field: f, value: v });
+    return origEnqueue(id, f, v);
+  };
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = caseUntouched.id;
+  await el.connectedCallback();
+
+  const section = (/** @type {any} */ (el))._children[3];
+  const handler = section._listeners['cr-answer'][0];
+
+  // 1. q-needs = Yes → q-resolve becomes applicable
+  handler({ detail: { questionId: 'q-needs', value: 'Yes' } });
+  // 2. answer q-resolve = No
+  handler({ detail: { questionId: 'q-resolve', value: 'No' } });
+  // 3. q-needs = No → q-resolve hides; its answer must be cleared
+  handler({ detail: { questionId: 'q-needs', value: 'No' } });
+
+  const lastSaved = enqueued[enqueued.length - 1].value;
+  assert.equal(lastSaved['q-needs'].value, 'No');
+  assert.equal(lastSaved['q-resolve'], undefined,
+    'q-resolve answer should be cleared when its trigger no longer makes it applicable');
+});
+
+test('CRCaseReview: re-showing a conditional question after hide reveals it blank', async () => {
+  const client = makeStubClient({ getRow: caseUntouched });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
+
+  /** @type {any[]} */
+  const enqueued = [];
+  const origEnqueue = saveQueue.enqueue.bind(saveQueue);
+  saveQueue.enqueue = (/** @type {string} */ id, /** @type {string} */ f, /** @type {unknown} */ v) => {
+    enqueued.push({ id, field: f, value: v });
+    return origEnqueue(id, f, v);
+  };
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = caseUntouched.id;
+  await el.connectedCallback();
+
+  const section = (/** @type {any} */ (el))._children[3];
+  const handler = section._listeners['cr-answer'][0];
+
+  handler({ detail: { questionId: 'q-needs', value: 'Yes' } });
+  handler({ detail: { questionId: 'q-resolve', value: 'No' } });
+  handler({ detail: { questionId: 'q-needs', value: 'No' } });
+  handler({ detail: { questionId: 'q-needs', value: 'Yes' } });
+
+  const lastSaved = enqueued[enqueued.length - 1].value;
+  assert.equal(lastSaved['q-resolve'], undefined,
+    'q-resolve should remain blank after re-appearing');
+});
+
 test('CRCaseReview: layout includes a cr-remediation-section', async () => {
   const client = makeStubClient({ getRow: caseUntouched });
   const saveQueue = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });

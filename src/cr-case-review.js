@@ -125,7 +125,16 @@ export class CRCaseReview extends CRElement {
       const q = byId.get(questionId);
       const baseAnswer = { ...answersSignal.get()[questionId], value };
       const nextAnswer = q ? materializeRemediationActions(q, baseAnswer) : baseAnswer;
-      const newAnswers = { ...answersSignal.get(), [questionId]: nextAnswer };
+      const draft = { ...answersSignal.get(), [questionId]: nextAnswer };
+      // Drop answers for questions that are no longer applicable so a hidden
+      // conditional question does not retain its previously-selected value.
+      const stillApplicable = evaluate(catalogue, draft);
+      const newAnswers = /** @type {Record<string, Answer>} */ ({});
+      for (const [id, answer] of Object.entries(draft)) {
+        if (!byId.has(id) || stillApplicable.has(id)) {
+          newAnswers[id] = answer;
+        }
+      }
       answersSignal.set(newAnswers);
       saveQueue.enqueue(caseRow.id, 'answers', newAnswers);
     });
