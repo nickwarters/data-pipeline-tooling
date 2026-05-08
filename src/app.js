@@ -48,6 +48,9 @@ async function boot() {
   }
 
   const appEl = /** @type {Element} */ (document.getElementById('app'));
+  // Ensure the cr- CSS scope is active even when the host page doesn't set it
+  // (e.g. SharePoint Content Editor markup managed separately from this app).
+  appEl.setAttribute('data-cr-root', '');
 
   router.register('#/', {
     mount() { location.hash = '#/dashboard'; },

@@ -19,12 +19,26 @@ export class CRQuestion extends CRElement {
     this._render();
   }
 
+  /**
+   * Forwards programmatic focus to the first input so screen-reader users land
+   * inside the radio group when a conditional question appears.
+   */
+  focus() {
+    const input = /** @type {HTMLElement | null} */ (
+      /** @type {any} */ (this).querySelector?.('input')
+    );
+    if (input) input.focus();
+  }
+
   _render() {
     const q = this.question;
     if (!q) return;
 
     const fieldset = document.createElement('fieldset');
     fieldset.className = 'cr-question';
+    fieldset.id = `cr-q-${q.id}`;
+    fieldset.setAttribute('role', q.responseType === 'multi-choice' ? 'group' : 'radiogroup');
+    fieldset.setAttribute('aria-required', 'true');
 
     const legend = document.createElement('legend');
     legend.textContent = q.text;

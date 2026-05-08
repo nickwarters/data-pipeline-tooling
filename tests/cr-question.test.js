@@ -26,6 +26,8 @@ class StubEl {
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
   }
+  setAttribute(/** @type {string} */ k, /** @type {string} */ v) { (/** @type {any} */ (this))._attrs ??= {}; (/** @type {any} */ (this))._attrs[k] = v; }
+  getAttribute(/** @type {string} */ k) { return (/** @type {any} */ (this))._attrs?.[k] ?? null; }
   /** @param {{ detail?: unknown, bubbles?: boolean }} ev */
   dispatchEvent(ev) {
     /** @type {any} */ (this)._lastDispatched = ev;

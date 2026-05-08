@@ -1,0 +1,402 @@
+/*
+ * Case Review framework styles.
+ * All selectors are scoped under [data-cr-root] so they cannot leak into
+ * surrounding SharePoint chrome (ADR-0003: light DOM + cr- prefix).
+ *
+ * Tokens are declared once on the root and referenced by every component.
+ */
+
+[data-cr-root] {
+  /* Colour palette */
+  --cr-color-bg: #ffffff;
+  --cr-color-surface: #f6f7f9;
+  --cr-color-border: #d8dde2;
+  --cr-color-text: #1f2328;
+  --cr-color-muted: #5f6873;
+  --cr-color-accent: #0a5fbe;
+  --cr-color-accent-hover: #084da0;
+  --cr-color-success: #1a7f37;
+  --cr-color-warning: #9a6700;
+  --cr-color-danger: #b42318;
+  --cr-color-conflict-bg: #fff4f2;
+  --cr-color-reconnecting-bg: #fff8e1;
+
+  /* Spacing scale (4-pt rhythm) */
+  --cr-space-1: 0.25rem;
+  --cr-space-2: 0.5rem;
+  --cr-space-3: 0.75rem;
+  --cr-space-4: 1rem;
+  --cr-space-5: 1.5rem;
+  --cr-space-6: 2rem;
+  --cr-space-7: 3rem;
+
+  /* Typography */
+  --cr-font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --cr-font-size-sm: 0.875rem;
+  --cr-font-size-base: 1rem;
+  --cr-font-size-lg: 1.25rem;
+  --cr-font-size-xl: 1.75rem;
+  --cr-line-height: 1.5;
+
+  /* Layout */
+  --cr-radius: 6px;
+  --cr-radius-sm: 4px;
+  --cr-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --cr-content-max-width: 64rem;
+
+  /* Focus ring */
+  --cr-focus-outline: 2px solid var(--cr-color-accent);
+  --cr-focus-offset: 2px;
+
+  font-family: var(--cr-font-family);
+  font-size: var(--cr-font-size-base);
+  line-height: var(--cr-line-height);
+  color: var(--cr-color-text);
+  background: var(--cr-color-bg);
+}
+
+/* Scoped reset — :where() keeps specificity at zero so component rules below
+   don't have to fight a high-specificity reset. */
+:where([data-cr-root]) *,
+:where([data-cr-root]) *::before,
+:where([data-cr-root]) *::after {
+  box-sizing: border-box;
+}
+
+:where([data-cr-root]) :focus-visible {
+  outline: var(--cr-focus-outline);
+  outline-offset: var(--cr-focus-offset);
+}
+
+/* Layout shell */
+[data-cr-root] {
+  max-width: var(--cr-content-max-width);
+  margin: 0 auto;
+  padding: var(--cr-space-5) var(--cr-space-4);
+}
+
+[data-cr-root] h1 {
+  font-size: var(--cr-font-size-xl);
+  margin: 0 0 var(--cr-space-3);
+}
+
+[data-cr-root] h2 {
+  font-size: var(--cr-font-size-lg);
+  margin: var(--cr-space-6) 0 var(--cr-space-3);
+}
+
+[data-cr-root] h3 {
+  font-size: var(--cr-font-size-base);
+  margin: 0 0 var(--cr-space-2);
+}
+
+[data-cr-root] p {
+  margin: 0 0 var(--cr-space-3);
+}
+
+[data-cr-root] button {
+  font: inherit;
+  color: var(--cr-color-bg);
+  background: var(--cr-color-accent);
+  border: 1px solid var(--cr-color-accent);
+  border-radius: var(--cr-radius-sm);
+  padding: var(--cr-space-2) var(--cr-space-4);
+  cursor: pointer;
+}
+
+[data-cr-root] button:hover {
+  background: var(--cr-color-accent-hover);
+  border-color: var(--cr-color-accent-hover);
+}
+
+[data-cr-root] button[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+[data-cr-root] a {
+  color: var(--cr-color-accent);
+  text-decoration: none;
+}
+
+[data-cr-root] a:hover {
+  text-decoration: underline;
+}
+
+/* Save status */
+.cr-save-status {
+  font-size: var(--cr-font-size-sm);
+  color: var(--cr-color-muted);
+  margin: 0 0 var(--cr-space-3);
+}
+
+/* Banner — reconnecting & conflict surfaces */
+.cr-banner {
+  border-radius: var(--cr-radius);
+  padding: var(--cr-space-3) var(--cr-space-4);
+  margin: 0 0 var(--cr-space-4);
+  font-size: var(--cr-font-size-sm);
+  border: 1px solid var(--cr-color-border);
+}
+
+.cr-banner-saving,
+.cr-banner-reconnecting {
+  background: var(--cr-color-reconnecting-bg);
+  color: var(--cr-color-warning);
+}
+
+.cr-banner-conflict {
+  background: var(--cr-color-conflict-bg);
+  color: var(--cr-color-danger);
+  border-color: var(--cr-color-danger);
+  display: flex;
+  align-items: center;
+  gap: var(--cr-space-3);
+  font-size: var(--cr-font-size-base);
+  font-weight: 500;
+}
+
+.cr-banner-text {
+  margin: 0;
+  flex: 1;
+}
+
+.cr-banner-reload {
+  background: var(--cr-color-danger);
+  border-color: var(--cr-color-danger);
+}
+
+.cr-banner-reload:hover {
+  background: #8d1810;
+  border-color: #8d1810;
+}
+
+/* Dashboard */
+.cr-case-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--cr-space-5);
+  display: grid;
+  gap: var(--cr-space-2);
+}
+
+.cr-case-row {
+  background: var(--cr-color-surface);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius);
+  padding: var(--cr-space-3) var(--cr-space-4);
+  box-shadow: var(--cr-shadow-card);
+}
+
+.cr-allocation-btn {
+  margin-top: var(--cr-space-3);
+}
+
+.cr-allocation-empty {
+  color: var(--cr-color-muted);
+  font-style: italic;
+}
+
+/* Owner summary cards */
+.cr-owner-summary-heading {
+  margin-top: var(--cr-space-7);
+}
+
+.cr-owner-card {
+  background: var(--cr-color-surface);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius);
+  padding: var(--cr-space-4);
+  margin-bottom: var(--cr-space-3);
+  box-shadow: var(--cr-shadow-card);
+}
+
+.cr-owner-card-title {
+  margin-top: 0;
+}
+
+.cr-owner-stats {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--cr-space-1) var(--cr-space-4);
+  margin: 0;
+}
+
+.cr-owner-stats dt {
+  color: var(--cr-color-muted);
+}
+
+.cr-owner-stats dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+}
+
+.cr-owner-overdue {
+  color: var(--cr-color-danger);
+}
+
+/* Question list */
+.cr-question {
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius);
+  padding: var(--cr-space-3) var(--cr-space-4);
+  margin: 0 0 var(--cr-space-3);
+}
+
+.cr-question legend {
+  font-weight: 600;
+  padding: 0 var(--cr-space-2);
+}
+
+.cr-question label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cr-space-1);
+  margin-right: var(--cr-space-4);
+  cursor: pointer;
+}
+
+/* Remediation panels & section */
+.cr-remediation-panel {
+  margin-top: var(--cr-space-3);
+  padding: var(--cr-space-2) var(--cr-space-3);
+  background: var(--cr-color-conflict-bg);
+  border-left: 3px solid var(--cr-color-danger);
+  border-radius: var(--cr-radius-sm);
+}
+
+.cr-remediation-panel summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--cr-color-danger);
+}
+
+.cr-remediation-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--cr-space-3);
+}
+
+.cr-remediation-item {
+  background: var(--cr-color-surface);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius);
+  padding: var(--cr-space-3) var(--cr-space-4);
+}
+
+.cr-remediation-category {
+  font-size: var(--cr-font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--cr-color-muted);
+  margin: 0 0 var(--cr-space-1);
+}
+
+.cr-remediation-question {
+  font-weight: 500;
+  margin: 0 0 var(--cr-space-1);
+}
+
+.cr-remediation-answer {
+  color: var(--cr-color-danger);
+  margin: 0 0 var(--cr-space-2);
+}
+
+.cr-remediation-actions {
+  margin: 0;
+  padding-left: var(--cr-space-5);
+}
+
+.cr-remediation-empty {
+  color: var(--cr-color-muted);
+  font-style: italic;
+}
+
+/* Conversation */
+.cr-conversation-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--cr-space-3);
+  display: grid;
+  gap: var(--cr-space-2);
+}
+
+.cr-conversation-message {
+  background: var(--cr-color-surface);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius);
+  padding: var(--cr-space-3);
+}
+
+.cr-message-author {
+  font-weight: 600;
+  margin: 0;
+}
+
+.cr-message-timestamp {
+  font-size: var(--cr-font-size-sm);
+  color: var(--cr-color-muted);
+  margin: 0 0 var(--cr-space-2);
+}
+
+.cr-message-body {
+  margin: 0;
+}
+
+.cr-conversation-empty {
+  color: var(--cr-color-muted);
+  font-style: italic;
+}
+
+.cr-conversation-compose {
+  display: grid;
+  gap: var(--cr-space-2);
+}
+
+.cr-conversation-input,
+.cr-notes-input {
+  font: inherit;
+  width: 100%;
+  min-height: 5rem;
+  padding: var(--cr-space-2) var(--cr-space-3);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-sm);
+  background: var(--cr-color-bg);
+  color: inherit;
+  resize: vertical;
+}
+
+.cr-conversation-send {
+  justify-self: start;
+}
+
+/* Outcome */
+.cr-outcome-pass {
+  color: var(--cr-color-success);
+  font-weight: 600;
+}
+
+.cr-outcome-fail {
+  color: var(--cr-color-danger);
+  font-weight: 600;
+}
+
+.cr-outcome-indeterminate {
+  color: var(--cr-color-muted);
+  font-style: italic;
+}
+
+/* Complete button */
+.cr-complete-btn {
+  margin-top: var(--cr-space-5);
+  background: var(--cr-color-success);
+  border-color: var(--cr-color-success);
+}
+
+.cr-complete-btn:hover {
+  background: #155f29;
+  border-color: #155f29;
+}

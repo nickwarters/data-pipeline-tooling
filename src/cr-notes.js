@@ -22,6 +22,7 @@ export class CRNotes extends CRElement {
     /** @type {any} */ (textarea).className = 'cr-notes-input';
     /** @type {any} */ (textarea).placeholder = 'Add notes…';
     /** @type {any} */ (textarea).value = this.notes;
+    /** @type {any} */ (textarea).setAttribute?.('aria-label', 'Case notes');
 
     textarea.addEventListener('input', (ev) => {
       if (!this.saveQueue || !this.caseId) return;

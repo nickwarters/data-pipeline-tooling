@@ -4,10 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Case Review — Dev Harness</title>
-  <style>
-    body { font-family: system-ui, sans-serif; margin: 2rem; }
-    #app { min-height: 200px; }
-  </style>
+  <link rel="stylesheet" href="../src/cr-styles.css">
 </head>
 <body>
   <!--
@@ -19,7 +16,7 @@
       npx serve .
     Then open: http://localhost:3000/dev/?mock=1
   -->
-  <div id="app"></div>
+  <div id="app" data-cr-root></div>
   <script type="module" src="../src/app.js"></script>
 </body>
 </html>

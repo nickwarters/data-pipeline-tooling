@@ -8,6 +8,7 @@ import './cr-remediation-section.js';
 import './cr-conversation.js';
 import './cr-notes.js';
 import './cr-outcome.js';
+import './cr-status-banner.js';
 
 /** @typedef {import('./sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('./sharepoint-client.js').CaseRow} CaseRow */
@@ -96,9 +97,16 @@ export class CRCaseReview extends CRElement {
 
     const statusEl = document.createElement('p');
     statusEl.className = 'cr-save-status';
+    statusEl.setAttribute('role', 'status');
+    statusEl.setAttribute('aria-live', 'polite');
     this.subscribe(saveQueue.status, status => {
       statusEl.textContent = STATUS_LABELS[status] ?? status;
     });
+
+    const bannerEl = /** @type {import('./cr-status-banner.js').CRStatusBanner} */ (
+      document.createElement('cr-status-banner')
+    );
+    bannerEl.saveQueue = saveQueue;
 
     const section = document.createElement('section');
     const h2 = document.createElement('h2');
@@ -174,7 +182,7 @@ export class CRCaseReview extends CRElement {
     notesEl.saveQueue = saveQueue;
     notesEl.caseId = caseRow.id;
 
-    this.replaceChildren(header, statusEl, section, remediationSection, outcomeEl, conversationEl, notesEl, completeBtn);
+    this.replaceChildren(bannerEl, header, statusEl, section, remediationSection, outcomeEl, conversationEl, notesEl, completeBtn);
   }
 
   /**
