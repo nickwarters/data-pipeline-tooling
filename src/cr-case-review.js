@@ -5,11 +5,13 @@ import { evaluate } from './applicability-evaluator.js';
 import { materializeRemediationActions } from './failure-evaluator.js';
 import './cr-question-list.js';
 import './cr-remediation-section.js';
+import './cr-conversation.js';
 
 /** @typedef {import('./sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('./sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('./sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('./sharepoint-client.js').Answer} Answer */
+/** @typedef {import('./sharepoint-client.js').CurrentUser} CurrentUser */
 /** @typedef {import('./save-queue.js').SaveQueue} SaveQueue */
 /** @typedef {import('./save-queue.js').SaveStatus} SaveStatus */
 
@@ -36,7 +38,11 @@ export class CRCaseReview extends CRElement {
     const { client, saveQueue, caseId } = this;
     if (!client || !saveQueue || !caseId) return;
 
-    const caseRow = await client.getCase(caseId);
+    const [caseRow, currentUser] = await Promise.all([
+      client.getCase(caseId),
+      client.getCurrentUser(),
+    ]);
+
     if (!caseRow) {
       const p = document.createElement('p');
       p.textContent = 'Case not found.';
@@ -64,7 +70,7 @@ export class CRCaseReview extends CRElement {
       return applicableQuestions.get().every(q => !!answers[q.id]?.value);
     });
 
-    this._buildLayout(caseRow, catalogue, client, saveQueue, answersSignal, applicableQuestions, allAnswered);
+    this._buildLayout(caseRow, catalogue, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser);
   }
 
   /**
@@ -75,8 +81,9 @@ export class CRCaseReview extends CRElement {
    * @param {{ get: () => Record<string, Answer>, set: (v: Record<string, Answer>) => void }} answersSignal
    * @param {{ get: () => QuestionDefinition[] }} applicableQuestions
    * @param {{ get: () => boolean }} allAnswered
+   * @param {CurrentUser} currentUser
    */
-  _buildLayout(caseRow, catalogue, client, saveQueue, answersSignal, applicableQuestions, allAnswered) {
+  _buildLayout(caseRow, catalogue, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser) {
     const header = document.createElement('header');
     const h1 = document.createElement('h1');
     h1.textContent = caseRow.title;
@@ -142,7 +149,16 @@ export class CRCaseReview extends CRElement {
       completeBtn.disabled = false;
     });
 
-    this.replaceChildren(header, statusEl, section, remediationSection, completeBtn);
+    const conversationEl = /** @type {import('./cr-conversation.js').CRConversation} */ (
+      document.createElement('cr-conversation')
+    );
+    conversationEl.client = client;
+    conversationEl.saveQueue = saveQueue;
+    conversationEl.caseId = caseRow.id;
+    conversationEl.currentUser = currentUser;
+    conversationEl._messages = caseRow.conversation.slice();
+
+    this.replaceChildren(header, statusEl, section, remediationSection, conversationEl, completeBtn);
   }
 
   /**
