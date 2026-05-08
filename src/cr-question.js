@@ -1,5 +1,6 @@
 // @ts-check
 import { CRElement } from './cr-element.js';
+import { isFailure } from './failure-evaluator.js';
 
 /** @typedef {import('./sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 
@@ -37,7 +38,41 @@ export class CRQuestion extends CRElement {
       this._renderSingleChoice(fieldset, q, options);
     }
 
-    this.replaceChildren(fieldset);
+    /** @type {HTMLElement[]} */
+    const children = [fieldset];
+    const panel = this._renderRemediationPanel(q);
+    if (panel) children.push(panel);
+    this.replaceChildren(...children);
+  }
+
+  /**
+   * Renders an "Actions required" panel below the question when the current
+   * answer is a failure and the question has remediationActions defined.
+   * Returns null if no panel should be shown.
+   * @param {QuestionDefinition} q
+   * @returns {HTMLElement | null}
+   */
+  _renderRemediationPanel(q) {
+    if (!q.remediationActions?.length) return null;
+    const answer = { value: this.currentValue };
+    if (!isFailure(q, answer)) return null;
+
+    const panel = document.createElement('details');
+    panel.className = 'cr-remediation-panel';
+    /** @type {any} */ (panel).open = true;
+
+    const summary = document.createElement('summary');
+    summary.textContent = 'Actions required';
+    panel.appendChild(summary);
+
+    const ul = document.createElement('ul');
+    for (const text of q.remediationActions) {
+      const li = document.createElement('li');
+      li.textContent = text;
+      ul.appendChild(li);
+    }
+    panel.appendChild(ul);
+    return panel;
   }
 
   /**

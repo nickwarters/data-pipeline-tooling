@@ -16,6 +16,9 @@ class StubEl {
     this.name = '';
     this.value = '';
     this.checked = false;
+    /** @type {string} */
+    this._tagName = '';
+    this.open = false;
   }
   replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
   appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
@@ -44,8 +47,12 @@ class StubCustomEvent {
 
 (/** @type {any} */ (globalThis)).HTMLElement = StubEl;
 (/** @type {any} */ (globalThis)).document = {
-  /** @param {string} _tag @returns {StubEl} */
-  createElement(_tag) { return new StubEl(); },
+  /** @param {string} tag @returns {StubEl} */
+  createElement(tag) {
+    const el = new StubEl();
+    el._tagName = tag;
+    return el;
+  },
 };
 (/** @type {any} */ (globalThis)).customElements = { define() {} };
 (/** @type {any} */ (globalThis)).CustomEvent = StubCustomEvent;
@@ -259,6 +266,122 @@ test('CRQuestion: multi-choice deselecting an option removes it from the array',
 
   const ev = (/** @type {any} */ (el))._lastDispatched;
   assert.deepEqual(ev.detail, { questionId: 'q-chan', value: ['Phone'] });
+});
+
+// ===== Remediation Actions panel =====
+
+/**
+ * Walks a stub tree and returns the first descendant element with the given className.
+ * @param {any} root
+ * @param {string} cls
+ * @returns {any}
+ */
+function findByClass(root, cls) {
+  for (const c of root._children ?? []) {
+    if (c.className === cls) return c;
+    const nested = findByClass(c, cls);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+test('CRQuestion: failed yes-no-na answer with remediationActions renders Actions required panel', () => {
+  /** @type {QuestionDefinition} */
+  const qd = {
+    id: 'q-needs',
+    text: 'Needs identified?',
+    responseType: 'yes-no-na',
+    failureCriteria: 'No',
+    remediationActions: ['Retrain agent.', 'Update script.'],
+    deprecated: false,
+  };
+  const el = new CRQuestion();
+  el.question = qd;
+  el.currentValue = 'No';
+  el.connectedCallback();
+
+  const panel = findByClass(el, 'cr-remediation-panel');
+  assert.ok(panel, 'panel should be rendered');
+  // panel has [summary, ul]; ul has one li per action
+  const ul = panel._children.find((/** @type {any} */ c) => c._tagName === 'ul');
+  assert.equal(ul._children.length, 2);
+  assert.deepEqual(ul._children.map((/** @type {any} */ li) => li.textContent), [
+    'Retrain agent.',
+    'Update script.',
+  ]);
+});
+
+test('CRQuestion: passing answer does not render Actions required panel', () => {
+  /** @type {QuestionDefinition} */
+  const qd = {
+    id: 'q-needs',
+    text: 'Needs identified?',
+    responseType: 'yes-no-na',
+    failureCriteria: 'No',
+    remediationActions: ['Retrain agent.'],
+    deprecated: false,
+  };
+  const el = new CRQuestion();
+  el.question = qd;
+  el.currentValue = 'Yes';
+  el.connectedCallback();
+
+  assert.equal(findByClass(el, 'cr-remediation-panel'), null);
+});
+
+test('CRQuestion: failed answer without remediationActions renders no panel', () => {
+  /** @type {QuestionDefinition} */
+  const qd = {
+    id: 'q-welcome',
+    text: 'Greeted professionally?',
+    responseType: 'yes-no-na',
+    failureCriteria: 'No',
+    deprecated: false,
+  };
+  const el = new CRQuestion();
+  el.question = qd;
+  el.currentValue = 'No';
+  el.connectedCallback();
+
+  assert.equal(findByClass(el, 'cr-remediation-panel'), null);
+});
+
+test('CRQuestion: multi-choice answer including failureCriteria renders panel', () => {
+  /** @type {QuestionDefinition} */
+  const qd = {
+    id: 'q-products',
+    text: 'Products discussed?',
+    responseType: 'multi-choice',
+    options: ['Account', 'Billing', 'Support'],
+    failureCriteria: 'Billing',
+    remediationActions: ['Refer to billing team.'],
+    deprecated: false,
+  };
+  const el = new CRQuestion();
+  el.question = qd;
+  el.currentValue = ['Account', 'Billing'];
+  el.connectedCallback();
+
+  assert.ok(findByClass(el, 'cr-remediation-panel'));
+});
+
+test('CRQuestion: multi-choice answer not including failureCriteria does not render panel', () => {
+  /** @type {QuestionDefinition} */
+  const qd = {
+    id: 'q-products',
+    text: 'Products discussed?',
+    responseType: 'multi-choice',
+    options: ['Account', 'Billing', 'Support'],
+    failureCriteria: 'Billing',
+    remediationActions: ['Refer to billing team.'],
+    deprecated: false,
+  };
+  const el = new CRQuestion();
+  el.question = qd;
+  el.currentValue = ['Account', 'Support'];
+  el.connectedCallback();
+
+  assert.equal(findByClass(el, 'cr-remediation-panel'), null);
 });
 
 test('CRQuestion: multi-choice deselecting last option dispatches empty array', () => {

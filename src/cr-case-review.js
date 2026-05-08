@@ -2,7 +2,9 @@
 import { CRElement } from './cr-element.js';
 import { signal, computed } from './signal.js';
 import { evaluate } from './applicability-evaluator.js';
+import { materializeRemediationActions } from './failure-evaluator.js';
 import './cr-question-list.js';
+import './cr-remediation-section.js';
 
 /** @typedef {import('./sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('./sharepoint-client.js').CaseRow} CaseRow */
@@ -62,18 +64,19 @@ export class CRCaseReview extends CRElement {
       return applicableQuestions.get().every(q => !!answers[q.id]?.value);
     });
 
-    this._buildLayout(caseRow, client, saveQueue, answersSignal, applicableQuestions, allAnswered);
+    this._buildLayout(caseRow, catalogue, client, saveQueue, answersSignal, applicableQuestions, allAnswered);
   }
 
   /**
    * @param {CaseRow} caseRow
+   * @param {QuestionDefinition[]} catalogue
    * @param {SharePointClient} client
    * @param {SaveQueue} saveQueue
    * @param {{ get: () => Record<string, Answer>, set: (v: Record<string, Answer>) => void }} answersSignal
    * @param {{ get: () => QuestionDefinition[] }} applicableQuestions
    * @param {{ get: () => boolean }} allAnswered
    */
-  _buildLayout(caseRow, client, saveQueue, answersSignal, applicableQuestions, allAnswered) {
+  _buildLayout(caseRow, catalogue, client, saveQueue, answersSignal, applicableQuestions, allAnswered) {
     const header = document.createElement('header');
     const h1 = document.createElement('h1');
     h1.textContent = caseRow.title;
@@ -95,13 +98,23 @@ export class CRCaseReview extends CRElement {
     );
     section.append(h2, qList);
 
+    /** @type {Map<string, QuestionDefinition>} */
+    const byId = new Map(catalogue.map(q => [q.id, q]));
+
     section.addEventListener('cr-answer', (ev) => {
       const { questionId, value } =
         /** @type {CustomEvent<{ questionId: string, value: string | string[] }>} */ (ev).detail;
-      const newAnswers = { ...answersSignal.get(), [questionId]: { value } };
+      const q = byId.get(questionId);
+      const baseAnswer = { ...answersSignal.get()[questionId], value };
+      const nextAnswer = q ? materializeRemediationActions(q, baseAnswer) : baseAnswer;
+      const newAnswers = { ...answersSignal.get(), [questionId]: nextAnswer };
       answersSignal.set(newAnswers);
       saveQueue.enqueue(caseRow.id, 'answers', newAnswers);
     });
+
+    const remediationSection = /** @type {import('./cr-remediation-section.js').CRRemediationSection} */ (
+      document.createElement('cr-remediation-section')
+    );
 
     // viewState combines applicability + answers so the subscribe fires once per state change.
     const viewState = computed(() => ({
@@ -110,6 +123,7 @@ export class CRCaseReview extends CRElement {
     }));
     this.subscribe(viewState, ({ questions, answers }) => {
       qList.update(questions, answers);
+      remediationSection.update(catalogue, answers);
     });
 
     const completeBtn = document.createElement('button');
@@ -128,7 +142,7 @@ export class CRCaseReview extends CRElement {
       completeBtn.disabled = false;
     });
 
-    this.replaceChildren(header, statusEl, section, completeBtn);
+    this.replaceChildren(header, statusEl, section, remediationSection, completeBtn);
   }
 
   /**

@@ -253,7 +253,7 @@ test('CRCaseReview: complete button is hidden when not all applicable questions 
 
   await el.connectedCallback();
 
-  const completeBtn = (/** @type {any} */ (el))._children[3];
+  const completeBtn = (/** @type {any} */ (el))._children[4];
   assert.equal(completeBtn.hidden, true);
 });
 
@@ -268,7 +268,7 @@ test('CRCaseReview: complete button is visible when all applicable questions ans
 
   await el.connectedCallback();
 
-  const completeBtn = (/** @type {any} */ (el))._children[3];
+  const completeBtn = (/** @type {any} */ (el))._children[4];
   assert.equal(completeBtn.hidden, false);
 });
 
@@ -291,6 +291,91 @@ test('CRCaseReview: _completeCase patches status:Completed with completedAt usin
   assert.ok(typeof client.patchCalls[0].fields.completedAt === 'string',
     'completedAt should be an ISO string');
   assert.equal(client.patchCalls[0].etag, caseCompletable.etag);
+});
+
+test('CRCaseReview: cr-answer with failing value materializes remediationActions into the saved Answer', async () => {
+  const client = makeStubClient({ getRow: caseUntouched });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
+
+  /** @type {{ id: string, fields: any }[]} */
+  const enqueued = [];
+  const origEnqueue = saveQueue.enqueue.bind(saveQueue);
+  saveQueue.enqueue = (/** @type {string} */ id, /** @type {string} */ field, /** @type {unknown} */ val) => {
+    enqueued.push({ id, fields: { [field]: val } });
+    return origEnqueue(id, field, val);
+  };
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = caseUntouched.id;
+  await el.connectedCallback();
+
+  // Find the section element and dispatch a cr-answer for q-needs = No (a failure with remediationActions)
+  const section = (/** @type {any} */ (el))._children[2];
+  const handler = section._listeners['cr-answer'][0];
+  handler({ detail: { questionId: 'q-needs', value: 'No' } });
+
+  assert.equal(enqueued.length, 1);
+  const saved = enqueued[0].fields.answers;
+  assert.equal(saved['q-needs'].value, 'No');
+  assert.ok(Array.isArray(saved['q-needs'].remediationActions), 'remediationActions should be materialized');
+  assert.equal(saved['q-needs'].remediationActions.length, 1);
+  assert.equal(saved['q-needs'].remediationActions[0].text, 'Retrain agent on needs-identification protocol.');
+  assert.equal(saved['q-needs'].remediationActions[0].completed, false);
+});
+
+test('CRCaseReview: changing a failed Answer to a passing value strips remediationActions', async () => {
+  const failed = /** @type {CaseRow} */ ({
+    ...caseUntouched,
+    answers: {
+      'q-needs': {
+        value: 'No',
+        remediationActions: [{ id: 'q-needs-ra-0', text: 'old', completed: false }],
+      },
+    },
+  });
+  const client = makeStubClient({ getRow: failed });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
+
+  /** @type {any[]} */
+  const enqueued = [];
+  const origEnqueue = saveQueue.enqueue.bind(saveQueue);
+  saveQueue.enqueue = (/** @type {string} */ id, /** @type {string} */ f, /** @type {unknown} */ v) => {
+    enqueued.push({ id, field: f, value: v });
+    return origEnqueue(id, f, v);
+  };
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = failed.id;
+  await el.connectedCallback();
+
+  const section = (/** @type {any} */ (el))._children[2];
+  section._listeners['cr-answer'][0]({ detail: { questionId: 'q-needs', value: 'Yes' } });
+
+  assert.equal(enqueued.length, 1);
+  const saved = enqueued[0].value;
+  assert.equal(saved['q-needs'].value, 'Yes');
+  assert.equal(saved['q-needs'].remediationActions, undefined);
+});
+
+test('CRCaseReview: layout includes a cr-remediation-section', async () => {
+  const client = makeStubClient({ getRow: caseUntouched });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = caseUntouched.id;
+  await el.connectedCallback();
+
+  // children: header, statusEl, section, remediationSection, completeBtn
+  const remediationSection = (/** @type {any} */ (el))._children[3];
+  assert.ok(remediationSection, 'remediation section should exist');
+  // The stub's update method should have been called with catalogue + answers
+  assert.ok(remediationSection._updateArgs, 'update() should have been called on remediation section');
 });
 
 test('CRCaseReview: _completeCase navigates to #/dashboard on success', async () => {

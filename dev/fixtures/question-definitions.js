@@ -11,6 +11,7 @@ export const questionDefinitions = [
   {
     id: 'q-welcome',
     text: 'Was the customer greeted professionally?',
+    category: 'Opening',
     responseType: 'yes-no-na',
     failureCriteria: 'No',
     deprecated: false,
@@ -18,6 +19,7 @@ export const questionDefinitions = [
   {
     id: 'q-needs',
     text: "Were the customer's needs identified before proceeding?",
+    category: 'Discovery',
     responseType: 'yes-no-na',
     failureCriteria: 'No',
     remediationActions: ['Retrain agent on needs-identification protocol.'],
@@ -26,6 +28,7 @@ export const questionDefinitions = [
   {
     id: 'q-resolve',
     text: 'Was the issue resolved to the customer\'s satisfaction?',
+    category: 'Resolution',
     responseType: 'yes-no-na',
     showWhen: { 'q-needs': { equals: 'Yes' } },
     failureCriteria: 'No',

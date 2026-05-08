@@ -31,6 +31,7 @@
  * @typedef {{
  *   id: string,
  *   text: string,
+ *   category?: string,
  *   responseType: 'yes-no-na' | 'single-choice' | 'multi-choice',
  *   options?: string[],
  *   showWhen?: Record<string, unknown>,
