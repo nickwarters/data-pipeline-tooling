@@ -75,6 +75,7 @@ export class MockSharePointClient {
       .filter(c => {
         if (filter.status !== undefined && c.status !== filter.status) return false;
         if (filter.assignedReviewer !== undefined && c.assignedReviewer !== filter.assignedReviewer) return false;
+        if (filter.caseType !== undefined && c.caseType !== filter.caseType) return false;
         return true;
       })
       .map(c => ({ ...c }));

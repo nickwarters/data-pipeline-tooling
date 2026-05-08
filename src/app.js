@@ -24,12 +24,16 @@ async function boot() {
 
   const { Router } = await import('./router.js');
   const { SaveQueue } = await import('./save-queue.js');
+  await import('./cr-owner-summary.js');
   await import('./cr-dashboard.js');
   await import('./cr-case-review.js');
 
   const saveQueue = new SaveQueue(client);
   const router = new Router();
-  const currentUser = await client.getCurrentUser();
+  const [currentUser, userGroups] = await Promise.all([
+    client.getCurrentUser(),
+    client.getCurrentUserGroups(),
+  ]);
 
   const appEl = /** @type {Element} */ (document.getElementById('app'));
 
@@ -45,6 +49,7 @@ async function boot() {
       );
       el.client = client;
       el.currentUserId = currentUser.id;
+      el.userGroups = userGroups;
       container.replaceChildren(el);
     },
     unmount() {},

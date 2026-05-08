@@ -214,6 +214,41 @@ test('CRDashboard: renders one list item per case returned by listCases', async 
   assert.equal(ul._children.length, 3, 'one li per In-progress case');
 });
 
+test('CRDashboard: owner group causes cr-owner-summary to be added to layout', async () => {
+  const el = new CRDashboard();
+  el.client = /** @type {any} */ (makeStubClient());
+  el.currentUserId = 'user-owner';
+  el.userGroups = ['Reviewers', 'CaseTypeOwners-HelloReview'];
+  await el.connectedCallback();
+
+  // _children: [h1, ul, ownerSection]
+  const ownerSection = (/** @type {any} */ (el))._children[2];
+  assert.ok(ownerSection, 'owner section should exist');
+  assert.deepEqual(ownerSection.ownedCaseTypes, ['hello-review']);
+  assert.ok(ownerSection.client !== null, 'client should be set on owner section');
+});
+
+test('CRDashboard: reviewer-only groups do not show cr-owner-summary', async () => {
+  const el = new CRDashboard();
+  el.client = /** @type {any} */ (makeStubClient());
+  el.currentUserId = 'user-reviewer';
+  el.userGroups = ['Reviewers'];
+  await el.connectedCallback();
+
+  // _children: [h1, ul] — no owner section
+  assert.equal((/** @type {any} */ (el))._children.length, 2);
+});
+
+test('CRDashboard: user with no groups does not show cr-owner-summary', async () => {
+  const el = new CRDashboard();
+  el.client = /** @type {any} */ (makeStubClient());
+  el.currentUserId = 'user-reviewer';
+  // userGroups defaults to [] — should not crash and should not show owner section
+  await el.connectedCallback();
+
+  assert.equal((/** @type {any} */ (el))._children.length, 2);
+});
+
 // ===== TESTS: CRCaseReview =====
 
 test('CRCaseReview: connectedCallback calls getCase and saveQueue.loadCase', async () => {

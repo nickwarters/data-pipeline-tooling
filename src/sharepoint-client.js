@@ -23,6 +23,7 @@
  *   conversation: Message[],
  *   notes: string,
  *   completedAt: string | null,
+ *   dueDate?: string | null,
  *   etag: string
  * }} CaseRow
  */
@@ -42,7 +43,7 @@
  */
 
 /**
- * @typedef {{ status?: string, assignedReviewer?: string }} ListCasesFilter
+ * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string }} ListCasesFilter
  */
 
 /**

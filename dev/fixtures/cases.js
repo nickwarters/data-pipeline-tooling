@@ -1,11 +1,18 @@
 // @ts-check
 /** @typedef {import('../../src/sharepoint-client.js').CaseRow} CaseRow */
 
+const _now = new Date();
+const _todayStart = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate());
+const _threeDaysAgo = new Date(_todayStart.getTime() - 3 * 24 * 60 * 60 * 1000);
+
 /**
- * Three hello-review Cases:
- *   case-1 — untouched (no Answers)
- *   case-2 — partially answered (q-welcome answered, q-needs not answered)
- *   case-3 — completable (q-welcome + q-needs answered; q-resolve not applicable because q-needs ≠ Yes)
+ * Six hello-review Cases:
+ *   case-1 — untouched (no Answers, assigned)
+ *   case-2 — partially answered (assigned)
+ *   case-3 — completable (assigned)
+ *   case-4 — In-progress, unassigned (for owner outstanding count)
+ *   case-5 — Completed today (for owner completedToday count)
+ *   case-6 — Completed 3 days ago (for owner completedLast7Days count)
  *
  * @type {CaseRow[]}
  */
@@ -58,5 +65,44 @@ export const cases = [
     notes: 'All applicable questions answered — ready to complete.',
     completedAt: null,
     etag: 'etag-c3-v1',
+  },
+  {
+    id: 'case-4',
+    caseType: 'hello-review',
+    title: 'Hello Review #4',
+    status: 'In-progress',
+    assignedReviewer: '',
+    responsibleParty: 'user-agent-d',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    etag: 'etag-c4-v1',
+  },
+  {
+    id: 'case-5',
+    caseType: 'hello-review',
+    title: 'Hello Review #5',
+    status: 'Completed',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-agent-e',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: _todayStart.toISOString(),
+    etag: 'etag-c5-v1',
+  },
+  {
+    id: 'case-6',
+    caseType: 'hello-review',
+    title: 'Hello Review #6',
+    status: 'Completed',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-agent-f',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: _threeDaysAgo.toISOString(),
+    etag: 'etag-c6-v1',
   },
 ];
