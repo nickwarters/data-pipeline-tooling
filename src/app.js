@@ -24,6 +24,7 @@ async function boot() {
 
   const { Router } = await import('./router.js');
   const { SaveQueue } = await import('./save-queue.js');
+  const { resolveCapabilities } = await import('./permissions.js');
   await import('./cr-allocation.js');
   await import('./cr-owner-summary.js');
   await import('./cr-dashboard.js');
@@ -35,6 +36,7 @@ async function boot() {
     client.getCurrentUser(),
     client.getCurrentUserGroups(),
   ]);
+  const capabilities = resolveCapabilities(userGroups);
 
   // Compute which case types the current user is eligible to review.
   // Each case type module declares eligibleGroups; we check for group intersection.
@@ -59,7 +61,7 @@ async function boot() {
       );
       el.client = client;
       el.currentUserId = currentUser.id;
-      el.userGroups = userGroups;
+      el.capabilities = capabilities;
       el.eligibleCaseTypes = eligibleCaseTypes;
       container.replaceChildren(el);
     },
