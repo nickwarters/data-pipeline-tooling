@@ -191,10 +191,10 @@ test('CROwnerSummary: renders correct counts for hello-review fixture data', asy
 
   const s = el._summaries[0];
   // case-1, case-2, case-3 are In-progress + assigned → assigned=3
-  // case-4 is In-progress + unassigned → outstanding=1
+  // case-4 and case-7 are In-progress + unassigned → outstanding=2
   // case-5 is Completed today → completedToday=1, completedLast7Days=1
   // case-6 is Completed 3 days ago → completedLast7Days includes it → 2 total
-  assert.equal(s.outstanding, 1, 'outstanding: 1 unassigned in-progress case');
+  assert.equal(s.outstanding, 2, 'outstanding: 2 unassigned in-progress cases');
   assert.equal(s.assigned, 3, 'assigned: 3 assigned in-progress cases');
   assert.equal(s.completedToday, 1, 'completed today: 1');
   assert.equal(s.completedLast7Days, 2, 'completed last 7 days: 2');

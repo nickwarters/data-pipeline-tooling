@@ -4,6 +4,7 @@
 
 /** @type {CaseTypeConfig} */
 const config = {
+  eligibleGroups: ['Reviewers'],
   questions: [
     {
       id: 'q-welcome',

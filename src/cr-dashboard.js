@@ -30,6 +30,8 @@ export class CRDashboard extends CRElement {
     this.currentUserId = '';
     /** @type {string[]} */
     this.userGroups = [];
+    /** @type {string[]} */
+    this.eligibleCaseTypes = [];
   }
 
   async connectedCallback() {
@@ -43,6 +45,8 @@ export class CRDashboard extends CRElement {
   }
 
   /**
+   * Layout: [h1, ul/p, allocationEl, ownerSection?]
+   *
    * @param {CaseRow[]} cases
    * @param {string[]} ownedCaseTypes
    */
@@ -73,6 +77,14 @@ export class CRDashboard extends CRElement {
 
       children.push(ul);
     }
+
+    const allocationEl = /** @type {import('./cr-allocation.js').CRAllocation} */ (
+      document.createElement('cr-allocation')
+    );
+    allocationEl.client = this.client;
+    allocationEl.currentUserId = this.currentUserId;
+    allocationEl.eligibleCaseTypes = this.eligibleCaseTypes;
+    children.push(allocationEl);
 
     if (ownedCaseTypes.length > 0) {
       const ownerSection = /** @type {import('./cr-owner-summary.js').CROwnerSummary} */ (

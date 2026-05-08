@@ -1,0 +1,220 @@
+// @ts-check
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+
+// ===== MINIMAL DOM STUBS =====
+class StubEl {
+  constructor() {
+    /** @type {StubEl[]} */
+    this._children = [];
+    /** @type {Record<string, Function[]>} */
+    this._listeners = {};
+    this.textContent = '';
+    this.className = '';
+    this.href = '';
+    this.hidden = false;
+    this.disabled = false;
+  }
+  replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
+  appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
+  append(/** @type {StubEl[]} */ ...cs) { this._children.push(...cs); }
+  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
+    (this._listeners[t] ??= []).push(h);
+  }
+}
+
+(/** @type {any} */ (globalThis)).HTMLElement = StubEl;
+(/** @type {any} */ (globalThis)).document = {
+  /** @param {string} _tag @returns {StubEl} */
+  createElement(_tag) { return new StubEl(); },
+  addEventListener() {},
+  removeEventListener() {},
+};
+(/** @type {any} */ (globalThis)).customElements = { define() {} };
+(/** @type {any} */ (globalThis)).location = { hash: '' };
+
+// ===== IMPORTS (after stubs) =====
+const { CRAllocation } = await import('../src/cr-allocation.js');
+
+// ===== HELPERS =====
+
+/** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
+
+/** @param {CaseRow[]} allCases */
+function makeClient(allCases) {
+  /** @type {{ id: string, fields: any, etag: string }[]} */
+  const patchCalls = [];
+  return {
+    patchCalls,
+    async listCases(/** @type {import('../src/sharepoint-client.js').ListCasesFilter} */ filter) {
+      return allCases.filter(c => {
+        if (filter.status !== undefined && c.status !== filter.status) return false;
+        if (filter.assignedReviewer !== undefined && c.assignedReviewer !== filter.assignedReviewer) return false;
+        if (filter.caseType !== undefined && c.caseType !== filter.caseType) return false;
+        return true;
+      }).map(c => ({ ...c }));
+    },
+    async patchCase(/** @type {string} */ id, /** @type {Partial<CaseRow>} */ fields, /** @type {string} */ etag) {
+      patchCalls.push({ id, fields, etag });
+      const c = allCases.find(c => c.id === id);
+      if (!c) return { ok: false, status: 404 };
+      if (c.etag !== etag) return { ok: false, status: 412 };
+      c.assignedReviewer = /** @type {string} */ (fields.assignedReviewer ?? c.assignedReviewer);
+      const newEtag = etag + '-patched';
+      c.etag = newEtag;
+      return { ok: true, status: 200, data: { ...c, etag: newEtag } };
+    },
+  };
+}
+
+/** Unassigned hello-review case with a given `created` timestamp. */
+function unassignedCase(id = 'c1', created = '2026-01-01T00:00:00Z') {
+  /** @type {CaseRow} */
+  const c = {
+    id,
+    caseType: 'hello-review',
+    title: `Case ${id}`,
+    status: 'In-progress',
+    assignedReviewer: '',
+    responsibleParty: 'rp',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    created,
+    etag: `etag-${id}`,
+  };
+  return c;
+}
+
+// ===== TESTS =====
+
+test('CRAllocation: connectedCallback renders "Request next Case" button', async () => {
+  const el = new CRAllocation();
+  el.client = /** @type {any} */ (makeClient([]));
+  el.currentUserId = 'user-reviewer';
+  el.eligibleCaseTypes = ['hello-review'];
+  el.connectedCallback();
+  const btn = (/** @type {any} */ (el))._children[0];
+  assert.ok(btn, 'should have a child element');
+  assert.equal(btn.textContent, 'Request next Case');
+});
+
+test('CRAllocation: _requestNextCase assigns the oldest unassigned case and navigates to it', async () => {
+  const older = unassignedCase('c-older', '2026-01-01T00:00:00Z');
+  const newer = unassignedCase('c-newer', '2026-06-01T00:00:00Z');
+  const client = makeClient([older, newer]);
+
+  const el = new CRAllocation();
+  el.client = /** @type {any} */ (client);
+  el.currentUserId = 'user-reviewer';
+  el.eligibleCaseTypes = ['hello-review'];
+
+  (/** @type {any} */ (globalThis)).location.hash = '';
+  await el._requestNextCase();
+
+  assert.equal(client.patchCalls.length, 1, 'should patch exactly once');
+  assert.equal(client.patchCalls[0].id, 'c-older', 'should assign the oldest case first');
+  assert.deepEqual(client.patchCalls[0].fields, { assignedReviewer: 'user-reviewer' });
+  assert.equal((/** @type {any} */ (globalThis)).location.hash, '#/case/c-older');
+});
+
+test('CRAllocation: _requestNextCase retries with next case on 412', async () => {
+  const first = unassignedCase('c-first', '2026-01-01T00:00:00Z');
+  const second = unassignedCase('c-second', '2026-06-01T00:00:00Z');
+
+  // Inject a 412 on the first patchCase call only
+  let callCount = 0;
+  const client = {
+    patchCalls: /** @type {{ id: string }[]} */ ([]),
+    async listCases() { return [{ ...first }, { ...second }]; },
+    async patchCase(/** @type {string} */ id, /** @type {any} */ fields, /** @type {string} */ etag) {
+      client.patchCalls.push({ id });
+      callCount++;
+      if (callCount === 1) return { ok: false, status: 412 };
+      return { ok: true, status: 200, data: { ...second, etag } };
+    },
+  };
+
+  const el = new CRAllocation();
+  el.client = /** @type {any} */ (client);
+  el.currentUserId = 'user-reviewer';
+  el.eligibleCaseTypes = ['hello-review'];
+
+  (/** @type {any} */ (globalThis)).location.hash = '';
+  await el._requestNextCase();
+
+  assert.equal(client.patchCalls.length, 2, 'should attempt two patches');
+  assert.equal(client.patchCalls[0].id, 'c-first', 'first attempt is oldest case');
+  assert.equal(client.patchCalls[1].id, 'c-second', 'second attempt is next case');
+  assert.equal((/** @type {any} */ (globalThis)).location.hash, '#/case/c-second');
+});
+
+test('CRAllocation: _requestNextCase shows "No Cases available" when no unassigned cases exist', async () => {
+  const client = makeClient([]); // empty pool
+  const el = new CRAllocation();
+  el.client = /** @type {any} */ (client);
+  el.currentUserId = 'user-reviewer';
+  el.eligibleCaseTypes = ['hello-review'];
+
+  await el._requestNextCase();
+
+  const msg = (/** @type {any} */ (el))._children[0];
+  assert.ok(msg, 'should have a child element');
+  assert.equal(msg.textContent, 'No Cases available');
+});
+
+test('CRAllocation: _requestNextCase shows "No Cases available" when all retries receive 412', async () => {
+  const first = unassignedCase('c-first', '2026-01-01T00:00:00Z');
+  const second = unassignedCase('c-second', '2026-06-01T00:00:00Z');
+
+  const client = {
+    async listCases() { return [{ ...first }, { ...second }]; },
+    async patchCase() { return { ok: false, status: 412 }; },
+  };
+
+  const el = new CRAllocation();
+  el.client = /** @type {any} */ (client);
+  el.currentUserId = 'user-reviewer';
+  el.eligibleCaseTypes = ['hello-review'];
+
+  await el._requestNextCase();
+
+  const msg = (/** @type {any} */ (el))._children[0];
+  assert.equal(msg.textContent, 'No Cases available');
+});
+
+test('CRAllocation: _requestNextCase only considers eligible case types', async () => {
+  const eligibleCase = unassignedCase('c-eligible', '2026-01-01T00:00:00Z'); // hello-review
+  const ineligibleCase = /** @type {CaseRow} */ ({
+    ...unassignedCase('c-ineligible', '2025-12-01T00:00:00Z'), // older but wrong type
+    caseType: 'other-review',
+  });
+  const client = makeClient([ineligibleCase, eligibleCase]);
+
+  const el = new CRAllocation();
+  el.client = /** @type {any} */ (client);
+  el.currentUserId = 'user-reviewer';
+  el.eligibleCaseTypes = ['hello-review']; // only hello-review eligible
+
+  (/** @type {any} */ (globalThis)).location.hash = '';
+  await el._requestNextCase();
+
+  assert.equal(client.patchCalls.length, 1, 'should only patch the eligible case');
+  assert.equal(client.patchCalls[0].id, 'c-eligible');
+});
+
+test('CRAllocation: patchCase is called with the correct etag', async () => {
+  const c = unassignedCase('c1', '2026-01-01T00:00:00Z');
+  c.etag = 'specific-etag';
+  const client = makeClient([c]);
+
+  const el = new CRAllocation();
+  el.client = /** @type {any} */ (client);
+  el.currentUserId = 'user-reviewer';
+  el.eligibleCaseTypes = ['hello-review'];
+
+  await el._requestNextCase();
+
+  assert.equal(client.patchCalls[0].etag, 'specific-etag');
+});

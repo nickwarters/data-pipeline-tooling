@@ -221,8 +221,8 @@ test('CRDashboard: owner group causes cr-owner-summary to be added to layout', a
   el.userGroups = ['Reviewers', 'CaseTypeOwners-HelloReview'];
   await el.connectedCallback();
 
-  // _children: [h1, ul, ownerSection]
-  const ownerSection = (/** @type {any} */ (el))._children[2];
+  // _children: [h1, ul, allocationEl, ownerSection]
+  const ownerSection = (/** @type {any} */ (el))._children[3];
   assert.ok(ownerSection, 'owner section should exist');
   assert.deepEqual(ownerSection.ownedCaseTypes, ['hello-review']);
   assert.ok(ownerSection.client !== null, 'client should be set on owner section');
@@ -235,8 +235,8 @@ test('CRDashboard: reviewer-only groups do not show cr-owner-summary', async () 
   el.userGroups = ['Reviewers'];
   await el.connectedCallback();
 
-  // _children: [h1, ul] — no owner section
-  assert.equal((/** @type {any} */ (el))._children.length, 2);
+  // _children: [h1, ul, allocationEl] — no owner section
+  assert.equal((/** @type {any} */ (el))._children.length, 3);
 });
 
 test('CRDashboard: user with no groups does not show cr-owner-summary', async () => {
@@ -246,7 +246,22 @@ test('CRDashboard: user with no groups does not show cr-owner-summary', async ()
   // userGroups defaults to [] — should not crash and should not show owner section
   await el.connectedCallback();
 
-  assert.equal((/** @type {any} */ (el))._children.length, 2);
+  // _children: [h1, ul, allocationEl] — no owner section
+  assert.equal((/** @type {any} */ (el))._children.length, 3);
+});
+
+test('CRDashboard: layout always includes a cr-allocation element at index 2', async () => {
+  const el = new CRDashboard();
+  el.client = /** @type {any} */ (makeStubClient());
+  el.currentUserId = 'user-reviewer';
+  el.eligibleCaseTypes = ['hello-review'];
+  await el.connectedCallback();
+
+  // _children: [h1, ul, allocationEl]
+  const allocationEl = (/** @type {any} */ (el))._children[2];
+  assert.ok(allocationEl, 'allocation element should exist at index 2');
+  assert.equal(allocationEl.currentUserId, 'user-reviewer');
+  assert.deepEqual(allocationEl.eligibleCaseTypes, ['hello-review']);
 });
 
 // ===== TESTS: CRCaseReview =====

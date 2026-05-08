@@ -24,6 +24,7 @@
  *   notes: string,
  *   completedAt: string | null,
  *   dueDate?: string | null,
+ *   created?: string,
  *   etag: string
  * }} CaseRow
  */
@@ -77,7 +78,8 @@
  *
  * @typedef {{
  *   questions: QuestionDefinition[],
- *   computeOutcome: (answers: Record<string, Answer>) => OutcomeResult
+ *   computeOutcome: (answers: Record<string, Answer>) => OutcomeResult,
+ *   eligibleGroups?: string[]
  * }} CaseTypeConfig
  */
 

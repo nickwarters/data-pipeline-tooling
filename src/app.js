@@ -24,6 +24,7 @@ async function boot() {
 
   const { Router } = await import('./router.js');
   const { SaveQueue } = await import('./save-queue.js');
+  await import('./cr-allocation.js');
   await import('./cr-owner-summary.js');
   await import('./cr-dashboard.js');
   await import('./cr-case-review.js');
@@ -34,6 +35,15 @@ async function boot() {
     client.getCurrentUser(),
     client.getCurrentUserGroups(),
   ]);
+
+  // Compute which case types the current user is eligible to review.
+  // Each case type module declares eligibleGroups; we check for group intersection.
+  const { default: helloReviewConfig } = await import('../case-types/hello-review.js');
+  /** @type {string[]} */
+  const eligibleCaseTypes = [];
+  if (helloReviewConfig.eligibleGroups?.some(g => userGroups.includes(g))) {
+    eligibleCaseTypes.push('hello-review');
+  }
 
   const appEl = /** @type {Element} */ (document.getElementById('app'));
 
@@ -50,6 +60,7 @@ async function boot() {
       el.client = client;
       el.currentUserId = currentUser.id;
       el.userGroups = userGroups;
+      el.eligibleCaseTypes = eligibleCaseTypes;
       container.replaceChildren(el);
     },
     unmount() {},

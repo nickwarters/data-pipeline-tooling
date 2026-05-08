@@ -6,13 +6,14 @@ const _todayStart = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate()
 const _threeDaysAgo = new Date(_todayStart.getTime() - 3 * 24 * 60 * 60 * 1000);
 
 /**
- * Six hello-review Cases:
+ * Seven hello-review Cases:
  *   case-1 — untouched (no Answers, assigned)
  *   case-2 — partially answered (assigned)
  *   case-3 — completable (assigned)
- *   case-4 — In-progress, unassigned (for owner outstanding count)
+ *   case-4 — In-progress, unassigned (oldest; for allocation + owner outstanding count)
  *   case-5 — Completed today (for owner completedToday count)
  *   case-6 — Completed 3 days ago (for owner completedLast7Days count)
+ *   case-7 — In-progress, unassigned (newer than case-4; for allocation 412-retry test)
  *
  * @type {CaseRow[]}
  */
@@ -28,6 +29,7 @@ export const cases = [
     conversation: [],
     notes: '',
     completedAt: null,
+    created: '2026-05-01T08:00:00Z',
     etag: 'etag-c1-v1',
   },
   {
@@ -46,6 +48,7 @@ export const cases = [
     ],
     notes: '',
     completedAt: null,
+    created: '2026-05-02T08:00:00Z',
     etag: 'etag-c2-v1',
   },
   {
@@ -64,6 +67,7 @@ export const cases = [
     conversation: [],
     notes: 'All applicable questions answered — ready to complete.',
     completedAt: null,
+    created: '2026-05-03T08:00:00Z',
     etag: 'etag-c3-v1',
   },
   {
@@ -77,6 +81,7 @@ export const cases = [
     conversation: [],
     notes: '',
     completedAt: null,
+    created: '2026-05-04T08:00:00Z',
     etag: 'etag-c4-v1',
   },
   {
@@ -90,6 +95,7 @@ export const cases = [
     conversation: [],
     notes: '',
     completedAt: _todayStart.toISOString(),
+    created: '2026-05-05T08:00:00Z',
     etag: 'etag-c5-v1',
   },
   {
@@ -103,6 +109,21 @@ export const cases = [
     conversation: [],
     notes: '',
     completedAt: _threeDaysAgo.toISOString(),
+    created: '2026-05-06T08:00:00Z',
     etag: 'etag-c6-v1',
+  },
+  {
+    id: 'case-7',
+    caseType: 'hello-review',
+    title: 'Hello Review #7',
+    status: 'In-progress',
+    assignedReviewer: '',
+    responsibleParty: 'user-agent-g',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    created: '2026-05-07T08:00:00Z',
+    etag: 'etag-c7-v1',
   },
 ];
