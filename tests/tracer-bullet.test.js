@@ -30,9 +30,9 @@ class StubEl {
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
   }
-  // Stub for CRQuestionList.update — prevents crash when subscribe fires.
-  update(/** @type {any} */ questions, /** @type {any} */ answers) {
-    this._updateArgs = { questions, answers };
+  // Stub for CRQuestionList.update / CRRemediationSection.update / CROutcome.update
+  update(/** @type {any} */ a1, /** @type {any} */ a2, /** @type {any} */ a3) {
+    this._updateArgs = { a1, a2, a3 };
   }
 }
 
@@ -256,8 +256,8 @@ test('CRCaseReview: complete button is hidden when not all applicable questions 
 
   await el.connectedCallback();
 
-  // children: header(0), statusEl(1), section(2), remediationSection(3), conversationEl(4), notesEl(5), completeBtn(6)
-  const completeBtn = (/** @type {any} */ (el))._children[6];
+  // children: header(0), statusEl(1), section(2), remediationSection(3), outcomeEl(4), conversationEl(5), notesEl(6), completeBtn(7)
+  const completeBtn = (/** @type {any} */ (el))._children[7];
   assert.equal(completeBtn.hidden, true);
 });
 
@@ -272,8 +272,8 @@ test('CRCaseReview: complete button is visible when all applicable questions ans
 
   await el.connectedCallback();
 
-  // children: header(0), statusEl(1), section(2), remediationSection(3), conversationEl(4), notesEl(5), completeBtn(6)
-  const completeBtn = (/** @type {any} */ (el))._children[6];
+  // children: header(0), statusEl(1), section(2), remediationSection(3), outcomeEl(4), conversationEl(5), notesEl(6), completeBtn(7)
+  const completeBtn = (/** @type {any} */ (el))._children[7];
   assert.equal(completeBtn.hidden, false);
 });
 
@@ -376,7 +376,7 @@ test('CRCaseReview: layout includes a cr-remediation-section', async () => {
   el.caseId = caseUntouched.id;
   await el.connectedCallback();
 
-  // children: header(0), statusEl(1), section(2), remediationSection(3), conversationEl(4), notesEl(5), completeBtn(6)
+  // children: header(0), statusEl(1), section(2), remediationSection(3), outcomeEl(4), conversationEl(5), notesEl(6), completeBtn(7)
   const remediationSection = (/** @type {any} */ (el))._children[3];
   assert.ok(remediationSection, 'remediation section should exist');
   // The stub's update method should have been called with catalogue + answers
@@ -393,8 +393,8 @@ test('CRCaseReview: layout includes a cr-conversation element with case messages
   el.caseId = cases[1].id;
   await el.connectedCallback();
 
-  // children: header(0), statusEl(1), section(2), remediationSection(3), conversationEl(4), notesEl(5), completeBtn(6)
-  const conversationEl = (/** @type {any} */ (el))._children[4];
+  // children: header(0), statusEl(1), section(2), remediationSection(3), outcomeEl(4), conversationEl(5), notesEl(6), completeBtn(7)
+  const conversationEl = (/** @type {any} */ (el))._children[5];
   assert.ok(conversationEl, 'conversation element should exist');
   assert.ok(Array.isArray(conversationEl._messages), '_messages should be set');
   assert.equal(conversationEl._messages.length, 2);
@@ -410,11 +410,45 @@ test('CRCaseReview: layout includes a cr-notes element with case notes value', a
   el.caseId = cases[2].id;
   await el.connectedCallback();
 
-  // children: header(0), statusEl(1), section(2), remediationSection(3), conversationEl(4), notesEl(5), completeBtn(6)
-  const notesEl = (/** @type {any} */ (el))._children[5];
+  // children: header(0), statusEl(1), section(2), remediationSection(3), outcomeEl(4), conversationEl(5), notesEl(6), completeBtn(7)
+  const notesEl = (/** @type {any} */ (el))._children[6];
   assert.ok(notesEl, 'notes element should exist');
   assert.equal(notesEl.notes, cases[2].notes);
   assert.equal(notesEl.caseId, cases[2].id);
+});
+
+test('CRCaseReview: layout includes a cr-outcome element updated with computeOutcome', async () => {
+  const client = makeStubClient({ getRow: caseUntouched });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = caseUntouched.id;
+  await el.connectedCallback();
+
+  // children: header(0), statusEl(1), section(2), remediationSection(3), outcomeEl(4), conversationEl(5), notesEl(6), completeBtn(7)
+  const outcomeEl = (/** @type {any} */ (el))._children[4];
+  assert.ok(outcomeEl, 'outcome element should exist');
+  assert.ok(outcomeEl._updateArgs, 'update() should have been called on outcome element');
+  // case-1 has no answers so allAnswered is false
+  assert.equal(outcomeEl._updateArgs.a3, false, 'allAnswered should be false for untouched case');
+  assert.equal(typeof outcomeEl._updateArgs.a1, 'function', 'computeOutcome should be a function');
+});
+
+test('CRCaseReview: outcome element receives allAnswered=true when all applicable questions answered', async () => {
+  const client = makeStubClient({ getRow: caseCompletable });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = caseCompletable.id;
+  await el.connectedCallback();
+
+  // case-3 has all applicable questions answered (q-welcome + q-needs + q-channel + q-products)
+  const outcomeEl = (/** @type {any} */ (el))._children[4];
+  assert.equal(outcomeEl._updateArgs.a3, true, 'allAnswered should be true for completable case');
 });
 
 test('CRCaseReview: _completeCase navigates to #/dashboard on success', async () => {

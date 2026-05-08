@@ -7,6 +7,7 @@ import './cr-question-list.js';
 import './cr-remediation-section.js';
 import './cr-conversation.js';
 import './cr-notes.js';
+import './cr-outcome.js';
 
 /** @typedef {import('./sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('./sharepoint-client.js').CaseRow} CaseRow */
@@ -71,12 +72,13 @@ export class CRCaseReview extends CRElement {
       return applicableQuestions.get().every(q => !!answers[q.id]?.value);
     });
 
-    this._buildLayout(caseRow, catalogue, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser);
+    this._buildLayout(caseRow, catalogue, config.computeOutcome, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser);
   }
 
   /**
    * @param {CaseRow} caseRow
    * @param {QuestionDefinition[]} catalogue
+   * @param {(answers: Record<string, Answer>) => import('./sharepoint-client.js').OutcomeResult} computeOutcome
    * @param {SharePointClient} client
    * @param {SaveQueue} saveQueue
    * @param {{ get: () => Record<string, Answer>, set: (v: Record<string, Answer>) => void }} answersSignal
@@ -84,7 +86,7 @@ export class CRCaseReview extends CRElement {
    * @param {{ get: () => boolean }} allAnswered
    * @param {CurrentUser} currentUser
    */
-  _buildLayout(caseRow, catalogue, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser) {
+  _buildLayout(caseRow, catalogue, computeOutcome, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser) {
     const header = document.createElement('header');
     const h1 = document.createElement('h1');
     h1.textContent = caseRow.title;
@@ -124,14 +126,20 @@ export class CRCaseReview extends CRElement {
       document.createElement('cr-remediation-section')
     );
 
-    // viewState combines applicability + answers so the subscribe fires once per state change.
+    const outcomeEl = /** @type {import('./cr-outcome.js').CROutcome} */ (
+      document.createElement('cr-outcome')
+    );
+
+    // viewState combines applicability + answers + allAnswered so the subscribe fires once per state change.
     const viewState = computed(() => ({
       questions: applicableQuestions.get(),
       answers: answersSignal.get(),
+      allAnswered: allAnswered.get(),
     }));
-    this.subscribe(viewState, ({ questions, answers }) => {
+    this.subscribe(viewState, ({ questions, answers, allAnswered: done }) => {
       qList.update(questions, answers);
       remediationSection.update(catalogue, answers);
+      outcomeEl.update(computeOutcome, answers, done);
     });
 
     const completeBtn = document.createElement('button');
@@ -166,7 +174,7 @@ export class CRCaseReview extends CRElement {
     notesEl.saveQueue = saveQueue;
     notesEl.caseId = caseRow.id;
 
-    this.replaceChildren(header, statusEl, section, remediationSection, conversationEl, notesEl, completeBtn);
+    this.replaceChildren(header, statusEl, section, remediationSection, outcomeEl, conversationEl, notesEl, completeBtn);
   }
 
   /**
