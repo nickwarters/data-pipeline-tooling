@@ -24,6 +24,7 @@
  *   notes: string,
  *   completedAt: string | null,
  *   dueDate?: string | null,
+ *   relatedDate?: string | null,
  *   created?: string,
  *   etag: string
  * }} CaseRow

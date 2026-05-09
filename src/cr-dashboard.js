@@ -1,9 +1,11 @@
 // @ts-check
 import { CRElement } from './cr-element.js';
+import './cr-case-table.js';
 
 /** @typedef {import('./sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('./sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('./permissions.js').Capabilities} Capabilities */
+/** @typedef {import('./cr-case-table.js').CRCaseTable} CRCaseTable */
 
 export class CRDashboard extends CRElement {
   constructor() {
@@ -41,24 +43,12 @@ export class CRDashboard extends CRElement {
       h1.textContent = 'Outstanding Cases';
       children.push(h1);
 
-      if (cases.length === 0) {
-        const p = document.createElement('p');
-        p.textContent = 'No outstanding cases.';
-        children.push(p);
-      } else {
-        const ul = document.createElement('ul');
-        ul.className = 'cr-case-list';
-        for (const c of cases) {
-          const li = document.createElement('li');
-          li.className = 'cr-case-row';
-          const a = document.createElement('a');
-          a.href = `#/case/${c.id}`;
-          a.textContent = `${c.title} (${c.caseType})`;
-          li.appendChild(a);
-          ul.appendChild(li);
-        }
-        children.push(ul);
-      }
+      const caseTable = /** @type {CRCaseTable} */ (document.createElement('cr-case-table'));
+      caseTable.cases = cases;
+      caseTable.addEventListener('cr-case-open', (/** @type {any} */ e) => {
+        location.hash = `#/case/${e.detail.caseId}`;
+      });
+      children.push(caseTable);
 
       const allocationEl = /** @type {import('./cr-allocation.js').CRAllocation} */ (
         document.createElement('cr-allocation')

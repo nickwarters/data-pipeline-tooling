@@ -208,17 +208,18 @@ test('CRDashboard: connectedCallback calls listCases with In-progress and assign
   assert.deepEqual(listCalls[0], { status: 'In-progress', assignedReviewer: 'user-reviewer' });
 });
 
-test('CRDashboard: renders one list item per case returned by listCases', async () => {
+test('CRDashboard: renders cr-case-table with cases from listCases', async () => {
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeStubClient());
   el.currentUserId = 'user-reviewer';
   el.capabilities = { isReviewer: true, ownedCaseTypes: [] };
   await el.connectedCallback();
 
-  // el._children = [h1, ul, allocationEl] — all 3 fixture cases are assigned to user-reviewer
-  const ul = (/** @type {any} */ (el))._children[1];
-  assert.ok(ul, 'list element should exist');
-  assert.equal(ul._children.length, 3, 'one li per In-progress case');
+  // _children: [h1, caseTable, allocationEl] — all 3 fixture cases are assigned to user-reviewer
+  const caseTableEl = (/** @type {any} */ (el))._children[1];
+  assert.ok(caseTableEl, 'cr-case-table element should exist at index 1');
+  assert.ok(Array.isArray(caseTableEl.cases), 'cases property should be set on the table');
+  assert.equal(caseTableEl.cases.length, 3, 'one case per In-progress case assigned to reviewer');
 });
 
 test('CRDashboard: owner capability causes cr-owner-summary to be added to layout', async () => {
@@ -228,7 +229,7 @@ test('CRDashboard: owner capability causes cr-owner-summary to be added to layou
   el.capabilities = { isReviewer: true, ownedCaseTypes: ['hello-review'] };
   await el.connectedCallback();
 
-  // _children: [h1, ul, allocationEl, ownerSection]
+  // _children: [h1, caseTable, allocationEl, ownerSection]
   const ownerSection = (/** @type {any} */ (el))._children[3];
   assert.ok(ownerSection, 'owner section should exist');
   assert.deepEqual(ownerSection.ownedCaseTypes, ['hello-review']);
@@ -242,7 +243,7 @@ test('CRDashboard: reviewer-only capability does not show cr-owner-summary', asy
   el.capabilities = { isReviewer: true, ownedCaseTypes: [] };
   await el.connectedCallback();
 
-  // _children: [h1, ul, allocationEl] — no owner section
+  // _children: [h1, caseTable, allocationEl] — no owner section
   assert.equal((/** @type {any} */ (el))._children.length, 3);
 });
 
@@ -264,7 +265,7 @@ test('CRDashboard: layout includes a cr-allocation element at index 2 for review
   el.eligibleCaseTypes = ['hello-review'];
   await el.connectedCallback();
 
-  // _children: [h1, ul, allocationEl]
+  // _children: [h1, caseTable, allocationEl]
   const allocationEl = (/** @type {any} */ (el))._children[2];
   assert.ok(allocationEl, 'allocation element should exist at index 2');
   assert.equal(allocationEl.currentUserId, 'user-reviewer');
