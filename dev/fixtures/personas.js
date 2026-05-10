@@ -22,4 +22,9 @@ export const personas = {
     displayName: 'Riley Admin',
     groups: ['Reviewers', 'CaseTypeOwners-HelloReview'],
   },
+  'responsible-party': {
+    userId: 'user-rp',
+    displayName: 'Jordan RP',
+    groups: ['CR-ResponsibleParty'],
+  },
 };

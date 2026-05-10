@@ -29,6 +29,8 @@ async function boot() {
   await import('./cr-owner-summary.js');
   await import('./cr-dashboard.js');
   await import('./cr-case-review.js');
+  await import('./cr-responsible-party-dashboard.js');
+  await import('./cr-conversation-view.js');
 
   const saveQueue = new SaveQueue(client);
   const router = new Router();
@@ -66,6 +68,39 @@ async function boot() {
       el.currentUserId = currentUser.id;
       el.capabilities = capabilities;
       el.eligibleCaseTypes = eligibleCaseTypes;
+      container.replaceChildren(el);
+    },
+    unmount() {},
+  });
+
+  router.register('#/my-reviews', {
+    mount(container) {
+      if (!capabilities.isResponsibleParty) {
+        container.replaceChildren();
+        return;
+      }
+      const el = /** @type {import('./cr-responsible-party-dashboard.js').CRResponsiblePartyDashboard} */ (
+        document.createElement('cr-responsible-party-dashboard')
+      );
+      el.client = client;
+      el.currentUserId = currentUser.id;
+      el.addEventListener('cr-open-conversation', (/** @type {any} */ e) => {
+        location.hash = `#/conversation/${e.detail.caseId}`;
+      });
+      container.replaceChildren(el);
+    },
+    unmount() {},
+  });
+
+  router.register('#/conversation/:id', {
+    mount(container, params) {
+      const el = /** @type {import('./cr-conversation-view.js').CRConversationView} */ (
+        document.createElement('cr-conversation-view')
+      );
+      el.client = client;
+      el.saveQueue = saveQueue;
+      el.caseId = params.id;
+      el.currentUser = currentUser;
       container.replaceChildren(el);
     },
     unmount() {},

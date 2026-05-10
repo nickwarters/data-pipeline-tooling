@@ -4,6 +4,10 @@
 const _now = new Date();
 const _todayStart = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate());
 const _threeDaysAgo = new Date(_todayStart.getTime() - 3 * 24 * 60 * 60 * 1000);
+const _twoMonthsAgo = new Date(_todayStart);
+_twoMonthsAgo.setMonth(_twoMonthsAgo.getMonth() - 2);
+const _yesterday = new Date(_todayStart.getTime() - 24 * 60 * 60 * 1000);
+const _nextWeek = new Date(_todayStart.getTime() + 7 * 24 * 60 * 60 * 1000);
 
 /**
  * Seven hello-review Cases:
@@ -125,5 +129,115 @@ export const cases = [
     completedAt: null,
     created: '2026-05-07T08:00:00Z',
     etag: 'etag-c7-v1',
+  },
+  // --- Responsible Party portal fixture cases (responsibleParty: 'user-rp') ---
+  {
+    id: 'case-8',
+    caseType: 'hello-review',
+    title: 'Hello Review #8',
+    status: 'Completed',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-rp',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: _todayStart.toISOString(),
+    outcome: 'Pass',
+    created: '2026-04-28T08:00:00Z',
+    etag: 'etag-c8-v1',
+  },
+  {
+    id: 'case-9',
+    caseType: 'hello-review',
+    title: 'Hello Review #9',
+    status: 'Completed',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-rp',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: _twoMonthsAgo.toISOString(),
+    outcome: 'Fail',
+    created: '2026-03-01T08:00:00Z',
+    etag: 'etag-c9-v1',
+  },
+  {
+    id: 'case-10',
+    caseType: 'hello-review',
+    title: 'Hello Review #10',
+    status: 'In-progress',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-rp',
+    answers: {
+      'q-needs': {
+        value: 'No',
+        justification: 'Needs improvement',
+        remediationActions: [
+          { id: 'ra-10-1', text: 'Ensure agent identifies customer needs before proceeding', completed: false },
+        ],
+      },
+    },
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    dueDate: _yesterday.toISOString(),
+    created: '2026-05-01T08:00:00Z',
+    etag: 'etag-c10-v1',
+  },
+  {
+    id: 'case-11',
+    caseType: 'hello-review',
+    title: 'Hello Review #11',
+    status: 'In-progress',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-rp',
+    answers: {
+      'q-welcome': {
+        value: 'No',
+        remediationActions: [
+          { id: 'ra-11-1', text: 'Review greeting standards and apply correct opening', completed: false },
+        ],
+      },
+    },
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    dueDate: _nextWeek.toISOString(),
+    created: '2026-05-02T08:00:00Z',
+    etag: 'etag-c11-v1',
+  },
+  {
+    id: 'case-12',
+    caseType: 'hello-review',
+    title: 'Hello Review #12',
+    status: 'In-progress',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-rp',
+    answers: {},
+    conversation: [
+      { author: 'user-reviewer', timestamp: '2026-05-07T09:00:00Z', body: 'Please clarify the greeting used.' },
+      { author: 'user-rp', timestamp: '2026-05-07T09:30:00Z', body: 'Standard greeting was used.' },
+      { author: 'user-reviewer', timestamp: '2026-05-07T10:00:00Z', body: 'Can you provide the exact wording?' },
+    ],
+    notes: '',
+    completedAt: null,
+    created: '2026-05-03T08:00:00Z',
+    etag: 'etag-c12-v1',
+  },
+  {
+    id: 'case-13',
+    caseType: 'hello-review',
+    title: 'Hello Review #13',
+    status: 'In-progress',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-rp',
+    answers: {},
+    conversation: [
+      { author: 'user-reviewer', timestamp: '2026-05-08T09:00:00Z', body: 'Please respond to review queries.' },
+    ],
+    notes: '',
+    completedAt: null,
+    created: '2026-05-04T08:00:00Z',
+    etag: 'etag-c13-v1',
   },
 ];

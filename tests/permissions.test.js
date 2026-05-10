@@ -10,6 +10,7 @@ const sampleConfig = {
     'hello-review': 'CaseTypeOwners-HelloReview',
     'kyc-review': 'CaseTypeOwners-KycReview',
   },
+  responsibleParty: 'CR-ResponsibleParty',
 };
 
 test('resolveCapabilities: empty groups → not reviewer, no owned types', () => {
@@ -51,6 +52,18 @@ test('resolveCapabilities: unknown group is silently ignored', () => {
   const caps = resolveCapabilities(['SomeOtherGroup', 'Reviewers'], sampleConfig);
   assert.equal(caps.isReviewer, true);
   assert.deepEqual(caps.ownedCaseTypes, []);
+});
+
+test('resolveCapabilities: responsible party group → isResponsibleParty=true', () => {
+  const caps = resolveCapabilities(['CR-ResponsibleParty'], sampleConfig);
+  assert.equal(caps.isResponsibleParty, true);
+  assert.equal(caps.isReviewer, false);
+  assert.deepEqual(caps.ownedCaseTypes, []);
+});
+
+test('resolveCapabilities: no responsible party group → isResponsibleParty=false', () => {
+  const caps = resolveCapabilities(['Reviewers'], sampleConfig);
+  assert.equal(caps.isResponsibleParty, false);
 });
 
 test('resolveCapabilities: defaults to exported permissions config when none passed', () => {

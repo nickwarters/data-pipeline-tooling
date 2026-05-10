@@ -201,7 +201,7 @@ test('CRDashboard: connectedCallback calls listCases with In-progress and assign
   const el = new CRDashboard();
   el.client = /** @type {any} */ (client);
   el.currentUserId = 'user-reviewer';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [] };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false };
   await el.connectedCallback();
 
   assert.equal(listCalls.length, 1);
@@ -212,21 +212,21 @@ test('CRDashboard: renders cr-case-table with cases from listCases', async () =>
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeStubClient());
   el.currentUserId = 'user-reviewer';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [] };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false };
   await el.connectedCallback();
 
   // _children: [h1, caseTable, allocationEl] — all 3 fixture cases are assigned to user-reviewer
   const caseTableEl = (/** @type {any} */ (el))._children[1];
   assert.ok(caseTableEl, 'cr-case-table element should exist at index 1');
   assert.ok(Array.isArray(caseTableEl.cases), 'cases property should be set on the table');
-  assert.equal(caseTableEl.cases.length, 3, 'one case per In-progress case assigned to reviewer');
+  assert.equal(caseTableEl.cases.length, 7, 'one case per In-progress case assigned to reviewer');
 });
 
 test('CRDashboard: owner capability causes cr-owner-summary to be added to layout', async () => {
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeStubClient());
   el.currentUserId = 'user-owner';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: ['hello-review'] };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: ["hello-review"], isResponsibleParty: false };
   await el.connectedCallback();
 
   // _children: [h1, caseTable, allocationEl, ownerSection]
@@ -240,7 +240,7 @@ test('CRDashboard: reviewer-only capability does not show cr-owner-summary', asy
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeStubClient());
   el.currentUserId = 'user-reviewer';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [] };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false };
   await el.connectedCallback();
 
   // _children: [h1, caseTable, allocationEl] — no owner section
@@ -261,7 +261,7 @@ test('CRDashboard: layout includes a cr-allocation element at index 2 for review
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeStubClient());
   el.currentUserId = 'user-reviewer';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [] };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false };
   el.eligibleCaseTypes = ['hello-review'];
   await el.connectedCallback();
 

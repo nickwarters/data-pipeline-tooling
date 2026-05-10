@@ -15,7 +15,7 @@ export class CRDashboard extends CRElement {
     /** @type {string} */
     this.currentUserId = '';
     /** @type {Capabilities} */
-    this.capabilities = { isReviewer: false, ownedCaseTypes: [] };
+    this.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false };
     /** @type {string[]} */
     this.eligibleCaseTypes = [];
   }

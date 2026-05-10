@@ -85,7 +85,7 @@ test('CRDashboard: reviewer capability — outstanding Cases heading and allocat
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeClient());
   el.currentUserId = 'user-reviewer';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [] };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false };
   el.eligibleCaseTypes = ['hello-review'];
 
   await el.connectedCallback();
@@ -99,7 +99,7 @@ test('CRDashboard: owner-only capability — owner summary visible, no outstandi
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeClient());
   el.currentUserId = 'user-owner';
-  el.capabilities = { isReviewer: false, ownedCaseTypes: ['hello-review'] };
+  el.capabilities = { isReviewer: false, ownedCaseTypes: ["hello-review"], isResponsibleParty: false };
   el.eligibleCaseTypes = [];
 
   await el.connectedCallback();
@@ -113,7 +113,7 @@ test('CRDashboard: admin capability — both reviewer and owner sections visible
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeClient());
   el.currentUserId = 'user-admin';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: ['hello-review'] };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: ["hello-review"], isResponsibleParty: false };
   el.eligibleCaseTypes = ['hello-review'];
 
   await el.connectedCallback();
@@ -127,7 +127,7 @@ test('CRDashboard: reviewer with no ownedCaseTypes never renders owner section (
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeClient());
   el.currentUserId = 'user-reviewer';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [] };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false };
   el.eligibleCaseTypes = ['hello-review'];
 
   // Must not throw.
@@ -155,7 +155,7 @@ test('CRDashboard: cr-allocation element listens for cr-allocated and re-fetches
   const el = new CRDashboard();
   el.client = /** @type {any} */ (client);
   el.currentUserId = 'user-reviewer';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [] };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false };
   el.eligibleCaseTypes = ['hello-review'];
 
   await el.connectedCallback();

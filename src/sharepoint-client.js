@@ -23,6 +23,7 @@
  *   conversation: Message[],
  *   notes: string,
  *   completedAt: string | null,
+ *   outcome?: string | null,
  *   dueDate?: string | null,
  *   relatedDate?: string | null,
  *   created?: string,
@@ -45,7 +46,7 @@
  */
 
 /**
- * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string }} ListCasesFilter
+ * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string }} ListCasesFilter
  */
 
 /**
