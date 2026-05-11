@@ -13,6 +13,8 @@ export class CRQuestion extends CRElement {
     this.question = null;
     /** @type {string | string[]} */
     this.currentValue = '';
+    /** @type {'edit'|'read-only'|'hidden'} */
+    this.access = 'edit';
   }
 
   connectedCallback() {
@@ -103,7 +105,9 @@ export class CRQuestion extends CRElement {
       radio.name = `cr-q-${q.id}`;
       radio.value = opt;
       radio.checked = current === opt;
+      if (this.access === 'read-only') radio.disabled = true;
       radio.addEventListener('change', () => {
+        if (this.access === 'read-only') return;
         this.dispatchEvent(new CustomEvent('cr-answer', {
           detail: { questionId: q.id, value: opt },
           bubbles: true,
@@ -131,7 +135,9 @@ export class CRQuestion extends CRElement {
       checkbox.name = `cr-q-${q.id}`;
       checkbox.value = opt;
       checkbox.checked = selected.has(opt);
+      if (this.access === 'read-only') checkbox.disabled = true;
       checkbox.addEventListener('change', () => {
+        if (this.access === 'read-only') return;
         const next = new Set(selected);
         if (checkbox.checked) next.add(opt);
         else next.delete(opt);

@@ -21,6 +21,8 @@ export class CRConversation extends CRElement {
     this.currentUser = null;
     /** @type {(() => void) | null} */
     this._visibilityHandler = null;
+    /** @type {'edit'|'read-only'|'hidden'} */
+    this.access = 'edit';
   }
 
   connectedCallback() {
@@ -70,7 +72,9 @@ export class CRConversation extends CRElement {
       children.push(/** @type {any} */ (list));
     }
 
-    children.push(/** @type {any} */ (this._renderCompose()));
+    if (this.access === 'edit') {
+      children.push(/** @type {any} */ (this._renderCompose()));
+    }
     this.replaceChildren(...children);
   }
 

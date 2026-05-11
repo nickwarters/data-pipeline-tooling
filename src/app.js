@@ -94,6 +94,8 @@ async function boot() {
       el.client = client;
       el.saveQueue = saveQueue;
       el.caseId = params.id;
+      el.currentUserId = currentUser.id;
+      el.capabilities = capabilities;
       container.replaceChildren(el);
     },
     unmount() {},

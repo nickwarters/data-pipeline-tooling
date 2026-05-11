@@ -3,6 +3,7 @@ import { CRElement } from './cr-element.js';
 import { signal, computed } from './signal.js';
 import { evaluate } from './applicability-evaluator.js';
 import { materializeRemediationActions } from './failure-evaluator.js';
+import { evaluateAccess, resolveRoles, SECTIONS } from './section-access.js';
 import './cr-question-list.js';
 import './cr-remediation-section.js';
 import './cr-conversation.js';
@@ -35,6 +36,10 @@ export class CRCaseReview extends CRElement {
     this.saveQueue = null;
     /** @type {string} */
     this.caseId = '';
+    /** @type {string} */
+    this.currentUserId = '';
+    /** @type {import('./permissions.js').Capabilities | null} */
+    this.capabilities = null;
   }
 
   async connectedCallback() {
@@ -73,7 +78,32 @@ export class CRCaseReview extends CRElement {
       return applicableQuestions.get().every(q => !!answers[q.id]?.value);
     });
 
-    this._buildLayout(caseRow, catalogue, config.computeOutcome, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser);
+    const currentUserId = this.currentUserId || currentUser.id;
+    const capabilities = this.capabilities || /** @type {import('./permissions.js').Capabilities} */ (
+      { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false }
+    );
+    const roles = resolveRoles(caseRow, currentUserId, capabilities);
+    /** @type {Record<import('./section-access.js').Section, import('./section-access.js').Mode>} */
+    const access = /** @type {any} */ ({});
+    for (const s of SECTIONS) access[s] = evaluateAccess(s, roles, caseRow, config);
+
+    if (SECTIONS.every(s => access[s] === 'hidden')) {
+      this._renderAccessDenied();
+      return;
+    }
+
+    this._buildLayout(caseRow, catalogue, config.computeOutcome, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access);
+  }
+
+  _renderAccessDenied() {
+    const panel = document.createElement('section');
+    panel.className = 'cr-access-denied';
+    const h2 = document.createElement('h2');
+    h2.textContent = 'Access denied';
+    const p = document.createElement('p');
+    p.textContent = 'You do not have access to this case.';
+    panel.append(h2, p);
+    this.replaceChildren(panel);
   }
 
   /**
@@ -86,8 +116,9 @@ export class CRCaseReview extends CRElement {
    * @param {{ get: () => QuestionDefinition[] }} applicableQuestions
    * @param {{ get: () => boolean }} allAnswered
    * @param {CurrentUser} currentUser
+   * @param {Record<import('./section-access.js').Section, import('./section-access.js').Mode>} access
    */
-  _buildLayout(caseRow, catalogue, computeOutcome, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser) {
+  _buildLayout(caseRow, catalogue, computeOutcome, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access) {
     const header = document.createElement('header');
     const h1 = document.createElement('h1');
     h1.textContent = caseRow.title;
@@ -114,12 +145,14 @@ export class CRCaseReview extends CRElement {
     const qList = /** @type {import('./cr-question-list.js').CRQuestionList} */ (
       document.createElement('cr-question-list')
     );
+    qList.access = access.questions;
     section.append(h2, qList);
 
     /** @type {Map<string, QuestionDefinition>} */
     const byId = new Map(catalogue.map(q => [q.id, q]));
 
     section.addEventListener('cr-answer', (ev) => {
+      if (access.questions !== 'edit') return;
       const { questionId, value } =
         /** @type {CustomEvent<{ questionId: string, value: string | string[] }>} */ (ev).detail;
       const q = byId.get(questionId);
@@ -164,8 +197,11 @@ export class CRCaseReview extends CRElement {
     completeBtn.textContent = 'Complete Case';
     completeBtn.hidden = true;
 
+    const canComplete = access.questions === 'edit'
+      && caseRow.assignedReviewer === (this.currentUserId || currentUser.id)
+      && caseRow.status === 'In-progress';
     this.subscribe(allAnswered, answered => {
-      completeBtn.hidden = !answered;
+      completeBtn.hidden = !(answered && canComplete);
     });
 
     completeBtn.addEventListener('click', async () => {
@@ -182,6 +218,7 @@ export class CRCaseReview extends CRElement {
     conversationEl.saveQueue = saveQueue;
     conversationEl.caseId = caseRow.id;
     conversationEl.currentUser = currentUser;
+    conversationEl.access = access.conversation;
     conversationEl._messages = caseRow.conversation.slice();
 
     const notesEl = /** @type {import('./cr-notes.js').CRNotes} */ (
@@ -190,8 +227,29 @@ export class CRCaseReview extends CRElement {
     notesEl.notes = caseRow.notes;
     notesEl.saveQueue = saveQueue;
     notesEl.caseId = caseRow.id;
+    notesEl.access = access.notes;
 
-    this.replaceChildren(bannerEl, header, statusEl, section, remediationSection, outcomeEl, conversationEl, notesEl, completeBtn);
+    /** @type {HTMLElement[]} */
+    const children = [
+      /** @type {HTMLElement} */ (/** @type {unknown} */ (bannerEl)),
+      header,
+      statusEl,
+      section,
+      /** @type {HTMLElement} */ (/** @type {unknown} */ (remediationSection)),
+      /** @type {HTMLElement} */ (/** @type {unknown} */ (outcomeEl)),
+      /** @type {HTMLElement} */ (/** @type {unknown} */ (conversationEl)),
+      /** @type {HTMLElement} */ (/** @type {unknown} */ (notesEl)),
+      completeBtn,
+    ];
+    // Hide rather than unmount so existing layout indices stay stable and so
+    // tests can still inspect properties on the hidden elements.
+    if (access.questions === 'hidden') section.hidden = true;
+    if (access.remediation === 'hidden') /** @type {any} */ (remediationSection).hidden = true;
+    if (access.outcome === 'hidden') /** @type {any} */ (outcomeEl).hidden = true;
+    if (access.conversation === 'hidden') /** @type {any} */ (conversationEl).hidden = true;
+    if (access.notes === 'hidden') /** @type {any} */ (notesEl).hidden = true;
+
+    this.replaceChildren(...children);
   }
 
   /**

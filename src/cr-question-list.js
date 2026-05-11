@@ -14,6 +14,8 @@ export class CRQuestionList extends CRElement {
     this.answers = {};
     /** @type {Set<string>} */
     this._renderedIds = new Set();
+    /** @type {'edit'|'read-only'|'hidden'} */
+    this.access = 'edit';
   }
 
   connectedCallback() {
@@ -57,6 +59,7 @@ export class CRQuestionList extends CRElement {
       // to the first input so screen-reader users land in the radio group.
       /** @type {any} */ (el).tabIndex = -1;
       el.question = q;
+      el.access = this.access;
       const v = this.answers[q.id]?.value;
       el.currentValue = v ?? (q.responseType === 'multi-choice' ? [] : '');
       return el;

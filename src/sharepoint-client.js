@@ -81,7 +81,8 @@
  * @typedef {{
  *   questions: QuestionDefinition[],
  *   computeOutcome: (answers: Record<string, Answer>) => OutcomeResult,
- *   eligibleGroups?: string[]
+ *   eligibleGroups?: string[],
+ *   sections?: Array<'questions'|'conversation'|'notes'|'remediation'|'outcome'>
  * }} CaseTypeConfig
  */
 
