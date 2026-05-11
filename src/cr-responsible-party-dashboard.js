@@ -1,6 +1,6 @@
 // @ts-check
 import { CRElement } from './cr-element.js';
-import './cr-case-table.js';
+import { CRCaseTable } from './cr-case-table.js';
 
 /** @typedef {import('./sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('./sharepoint-client.js').CaseRow} CaseRow */
@@ -30,8 +30,8 @@ export class CRResponsiblePartyDashboard extends CRElement {
     this._unreadCases = [];
     /** @type {string} */
     this._caseTypeFilter = '';
-    /** @type {'asc' | 'desc'} */
-    this._remediationSortDir = 'asc';
+    /** @type {CRCaseTable | null} */
+    this._remediationTable = null;
   }
 
   async connectedCallback() {
@@ -171,7 +171,7 @@ export class CRResponsiblePartyDashboard extends CRElement {
     const h2 = document.createElement('h2');
     h2.textContent = 'Outstanding Remediation Actions';
 
-    // Case type filter
+    // Case type filter (lives outside the cr-case-table — see ADR-0003)
     const caseTypes = [...new Set(this._remediationCases.map(c => c.caseType))];
     const select = document.createElement('select');
     select.className = 'cr-rp-remediation-filter';
@@ -189,114 +189,69 @@ export class CRResponsiblePartyDashboard extends CRElement {
     }
     select.addEventListener('change', (/** @type {any} */ e) => {
       this._caseTypeFilter = e.target?.value ?? '';
-      this._renderRemediationTable(section);
+      this._refreshRemediationCases();
     });
+
+    const table = this._buildRemediationTable();
+    this._remediationTable = table;
 
     section.replaceChildren(
       /** @type {any} */ (h2),
       /** @type {any} */ (select),
+      /** @type {any} */ (table),
     );
-    this._renderRemediationTable(section);
     return section;
   }
 
-  /** @param {any} section */
-  _renderRemediationTable(section) {
+  _buildRemediationTable() {
     const now = new Date().toISOString();
+    const table = new CRCaseTable();
+    /** @type {any} */ (table).toolbar = 'hidden';
+    /** @type {any} */ (table).sort = { key: 'dueDate', dir: 'asc' };
+    /** @type {any} */ (table).columns = [
+      {
+        key: 'reference',
+        label: 'Reference',
+        getValue: (/** @type {CaseRow} */ r) => r.title || r.id,
+      },
+      {
+        key: 'caseType',
+        label: 'Case Type',
+        getValue: (/** @type {CaseRow} */ r) => r.caseType,
+      },
+      {
+        key: 'dueDate',
+        label: 'Due Date',
+        sortable: true,
+        getValue: (/** @type {CaseRow} */ r) => r.dueDate || null,
+        renderCell: (/** @type {CaseRow} */ r) =>
+          r.dueDate ? new Date(r.dueDate).toLocaleDateString() : '—',
+      },
+      {
+        key: 'action',
+        label: 'Action required',
+        getValue: (/** @type {CaseRow} */ r) =>
+          this._getOpenActions(r).map(ra => ra.text).join('; '),
+      },
+    ];
+    /** @type {any} */ (table).rowClass = (/** @type {CaseRow} */ r) => {
+      const overdue = !!r.dueDate && r.dueDate < now;
+      return overdue ? 'cr-remediation-row cr-overdue' : 'cr-remediation-row';
+    };
+    table.cases = this._filteredRemediationCases();
+    table.connectedCallback();
+    return table;
+  }
 
-    let rows = this._remediationCases;
-    if (this._caseTypeFilter) {
-      rows = rows.filter(c => c.caseType === this._caseTypeFilter);
+  _filteredRemediationCases() {
+    if (!this._caseTypeFilter) return this._remediationCases;
+    return this._remediationCases.filter(c => c.caseType === this._caseTypeFilter);
+  }
+
+  _refreshRemediationCases() {
+    if (this._remediationTable) {
+      this._remediationTable.cases = this._filteredRemediationCases();
     }
-
-    // Sort by due date ascending (nulls last)
-    if (this._remediationSortDir === 'asc') {
-      rows = [...rows].sort((a, b) => {
-        if (!a.dueDate && !b.dueDate) return 0;
-        if (!a.dueDate) return 1;
-        if (!b.dueDate) return -1;
-        return a.dueDate < b.dueDate ? -1 : a.dueDate > b.dueDate ? 1 : 0;
-      });
-    } else {
-      rows = [...rows].sort((a, b) => {
-        if (!a.dueDate && !b.dueDate) return 0;
-        if (!a.dueDate) return 1;
-        if (!b.dueDate) return -1;
-        return a.dueDate > b.dueDate ? -1 : a.dueDate < b.dueDate ? 1 : 0;
-      });
-    }
-
-    const table = document.createElement('table');
-    table.className = 'cr-rp-remediation-table';
-    table.setAttribute('role', 'grid');
-
-    const thead = document.createElement('thead');
-    const headRow = document.createElement('tr');
-    for (const [label, cls] of [
-      ['Reference', 'cr-col-reference'],
-      ['Case Type', 'cr-col-casetype'],
-      ['Due Date', 'cr-col-duedate'],
-      ['Action required', 'cr-col-action'],
-    ]) {
-      const th = document.createElement('th');
-      th.setAttribute('scope', 'col');
-      th.className = /** @type {string} */ (cls);
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.textContent = /** @type {string} */ (label);
-      if (label === 'Due Date') {
-        btn.addEventListener('click', () => {
-          this._remediationSortDir = this._remediationSortDir === 'asc' ? 'desc' : 'asc';
-          this._renderRemediationTable(section);
-        });
-      }
-      th.appendChild(/** @type {any} */ (btn));
-      headRow.appendChild(/** @type {any} */ (th));
-    }
-    thead.appendChild(/** @type {any} */ (headRow));
-    table.appendChild(/** @type {any} */ (thead));
-
-    const tbody = document.createElement('tbody');
-    for (const c of rows) {
-      const isOverdue = !!c.dueDate && c.dueDate < now;
-      const openActions = this._getOpenActions(c);
-      const actionText = openActions.map(ra => ra.text).join('; ');
-
-      const tr = document.createElement('tr');
-      tr.className = `cr-remediation-row${isOverdue ? ' cr-overdue' : ''}`;
-      /** @type {any} */ (tr)._caseType = c.caseType;
-
-      const tdRef = document.createElement('td');
-      tdRef.textContent = c.title || c.id;
-
-      const tdType = document.createElement('td');
-      tdType.textContent = c.caseType;
-
-      const tdDue = document.createElement('td');
-      tdDue.textContent = c.dueDate ? new Date(c.dueDate).toLocaleDateString() : '—';
-
-      const tdAction = document.createElement('td');
-      tdAction.textContent = actionText;
-
-      tr.replaceChildren(
-        /** @type {any} */ (tdRef),
-        /** @type {any} */ (tdType),
-        /** @type {any} */ (tdDue),
-        /** @type {any} */ (tdAction),
-      );
-      tbody.appendChild(/** @type {any} */ (tr));
-    }
-    table.appendChild(/** @type {any} */ (tbody));
-
-    // Remove old table if present and append new one
-    const oldTable = /** @type {any} */ (section)._children?.find(
-      (/** @type {any} */ c) => c.className === 'cr-rp-remediation-table'
-    );
-    if (oldTable) {
-      const idx = /** @type {any} */ (section)._children.indexOf(oldTable);
-      if (idx !== -1) /** @type {any} */ (section)._children.splice(idx, 1);
-    }
-    /** @type {any} */ (section).appendChild(table);
   }
 
   _buildMessagesSection() {
@@ -306,9 +261,54 @@ export class CRResponsiblePartyDashboard extends CRElement {
     const h2 = document.createElement('h2');
     h2.textContent = 'Cases with Unread Messages';
 
-    const table = /** @type {import('./cr-case-table.js').CRCaseTable} */ (
-      document.createElement('cr-case-table')
-    );
+    const table = new CRCaseTable();
+    /** @type {any} */ (table).toolbar = 'hidden';
+    /** @type {any} */ (table).sort = { key: 'lastMessage', dir: 'desc' };
+    /** @type {any} */ (table).columns = [
+      {
+        key: 'reference',
+        label: 'Reference',
+        getValue: (/** @type {CaseRow} */ r) => r.title || r.id,
+        renderCell: (/** @type {CaseRow} */ r) => {
+          const a = document.createElement('a');
+          a.href = `#/case/${r.id}`;
+          a.textContent = r.title || r.id;
+          return a;
+        },
+      },
+      {
+        key: 'caseType',
+        label: 'Case Type',
+        getValue: (/** @type {CaseRow} */ r) => r.caseType,
+      },
+      {
+        key: 'lastMessage',
+        label: 'Last message',
+        sortable: true,
+        getValue: (/** @type {CaseRow} */ r) => r.conversation.at(-1)?.timestamp ?? null,
+        renderCell: (/** @type {CaseRow} */ r) => {
+          const ts = r.conversation.at(-1)?.timestamp;
+          return ts ? new Date(ts).toLocaleString() : '—';
+        },
+      },
+      {
+        key: 'actions',
+        label: 'Actions',
+        renderCell: (/** @type {CaseRow} */ r) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'cr-case-open-btn';
+          btn.textContent = 'Open';
+          btn.setAttribute('aria-label', `Open ${r.title || r.id}`);
+          btn.addEventListener('click', () => {
+            table.dispatchEvent(new CustomEvent('cr-case-open', {
+              detail: { caseId: r.id }, bubbles: true,
+            }));
+          });
+          return btn;
+        },
+      },
+    ];
     table.cases = this._unreadCases;
     table.addEventListener('cr-case-open', (/** @type {any} */ e) => {
       this.dispatchEvent(new CustomEvent('cr-open-conversation', {
@@ -316,6 +316,7 @@ export class CRResponsiblePartyDashboard extends CRElement {
         bubbles: true,
       }));
     });
+    table.connectedCallback();
 
     section.replaceChildren(
       /** @type {any} */ (h2),

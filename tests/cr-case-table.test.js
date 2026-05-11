@@ -396,3 +396,64 @@ test('CRCaseTable: status select has aria-label', () => {
   assert.ok(select, 'should have select');
   assert.equal(select.getAttribute('aria-label'), 'Filter by status', 'select needs aria-label');
 });
+
+test('CRCaseTable: custom columns override defaults', () => {
+  const el = new CRCaseTable();
+  /** @type {any} */ (el).columns = [
+    { key: 'reference', label: 'Ref', getValue: (/** @type {any} */ r) => r.title },
+    { key: 'caseType', label: 'Type', getValue: (/** @type {any} */ r) => r.caseType },
+  ];
+  el.cases = [makeCase({ id: 'c1', title: 'My Case', caseType: 'audit' })];
+  el.connectedCallback();
+  const ths = findAll(el, 'th');
+  assert.equal(ths.length, 2, 'should render only the two custom columns');
+  const rows = findAll(el, 'tr');
+  // 1 header row + 1 data row
+  assert.equal(rows.length, 2);
+});
+
+test('CRCaseTable: rowClass is applied to data rows', () => {
+  const el = new CRCaseTable();
+  /** @type {any} */ (el).columns = [
+    { key: 'reference', label: 'Ref', getValue: (/** @type {any} */ r) => r.title },
+  ];
+  /** @type {any} */ (el).rowClass = (/** @type {any} */ r) => r.id === 'flag' ? 'cr-flagged' : '';
+  el.cases = [
+    makeCase({ id: 'flag', title: 'Flagged' }),
+    makeCase({ id: 'ok', title: 'Normal' }),
+  ];
+  el.connectedCallback();
+  const dataRows = findAll(el, 'tr').filter(r => r._children[0]?.tagName === 'TD');
+  assert.equal(dataRows.length, 2);
+  assert.equal(dataRows[0].className, 'cr-flagged');
+  assert.equal(dataRows[1].className, '');
+});
+
+test('CRCaseTable: hidden toolbar omits filter input and status select', () => {
+  const el = new CRCaseTable();
+  /** @type {any} */ (el).toolbar = 'hidden';
+  /** @type {any} */ (el).columns = [
+    { key: 'reference', label: 'Ref', getValue: (/** @type {any} */ r) => r.title },
+  ];
+  el.cases = [makeCase()];
+  el.connectedCallback();
+  assert.equal(findFirst(el, 'input'), undefined, 'no filter input when hidden');
+  assert.equal(findFirst(el, 'select'), undefined, 'no status select when hidden');
+});
+
+test('CRCaseTable: initial sort prop drives default order', () => {
+  const el = new CRCaseTable();
+  /** @type {any} */ (el).columns = [
+    { key: 'reference', label: 'Ref', sortable: true, getValue: (/** @type {any} */ r) => r.title },
+  ];
+  /** @type {any} */ (el).sort = { key: 'reference', dir: 'desc' };
+  el.cases = [
+    makeCase({ id: 'a', title: 'Alpha' }),
+    makeCase({ id: 'b', title: 'Beta' }),
+    makeCase({ id: 'c', title: 'Gamma' }),
+  ];
+  el.connectedCallback();
+  const dataRows = findAll(el, 'tr').filter(r => r._children[0]?.tagName === 'TD');
+  const titles = dataRows.map(r => r._children[0].textContent);
+  assert.deepEqual(titles, ['Gamma', 'Beta', 'Alpha']);
+});

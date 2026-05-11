@@ -60,6 +60,40 @@ class StubCustomEvent {
 
 // ===== IMPORTS (after stubs) =====
 const { CRResponsiblePartyDashboard } = await import('../src/cr-responsible-party-dashboard.js');
+const { CRCaseTable } = await import('../src/cr-case-table.js');
+
+/**
+ * Find CRCaseTable instances by walking _children (custom-element tagNames
+ * aren't set in the stub DOM since `customElements.define` is a noop).
+ * @param {any} root
+ * @returns {any[]}
+ */
+function findCaseTables(root) {
+  /** @type {any[]} */
+  const out = [];
+  /** @param {any} n */
+  function walk(n) {
+    if (n instanceof CRCaseTable) out.push(n);
+    for (const c of n._children ?? []) walk(c);
+  }
+  walk(root);
+  return out;
+}
+
+/**
+ * Find a section by className and return the CRCaseTable inside.
+ * @param {any} root
+ * @param {string} sectionClass
+ */
+function caseTableInSection(root, sectionClass) {
+  for (const sec of findAll(root, 'section')) {
+    if (sec.className === sectionClass) {
+      const tables = findCaseTables(sec);
+      return tables[0];
+    }
+  }
+  return undefined;
+}
 
 // ===== HELPERS =====
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
@@ -320,8 +354,9 @@ test('CRResponsiblePartyDashboard: remediation table filterable by case type', a
   el._setCaseTypeFilter('hello-review');
   const rows = findAll(el, 'tr').filter(r => r.className.includes('cr-remediation-row'));
   assert.equal(rows.length, 1);
-  const allTypes = /** @type {any[]} */ (rows).map(r => r._caseType);
-  assert.ok(allTypes.every(t => t === 'hello-review'));
+  // Case Type is the second cell in the remediation column set
+  const caseTypeCells = rows.map(r => r._children[1]?.textContent);
+  assert.ok(caseTypeCells.every(t => t === 'hello-review'));
 });
 
 test('CRResponsiblePartyDashboard: sort by due date ascending puts earliest due first', async () => {
@@ -423,9 +458,11 @@ test('CRResponsiblePartyDashboard: unread messages section uses cr-case-table wi
   el.client = /** @type {any} */ (makeClient(cases));
   el.currentUserId = 'user-rp';
   await el.connectedCallback();
-  const tables = findAll(el, 'cr-case-table');
-  assert.equal(tables.length, 1, 'should have exactly one cr-case-table (unread messages)');
-  assert.equal((/** @type {any} */ (tables[0])).cases.length, 2, 'table should have the two unread cases');
+  const allTables = findCaseTables(el);
+  assert.equal(allTables.length, 2, 'should have two cr-case-table instances (remediation + unread)');
+  const unreadTable = caseTableInSection(el, 'cr-rp-messages');
+  assert.ok(unreadTable, 'unread section should contain a cr-case-table');
+  assert.equal(unreadTable.cases.length, 2, 'table should have the two unread cases');
 });
 
 test('CRResponsiblePartyDashboard: cr-case-open on unread table dispatches cr-open-conversation event', async () => {
@@ -444,9 +481,9 @@ test('CRResponsiblePartyDashboard: cr-case-open on unread table dispatches cr-op
   const fired = [];
   /** @type {any} */ (el).addEventListener('cr-open-conversation', (/** @type {any} */ e) => fired.push(e));
 
-  const tables = findAll(el, 'cr-case-table');
-  assert.equal(tables.length, 1);
-  const handler = (/** @type {any} */ (tables[0]))._listeners['cr-case-open']?.[0];
+  const unreadTable = caseTableInSection(el, 'cr-rp-messages');
+  assert.ok(unreadTable, 'unread section should contain a cr-case-table');
+  const handler = unreadTable._listeners['cr-case-open']?.[0];
   assert.ok(handler, 'cr-case-table should have a cr-case-open listener');
   handler({ detail: { caseId: 'c1' } });
   assert.equal(fired.length, 1);
