@@ -35,6 +35,17 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 - **Custom elements use the `cr-` prefix** (also the CSS namespace).
 - **Question Definitions are never deleted** — use a `deprecated` flag (avoids dangling references from Case Type modules).
 
+## Test discipline: Red-Green-Refactor, 100% coverage
+
+**Every line of production code must be covered by a test.** No exceptions.
+
+Workflow for all new code:
+1. **Red** — write a failing test for the behaviour you are about to add.
+2. **Green** — write the minimum production code to make it pass.
+3. **Refactor** — clean up, keeping tests green.
+
+Never merge production code without a corresponding test. Run `node --test --experimental-test-coverage` to verify coverage before committing. A branch, line, or function that appears in the coverage report as uncovered is a bug in the development process, not just the code.
+
 ## Repository state
 
 Pre-implementation. As of this commit there is no source code — only the README, CLAUDE.md, CONTEXT.md, docs/PLAN.md, and the ADRs. The first work is **Slice 1** in PLAN.md.

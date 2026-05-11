@@ -1,6 +1,16 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+
+/** @type {Record<string, Function[]>} */
+const windowListeners = {};
+(/** @type {any} */ (globalThis)).window = {
+  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
+    (windowListeners[t] ??= []).push(h);
+  },
+};
+(/** @type {any} */ (globalThis)).location = { hash: '' };
+
 import { Router } from '../src/router.js';
 
 test('Router: mount is called when navigating to a registered static hash', () => {
@@ -90,4 +100,60 @@ test('Router: unregistered hash does not unmount the current view', () => {
   router.navigate('#/dashboard');
   router.navigate('#/not-registered');
   assert.deepEqual(log, ['mount']);
+});
+
+test('Router: init sets container, registers hashchange listener, and navigates to current hash', () => {
+  const router = new Router();
+  const container = /** @type {any} */ ({});
+  /** @type {string[]} */
+  const log = [];
+
+  router.register('#/', {
+    mount: (el, params) => log.push(`mount:root`),
+    unmount: () => log.push('unmount:root'),
+  });
+
+  (/** @type {any} */ (globalThis)).location.hash = '#/';
+  router.init(container);
+
+  assert.equal(router._container, container);
+  assert.ok(windowListeners['hashchange']?.length > 0, 'hashchange listener should be registered');
+  assert.deepEqual(log, ['mount:root']);
+});
+
+test('Router: init with empty hash navigates to #/', () => {
+  const router = new Router();
+  const container = /** @type {any} */ ({});
+  /** @type {string[]} */
+  const log = [];
+
+  router.register('#/', {
+    mount: () => log.push('mount:root'),
+    unmount: () => {},
+  });
+
+  (/** @type {any} */ (globalThis)).location.hash = '';
+  router.init(container);
+
+  assert.deepEqual(log, ['mount:root']);
+});
+
+test('Router: hashchange event triggers navigation', () => {
+  const router = new Router();
+  const container = /** @type {any} */ ({});
+  /** @type {string[]} */
+  const log = [];
+
+  router.register('#/dashboard', {
+    mount: () => log.push('mount:dashboard'),
+    unmount: () => log.push('unmount:dashboard'),
+  });
+
+  (/** @type {any} */ (globalThis)).location.hash = '';
+  router.init(container);
+
+  (/** @type {any} */ (globalThis)).location.hash = '#/dashboard';
+  (windowListeners['hashchange'] ?? []).forEach(fn => fn());
+
+  assert.ok(log.includes('mount:dashboard'));
 });

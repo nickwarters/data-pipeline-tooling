@@ -131,3 +131,10 @@ test('CRStatusBanner: conflict banner remains rendered when status updated again
   const banner = (/** @type {any} */ (el))._children[0];
   assert.equal(banner.className, 'cr-banner cr-banner-conflict');
 });
+
+test('CRStatusBanner: connectedCallback with null saveQueue is a no-op', () => {
+  const el = new CRStatusBanner();
+  el.saveQueue = null;
+  assert.doesNotThrow(() => el.connectedCallback());
+  assert.equal((/** @type {any} */ (el))._children.length, 0);
+});

@@ -457,3 +457,31 @@ test('CRCaseTable: initial sort prop drives default order', () => {
   const titles = dataRows.map(r => r._children[0].textContent);
   assert.deepEqual(titles, ['Gamma', 'Beta', 'Alpha']);
 });
+
+test('CRCaseTable: case with empty title falls back to id in Open button aria-label', () => {
+  const el = new CRCaseTable();
+  el.cases = [makeCase({ id: 'case-no-title', title: '' })];
+  el.connectedCallback();
+  const openBtn = findAll(el, 'button').find(b => b.className === 'cr-case-open-btn');
+  assert.ok(openBtn, 'should have open button');
+  assert.equal(openBtn._attrs['aria-label'], 'Open case-no-title');
+});
+
+test('CRCaseTable: free-text filter matches by status field', () => {
+  const el = new CRCaseTable();
+  el.cases = [
+    makeCase({ id: 'c1', title: 'Unique Title', status: 'In-progress' }),
+    makeCase({ id: 'c2', title: 'Another', status: 'Completed' }),
+  ];
+  el.connectedCallback();
+
+  const filterInput = /** @type {any} */ (findFirst(el, 'input'));
+  filterInput.value = 'completed';
+  for (const h of filterInput._listeners['input'] ?? []) {
+    h({ target: filterInput });
+  }
+
+  const rows = findAll(el, 'tr').filter(r => r.className === 'cr-case-row');
+  assert.equal(rows.length, 1, 'should match one row by status');
+  assert.equal(findAll(rows[0], 'a')[0]?.href, '#/case/c2');
+});

@@ -231,3 +231,19 @@ test('CRRemediationSection: skips failed questions without remediationActions', 
 
   assert.ok(findByClass(el, 'cr-remediation-empty'));
 });
+
+test('CRRemediationSection: _renderItem with no answer shows empty string via ?? fallback', () => {
+  /** @type {QuestionDefinition} */
+  const q = {
+    id: 'q-missing',
+    text: 'Missing answer?',
+    responseType: 'yes-no-na',
+    remediationActions: ['Do something'],
+    deprecated: false,
+  };
+  const el = new CRRemediationSection();
+  el.answers = {};
+  const item = /** @type {any} */ (el)._renderItem(q);
+  const answerEl = findByClass(item, 'cr-remediation-answer');
+  assert.equal(answerEl.textContent, 'Answer: ');
+});

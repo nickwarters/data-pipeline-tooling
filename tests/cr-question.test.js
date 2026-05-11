@@ -407,3 +407,29 @@ test('CRQuestion: multi-choice deselecting last option dispatches empty array', 
   const ev = (/** @type {any} */ (el))._lastDispatched;
   assert.deepEqual(ev.detail, { questionId: 'q-chan', value: [] });
 });
+
+test('CRQuestion: focus() forwards to the first input element', () => {
+  /** @type {QuestionDefinition} */
+  const qd = { id: 'q-focus', text: 'Focus test?', responseType: 'yes-no-na', deprecated: false };
+  const el = new CRQuestion();
+  el.question = qd;
+  el.connectedCallback();
+
+  let focusCalled = false;
+  const mockInput = { focus() { focusCalled = true; } };
+  /** @type {any} */ (el).querySelector = () => mockInput;
+
+  el.focus();
+  assert.equal(focusCalled, true);
+});
+
+test('CRQuestion: focus() is a no-op when querySelector returns null', () => {
+  /** @type {QuestionDefinition} */
+  const qd = { id: 'q-focus2', text: 'Focus null?', responseType: 'yes-no-na', deprecated: false };
+  const el = new CRQuestion();
+  el.question = qd;
+  el.connectedCallback();
+
+  /** @type {any} */ (el).querySelector = () => null;
+  assert.doesNotThrow(() => el.focus());
+});

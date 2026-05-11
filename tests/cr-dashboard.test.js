@@ -232,3 +232,24 @@ test('CRDashboard: cr-allocation element listens for cr-allocated and re-fetches
 
   assert.ok(fetchCount > initialFetchCount, 'should re-fetch cases after cr-allocated event');
 });
+
+test('CRDashboard: cr-case-open event on case table navigates to #/case/{id}', async () => {
+  const el = new CRDashboard();
+  el.client = /** @type {any} */ (makeClient());
+  el.currentUserId = 'user-reviewer';
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false };
+  el.eligibleCaseTypes = [];
+
+  (/** @type {any} */ (globalThis)).location.hash = '';
+  await el.connectedCallback();
+
+  const caseTable = findAll(el, 'cr-case-table')[0];
+  assert.ok(caseTable, 'should have a case table');
+
+  const event = { type: 'cr-case-open', detail: { caseId: 'case-42' } };
+  for (const h of (/** @type {any} */ (caseTable))._listeners['cr-case-open'] ?? []) {
+    h(event);
+  }
+
+  assert.equal((/** @type {any} */ (globalThis)).location.hash, '#/case/case-42');
+});

@@ -340,3 +340,43 @@ test('CRConversation: new message author comes from currentUser.displayName', as
   const author = findByClass(item, 'cr-message-author');
   assert.equal(author.textContent, 'Test Author');
 });
+
+test('CRConversation: disconnectedCallback removes the visibilitychange listener', async () => {
+  const el = new CRConversation();
+  el._messages = [];
+  el.caseId = 'case-1';
+  el.currentUser = CURRENT_USER;
+  el.client = /** @type {any} */ (makeStubClient({ conversation: [] }));
+  el.saveQueue = /** @type {any} */ (makeStubSaveQueue());
+
+  const before = (docListeners['visibilitychange'] ?? []).length;
+  el.connectedCallback();
+  assert.equal((docListeners['visibilitychange'] ?? []).length, before + 1, 'listener should be added on connect');
+
+  el.disconnectedCallback();
+  assert.equal((docListeners['visibilitychange'] ?? []).length, before, 'listener should be removed on disconnect');
+  assert.equal((/** @type {any} */ (el))._visibilityHandler, null, '_visibilityHandler should be nulled');
+});
+
+test('CRConversation: visibilitychange fires _refresh when document is not hidden', async () => {
+  const client = makeStubClient({ conversation: [{ author: 'Alex', timestamp: '2026-05-07T09:00:00Z', body: 'Hello' }] });
+  const el = new CRConversation();
+  el._messages = [];
+  el.caseId = 'case-1';
+  el.currentUser = CURRENT_USER;
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = /** @type {any} */ (makeStubSaveQueue());
+  el.connectedCallback();
+
+  assert.equal(findAllByClass(el, 'cr-conversation-message').length, 0, 'no messages before refresh');
+
+  // Simulate tab becoming visible
+  (/** @type {any} */ (globalThis)).document.hidden = false;
+  const handlers = docListeners['visibilitychange'] ?? [];
+  for (const h of handlers) h();
+
+  // _refresh is async; wait for it
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(findAllByClass(el, 'cr-conversation-message').length, 1, 'refresh should load messages');
+});

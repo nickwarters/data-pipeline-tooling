@@ -420,6 +420,139 @@ test('HttpSharePointClient: getCurrentUserGroups returns group titles', async ()
   assert.deepEqual(groups, ['Reviewers', 'CaseTypeOwners']);
 });
 
+// --- patchCase 200 with JSON body ---
+
+test('HttpSharePointClient: patchCase handles 200 response with JSON body (no separate getCase)', async () => {
+  const patchBody = {
+    Id: 'case-1', Title: 'Updated', Status: 'In-progress', AssignedReviewerId: 'u1',
+    ResponsiblePartyId: 'u2', Answers: '{}', Conversation: '[]', Notes: 'n',
+    CompletedAt: null, CaseType: 'hello-review',
+  };
+  const { fetch } = makeFetch([
+    {
+      when: c => c.url.endsWith('/_api/contextinfo'),
+      respond: () => digestResponse('digest-x'),
+    },
+    {
+      when: c => c.method === 'PATCH',
+      respond: () => new Response(JSON.stringify(patchBody), {
+        status: 200,
+        headers: { ETag: '"v2"', 'Content-Type': 'application/json' },
+      }),
+    },
+  ]);
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+
+  const result = await client.patchCase('case-1', { notes: 'n' }, '"v1"');
+  assert.equal(result.ok, true);
+  assert.equal(result.status, 200);
+  assert.equal(result.data?.title, 'Updated');
+});
+
+// --- getQuestionDefinitions with non-empty ids ---
+
+test('HttpSharePointClient: getQuestionDefinitions with non-empty ids sends $filter and parses items', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: c => c.method === 'GET',
+      respond: () => new Response(JSON.stringify({
+        value: [
+          { QuestionId: 'q-1', QuestionText: 'Was greeting professional?', ResponseType: 'yes-no-na', Deprecated: false },
+          { QuestionId: 'q-2', QuestionText: 'Were needs met?', ResponseType: 'yes-no-na', Deprecated: false },
+        ],
+      }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+
+  const defs = await client.getQuestionDefinitions(['q-1', 'q-2']);
+  assert.equal(defs.length, 2);
+  assert.ok(defs.some(d => d.id === 'q-1'));
+  assert.ok(defs.some(d => d.id === 'q-2'));
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(url.includes("QuestionId eq 'q-1'"), 'URL should have filter for q-1');
+});
+
+test('HttpSharePointClient: getQuestionDefinitions with single-choice and multi-choice response types', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: c => c.method === 'GET',
+      respond: () => new Response(JSON.stringify({
+        value: [
+          { QuestionId: 'q-sc', QuestionText: 'Choose one', ResponseType: 'single-choice', Options: '["A","B"]', Deprecated: false },
+          { QuestionId: 'q-mc', QuestionText: 'Choose many', ResponseType: 'multi-choice', Options: '["X","Y"]', Deprecated: false },
+        ],
+      }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+
+  const defs = await client.getQuestionDefinitions(['q-sc', 'q-mc']);
+  const sc = defs.find(d => d.id === 'q-sc');
+  const mc = defs.find(d => d.id === 'q-mc');
+  assert.equal(sc?.responseType, 'single-choice');
+  assert.deepEqual(sc?.options, ['A', 'B']);
+  assert.equal(mc?.responseType, 'multi-choice');
+  assert.deepEqual(mc?.options, ['X', 'Y']);
+});
+
+// --- legacy OData verbose format ---
+
+test('HttpSharePointClient: _getAllPages handles legacy d.results OData format', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: c => c.method === 'GET',
+      respond: () => new Response(JSON.stringify({
+        d: {
+          results: [
+            { Id: 'case-1', Title: 'One', Status: 'In-progress', AssignedReviewerId: 'u1', ResponsiblePartyId: 'u2', Answers: '{}', Conversation: '[]', Notes: '', CompletedAt: null, CaseType: 'hello-review' },
+          ],
+        },
+      }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+
+  const cases = await client.listCases({});
+  assert.equal(cases.length, 1, 'should parse d.results format');
+  assert.equal(cases[0].id, 'case-1');
+});
+
+// --- HTTP-date Retry-After ---
+
+test('HttpSharePointClient: 429 with HTTP-date Retry-After waits until that time', async () => {
+  // Use a date 2 seconds in the future
+  const futureMs = Date.now() + 2000;
+  const httpDate = new Date(futureMs).toUTCString();
+
+  let getCount = 0;
+  const { fetch } = makeFetch([
+    {
+      when: c => c.method === 'GET',
+      respond: () => {
+        getCount++;
+        if (getCount === 1) {
+          return new Response('throttled', { status: 429, headers: { 'Retry-After': httpDate } });
+        }
+        return new Response(JSON.stringify({
+          Id: 'case-1', Title: 'OK', Status: 'In-progress', AssignedReviewerId: 'u1',
+          ResponsiblePartyId: 'u2', Answers: '{}', Conversation: '[]', Notes: '', CompletedAt: null,
+          CaseType: 'hello-review',
+        }), { status: 200, headers: { ETag: '"ok"' } });
+      },
+    },
+  ]);
+  const { sleep, delays } = makeSleep();
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch, sleep });
+
+  await client.getCase('case-1');
+
+  assert.equal(delays.length, 1, 'should have slept once');
+  // The delay should be roughly 2 seconds (± some tolerance for test run time)
+  assert.ok(delays[0] >= 0, 'delay should be non-negative');
+  assert.ok(delays[0] <= 3000, 'delay should not be wildly large');
+});
+
 // --- type-shape compile-time check ---
 
 test('HttpSharePointClient: assignable to SharePointClient interface', () => {

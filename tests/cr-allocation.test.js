@@ -265,3 +265,11 @@ test('CRAllocation: _requestNextCase does not navigate and dispatches cr-allocat
   assert.equal(dispatched.length, 1, 'should dispatch cr-allocated event once');
   assert.equal(dispatched[0].detail.caseId, 'c-nav', 'event detail should carry the allocated case id');
 });
+
+test('CRAllocation: _getUnassignedCases returns empty array when client is null', async () => {
+  const el = new CRAllocation();
+  el.client = null;
+  el.eligibleCaseTypes = ['hello-review'];
+  const result = await el._getUnassignedCases();
+  assert.deepEqual(result, []);
+});

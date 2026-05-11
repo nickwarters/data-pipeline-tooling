@@ -254,3 +254,14 @@ test('detectCycles: reference to unknown ID is not a cycle → false', () => {
   const catalogue = [q('q1', { unknown: { equals: 'Yes' } })];
   assert.equal(detectCycles(catalogue), false);
 });
+
+test('evaluate: showWhen with unknown operator evaluates to false (question not applicable)', () => {
+  const catalogue = [
+    q('q1'),
+    q('q2', { q1: { unsupportedOp: 'Yes' } }),
+  ];
+  const answers = { q1: ans('Yes') };
+  const result = evaluate(catalogue, answers);
+  assert.ok(result.has('q1'));
+  assert.ok(!result.has('q2'), 'unknown operator should make the condition evaluate to false');
+});

@@ -252,3 +252,50 @@ test('SaveQueue: conflict does not trigger a retry PATCH', async () => {
 
   assert.equal(client.patchCalls.length, 1);
 });
+
+test('SaveQueue: enqueue for unknown caseId auto-creates state and sends PATCH', async () => {
+  const client = makeClient();
+  const q = new SaveQueue(client, { debounceMs: 0 });
+  // Do NOT call loadCase — the caseId is unknown
+
+  q.enqueue('unknown-case', 'notes', 'auto-created');
+  await tick();
+
+  assert.equal(client.patchCalls.length, 1);
+  assert.deepEqual(client.patchCalls[0].fields, { notes: 'auto-created' });
+  // ETag should default to empty string
+  assert.equal(client.patchCalls[0].etag, '');
+});
+
+test('SaveQueue: patchCase exception is caught and treated as status 0 (reconnecting)', async () => {
+  const client = {
+    patchCalls: /** @type {any[]} */ ([]),
+    async patchCase(/** @type {string} */ _id, /** @type {Partial<CaseRow>} */ fields, /** @type {string} */ etag) {
+      this.patchCalls.push({ fields, etag });
+      throw new Error('Network failure');
+    },
+    async getCase() { return null; },
+  };
+  const q = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
+  q.loadCase(BASE_ROW);
+
+  q.enqueue('c1', 'notes', 'boom');
+  await tick();
+
+  // After the throw, status should be reconnecting (will retry)
+  assert.equal(q.status.get(), 'reconnecting');
+});
+
+test('SaveQueue: _handle412 with null getCase sets status to conflict', async () => {
+  const client = makeClient({
+    patchResponses: [{ ok: false, status: 412 }],
+    getCaseRow: /** @type {any} */ (null), // getCase returns null
+  });
+  const q = new SaveQueue(client, { debounceMs: 0 });
+  q.loadCase(BASE_ROW);
+
+  q.enqueue('c1', 'notes', 'test');
+  await tick();
+
+  assert.equal(q.status.get(), 'conflict');
+});

@@ -196,3 +196,27 @@ test('MockSharePointClient: getQuestionDefinitions returns empty array for unkno
   const defs = await client.getQuestionDefinitions(['q-unknown']);
   assert.equal(defs.length, 0);
 });
+
+test('MockSharePointClient: listCases filters by caseType', async () => {
+  const client = makeClient();
+  const cases = await client.listCases({ caseType: 'hello-review' });
+  assert.equal(cases.length, 3);
+
+  // A different caseType should return nothing
+  const none = await client.listCases({ caseType: 'other-type' });
+  assert.equal(none.length, 0);
+});
+
+test('MockSharePointClient: listCases filters by responsibleParty', async () => {
+  const client = makeClient();
+  const cases = await client.listCases({ responsibleParty: 'user-2' });
+  assert.equal(cases.length, 1);
+  assert.equal(cases[0].id, 'case-1');
+});
+
+test('MockSharePointClient: listCases filters by both caseType and responsibleParty', async () => {
+  const client = makeClient();
+  const cases = await client.listCases({ caseType: 'hello-review', responsibleParty: 'user-3' });
+  assert.equal(cases.length, 1);
+  assert.equal(cases[0].id, 'case-2');
+});

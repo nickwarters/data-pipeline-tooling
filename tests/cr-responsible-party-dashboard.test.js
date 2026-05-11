@@ -489,3 +489,60 @@ test('CRResponsiblePartyDashboard: cr-case-open on unread table dispatches cr-op
   assert.equal(fired.length, 1);
   assert.equal(fired[0].detail.caseId, 'c1');
 });
+
+test('CRResponsiblePartyDashboard: select change event calls _refreshRemediationCases via DOM event', async () => {
+  const cases = [
+    makeCase({ id: 'c1', caseType: 'hello-review', answers: { 'q-1': { value: 'No', remediationActions: [{ id: 'ra-1', text: 'A', completed: false }] } } }),
+    makeCase({ id: 'c2', caseType: 'audit-review', answers: { 'q-2': { value: 'No', remediationActions: [{ id: 'ra-2', text: 'B', completed: false }] } } }),
+  ];
+  const el = new CRResponsiblePartyDashboard();
+  el.client = /** @type {any} */ (makeClient(cases));
+  el.currentUserId = 'user-rp';
+  await el.connectedCallback();
+
+  // Find the filter select by class name
+  const select = /** @type {any} */ (findAll(el, 'select').find(s => s.className === 'cr-rp-remediation-filter'));
+  assert.ok(select, 'remediation filter select should exist');
+
+  // Fire the change event with a filter value
+  select.value = 'hello-review';
+  for (const h of select._listeners['change'] ?? []) {
+    h({ target: select });
+  }
+
+  // After filtering, only the hello-review case should appear in the remediation table
+  const rows = findAll(el, 'tr').filter(r => r.className.includes('cr-remediation-row'));
+  assert.equal(rows.length, 1, 'only matching case type should remain after change event');
+  assert.equal(rows[0]._children[1]?.textContent, 'hello-review');
+});
+
+test('CRResponsiblePartyDashboard: Open button click dispatches cr-case-open on messages table', async () => {
+  const cases = [
+    makeCase({
+      id: 'c1',
+      conversation: [{ author: 'user-reviewer', timestamp: '2026-05-07T09:00:00Z', body: 'Q' }],
+    }),
+  ];
+  const el = new CRResponsiblePartyDashboard();
+  el.client = /** @type {any} */ (makeClient(cases));
+  el.currentUserId = 'user-rp';
+  await el.connectedCallback();
+
+  /** @type {any[]} */
+  const fired = [];
+  el.addEventListener('cr-open-conversation', (/** @type {any} */ e) => fired.push(e));
+
+  // Find the Open button in the messages section
+  const messagesSection = findAll(el, 'section').find(s => s.className === 'cr-rp-messages');
+  assert.ok(messagesSection, 'messages section should exist');
+  const openBtn = findAll(messagesSection, 'button').find(b => b.className === 'cr-case-open-btn');
+  assert.ok(openBtn, 'Open button should exist in messages table');
+
+  // Click the open button — should dispatch cr-case-open which is handled by the table listener
+  for (const h of openBtn._listeners['click'] ?? []) {
+    h();
+  }
+
+  assert.equal(fired.length, 1, 'cr-open-conversation should be dispatched');
+  assert.equal(fired[0].detail.caseId, 'c1');
+});

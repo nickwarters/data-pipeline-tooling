@@ -21,6 +21,10 @@ class StubEl {
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
   }
+  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
+    /** @type {any} */ (this)._attrs ??= {};
+    /** @type {any} */ (this)._attrs[k] = v;
+  }
 }
 
 (/** @type {any} */ (globalThis)).HTMLElement = StubEl;
@@ -122,6 +126,34 @@ test('CRNotes: input event does not throw when saveQueue is null', () => {
   assert.doesNotThrow(() => {
     (/** @type {any} */ (textarea))._listeners['input'][0]({ target: textarea });
   });
+});
+
+test('CRNotes: access read-only sets textarea readOnly and readonly attribute', () => {
+  const el = new CRNotes();
+  el.notes = 'some notes';
+  el.saveQueue = /** @type {any} */ (makeQueue());
+  el.caseId = 'case-1';
+  el.access = 'read-only';
+  el.connectedCallback();
+
+  const textarea = (/** @type {any} */ (el))._children[1];
+  assert.equal(textarea.readOnly, true);
+  assert.equal(textarea._attrs?.['readonly'], 'readonly');
+});
+
+test('CRNotes: read-only input event does not enqueue a save', () => {
+  const saveQueue = makeQueue('case-1');
+  const el = new CRNotes();
+  el.notes = 'text';
+  el.saveQueue = /** @type {any} */ (saveQueue);
+  el.caseId = 'case-1';
+  el.access = 'read-only';
+  el.connectedCallback();
+
+  const textarea = (/** @type {any} */ (el))._children[1];
+  textarea.value = 'changed';
+  (/** @type {any} */ (textarea))._listeners['input'][0]({ target: textarea });
+  assert.equal(saveQueue.enqueued.length, 0);
 });
 
 test('CRNotes: input event does not throw when caseId is empty', () => {
