@@ -405,7 +405,7 @@ test('CRResponsiblePartyDashboard: _unreadCases excludes cases with empty conver
   assert.equal(el._unreadCases.length, 0);
 });
 
-test('CRResponsiblePartyDashboard: unread messages table renders row for each unread case', async () => {
+test('CRResponsiblePartyDashboard: unread messages section uses cr-case-table with only unread cases', async () => {
   const cases = [
     makeCase({
       id: 'c1',
@@ -423,11 +423,12 @@ test('CRResponsiblePartyDashboard: unread messages table renders row for each un
   el.client = /** @type {any} */ (makeClient(cases));
   el.currentUserId = 'user-rp';
   await el.connectedCallback();
-  const rows = findAll(el, 'tr').filter(r => r.className.includes('cr-unread-row'));
-  assert.equal(rows.length, 2);
+  const tables = findAll(el, 'cr-case-table');
+  assert.equal(tables.length, 1, 'should have exactly one cr-case-table (unread messages)');
+  assert.equal((/** @type {any} */ (tables[0])).cases.length, 2, 'table should have the two unread cases');
 });
 
-test('CRResponsiblePartyDashboard: clicking unread message row dispatches cr-open-conversation event', async () => {
+test('CRResponsiblePartyDashboard: cr-case-open on unread table dispatches cr-open-conversation event', async () => {
   const cases = [
     makeCase({
       id: 'c1',
@@ -443,9 +444,11 @@ test('CRResponsiblePartyDashboard: clicking unread message row dispatches cr-ope
   const fired = [];
   /** @type {any} */ (el).addEventListener('cr-open-conversation', (/** @type {any} */ e) => fired.push(e));
 
-  const rows = findAll(el, 'tr').filter(r => r.className.includes('cr-unread-row'));
-  assert.equal(rows.length, 1);
-  rows[0]._listeners['click']?.[0]?.({ preventDefault() {} });
+  const tables = findAll(el, 'cr-case-table');
+  assert.equal(tables.length, 1);
+  const handler = (/** @type {any} */ (tables[0]))._listeners['cr-case-open']?.[0];
+  assert.ok(handler, 'cr-case-table should have a cr-case-open listener');
+  handler({ detail: { caseId: 'c1' } });
   assert.equal(fired.length, 1);
   assert.equal(fired[0].detail.caseId, 'c1');
 });

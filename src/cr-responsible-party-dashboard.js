@@ -1,5 +1,6 @@
 // @ts-check
 import { CRElement } from './cr-element.js';
+import './cr-case-table.js';
 
 /** @typedef {import('./sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('./sharepoint-client.js').CaseRow} CaseRow */
@@ -305,69 +306,16 @@ export class CRResponsiblePartyDashboard extends CRElement {
     const h2 = document.createElement('h2');
     h2.textContent = 'Cases with Unread Messages';
 
-    const table = document.createElement('table');
-    table.className = 'cr-rp-messages-table';
-    table.setAttribute('role', 'grid');
-
-    const thead = document.createElement('thead');
-    const headRow = document.createElement('tr');
-    for (const [label, cls] of [
-      ['Reference', 'cr-col-reference'],
-      ['Case Type', 'cr-col-casetype'],
-      ['Last message', 'cr-col-lastmessage'],
-    ]) {
-      const th = document.createElement('th');
-      th.setAttribute('scope', 'col');
-      th.className = /** @type {string} */ (cls);
-      th.textContent = /** @type {string} */ (label);
-      headRow.appendChild(/** @type {any} */ (th));
-    }
-    thead.appendChild(/** @type {any} */ (headRow));
-    table.appendChild(/** @type {any} */ (thead));
-
-    const tbody = document.createElement('tbody');
-    for (const c of this._unreadCases) {
-      const lastMsg = c.conversation[c.conversation.length - 1];
-      const lastTs = lastMsg ? new Date(lastMsg.timestamp).toLocaleString() : '—';
-
-      const tr = document.createElement('tr');
-      tr.className = 'cr-unread-row';
-      tr.setAttribute('tabindex', '0');
-
-      const tdRef = document.createElement('td');
-      tdRef.textContent = c.title || c.id;
-
-      const tdType = document.createElement('td');
-      tdType.textContent = c.caseType;
-
-      const tdLast = document.createElement('td');
-      tdLast.textContent = lastTs;
-
-      tr.replaceChildren(
-        /** @type {any} */ (tdRef),
-        /** @type {any} */ (tdType),
-        /** @type {any} */ (tdLast),
-      );
-
-      const caseId = c.id;
-      tr.addEventListener('click', () => {
-        this.dispatchEvent(new CustomEvent('cr-open-conversation', {
-          detail: { caseId },
-          bubbles: true,
-        }));
-      });
-      tr.addEventListener('keydown', (/** @type {any} */ e) => {
-        if (e.key === 'Enter') {
-          this.dispatchEvent(new CustomEvent('cr-open-conversation', {
-            detail: { caseId },
-            bubbles: true,
-          }));
-        }
-      });
-
-      tbody.appendChild(/** @type {any} */ (tr));
-    }
-    table.appendChild(/** @type {any} */ (tbody));
+    const table = /** @type {import('./cr-case-table.js').CRCaseTable} */ (
+      document.createElement('cr-case-table')
+    );
+    table.cases = this._unreadCases;
+    table.addEventListener('cr-case-open', (/** @type {any} */ e) => {
+      this.dispatchEvent(new CustomEvent('cr-open-conversation', {
+        detail: { caseId: e.detail.caseId },
+        bubbles: true,
+      }));
+    });
 
     section.replaceChildren(
       /** @type {any} */ (h2),
