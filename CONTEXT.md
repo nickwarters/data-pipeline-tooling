@@ -41,7 +41,12 @@ _Avoid_: Remediation (ambiguous — refers to the section, not the item)
 ### People
 
 **Reviewer**:
-A SharePoint user in a Reviewer **SharePoint Group** who is assigned **Cases** and produces **Answers**. Can be reassigned — assignment is a single user field on the Case row; history comes from SharePoint's list version history, not stored explicitly.
+A SharePoint user in the Case Reviewers **SharePoint Group**. Eligible to be assigned **Cases** and produce **Answers**. Group membership alone does not grant edit access to any particular Case — that's the **Assigned Reviewer**.
+_Avoid_: Assessor, evaluator
+
+**Assigned Reviewer**:
+The single **Reviewer** currently assigned to a specific **Case** (the Case row's reviewer field). The role that grants edit access to that Case's **Answers**, **Conversation**, **Notes** and **Remediation Actions**. Reassignment is a single-user-field update; history comes from SharePoint's list version history, not stored explicitly.
+_Avoid_: Owner (of the case), primary reviewer, lead
 
 **Responsible Party**:
 The SharePoint user whose work is being reviewed (e.g., the agent on a call being assessed). Distinct from the **Reviewer**.
@@ -71,7 +76,7 @@ The computed verdict for a **Case**, derived by the **Case Type**'s algorithm fr
 - A **Case** has many **Answers**, one per **Applicable Question**.
 - An **Answer** has zero-to-many **Remediation Actions**.
 - A **Case** has one **Conversation** (= many **Messages**).
-- A **Case** has one current **Reviewer** and one **Responsible Party**.
+- A **Case** has one **Assigned Reviewer** and one **Responsible Party**.
 
 ## Example dialogue
 
@@ -85,3 +90,4 @@ The computed verdict for a **Case**, derived by the **Case Type**'s algorithm fr
 - "Question" was being used for both the canonical definition and the per-Case instance — resolved as **Question Definition** vs **Answer**.
 - "Remediation" was being used for both the section and the corrective action — resolved as **Remediation Action** for the item; the section is just a UI concern.
 - "Outcome" was nearly modeled as a stored entity — resolved as a *computed* property of a Case.
+- "Reviewer" was being used for both group membership and per-Case assignment — resolved as **Reviewer** (group) vs **Assigned Reviewer** (per-Case role). See ADR-0011.
