@@ -143,6 +143,66 @@ test('CRDashboard: connectedCallback does nothing when client is null', async ()
   assert.equal((/** @type {any} */ (el))._children.length, 0);
 });
 
+test('CRDashboard: RP-only capability — cr-responsible-party-dashboard rendered, reviewer sections absent', async () => {
+  const el = new CRDashboard();
+  el.client = /** @type {any} */ (makeClient());
+  el.currentUserId = 'user-rp';
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true };
+
+  await el.connectedCallback();
+
+  assert.equal(findAll(el, 'cr-responsible-party-dashboard').length, 1, 'should render RP section');
+  assert.equal(hasOutstandingCasesHeading(el), false, 'should NOT render reviewer heading');
+  assert.equal(findAll(el, 'cr-allocation').length, 0, 'should NOT render allocation button');
+  assert.equal(findAll(el, 'cr-owner-summary').length, 0, 'should NOT render owner summary');
+});
+
+test('CRDashboard: reviewer + RP capability — both reviewer and RP sections visible', async () => {
+  const el = new CRDashboard();
+  el.client = /** @type {any} */ (makeClient());
+  el.currentUserId = 'user-reviewer-rp';
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: true };
+  el.eligibleCaseTypes = ['hello-review'];
+
+  await el.connectedCallback();
+
+  assert.equal(hasOutstandingCasesHeading(el), true, 'should render reviewer heading');
+  assert.equal(findAll(el, 'cr-allocation').length, 1, 'should render allocation button');
+  assert.equal(findAll(el, 'cr-responsible-party-dashboard').length, 1, 'should render RP section');
+});
+
+test('CRDashboard: cr-open-conversation from RP section navigates to conversation hash', async () => {
+  (/** @type {any} */ (globalThis)).location.hash = '';
+  const el = new CRDashboard();
+  el.client = /** @type {any} */ (makeClient());
+  el.currentUserId = 'user-rp';
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true };
+
+  await el.connectedCallback();
+
+  const rpEl = findAll(el, 'cr-responsible-party-dashboard')[0];
+  assert.ok(rpEl, 'RP element should exist');
+  const handler = (/** @type {any} */ (rpEl))._listeners['cr-open-conversation']?.[0];
+  assert.ok(handler, 'should have cr-open-conversation listener');
+  handler({ detail: { caseId: 'c-42' } });
+  assert.equal((/** @type {any} */ (globalThis)).location.hash, '#/conversation/c-42');
+});
+
+test('CRDashboard: RP section gets client and currentUserId set', async () => {
+  const client = makeClient();
+  const el = new CRDashboard();
+  el.client = /** @type {any} */ (client);
+  el.currentUserId = 'user-rp';
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true };
+
+  await el.connectedCallback();
+
+  const rpEl = findAll(el, 'cr-responsible-party-dashboard')[0];
+  assert.ok(rpEl, 'RP element should exist');
+  assert.equal((/** @type {any} */ (rpEl)).client, client, 'client should be passed through');
+  assert.equal((/** @type {any} */ (rpEl)).currentUserId, 'user-rp', 'currentUserId should be passed through');
+});
+
 test('CRDashboard: cr-allocation element listens for cr-allocated and re-fetches cases on allocation', async () => {
   let fetchCount = 0;
   const client = {

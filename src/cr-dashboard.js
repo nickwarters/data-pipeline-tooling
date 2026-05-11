@@ -1,6 +1,7 @@
 // @ts-check
 import { CRElement } from './cr-element.js';
 import './cr-case-table.js';
+import './cr-responsible-party-dashboard.js';
 
 /** @typedef {import('./sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('./sharepoint-client.js').CaseRow} CaseRow */
@@ -67,6 +68,18 @@ export class CRDashboard extends CRElement {
       ownerSection.client = this.client;
       ownerSection.ownedCaseTypes = this.capabilities.ownedCaseTypes;
       children.push(ownerSection);
+    }
+
+    if (this.capabilities.isResponsibleParty) {
+      const rpEl = /** @type {import('./cr-responsible-party-dashboard.js').CRResponsiblePartyDashboard} */ (
+        document.createElement('cr-responsible-party-dashboard')
+      );
+      rpEl.client = this.client;
+      rpEl.currentUserId = this.currentUserId;
+      rpEl.addEventListener('cr-open-conversation', (/** @type {any} */ e) => {
+        location.hash = `#/conversation/${e.detail.caseId}`;
+      });
+      children.push(rpEl);
     }
 
     this.replaceChildren(...children);

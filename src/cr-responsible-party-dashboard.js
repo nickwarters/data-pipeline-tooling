@@ -83,11 +83,7 @@ export class CRResponsiblePartyDashboard extends CRElement {
   }
 
   _render() {
-    const h1 = document.createElement('h1');
-    h1.textContent = 'My Reviews';
-
     this.replaceChildren(
-      /** @type {any} */ (h1),
       /** @type {any} */ (this._buildOutcomeSummary()),
       /** @type {any} */ (this._buildRemediationSection()),
       /** @type {any} */ (this._buildMessagesSection()),

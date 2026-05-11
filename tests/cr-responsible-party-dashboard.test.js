@@ -149,13 +149,13 @@ test('CRResponsiblePartyDashboard: calls listCases with responsibleParty filter'
   assert.deepEqual(calls[0], { responsibleParty: 'user-rp' });
 });
 
-test('CRResponsiblePartyDashboard: renders h1 + 3 sections after connectedCallback', async () => {
+test('CRResponsiblePartyDashboard: renders 3 sections after connectedCallback', async () => {
   const el = new CRResponsiblePartyDashboard();
   el.client = /** @type {any} */ (makeClient([]));
   el.currentUserId = 'user-rp';
   await el.connectedCallback();
-  // h1 + outcome section + remediation section + messages section
-  assert.equal((/** @type {any} */ (el))._children.length, 4);
+  // outcome section + remediation section + messages section
+  assert.equal((/** @type {any} */ (el))._children.length, 3);
 });
 
 // ===== Outcome summary tests =====
