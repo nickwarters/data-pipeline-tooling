@@ -268,15 +268,20 @@ test('SaveQueue: enqueue for unknown caseId auto-creates state and sends PATCH',
 });
 
 test('SaveQueue: patchCase exception is caught and treated as status 0 (reconnecting)', async () => {
+  let thrown = false;
   const client = {
     patchCalls: /** @type {any[]} */ ([]),
     async patchCase(/** @type {string} */ _id, /** @type {Partial<CaseRow>} */ fields, /** @type {string} */ etag) {
       this.patchCalls.push({ fields, etag });
-      throw new Error('Network failure');
+      if (!thrown) {
+        thrown = true;
+        throw new Error('Network failure');
+      }
+      return { ok: true, status: 200, data: { ...BASE_ROW, etag: 'etag-after-retry' } };
     },
-    async getCase() { return null; },
+    async getCase() { return BASE_ROW; },
   };
-  const q = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
+  const q = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0, backoffSchedule: [100] });
   q.loadCase(BASE_ROW);
 
   q.enqueue('c1', 'notes', 'boom');
@@ -284,6 +289,11 @@ test('SaveQueue: patchCase exception is caught and treated as status 0 (reconnec
 
   // After the throw, status should be reconnecting (will retry)
   assert.equal(q.status.get(), 'reconnecting');
+
+  // Wait for the retry to complete (tick is 20ms, backoff is 100ms, so we need a few ticks or one long wait)
+  await new Promise(r => setTimeout(r, 150));
+  assert.equal(q.status.get(), 'saved');
+  assert.equal(client.patchCalls.length, 2);
 });
 
 test('SaveQueue: _handle412 with null getCase sets status to conflict', async () => {

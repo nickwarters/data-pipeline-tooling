@@ -1,0 +1,297 @@
+// @ts-check
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+
+// ===== MINIMAL DOM STUBS =====
+class StubEl {
+  constructor() {
+    /** @type {StubEl[]} */
+    this._children = [];
+    /** @type {Record<string, Function[]>} */
+    this._listeners = {};
+    /** @type {Record<string, string>} */
+    this._attrs = {};
+    this.textContent = '';
+    this.className = '';
+    this.href = '';
+    this.hidden = false;
+    this.disabled = false;
+    this.type = '';
+    this.name = '';
+    this.value = '';
+    this.checked = false;
+  }
+  replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
+  appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
+  append(/** @type {StubEl[]} */ ...cs) { this._children.push(...cs); }
+  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
+    (this._listeners[t] ??= []).push(h);
+  }
+  setAttribute(/** @type {string} */ k, /** @type {string} */ v) { this._attrs[k] = v; }
+  getAttribute(/** @type {string} */ k) { return this._attrs[k] ?? null; }
+  focus() {}
+  // Stub for CRQuestionList.update / CRRemediationSection.update / CROutcome.update
+  update() {}
+}
+
+class StubCustomEvent {
+  /** @param {string} type @param {{ detail?: any }} [init] */
+  constructor(type, init) {
+    this.type = type;
+    this.detail = init?.detail ?? null;
+  }
+}
+
+(/** @type {any} */ (globalThis)).HTMLElement = StubEl;
+(/** @type {any} */ (globalThis)).document = {
+  /** @param {string} _tag @returns {StubEl} */
+  createElement(_tag) { return new StubEl(); },
+  addEventListener() {},
+  removeEventListener() {},
+};
+(/** @type {any} */ (globalThis)).customElements = { define() {} };
+(/** @type {any} */ (globalThis)).location = { hash: '' };
+(/** @type {any} */ (globalThis)).CustomEvent = StubCustomEvent;
+
+// ===== IMPORTS =====
+const { CRCaseReview } = await import('../src/cr-case-review.js');
+const { SaveQueue } = await import('../src/save-queue.js');
+
+// ===== HELPERS =====
+/** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
+const BASE_ROW = {
+  id: 'c1',
+  caseType: 'hello-review',
+  title: 'Test Case',
+  status: 'In-progress',
+  assignedReviewer: 'u1',
+  responsibleParty: 'u2',
+  answers: {},
+  conversation: [],
+  notes: '',
+  completedAt: null,
+  etag: 'e1'
+};
+
+function makeClient({ caseRow = BASE_ROW, patchOk = true } = {}) {
+  return {
+    async getCase() { return caseRow; },
+    async getCurrentUser() { return { id: 'u1', displayName: 'User 1' }; },
+    async patchCase() { return { ok: patchOk, status: patchOk ? 200 : 500 }; },
+  };
+}
+
+// ===== TESTS =====
+
+test('CRCaseReview: constructor initializes with nulls/empty', () => {
+  const el = new CRCaseReview();
+  assert.equal(el.client, null);
+  assert.equal(el.saveQueue, null);
+  assert.equal(el.caseId, '');
+  assert.equal(el.currentUserId, '');
+  assert.equal(el.capabilities, null);
+});
+
+test('CRCaseReview: connectedCallback returns early if missing deps', async () => {
+  const el = new CRCaseReview();
+  // No client, saveQueue, or caseId
+  await el.connectedCallback();
+  assert.equal((/** @type {any} */ (el))._children.length, 0);
+});
+
+test('CRCaseReview: connectedCallback handles case not found', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ ({
+    async getCase() { return null; },
+    async getCurrentUser() { return { id: 'u1' }; }
+  });
+  el.saveQueue = /** @type {any} */ ({});
+  el.caseId = 'missing';
+  await el.connectedCallback();
+  
+  const msg = (/** @type {any} */ (el))._children[0];
+  assert.equal(msg.textContent, 'Case not found.');
+});
+
+test('CRCaseReview: connectedCallback handles access denied', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient({
+    caseRow: { ...BASE_ROW, assignedReviewer: 'someone-else' }
+  }));
+  el.saveQueue = new SaveQueue(el.client);
+  el.caseId = 'c1';
+  el.currentUserId = 'u1';
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false };
+  
+  await el.connectedCallback();
+  
+  const panel = (/** @type {any} */ (el))._children[0];
+  assert.equal(panel.className, 'cr-access-denied');
+});
+
+test('CRCaseReview: _completeCase returns early if client or saveQueue missing', async () => {
+  const el = new CRCaseReview();
+  // @ts-ignore
+  await el._completeCase('c1', null, null);
+  assert.equal((/** @type {any} */ (globalThis)).location.hash, '');
+});
+
+test('CRCaseReview: _completeCase uses this.client if arg missing', async () => {
+  const client = makeClient();
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = new SaveQueue(el.client);
+  el.saveQueue.loadCase(BASE_ROW);
+  
+  (/** @type {any} */ (globalThis)).location.hash = '';
+  // @ts-ignore
+  await el._completeCase('c1', undefined, undefined);
+  assert.equal((/** @type {any} */ (globalThis)).location.hash, '#/dashboard');
+});
+
+test('CRCaseReview: _completeCase does not navigate on failure', async () => {
+  const client = makeClient({ patchOk: false });
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = new SaveQueue(el.client);
+  el.saveQueue.loadCase(BASE_ROW);
+  
+  (/** @type {any} */ (globalThis)).location.hash = 'keep-me';
+  await el._completeCase('c1', el.client, el.saveQueue);
+  assert.equal((/** @type {any} */ (globalThis)).location.hash, 'keep-me');
+});
+
+test('CRCaseReview: CRStatusBanner handles unknown status label', async () => {
+  const client = makeClient();
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  await el.connectedCallback();
+  
+  // children: bannerEl(0), header(1), statusEl(2)
+  const statusEl = (/** @type {any} */ (el))._children[2];
+  
+  // Branch: known status
+  // @ts-ignore
+  saveQueue._statusSignal.set('saved');
+  assert.equal(statusEl.textContent, 'Saved');
+
+  // Branch: unknown status
+  // @ts-ignore
+  saveQueue._statusSignal.set('weird');
+  assert.equal(statusEl.textContent, 'weird');
+});
+
+
+test('CRCaseReview: remediation and conversation can be hidden', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient({
+    caseRow: { ...BASE_ROW, assignedReviewer: 'u1' }
+  }));
+  el.saveQueue = new SaveQueue(el.client);
+  el.caseId = 'c1';
+  el.currentUserId = 'u1';
+  // Use RP capability but case is not assigned to us as RP -> conversation might be hidden or read-only
+  // Actually let's just force all hidden via a mock capability/role if possible, 
+  // but evaluateAccess depends on fixed SECTIONS.
+  // RP role: questions R, conversation E, notes H, remediation R.
+  // If we are 'none' role we get Access Denied.
+  
+  // Let's test the 'hidden' branches in _buildLayout directly by providing specific roles
+  // but those are hardcoded in resolveRoles.
+  
+  // Instead, I can test if sections are hidden for an RP (Notes should be hidden).
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true };
+  const rpRow = { ...BASE_ROW, responsibleParty: 'u1', assignedReviewer: 'other' };
+  el.client.getCase = async () => rpRow;
+  
+  await el.connectedCallback();
+  
+  // children index 7 is Notes
+  const notesEl = (/** @type {any} */ (el))._children[7];
+  assert.equal(notesEl.hidden, true, 'Notes should be hidden for RP');
+});
+
+test('CRCaseReview: cr-answer handles unmapped question', async () => {
+  const client = makeClient();
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  /** @type {any[]} */
+  const enqueued = [];
+  saveQueue.enqueue = (...args) => { enqueued.push(args); };
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  const section = (/** @type {any} */ (el))._children[3];
+  // Dispatch answer for an ID not in the catalogue
+  section._listeners['cr-answer'][0]({ detail: { questionId: 'unknown', value: 'Yes' } });
+  
+  assert.equal(enqueued.length, 1);
+  assert.equal(enqueued[0][2].unknown.value, 'Yes');
+});
+
+test('CRCaseReview: cr-answer clears answers for questions that become non-applicable', async () => {
+  const client = makeClient();
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  /** @type {any[]} */
+  const enqueued = [];
+  saveQueue.enqueue = (...args) => { enqueued.push(args); };
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  const section = (/** @type {any} */ (el))._children[3];
+  const handler = section._listeners['cr-answer'][0];
+  
+  // 1. q-needs = Yes (triggers q-resolve)
+  handler({ detail: { questionId: 'q-needs', value: 'Yes' } });
+  // 2. q-resolve = Yes
+  handler({ detail: { questionId: 'q-resolve', value: 'Yes' } });
+  // 3. q-needs = No (q-resolve hidden)
+  handler({ detail: { questionId: 'q-needs', value: 'No' } });
+  
+  const lastAnswers = enqueued[2][2];
+  assert.equal(lastAnswers['q-needs'].value, 'No');
+  assert.equal(lastAnswers['q-resolve'], undefined, 'hidden conditional question answer should be cleared');
+});
+
+test('CRCaseReview: complete button click invokes _completeCase', async () => {
+  const client = makeClient();
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  // Provide all answers so button is visible
+  const completableRow = {
+    ...BASE_ROW,
+    answers: {
+      'q-welcome': { value: 'Yes' },
+      'q-needs': { value: 'No' },
+      'q-channel': { value: 'Email' },
+      'q-products': { value: ['Billing'] },
+    }
+  };
+  client.getCase = async () => completableRow;
+  saveQueue.loadCase(completableRow);
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  const completeBtn = (/** @type {any} */ (el))._children[8];
+  assert.equal(completeBtn.hidden, false, 'Complete button should be visible');
+  
+  let completeCalled = false;
+  el._completeCase = async () => { completeCalled = true; };
+  
+  completeBtn._listeners['click'][0]();
+  assert.equal(completeCalled, true);
+});
+

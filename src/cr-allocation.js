@@ -19,6 +19,10 @@ export class CRAllocation extends CRElement {
     this._render();
   }
 
+  disconnectedCallback() {
+    super.disconnectedCallback();
+  }
+
   _render() {
     const btn = document.createElement('button');
     btn.textContent = 'Request next Case';

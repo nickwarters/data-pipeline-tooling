@@ -103,6 +103,13 @@ function unassignedCase(id = 'c1', created = '2026-01-01T00:00:00Z') {
 
 // ===== TESTS =====
 
+test('CRAllocation: constructor initializes with default values', () => {
+  const el = new CRAllocation();
+  assert.equal(el.client, null);
+  assert.equal(el.currentUserId, '');
+  assert.deepEqual(el.eligibleCaseTypes, []);
+});
+
 test('CRAllocation: connectedCallback renders "Request next Case" button', async () => {
   const el = new CRAllocation();
   el.client = /** @type {any} */ (makeClient([]));
@@ -113,6 +120,13 @@ test('CRAllocation: connectedCallback renders "Request next Case" button', async
   assert.ok(btn, 'should have a child element');
   assert.equal(btn.textContent, 'Request next Case');
 });
+
+test('CRAllocation: disconnectedCallback is callable', () => {
+  const el = new CRAllocation();
+  el.disconnectedCallback();
+  // Should not throw
+});
+
 
 test('CRAllocation: _requestNextCase assigns the oldest unassigned case and dispatches cr-allocated', async () => {
   const older = unassignedCase('c-older', '2026-01-01T00:00:00Z');
@@ -273,3 +287,77 @@ test('CRAllocation: _getUnassignedCases returns empty array when client is null'
   const result = await el._getUnassignedCases();
   assert.deepEqual(result, []);
 });
+
+test('CRAllocation: _requestNextCase returns early when client is null', async () => {
+  const el = new CRAllocation();
+  el.client = null;
+  await el._requestNextCase();
+  // No error should occur
+});
+
+test('CRAllocation: _getUnassignedCases filters out assigned cases', async () => {
+  const c1 = unassignedCase('c1');
+  const c2 = unassignedCase('c2');
+  c2.assignedReviewer = 'someone';
+  const client = makeClient([c1, c2]);
+  const el = new CRAllocation();
+  el.client = /** @type {any} */ (client);
+  el.eligibleCaseTypes = ['hello-review'];
+  const result = await el._getUnassignedCases();
+  assert.equal(result.length, 1);
+  assert.equal(result[0].id, 'c1');
+});
+
+test('CRAllocation: _getUnassignedCases filters out ineligible case types', async () => {
+  const c1 = unassignedCase('c1');
+  const c2 = unassignedCase('c2');
+  c2.caseType = 'unsupported-type';
+  const client = makeClient([c1, c2]);
+  const el = new CRAllocation();
+  el.client = /** @type {any} */ (client);
+  el.eligibleCaseTypes = ['hello-review'];
+  const result = await el._getUnassignedCases();
+  assert.equal(result.length, 1);
+  assert.equal(result[0].id, 'c1');
+});
+
+test('CRAllocation: _getUnassignedCases sorting handles equal or greater dates', async () => {
+  const c1 = unassignedCase('c1', '2026-01-01');
+  const c2 = unassignedCase('c2', '2026-01-01'); // Equal
+  const c3 = unassignedCase('c3', '2026-01-02'); // Greater
+
+  const client = makeClient([c3, c2, c1]);
+  const el = new CRAllocation();
+  el.client = /** @type {any} */ (client);
+  el.eligibleCaseTypes = ['hello-review'];
+
+  const result = await el._getUnassignedCases();
+  // c1 and c2 are equal, c3 is greater.
+  // Sort should put c1, c2 before c3.
+  assert.equal(result[2].id, 'c3');
+});
+
+test('CRAllocation: _getUnassignedCases sorting handles smaller date', async () => {
+  const c1 = unassignedCase('c1', '2026-01-02');
+  const c2 = unassignedCase('c2', '2026-01-01');
+
+  const client = makeClient([c1, c2]);
+  const el = new CRAllocation();
+  el.client = /** @type {any} */ (client);
+  el.eligibleCaseTypes = ['hello-review'];
+
+  const result = await el._getUnassignedCases();
+  assert.equal(result[0].id, 'c2');
+  assert.equal(result[1].id, 'c1');
+});
+
+test('CRAllocation: _renderEmpty shows "No Cases available"', () => {
+  const el = new CRAllocation();
+  el._renderEmpty();
+  const msg = (/** @type {any} */ (el))._children[0];
+  assert.equal(msg.textContent, 'No Cases available');
+});
+
+
+
+
