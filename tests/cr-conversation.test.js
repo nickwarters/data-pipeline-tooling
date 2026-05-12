@@ -25,6 +25,10 @@ class StubEl {
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
   }
+  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
+    /** @type {any} */ (this)._attrs ??= {};
+    /** @type {any} */ (this)._attrs[k] = v;
+  }
 }
 
 /** @type {Record<string, Function[]>} */
@@ -379,4 +383,88 @@ test('CRConversation: visibilitychange fires _refresh when document is not hidde
   await new Promise(resolve => setImmediate(resolve));
 
   assert.equal(findAllByClass(el, 'cr-conversation-message').length, 1, 'refresh should load messages');
+});
+
+test('CRConversation: _refresh does nothing when getCase returns null', async () => {
+  const client = {
+    patchCalls: /** @type {any[]} */ ([]),
+    async getCase() { return null; },
+    async patchCase() { return { ok: false, status: 404 }; },
+  };
+  const el = new CRConversation();
+  el._messages = [TWO_MESSAGES[0]];
+  el.caseId = 'case-2';
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = /** @type {any} */ (makeStubSaveQueue());
+  el.connectedCallback();
+
+  const before = findAllByClass(el, 'cr-conversation-message').length;
+  await el._refresh();
+  assert.equal(findAllByClass(el, 'cr-conversation-message').length, before,
+    '_refresh with null case must not change messages');
+});
+
+test('CRConversation: _sendMessage with no result.data does not call saveQueue.loadCase', async () => {
+  const client = {
+    patchCalls: /** @type {any[]} */ ([]),
+    async getCase() { return null; },
+    async patchCase(/** @type {string} */ id, /** @type {any} */ fields, /** @type {string} */ etag) {
+      this.patchCalls.push({ id, fields, etag });
+      return { ok: true, status: 200 }; // no data field
+    },
+  };
+  const saveQueue = makeStubSaveQueue();
+  const el = new CRConversation();
+  el._messages = [];
+  el.caseId = 'case-2';
+  el.currentUser = CURRENT_USER;
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = /** @type {any} */ (saveQueue);
+  el.connectedCallback();
+
+  await el._sendMessage('Hello!');
+  assert.equal(saveQueue.loadedCases.length, 0,
+    'saveQueue.loadCase must not be called when result has no data');
+});
+
+test('CRConversation: visibilitychange does NOT call _refresh when document is hidden', async () => {
+  const client = makeStubClient({ conversation: [{ author: 'Alex', timestamp: '2026-05-07T09:00:00Z', body: 'Hello' }] });
+  const el = new CRConversation();
+  el._messages = [];
+  el.caseId = 'case-1';
+  el.currentUser = CURRENT_USER;
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = /** @type {any} */ (makeStubSaveQueue());
+  el.connectedCallback();
+
+  // Simulate tab still hidden
+  (/** @type {any} */ (globalThis)).document.hidden = true;
+  const handlers = docListeners['visibilitychange'] ?? [];
+  for (const h of handlers) h();
+
+  await new Promise(resolve => setImmediate(resolve));
+  // Messages should NOT be updated since document is hidden
+  assert.equal(findAllByClass(el, 'cr-conversation-message').length, 0,
+    '_refresh must not be called when document is still hidden');
+  // Reset for other tests
+  (/** @type {any} */ (globalThis)).document.hidden = false;
+});
+
+test('CRConversation: send click with null textarea value treats body as empty (no patch)', async () => {
+  const client = makeStubClient({ conversation: [] });
+  const el = new CRConversation();
+  el._messages = [];
+  el.caseId = 'case-2';
+  el.currentUser = CURRENT_USER;
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = /** @type {any} */ (makeStubSaveQueue());
+  el.connectedCallback();
+
+  const compose = findByClass(el, 'cr-conversation-compose');
+  const textarea = findByClass(compose, 'cr-conversation-input');
+  const btn = findByClass(compose, 'cr-conversation-send');
+  // Simulate environment where .value is null (covers the `?? ''` branch)
+  /** @type {any} */ (textarea).value = null;
+  await btn._listeners['click'][0]();
+  assert.equal(client.patchCalls.length, 0, 'null textarea value must be treated as empty body');
 });

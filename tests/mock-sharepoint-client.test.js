@@ -220,3 +220,16 @@ test('MockSharePointClient: listCases filters by both caseType and responsiblePa
   assert.equal(cases.length, 1);
   assert.equal(cases[0].id, 'case-2');
 });
+
+test('MockSharePointClient: getCurrentUserGroups returns empty array for unknown persona', async () => {
+  const client = makeClient('unknown-persona'); // not in PERSONAS
+  const groups = await client.getCurrentUserGroups();
+  assert.deepEqual(groups, [], 'unknown persona: personas[p] is undefined → ?. returns undefined → ?? [] returns []');
+});
+
+test('MockSharePointClient: getCurrentUser falls back to persona string when persona not in map', async () => {
+  const client = makeClient('unknown-persona');
+  const user = await client.getCurrentUser();
+  assert.equal(user.id, 'unknown-persona', 'p?.userId ?? persona uses fallback when p is undefined');
+  assert.equal(user.displayName, 'unknown-persona', 'p?.displayName ?? persona uses fallback when p is undefined');
+});

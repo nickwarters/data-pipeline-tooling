@@ -263,6 +263,89 @@ test('CRCaseReview: cr-answer clears answers for questions that become non-appli
   assert.equal(lastAnswers['q-resolve'], undefined, 'hidden conditional question answer should be cleared');
 });
 
+test('CRCaseReview: cr-answer is ignored when questions access is read-only (RP role)', async () => {
+  const client = makeClient({
+    caseRow: { ...BASE_ROW, responsibleParty: 'user-rp', assignedReviewer: 'other-reviewer' },
+  });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  /** @type {any[]} */
+  const enqueued = [];
+  saveQueue.enqueue = (...args) => { enqueued.push(args); };
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  el.currentUserId = 'user-rp';
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true };
+  await el.connectedCallback();
+
+  // For RP, access.questions = 'read-only', so the cr-answer handler must early-return.
+  const section = (/** @type {any} */ (el))._children[3];
+  section._listeners['cr-answer'][0]({ detail: { questionId: 'q-welcome', value: 'Yes' } });
+
+  assert.equal(enqueued.length, 0, 'cr-answer must not enqueue when questions access is read-only');
+});
+
+test('CRCaseReview: complete button stays hidden for a Completed case even when all answered', async () => {
+  const completedRow = {
+    ...BASE_ROW,
+    status: /** @type {'Completed'} */ ('Completed'),
+    assignedReviewer: 'u1',
+    answers: {
+      'q-welcome': { value: 'Yes' },
+      'q-needs': { value: 'No' },
+      'q-channel': { value: 'Email' },
+      'q-products': { value: ['Billing'] },
+    },
+  };
+  const client = makeClient({ caseRow: completedRow });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  saveQueue.loadCase(completedRow);
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  el.currentUserId = 'u1';
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false };
+  await el.connectedCallback();
+
+  const completeBtn = (/** @type {any} */ (el))._children[8];
+  assert.equal(completeBtn.hidden, true, 'Complete button must be hidden for a Completed case');
+});
+
+test('CRCaseReview: complete button click is no-op when button is already disabled', async () => {
+  const client = makeClient();
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  const completableRow = {
+    ...BASE_ROW,
+    answers: {
+      'q-welcome': { value: 'Yes' },
+      'q-needs': { value: 'No' },
+      'q-channel': { value: 'Email' },
+      'q-products': { value: ['Billing'] },
+    }
+  };
+  client.getCase = async () => completableRow;
+  saveQueue.loadCase(completableRow);
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  const completeBtn = (/** @type {any} */ (el))._children[8];
+  completeBtn.disabled = true; // pre-disable
+
+  let completeCalled = false;
+  el._completeCase = async () => { completeCalled = true; };
+
+  completeBtn._listeners['click'][0]();
+  assert.equal(completeCalled, false, 'disabled button click must not invoke _completeCase');
+});
+
 test('CRCaseReview: complete button click invokes _completeCase', async () => {
   const client = makeClient();
   const saveQueue = new SaveQueue(/** @type {any} */ (client));

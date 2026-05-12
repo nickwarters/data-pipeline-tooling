@@ -24,10 +24,10 @@ export class CRNotes extends CRElement {
     /** @type {any} */ (textarea).className = 'cr-notes-input';
     /** @type {any} */ (textarea).placeholder = 'Add notes…';
     /** @type {any} */ (textarea).value = this.notes;
-    /** @type {any} */ (textarea).setAttribute?.('aria-label', 'Case notes');
+    /** @type {any} */ (textarea).setAttribute('aria-label', 'Case notes');
     if (this.access === 'read-only') {
       /** @type {any} */ (textarea).readOnly = true;
-      /** @type {any} */ (textarea).setAttribute?.('readonly', 'readonly');
+      /** @type {any} */ (textarea).setAttribute('readonly', 'readonly');
     }
 
     textarea.addEventListener('input', (ev) => {

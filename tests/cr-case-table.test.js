@@ -467,6 +467,36 @@ test('CRCaseTable: case with empty title falls back to id in Open button aria-la
   assert.equal(openBtn._attrs['aria-label'], 'Open case-no-title');
 });
 
+test('CRCaseTable: filter input event with null target falls back to empty string', () => {
+  const el = new CRCaseTable();
+  el.cases = [makeCase({ id: 'c1', title: 'Alpha' }), makeCase({ id: 'c2', title: 'Beta' })];
+  el.connectedCallback();
+
+  const filterInput = /** @type {any} */ (findFirst(el, 'input'));
+  // Fire event with null target — covers `e.target?.value ?? ''` null branch
+  for (const h of filterInput._listeners['input'] ?? []) {
+    h({ target: null });
+  }
+  // Empty string filter shows all rows
+  const rows = findAll(el, 'tr').filter(r => r.className === 'cr-case-row');
+  assert.equal(rows.length, 2);
+});
+
+test('CRCaseTable: status filter event with null target falls back to empty string', () => {
+  const el = new CRCaseTable();
+  el.cases = [makeCase({ id: 'c1', status: 'In-progress' }), makeCase({ id: 'c2', status: 'Completed' })];
+  el.connectedCallback();
+
+  const statusSelect = /** @type {any} */ (findFirst(el, 'select'));
+  // Fire event with null target — covers `e.target?.value ?? ''` null branch
+  for (const h of statusSelect._listeners['change'] ?? []) {
+    h({ target: null });
+  }
+  // Empty string filter shows all rows
+  const rows = findAll(el, 'tr').filter(r => r.className === 'cr-case-row');
+  assert.equal(rows.length, 2);
+});
+
 test('CRCaseTable: free-text filter matches by status field', () => {
   const el = new CRCaseTable();
   el.cases = [

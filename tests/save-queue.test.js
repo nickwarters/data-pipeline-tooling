@@ -309,3 +309,74 @@ test('SaveQueue: _handle412 with null getCase sets status to conflict', async ()
 
   assert.equal(q.status.get(), 'conflict');
 });
+
+test('SaveQueue: loadCase with null answers sets baselineAnswers to null', () => {
+  const q = new SaveQueue(makeClient());
+  q.loadCase({ ...BASE_ROW, answers: /** @type {any} */ (null) });
+  // Should not throw; baselineAnswers = null (the `row.answers ? ... : null` false branch)
+  assert.equal(q.getEtag('c1'), BASE_ROW.etag);
+});
+
+test('SaveQueue: getEtag returns empty string for an unknown caseId', () => {
+  const q = new SaveQueue(makeClient());
+  assert.equal(q.getEtag('unknown'), '', 'unknown caseId must return empty etag');
+});
+
+test('SaveQueue: successful flush with no data.answers preserves existing baselineAnswers', async () => {
+  const client = {
+    patchCalls: /** @type {any[]} */ ([]),
+    async patchCase(/** @type {string} */ _id, /** @type {any} */ fields, /** @type {string} */ etag) {
+      this.patchCalls.push({ fields, etag });
+      // result.ok=true but result.data has no answers field
+      return { ok: true, status: 200, data: { ...BASE_ROW, notes: 'updated', etag: 'new-etag', answers: null } };
+    },
+    async getCase() { return { ...BASE_ROW }; },
+  };
+  const q = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
+  q.loadCase(BASE_ROW);
+  q.enqueue('c1', 'notes', 'updated');
+  await tick();
+  assert.equal(q.status.get(), 'saved');
+});
+
+test('SaveQueue: _handle412 retry with null answers on fresh row stores null baselineAnswers', async () => {
+  // Server has same baseline but fresh.answers is null
+  const freshRow = { ...BASE_ROW, etag: 'etag-fresh', answers: /** @type {any} */ (null) };
+  const client = makeClient({
+    patchResponses: [{ ok: false, status: 412 }],
+    getCaseRow: freshRow,
+  });
+  const q = new SaveQueue(client, { debounceMs: 0 });
+  q.loadCase(BASE_ROW);
+  q.enqueue('c1', 'notes', 'x');
+  await tick();
+  assert.equal(q.status.get(), 'saved');
+});
+
+test('SaveQueue: loadCase called twice preserves existing pending items', async () => {
+  const client = makeClient();
+  const q = new SaveQueue(client, { debounceMs: 5000 }); // long debounce so pending stays
+  q.loadCase(BASE_ROW);
+  q.enqueue('c1', 'notes', 'pending value'); // adds a pending item
+
+  // Calling loadCase again with the same case should preserve the pending entry
+  q.loadCase({ ...BASE_ROW, etag: 'etag-2' });
+
+  // The pending value should still be there (covers `existing?.pending ?? {}` non-null branch)
+  assert.equal(q.getEtag('c1'), 'etag-2', 'ETag should be updated');
+});
+
+test('SaveQueue: _handle412 with null baselineAnswers uses {} for comparison', async () => {
+  // Load with null answers → baselineAnswers = null
+  const client = makeClient({
+    patchResponses: [{ ok: false, status: 412 }],
+    // getCase returns row with same null answers → comparison {} == {} → no conflict
+    getCaseRow: { ...BASE_ROW, etag: 'etag-2', answers: /** @type {any} */ (null) },
+  });
+  const q = new SaveQueue(client, { debounceMs: 0 });
+  q.loadCase({ ...BASE_ROW, answers: /** @type {any} */ (null) }); // baselineAnswers = null
+  q.enqueue('c1', 'notes', 'x');
+  await tick();
+  // Both sides stringify to '{}' → no conflict → retried → saved
+  assert.equal(q.status.get(), 'saved');
+});

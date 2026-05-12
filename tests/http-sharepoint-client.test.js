@@ -300,6 +300,56 @@ test('HttpSharePointClient: 429 without Retry-After falls back to a default dela
   assert.ok(delays[0] >= 1000, 'fallback delay should be at least 1s');
 });
 
+test('HttpSharePointClient: 429 with garbage Retry-After string falls back to default delay', async () => {
+  let getCount = 0;
+  const { fetch } = makeFetch([
+    {
+      when: c => c.method === 'GET',
+      respond: () => {
+        getCount++;
+        if (getCount === 1) {
+          // Non-numeric, non-date Retry-After → parseRetryAfter returns DEFAULT_THROTTLE_MS (line 286)
+          return new Response('throttled', { status: 429, headers: { 'Retry-After': 'not-a-number-or-date' } });
+        }
+        return new Response(JSON.stringify({
+          Id: 'case-1', Title: 'OK', Status: 'In-progress', AssignedReviewerId: 'u1',
+          ResponsiblePartyId: 'u2', Answers: '{}', Conversation: '[]', Notes: '', CompletedAt: null,
+          CaseType: 'hello-review',
+        }), { status: 200, headers: { ETag: '"ok"' } });
+      },
+    },
+  ]);
+  const { sleep, delays } = makeSleep();
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch, sleep });
+
+  await client.getCase('case-1');
+
+  assert.equal(delays.length, 1);
+  assert.ok(delays[0] >= 1000, 'garbage Retry-After should fall back to default delay (≥ 1s)');
+});
+
+test('HttpSharePointClient: getCase returns fallback empty objects when Answers/Conversation are invalid JSON', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: c => c.method === 'GET',
+      respond: () => new Response(JSON.stringify({
+        Id: 'case-bad', Title: 'Bad JSON', Status: 'In-progress', CaseType: 'hello-review',
+        AssignedReviewerId: 'u1', ResponsiblePartyId: 'u2',
+        Answers: 'not valid json {{{',
+        Conversation: 'also invalid',
+        Notes: '', CompletedAt: null,
+      }), { status: 200, headers: { ETag: '"v1"' } }),
+    },
+  ]);
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+
+  const row = await client.getCase('case-bad');
+
+  // parseJsonField catch block returns fallback for invalid JSON (lines 349-350)
+  assert.deepEqual(row?.answers, {}, 'invalid Answers JSON falls back to {}');
+  assert.deepEqual(row?.conversation, [], 'invalid Conversation JSON falls back to []');
+});
+
 // --- pagination ---
 
 test('HttpSharePointClient: listCases follows odata.nextLink across pages and concatenates results', async () => {

@@ -358,6 +358,44 @@ test('CRAllocation: _renderEmpty shows "No Cases available"', () => {
   assert.equal(msg.textContent, 'No Cases available');
 });
 
+test('CRAllocation: _getUnassignedCases handles null created via ?? fallback', async () => {
+  const c1 = unassignedCase('c-no-created', '');
+  const c2 = unassignedCase('c-with-created', '2026-01-01T00:00:00Z');
+  // Set created to null on c1 to trigger the `?? ''` fallback in the sort comparator
+  /** @type {any} */ (c1).created = null;
+  const client = makeClient([c2, c1]);
+
+  const el = new CRAllocation();
+  el.client = /** @type {any} */ (client);
+  el.eligibleCaseTypes = ['hello-review'];
+
+  const result = await el._getUnassignedCases();
+  // null created sorts as '' which is less than '2026-...', so c1 comes first
+  assert.equal(result.length, 2, 'both cases should be returned');
+  assert.equal(result[0].id, 'c-no-created', 'null created falls back to empty string → sorts first');
+});
+
+test('CRAllocation: button click triggers _requestNextCase', async () => {
+  const c = unassignedCase('c-btn', '2026-01-01T00:00:00Z');
+  const client = makeClient([c]);
+
+  const el = new CRAllocation();
+  el.client = /** @type {any} */ (client);
+  el.currentUserId = 'user-reviewer';
+  el.eligibleCaseTypes = ['hello-review'];
+  el.connectedCallback();
+
+  /** @type {any[]} */
+  const dispatched = [];
+  el.addEventListener('cr-allocated', (e) => dispatched.push(e));
+
+  const btn = (/** @type {any} */ (el))._children[0];
+  await btn._listeners['click'][0]();
+
+  assert.equal(dispatched.length, 1, 'button click must trigger allocation');
+  assert.equal(dispatched[0].detail.caseId, 'c-btn');
+});
+
 
 
 

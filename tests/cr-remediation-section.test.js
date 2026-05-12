@@ -247,3 +247,19 @@ test('CRRemediationSection: _renderItem with no answer shows empty string via ??
   const answerEl = findByClass(item, 'cr-remediation-answer');
   assert.equal(answerEl.textContent, 'Answer: ');
 });
+
+test('CRRemediationSection: _renderItem with null remediationActions falls back to empty array', () => {
+  // Exercises `q.remediationActions ?? []` when remediationActions is null
+  const q = /** @type {any} */ ({
+    id: 'q-null-actions',
+    text: 'No actions?',
+    responseType: 'yes-no-na',
+    remediationActions: null,
+    deprecated: false,
+  });
+  const el = new CRRemediationSection();
+  el.answers = { 'q-null-actions': { value: 'No' } };
+  const item = /** @type {any} */ (el)._renderItem(q);
+  const actionsList = findByClass(item, 'cr-remediation-actions');
+  assert.equal(actionsList._children.length, 0, 'null remediationActions falls back to [] → no action items');
+});

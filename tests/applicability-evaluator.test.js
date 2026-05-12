@@ -413,6 +413,12 @@ test('detectCycles: extractRefs with empty object', () => {
   assert.strictEqual(detectCycles(catalogue), false);
 });
 
+test('allApplicableAnswered: returns true when applicable multi-choice question has non-empty array value', () => {
+  const catalogue = [q('q1')];
+  const answers = { q1: { value: ['Option A', 'Option B'] } };
+  assert.strictEqual(allApplicableAnswered(catalogue, answers), true);
+});
+
 
 
 

@@ -299,13 +299,23 @@ test('CRQuestion: focus() does nothing if no input found', () => {
   const el = new CRQuestion();
   el.question = Q_YES_NO;
   el.connectedCallback();
-  
+
   // Override querySelector to return null
   el.querySelector = () => null;
-  
+
   (/** @type {any} */ (globalThis))._lastFocused = 'initial';
   el.focus();
   assert.equal((/** @type {any} */ (globalThis))._lastFocused, 'initial');
+});
+
+test('CRQuestion: single-choice with no options renders empty fieldset (covers q.options ?? [])', () => {
+  const el = new CRQuestion();
+  el.question = { .../** @type {any} */ (Q_YES_NO), responseType: 'single-choice', options: undefined };
+  el.connectedCallback();
+  // With options: undefined, falls back to [], so fieldset has only the legend (no label children)
+  const fieldset = (/** @type {any} */ (el))._children[0];
+  // Only the legend child; no radio labels added
+  assert.equal(fieldset._children.length, 1, 'undefined options falls back to [] → only legend in fieldset');
 });
 
 

@@ -111,7 +111,7 @@ export class CRConversation extends CRElement {
 
     const textarea = /** @type {HTMLTextAreaElement} */ (/** @type {unknown} */ (document.createElement('textarea')));
     /** @type {any} */ (textarea).className = 'cr-conversation-input';
-    /** @type {any} */ (textarea).setAttribute?.('aria-label', 'Message to Responsible Party');
+    /** @type {any} */ (textarea).setAttribute('aria-label', 'Message to Responsible Party');
 
     const btn = document.createElement('button');
     btn.className = 'cr-conversation-send';

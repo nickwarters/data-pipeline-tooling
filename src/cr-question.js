@@ -27,7 +27,7 @@ export class CRQuestion extends CRElement {
    */
   focus() {
     const input = /** @type {HTMLElement | null} */ (
-      /** @type {any} */ (this).querySelector?.('input')
+      /** @type {any} */ (this).querySelector('input')
     );
     if (input) input.focus();
   }

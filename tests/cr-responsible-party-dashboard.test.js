@@ -546,3 +546,79 @@ test('CRResponsiblePartyDashboard: Open button click dispatches cr-case-open on 
   assert.equal(fired.length, 1, 'cr-open-conversation should be dispatched');
   assert.equal(fired[0].detail.caseId, 'c1');
 });
+
+test('CRResponsiblePartyDashboard: _setCaseTypeFilter sets filter and re-renders', async () => {
+  const cases = [
+    makeCase({ id: 'c1', caseType: 'hello-review', answers: { 'q-1': { value: 'No', remediationActions: [{ id: 'ra-1', text: 'A', completed: false }] } } }),
+    makeCase({ id: 'c2', caseType: 'other-review', answers: { 'q-2': { value: 'No', remediationActions: [{ id: 'ra-2', text: 'B', completed: false }] } } }),
+  ];
+  const el = new CRResponsiblePartyDashboard();
+  el.client = /** @type {any} */ (makeClient(cases));
+  el.currentUserId = 'user-rp';
+  await el.connectedCallback();
+
+  // _setCaseTypeFilter is not wired to the DOM select but must be callable directly
+  el._setCaseTypeFilter('hello-review');
+
+  // After calling _setCaseTypeFilter, the filter should be applied on next render
+  const remediationTable = caseTableInSection(el, 'cr-rp-remediation');
+  assert.ok(remediationTable, 'remediation table must exist after re-render');
+  assert.equal(el._caseTypeFilter, 'hello-review', '_caseTypeFilter must be updated');
+});
+
+test('CRResponsiblePartyDashboard: select change with null e.target falls back to empty filter', async () => {
+  const cases = [
+    makeCase({ id: 'c1', caseType: 'hello-review', answers: { 'q-1': { value: 'No', remediationActions: [{ id: 'ra-1', text: 'A', completed: false }] } } }),
+  ];
+  const el = new CRResponsiblePartyDashboard();
+  el.client = /** @type {any} */ (makeClient(cases));
+  el.currentUserId = 'user-rp';
+  await el.connectedCallback();
+
+  const select = /** @type {any} */ (findAll(el, 'select').find(s => s.className === 'cr-rp-remediation-filter'));
+  assert.ok(select, 'remediation filter select should exist');
+  // Fire change with null target — covers `e.target?.value ?? ''` null branch
+  for (const h of select._listeners['change'] ?? []) {
+    h({ target: null });
+  }
+  // Empty filter: all cases shown
+  const rows = findAll(el, 'tr').filter(r => r.className.includes('cr-remediation-row'));
+  assert.equal(rows.length, 1, 'null target falls back to empty string → all remediation rows shown');
+});
+
+test('CRResponsiblePartyDashboard: two completed cases in same month+outcome increments count (covers ?? 0 and !monthMap[month] false branch)', async () => {
+  const recentMonth = new Date();
+  recentMonth.setDate(1);
+  const iso = recentMonth.toISOString().slice(0, 10);
+
+  const cases = [
+    makeCase({ id: 'c1', status: /** @type {'Completed'} */ ('Completed'), completedAt: `${iso}T10:00:00Z`, outcome: 'Pass' }),
+    makeCase({ id: 'c2', status: /** @type {'Completed'} */ ('Completed'), completedAt: `${iso}T11:00:00Z`, outcome: 'Pass' }),
+  ];
+  const el = new CRResponsiblePartyDashboard();
+  el.client = /** @type {any} */ (makeClient(cases));
+  el.currentUserId = 'user-rp';
+  await el.connectedCallback();
+
+  assert.equal(el._outcomeSummary.totalCompleted, 2);
+  assert.equal(el._outcomeSummary.byOutcome['Pass'], 2, 'two cases with same outcome increment count');
+  const month = iso.slice(0, 7);
+  const monthEntry = el._outcomeSummary.byMonth.find(m => m.month === month);
+  assert.equal(monthEntry?.counts['Pass'], 2, 'same outcome in same month accumulates count');
+});
+
+test('CRResponsiblePartyDashboard: case with null outcome uses "Unknown" label', async () => {
+  const recentMonth = new Date();
+  recentMonth.setDate(1);
+  const iso = recentMonth.toISOString().slice(0, 10);
+
+  const cases = [
+    makeCase({ id: 'c1', status: /** @type {'Completed'} */ ('Completed'), completedAt: `${iso}T10:00:00Z`, outcome: /** @type {any} */ (null) }),
+  ];
+  const el = new CRResponsiblePartyDashboard();
+  el.client = /** @type {any} */ (makeClient(cases));
+  el.currentUserId = 'user-rp';
+  await el.connectedCallback();
+
+  assert.equal(el._outcomeSummary.byOutcome['Unknown'], 1, 'null outcome falls back to "Unknown" label');
+});

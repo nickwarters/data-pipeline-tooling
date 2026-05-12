@@ -190,6 +190,38 @@ test('CRQuestionList: removing a question does not trigger focus change', () => 
     'no focus change when only removing questions');
 });
 
+test('CRQuestionList: update with same questions (no new) does not trigger focus change', () => {
+  const list = new CRQuestionList();
+  /** @type {QuestionDefinition[]} */
+  const questions = [
+    { id: 'q1', text: 'Q1?', responseType: 'yes-no-na', deprecated: false },
+  ];
+  list.questions = questions;
+  list.answers = {};
+  list.connectedCallback();
+  (/** @type {any} */ (globalThis))._lastFocused = null;
+
+  // Same questions, just updated answers — no new question IDs appear.
+  list.update(questions, { 'q1': { value: 'Yes' } });
+  assert.equal((/** @type {any} */ (globalThis))._lastFocused, null,
+    'update with same question set must not steal focus');
+});
+
+test('CRQuestionList: multi-choice question with no answer initialises currentValue to empty array', () => {
+  const list = new CRQuestionList();
+  /** @type {QuestionDefinition[]} */
+  const questions = [
+    { id: 'q-mc', text: 'Pick?', responseType: 'multi-choice', options: ['A', 'B'], deprecated: false },
+  ];
+  list.questions = questions;
+  list.answers = {}; // no answer yet
+  list.connectedCallback();
+
+  const crQ = /** @type {any} */ ((/** @type {any} */ (list))._children[0]);
+  assert.deepEqual(crQ.currentValue, [],
+    'multi-choice with no existing answer must initialise currentValue to []');
+});
+
 // ---- cr-notes / cr-conversation labelling ----
 
 test('CRNotes: textarea has aria-label="Case notes"', () => {

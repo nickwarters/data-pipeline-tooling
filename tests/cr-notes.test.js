@@ -171,3 +171,18 @@ test('CRNotes: input event does not throw when caseId is empty', () => {
   });
   assert.equal(saveQueue.enqueued.length, 0);
 });
+
+test('CRNotes: input event with null target value falls back to empty string', () => {
+  const saveQueue = makeQueue('case-1');
+  const el = new CRNotes();
+  el.notes = '';
+  el.saveQueue = /** @type {any} */ (saveQueue);
+  el.caseId = 'case-1';
+  el.connectedCallback();
+
+  const textarea = (/** @type {any} */ (el))._children[1];
+  // Simulate ev.target.value being null (covers the `?? ''` branch)
+  (/** @type {any} */ (textarea))._listeners['input'][0]({ target: { value: null } });
+  assert.equal(saveQueue.enqueued.length, 1);
+  assert.equal(saveQueue.enqueued[0].value, '');
+});
