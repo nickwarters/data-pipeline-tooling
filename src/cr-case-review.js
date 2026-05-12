@@ -92,7 +92,11 @@ export class CRCaseReview extends CRElement {
       return;
     }
 
+<<<<<<< issue-41-buildlayout-options-object
+    this._buildLayout({ caseRow, catalogue, computeOutcome: config.computeOutcome, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access });
+=======
     this._buildLayout(caseRow, catalogue, config.computeOutcome, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access);
+>>>>>>> main
   }
 
   _renderAccessDenied() {
@@ -107,6 +111,21 @@ export class CRCaseReview extends CRElement {
   }
 
   /**
+<<<<<<< issue-41-buildlayout-options-object
+   * @param {object} opts
+   * @param {CaseRow} opts.caseRow
+   * @param {QuestionDefinition[]} opts.catalogue
+   * @param {(answers: Record<string, Answer>) => import('./sharepoint-client.js').OutcomeResult} opts.computeOutcome
+   * @param {SharePointClient} opts.client
+   * @param {SaveQueue} opts.saveQueue
+   * @param {{ get: () => Record<string, Answer>, set: (v: Record<string, Answer>) => void }} opts.answersSignal
+   * @param {{ get: () => QuestionDefinition[] }} opts.applicableQuestions
+   * @param {{ get: () => boolean }} opts.allAnswered
+   * @param {CurrentUser} opts.currentUser
+   * @param {Record<import('./section-access.js').Section, import('./section-access.js').Mode>} opts.access
+   */
+  _buildLayout({ caseRow, catalogue, computeOutcome, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access }) {
+=======
    * @param {CaseRow} caseRow
    * @param {QuestionDefinition[]} catalogue
    * @param {(answers: Record<string, Answer>) => import('./sharepoint-client.js').OutcomeResult} computeOutcome
@@ -119,6 +138,7 @@ export class CRCaseReview extends CRElement {
    * @param {Record<import('./section-access.js').Section, import('./section-access.js').Mode>} access
    */
   _buildLayout(caseRow, catalogue, computeOutcome, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access) {
+>>>>>>> main
     const header = document.createElement('header');
     const h1 = document.createElement('h1');
     h1.textContent = caseRow.title;
