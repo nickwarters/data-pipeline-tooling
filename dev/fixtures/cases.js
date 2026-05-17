@@ -9,6 +9,10 @@ _twoMonthsAgo.setMonth(_twoMonthsAgo.getMonth() - 2);
 const _yesterday = new Date(_todayStart.getTime() - 24 * 60 * 60 * 1000);
 const _nextWeek = new Date(_todayStart.getTime() + 7 * 24 * 60 * 60 * 1000);
 
+// Reviewer Manager report: cases assigned to user-rm (morgan manager)
+const _fiveDaysAgo = new Date(_todayStart.getTime() - 5 * 24 * 60 * 60 * 1000);
+const _twentyDaysAgo = new Date(_todayStart.getTime() - 20 * 24 * 60 * 60 * 1000);
+
 /**
  * hello-review Cases:
  *   case-1  — untouched (no Answers, assigned)
@@ -21,6 +25,12 @@ const _nextWeek = new Date(_todayStart.getTime() + 7 * 24 * 60 * 60 * 1000);
  *   case-8  — Completed today, responsibleParty=user-rp
  *   case-9  — Completed 2 months ago, responsibleParty=user-rp
  *   case-10 — In-progress, OVERDUE (dueDate=yesterday), responsibleParty=user-rp
+ *
+ * Reviewer Manager (user-rm) report cases:
+ *   rm-case-1 — Completed 5 days ago (in 7-day tile)
+ *   rm-case-2 — Completed 20 days ago (in 30-day tile only)
+ *   rm-case-3 — In-progress, due next week (outstanding)
+ *   rm-case-4 — In-progress, OVERDUE (dueDate=yesterday)
  *
  * @type {CaseRow[]}
  */
@@ -242,6 +252,69 @@ export const cases = [
     completedAt: null,
     created: '2026-05-04T08:00:00Z',
     etag: 'etag-c13-v1',
+  },
+  // --- Reviewer Manager (user-rm) report fixture cases ---
+  {
+    id: 'rm-case-1',
+    caseType: 'hello-review',
+    title: 'Hello Review #RM-1',
+    status: 'Completed',
+    assignedReviewer: 'user-reviewer-2',
+    assignedReviewerManager: 'user-rm',
+    responsibleParty: 'user-agent-a',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: _fiveDaysAgo.toISOString(),
+    created: '2026-05-01T08:00:00Z',
+    etag: 'etag-rm1-v1',
+  },
+  {
+    id: 'rm-case-2',
+    caseType: 'hello-review',
+    title: 'Hello Review #RM-2',
+    status: 'Completed',
+    assignedReviewer: 'user-reviewer-2',
+    assignedReviewerManager: 'user-rm',
+    responsibleParty: 'user-agent-b',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: _twentyDaysAgo.toISOString(),
+    created: '2026-04-20T08:00:00Z',
+    etag: 'etag-rm2-v1',
+  },
+  {
+    id: 'rm-case-3',
+    caseType: 'hello-review',
+    title: 'Hello Review #RM-3',
+    status: 'In-progress',
+    assignedReviewer: 'user-reviewer-2',
+    assignedReviewerManager: 'user-rm',
+    responsibleParty: 'user-agent-c',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    dueDate: _nextWeek.toISOString(),
+    created: '2026-05-10T08:00:00Z',
+    etag: 'etag-rm3-v1',
+  },
+  {
+    id: 'rm-case-4',
+    caseType: 'hello-review',
+    title: 'Hello Review #RM-4',
+    status: 'In-progress',
+    assignedReviewer: 'user-reviewer-2',
+    assignedReviewerManager: 'user-rm',
+    responsibleParty: 'user-agent-d',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    dueDate: _yesterday.toISOString(),
+    created: '2026-05-05T08:00:00Z',
+    etag: 'etag-rm4-v1',
   },
   // --- product-sale-review fixture cases ---
   {

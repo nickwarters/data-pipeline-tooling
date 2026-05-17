@@ -18,7 +18,17 @@ export function register(router, context) {
 
   router.register('#/reports/reviewer-team', {
     mount(container) {
-      container.replaceChildren(document.createElement('cr-reviewer-team-report'));
+      if (!context.capabilities.isReviewerManager) {
+        location.hash = '#/reports';
+        return;
+      }
+      const el = /** @type {import('../pages/cr-reviewer-team-report.js').CRReviewerTeamReport} */ (
+        document.createElement('cr-reviewer-team-report')
+      );
+      el.client = context.client;
+      el.currentUser = context.currentUser;
+      el.eligibleCaseTypes = context.eligibleCaseTypes;
+      container.replaceChildren(el);
     },
     unmount() {},
   });

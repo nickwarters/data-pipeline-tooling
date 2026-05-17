@@ -29,3 +29,9 @@ test('resolveEligibleCaseTypes: returns an array', async () => {
   const result = await resolveEligibleCaseTypes(['Reviewers']);
   assert.ok(Array.isArray(result), 'result should be an array');
 });
+
+test('resolveEligibleCaseTypes: Reviewer-Managers get all case types (needed for fan-out reporting)', async () => {
+  const result = await resolveEligibleCaseTypes(['Reviewer-Managers']);
+  assert.ok(result.includes('hello-review'), 'hello-review should be eligible for Reviewer-Managers');
+  assert.ok(result.length > 0, 'should return at least one case type');
+});

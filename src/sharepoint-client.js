@@ -28,6 +28,7 @@
  *   relatedDate?: string | null,
  *   created?: string,
  *   overdue?: boolean,
+ *   assignedReviewerManager?: string | null,
  *   etag: string
  * }} CaseRow
  */
@@ -47,7 +48,7 @@
  */
 
 /**
- * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean }} ListCasesFilter
+ * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, assignedReviewerManager?: string }} ListCasesFilter
  */
 
 /**

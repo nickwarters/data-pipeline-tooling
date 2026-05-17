@@ -173,7 +173,7 @@ test('registerRoutes: #/reports/reviewer-team mount creates cr-reviewer-team-rep
     const router = new Router();
     const container = { replaceChildren() {} };
     router._container = /** @type {any} */ (container);
-    registerRoutes(router, makeContext());
+    registerRoutes(router, /** @type {any} */ ({ ...makeContext(), capabilities: { isReviewerManager: true } }));
     router.navigate('#/reports/reviewer-team');
     assert.ok(created.includes('cr-reviewer-team-report'), 'cr-reviewer-team-report should be created on mount');
   } finally {

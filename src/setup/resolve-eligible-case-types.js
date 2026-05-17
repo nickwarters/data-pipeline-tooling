@@ -12,6 +12,11 @@ export async function resolveEligibleCaseTypes(userGroups) {
     { slug: 'hello-review', config: helloReviewConfig },
   ];
 
+  // Reviewer Managers need all case types for fan-out reporting queries.
+  if (userGroups.includes('Reviewer-Managers')) {
+    return caseTypes.map(({ slug }) => slug);
+  }
+
   return caseTypes
     .filter(({ config }) => config.eligibleGroups?.some(g => userGroups.includes(g)))
     .map(({ slug }) => slug);

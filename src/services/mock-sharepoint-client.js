@@ -77,6 +77,7 @@ export class MockSharePointClient {
         if (filter.assignedReviewer !== undefined && c.assignedReviewer !== filter.assignedReviewer) return false;
         if (filter.caseType !== undefined && c.caseType !== filter.caseType) return false;
         if (filter.responsibleParty !== undefined && c.responsibleParty !== filter.responsibleParty) return false;
+        if (filter.assignedReviewerManager !== undefined && c.assignedReviewerManager !== filter.assignedReviewerManager) return false;
         if (filter.overdue === true) {
           if (c.status === 'Completed') return false;
           if (!c.dueDate) return false;
