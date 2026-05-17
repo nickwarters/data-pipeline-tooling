@@ -72,7 +72,7 @@
  */
 
 /**
- * @typedef {{ verdict: 'pass' | 'fail' }} OutcomeResult
+ * @typedef {{ verdict: 'pass' | 'refer' | 'fail' }} OutcomeResult
  */
 
 /**

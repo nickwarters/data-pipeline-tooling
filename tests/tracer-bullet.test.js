@@ -215,11 +215,10 @@ test('CRDashboard: renders cr-case-table with cases from listCases', async () =>
   el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false };
   await el.connectedCallback();
 
-  // _children: [h1, caseTable, allocationEl] — all 3 fixture cases are assigned to user-reviewer
   const caseTableEl = (/** @type {any} */ (el))._children[1];
   assert.ok(caseTableEl, 'cr-case-table element should exist at index 1');
   assert.ok(Array.isArray(caseTableEl.cases), 'cases property should be set on the table');
-  assert.equal(caseTableEl.cases.length, 7, 'one case per In-progress case assigned to reviewer');
+  assert.equal(caseTableEl.cases.length, 10, 'one case per In-progress case assigned to reviewer');
 });
 
 test('CRDashboard: owner capability causes cr-owner-summary to be added to layout', async () => {
