@@ -41,8 +41,6 @@ async function boot() {
   ]);
   const capabilities = resolveCapabilities(userGroups);
 
-  // Compute which case types the current user is eligible to review.
-  // Each case type module declares eligibleGroups; we check for group intersection.
   const { default: helloReviewConfig } = await import('../case-types/hello-review.js');
   /** @type {string[]} */
   const eligibleCaseTypes = [];
@@ -51,68 +49,10 @@ async function boot() {
   }
 
   const appEl = /** @type {Element} */ (document.getElementById('app'));
-  // Ensure the cr- CSS scope is active even when the host page doesn't set it
-  // (e.g. SharePoint Content Editor markup managed separately from this app).
   appEl.setAttribute('data-cr-root', '');
 
-  router.register('#/', {
-    mount() { location.hash = '#/dashboard'; },
-    unmount() {},
-  });
-
-  router.register('#/dashboard', {
-    mount(container) {
-      const el = /** @type {import('./cr-dashboard.js').CRDashboard} */ (
-        document.createElement('cr-dashboard')
-      );
-      el.client = client;
-      el.currentUserId = currentUser.id;
-      el.capabilities = capabilities;
-      el.eligibleCaseTypes = eligibleCaseTypes;
-      container.replaceChildren(el);
-    },
-    unmount() {},
-  });
-
-  router.register('#/conversation/:id', {
-    mount(container, params) {
-      const el = /** @type {import('./cr-conversation-view.js').CRConversationView} */ (
-        document.createElement('cr-conversation-view')
-      );
-      el.client = client;
-      el.saveQueue = saveQueue;
-      el.caseId = params.id;
-      el.currentUser = currentUser;
-      container.replaceChildren(el);
-    },
-    unmount() {},
-  });
-
-  router.register('#/question-bank', {
-    mount(container) {
-      appEl.classList.add('cr-fullbleed');
-      const el = document.createElement('cr-bank-editor');
-      container.replaceChildren(el);
-    },
-    unmount() {
-      appEl.classList.remove('cr-fullbleed');
-    },
-  });
-
-  router.register('#/case/:id', {
-    mount(container, params) {
-      const el = /** @type {import('./cr-case-review.js').CRCaseReview} */ (
-        document.createElement('cr-case-review')
-      );
-      el.client = client;
-      el.saveQueue = saveQueue;
-      el.caseId = params.id;
-      el.currentUserId = currentUser.id;
-      el.capabilities = capabilities;
-      container.replaceChildren(el);
-    },
-    unmount() {},
-  });
+  const { registerRoutes } = await import('./register-routes.js');
+  registerRoutes(router, { client, saveQueue, currentUser, capabilities, eligibleCaseTypes, appEl });
 
   router.init(appEl);
 }
