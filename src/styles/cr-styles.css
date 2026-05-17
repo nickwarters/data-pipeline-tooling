@@ -467,3 +467,63 @@
   background: #155f29;
   border-color: #155f29;
 }
+
+/* Section progress sidebar */
+[data-cr-root] section:has(cr-section-progress) {
+  display: grid;
+  grid-template-columns: 1fr 14rem;
+  grid-template-rows: auto 1fr;
+  gap: 0 var(--cr-space-5);
+  align-items: start;
+}
+
+[data-cr-root] section:has(cr-section-progress) > h2 {
+  grid-column: 1 / -1;
+}
+
+[data-cr-root] cr-section-progress {
+  position: sticky;
+  top: var(--cr-space-5);
+  background: var(--cr-color-surface);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius);
+  padding: var(--cr-space-3);
+}
+
+.cr-section-progress-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--cr-space-2) var(--cr-space-3);
+  border-radius: var(--cr-radius-sm);
+  cursor: pointer;
+  font-size: 0.875rem;
+  margin-bottom: var(--cr-space-1);
+}
+
+.cr-section-progress-row:hover {
+  background: var(--cr-color-border);
+}
+
+.cr-section-progress-row.complete {
+  color: var(--cr-color-success);
+}
+
+.cr-section-progress-label {
+  font-weight: 500;
+}
+
+.cr-section-progress-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--cr-color-muted);
+}
+
+.cr-section-progress-row.complete .cr-section-progress-count {
+  color: var(--cr-color-success);
+}
+
+.cr-jump-unanswered-btn {
+  width: 100%;
+  margin-top: var(--cr-space-3);
+  font-size: 0.8125rem;
+}

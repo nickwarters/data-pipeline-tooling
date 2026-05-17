@@ -2,9 +2,11 @@
 import { CRElement } from '../components/cr-element.js';
 import { signal, computed } from '../lib/signal.js';
 import { evaluate } from '../evaluators/applicability-evaluator.js';
+import { computeSectionProgress } from '../evaluators/section-progress.js';
 import { materializeRemediationActions } from '../evaluators/failure-evaluator.js';
 import { evaluateAccess, resolveRoles, SECTIONS } from '../services/section-access.js';
 import '../components/cr-question-list.js';
+import '../components/cr-section-progress.js';
 import '../components/cr-remediation-section.js';
 import '../components/cr-conversation.js';
 import '../components/cr-notes.js';
@@ -148,7 +150,10 @@ export class CRCaseReview extends CRElement {
       document.createElement('cr-question-list')
     );
     qList.access = access.questions;
-    section.append(h2, qList);
+    const progressEl = /** @type {import('../components/cr-section-progress.js').CRSectionProgress} */ (
+      document.createElement('cr-section-progress')
+    );
+    section.append(h2, qList, progressEl);
 
     /** @type {Map<string, QuestionDefinition>} */
     const byId = new Map(catalogue.map(q => [q.id, q]));
@@ -174,6 +179,25 @@ export class CRCaseReview extends CRElement {
       saveQueue.enqueue(caseRow.id, 'answers', newAnswers);
     });
 
+    section.addEventListener('cr-section-jump', (ev) => {
+      const { section: sectionName } = /** @type {CustomEvent<{ section: string }>} */ (ev).detail;
+      const children = /** @type {any[]} */ (/** @type {any} */ (qList)._children ?? []);
+      const target = children.find(c => c.question?.category === sectionName ||
+        (!c.question?.category && sectionName === 'General'));
+      target?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    });
+
+    section.addEventListener('cr-jump-unanswered', () => {
+      const children = /** @type {any[]} */ (/** @type {any} */ (qList)._children ?? []);
+      const answers = answersSignal.get();
+      const target = children.find(c => {
+        if (!c.question) return false;
+        const v = answers[c.question.id]?.value;
+        return Array.isArray(v) ? v.length === 0 : !v;
+      });
+      target?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    });
+
     const remediationSection = /** @type {import('../components/cr-remediation-section.js').CRRemediationSection} */ (
       document.createElement('cr-remediation-section')
     );
@@ -192,6 +216,12 @@ export class CRCaseReview extends CRElement {
       qList.update(questions, answers);
       remediationSection.update(catalogue, answers);
       outcomeEl.update(computeOutcome, answers, done);
+      const sectionData = computeSectionProgress(catalogue, answers);
+      const unanswered = questions.filter(q => {
+        const v = answers[q.id]?.value;
+        return Array.isArray(v) ? v.length === 0 : !v;
+      });
+      progressEl.update(sectionData, unanswered);
     });
 
     const completeBtn = document.createElement('button');

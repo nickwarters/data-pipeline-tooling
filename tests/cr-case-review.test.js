@@ -118,7 +118,7 @@ test('CRCaseReview: connectedCallback handles access denied', async () => {
   el.client = /** @type {any} */ (makeClient({
     caseRow: { ...BASE_ROW, assignedReviewer: 'someone-else' }
   }));
-  el.saveQueue = new SaveQueue(el.client);
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
   el.currentUserId = 'u1';
   el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false };
@@ -140,7 +140,7 @@ test('CRCaseReview: _completeCase uses this.client if arg missing', async () => 
   const client = makeClient();
   const el = new CRCaseReview();
   el.client = /** @type {any} */ (client);
-  el.saveQueue = new SaveQueue(el.client);
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.saveQueue.loadCase(BASE_ROW);
   
   (/** @type {any} */ (globalThis)).location.hash = '';
@@ -153,7 +153,7 @@ test('CRCaseReview: _completeCase does not navigate on failure', async () => {
   const client = makeClient({ patchOk: false });
   const el = new CRCaseReview();
   el.client = /** @type {any} */ (client);
-  el.saveQueue = new SaveQueue(el.client);
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.saveQueue.loadCase(BASE_ROW);
   
   (/** @type {any} */ (globalThis)).location.hash = 'keep-me';
@@ -190,7 +190,7 @@ test('CRCaseReview: remediation and conversation can be hidden', async () => {
   el.client = /** @type {any} */ (makeClient({
     caseRow: { ...BASE_ROW, assignedReviewer: 'u1' }
   }));
-  el.saveQueue = new SaveQueue(el.client);
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
   el.currentUserId = 'u1';
   // Use RP capability but case is not assigned to us as RP -> conversation might be hidden or read-only
@@ -378,3 +378,124 @@ test('CRCaseReview: complete button click invokes _completeCase', async () => {
   assert.equal(completeCalled, true);
 });
 
+// ===== SECTION PROGRESS INTEGRATION =====
+
+test('CRCaseReview: cr-section-progress is mounted inside the question section', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  const section = (/** @type {any} */ (el))._children[3];
+  // section._children: [h2, qList, cr-section-progress]
+  const progressEl = section._children[2];
+  assert.ok(progressEl, 'cr-section-progress should be mounted inside the question section');
+  assert.ok(typeof progressEl.update === 'function', 'cr-section-progress should have an update method');
+});
+
+test('CRCaseReview: cr-section-progress.update is called with section data on initial render', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  const section = (/** @type {any} */ (el))._children[3];
+  const progressEl = section._children[2];
+
+  /** @type {any[]} */
+  const calls = [];
+  (/** @type {any} */ (progressEl)).update = (/** @type {any[]} */ ...args) => calls.push(args);
+
+  // Trigger viewState update by simulating a cr-answer event
+  section._listeners['cr-answer'][0]({ detail: { questionId: 'q-welcome', value: 'Yes' } });
+
+  assert.ok(calls.length > 0, 'update should be called after an answer change');
+  const [sections] = calls[0];
+  assert.ok(Array.isArray(sections), 'first arg should be an array of section progress entries');
+  assert.ok(sections.length > 0, 'should have at least one section');
+  assert.ok('section' in sections[0], 'each entry should have a section property');
+  assert.ok('answered' in sections[0], 'each entry should have an answered count');
+  assert.ok('total' in sections[0], 'each entry should have a total count');
+});
+
+test('CRCaseReview: cr-section-progress.update answered count increases after cr-answer', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  const section = (/** @type {any} */ (el))._children[3];
+  const progressEl = section._children[2];
+
+  /** @type {any[][]} */
+  const calls = [];
+  (/** @type {any} */ (progressEl)).update = (/** @type {any[]} */ ...args) => calls.push(args);
+
+  // Answer q-welcome (category: 'Opening')
+  section._listeners['cr-answer'][0]({ detail: { questionId: 'q-welcome', value: 'Yes' } });
+  const sections = calls[0][0];
+  const opening = sections.find((/** @type {any} */ s) => s.section === 'Opening');
+  assert.ok(opening, 'Opening section should be present');
+  assert.equal(opening.answered, 1);
+  assert.equal(opening.total, 1);
+});
+
+test('CRCaseReview: cr-section-progress receives unanswered applicable questions list', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  const section = (/** @type {any} */ (el))._children[3];
+  const progressEl = section._children[2];
+
+  /** @type {any[][]} */
+  const calls = [];
+  (/** @type {any} */ (progressEl)).update = (/** @type {any[]} */ ...args) => calls.push(args);
+
+  section._listeners['cr-answer'][0]({ detail: { questionId: 'q-welcome', value: 'Yes' } });
+  const [, unanswered] = calls[0];
+  assert.ok(Array.isArray(unanswered), 'second arg should be the unanswered applicable questions array');
+  // q-welcome is answered; others remain unanswered
+  assert.ok(!unanswered.some((/** @type {any} */ q) => q.id === 'q-welcome'), 'answered question should not appear in unanswered list');
+});
+
+test('CRCaseReview: cr-section-jump event on section scrolls first question of that section', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  const section = (/** @type {any} */ (el))._children[3];
+  // Check the event listener is registered for cr-section-jump
+  assert.ok(
+    Array.isArray(section._listeners['cr-section-jump']) && section._listeners['cr-section-jump'].length > 0,
+    'section should have a cr-section-jump listener'
+  );
+  // Fire it without throwing
+  assert.doesNotThrow(() => {
+    section._listeners['cr-section-jump'][0]({ detail: { section: 'Opening' } });
+  });
+});
+
+test('CRCaseReview: cr-jump-unanswered event scrolls to first unanswered applicable question', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  const section = (/** @type {any} */ (el))._children[3];
+  assert.ok(
+    Array.isArray(section._listeners['cr-jump-unanswered']) && section._listeners['cr-jump-unanswered'].length > 0,
+    'section should have a cr-jump-unanswered listener'
+  );
+  assert.doesNotThrow(() => {
+    section._listeners['cr-jump-unanswered'][0]({});
+  });
+});
