@@ -25,13 +25,8 @@ async function boot() {
   const { Router } = await import('./router.js');
   const { SaveQueue } = await import('./save-queue.js');
   const { resolveCapabilities } = await import('./permissions.js');
-  await import('./cr-allocation.js');
-  await import('./cr-owner-summary.js');
-  await import('./cr-dashboard.js');
-  await import('./cr-case-review.js');
-  await import('./cr-conversation-view.js');
-  // cr-bank-editor pulls in all 13 sub-components via side-effect imports.
-  await import('./cr-bank-editor.js');
+  const { registerComponents } = await import('./register-components.js');
+  await registerComponents();
 
   const saveQueue = new SaveQueue(client);
   const router = new Router();
