@@ -30,6 +30,8 @@ async function boot() {
   await import('./cr-dashboard.js');
   await import('./cr-case-review.js');
   await import('./cr-conversation-view.js');
+  // cr-bank-editor pulls in all 13 sub-components via side-effect imports.
+  await import('./cr-bank-editor.js');
 
   const saveQueue = new SaveQueue(client);
   const router = new Router();
@@ -84,6 +86,17 @@ async function boot() {
       container.replaceChildren(el);
     },
     unmount() {},
+  });
+
+  router.register('#/question-bank', {
+    mount(container) {
+      appEl.classList.add('cr-fullbleed');
+      const el = document.createElement('cr-bank-editor');
+      container.replaceChildren(el);
+    },
+    unmount() {
+      appEl.classList.remove('cr-fullbleed');
+    },
   });
 
   router.register('#/case/:id', {

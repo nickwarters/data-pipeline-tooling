@@ -21,6 +21,10 @@ A **Case** with one or more applicable unanswered **Question Definitions**. Cann
 A **Case** where every applicable **Question Definition** has an **Answer**. Has a `completedAt` timestamp on the SharePoint list row.
 _Avoid_: Closed, finished, done
 
+**QA Check**:
+A separate **Case** that references a **Completed Case** and records a meta-review of whether the original **Assigned Reviewer** conducted that Case properly. Has its own **Assigned Reviewer** (the QA reviewer), its own **Answers**, and its own **Outcome**. The original Case is read-only input. A QA Check is modeled as a distinct Case Type (e.g. `qa-{slug}`), not a mode on an existing Case. Only some Completed Cases are selected for QA Check; selection is manual and performed by a role not yet fully defined in the domain.
+_Avoid_: Re-review, audit (overloaded)
+
 ### Questions & answers
 
 **Question Definition**:
@@ -53,7 +57,11 @@ The SharePoint user whose work is being reviewed (e.g., the agent on a call bein
 _Avoid_: Subject, owner (ambiguous), reviewee
 
 **Case Type Owner**:
-A SharePoint group that "owns" a **Case Type** and sees aggregate dashboard stats for it (outstanding, overdue, completed today / last 7 days).
+A SharePoint group that "owns" a **Case Type** and sees aggregate dashboard stats for it (outstanding, overdue, completed today / last 7 days). Case Type Owners are also the **authors** of Question Bank changes — they propose additions, edits, and deprecations via the question bank editor. Maintainers act as implementors who confirm (publish) those changes; they do not author them.
+
+**Maintainer**:
+A platform administrator responsible for deploying and configuring the framework. When Question Bank changes are authored by a **Case Type Owner**, the Maintainer's role is to confirm (publish) the changes — not to author or approve them. Maintainers also handle SharePoint list/group provisioning and code deployments.
+_Avoid_: Admin (overloaded with SharePoint admin), developer
 
 ### Communication
 

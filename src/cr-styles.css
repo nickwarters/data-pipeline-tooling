@@ -75,6 +75,15 @@
   padding: var(--cr-space-5) var(--cr-space-4);
 }
 
+/* Full-viewport escape hatch for routes that need to own the entire viewport
+   (e.g. #/question-bank). Tokens and resets still apply; only the centering
+   shell is neutralised. */
+[data-cr-root].cr-fullbleed {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
 [data-cr-root] h1 {
   font-size: var(--cr-font-size-xl);
   margin: 0 0 var(--cr-space-3);
