@@ -7,7 +7,8 @@
  * @typedef {{
  *   reviewer: string,
  *   caseTypeOwners: Record<string, string>,
- *   responsibleParty: string
+ *   responsibleParty: string,
+ *   reviewerManager: string
  * }} PermissionsConfig
  */
 
@@ -17,7 +18,8 @@
  * @typedef {{
  *   isReviewer: boolean,
  *   ownedCaseTypes: string[],
- *   isResponsibleParty: boolean
+ *   isResponsibleParty: boolean,
+ *   isReviewerManager: boolean
  * }} Capabilities
  */
 
@@ -28,6 +30,7 @@ export const permissions = {
     'hello-review': 'CaseTypeOwners-HelloReview',
   },
   responsibleParty: 'CR-ResponsibleParty',
+  reviewerManager: 'Reviewer-Managers',
 };
 
 /**
@@ -44,5 +47,6 @@ export function resolveCapabilities(userGroups, config = permissions) {
     .filter(([, group]) => userGroups.includes(group))
     .map(([slug]) => slug);
   const isResponsibleParty = userGroups.includes(config.responsibleParty);
-  return { isReviewer, ownedCaseTypes, isResponsibleParty };
+  const isReviewerManager = userGroups.includes(config.reviewerManager);
+  return { isReviewer, ownedCaseTypes, isResponsibleParty, isReviewerManager };
 }

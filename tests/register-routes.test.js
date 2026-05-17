@@ -127,6 +127,60 @@ test('registerRoutes: #/question-bank mount adds cr-fullbleed to appEl', () => {
   }
 });
 
+test('registerRoutes: registers #/reports route', () => {
+  const router = new Router();
+  router._container = /** @type {any} */ ({});
+  registerRoutes(router, makeContext());
+  assert.ok(router._routes.some(r => r.re.test('#/reports')), '#/reports should be registered');
+});
+
+test('registerRoutes: #/reports mount creates cr-reports-index element', () => {
+  const created = /** @type {string[]} */ ([]);
+  const origCreate = (/** @type {any} */ (globalThis)).document;
+  (/** @type {any} */ (globalThis)).document = {
+    createElement(/** @type {string} */ tag) { created.push(tag); return { setAttribute() {} }; },
+    createTreeWalker() { return { nextNode() { return null; } }; },
+  };
+
+  try {
+    const router = new Router();
+    const container = { replaceChildren() {} };
+    router._container = /** @type {any} */ (container);
+    registerRoutes(router, makeContext());
+    router.navigate('#/reports');
+    assert.ok(created.includes('cr-reports-index'), 'cr-reports-index should be created on mount');
+  } finally {
+    (/** @type {any} */ (globalThis)).document = origCreate;
+  }
+});
+
+test('registerRoutes: registers #/reports/reviewer-team route', () => {
+  const router = new Router();
+  router._container = /** @type {any} */ ({});
+  registerRoutes(router, makeContext());
+  assert.ok(router._routes.some(r => r.re.test('#/reports/reviewer-team')), '#/reports/reviewer-team should be registered');
+});
+
+test('registerRoutes: #/reports/reviewer-team mount creates cr-reviewer-team-report element', () => {
+  const created = /** @type {string[]} */ ([]);
+  const origCreate = (/** @type {any} */ (globalThis)).document;
+  (/** @type {any} */ (globalThis)).document = {
+    createElement(/** @type {string} */ tag) { created.push(tag); return { setAttribute() {} }; },
+    createTreeWalker() { return { nextNode() { return null; } }; },
+  };
+
+  try {
+    const router = new Router();
+    const container = { replaceChildren() {} };
+    router._container = /** @type {any} */ (container);
+    registerRoutes(router, makeContext());
+    router.navigate('#/reports/reviewer-team');
+    assert.ok(created.includes('cr-reviewer-team-report'), 'cr-reviewer-team-report should be created on mount');
+  } finally {
+    (/** @type {any} */ (globalThis)).document = origCreate;
+  }
+});
+
 test('registerRoutes: #/question-bank unmount removes cr-fullbleed from appEl', () => {
   const router = new Router();
   const container = { replaceChildren() {} };

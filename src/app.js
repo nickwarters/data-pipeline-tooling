@@ -25,10 +25,19 @@ async function boot() {
   const appEl = /** @type {Element} */ (document.getElementById('app'));
   appEl.setAttribute('data-cr-root', '');
 
+  const nav = /** @type {import('./components/cr-app-nav.js').CRAppNav} */ (
+    document.createElement('cr-app-nav')
+  );
+  nav.capabilities = capabilities;
+  appEl.appendChild(nav);
+
+  const routerContainer = document.createElement('div');
+  appEl.appendChild(routerContainer);
+
   const { registerRoutes } = await import('./setup/register-routes.js');
   registerRoutes(router, { client, saveQueue, currentUser, capabilities, eligibleCaseTypes, appEl });
 
-  router.init(appEl);
+  router.init(routerContainer);
 }
 
 boot().catch(err => console.error('[RALPH] Boot error:', err));

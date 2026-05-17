@@ -85,7 +85,7 @@ test('CRDashboard: reviewer capability — outstanding Cases heading and allocat
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeClient());
   el.currentUserId = 'user-reviewer';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false };
   el.eligibleCaseTypes = ['hello-review'];
 
   await el.connectedCallback();
@@ -99,7 +99,7 @@ test('CRDashboard: owner-only capability — owner summary visible, no outstandi
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeClient());
   el.currentUserId = 'user-owner';
-  el.capabilities = { isReviewer: false, ownedCaseTypes: ["hello-review"], isResponsibleParty: false };
+  el.capabilities = { isReviewer: false, ownedCaseTypes: ["hello-review"], isResponsibleParty: false, isReviewerManager: false };
   el.eligibleCaseTypes = [];
 
   await el.connectedCallback();
@@ -113,7 +113,7 @@ test('CRDashboard: admin capability — both reviewer and owner sections visible
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeClient());
   el.currentUserId = 'user-admin';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: ["hello-review"], isResponsibleParty: false };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: ["hello-review"], isResponsibleParty: false, isReviewerManager: false };
   el.eligibleCaseTypes = ['hello-review'];
 
   await el.connectedCallback();
@@ -127,7 +127,7 @@ test('CRDashboard: reviewer with no ownedCaseTypes never renders owner section (
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeClient());
   el.currentUserId = 'user-reviewer';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false };
   el.eligibleCaseTypes = ['hello-review'];
 
   // Must not throw.
@@ -147,7 +147,7 @@ test('CRDashboard: RP-only capability — cr-responsible-party-dashboard rendere
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeClient());
   el.currentUserId = 'user-rp';
-  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true };
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false };
 
   await el.connectedCallback();
 
@@ -161,7 +161,7 @@ test('CRDashboard: reviewer + RP capability — both reviewer and RP sections vi
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeClient());
   el.currentUserId = 'user-reviewer-rp';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: true };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false };
   el.eligibleCaseTypes = ['hello-review'];
 
   await el.connectedCallback();
@@ -176,7 +176,7 @@ test('CRDashboard: cr-open-conversation from RP section navigates to conversatio
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeClient());
   el.currentUserId = 'user-rp';
-  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true };
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false };
 
   await el.connectedCallback();
 
@@ -193,7 +193,7 @@ test('CRDashboard: RP section gets client and currentUserId set', async () => {
   const el = new CRDashboard();
   el.client = /** @type {any} */ (client);
   el.currentUserId = 'user-rp';
-  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true };
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false };
 
   await el.connectedCallback();
 
@@ -215,7 +215,7 @@ test('CRDashboard: cr-allocation element listens for cr-allocated and re-fetches
   const el = new CRDashboard();
   el.client = /** @type {any} */ (client);
   el.currentUserId = 'user-reviewer';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false };
   el.eligibleCaseTypes = ['hello-review'];
 
   await el.connectedCallback();
@@ -237,7 +237,7 @@ test('CRDashboard: cr-case-open event on case table navigates to #/case/{id}', a
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeClient());
   el.currentUserId = 'user-reviewer';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false };
   el.eligibleCaseTypes = [];
 
   (/** @type {any} */ (globalThis)).location.hash = '';
@@ -282,7 +282,7 @@ test('CRDashboard: stamps overdue:true on rows whose dueDate is in the past', as
   const el = new CRDashboard();
   el.client = /** @type {any} */ (client);
   el.currentUserId = 'u1';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false };
   el.eligibleCaseTypes = [];
   await el.connectedCallback();
 

@@ -11,6 +11,7 @@ const sampleConfig = {
     'kyc-review': 'CaseTypeOwners-KycReview',
   },
   responsibleParty: 'CR-ResponsibleParty',
+  reviewerManager: 'Reviewer-Managers',
 };
 
 test('resolveCapabilities: empty groups → not reviewer, no owned types', () => {
@@ -76,4 +77,15 @@ test('resolveCapabilities: defaults to exported permissions config when none pas
 test('permissions: exported config has expected shape', () => {
   assert.equal(typeof permissions.reviewer, 'string');
   assert.equal(typeof permissions.caseTypeOwners, 'object');
+});
+
+test('resolveCapabilities: Reviewer-Managers group → isReviewerManager=true', () => {
+  const caps = resolveCapabilities(['Reviewer-Managers'], sampleConfig);
+  assert.equal(caps.isReviewerManager, true);
+  assert.equal(caps.isReviewer, false);
+});
+
+test('resolveCapabilities: no Reviewer-Managers group → isReviewerManager=false', () => {
+  const caps = resolveCapabilities(['Reviewers'], sampleConfig);
+  assert.equal(caps.isReviewerManager, false);
 });

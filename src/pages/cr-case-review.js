@@ -82,7 +82,7 @@ export class CRCaseReview extends CRElement {
 
     const currentUserId = this.currentUserId || currentUser.id;
     const capabilities = this.capabilities || /** @type {import('../services/permissions.js').Capabilities} */ (
-      { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false }
+      { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false }
     );
     const roles = resolveRoles(caseRow, currentUserId, capabilities);
     /** @type {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} */

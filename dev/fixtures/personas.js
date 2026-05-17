@@ -27,4 +27,9 @@ export const personas = {
     displayName: 'Jordan RP',
     groups: ['CR-ResponsibleParty'],
   },
+  'reviewer-manager': {
+    userId: 'user-rm',
+    displayName: 'Morgan Manager',
+    groups: ['Reviewer-Managers'],
+  },
 };

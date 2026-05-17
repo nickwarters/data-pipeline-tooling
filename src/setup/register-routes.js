@@ -5,6 +5,7 @@ import { register as registerDashboard } from '../routes/dashboard.js';
 import { register as registerConversation } from '../routes/conversation.js';
 import { register as registerQuestionBank } from '../routes/question-bank.js';
 import { register as registerCase } from '../routes/case.js';
+import { register as registerReports } from '../routes/reports.js';
 
 /**
  * @typedef {Object} AppContext
@@ -26,4 +27,5 @@ export function registerRoutes(router, context) {
   registerConversation(router, context);
   registerQuestionBank(router, context);
   registerCase(router, context);
+  registerReports(router, context);
 }

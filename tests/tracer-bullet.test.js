@@ -201,7 +201,7 @@ test('CRDashboard: connectedCallback calls listCases with In-progress and assign
   const el = new CRDashboard();
   el.client = /** @type {any} */ (client);
   el.currentUserId = 'user-reviewer';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false };
   await el.connectedCallback();
 
   assert.equal(listCalls.length, 1);
@@ -212,7 +212,7 @@ test('CRDashboard: renders cr-case-table with cases from listCases', async () =>
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeStubClient());
   el.currentUserId = 'user-reviewer';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false };
   await el.connectedCallback();
 
   const caseTableEl = (/** @type {any} */ (el))._children[1];
@@ -225,7 +225,7 @@ test('CRDashboard: owner capability causes cr-owner-summary to be added to layou
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeStubClient());
   el.currentUserId = 'user-owner';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: ["hello-review"], isResponsibleParty: false };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: ["hello-review"], isResponsibleParty: false, isReviewerManager: false };
   await el.connectedCallback();
 
   // _children: [h1, caseTable, allocationEl, ownerSection]
@@ -239,7 +239,7 @@ test('CRDashboard: reviewer-only capability does not show cr-owner-summary', asy
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeStubClient());
   el.currentUserId = 'user-reviewer';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false };
   await el.connectedCallback();
 
   // _children: [h1, caseTable, allocationEl] — no owner section
@@ -260,7 +260,7 @@ test('CRDashboard: layout includes a cr-allocation element at index 2 for review
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeStubClient());
   el.currentUserId = 'user-reviewer';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false };
   el.eligibleCaseTypes = ['hello-review'];
   await el.connectedCallback();
 
@@ -587,4 +587,27 @@ test('CRCaseReview: _completeCase navigates to #/dashboard on success', async ()
   await el._completeCase(caseCompletable.id);
 
   assert.equal((/** @type {any} */ (globalThis)).location.hash, '#/dashboard');
+});
+
+// ===== SMOKE: CRReviewerTeamReport =====
+
+const { CRReviewerTeamReport } = await import('../src/pages/cr-reviewer-team-report.js');
+
+test('CRReviewerTeamReport: connectedCallback renders a non-empty page', () => {
+  const el = new CRReviewerTeamReport();
+  el.connectedCallback();
+  assert.ok((/** @type {any} */ (el))._children.length > 0, 'should render at least one child');
+});
+
+test('CRReviewerTeamReport: rendered page includes a back link to #/reports', () => {
+  const el = new CRReviewerTeamReport();
+  el.connectedCallback();
+
+  /** @param {any} node @param {string} href @returns {boolean} */
+  function hasLink(node, href) {
+    if (node._attrs?.href === href) return true;
+    return (node._children ?? []).some((/** @type {any} */ c) => hasLink(c, href));
+  }
+
+  assert.ok(hasLink(el, '#/reports'), 'page should include a back link to #/reports');
 });
