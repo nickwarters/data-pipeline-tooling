@@ -4,6 +4,7 @@
 export async function registerComponents() {
   await Promise.all([
     import('../components/cr-allocation.js'),
+    import('../components/cr-command-palette.js'),
     import('../components/cr-owner-summary.js'),
     import('../pages/cr-dashboard.js'),
     import('../pages/cr-case-review.js'),
@@ -11,4 +12,5 @@ export async function registerComponents() {
     // cr-bank-editor pulls in all 13 sub-components via side-effect imports.
     import('../question-bank/cr-bank-editor.js'),
   ]);
+  document.body.appendChild(document.createElement('cr-command-palette'));
 }

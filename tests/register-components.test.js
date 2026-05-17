@@ -15,6 +15,8 @@ class StubEl {
   querySelectorAll() { return []; }
 }
 (/** @type {any} */ (globalThis)).HTMLElement = StubEl;
+/** @type {{ tagName: string }[]} */
+const bodyChildren = [];
 (/** @type {any} */ (globalThis)).document = {
   createElement(/** @type {string} */ tag) {
     const el = new StubEl();
@@ -23,6 +25,9 @@ class StubEl {
   },
   addEventListener() {},
   removeEventListener() {},
+  body: {
+    appendChild(/** @type {any} */ el) { bodyChildren.push(el); return el; },
+  },
 };
 (/** @type {any} */ (globalThis)).customElements = { define() {} };
 (/** @type {any} */ (globalThis)).window = { addEventListener() {} };
@@ -38,4 +43,13 @@ test('registerComponents: returns a Promise', () => {
 
 test('registerComponents: resolves without error', async () => {
   await assert.doesNotReject(() => registerComponents());
+});
+
+test('registerComponents: appends cr-command-palette to document.body', async () => {
+  bodyChildren.length = 0;
+  await registerComponents();
+  assert.ok(
+    bodyChildren.some(el => el.tagName === 'CR-COMMAND-PALETTE'),
+    'cr-command-palette should be appended to body'
+  );
 });
