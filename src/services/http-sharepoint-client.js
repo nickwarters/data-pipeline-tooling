@@ -104,6 +104,10 @@ export class HttpSharePointClient {
     if (filter.assignedReviewer) {
       conds.push(`AssignedReviewerId eq '${escapeOData(filter.assignedReviewer)}'`);
     }
+    if (filter.overdue === true) {
+      conds.push(`DueDate lt '${new Date().toISOString()}'`);
+      conds.push(`Status eq 'In-progress'`);
+    }
     let url = this._listItemsUrl(this._caseListName);
     if (conds.length) url += `?$filter=${encodeURIComponent(conds.join(' and '))}`;
     const items = await this._getAllPages(url);

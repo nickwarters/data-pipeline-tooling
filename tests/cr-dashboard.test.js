@@ -253,3 +253,48 @@ test('CRDashboard: cr-case-open event on case table navigates to #/case/{id}', a
 
   assert.equal((/** @type {any} */ (globalThis)).location.hash, '#/case/case-42');
 });
+
+// --- overdue flag ---
+
+test('CRDashboard: stamps overdue:true on rows whose dueDate is in the past', async () => {
+  const PAST = '2020-01-01T00:00:00Z';
+  const FUTURE = '2099-01-01T00:00:00Z';
+  /** @type {import('../src/sharepoint-client.js').CaseRow[]} */
+  const fetchedCases = [
+    {
+      id: 'od-past', caseType: 'hello-review', title: 'Overdue', status: 'In-progress',
+      assignedReviewer: 'u1', responsibleParty: '', answers: {}, conversation: [],
+      notes: '', completedAt: null, dueDate: PAST, etag: 'e1',
+    },
+    {
+      id: 'od-future', caseType: 'hello-review', title: 'On Time', status: 'In-progress',
+      assignedReviewer: 'u1', responsibleParty: '', answers: {}, conversation: [],
+      notes: '', completedAt: null, dueDate: FUTURE, etag: 'e2',
+    },
+    {
+      id: 'od-none', caseType: 'hello-review', title: 'No Due Date', status: 'In-progress',
+      assignedReviewer: 'u1', responsibleParty: '', answers: {}, conversation: [],
+      notes: '', completedAt: null, etag: 'e3',
+    },
+  ];
+
+  const client = { async listCases() { return fetchedCases; } };
+  const el = new CRDashboard();
+  el.client = /** @type {any} */ (client);
+  el.currentUserId = 'u1';
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false };
+  el.eligibleCaseTypes = [];
+  await el.connectedCallback();
+
+  const caseTable = /** @type {any} */ (findAll(el, 'cr-case-table')[0]);
+  const rows = /** @type {import('../src/sharepoint-client.js').CaseRow[]} */ (caseTable.cases);
+  assert.ok(Array.isArray(rows), 'case table should have cases set');
+
+  const pastRow = rows.find(r => r.id === 'od-past');
+  const futureRow = rows.find(r => r.id === 'od-future');
+  const noneRow = rows.find(r => r.id === 'od-none');
+
+  assert.strictEqual(pastRow?.overdue, true, 'past dueDate row should be flagged overdue');
+  assert.strictEqual(futureRow?.overdue, false, 'future dueDate row should not be overdue');
+  assert.strictEqual(noneRow?.overdue, false, 'no-dueDate row should not be overdue');
+});

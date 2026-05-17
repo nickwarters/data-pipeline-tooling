@@ -5,6 +5,7 @@
 /** @type {CaseTypeConfig} */
 const config = {
   eligibleGroups: ['Reviewers'],
+  slaHours: 48,
   questions: [
     {
       id: 'q-welcome',

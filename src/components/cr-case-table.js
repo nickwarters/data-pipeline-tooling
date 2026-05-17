@@ -147,7 +147,8 @@ export class CRCaseTable extends CRElement {
     if (this._customRowClass) {
       inner.rowClass = this._customRowClass;
     } else if (!this._customColumns) {
-      inner.rowClass = () => 'cr-case-row';
+      inner.rowClass = (/** @type {CaseRow} */ row) =>
+        row.overdue ? 'cr-case-row cr-case-row--overdue' : 'cr-case-row';
     }
     inner.onRowActivate = (/** @type {CaseRow} */ row) => this._openCase(row.id);
     if (this._initialSort) inner.sort = this._initialSort;

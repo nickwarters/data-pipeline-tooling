@@ -2,6 +2,7 @@
 import { CRElement } from '../components/cr-element.js';
 import '../components/cr-case-table.js';
 import './cr-responsible-party-dashboard.js';
+import { isOverdue } from '../evaluators/overdue-evaluator.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
@@ -26,10 +27,11 @@ export class CRDashboard extends CRElement {
     /** @type {CaseRow[]} */
     let cases = [];
     if (this.capabilities.isReviewer) {
-      cases = await this.client.listCases({
+      const raw = await this.client.listCases({
         status: 'In-progress',
         assignedReviewer: this.currentUserId,
       });
+      cases = raw.map(c => ({ ...c, overdue: isOverdue(c) }));
     }
     this._render(cases);
   }

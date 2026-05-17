@@ -615,3 +615,37 @@ test('HttpSharePointClient: assignable to SharePointClient interface', () => {
   assert.equal(typeof c.getCurrentUserGroups, 'function');
   assert.equal(typeof c.getCurrentUser, 'function');
 });
+
+// --- listCases overdue OData filter ---
+
+test('HttpSharePointClient: listCases with overdue:true adds DueDate lt and Status eq In-progress OData conditions', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: c => c.method === 'GET',
+      respond: () => new Response(JSON.stringify({ value: [] }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+
+  await client.listCases({ overdue: true });
+
+  assert.equal(calls.length, 1);
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(url.includes('DueDate lt '), 'should include DueDate lt condition');
+  assert.ok(url.includes("Status eq 'In-progress'"), 'should restrict to In-progress cases');
+});
+
+test('HttpSharePointClient: listCases without overdue filter omits DueDate condition', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: c => c.method === 'GET',
+      respond: () => new Response(JSON.stringify({ value: [] }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+
+  await client.listCases({});
+
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(!url.includes('DueDate'), 'should not include DueDate when overdue filter not set');
+});

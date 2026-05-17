@@ -10,14 +10,17 @@ const _yesterday = new Date(_todayStart.getTime() - 24 * 60 * 60 * 1000);
 const _nextWeek = new Date(_todayStart.getTime() + 7 * 24 * 60 * 60 * 1000);
 
 /**
- * Seven hello-review Cases:
- *   case-1 — untouched (no Answers, assigned)
- *   case-2 — partially answered (assigned)
- *   case-3 — completable (assigned)
- *   case-4 — In-progress, unassigned (oldest; for allocation + owner outstanding count)
- *   case-5 — Completed today (for owner completedToday count)
- *   case-6 — Completed 3 days ago (for owner completedLast7Days count)
- *   case-7 — In-progress, unassigned (newer than case-4; for allocation 412-retry test)
+ * hello-review Cases:
+ *   case-1  — untouched (no Answers, assigned)
+ *   case-2  — partially answered (assigned)
+ *   case-3  — completable (assigned)
+ *   case-4  — In-progress, unassigned (oldest; for allocation + owner outstanding count)
+ *   case-5  — Completed today (for owner completedToday count)
+ *   case-6  — Completed 3 days ago (for owner completedLast7Days count)
+ *   case-7  — In-progress, unassigned (newer than case-4; for allocation 412-retry test)
+ *   case-8  — Completed today, responsibleParty=user-rp
+ *   case-9  — Completed 2 months ago, responsibleParty=user-rp
+ *   case-10 — In-progress, OVERDUE (dueDate=yesterday), responsibleParty=user-rp
  *
  * @type {CaseRow[]}
  */

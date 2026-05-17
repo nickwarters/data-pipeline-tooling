@@ -3,6 +3,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import config from '../case-types/hello-review.js';
 import { detectCycles } from '../src/evaluators/applicability-evaluator.js';
+import { cases } from '../dev/fixtures/cases.js';
+import { isOverdue } from '../src/evaluators/overdue-evaluator.js';
 
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
 
@@ -91,4 +93,18 @@ test('computeOutcome: No among Yes and N/A → fail', () => {
 
 test('computeOutcome: empty answers → pass (no No)', () => {
   assert.deepStrictEqual(config.computeOutcome({}), { verdict: 'pass' });
+});
+
+// --- SLA ---
+
+test('hello-review: slaHours is a positive number', () => {
+  assert.ok(typeof config.slaHours === 'number' && config.slaHours > 0,
+    'slaHours should be a positive number');
+});
+
+test('hello-review fixtures: at least one In-progress case with a past dueDate exists', () => {
+  const helloReviewCases = cases.filter(c => c.caseType === 'hello-review');
+  const overdueCases = helloReviewCases.filter(c => isOverdue(c, config));
+  assert.ok(overdueCases.length >= 1,
+    'expected at least one overdue hello-review fixture case');
 });

@@ -515,3 +515,22 @@ test('CRCaseTable: free-text filter matches by status field', () => {
   assert.equal(rows.length, 1, 'should match one row by status');
   assert.equal(findAll(rows[0], 'a')[0]?.href, '#/case/c2');
 });
+
+// --- overdue indicator ---
+
+test('CRCaseTable: default rowClass adds cr-case-row--overdue for overdue rows', () => {
+  const el = new CRCaseTable();
+  el.cases = [
+    makeCase({ id: 'c1', overdue: true }),
+    makeCase({ id: 'c2', overdue: false }),
+    makeCase({ id: 'c3' }), // no overdue field
+  ];
+  el.connectedCallback();
+
+  const rows = findAll(el, 'tr');
+  const overdueRow = rows.find(r => r.className.includes('cr-case-row--overdue'));
+  assert.ok(overdueRow, 'should have a row with cr-case-row--overdue class');
+
+  const nonOverdueRows = rows.filter(r => !r.className.includes('cr-case-row--overdue') && r.className.includes('cr-case-row'));
+  assert.equal(nonOverdueRows.length, 2, 'non-overdue rows should not have the overdue class');
+});

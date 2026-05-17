@@ -27,6 +27,7 @@
  *   dueDate?: string | null,
  *   relatedDate?: string | null,
  *   created?: string,
+ *   overdue?: boolean,
  *   etag: string
  * }} CaseRow
  */
@@ -46,7 +47,7 @@
  */
 
 /**
- * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string }} ListCasesFilter
+ * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean }} ListCasesFilter
  */
 
 /**
@@ -82,7 +83,8 @@
  *   questions: QuestionDefinition[],
  *   computeOutcome: (answers: Record<string, Answer>) => OutcomeResult,
  *   eligibleGroups?: string[],
- *   sections?: Array<'questions'|'conversation'|'notes'|'remediation'|'outcome'>
+ *   sections?: Array<'questions'|'conversation'|'notes'|'remediation'|'outcome'>,
+ *   slaHours?: number
  * }} CaseTypeConfig
  */
 

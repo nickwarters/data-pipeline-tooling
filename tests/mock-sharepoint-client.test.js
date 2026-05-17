@@ -233,3 +233,47 @@ test('MockSharePointClient: getCurrentUser falls back to persona string when per
   assert.equal(user.id, 'unknown-persona', 'p?.userId ?? persona uses fallback when p is undefined');
   assert.equal(user.displayName, 'unknown-persona', 'p?.displayName ?? persona uses fallback when p is undefined');
 });
+
+// --- listCases overdue filter ---
+
+test('MockSharePointClient: listCases with overdue:true returns only In-progress cases with past dueDate', async () => {
+  const PAST = '2020-01-01T00:00:00Z';
+  const FUTURE = '2099-01-01T00:00:00Z';
+  const overdueCase = /** @type {CaseRow} */ ({
+    id: 'od-1', caseType: 'hello-review', title: 'Overdue', status: 'In-progress',
+    assignedReviewer: '', responsibleParty: '', answers: {}, conversation: [], notes: '',
+    completedAt: null, dueDate: PAST, etag: 'etag-od1',
+  });
+  const onTimeCase = /** @type {CaseRow} */ ({
+    id: 'od-2', caseType: 'hello-review', title: 'On Time', status: 'In-progress',
+    assignedReviewer: '', responsibleParty: '', answers: {}, conversation: [], notes: '',
+    completedAt: null, dueDate: FUTURE, etag: 'etag-od2',
+  });
+  const completedLateCase = /** @type {CaseRow} */ ({
+    id: 'od-3', caseType: 'hello-review', title: 'Completed Late', status: 'Completed',
+    assignedReviewer: '', responsibleParty: '', answers: {}, conversation: [], notes: '',
+    completedAt: '2021-01-01T00:00:00Z', dueDate: PAST, etag: 'etag-od3',
+  });
+  const noDueDateCase = /** @type {CaseRow} */ ({
+    id: 'od-4', caseType: 'hello-review', title: 'No Due Date', status: 'In-progress',
+    assignedReviewer: '', responsibleParty: '', answers: {}, conversation: [], notes: '',
+    completedAt: null, etag: 'etag-od4',
+  });
+
+  const client = new MockSharePointClient({
+    cases: [overdueCase, onTimeCase, completedLateCase, noDueDateCase],
+    questionDefinitions: [],
+    personas: PERSONAS,
+  });
+
+  const results = await client.listCases({ overdue: true });
+  assert.equal(results.length, 1);
+  assert.equal(results[0].id, 'od-1');
+});
+
+test('MockSharePointClient: listCases with overdue:false returns all cases (no overdue filter applied)', async () => {
+  const client = makeClient();
+  const all = await client.listCases({});
+  const sameWithFalse = await client.listCases({ overdue: false });
+  assert.equal(sameWithFalse.length, all.length);
+});
