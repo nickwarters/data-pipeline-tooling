@@ -11,7 +11,7 @@ const windowListeners = {};
 };
 (/** @type {any} */ (globalThis)).location = { hash: '' };
 
-import { Router } from '../src/router.js';
+import { Router } from '../src/lib/router.js';
 import { register } from '../src/routes/dashboard.js';
 
 test('dashboard route: register calls router.register with #/dashboard', () => {

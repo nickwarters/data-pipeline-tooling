@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createSharePointClient } from '../src/create-sharepoint-client.js';
+import { createSharePointClient } from '../src/services/create-sharepoint-client.js';
 
 test('createSharePointClient: returns a Promise', () => {
   const result = createSharePointClient(new URLSearchParams(''));
@@ -21,13 +21,13 @@ test('createSharePointClient: returns an object satisfying SharePointClient when
 });
 
 test('createSharePointClient: returns a MockSharePointClient when mock=1', async () => {
-  const { MockSharePointClient } = await import('../src/mock-sharepoint-client.js');
+  const { MockSharePointClient } = await import('../src/services/mock-sharepoint-client.js');
   const client = await createSharePointClient(new URLSearchParams('mock=1'));
   assert.ok(client instanceof MockSharePointClient, 'should be a MockSharePointClient');
 });
 
 test('createSharePointClient: returns an HttpSharePointClient when mock param is absent', async () => {
-  const { HttpSharePointClient } = await import('../src/http-sharepoint-client.js');
+  const { HttpSharePointClient } = await import('../src/services/http-sharepoint-client.js');
   const client = await createSharePointClient(new URLSearchParams(''));
   assert.ok(client instanceof HttpSharePointClient, 'should be an HttpSharePointClient');
 });

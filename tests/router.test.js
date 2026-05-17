@@ -11,7 +11,7 @@ const windowListeners = {};
 };
 (/** @type {any} */ (globalThis)).location = { hash: '' };
 
-import { Router } from '../src/router.js';
+import { Router } from '../src/lib/router.js';
 
 test('Router: mount is called when navigating to a registered static hash', () => {
   const router = new Router();

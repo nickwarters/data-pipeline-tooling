@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { installDom } from './_bank-dom-stub.js';
 installDom();
 
-const { CRShowwhenEditor } = await import('../src/cr-showwhen-editor.js');
-const { _resetStore, cases } = await import('../src/question-bank-store.js');
+const { CRShowwhenEditor } = await import('../src/components/cr-showwhen-editor.js');
+const { _resetStore, cases } = await import('../src/question-bank/question-bank-store.js');
 
 test('CRShowwhenEditor: no question → renders nothing', () => {
   const e = new CRShowwhenEditor();

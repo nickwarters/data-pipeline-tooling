@@ -36,8 +36,8 @@ class StubEl {
 (/** @type {any} */ (globalThis)).location = { hash: '', reload() { reloadCalls++; } };
 let reloadCalls = 0;
 
-const { signal } = await import('../src/signal.js');
-const { CRStatusBanner } = await import('../src/cr-status-banner.js');
+const { signal } = await import('../src/lib/signal.js');
+const { CRStatusBanner } = await import('../src/components/cr-status-banner.js');
 
 /**
  * @param {'saved'|'saving'|'reconnecting'|'conflict'} initial

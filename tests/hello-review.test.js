@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import config from '../case-types/hello-review.js';
-import { detectCycles } from '../src/applicability-evaluator.js';
+import { detectCycles } from '../src/evaluators/applicability-evaluator.js';
 
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
 

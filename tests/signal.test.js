@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { signal, computed, effect } from '../src/signal.js';
+import { signal, computed, effect } from '../src/lib/signal.js';
 
 // --- signal ---
 

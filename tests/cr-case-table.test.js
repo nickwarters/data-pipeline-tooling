@@ -61,7 +61,7 @@ class StubCustomEvent {
 (/** @type {any} */ (globalThis)).CustomEvent = StubCustomEvent;
 
 // ===== IMPORTS (after stubs) =====
-const { CRCaseTable } = await import('../src/cr-case-table.js');
+const { CRCaseTable } = await import('../src/components/cr-case-table.js');
 
 // ===== HELPERS =====
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */

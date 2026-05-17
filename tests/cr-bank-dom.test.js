@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { installDom } from './_bank-dom-stub.js';
 installDom();
 
-const { el, reactive } = await import('../src/cr-bank-dom.js');
-const { signal } = await import('../src/signal.js');
+const { el, reactive } = await import('../src/question-bank/cr-bank-dom.js');
+const { signal } = await import('../src/lib/signal.js');
 
 test('el: assigns className via "class"', () => {
   const e = el('div', { class: 'foo' });

@@ -48,7 +48,7 @@ class StubCustomEvent {
 (/** @type {any} */ (globalThis)).CustomEvent = StubCustomEvent;
 
 // ===== IMPORTS (after stubs) =====
-const { CRAllocation } = await import('../src/cr-allocation.js');
+const { CRAllocation } = await import('../src/components/cr-allocation.js');
 
 // ===== HELPERS =====
 

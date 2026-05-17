@@ -59,8 +59,8 @@ class StubCustomEvent {
 (/** @type {any} */ (globalThis)).CustomEvent = StubCustomEvent;
 
 // ===== IMPORTS (after stubs) =====
-const { CRResponsiblePartyDashboard } = await import('../src/cr-responsible-party-dashboard.js');
-const { CRCaseTable } = await import('../src/cr-case-table.js');
+const { CRResponsiblePartyDashboard } = await import('../src/pages/cr-responsible-party-dashboard.js');
+const { CRCaseTable } = await import('../src/components/cr-case-table.js');
 
 /**
  * Find CRCaseTable instances by walking _children (custom-element tagNames

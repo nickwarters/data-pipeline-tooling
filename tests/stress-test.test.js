@@ -1,7 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluate, allApplicableAnswered, detectCycles } from '../src/applicability-evaluator.js';
+import { evaluate, allApplicableAnswered, detectCycles } from '../src/evaluators/applicability-evaluator.js';
 import { generateStressQuestions } from '../dev/fixtures/stress-questions.js';
 
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */

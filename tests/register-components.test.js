@@ -28,7 +28,7 @@ class StubEl {
 (/** @type {any} */ (globalThis)).window = { addEventListener() {} };
 (/** @type {any} */ (globalThis)).location = { hash: '' };
 
-import { registerComponents } from '../src/register-components.js';
+import { registerComponents } from '../src/setup/register-components.js';
 
 test('registerComponents: returns a Promise', () => {
   const result = registerComponents();

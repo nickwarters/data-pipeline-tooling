@@ -36,7 +36,7 @@ class StubEl {
 (/** @type {any} */ (globalThis)).customElements = { define() {} };
 
 // ===== IMPORTS (after stubs) =====
-const { CROwnerSummary } = await import('../src/cr-owner-summary.js');
+const { CROwnerSummary } = await import('../src/components/cr-owner-summary.js');
 
 // ===== HELPERS =====
 const now = new Date();

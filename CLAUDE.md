@@ -46,8 +46,90 @@ Workflow for all new code:
 
 Never merge production code without a corresponding test. Run `node --test --experimental-test-coverage` to verify coverage before committing. A branch, line, or function that appears in the coverage report as uncovered is a bug in the development process, not just the code.
 
-## Repository state
+## Directory layout
 
-Pre-implementation. As of this commit there is no source code — only the README, CLAUDE.md, CONTEXT.md, docs/PLAN.md, and the ADRs. The first work is **Slice 1** in PLAN.md.
+```
+src/
+  app.js                        # entry point
+  sharepoint-client.js          # shared typedefs (SharePointClient interface)
 
-When implementation begins, document the directory layout that emerges and update this file.
+  lib/                          # framework-level primitives (no domain knowledge)
+    signal.js                   # home-grown signal/computed/effect (~50 LOC)
+    router.js                   # hash-based SPA router
+
+  components/                   # reusable cr-* custom elements
+    cr-element.js               # base class
+    cr-allocation.js
+    cr-case-tabs.js
+    cr-compile-drawer.js
+    cr-conversation.js
+    cr-dashboard-table.js
+    cr-case-table.js
+    cr-notes.js
+    cr-options-editor.js
+    cr-outcome.js
+    cr-owner-summary.js
+    cr-question.js
+    cr-question-list.js
+    cr-question-card.js
+    cr-remediation-editor.js
+    cr-remediation-section.js
+    cr-showwhen-editor.js
+    cr-showwhen-group.js
+    cr-showwhen-leaf.js
+    cr-status-banner.js
+    cr-toast.js
+    cr-wording-editor.js
+
+  pages/                        # top-level view components (one per route)
+    cr-case-review.js
+    cr-conversation-view.js
+    cr-dashboard.js
+    cr-responsible-party-dashboard.js
+
+  question-bank/                # question bank editor subsystem
+    cr-bank-dock.js
+    cr-bank-dom.js
+    cr-bank-editor.js
+    cr-bank-list.js
+    cr-bank-rail.js
+    cr-question-bank-editor.css
+    question-bank-compile.js
+    question-bank-store.js
+    question-bank-tree.js
+
+  routes/                       # route handler modules (one per hash route)
+    root.js
+    dashboard.js
+    conversation.js
+    question-bank.js
+    case.js
+
+  services/                     # non-UI modules: data, state, auth
+    create-sharepoint-client.js
+    http-sharepoint-client.js
+    mock-sharepoint-client.js
+    permissions.js
+    save-queue.js
+    section-access.js
+
+  evaluators/                   # pure logic: applicability and failure
+    applicability-evaluator.js
+    failure-evaluator.js
+
+  setup/                        # app startup helpers
+    register-components.js
+    register-routes.js
+    resolve-eligible-case-types.js
+
+  styles/
+    cr-styles.css
+
+case-types/                     # one module per Case Type (lazy-loaded by cr-case-review)
+  hello-review.js
+
+dev/
+  fixtures/                     # mock data used by MockSharePointClient (?mock=1)
+
+tests/                          # node:test unit tests (mirror src/ file names)
+```

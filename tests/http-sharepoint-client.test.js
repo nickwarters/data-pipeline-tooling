@@ -1,7 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { HttpSharePointClient } from '../src/http-sharepoint-client.js';
+import { HttpSharePointClient } from '../src/services/http-sharepoint-client.js';
 
 /** @typedef {{ method: string, url: string, headers: Record<string, string>, body: string|null }} CapturedCall */
 

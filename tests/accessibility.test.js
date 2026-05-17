@@ -71,12 +71,12 @@ class StubEl {
   }
 };
 
-const { CRQuestion } = await import('../src/cr-question.js');
-const { CRQuestionList } = await import('../src/cr-question-list.js');
-const { CRNotes } = await import('../src/cr-notes.js');
-const { CRConversation } = await import('../src/cr-conversation.js');
-const { CRStatusBanner } = await import('../src/cr-status-banner.js');
-const { signal } = await import('../src/signal.js');
+const { CRQuestion } = await import('../src/components/cr-question.js');
+const { CRQuestionList } = await import('../src/components/cr-question-list.js');
+const { CRNotes } = await import('../src/components/cr-notes.js');
+const { CRConversation } = await import('../src/components/cr-conversation.js');
+const { CRStatusBanner } = await import('../src/components/cr-status-banner.js');
+const { signal } = await import('../src/lib/signal.js');
 
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 

@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { installDom } from './_bank-dom-stub.js';
 installDom();
 
-const { CRQuestionCard } = await import('../src/cr-question-card.js');
-const { _resetStore, cases, activeSlug } = await import('../src/question-bank-store.js');
+const { CRQuestionCard } = await import('../src/components/cr-question-card.js');
+const { _resetStore, cases, activeSlug } = await import('../src/question-bank/question-bank-store.js');
 
 test('CRQuestionCard: no question → nothing renders', () => {
   const e = new CRQuestionCard();

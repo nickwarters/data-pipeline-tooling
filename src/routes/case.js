@@ -1,13 +1,13 @@
 // @ts-check
 
 /**
- * @param {import('../router.js').Router} router
- * @param {import('../register-routes.js').AppContext} context
+ * @param {import('../lib/router.js').Router} router
+ * @param {import('../setup/register-routes.js').AppContext} context
  */
 export function register(router, context) {
   router.register('#/case/:id', {
     mount(container, params) {
-      const el = /** @type {import('../cr-case-review.js').CRCaseReview} */ (
+      const el = /** @type {import('../pages/cr-case-review.js').CRCaseReview} */ (
         document.createElement('cr-case-review')
       );
       el.client = context.client;

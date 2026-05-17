@@ -4,10 +4,10 @@ import assert from 'node:assert/strict';
 import { installDom } from './_bank-dom-stub.js';
 installDom();
 
-const { CRCompileDrawer } = await import('../src/cr-compile-drawer.js');
+const { CRCompileDrawer } = await import('../src/components/cr-compile-drawer.js');
 const {
   _resetStore, drawerOpen, baseline, cases, toastMsg, commit,
-} = await import('../src/question-bank-store.js');
+} = await import('../src/question-bank/question-bank-store.js');
 
 (/** @type {any} */ (globalThis)).setTimeout = () => 0;
 

@@ -1,8 +1,8 @@
 // @ts-check
 
 /**
- * @param {import('../router.js').Router} router
- * @param {import('../register-routes.js').AppContext} context
+ * @param {import('../lib/router.js').Router} router
+ * @param {import('../setup/register-routes.js').AppContext} context
  */
 export function register(router, context) {
   router.register('#/question-bank', {

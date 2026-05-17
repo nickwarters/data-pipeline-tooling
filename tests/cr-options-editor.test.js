@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { installDom } from './_bank-dom-stub.js';
 installDom();
 
-const { CROptionsEditor } = await import('../src/cr-options-editor.js');
+const { CROptionsEditor } = await import('../src/components/cr-options-editor.js');
 
 test('CROptionsEditor: renders nothing when no question set', () => {
   const e = new CROptionsEditor();

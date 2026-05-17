@@ -30,7 +30,7 @@ class StubEl {
 };
 (/** @type {any} */ (globalThis)).customElements = { define() {} };
 
-const { CROutcome } = await import('../src/cr-outcome.js');
+const { CROutcome } = await import('../src/components/cr-outcome.js');
 
 /** @param {Record<string, import('../src/sharepoint-client.js').Answer>} answers */
 function makeComputeOutcome(answers) {

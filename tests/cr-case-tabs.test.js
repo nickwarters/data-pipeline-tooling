@@ -4,10 +4,10 @@ import assert from 'node:assert/strict';
 import { installDom } from './_bank-dom-stub.js';
 installDom();
 
-const { CRCaseTabs } = await import('../src/cr-case-tabs.js');
+const { CRCaseTabs } = await import('../src/components/cr-case-tabs.js');
 const {
   _resetStore, activeSlug, cases, baseline, drawerOpen, isDirty, toastMsg,
-} = await import('../src/question-bank-store.js');
+} = await import('../src/question-bank/question-bank-store.js');
 
 test('CRCaseTabs: one tab per case type; clicking switches activeSlug', () => {
   _resetStore();

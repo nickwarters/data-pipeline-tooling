@@ -1,7 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MockSharePointClient } from '../src/mock-sharepoint-client.js';
+import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js';
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */

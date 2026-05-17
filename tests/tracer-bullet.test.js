@@ -66,11 +66,11 @@ class StubCustomEvent {
 (/** @type {any} */ (globalThis)).CustomEvent = StubCustomEvent;
 
 // ===== IMPORTS (after stubs are in place) =====
-const { allApplicableAnswered } = await import('../src/applicability-evaluator.js');
-const { MockSharePointClient } = await import('../src/mock-sharepoint-client.js');
-const { SaveQueue } = await import('../src/save-queue.js');
-const { CRDashboard } = await import('../src/cr-dashboard.js');
-const { CRCaseReview } = await import('../src/cr-case-review.js');
+const { allApplicableAnswered } = await import('../src/evaluators/applicability-evaluator.js');
+const { MockSharePointClient } = await import('../src/services/mock-sharepoint-client.js');
+const { SaveQueue } = await import('../src/services/save-queue.js');
+const { CRDashboard } = await import('../src/pages/cr-dashboard.js');
+const { CRCaseReview } = await import('../src/pages/cr-case-review.js');
 const { cases } = await import('../dev/fixtures/cases.js');
 const { questionDefinitions } = await import('../dev/fixtures/question-definitions.js');
 const { personas } = await import('../dev/fixtures/personas.js');

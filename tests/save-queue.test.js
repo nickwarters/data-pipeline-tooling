@@ -1,7 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SaveQueue } from '../src/save-queue.js';
+import { SaveQueue } from '../src/services/save-queue.js';
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../src/sharepoint-client.js').PatchResult} PatchResult */

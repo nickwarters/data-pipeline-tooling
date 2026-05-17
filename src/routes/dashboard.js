@@ -1,13 +1,13 @@
 // @ts-check
 
 /**
- * @param {import('../router.js').Router} router
- * @param {import('../register-routes.js').AppContext} context
+ * @param {import('../lib/router.js').Router} router
+ * @param {import('../setup/register-routes.js').AppContext} context
  */
 export function register(router, context) {
   router.register('#/dashboard', {
     mount(container) {
-      const el = /** @type {import('../cr-dashboard.js').CRDashboard} */ (
+      const el = /** @type {import('../pages/cr-dashboard.js').CRDashboard} */ (
         document.createElement('cr-dashboard')
       );
       el.client = context.client;

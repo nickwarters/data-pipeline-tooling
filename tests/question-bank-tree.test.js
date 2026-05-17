@@ -6,7 +6,7 @@ import {
   parseShowWhen, parseNode, leafFromOp, leafToOp,
   serializeTree, removeNode, countLeaves, treeDepth,
   ensureTree, commitTreeFor, _resetTreeCache,
-} from '../src/question-bank-tree.js';
+} from '../src/question-bank/question-bank-tree.js';
 
 test('parseShowWhen: undefined → empty AND group', () => {
   assert.deepEqual(parseShowWhen(undefined), { type: 'group', op: 'and', children: [] });

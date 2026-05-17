@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { installDom } from './_bank-dom-stub.js';
 installDom();
 
-const { CRBankDock } = await import('../src/cr-bank-dock.js');
-const { _resetStore, drawerOpen, commit } = await import('../src/question-bank-store.js');
+const { CRBankDock } = await import('../src/question-bank/cr-bank-dock.js');
+const { _resetStore, drawerOpen, commit } = await import('../src/question-bank/question-bank-store.js');
 
 test('CRBankDock: shows active / deprecated / conditional / pending stats', () => {
   _resetStore();

@@ -11,10 +11,10 @@ const windowListeners = {};
 };
 (/** @type {any} */ (globalThis)).location = { hash: '' };
 
-import { Router } from '../src/router.js';
-import { registerRoutes } from '../src/register-routes.js';
+import { Router } from '../src/lib/router.js';
+import { registerRoutes } from '../src/setup/register-routes.js';
 
-/** @returns {import('../src/register-routes.js').AppContext} */
+/** @returns {import('../src/setup/register-routes.js').AppContext} */
 function makeContext() {
   return /** @type {any} */ ({
     client: {},

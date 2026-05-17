@@ -35,7 +35,7 @@ class StubEl {
 (/** @type {any} */ (globalThis)).customElements = { define() {} };
 
 // ===== IMPORTS (after stubs) =====
-const { CRRemediationSection } = await import('../src/cr-remediation-section.js');
+const { CRRemediationSection } = await import('../src/components/cr-remediation-section.js');
 
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */

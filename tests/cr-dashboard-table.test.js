@@ -42,7 +42,7 @@ class StubEl {
 (/** @type {any} */ (globalThis)).customElements = { define() {} };
 
 // ===== IMPORTS =====
-const { CRDashboardTable } = await import('../src/cr-dashboard-table.js');
+const { CRDashboardTable } = await import('../src/components/cr-dashboard-table.js');
 
 // ===== HELPERS =====
 

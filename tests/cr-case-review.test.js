@@ -54,8 +54,8 @@ class StubCustomEvent {
 (/** @type {any} */ (globalThis)).CustomEvent = StubCustomEvent;
 
 // ===== IMPORTS =====
-const { CRCaseReview } = await import('../src/cr-case-review.js');
-const { SaveQueue } = await import('../src/save-queue.js');
+const { CRCaseReview } = await import('../src/pages/cr-case-review.js');
+const { SaveQueue } = await import('../src/services/save-queue.js');
 
 // ===== HELPERS =====
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */

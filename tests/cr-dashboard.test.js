@@ -47,7 +47,7 @@ class StubEl {
 (/** @type {any} */ (globalThis)).location = { hash: '' };
 
 // ===== IMPORTS (after stubs) =====
-const { CRDashboard } = await import('../src/cr-dashboard.js');
+const { CRDashboard } = await import('../src/pages/cr-dashboard.js');
 
 // ===== HELPERS =====
 function makeClient() {

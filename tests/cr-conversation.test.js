@@ -53,7 +53,7 @@ const docListeners = {};
 (/** @type {any} */ (globalThis)).customElements = { define() {} };
 
 // ===== IMPORTS (after stubs) =====
-const { CRConversation } = await import('../src/cr-conversation.js');
+const { CRConversation } = await import('../src/components/cr-conversation.js');
 
 /** @typedef {import('../src/sharepoint-client.js').Message} Message */
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */

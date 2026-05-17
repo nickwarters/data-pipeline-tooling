@@ -1,13 +1,13 @@
 // @ts-check
 
 /**
- * @param {import('../router.js').Router} router
- * @param {import('../register-routes.js').AppContext} context
+ * @param {import('../lib/router.js').Router} router
+ * @param {import('../setup/register-routes.js').AppContext} context
  */
 export function register(router, context) {
   router.register('#/conversation/:id', {
     mount(container, params) {
-      const el = /** @type {import('../cr-conversation-view.js').CRConversationView} */ (
+      const el = /** @type {import('../pages/cr-conversation-view.js').CRConversationView} */ (
         document.createElement('cr-conversation-view')
       );
       el.client = context.client;

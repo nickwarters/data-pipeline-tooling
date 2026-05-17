@@ -1,9 +1,9 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveCapabilities, permissions } from '../src/permissions.js';
+import { resolveCapabilities, permissions } from '../src/services/permissions.js';
 
-/** @type {import('../src/permissions.js').PermissionsConfig} */
+/** @type {import('../src/services/permissions.js').PermissionsConfig} */
 const sampleConfig = {
   reviewer: 'Reviewers',
   caseTypeOwners: {

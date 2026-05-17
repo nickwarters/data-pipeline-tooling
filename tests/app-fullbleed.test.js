@@ -12,7 +12,7 @@ const windowListeners = {};
 };
 (/** @type {any} */ (globalThis)).location = { hash: '' };
 
-import { Router } from '../src/router.js';
+import { Router } from '../src/lib/router.js';
 
 /**
  * Simulate what app.js does for the #/question-bank route:

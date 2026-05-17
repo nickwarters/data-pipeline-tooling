@@ -1,7 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { signal } from '../src/signal.js';
+import { signal } from '../src/lib/signal.js';
 
 // Provide a minimal HTMLElement stub before cr-element.js is evaluated.
 // Cast through any to satisfy tsc (DOM lib types HTMLElement as non-writable on globalThis).
@@ -9,7 +9,7 @@ import { signal } from '../src/signal.js';
   disconnectedCallback() {}
 };
 
-const { CRElement } = await import('../src/cr-element.js');
+const { CRElement } = await import('../src/components/cr-element.js');
 
 test('CRElement: subscribe fires immediately with the current signal value', () => {
   const el = new CRElement();

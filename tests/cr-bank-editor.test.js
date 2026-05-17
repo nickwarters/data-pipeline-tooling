@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { installDom, StubEl } from './_bank-dom-stub.js';
 installDom();
 
-await import('../src/cr-bank-editor.js');
+await import('../src/question-bank/cr-bank-editor.js');
 
 const G = /** @type {any} */ (globalThis);
 

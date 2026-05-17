@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { resolveEligibleCaseTypes } from '../src/resolve-eligible-case-types.js';
+import { resolveEligibleCaseTypes } from '../src/setup/resolve-eligible-case-types.js';
 
 test('resolveEligibleCaseTypes: returns a Promise', async () => {
   const result = resolveEligibleCaseTypes([]);

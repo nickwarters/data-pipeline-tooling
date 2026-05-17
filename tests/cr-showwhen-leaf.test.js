@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { installDom } from './_bank-dom-stub.js';
 installDom();
 
-const { CRShowwhenLeaf } = await import('../src/cr-showwhen-leaf.js');
-const { _resetStore, cases } = await import('../src/question-bank-store.js');
+const { CRShowwhenLeaf } = await import('../src/components/cr-showwhen-leaf.js');
+const { _resetStore, cases } = await import('../src/question-bank/question-bank-store.js');
 
 function mkLeaf(over = {}) {
   return {

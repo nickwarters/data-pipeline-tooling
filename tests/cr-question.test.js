@@ -51,7 +51,7 @@ class StubEl {
 (/** @type {any} */ (globalThis)).customElements = { define() {} };
 
 // ===== IMPORTS =====
-const { CRQuestion } = await import('../src/cr-question.js');
+const { CRQuestion } = await import('../src/components/cr-question.js');
 
 // ===== TESTS =====
 

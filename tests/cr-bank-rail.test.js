@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { installDom } from './_bank-dom-stub.js';
 installDom();
 
-const { CRBankRail } = await import('../src/cr-bank-rail.js');
-const { _resetStore, filters, cases } = await import('../src/question-bank-store.js');
+const { CRBankRail } = await import('../src/question-bank/cr-bank-rail.js');
+const { _resetStore, filters, cases } = await import('../src/question-bank/question-bank-store.js');
 
 test('CRBankRail: renders 4 sections: stat, categories, view, legend', () => {
   _resetStore();

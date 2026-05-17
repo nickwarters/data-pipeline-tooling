@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { installDom } from './_bank-dom-stub.js';
 installDom();
 
-const { CRShowwhenGroup } = await import('../src/cr-showwhen-group.js');
-const { _resetStore, cases } = await import('../src/question-bank-store.js');
+const { CRShowwhenGroup } = await import('../src/components/cr-showwhen-group.js');
+const { _resetStore, cases } = await import('../src/question-bank/question-bank-store.js');
 
 function mkGroup(over = {}) { return { type: 'group', op: 'and', children: [], ...over }; }
 
@@ -105,9 +105,9 @@ test('CRShowwhenGroup: non-root shows × group button', () => {
 test('CRShowwhenGroup: × group on non-root removes self from parent tree', async () => {
   _resetStore();
   // Use complaint-review's q-rootcause which already has a nested tree.
-  const storeMod = await import('../src/question-bank-store.js');
+  const storeMod = await import('../src/question-bank/question-bank-store.js');
   const q = storeMod.cases.get()['complaint-review'].questions[2];
-  const { ensureTree } = await import('../src/question-bank-tree.js');
+  const { ensureTree } = await import('../src/question-bank/question-bank-tree.js');
   const root = ensureTree(q);
   const innerOr = /** @type {any} */ (root.children.find(c => c.type === 'group' && c.op === 'or'));
   const before = root.children.length;

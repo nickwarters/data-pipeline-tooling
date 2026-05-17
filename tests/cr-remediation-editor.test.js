@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { installDom } from './_bank-dom-stub.js';
 installDom();
 
-const { CRRemediationEditor } = await import('../src/cr-remediation-editor.js');
+const { CRRemediationEditor } = await import('../src/components/cr-remediation-editor.js');
 
 test('CRRemediationEditor: no question → renders nothing', () => {
   const e = new CRRemediationEditor();

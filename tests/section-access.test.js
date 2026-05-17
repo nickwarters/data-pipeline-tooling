@@ -1,11 +1,11 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateAccess, resolveRoles, SECTIONS } from '../src/section-access.js';
+import { evaluateAccess, resolveRoles, SECTIONS } from '../src/services/section-access.js';
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../src/sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
-/** @typedef {import('../src/permissions.js').Capabilities} Capabilities */
+/** @typedef {import('../src/services/permissions.js').Capabilities} Capabilities */
 
 /** @returns {CaseRow} */
 function makeCase(overrides = {}) {

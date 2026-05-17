@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { installDom } from './_bank-dom-stub.js';
 installDom();
 
-const { CRBankList } = await import('../src/cr-bank-list.js');
-const { _resetStore, cases, activeSlug, filters } = await import('../src/question-bank-store.js');
+const { CRBankList } = await import('../src/question-bank/cr-bank-list.js');
+const { _resetStore, cases, activeSlug, filters } = await import('../src/question-bank/question-bank-store.js');
 
 test('CRBankList: renders dirty pill + question cards + add button', () => {
   _resetStore();

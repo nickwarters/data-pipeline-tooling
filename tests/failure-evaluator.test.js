@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { isFailure, materializeRemediationActions } from '../src/failure-evaluator.js';
+import { isFailure, materializeRemediationActions } from '../src/evaluators/failure-evaluator.js';
 
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 

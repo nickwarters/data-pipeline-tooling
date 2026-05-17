@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 
 import {
   compileBank, highlight, escapeHtml, hashStr,
-} from '../src/question-bank-compile.js';
+} from '../src/question-bank/question-bank-compile.js';
 
 /** Tiny helper to build a bank with one question. */
 function bank(/** @type {any} */ q) {

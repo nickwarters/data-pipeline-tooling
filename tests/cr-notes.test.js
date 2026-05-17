@@ -36,7 +36,7 @@ class StubEl {
 };
 (/** @type {any} */ (globalThis)).customElements = { define() {} };
 
-const { CRNotes } = await import('../src/cr-notes.js');
+const { CRNotes } = await import('../src/components/cr-notes.js');
 
 /**
  * @param {string} [caseId]

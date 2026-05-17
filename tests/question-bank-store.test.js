@@ -25,7 +25,7 @@ const {
   cases, baseline, activeSlug, filters, drawerOpen, toastMsg,
   currentBank, baselineBank, isDirty, diffCounts,
   commit, setFilters, showToast, _resetStore,
-} = await import('../src/question-bank-store.js');
+} = await import('../src/question-bank/question-bank-store.js');
 
 function makeEl(key) {
   return {
