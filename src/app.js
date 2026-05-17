@@ -36,12 +36,8 @@ async function boot() {
   ]);
   const capabilities = resolveCapabilities(userGroups);
 
-  const { default: helloReviewConfig } = await import('../case-types/hello-review.js');
-  /** @type {string[]} */
-  const eligibleCaseTypes = [];
-  if (helloReviewConfig.eligibleGroups?.some(g => userGroups.includes(g))) {
-    eligibleCaseTypes.push('hello-review');
-  }
+  const { resolveEligibleCaseTypes } = await import('./resolve-eligible-case-types.js');
+  const eligibleCaseTypes = await resolveEligibleCaseTypes(userGroups);
 
   const appEl = /** @type {Element} */ (document.getElementById('app'));
   appEl.setAttribute('data-cr-root', '');
