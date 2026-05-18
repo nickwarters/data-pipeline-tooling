@@ -1,0 +1,234 @@
+/*
+ * Case Review Platform — Design Tokens
+ * Single source of truth for all visual variables.
+ *
+ * Scoped to [data-cr-root] to avoid leaking into SharePoint chrome (ADR-0003).
+ * All component CSS must reference these tokens; no hard-coded colours or sizes.
+ *
+ * DARK MODE
+ * Follows prefers-color-scheme automatically.
+ * Styleguide and test overrides may set data-cr-theme="light" | "dark"
+ * on the [data-cr-root] element to force a mode.
+ *
+ * FONT SELF-HOSTING
+ * Production deployments must serve the three typefaces from SharePoint Site Assets.
+ * The styleguide loads from Google Fonts for convenience.
+ * Families: "Barlow Condensed" (600 700 800), "Barlow" (400 500 600 700 ital 400),
+ *           "JetBrains Mono" (400 500)
+ *
+ * WCAG AA TARGETS
+ *   --cr-color-text on --cr-color-bg       ≥ 7:1
+ *   --cr-color-text on --cr-color-surface  ≥ 7:1
+ *   --cr-color-text-muted on surface       ≥ 4.5:1 (light: 6.1:1 ✓)
+ *   --cr-color-accent on surface           ≥ 4.5:1 (light: 5.3:1 ✓ / dark: verify #FF2233)
+ *   --cr-color-success on bg               ≥ 4.5:1
+ *   All button text (white on filled bg)   ≥ 4.5:1
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LIGHT MODE (default)
+   ═══════════════════════════════════════════════════════════════════════════ */
+[data-cr-root],
+[data-cr-root][data-cr-theme="light"] {
+
+  /* ── Accent ──────────────────────────────────────────────────────────── */
+  --cr-color-accent:           #DB0011;    /* rgb(219,0,17) — brand red                */
+  --cr-color-accent-hover:     #B8000E;    /* -15% lightness                           */
+  --cr-color-accent-active:    #96000B;    /* -25% lightness                           */
+  --cr-color-accent-muted:     rgba(219, 0, 17, 0.09);
+  --cr-color-accent-on:        #FFFFFF;    /* text rendered on an accent fill          */
+
+  /* ── Surface hierarchy ───────────────────────────────────────────────── */
+  --cr-color-bg:               #F3F3F4;    /* page canvas                              */
+  --cr-color-surface:          #FFFFFF;    /* card / panel / input fill                */
+  --cr-color-surface-2:        #E9E9EB;    /* recessed surface, hover cells            */
+  --cr-color-surface-overlay:  rgba(255, 255, 255, 0.92); /* floating panel tint       */
+  --cr-color-border:           #DCDCE0;
+  --cr-color-border-strong:    #B2B2B8;
+
+  /* ── Text ────────────────────────────────────────────────────────────── */
+  --cr-color-on-surface:       #0E0E0F;    /* primary text on any surface              */
+  --cr-color-text:             #0E0E0F;    /* alias — use --cr-color-on-surface        */
+  --cr-color-text-muted:       #5C5C65;    /* secondary labels, 6.1:1 on white ✓      */
+  --cr-color-text-subtle:      #8C8C95;    /* captions; large text / UI only           */
+  --cr-color-text-on-accent:   #FFFFFF;    /* text on accent-filled elements           */
+
+  /* ── Semantic ────────────────────────────────────────────────────────── */
+  --cr-color-success:          #006742;
+  --cr-color-success-bg:       rgba(0, 103, 66, 0.07);
+  --cr-color-warning:          #9B5D00;
+  --cr-color-warning-bg:       rgba(155, 93, 0, 0.08);
+  --cr-color-danger:           #DB0011;    /* intentionally == --cr-color-accent       */
+  --cr-color-danger-bg:        rgba(219, 0, 17, 0.06);
+  --cr-color-info:             #004CB5;
+  --cr-color-info-bg:          rgba(0, 76, 181, 0.07);
+
+  /* ── Focus ───────────────────────────────────────────────────────────── */
+  --cr-focus-outline:          2px solid var(--cr-color-accent);
+  --cr-focus-offset:           3px;
+  --cr-focus-ring:             0 0 0 3px rgba(219, 0, 17, 0.28);
+
+  /* ── Elevation ───────────────────────────────────────────────────────── */
+  --cr-shadow-sm:   0 1px 2px rgba(0, 0, 0, 0.06);
+  --cr-shadow-md:   0 2px 6px rgba(0, 0, 0, 0.09), 0 1px 2px rgba(0, 0, 0, 0.05);
+  --cr-shadow-lg:   0 8px 24px rgba(0, 0, 0, 0.10), 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DARK MODE — system preference
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (prefers-color-scheme: dark) {
+  [data-cr-root]:not([data-cr-theme="light"]) {
+    --cr-color-accent:           #FF2233;   /* brightened — contrast ≥4.5:1 on dark bg  */
+    --cr-color-accent-hover:     #E8001C;
+    --cr-color-accent-active:    #CC0018;
+    --cr-color-accent-muted:     rgba(255, 34, 51, 0.12);
+    --cr-color-accent-on:        #FFFFFF;
+
+    --cr-color-bg:               #0C0C0D;
+    --cr-color-surface:          #17171A;
+    --cr-color-surface-2:        #212127;
+    --cr-color-surface-overlay:  rgba(23, 23, 26, 0.94);
+    --cr-color-border:           #2C2C33;
+    --cr-color-border-strong:    #48484F;
+
+    --cr-color-on-surface:       #EAEAEC;
+    --cr-color-text:             #EAEAEC;
+    --cr-color-text-muted:       #888892;
+    --cr-color-text-subtle:      #585862;
+    --cr-color-text-on-accent:   #FFFFFF;
+
+    --cr-color-success:          #00A368;
+    --cr-color-success-bg:       rgba(0, 163, 104, 0.12);
+    --cr-color-warning:          #D4820A;
+    --cr-color-warning-bg:       rgba(212, 130, 10, 0.12);
+    --cr-color-danger:           #FF2233;
+    --cr-color-danger-bg:        rgba(255, 34, 51, 0.10);
+    --cr-color-info:             #4D9EFF;
+    --cr-color-info-bg:          rgba(77, 158, 255, 0.10);
+
+    --cr-focus-ring: 0 0 0 3px rgba(255, 34, 51, 0.38);
+
+    --cr-shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.40);
+    --cr-shadow-md:  0 2px 8px rgba(0, 0, 0, 0.50), 0 1px 3px rgba(0, 0, 0, 0.30);
+    --cr-shadow-lg:  0 8px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DARK MODE — forced via attribute
+   ═══════════════════════════════════════════════════════════════════════════ */
+[data-cr-root][data-cr-theme="dark"] {
+  --cr-color-accent:           #FF2233;
+  --cr-color-accent-hover:     #E8001C;
+  --cr-color-accent-active:    #CC0018;
+  --cr-color-accent-muted:     rgba(255, 34, 51, 0.12);
+  --cr-color-accent-on:        #FFFFFF;
+
+  --cr-color-bg:               #0C0C0D;
+  --cr-color-surface:          #17171A;
+  --cr-color-surface-2:        #212127;
+  --cr-color-surface-overlay:  rgba(23, 23, 26, 0.94);
+  --cr-color-border:           #2C2C33;
+  --cr-color-border-strong:    #48484F;
+
+  --cr-color-on-surface:       #EAEAEC;
+  --cr-color-text:             #EAEAEC;
+  --cr-color-text-muted:       #888892;
+  --cr-color-text-subtle:      #585862;
+  --cr-color-text-on-accent:   #FFFFFF;
+
+  --cr-color-success:          #00A368;
+  --cr-color-success-bg:       rgba(0, 163, 104, 0.12);
+  --cr-color-warning:          #D4820A;
+  --cr-color-warning-bg:       rgba(212, 130, 10, 0.12);
+  --cr-color-danger:           #FF2233;
+  --cr-color-danger-bg:        rgba(255, 34, 51, 0.10);
+  --cr-color-info:             #4D9EFF;
+  --cr-color-info-bg:          rgba(77, 158, 255, 0.10);
+
+  --cr-focus-ring: 0 0 0 3px rgba(255, 34, 51, 0.38);
+
+  --cr-shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.40);
+  --cr-shadow-md:  0 2px 8px rgba(0, 0, 0, 0.50), 0 1px 3px rgba(0, 0, 0, 0.30);
+  --cr-shadow-lg:  0 8px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TYPOGRAPHY — shared across modes
+   ═══════════════════════════════════════════════════════════════════════════ */
+[data-cr-root] {
+
+  /* Font families -------------------------------------------------------- */
+  --cr-font-display:  "Barlow Condensed", "Arial Narrow", Arial, sans-serif;
+  --cr-font-body:     "Barlow", system-ui, "Segoe UI", sans-serif;
+  --cr-font-mono:     "JetBrains Mono", "Fira Code", Consolas, "Courier New", monospace;
+
+  /* Numeric scale — 1.25 ratio, base 16px ------------------------------- */
+  --cr-font-size-2xs:  0.6875rem;  /*  11px */
+  --cr-font-size-xs:   0.75rem;    /*  12px */
+  --cr-font-size-sm:   0.875rem;   /*  14px */
+  --cr-font-size-base: 1rem;       /*  16px */
+  --cr-font-size-md:   1.125rem;   /*  18px */
+  --cr-font-size-lg:   1.375rem;   /*  22px */
+  --cr-font-size-xl:   1.75rem;    /*  28px */
+  --cr-font-size-2xl:  2.25rem;    /*  36px */
+  --cr-font-size-3xl:  3rem;       /*  48px */
+
+  /* Weights ------------------------------------------------------------- */
+  --cr-font-weight-regular:  400;
+  --cr-font-weight-medium:   500;
+  --cr-font-weight-semibold: 600;
+  --cr-font-weight-bold:     700;
+  --cr-font-weight-black:    800;
+
+  /* Line heights -------------------------------------------------------- */
+  --cr-line-height-tight: 1.2;
+  --cr-line-height-snug:  1.375;
+  --cr-line-height:       1.5;    /* legacy alias → base */
+  --cr-line-height-base:  1.5;
+  --cr-line-height-loose: 1.75;
+
+  /* Letter spacing ------------------------------------------------------ */
+  --cr-tracking-tight:   -0.025em;
+  --cr-tracking-base:     0em;
+  --cr-tracking-wide:     0.04em;
+  --cr-tracking-wider:    0.08em;
+  --cr-tracking-widest:   0.12em;
+
+  /* ═══ SPACING — 4pt grid ═══════════════════════════════════════════════ */
+  --cr-space-px:   1px;
+  --cr-space-0-5:  0.125rem;  /*  2px */
+  --cr-space-1:    0.25rem;   /*  4px */
+  --cr-space-2:    0.5rem;    /*  8px */
+  --cr-space-3:    0.75rem;   /* 12px */
+  --cr-space-4:    1rem;      /* 16px */
+  --cr-space-5:    1.5rem;    /* 24px */
+  --cr-space-6:    2rem;      /* 32px */
+  --cr-space-7:    2.5rem;    /* 40px */
+  --cr-space-8:    3rem;      /* 48px */
+  --cr-space-10:   4rem;      /* 64px */
+  --cr-space-12:   6rem;      /* 96px */
+
+  /* ═══ BORDER RADIUS ════════════════════════════════════════════════════ */
+  --cr-radius-none: 0;
+  --cr-radius-sm:   2px;
+  --cr-radius-md:   4px;
+  --cr-radius:      4px;      /* default / legacy alias */
+  --cr-radius-lg:   8px;
+  --cr-radius-pill: 9999px;
+
+  /* ═══ MOTION ════════════════════════════════════════════════════════════ */
+  --cr-duration-fast:    100ms;
+  --cr-duration-base:    200ms;
+  --cr-duration-slow:    350ms;
+  --cr-easing-standard:  cubic-bezier(0.2, 0.0, 0.0, 1.0);
+  --cr-easing-enter:     cubic-bezier(0.0, 0.0, 0.2, 1.0);
+  --cr-easing-exit:      cubic-bezier(0.4, 0.0, 1.0, 1.0);
+
+  /* ═══ LAYOUT ════════════════════════════════════════════════════════════ */
+  --cr-content-max-width:        80rem;   /* 1280px */
+  --cr-content-max-width-narrow: 56rem;   /*  896px */
+  --cr-nav-height:               3.5rem;
+  --cr-sidebar-width:            15rem;   /*  240px */
+}

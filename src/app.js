@@ -32,6 +32,7 @@ async function boot() {
   appEl.appendChild(nav);
 
   const routerContainer = document.createElement('div');
+  routerContainer.className = 'cr-page-content';
   appEl.appendChild(routerContainer);
 
   const { registerRoutes } = await import('./setup/register-routes.js');
