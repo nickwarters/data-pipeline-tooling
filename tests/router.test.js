@@ -138,6 +138,20 @@ test('Router: init with empty hash navigates to #/', () => {
   assert.deepEqual(log, ['mount:root']);
 });
 
+test('Router: route matches hash that has query params appended', () => {
+  const router = new Router();
+  router._container = /** @type {any} */ ({});
+  const calls = /** @type {Array<{el: unknown, params: Record<string, string>}>} */ ([]);
+
+  router.register('#/team-cases', {
+    mount: (el, params) => calls.push({ el, params }),
+    unmount: () => {},
+  });
+
+  router.navigate('#/team-cases?manager=me&status=overdue');
+  assert.equal(calls.length, 1, 'should match even with query params in hash');
+});
+
 test('Router: hashchange event triggers navigation', () => {
   const router = new Router();
   const container = /** @type {any} */ ({});

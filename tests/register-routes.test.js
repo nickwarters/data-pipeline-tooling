@@ -204,3 +204,10 @@ test('registerRoutes: #/question-bank unmount removes cr-fullbleed from appEl', 
     (/** @type {any} */ (globalThis)).document = origCreate;
   }
 });
+
+test('registerRoutes: registers #/team-cases route', () => {
+  const router = new Router();
+  router._container = /** @type {any} */ ({});
+  registerRoutes(router, makeContext());
+  assert.ok(router._routes.some(r => r.re.test('#/team-cases')), '#/team-cases should be registered');
+});

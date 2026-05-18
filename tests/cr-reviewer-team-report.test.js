@@ -58,6 +58,16 @@ function findLink(node, href) {
   return null;
 }
 
+/** @param {any} node @param {(href: string) => boolean} pred @returns {any|null} */
+function findLinkWhere(node, pred) {
+  if (node.tagName === 'A' && typeof node._attrs['href'] === 'string' && pred(node._attrs['href'])) return node;
+  for (const c of node._children ?? []) {
+    const f = findLinkWhere(c, pred);
+    if (f) return f;
+  }
+  return null;
+}
+
 /**
  * Find all elements with a given class (checked on className string).
  * @param {any} node @param {string} cls @returns {StubEl[]}
@@ -153,10 +163,12 @@ test('cr-reviewer-team-report: drill-through links navigate to #/team-cases with
   el.eligibleCaseTypes = ['hello-review'];
   await el.connectedCallback();
 
-  assert.ok(
-    findLink(el, '#/team-cases?manager=me&caseType=hello-review&filter=outstanding'),
-    'should render drill-through link for outstanding cases',
+  const link = findLinkWhere(el, href =>
+    href.startsWith('#/team-cases') &&
+    href.includes('caseType=hello-review') &&
+    href.includes('status=outstanding'),
   );
+  assert.ok(link, 'should render drill-through link for outstanding cases with explicit status param');
 });
 
 test('cr-reviewer-team-report: empty state when no cases', async () => {

@@ -35,8 +35,9 @@ export class Router {
    * @returns {{ handler: RouteHandler, params: Record<string, string> } | null}
    */
   _match(hash) {
+    const path = hash.split('?')[0];
     for (const route of this._routes) {
-      const m = hash.match(route.re);
+      const m = path.match(route.re);
       if (m) {
         /** @type {Record<string, string>} */
         const params = {};
