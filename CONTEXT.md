@@ -71,6 +71,10 @@ A SharePoint group that "owns" a **Case Type** and sees aggregate dashboard stat
 A platform administrator responsible for deploying and configuring the framework. When Question Bank changes are authored by a **Case Type Owner**, the Maintainer's role is to confirm (publish) the changes — not to author or approve them. Maintainers also handle SharePoint list/group provisioning and code deployments.
 _Avoid_: Admin (overloaded with SharePoint admin), developer
 
+**Visitor**:
+A SharePoint user who is authenticated (browser NTLM/Kerberos passes) but does not belong to any named Case Review **SharePoint Group** — not a **Reviewer**, **Reviewer Manager**, **Responsible Party**, **Responsible Party Manager**, **Case Type Owner**, or **Maintainer**. Cannot be an **Assigned Reviewer**, cannot produce **Answers**, has no ownership or management responsibilities. The `#/` landing page shows a Visitor an explainer and an access-request prompt; all other routes are inaccessible (enforced by SharePoint list ACLs, surfaced as UX by capability checks). Visitor is *derived* from the absence of all other group memberships — there is no "Visitors" SharePoint group.
+_Avoid_: Guest (collides with SharePoint's external-guest concept), Unenrolled (jargon), Anonymous (the user *is* authenticated)
+
 ### Communication
 
 **Conversation**:
@@ -107,3 +111,4 @@ The computed verdict for a **Case**, derived by the **Case Type**'s algorithm fr
 - "Remediation" was being used for both the section and the corrective action — resolved as **Remediation Action** for the item; the section is just a UI concern.
 - "Outcome" was nearly modeled as a stored entity — resolved as a *computed* property of a Case.
 - "Reviewer" was being used for both group membership and per-Case assignment — resolved as **Reviewer** (group) vs **Assigned Reviewer** (per-Case role). See ADR-0011.
+- "Visitor" is *derived* (absence of all named-group memberships), not a SharePoint group — consistent with ADR-0010, capability flags are UX-only and the real boundary is SharePoint list ACLs.
