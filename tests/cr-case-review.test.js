@@ -161,27 +161,17 @@ test('CRCaseReview: _completeCase does not navigate on failure', async () => {
   assert.equal((/** @type {any} */ (globalThis)).location.hash, 'keep-me');
 });
 
-test('CRCaseReview: CRStatusBanner handles unknown status label', async () => {
+test('CRCaseReview: no inline cr-save-status paragraph in rendered children', async () => {
   const client = makeClient();
-  const saveQueue = new SaveQueue(/** @type {any} */ (client));
   const el = new CRCaseReview();
   el.client = /** @type {any} */ (client);
-  el.saveQueue = saveQueue;
+  el.saveQueue = new SaveQueue(/** @type {any} */ (client));
   el.caseId = 'c1';
   await el.connectedCallback();
-  
-  // children: bannerEl(0), header(1), statusEl(2)
-  const statusEl = (/** @type {any} */ (el))._children[2];
-  
-  // Branch: known status
-  // @ts-ignore
-  saveQueue._statusSignal.set('saved');
-  assert.equal(statusEl.textContent, 'Saved');
 
-  // Branch: unknown status
-  // @ts-ignore
-  saveQueue._statusSignal.set('weird');
-  assert.equal(statusEl.textContent, 'weird');
+  const children = /** @type {any[]} */ ((/** @type {any} */ (el))._children);
+  const hasStatusPara = children.some(c => c.className === 'cr-save-status');
+  assert.equal(hasStatusPara, false, 'inline save-status paragraph must not appear; cr-status-banner handles display');
 });
 
 
@@ -210,7 +200,7 @@ test('CRCaseReview: remediation and conversation can be hidden', async () => {
   await el.connectedCallback();
   
   // children index 7 is Notes
-  const notesEl = (/** @type {any} */ (el))._children[7];
+  const notesEl = (/** @type {any} */ (el))._children[6];
   assert.equal(notesEl.hidden, true, 'Notes should be hidden for RP');
 });
 
@@ -227,7 +217,7 @@ test('CRCaseReview: cr-answer handles unmapped question', async () => {
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const section = (/** @type {any} */ (el))._children[3];
+  const section = (/** @type {any} */ (el))._children[2];
   // Dispatch answer for an ID not in the catalogue
   section._listeners['cr-answer'][0]({ detail: { questionId: 'unknown', value: 'Yes' } });
   
@@ -248,7 +238,7 @@ test('CRCaseReview: cr-answer clears answers for questions that become non-appli
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const section = (/** @type {any} */ (el))._children[3];
+  const section = (/** @type {any} */ (el))._children[2];
   const handler = section._listeners['cr-answer'][0];
   
   // 1. q-needs = Yes (triggers q-resolve)
@@ -281,7 +271,7 @@ test('CRCaseReview: cr-answer is ignored when questions access is read-only (RP 
   await el.connectedCallback();
 
   // For RP, access.questions = 'read-only', so the cr-answer handler must early-return.
-  const section = (/** @type {any} */ (el))._children[3];
+  const section = (/** @type {any} */ (el))._children[2];
   section._listeners['cr-answer'][0]({ detail: { questionId: 'q-welcome', value: 'Yes' } });
 
   assert.equal(enqueued.length, 0, 'cr-answer must not enqueue when questions access is read-only');
@@ -311,7 +301,7 @@ test('CRCaseReview: complete button stays hidden for a Completed case even when 
   el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false };
   await el.connectedCallback();
 
-  const completeBtn = (/** @type {any} */ (el))._children[8];
+  const completeBtn = (/** @type {any} */ (el))._children[7];
   assert.equal(completeBtn.hidden, true, 'Complete button must be hidden for a Completed case');
 });
 
@@ -336,7 +326,7 @@ test('CRCaseReview: complete button click is no-op when button is already disabl
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const completeBtn = (/** @type {any} */ (el))._children[8];
+  const completeBtn = (/** @type {any} */ (el))._children[7];
   completeBtn.disabled = true; // pre-disable
 
   let completeCalled = false;
@@ -368,7 +358,7 @@ test('CRCaseReview: complete button click invokes _completeCase', async () => {
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const completeBtn = (/** @type {any} */ (el))._children[8];
+  const completeBtn = (/** @type {any} */ (el))._children[7];
   assert.equal(completeBtn.hidden, false, 'Complete button should be visible');
   
   let completeCalled = false;
@@ -387,7 +377,7 @@ test('CRCaseReview: cr-section-progress is mounted inside the question section',
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const section = (/** @type {any} */ (el))._children[3];
+  const section = (/** @type {any} */ (el))._children[2];
   // section._children: [h2, qList, cr-section-progress]
   const progressEl = section._children[2];
   assert.ok(progressEl, 'cr-section-progress should be mounted inside the question section');
@@ -401,7 +391,7 @@ test('CRCaseReview: cr-section-progress.update is called with section data on in
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const section = (/** @type {any} */ (el))._children[3];
+  const section = (/** @type {any} */ (el))._children[2];
   const progressEl = section._children[2];
 
   /** @type {any[]} */
@@ -427,7 +417,7 @@ test('CRCaseReview: cr-section-progress.update answered count increases after cr
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const section = (/** @type {any} */ (el))._children[3];
+  const section = (/** @type {any} */ (el))._children[2];
   const progressEl = section._children[2];
 
   /** @type {any[][]} */
@@ -450,7 +440,7 @@ test('CRCaseReview: cr-section-progress receives unanswered applicable questions
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const section = (/** @type {any} */ (el))._children[3];
+  const section = (/** @type {any} */ (el))._children[2];
   const progressEl = section._children[2];
 
   /** @type {any[][]} */
@@ -471,7 +461,7 @@ test('CRCaseReview: cr-section-jump event on section scrolls first question of t
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const section = (/** @type {any} */ (el))._children[3];
+  const section = (/** @type {any} */ (el))._children[2];
   // Check the event listener is registered for cr-section-jump
   assert.ok(
     Array.isArray(section._listeners['cr-section-jump']) && section._listeners['cr-section-jump'].length > 0,
@@ -490,7 +480,7 @@ test('CRCaseReview: cr-jump-unanswered event scrolls to first unanswered applica
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const section = (/** @type {any} */ (el))._children[3];
+  const section = (/** @type {any} */ (el))._children[2];
   assert.ok(
     Array.isArray(section._listeners['cr-jump-unanswered']) && section._listeners['cr-jump-unanswered'].length > 0,
     'section should have a cr-jump-unanswered listener'

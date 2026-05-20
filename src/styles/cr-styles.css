@@ -241,20 +241,18 @@
   color: var(--cr-color-danger);
 }
 
-/* ── Save status ─────────────────────────────────────────────────────────── */
-
-.cr-save-status {
-  font-size: var(--cr-font-size-sm);
-  color: var(--cr-color-text-muted);
-  margin: 0 0 var(--cr-space-3);
-}
-
 /* ── Banner — reconnecting & conflict surfaces ───────────────────────────── */
+
+cr-status-banner {
+  position: fixed;
+  bottom: var(--cr-space-4);
+  right: var(--cr-space-4);
+  z-index: 110;
+}
 
 .cr-banner {
   border-radius: var(--cr-radius-md);
   padding: var(--cr-space-3) var(--cr-space-4);
-  margin: 0 0 var(--cr-space-4);
   font-size: var(--cr-font-size-sm);
   border: 1px solid var(--cr-color-border);
 }

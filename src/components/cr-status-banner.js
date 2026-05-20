@@ -19,6 +19,12 @@ export class CRStatusBanner extends CRElement {
   }
 
   connectedCallback() {
+    Object.assign(this.style, {
+      position: 'fixed',
+      bottom: 'var(--cr-space-4)',
+      right: 'var(--cr-space-4)',
+      zIndex: '110',
+    });
     if (!this.saveQueue) return;
     this.subscribe(this.saveQueue.status, status => this._render(status));
   }

@@ -14,6 +14,8 @@ class StubEl {
     this.hidden = false;
     /** @type {Record<string, string>} */
     this._attrs = {};
+    /** @type {Record<string, string>} */
+    this.style = {};
   }
   replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
   appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
@@ -137,4 +139,12 @@ test('CRStatusBanner: connectedCallback with null saveQueue is a no-op', () => {
   el.saveQueue = null;
   assert.doesNotThrow(() => el.connectedCallback());
   assert.equal((/** @type {any} */ (el))._children.length, 0);
+});
+
+test('CRStatusBanner: connectedCallback positions host element as fixed so it never causes layout shift', () => {
+  const el = new CRStatusBanner();
+  el.saveQueue = /** @type {any} */ (makeQueue('saved'));
+  el.connectedCallback();
+  const style = /** @type {any} */ (el).style;
+  assert.equal(style.position, 'fixed', 'host element must be removed from document flow');
 });

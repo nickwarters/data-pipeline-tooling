@@ -22,12 +22,6 @@ import '../components/cr-status-banner.js';
 /** @typedef {import('../services/save-queue.js').SaveStatus} SaveStatus */
 
 /** @type {Record<SaveStatus, string>} */
-const STATUS_LABELS = {
-  saved: 'Saved',
-  saving: 'Saving…',
-  reconnecting: 'Reconnecting…',
-  conflict: 'Conflict — reload',
-};
 
 export class CRCaseReview extends CRElement {
   constructor() {
@@ -129,14 +123,6 @@ export class CRCaseReview extends CRElement {
     const reviewerP = document.createElement('p');
     reviewerP.textContent = `Reviewer: ${caseRow.assignedReviewer}`;
     header.append(h1, reviewerP);
-
-    const statusEl = document.createElement('p');
-    statusEl.className = 'cr-save-status';
-    statusEl.setAttribute('role', 'status');
-    statusEl.setAttribute('aria-live', 'polite');
-    this.subscribe(saveQueue.status, status => {
-      statusEl.textContent = STATUS_LABELS[status] ?? status;
-    });
 
     const bannerEl = /** @type {import('../components/cr-status-banner.js').CRStatusBanner} */ (
       document.createElement('cr-status-banner')
@@ -265,7 +251,6 @@ export class CRCaseReview extends CRElement {
     const children = [
       /** @type {HTMLElement} */ (/** @type {unknown} */ (bannerEl)),
       header,
-      statusEl,
       section,
       /** @type {HTMLElement} */ (/** @type {unknown} */ (remediationSection)),
       /** @type {HTMLElement} */ (/** @type {unknown} */ (outcomeEl)),
