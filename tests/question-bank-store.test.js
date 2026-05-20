@@ -27,12 +27,12 @@ const {
   commit, setFilters, showToast, _resetStore,
 } = await import('../src/question-bank/question-bank-store.js');
 
-function makeEl(key) {
+function makeEl(/** @type {string} */ key) {
   return {
-    _attrs: { 'data-focus-key': key },
-    getAttribute(k) { return this._attrs[k] ?? null; },
+    _attrs: /** @type {Record<string, any>} */ ({ 'data-focus-key': key }),
+    getAttribute(/** @type {string} */ k) { return this._attrs[k] ?? null; },
     focus() { focusLog.push(key); },
-    setSelectionRange(a, b) { setSelLog.push([a, b]); },
+    setSelectionRange(/** @type {number} */ a, /** @type {number} */ b) { setSelLog.push([a, b]); },
     selectionStart: 0,
     selectionEnd: 0,
   };
@@ -92,12 +92,12 @@ test('setFilters: merges patch', () => {
 
 test('showToast: sets, then clears after timer', () => {
   _resetStore();
-  /** @type {Function|null} */
-  let pending = null;
+  /** @type {Function | undefined} */
+  let pending;
   (/** @type {any} */ (globalThis)).setTimeout = (/** @type {Function} */ fn) => { pending = fn; return 0; };
   showToast('Saved');
   assert.equal(toastMsg.get(), 'Saved');
-  pending?.();
+  if (pending) (/** @type {Function} */ (pending))();
   assert.equal(toastMsg.get(), '');
 });
 
@@ -179,7 +179,7 @@ test('commit: skips focus restore when no replacement is found', () => {
 test('commit: uses native CSS.escape when available', () => {
   _resetStore();
   let escaped = '';
-  (/** @type {any} */ (globalThis)).CSS = { escape: (s) => { escaped = s; return s; } };
+  (/** @type {any} */ (globalThis)).CSS = { escape: (/** @type {string} */ s) => { escaped = s; return s; } };
   const old = makeEl('wording:q-welcome');
   activeStub = old;
   lookupStub = { key: 'wording:q-welcome', el: makeEl('wording:q-welcome') };

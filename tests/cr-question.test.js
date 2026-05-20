@@ -29,7 +29,8 @@ class StubEl {
   }
   setAttribute(/** @type {string} */ k, /** @type {string} */ v) { this._attrs[k] = v; }
   getAttribute(/** @type {string} */ k) { return this._attrs[k] ?? null; }
-  querySelector(/** @type {string} */ _sel) { 
+  /** @param {string} _sel @returns {StubEl | null} */
+  querySelector(_sel) {
     // Very simple find for 'input'
     for (const c of this._children) {
       if (c._children.length > 0) {

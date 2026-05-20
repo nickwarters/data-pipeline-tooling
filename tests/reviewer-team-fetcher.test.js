@@ -8,6 +8,7 @@ const { fetchReviewerTeamCases } = await import('../src/services/reviewer-team-f
 /** @typedef {import('../src/sharepoint-client.js').ListCasesFilter} ListCasesFilter */
 
 /** Minimal mock client that records listCases calls */
+/** @param {Record<string, CaseRow[]>} [casesByType] */
 function makeClient(casesByType = {}) {
   const calls = /** @type {ListCasesFilter[]} */ ([]);
   return {

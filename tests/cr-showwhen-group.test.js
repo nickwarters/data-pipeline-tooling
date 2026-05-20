@@ -7,6 +7,7 @@ installDom();
 const { CRShowwhenGroup } = await import('../src/components/cr-showwhen-group.js');
 const { _resetStore, cases } = await import('../src/question-bank/question-bank-store.js');
 
+/** @returns {{ type: string, op: string, children: any[] }} */
 function mkGroup(over = {}) { return { type: 'group', op: 'and', children: [], ...over }; }
 
 test('CRShowwhenGroup: missing question/group → no children', () => {
@@ -40,7 +41,7 @@ test('CRShowwhenGroup: + condition appends a leaf, alerts when no other question
   const actions = head._children[1];
   /** @type {any[]} */
   const alerts = [];
-  (/** @type {any} */ (globalThis)).alert = (m) => alerts.push(m);
+  (/** @type {any} */ (globalThis)).alert = (/** @type {string} */ m) => alerts.push(m);
   const addCondBtn = actions._children[0];
   addCondBtn._listeners.click[0]();
   assert.equal(alerts.length, 1);

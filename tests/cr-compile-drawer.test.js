@@ -63,7 +63,7 @@ test('CRCompileDrawer: Copy writes code to clipboard + shows toast', async () =>
   /** @type {any} */
   let written = null;
   try {
-    (/** @type {any} */ (globalThis)).navigator = { clipboard: { writeText: async (s) => { written = s; } } };
+    (/** @type {any} */ (globalThis)).navigator = { clipboard: { writeText: async (/** @type {string} */ s) => { written = s; } } };
   } catch { /* read-only navigator on some runtimes */ }
   const e = new CRCompileDrawer();
   e.connectedCallback();

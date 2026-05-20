@@ -84,7 +84,7 @@ export class StubEl {
   cloneNode() { return new StubEl(this.tagName); }
 }
 
-/** @param {StubEl} root @param {(n: StubEl) => boolean} pred */
+/** @param {StubEl} root @param {(n: StubEl) => boolean} pred @returns {StubEl | null} */
 function findFirst(root, pred) {
   for (const c of root._children) {
     if (pred(c)) return c;
@@ -133,16 +133,16 @@ export function installDom() {
   G.customElements = {
     /** @type {Record<string, any>} */
     _registry: {},
-    define(name, cls) { this._registry[name] = cls; },
+    define(/** @type {string} */ name, /** @type {any} */ cls) { this._registry[name] = cls; },
   };
-  G.CSS = { escape: (s) => s };
+  G.CSS = { escape: (/** @type {string} */ s) => s };
   if (!G.crypto?.subtle) {
     try {
       G.crypto = { subtle: { async digest() { return new ArrayBuffer(32); } } };
     } catch { /* read-only crypto on this runtime — fine, hashStr tests already cover it */ }
   }
   if (!G.TextEncoder) {
-    G.TextEncoder = class { encode(s) { return new Uint8Array([...String(s)].map(c => c.charCodeAt(0))); } };
+    G.TextEncoder = class { encode(/** @type {string} */ s) { return new Uint8Array([...String(s)].map(c => c.charCodeAt(0))); } };
   }
   G.requestAnimationFrame = G.requestAnimationFrame ?? ((/** @type {Function} */ fn) => { fn(); return 0; });
   G.confirm = G.confirm ?? (() => true);

@@ -59,6 +59,7 @@ const { SaveQueue } = await import('../src/services/save-queue.js');
 
 // ===== HELPERS =====
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
+/** @type {CaseRow} */
 const BASE_ROW = {
   id: 'c1',
   caseType: 'hello-review',
@@ -157,7 +158,7 @@ test('CRCaseReview: _completeCase does not navigate on failure', async () => {
   el.saveQueue.loadCase(BASE_ROW);
   
   (/** @type {any} */ (globalThis)).location.hash = 'keep-me';
-  await el._completeCase('c1', el.client, el.saveQueue);
+  await el._completeCase('c1', el.client ?? undefined, el.saveQueue ?? undefined);
   assert.equal((/** @type {any} */ (globalThis)).location.hash, 'keep-me');
 });
 
@@ -195,7 +196,7 @@ test('CRCaseReview: remediation and conversation can be hidden', async () => {
   // Instead, I can test if sections are hidden for an RP (Notes should be hidden).
   el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false };
   const rpRow = { ...BASE_ROW, responsibleParty: 'u1', assignedReviewer: 'other' };
-  el.client.getCase = async () => rpRow;
+  (/** @type {any} */ (el.client)).getCase = async () => rpRow;
   
   await el.connectedCallback();
   

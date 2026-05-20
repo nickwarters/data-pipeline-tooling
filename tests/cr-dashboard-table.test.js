@@ -46,7 +46,7 @@ const { CRDashboardTable } = await import('../src/components/cr-dashboard-table.
 
 // ===== HELPERS =====
 
-/** @returns {CRDashboardTable} */
+/** @returns {any} */
 function makeTable() {
   const t = new CRDashboardTable();
   t.columns = [

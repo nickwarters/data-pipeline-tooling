@@ -298,8 +298,7 @@ test('allApplicableAnswered: returns false when an applicable question has empty
 
 test('allApplicableAnswered: returns false when an applicable question has null value', () => {
   const catalogue = [q('q1')];
-  // @ts-ignore
-  const answers = { q1: { value: null } };
+  const answers = /** @type {Record<string, any>} */ ({ q1: { value: null } });
   assert.strictEqual(allApplicableAnswered(catalogue, answers), false);
 });
 
@@ -377,8 +376,7 @@ test('evaluate: showWhen with $or false but another key true', () => {
 });
 
 test('detectCycles: extractRefs with undefined', () => {
-  // @ts-ignore
-  const catalogue = [{ id: 'q1', showWhen: undefined }];
+  const catalogue = /** @type {any[]} */ ([{ id: 'q1', showWhen: undefined }]);
   assert.strictEqual(detectCycles(catalogue), false);
 });
 
