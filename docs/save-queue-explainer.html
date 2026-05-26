@@ -270,10 +270,115 @@
 
     footer { padding: 32px 48px; text-align: center; font-size: 0.65rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); }
 
+    /* ── QUEUE ANATOMY (Scene 02) ───────────────────────────── */
+    .queue-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+    .queue-btn {
+      background: transparent; border: 1px solid var(--border); border-radius: 4px;
+      color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+      padding: 8px 14px; cursor: pointer; transition: all 0.15s;
+    }
+    .queue-btn:hover { border-color: var(--signal); color: var(--signal); }
+    .queue-btn.reset:hover { border-color: var(--muted); color: var(--text); }
+
+    .queue-stage {
+      display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 16px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      padding: 18px; min-height: 320px; position: relative; overflow: hidden;
+    }
+
+    .queue-lane { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+    .lane-label {
+      font-size: 0.58rem; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--muted); border-bottom: 1px dashed var(--border); padding-bottom: 6px;
+    }
+
+    .etag-box {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 10px; border-radius: 5px;
+      background: var(--bg); border: 1px solid var(--border);
+      transition: background 0.4s, border-color 0.4s, box-shadow 0.4s;
+    }
+    .etag-box.flash {
+      background: rgba(34,211,238,0.12);
+      border-color: rgba(34,211,238,0.6);
+      box-shadow: 0 0 0 1px rgba(34,211,238,0.25), 0 0 18px -6px var(--computed-glow);
+    }
+    .etag-label {
+      font-size: 0.58rem; letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--muted); flex-shrink: 0;
+    }
+    .etag-value { font-size: 0.72rem; color: var(--computed); font-weight: 700; }
+    .etag-arrow { color: var(--muted); font-size: 0.62rem; margin: 0 2px; }
+    .etag-old { color: var(--muted); text-decoration: line-through; font-weight: 400; }
+
+    .slot { display: flex; flex-direction: column; gap: 4px; }
+    .slot-label { font-size: 0.62rem; color: var(--muted); font-weight: 600; letter-spacing: 0.08em; }
+
+    .slot-block {
+      position: relative; min-height: 56px; padding: 8px 10px; border-radius: 5px;
+      font-size: 0.7rem; line-height: 1.4; overflow: hidden;
+      border: 1px solid var(--border); background: var(--bg); color: var(--muted);
+      transition: opacity 0.2s;
+    }
+    .slot-block.empty { font-style: italic; color: var(--muted); opacity: 0.5; min-height: 36px; padding: 8px 10px; display: flex; align-items: center; }
+
+    .slot-block.active {
+      background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.5); color: var(--text);
+      box-shadow: 0 0 0 1px rgba(245,158,11,0.18), 0 4px 14px -6px var(--signal-glow);
+      animation: block-pop 0.22s ease;
+    }
+    @keyframes block-pop { from { transform: scale(0.94); opacity: 0; } to { transform: none; opacity: 1; } }
+
+    .block-row { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+    .block-field { color: var(--signal); font-weight: 700; font-size: 0.68rem; }
+    .block-revision { color: var(--muted); font-size: 0.58rem; }
+    .block-value { color: var(--text); font-size: 0.68rem; margin-top: 3px; word-break: break-all; }
+
+    .block-timer-track { margin-top: 7px; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+    .block-timer-fill  { height: 100%; width: 0%; background: var(--signal); border-radius: 2px; }
+
+    .flight-zone, .server-zone {
+      flex: 1; min-height: 220px; padding: 6px;
+      display: flex; flex-direction: column; gap: 6px;
+      border: 1px dashed var(--border); border-radius: 5px;
+    }
+
+    .flight-block {
+      padding: 7px 10px; border-radius: 5px; font-size: 0.66rem;
+      background: rgba(34,211,238,0.08); border: 1px solid rgba(34,211,238,0.5); color: var(--text);
+      animation: fly-across 0.9s cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
+    }
+    @keyframes fly-across {
+      from { transform: translateX(-130%); opacity: 0; }
+      30%  { opacity: 1; }
+      to   { transform: none; opacity: 1; }
+    }
+    .flight-block .block-field { color: var(--computed); }
+    .flight-meta { color: var(--muted); font-size: 0.58rem; margin-top: 3px; font-style: italic; }
+
+    .server-block {
+      padding: 7px 10px; border-radius: 5px; font-size: 0.66rem;
+      background: rgba(74,222,128,0.07); border: 1px solid rgba(74,222,128,0.4); color: var(--text);
+      animation: land 0.3s ease forwards;
+    }
+    @keyframes land { from { transform: translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
+    .server-block .block-field { color: var(--saved); }
+    .server-meta { color: var(--muted); font-size: 0.58rem; margin-top: 3px; }
+
+    .queue-counter {
+      display: flex; gap: 18px; margin-top: 14px; padding: 10px 14px;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+      font-size: 0.66rem; color: var(--muted); flex-wrap: wrap;
+    }
+    .queue-counter strong { color: var(--text); font-weight: 700; }
+    .queue-counter .qc-num { color: var(--signal); font-weight: 700; font-size: 0.85rem; margin-right: 4px; }
+    .qc-savings { color: var(--saved); }
+
     @media (max-width: 860px) {
       .scene { padding: 24px; }
       .concepts { padding: 24px; }
       .demo-layout, .wt-layout { grid-template-columns: 1fr; }
+      .queue-stage { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -385,6 +490,72 @@
         <label class="demo-label">Event log</label>
         <div class="event-log" id="event-log"></div>
       </div>
+    </div>
+  </section>
+
+  <!-- ══ QUEUE ANATOMY ══════════════════════════════════════════ -->
+  <section class="scene">
+    <div class="scene-label">Scene 02</div>
+    <div class="scene-title">The Queue — Block by Block</div>
+    <p class="scene-intro">
+      "Queue" is a slight misnomer. <code>state.pending</code> is a map keyed by
+      <strong>field name</strong> — at most one pending block per field. A second edit
+      to the same field <em>replaces</em> the existing block and resets its timer; it never
+      stacks a second one. Each field's timer runs independently, so three fields edited
+      together produce three parallel timers and three independent PATCHes.
+    </p>
+    <p class="scene-intro">
+      Watch the <strong>ETag</strong> in the CLIENT lane: every successful PATCH
+      returns a fresh ETag, which replaces <code>state.etag</code> and becomes the
+      <code>If-Match</code> header on the <em>next</em> PATCH. This is what makes
+      concurrent edits safe — if anyone else writes between our reads, our ETag goes
+      stale and SharePoint rejects the write with 412.
+    </p>
+
+    <div class="queue-controls">
+      <button class="queue-btn" data-edit="q1">✏ Edit Q1 answer</button>
+      <button class="queue-btn" data-edit="q2">✏ Edit Q2 answer</button>
+      <button class="queue-btn" data-edit="conv">✏ Append Conversation</button>
+      <button class="queue-btn" data-edit="burst">⚡ Burst: edit Q1 ×4</button>
+      <button class="queue-btn reset" data-edit="reset">↻ Reset</button>
+    </div>
+
+    <div class="queue-stage">
+      <div class="queue-lane lane-pending">
+        <div class="lane-label">CLIENT — state.pending (per-field slots)</div>
+        <div class="etag-box">
+          <span class="etag-label">state.etag</span>
+          <span class="etag-value" id="client-etag">"etag-001"</span>
+        </div>
+        <div class="slot" data-slot="q1">
+          <div class="slot-label">Answers.q1</div>
+          <div class="slot-block empty" id="slot-q1">— empty —</div>
+        </div>
+        <div class="slot" data-slot="q2">
+          <div class="slot-label">Answers.q2</div>
+          <div class="slot-block empty" id="slot-q2">— empty —</div>
+        </div>
+        <div class="slot" data-slot="conv">
+          <div class="slot-label">Conversation</div>
+          <div class="slot-block empty" id="slot-conv">— empty —</div>
+        </div>
+      </div>
+
+      <div class="queue-lane">
+        <div class="lane-label">IN FLIGHT — PATCH /cases/1</div>
+        <div class="flight-zone" id="flight-zone"></div>
+      </div>
+
+      <div class="queue-lane">
+        <div class="lane-label">SHAREPOINT — committed</div>
+        <div class="server-zone" id="server-zone"></div>
+      </div>
+    </div>
+
+    <div class="queue-counter">
+      <div><span class="qc-num" id="qc-clicks">0</span><strong>user edits</strong></div>
+      <div><span class="qc-num" id="qc-patches">0</span><strong>PATCH requests sent</strong></div>
+      <div class="qc-savings" id="qc-savings"></div>
     </div>
   </section>
 
@@ -533,6 +704,166 @@
     }
     setStatus('saving'); startAnim();
     timer = setTimeout(function () { timer = null; firePatch(); }, DEBOUNCE);
+  });
+})();
+
+/* ══ QUEUE ANATOMY (Scene 02) ═════════════════════════════════════ */
+(function () {
+  var DEBOUNCE = 1500;
+
+  /** @type {Record<string, { timerId: any, rafId: any, revision: number, value: string, startTime: number }>} */
+  var pending = {};
+  var revisionCounters = { q1: 0, q2: 0, conv: 0 };
+  var clicks = 0, patches = 0;
+  var etagCounter = 1;
+  function fmtEtag(n) { return '"etag-' + String(n).padStart(3, '0') + '"'; }
+  var currentEtag = fmtEtag(etagCounter);
+
+  var SAMPLE = {
+    q1:   ['Yes',  'No',   'N/A',  'Yes — with caveat',  'Partially'],
+    q2:   ['Low',  'High', 'Medium', 'Critical',          'Unknown'],
+    conv: ['Asked for more info…', 'Following up.', 'Reviewer noted concern.', 'Closed out.'],
+  };
+  var FIELD_LABEL = { q1: 'Answers.q1', q2: 'Answers.q2', conv: 'Conversation' };
+
+  function $(id) { return document.getElementById(id); }
+
+  function updateCounters() {
+    $('qc-clicks').textContent = clicks;
+    $('qc-patches').textContent = patches;
+    if (clicks > 0 && patches > 0 && clicks > patches) {
+      var saved = clicks - patches;
+      $('qc-savings').textContent = '↓ ' + saved + ' redundant PATCH' + (saved === 1 ? '' : 'es') + ' coalesced by debounce';
+    } else {
+      $('qc-savings').textContent = '';
+    }
+  }
+
+  function renderBlock(field) {
+    var slot = $('slot-' + field);
+    var p = pending[field];
+    if (!p) {
+      slot.className = 'slot-block empty';
+      slot.innerHTML = '— empty —';
+      return;
+    }
+    slot.className = 'slot-block active';
+    slot.innerHTML =
+      '<div class="block-row">' +
+        '<span class="block-field">' + FIELD_LABEL[field] + '</span>' +
+        '<span class="block-revision">rev ' + p.revision + '</span>' +
+      '</div>' +
+      '<div class="block-value">"' + p.value + '"</div>' +
+      '<div class="block-timer-track"><div class="block-timer-fill" id="fill-' + field + '"></div></div>';
+
+    var fill = $('fill-' + field);
+    fill.style.transition = 'none'; fill.style.width = '0%';
+    requestAnimationFrame(function () {
+      fill.style.transition = 'width ' + DEBOUNCE + 'ms linear';
+      fill.style.width = '100%';
+    });
+  }
+
+  function flushField(field) {
+    var p = pending[field];
+    if (!p) return;
+    delete pending[field];
+    renderBlock(field);
+
+    patches++;
+    updateCounters();
+
+    var sentEtag = currentEtag;
+
+    var flight = document.createElement('div');
+    flight.className = 'flight-block';
+    flight.innerHTML =
+      '<div class="block-row">' +
+        '<span class="block-field">PATCH ' + FIELD_LABEL[field] + '</span>' +
+        '<span class="block-revision">rev ' + p.revision + '</span>' +
+      '</div>' +
+      '<div class="block-value">"' + p.value + '"</div>' +
+      '<div class="flight-meta">If-Match: ' + sentEtag + '</div>';
+    $('flight-zone').appendChild(flight);
+
+    setTimeout(function () {
+      flight.remove();
+
+      etagCounter++;
+      var newEtag = fmtEtag(etagCounter);
+
+      var landed = document.createElement('div');
+      landed.className = 'server-block';
+      landed.innerHTML =
+        '<div class="block-row">' +
+          '<span class="block-field">✓ ' + FIELD_LABEL[field] + '</span>' +
+          '<span class="block-revision">200 OK</span>' +
+        '</div>' +
+        '<div class="block-value">"' + p.value + '"</div>' +
+        '<div class="server-meta">ETag: <span class="etag-old">' + sentEtag + '</span> ' +
+          '<span class="etag-arrow">→</span> <strong style="color:var(--computed)">' + newEtag + '</strong></div>';
+      var zone = $('server-zone');
+      zone.appendChild(landed);
+      while (zone.children.length > 6) zone.removeChild(zone.firstChild);
+
+      currentEtag = newEtag;
+      var box = document.querySelector('.etag-box');
+      $('client-etag').textContent = newEtag;
+      box.classList.add('flash');
+      setTimeout(function () { box.classList.remove('flash'); }, 600);
+    }, 900);
+  }
+
+  function enqueue(field, value) {
+    clicks++;
+    revisionCounters[field]++;
+    var existing = pending[field];
+    if (existing) clearTimeout(existing.timerId);
+
+    var revision = revisionCounters[field];
+    pending[field] = {
+      revision: revision,
+      value: value,
+      startTime: performance.now(),
+      timerId: setTimeout(function () { flushField(field); }, DEBOUNCE),
+      rafId: null,
+    };
+    renderBlock(field);
+    updateCounters();
+  }
+
+  function pickValue(field) {
+    var arr = SAMPLE[field];
+    return arr[revisionCounters[field] % arr.length];
+  }
+
+  document.querySelectorAll('.queue-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var action = btn.dataset.edit;
+      if (action === 'reset') {
+        Object.keys(pending).forEach(function (f) { clearTimeout(pending[f].timerId); });
+        pending = {};
+        revisionCounters = { q1: 0, q2: 0, conv: 0 };
+        clicks = 0; patches = 0;
+        etagCounter = 1;
+        currentEtag = fmtEtag(etagCounter);
+        $('client-etag').textContent = currentEtag;
+        ['q1', 'q2', 'conv'].forEach(renderBlock);
+        $('flight-zone').innerHTML = '';
+        $('server-zone').innerHTML = '';
+        updateCounters();
+        return;
+      }
+      if (action === 'burst') {
+        for (var i = 0; i < 4; i++) {
+          (function (n) {
+            setTimeout(function () { enqueue('q1', pickValue('q1')); }, n * 200);
+          })(i);
+        }
+        return;
+      }
+      enqueue(action, pickValue(action));
+    });
   });
 })();
 
