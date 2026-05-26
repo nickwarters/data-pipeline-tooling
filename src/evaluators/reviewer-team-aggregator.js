@@ -27,7 +27,16 @@ export function aggregateReviewerTeamData(cases, windows) {
   /** @type {AggregateResult} */
   const result = { completedLast7d: 0, completedLast30d: 0, outstanding: 0, overdue: 0, byType: {} };
 
-  const now = new Date();
+  // Derive "now" from the sevenDaysAgo window boundary (midnight 6 calendar days ago)
+  // so that overdue comparisons are consistent with the same time reference used to
+  // build the windows, rather than the actual wall-clock time of execution.
+  const sevenDaysAgoDate = windows.sevenDaysAgo;
+  const now = new Date(
+    sevenDaysAgoDate.getFullYear(),
+    sevenDaysAgoDate.getMonth(),
+    sevenDaysAgoDate.getDate() + 6,
+    23, 59, 59, 999
+  );
 
   for (const c of cases) {
     const type = c.caseType;
