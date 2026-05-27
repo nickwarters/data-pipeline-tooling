@@ -36,6 +36,35 @@ export class CRCaseReview extends CRElement {
     this.currentUserId = '';
     /** @type {import('../services/permissions.js').Capabilities | null} */
     this.capabilities = null;
+    /** @type {((e: KeyboardEvent) => void) | null} */
+    this._keydownHandler = null;
+    /** @type {HTMLElement | null} */
+    this._conversationEl = null;
+    /** @type {HTMLElement | null} */
+    this._conversationToggleBtn = null;
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this._keydownHandler && typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+      document.removeEventListener('keydown', this._keydownHandler);
+      this._keydownHandler = null;
+    }
+  }
+
+  _toggleConversationPanel() {
+    const el = this._conversationEl;
+    const btn = this._conversationToggleBtn;
+    if (!el) return;
+    el.hidden = !el.hidden;
+    if (btn) btn.setAttribute('aria-expanded', String(!el.hidden));
+  }
+
+  /** @param {{ altKey: boolean, code?: string }} e */
+  _handleKeydown(e) {
+    if (e.altKey && e.code === 'KeyC') {
+      this._toggleConversationPanel();
+    }
   }
 
   async connectedCallback() {
@@ -117,12 +146,15 @@ export class CRCaseReview extends CRElement {
    */
   _buildLayout({ caseRow, catalogue, computeOutcome, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access }) {
 
+    const searchStr = typeof location !== 'undefined' ? (/** @type {any} */ (location).search ?? '') : '';
+    const panelMode = new URLSearchParams(searchStr).get('conversation') ?? 'popover';
+    this.setAttribute('data-conversation-mode', panelMode);
+
     const header = document.createElement('header');
     const h1 = document.createElement('h1');
     h1.textContent = caseRow.title;
     const reviewerP = document.createElement('p');
     reviewerP.textContent = `Reviewer: ${caseRow.assignedReviewer}`;
-    header.append(h1, reviewerP);
 
     const bannerEl = /** @type {import('../components/cr-status-banner.js').CRStatusBanner} */ (
       document.createElement('cr-status-banner')
@@ -238,6 +270,27 @@ export class CRCaseReview extends CRElement {
     conversationEl.currentUser = currentUser;
     conversationEl.access = access.conversation;
     conversationEl._messages = caseRow.conversation.slice();
+    // Always start hidden; the toggle button controls visibility.
+    /** @type {any} */ (conversationEl).hidden = true;
+    this._conversationEl = /** @type {HTMLElement} */ (/** @type {unknown} */ (conversationEl));
+
+    const canToggle = access.conversation !== 'hidden';
+    if (canToggle) {
+      const toggleBtn = document.createElement('button');
+      toggleBtn.className = 'cr-conversation-toggle-btn';
+      toggleBtn.textContent = 'Conversation';
+      toggleBtn.setAttribute('aria-expanded', 'false');
+      toggleBtn.setAttribute('aria-label', 'Toggle conversation panel (⌥C / Alt+C)');
+      toggleBtn.addEventListener('click', () => this._toggleConversationPanel());
+      this._conversationToggleBtn = /** @type {HTMLElement} */ (/** @type {unknown} */ (toggleBtn));
+      this._keydownHandler = (/** @type {KeyboardEvent} */ e) => this._handleKeydown(e);
+      if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+        document.addEventListener('keydown', this._keydownHandler);
+      }
+      header.append(h1, reviewerP, toggleBtn);
+    } else {
+      header.append(h1, reviewerP);
+    }
 
     const notesEl = /** @type {import('../components/cr-notes.js').CRNotes} */ (
       document.createElement('cr-notes')
@@ -263,7 +316,6 @@ export class CRCaseReview extends CRElement {
     if (access.questions === 'hidden') section.hidden = true;
     if (access.remediation === 'hidden') /** @type {any} */ (remediationSection).hidden = true;
     if (access.outcome === 'hidden') /** @type {any} */ (outcomeEl).hidden = true;
-    if (access.conversation === 'hidden') /** @type {any} */ (conversationEl).hidden = true;
     if (access.notes === 'hidden') /** @type {any} */ (notesEl).hidden = true;
 
     this.replaceChildren(...children);

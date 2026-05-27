@@ -592,6 +592,68 @@ cr-status-banner {
   font-style: italic;
 }
 
+/* ── Conversation toggle button ──────────────────────────────────────────── */
+
+[data-cr-root] .cr-conversation-toggle-btn {
+  font-size: var(--cr-font-size-sm);
+  padding: var(--cr-space-1) var(--cr-space-3);
+  background: var(--cr-color-surface-2);
+  border-color: var(--cr-color-border);
+  color: var(--cr-color-on-surface);
+  margin-left: var(--cr-space-4);
+  vertical-align: middle;
+}
+
+[data-cr-root] .cr-conversation-toggle-btn:hover {
+  background: var(--cr-color-border);
+}
+
+[data-cr-root] .cr-conversation-toggle-btn[aria-expanded="true"] {
+  background: var(--cr-color-accent-muted);
+  border-color: var(--cr-color-accent);
+  color: var(--cr-color-accent);
+}
+
+/* ── Conversation panel — popover mode ───────────────────────────────────── */
+/* Floating panel; sits above the content on the right side of the viewport. */
+
+[data-cr-root] cr-case-review[data-conversation-mode="popover"] > cr-conversation:not([hidden]) {
+  position: fixed;
+  top: var(--cr-space-5);
+  right: var(--cr-space-4);
+  bottom: var(--cr-space-4);
+  width: 28rem;
+  max-width: calc(100vw - var(--cr-space-5) * 2);
+  overflow-y: auto;
+  background: var(--cr-color-surface);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-lg);
+  box-shadow: var(--cr-shadow-lg);
+  padding: var(--cr-space-4);
+  z-index: 200;
+}
+
+/* ── Conversation panel — sidebar mode ───────────────────────────────────── */
+/* Full-height panel anchored to the right viewport edge; more "attached" feel
+   than the floating popover. Content is not pushed — sidebar overlaps at
+   narrower viewports. A layout-restructuring pass (CSS grid on cr-case-review)
+   can add true push behaviour if the sidebar wins the A/B. */
+
+[data-cr-root] cr-case-review[data-conversation-mode="sidebar"] > cr-conversation:not([hidden]) {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 36rem;
+  max-width: calc(100vw - var(--cr-space-5) * 2);
+  overflow-y: auto;
+  background: var(--cr-color-surface);
+  border-left: 2px solid var(--cr-color-border);
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.06);
+  padding: var(--cr-space-5) var(--cr-space-4);
+  z-index: 200;
+}
+
 /* ── Complete button ─────────────────────────────────────────────────────── */
 
 .cr-complete-btn {

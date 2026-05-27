@@ -491,6 +491,121 @@ test('CRCaseReview: cr-jump-unanswered event scrolls to first unanswered applica
   });
 });
 
+// ===== CONVERSATION PANEL TOGGLE =====
+
+test('CRCaseReview: conversation panel starts hidden by default', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  const conversationEl = (/** @type {any} */ (el))._children[5];
+  assert.equal(conversationEl.hidden, true, 'conversation panel must start hidden');
+});
+
+test('CRCaseReview: toggle button is in the header when conversation access is not hidden', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  const header = (/** @type {any} */ (el))._children[1];
+  const toggleBtn = (/** @type {any} */ (header))._children.find(
+    (/** @type {any} */ c) => c.className === 'cr-conversation-toggle-btn'
+  );
+  assert.ok(toggleBtn, 'toggle button should be in the header');
+  assert.equal(toggleBtn.getAttribute('aria-expanded'), 'false', 'aria-expanded starts false');
+});
+
+test('CRCaseReview: toggle button click shows then hides conversation', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  const conversationEl = (/** @type {any} */ (el))._children[5];
+  const header = (/** @type {any} */ (el))._children[1];
+  const toggleBtn = (/** @type {any} */ (header))._children.find(
+    (/** @type {any} */ c) => c.className === 'cr-conversation-toggle-btn'
+  );
+
+  toggleBtn._listeners['click'][0]();
+  assert.equal(conversationEl.hidden, false, 'first click should show the panel');
+  assert.equal(toggleBtn.getAttribute('aria-expanded'), 'true');
+
+  toggleBtn._listeners['click'][0]();
+  assert.equal(conversationEl.hidden, true, 'second click should hide the panel');
+  assert.equal(toggleBtn.getAttribute('aria-expanded'), 'false');
+});
+
+test('CRCaseReview: data-conversation-mode defaults to popover', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  assert.equal(el.getAttribute('data-conversation-mode'), 'popover');
+});
+
+test('CRCaseReview: data-conversation-mode reads sidebar from location.search', async () => {
+  (/** @type {any} */ (globalThis)).location.search = '?conversation=sidebar';
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+  (/** @type {any} */ (globalThis)).location.search = undefined;
+
+  assert.equal(el.getAttribute('data-conversation-mode'), 'sidebar');
+});
+
+test('CRCaseReview: Alt+C via _handleKeydown opens then closes the panel', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  const conversationEl = (/** @type {any} */ (el))._children[5];
+  assert.equal(conversationEl.hidden, true);
+
+  el._handleKeydown(/** @type {any} */ ({ altKey: true, code: 'KeyC' }));
+  assert.equal(conversationEl.hidden, false, 'Alt/Option+C should open the panel');
+
+  el._handleKeydown(/** @type {any} */ ({ altKey: true, code: 'KeyC' }));
+  assert.equal(conversationEl.hidden, true, 'Alt/Option+C again should close the panel');
+});
+
+test('CRCaseReview: _handleKeydown ignores keys that are not Alt+C', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  const conversationEl = (/** @type {any} */ (el))._children[5];
+  el._handleKeydown(/** @type {any} */ ({ altKey: false, code: 'KeyC' }));
+  assert.equal(conversationEl.hidden, true, 'bare C must not toggle');
+  el._handleKeydown(/** @type {any} */ ({ altKey: true, code: 'KeyK' }));
+  assert.equal(conversationEl.hidden, true, 'Alt+K must not toggle');
+});
+
+test('CRCaseReview: disconnectedCallback nulls _keydownHandler', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  assert.ok((/** @type {any} */ (el))._keydownHandler !== null, 'handler should be set after connect');
+  el.disconnectedCallback();
+  assert.equal((/** @type {any} */ (el))._keydownHandler, null, 'handler should be nulled after disconnect');
+});
+
 test('CRCaseReview: cr-jump-unanswered handler calls scrollIntoView on first unanswered question element', async () => {
   const el = new CRCaseReview();
   el.client = /** @type {any} */ (makeClient());
