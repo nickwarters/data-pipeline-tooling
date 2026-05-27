@@ -606,6 +606,91 @@ test('CRCaseReview: disconnectedCallback nulls _keydownHandler', async () => {
   assert.equal((/** @type {any} */ (el))._keydownHandler, null, 'handler should be nulled after disconnect');
 });
 
+// ===== DEFENSIVE BRANCH COVERAGE =====
+
+test('CRCaseReview: _toggleConversationPanel returns early when _conversationEl is null', () => {
+  const el = new CRCaseReview();
+  // _conversationEl is null by default — should not throw
+  assert.doesNotThrow(() => el._toggleConversationPanel());
+});
+
+test('CRCaseReview: _toggleConversationPanel toggles element when _conversationToggleBtn is null', () => {
+  const el = new CRCaseReview();
+  const fakeEl = new StubEl();
+  fakeEl.hidden = false;
+  (/** @type {any} */ (el))._conversationEl = fakeEl;
+  // _conversationToggleBtn remains null — setAttribute path must not throw
+  assert.doesNotThrow(() => el._toggleConversationPanel());
+  assert.equal(fakeEl.hidden, true, 'hidden should be toggled to true');
+});
+
+test('CRCaseReview: disconnectedCallback is safe when _keydownHandler is already null', () => {
+  const el = new CRCaseReview();
+  // _keydownHandler starts as null — calling disconnectedCallback must not throw
+  assert.equal((/** @type {any} */ (el))._keydownHandler, null);
+  assert.doesNotThrow(() => el.disconnectedCallback());
+  assert.equal((/** @type {any} */ (el))._keydownHandler, null, 'handler remains null');
+});
+
+test('CRCaseReview: _buildLayout with access.conversation=hidden omits toggle button and leaves _keydownHandler null', () => {
+  const el = new CRCaseReview();
+
+  // Minimal stubs required by _buildLayout
+  const fakeClient = makeClient();
+  const fakeSaveQueue = new SaveQueue(/** @type {any} */ (fakeClient));
+  fakeSaveQueue.loadCase(BASE_ROW);
+
+  const { signal: signalFn, computed: computedFn } = /** @type {any} */ (
+    // Re-use the already-imported signal module by grabbing it from the live module.
+    // We reconstruct minimal stubs using plain objects since signal is already loaded.
+    {}
+  );
+
+  // Build the minimal signal stubs _buildLayout needs
+  const answersSignal = { get: () => ({}), set: (/** @type {any} */ _v) => {} };
+  const applicableQuestions = { get: () => [] };
+  const allAnswered = { get: () => false };
+  const viewState = { get: () => ({ questions: [], answers: {}, allAnswered: false }) };
+
+  // Patch subscribe to avoid real effect execution
+  /** @type {any[]} */
+  const subscribeCalls = [];
+  el.subscribe = (/** @type {any} */ _sig, /** @type {any} */ _cb) => { subscribeCalls.push(_sig); };
+
+  /** @type {import('../src/services/section-access.js').Mode} */
+  const hidden = 'hidden';
+  /** @type {import('../src/services/section-access.js').Mode} */
+  const edit = 'edit';
+
+  el._buildLayout({
+    caseRow: BASE_ROW,
+    catalogue: [],
+    computeOutcome: () => ({ passed: true, findings: [] }),
+    client: /** @type {any} */ (fakeClient),
+    saveQueue: /** @type {any} */ (fakeSaveQueue),
+    answersSignal: /** @type {any} */ (answersSignal),
+    applicableQuestions: /** @type {any} */ (applicableQuestions),
+    allAnswered: /** @type {any} */ (allAnswered),
+    currentUser: { id: 'u1', displayName: 'User 1' },
+    access: /** @type {any} */ ({
+      questions: edit,
+      conversation: hidden,
+      notes: edit,
+      remediation: edit,
+      outcome: edit,
+    }),
+  });
+
+  // No toggle button should appear in the header
+  const header = (/** @type {any} */ (el))._children[1];
+  const toggleBtn = (/** @type {any} */ (header))._children.find(
+    (/** @type {any} */ c) => c.className === 'cr-conversation-toggle-btn'
+  );
+  assert.equal(toggleBtn, undefined, 'toggle button must not be in header when conversation is hidden');
+  assert.equal((/** @type {any} */ (el))._keydownHandler, null, '_keydownHandler must remain null');
+  assert.equal((/** @type {any} */ (el))._conversationToggleBtn, null, '_conversationToggleBtn must remain null');
+});
+
 test('CRCaseReview: cr-jump-unanswered handler calls scrollIntoView on first unanswered question element', async () => {
   const el = new CRCaseReview();
   el.client = /** @type {any} */ (makeClient());
