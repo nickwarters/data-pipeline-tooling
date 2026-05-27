@@ -490,3 +490,40 @@ test('CRCaseReview: cr-jump-unanswered event scrolls to first unanswered applica
     section._listeners['cr-jump-unanswered'][0]({});
   });
 });
+
+test('CRCaseReview: cr-jump-unanswered handler calls scrollIntoView on first unanswered question element', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  const section = (/** @type {any} */ (el))._children[2];
+  // section._children: [h2, qList, cr-section-progress]
+  const qList = section._children[1];
+
+  // Simulate cr-question-list having rendered its child question elements.
+  // Production wires them via qList.questionElements; the test stub does not
+  // run the real _render so we populate this directly.
+  /** @type {any[]} */
+  const scrollCalls = [];
+  /** @param {string} id */
+  const makeQuestionEl = (id) => ({
+    question: { id },
+    scrollIntoView(/** @type {any} */ opts) { scrollCalls.push({ id, opts }); },
+  });
+  qList.questionElements = [
+    makeQuestionEl('q-welcome'),
+    makeQuestionEl('q-needs'),
+    makeQuestionEl('q-channel'),
+    makeQuestionEl('q-products'),
+  ];
+
+  // Answer q-welcome so the first unanswered applicable question is q-needs.
+  section._listeners['cr-answer'][0]({ detail: { questionId: 'q-welcome', value: 'Yes' } });
+
+  section._listeners['cr-jump-unanswered'][0]({});
+
+  assert.equal(scrollCalls.length, 1, 'scrollIntoView should be called exactly once');
+  assert.equal(scrollCalls[0].id, 'q-needs', 'should scroll to first unanswered applicable question');
+});

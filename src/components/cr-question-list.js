@@ -16,6 +16,14 @@ export class CRQuestionList extends CRElement {
     this._renderedIds = new Set();
     /** @type {'edit'|'read-only'|'hidden'} */
     this.access = 'edit';
+    /**
+     * Rendered cr-question elements in display order. Exposed so siblings
+     * (e.g. cr-case-review's "Jump to next unanswered" handler) can locate
+     * a question's host element without reaching into the (browser-only,
+     * not-on-our-test-stub) `children` HTMLCollection.
+     * @type {import('./cr-question.js').CRQuestion[]}
+     */
+    this.questionElements = [];
   }
 
   connectedCallback() {
@@ -44,7 +52,7 @@ export class CRQuestionList extends CRElement {
 
     // Only auto-focus when something genuinely new appeared (not on first render).
     if (previous.size > 0 && firstNewIndex !== -1) {
-      const child = /** @type {any} */ (/** @type {any} */ (this)._children?.[firstNewIndex]);
+      const child = this.questionElements[firstNewIndex];
       child?.focus?.();
     }
   }
@@ -65,6 +73,7 @@ export class CRQuestionList extends CRElement {
       return el;
     });
     this.replaceChildren(...elements);
+    this.questionElements = elements;
     this._renderedIds = new Set(this.questions.map(q => q.id));
   }
 }

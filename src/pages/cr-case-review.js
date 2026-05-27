@@ -167,14 +167,14 @@ export class CRCaseReview extends CRElement {
 
     section.addEventListener('cr-section-jump', (ev) => {
       const { section: sectionName } = /** @type {CustomEvent<{ section: string }>} */ (ev).detail;
-      const children = /** @type {any[]} */ (/** @type {any} */ (qList)._children ?? []);
+      const children = qList.questionElements ?? [];
       const target = children.find(c => c.question?.category === sectionName ||
         (!c.question?.category && sectionName === 'General'));
       target?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
     });
 
     section.addEventListener('cr-jump-unanswered', () => {
-      const children = /** @type {any[]} */ (/** @type {any} */ (qList)._children ?? []);
+      const children = qList.questionElements ?? [];
       const answers = answersSignal.get();
       const target = children.find(c => {
         if (!c.question) return false;
