@@ -28,11 +28,10 @@ export class CRBankEditor extends CRElement {
     this.replaceChildren(
       el('header', { class: 'masthead' },
         el('div', {},
-          el('div', { class: 'eyebrow', html: 'Curator’s Workbench <span class="dot"></span> Question Bank Editorial' }),
-          el('h1', { html: 'The Question <em>Bank</em>' }),
+          el('div', { class: 'eyebrow', html: 'Case Type Owner <span class="dot"></span> Question Bank' }),
+          el('h1', { html: 'Question <em>Bank</em>' }),
         ),
         el('div', { class: 'masthead-meta', html:
-          '<strong>Curator</strong>: Case Type Owner<br>' +
           'Session: <strong>local · uncommitted</strong><br>' +
           'Schema: <strong>questions.v3</strong>' }),
       ),
