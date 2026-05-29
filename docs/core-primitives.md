@@ -3,7 +3,8 @@
 This is the framework's foundational vocabulary. The walking skeleton (the CSV →
 raw slice, #2) introduced `DataHandle`, `Reader`, `Store`, and the `Pipeline`
 builder; slice #14 added the **`Writer`** port and reshaped the builder terminus
-to `.write_to(writer).run()`. Every later slice builds on these shapes. For the
+to `.write_to(writer).run()`; slice #3 added the **`Validator`** port and made
+`.run()` fail-fast and atomic. Every later slice builds on these shapes. For the
 *why* behind each, see the ADRs referenced inline; for domain language (Case,
 CasePool, Feed, Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
 
@@ -30,8 +31,11 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > *mints* that subject's layer-appropriate Writers/Readers over its own
 > `<subject_dir>/{raw,silver,gold}.db`, and the legacy global `Store.write`/`read`
 > is retired. The shared `connect` factory now lives in `framework.connection`
-> (the seam that keeps `store` and `writers` cycle-free). Still ahead: silver/gold
-> *processors* and validators on the `.run()` terminus.
+> (the seam that keeps `store` and `writers` cycle-free). **Validators** now
+> attach to the builder (`.with_validator()` / `.with_post_validator()`) and
+> `.run()` is fail-fast and atomic. Still ahead: silver/gold *processors*, the
+> `SchemaValidator` derived from a Case Type's dataclass (ADR-0008), and the
+> structured JSONL run-registry (ADR-0007).
 
 ## The primitives
 
@@ -111,22 +115,68 @@ ride out the single writer's in-place commits instead of erroring, and stays on
 the default rollback journal because **WAL is unavailable over a network
 share**.
 
+### `Validator` — a fail-fast check at a layer boundary
+A `Validator` states an expectation about a feed's data and **raises**
+`ValidationError` when the data breaks it:
+
+```python
+class Validator(Protocol):
+    def validate(self, handle: DataHandle) -> None: ...   # raises on failure
+```
+
+Two ship now, both reading only the handle's public shape (so they stay behind
+the DataHandle seam — ADR-0002):
+
+- `ColumnValidator(required_columns)` — every required column is present
+  (presence, not dtype).
+- `RowCountValidator(minimum=…, maximum=…)` — row count within an inclusive
+  `[min, max]`; either bound is optional (`None` leaves that side open).
+
+A Validator knows only how to *check*; it does **not** decide what a failure
+means. **Severity is set where the Validator is attached to the builder**
+(`severity="error" | "warn"`, default `error` — ADR-0007), so the same Validator
+can abort one pipeline and merely warn another. The richer `SchemaValidator`
+derived from a Case Type's dataclass (ADR-0008) will be a later Validator of this
+same shape, attached as a silver/gold post-validator.
+
 ### `Pipeline` — the deferred fluent builder
 A `Pipeline` describes a feed's path and runs **nothing** until `.run()`
 (ADR-0003):
 
 ```python
-Pipeline("cases", CsvReader(path)).write_to(writer).run()
+(
+    Pipeline("cases", CsvReader(path))
+    .with_validator(ColumnValidator(["case_ref"]))        # pre: gate the input
+    .with_post_validator(RowCountValidator(minimum=1))     # post: gate the output
+    .write_to(writer)
+    .run()
+)
 ```
 
-`.write_to(writer)` composes in the destination Writer (deferred). `.run()` is
-the terminus: it reads the source, hands the bulk-tier `DataHandle` to the
-Writer, and returns it. The builder makes **no** write decisions — no layer
-logic, no refresh-vs-accumulate branching; that all lives on the Writer. Because
-the terminus owns execution, it is the natural home for the cross-cutting
-concerns added in later slices — validators, processors, timing, JSONL logging,
-lineage, atomic fail-fast runs. (`.with_validator()` / `.with_processor()` /
-`.checkpoint(writer)` arrive then.)
+`.with_validator(v, severity="error")` attaches a **pre**-validator (checks the
+input); `.with_post_validator(v, severity="error")` attaches a **post**-validator
+(checks the output that is about to be written). `.write_to(writer)` composes in
+the destination Writer. All deferred — nothing runs until `.run()`.
+
+`.run()` is the terminus and is **fail-fast and atomic** (ADR-0007): it reads the
+source, runs the pre-validators, (processors transform the handle here in a later
+slice), runs the post-validators, then hands the bulk-tier `DataHandle` to the
+Writer and returns it.
+
+- An **error**-severity failure aborts the run by raising `ValidationError`
+  *before* the Writer is ever called — so a bad dataset never reaches the layer
+  and **nothing partial lands**. (The write itself is also a single SQLite
+  transaction owned by the Writer, so gold's delete-by-run + insert is
+  all-or-nothing even on a mid-write error.)
+- A **warn**-severity failure logs a warning naming the problem and the run
+  continues — the explicit, deliberate escape hatch for known-tolerable
+  conditions.
+
+The builder still makes **no** write decisions — no layer logic, no
+refresh-vs-accumulate branching; that all lives on the Writer. Because the
+terminus owns execution, it remains the natural home for the cross-cutting
+concerns still ahead: processors, timing, structured JSONL logging, and lineage.
+(`.with_processor()` / `.checkpoint(writer)` arrive then.)
 
 ## Worked example
 

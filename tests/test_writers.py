@@ -1,6 +1,10 @@
 from pathlib import Path
 
+import pandas as pd
+import pytest
+
 from framework.connection import connect
+from framework.data_handle import DataHandle
 from framework.readers import CsvReader, SqliteReader
 from framework.writers import AccumulateByRunWriter, SqliteTruncateReloadWriter
 
@@ -72,3 +76,22 @@ def test_accumulate_by_run_writer_is_idempotent_per_run(tmp_path):
     writer.write(handle)
 
     assert len(SqliteReader(db, "selection_pool").read()) == len(handle)
+
+
+def test_accumulate_by_run_writer_is_atomic_when_the_write_fails(tmp_path):
+    # The layer write is a single SQLite transaction (ADR-0007): gold's
+    # delete-by-run then insert is all-or-nothing. If the insert fails, the
+    # delete must roll back so a re-driven run never half-wipes prior rows.
+    db = tmp_path / "gold.db"
+    good = DataHandle.from_pandas(pd.DataFrame({"id": [1, 2]}))
+    AccumulateByRunWriter(db, "selection_pool", "r1", "2026-05-29").write(good)
+
+    # A frame with a surprise column the table lacks fails on append, after the
+    # delete-by-run has already run within the same transaction.
+    broken = DataHandle.from_pandas(pd.DataFrame({"id": [1], "surprise": [9]}))
+    with pytest.raises(Exception):
+        AccumulateByRunWriter(db, "selection_pool", "r1", "2026-05-29").write(broken)
+
+    survivors = SqliteReader(db, "selection_pool").read()
+    assert len(survivors) == 2
+    assert "surprise" not in survivors.columns
