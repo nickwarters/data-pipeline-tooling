@@ -1,71 +1,89 @@
-"""The medallion store — a dumb SQLite persistence layer.
+"""The medallion store — scoped to one subject, mints that subject's Writers
+and Readers.
 
-Three SQLite databases, one per layer (raw, silver, gold), each a file under a
-base directory (a network share in production). The store persists and returns
-DataHandles; it holds no business logic (ADR-0001, ADR-0002). Connections come
-from a single factory so cross-host read/write tolerance (busy_timeout,
-rollback-journal mode) is configured in one place.
+A ``Store`` is the mouth of one **subject**'s medallion (a Case Type or a shared
+Reference Data set — ADR-0001 amendment): its three SQLite files
+``<subject_dir>/{raw,silver,gold}.db``, isolated from every other subject's
+files. The store holds **no** business logic and makes **no** load decisions
+(ADR-0002, ADR-0003 amendment); it merely mints the layer-appropriate component
+wired to the subject's file:
+
+- ``store.writer(layer, table)`` — the layer's Writer (raw/silver full-refresh;
+  gold accumulate-by-run, stamped with the run's ``run_id`` / ``load_date``).
+- ``store.reader(layer, table)`` — a Reader over the same file.
+
+The minted Writers/Readers each open through the shared ``connect`` factory in
+``framework.connection`` — the single place connections are configured
+(ADR-0001) and the seam that keeps ``store`` and ``writers`` from importing each
+other in a cycle.
 """
 
 from __future__ import annotations
 
 import os
-import sqlite3
 from pathlib import Path
 
-import pandas as pd
+from framework.connection import LAYERS
+from framework.readers import Reader, SqliteReader
+from framework.writers import (
+    AccumulateByRunWriter,
+    SqliteTruncateReloadWriter,
+    Writer,
+)
 
-from framework.data_handle import DataHandle
-
-LAYERS = ("raw", "silver", "gold")
-
-
-def connect(
-    db_path: str | os.PathLike[str], busy_timeout_ms: int = 5000
-) -> sqlite3.Connection:
-    """Open a connection with the share-tolerant settings (ADR-0001).
-
-    The single place SQLite connections are configured: a ``busy_timeout`` so
-    read-only clients ride out the single writer's in-place commits instead of
-    erroring, on the default rollback journal because WAL is unavailable over a
-    network share. Readers and Writers both go through here.
-    """
-    con = sqlite3.connect(db_path)
-    con.execute(f"PRAGMA busy_timeout = {busy_timeout_ms}")
-    return con
+# Layers whose contents mirror a current-state snapshot — full-refreshed each
+# run (truncate + reload). Gold instead accumulates by run (ADR-0006).
+_REFRESH_LAYERS = ("raw", "silver")
 
 
 class Store:
-    """Read and write DataHandles to medallion layer databases."""
+    """One subject's medallion: mints Writers/Readers over its three files."""
 
     def __init__(
-        self, base_dir: str | os.PathLike[str], busy_timeout_ms: int = 5000
+        self, subject_dir: str | os.PathLike[str], busy_timeout_ms: int = 5000
     ) -> None:
-        self._base_dir = Path(base_dir)
+        # Path keeps separators OS-agnostic across Windows and macOS.
+        self._subject_dir = Path(subject_dir)
         self._busy_timeout_ms = busy_timeout_ms
 
     def _db_path(self, layer: str) -> Path:
         if layer not in LAYERS:
             raise ValueError(f"unknown layer {layer!r}; expected one of {LAYERS}")
-        return self._base_dir / f"{layer}.db"
+        return self._subject_dir / f"{layer}.db"
 
-    def _connect(self, layer: str) -> sqlite3.Connection:
-        return connect(self._db_path(layer), self._busy_timeout_ms)
+    def writer(
+        self,
+        layer: str,
+        table: str,
+        run_id: str | None = None,
+        load_date: str | None = None,
+    ) -> Writer:
+        """Mint the layer-appropriate Writer over the subject's layer file.
 
-    def write(self, layer: str, table: str, handle: DataHandle) -> None:
-        con = self._connect(layer)
-        try:
-            # Raw is a faithful snapshot of the source: truncate + reload so
-            # re-runs are deterministic and never accumulate (ADR-0006).
-            handle.to_pandas().to_sql(table, con, if_exists="replace", index=False)
-            con.commit()
-        finally:
-            con.close()
+        raw/silver mirror a current-state snapshot, so they get a truncate +
+        reload Writer; gold accumulates, so it gets an accumulate-by-run Writer
+        stamped with this run's ``run_id`` / ``load_date`` (required for gold).
+        """
+        db_path = self._db_path(layer)
+        if layer in _REFRESH_LAYERS:
+            return SqliteTruncateReloadWriter(
+                db_path, table, busy_timeout_ms=self._busy_timeout_ms
+            )
+        # layer == "gold": accumulate-by-run, stamped by the run that mints it.
+        if run_id is None or load_date is None:
+            raise ValueError(
+                f"minting a {layer!r} Writer requires run_id and load_date"
+            )
+        return AccumulateByRunWriter(
+            db_path,
+            table,
+            run_id,
+            load_date,
+            busy_timeout_ms=self._busy_timeout_ms,
+        )
 
-    def read(self, layer: str, table: str) -> DataHandle:
-        con = self._connect(layer)
-        try:
-            frame = pd.read_sql(f"SELECT * FROM {table}", con)
-        finally:
-            con.close()
-        return DataHandle.from_pandas(frame)
+    def reader(self, layer: str, table: str) -> Reader:
+        """Mint a Reader over the subject's layer file."""
+        return SqliteReader(
+            self._db_path(layer), table, busy_timeout_ms=self._busy_timeout_ms
+        )

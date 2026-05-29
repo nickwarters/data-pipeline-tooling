@@ -14,9 +14,11 @@ domain language in `CONTEXT.md`; the core primitives are documented in
 - **Layout:** `framework/` (engine + domain), `pipelines/` (scripts),
   `tests/` (pytest), `docs/` (architecture, ADRs).
 - **Core primitives:** `DataHandle` (opaque tabular carrier, pandas behind the
-  seam), `Reader` (`read() -> DataHandle`), `Writer` (`write(handle) -> None`;
-  owns target location + load strategy — added by #14), `Store` (dumb SQLite
-  medallion store + connection factory), `Pipeline` (deferred fluent builder;
+  seam), `Reader` (`read() -> DataHandle`; `CsvReader`, `SqliteReader`),
+  `Writer` (`write(handle) -> None`; owns target location + load strategy —
+  added by #14), `Store` (per-subject medallion that mints the layer's
+  Writers/Readers over `<subject>/{raw,silver,gold}.db` — #15; `connect` factory
+  now in `framework.connection`), `Pipeline` (deferred fluent builder;
   `.write_to(writer)` composes, `.run()` executes — replaced `.to(layer)` in
   #14).
 

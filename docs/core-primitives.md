@@ -26,11 +26,12 @@ names are placeholders pending a domain rename — see CONTEXT.)
 raw stays schema-light on purpose: it mirrors the source so the landing zone is
 faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 
-> **Build status.** A `Writer` already owns its target location, so pointing a
-> pipeline at a subject's own medallion file is just a matter of which Writer you
-> compose. The **per-subject `Store`** that *mints* a subject's Writers/Readers
-> over `<subject>/{raw,silver,gold}.db` is the next slice; until then the legacy
-> global `Store` below still serves reads, and Writers take an explicit db path.
+> **Build status.** The **per-subject `Store`** has landed: `Store(subject_dir)`
+> *mints* that subject's layer-appropriate Writers/Readers over its own
+> `<subject_dir>/{raw,silver,gold}.db`, and the legacy global `Store.write`/`read`
+> is retired. The shared `connect` factory now lives in `framework.connection`
+> (the seam that keeps `store` and `writers` cycle-free). Still ahead: silver/gold
+> *processors* and validators on the `.run()` terminus.
 
 ## The primitives
 
@@ -57,7 +58,10 @@ class Reader(Protocol):
     def read(self) -> DataHandle: ...
 ```
 
-`CsvReader(path)` is the first concrete reader; `Excel`/`Sqlite`/`Sas`/
+`CsvReader(path)` reads a source feed; `SqliteReader(db_path, table)` is the
+read-side dual of the Sqlite Writers — it reads one table from a layer db back
+into a `DataHandle` (a subject's own layer, or another subject's read-only
+Reference Data medallion, joined in Python — ADR-0002). `Excel`/`Sas`/
 `SharePoint` follow the same shape (ADR-0004, ADR-0005). Readers are the home of
 the concrete engine and are tested against **local fixture files** — no network,
 no SAS, no SharePoint. Paths are handled with `pathlib` so they behave
@@ -83,21 +87,29 @@ concrete writers ship now:
   run** for gold: stamps each row `run_id` / `load_date` and makes a re-driven
   run idempotent via *delete-by-run then insert* (a stub for the gold layer).
 
-### `Store` — the dumb medallion store + connection factory
-`Store(base_dir, busy_timeout_ms=5000)` maps each layer to
-`<base_dir>/<layer>.db` and persists/returns handles via
-`store.write(layer, table, handle)` / `store.read(layer, table)`. It holds **no
-business logic** (ADR-0002). The module-level `connect(db_path, busy_timeout_ms)`
-is the single place connections are configured (ADR-0001) — both `Store` and the
-`Writer`s open connections through it. It sets a `busy_timeout` so read-only
-clients ride out the single writer's in-place commits instead of erroring, and
-stays on the default rollback journal because **WAL is unavailable over a
-network share**.
+### `Store` — one subject's medallion, minting its Writers/Readers
+`Store(subject_dir, busy_timeout_ms=5000)` is the mouth of **one subject's**
+medallion (a Case Type or a Reference Data set — ADR-0001 amendment): its three
+files `<subject_dir>/{raw,silver,gold}.db`, isolated from every other subject's.
+It holds **no business logic** (ADR-0002) and makes **no** load decision
+(ADR-0003 amendment) — it merely mints the layer-appropriate component:
 
-The **load decision has moved off the `Store` and onto the `Writer`** (ADR-0003
-amendment): the store no longer chooses truncate-vs-accumulate. The per-subject
-`Store` that mints layer-appropriate Writers/Readers is the next slice (see Build
-status above).
+- `store.writer(layer, table)` — raw/silver get a `SqliteTruncateReloadWriter`
+  (full refresh); gold gets an `AccumulateByRunWriter` and so requires
+  `run_id` / `load_date` (stamped per the run that mints it).
+- `store.reader(layer, table)` — a `SqliteReader` over the same file.
+
+The strategy lives on the Writer the store mints, not on the store. A new
+subject's directory is created on first write, so onboarding migrates nothing.
+
+The connection factory `connect(db_path, busy_timeout_ms)` lives in
+`framework.connection` — the single place connections are configured (ADR-0001),
+which Readers, Writers, and the Store all open through. Keeping it in its own
+module is the seam that lets the `Store` mint Writers/Readers without a
+`store`↔`writers` import cycle. It sets a `busy_timeout` so read-only clients
+ride out the single writer's in-place commits instead of erroring, and stays on
+the default rollback journal because **WAL is unavailable over a network
+share**.
 
 ### `Pipeline` — the deferred fluent builder
 A `Pipeline` describes a feed's path and runs **nothing** until `.run()`
@@ -121,10 +133,15 @@ lineage, atomic fail-fast runs. (`.with_validator()` / `.with_processor()` /
 ```python
 from framework.builder import Pipeline
 from framework.readers import CsvReader
-from framework.writers import SqliteTruncateReloadWriter
+from framework.store import Store
 
-writer = SqliteTruncateReloadWriter("/path/to/share/raw.db", "cases")
-landed = Pipeline("cases", CsvReader("feed.csv")).write_to(writer).run()
+# The "cases" subject's medallion mints the raw Writer over its own raw.db.
+store = Store("/path/to/share/cases")
+landed = (
+    Pipeline("cases", CsvReader("feed.csv"))
+    .write_to(store.writer("raw", "cases"))
+    .run()
+)
 print(len(landed), landed.columns)
 ```
 

@@ -14,6 +14,7 @@ from typing import Protocol, runtime_checkable
 
 import pandas as pd
 
+from framework.connection import connect
 from framework.data_handle import DataHandle
 
 
@@ -35,3 +36,33 @@ class CsvReader:
 
     def read(self) -> DataHandle:
         return DataHandle.from_pandas(pd.read_csv(self._path))
+
+
+class SqliteReader:
+    """Read one table from a SQLite layer database into a DataHandle.
+
+    The read-side dual of the Sqlite Writers: where a Writer owns its target
+    location, a ``SqliteReader`` owns its source location (a single layer db
+    file + table). Opens through the shared ``connect`` factory so it inherits
+    the share-tolerant settings (ADR-0001). Used to read a subject's own layer
+    or another subject's Reference Data medallion (joined in Python — ADR-0002).
+    """
+
+    def __init__(
+        self,
+        db_path: str | os.PathLike[str],
+        table: str,
+        busy_timeout_ms: int = 5000,
+    ) -> None:
+        # Path keeps separators OS-agnostic across Windows and macOS.
+        self._db_path = Path(db_path)
+        self._table = table
+        self._busy_timeout_ms = busy_timeout_ms
+
+    def read(self) -> DataHandle:
+        con = connect(self._db_path, self._busy_timeout_ms)
+        try:
+            frame = pd.read_sql(f"SELECT * FROM {self._table}", con)
+        finally:
+            con.close()
+        return DataHandle.from_pandas(frame)
