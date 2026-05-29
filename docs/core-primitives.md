@@ -207,6 +207,17 @@ mints the run's `run_id`, times each step, and drives the composed `RunLog`
 (timing + structured JSONL logging — landed in #4). Processors and lineage
 remain ahead (`.with_processor()` / `.checkpoint(writer)` arrive then).
 
+### `WorkingDayCalendar` — working-day arithmetic (pure utility)
+A config-seeded `WorkingDayCalendar(holidays=…, weekend=…)` answers working-day
+questions for availability criteria ("the last 20 working days" — `CONTEXT.md`).
+Unlike the primitives above it touches no `DataHandle`, `Store`, or engine — it
+is pure stdlib `datetime`, hence deterministic and identical on Windows/macOS,
+and is **not** a Feed (ADR-0001 amendment). Two queries: `is_working_day(day)`
+and `last_n_working_days(n, from_date)` (the `n` most recent working days on or
+before `from_date`, most-recent first, skipping weekends + holidays). Full
+config and boundary semantics in
+[`working-day-calendar.md`](working-day-calendar.md).
+
 ## Worked example
 
 ```python
