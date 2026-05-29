@@ -94,6 +94,10 @@ class AccumulateByRunWriter:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         con = connect(self._db_path, self._busy_timeout_ms)
         try:
+            # Delete + append commit as a single transaction (one commit at the
+            # end; an error before it rolls back on close) — atomic, so a failed
+            # re-run never half-wipes prior rows (ADR-0007).
+            #
             # Idempotent re-run: clear this run's prior rows, then append, so a
             # re-driven day replaces only its own rows and never other runs'.
             try:
