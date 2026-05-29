@@ -15,8 +15,8 @@ import sqlite3
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+from framework.connection import connect
 from framework.data_handle import DataHandle
-from framework.store import connect
 
 
 @runtime_checkable
@@ -48,6 +48,9 @@ class SqliteTruncateReloadWriter:
         self._busy_timeout_ms = busy_timeout_ms
 
     def write(self, handle: DataHandle) -> None:
+        # Create the subject's medallion directory on first write — a new
+        # subject lands its own files and migrates nothing (ADR-0001 amendment).
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
         con = connect(self._db_path, self._busy_timeout_ms)
         try:
             handle.to_pandas().to_sql(
@@ -86,6 +89,9 @@ class AccumulateByRunWriter:
         frame["run_id"] = self._run_id
         frame["load_date"] = self._load_date
 
+        # Create the subject's medallion directory on first write — a new
+        # subject lands its own files and migrates nothing (ADR-0001 amendment).
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
         con = connect(self._db_path, self._busy_timeout_ms)
         try:
             # Idempotent re-run: clear this run's prior rows, then append, so a

@@ -1,9 +1,10 @@
 """Walking-skeleton demo: read a CSV feed and land it in the raw layer.
 
-The thinnest end-to-end path through the framework. Run it as a module from the
-repo root (so the import-only ``framework`` package resolves on ``sys.path``) to
-write ``raw.db`` under a data directory, or import ``run`` to drive it from a
-test.
+The thinnest end-to-end path through the framework. ``base_dir`` is the
+``cases`` subject's medallion directory; the demo mints its raw Writer from a
+per-subject ``Store`` (ADR-0001 amendment), which lands ``raw.db`` under that
+directory. Run it as a module from the repo root (so the import-only
+``framework`` package resolves on ``sys.path``), or import ``run`` from a test.
 
     python -m pipelines.demo_csv_to_raw [BASE_DIR]
 """
@@ -17,7 +18,7 @@ from pathlib import Path
 from framework.builder import Pipeline
 from framework.data_handle import DataHandle
 from framework.readers import CsvReader
-from framework.writers import SqliteTruncateReloadWriter
+from framework.store import Store
 
 FEED_NAME = "cases"
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "cases.csv"
@@ -28,18 +29,17 @@ def run(
     csv_path: str | os.PathLike[str] = SAMPLE_CSV,
 ) -> DataHandle:
     """Land the CSV feed into ``raw.db`` under ``base_dir``; return the rows."""
-    writer = SqliteTruncateReloadWriter(Path(base_dir) / "raw.db", FEED_NAME)
+    writer = Store(base_dir).writer("raw", FEED_NAME)
     return Pipeline(FEED_NAME, CsvReader(csv_path)).write_to(writer).run()
 
 
 def main(argv: list[str]) -> int:
     base_dir = Path(argv[1]) if len(argv) > 1 else Path(__file__).parent.parent / "data"
-    base_dir.mkdir(parents=True, exist_ok=True)
 
     handle = run(base_dir)
     print(
         f"Landed {len(handle)} rows into "
-        f"{base_dir / 'raw.db'} (table '{FEED_NAME}')"
+        f"{Path(base_dir) / 'raw.db'} (table '{FEED_NAME}')"
     )
     return 0
 
