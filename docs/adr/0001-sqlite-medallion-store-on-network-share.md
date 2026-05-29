@@ -18,3 +18,11 @@ The framework persists each medallion layer as a SQLite database (raw, silver, g
 - The connection factory must set a `busy_timeout` (and readers retry) so clients tolerate the writer's in-place commits.
 - The single-writer rule is load-bearing: if a second host ever writes, corruption risk returns. Enforce it operationally.
 - If read contention or torn-read complaints emerge, revisit the "build-local, atomically publish" option for gold.
+
+## Amendment (2026-05-29): medallions are scoped per subject
+
+The original decision framed *one* store of three databases. As we onboard many Case Types and shared reference datasets, the medallion is instead scoped **per subject** — each **Case Type** and each shared **Reference Data** set owns its own three-file medallion (`<subject>/{raw,silver,gold}.db`), isolated from every other subject. This buys **blast-radius isolation** (a bad load or a corrupt file is contained to one subject) and **independent onboarding** (a new subject creates its own files and migrates nothing). It mirrors the read side, which is already per-Case-Type (the CasePool).
+
+Reference Data sets (e.g. the Adviser hierarchy, product codes) are subjects too: each gets its own medallion, refined by its own pipeline, and is **read-only** to Case Types' Selection. Cross-medallion joins happen in Python (ADR-0002), so splitting files costs nothing on the join path.
+
+The core decision is unchanged: SQLite, in-place writes on the share, rollback-journal mode, `busy_timeout`, and the **single-writer-per-file** rule — which now holds per subject's file and gets *safer* with smaller, isolated databases (less contention, smaller blast radius).

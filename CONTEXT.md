@@ -48,6 +48,10 @@ _Avoid_: result, verdict, assessment
 A single configured inbound data stream the framework ingests (e.g. one Excel workbook, one SharePoint list, one SAS extract). Source data going out as Cases and Review Outcomes coming back are both feeds.
 _Avoid_: source (reserved for source *type*: Excel/CSV/SAS/SQLite/SharePoint), import
 
+**Reference Data**:
+Shared, cross-cutting data that many Case Types' Selection joins against (e.g. the **Adviser hierarchy**, product codes, mappings). Ingested as ordinary **Feeds** and refined through its own per-subject medallion exactly like a Case Type's data, but **read-only** to Case Types — a Case Type joins it (in Python) and never writes it.
+_Avoid_: master data, lookup, static data
+
 **Selection**:
 The process that turns candidate records into the Cases made available for review — typically filter to specific Advisers, score, sort, join with other feeds' silver/gold data, then filter again. Governed by a Case Type / Variation's selection criteria.
 _Avoid_: sampling (until disambiguated), picking
@@ -66,10 +70,11 @@ _Avoid_: model, shape, structure (informal)
 - A **Variation** references the **Question Bank** (`question_bank_id`) the Reviewer uses; that id is stamped onto selected Cases (content owned by the review platform)
 - The pipeline is bidirectional: **Feeds** → Cases (outbound), and **Review Outcomes** → reporting (inbound)
 - Selection flow: **CasePool** (all Cases) → Selection → **SelectionPool** (chosen Cases)
+- **Reference Data** (e.g. Adviser hierarchy, product codes) lives in its own medallion, shared across Case Types; a Case Type's **Selection** reads it (joined in Python) but never writes it
 
 ## Medallion layers
 
-Three SQLite databases, one per layer, on a network share: **raw → silver → gold**. The ingest stage of each Case Type refines its data up to gold; the Selection pipeline reads from the ingested **silver/gold** (via the CasePool) and writes the **SelectionPool** back into gold. So gold holds both refined ingest outputs and accumulating selection results. (Layer names are placeholders — see flagged ambiguities.)
+Each **subject** — a Case Type or a shared Reference Data set — owns its **own** medallion: three SQLite databases, one per layer (**raw → silver → gold**), on a network share, isolated from every other subject's files (blast-radius isolation, independent onboarding). The ingest stage of a Case Type refines its data up to gold; the Selection pipeline reads from the ingested **silver/gold** (via the CasePool) and writes the **SelectionPool** back into gold. So gold holds both refined ingest outputs and accumulating selection results. (Layer names are placeholders — see flagged ambiguities.)
 
 ## Example dialogue
 
@@ -86,5 +91,6 @@ Three SQLite databases, one per layer, on a network share: **raw → silver → 
 - "activity" vs "sale" vs "other things" — RESOLVED: these are **Case Types** (open-ended, generic A/B/C…), each with its own fields/selection/ingest/destination/processing.
 - Medallion layer names "bronze/silver/gold" (a.k.a. raw/silver/gold) are **placeholders** — to be renamed by domain later. Using raw/silver/gold for now.
 - **CasePool scope** — RESOLVED: a CasePool is **per Case Type**, typed/validated by that type's Schema. A Case Type is an explicit declarative `CaseType` object (schema + Variations) imported directly; a global registry is deferred to runner-era (ADR-0005).
-- **Reference data** — RESOLVED: external reference (Adviser directory, mappings) is modelled as ordinary **Feeds**, ingested into the medallion and joined during Selection; the working-day calendar is a config-seeded **`WorkingDayCalendar`** Python utility (not a feed). No separate reference subsystem.
+- **Reference Data** — RESOLVED: canonical term **Reference Data** (avoid "master data"/"lookup"). Cross-cutting reference (Adviser hierarchy, product codes, mappings) is modelled as ordinary **Feeds**, each given its **own per-subject medallion**, refined by its own pipeline, and **read-only** to Case Types' Selection (joined in Python). The working-day calendar is a config-seeded **`WorkingDayCalendar`** Python utility (not a feed). No separate reference subsystem. See ADR-0001 (per-subject medallions).
+- **Medallion scope** — RESOLVED: a medallion is scoped **per subject** (a Case Type or a Reference Data set) — three files each — for blast-radius isolation and independent onboarding; the single-writer rule holds per file. See ADR-0001.
 - **Question Bank ownership** — RESOLVED: the framework stores only a **reference** (`question_bank_id`) on the Variation and stamps it onto selected Cases so the review platform knows which bank to present; the bank's **content** is owned by the review platform.
