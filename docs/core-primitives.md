@@ -68,14 +68,17 @@ class Reader(Protocol):
     def read(self) -> DataHandle: ...
 ```
 
-`CsvReader(path)` reads a source feed; `SqliteReader(db_path, table)` is the
+`CsvReader(path)` reads a source feed; `ExcelReader(path, sheet=0)` reads one
+worksheet of an `.xlsx` workbook (sheet selectable by name or zero-based index;
+pandas + **openpyxl** behind the seam); `SqliteReader(db_path, table)` is the
 read-side dual of the Sqlite Writers — it reads one table from a layer db back
 into a `DataHandle` (a subject's own layer, or another subject's read-only
-Reference Data medallion, joined in Python — ADR-0002). `Excel`/`Sas`/
-`SharePoint` follow the same shape (ADR-0004, ADR-0005). Readers are the home of
+Reference Data medallion, joined in Python — ADR-0002). `Sas`/`SharePoint`
+follow the same shape (ADR-0004, ADR-0005; later slice). Readers are the home of
 the concrete engine and are tested against **local fixture files** — no network,
 no SAS, no SharePoint. Paths are handled with `pathlib` so they behave
-identically on Windows and macOS.
+identically on Windows and macOS. **How to add a Feed:**
+[`adding-a-feed.md`](adding-a-feed.md).
 
 ### `Writer` — the destination, behind one method
 A `Writer` is the component-role **dual of `Reader`**: a Reader brings data in,

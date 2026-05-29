@@ -2,3 +2,4 @@
 # The framework is import-only: add the repo root to sys.path, never `pip install`
 # the package itself. Only these third-party libs are installed into the venv.
 pandas==3.0.3
+openpyxl==3.1.5   # pandas .xlsx engine for ExcelReader; pure-Python, cross-platform

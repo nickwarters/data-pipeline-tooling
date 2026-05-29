@@ -38,6 +38,29 @@ class CsvReader:
         return DataHandle.from_pandas(pd.read_csv(self._path))
 
 
+class ExcelReader:
+    """Read one sheet of an Excel workbook into a DataHandle.
+
+    ``sheet`` selects the worksheet by name or zero-based index (default the
+    first sheet). The concrete engine (pandas + openpyxl for ``.xlsx``) lives
+    here behind the DataHandle seam, never in the Protocol (ADR-0002). Tested
+    against a local fixture workbook — no external system (ADR-0005).
+    """
+
+    def __init__(
+        self,
+        path: str | os.PathLike[str],
+        sheet: str | int = 0,
+    ) -> None:
+        # Path keeps separators OS-agnostic across Windows and macOS.
+        self._path = Path(path)
+        self._sheet = sheet
+
+    def read(self) -> DataHandle:
+        frame = pd.read_excel(self._path, sheet_name=self._sheet)
+        return DataHandle.from_pandas(frame)
+
+
 class SqliteReader:
     """Read one table from a SQLite layer database into a DataHandle.
 
