@@ -13,10 +13,12 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   (on `sys.path`, never `pip install`ed); `pipelines/` holds runnable scripts.
 - **Layout:** `framework/` (engine + domain), `pipelines/` (scripts),
   `tests/` (pytest), `docs/` (architecture, ADRs).
-- **Core primitives (locked by #2):** `DataHandle` (opaque tabular carrier,
-  pandas behind the seam), `Reader` (`read() -> DataHandle`), `Store` (dumb
-  SQLite medallion store + connection factory), `Pipeline` (deferred fluent
-  builder; runs only at `.to(layer)`).
+- **Core primitives:** `DataHandle` (opaque tabular carrier, pandas behind the
+  seam), `Reader` (`read() -> DataHandle`), `Writer` (`write(handle) -> None`;
+  owns target location + load strategy — added by #14), `Store` (dumb SQLite
+  medallion store + connection factory), `Pipeline` (deferred fluent builder;
+  `.write_to(writer)` composes, `.run()` executes — replaced `.to(layer)` in
+  #14).
 
 ### Commands
 

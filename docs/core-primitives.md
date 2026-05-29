@@ -1,16 +1,21 @@
 # Core primitives & the medallion layers
 
-This is the framework's foundational vocabulary, introduced by the walking
-skeleton (the CSV → raw slice). Every later slice builds on these four shapes.
-For the *why* behind each, see the ADRs referenced inline; for domain language
-(Case, CasePool, Feed, …) see [`../CONTEXT.md`](../CONTEXT.md).
+This is the framework's foundational vocabulary. The walking skeleton (the CSV →
+raw slice, #2) introduced `DataHandle`, `Reader`, `Store`, and the `Pipeline`
+builder; slice #14 added the **`Writer`** port and reshaped the builder terminus
+to `.write_to(writer).run()`. Every later slice builds on these shapes. For the
+*why* behind each, see the ADRs referenced inline; for domain language (Case,
+CasePool, Feed, Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
 
 ## Medallion layers
 
-The store is three SQLite databases, one per layer, on a network share:
-**raw → silver → gold**. A Feed is ingested and refined upward; the Selection
-pipeline reads the ingested silver/gold and writes the SelectionPool back into
-gold. (The names are placeholders pending a domain rename — see CONTEXT.)
+A medallion is three SQLite databases, one per layer (raw, silver, gold), on a
+network share: **raw → silver → gold**. Each **subject** — a Case Type or a
+shared Reference Data set — owns its **own** medallion, isolated from every
+other subject's files (ADR-0001 amendment: blast-radius isolation, independent
+onboarding). A Feed is ingested and refined upward; the Selection pipeline reads
+the ingested silver/gold and writes the SelectionPool back into gold. (The layer
+names are placeholders pending a domain rename — see CONTEXT.)
 
 | Layer  | Holds                                  | Load behaviour |
 |--------|----------------------------------------|----------------|
@@ -18,11 +23,16 @@ gold. (The names are placeholders pending a domain rename — see CONTEXT.)
 | silver | Validated, normalised data. *(later slice)* | Full refresh from raw. |
 | gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. *(later slice)* | Accumulates, stamped `run_id` / `load_date`; idempotent re-run via delete-by-run then insert (ADR-0006). |
 
-**This slice implements `raw` only.** raw stays schema-light on purpose: it
-mirrors the source so the landing zone is faithful, and schema enforcement
-arrives at silver and gold (ADR-0008).
+raw stays schema-light on purpose: it mirrors the source so the landing zone is
+faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 
-## The four primitives
+> **Build status.** A `Writer` already owns its target location, so pointing a
+> pipeline at a subject's own medallion file is just a matter of which Writer you
+> compose. The **per-subject `Store`** that *mints* a subject's Writers/Readers
+> over `<subject>/{raw,silver,gold}.db` is the next slice; until then the legacy
+> global `Store` below still serves reads, and Writers take an explicit db path.
+
+## The primitives
 
 ### `DataHandle` — the opaque tabular carrier
 The bulk tier of the two-tier data carrier (ADR-0002). It wraps the concrete
@@ -33,11 +43,11 @@ deliberately tiny:
 - `handle.columns -> list[str]`
 - `len(handle) -> int`
 
-Only engine-confined code (readers, the store, processors) crosses the seam via
-`DataHandle.from_pandas(frame)` / `handle.to_pandas()`. **pandas must never
-appear** in a Protocol signature, a pipeline script, or the domain layer — only
-behind this seam. Typed domain objects (`Case`, `ReviewOutcome`) are the *other*
-tier, materialised on demand at the domain edge (later slice).
+Only engine-confined code (readers, writers, the store, processors) crosses the
+seam via `DataHandle.from_pandas(frame)` / `handle.to_pandas()`. **pandas must
+never appear** in a Protocol signature, a pipeline script, or the domain layer —
+only behind this seam. Typed domain objects (`Case`, `ReviewOutcome`) are the
+*other* tier, materialised on demand at the domain edge (later slice).
 
 ### `Reader` — source IO behind one method
 A `Reader` encapsulates how one source type is read:
@@ -53,43 +63,68 @@ the concrete engine and are tested against **local fixture files** — no networ
 no SAS, no SharePoint. Paths are handled with `pathlib` so they behave
 identically on Windows and macOS.
 
-### `Store` — the dumb medallion store + connection factory
-`Store(base_dir, busy_timeout_ms=5000)` maps each layer to `<base_dir>/<layer>.db`
-and is the single place connections are made (ADR-0001):
-
-- `store.write(layer, table, handle)` — raw writes are truncate + reload.
-- `store.read(layer, table) -> DataHandle` — read a table back.
-
-The store holds **no business logic** (no business-rule SQL); it only persists
-and returns handles (ADR-0002). The connection factory sets a `busy_timeout` so
-read-only clients ride out the single writer's in-place commits instead of
-erroring, and stays on the default rollback journal because **WAL is
-unavailable over a network share** (ADR-0001).
-
-### `Pipeline` — the deferred fluent builder
-A `Pipeline` describes a feed's path through **one layer transition** and runs
-**nothing** until a terminus (ADR-0003):
+### `Writer` — the destination, behind one method
+A `Writer` is the component-role **dual of `Reader`**: a Reader brings data in,
+a Writer takes it out (ADR-0003 amendment).
 
 ```python
-Pipeline("cases", CsvReader(path), store).to("raw")
+class Writer(Protocol):
+    def write(self, handle: DataHandle) -> None: ...
 ```
 
-Composing the builder is side-effect-free; `.to(layer)` is what reads the source
-and lands it, returning the bulk-tier `DataHandle`. Because the terminus owns
-execution, it is the natural home for the cross-cutting concerns added in later
-slices — validators, processors, timing, JSONL logging, lineage, atomic
-fail-fast runs. (`.with_validator()` / `.with_processor()` / `.run()` /
-`.checkpoint(layer)` arrive then.)
+A Writer owns **both** its target location (a layer db file + table) **and** its
+load strategy (ADR-0006). Swapping the Writer is how you target a different
+database — the builder never learns about medallion layers or load rules. Two
+concrete writers ship now:
+
+- `SqliteTruncateReloadWriter(db_path, table)` — **full refresh** (truncate +
+  reload). Used for raw/silver, which mirror a current-state source snapshot.
+- `AccumulateByRunWriter(db_path, table, run_id, load_date)` — **accumulate by
+  run** for gold: stamps each row `run_id` / `load_date` and makes a re-driven
+  run idempotent via *delete-by-run then insert* (a stub for the gold layer).
+
+### `Store` — the dumb medallion store + connection factory
+`Store(base_dir, busy_timeout_ms=5000)` maps each layer to
+`<base_dir>/<layer>.db` and persists/returns handles via
+`store.write(layer, table, handle)` / `store.read(layer, table)`. It holds **no
+business logic** (ADR-0002). The module-level `connect(db_path, busy_timeout_ms)`
+is the single place connections are configured (ADR-0001) — both `Store` and the
+`Writer`s open connections through it. It sets a `busy_timeout` so read-only
+clients ride out the single writer's in-place commits instead of erroring, and
+stays on the default rollback journal because **WAL is unavailable over a
+network share**.
+
+The **load decision has moved off the `Store` and onto the `Writer`** (ADR-0003
+amendment): the store no longer chooses truncate-vs-accumulate. The per-subject
+`Store` that mints layer-appropriate Writers/Readers is the next slice (see Build
+status above).
+
+### `Pipeline` — the deferred fluent builder
+A `Pipeline` describes a feed's path and runs **nothing** until `.run()`
+(ADR-0003):
+
+```python
+Pipeline("cases", CsvReader(path)).write_to(writer).run()
+```
+
+`.write_to(writer)` composes in the destination Writer (deferred). `.run()` is
+the terminus: it reads the source, hands the bulk-tier `DataHandle` to the
+Writer, and returns it. The builder makes **no** write decisions — no layer
+logic, no refresh-vs-accumulate branching; that all lives on the Writer. Because
+the terminus owns execution, it is the natural home for the cross-cutting
+concerns added in later slices — validators, processors, timing, JSONL logging,
+lineage, atomic fail-fast runs. (`.with_validator()` / `.with_processor()` /
+`.checkpoint(writer)` arrive then.)
 
 ## Worked example
 
 ```python
 from framework.builder import Pipeline
 from framework.readers import CsvReader
-from framework.store import Store
+from framework.writers import SqliteTruncateReloadWriter
 
-store = Store("/path/to/share")
-landed = Pipeline("cases", CsvReader("feed.csv"), store).to("raw")
+writer = SqliteTruncateReloadWriter("/path/to/share/raw.db", "cases")
+landed = Pipeline("cases", CsvReader("feed.csv")).write_to(writer).run()
 print(len(landed), landed.columns)
 ```
 

@@ -20,6 +20,21 @@ from framework.data_handle import DataHandle
 LAYERS = ("raw", "silver", "gold")
 
 
+def connect(
+    db_path: str | os.PathLike[str], busy_timeout_ms: int = 5000
+) -> sqlite3.Connection:
+    """Open a connection with the share-tolerant settings (ADR-0001).
+
+    The single place SQLite connections are configured: a ``busy_timeout`` so
+    read-only clients ride out the single writer's in-place commits instead of
+    erroring, on the default rollback journal because WAL is unavailable over a
+    network share. Readers and Writers both go through here.
+    """
+    con = sqlite3.connect(db_path)
+    con.execute(f"PRAGMA busy_timeout = {busy_timeout_ms}")
+    return con
+
+
 class Store:
     """Read and write DataHandles to medallion layer databases."""
 
@@ -35,12 +50,7 @@ class Store:
         return self._base_dir / f"{layer}.db"
 
     def _connect(self, layer: str) -> sqlite3.Connection:
-        con = sqlite3.connect(self._db_path(layer))
-        # Single writer in place on a share; readers wait out commits instead
-        # of erroring. WAL is unavailable over a share, so we stay on the
-        # default rollback journal (ADR-0001).
-        con.execute(f"PRAGMA busy_timeout = {self._busy_timeout_ms}")
-        return con
+        return connect(self._db_path(layer), self._busy_timeout_ms)
 
     def write(self, layer: str, table: str, handle: DataHandle) -> None:
         con = self._connect(layer)

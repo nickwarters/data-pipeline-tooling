@@ -1,34 +1,42 @@
-"""The deferred fluent builder — describes a pipeline; executes on terminus.
+"""The deferred fluent builder — describes a pipeline; executes on ``.run()``.
 
-A ``Pipeline`` composes a feed's reader (and, in later slices, processors and
-validators) without running anything. Execution happens only at a terminus
-(``.to(layer)`` here; ``.run()`` / ``.checkpoint(layer)`` later), which owns
-the cross-cutting concerns — timing, logging, lineage, error handling — for
-every stage. One builder spans a single medallion layer transition. See
-ADR-0003.
+A ``Pipeline`` composes a feed's reader and its destination Writer (and, in
+later slices, processors and validators) without running anything. Execution
+happens only at the ``.run()`` terminus, which owns the cross-cutting concerns
+— timing, logging, lineage, error handling — for every stage. The builder makes
+**no** write decisions: it hands the read ``DataHandle`` to the composed Writer,
+which owns its own location and load strategy (ADR-0003, ADR-0006).
 """
 
 from __future__ import annotations
 
 from framework.data_handle import DataHandle
 from framework.readers import Reader
-from framework.store import Store
+from framework.writers import Writer
 
 
 class Pipeline:
-    """A deferred single-layer-transition pipeline for one feed."""
+    """A deferred pipeline for one feed: read, then hand off to a Writer."""
 
-    def __init__(self, name: str, reader: Reader, store: Store) -> None:
-        # `name` is the feed's table name within a layer. Nothing reads yet.
+    def __init__(self, name: str, reader: Reader) -> None:
+        # `name` labels the feed/pipeline (for lineage in later slices); it is
+        # not a write decision — the Writer owns the target table. Nothing runs
+        # at construction.
         self._name = name
         self._reader = reader
-        self._store = store
+        self._writer: Writer | None = None
 
-    def to(self, layer: str) -> DataHandle:
-        """Execute the pipeline, landing the feed in ``layer``.
+    def write_to(self, writer: Writer) -> "Pipeline":
+        """Compose in the destination Writer. Deferred — nothing runs yet."""
+        self._writer = writer
+        return self
 
-        Returns the landed DataHandle (the bulk-tier result, per ADR-0003).
+    def run(self) -> DataHandle:
+        """Execute: read the source, hand the handle to the Writer, return it.
+
+        Returns the bulk-tier ``DataHandle`` (ADR-0003).
         """
         handle = self._reader.read()
-        self._store.write(layer, self._name, handle)
+        if self._writer is not None:
+            self._writer.write(handle)
         return handle

@@ -17,7 +17,7 @@ from pathlib import Path
 from framework.builder import Pipeline
 from framework.data_handle import DataHandle
 from framework.readers import CsvReader
-from framework.store import Store
+from framework.writers import SqliteTruncateReloadWriter
 
 FEED_NAME = "cases"
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "cases.csv"
@@ -28,8 +28,8 @@ def run(
     csv_path: str | os.PathLike[str] = SAMPLE_CSV,
 ) -> DataHandle:
     """Land the CSV feed into ``raw.db`` under ``base_dir``; return the rows."""
-    store = Store(base_dir)
-    return Pipeline(FEED_NAME, CsvReader(csv_path), store).to("raw")
+    writer = SqliteTruncateReloadWriter(Path(base_dir) / "raw.db", FEED_NAME)
+    return Pipeline(FEED_NAME, CsvReader(csv_path)).write_to(writer).run()
 
 
 def main(argv: list[str]) -> int:
