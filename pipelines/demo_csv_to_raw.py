@@ -11,6 +11,7 @@ directory. Run it as a module from the repo root (so the import-only
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -18,28 +19,44 @@ from pathlib import Path
 from framework.builder import Pipeline
 from framework.data_handle import DataHandle
 from framework.readers import CsvReader
+from framework.run_log import RunLog
 from framework.store import Store
 
 FEED_NAME = "cases"
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "cases.csv"
+RUN_LOG_NAME = "runs.log"
 
 
 def run(
     base_dir: str | os.PathLike[str],
     csv_path: str | os.PathLike[str] = SAMPLE_CSV,
 ) -> DataHandle:
-    """Land the CSV feed into ``raw.db`` under ``base_dir``; return the rows."""
+    """Land the CSV feed into ``raw.db`` under ``base_dir``; return the rows.
+
+    Composes a :class:`RunLog` so the run emits structured JSONL records to
+    ``<base_dir>/runs.log`` (and human-readable lines to the console) — the
+    observability seam described in ADR-0007.
+    """
     writer = Store(base_dir).writer("raw", FEED_NAME)
-    return Pipeline(FEED_NAME, CsvReader(csv_path)).write_to(writer).run()
+    run_log = RunLog(Path(base_dir) / RUN_LOG_NAME)
+    return (
+        Pipeline(FEED_NAME, CsvReader(csv_path), run_log=run_log)
+        .write_to(writer)
+        .run()
+    )
 
 
 def main(argv: list[str]) -> int:
+    # Configure logging at the entry point (never in library code) so the
+    # RunLog's human-readable per-step lines surface on the console.
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     base_dir = Path(argv[1]) if len(argv) > 1 else Path(__file__).parent.parent / "data"
 
     handle = run(base_dir)
     print(
         f"Landed {len(handle)} rows into "
-        f"{Path(base_dir) / 'raw.db'} (table '{FEED_NAME}')"
+        f"{Path(base_dir) / 'raw.db'} (table '{FEED_NAME}'); "
+        f"run log at {Path(base_dir) / RUN_LOG_NAME}"
     )
     return 0
 
