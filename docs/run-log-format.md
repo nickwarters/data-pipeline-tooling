@@ -1,0 +1,109 @@
+# The JSONL run log & the `RunLog` primitive
+
+Every `.run()` can emit **structured run observability**: one JSON object per
+line to a `.log` file, plus a human-readable line per record to the console for
+development. The file is deliberately infrastructure-free now, yet it is the
+**seam the deferred run-registry will ingest** (ADR-0005) without parsing free
+text. See ADR-0007 for the *why* (fail-fast, atomic, no silent drops).
+
+## Wiring it in
+
+`RunLog` is composed onto the builder at construction; the builder owns no path
+or format knowledge — it just drives the sink:
+
+```python
+from framework.builder import Pipeline
+from framework.readers import CsvReader
+from framework.run_log import RunLog
+from framework.store import Store
+
+run_log = RunLog("/path/to/share/cases/runs.log")
+pipeline = Pipeline("cases", CsvReader("feed.csv"), run_log=run_log)
+landed = (
+    pipeline
+    .write_to(Store("/path/to/share/cases").writer("raw", "cases"))
+    .run()
+)
+print(pipeline.run_id)  # the run's correlating id, shared by every record
+```
+
+If no `RunLog` is composed, `.run()` behaves identically but emits nothing (a
+null sink keeps the terminus branch-free). The human-readable console lines are
+logged at `INFO` on the `framework.run_log` logger, so an entry-point that calls
+`logging.basicConfig(level=logging.INFO)` (as `pipelines/demo_csv_to_raw.py`
+does) will surface them. The `.log` file is always written when a `RunLog` is
+present, regardless of logging configuration.
+
+## `run_id` — the correlation key
+
+`.run()` mints a fresh `run_id` (a uuid4 hex) on every call and exposes it as
+`pipeline.run_id`. **Every record of a single run carries the same `run_id`**,
+so the registry can group a run's steps and its summary. Re-running the same
+builder is a new run with a new id. (For this slice the run-log `run_id` is
+independent of the gold `AccumulateByRunWriter`'s own `run_id`; unifying them is
+a later seam.)
+
+## Record schema
+
+Every line is a JSON object with a **stable key set** — fields that don't apply
+to a step are `null` (or `[]`), so the registry sees one shape:
+
+| Field       | Type                | Meaning |
+|-------------|---------------------|---------|
+| `run_id`    | string              | The run's correlating id (same on every line of the run). |
+| `pipeline`  | string              | The feed/pipeline name (the builder's `name`). |
+| `step`      | string              | `read`, `pre-validate`, `post-validate`, `write`, or `run` (the summary). |
+| `status`    | `"ok"` \| `"error"` | Step/run outcome. |
+| `rows_in`   | int \| null         | Rows the step consumed (`null` where N/A, e.g. `read`). |
+| `rows_out`  | int \| null         | Rows the step produced. |
+| `duration`  | float \| null       | Wall-clock seconds for the step/run. |
+| `errors`    | string[]            | Error messages when `status` is `error`; `[]` otherwise. |
+| `warn_hits` | string[]            | Warn-severity validator messages tolerated at this step; `[]` otherwise. |
+
+### Steps per run
+
+One record per step, in execution order, then a final `run` summary:
+
+1. `read` — `rows_out` is the rows the Reader produced.
+2. `pre-validate` — input validators; `warn_hits` lists any tolerated failures.
+3. `post-validate` — output validators (the home of ADR-0008 schema checks).
+4. `write` — present only when a Writer is composed; `rows_in` is the rows handed to it.
+5. `run` — the **summary**: overall `status`, total `duration`, and the
+   run's aggregated `warn_hits`.
+
+### Happy path (a successful run of 4 rows)
+
+```json
+{"run_id": "f8263986…", "pipeline": "cases", "step": "read",          "status": "ok", "rows_in": null, "rows_out": 4, "duration": 0.0007, "errors": [], "warn_hits": []}
+{"run_id": "f8263986…", "pipeline": "cases", "step": "pre-validate",  "status": "ok", "rows_in": 4,    "rows_out": 4, "duration": 0.0000, "errors": [], "warn_hits": []}
+{"run_id": "f8263986…", "pipeline": "cases", "step": "post-validate", "status": "ok", "rows_in": 4,    "rows_out": 4, "duration": 0.0000, "errors": [], "warn_hits": []}
+{"run_id": "f8263986…", "pipeline": "cases", "step": "write",         "status": "ok", "rows_in": 4,    "rows_out": 4, "duration": 0.0016, "errors": [], "warn_hits": []}
+{"run_id": "f8263986…", "pipeline": "cases", "step": "run",           "status": "ok", "rows_in": 4,    "rows_out": 4, "duration": 0.0030, "errors": [], "warn_hits": []}
+```
+
+### Fail-fast abort (error-severity validator)
+
+The failing step is recorded `error` with its message, the `run` summary closes
+the run as `error`, **no `write` record is emitted** (nothing partial lands —
+ADR-0007), and `.run()` re-raises `ValidationError`:
+
+```json
+{"run_id": "…", "pipeline": "cases", "step": "read",         "status": "ok",    "rows_out": 1, "errors": [],                                                     "warn_hits": []}
+{"run_id": "…", "pipeline": "cases", "step": "pre-validate", "status": "error", "rows_in": 1,  "errors": ["cases pre-validate failed: missing required column(s): case_ref"], "warn_hits": []}
+{"run_id": "…", "pipeline": "cases", "step": "run",          "status": "error", "errors": ["cases pre-validate failed: missing required column(s): case_ref"], "warn_hits": []}
+```
+
+### Warn escape hatch
+
+A warn-severity failure is recorded as a `warn_hit` on its step (status stays
+`ok`), the run continues to the write, and the `run` summary surfaces the
+aggregated `warn_hits` — so a tolerated condition is still visible (ADR-0007).
+
+## Reading the log back
+
+One JSON object per line means trivial ingestion — no custom parser:
+
+```python
+import json
+records = [json.loads(line) for line in open("runs.log")]
+```
