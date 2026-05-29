@@ -4,9 +4,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-This repository is **empty** at the time of writing — no source code, build files, or commits exist yet. It is being initialized to hold a **data pipeline framework**.
+The **walking skeleton** is in place (issue #2): the CSV → raw path through the
+core primitives. Architecture is governed by the ADRs in `docs/adr/` and the
+domain language in `CONTEXT.md`; the core primitives are documented in
+[`docs/core-primitives.md`](docs/core-primitives.md).
 
-When the codebase takes shape, update this file with the build/lint/test commands and the architecture overview. Until then, the notes below are the only fixed constraints.
+- **Language/runtime:** Python 3.12. The `framework/` package is **import-only**
+  (on `sys.path`, never `pip install`ed); `pipelines/` holds runnable scripts.
+- **Layout:** `framework/` (engine + domain), `pipelines/` (scripts),
+  `tests/` (pytest), `docs/` (architecture, ADRs).
+- **Core primitives (locked by #2):** `DataHandle` (opaque tabular carrier,
+  pandas behind the seam), `Reader` (`read() -> DataHandle`), `Store` (dumb
+  SQLite medallion store + connection factory), `Pipeline` (deferred fluent
+  builder; runs only at `.to(layer)`).
+
+### Commands
+
+```sh
+python3 -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt   # pandas + pytest
+.venv/bin/python -m pytest                       # run the suite
+.venv/bin/python -m pipelines.demo_csv_to_raw /tmp/demo   # run the demo (module form, from repo root)
+```
+
+Run pipelines as **modules from the repo root** (`python -m pipelines.<name>`)
+so the import-only `framework` package resolves on `sys.path`.
 
 ## Core constraint: cross-platform (Windows-first, macOS-compatible)
 
