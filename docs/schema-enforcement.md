@@ -14,7 +14,7 @@ Enforcement is **graduated** across the medallion (ADR-0008):
 |-------|------------------|
 | **raw** | **Schema-light.** A faithful mirror of the source snapshot as landed — booleans still as `TRUE`/`FALSE` text, dates still unparsed, warts and all. At most a loud column-presence check so a wholesale source change fails immediately. |
 | **silver** | **Validated — the schema boundary.** A Case Type's declared columns + dtypes are enforced here, as a post-validator, before the data lands. This is where "is this data valid and processable?" gets its authoritative answer. |
-| **gold** | Validated on the same footing as silver (the accumulating SelectionPool / Review Outcomes). |
+| **gold** | **Validated on the same footing as silver** (the accumulating SelectionPool / Review Outcomes) — via an optional `schema=` post-validator on `silver_to_gold` (see below). |
 
 **Why silver, not raw?** Raw must stay faithful to the source so the landing
 zone is diagnosable and re-runnable; hardening the shape is a silver-stage
@@ -159,6 +159,36 @@ at the **process** step or a schema breach at the **post-validate** step raises
 *before* the Writer is called — so **no `silver.db` is written** and nothing
 partial lands. The builder itself makes no write or load decisions: the `Store`
 mints the Writer, which owns its location and load strategy (ADR-0003, ADR-0006).
+
+## `silver_to_gold` — the same schema, at the gold boundary
+
+Gold is validated *on the same footing as silver* (ADR-0008): `silver_to_gold`
+takes the **same** optional `schema=` and attaches the **same** `SchemaValidator`
+as a post-validator before the gold write.
+
+```python
+from framework.gold import silver_to_gold
+
+silver_to_gold(
+    store, "selection_pool",
+    run_id="2026-05-30", load_date="2026-05-30",
+    schema=CaseA,
+).run()   # reads silver, validates, accumulates into gold.db
+```
+
+Two deliberate differences from `raw_to_silver`:
+
+- **No `SchemaCoercion`.** Gold reads already-coerced silver, so the round-trip
+  repair step is unneeded — only the validator attaches.
+- **Belt-and-braces, not the primary gate.** Silver is already schema-validated
+  upstream, so gold enforcement guards *selection-built* rows (rows assembled in
+  the Selection Pipeline, not mirrored from ingest) rather than re-checking ingest
+  mirrors. It is therefore **optional**: omit `schema=` and `silver_to_gold` is a
+  pure accumulate pass-through.
+
+A breach raises at **post-validate**, before the writer's delete-by-run/insert
+transaction (ADR-0007) — so a failed run accumulates nothing and leaves prior
+runs' gold rows intact. See [`gold-accumulation.md`](gold-accumulation.md).
 
 ## Not yet (follow-on tickets)
 
