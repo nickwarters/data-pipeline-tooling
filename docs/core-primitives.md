@@ -11,8 +11,10 @@ wired structured JSONL observability into the terminus; slice #7 added the
 slice #23 added the **`Processor`** seam (`.with_processor`) and the
 **`SchemaCoercion`** processor that repairs raw's round-trip-lossy types ahead of
 that validator; slice #8 added the **`silver_to_gold`** builder that accumulates
-validated silver into the gold layer, stamped by run. Every later slice builds on
-these shapes. For the
+validated silver into the gold layer, stamped by run; slice #9 added the
+**Selection processors** (`Filter`/`Score`/`Sort`/`Rename`) and **`JoinWith`**,
+the cross-feed join holding a lazy reference to another builder. Every later slice
+builds on these shapes. For the
 *why* behind each, see the ADRs referenced inline; for domain language (Case,
 CasePool, Feed, Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
 
@@ -57,9 +59,14 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > carries validated silver into gold via the `AccumulateByRunWriter`, stamping each
 > row `run_id` / `load_date` and making a re-driven run idempotent via
 > delete-by-run then insert (ADR-0006;
-> [gold-accumulation doc](gold-accumulation.md)). Still ahead: the value-level
-> schema rules (format / uniqueness / encoding, #24), schema enforcement at the
-> gold boundary (#27), and the run-registry that ingests the JSONL (ADR-0005).
+> [gold-accumulation doc](gold-accumulation.md)). **The Selection processors**
+> have landed: `Filter`/`Score` (plain-Python row callables — ADR-0002),
+> `Sort`/`Rename`, and **`JoinWith`** — the cross-feed join that holds a lazy
+> reference to another builder and resolves it to a DAG at `.run()`, joined in
+> Python (ADR-0003, #9; [processors doc](processors.md)). Still ahead: the
+> value-level schema rules (format / uniqueness / encoding, #24), the domain
+> capstone (CaseType/Variation + CasePool → SelectionPool, #11), and the
+> run-registry that ingests the JSONL (ADR-0005).
 
 ## The primitives
 
@@ -229,17 +236,36 @@ attached with `.with_processor(...)` and runs as the builder's `process` step. A
 processor has **no severity**: a transform either applies or it can't, so a
 failure is always fail-fast (ADR-0007) — it raises and the run aborts.
 
-One concrete processor ships now: **`SchemaCoercion(schema)`** — the write-side
-companion of `SchemaValidator`, derived from the same Case Type dataclass. Where
-the validator *checks* dtypes, the coercer *repairs* the representation raw loses
-to storage, casting only the round-trip-lossy declared types — `date`/`datetime`
-(landed as text) and `bool` (`TRUE`/`FALSE` text or `1`/`0`). `str`/`int`/`float`
-survive a SQLite round-trip, so they pass through untouched and stay the
-validator's gate; undeclared columns are left alone. A value it cannot cast (an
-unparseable date, an unknown boolean encoding) raises a **`CoercionError`** with
-one located message naming the column. `raw_to_silver` composes it ahead of the
+Two families of concrete processor ship now.
+
+**Schema coercion (#23).** `SchemaCoercion(schema)` — the write-side companion of
+`SchemaValidator`, derived from the same Case Type dataclass. Where the validator
+*checks* dtypes, the coercer *repairs* the representation raw loses to storage,
+casting only the round-trip-lossy declared types — `date`/`datetime` (landed as
+text) and `bool` (`TRUE`/`FALSE` text or `1`/`0`). `str`/`int`/`float` survive a
+SQLite round-trip, so they pass through untouched and stay the validator's gate;
+undeclared columns are left alone. A value it cannot cast (an unparseable date,
+an unknown boolean encoding) raises a **`CoercionError`** with one located
+message naming the column. `raw_to_silver` composes it ahead of the
 `SchemaValidator`, so the per-run order is **read → pre-validate → process
 (coerce) → post-validate (schema) → write** (ADR-0008, #23).
+
+**Selection transforms (#9)** — the `filter/score/sort/join` of `CONTEXT.md`:
+
+- `Filter(predicate)` / `Score(column, scorer)` — carry the business rule as a
+  **plain-Python callable over a row mapping**, never SQL or a column DSL
+  (ADR-0002); applied row-wise behind the seam.
+- `Sort(by, ascending=True)` — order rows (`by` a column or sequence; index
+  reset so the output reads positionally clean) for a meaningful "top N".
+- `Rename({old: new})` — align column vocabulary (e.g. agree a key name before a
+  join); unnamed columns pass through.
+- `JoinWith(other, on=..., how="inner")` — the cross-feed join. `other` is a
+  **lazy reference to another builder** (any `Runnable` — typically a read-only
+  `Pipeline` over another subject's silver/gold), **not executed** until the
+  join's `process` step runs `other.run()` and merges in Python. That is how a
+  pipeline resolves to a **DAG without a separate DAG engine** (ADR-0003).
+
+Full walkthrough + worked example: [processors.md](processors.md).
 
 ### `RunLog` — structured JSONL run observability
 A `RunLog` is the observability seam (ADR-0007). Composed onto the builder
