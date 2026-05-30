@@ -103,6 +103,21 @@ from framework.processors import Rename
 Rename({"ref": "case_ref", "amt": "amount"})
 ```
 
+### `Stamp` — write a constant column
+
+Writes one constant value onto every row. Where `Score` derives a column from
+each row, `Stamp` records a single run-level constant — chiefly the applicable
+`question_bank_id` a Variation resolves (`CONTEXT.md`) — so the stamp reads as
+the constant it is, not a degenerate scorer. The column is added (or overwritten)
+even on an empty feed, so the SelectionPool's shape is stable whether or not any
+Case was selected:
+
+```python
+from framework.processors import Stamp
+
+Stamp("question_bank_id", variation.question_bank_id)
+```
+
 ## `JoinWith` — the lazy cross-feed join
 
 A Case Type's Selection joins against other feeds — most commonly **Reference
@@ -168,10 +183,15 @@ on `adviser` — all in Python, the store never asked to join. The result is the
 bulk-tier `Dataset` the Selection Pipeline would accumulate into gold as the
 SelectionPool (via [`silver_to_gold`](gold-accumulation.md)).
 
+The domain capstone (#11, landed) composes these processors into a Case Type's
+full Selection flow — `CaseType`/`Variation` + `CasePool` → `SelectionPool`,
+stamping the Variation's `question_bank_id` onto the chosen Cases. See
+[`selection.md`](selection.md).
+
 ## Not yet (follow-on tickets)
 
-- **The domain capstone** (#11): `CaseType`/`Variation` + `CasePool` →
-  `SelectionPool`, which composes these processors into a Case Type's declared
-  selection criteria and surfaces typed `Case` objects at the domain edge.
+- **Typed `Case` objects** at the domain edge: the CasePool returns the bulk-tier
+  `Dataset` today; materialising fully typed Cases on demand is reserved for a
+  later slice (ADR-0002).
 - **Lineage checkpoints** (`.checkpoint(writer)`): persisting an intermediate
   layer mid-pipeline, the other half of the deferred-builder terminus story.

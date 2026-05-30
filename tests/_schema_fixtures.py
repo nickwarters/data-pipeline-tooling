@@ -29,6 +29,19 @@ class LandedCase:
 
 
 @dataclass
+class ActivityCase:
+    # The Case Type for the domain capstone (#11): an activity-dated Case with an
+    # adviser and an amount, so availability (a working-day window on
+    # activity_date) and selection (filter/score on amount) both have something
+    # to bite on. activity_date round-trips through SQLite as text, so the
+    # CasePool re-coerces it on read — exercising the typed-on-demand edge.
+    case_ref: str
+    adviser: str
+    activity_date: date
+    amount: int
+
+
+@dataclass
 class CoercedCase:
     # A schema whose declared types do NOT survive a SQLite round-trip: dates
     # land as text and booleans as 1/0 or TRUE/FALSE. Exercises the raw->silver

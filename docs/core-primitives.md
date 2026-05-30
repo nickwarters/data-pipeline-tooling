@@ -259,6 +259,8 @@ message naming the column. `raw_to_silver` composes it ahead of the
   reset so the output reads positionally clean) for a meaningful "top N".
 - `Rename({old: new})` — align column vocabulary (e.g. agree a key name before a
   join); unnamed columns pass through.
+- `Stamp(column, value)` — write one constant column (the run-level
+  `question_bank_id` a Variation resolves), even onto an empty feed (#11).
 - `JoinWith(other, on=..., how="inner")` — the cross-feed join. `other` is a
   **lazy reference to another builder** (any `Runnable` — typically a read-only
   `Pipeline` over another subject's silver/gold), **not executed** until the
@@ -340,6 +342,38 @@ and `last_n_working_days(n, from_date)` (the `n` most recent working days on or
 before `from_date`, most-recent first, skipping weekends + holidays). Full
 config and boundary semantics in
 [`working-day-calendar.md`](working-day-calendar.md).
+
+## The domain layer (#11)
+
+Above the engine primitives sits the thin **domain layer** the framework exists
+to expose — the declarative Case Type objects and the `CasePool` that reads the
+ingested silver, surfaced through intention-revealing retrievals instead of raw
+`pandas.read_*` calls. The full flow lives in [`selection.md`](selection.md); in
+brief:
+
+### `CaseType` / `Variation` — the declarative domain objects
+A `CaseType` (`framework.case_type`) bundles a Case Type's `schema` with its
+`variations`, imported directly — no global registry (ADR-0005).
+`CaseType.variation(id)` resolves a `Variation` (its `question_bank_id` + later
+overrides) and raises a located `KeyError` on an unknown id. Declarative data,
+not code (one Case Type has many Variations — `CONTEXT.md`).
+
+### `CasePool` — the domain population, behind named reads
+`CasePool(case_type, store, calendar)` (`framework.case_pool`) is the
+per-Case-Type population of Cases read from the **ingested silver**. Its headline
+retrieval is the *concept* of fetching **available cases** — e.g.
+`fetch_available_cases(as_of, activity_column=…, within_working_days=…)` narrows
+to a `WorkingDayCalendar` window in Python (ADR-0002), repairing silver's
+text-stored dates first, and returns a bulk-tier `Dataset`. Fully typed `Case`
+objects are the typed-on-demand edge reserved for a later slice (ADR-0002).
+
+### `DatasetReader` — bridge an in-memory Dataset into the builder
+`DatasetReader(dataset)` (`framework.readers`) adapts an already-in-memory
+`Dataset` to the `Reader` shape, so the **Selection** pipeline feeds the
+CasePool's available cases straight into the `Pipeline` builder (read → process →
+write) without a SQL round-trip. Selection is its own pipeline that reuses the
+builder, narrowing the CasePool with the Selection processors and `Stamp` into
+the gold `SelectionPool`.
 
 ## Worked example
 

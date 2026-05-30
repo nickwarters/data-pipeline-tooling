@@ -12,7 +12,7 @@ import pandas as pd
 
 from framework.builder import Pipeline
 from framework.dataset import Dataset
-from framework.processors import Filter, JoinWith, Rename, Score, Sort
+from framework.processors import Filter, JoinWith, Rename, Score, Sort, Stamp
 from framework.store import Store
 
 
@@ -69,6 +69,32 @@ def test_score_writes_a_column_computed_per_row():
 
     assert list(scored["priority"]) == [200, 100]
     assert list(scored["case_ref"]) == ["c1", "c2"]
+
+
+def test_stamp_writes_a_constant_column_onto_every_row():
+    # Stamp puts one constant value on every row — how Selection records the
+    # applicable question_bank_id (CONTEXT.md) onto the selected Cases. Unlike
+    # Score it carries no per-row rule, so it reads as the constant it is.
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"case_ref": ["c1", "c2", "c3"]})
+    )
+
+    stamped = Stamp("question_bank_id", "qb-100").process(dataset).to_pandas()
+
+    assert list(stamped["question_bank_id"]) == ["qb-100", "qb-100", "qb-100"]
+    assert list(stamped["case_ref"]) == ["c1", "c2", "c3"]
+
+
+def test_stamp_writes_the_column_even_onto_an_empty_feed():
+    # An empty SelectionPool (an upstream filter matched nothing) must still
+    # carry the stamped column, so the gold schema is the same shape whether or
+    # not any Case was selected — a regression guard for assign-on-empty.
+    empty = Dataset.from_pandas(pd.DataFrame({"case_ref": []}))
+
+    stamped = Stamp("question_bank_id", "qb-100").process(empty)
+
+    assert "question_bank_id" in stamped.columns
+    assert len(stamped) == 0
 
 
 def test_sort_orders_rows_by_a_column():
