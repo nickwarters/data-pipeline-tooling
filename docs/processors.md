@@ -13,11 +13,11 @@ builder, joins as lazy references); for the surrounding primitives and the
 ## What a processor is
 
 A `Processor` is an engine-confined transform run mid-pipeline — it takes the
-bulk-tier `DataHandle` and returns a transformed one:
+bulk-tier `Dataset` and returns a transformed one:
 
 ```python
 class Processor(Protocol):
-    def process(self, handle: DataHandle) -> DataHandle: ...
+    def process(self, dataset: Dataset) -> Dataset: ...
 ```
 
 It is attached with `.with_processor(...)` and runs as the builder's `process`
@@ -40,7 +40,7 @@ it, joins in Reference Data, and emits the **SelectionPool**. The
 a row mapping** (`{column: value}`), not a SQL string or a column-operator DSL.
 This is ADR-0002 made concrete: all business logic happens in Python, and the
 store stays dumb. The rule is ordinary Python and never names the engine — the
-processor applies it row-wise behind the `DataHandle` seam:
+processor applies it row-wise behind the `Dataset` seam:
 
 ```python
 RowPredicate = Callable[[Mapping[str, Any]], bool]   # Filter
@@ -80,7 +80,7 @@ Score("priority", lambda row: row["amount"] * 2)
 ### `Sort` — order the rows
 
 Orders rows so a downstream "top N" is meaningful. `by` is a column or a sequence
-of them; `ascending` a single flag or a matching sequence. The sorted handle's
+of them; `ascending` a single flag or a matching sequence. The sorted dataset's
 index is reset (`0..n-1`) so it reads positionally clean and no stale source
 order leaks through to storage:
 
@@ -117,9 +117,9 @@ JoinWith(reference_builder, on="adviser", how="inner")
 ```
 
 - `other` — a **lazy reference to another builder**: any `Runnable`
-  (`run() -> DataHandle`), typically a read-only `Pipeline` over another
+  (`run() -> Dataset`), typically a read-only `Pipeline` over another
   subject's silver/gold (a `Store.reader(...)` with **no** writer, so `.run()`
-  just returns that feed's handle).
+  just returns that feed's dataset).
 - `on` — the shared key column(s).
 - `how` — the join kind: `inner` (default — unmatched rows dropped),
   `left`/`right`/`outer`.
@@ -135,7 +135,7 @@ DAG engine to build.
 
 To keep `JoinWith` from importing the builder (which imports this module — a
 cycle), the reference is held through a structural `Runnable` Protocol
-(`run() -> DataHandle`) rather than the concrete `Pipeline` class. Naming the
+(`run() -> Dataset`) rather than the concrete `Pipeline` class. Naming the
 *shape* is what lets the join carry any unexecuted builder.
 
 ## Worked example — filter one feed, join another's silver
@@ -165,7 +165,7 @@ selection_pool = (
 At `.run()` the outer pipeline reads `cases` silver, filters it, then the
 `JoinWith` step runs the `reference` builder, reads `advisers` silver, and merges
 on `adviser` — all in Python, the store never asked to join. The result is the
-bulk-tier `DataHandle` the Selection Pipeline would accumulate into gold as the
+bulk-tier `Dataset` the Selection Pipeline would accumulate into gold as the
 SelectionPool (via [`silver_to_gold`](gold-accumulation.md)).
 
 ## Not yet (follow-on tickets)

@@ -4,7 +4,7 @@ Availability criteria phrase eligibility in *working days* ("these Advisers
 within the last 20 working days" — see ``CONTEXT.md``). This utility answers
 those questions deterministically from a seeded weekend rule plus a set of
 holidays. It is **pure logic**: no ``Store``, no in-memory engine, no
-``DataHandle`` — it depends only on the stdlib ``datetime``, so it is the same on
+``Dataset`` — it depends only on the stdlib ``datetime``, so it is the same on
 Windows and macOS. Reference Data lives in per-subject medallions; the
 working-day calendar is deliberately *not* a feed (ADR-0001 amendment).
 """

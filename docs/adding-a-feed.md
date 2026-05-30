@@ -12,11 +12,11 @@ A `Reader` encapsulates *how one source type is read* behind a single method
 
 ```python
 class Reader(Protocol):
-    def read(self) -> DataHandle: ...
+    def read(self) -> Dataset: ...
 ```
 
 The concrete in-memory engine (pandas today) lives **inside** the Reader and
-behind the `DataHandle` seam — it never appears in this signature, a pipeline
+behind the `Dataset` seam — it never appears in this signature, a pipeline
 script, or the domain layer. Readers are tested against **local fixture files**:
 no network, no SAS, no SharePoint. Paths are taken as `str | os.PathLike` and
 held with `pathlib.Path`, so they behave identically on Windows and macOS.

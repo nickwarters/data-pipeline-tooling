@@ -27,17 +27,17 @@ def fixture_db(tmp_path) -> Path:
     return db
 
 
-def test_reads_the_named_table_into_a_datahandle(fixture_db):
-    handle = SqliteReader(fixture_db, "advisers").read()
+def test_reads_the_named_table_into_a_dataset(fixture_db):
+    dataset = SqliteReader(fixture_db, "advisers").read()
 
-    assert handle.columns == ["adviser_id", "name"]
-    assert len(handle) == 3
+    assert dataset.columns == ["adviser_id", "name"]
+    assert len(dataset) == 3
 
 
 def test_reads_a_different_table_from_the_same_db(fixture_db):
     # The source location is (db file + table): pointing at another table reads
     # that one, no other config change.
-    handle = SqliteReader(fixture_db, "products").read()
+    dataset = SqliteReader(fixture_db, "products").read()
 
-    assert handle.columns == ["code"]
-    assert len(handle) == 1
+    assert dataset.columns == ["code"]
+    assert len(dataset) == 1

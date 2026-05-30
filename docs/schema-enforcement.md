@@ -46,8 +46,8 @@ materialise typed objects — it is a *validation contract first*; typed objects
 ## `SchemaValidator` — the dataclass→validator adapter
 
 `SchemaValidator(CaseA)` derives column + dtype expectations from the dataclass
-and checks a `DataHandle` against them. It is a `Validator`
-(`validate(handle) -> None`, raising `ValidationError`), so it attaches to the
+and checks a `Dataset` against them. It is a `Validator`
+(`validate(dataset) -> None`, raising `ValidationError`), so it attaches to the
 builder like any other — but it is **engine-confined** (see below).
 
 What it checks:
@@ -84,13 +84,13 @@ Two guard rails:
 ### Why engine-confined
 
 The structural validators (`ColumnValidator`, `RowCountValidator`) read only the
-handle's engine-agnostic shape (`columns` / `len`) and never name pandas. A
+dataset's engine-agnostic shape (`columns` / `len`) and never name pandas. A
 schema check inspects column **dtypes**, and the value-level rules it will grow
 into (format/pattern, length, uniqueness, encoding) need the engine's vectorised
 operations over actual values. Re-exposing all of that engine-agnostically would
-re-implement a dataframe API on the `DataHandle` seam. So `SchemaValidator`
+re-implement a dataframe API on the `Dataset` seam. So `SchemaValidator`
 reaches the backing frame via `to_pandas()` exactly as a Reader/Writer/processor
-does — keeping `DataHandle`'s public surface tiny and the pandas-dtype mapping in
+does — keeping `Dataset`'s public surface tiny and the pandas-dtype mapping in
 one place (`framework.schema`). See ADR-0002 and ADR-0008.
 
 ## `SchemaCoercion` — repairing what storage loses
@@ -105,10 +105,10 @@ from the *same* dataclass:
 ```python
 from framework.schema import SchemaCoercion
 
-coerced = SchemaCoercion(CaseA).process(handle)   # returns a transformed handle
+coerced = SchemaCoercion(CaseA).process(dataset)   # returns a transformed dataset
 ```
 
-It is a `Processor` (`process(handle) -> DataHandle`) and, like the validator,
+It is a `Processor` (`process(dataset) -> Dataset`) and, like the validator,
 **engine-confined** — a cast needs the engine's vectorised operations, so it
 reaches the frame via `to_pandas()`/`from_pandas()` (ADR-0002). It casts **only
 the round-trip-lossy declared types**:

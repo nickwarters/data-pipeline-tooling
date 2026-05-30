@@ -13,29 +13,29 @@ import pandas as pd
 import pytest
 
 from framework.builder import Pipeline
-from framework.data_handle import DataHandle
+from framework.dataset import Dataset
 from framework.run_log import RunLog
 from framework.validators import ColumnValidator, ValidationError
 
 
 class RecordingReader:
-    """A Reader that returns a fixed handle (mirrors test_pipeline)."""
+    """A Reader that returns a fixed dataset (mirrors test_pipeline)."""
 
-    def __init__(self, handle: DataHandle) -> None:
-        self._handle = handle
+    def __init__(self, dataset: Dataset) -> None:
+        self._dataset = dataset
 
-    def read(self) -> DataHandle:
-        return self._handle
+    def read(self) -> Dataset:
+        return self._dataset
 
 
 class CapturingWriter:
     """A Writer that captures what it was handed."""
 
     def __init__(self) -> None:
-        self.written: DataHandle | None = None
+        self.written: Dataset | None = None
 
-    def write(self, handle: DataHandle) -> None:
-        self.written = handle
+    def write(self, dataset: Dataset) -> None:
+        self.written = dataset
 
 
 def _read_records(log_path: Path) -> list[dict]:
@@ -47,7 +47,7 @@ def test_run_appends_jsonl_records_sharing_one_run_id(tmp_path):
     # A successful run writes its records as JSONL (one JSON object per line) to
     # the .log file, and every record carries the same correlating run_id.
     log_path = tmp_path / "cases.log"
-    reader = RecordingReader(DataHandle.from_pandas(pd.DataFrame({"id": [1, 2]})))
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1, 2]})))
     pipeline = Pipeline("cases", reader, run_log=RunLog(log_path))
 
     pipeline.write_to(CapturingWriter()).run()
@@ -67,7 +67,7 @@ def test_per_step_records_carry_row_counts_and_a_run_summary(tmp_path):
     # it consumed, and a final `run` summary reports overall status and the total
     # duration. All are status "ok" on the happy path.
     log_path = tmp_path / "cases.log"
-    reader = RecordingReader(DataHandle.from_pandas(pd.DataFrame({"id": [1, 2, 3]})))
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1, 2, 3]})))
     pipeline = Pipeline("cases", reader, run_log=RunLog(log_path))
 
     pipeline.write_to(CapturingWriter()).run()
@@ -92,7 +92,7 @@ def test_failed_validation_records_the_failing_step_and_aborts(tmp_path):
     # `error`, no `write` record is emitted (nothing partial lands), and the
     # ValidationError still propagates to the caller.
     log_path = tmp_path / "cases.log"
-    reader = RecordingReader(DataHandle.from_pandas(pd.DataFrame({"id": [1]})))
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
     pipeline = (
         Pipeline("cases", reader, run_log=RunLog(log_path))
         .with_validator(ColumnValidator(["case_ref"]))
@@ -121,7 +121,7 @@ def test_warn_validator_is_recorded_as_a_warn_hit_and_the_run_continues(tmp_path
     # write, and the run summary surfaces the warn-hit so a tolerated condition
     # is still visible to the registry.
     log_path = tmp_path / "cases.log"
-    reader = RecordingReader(DataHandle.from_pandas(pd.DataFrame({"id": [1]})))
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
     pipeline = (
         Pipeline("cases", reader, run_log=RunLog(log_path))
         .with_validator(ColumnValidator(["case_ref"]), severity="warn")
@@ -147,7 +147,7 @@ def test_console_output_is_human_readable_not_raw_json(tmp_path, caplog):
     # console for development — naming the pipeline, step and status in prose,
     # *not* as a raw JSON object.
     log_path = tmp_path / "cases.log"
-    reader = RecordingReader(DataHandle.from_pandas(pd.DataFrame({"id": [1, 2]})))
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1, 2]})))
     pipeline = Pipeline("cases", reader, run_log=RunLog(log_path))
 
     with caplog.at_level(logging.INFO, logger="framework.run_log"):
@@ -164,7 +164,7 @@ def test_console_output_is_human_readable_not_raw_json(tmp_path, caplog):
 def test_each_run_mints_a_fresh_run_id():
     # `.run()` mints a uuid run_id, exposed as `pipeline.run_id`; re-running the
     # same builder correlates a *new* run, so the id changes each time.
-    reader = RecordingReader(DataHandle.from_pandas(pd.DataFrame({"id": [1]})))
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
     pipeline = Pipeline("cases", reader)
 
     assert pipeline.run_id is None  # nothing has run yet

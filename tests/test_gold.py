@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from framework.connection import connect
-from framework.data_handle import DataHandle
+from framework.dataset import Dataset
 from framework.gold import silver_to_gold
 from framework.store import Store
 from framework.validators import ValidationError
@@ -14,7 +14,7 @@ from tests._schema_fixtures import LandedCase
 def _land_silver(store: Store, table: str, frame: pd.DataFrame) -> None:
     # Land a snapshot into silver exactly as a raw->silver pipeline would, so the
     # gold builder has a validated upstream to read from.
-    store.writer("silver", table).write(DataHandle.from_pandas(frame))
+    store.writer("silver", table).write(Dataset.from_pandas(frame))
 
 
 def test_silver_to_gold_accumulates_stamped_by_run(tmp_path):

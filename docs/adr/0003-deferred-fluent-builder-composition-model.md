@@ -22,16 +22,16 @@ Pipelines are described with a **deferred (lazy) fluent builder**: callers chain
 
 ## Consequences
 
-- `.run()` returns the opaque tabular handle in the bulk tier; the domain edge (CasePool) returns typed `Case` objects (see ADR-0002).
+- `.run()` returns the opaque tabular dataset in the bulk tier; the domain edge (CasePool) returns typed `Case` objects (see ADR-0002).
 - The builder/run layer is the natural home for lineage, run metadata, and uniform error handling.
 - Keeping every component parameter-constructed is a standing discipline — it's what makes the config-later path real.
 
 ## Amendment (2026-05-29): the terminus is a Writer port, not a layer string
 
-`.to(layer)` — a stringly-typed medallion layer name threaded through the generic builder — is replaced by **`.write_to(writer)`**, where `writer` is a **Writer**: the component-role dual of `Reader` (`Reader.read() -> DataHandle` on the way in; `Writer.write(handle)` on the way out). This removes the medallion vocabulary (and the placeholder layer names — see CONTEXT) from the core composition machinery, and is in fact *more* faithful to this ADR's own component model, which already lists Writers as a parameter-constructed role. The string form was shorthand in tension with that model.
+`.to(layer)` — a stringly-typed medallion layer name threaded through the generic builder — is replaced by **`.write_to(writer)`**, where `writer` is a **Writer**: the component-role dual of `Reader` (`Reader.read() -> Dataset` on the way in; `Writer.write(dataset)` on the way out). This removes the medallion vocabulary (and the placeholder layer names — see CONTEXT) from the core composition machinery, and is in fact *more* faithful to this ADR's own component model, which already lists Writers as a parameter-constructed role. The string form was shorthand in tension with that model.
 
-- **The Writer owns its persistence** — both the target location (a subject's layer database + table) *and* the load strategy (truncate+reload vs accumulate-by-run — ADR-0006). The builder/terminus hands the `DataHandle` to the Writer and makes **no** write decisions itself: no layer logic, no refresh-vs-accumulate branching.
+- **The Writer owns its persistence** — both the target location (a subject's layer database + table) *and* the load strategy (truncate+reload vs accumulate-by-run — ADR-0006). The builder/terminus hands the `Dataset` to the Writer and makes **no** write decisions itself: no layer logic, no refresh-vs-accumulate branching.
 - **Swapping the Writer is how you target a different database** — e.g. pointing a subject's pipeline at its own per-subject medallion file (see ADR-0001 amendment). The core never learns about the medallion; the Writer carries that knowledge.
-- **The two-tier carrier holds** (ADR-0002): a bulk Writer takes a `DataHandle`; a domain-typed write-side (typed `Case`s) would be a different Writer implementation of the same port, so opaque frames are never silently handed to a typed destination.
+- **The two-tier carrier holds** (ADR-0002): a bulk Writer takes a `Dataset`; a domain-typed write-side (typed `Case`s) would be a different Writer implementation of the same port, so opaque frames are never silently handed to a typed destination.
 - **Layer-typed termini become writer-typed.** `.to(layer)` → `.write_to(writer)`; a future `.checkpoint(layer)` likewise carries a Writer rather than a layer string.
 - **Pipelines per subject — prefer one, allow per-layer.** A subject (Case Type or Reference Data set) is normally served by a **single** pipeline spanning its layer transitions. Where circumstances warrant — e.g. a reference subject's raw load runs on a different cadence than its silver/gold processing — it **may** be split into separate per-layer pipelines (a raw pipeline, a silver pipeline, a gold pipeline), still scoped to the one subject. This is an authoring choice, not a safety rule: the single-writer-per-file invariant (ADR-0001) is unaffected because per-layer pipelines write distinct layer files.

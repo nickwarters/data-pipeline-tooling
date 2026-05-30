@@ -1,7 +1,7 @@
 # Core primitives & the medallion layers
 
 This is the framework's foundational vocabulary. The walking skeleton (the CSV →
-raw slice, #2) introduced `DataHandle`, `Reader`, `Store`, and the `Pipeline`
+raw slice, #2) introduced `Dataset`, `Reader`, `Store`, and the `Pipeline`
 builder; slice #14 added the **`Writer`** port and reshaped the builder terminus
 to `.write_to(writer).run()`; slice #3 added the **`Validator`** port and made
 `.run()` fail-fast and atomic; slice #4 added the **`RunLog`** primitive and
@@ -70,17 +70,17 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 
 ## The primitives
 
-### `DataHandle` — the opaque tabular carrier
+### `Dataset` — the opaque tabular carrier
 The bulk tier of the two-tier data carrier (ADR-0002). It wraps the concrete
 in-memory engine (**pandas today, swappable to e.g. polars later**) so that
 engine never leaks into the rest of the system. The public surface is
 deliberately tiny:
 
-- `handle.columns -> list[str]`
-- `len(handle) -> int`
+- `dataset.columns -> list[str]`
+- `len(dataset) -> int`
 
 Only engine-confined code (readers, writers, the store, processors) crosses the
-seam via `DataHandle.from_pandas(frame)` / `handle.to_pandas()`. **pandas must
+seam via `Dataset.from_pandas(frame)` / `dataset.to_pandas()`. **pandas must
 never appear** in a Protocol signature, a pipeline script, or the domain layer —
 only behind this seam. Typed domain objects (`Case`, `ReviewOutcome`) are the
 *other* tier, materialised on demand at the domain edge (later slice).
@@ -90,14 +90,14 @@ A `Reader` encapsulates how one source type is read:
 
 ```python
 class Reader(Protocol):
-    def read(self) -> DataHandle: ...
+    def read(self) -> Dataset: ...
 ```
 
 `CsvReader(path)` reads a source feed; `ExcelReader(path, sheet=0)` reads one
 worksheet of an `.xlsx` workbook (sheet selectable by name or zero-based index;
 pandas + **openpyxl** behind the seam); `SqliteReader(db_path, table)` is the
 read-side dual of the Sqlite Writers — it reads one table from a layer db back
-into a `DataHandle` (a subject's own layer, or another subject's read-only
+into a `Dataset` (a subject's own layer, or another subject's read-only
 Reference Data medallion, joined in Python — ADR-0002). `Sas`/`SharePoint`
 follow the same shape (ADR-0004, ADR-0005; later slice). Readers are the home of
 the concrete engine and are tested against **local fixture files** — no network,
@@ -111,7 +111,7 @@ a Writer takes it out (ADR-0003 amendment).
 
 ```python
 class Writer(Protocol):
-    def write(self, handle: DataHandle) -> None: ...
+    def write(self, dataset: Dataset) -> None: ...
 ```
 
 A Writer owns **both** its target location (a layer db file + table) **and** its
@@ -156,11 +156,11 @@ A `Validator` states an expectation about a feed's data and **raises**
 
 ```python
 class Validator(Protocol):
-    def validate(self, handle: DataHandle) -> None: ...   # raises on failure
+    def validate(self, dataset: Dataset) -> None: ...   # raises on failure
 ```
 
-Two ship now, both reading only the handle's public shape (so they stay behind
-the DataHandle seam — ADR-0002):
+Two ship now, both reading only the dataset's public shape (so they stay behind
+the Dataset seam — ADR-0002):
 
 - `ColumnValidator(required_columns)` — every required column is present
   (presence, not dtype).
@@ -188,7 +188,7 @@ class CaseA:
 
 `SchemaValidator(CaseA)` is the **dataclass→validator adapter** (the seam to
 dataclass→Pydantic later, ADR-0005). It is a `Validator` of the same shape as
-above, but **engine-confined**: where `ColumnValidator` reads only `handle.columns`,
+above, but **engine-confined**: where `ColumnValidator` reads only `dataset.columns`,
 a schema check inspects column *dtypes*, so it reaches the frame via
 `to_pandas()` exactly as a Reader/Writer/processor does (ADR-0002). It checks:
 
@@ -222,11 +222,11 @@ write or load decisions — the Store mints the Writer, which owns location +
 strategy. Full walkthrough: [schema-enforcement.md](schema-enforcement.md).
 
 ### `Processor` — an engine-confined transform, run mid-pipeline
-A `Processor` transforms the handle between the read and the post-validators:
+A `Processor` transforms the dataset between the read and the post-validators:
 
 ```python
 class Processor(Protocol):
-    def process(self, handle: DataHandle) -> DataHandle: ...
+    def process(self, dataset: Dataset) -> Dataset: ...
 ```
 
 Unlike the structural validators it is **engine-confined** — a transform needs
@@ -310,8 +310,8 @@ the destination Writer. All deferred — nothing runs until `.run()`.
 
 `.run()` is the terminus and is **fail-fast and atomic** (ADR-0007): it reads the
 source, runs the pre-validators, runs the processors (the `process` step —
-`.with_processor`), runs the post-validators over that transformed handle, then
-hands the bulk-tier `DataHandle` to the Writer and returns it.
+`.with_processor`), runs the post-validators over that transformed dataset, then
+hands the bulk-tier `Dataset` to the Writer and returns it.
 
 - An **error**-severity failure aborts the run by raising `ValidationError`
   *before* the Writer is ever called — so a bad dataset never reaches the layer
@@ -333,7 +333,7 @@ remain ahead.
 ### `WorkingDayCalendar` — working-day arithmetic (pure utility)
 A config-seeded `WorkingDayCalendar(holidays=…, weekend=…)` answers working-day
 questions for availability criteria ("the last 20 working days" — `CONTEXT.md`).
-Unlike the primitives above it touches no `DataHandle`, `Store`, or engine — it
+Unlike the primitives above it touches no `Dataset`, `Store`, or engine — it
 is pure stdlib `datetime`, hence deterministic and identical on Windows/macOS,
 and is **not** a Feed (ADR-0001 amendment). Two queries: `is_working_day(day)`
 and `last_n_working_days(n, from_date)` (the `n` most recent working days on or

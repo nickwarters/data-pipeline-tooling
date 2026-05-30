@@ -1,11 +1,11 @@
 """Writers — the component-role dual of ``Reader``.
 
-A ``Reader`` brings a feed's data in (``read() -> DataHandle``); a ``Writer``
-takes it out (``write(handle) -> None``). A Writer owns **both** its target
+A ``Reader`` brings a feed's data in (``read() -> Dataset``); a ``Writer``
+takes it out (``write(dataset) -> None``). A Writer owns **both** its target
 location *and* its load strategy (truncate+reload vs accumulate-by-run —
-ADR-0006); the builder/terminus hands it the handle and makes no write
+ADR-0006); the builder/terminus hands it the dataset and makes no write
 decisions of its own (ADR-0003). The concrete engine (pandas) lives behind the
-DataHandle seam, never in the Protocol signature. See ADR-0002, ADR-0003.
+Dataset seam, never in the Protocol signature. See ADR-0002, ADR-0003.
 """
 
 from __future__ import annotations
@@ -16,15 +16,15 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from framework.connection import connect
-from framework.data_handle import DataHandle
+from framework.dataset import Dataset
 
 
 @runtime_checkable
 class Writer(Protocol):
     """A destination for one feed's data."""
 
-    def write(self, handle: DataHandle) -> None:
-        """Persist the handle to this Writer's target, per its load strategy."""
+    def write(self, dataset: Dataset) -> None:
+        """Persist the dataset to this Writer's target, per its load strategy."""
         ...
 
 
@@ -47,13 +47,13 @@ class SqliteTruncateReloadWriter:
         self._table = table
         self._busy_timeout_ms = busy_timeout_ms
 
-    def write(self, handle: DataHandle) -> None:
+    def write(self, dataset: Dataset) -> None:
         # Create the subject's medallion directory on first write — a new
         # subject lands its own files and migrates nothing (ADR-0001 amendment).
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         con = connect(self._db_path, self._busy_timeout_ms)
         try:
-            handle.to_pandas().to_sql(
+            dataset.to_pandas().to_sql(
                 self._table, con, if_exists="replace", index=False
             )
             con.commit()
@@ -84,8 +84,8 @@ class AccumulateByRunWriter:
         self._load_date = load_date
         self._busy_timeout_ms = busy_timeout_ms
 
-    def write(self, handle: DataHandle) -> None:
-        frame = handle.to_pandas().copy()
+    def write(self, dataset: Dataset) -> None:
+        frame = dataset.to_pandas().copy()
         frame["run_id"] = self._run_id
         frame["load_date"] = self._load_date
 

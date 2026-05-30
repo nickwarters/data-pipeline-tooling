@@ -1,7 +1,7 @@
-"""Processors — engine-confined transforms over a ``DataHandle`` mid-pipeline.
+"""Processors — engine-confined transforms over a ``Dataset`` mid-pipeline.
 
 A ``Processor`` reshapes a feed's data between the read and the post-validators
-(issue #23): it takes the bulk-tier handle and returns a transformed one. Unlike
+(issue #23): it takes the bulk-tier dataset and returns a transformed one. Unlike
 the structural validators it is **engine-confined** — it reaches the backing
 frame via ``to_pandas``/``from_pandas`` exactly as a Reader/Writer does
 (ADR-0002), because a transform needs the engine's vectorised operations.
@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Mapping, Protocol, Sequence, runtime_checkable
 
-from framework.data_handle import DataHandle
+from framework.dataset import Dataset
 
 
 class CoercionError(Exception):
@@ -36,8 +36,8 @@ class CoercionError(Exception):
 class Processor(Protocol):
     """An engine-confined transform of one feed's data, run mid-pipeline."""
 
-    def process(self, handle: DataHandle) -> DataHandle:
-        """Return a transformed handle; raise on a value it cannot transform."""
+    def process(self, dataset: Dataset) -> Dataset:
+        """Return a transformed dataset; raise on a value it cannot transform."""
         ...
 
 
@@ -46,20 +46,20 @@ class Runnable(Protocol):
     """Anything that materialises a feed on demand — i.e. another builder.
 
     The structural seam ``JoinWith`` holds its lazy reference through: a
-    ``Pipeline`` satisfies it (``run() -> DataHandle``) without ``processors``
+    ``Pipeline`` satisfies it (``run() -> Dataset``) without ``processors``
     importing ``builder`` (which would cycle, since ``builder`` imports this
     module). Naming the shape rather than the class is what lets the join carry
     an *unexecuted* builder and resolve it to a DAG only at run time (ADR-0003).
     """
 
-    def run(self) -> DataHandle:
-        """Execute the referenced builder and return its handle."""
+    def run(self) -> Dataset:
+        """Execute the referenced builder and return its dataset."""
         ...
 
 
 # The Selection workload's business rules (filter/score) are expressed as plain
 # Python callables over a row mapping — never the engine (ADR-0002). The
-# processor applies them row-wise behind the DataHandle seam; the caller's rule
+# processor applies them row-wise behind the Dataset seam; the caller's rule
 # stays pure Python and pandas-free.
 RowPredicate = Callable[[Mapping[str, Any]], bool]
 RowScorer = Callable[[Mapping[str, Any]], Any]
@@ -71,16 +71,16 @@ class Filter:
     The narrowing half of Selection (CONTEXT.md): ``predicate`` is a callable
     over a row as a ``{column: value}`` mapping, so the availability/eligibility
     rule is pure Python (ADR-0002) and never names the engine. Applied row-wise
-    behind the DataHandle seam.
+    behind the Dataset seam.
     """
 
     def __init__(self, predicate: RowPredicate) -> None:
         self._predicate = predicate
 
-    def process(self, handle: DataHandle) -> DataHandle:
-        frame = handle.to_pandas()  # engine-confined (ADR-0002)
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
         kept = frame[frame.apply(lambda row: self._predicate(row), axis=1)]
-        return DataHandle.from_pandas(kept)
+        return Dataset.from_pandas(kept)
 
 
 class Score:
@@ -96,17 +96,17 @@ class Score:
         self._column = column
         self._scorer = scorer
 
-    def process(self, handle: DataHandle) -> DataHandle:
-        frame = handle.to_pandas().copy()  # engine-confined (ADR-0002)
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas().copy()  # engine-confined (ADR-0002)
         frame[self._column] = frame.apply(lambda row: self._scorer(row), axis=1)
-        return DataHandle.from_pandas(frame)
+        return Dataset.from_pandas(frame)
 
 
 class Sort:
     """Order rows by one or more columns, so a downstream "top N" is meaningful.
 
     ``by`` is a column name or a sequence of them; ``ascending`` a single flag
-    (or a matching sequence). The sorted handle's index is reset so it reads
+    (or a matching sequence). The sorted dataset's index is reset so it reads
     positionally clean and no stale source order leaks through to storage.
     """
 
@@ -118,12 +118,12 @@ class Sort:
         self._by = by
         self._ascending = ascending
 
-    def process(self, handle: DataHandle) -> DataHandle:
-        frame = handle.to_pandas()  # engine-confined (ADR-0002)
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
         ordered = frame.sort_values(
             by=self._by, ascending=self._ascending
         ).reset_index(drop=True)
-        return DataHandle.from_pandas(ordered)
+        return Dataset.from_pandas(ordered)
 
 
 class Rename:
@@ -137,9 +137,9 @@ class Rename:
     def __init__(self, mapping: Mapping[str, str]) -> None:
         self._mapping = dict(mapping)
 
-    def process(self, handle: DataHandle) -> DataHandle:
-        frame = handle.to_pandas()  # engine-confined (ADR-0002)
-        return DataHandle.from_pandas(frame.rename(columns=self._mapping))
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
+        return Dataset.from_pandas(frame.rename(columns=self._mapping))
 
 
 class JoinWith:
@@ -168,10 +168,10 @@ class JoinWith:
         self._on = on
         self._how = how
 
-    def process(self, handle: DataHandle) -> DataHandle:
+    def process(self, dataset: Dataset) -> Dataset:
         # Resolve the lazy reference now (ADR-0003): run the other builder and
-        # merge in Python, both behind the DataHandle seam (ADR-0002).
-        frame = handle.to_pandas()
+        # merge in Python, both behind the Dataset seam (ADR-0002).
+        frame = dataset.to_pandas()
         other_frame = self._other.run().to_pandas()
         merged = frame.merge(other_frame, on=self._on, how=self._how)
-        return DataHandle.from_pandas(merged)
+        return Dataset.from_pandas(merged)
