@@ -1,7 +1,8 @@
 # Schema enforcement & what "silver" means
 
 This documents the `Schema` + `SchemaValidator` adapter and the `raw_to_silver`
-builder introduced in #7. For the *why*, see
+builder introduced in #7, plus the `SchemaCoercion` processor that repairs
+raw's round-trip-lossy types ahead of the validator (#23). For the *why*, see
 [ADR-0008](adr/0008-graduated-schema-enforcement.md); for the surrounding
 primitives, [core-primitives.md](core-primitives.md).
 
@@ -92,7 +93,46 @@ reaches the backing frame via `to_pandas()` exactly as a Reader/Writer/processor
 does — keeping `DataHandle`'s public surface tiny and the pandas-dtype mapping in
 one place (`framework.schema`). See ADR-0002 and ADR-0008.
 
-## `raw_to_silver` — enforcing the schema at the boundary
+## `SchemaCoercion` — repairing what storage loses
+
+A `SchemaValidator` can only *assert* the dtype it is handed, and raw hands it
+the dtypes a SQLite round-trip leaves behind: a `date` lands as text, a `bool`
+as `1`/`0` or `TRUE`/`FALSE`. Without a repair step those columns would fail the
+validator even when the underlying values are perfectly valid. `SchemaCoercion`
+is that repair step — the **write-side companion** of `SchemaValidator`, derived
+from the *same* dataclass:
+
+```python
+from framework.schema import SchemaCoercion
+
+coerced = SchemaCoercion(CaseA).process(handle)   # returns a transformed handle
+```
+
+It is a `Processor` (`process(handle) -> DataHandle`) and, like the validator,
+**engine-confined** — a cast needs the engine's vectorised operations, so it
+reaches the frame via `to_pandas()`/`from_pandas()` (ADR-0002). It casts **only
+the round-trip-lossy declared types**:
+
+| Declared type | Coerced from | Coerced to |
+|---------------|--------------|------------|
+| `date` / `datetime` | text (`"2026-01-01"`) | datetime64 |
+| `bool` | `TRUE`/`FALSE` text (case-insensitive) or `1`/`0` | bool |
+
+`str` / `int` / `float` **survive storage**, so they pass through untouched and
+stay the validator's gate — and columns the schema doesn't declare are left
+alone. This keeps the division crisp: **coercion repairs representation lost to
+storage; validation enforces the contract.**
+
+A value the coercer cannot cast — an unparseable date, a boolean encoding
+outside the known set (`"maybe"`) — is **not** silently dropped: it raises a
+`CoercionError` with one located message naming the schema, the column, and the
+reason, and the run aborts fail-fast (ADR-0007):
+
+```
+CaseA coercion: column 'active' has unrecognized boolean encoding(s): 'maybe'
+```
+
+## `raw_to_silver` — coerce, then enforce, at the boundary
 
 The builder wires the convention together for one subject's table:
 
@@ -101,27 +141,27 @@ from framework.silver import raw_to_silver
 from framework.store import Store
 
 store = Store("/path/to/share/cases")
-raw_to_silver(store, "cases", CaseA).run()   # reads raw, validates, writes silver.db
+raw_to_silver(store, "cases", CaseA).run()   # reads raw, coerces, validates, writes silver.db
 ```
 
-It reads `store`'s **raw** `cases` table, attaches `SchemaValidator(CaseA)` as a
-**post**-validator, and writes the **silver** `cases` table — all deferred until
+It reads `store`'s **raw** `cases` table, runs `SchemaCoercion(CaseA)` as the
+**process** step, attaches `SchemaValidator(CaseA)` as a **post**-validator over
+that coerced output, and writes the **silver** `cases` table — all deferred until
 `.run()`. Optional `name=` labels the run for observability (default the table)
-and `run_log=` supplies a `RunLog` sink.
+and `run_log=` supplies a `RunLog` sink. The per-run step order is:
 
-Because `.run()` is fail-fast and atomic (ADR-0007), a schema breach raises at
-the silver **post-validate** step *before* the Writer is called — so **no
-`silver.db` is written** and nothing partial lands. The builder itself makes no
-write or load decisions: the `Store` mints the Writer, which owns its location
-and load strategy (ADR-0003, ADR-0006).
+```
+read → pre-validate → process (coerce) → post-validate (schema) → write
+```
+
+Because `.run()` is fail-fast and atomic (ADR-0007), either a coercion failure
+at the **process** step or a schema breach at the **post-validate** step raises
+*before* the Writer is called — so **no `silver.db` is written** and nothing
+partial lands. The builder itself makes no write or load decisions: the `Store`
+mints the Writer, which owns its location and load strategy (ADR-0003, ADR-0006).
 
 ## Not yet (follow-on tickets)
 
-- **Coercion processors.** With no processor between raw and silver, silver
-  dtypes are whatever the raw→silver read yields; types that do not survive a
-  SQLite round-trip (dates, booleans) need a coercion step *before* the silver
-  post-validator can assert them. The processor slots in ahead of the validator
-  without reshaping it.
 - **Value-level rules.** Format/pattern (e.g. a 9–10 digit id), length,
-  uniqueness (duplicate keys), and encoding (`TRUE`/`FALSE` text vs `1`/`0`)
-  extend the same dataclass and run on the same engine-confined seam.
+  uniqueness (duplicate keys), and value-set/encoding membership extend the same
+  dataclass and run as later validators on the same engine-confined seam (#24).

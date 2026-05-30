@@ -37,6 +37,66 @@ class CapturingWriter:
         self.write_count += 1
 
 
+class AddingProcessor:
+    """A Processor that adds a column and counts how often it ran (probe)."""
+
+    def __init__(self, column: str) -> None:
+        self._column = column
+        self.process_count = 0
+
+    def process(self, handle: DataHandle) -> DataHandle:
+        self.process_count += 1
+        frame = handle.to_pandas().copy()
+        frame[self._column] = "derived"
+        return DataHandle.from_pandas(frame)
+
+
+def test_processor_transforms_the_handle_before_the_writer():
+    # A processor attached with .with_processor runs between read and write and
+    # its transformed handle — not the read one — is what reaches the Writer.
+    reader = RecordingReader(DataHandle.from_pandas(pd.DataFrame({"id": [1, 2]})))
+    writer = CapturingWriter()
+
+    Pipeline("cases", reader).with_processor(AddingProcessor("derived")).write_to(
+        writer
+    ).run()
+
+    assert "derived" in writer.written.columns
+
+
+def test_processor_runs_before_post_validators():
+    # The processor stage sits ahead of the post-validators: a post-validator
+    # requiring the derived column is satisfied only because the processor
+    # produced it first (the order the coercion-then-validate flow depends on).
+    reader = RecordingReader(DataHandle.from_pandas(pd.DataFrame({"id": [1]})))
+    writer = CapturingWriter()
+    pipeline = (
+        Pipeline("cases", reader)
+        .with_processor(AddingProcessor("derived"))
+        .with_post_validator(ColumnValidator(["derived"]))
+        .write_to(writer)
+    )
+
+    pipeline.run()  # does not raise: 'derived' exists by post-validate time
+
+    assert writer.write_count == 1
+
+
+def test_processor_is_deferred_until_run():
+    # Composing .with_processor is side-effect-free; the processor fires only at
+    # .run() (ADR-0003), like the reader and writer.
+    reader = RecordingReader(DataHandle.from_pandas(pd.DataFrame({"id": [1]})))
+    processor = AddingProcessor("derived")
+
+    pipeline = Pipeline("cases", reader).with_processor(processor).write_to(
+        CapturingWriter()
+    )
+    assert processor.process_count == 0
+
+    pipeline.run()
+    assert processor.process_count == 1
+
+
 def test_run_hands_the_read_handle_to_the_writer_and_returns_it():
     # The builder makes no write decisions: it reads via the Reader and hands
     # the exact bulk-tier handle to whatever Writer was composed in, then

@@ -1,15 +1,21 @@
-"""Schema enforcement — the dataclass→validator adapter (ADR-0008).
+"""Schema enforcement — the dataclass→{validator, coercer} adapter (ADR-0008).
 
 A Case Type's **schema** is declared as an ordinary dataclass whose annotations
 *are* the contract: each field is a column name and its declared Python type.
-``SchemaValidator`` derives column + dtype expectations from those annotations
-and checks a ``DataHandle`` against them at the **silver** boundary (post-
-validator), so a missing column or wrong dtype fails at a predictable place with
-a located message — before downstream logic touches the data.
+Two adapters are derived from those annotations, sharing the one Python-type ↔
+pandas knowledge this module owns:
+
+- ``SchemaValidator`` *checks* a ``DataHandle``'s columns + dtypes at the
+  **silver** boundary (post-validator), so a missing column or wrong dtype fails
+  at a predictable place with a located message — before downstream logic touches
+  the data.
+- ``SchemaCoercion`` *repairs* the representation raw loses to storage, casting
+  the round-trip-lossy declared types (dates, booleans) ahead of that validator
+  (the ``process`` step). It is the write-side companion of the validator (#23).
 
 Unlike the structural checks in :mod:`framework.validators` (which read only the
-handle's engine-agnostic shape), a schema check inspects column *dtypes*, so it
-is **engine-confined**: it reaches the backing frame via ``to_pandas()`` exactly
+handle's engine-agnostic shape), both inspect/transform column *values*, so they
+are **engine-confined**: they reach the backing frame via ``to_pandas()`` exactly
 as a Reader/Writer/processor does (ADR-0002). Richer value-level rules (format,
 uniqueness, encoding) are later validators of the same engine-confined shape;
 the dataclass annotations stay the single source of truth they extend.
@@ -21,9 +27,11 @@ from dataclasses import fields
 from datetime import date, datetime
 from typing import Callable, get_type_hints
 
+import pandas as pd
 from pandas.api import types as pdt
 
 from framework.data_handle import DataHandle
+from framework.processors import CoercionError
 from framework.validators import ValidationError
 
 # Python declared type -> (predicate over a pandas dtype, human label). The
@@ -41,6 +49,19 @@ _DTYPE_CHECKS: dict[type, tuple[Callable[[object], bool], str]] = {
 }
 
 
+def _declared_fields(schema: type) -> list[tuple[str, type]]:
+    """Return a schema's ``(column, declared type)`` pairs, in declaration order.
+
+    Resolves postponed (string) annotations to their types: the framework uses
+    ``from __future__ import annotations``, so ``fields(...).type`` is a string;
+    ``get_type_hints`` evaluates each against the schema's own module. The single
+    place the dataclass→column/type reading lives, shared by the validator and
+    the coercer.
+    """
+    hints = get_type_hints(schema)
+    return [(f.name, hints[f.name]) for f in fields(schema)]
+
+
 class SchemaValidator:
     """Check a handle against a Case Type schema (a dataclass): columns + dtypes.
 
@@ -52,11 +73,7 @@ class SchemaValidator:
 
     def __init__(self, schema: type) -> None:
         self._schema = schema
-        # Resolve postponed (string) annotations to their types: the framework
-        # uses `from __future__ import annotations`, so `fields(...).type` is a
-        # string. `get_type_hints` evaluates it against the schema's module.
-        hints = get_type_hints(schema)
-        self._expected = [(f.name, hints[f.name]) for f in fields(schema)]
+        self._expected = _declared_fields(schema)
         # Fail at build time on a type the adapter cannot map to a dtype, so a
         # mis-declared schema surfaces where it is composed, not mid-run.
         unsupported = [
@@ -92,3 +109,65 @@ class SchemaValidator:
             raise ValidationError(
                 f"{self._schema.__name__} schema: " + "; ".join(problems)
             )
+
+
+# Boolean encodings raw can leave behind once a source's booleans survive a
+# SQLite round-trip — as TRUE/FALSE text or as 1/0 (integer, or text after a
+# text-typed round-trip). Compared case-folded, so `true`/`True`/`TRUE` all map;
+# 1/0 integers are stringified to "1"/"0" before lookup.
+_BOOL_ENCODINGS: dict[str, bool] = {
+    "TRUE": True,
+    "FALSE": False,
+    "1": True,
+    "0": False,
+}
+
+
+class SchemaCoercion:
+    """Cast a handle's round-trip-lossy columns to a Case Type schema's types.
+
+    The write-side companion of :class:`SchemaValidator`: where the validator
+    *checks* dtypes, this *repairs* the representation raw loses to storage.
+    Only the types that don't survive a SQLite round-trip are cast — ``date`` /
+    ``datetime`` (which land as text); ``str`` / ``int`` / ``float`` survive
+    storage and pass through untouched, so the validator stays their gate.
+    """
+
+    def __init__(self, schema: type) -> None:
+        self._schema = schema
+        self._expected = _declared_fields(schema)
+
+    def process(self, handle: DataHandle) -> DataHandle:
+        frame = handle.to_pandas().copy()  # engine-confined (ADR-0002)
+        for name, declared in self._expected:
+            if name not in frame.columns:
+                continue  # a missing column is the validator's breach to report
+            if declared in (date, datetime):
+                frame[name] = self._to_datetime(frame[name], name)
+            elif declared is bool:
+                frame[name] = self._to_bool(frame[name], name)
+        return DataHandle.from_pandas(frame)
+
+    def _to_datetime(self, series: "pd.Series", name: str) -> "pd.Series":
+        try:
+            return pd.to_datetime(series)
+        except (ValueError, TypeError) as exc:
+            raise self._error(name, f"not a parseable date ({exc})") from exc
+
+    def _to_bool(self, series: "pd.Series", name: str) -> "pd.Series":
+        normalized = series.astype("string").str.upper()
+        mapped = normalized.map(_BOOL_ENCODINGS)
+        # Plain `str` (not pandas "string") keeps a null source value sortable as
+        # "<NA>" rather than letting pd.NA reach sorted() and raise.
+        unrecognized = sorted(set(series[mapped.isna()].astype(str)))
+        if unrecognized:
+            joined = ", ".join(repr(v) for v in unrecognized)
+            raise self._error(name, f"unrecognized boolean encoding(s): {joined}")
+        return mapped.astype("bool")
+
+    def _error(self, name: str, detail: str) -> CoercionError:
+        # One located message per ADR-0007: name the schema, the column, the
+        # reason — so an aborted coerce step diagnoses itself.
+        return CoercionError(
+            f"{self._schema.__name__} coercion: column {name!r} {detail}"
+        )

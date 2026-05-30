@@ -7,8 +7,10 @@ to `.write_to(writer).run()`; slice #3 added the **`Validator`** port and made
 `.run()` fail-fast and atomic; slice #4 added the **`RunLog`** primitive and
 wired structured JSONL observability into the terminus; slice #7 added the
 **`Schema`** (a Case Type dataclass) and its **`SchemaValidator`**, plus the
-**`raw_to_silver`** builder that enforces the schema at the silver boundary.
-Every later slice builds on these shapes. For the
+**`raw_to_silver`** builder that enforces the schema at the silver boundary;
+slice #23 added the **`Processor`** seam (`.with_processor`) and the
+**`SchemaCoercion`** processor that repairs raw's round-trip-lossy types ahead of
+that validator. Every later slice builds on these shapes. For the
 *why* behind each, see the ADRs referenced inline; for domain language (Case,
 CasePool, Feed, Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
 
@@ -25,7 +27,7 @@ names are placeholders pending a domain rename — see CONTEXT.)
 | Layer  | Holds                                  | Load behaviour |
 |--------|----------------------------------------|----------------|
 | **raw** | A faithful, schema-light snapshot of the source as landed — the framework's landing zone. | **Full refresh** each run: truncate + reload from the source snapshot, so re-runs are deterministic (ADR-0006). |
-| silver | Validated, normalised data: the **schema boundary** — a Case Type's declared columns + dtypes are enforced here as a post-validator before the data lands (ADR-0008, #7). Normalising *coercion* (parsing dates, casting booleans) is a later processor ahead of that check. | Full refresh from raw. |
+| silver | Validated, normalised data: the **schema boundary** — a Case Type's declared columns + dtypes are enforced here as a post-validator before the data lands (ADR-0008, #7). Normalising *coercion* (parsing dates, casting booleans) runs as a `process` step ahead of that check (#23). | Full refresh from raw. |
 | gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. *(later slice)* | Accumulates, stamped `run_id` / `load_date`; idempotent re-run via delete-by-run then insert (ADR-0006). |
 
 raw stays schema-light on purpose: it mirrors the source so the landing zone is
@@ -45,9 +47,13 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > a `SchemaValidator` derived from a Case Type's dataclass checks columns +
 > dtypes, and the `raw_to_silver` builder attaches it as a post-validator so a
 > breach aborts before silver is written (ADR-0008;
-> [schema-enforcement doc](schema-enforcement.md)). Still ahead: silver/gold
-> *coercion processors*, the value-level schema rules (format / uniqueness /
-> encoding), and the run-registry that ingests the JSONL (ADR-0005).
+> [schema-enforcement doc](schema-enforcement.md)). **Coercion between raw and
+> silver** has landed: a `Processor` seam (`.with_processor`) runs as a `process`
+> step, and `SchemaCoercion` casts the schema's round-trip-lossy types (dates,
+> booleans) ahead of the validator so a date/bool schema survives the round-trip
+> (ADR-0008, #23). Still ahead: the value-level schema rules (format / uniqueness
+> / encoding, #24), gold accumulation (#8), and the run-registry that ingests the
+> JSONL (ADR-0005).
 
 ## The primitives
 
@@ -201,6 +207,33 @@ the schema would reject still lands faithfully in raw. The builder makes no
 write or load decisions — the Store mints the Writer, which owns location +
 strategy. Full walkthrough: [schema-enforcement.md](schema-enforcement.md).
 
+### `Processor` — an engine-confined transform, run mid-pipeline
+A `Processor` transforms the handle between the read and the post-validators:
+
+```python
+class Processor(Protocol):
+    def process(self, handle: DataHandle) -> DataHandle: ...
+```
+
+Unlike the structural validators it is **engine-confined** — a transform needs
+the engine's vectorised operations, so it reaches the frame via
+`to_pandas()`/`from_pandas()` exactly as a Reader/Writer does (ADR-0002). It is
+attached with `.with_processor(...)` and runs as the builder's `process` step. A
+processor has **no severity**: a transform either applies or it can't, so a
+failure is always fail-fast (ADR-0007) — it raises and the run aborts.
+
+One concrete processor ships now: **`SchemaCoercion(schema)`** — the write-side
+companion of `SchemaValidator`, derived from the same Case Type dataclass. Where
+the validator *checks* dtypes, the coercer *repairs* the representation raw loses
+to storage, casting only the round-trip-lossy declared types — `date`/`datetime`
+(landed as text) and `bool` (`TRUE`/`FALSE` text or `1`/`0`). `str`/`int`/`float`
+survive a SQLite round-trip, so they pass through untouched and stay the
+validator's gate; undeclared columns are left alone. A value it cannot cast (an
+unparseable date, an unknown boolean encoding) raises a **`CoercionError`** with
+one located message naming the column. `raw_to_silver` composes it ahead of the
+`SchemaValidator`, so the per-run order is **read → pre-validate → process
+(coerce) → post-validate (schema) → write** (ADR-0008, #23).
+
 ### `RunLog` — structured JSONL run observability
 A `RunLog` is the observability seam (ADR-0007). Composed onto the builder
 (`Pipeline(name, reader, run_log=RunLog(path))`), it emits **one JSON object per
@@ -243,9 +276,9 @@ input); `.with_post_validator(v, severity="error")` attaches a **post**-validato
 the destination Writer. All deferred — nothing runs until `.run()`.
 
 `.run()` is the terminus and is **fail-fast and atomic** (ADR-0007): it reads the
-source, runs the pre-validators, (processors transform the handle here in a later
-slice), runs the post-validators, then hands the bulk-tier `DataHandle` to the
-Writer and returns it.
+source, runs the pre-validators, runs the processors (the `process` step —
+`.with_processor`), runs the post-validators over that transformed handle, then
+hands the bulk-tier `DataHandle` to the Writer and returns it.
 
 - An **error**-severity failure aborts the run by raising `ValidationError`
   *before* the Writer is ever called — so a bad dataset never reaches the layer
@@ -260,8 +293,9 @@ The builder still makes **no** write decisions — no layer logic, no
 refresh-vs-accumulate branching; that all lives on the Writer. Because the
 terminus owns execution, it is the home of the cross-cutting concerns: it now
 mints the run's `run_id`, times each step, and drives the composed `RunLog`
-(timing + structured JSONL logging — landed in #4). Processors and lineage
-remain ahead (`.with_processor()` / `.checkpoint(writer)` arrive then).
+(timing + structured JSONL logging — landed in #4). The `process` step
+(`.with_processor()`) landed in #23; lineage checkpoints (`.checkpoint(writer)`)
+remain ahead.
 
 ### `WorkingDayCalendar` — working-day arithmetic (pure utility)
 A config-seeded `WorkingDayCalendar(holidays=…, weekend=…)` answers working-day
