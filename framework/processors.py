@@ -102,6 +102,27 @@ class Score:
         return Dataset.from_pandas(frame)
 
 
+class Stamp:
+    """Write one constant value onto every row of a column.
+
+    The declarative half of "mark these Cases" in Selection: where ``Score``
+    derives a column from each row, ``Stamp`` records a single run-level constant
+    — chiefly the applicable ``question_bank_id`` the Variation resolves
+    (CONTEXT.md) — so the stamp reads as the constant it is, not a degenerate
+    scorer. The column is added (or overwritten) even on an empty feed, so the
+    output shape is stable whether or not any Case was selected.
+    """
+
+    def __init__(self, column: str, value: Any) -> None:
+        self._column = column
+        self._value = value
+
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas().copy()  # engine-confined (ADR-0002)
+        frame[self._column] = self._value
+        return Dataset.from_pandas(frame)
+
+
 class Sort:
     """Order rows by one or more columns, so a downstream "top N" is meaningful.
 

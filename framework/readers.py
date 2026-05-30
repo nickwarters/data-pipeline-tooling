@@ -27,6 +27,24 @@ class Reader(Protocol):
         ...
 
 
+class DatasetReader:
+    """Adapt an already-in-memory ``Dataset`` to the ``Reader`` shape.
+
+    The bridge that lets the deferred :class:`~framework.builder.Pipeline` read a
+    dataset the caller already holds — chiefly the **available cases** a
+    :class:`~framework.case_pool.CasePool` fetches — so the Selection pipeline
+    reuses the same read→process→write builder as ingest without a SQL
+    round-trip. Holds no engine and touches no file; it simply hands back the
+    dataset it was given.
+    """
+
+    def __init__(self, dataset: Dataset) -> None:
+        self._dataset = dataset
+
+    def read(self) -> Dataset:
+        return self._dataset
+
+
 class CsvReader:
     """Read a CSV feed from a local file into a Dataset."""
 
