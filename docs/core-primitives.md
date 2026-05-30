@@ -10,7 +10,9 @@ wired structured JSONL observability into the terminus; slice #7 added the
 **`raw_to_silver`** builder that enforces the schema at the silver boundary;
 slice #23 added the **`Processor`** seam (`.with_processor`) and the
 **`SchemaCoercion`** processor that repairs raw's round-trip-lossy types ahead of
-that validator. Every later slice builds on these shapes. For the
+that validator; slice #8 added the **`silver_to_gold`** builder that accumulates
+validated silver into the gold layer, stamped by run. Every later slice builds on
+these shapes. For the
 *why* behind each, see the ADRs referenced inline; for domain language (Case,
 CasePool, Feed, Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
 
@@ -28,7 +30,7 @@ names are placeholders pending a domain rename — see CONTEXT.)
 |--------|----------------------------------------|----------------|
 | **raw** | A faithful, schema-light snapshot of the source as landed — the framework's landing zone. | **Full refresh** each run: truncate + reload from the source snapshot, so re-runs are deterministic (ADR-0006). |
 | silver | Validated, normalised data: the **schema boundary** — a Case Type's declared columns + dtypes are enforced here as a post-validator before the data lands (ADR-0008, #7). Normalising *coercion* (parsing dates, casting booleans) runs as a `process` step ahead of that check (#23). | Full refresh from raw. |
-| gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. *(later slice)* | Accumulates, stamped `run_id` / `load_date`; idempotent re-run via delete-by-run then insert (ADR-0006). |
+| gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. The `silver_to_gold` builder carries validated silver forward (#8). | Accumulates, stamped `run_id` / `load_date`; idempotent re-run via delete-by-run then insert (ADR-0006; [gold-accumulation doc](gold-accumulation.md)). |
 
 raw stays schema-light on purpose: it mirrors the source so the landing zone is
 faithful, and schema enforcement arrives at silver and gold (ADR-0008).
@@ -51,9 +53,13 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > silver** has landed: a `Processor` seam (`.with_processor`) runs as a `process`
 > step, and `SchemaCoercion` casts the schema's round-trip-lossy types (dates,
 > booleans) ahead of the validator so a date/bool schema survives the round-trip
-> (ADR-0008, #23). Still ahead: the value-level schema rules (format / uniqueness
-> / encoding, #24), gold accumulation (#8), and the run-registry that ingests the
-> JSONL (ADR-0005).
+> (ADR-0008, #23). **Gold accumulation** has landed: the `silver_to_gold` builder
+> carries validated silver into gold via the `AccumulateByRunWriter`, stamping each
+> row `run_id` / `load_date` and making a re-driven run idempotent via
+> delete-by-run then insert (ADR-0006;
+> [gold-accumulation doc](gold-accumulation.md)). Still ahead: the value-level
+> schema rules (format / uniqueness / encoding, #24), schema enforcement at the
+> gold boundary (#27), and the run-registry that ingests the JSONL (ADR-0005).
 
 ## The primitives
 
@@ -110,7 +116,8 @@ concrete writers ship now:
   reload). Used for raw/silver, which mirror a current-state source snapshot.
 - `AccumulateByRunWriter(db_path, table, run_id, load_date)` — **accumulate by
   run** for gold: stamps each row `run_id` / `load_date` and makes a re-driven
-  run idempotent via *delete-by-run then insert* (a stub for the gold layer).
+  run idempotent via *delete-by-run then insert*. Wired by the `silver_to_gold`
+  builder (#8; [gold-accumulation doc](gold-accumulation.md)).
 
 ### `Store` — one subject's medallion, minting its Writers/Readers
 `Store(subject_dir, busy_timeout_ms=5000)` is the mouth of **one subject's**
