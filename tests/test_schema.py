@@ -4,7 +4,7 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from framework.data_handle import DataHandle
+from framework.dataset import Dataset
 from framework.schema import SchemaValidator
 from framework.validators import ValidationError
 
@@ -33,29 +33,29 @@ def _silver_frame(**overrides) -> pd.DataFrame:
 def test_schema_validator_passes_when_columns_and_dtypes_match():
     # The post-validator at silver is satisfied by a conforming frame: every
     # declared column is present and carries the declared type.
-    handle = DataHandle.from_pandas(_silver_frame())
+    dataset = Dataset.from_pandas(_silver_frame())
 
-    SchemaValidator(CaseA).validate(handle)  # does not raise
+    SchemaValidator(CaseA).validate(dataset)  # does not raise
 
 
 def test_schema_validator_locates_a_missing_declared_column():
     # A declared column absent from the frame fails with a message naming it,
     # so the breach is diagnosable at the boundary (ADR-0008).
     frame = _silver_frame().drop(columns=["case_ref"])
-    handle = DataHandle.from_pandas(frame)
+    dataset = Dataset.from_pandas(frame)
 
     with pytest.raises(ValidationError, match="missing column 'case_ref'"):
-        SchemaValidator(CaseA).validate(handle)
+        SchemaValidator(CaseA).validate(dataset)
 
 
 def test_schema_validator_locates_a_wrong_dtype_with_expected_and_actual():
     # A present column carrying the wrong type fails naming the column, the
     # declared type, and what was actually found — e.g. dates left as text.
     frame = _silver_frame(opened=pd.Series(["2026-01-01", "nope"], dtype="string"))
-    handle = DataHandle.from_pandas(frame)
+    dataset = Dataset.from_pandas(frame)
 
     with pytest.raises(ValidationError, match="column 'opened' expected date but found"):
-        SchemaValidator(CaseA).validate(handle)
+        SchemaValidator(CaseA).validate(dataset)
 
 
 def test_schema_validator_ignores_columns_not_declared_in_the_schema():
@@ -63,9 +63,9 @@ def test_schema_validator_ignores_columns_not_declared_in_the_schema():
     # still passes, so silver can hold more than the schema names.
     frame = _silver_frame()
     frame["unexpected"] = pd.Series([1, 2], dtype="int64")
-    handle = DataHandle.from_pandas(frame)
+    dataset = Dataset.from_pandas(frame)
 
-    SchemaValidator(CaseA).validate(handle)  # does not raise
+    SchemaValidator(CaseA).validate(dataset)  # does not raise
 
 
 @dataclass
@@ -83,7 +83,7 @@ def test_schema_validator_accepts_matching_numeric_dtypes():
         }
     )
 
-    SchemaValidator(Measurement).validate(DataHandle.from_pandas(frame))
+    SchemaValidator(Measurement).validate(Dataset.from_pandas(frame))
 
 
 def test_schema_validator_rejects_int_where_float_declared():
@@ -97,7 +97,7 @@ def test_schema_validator_rejects_int_where_float_declared():
     )
 
     with pytest.raises(ValidationError, match="column 'score' expected float"):
-        SchemaValidator(Measurement).validate(DataHandle.from_pandas(frame))
+        SchemaValidator(Measurement).validate(Dataset.from_pandas(frame))
 
 
 def test_schema_validator_resolves_postponed_string_annotations():
@@ -106,13 +106,13 @@ def test_schema_validator_resolves_postponed_string_annotations():
     # the declared types, not choke on "str"/"date"/"bool".
     from tests._schema_fixtures import DeferredCase
 
-    handle = DataHandle.from_pandas(_silver_frame())
+    dataset = Dataset.from_pandas(_silver_frame())
 
-    SchemaValidator(DeferredCase).validate(handle)  # does not raise
+    SchemaValidator(DeferredCase).validate(dataset)  # does not raise
 
     bad = _silver_frame(opened=pd.Series(["x", "y"], dtype="string"))
     with pytest.raises(ValidationError, match="column 'opened' expected date"):
-        SchemaValidator(DeferredCase).validate(DataHandle.from_pandas(bad))
+        SchemaValidator(DeferredCase).validate(Dataset.from_pandas(bad))
 
 
 @dataclass

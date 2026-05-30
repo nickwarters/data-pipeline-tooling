@@ -24,21 +24,21 @@ def workbook(tmp_path) -> Path:
     return path
 
 
-def test_read_returns_datahandle_from_the_first_sheet(workbook):
-    handle = ExcelReader(workbook).read()
+def test_read_returns_dataset_from_the_first_sheet(workbook):
+    dataset = ExcelReader(workbook).read()
 
-    # Observed only through the DataHandle's public surface — the test never
+    # Observed only through the Dataset's public surface — the test never
     # touches pandas (ADR-0002 swappable engine seam).
-    assert handle.columns == ["case_id", "advisor"]
-    assert len(handle) == 3
+    assert dataset.columns == ["case_id", "advisor"]
+    assert len(dataset) == 3
 
 
 def test_reads_a_selected_sheet_by_name(workbook):
     # A workbook can carry several tabs; the reader targets the named one.
-    handle = ExcelReader(workbook, sheet="reference").read()
+    dataset = ExcelReader(workbook, sheet="reference").read()
 
-    assert handle.columns == ["region"]
-    assert len(handle) == 2
+    assert dataset.columns == ["region"]
+    assert len(dataset) == 2
 
 
 def test_excel_reader_composes_in_the_pipeline_builder(workbook, tmp_path):

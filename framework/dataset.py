@@ -1,8 +1,8 @@
 """The opaque tabular carrier — the bulk tier of the two-tier data carrier.
 
-``DataHandle`` is the seam that keeps the concrete in-memory engine (pandas
+``Dataset`` is the seam that keeps the concrete in-memory engine (pandas
 today, polars or other later) out of the rest of the system. Readers, the
-Store, and processors construct and unwrap handles through ``from_pandas`` /
+Store, and processors construct and unwrap datasets through ``from_pandas`` /
 ``to_pandas``; everything else (Protocol signatures, pipeline scripts, the
 domain layer) sees only the small public surface below and never names pandas.
 See ADR-0002.
@@ -16,8 +16,8 @@ if TYPE_CHECKING:  # pragma: no cover - typing only, no runtime pandas leak
     import pandas as pd
 
 
-class DataHandle:
-    """An opaque handle over a tabular dataset.
+class Dataset:
+    """An opaque, bulk in-memory carrier of tabular data (pandas behind the seam).
 
     The backing frame is engine-private. Callers read shape through
     :attr:`columns` and :func:`len`; only engine-confined code (readers,
@@ -29,7 +29,7 @@ class DataHandle:
         self._frame = frame
 
     @classmethod
-    def from_pandas(cls, frame: "pd.DataFrame") -> "DataHandle":
+    def from_pandas(cls, frame: "pd.DataFrame") -> "Dataset":
         """Wrap a pandas frame. Engine-confined entry point."""
         return cls(frame)
 

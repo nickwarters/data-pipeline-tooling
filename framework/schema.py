@@ -5,7 +5,7 @@ A Case Type's **schema** is declared as an ordinary dataclass whose annotations
 Two adapters are derived from those annotations, sharing the one Python-type ↔
 pandas knowledge this module owns:
 
-- ``SchemaValidator`` *checks* a ``DataHandle``'s columns + dtypes at the
+- ``SchemaValidator`` *checks* a ``Dataset``'s columns + dtypes at the
   **silver** boundary (post-validator), so a missing column or wrong dtype fails
   at a predictable place with a located message — before downstream logic touches
   the data.
@@ -14,7 +14,7 @@ pandas knowledge this module owns:
   (the ``process`` step). It is the write-side companion of the validator (#23).
 
 Unlike the structural checks in :mod:`framework.validators` (which read only the
-handle's engine-agnostic shape), both inspect/transform column *values*, so they
+dataset's engine-agnostic shape), both inspect/transform column *values*, so they
 are **engine-confined**: they reach the backing frame via ``to_pandas()`` exactly
 as a Reader/Writer/processor does (ADR-0002). Richer value-level rules (format,
 uniqueness, encoding) are later validators of the same engine-confined shape;
@@ -30,7 +30,7 @@ from typing import Callable, get_type_hints
 import pandas as pd
 from pandas.api import types as pdt
 
-from framework.data_handle import DataHandle
+from framework.dataset import Dataset
 from framework.processors import CoercionError
 from framework.validators import ValidationError
 
@@ -63,7 +63,7 @@ def _declared_fields(schema: type) -> list[tuple[str, type]]:
 
 
 class SchemaValidator:
-    """Check a handle against a Case Type schema (a dataclass): columns + dtypes.
+    """Check a dataset against a Case Type schema (a dataclass): columns + dtypes.
 
     Derived from the dataclass's fields — name gives the required column, the
     annotation gives the required type. Extra columns are ignored (the contract
@@ -91,8 +91,8 @@ class SchemaValidator:
                 f"({details}); supported: {supported}"
             )
 
-    def validate(self, handle: DataHandle) -> None:
-        frame = handle.to_pandas()  # engine-confined (ADR-0002)
+    def validate(self, dataset: Dataset) -> None:
+        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
         present = set(frame.columns)
         problems: list[str] = []
         for name, declared in self._expected:
@@ -124,7 +124,7 @@ _BOOL_ENCODINGS: dict[str, bool] = {
 
 
 class SchemaCoercion:
-    """Cast a handle's round-trip-lossy columns to a Case Type schema's types.
+    """Cast a dataset's round-trip-lossy columns to a Case Type schema's types.
 
     The write-side companion of :class:`SchemaValidator`: where the validator
     *checks* dtypes, this *repairs* the representation raw loses to storage.
@@ -137,8 +137,8 @@ class SchemaCoercion:
         self._schema = schema
         self._expected = _declared_fields(schema)
 
-    def process(self, handle: DataHandle) -> DataHandle:
-        frame = handle.to_pandas().copy()  # engine-confined (ADR-0002)
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas().copy()  # engine-confined (ADR-0002)
         for name, declared in self._expected:
             if name not in frame.columns:
                 continue  # a missing column is the validator's breach to report
@@ -146,7 +146,7 @@ class SchemaCoercion:
                 frame[name] = self._to_datetime(frame[name], name)
             elif declared is bool:
                 frame[name] = self._to_bool(frame[name], name)
-        return DataHandle.from_pandas(frame)
+        return Dataset.from_pandas(frame)
 
     def _to_datetime(self, series: "pd.Series", name: str) -> "pd.Series":
         try:

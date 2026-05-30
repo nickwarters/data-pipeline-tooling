@@ -1,4 +1,4 @@
-"""Validators — fail-fast checks over a ``DataHandle`` at a layer boundary.
+"""Validators — fail-fast checks over a ``Dataset`` at a layer boundary.
 
 A ``Validator`` states an expectation about a feed's data and raises
 ``ValidationError`` when the data breaks it. Validators are attached to the
@@ -7,8 +7,8 @@ builder as **pre** (input) or **post** (output) checks; the builder owns the
 continues — ADR-0007) and the run ordering, so a Validator itself only knows
 how to check, not what to do about a failure.
 
-Checks read the handle's public shape (``columns`` / ``len``) and never name the
-concrete engine, so they stay behind the DataHandle seam (ADR-0002). Schema /
+Checks read the dataset's public shape (``columns`` / ``len``) and never name the
+concrete engine, so they stay behind the Dataset seam (ADR-0002). Schema /
 dtype enforcement at silver & gold (ADR-0008) is a later, richer Validator of
 the same shape.
 """
@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Iterable, Literal, Protocol, runtime_checkable
 
-from framework.data_handle import DataHandle
+from framework.dataset import Dataset
 
 # Severity is set where a Validator is *attached* to the builder, not on the
 # Validator itself (ADR-0007: validators default to error/abort; warn is the
@@ -33,19 +33,19 @@ class ValidationError(Exception):
 class Validator(Protocol):
     """A fail-fast expectation about one feed's data."""
 
-    def validate(self, handle: DataHandle) -> None:
-        """Raise :class:`ValidationError` if ``handle`` breaks the expectation."""
+    def validate(self, dataset: Dataset) -> None:
+        """Raise :class:`ValidationError` if ``dataset`` breaks the expectation."""
         ...
 
 
 class ColumnValidator:
-    """Assert the handle carries every required column (presence, not dtype)."""
+    """Assert the dataset carries every required column (presence, not dtype)."""
 
     def __init__(self, required_columns: Iterable[str]) -> None:
         self._required = tuple(required_columns)
 
-    def validate(self, handle: DataHandle) -> None:
-        present = set(handle.columns)
+    def validate(self, dataset: Dataset) -> None:
+        present = set(dataset.columns)
         missing = [c for c in self._required if c not in present]
         if missing:
             raise ValidationError(
@@ -54,7 +54,7 @@ class ColumnValidator:
 
 
 class RowCountValidator:
-    """Assert the handle's row count sits within an inclusive ``[min, max]``.
+    """Assert the dataset's row count sits within an inclusive ``[min, max]``.
 
     Either bound is optional: ``minimum`` guards against a truncated/empty feed,
     ``maximum`` against an unexpectedly large one. ``None`` leaves that side open.
@@ -66,8 +66,8 @@ class RowCountValidator:
         self._minimum = minimum
         self._maximum = maximum
 
-    def validate(self, handle: DataHandle) -> None:
-        rows = len(handle)
+    def validate(self, dataset: Dataset) -> None:
+        rows = len(dataset)
         if self._minimum is not None and rows < self._minimum:
             raise ValidationError(
                 f"row count {rows} below minimum {self._minimum}"

@@ -15,7 +15,7 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from framework.data_handle import DataHandle
+from framework.dataset import Dataset
 from framework.processors import CoercionError
 from framework.schema import SchemaCoercion, SchemaValidator
 
@@ -46,9 +46,9 @@ def test_coerces_a_declared_date_from_text_so_the_validator_passes():
     raw = pd.DataFrame(
         {"case_ref": ["c1", "c2"], "opened": ["2026-01-01", "2026-01-02"]}
     )
-    handle = DataHandle.from_pandas(raw)
+    dataset = Dataset.from_pandas(raw)
 
-    coerced = SchemaCoercion(DatedCase).process(handle)
+    coerced = SchemaCoercion(DatedCase).process(dataset)
 
     SchemaValidator(DatedCase).validate(coerced)  # does not raise
 
@@ -57,9 +57,9 @@ def test_coerces_a_declared_bool_from_true_false_text():
     # A boolean landed as TRUE/FALSE text (one of the encodings SQLite leaves
     # behind) is cast to a real bool column so the validator passes.
     raw = pd.DataFrame({"case_ref": ["c1", "c2"], "active": ["TRUE", "FALSE"]})
-    handle = DataHandle.from_pandas(raw)
+    dataset = Dataset.from_pandas(raw)
 
-    coerced = SchemaCoercion(FlaggedCase).process(handle)
+    coerced = SchemaCoercion(FlaggedCase).process(dataset)
 
     SchemaValidator(FlaggedCase).validate(coerced)  # does not raise
     assert list(coerced.to_pandas()["active"]) == [True, False]
@@ -77,9 +77,9 @@ def test_leaves_round_trip_safe_and_undeclared_columns_untouched():
             "note": ["keep", "me"],
         }
     )
-    handle = DataHandle.from_pandas(raw)
+    dataset = Dataset.from_pandas(raw)
 
-    coerced = SchemaCoercion(MixedCase).process(handle).to_pandas()
+    coerced = SchemaCoercion(MixedCase).process(dataset).to_pandas()
 
     assert list(coerced["case_ref"]) == ["c1", "c2"]
     assert list(coerced["score"]) == [10, 20]
@@ -91,29 +91,29 @@ def test_unparseable_date_fails_fast_with_a_located_message():
     # A value the coercer cannot parse aborts at the coerce step (ADR-0007
     # fail-fast) with a message naming the column, so the breach is diagnosable.
     raw = pd.DataFrame({"case_ref": ["c1"], "opened": ["not-a-date"]})
-    handle = DataHandle.from_pandas(raw)
+    dataset = Dataset.from_pandas(raw)
 
     with pytest.raises(CoercionError, match="opened"):
-        SchemaCoercion(DatedCase).process(handle)
+        SchemaCoercion(DatedCase).process(dataset)
 
 
 def test_unrecognized_boolean_encoding_fails_fast_with_a_located_message():
     # A value outside the known boolean encodings is a coercion failure, not a
     # silently-true row: it aborts naming the column and the offending value.
     raw = pd.DataFrame({"case_ref": ["c1"], "active": ["maybe"]})
-    handle = DataHandle.from_pandas(raw)
+    dataset = Dataset.from_pandas(raw)
 
     with pytest.raises(CoercionError, match="active.*maybe"):
-        SchemaCoercion(FlaggedCase).process(handle)
+        SchemaCoercion(FlaggedCase).process(dataset)
 
 
 def test_coerces_a_declared_bool_from_one_zero_encoding():
     # The other encoding SQLite leaves behind: a boolean stored as 1/0 integers
     # is cast to a real bool column, not left as an int the validator would reject.
     raw = pd.DataFrame({"case_ref": ["c1", "c2"], "active": [1, 0]})
-    handle = DataHandle.from_pandas(raw)
+    dataset = Dataset.from_pandas(raw)
 
-    coerced = SchemaCoercion(FlaggedCase).process(handle)
+    coerced = SchemaCoercion(FlaggedCase).process(dataset)
 
     SchemaValidator(FlaggedCase).validate(coerced)  # does not raise
     assert list(coerced.to_pandas()["active"]) == [True, False]

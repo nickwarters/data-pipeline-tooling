@@ -4,7 +4,7 @@ A ``Pipeline`` composes a feed's reader, its validators and processors, and its
 destination Writer without running anything. Execution
 happens only at the ``.run()`` terminus, which owns the cross-cutting concerns
 — timing, logging, lineage, error handling — for every stage. The builder makes
-**no** write decisions: it hands the read ``DataHandle`` to the composed Writer,
+**no** write decisions: it hands the read ``Dataset`` to the composed Writer,
 which owns its own location and load strategy (ADR-0003, ADR-0006).
 """
 
@@ -15,7 +15,7 @@ import time
 import uuid
 from functools import partial
 
-from framework.data_handle import DataHandle
+from framework.dataset import Dataset
 from framework.processors import Processor
 from framework.readers import Reader
 from framework.run_log import NULL_RUN_LOG, RunLog, StepMetrics
@@ -48,7 +48,7 @@ class Pipeline:
         # about to be written.
         self._pre_validators: list[tuple[Validator, Severity]] = []
         self._post_validators: list[tuple[Validator, Severity]] = []
-        # Processors transform the handle between the pre- and post-validators,
+        # Processors transform the dataset between the pre- and post-validators,
         # in attach order — the seam the raw->silver coercion slots into (#23).
         self._processors: list[Processor] = []
 
@@ -67,7 +67,7 @@ class Pipeline:
         return self
 
     def with_processor(self, processor: Processor) -> "Pipeline":
-        """Attach a processor (transforms the handle mid-run). Deferred."""
+        """Attach a processor (transforms the dataset mid-run). Deferred."""
         self._processors.append(processor)
         return self
 
@@ -76,14 +76,14 @@ class Pipeline:
         self._writer = writer
         return self
 
-    def run(self) -> DataHandle:
-        """Execute: read, validate, hand the handle to the Writer, return it.
+    def run(self) -> Dataset:
+        """Execute: read, validate, hand the dataset to the Writer, return it.
 
         Fail-fast and atomic (ADR-0007): an error-severity validator aborts the
         run *before* the Writer is called, so nothing partial lands; a
         warn-severity failure logs and continues. The write itself is a single
         SQLite transaction owned by the Writer. Returns the bulk-tier
-        ``DataHandle`` (ADR-0003).
+        ``Dataset`` (ADR-0003).
 
         ``.run()`` is also the home of cross-cutting observability: it mints a
         fresh ``run_id`` (exposed as :attr:`run_id`) and drives the composed
@@ -98,31 +98,31 @@ class Pipeline:
         warn_hits: list[str] = []
         try:
             with step("read") as metrics:
-                handle = self._reader.read()
-                metrics.rows_out = len(handle)
+                dataset = self._reader.read()
+                metrics.rows_out = len(dataset)
 
-            with step("pre-validate", rows_in=len(handle)) as metrics:
-                self._validate(self._pre_validators, handle, "pre-validate", metrics)
-                metrics.rows_out = len(handle)
+            with step("pre-validate", rows_in=len(dataset)) as metrics:
+                self._validate(self._pre_validators, dataset, "pre-validate", metrics)
+                metrics.rows_out = len(dataset)
             warn_hits += metrics.warn_hits
 
-            # Processors transform the handle in attach order; post-validators
+            # Processors transform the dataset in attach order; post-validators
             # then gate that transformed output. A processor failure is always
             # fail-fast (ADR-0007) — it has no severity, so it raises and aborts.
-            with step("process", rows_in=len(handle)) as metrics:
+            with step("process", rows_in=len(dataset)) as metrics:
                 for processor in self._processors:
-                    handle = processor.process(handle)
-                metrics.rows_out = len(handle)
+                    dataset = processor.process(dataset)
+                metrics.rows_out = len(dataset)
 
-            with step("post-validate", rows_in=len(handle)) as metrics:
-                self._validate(self._post_validators, handle, "post-validate", metrics)
-                metrics.rows_out = len(handle)
+            with step("post-validate", rows_in=len(dataset)) as metrics:
+                self._validate(self._post_validators, dataset, "post-validate", metrics)
+                metrics.rows_out = len(dataset)
             warn_hits += metrics.warn_hits
 
             if self._writer is not None:
-                with step("write", rows_in=len(handle)) as metrics:
-                    self._writer.write(handle)
-                    metrics.rows_out = len(handle)
+                with step("write", rows_in=len(dataset)) as metrics:
+                    self._writer.write(dataset)
+                    metrics.rows_out = len(dataset)
         except Exception as exc:
             # Fail-fast (ADR-0007): the failing step already logged its own
             # `error` record; the run summary closes the run as aborted before
@@ -138,23 +138,23 @@ class Pipeline:
         record(
             "run",
             "ok",
-            rows_in=len(handle),
-            rows_out=len(handle),
+            rows_in=len(dataset),
+            rows_out=len(dataset),
             duration=time.perf_counter() - started,
             warn_hits=warn_hits,
         )
-        return handle
+        return dataset
 
     def _validate(
         self,
         validators: list[tuple[Validator, Severity]],
-        handle: DataHandle,
+        dataset: Dataset,
         phase: str,
         metrics: StepMetrics,
     ) -> None:
         for validator, severity in validators:
             try:
-                validator.validate(handle)
+                validator.validate(dataset)
             except ValidationError as exc:
                 if severity == "error":
                     raise ValidationError(

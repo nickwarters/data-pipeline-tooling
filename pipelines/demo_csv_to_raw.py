@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 from framework.builder import Pipeline
-from framework.data_handle import DataHandle
+from framework.dataset import Dataset
 from framework.readers import CsvReader
 from framework.run_log import RunLog
 from framework.store import Store
@@ -30,7 +30,7 @@ RUN_LOG_NAME = "runs.log"
 def run(
     base_dir: str | os.PathLike[str],
     csv_path: str | os.PathLike[str] = SAMPLE_CSV,
-) -> DataHandle:
+) -> Dataset:
     """Land the CSV feed into ``raw.db`` under ``base_dir``; return the rows.
 
     Composes a :class:`RunLog` so the run emits structured JSONL records to
@@ -52,9 +52,9 @@ def main(argv: list[str]) -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     base_dir = Path(argv[1]) if len(argv) > 1 else Path(__file__).parent.parent / "data"
 
-    handle = run(base_dir)
+    dataset = run(base_dir)
     print(
-        f"Landed {len(handle)} rows into "
+        f"Landed {len(dataset)} rows into "
         f"{Path(base_dir) / 'raw.db'} (table '{FEED_NAME}'); "
         f"run log at {Path(base_dir) / RUN_LOG_NAME}"
     )
