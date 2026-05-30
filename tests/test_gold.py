@@ -7,6 +7,8 @@ from framework.connection import connect
 from framework.data_handle import DataHandle
 from framework.gold import silver_to_gold
 from framework.store import Store
+from framework.validators import ValidationError
+from tests._schema_fixtures import LandedCase
 
 
 def _land_silver(store: Store, table: str, frame: pd.DataFrame) -> None:
@@ -75,6 +77,79 @@ def test_silver_to_gold_keeps_history_across_distinct_runs(tmp_path):
     landed = store.reader("gold", "selection_pool").read().to_pandas()
     assert len(landed) == 3
     assert set(landed["run_id"]) == {"2026-05-29", "2026-05-30"}
+
+
+def test_silver_to_gold_enforces_schema_then_accumulates(tmp_path):
+    # When a schema is supplied it is enforced as a post-validator on the data
+    # about to be written into gold (belt-and-braces, ADR-0008). Conforming
+    # silver passes the check, so the run completes and the rows accumulate.
+    store = Store(tmp_path)
+    _land_silver(
+        store,
+        "selection_pool",
+        pd.DataFrame({"case_ref": ["c1", "c2"], "score": [10, 20]}),
+    )
+
+    silver_to_gold(
+        store,
+        "selection_pool",
+        run_id="2026-05-30",
+        load_date="2026-05-30",
+        schema=LandedCase,
+    ).run()
+
+    landed = store.reader("gold", "selection_pool").read()
+    assert len(landed) == 2
+
+
+def test_silver_to_gold_aborts_at_the_gold_boundary_without_writing(tmp_path):
+    # A schema breach in the data bound for gold (here: score as text, not int)
+    # fails at the post-validate step with a located message — and because the
+    # run is fail-fast and atomic (ADR-0007), no gold.db is written.
+    store = Store(tmp_path)
+    _land_silver(
+        store,
+        "selection_pool",
+        pd.DataFrame({"case_ref": ["c1", "c2"], "score": ["oops", "nope"]}),
+    )
+
+    with pytest.raises(ValidationError, match="post-validate failed.*score"):
+        silver_to_gold(
+            store,
+            "selection_pool",
+            run_id="2026-05-30",
+            load_date="2026-05-30",
+            schema=LandedCase,
+        ).run()
+
+    assert not (tmp_path / "gold.db").exists()
+
+
+def test_silver_to_gold_breach_leaves_prior_accumulation_intact(tmp_path):
+    # Atomicity over an accumulating layer: a later breaching run must not delete
+    # or insert anything — the post-validate abort happens before the writer's
+    # delete-by-run/insert transaction, so a prior run's gold rows survive intact.
+    store = Store(tmp_path)
+    _land_silver(store, "selection_pool", pd.DataFrame({"case_ref": ["c1"], "score": [10]}))
+    silver_to_gold(
+        store, "selection_pool", run_id="2026-05-29", load_date="2026-05-29",
+        schema=LandedCase,
+    ).run()
+
+    # A second snapshot that breaches the schema (score as text) — its run aborts.
+    _land_silver(
+        store, "selection_pool",
+        pd.DataFrame({"case_ref": ["c2"], "score": ["nope"]}),
+    )
+    with pytest.raises(ValidationError, match="post-validate failed.*score"):
+        silver_to_gold(
+            store, "selection_pool", run_id="2026-05-30", load_date="2026-05-30",
+            schema=LandedCase,
+        ).run()
+
+    landed = store.reader("gold", "selection_pool").read().to_pandas()
+    assert len(landed) == 1
+    assert set(landed["run_id"]) == {"2026-05-29"}
 
 
 def test_gold_reader_rides_out_an_in_flight_writer_commit(tmp_path):

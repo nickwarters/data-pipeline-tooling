@@ -161,18 +161,44 @@ The per-run step order is:
 read → pre-validate → process → post-validate → write
 ```
 
-For this slice the builder is a **pure pass-through**: silver is already
+By default the builder is a **pure pass-through**: silver is already
 schema-validated upstream, so no validators or processors are attached — it
 carries validated silver forward and lets the Writer stamp and accumulate it. The
 builder makes no write or load decisions of its own: the `Store` mints the Writer,
 which owns its location and accumulate strategy (ADR-0003, ADR-0006).
 
+### Optional `schema=` — validate on the same footing as silver
+
+Pass a Case Type schema to enforce it at the gold boundary too (ADR-0008,
+[`schema-enforcement.md`](schema-enforcement.md)):
+
+```python
+from tests._schema_fixtures import LandedCase  # any Case Type dataclass
+
+silver_to_gold(
+    store, "selection_pool",
+    run_id="2026-05-30", load_date="2026-05-30",
+    schema=LandedCase,                    # enforced before the gold write
+).run()
+```
+
+When supplied, `SchemaValidator(schema)` attaches as a **post**-validator, so the
+schema is checked on the data about to be written and the step order becomes:
+
+```
+read → pre-validate → process → post-validate (schema) → write
+```
+
+Because `.run()` is fail-fast and atomic (ADR-0007), a breach raises at
+**post-validate** *before* the Writer's delete-by-run/insert transaction — so
+nothing is deleted or accumulated and any **prior runs' gold rows stay intact**.
+No coercion processor is attached (unlike `raw_to_silver`): gold reads
+already-coerced silver, so this is purely a **belt-and-braces** guard for
+selection-built rows rather than ingest mirrors. Omit `schema=` and the accumulate
+pass-through is unchanged.
+
 ## Not yet (follow-on tickets)
 
-- **Schema enforcement at the gold boundary.** `docs/schema-enforcement.md` holds
-  that gold is "validated on the same footing as silver". An optional `schema=`
-  post-validator on `silver_to_gold` (mirroring `raw_to_silver`) will close that
-  gap (#27).
 - **Row→run lineage.** Recording the gold `run_id` / `load_date` as metadata on
   the run log, linking an execution to the logical load it produced, lands with
   the run-registry (ADR-0005).
