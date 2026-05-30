@@ -5,8 +5,10 @@ raw slice, #2) introduced `DataHandle`, `Reader`, `Store`, and the `Pipeline`
 builder; slice #14 added the **`Writer`** port and reshaped the builder terminus
 to `.write_to(writer).run()`; slice #3 added the **`Validator`** port and made
 `.run()` fail-fast and atomic; slice #4 added the **`RunLog`** primitive and
-wired structured JSONL observability into the terminus. Every later slice builds
-on these shapes. For the
+wired structured JSONL observability into the terminus; slice #7 added the
+**`Schema`** (a Case Type dataclass) and its **`SchemaValidator`**, plus the
+**`raw_to_silver`** builder that enforces the schema at the silver boundary.
+Every later slice builds on these shapes. For the
 *why* behind each, see the ADRs referenced inline; for domain language (Case,
 CasePool, Feed, Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
 
@@ -23,7 +25,7 @@ names are placeholders pending a domain rename — see CONTEXT.)
 | Layer  | Holds                                  | Load behaviour |
 |--------|----------------------------------------|----------------|
 | **raw** | A faithful, schema-light snapshot of the source as landed — the framework's landing zone. | **Full refresh** each run: truncate + reload from the source snapshot, so re-runs are deterministic (ADR-0006). |
-| silver | Validated, normalised data. *(later slice)* | Full refresh from raw. |
+| silver | Validated, normalised data: the **schema boundary** — a Case Type's declared columns + dtypes are enforced here as a post-validator before the data lands (ADR-0008, #7). Normalising *coercion* (parsing dates, casting booleans) is a later processor ahead of that check. | Full refresh from raw. |
 | gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. *(later slice)* | Accumulates, stamped `run_id` / `load_date`; idempotent re-run via delete-by-run then insert (ADR-0006). |
 
 raw stays schema-light on purpose: it mirrors the source so the landing zone is
@@ -39,9 +41,13 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > landed: a `RunLog` composed onto the builder emits one JSON record per step
 > plus a run summary to a `.log` file (and human-readable lines to the console)
 > — the seam the future run-registry ingests (ADR-0007;
-> [format doc](run-log-format.md)). Still ahead: silver/gold *processors*, the
-> `SchemaValidator` derived from a Case Type's dataclass (ADR-0008), and the
-> run-registry that ingests the JSONL (ADR-0005).
+> [format doc](run-log-format.md)). **Schema enforcement at silver** has landed:
+> a `SchemaValidator` derived from a Case Type's dataclass checks columns +
+> dtypes, and the `raw_to_silver` builder attaches it as a post-validator so a
+> breach aborts before silver is written (ADR-0008;
+> [schema-enforcement doc](schema-enforcement.md)). Still ahead: silver/gold
+> *coercion processors*, the value-level schema rules (format / uniqueness /
+> encoding), and the run-registry that ingests the JSONL (ADR-0005).
 
 ## The primitives
 
@@ -144,9 +150,56 @@ the DataHandle seam — ADR-0002):
 A Validator knows only how to *check*; it does **not** decide what a failure
 means. **Severity is set where the Validator is attached to the builder**
 (`severity="error" | "warn"`, default `error` — ADR-0007), so the same Validator
-can abort one pipeline and merely warn another. The richer `SchemaValidator`
-derived from a Case Type's dataclass (ADR-0008) will be a later Validator of this
-same shape, attached as a silver/gold post-validator.
+can abort one pipeline and merely warn another. These two are **engine-agnostic**
+(shape only); the richer `SchemaValidator` below is the *engine-confined* kind.
+
+### `Schema` & `SchemaValidator` — the declared contract, enforced at silver
+A Case Type's **`Schema`** is an ordinary **dataclass** whose annotations *are*
+the contract — each field is a column name and its declared Python type, the
+single source of truth (ADR-0008):
+
+```python
+@dataclass
+class CaseA:
+    case_ref: str
+    opened: date
+    active: bool
+```
+
+`SchemaValidator(CaseA)` is the **dataclass→validator adapter** (the seam to
+dataclass→Pydantic later, ADR-0005). It is a `Validator` of the same shape as
+above, but **engine-confined**: where `ColumnValidator` reads only `handle.columns`,
+a schema check inspects column *dtypes*, so it reaches the frame via
+`to_pandas()` exactly as a Reader/Writer/processor does (ADR-0002). It checks:
+
+- every declared column is **present** (extra, undeclared columns are ignored);
+- each present column's **dtype** matches the declared Python type — the
+  Python-type ↔ pandas-dtype mapping lives here, engine-confined (`str`,
+  `int`, `float`, `bool`, `date`/`datetime`).
+
+Every breach is reported at once in one **located** message naming the column
+and the expected-vs-actual type, then raised as `ValidationError`. A type the
+adapter cannot map is a configuration error caught **when the validator is
+built**, not mid-run. Postponed (string) annotations from
+`from __future__ import annotations` are resolved via `typing.get_type_hints`.
+Value-level rules (format / length / uniqueness / encoding) are later validators
+of this same engine-confined shape and extend the same dataclass.
+
+### `raw_to_silver` — the schema-enforcing builder
+`raw_to_silver(store, table, schema)` encodes the ADR-0008 convention in one
+place: it composes the subject's raw Reader and silver Writer into a deferred
+`Pipeline` with `SchemaValidator(schema)` attached as a **post**-validator, and
+returns it (call `.run()` to execute):
+
+```python
+raw_to_silver(store, "cases", CaseA).run()   # validates, then writes silver.db
+```
+
+A breach aborts at the silver boundary **before** silver is written (fail-fast
+and atomic — ADR-0007), so nothing partial lands. Raw stays schema-light: data
+the schema would reject still lands faithfully in raw. The builder makes no
+write or load decisions — the Store mints the Writer, which owns location +
+strategy. Full walkthrough: [schema-enforcement.md](schema-enforcement.md).
 
 ### `RunLog` — structured JSONL run observability
 A `RunLog` is the observability seam (ADR-0007). Composed onto the builder
