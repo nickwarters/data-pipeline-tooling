@@ -7,25 +7,25 @@ across runs, with an idempotent re-run via *delete-by-run then insert*. For the
 for the surrounding primitives, [core-primitives.md](core-primitives.md); for the
 domain terms (CasePool, SelectionPool, Review Outcomes), [`../CONTEXT.md`](../CONTEXT.md).
 
-## Gold appears in every stage — the framework is reused
+## Gold appears in every Pipeline — the framework is reused
 
 Gold is the **accumulating** layer of a medallion. Where raw and silver mirror a
 *current-state snapshot* and are full-refreshed each run, gold is the layer whose
 **history must survive across runs**.
 
-The medallion (`raw → silver → gold`) is **stage-agnostic infrastructure**: every
-stage of the platform runs its own store(s) through the same primitives, so what
-gold *holds* depends on the stage:
+The medallion (`raw → silver → gold`) is reused by every **Pipeline** — the four
+end-to-end phases of the platform, each running its own store(s) through the same
+primitives (CONTEXT.md). What gold *holds* depends on the Pipeline:
 
-| Stage | What its gold accumulates |
-|-------|---------------------------|
-| **Ingest** | A Case Type's Feeds refined to gold; the **CasePool** reads this ingested silver/gold. |
-| **Selection** | The Cases the Selection pipeline chose — the **SelectionPool** — written back into gold. |
-| **Sync** | The review platform synced into its **own** store; the **Review Outcomes** live here, giving the full picture of each case *as the platform sees it*. A case's outcome can change between runs (see below). |
-| **Reporting** | Its own `raw → silver → gold` building cross-pipeline views, which feed dedicated reporting feeds out as **CSV / Excel / JSON**. |
+| Pipeline | Scope | What its gold accumulates |
+|----------|-------|---------------------------|
+| **Ingest** | per Case Type | A Case Type's Feeds refined to gold; the **CasePool** reads this ingested silver/gold. |
+| **Selection** | per Case Type | The chosen Cases — the **SelectionPool** — written into gold and emitted as a Deliverable to the platform. |
+| **Sync** | platform-wide | The review platform synced into its **own** store; the **Review Outcomes** live here, the full picture of each case *as the platform sees it*. An outcome can change between runs (see below). |
+| **Reporting** | platform-wide | Its own `raw → silver → gold` building cross-Pipeline views (Outcomes joined to selected Cases), shaped into Deliverables (CSV / Excel / JSON, or views read in place). |
 
 So `CasePool` and `SelectionPool` belong to the **Ingest** and **Selection**
-stages only; **Review Outcomes** belong to the **Sync** stage's store, *not* to
+Pipelines only; **Review Outcomes** belong to the **Sync** store, *not* to
 selection gold. The mutable-record behaviour below is most visible in **Sync**,
 where an outcome genuinely changes between runs.
 
@@ -82,7 +82,7 @@ each stamped with that run's `run_id` / `load_date`. The version axis of a recor
 is `(case_ref, load_date)`; `run_id` is the *load* identity, not a per-row
 version key.
 
-**Worked example — an outcome that changes (most visible in the Sync stage).**
+**Worked example — an outcome that changes (most visible in the Sync Pipeline).**
 Because raw/silver mirror the current-state source, each run's silver holds the
 record's *current* value, and gold accumulates it:
 
@@ -115,7 +115,7 @@ rows remain.
 
 ### Two shapes of accumulation, and their costs
 
-`run_id`-stamped accumulation supports two patterns; choose deliberately per stage:
+`run_id`-stamped accumulation supports two patterns; choose deliberately per Pipeline:
 
 - **Periodic snapshot** — every run re-writes the full set (Sync, ingest). Simple
   and self-correcting, but **unchanged records are re-copied every run**: 10k
