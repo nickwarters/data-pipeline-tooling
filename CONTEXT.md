@@ -74,7 +74,14 @@ _Avoid_: model, shape, structure (informal)
 
 ## Medallion layers
 
-Each **subject** — a Case Type or a shared Reference Data set — owns its **own** medallion: three SQLite databases, one per layer (**raw → silver → gold**), on a network share, isolated from every other subject's files (blast-radius isolation, independent onboarding). The ingest stage of a Case Type refines its data up to gold; the Selection pipeline reads from the ingested **silver/gold** (via the CasePool) and writes the **SelectionPool** back into gold. So gold holds both refined ingest outputs and accumulating selection results. (Layer names are placeholders — see flagged ambiguities.)
+Each **subject** — a Case Type or a shared Reference Data set — owns its **own** medallion: three SQLite databases, one per layer (**raw → silver → gold**), on a network share, isolated from every other subject's files (blast-radius isolation, independent onboarding). The same `raw → silver → gold` framework is **reused by every stage** of the platform, each with its own store(s):
+
+- **Ingest** — a Case Type's Feeds refined up to gold; the **CasePool** reads the ingested silver/gold.
+- **Selection** — reads the CasePool, writes the **SelectionPool** (the chosen Cases) back into gold.
+- **Sync** — syncs the review platform into its **own** store, where the **Review Outcomes** live (the full picture of each case per the platform; an outcome can change run to run).
+- **Reporting** — its own raw/silver/gold building cross-pipeline views that feed dedicated reporting feeds out as **CSV / Excel / JSON**.
+
+So **CasePool** and **SelectionPool** relate to the Ingest and Selection stages only; **Review Outcomes** live in the Sync stage's store. Gold is, in every stage, the accumulating layer whose history survives across runs (stamped `run_id` / `load_date`, idempotent re-run — ADR-0006). (Layer names are placeholders — see flagged ambiguities.)
 
 ## Example dialogue
 
