@@ -2,10 +2,11 @@ import pandas as pd
 import pytest
 
 from framework.data_handle import DataHandle
+from framework.processors import CoercionError
 from framework.silver import raw_to_silver
 from framework.store import Store
 from framework.validators import ValidationError
-from tests._schema_fixtures import LandedCase
+from tests._schema_fixtures import CoercedCase, LandedCase
 
 
 def _land_raw(store: Store, table: str, frame: pd.DataFrame) -> None:
@@ -45,6 +46,53 @@ def test_raw_to_silver_aborts_at_the_silver_boundary_without_writing(tmp_path):
 
     with pytest.raises(ValidationError, match="post-validate failed.*score"):
         raw_to_silver(store, "cases", LandedCase).run()
+
+    assert not (tmp_path / "silver.db").exists()
+
+
+def test_raw_to_silver_coerces_round_trip_lossy_types_through_to_silver(tmp_path):
+    # End to end: a schema with a date and a boolean — types that land in raw as
+    # text / 1-0 — passes through raw_to_silver because the coercion processor
+    # casts them ahead of the SchemaValidator. The run completing (the validator
+    # runs on the coerced output before the write) is the proof, and silver lands.
+    store = Store(tmp_path)
+    _land_raw(
+        store,
+        "cases",
+        pd.DataFrame(
+            {
+                "case_ref": ["c1", "c2"],
+                "opened": ["2026-01-01", "2026-01-02"],  # dates as text
+                "active": ["TRUE", "FALSE"],  # booleans as text
+            }
+        ),
+    )
+
+    raw_to_silver(store, "cases", CoercedCase).run()  # would fail without coercion
+
+    assert (tmp_path / "silver.db").exists()
+    assert len(store.reader("silver", "cases").read()) == 2
+
+
+def test_raw_to_silver_aborts_when_a_value_cannot_be_coerced(tmp_path):
+    # A value the coercer cannot parse aborts at the process step (fail-fast,
+    # ADR-0007) with a located message — and because the run is atomic, no
+    # silver.db is written.
+    store = Store(tmp_path)
+    _land_raw(
+        store,
+        "cases",
+        pd.DataFrame(
+            {
+                "case_ref": ["c1"],
+                "opened": ["not-a-date"],
+                "active": ["TRUE"],
+            }
+        ),
+    )
+
+    with pytest.raises(CoercionError, match="opened"):
+        raw_to_silver(store, "cases", CoercedCase).run()
 
     assert not (tmp_path / "silver.db").exists()
 

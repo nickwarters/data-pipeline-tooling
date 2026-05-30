@@ -1,7 +1,7 @@
 """The deferred fluent builder — describes a pipeline; executes on ``.run()``.
 
-A ``Pipeline`` composes a feed's reader and its destination Writer (and, in
-later slices, processors and validators) without running anything. Execution
+A ``Pipeline`` composes a feed's reader, its validators and processors, and its
+destination Writer without running anything. Execution
 happens only at the ``.run()`` terminus, which owns the cross-cutting concerns
 — timing, logging, lineage, error handling — for every stage. The builder makes
 **no** write decisions: it hands the read ``DataHandle`` to the composed Writer,
@@ -16,6 +16,7 @@ import uuid
 from functools import partial
 
 from framework.data_handle import DataHandle
+from framework.processors import Processor
 from framework.readers import Reader
 from framework.run_log import NULL_RUN_LOG, RunLog, StepMetrics
 from framework.validators import Severity, ValidationError, Validator
@@ -47,6 +48,9 @@ class Pipeline:
         # about to be written.
         self._pre_validators: list[tuple[Validator, Severity]] = []
         self._post_validators: list[tuple[Validator, Severity]] = []
+        # Processors transform the handle between the pre- and post-validators,
+        # in attach order — the seam the raw->silver coercion slots into (#23).
+        self._processors: list[Processor] = []
 
     def with_validator(
         self, validator: Validator, severity: Severity = "error"
@@ -60,6 +64,11 @@ class Pipeline:
     ) -> "Pipeline":
         """Attach a post-validator (checks the output). Deferred."""
         self._post_validators.append((validator, severity))
+        return self
+
+    def with_processor(self, processor: Processor) -> "Pipeline":
+        """Attach a processor (transforms the handle mid-run). Deferred."""
+        self._processors.append(processor)
         return self
 
     def write_to(self, writer: Writer) -> "Pipeline":
@@ -97,9 +106,14 @@ class Pipeline:
                 metrics.rows_out = len(handle)
             warn_hits += metrics.warn_hits
 
-            # Processors transform the handle here in a later slice;
-            # post-validators then gate that output. Today the output is the
-            # read handle unchanged.
+            # Processors transform the handle in attach order; post-validators
+            # then gate that transformed output. A processor failure is always
+            # fail-fast (ADR-0007) — it has no severity, so it raises and aborts.
+            with step("process", rows_in=len(handle)) as metrics:
+                for processor in self._processors:
+                    handle = processor.process(handle)
+                metrics.rows_out = len(handle)
+
             with step("post-validate", rows_in=len(handle)) as metrics:
                 self._validate(self._post_validators, handle, "post-validate", metrics)
                 metrics.rows_out = len(handle)

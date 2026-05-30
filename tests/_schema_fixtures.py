@@ -26,3 +26,13 @@ class LandedCase:
     # is a fair test of *schema enforcement* rather than of type coercion.
     case_ref: str
     score: int
+
+
+@dataclass
+class CoercedCase:
+    # A schema whose declared types do NOT survive a SQLite round-trip: dates
+    # land as text and booleans as 1/0 or TRUE/FALSE. Exercises the raw->silver
+    # coercion processor (#23) end-to-end ahead of the schema post-validator.
+    case_ref: str
+    opened: date
+    active: bool
