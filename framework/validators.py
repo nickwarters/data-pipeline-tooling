@@ -76,3 +76,44 @@ class RowCountValidator:
             raise ValidationError(
                 f"row count {rows} above maximum {self._maximum}"
             )
+
+
+class UniqueValidator:
+    """Assert that a column (or column set) is unique across the dataset.
+
+    Attached at the gold boundary it enforces the one-row-per-Case grain on
+    ``case_id`` (ADR-0009), aborting the run before a duplicated-grain gold is
+    written (fail-fast, ADR-0007).
+
+    ``columns`` may be a single column name (str) or a list of column names for
+    a composite key.
+    """
+
+    def __init__(self, columns: str | Iterable[str]) -> None:
+        if isinstance(columns, str):
+            self._columns = [columns]
+        else:
+            self._columns = list(columns)
+
+    def validate(self, dataset: Dataset) -> None:
+        frame = dataset.to_pandas()
+        mask = frame.duplicated(subset=self._columns, keep=False)
+        duplicated = frame.loc[mask, self._columns].drop_duplicates()
+        if not duplicated.empty:
+            dup_values = duplicated.apply(
+                lambda row: (
+                    str(row.iloc[0])
+                    if len(self._columns) == 1
+                    else str(tuple(row))
+                ),
+                axis=1,
+            ).tolist()
+            keys_str = ", ".join(dup_values)
+            col_str = (
+                self._columns[0]
+                if len(self._columns) == 1
+                else str(self._columns)
+            )
+            raise ValidationError(
+                f"duplicate key(s) on {col_str!r}: {keys_str}"
+            )
