@@ -223,3 +223,92 @@ def test_pipeline_filters_one_feed_and_joins_another_feeds_silver(tmp_path):
     # a2 dropped by the filter (amount 5); the survivors gain the adviser region.
     assert list(selected["case_ref"]) == ["c1", "c3"]
     assert list(selected["region"]) == ["north", "south"]
+
+
+# ---------------------------------------------------------------------------
+# DeriveKey — deterministic uuid5 processor (issue #35)
+# ---------------------------------------------------------------------------
+
+import uuid as _uuid
+
+from framework.processors import DeriveKey
+
+_NS = _uuid.UUID("12345678-1234-5678-1234-567812345678")
+
+
+def test_derive_key_stamps_uuid5_for_a_single_column_key():
+    # DeriveKey computes uuid5(namespace, key_string) per row and writes it into
+    # the `into` column; the value must equal the uuid5 we'd compute by hand.
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"surname": ["SMITH"], "dob": ["2024-01-15"]})
+    )
+
+    result = DeriveKey(into="case_id", namespace=_NS, natural_key=["surname"]).process(dataset).to_pandas()
+
+    expected = _uuid.uuid5(_NS, "SMITH")
+    assert result["case_id"].iloc[0] == expected
+
+
+def test_derive_key_is_deterministic_across_runs():
+    # Re-running DeriveKey over identical input must produce identical case_ids —
+    # the same natural-key values always map to the same UUID on every run and
+    # every machine (determinism criterion).
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"ref": ["A", "B"]})
+    )
+    processor = DeriveKey(into="case_id", namespace=_NS, natural_key=["ref"])
+
+    first = list(processor.process(dataset).to_pandas()["case_id"])
+    second = list(processor.process(dataset).to_pandas()["case_id"])
+
+    assert first == second
+
+
+def test_derive_key_different_namespaces_yield_different_ids():
+    # The same natural-key values under two different namespaces must produce
+    # different case_ids — the namespace is the case-type discriminator.
+    _NS2 = _uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+    dataset = Dataset.from_pandas(pd.DataFrame({"ref": ["X"]}))
+
+    id_ns1 = DeriveKey(into="case_id", namespace=_NS, natural_key=["ref"]).process(dataset).to_pandas()["case_id"].iloc[0]
+    id_ns2 = DeriveKey(into="case_id", namespace=_NS2, natural_key=["ref"]).process(dataset).to_pandas()["case_id"].iloc[0]
+
+    assert id_ns1 != id_ns2
+
+
+def test_derive_key_multi_column_key_composes_in_declared_order():
+    # Multi-column natural keys are composed as "col_a|col_b" in declared order;
+    # the uuid5 result must equal hand-computing uuid5(NS, "SMITH|2024-01-15").
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"surname": ["SMITH"], "dob": ["2024-01-15"]})
+    )
+
+    result = DeriveKey(
+        into="case_id", namespace=_NS, natural_key=["surname", "dob"]
+    ).process(dataset).to_pandas()
+
+    expected = _uuid.uuid5(_NS, "SMITH|2024-01-15")
+    assert result["case_id"].iloc[0] == expected
+
+
+def test_derive_key_multi_column_key_order_matters():
+    # Column order in natural_key is significant: ["surname", "dob"] and
+    # ["dob", "surname"] must produce different ids for the same row.
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"surname": ["SMITH"], "dob": ["2024-01-15"]})
+    )
+
+    id_ab = DeriveKey(into="case_id", namespace=_NS, natural_key=["surname", "dob"]).process(dataset).to_pandas()["case_id"].iloc[0]
+    id_ba = DeriveKey(into="case_id", namespace=_NS, natural_key=["dob", "surname"]).process(dataset).to_pandas()["case_id"].iloc[0]
+
+    assert id_ab != id_ba
+
+
+def test_derive_key_returns_a_dataset_not_a_dataframe():
+    # Engine-confined (ADR-0002): DeriveKey.process must return a Dataset, not
+    # a pandas DataFrame — pandas stays behind the seam.
+    dataset = Dataset.from_pandas(pd.DataFrame({"ref": ["A"]}))
+
+    result = DeriveKey(into="case_id", namespace=_NS, natural_key=["ref"]).process(dataset)
+
+    assert isinstance(result, Dataset)
