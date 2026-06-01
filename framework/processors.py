@@ -23,6 +23,7 @@ and joined in Python only at ``.run()`` (ADR-0003).
 
 from __future__ import annotations
 
+import uuid
 from typing import Any, Callable, Mapping, Protocol, Sequence, runtime_checkable
 
 from framework.dataset import Dataset
@@ -196,3 +197,40 @@ class JoinWith:
         other_frame = self._other.run().to_pandas()
         merged = frame.merge(other_frame, on=self._on, how=self._how)
         return Dataset.from_pandas(merged)
+
+
+class DeriveKey:
+    """Stamp a deterministic ``uuid5`` key onto every row.
+
+    Computes ``uuid5(namespace, natural_key_string)`` for each row and writes
+    the result into the ``into`` column (new or overwrite). The natural-key
+    string is formed by joining the ``str()`` of each listed column's value
+    with ``"|"`` as the separator, in declared order — so the same values
+    always produce the same UUID on every run and every machine (pure stdlib
+    ``uuid``, no platform variance).
+
+    ``namespace`` is a ``uuid.UUID`` instance supplied by the caller (typically
+    the case-type namespace). ``natural_key`` is a list of column names whose
+    values are composed into the key string.
+    """
+
+    def __init__(
+        self,
+        *,
+        into: str,
+        namespace: uuid.UUID,
+        natural_key: Sequence[str],
+    ) -> None:
+        self._into = into
+        self._namespace = namespace
+        self._natural_key = list(natural_key)
+
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas().copy()  # engine-confined (ADR-0002)
+        frame[self._into] = frame.apply(
+            lambda row: uuid.uuid5(
+                self._namespace, "|".join(str(row[col]) for col in self._natural_key)
+            ),
+            axis=1,
+        )
+        return Dataset.from_pandas(frame)
