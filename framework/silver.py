@@ -10,8 +10,9 @@ checked on the coerced output that is about to be written. Nothing runs until
 ``.run()`` — and a coercion or schema breach aborts the run atomically *before*
 silver is written (fail-fast, ADR-0007).
 
-It makes no write or load decisions of its own (ADR-0003): the Store mints the
-layer-appropriate Writer/Reader, the Writer owns its location and load strategy.
+It makes no write or load decisions of its own (ADR-0003): it passes an explicit
+:class:`~framework.strategy.Refresh` strategy to :func:`Store.writer`, which
+maps ``layer → location``; the Writer owns its location and load strategy.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from framework.builder import Pipeline
 from framework.run_log import RunLog
 from framework.schema import SchemaCoercion, SchemaValidator
 from framework.store import Store
+from framework.strategy import Refresh
 
 
 def raw_to_silver(
@@ -41,5 +43,5 @@ def raw_to_silver(
         Pipeline(name or table, store.reader("raw", table), run_log)
         .with_processor(SchemaCoercion(schema))
         .with_post_validator(SchemaValidator(schema))
-        .write_to(store.writer("silver", table))
+        .write_to(store.writer("silver", table, Refresh()))
     )

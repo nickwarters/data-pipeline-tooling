@@ -6,47 +6,46 @@ import pytest
 from framework.dataset import Dataset
 from framework.readers import CsvReader
 from framework.store import Store
+from framework.strategy import AccumulateByRun, Refresh
 
 FIXTURE = Path(__file__).parent / "fixtures" / "cases.csv"
 
 
-def test_store_mints_a_writer_and_reader_that_round_trip_a_dataset(tmp_path):
-    # A per-subject Store mints the layer's Writer and Reader over the subject's
-    # own file; writing a dataset through the minted Writer and reading it back
-    # through the minted Reader returns the same shape (ADR-0001 amendment).
+def test_store_writer_with_refresh_strategy_round_trips_a_dataset(tmp_path):
+    # Store.writer accepts an explicit Refresh strategy; the minted Writer
+    # truncates + reloads (full-refresh) on each run — strategy is now the
+    # caller's declaration, not an implicit layer rule (ADR-0006 amendment).
     dataset = CsvReader(FIXTURE).read()
     store = Store(tmp_path)
 
-    store.writer("raw", "cases").write(dataset)
+    store.writer("raw", "cases", Refresh()).write(dataset)
     landed = store.reader("raw", "cases").read()
 
     assert landed.columns == dataset.columns
     assert len(landed) == len(dataset)
 
 
-def test_minted_raw_writer_full_refreshes_rather_than_accumulates(tmp_path):
-    # raw mirrors a current-state source snapshot, so the Store mints a
-    # truncate+reload Writer there (ADR-0006): a second write replaces the
+def test_refresh_strategy_full_refreshes_rather_than_accumulates(tmp_path):
+    # A Refresh strategy truncates + reloads: a second write replaces the
     # first rather than appending.
     dataset = CsvReader(FIXTURE).read()
     store = Store(tmp_path)
 
-    store.writer("raw", "cases").write(dataset)
-    store.writer("raw", "cases").write(dataset)
+    store.writer("raw", "cases", Refresh()).write(dataset)
+    store.writer("raw", "cases", Refresh()).write(dataset)
 
     landed = store.reader("raw", "cases").read()
     assert len(landed) == len(dataset)
 
 
-def test_minted_gold_writer_accumulates_each_run_stamped_by_run(tmp_path):
-    # gold accumulates (ADR-0006): the Store mints an accumulate-by-run Writer
-    # there, stamped with the run identity passed at mint time. Two distinct
-    # runs land both sets, each row carrying its run_id / load_date.
+def test_store_writer_with_accumulate_by_run_strategy_accumulates(tmp_path):
+    # Store.writer accepts an explicit AccumulateByRun strategy; the minted
+    # Writer stamps rows by run and accumulates across runs (ADR-0006 amendment).
     dataset = CsvReader(FIXTURE).read()
     store = Store(tmp_path)
 
-    store.writer("gold", "casepool", run_id="r1", load_date="2026-05-29").write(dataset)
-    store.writer("gold", "casepool", run_id="r2", load_date="2026-05-30").write(dataset)
+    store.writer("gold", "casepool", AccumulateByRun("r1", "2026-05-29")).write(dataset)
+    store.writer("gold", "casepool", AccumulateByRun("r2", "2026-05-30")).write(dataset)
 
     landed = store.reader("gold", "casepool").read()
     assert len(landed) == 2 * len(dataset)
@@ -54,14 +53,19 @@ def test_minted_gold_writer_accumulates_each_run_stamped_by_run(tmp_path):
     assert "load_date" in landed.columns
 
 
-def test_minting_gold_writer_requires_run_identity(tmp_path):
-    # gold's accumulate-by-run strategy stamps each row by run, so minting a
-    # gold Writer without a run identity is a programming error, not a silent
-    # unstamped write.
+def test_silver_table_can_be_configured_to_accumulate(tmp_path):
+    # Strategy is no longer layer-bound: a silver feed can declare AccumulateByRun
+    # instead of Refresh, letting two distinct runs land in silver.db side-by-side.
+    # This is AC#5 of issue #33 — the proof that the Store makes no load decision.
+    dataset = CsvReader(FIXTURE).read()
     store = Store(tmp_path)
 
-    with pytest.raises(ValueError):
-        store.writer("gold", "casepool")
+    store.writer("silver", "events", AccumulateByRun("r1", "2026-01-01")).write(dataset)
+    store.writer("silver", "events", AccumulateByRun("r2", "2026-01-02")).write(dataset)
+
+    landed = store.reader("silver", "events").read()
+    assert len(landed) == 2 * len(dataset)
+    assert "run_id" in landed.columns
 
 
 def test_unknown_layer_is_rejected(tmp_path):
@@ -70,7 +74,7 @@ def test_unknown_layer_is_rejected(tmp_path):
     store = Store(tmp_path)
 
     with pytest.raises(ValueError):
-        store.writer("bronze", "cases")
+        store.writer("bronze", "cases", Refresh())
     with pytest.raises(ValueError):
         store.reader("bronze", "cases")
 
@@ -83,13 +87,13 @@ def test_subjects_are_isolated_same_table_name_no_collision(tmp_path):
     type_a = Store(tmp_path / "case_type_a")
     type_b = Store(tmp_path / "case_type_b")
 
-    type_a.writer("raw", "cases").write(dataset)
+    type_a.writer("raw", "cases", Refresh()).write(dataset)
 
     # type_b's "cases" table does not exist yet — type_a's write did not leak.
     assert (tmp_path / "case_type_a" / "raw.db").exists()
     assert not (tmp_path / "case_type_b" / "raw.db").exists()
 
-    type_b.writer("raw", "cases").write(dataset)
+    type_b.writer("raw", "cases", Refresh()).write(dataset)
     assert (tmp_path / "case_type_b" / "raw.db").exists()
     assert len(type_a.reader("raw", "cases").read()) == len(dataset)
     assert len(type_b.reader("raw", "cases").read()) == len(dataset)
@@ -102,12 +106,12 @@ def test_reference_data_medallion_is_read_and_joined_by_another_subject(tmp_path
     advisers = Store(tmp_path / "advisers")  # a Reference Data subject
     cases = Store(tmp_path / "activity")  # a Case Type subject
 
-    advisers.writer("silver", "advisers").write(
+    advisers.writer("silver", "advisers", Refresh()).write(
         Dataset.from_pandas(
             pd.DataFrame({"adviser_id": [1, 2], "region": ["North", "South"]})
         )
     )
-    cases.writer("silver", "cases").write(
+    cases.writer("silver", "cases", Refresh()).write(
         Dataset.from_pandas(
             pd.DataFrame({"case_id": [10, 11], "adviser_id": [1, 2]})
         )

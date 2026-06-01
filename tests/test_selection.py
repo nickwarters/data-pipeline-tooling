@@ -10,6 +10,7 @@ from framework.dataset import Dataset
 from framework.processors import Filter, Sort, Stamp
 from framework.readers import DatasetReader
 from framework.store import Store
+from framework.strategy import AccumulateByRun, Refresh
 from tests._schema_fixtures import ActivityCase
 
 
@@ -25,7 +26,7 @@ def _case_type() -> CaseType:
 
 
 def _land_silver_cases(store: Store, frame: pd.DataFrame) -> None:
-    store.writer("silver", "cases").write(Dataset.from_pandas(frame))
+    store.writer("silver", "cases", Refresh()).write(Dataset.from_pandas(frame))
 
 
 def test_selection_narrows_the_casepool_into_a_stamped_selection_pool(tmp_path):
@@ -67,7 +68,7 @@ def test_selection_narrows_the_casepool_into_a_stamped_selection_pool(tmp_path):
         .with_processor(Filter(lambda row: row["amount"] >= 100))
         .with_processor(Sort("amount", ascending=False))
         .with_processor(Stamp("question_bank_id", variation.question_bank_id))
-        .write_to(store.writer("gold", "selection_pool", "2026-05-29", "2026-05-29"))
+        .write_to(store.writer("gold", "selection_pool", AccumulateByRun("2026-05-29", "2026-05-29")))
         .run()
     )
 

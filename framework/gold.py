@@ -11,9 +11,9 @@ idempotent via delete-by-run then insert (ADR-0006).
 ``run_id`` / ``load_date`` are **caller-supplied** — gold's ``run_id`` is a
 stable, logical idempotency key (e.g. a business date), deliberately distinct
 from the run-log's per-execution uuid, because re-driving a day must match and
-replace its own prior rows. It makes no write or load decisions of its own
-(ADR-0003): the Store mints the gold Writer, the Writer owns its location and
-accumulate strategy.
+replace its own prior rows. It makes no write or load decisions of its own (ADR-0003): it passes an explicit
+:class:`~framework.strategy.AccumulateByRun` strategy to :func:`Store.writer`,
+which maps ``layer → location``; the Writer owns its location and accumulate strategy.
 
 An optional ``schema`` enforces a Case Type's contract at the gold boundary on
 the same footing as silver (ADR-0008): when supplied it attaches a
@@ -31,6 +31,7 @@ from framework.builder import Pipeline
 from framework.run_log import RunLog
 from framework.schema import SchemaValidator
 from framework.store import Store
+from framework.strategy import AccumulateByRun
 
 
 def silver_to_gold(
@@ -57,4 +58,4 @@ def silver_to_gold(
     pipeline = Pipeline(name or table, store.reader("silver", table), run_log)
     if schema is not None:
         pipeline.with_post_validator(SchemaValidator(schema))
-    return pipeline.write_to(store.writer("gold", table, run_id, load_date))
+    return pipeline.write_to(store.writer("gold", table, AccumulateByRun(run_id, load_date)))

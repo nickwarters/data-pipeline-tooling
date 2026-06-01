@@ -14,6 +14,7 @@ from framework.builder import Pipeline
 from framework.dataset import Dataset
 from framework.processors import Filter, JoinWith, Rename, Score, Sort, Stamp
 from framework.store import Store
+from framework.strategy import Refresh
 
 
 class RecordingBuilder:
@@ -191,7 +192,7 @@ def test_pipeline_filters_one_feed_and_joins_another_feeds_silver(tmp_path):
     # builders resolved at one .run() (ADR-0003), all joined in Python (ADR-0002).
     cases = Store(tmp_path / "cases")
     advisers = Store(tmp_path / "advisers")
-    cases.writer("silver", "cases").write(
+    cases.writer("silver", "cases", Refresh()).write(
         Dataset.from_pandas(
             pd.DataFrame(
                 {
@@ -202,7 +203,7 @@ def test_pipeline_filters_one_feed_and_joins_another_feeds_silver(tmp_path):
             )
         )
     )
-    advisers.writer("silver", "advisers").write(
+    advisers.writer("silver", "advisers", Refresh()).write(
         Dataset.from_pandas(
             pd.DataFrame({"adviser": ["a1", "a3"], "region": ["north", "south"]})
         )

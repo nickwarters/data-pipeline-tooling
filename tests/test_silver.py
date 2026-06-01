@@ -5,6 +5,7 @@ from framework.dataset import Dataset
 from framework.processors import CoercionError
 from framework.silver import raw_to_silver
 from framework.store import Store
+from framework.strategy import Refresh
 from framework.validators import ValidationError
 from tests._schema_fixtures import CoercedCase, LandedCase
 
@@ -12,7 +13,7 @@ from tests._schema_fixtures import CoercedCase, LandedCase
 def _land_raw(store: Store, table: str, frame: pd.DataFrame) -> None:
     # Land a snapshot into raw exactly as an upstream source->raw pipeline would
     # — schema-light, no enforcement at raw (ADR-0008).
-    store.writer("raw", table).write(Dataset.from_pandas(frame))
+    store.writer("raw", table, Refresh()).write(Dataset.from_pandas(frame))
 
 
 def test_raw_to_silver_validates_then_writes_silver_db(tmp_path):
