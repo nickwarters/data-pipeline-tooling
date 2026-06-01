@@ -38,6 +38,7 @@ from framework.processors import Filter, Sort, Stamp
 from framework.readers import CsvReader, DatasetReader
 from framework.silver import raw_to_silver
 from framework.store import Store
+from framework.strategy import AccumulateByRun, Refresh
 
 
 @dataclass
@@ -72,7 +73,7 @@ def main(target_dir: str) -> None:
     store = Store(Path(target_dir) / CASES.name)
 
     # 1. Ingest: CSV feed -> raw (schema-light) -> silver (schema enforced).
-    Pipeline("cases", CsvReader(sample)).write_to(store.writer("raw", "cases")).run()
+    Pipeline("cases", CsvReader(sample)).write_to(store.writer("raw", "cases", Refresh())).run()
     raw_to_silver(store, "cases", CASES.schema).run()
 
     # 2. Selection: fetch the available cases from the CasePool, then narrow them.
@@ -86,7 +87,7 @@ def main(target_dir: str) -> None:
         .with_processor(Filter(lambda row: row["amount"] >= 100))  # high-value only
         .with_processor(Sort("amount", ascending=False))  # rank top-amount first
         .with_processor(Stamp("question_bank_id", variation.question_bank_id))
-        .write_to(store.writer("gold", "selection_pool", RUN_ID, RUN_ID))
+        .write_to(store.writer("gold", "selection_pool", AccumulateByRun(RUN_ID, RUN_ID)))
         .run()
     )
 

@@ -7,6 +7,7 @@ from framework.case_type import CaseType, Variation
 from framework.calendar import WorkingDayCalendar
 from framework.dataset import Dataset
 from framework.store import Store
+from framework.strategy import Refresh
 from tests._schema_fixtures import ActivityCase
 
 
@@ -21,7 +22,7 @@ def _case_type() -> CaseType:
 def _land_silver_cases(store: Store, frame: pd.DataFrame) -> None:
     # Land Cases into silver exactly as an ingest raw->silver run would — dates
     # land as text (SQLite has no date type), which is what the CasePool re-reads.
-    store.writer("silver", "cases").write(Dataset.from_pandas(frame))
+    store.writer("silver", "cases", Refresh()).write(Dataset.from_pandas(frame))
 
 
 def test_fetch_available_cases_keeps_only_cases_inside_the_working_day_window(

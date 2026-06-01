@@ -8,6 +8,7 @@ from framework.builder import Pipeline
 from framework.dataset import Dataset
 from framework.readers import CsvReader
 from framework.store import Store
+from framework.strategy import AccumulateByRun
 from framework.validators import ColumnValidator, RowCountValidator, ValidationError
 
 FIXTURE = Path(__file__).parent / "fixtures" / "cases.csv"
@@ -150,14 +151,14 @@ def test_failed_run_leaves_the_gold_layer_untouched(tmp_path):
     # (ADR-0007 fail-fast + atomic).
     store = Store(tmp_path / "cases")
     seed = Dataset.from_pandas(pd.DataFrame({"id": [1, 2]}))
-    store.writer("gold", "casepool", run_id="r1", load_date="2026-05-29").write(seed)
+    store.writer("gold", "casepool", AccumulateByRun("r1", "2026-05-29")).write(seed)
 
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [3]})))
     pipeline = (
         Pipeline("cases", reader)
         .with_post_validator(RowCountValidator(minimum=100))
         .write_to(
-            store.writer("gold", "casepool", run_id="r2", load_date="2026-05-30")
+            store.writer("gold", "casepool", AccumulateByRun("r2", "2026-05-30"))
         )
     )
 

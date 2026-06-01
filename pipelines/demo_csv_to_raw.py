@@ -21,6 +21,7 @@ from framework.dataset import Dataset
 from framework.readers import CsvReader
 from framework.run_log import RunLog
 from framework.store import Store
+from framework.strategy import Refresh
 
 FEED_NAME = "cases"
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "cases.csv"
@@ -37,7 +38,7 @@ def run(
     ``<base_dir>/runs.log`` (and human-readable lines to the console) — the
     observability seam described in ADR-0007.
     """
-    writer = Store(base_dir).writer("raw", FEED_NAME)
+    writer = Store(base_dir).writer("raw", FEED_NAME, Refresh())
     run_log = RunLog(Path(base_dir) / RUN_LOG_NAME)
     return (
         Pipeline(FEED_NAME, CsvReader(csv_path), run_log=run_log)
