@@ -41,3 +41,19 @@ def test_reads_a_different_table_from_the_same_db(fixture_db):
 
     assert dataset.columns == ["code"]
     assert len(dataset) == 1
+
+
+def test_sqlite_reader_projects_only_requested_columns(fixture_db):
+    # When columns=[...] is supplied only those columns should appear in the
+    # returned Dataset; row count is unchanged.
+    dataset = SqliteReader(fixture_db, "advisers", columns=["name"]).read()
+
+    assert dataset.columns == ["name"]
+    assert len(dataset) == 3
+
+
+def test_sqlite_reader_without_columns_reads_all_columns(fixture_db):
+    # Omitting columns preserves read-everything behaviour (regression guard).
+    dataset = SqliteReader(fixture_db, "advisers").read()
+
+    assert dataset.columns == ["adviser_id", "name"]
