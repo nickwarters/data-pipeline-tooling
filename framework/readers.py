@@ -48,12 +48,20 @@ class DatasetReader:
 class CsvReader:
     """Read a CSV feed from a local file into a Dataset."""
 
-    def __init__(self, path: str | os.PathLike[str]) -> None:
+    def __init__(
+        self,
+        path: str | os.PathLike[str],
+        columns: list[str] | None = None,
+    ) -> None:
         # Path keeps separators OS-agnostic across Windows and macOS.
         self._path = Path(path)
+        self._columns = columns
 
     def read(self) -> Dataset:
-        return Dataset.from_pandas(pd.read_csv(self._path))
+        kwargs: dict = {}
+        if self._columns is not None:
+            kwargs["usecols"] = self._columns
+        return Dataset.from_pandas(pd.read_csv(self._path, **kwargs))
 
 
 class ExcelReader:
@@ -94,16 +102,23 @@ class SqliteReader:
         db_path: str | os.PathLike[str],
         table: str,
         busy_timeout_ms: int = 5000,
+        columns: list[str] | None = None,
     ) -> None:
         # Path keeps separators OS-agnostic across Windows and macOS.
         self._db_path = Path(db_path)
         self._table = table
         self._busy_timeout_ms = busy_timeout_ms
+        self._columns = columns
 
     def read(self) -> Dataset:
+        if self._columns is not None:
+            col_list = ", ".join(self._columns)
+            query = f"SELECT {col_list} FROM {self._table}"
+        else:
+            query = f"SELECT * FROM {self._table}"
         con = connect(self._db_path, self._busy_timeout_ms)
         try:
-            frame = pd.read_sql(f"SELECT * FROM {self._table}", con)
+            frame = pd.read_sql(query, con)
         finally:
             con.close()
         return Dataset.from_pandas(frame)
