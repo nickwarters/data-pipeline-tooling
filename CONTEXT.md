@@ -5,8 +5,12 @@ The data pipeline framework ingests data about reviewable work from many heterog
 ## Language
 
 **Case**:
-A normalized, source-agnostic record representing one thing to be reviewed; every feed maps its raw rows into this common shape.
+A normalized, source-agnostic record representing one thing to be reviewed; every feed maps its raw rows into this common shape. Its grain is **one row per Case**, identified by a deterministic **`case_id`** (`uuid5(case_type_namespace, natural_key)` — stable across runs; ADR-0009).
 _Avoid_: record, row, item
+
+**Detail Table**:
+A supporting table produced by the *same* Feed as a Case but holding data that does not fit the one-row-per-Case grain — repeated sections (e.g. product 1..10) or child collections — at its own finer grain (many lines per Case). Keyed back to its Case by the deterministic `case_id`, **not independently reviewable**, and rolled up to the Case downstream. A Feed yields exactly **one Case table and zero or more Detail Tables** (ADR-0009).
+_Avoid_: child table, sub-table, line item (until disambiguated), Deliverable (that is outbound)
 
 **CasePool**:
 The full population of Cases, read from the ingested silver/gold data. It exposes intention-revealing, domain-named retrievals (a representative example being `fetch_available_cases(...)`) that pipelines call instead of raw `pandas.read_sql`/`read_csv`. Method names/shapes vary by case type — `fetch_available_cases` is illustrative, not a mandated universal API.
@@ -85,6 +89,8 @@ _Avoid_: model, shape, structure (informal)
 ## Relationships
 
 - A **Case** is produced by exactly one **feed** but conforms to a single common shape regardless of origin
+- A **Feed** yields exactly **one Case table and zero or more Detail Tables**; a wide feed is fanned out by **N single-table pipelines over the shared raw table** (each projecting its own columns), not a multi-Writer terminus or a splitting processor (ADR-0009)
+- A **Detail Table** holds many lines per **Case**, linked by the deterministic **`case_id`**, and is rolled up to the Case downstream — never independently reviewed
 - A **CasePool** returns many **Cases**
 - A **Case** records the **Advisor** who conducted it
 - A **Reviewer** reviews **Cases**
@@ -99,14 +105,14 @@ _Avoid_: model, shape, structure (informal)
 
 A **subject** owns a **medallion**: three SQLite databases, one per **layer** (**raw → silver → gold**), on a network share, isolated from every other subject's files (blast-radius isolation, independent onboarding — ADR-0001). The same `raw → silver → gold` framework is **reused by every Pipeline**:
 
-| Pipeline | Scope | What its gold accumulates |
-|----------|-------|---------------------------|
-| **Ingest** | per Case Type | A Case Type's Feeds refined to gold; the **CasePool** reads this ingested silver/gold. |
-| **Selection** | per Case Type | The **SelectionPool** (chosen Cases), written into gold and emitted as a **Deliverable** to the platform. |
-| **Sync** | platform-wide | The review platform's state — **Review Outcomes** + its full picture of each Case (an outcome can change run to run). |
-| **Reporting** | platform-wide | Cross-Pipeline views (Outcomes joined to selected Cases), shaped into **Deliverables**. |
+| Pipeline | Scope | Load profile & what its gold holds |
+|----------|-------|------------------------------------|
+| **Ingest** | per Case Type | **History-upstream / current-gold** (ADR-0006 amendment): raw + silver *accumulate* the change-over-time record (the source is a destructive current-state system, so the framework is the historian); gold is *current-only*, **one row per Case** (`case_id`), the clean layer the **CasePool** reads. |
+| **Selection** | per Case Type | *Accumulate-by-run* gold: the **SelectionPool** (chosen Cases), an audit trail, written into gold and emitted as a **Deliverable** to the platform. |
+| **Sync** | platform-wide | *Accumulate-by-run* gold: the review platform's state — **Review Outcomes** + its full picture of each Case (an outcome can change run to run). |
+| **Reporting** | platform-wide | *Accumulate-by-run* gold: cross-Pipeline views (Outcomes joined to selected Cases), shaped into **Deliverables**. |
 
-So **CasePool** and **SelectionPool** relate to **Ingest** and **Selection** only; **Review Outcomes** live in the **Sync** store. Gold is, in every Pipeline, the accumulating layer whose history survives across runs (stamped `run_id` / `load_date`, idempotent re-run — ADR-0006).
+So **CasePool** and **SelectionPool** relate to **Ingest** and **Selection** only; **Review Outcomes** live in the **Sync** store. **Load strategy is per-feed, owned by the Writer** (the Store maps `layer → location` only — ADR-0006 amendment); there is no longer a single "gold accumulates everywhere" rule. Where a layer accumulates, its history survives across runs (stamped `run_id` / `load_date`, idempotent re-run via delete-by-run — ADR-0006). Ingest's *current* gold is reduced from accumulated silver (`LatestPerKey` by `case_id`) and its one-row-per-Case grain is enforced at the gold boundary (ADR-0009).
 
 **Store topology (current working assumption).** Logically each Pipeline has its own **Store**. Physically that maps to: one SQLite database **per Case Type** shared by Ingest + Selection; **one** database for **Sync** (all Case Types); **one** for **Reporting** (all Case Types). Separate Python `Store`s/Writers may point at the same underlying database file — the `Store` abstraction is decoupled from the physical file. (Layer names are placeholders — see Flagged ambiguities.)
 
@@ -134,3 +140,6 @@ So **CasePool** and **SelectionPool** relate to **Ingest** and **Selection** onl
 - **Inbound vs outbound** — RESOLVED: **Feed** is inbound-only; an outbound artifact is a **Deliverable** (file or directly-readable view). The **Sync** Pipeline is one-way inbound (no push, no correlation); the **SelectionPool** reaches the review platform as a Deliverable emitted by **Selection**.
 - **`Dataset` vs CasePool** — RESOLVED (#26): `Dataset` is the framework primitive renamed from `DataHandle` — the opaque, **bulk** in-memory carrier (the bulk tier of the two-tier carrier, ADR-0002; pandas behind the seam), returned by `Reader.read()` and flowing through builders/processors/Writers. It is **not** the **CasePool**, which is the domain population of **Cases** read from silver/gold and surfaced as typed `Case` objects. The two tiers meet only *inside* CasePool: it reads a `Dataset`, then materialises typed Cases. So "dataset" stays an `_Avoid_` alias for the *CasePool concept*, while the capitalised type `Dataset` is the carrier. (Renamed from `DataHandle` because "handle" implies a lightweight pointer; the thing actually owns a tableful of rows — the noun was the onboarding tripwire.)
 - **Store topology** — PROVISIONAL (working assumption, not yet an ADR): logically one **Store** per Pipeline; physically one SQLite DB per Case Type shared by Ingest + Selection, one DB for Sync (all Case Types), one for Reporting (all Case Types). Separate Python `Store`s/Writers may point at the same file. Revisit when Sync/Reporting are built.
+- **One feed, many tables** — RESOLVED (ADR-0009): the old "one feed → one silver table → one gold table" assumption is dropped. A Feed yields **one Case table and zero or more Detail Tables**; the wide feed is fanned out by **N single-table pipelines over the shared raw table**, each projecting its columns and sharing one reusable normalisation `Processor`. No new core seam (rejected a multi-Writer terminus and a splitting Processor — both break `.write_to`/`.run()`'s single-Writer/single-Dataset shape). Decided; not yet built.
+- **Case identity** — RESOLVED (ADR-0009): a Case's identity is a **deterministic** surrogate `case_id = uuid5(case_type_namespace, natural_key)`, derived from the feed's stable natural key — same Case → same id every run/machine, so idempotency holds and the Case ↔ Detail link needs no join. A random `uuid4` is rejected (breaks idempotency); a persistent identity map is the deferred fallback for a feed with no natural key.
+- **Load strategy vs layer** — RESOLVED (ADR-0006 amendment): load strategy is **per-feed, owned by the Writer**; the Store maps `layer → location` only (no load decision). The global "refresh upstream / accumulate downstream" rule becomes the *default* profile, not a law. Ingest adopts **history-upstream / current-gold**; Selection/Sync/Reporting keep accumulate-by-run gold. Consequence: where the source is destructive, accumulated raw/silver are a **system of record** (backup matters) and volume grows `records × snapshots`. Decided; not yet built.

@@ -37,6 +37,19 @@ names are placeholders pending a domain rename — see CONTEXT.)
 raw stays schema-light on purpose: it mirrors the source so the landing zone is
 faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 
+> **Decided, not yet built (ADR-0006 amendment, ADR-0009).** The table above
+> describes the *current* build, where the Store maps raw/silver → full-refresh
+> and gold → accumulate-by-run. That layer→strategy mapping is being replaced:
+> **load strategy becomes per-feed, owned by the Writer**, with the Store mapping
+> `layer → location` only (`store.writer(layer, table, strategy)` where strategy
+> is `Refresh()` or `AccumulateByRun(run_id, load_date)`). The **Ingest** profile
+> then flips to *history-upstream / current-gold* — raw + silver accumulate the
+> change-over-time record, gold is reduced to a current **one-row-per-Case**
+> grain (`LatestPerKey` by `case_id` + a uniqueness validator). Selection/Sync/
+> Reporting keep accumulate-by-run gold. See the two ADRs for the rationale and
+> consequences (raw becomes a backed-up system of record; volume grows
+> `records × snapshots`).
+
 > **Build status.** The **per-subject `Store`** has landed: `Store(subject_dir)`
 > *mints* that subject's layer-appropriate Writers/Readers over its own
 > `<subject_dir>/{raw,silver,gold}.db`, and the legacy global `Store.write`/`read`
@@ -65,8 +78,12 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > reference to another builder and resolves it to a DAG at `.run()`, joined in
 > Python (ADR-0003, #9; [processors doc](processors.md)). Still ahead: the
 > value-level schema rules (format / uniqueness / encoding, #24), the domain
-> capstone (CaseType/Variation + CasePool → SelectionPool, #11), and the
-> run-registry that ingests the JSONL (ADR-0005).
+> capstone (CaseType/Variation + CasePool → SelectionPool, #11), the
+> run-registry that ingests the JSONL (ADR-0005), and the multi-table feed work
+> (ADR-0006 amendment, ADR-0009): per-feed load strategy (Store maps
+> `layer → location` only), the history-upstream / current-gold Ingest profile,
+> reader column projection, the `LatestPerKey` reduction + one-row-per-Case grain
+> validator, deterministic `case_id`, and Detail Tables.
 
 ## The primitives
 
@@ -104,6 +121,12 @@ the concrete engine and are tested against **local fixture files** — no networ
 no SAS, no SharePoint. Paths are handled with `pathlib` so they behave
 identically on Windows and macOS. **How to add a Feed:**
 [`adding-a-feed.md`](adding-a-feed.md).
+
+*Decided, not yet built (ADR-0009):* a `columns=[...]` parameter on the readers
+(`CsvReader` via pandas `usecols`, `SqliteReader` pushed into the `SELECT`) lets
+a pipeline read only the columns it needs, leaving `read() -> Dataset`
+unchanged. This is what keeps each single-table pipeline narrow when a wide feed
+(650+ columns) is fanned out into a Case table and its Detail Tables.
 
 ### `Writer` — the destination, behind one method
 A `Writer` is the component-role **dual of `Reader`**: a Reader brings data in,

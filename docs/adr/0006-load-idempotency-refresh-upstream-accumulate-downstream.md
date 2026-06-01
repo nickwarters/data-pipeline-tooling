@@ -32,3 +32,48 @@ Clarifications from building the `silver_to_gold` builder (#8); see [gold-accumu
 - **This is a periodic-snapshot pattern as much as an event log.** The original decision framed gold around accumulating *selections / outcomes* (append-only events). Reused for a full per-run snapshot of a mutable entity (e.g. the Sync **Pipeline** re-syncing the review platform), the same primitive re-copies unchanged rows every run — periodic-snapshot growth (records × runs), bounded here at ~1M rows. Whether a given gold should stay a periodic snapshot or grow change-detection / SCD-style current+history is a per-Pipeline decision, deferred until a Pipeline needs it.
 
 - **The medallion is reused by every Pipeline.** `raw → silver → gold` is Pipeline-agnostic infrastructure: **Ingest**, **Selection**, **Sync** (review-platform outcomes in their own store), and **Reporting** (cross-Pipeline views shaped into Deliverables) each run their own store(s) through it. Gold is, in each, the layer whose history must survive across runs. See [CONTEXT.md](../../CONTEXT.md) for the Pipeline / Deliverable vocabulary.
+
+## Amendment (2026-06-01): load strategy is per-feed, not per-layer — and Ingest flips to history-upstream / current-gold
+
+The headline rule above — *refresh upstream (raw/silver), accumulate downstream
+(gold)* — is **superseded as a global rule**. Load strategy is now a **per-feed /
+per-Pipeline choice owned by the Writer**, with the Store mapping `layer →
+location` only and making **no** load decision — finally honouring the
+ADR-0003-amendment principle that `Store.writer` had been quietly violating by
+branching on the layer name (`_REFRESH_LAYERS`).
+
+- **Strategy is an explicit Writer choice, not a property of the layer.**
+  `store.writer(layer, table, strategy)` takes the strategy explicitly —
+  `Refresh()` (truncate + reload) or `AccumulateByRun(run_id, load_date)` — and
+  the Store only resolves *which* `<subject>/<layer>.db` the Writer targets. Two
+  feeds may land in the *same* layer with *different* strategies.
+- **Idempotency mechanics are unchanged, only relocated.** Delete-by-run-then-
+  insert and the caller-supplied *logical* `run_id` (a business/snapshot date, not
+  the run-log's per-execution uuid) still define an idempotent accumulate; they
+  now apply wherever accumulation is configured — which, for Ingest, is upstream.
+- **The Ingest profile inverts to history-upstream / current-gold.** Because
+  several sources are *destructive current-state systems* (they overwrite; history
+  cannot be re-pulled), the framework must be the historian: an Ingest feed
+  **accumulates raw and silver** (the change-over-time record) and reduces to a
+  **current-only gold** — one row per Case (ADR-0009). Gold becomes the clean,
+  enforced consumption layer feeding Selection/Reporting, rather than a
+  multi-version pile deduped on read.
+- **Selection / Sync / Reporting are unchanged** — their gold stays
+  accumulate-by-run (the SelectionPool and Review Outcomes are audit trails that
+  must survive a refresh). So "gold" no longer carries a single load semantic
+  across Pipelines: the semantic is the *Pipeline's*, expressed by the Writer it
+  composes.
+
+Consequences:
+
+- **Raw is no longer always rebuildable from source.** Where the source is
+  destructive, accumulated raw/silver become a **system of record** needing
+  backup/retention — not a transient landing zone. (This is the inverse of the
+  original Consequence about delta sources: there the *source* changed shape;
+  here the source *forgets*, so the framework must remember.)
+- **The volume envelope grows.** Accumulating raw + silver scales
+  `records × snapshots`, beyond the original ≤~1M assumption; revisit
+  retention/compaction per feed when one warrants it.
+- The original "refresh-up / accumulate-down" framing remains the **default
+  starting profile** for a simple current-state feed whose source is
+  non-destructive; it is just no longer the only profile.
