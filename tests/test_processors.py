@@ -312,3 +312,104 @@ def test_derive_key_returns_a_dataset_not_a_dataframe():
     result = DeriveKey(into="case_id", namespace=_NS, natural_key=["ref"]).process(dataset)
 
     assert isinstance(result, Dataset)
+
+
+# ---------------------------------------------------------------------------
+# LatestPerKey — collapse accumulated history to current state (issue #36)
+# ---------------------------------------------------------------------------
+
+from framework.processors import LatestPerKey
+
+
+def test_latest_per_key_keeps_one_row_per_key_with_maximum_by_value():
+    # Simulates accumulated silver history: case_id "A" has two rows with
+    # different load_dates. LatestPerKey must return the row with the max
+    # load_date and drop the earlier one.
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({
+            "case_id": ["A", "A", "B"],
+            "load_date": ["2024-01-01", "2024-03-01", "2024-02-01"],
+            "status": ["open", "closed", "open"],
+        })
+    )
+
+    result = LatestPerKey(key="case_id", by="load_date").process(dataset).to_pandas()
+
+    assert len(result) == 2
+    assert set(result["case_id"]) == {"A", "B"}
+    # The latest row for A is the "closed" one (2024-03-01)
+    row_a = result[result["case_id"] == "A"].iloc[0]
+    assert row_a["status"] == "closed"
+
+
+def test_latest_per_key_supports_multi_column_keys():
+    # key can be a list of column names; the unique key is the combination.
+    # Entity (type="complaint", ref="C1") has two rows; (type="request", ref="C1")
+    # has one. Result must have one row per (type, ref) pair.
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({
+            "type": ["complaint", "complaint", "request"],
+            "ref": ["C1", "C1", "C1"],
+            "load_date": ["2024-01-01", "2024-06-01", "2024-03-01"],
+            "status": ["open", "resolved", "pending"],
+        })
+    )
+
+    result = LatestPerKey(key=["type", "ref"], by="load_date").process(dataset).to_pandas()
+
+    assert len(result) == 2
+    complaint_row = result[result["type"] == "complaint"].iloc[0]
+    assert complaint_row["status"] == "resolved"
+
+
+def test_latest_per_key_ties_resolve_to_last_row_in_input_order():
+    # When two rows share the same maximum `by` value (a tie), the row that
+    # appears last in the input is kept. This is the documented tie-break rule.
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({
+            "case_id": ["A", "A"],
+            "load_date": ["2024-01-01", "2024-01-01"],
+            "status": ["first", "second"],
+        })
+    )
+
+    result = LatestPerKey(key="case_id", by="load_date").process(dataset).to_pandas()
+
+    assert len(result) == 1
+    assert result.iloc[0]["status"] == "second"
+
+
+def test_latest_per_key_raises_when_key_column_is_missing():
+    # A located error (naming the missing column) is raised when the key column
+    # is absent from the dataset — prevents silent wrong results.
+    import pytest
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"load_date": ["2024-01-01"], "status": ["open"]})
+    )
+
+    with pytest.raises(ValueError, match="case_id"):
+        LatestPerKey(key="case_id", by="load_date").process(dataset)
+
+
+def test_latest_per_key_raises_when_by_column_is_missing():
+    # A located error is raised when the `by` column is absent — the caller
+    # must know exactly which column is missing to fix their pipeline.
+    import pytest
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"case_id": ["A"], "status": ["open"]})
+    )
+
+    with pytest.raises(ValueError, match="load_date"):
+        LatestPerKey(key="case_id", by="load_date").process(dataset)
+
+
+def test_latest_per_key_returns_a_dataset_not_a_dataframe():
+    # Engine-confined (ADR-0002): process() must return a Dataset, keeping
+    # pandas behind the seam — callers never touch the backing frame directly.
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"case_id": ["A"], "load_date": ["2024-01-01"], "status": ["open"]})
+    )
+
+    result = LatestPerKey(key="case_id", by="load_date").process(dataset)
+
+    assert isinstance(result, Dataset)
