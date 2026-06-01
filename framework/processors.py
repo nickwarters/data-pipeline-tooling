@@ -24,7 +24,7 @@ and joined in Python only at ``.run()`` (ADR-0003).
 from __future__ import annotations
 
 import uuid
-from typing import Any, Callable, Mapping, Protocol, Sequence, runtime_checkable
+from typing import Any, Callable, Literal, Mapping, Protocol, Sequence, runtime_checkable
 
 from framework.dataset import Dataset
 
@@ -80,7 +80,7 @@ class Filter:
 
     def process(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()  # engine-confined (ADR-0002)
-        kept = frame[frame.apply(lambda row: self._predicate(row), axis=1)]
+        kept = frame.loc[frame.apply(lambda row: self._predicate(row), axis=1)]
         return Dataset.from_pandas(kept)
 
 
@@ -164,6 +164,9 @@ class Rename:
         return Dataset.from_pandas(frame.rename(columns=self._mapping))
 
 
+_MergeHow = Literal["left", "right", "inner", "outer", "cross"]
+
+
 class JoinWith:
     """Join the feed against another feed, resolved lazily at run time.
 
@@ -184,7 +187,7 @@ class JoinWith:
         other: Runnable,
         *,
         on: str | Sequence[str],
-        how: str = "inner",
+        how: _MergeHow = "inner",
     ) -> None:
         self._other = other
         self._on = on
@@ -195,7 +198,7 @@ class JoinWith:
         # merge in Python, both behind the Dataset seam (ADR-0002).
         frame = dataset.to_pandas()
         other_frame = self._other.run().to_pandas()
-        merged = frame.merge(other_frame, on=self._on, how=self._how)
+        merged = frame.merge(other_frame, on=self._on, how=self._how)  # type: ignore[arg-type]
         return Dataset.from_pandas(merged)
 
 
