@@ -10,7 +10,7 @@ from framework.gold import ingest_silver_to_gold, silver_to_gold
 from framework.store import Store
 from framework.strategy import AccumulateByRun, Refresh
 from framework.validators import ValidationError
-from tests._schema_fixtures import LandedCase
+from tests._schema_fixtures import LandedCase, RuledCase
 
 _NS = uuid.uuid5(uuid.NAMESPACE_DNS, "cases")
 
@@ -126,6 +126,32 @@ def test_silver_to_gold_aborts_at_the_gold_boundary_without_writing(tmp_path):
             run_id="2026-05-30",
             load_date="2026-05-30",
             schema=LandedCase,
+        ).run()
+
+    assert not (tmp_path / "gold.db").exists()
+
+
+def test_silver_to_gold_aborts_on_a_value_rule_breach_without_writing(tmp_path):
+    # Value-level rules (#24) enforce at the gold boundary on the same footing as
+    # silver, via the same SchemaValidator post-validator: a breach (a case_ref
+    # failing its 9-10 digit Pattern) aborts before the gold write — fail-fast and
+    # atomic (ADR-0007), so no gold.db is written.
+    store = Store(tmp_path)
+    _land_silver(
+        store,
+        "selection_pool",
+        pd.DataFrame(
+            {"case_ref": ["123456789", "NOPE"], "status": ["open", "closed"]}
+        ),
+    )
+
+    with pytest.raises(ValidationError, match="post-validate failed.*violates pattern"):
+        silver_to_gold(
+            store,
+            "selection_pool",
+            run_id="2026-05-30",
+            load_date="2026-05-30",
+            schema=RuledCase,
         ).run()
 
     assert not (tmp_path / "gold.db").exists()

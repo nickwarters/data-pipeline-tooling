@@ -7,7 +7,7 @@ from framework.silver import raw_to_silver
 from framework.store import Store
 from framework.strategy import AccumulateByRun, Refresh
 from framework.validators import ValidationError
-from tests._schema_fixtures import CoercedCase, LandedCase
+from tests._schema_fixtures import CoercedCase, LandedCase, RuledCase
 
 
 def _land_raw(store: Store, table: str, frame: pd.DataFrame, strategy=None) -> None:
@@ -49,6 +49,29 @@ def test_raw_to_silver_aborts_at_the_silver_boundary_without_writing(tmp_path):
 
     with pytest.raises(ValidationError, match="post-validate failed.*score"):
         raw_to_silver(store, "cases", LandedCase).run()
+
+    assert not (tmp_path / "silver.db").exists()
+
+
+def test_raw_to_silver_aborts_on_a_value_rule_breach_without_writing(tmp_path):
+    # Value-level rules (#24) ride the same SchemaValidator post-validator, so a
+    # breach (here a case_ref that fails its 9-10 digit Pattern) aborts at the
+    # silver boundary with a located message — and, fail-fast/atomic (ADR-0007),
+    # no silver.db is written. Both fields are str, so coercion is not involved.
+    store = Store(tmp_path)
+    _land_raw(
+        store,
+        "cases",
+        pd.DataFrame(
+            {
+                "case_ref": ["123456789", "NOPE"],
+                "status": ["open", "closed"],
+            }
+        ),
+    )
+
+    with pytest.raises(ValidationError, match="post-validate failed.*violates pattern"):
+        raw_to_silver(store, "cases", RuledCase).run()
 
     assert not (tmp_path / "silver.db").exists()
 

@@ -16,16 +16,22 @@ pandas knowledge this module owns:
 Unlike the structural checks in :mod:`framework.validators` (which read only the
 dataset's engine-agnostic shape), both inspect/transform column *values*, so they
 are **engine-confined**: they reach the backing frame via ``to_pandas()`` exactly
-as a Reader/Writer/processor does (ADR-0002). Richer value-level rules (format,
-uniqueness, encoding) are later validators of the same engine-confined shape;
-the dataclass annotations stay the single source of truth they extend.
+as a Reader/Writer/processor does (ADR-0002).
+
+``SchemaValidator`` also runs **value-level rules** (#24) — ``Pattern`` / ``Length``
+/ ``Unique`` / ``OneOf``, attached to a field via ``Annotated[type, Rule(...)]`` so
+the dataclass annotations stay the single source of truth they extend. The rules
+check column *contents* (format, length, uniqueness, membership) on the same
+engine-confined seam as the dtype check, and their breaches join the dtype
+breaches in the validator's one located message.
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import fields
 from datetime import date, datetime
-from typing import Callable, get_type_hints
+from typing import Callable, Protocol, get_type_hints, runtime_checkable
 
 import pandas as pd
 from pandas.api import types as pdt
@@ -33,6 +39,142 @@ from pandas.api import types as pdt
 from framework.dataset import Dataset
 from framework.processors import CoercionError
 from framework.validators import ValidationError
+
+# Cap on how many offending values a breach message lists, so a column that is
+# wrong in thousands of rows still produces one readable located message rather
+# than dumping the frame (ADR-0007: a breach names the problem, not every row).
+_SAMPLE_LIMIT = 5
+
+
+@runtime_checkable
+class ValueRule(Protocol):
+    """A value-level expectation attached to a schema field via ``Annotated``.
+
+    Where the columns+dtypes contract checks a column's *shape*, a value rule
+    checks its *contents* — format, length, uniqueness, membership. Rules are
+    declared on the same Case Type dataclass (``Annotated[type, Rule(...)]``) so
+    the annotations stay the single source of truth (ADR-0008), and run on the
+    same engine-confined seam as the dtype check: each is handed the column's
+    pandas Series directly. A rule returns ``None`` when satisfied, else a short
+    phrase describing the breach (the column name is prefixed by the validator).
+    """
+
+    def check(self, series: "pd.Series") -> str | None:
+        """Return a breach phrase if ``series`` breaks the rule, else ``None``."""
+        ...
+
+
+def _sample(values: "pd.Series") -> str:
+    """Format up to ``_SAMPLE_LIMIT`` offending values for a breach message.
+
+    Sorted for a deterministic message and capped so a wholly-wrong column is
+    still diagnosable in one line; a trailing ``...`` marks an elided remainder.
+    """
+    offenders = sorted(set(values.astype(str)))
+    shown = ", ".join(repr(v) for v in offenders[:_SAMPLE_LIMIT])
+    if len(offenders) > _SAMPLE_LIMIT:
+        shown += ", ..."
+    return shown
+
+
+class Pattern:
+    """Require every (non-null) value to fully match a regular expression.
+
+    The format check of the issue's worked example — an id that must be 9-10
+    numeric characters rejects letters and 11+ chars. The regex compiles at
+    construction so a malformed pattern fails where the schema is composed, not
+    mid-run (mirroring the validator's unsupported-dtype guard). Null values are
+    out of scope — nullability is a separate concern.
+    """
+
+    def __init__(self, pattern: str) -> None:
+        self._source = pattern
+        self._regex = re.compile(pattern)  # fail-fast on a malformed pattern
+
+    def check(self, series: "pd.Series") -> str | None:
+        present = series.dropna()
+        matched = present.astype("string").str.fullmatch(self._regex)
+        breaches = present[~matched.fillna(False)]
+        if not breaches.empty:
+            return f"violates pattern {self._source!r} (e.g. {_sample(breaches)})"
+        return None
+
+
+class Length:
+    """Require every (non-null) value's string length to sit in ``[min, max]``.
+
+    Either bound is optional — ``minimum`` guards against a truncated value,
+    ``maximum`` against an overlong one; ``None`` leaves that side open (mirroring
+    :class:`~framework.validators.RowCountValidator`'s inclusive bounds). A
+    contradictory pair (min > max) is a configuration error raised at
+    construction. Null values are out of scope.
+    """
+
+    def __init__(
+        self, minimum: int | None = None, maximum: int | None = None
+    ) -> None:
+        if minimum is None and maximum is None:
+            raise ValueError("Length requires at least one of minimum / maximum")
+        if minimum is not None and maximum is not None and minimum > maximum:
+            raise ValueError(
+                f"Length minimum {minimum} exceeds maximum {maximum}"
+            )
+        self._minimum = minimum
+        self._maximum = maximum
+
+    def check(self, series: "pd.Series") -> str | None:
+        present = series.dropna()
+        lengths = present.astype("string").str.len()
+        too_short = lengths < self._minimum if self._minimum is not None else False
+        too_long = lengths > self._maximum if self._maximum is not None else False
+        breaches = present[too_short | too_long]
+        if not breaches.empty:
+            lo = self._minimum if self._minimum is not None else ""
+            hi = self._maximum if self._maximum is not None else ""
+            return f"length not in [{lo}, {hi}] (e.g. {_sample(breaches)})"
+        return None
+
+
+class Unique:
+    """Require a field's (non-null) values to be distinct — no duplicate keys.
+
+    The field-annotation form of uniqueness, sitting beside the columns+dtypes
+    contract. It complements :class:`~framework.validators.UniqueValidator`,
+    which enforces the one-row-per-Case *grain* on a (possibly composite) key at
+    the gold boundary (ADR-0009); this rule states the expectation declaratively
+    on the schema field itself. Null values are out of scope, so repeated missing
+    values are not flagged as duplicates.
+    """
+
+    def check(self, series: "pd.Series") -> str | None:
+        present = series.dropna()
+        dupes = present[present.duplicated(keep=False)]
+        if not dupes.empty:
+            return f"has duplicate value(s): {_sample(dupes)}"
+        return None
+
+
+class OneOf:
+    """Require every (non-null) value to be a member of an allowed set.
+
+    The value-set / encoding rule: a status restricted to ``"open"``/``"closed"``,
+    or a flag restricted to a known encoding. An empty set can never be satisfied
+    and is rejected at construction. Null values are out of scope.
+    """
+
+    def __init__(self, *allowed: object) -> None:
+        if not allowed:
+            raise ValueError("OneOf requires at least one allowed value")
+        self._allowed = set(allowed)
+
+    def check(self, series: "pd.Series") -> str | None:
+        present = series.dropna()
+        breaches = present[~present.isin(self._allowed)]
+        if not breaches.empty:
+            allowed = ", ".join(sorted(repr(v) for v in self._allowed))
+            return f"has value(s) outside {{{allowed}}}: {_sample(breaches)}"
+        return None
+
 
 # Python declared type -> (predicate over a pandas dtype, human label). The
 # mapping is the seam between the dataclass contract and the concrete engine; it
@@ -49,17 +191,46 @@ _DTYPE_CHECKS: dict[type, tuple[Callable[[object], bool], str]] = {
 }
 
 
+def _unwrap(hint: object) -> tuple[type, tuple[object, ...]]:
+    """Split an ``Annotated[type, *rules]`` hint into ``(base type, metadata)``.
+
+    A plain annotation passes through with empty metadata, so the columns+dtypes
+    path from #7 is untouched; an ``Annotated`` field yields its underlying type
+    (for the dtype check) and the attached value rules (``__metadata__``).
+    """
+    if hasattr(hint, "__metadata__"):
+        return hint.__origin__, hint.__metadata__  # type: ignore[attr-defined]
+    return hint, ()  # type: ignore[return-value]
+
+
 def _declared_fields(schema: type) -> list[tuple[str, type]]:
     """Return a schema's ``(column, declared type)`` pairs, in declaration order.
 
     Resolves postponed (string) annotations to their types: the framework uses
     ``from __future__ import annotations``, so ``fields(...).type`` is a string;
-    ``get_type_hints`` evaluates each against the schema's own module. The single
-    place the dataclass→column/type reading lives, shared by the validator and
-    the coercer.
+    ``get_type_hints`` evaluates each against the schema's own module. Any
+    ``Annotated`` value-rule metadata is stripped to the base type here, so the
+    validator's dtype check and the coercer keep seeing plain Python types. The
+    single place the dataclass→column/type reading lives.
     """
-    hints = get_type_hints(schema)
-    return [(f.name, hints[f.name]) for f in fields(schema)]
+    hints = get_type_hints(schema, include_extras=True)
+    return [(f.name, _unwrap(hints[f.name])[0]) for f in fields(schema)]
+
+
+def _declared_rules(schema: type) -> list[tuple[str, list[ValueRule]]]:
+    """Return a schema's ``(column, [value rules])`` pairs for fields that have any.
+
+    The companion of :func:`_declared_fields` for the value-level contract: it
+    reads the ``Annotated`` metadata off each field, keeping only the
+    :class:`ValueRule` entries (other annotations, if any, are ignored).
+    """
+    hints = get_type_hints(schema, include_extras=True)
+    declared: list[tuple[str, list[ValueRule]]] = []
+    for f in fields(schema):
+        rules = [m for m in _unwrap(hints[f.name])[1] if isinstance(m, ValueRule)]
+        if rules:
+            declared.append((f.name, rules))
+    return declared
 
 
 class SchemaValidator:
@@ -74,6 +245,7 @@ class SchemaValidator:
     def __init__(self, schema: type) -> None:
         self._schema = schema
         self._expected = _declared_fields(schema)
+        self._rules = _declared_rules(schema)
         # Fail at build time on a type the adapter cannot map to a dtype, so a
         # mis-declared schema surfaces where it is composed, not mid-run.
         unsupported = [
@@ -95,6 +267,7 @@ class SchemaValidator:
         frame = dataset.to_pandas()  # engine-confined (ADR-0002)
         present = set(frame.columns)
         problems: list[str] = []
+        ill_typed: set[str] = set()
         for name, declared in self._expected:
             if name not in present:
                 problems.append(f"missing column {name!r}")
@@ -105,6 +278,19 @@ class SchemaValidator:
                 problems.append(
                     f"column {name!r} expected {label} but found {actual}"
                 )
+                ill_typed.add(name)
+        # Value rules run on the same engine-confined frame, but only over columns
+        # that are present and carry the declared dtype — a wrong-typed column's
+        # dtype breach is the prior problem to fix, and running e.g. a string rule
+        # over it would report a spurious second failure. Every breach still lands
+        # in the one located message alongside the shape problems.
+        for name, rules in self._rules:
+            if name not in present or name in ill_typed:
+                continue
+            for rule in rules:
+                breach = rule.check(frame[name])
+                if breach is not None:
+                    problems.append(f"column {name!r} {breach}")
         if problems:
             raise ValidationError(
                 f"{self._schema.__name__} schema: " + "; ".join(problems)
