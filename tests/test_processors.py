@@ -414,3 +414,103 @@ def test_latest_per_key_returns_a_dataset_not_a_dataframe():
     result = LatestPerKey(key="case_id", by="load_date").process(dataset)
 
     assert isinstance(result, Dataset)
+
+
+# ---------------------------------------------------------------------------
+# SelectColumns — project a subset of columns (issue #39)
+# ---------------------------------------------------------------------------
+
+from framework.processors import SelectColumns
+
+
+def test_select_columns_keeps_only_the_listed_columns():
+    # SelectColumns is the column-projection seam: each fan-out pipeline reads
+    # only the columns it needs from the shared raw table (ADR-0009).
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"case_ref": ["c1"], "amount": [100], "product_1": ["widget"]})
+    )
+
+    result = SelectColumns(["case_ref", "amount"]).process(dataset).to_pandas()
+
+    assert list(result.columns) == ["case_ref", "amount"]
+    assert "product_1" not in result.columns
+
+
+def test_select_columns_raises_when_a_column_is_missing():
+    # A misconfigured projection is caught immediately so a silent wrong result
+    # (missing column without error) can't reach the Writer.
+    import pytest
+
+    dataset = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c1"]}))
+
+    with pytest.raises(ValueError, match="product_1"):
+        SelectColumns(["case_ref", "product_1"]).process(dataset)
+
+
+# ---------------------------------------------------------------------------
+# Unpivot — wide→long reshape for Detail Tables (issue #39)
+# ---------------------------------------------------------------------------
+
+from framework.processors import Unpivot
+
+
+def test_unpivot_melts_value_vars_into_one_row_per_value():
+    # The wide→long unpivot at the heart of the Detail Table fan-out (ADR-0009):
+    # each product column becomes a row, so product_1..N are not repeated fields
+    # but a proper one-row-per-product Detail Table.
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({
+            "case_ref": ["c1", "c2"],
+            "product_1": ["widget", "gadget"],
+            "product_2": ["doodad", None],
+        })
+    )
+
+    result = Unpivot(
+        id_vars=["case_ref"],
+        value_vars=["product_1", "product_2"],
+        var_name="product_slot",
+        value_name="product_name",
+        drop_empty=False,
+    ).process(dataset).to_pandas()
+
+    # 2 cases × 2 products = 4 rows (before dropping empties)
+    assert len(result) == 4
+    assert set(result.columns) == {"case_ref", "product_slot", "product_name"}
+
+
+def test_unpivot_drops_null_and_blank_values_by_default():
+    # drop_empty=True (the default) removes rows where the value is None or
+    # blank — the normal behaviour for wide product feeds with unoccupied slots.
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({
+            "case_ref": ["c1"],
+            "product_1": ["widget"],
+            "product_2": [None],
+            "product_3": ["   "],
+        })
+    )
+
+    result = Unpivot(
+        id_vars=["case_ref"],
+        value_vars=["product_1", "product_2", "product_3"],
+        var_name="slot",
+        value_name="name",
+    ).process(dataset).to_pandas()
+
+    # Only the non-empty product_1 row survives
+    assert len(result) == 1
+    assert result.iloc[0]["name"] == "widget"
+
+
+def test_unpivot_returns_a_dataset_not_a_dataframe():
+    # Engine-confined (ADR-0002): process() must return a Dataset.
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"case_ref": ["c1"], "product_1": ["widget"]})
+    )
+
+    result = Unpivot(
+        id_vars=["case_ref"], value_vars=["product_1"], var_name="slot", value_name="name"
+    ).process(dataset)
+
+    assert isinstance(result, Dataset)
