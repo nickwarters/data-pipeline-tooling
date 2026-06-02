@@ -19,10 +19,11 @@ def _case_type() -> CaseType:
     )
 
 
-def _land_silver_cases(store: Store, frame: pd.DataFrame) -> None:
-    # Land Cases into silver exactly as an ingest raw->silver run would — dates
-    # land as text (SQLite has no date type), which is what the CasePool re-reads.
-    store.writer("silver", "cases", Refresh()).write(Dataset.from_pandas(frame))
+def _land_gold_cases(store: Store, frame: pd.DataFrame) -> None:
+    # Land Cases into the ingest gold exactly as an ingest_silver_to_gold run
+    # would — one row per Case, dates as text (SQLite has no date type), which
+    # is what the CasePool re-reads (ADR-0006 amendment).
+    store.writer("gold", "cases", Refresh()).write(Dataset.from_pandas(frame))
 
 
 def test_fetch_available_cases_keeps_only_cases_inside_the_working_day_window(
@@ -33,7 +34,7 @@ def test_fetch_available_cases_keeps_only_cases_inside_the_working_day_window(
     # silver and narrows to that window using the WorkingDayCalendar — the domain
     # retrieval Selection calls instead of a raw read.
     store = Store(tmp_path / "cases")
-    _land_silver_cases(
+    _land_gold_cases(
         store,
         pd.DataFrame(
             {
@@ -67,7 +68,7 @@ def test_fetch_available_cases_returns_an_empty_pool_when_none_are_eligible(
     # No Case dated inside the window yields an empty pool, not an error — an
     # empty SelectionPool is a legitimate outcome a downstream run must tolerate.
     store = Store(tmp_path / "cases")
-    _land_silver_cases(
+    _land_gold_cases(
         store,
         pd.DataFrame(
             {

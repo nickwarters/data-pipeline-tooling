@@ -5,15 +5,17 @@ from framework.dataset import Dataset
 from framework.processors import CoercionError
 from framework.silver import raw_to_silver
 from framework.store import Store
-from framework.strategy import Refresh
+from framework.strategy import AccumulateByRun, Refresh
 from framework.validators import ValidationError
 from tests._schema_fixtures import CoercedCase, LandedCase
 
 
-def _land_raw(store: Store, table: str, frame: pd.DataFrame) -> None:
+def _land_raw(store: Store, table: str, frame: pd.DataFrame, strategy=None) -> None:
     # Land a snapshot into raw exactly as an upstream source->raw pipeline would
     # — schema-light, no enforcement at raw (ADR-0008).
-    store.writer("raw", table, Refresh()).write(Dataset.from_pandas(frame))
+    store.writer("raw", table, strategy if strategy is not None else Refresh()).write(
+        Dataset.from_pandas(frame)
+    )
 
 
 def test_raw_to_silver_validates_then_writes_silver_db(tmp_path):
@@ -110,3 +112,68 @@ def test_raw_stays_schema_light(tmp_path):
     landed = store.reader("raw", "cases").read()
     assert len(landed) == 1
     assert list(landed.to_pandas()["score"]) == ["not-an-int"]
+
+
+# ---------------------------------------------------------------------------
+# Ingest history-upstream profile — AccumulateByRun strategy (ADR-0006 amendment)
+# ---------------------------------------------------------------------------
+
+
+def test_raw_to_silver_accumulates_when_strategy_is_accumulate_by_run(tmp_path):
+    # With AccumulateByRun the builder stamps run_id / load_date and appends rows
+    # rather than refreshing — the Ingest profile's silver is a historian for a
+    # destructive current-state source (ADR-0006 amendment).
+    store = Store(tmp_path)
+    _land_raw(
+        store, "cases",
+        pd.DataFrame({"case_ref": ["c1", "c2"], "score": [10, 20]}),
+        strategy=AccumulateByRun("2026-05-29", "2026-05-29"),
+    )
+
+    raw_to_silver(store, "cases", LandedCase, strategy=AccumulateByRun("2026-05-29", "2026-05-29")).run()
+
+    landed = store.reader("silver", "cases").read().to_pandas()
+    assert len(landed) == 2
+    assert set(landed["run_id"]) == {"2026-05-29"}
+    assert set(landed["load_date"]) == {"2026-05-29"}
+
+
+def test_raw_to_silver_accumulate_re_run_is_idempotent(tmp_path):
+    # Re-driving the same run_id with AccumulateByRun is idempotent: delete-by-run
+    # then insert, so re-running the same snapshot never duplicates silver rows.
+    store = Store(tmp_path)
+    _land_raw(
+        store, "cases",
+        pd.DataFrame({"case_ref": ["c1"], "score": [10]}),
+        strategy=AccumulateByRun("2026-05-29", "2026-05-29"),
+    )
+
+    raw_to_silver(store, "cases", LandedCase, strategy=AccumulateByRun("2026-05-29", "2026-05-29")).run()
+    raw_to_silver(store, "cases", LandedCase, strategy=AccumulateByRun("2026-05-29", "2026-05-29")).run()
+
+    assert len(store.reader("silver", "cases").read()) == 1
+
+
+def test_raw_to_silver_accumulate_retains_history_across_distinct_runs(tmp_path):
+    # Distinct run_ids accumulate — silver becomes the system of record for a
+    # destructive source, so a later snapshot adds its rows and never wipes prior
+    # runs' rows (ADR-0006 amendment).
+    store = Store(tmp_path)
+
+    _land_raw(
+        store, "cases",
+        pd.DataFrame({"case_ref": ["c1"], "score": [10]}),
+        strategy=AccumulateByRun("2026-05-29", "2026-05-29"),
+    )
+    raw_to_silver(store, "cases", LandedCase, strategy=AccumulateByRun("2026-05-29", "2026-05-29")).run()
+
+    _land_raw(
+        store, "cases",
+        pd.DataFrame({"case_ref": ["c1"], "score": [99]}),
+        strategy=AccumulateByRun("2026-05-30", "2026-05-30"),
+    )
+    raw_to_silver(store, "cases", LandedCase, strategy=AccumulateByRun("2026-05-30", "2026-05-30")).run()
+
+    landed = store.reader("silver", "cases").read().to_pandas()
+    assert len(landed) == 2
+    assert set(landed["run_id"]) == {"2026-05-29", "2026-05-30"}

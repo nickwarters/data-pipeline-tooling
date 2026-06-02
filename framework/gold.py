@@ -27,11 +27,15 @@ its pure accumulate pass-through.
 
 from __future__ import annotations
 
+import uuid
+
 from framework.builder import Pipeline
+from framework.processors import DeriveKey, LatestPerKey
 from framework.run_log import RunLog
 from framework.schema import SchemaValidator
 from framework.store import Store
-from framework.strategy import AccumulateByRun
+from framework.strategy import AccumulateByRun, Refresh
+from framework.validators import UniqueValidator
 
 
 def silver_to_gold(
@@ -59,3 +63,34 @@ def silver_to_gold(
     if schema is not None:
         pipeline.with_post_validator(SchemaValidator(schema))
     return pipeline.write_to(store.writer("gold", table, AccumulateByRun(run_id, load_date)))
+
+
+def ingest_silver_to_gold(
+    store: Store,
+    table: str,
+    *,
+    namespace: uuid.UUID,
+    natural_key: list[str],
+    by: str = "load_date",
+    case_id_column: str = "case_id",
+    name: str | None = None,
+    run_log: RunLog | None = None,
+) -> Pipeline:
+    """Compose the Ingest silver->gold reduction for one subject's ``table``.
+
+    Reads the subject's accumulated silver (full change-over-time history),
+    derives a deterministic ``case_id`` from ``natural_key`` under ``namespace``
+    (ADR-0009), collapses history to the latest row per Case via
+    ``LatestPerKey`` (ordered by ``by``, defaults to ``load_date``), enforces
+    the one-row-per-Case grain at the gold boundary via ``UniqueValidator``,
+    and writes a current-only gold via ``Refresh`` (truncate + reload) so that
+    gold always holds exactly one row per live Case. Returns the composed
+    :class:`~framework.builder.Pipeline`; call ``.run()`` to execute.
+    """
+    return (
+        Pipeline(name or table, store.reader("silver", table), run_log)
+        .with_processor(DeriveKey(into=case_id_column, namespace=namespace, natural_key=natural_key))
+        .with_processor(LatestPerKey(key=case_id_column, by=by))
+        .with_post_validator(UniqueValidator(case_id_column))
+        .write_to(store.writer("gold", table, Refresh()))
+    )
