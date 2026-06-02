@@ -190,8 +190,79 @@ A breach raises at **post-validate**, before the writer's delete-by-run/insert
 transaction (ADR-0007) — so a failed run accumulates nothing and leaves prior
 runs' gold rows intact. See [`gold-accumulation.md`](gold-accumulation.md).
 
+## Value-level rules — format / length / uniqueness / value-set (#24)
+
+Columns + dtypes check a column's *shape*; **value-level rules** check its
+*contents*. They extend the **same** Case Type dataclass — attached to a field
+via `typing.Annotated`, so the annotations stay the single source of truth — and
+run on the same engine-confined `SchemaValidator` seam at silver **and** gold:
+
+```python
+from dataclasses import dataclass
+from datetime import date
+from typing import Annotated
+
+from framework.schema import Pattern, Length, Unique, OneOf
+
+@dataclass
+class CaseA:
+    case_ref: Annotated[str, Pattern(r"\d{9,10}"), Unique()]  # 9–10 digits, no dup keys
+    name:     Annotated[str, Length(maximum=50)]              # at most 50 chars
+    status:   Annotated[str, OneOf("open", "closed")]         # value-set membership
+    opened:   date                                            # plain field — unchanged
+```
+
+A field can carry **several** rules (they all run), or none — a bare
+`opened: date` keeps the exact columns+dtypes behaviour from #7, so the plain
+path is untouched.
+
+### The rule vocabulary
+
+| Rule | Checks | Breach phrase |
+|------|--------|---------------|
+| `Pattern(regex)` | every value **fully matches** the regex (e.g. a 9–10 digit id rejects letters / 11+ chars) | `violates pattern '\d{9,10}' (e.g. 'ABC', '12')` |
+| `Length(minimum=, maximum=)` | string length within the inclusive `[min, max]`; either bound optional | `length not in [2, 4] (e.g. 'x', 'toolong')` |
+| `Unique()` | no duplicate values in the column | `has duplicate value(s): 'dup'` |
+| `OneOf(*allowed)` | membership in an allowed set (value-set / encoding) | `has value(s) outside {'closed', 'open'}: 'pending'` |
+
+Three shared properties:
+
+- **Null values are out of scope.** Each rule checks only *present* (non-null)
+  values; nullability is a separate concern (a possible future `Required` rule).
+- **Configuration errors fail where the schema is composed**, not mid-run: a
+  malformed `Pattern` regex, a `Length` with `min > max`, or an empty `OneOf`
+  raises when the rule is constructed — mirroring the validator's
+  unsupported-dtype guard.
+- **Breaches are sampled, not dumped.** A message lists up to five offending
+  values (sorted, then `...`), so a wholly-wrong column stays one readable line.
+
+### One message, naming column + rule
+
+Value-rule breaches join the dtype/column breaches in the validator's **single**
+located message (the "report at once" contract from #7), each naming its column
+and rule:
+
+```
+CaseA schema: column 'case_ref' violates pattern '\d{9,10}' (e.g. '12', 'ABC'); column 'status' has value(s) outside {'closed', 'open'}: 'pending'
+```
+
+A value rule is **skipped for a column whose dtype is wrong** — the dtype breach
+is the prior problem to fix, and running a string-shaped rule over a mistyped
+column would only add a spurious second failure.
+
+### Where they bite
+
+`SchemaValidator` is already the post-validator on both `raw_to_silver` and
+`silver_to_gold`, so the value rules enforce at **both** boundaries with no
+builder change. As with dtype breaches, a value-rule breach raises at the
+post-validate step **before** the writer runs — so the run aborts fail-fast and
+atomically (ADR-0007) and nothing partial lands. `Unique` here is the
+field-annotation form of uniqueness; the one-row-per-Case *grain* on a (possibly
+composite) key stays the job of `UniqueValidator` at the gold boundary (#37,
+ADR-0009).
+
 ## Not yet (follow-on tickets)
 
-- **Value-level rules.** Format/pattern (e.g. a 9–10 digit id), length,
-  uniqueness (duplicate keys), and value-set/encoding membership extend the same
-  dataclass and run as later validators on the same engine-confined seam (#24).
+- **Nullability.** A `Required` rule (or a nullable-by-default policy) is the
+  natural next field-level contract — value rules deliberately leave nulls out
+  of scope today.

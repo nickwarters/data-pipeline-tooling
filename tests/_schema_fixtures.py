@@ -10,6 +10,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from typing import Annotated
+
+from framework.schema import OneOf, Pattern, Unique
 
 
 @dataclass
@@ -49,3 +52,13 @@ class CoercedCase:
     case_ref: str
     opened: date
     active: bool
+
+
+@dataclass
+class RuledCase:
+    # Value-level rules (#24) attached via Annotated on a module that uses
+    # `from __future__ import annotations`, so the rule-bearing hints arrive as
+    # strings the validator must resolve with include_extras. The realistic
+    # condition for the value-rule contract, mirroring DeferredCase for dtypes.
+    case_ref: Annotated[str, Pattern(r"\d{9,10}"), Unique()]
+    status: Annotated[str, OneOf("open", "closed")]
