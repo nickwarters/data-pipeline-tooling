@@ -20,6 +20,10 @@ _Avoid_: repository, dataset (as a name for the CasePool — the capitalised fra
 The narrowed set of Cases the Selection pipeline produces by pulling from the CasePool and applying filter/score/sort/join — i.e. the Cases actually chosen for review.
 _Avoid_: shortlist, batch
 
+**Sampling**:
+A per-group narrowing technique Selection may apply, reducing each group (one or more key columns, e.g. **Adviser**, or Adviser × region) to at most *N* Cases. Two forms: **ranked** — the highest-scoring *N* per group, deterministic by a score (the common case is *N*=1, "the single highest available per Adviser"); and **random** — *N* drawn at random per group, made **reproducible** by a fixed **seed** (a pure function of input + seed; run-to-run variation comes from the upstream-narrowed population, not the seed — ADR-0010). The cut is itself a **selection decision**: the Cases dropped beyond *N* are excluded *with a reason*, captured by the selection trace (issue #53), never silently absent.
+_Avoid_: picking; "sample" as a loose name for the **SelectionPool** as a whole (sampling is one technique that helps produce it, not the result)
+
 **Available Cases**:
 An illustrative retrieval on the CasePool: candidate Cases eligible to enter Selection, defined by business availability criteria (e.g. activity dated yesterday; a subset of Advisers within the last 20 working days). Eligibility is computed in Python, not SQL.
 _Avoid_: queue, outstanding cases
@@ -72,7 +76,7 @@ _Avoid_: import, load, ETL
 
 **Selection**:
 The Pipeline that reads the **CasePool** and produces the **SelectionPool** (filter/score/sort/join with other feeds' silver/gold), then emits it as a **Deliverable** to the review platform; governed by a Case Type / Variation's selection criteria. Per Case Type.
-_Avoid_: sampling (until disambiguated), picking
+_Avoid_: picking; **sampling** (now a defined per-group narrowing *technique* within Selection — see **Sampling** — not a synonym for this Pipeline)
 
 **Sync**:
 The Pipeline that pulls the review platform's own state — **Review Outcomes** and its full picture of each Case — into a platform-wide store; one-way inbound, no correlation. Spans all Case Types.
