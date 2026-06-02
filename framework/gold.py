@@ -30,7 +30,7 @@ from __future__ import annotations
 import uuid
 
 from framework.builder import Pipeline
-from framework.processors import DeriveKey, LatestPerKey
+from framework.processors import DeriveKey, LatestPerKey, Unpivot
 from framework.run_log import RunLog
 from framework.schema import SchemaValidator
 from framework.store import Store
@@ -92,5 +92,38 @@ def ingest_silver_to_gold(
         .with_processor(DeriveKey(into=case_id_column, namespace=namespace, natural_key=natural_key))
         .with_processor(LatestPerKey(key=case_id_column, by=by))
         .with_post_validator(UniqueValidator(case_id_column))
+        .write_to(store.writer("gold", table, Refresh()))
+    )
+
+
+def detail_ingest_silver_to_gold(
+    store: Store,
+    table: str,
+    *,
+    namespace: uuid.UUID,
+    natural_key: list[str],
+    unpivot: Unpivot,
+    case_id_column: str = "case_id",
+    name: str | None = None,
+    run_log: RunLog | None = None,
+) -> Pipeline:
+    """Compose the Ingest silver->gold reduction for a Detail Table.
+
+    Reads the subject's accumulated silver (the projected, normalised product
+    rows), derives a deterministic ``case_id`` from ``natural_key`` under
+    ``namespace`` (ADR-0009), then applies ``unpivot`` to reshape the wide feed
+    into one row per detail line (e.g. product 1..N → one row each). Empty
+    detail slots are dropped by the Unpivot processor. Writes current-only gold
+    via ``Refresh`` (truncate + reload) so gold always reflects the latest full
+    set of Detail rows. Returns the composed Pipeline; call ``.run()`` to execute.
+
+    Unlike ``ingest_silver_to_gold`` there is no ``LatestPerKey`` step: the
+    Detail Table grain is many rows per Case, not one, so deduplication is not
+    appropriate here.
+    """
+    return (
+        Pipeline(name or table, store.reader("silver", table), run_log)
+        .with_processor(DeriveKey(into=case_id_column, namespace=namespace, natural_key=natural_key))
+        .with_processor(unpivot)
         .write_to(store.writer("gold", table, Refresh()))
     )

@@ -236,6 +236,74 @@ class LatestPerKey:
         return Dataset.from_pandas(latest)
 
 
+class SelectColumns:
+    """Keep only the listed columns from the dataset; drop everything else.
+
+    The projection seam for fan-out pipelines (ADR-0009): each single-table
+    pipeline over a shared raw table reads only the columns it needs, keeping
+    its schema narrow over a potentially wide feed.
+
+    Raises ``ValueError`` if any requested column is absent from the dataset,
+    so a misconfigured projection is caught at run time rather than silently
+    producing an incomplete result.
+    """
+
+    def __init__(self, columns: Sequence[str]) -> None:
+        self._columns = list(columns)
+
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
+        missing = [c for c in self._columns if c not in frame.columns]
+        if missing:
+            raise ValueError(
+                f"SelectColumns: column(s) not found in dataset: {missing!r}. "
+                f"Available columns: {list(frame.columns)!r}"
+            )
+        return Dataset.from_pandas(frame.loc[:, self._columns])
+
+
+class Unpivot:
+    """Wide→long reshape: melt repeated column groups into one row per value.
+
+    Takes the ``value_vars`` columns and melts them so each becomes a row,
+    keeping ``id_vars`` columns intact per row. ``var_name`` labels the column
+    that records which source column each row came from; ``value_name`` labels
+    the column that holds the value. When ``drop_empty=True`` (the default),
+    rows whose value is ``None`` or an empty/whitespace-only string are dropped —
+    the typical use case for product 1..10 feeds where unoccupied slots are blank.
+    """
+
+    def __init__(
+        self,
+        id_vars: Sequence[str],
+        value_vars: Sequence[str],
+        *,
+        var_name: str,
+        value_name: str,
+        drop_empty: bool = True,
+    ) -> None:
+        self._id_vars = list(id_vars)
+        self._value_vars = list(value_vars)
+        self._var_name = var_name
+        self._value_name = value_name
+        self._drop_empty = drop_empty
+
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
+        melted = frame.melt(
+            id_vars=self._id_vars,
+            value_vars=self._value_vars,
+            var_name=self._var_name,
+            value_name=self._value_name,
+        ).reset_index(drop=True)
+        if self._drop_empty:
+            value_col = melted[self._value_name]
+            is_null = value_col.isna()
+            is_blank = value_col.astype(str).str.strip() == ""
+            melted = melted.loc[~(is_null | is_blank)].reset_index(drop=True)
+        return Dataset.from_pandas(melted)
+
+
 class DeriveKey:
     """Stamp a deterministic ``uuid5`` key onto every row.
 

@@ -1,0 +1,5 @@
+case_ref_no,adviser,activity_date,amount,product_1,product_2,product_3,product_4,product_5,product_6,product_7,product_8,product_9,product_10
+c1,adv-a,2026-05-29,500,widget,gadget,,,,,,,,
+c2,adv-b,2026-05-28,120,doodad,,,,,,,,,
+c3,adv-c,2026-05-27,80,gizmo,widget,thingamajig,,,,,,,
+c4,adv-d,2026-05-18,300,gadget,,,,,,,,,
