@@ -238,14 +238,15 @@ _NS = _uuid.UUID("12345678-1234-5678-1234-567812345678")
 
 def test_derive_key_stamps_uuid5_for_a_single_column_key():
     # DeriveKey computes uuid5(namespace, key_string) per row and writes it into
-    # the `into` column; the value must equal the uuid5 we'd compute by hand.
+    # the `into` column as a string; the value must equal the uuid5 we'd compute
+    # by hand (stored as text so it round-trips through SQLite unchanged).
     dataset = Dataset.from_pandas(
         pd.DataFrame({"surname": ["SMITH"], "dob": ["2024-01-15"]})
     )
 
     result = DeriveKey(into="case_id", namespace=_NS, natural_key=["surname"]).process(dataset).to_pandas()
 
-    expected = _uuid.uuid5(_NS, "SMITH")
+    expected = str(_uuid.uuid5(_NS, "SMITH"))
     assert result["case_id"].iloc[0] == expected
 
 
@@ -287,7 +288,7 @@ def test_derive_key_multi_column_key_composes_in_declared_order():
         into="case_id", namespace=_NS, natural_key=["surname", "dob"]
     ).process(dataset).to_pandas()
 
-    expected = _uuid.uuid5(_NS, "SMITH|2024-01-15")
+    expected = str(_uuid.uuid5(_NS, "SMITH|2024-01-15"))
     assert result["case_id"].iloc[0] == expected
 
 

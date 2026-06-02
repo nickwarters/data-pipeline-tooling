@@ -25,8 +25,10 @@ def _case_type() -> CaseType:
     )
 
 
-def _land_silver_cases(store: Store, frame: pd.DataFrame) -> None:
-    store.writer("silver", "cases", Refresh()).write(Dataset.from_pandas(frame))
+def _land_gold_cases(store: Store, frame: pd.DataFrame) -> None:
+    # Land Cases into ingest gold (current-only, one row per Case) as an
+    # ingest_silver_to_gold run would — CasePool reads gold (ADR-0006 amendment).
+    store.writer("gold", "cases", Refresh()).write(Dataset.from_pandas(frame))
 
 
 def test_selection_narrows_the_casepool_into_a_stamped_selection_pool(tmp_path):
@@ -36,7 +38,7 @@ def test_selection_narrows_the_casepool_into_a_stamped_selection_pool(tmp_path):
     # filter, a sort), stamps the chosen Variation's question_bank_id, and writes
     # the SelectionPool into gold stamped run_id / load_date (CONTEXT.md; ADR-0006).
     store = Store(tmp_path / "cases")
-    _land_silver_cases(
+    _land_gold_cases(
         store,
         pd.DataFrame(
             {

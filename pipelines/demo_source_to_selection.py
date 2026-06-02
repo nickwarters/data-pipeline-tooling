@@ -3,16 +3,18 @@
 Runs the full per-Case-Type path the framework exists to make routine, composing
 the primitives the earlier slices built:
 
-1. **Ingest** — land the bundled CSV feed into ``raw``, then refine it into
-   ``silver`` with the Case Type's :mod:`~framework.schema` enforced
-   (:func:`~framework.silver.raw_to_silver`). Silver *is* the CasePool.
+1. **Ingest** — land the bundled CSV feed into **raw** (accumulated, stamped
+   ``run_id`` / ``load_date``), refine it into **silver** (accumulated, schema
+   enforced), then reduce it to a current-only **gold** (one-row-per-Case via
+   ``DeriveKey`` → ``LatestPerKey`` → ``UniqueValidator`` → ``Refresh``).
+   Gold *is* the CasePool (ADR-0006 amendment).
 2. **Selection** — a :class:`~framework.case_pool.CasePool` fetches the
-   **available cases** (activity within the working-day window), and a Selection
-   :class:`~framework.builder.Pipeline` narrows them with specific Python
-   processors (filter the low-value cases out, rank highest-amount first), stamps
-   the chosen :class:`~framework.case_type.Variation`'s ``question_bank_id``, and
-   accumulates the **SelectionPool** into ``gold`` stamped ``run_id`` /
-   ``load_date`` (ADR-0006).
+   **available cases** from gold (activity within the working-day window), and a
+   Selection :class:`~framework.builder.Pipeline` narrows them with specific
+   Python processors (filter the low-value cases out, rank highest-amount first),
+   stamps the chosen :class:`~framework.case_type.Variation`'s
+   ``question_bank_id``, and accumulates the **SelectionPool** into ``gold``
+   stamped ``run_id`` / ``load_date`` (ADR-0006).
 
 Run from the repo root as a module so the import-only ``framework`` package
 resolves on ``sys.path``::
@@ -26,6 +28,7 @@ sample feed and the run is deterministic.
 from __future__ import annotations
 
 import sys
+import uuid
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -34,11 +37,12 @@ from framework.builder import Pipeline
 from framework.calendar import WorkingDayCalendar
 from framework.case_pool import CasePool
 from framework.case_type import CaseType, Variation
+from framework.gold import ingest_silver_to_gold
 from framework.processors import Filter, Sort, Stamp
 from framework.readers import CsvReader, DatasetReader
 from framework.silver import raw_to_silver
 from framework.store import Store
-from framework.strategy import AccumulateByRun, Refresh
+from framework.strategy import AccumulateByRun
 
 
 @dataclass
@@ -62,8 +66,12 @@ CASES = CaseType(
     ),
 )
 
+# Stable namespace for deterministic case_id derivation — uuid5(NAMESPACE_DNS,
+# Case Type name) so each Case Type has its own UUID space (ADR-0009).
+CASE_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_DNS, CASES.name)
+
 # Fixed so the working-day window aligns with the bundled feed (Fri 2026-05-29);
-# doubles as gold's logical run_id / load_date idempotency key (ADR-0006).
+# doubles as the Ingest run_id / load_date idempotency key (ADR-0006).
 AS_OF = date(2026, 5, 29)
 RUN_ID = AS_OF.isoformat()
 
@@ -72,9 +80,13 @@ def main(target_dir: str) -> None:
     sample = Path(__file__).parent / "sample_data" / "activity_cases.csv"
     store = Store(Path(target_dir) / CASES.name)
 
-    # 1. Ingest: CSV feed -> raw (schema-light) -> silver (schema enforced).
-    Pipeline("cases", CsvReader(sample)).write_to(store.writer("raw", "cases", Refresh())).run()
-    raw_to_silver(store, "cases", CASES.schema).run()
+    # 1. Ingest: CSV feed -> raw (accumulate, system-of-record) -> silver
+    #    (accumulate, schema enforced) -> gold (current-only, one row per Case).
+    Pipeline("cases", CsvReader(sample)).write_to(
+        store.writer("raw", "cases", AccumulateByRun(RUN_ID, RUN_ID))
+    ).run()
+    raw_to_silver(store, "cases", CASES.schema, strategy=AccumulateByRun(RUN_ID, RUN_ID)).run()
+    ingest_silver_to_gold(store, "cases", namespace=CASE_NAMESPACE, natural_key=["case_ref"]).run()
 
     # 2. Selection: fetch the available cases from the CasePool, then narrow them.
     pool = CasePool(CASES, store, WorkingDayCalendar())

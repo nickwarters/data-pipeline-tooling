@@ -265,9 +265,9 @@ class DeriveKey:
     def process(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas().copy()  # engine-confined (ADR-0002)
         frame[self._into] = frame.apply(
-            lambda row: uuid.uuid5(
+            lambda row: str(uuid.uuid5(
                 self._namespace, "|".join(str(row[col]) for col in self._natural_key)
-            ),
+            )),
             axis=1,
         )
         return Dataset.from_pandas(frame)
