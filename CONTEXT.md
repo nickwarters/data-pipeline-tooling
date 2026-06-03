@@ -90,6 +90,74 @@ _Avoid_: analytics, BI, warehouse
 The declared expected columns + types for a Case Type — the single, named replacement for today's scattered, implicit "assume field X exists" checks. A validation contract first (enforced at silver & gold), and the optional basis for typed objects. Currently a dataclass; Pydantic later.
 _Avoid_: model, shape, structure (informal)
 
+## Engineering vocabulary (cross-cutting)
+
+General software-engineering terms that recur in design discussion. Unlike the
+**Language** above, these are **not** project-specific domain nouns — they are
+the shared vocabulary we reason *with*. Each entry notes where it shows up here
+so the abstraction stays tied to concrete practice.
+
+**Seam**:
+A place where you can change behaviour without editing code *at* that place
+(Feathers) — a point where two parts meet through a narrow contract, so one side
+can be substituted without the other noticing. _Here_: pandas lives **behind the
+`Dataset` seam** (`from_pandas`/`to_pandas`) so the engine is swappable
+(ADR-0002); `.with_processor` is the processing seam; the
+**dataclass→validator adapter** is the seam to Pydantic-later (ADR-0005/0008).
+
+**Edge**:
+Where the system meets something outside itself — external I/O, or the
+hand-off to a different layer/representation. _Here_: **Readers/Writers** sit at
+the *I/O edge* (files, SQLite, SharePoint); the **CasePool returning typed
+`Case` objects** is the *domain edge*, the "typed-on-demand" edge ADR-0002
+reserves for a later slice. A seam is a *substitution* point; an edge is a
+*crossing* point — they often coincide but are not the same idea.
+
+**Boundary**:
+A line across which a guarantee changes, and therefore the natural place to
+**enforce** that guarantee. _Here_: silver is the **schema boundary** (declared
+columns + dtypes validated *before* data lands — ADR-0008); gold is the **grain
+boundary** (one-row-per-Case enforced — ADR-0009).
+
+**Port / Adapter**:
+A **port** is the abstract contract a collaborator must satisfy (in Python, a
+`Protocol` — `Reader`, `Writer`, `Validator`); an **adapter** is a concrete
+implementation that maps one specific technology onto that port (`CsvReader`,
+`SqliteReader`, `SchemaValidator`). Seams are usually *expressed as* ports;
+swapping behaviour means supplying a different adapter for the same port.
+
+**Opaque (type / carrier)**:
+A type whose concrete innards are deliberately hidden behind its interface, so
+callers depend only on the contract and the implementation can change freely.
+_Here_: `Dataset` is the **opaque tabular carrier** — pandas today, polars
+plausibly later — and the concrete engine must never appear in a `Protocol`
+signature, pipeline script, or the domain layer (ADR-0002).
+
+**Walking skeleton**:
+A minimal end-to-end implementation that exercises the *whole* architecture —
+every layer wired together — before any one part is fleshed out, so the shape is
+validated early. _Here_: the CSV → raw path through the core primitives (issue
+#2).
+
+**Vertical slice / tracer bullet**:
+A unit of work cut **top-to-bottom through every layer** (rather than building one
+layer at a time), delivering a thin but complete capability that proves the path
+end-to-end and can be built on. _Here_: features land as numbered slices
+(e.g. the `Processor` slice #23, the schema-enforcement slice #7); our
+issue-breakdown deliberately favours these over horizontal layer-by-layer work.
+
+**Blast radius**:
+The scope of damage when something goes wrong; good designs **contain** it
+through isolation. _Here_: per-subject medallions mean a bad load or corrupt
+file is contained to one subject rather than poisoning the whole store
+(ADR-0001).
+
+**Fail-fast**:
+Detect a violation and stop at the **earliest** boundary, rather than letting bad
+data propagate downstream where the failure is harder to trace. _Here_:
+**Validators** abort at the silver boundary *before* silver is written, so an
+invalid feed never lands.
+
 ## Relationships
 
 - A **Case** is produced by exactly one **feed** but conforms to a single common shape regardless of origin
