@@ -65,6 +65,11 @@ Filter(lambda row: row["score"] >= 10)
 An empty feed in yields an empty feed out (no error) — realistic when an upstream
 filter has already matched nothing.
 
+An optional `name=` labels the eligibility gate so Selection explainability can
+record *which* filter excluded a Case — `Filter(lambda r: r["score"] >= 10,
+name="high-value")`. Unnamed filters still work; see
+[`selection.md`](selection.md) for the per-Case trace (#53).
+
 ### `Score` — rank the rows
 
 Computes a column from each row via a scorer; every other column is untouched. A
@@ -138,6 +143,9 @@ JoinWith(reference_builder, on="adviser", how="inner")
 - `on` — the shared key column(s).
 - `how` — the join kind: `inner` (default — unmatched rows dropped),
   `left`/`right`/`outer`.
+- `name=` (optional) — labels the join so Selection explainability records a Case
+  an *inner* join drops as excluded by this join, rather than silently absent
+  (#53; see [`selection.md`](selection.md)).
 
 ### Lazy: a DAG without a DAG engine
 
