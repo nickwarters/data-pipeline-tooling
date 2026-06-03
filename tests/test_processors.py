@@ -514,3 +514,273 @@ def test_unpivot_returns_a_dataset_not_a_dataframe():
     ).process(dataset)
 
     assert isinstance(result, Dataset)
+
+
+# ---------------------------------------------------------------------------
+# TopNPerGroup / SamplePerGroup — per-group Selection narrowing (issue #62)
+# ---------------------------------------------------------------------------
+
+from framework.processors import TopNPerGroup
+
+
+def test_top_n_per_group_n1_keeps_the_single_highest_by_row_per_group():
+    # "The single highest-scoring available Case per Adviser" — n=1 reduces each
+    # group to its top-ranked row, ranked by `by` descending (default).
+    dataset = Dataset.from_pandas(
+        pd.DataFrame(
+            {
+                "case_id": ["c1", "c2", "c3", "c4"],
+                "adviser": ["a", "a", "b", "b"],
+                "score": [10, 30, 50, 20],
+            }
+        )
+    )
+
+    kept = (
+        TopNPerGroup(key="adviser", by="score", n=1)
+        .process(dataset)
+        .to_pandas()
+    )
+
+    assert set(kept["case_id"]) == {"c2", "c3"}  # top of each adviser
+
+
+def test_top_n_per_group_breaks_score_ties_on_tiebreak_deterministically():
+    # Two Cases in group "a" tie on score; the tie-break (case_id, ascending)
+    # must pick the lower case_id reproducibly, regardless of input row order.
+    rows = pd.DataFrame(
+        {
+            "case_id": ["c2", "c1"],   # deliberately reverse-ordered
+            "adviser": ["a", "a"],
+            "score": [40, 40],         # tied
+        }
+    )
+    kept = (
+        TopNPerGroup(key="adviser", by="score", n=1, tiebreak="case_id")
+        .process(Dataset.from_pandas(rows))
+        .to_pandas()
+    )
+
+    assert list(kept["case_id"]) == ["c1"]
+
+
+def test_top_n_per_group_n_gt_1_keeps_the_top_n_ranked_per_group():
+    dataset = Dataset.from_pandas(
+        pd.DataFrame(
+            {
+                "case_id": ["c1", "c2", "c3", "c4", "c5"],
+                "adviser": ["a", "a", "a", "b", "b"],
+                "score": [10, 30, 20, 5, 50],
+            }
+        )
+    )
+    kept = (
+        TopNPerGroup(key="adviser", by="score", n=2)
+        .process(dataset)
+        .to_pandas()
+    )
+
+    # adviser a: top-2 of {10,30,20} = c2(30), c3(20); adviser b: both (<n+... 2 rows)
+    assert set(kept.loc[kept["adviser"] == "a", "case_id"]) == {"c2", "c3"}
+    assert set(kept.loc[kept["adviser"] == "b", "case_id"]) == {"c4", "c5"}
+
+
+def test_top_n_per_group_passes_a_group_smaller_than_n_through_whole():
+    # A group with fewer than n rows is not an error — it passes through entire.
+    dataset = Dataset.from_pandas(
+        pd.DataFrame(
+            {
+                "case_id": ["c1", "c2", "c3"],
+                "adviser": ["a", "b", "b"],
+                "score": [10, 20, 30],
+            }
+        )
+    )
+    kept = (
+        TopNPerGroup(key="adviser", by="score", n=5)
+        .process(dataset)
+        .to_pandas()
+    )
+
+    assert set(kept["case_id"]) == {"c1", "c2", "c3"}
+
+
+def test_top_n_per_group_empty_in_empty_out():
+    empty = Dataset.from_pandas(
+        pd.DataFrame({"case_id": [], "adviser": [], "score": []})
+    )
+    kept = TopNPerGroup(key="adviser", by="score", n=1).process(empty)
+
+    assert len(kept) == 0
+
+
+def test_top_n_per_group_supports_a_multi_column_key():
+    # Group by Adviser x region — n=1 keeps the top Case per (adviser, region).
+    dataset = Dataset.from_pandas(
+        pd.DataFrame(
+            {
+                "case_id": ["c1", "c2", "c3", "c4"],
+                "adviser": ["a", "a", "a", "a"],
+                "region": ["n", "n", "s", "s"],
+                "score": [10, 30, 50, 20],
+            }
+        )
+    )
+    kept = (
+        TopNPerGroup(key=["adviser", "region"], by="score", n=1)
+        .process(dataset)
+        .to_pandas()
+    )
+
+    assert set(kept["case_id"]) == {"c2", "c3"}  # top of (a,n) and (a,s)
+
+
+def test_top_n_per_group_ascending_ranks_lowest_first():
+    dataset = Dataset.from_pandas(
+        pd.DataFrame(
+            {
+                "case_id": ["c1", "c2", "c3"],
+                "adviser": ["a", "a", "a"],
+                "score": [10, 30, 20],
+            }
+        )
+    )
+    kept = (
+        TopNPerGroup(key="adviser", by="score", n=1, ascending=True)
+        .process(dataset)
+        .to_pandas()
+    )
+
+    assert list(kept["case_id"]) == ["c1"]  # lowest score
+
+
+def test_top_n_per_group_returns_a_dataset_not_a_dataframe():
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"case_id": ["c1"], "adviser": ["a"], "score": [1]})
+    )
+    assert isinstance(
+        TopNPerGroup(key="adviser", by="score", n=1).process(dataset), Dataset
+    )
+
+
+from framework.processors import SamplePerGroup
+
+
+def test_sample_per_group_keeps_at_most_n_per_group():
+    dataset = Dataset.from_pandas(
+        pd.DataFrame(
+            {
+                "case_id": ["c1", "c2", "c3", "c4", "c5"],
+                "adviser": ["a", "a", "a", "b", "b"],
+            }
+        )
+    )
+    kept = (
+        SamplePerGroup(key="adviser", n=2, seed=7)
+        .process(dataset)
+        .to_pandas()
+    )
+
+    counts = kept.groupby("adviser").size()
+    assert counts["a"] == 2  # 3 -> sampled down to 2
+    assert counts["b"] == 2  # exactly 2, all kept
+
+
+def test_sample_per_group_is_reproducible_for_the_same_input_and_seed():
+    dataset = Dataset.from_pandas(
+        pd.DataFrame(
+            {
+                "case_id": ["c1", "c2", "c3", "c4", "c5"],
+                "adviser": ["a", "a", "a", "b", "b"],
+            }
+        )
+    )
+    first = SamplePerGroup(key="adviser", n=2, seed=7).process(dataset).to_pandas()
+    second = SamplePerGroup(key="adviser", n=2, seed=7).process(dataset).to_pandas()
+
+    assert list(first["case_id"]) == list(second["case_id"])
+
+
+def test_sample_per_group_is_invariant_to_incoming_row_order():
+    # Same set of Cases, two different row orders, same seed -> same sample
+    # ("same set in => same sample out"), because each group is canonicalised
+    # by `order` before the draw.
+    rows = {
+        "case_id": ["c1", "c2", "c3", "c4", "c5"],
+        "adviser": ["a", "a", "a", "b", "b"],
+    }
+    forward = pd.DataFrame(rows)
+    shuffled = forward.iloc[[4, 0, 2, 1, 3]].reset_index(drop=True)
+
+    a = SamplePerGroup(key="adviser", n=2, seed=7).process(Dataset.from_pandas(forward)).to_pandas()
+    b = SamplePerGroup(key="adviser", n=2, seed=7).process(Dataset.from_pandas(shuffled)).to_pandas()
+
+    assert set(a["case_id"]) == set(b["case_id"])
+    assert list(a["case_id"]) == list(b["case_id"])  # canonical output order too
+
+
+def test_sample_per_group_passes_a_group_smaller_than_n_through_whole():
+    dataset = Dataset.from_pandas(
+        pd.DataFrame(
+            {
+                "case_id": ["c1", "c2", "c3"],
+                "adviser": ["a", "b", "b"],
+            }
+        )
+    )
+    kept = SamplePerGroup(key="adviser", n=5, seed=1).process(dataset).to_pandas()
+
+    assert set(kept["case_id"]) == {"c1", "c2", "c3"}
+
+
+def test_sample_per_group_empty_in_empty_out():
+    empty = Dataset.from_pandas(pd.DataFrame({"case_id": [], "adviser": []}))
+
+    assert len(SamplePerGroup(key="adviser", n=2, seed=1).process(empty)) == 0
+
+
+def test_sample_per_group_supports_a_multi_column_key():
+    dataset = Dataset.from_pandas(
+        pd.DataFrame(
+            {
+                "case_id": ["c1", "c2", "c3", "c4", "c5", "c6"],
+                "adviser": ["a", "a", "a", "a", "a", "a"],
+                "region": ["n", "n", "n", "s", "s", "s"],
+            }
+        )
+    )
+    kept = (
+        SamplePerGroup(key=["adviser", "region"], n=2, seed=3)
+        .process(dataset)
+        .to_pandas()
+    )
+
+    # Each (adviser, region) group of 3 sampled down to 2 independently.
+    counts = kept.groupby(["adviser", "region"]).size()
+    assert counts[("a", "n")] == 2
+    assert counts[("a", "s")] == 2
+
+
+def test_sample_per_group_different_seeds_can_draw_different_samples():
+    # A large group makes a collision between two seeds vanishingly unlikely, so
+    # the seed demonstrably governs the draw (it is not ignored).
+    dataset = Dataset.from_pandas(
+        pd.DataFrame(
+            {
+                "case_id": [f"c{i}" for i in range(20)],
+                "adviser": ["a"] * 20,
+            }
+        )
+    )
+    one = SamplePerGroup(key="adviser", n=5, seed=1).process(dataset).to_pandas()
+    two = SamplePerGroup(key="adviser", n=5, seed=2).process(dataset).to_pandas()
+
+    assert set(one["case_id"]) != set(two["case_id"])
+
+
+def test_per_group_processors_conform_to_the_processor_protocol():
+    # AC1: both are Processors, attachable via .with_processor (ADR-0002).
+    from framework.processors import Processor
+
+    assert isinstance(TopNPerGroup(key="adviser", by="score", n=1), Processor)
+    assert isinstance(SamplePerGroup(key="adviser", n=1, seed=0), Processor)

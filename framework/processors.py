@@ -23,6 +23,8 @@ and joined in Python only at ``.run()`` (ADR-0003).
 
 from __future__ import annotations
 
+import hashlib
+import random
 import uuid
 from typing import Any, Callable, Literal, Mapping, Protocol, Sequence, runtime_checkable
 
@@ -363,3 +365,138 @@ class DeriveKey:
             axis=1,
         )
         return Dataset.from_pandas(frame)
+
+
+def _cut_per_group(frame, key, select):
+    """Group ``frame`` by ``key`` and keep, per group, the rows ``select`` returns.
+
+    The shared spine of the per-group Selection processors (#62):
+    :class:`TopNPerGroup` and :class:`SamplePerGroup` differ only in *which*
+    rows they keep from each group — ``select(group_key, group)`` returns that
+    group's kept sub-frame. Groups are iterated in canonical key order and the
+    kept rows concatenated, so the output is deterministic regardless of
+    incoming row order. An empty feed in yields an empty feed out (consistent
+    with :class:`Filter`).
+    """
+    if len(frame) == 0:
+        return frame
+    keep_index: list[Any] = []
+    for group_key, group in frame.groupby(key, sort=True):
+        keep_index.extend(select(group_key, group).index)
+    return frame.loc[keep_index].reset_index(drop=True)
+
+
+class TopNPerGroup:
+    """Reduce each group of Cases to its top ``n`` by a ranking column.
+
+    The ranked half of per-group Selection narrowing (#62): ``n=1`` is "the
+    single highest-scoring available Case per Adviser". ``key`` is one or more
+    group columns (mirroring :class:`LatestPerKey`); the processor carries its
+    **own** sort (``by``/``ascending``) so it does not depend on a preceding
+    :class:`Sort` surviving the grouping, and applies a stable secondary
+    tie-break on ``tiebreak`` (default ``"case_id"`` — every Case has one,
+    ADR-0009) so ranked output is reproducible when scores tie.
+
+    A group with fewer than ``n`` rows passes through whole; an empty feed in
+    yields an empty feed out (consistent with :class:`Filter`).
+
+    Structurally this generalises ``LatestPerKey(key=K, by=B)`` to top-``n`` per
+    key, but the two keep separate names for separate domains — Ingest
+    current-state reduction vs Selection narrowing.
+    """
+
+    selection_role = "topn"
+    selection_name = "top-N per group"
+
+    def __init__(
+        self,
+        key: str | Sequence[str],
+        by: str,
+        n: int,
+        ascending: bool = False,
+        tiebreak: str = "case_id",
+    ) -> None:
+        self._key = [key] if isinstance(key, str) else list(key)
+        self._by = by
+        self._n = n
+        self._ascending = ascending
+        self._tiebreak = tiebreak
+
+    def _select(self, _group_key: Any, group):
+        # Carry our own sort (by, ascending) with a stable tie-break on
+        # `tiebreak` so a tied score ranks reproducibly. Sort the tie-break
+        # ascending always — it only disambiguates equal `by` values.
+        ordered = group.sort_values(
+            by=[self._by, self._tiebreak],
+            ascending=[self._ascending, True],
+            kind="stable",
+        )
+        return ordered.head(self._n)
+
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
+        return Dataset.from_pandas(_cut_per_group(frame, self._key, self._select))
+
+
+# A constant default seed (ADR-0010): the sampler is a *pure* function of input
+# state and this seed — never derived from run_id or the clock. Run-to-run
+# variation comes from the upstream population shrinking, not from the seed.
+_DEFAULT_SAMPLE_SEED = 0
+
+
+class SamplePerGroup:
+    """Draw at most ``n`` Cases per group by a seeded, reproducible sample.
+
+    The random half of per-group Selection narrowing (#62), and a **pure
+    function** of (input dataset, seed) — ADR-0010. ``key`` is one or more group
+    columns; ``seed`` a fixed, configurable constant (*not* ``run_id`` or the
+    clock); ``order`` the column that puts each group into a canonical order
+    (default ``"case_id"``) before the draw.
+
+    Each group is drawn independently via a per-group seed derived from
+    ``hash(seed, group_key)`` using stdlib hashing (``hashlib`` — stable across
+    Windows/macOS, unlike the salted builtin ``hash``; mirrors ADR-0009). Because
+    the group is ordered by ``order`` first and the draw keys only off the group
+    identity, the result is **invariant to incoming row/group order**: the same
+    set in with the same seed yields the same sample out.
+
+    A group with fewer than ``n`` rows passes through whole; an empty feed in
+    yields an empty feed out (consistent with :class:`Filter`).
+    """
+
+    selection_role = "sample"
+    selection_name = "sample per group"
+
+    def __init__(
+        self,
+        key: str | Sequence[str],
+        n: int,
+        seed: int = _DEFAULT_SAMPLE_SEED,
+        order: str = "case_id",
+    ) -> None:
+        self._key = [key] if isinstance(key, str) else list(key)
+        self._n = n
+        self._seed = seed
+        self._order = order
+
+    def _group_seed(self, group_key: Any) -> int:
+        # Normalise the group key (scalar for a single column, tuple for many)
+        # to a stable string, then derive a platform-independent integer seed.
+        parts = group_key if isinstance(group_key, tuple) else (group_key,)
+        key_str = "|".join(str(p) for p in parts)
+        digest = hashlib.sha256(f"{self._seed}|{key_str}".encode("utf-8")).hexdigest()
+        return int(digest, 16)
+
+    def _select(self, group_key: Any, group):
+        # Canonicalise the group by `order` so the draw is invariant to incoming
+        # row order; a group at or below n passes through whole.
+        ordered = group.sort_values(by=self._order, kind="stable")
+        if len(ordered) <= self._n:
+            return ordered
+        rng = random.Random(self._group_seed(group_key))
+        chosen = sorted(rng.sample(range(len(ordered)), k=self._n))
+        return ordered.iloc[chosen]
+
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
+        return Dataset.from_pandas(_cut_per_group(frame, self._key, self._select))

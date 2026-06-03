@@ -292,6 +292,15 @@ message naming the column. `raw_to_silver` composes it ahead of the
   `Pipeline` over another subject's silver/gold), **not executed** until the
   join's `process` step runs `other.run()` and merges in Python. That is how a
   pipeline resolves to a **DAG without a separate DAG engine** (ADR-0003).
+- `TopNPerGroup(key, by, n, ascending=False, tiebreak="case_id")` /
+  `SamplePerGroup(key, n, seed=0, order="case_id")` — reduce each group to at
+  most *N* Cases (CONTEXT.md **Sampling**, #62). `TopNPerGroup` is **ranked**
+  (`n=1` ⇒ "the single highest available per Adviser"), carrying its own sort and
+  a stable `tiebreak` so tied scores rank reproducibly; `SamplePerGroup` is
+  **seeded random** — a pure function of (input, `seed`) that is invariant to
+  incoming row order (ADR-0010). `TopNPerGroup(key=K, by=B, n=1)` is the
+  structural generalisation of the Ingest reduction `LatestPerKey(key=K, by=B)`,
+  kept separate by domain (Selection narrowing vs current-state reduction).
 
 Full walkthrough + worked example: [processors.md](processors.md).
 
