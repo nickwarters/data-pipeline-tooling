@@ -46,10 +46,12 @@ a later seam.)
 ## Record schema
 
 Every line is a JSON object with a **stable key set** — fields that don't apply
-to a step are `null` (or `[]`), so the registry sees one shape:
+to a step are `null` (or `[]`), so the registry sees one shape. `timestamp`
+leads each line; the examples below elide it for width but it is always present:
 
 | Field       | Type                | Meaning |
 |-------------|---------------------|---------|
+| `timestamp` | string              | ISO-8601 **UTC** instant the record was emitted (step close / run end). The time dimension the run-registry orders by — "latest run per pipeline", "row counts over time". |
 | `run_id`    | string              | The run's correlating id (same on every line of the run). |
 | `pipeline`  | string              | The feed/pipeline name (the builder's `name`). |
 | `step`      | string              | `read`, `pre-validate`, `quarantine`, `process`, `explain`, `post-validate`, `write`, or `run` (the summary). |

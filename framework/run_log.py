@@ -11,6 +11,7 @@ run-registry (ADR-0005) can ingest the JSONL later without parsing free text
 
 from __future__ import annotations
 
+import datetime
 import json
 import logging
 import os
@@ -105,6 +106,10 @@ class RunLog:
     ) -> None:
         """Append one JSONL record and echo a human-readable line to the console."""
         record = {
+            # The wall-clock instant this record is emitted, ISO-8601 UTC. It is
+            # the time dimension the run-registry orders by; the registry cannot
+            # read an event time the emitter does not write (ADR-0007).
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "run_id": run_id,
             "pipeline": pipeline,
             "step": step,
