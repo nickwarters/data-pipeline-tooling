@@ -25,14 +25,15 @@ log = logging.getLogger(__name__)
 class StepMetrics:
     """Mutable per-step tally the caller fills in while a ``step`` is open.
 
-    The builder sets whichever of ``rows_in`` / ``rows_out`` a step produces and
-    appends to ``warn_hits``; the :class:`RunLog` reads them back when the step
-    closes. Keeps the timed-block body free of bookkeeping.
+    The builder sets whichever of ``rows_in`` / ``rows_out`` / ``rows_quarantined``
+    a step produces and appends to ``warn_hits``; the :class:`RunLog` reads them
+    back when the step closes. Keeps the timed-block body free of bookkeeping.
     """
 
     def __init__(self) -> None:
         self.rows_in: int | None = None
         self.rows_out: int | None = None
+        self.rows_quarantined: int | None = None
         self.warn_hits: list[str] = []
 
 
@@ -66,6 +67,7 @@ class RunLog:
                 "error",
                 rows_in=metrics.rows_in,
                 rows_out=metrics.rows_out,
+                rows_quarantined=metrics.rows_quarantined,
                 duration=time.perf_counter() - started,
                 errors=[str(exc)],
                 warn_hits=metrics.warn_hits,
@@ -78,6 +80,7 @@ class RunLog:
             "ok",
             rows_in=metrics.rows_in,
             rows_out=metrics.rows_out,
+            rows_quarantined=metrics.rows_quarantined,
             duration=time.perf_counter() - started,
             warn_hits=metrics.warn_hits,
         )
@@ -91,6 +94,7 @@ class RunLog:
         *,
         rows_in: int | None = None,
         rows_out: int | None = None,
+        rows_quarantined: int | None = None,
         duration: float | None = None,
         errors: list[str] | None = None,
         warn_hits: list[str] | None = None,
@@ -103,6 +107,7 @@ class RunLog:
             "status": status,
             "rows_in": rows_in,
             "rows_out": rows_out,
+            "rows_quarantined": rows_quarantined,
             "duration": duration,
             "errors": errors or [],
             "warn_hits": warn_hits or [],
@@ -120,6 +125,8 @@ class RunLog:
             parts.append(f"rows_in={record['rows_in']}")
         if record["rows_out"] is not None:
             parts.append(f"rows_out={record['rows_out']}")
+        if record.get("rows_quarantined"):
+            parts.append(f"quarantined={record['rows_quarantined']}")
         if record["duration"] is not None:
             parts.append(f"{record['duration']:.3f}s")
         if record["errors"]:

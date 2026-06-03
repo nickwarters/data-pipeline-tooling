@@ -45,3 +45,10 @@ class Dataset:
     def __len__(self) -> int:
         """Number of rows."""
         return len(self._frame)
+
+    def with_columns(self, **values: object) -> "Dataset":
+        """Return a new Dataset with extra scalar columns stamped on every row."""
+        frame = self._frame.copy()
+        for col, val in values.items():
+            frame[col] = val
+        return Dataset.from_pandas(frame)
