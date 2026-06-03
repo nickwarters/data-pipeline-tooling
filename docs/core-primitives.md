@@ -76,10 +76,13 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > have landed: `Filter`/`Score` (plain-Python row callables — ADR-0002),
 > `Sort`/`Rename`, and **`JoinWith`** — the cross-feed join that holds a lazy
 > reference to another builder and resolves it to a DAG at `.run()`, joined in
-> Python (ADR-0003, #9; [processors doc](processors.md)). Still ahead: the
-> value-level schema rules (format / uniqueness / encoding, #24), the domain
-> capstone (CaseType/Variation + CasePool → SelectionPool, #11), the
-> run-registry that ingests the JSONL (ADR-0005), and the multi-table feed work
+> Python (ADR-0003, #9; [processors doc](processors.md)). **The run registry**
+> has landed: a `RunRegistry` ingests the `RunLog` JSONL into its own queryable
+> SQLite store — idempotent by `run_id` + step, queryable by pipeline / status /
+> time, surfacing warned (incl. schema-drift) runs (ADR-0005/0007, #52;
+> [run-log-format doc](run-log-format.md)). Still ahead: the value-level schema
+> rules (format / uniqueness / encoding, #24), the domain capstone
+> (CaseType/Variation + CasePool → SelectionPool, #11), and the multi-table feed work
 > (ADR-0006 amendment, ADR-0009): per-feed load strategy (Store maps
 > `layer → location` only), the history-upstream / current-gold Ingest profile,
 > reader column projection, the `LatestPerKey` reduction + one-row-per-Case grain
@@ -307,12 +310,47 @@ class RunLog:
 ```
 
 Every record of a single run carries the same `run_id` (minted by `.run()`,
-exposed as `pipeline.run_id`), so the deferred run-registry (ADR-0005) can group
-a run without parsing free text. The builder owns no path or format knowledge —
-it just drives the sink; when no `RunLog` is composed a null sink keeps `.run()`
-branch-free while emitting nothing. The full record schema, the per-step
-breakdown, and the fail-fast/warn examples live in
-[`run-log-format.md`](run-log-format.md).
+exposed as `pipeline.run_id`) and a `timestamp` (the ISO-8601 UTC instant it was
+emitted), so the run registry can group and order a run without parsing free
+text. The builder owns no path or format knowledge — it just drives the sink;
+when no `RunLog` is composed a null sink keeps `.run()` branch-free while
+emitting nothing. The full record schema, the per-step breakdown, and the
+fail-fast/warn examples live in [`run-log-format.md`](run-log-format.md).
+
+### `RunRegistry` — the run history that ingests the JSONL
+A `RunRegistry` is the **consumer** for the `RunLog` JSONL — the seam ADR-0005
+named — landed in #52. It ingests the run records into its **own** queryable
+SQLite store so operators can answer "did last night's Ingest for Case Type B
+succeed, how many rows, did anything warn?" without grepping `.log` files:
+
+```python
+registry = RunRegistry("/path/to/share/_registry/runs.db")
+registry.ingest("/path/to/share/cases/runs.log")   # idempotent
+
+registry.query_runs(pipeline="cases", status="error")  # narrow by pipeline/status
+registry.latest_run_per_pipeline()                     # one row per pipeline
+registry.runs_that_warned()                            # tolerated warns (incl. drift)
+registry.records_for_run(run_id)                       # every step of one run
+```
+
+- **Ingest is idempotent** (AC #3): a record's identity is `run_id` + step (+ a
+  step ordinal, because a multi-processor run emits one `process` record per
+  processor — a bare `run_id`+step would collide them), so re-reading the same
+  log inserts nothing the second time (`INSERT OR IGNORE`).
+- **Queryable by `run_id`, pipeline, status, and time.** Ordering is by the
+  record `timestamp`; "row counts over time" is `query_runs(pipeline=…)` read in
+  order.
+- It is a **query store, not a `Dataset` carrier**, so it stays stdlib-only
+  (`json` + `sqlite3`) and never names pandas. It opens through the same
+  `connect` factory and honours the single-writer / rollback-journal conventions
+  (ADR-0001) like any other medallion db; paths are `pathlib` (Windows/macOS).
+- **Schema-drift surfaces as a warn-hit** (ADR-0008), so `runs_that_warned()` is
+  also the drift-surfacing query (AC #6) — it pairs with the raw-drift detector
+  when that lands.
+
+Reading the JSONL needs no change to the emitter (ADR-0007); the one format
+addition this slice made is the per-record `timestamp` (run-log-format.md), the
+time dimension the registry orders by.
 
 ### `Pipeline` — the deferred fluent builder
 A `Pipeline` describes a feed's path and runs **nothing** until `.run()`

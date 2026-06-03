@@ -5,6 +5,7 @@ A ``RunLog`` composed onto a ``Pipeline`` emits one JSON object per line to a
 lines to the console. Every record of a single run shares one ``run_id``.
 """
 
+import datetime
 import json
 import logging
 from pathlib import Path
@@ -203,6 +204,27 @@ def test_checkpoint_failure_is_recorded_before_run_aborts(tmp_path):
     steps = _by_step(_read_records(log_path))
     assert steps["checkpoint:0"]["status"] == "error"
     assert steps["run"]["status"] == "error"
+
+
+def test_every_record_carries_a_parseable_utc_timestamp(tmp_path):
+    # Each record is stamped with the wall-clock instant it was emitted, as an
+    # ISO-8601 UTC string — the true time dimension the run-registry groups and
+    # orders by ("latest run", "row counts over time"), since the registry
+    # cannot read an event time the emitter does not write.
+    log_path = tmp_path / "cases.log"
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1, 2]})))
+    pipeline = Pipeline("cases", reader, run_log=RunLog(log_path))
+
+    before = datetime.datetime.now(datetime.timezone.utc)
+    pipeline.write_to(CapturingWriter()).run()
+    after = datetime.datetime.now(datetime.timezone.utc)
+
+    records = _read_records(log_path)
+    assert records
+    for record in records:
+        stamped = datetime.datetime.fromisoformat(record["timestamp"])
+        assert stamped.tzinfo is not None  # timezone-aware (UTC)
+        assert before <= stamped <= after
 
 
 def test_each_run_mints_a_fresh_run_id():
