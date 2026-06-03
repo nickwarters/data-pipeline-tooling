@@ -196,6 +196,59 @@ full Selection flow — `CaseType`/`Variation` + `CasePool` → `SelectionPool`,
 stamping the Variation's `question_bank_id` onto the chosen Cases. See
 [`selection.md`](selection.md).
 
+## Per-group narrowing — `TopNPerGroup` and `SamplePerGroup`
+
+Real selection rules reduce each *group* of Cases to at most *N* — "the single
+highest-scoring available Case per Adviser", or "sample 5 Cases per region". Two
+sibling processors do this (#62; CONTEXT.md **Sampling**). They are separate,
+intention-revealing names — not one `mode=` class — in the house style that
+keeps `Filter` and `Score` apart, and share a private group-and-cut helper.
+`key` is one or more group columns (`str | Sequence[str]`, mirroring
+`LatestPerKey`): one adviser, or Adviser × region.
+
+### `TopNPerGroup` — ranked
+
+```python
+from framework.processors import TopNPerGroup
+
+# the single highest-scoring Case per adviser
+TopNPerGroup(key="adviser", by="score", n=1)
+TopNPerGroup(key=["adviser", "region"], by="score", n=3)   # top-3 per group
+```
+
+It carries its **own** sort (`by`/`ascending`), so it does not depend on a
+preceding `Sort` surviving the grouping, and applies a **stable secondary
+tie-break** on `tiebreak` (default `"case_id"` — every Case has one, ADR-0009),
+so ranked output is **reproducible when scores tie**.
+
+`TopNPerGroup(key=K, by=B, n=1)` is the structural generalisation of the Ingest
+reduction `LatestPerKey(key=K, by=B)` (top-1 per key). They keep separate names
+for separate domains — Selection narrowing vs current-state reduction.
+
+### `SamplePerGroup` — seeded random, pure
+
+```python
+from framework.processors import SamplePerGroup
+
+SamplePerGroup(key="region", n=5, seed=7)   # 5 Cases per region, reproducibly
+```
+
+It is a **pure function** of (input dataset, `seed`) — ADR-0010. The seed is a
+fixed, configurable constant, *not* derived from `run_id` or the clock: run-to-run
+variation comes from the upstream population shrinking (select-once #60, history
+gates), not from varying the randomness. Each group is ordered by `order`
+(default `"case_id"`) then drawn via a per-group seed from stdlib hashing
+(`hashlib`, stable across Windows/macOS — not the salted builtin `hash`), so the
+draw is **invariant to incoming row order** and each group is independent: same
+set in + same seed ⇒ same sample out. As-of replay (#53) reconstructs the past
+input and re-feeds the same seed to reproduce a past draw.
+
+For both: a group with fewer than `n` rows passes through whole (no error), and
+an empty feed in yields an empty feed out (consistent with `Filter`). The
+aggregate considered/kept/dropped counts land on the run's `process` step
+(`rows_in`/`rows_out`). Exposing the *per-row* dropped reason ("ranked Kth of M",
+"not drawn") at the cut point for the explainability trace (#53) is a follow-on.
+
 ## Not yet (follow-on tickets)
 
 - **Typed `Case` objects** at the domain edge: the CasePool returns the bulk-tier
