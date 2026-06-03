@@ -161,6 +161,50 @@ def test_console_output_is_human_readable_not_raw_json(tmp_path, caplog):
         json.loads(line)  # human-readable prose, not a JSON object
 
 
+def test_checkpoint_emits_its_own_step_record(tmp_path):
+    # Each checkpoint emits a "checkpoint:N" step record in the JSONL log
+    # (ADR-0007 lineage requirement); two checkpoints produce "checkpoint:0"
+    # and "checkpoint:1" in attach order, each with row counts and status "ok".
+    log_path = tmp_path / "cases.log"
+    ds = Dataset.from_pandas(pd.DataFrame({"id": [1, 2, 3]}))
+    reader = RecordingReader(ds)
+
+    Pipeline("cases", reader, run_log=RunLog(log_path)).checkpoint(
+        CapturingWriter()
+    ).checkpoint(CapturingWriter()).run()
+
+    steps = _by_step(_read_records(log_path))
+
+    cp0 = steps["checkpoint:0"]
+    assert cp0["status"] == "ok"
+    assert cp0["rows_in"] == 3
+    assert cp0["rows_out"] == 3
+
+    cp1 = steps["checkpoint:1"]
+    assert cp1["status"] == "ok"
+    assert cp1["rows_in"] == 3
+
+
+def test_checkpoint_failure_is_recorded_before_run_aborts(tmp_path):
+    # A checkpoint that raises logs its own "checkpoint:0" step as "error" and
+    # the run summary as "error" before the exception propagates (ADR-0007).
+    log_path = tmp_path / "cases.log"
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
+
+    class BrokenWriter:
+        def write(self, dataset: Dataset) -> None:
+            raise RuntimeError("disk full")
+
+    with pytest.raises(RuntimeError):
+        Pipeline("cases", reader, run_log=RunLog(log_path)).checkpoint(
+            BrokenWriter()
+        ).run()
+
+    steps = _by_step(_read_records(log_path))
+    assert steps["checkpoint:0"]["status"] == "error"
+    assert steps["run"]["status"] == "error"
+
+
 def test_each_run_mints_a_fresh_run_id():
     # `.run()` mints a uuid run_id, exposed as `pipeline.run_id`; re-running the
     # same builder correlates a *new* run, so the id changes each time.

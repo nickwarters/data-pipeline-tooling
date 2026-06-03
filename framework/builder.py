@@ -48,9 +48,10 @@ class Pipeline:
         # about to be written.
         self._pre_validators: list[tuple[Validator, Severity]] = []
         self._post_validators: list[tuple[Validator, Severity]] = []
-        # Processors transform the dataset between the pre- and post-validators,
-        # in attach order — the seam the raw->silver coercion slots into (#23).
-        self._processors: list[Processor] = []
+        # Stages are processors and checkpoints in attach order; they run
+        # between pre- and post-validators. A "processor" stage transforms the
+        # dataset; a "checkpoint" stage writes a snapshot and passes through.
+        self._stages: list[tuple[str, Processor | Writer]] = []
 
     def with_validator(
         self, validator: Validator, severity: Severity = "error"
@@ -68,7 +69,17 @@ class Pipeline:
 
     def with_processor(self, processor: Processor) -> "Pipeline":
         """Attach a processor (transforms the dataset mid-run). Deferred."""
-        self._processors.append(processor)
+        self._stages.append(("processor", processor))
+        return self
+
+    def checkpoint(self, writer: Writer) -> "Pipeline":
+        """Attach a mid-run lineage write. Deferred — nothing runs until .run().
+
+        The writer receives the current dataset at this point in the stage
+        sequence and the dataset passes through unchanged so the pipeline
+        continues. A checkpoint failure aborts the run (ADR-0007 fail-fast).
+        """
+        self._stages.append(("checkpoint", writer))
         return self
 
     def write_to(self, writer: Writer) -> "Pipeline":
@@ -106,13 +117,22 @@ class Pipeline:
                 metrics.rows_out = len(dataset)
             warn_hits += metrics.warn_hits
 
-            # Processors transform the dataset in attach order; post-validators
-            # then gate that transformed output. A processor failure is always
-            # fail-fast (ADR-0007) — it has no severity, so it raises and aborts.
-            with step("process", rows_in=len(dataset)) as metrics:
-                for processor in self._processors:
-                    dataset = processor.process(dataset)
-                metrics.rows_out = len(dataset)
+            # Stages (processors and checkpoints) run in attach order between
+            # the pre- and post-validators. Processors transform the dataset;
+            # checkpoints snapshot it and pass it through unchanged. Both are
+            # fail-fast (ADR-0007): a failure aborts the run before any write.
+            checkpoint_idx = 0
+            for kind, component in self._stages:
+                if kind == "processor":
+                    with step("process", rows_in=len(dataset)) as metrics:
+                        dataset = component.process(dataset)  # type: ignore[union-attr]
+                        metrics.rows_out = len(dataset)
+                else:
+                    cp_name = f"checkpoint:{checkpoint_idx}"
+                    with step(cp_name, rows_in=len(dataset)) as metrics:
+                        component.write(dataset)  # type: ignore[union-attr]
+                        metrics.rows_out = len(dataset)
+                    checkpoint_idx += 1
 
             with step("post-validate", rows_in=len(dataset)) as metrics:
                 self._validate(self._post_validators, dataset, "post-validate", metrics)

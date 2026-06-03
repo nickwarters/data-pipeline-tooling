@@ -202,3 +202,100 @@ def test_error_severity_post_validator_aborts_before_any_write():
         pipeline.run()
 
     assert writer.write_count == 0
+
+
+# ---------------------------------------------------------------------------
+# checkpoint tests (issue #49)
+# ---------------------------------------------------------------------------
+
+
+def test_checkpoint_is_deferred_until_run():
+    # Composing .checkpoint() is side-effect-free; the write fires only at
+    # .run() (ADR-0003), like the reader and terminus writer.
+    ds = Dataset.from_pandas(pd.DataFrame({"id": [1]}))
+    reader = RecordingReader(ds)
+    cp = CapturingWriter()
+
+    pipeline = Pipeline("cases", reader).checkpoint(cp)
+    assert cp.write_count == 0
+
+    pipeline.run()
+    assert cp.write_count == 1
+
+
+def test_multiple_checkpoints_fire_in_attach_order():
+    # Two checkpoints both fire, in the order they were attached, and the
+    # dataset that reaches each is the same (pass-through, no mutation).
+    ds = Dataset.from_pandas(pd.DataFrame({"id": [1, 2]}))
+    reader = RecordingReader(ds)
+    cp0 = CapturingWriter()
+    cp1 = CapturingWriter()
+    order: list[str] = []
+
+    class OrderedWriter:
+        def __init__(self, label: str, target: CapturingWriter) -> None:
+            self._label = label
+            self._target = target
+
+        def write(self, dataset: Dataset) -> None:
+            order.append(self._label)
+            self._target.write(dataset)
+
+    Pipeline("cases", reader).checkpoint(OrderedWriter("a", cp0)).checkpoint(
+        OrderedWriter("b", cp1)
+    ).run()
+
+    assert order == ["a", "b"]
+    assert cp0.write_count == 1
+    assert cp1.write_count == 1
+
+
+def test_checkpoint_failure_aborts_before_terminus_write():
+    # A checkpoint that raises aborts the run (ADR-0007 fail-fast): the
+    # terminus writer is never called, so nothing partial lands.
+    class BrokenWriter:
+        def write(self, dataset: Dataset) -> None:
+            raise RuntimeError("disk full")
+
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
+    terminus = CapturingWriter()
+
+    with pytest.raises(RuntimeError, match="disk full"):
+        Pipeline("cases", reader).checkpoint(BrokenWriter()).write_to(terminus).run()
+
+    assert terminus.write_count == 0
+
+
+def test_checkpoint_sees_state_at_its_position_in_the_stage_sequence():
+    # A checkpoint attached between two processors sees the dataset as it
+    # exists at that point: the first processor's column is present, the
+    # second processor's column is not yet added.
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
+    cp = CapturingWriter()
+
+    (
+        Pipeline("cases", reader)
+        .with_processor(AddingProcessor("col_a"))
+        .checkpoint(cp)
+        .with_processor(AddingProcessor("col_b"))
+        .run()
+    )
+
+    assert "col_a" in cp.written.columns
+    assert "col_b" not in cp.written.columns
+
+
+def test_checkpoint_write_fires_and_passes_dataset_through_to_terminus():
+    # A checkpoint fires during .run() and the same dataset (unchanged) still
+    # reaches the terminus writer.
+    ds = Dataset.from_pandas(pd.DataFrame({"id": [1, 2]}))
+    reader = RecordingReader(ds)
+    cp = CapturingWriter()
+    terminus = CapturingWriter()
+
+    Pipeline("cases", reader).checkpoint(cp).write_to(terminus).run()
+
+    assert cp.write_count == 1
+    assert terminus.write_count == 1
+    assert cp.written is ds
+    assert terminus.written is ds
