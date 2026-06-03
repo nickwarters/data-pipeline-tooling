@@ -146,6 +146,53 @@ The SelectionPool reaches the review platform as a **Deliverable** (a later
 slice); the returned **Review Outcomes** come back through the **Sync** Pipeline,
 not here — they live in the Sync store, not the SelectionPool (CONTEXT.md).
 
+## Explainability — why each Case was (or wasn't) selected
+
+Selecting *which advisers' Cases get reviewed* is itself a governed act that will
+be challenged after the fact ("why wasn't this adviser picked up last quarter?").
+But `Filter`/`Score`/`JoinWith` **silently drop** the Cases they exclude (ADR-0002
+plain-Python callables), leaving no trace. `.explain(writer, id_column=…)` closes
+that gap (#53): it is the eligibility-stage twin of `.quarantine()` (#50) — the
+same *route aside with a reason, never silently drop* shape, pointed at
+**eligibility** rather than **validity** (ADR-0007 amendment 02).
+
+```python
+(
+    Pipeline("selection", DatasetReader(available))
+    .with_processor(Filter(lambda row: row["amount"] >= 100, name="high-value"))
+    .with_processor(Sort("amount", ascending=False))
+    .with_processor(Stamp("question_bank_id", variation.question_bank_id))
+    .explain(                                   # land a per-Case trace alongside
+        store.writer("gold", "selection_trace", AccumulateByRun(run_id, load_date)),
+        id_column="case_ref",
+    )
+    .write_to(store.writer("gold", "selection_pool", AccumulateByRun(run_id, load_date)))
+    .run()
+)
+```
+
+The **SelectionTrace** lands as a sibling table of the SelectionPool, one row per
+*considered* Case (not just the survivors), stamped `run_id`:
+
+| `case_ref` | `verdict` | `reason` | `rank` |
+|---|---|---|---|
+| `c1` | `selected` | `passed high-value` | 1 |
+| `c2` | `selected` | `passed high-value` | 2 |
+| `c3` | `excluded` | `excluded by filter 'high-value'` | — |
+
+Naming a gate (`Filter(..., name="high-value")`, `JoinWith(..., name=…)`) locates
+its reasons; an unnamed gate still traces, under a generic label. Pass
+`score_column="…"` to retain each Case's score — kept even for a Case a *later*
+gate excludes, so a low scorer dropped by a top-N cut still shows what it scored.
+A Case dropped by an **inner** `JoinWith` (e.g. an adviser absent from the
+hierarchy Reference Data) is recorded as excluded by that join, not silently
+absent. The run's `explain` step logs the governance counts —
+considered / selected / excluded (see [`run-log-format.md`](run-log-format.md)).
+
+Explainability is the trace of *one run*. Re-deriving what Selection *would* have
+picked "as of" a past date (reproducibility against accumulated silver — #38) is a
+separate concern, deferred to a follow-up.
+
 ## End to end — the runnable demo
 
 [`../pipelines/demo_source_to_selection.py`](../pipelines/demo_source_to_selection.py)

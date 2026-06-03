@@ -34,6 +34,7 @@ class StepMetrics:
         self.rows_in: int | None = None
         self.rows_out: int | None = None
         self.rows_quarantined: int | None = None
+        self.rows_excluded: int | None = None
         self.warn_hits: list[str] = []
 
 
@@ -68,6 +69,7 @@ class RunLog:
                 rows_in=metrics.rows_in,
                 rows_out=metrics.rows_out,
                 rows_quarantined=metrics.rows_quarantined,
+                rows_excluded=metrics.rows_excluded,
                 duration=time.perf_counter() - started,
                 errors=[str(exc)],
                 warn_hits=metrics.warn_hits,
@@ -81,6 +83,7 @@ class RunLog:
             rows_in=metrics.rows_in,
             rows_out=metrics.rows_out,
             rows_quarantined=metrics.rows_quarantined,
+            rows_excluded=metrics.rows_excluded,
             duration=time.perf_counter() - started,
             warn_hits=metrics.warn_hits,
         )
@@ -95,6 +98,7 @@ class RunLog:
         rows_in: int | None = None,
         rows_out: int | None = None,
         rows_quarantined: int | None = None,
+        rows_excluded: int | None = None,
         duration: float | None = None,
         errors: list[str] | None = None,
         warn_hits: list[str] | None = None,
@@ -108,6 +112,7 @@ class RunLog:
             "rows_in": rows_in,
             "rows_out": rows_out,
             "rows_quarantined": rows_quarantined,
+            "rows_excluded": rows_excluded,
             "duration": duration,
             "errors": errors or [],
             "warn_hits": warn_hits or [],
@@ -127,6 +132,8 @@ class RunLog:
             parts.append(f"rows_out={record['rows_out']}")
         if record.get("rows_quarantined"):
             parts.append(f"quarantined={record['rows_quarantined']}")
+        if record.get("rows_excluded"):
+            parts.append(f"excluded={record['rows_excluded']}")
         if record["duration"] is not None:
             parts.append(f"{record['duration']:.3f}s")
         if record["errors"]:

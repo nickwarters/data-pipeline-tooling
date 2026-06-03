@@ -73,10 +73,18 @@ class Filter:
     over a row as a ``{column: value}`` mapping, so the availability/eligibility
     rule is pure Python (ADR-0002) and never names the engine. Applied row-wise
     behind the Dataset seam.
+
+    An optional ``name`` labels the eligibility gate so Selection
+    explainability (#53) can record *which* filter excluded a Case — the
+    ``selection_role``/``selection_name`` the trace reads. Unnamed filters still
+    work; they trace under a generic ``"filter"`` label.
     """
 
-    def __init__(self, predicate: RowPredicate) -> None:
+    selection_role = "filter"
+
+    def __init__(self, predicate: RowPredicate, *, name: str | None = None) -> None:
         self._predicate = predicate
+        self.selection_name = name or "filter"
 
     def process(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()  # engine-confined (ADR-0002)
@@ -91,11 +99,18 @@ class Score:
     row mapping returning that row's value for ``column`` (a new column, or an
     overwrite of an existing one). Pure Python (ADR-0002), applied row-wise
     behind the seam; every other column is left untouched.
+
+    Its ``selection_role``/``selection_name`` let Selection explainability (#53)
+    snapshot each considered Case's score — retained in the trace even for a
+    Case a later gate excludes (AC2).
     """
+
+    selection_role = "score"
 
     def __init__(self, column: str, scorer: RowScorer) -> None:
         self._column = column
         self._scorer = scorer
+        self.selection_name = column
 
     def process(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas().copy()  # engine-confined (ADR-0002)
@@ -180,7 +195,14 @@ class JoinWith:
 
     ``on`` is the shared key column(s); ``how`` the join kind (``inner`` default,
     or ``left``/``right``/``outer``).
+
+    An optional ``name`` labels the join so Selection explainability (#53) can
+    record a Case an *inner* join drops as excluded by this join, rather than
+    leaving it silently absent (AC5) — the ``selection_role``/``selection_name``
+    the trace reads.
     """
+
+    selection_role = "join"
 
     def __init__(
         self,
@@ -188,10 +210,12 @@ class JoinWith:
         *,
         on: str | Sequence[str],
         how: _MergeHow = "inner",
+        name: str | None = None,
     ) -> None:
         self._other = other
         self._on = on
         self._how = how
+        self.selection_name = name or "join"
 
     def process(self, dataset: Dataset) -> Dataset:
         # Resolve the lazy reference now (ADR-0003): run the other builder and

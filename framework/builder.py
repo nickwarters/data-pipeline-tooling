@@ -17,6 +17,7 @@ import uuid
 from functools import partial
 
 from framework.dataset import Dataset
+from framework.explain import SelectionTrace
 from framework.processors import Processor
 from framework.readers import Reader
 from framework.run_log import NULL_RUN_LOG, RunLog, StepMetrics
@@ -57,6 +58,11 @@ class Pipeline:
         # routed to the reject writer; good rows continue through the pipeline.
         self._quarantine_validator = None
         self._quarantine_writer: Writer | None = None
+        # Optional Selection explainability (issue #53): a per-Case trace of why
+        # each considered Case was/wasn't selected, routed to a sibling table.
+        self._explain_writer: Writer | None = None
+        self._explain_id_column: str | None = None
+        self._explain_score_column: str | None = None
 
     def with_validator(
         self, validator: Validator, severity: Severity = "error"
@@ -87,6 +93,27 @@ class Pipeline:
         """
         self._quarantine_validator = row_validator
         self._quarantine_writer = reject_writer
+        return self
+
+    def explain(
+        self,
+        writer: Writer,
+        *,
+        id_column: str,
+        score_column: str | None = None,
+    ) -> "Pipeline":
+        """Configure Selection explainability. Deferred — nothing runs until .run().
+
+        When configured, ``.run()`` follows each considered Case (identified by
+        ``id_column``) across the processor stages and writes a per-Case verdict
+        — selected/excluded, the gate that excluded it, its ``score_column``
+        score, and the survivor's rank — to ``writer`` (a sibling trace table,
+        stamped ``run_id`` by the Writer's strategy). This is the eligibility-
+        stage twin of ``.quarantine()`` (ADR-0007 amendment 02, issue #53).
+        """
+        self._explain_writer = writer
+        self._explain_id_column = id_column
+        self._explain_score_column = score_column
         return self
 
     def checkpoint(self, writer: Writer) -> "Pipeline":
@@ -150,6 +177,17 @@ class Pipeline:
                         self._quarantine_writer.write(stamped)
                     dataset = good
 
+            # Selection explainability (issue #53): when configured, seed the
+            # trace with the considered population, then watch each processor
+            # stage to record which gate excludes each Case (ADR-0007 amd 02).
+            trace = None
+            if self._explain_writer is not None:
+                trace = SelectionTrace(
+                    self._explain_id_column,
+                    score_column=self._explain_score_column,
+                )
+                trace.consider(dataset)
+
             # Stages (processors and checkpoints) run in attach order between
             # the pre- and post-validators. Processors transform the dataset;
             # checkpoints snapshot it and pass it through unchanged. Both are
@@ -158,8 +196,16 @@ class Pipeline:
             for kind, component in self._stages:
                 if kind == "processor":
                     with step("process", rows_in=len(dataset)) as metrics:
+                        before = dataset
                         dataset = component.process(dataset)  # type: ignore[union-attr]
                         metrics.rows_out = len(dataset)
+                    if trace is not None:
+                        trace.observe(
+                            getattr(component, "selection_role", None),
+                            getattr(component, "selection_name", type(component).__name__),
+                            before,
+                            dataset,
+                        )
                 else:
                     cp_name = f"checkpoint:{checkpoint_idx}"
                     with step(cp_name, rows_in=len(dataset)) as metrics:
@@ -171,6 +217,16 @@ class Pipeline:
                 self._validate(self._post_validators, dataset, "post-validate", metrics)
                 metrics.rows_out = len(dataset)
             warn_hits += metrics.warn_hits
+
+            # Explainability (issue #53): the post-stage dataset *is* the
+            # SelectionPool, so finalize the trace against it (survivors' ranks)
+            # and land it in its sibling table. The step records the governance
+            # counts considered/selected/excluded (ADR-0007 amendment 02).
+            if trace is not None:
+                with step("explain", rows_in=trace.considered) as metrics:
+                    self._explain_writer.write(trace.finalize(dataset))
+                    metrics.rows_out = trace.selected
+                    metrics.rows_excluded = trace.excluded
 
             if self._writer is not None:
                 with step("write", rows_in=len(dataset)) as metrics:

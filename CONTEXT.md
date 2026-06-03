@@ -20,6 +20,10 @@ _Avoid_: repository, dataset (as a name for the CasePool — the capitalised fra
 The narrowed set of Cases the Selection pipeline produces by pulling from the CasePool and applying filter/score/sort/join — i.e. the Cases actually chosen for review.
 _Avoid_: shortlist, batch
 
+**SelectionTrace**:
+The per-Case audit of *why* each Case considered by Selection was or wasn't chosen: which **Filter**/**Join** excluded it (located by name), what it **Score**d, and — for survivors — where it ranked. A sibling table of the **SelectionPool**, stamped `run_id` per Case Type / run, so the selection decision is defensible after the fact ("why wasn't this Adviser picked up last quarter?"). It is the eligibility-stage twin of **quarantine** (validity) — the same "route aside *with a reason*, never silently drop" shape, pointed at selection rather than schema (issue #53, ADR-0007 amendment 02). Produced by `.explain(writer, id_column=…)` on the Selection pipeline.
+_Avoid_: log (it is queryable state, not free text); audit log (reserve for the run-level JSONL)
+
 **Sampling**:
 A per-group narrowing technique Selection may apply, reducing each group (one or more key columns, e.g. **Adviser**, or Adviser × region) to at most *N* Cases. Two forms: **ranked** — the highest-scoring *N* per group, deterministic by a score (the common case is *N*=1, "the single highest available per Adviser"); and **random** — *N* drawn at random per group, made **reproducible** by a fixed **seed** (a pure function of input + seed; run-to-run variation comes from the upstream-narrowed population, not the seed — ADR-0010). The cut is itself a **selection decision**: the Cases dropped beyond *N* are excluded *with a reason*, captured by the selection trace (issue #53), never silently absent.
 _Avoid_: picking; "sample" as a loose name for the **SelectionPool** as a whole (sampling is one technique that helps produce it, not the result)

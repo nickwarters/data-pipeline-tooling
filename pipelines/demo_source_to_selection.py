@@ -14,7 +14,9 @@ the primitives the earlier slices built:
    Python processors (filter the low-value cases out, rank highest-amount first),
    stamps the chosen :class:`~framework.case_type.Variation`'s
    ``question_bank_id``, and accumulates the **SelectionPool** into ``gold``
-   stamped ``run_id`` / ``load_date`` (ADR-0006).
+   stamped ``run_id`` / ``load_date`` (ADR-0006). ``.explain(...)`` lands a
+   sibling **SelectionTrace** alongside it — a per-Case verdict of why each
+   available Case was or wasn't selected (#53, ADR-0007 amendment 02).
 
 Run from the repo root as a module so the import-only ``framework`` package
 resolves on ``sys.path``::
@@ -96,17 +98,26 @@ def main(target_dir: str) -> None:
     variation = CASES.variation("v1")
     selection_pool = (
         Pipeline("selection", DatasetReader(available))
-        .with_processor(Filter(lambda row: row["amount"] >= 100))  # high-value only
+        .with_processor(Filter(lambda row: row["amount"] >= 100, name="high-value"))
         .with_processor(Sort("amount", ascending=False))  # rank top-amount first
         .with_processor(Stamp("question_bank_id", variation.question_bank_id))
+        # Explainability (#53): land a per-Case trace of why each available Case
+        # was/wasn't selected in a sibling table, stamped by this run.
+        .explain(
+            store.writer("gold", "selection_trace", AccumulateByRun(RUN_ID, RUN_ID)),
+            id_column="case_ref",
+        )
         .write_to(store.writer("gold", "selection_pool", AccumulateByRun(RUN_ID, RUN_ID)))
         .run()
     )
 
+    trace = store.reader("gold", "selection_trace").read()
+    excluded = sum(1 for v in trace.to_pandas()["verdict"] if v == "excluded")
     print(
         f"available cases: {len(available)} -> "
         f"SelectionPool: {len(selection_pool)} cases "
-        f"(Question Bank {variation.question_bank_id}, run {RUN_ID})"
+        f"(Question Bank {variation.question_bank_id}, run {RUN_ID}); "
+        f"trace: {len(trace)} considered, {excluded} excluded with a reason"
     )
 
 

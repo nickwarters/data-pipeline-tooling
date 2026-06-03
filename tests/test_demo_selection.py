@@ -23,8 +23,19 @@ def test_demo_runs_the_full_source_to_selection_path(tmp_path, capsys):
     assert set(selection_pool["question_bank_id"]) == {"qb-100"}
     assert set(selection_pool["run_id"]) == {"2026-05-29"}
 
+    # Selection explainability (#53): a sibling trace landed alongside the pool,
+    # stamped by the same run, with a per-Case verdict for every available Case.
+    trace = Store(cases_dir).reader("gold", "selection_trace").read().to_pandas()
+    by_ref = trace.set_index("case_ref")
+    assert set(trace["case_ref"]) == {"c1", "c2", "c3"}  # all considered, not just survivors
+    assert set(trace["run_id"]) == {"2026-05-29"}
+    assert by_ref.loc["c1", "verdict"] == "selected"
+    assert by_ref.loc["c3", "verdict"] == "excluded"  # below the high-value gate
+    assert "high-value" in by_ref.loc["c3", "reason"]
+
     captured = capsys.readouterr()
     assert "SelectionPool" in captured.out
+    assert "trace" in captured.out
 
 
 def test_demo_is_runnable_as_a_module(tmp_path):

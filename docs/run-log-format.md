@@ -52,10 +52,12 @@ to a step are `null` (or `[]`), so the registry sees one shape:
 |-------------|---------------------|---------|
 | `run_id`    | string              | The run's correlating id (same on every line of the run). |
 | `pipeline`  | string              | The feed/pipeline name (the builder's `name`). |
-| `step`      | string              | `read`, `pre-validate`, `post-validate`, `write`, or `run` (the summary). |
+| `step`      | string              | `read`, `pre-validate`, `quarantine`, `process`, `explain`, `post-validate`, `write`, or `run` (the summary). |
 | `status`    | `"ok"` \| `"error"` | Step/run outcome. |
 | `rows_in`   | int \| null         | Rows the step consumed (`null` where N/A, e.g. `read`). |
 | `rows_out`  | int \| null         | Rows the step produced. |
+| `rows_quarantined` | int \| null  | Rows routed aside on a `quarantine` step (value-rule breaches — ADR-0007 amd 01); `null` elsewhere. |
+| `rows_excluded` | int \| null     | Cases a gate excluded on an `explain` step (Selection explainability — ADR-0007 amd 02); `null` elsewhere. |
 | `duration`  | float \| null       | Wall-clock seconds for the step/run. |
 | `errors`    | string[]            | Error messages when `status` is `error`; `[]` otherwise. |
 | `warn_hits` | string[]            | Warn-severity validator messages tolerated at this step; `[]` otherwise. |
@@ -71,14 +73,20 @@ One record per step, in execution order, then a final `run` summary:
 5. `run` — the **summary**: overall `status`, total `duration`, and the
    run's aggregated `warn_hits`.
 
+Two opt-in steps appear only when their path is configured: `quarantine` (between
+`pre-validate` and the processors — ADR-0007 amd 01, with `rows_quarantined`) and
+`explain` (after `post-validate` — ADR-0007 amd 02, with `rows_excluded`; its
+`rows_in`/`rows_out` are the Cases considered/selected by Selection). A `process`
+step is recorded per attached processor.
+
 ### Happy path (a successful run of 4 rows)
 
 ```json
-{"run_id": "f8263986…", "pipeline": "cases", "step": "read",          "status": "ok", "rows_in": null, "rows_out": 4, "duration": 0.0007, "errors": [], "warn_hits": []}
-{"run_id": "f8263986…", "pipeline": "cases", "step": "pre-validate",  "status": "ok", "rows_in": 4,    "rows_out": 4, "duration": 0.0000, "errors": [], "warn_hits": []}
-{"run_id": "f8263986…", "pipeline": "cases", "step": "post-validate", "status": "ok", "rows_in": 4,    "rows_out": 4, "duration": 0.0000, "errors": [], "warn_hits": []}
-{"run_id": "f8263986…", "pipeline": "cases", "step": "write",         "status": "ok", "rows_in": 4,    "rows_out": 4, "duration": 0.0016, "errors": [], "warn_hits": []}
-{"run_id": "f8263986…", "pipeline": "cases", "step": "run",           "status": "ok", "rows_in": 4,    "rows_out": 4, "duration": 0.0030, "errors": [], "warn_hits": []}
+{"run_id": "f8263986…", "pipeline": "cases", "step": "read",          "status": "ok", "rows_in": null, "rows_out": 4, "rows_quarantined": null, "rows_excluded": null, "duration": 0.0007, "errors": [], "warn_hits": []}
+{"run_id": "f8263986…", "pipeline": "cases", "step": "pre-validate",  "status": "ok", "rows_in": 4,    "rows_out": 4, "rows_quarantined": null, "rows_excluded": null, "duration": 0.0000, "errors": [], "warn_hits": []}
+{"run_id": "f8263986…", "pipeline": "cases", "step": "post-validate", "status": "ok", "rows_in": 4,    "rows_out": 4, "rows_quarantined": null, "rows_excluded": null, "duration": 0.0000, "errors": [], "warn_hits": []}
+{"run_id": "f8263986…", "pipeline": "cases", "step": "write",         "status": "ok", "rows_in": 4,    "rows_out": 4, "rows_quarantined": null, "rows_excluded": null, "duration": 0.0016, "errors": [], "warn_hits": []}
+{"run_id": "f8263986…", "pipeline": "cases", "step": "run",           "status": "ok", "rows_in": 4,    "rows_out": 4, "rows_quarantined": null, "rows_excluded": null, "duration": 0.0030, "errors": [], "warn_hits": []}
 ```
 
 ### Fail-fast abort (error-severity validator)
