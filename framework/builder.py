@@ -10,6 +10,7 @@ which owns its own location and load strategy (ADR-0003, ADR-0006).
 
 from __future__ import annotations
 
+import datetime
 import logging
 import time
 import uuid
@@ -52,6 +53,10 @@ class Pipeline:
         # between pre- and post-validators. A "processor" stage transforms the
         # dataset; a "checkpoint" stage writes a snapshot and passes through.
         self._stages: list[tuple[str, Processor | Writer]] = []
+        # Optional row-level quarantine (issue #50): value-rule-failing rows are
+        # routed to the reject writer; good rows continue through the pipeline.
+        self._quarantine_validator = None
+        self._quarantine_writer: Writer | None = None
 
     def with_validator(
         self, validator: Validator, severity: Severity = "error"
@@ -70,6 +75,18 @@ class Pipeline:
     def with_processor(self, processor: Processor) -> "Pipeline":
         """Attach a processor (transforms the dataset mid-run). Deferred."""
         self._stages.append(("processor", processor))
+        return self
+
+    def quarantine(self, row_validator, reject_writer: Writer) -> "Pipeline":
+        """Configure opt-in row-level quarantine. Deferred — nothing runs until .run().
+
+        After pre-validation, value-rule-failing rows are routed to ``reject_writer``
+        (stamped with ``run_id`` + ``load_date``); good rows continue through the
+        pipeline. Structural breaches (missing columns, wrong dtypes) still abort via
+        the pre-validators — quarantine is only for value-rule breaches (ADR-0007 §2).
+        """
+        self._quarantine_validator = row_validator
+        self._quarantine_writer = reject_writer
         return self
 
     def checkpoint(self, writer: Writer) -> "Pipeline":
@@ -116,6 +133,22 @@ class Pipeline:
                 self._validate(self._pre_validators, dataset, "pre-validate", metrics)
                 metrics.rows_out = len(dataset)
             warn_hits += metrics.warn_hits
+
+            # Quarantine (issue #50): row-level value-rule partitioning runs after
+            # structural pre-validators (which abort on missing columns / wrong dtypes)
+            # and before stages (processors/checkpoints on the clean subset).
+            if self._quarantine_validator is not None:
+                with step("quarantine", rows_in=len(dataset)) as metrics:
+                    good, rejected = self._quarantine_validator.partition(dataset)
+                    metrics.rows_out = len(good)
+                    metrics.rows_quarantined = len(rejected)
+                    if len(rejected) > 0 and self._quarantine_writer is not None:
+                        stamped = rejected.with_columns(
+                            run_id=self.run_id,
+                            load_date=datetime.date.today().isoformat(),
+                        )
+                        self._quarantine_writer.write(stamped)
+                    dataset = good
 
             # Stages (processors and checkpoints) run in attach order between
             # the pre- and post-validators. Processors transform the dataset;

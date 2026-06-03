@@ -63,6 +63,15 @@ class ValueRule(Protocol):
         """Return a breach phrase if ``series`` breaks the rule, else ``None``."""
         ...
 
+    def violating_mask(self, series: "pd.Series") -> "pd.Series":
+        """Return a boolean mask: True where a row violates this rule.
+
+        Null values are always False — nullability is a separate concern.
+        Used by the quarantine partitioner to identify which rows to route to
+        the reject table (issue #50).
+        """
+        ...
+
 
 def _sample(values: "pd.Series") -> str:
     """Format up to ``_SAMPLE_LIMIT`` offending values for a breach message.
@@ -91,10 +100,16 @@ class Pattern:
         self._source = pattern
         self._regex = re.compile(pattern)  # fail-fast on a malformed pattern
 
+    def violating_mask(self, series: "pd.Series") -> "pd.Series":
+        mask = pd.Series(False, index=series.index)
+        present_idx = series.dropna().index
+        if len(present_idx):
+            matched = series[present_idx].astype("string").str.fullmatch(self._regex)
+            mask.loc[present_idx] = ~matched.fillna(False)
+        return mask
+
     def check(self, series: "pd.Series") -> str | None:
-        present = series.dropna()
-        matched = present.astype("string").str.fullmatch(self._regex)
-        breaches = present[~matched.fillna(False)]
+        breaches = series[self.violating_mask(series)]
         if not breaches.empty:
             return f"violates pattern {self._source!r} (e.g. {_sample(breaches)})"
         return None
@@ -122,12 +137,18 @@ class Length:
         self._minimum = minimum
         self._maximum = maximum
 
+    def violating_mask(self, series: "pd.Series") -> "pd.Series":
+        mask = pd.Series(False, index=series.index)
+        present_idx = series.dropna().index
+        if len(present_idx):
+            lengths = series[present_idx].astype("string").str.len()
+            too_short = lengths < self._minimum if self._minimum is not None else pd.Series(False, index=present_idx)
+            too_long = lengths > self._maximum if self._maximum is not None else pd.Series(False, index=present_idx)
+            mask.loc[present_idx] = too_short | too_long
+        return mask
+
     def check(self, series: "pd.Series") -> str | None:
-        present = series.dropna()
-        lengths = present.astype("string").str.len()
-        too_short = lengths < self._minimum if self._minimum is not None else False
-        too_long = lengths > self._maximum if self._maximum is not None else False
-        breaches = present[too_short | too_long]
+        breaches = series[self.violating_mask(series)]
         if not breaches.empty:
             lo = self._minimum if self._minimum is not None else ""
             hi = self._maximum if self._maximum is not None else ""
@@ -146,9 +167,15 @@ class Unique:
     values are not flagged as duplicates.
     """
 
-    def check(self, series: "pd.Series") -> str | None:
+    def violating_mask(self, series: "pd.Series") -> "pd.Series":
+        mask = pd.Series(False, index=series.index)
         present = series.dropna()
-        dupes = present[present.duplicated(keep=False)]
+        if not present.empty:
+            mask.loc[present.index] = present.duplicated(keep=False)
+        return mask
+
+    def check(self, series: "pd.Series") -> str | None:
+        dupes = series[self.violating_mask(series)]
         if not dupes.empty:
             return f"has duplicate value(s): {_sample(dupes)}"
         return None
@@ -167,9 +194,15 @@ class OneOf:
             raise ValueError("OneOf requires at least one allowed value")
         self._allowed = set(allowed)
 
-    def check(self, series: "pd.Series") -> str | None:
+    def violating_mask(self, series: "pd.Series") -> "pd.Series":
+        mask = pd.Series(False, index=series.index)
         present = series.dropna()
-        breaches = present[~present.isin(self._allowed)]
+        if not present.empty:
+            mask.loc[present.index] = ~present.isin(self._allowed)
+        return mask
+
+    def check(self, series: "pd.Series") -> str | None:
+        breaches = series[self.violating_mask(series)]
         if not breaches.empty:
             allowed = ", ".join(sorted(repr(v) for v in self._allowed))
             return f"has value(s) outside {{{allowed}}}: {_sample(breaches)}"

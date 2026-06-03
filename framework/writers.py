@@ -61,6 +61,48 @@ class SqliteTruncateReloadWriter:
             con.close()
 
 
+class QuarantineWriter:
+    """A Writer for the quarantine reject table — accumulates rejects across runs.
+
+    Owns its target location (db_path + table). The pipeline stamps ``run_id``
+    and ``load_date`` on the rejected dataset before calling ``write()``, so this
+    writer just does the idempotent delete-by-run_id + append that lets a re-driven
+    run replace only its own prior rejects without touching other runs (ADR-0006).
+
+    Unlike ``AccumulateByRunWriter``, this writer does NOT stamp ``run_id`` or
+    ``load_date`` — those come from the dataset (added by the pipeline at quarantine
+    time). The ``failed_rule`` column also arrives pre-stamped by the partitioner.
+    """
+
+    def __init__(
+        self,
+        db_path: str | os.PathLike[str],
+        table: str,
+        busy_timeout_ms: int = 5000,
+    ) -> None:
+        self._db_path = Path(db_path)
+        self._table = table
+        self._busy_timeout_ms = busy_timeout_ms
+
+    def write(self, dataset: Dataset) -> None:
+        frame = dataset.to_pandas()
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        con = connect(self._db_path, self._busy_timeout_ms)
+        try:
+            if "run_id" in frame.columns:
+                run_id = frame["run_id"].iloc[0]
+                try:
+                    con.execute(
+                        f"DELETE FROM {self._table} WHERE run_id = ?", (run_id,)
+                    )
+                except sqlite3.OperationalError:
+                    pass  # table does not exist yet
+            frame.to_sql(self._table, con, if_exists="append", index=False)
+            con.commit()
+        finally:
+            con.close()
+
+
 class AccumulateByRunWriter:
     """A Writer that accumulates runs into one table, stamped by run (ADR-0006).
 
