@@ -53,8 +53,12 @@ The single **Reviewer** currently assigned to a specific **Case** (the Case row'
 _Avoid_: Owner (of the case), primary reviewer, lead
 
 **Responsible Party**:
-The SharePoint user whose work is being reviewed (e.g., the agent on a call being assessed). Distinct from the **Reviewer**.
+The SharePoint user whose work is being reviewed (e.g., the agent on a call being assessed). Distinct from the **Reviewer**. One per **Case**. Distinct from an **Attributed Party** (which is per-failure, not per-Case).
 _Avoid_: Subject, owner (ambiguous), reviewee
+
+**Attributed Party**:
+The single SharePoint user identified as responsible for one specific *failed* **Answer**. Optional and zero-or-one per failed Answer. Distinct from the **Responsible Party**: a Case has exactly one Responsible Party (whose work is under review), but multiple people may have had a hand in the process, and any single failure may be attributed to a different person. Stored inside the Answer as a bare account name plus a cached display name (`{ loginName, displayName }`); the claims prefix and AD domain are single constants reattached at lookup time. Resolved to an authoritative display name at page load via the User Profile read (`GetPropertiesFor`), with the cached name as fallback. Settable only by the **Assigned Reviewer**, only when the **Case Type** enables `attributeFailures`, and frozen once the Case is **Completed**. Stripped automatically when its Answer is no longer a failure. Does not affect the **Outcome**.
+_Avoid_: Responsible Party (case-level, a different concept), Owner, Culprit, Blame, Assignee
 
 **Reviewer Manager**:
 A SharePoint user in the Reviewer Managers **SharePoint Group** who manages a team of **Reviewers**. Sees the `#/reports/reviewer-team` report — their team's completed-Case volumes (7- and 30-day) and current assigned-Case queue health (outstanding, overdue), totalled and broken down by **Case Type**. The relationship "Reviewer X is managed by Reviewer Manager Y" is denormalised onto every **Case** row as `assignedReviewerManager` (a user field) so reports can be queried via a single server-side `$filter` per **Case Type** list. A user is either a Reviewer Manager *or* a **Responsible Party Manager**, never both — enforced by Maintainer convention, not code.
@@ -95,6 +99,7 @@ The computed verdict for a **Case**, derived by the **Case Type**'s algorithm fr
 - A **Question Definition** can appear in many **Case Types**.
 - A **Case** has many **Answers**, one per **Applicable Question**.
 - An **Answer** has zero-to-many **Remediation Actions**.
+- A *failed* **Answer** has zero-or-one **Attributed Party**.
 - A **Case** has one **Conversation** (= many **Messages**).
 - A **Case** has one **Assigned Reviewer** and one **Responsible Party**.
 
