@@ -1,5 +1,8 @@
 // @ts-check
+import { toBareAccount } from './account-name.js';
+
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
+/** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').ListCasesFilter} ListCasesFilter */
 /** @typedef {import('../sharepoint-client.js').PatchResult} PatchResult */
@@ -137,6 +140,46 @@ export class HttpSharePointClient {
       id: String(body?.Id ?? body?.LoginName ?? ''),
       displayName: String(body?.Title ?? body?.LoginName ?? ''),
     };
+  }
+
+  /**
+   * Type-ahead directory search backing the people picker. Wraps the
+   * people-picker REST endpoint with `PrincipalSource: 15` (all sources,
+   * including the claims/directory provider) so users not yet added to this
+   * site are still found. Each result's claims `Key` is reduced to a bare
+   * account before returning (ADR-0013).
+   *
+   * @param {string} query
+   * @returns {Promise<PersonResult[]>}
+   */
+  async searchPeople(query) {
+    const q = query.trim();
+    if (q === '') return [];
+
+    const url = this._absolute(
+      '/_api/SP.UI.ApplicationPages.ClientPeoplePickerWebServiceInterface.clientPeoplePickerSearchUser'
+    );
+    const body = JSON.stringify({
+      queryParams: {
+        __metadata: { type: 'SP.UI.ApplicationPages.ClientPeoplePickerQueryParameters' },
+        AllowEmailAddresses: true,
+        AllowMultipleEntities: false,
+        MaximumEntitySuggestions: 50,
+        PrincipalSource: 15,
+        PrincipalType: 1,
+        QueryString: q,
+      },
+    });
+
+    const res = await this._write(url, 'POST', {}, body);
+    if (!res.ok) throw new Error(`searchPeople failed: ${res.status}`);
+
+    const json = /** @type {Record<string, unknown>} */ (await res.json());
+    const raw =
+      json?.value ??
+      /** @type {any} */ (json?.d)?.ClientPeoplePickerSearchUser;
+    const entities = typeof raw === 'string' ? JSON.parse(raw) : [];
+    return entities.map(personFromEntity);
   }
 
   // --- internals -----------------------------------------------------------
@@ -293,6 +336,20 @@ function parseRetryAfter(ra) {
 /** @param {string} s */
 function escapeOData(s) {
   return String(s).replace(/'/g, "''");
+}
+
+/**
+ * Map a people-picker entity to a bare-account PersonResult.
+ * @param {any} e
+ * @returns {PersonResult}
+ */
+function personFromEntity(e) {
+  const loginName = toBareAccount(String(e?.Key ?? ''));
+  /** @type {PersonResult} */
+  const out = { loginName, displayName: String(e?.DisplayText ?? loginName) };
+  const email = e?.EntityData?.Email;
+  if (email) out.email = String(email);
+  return out;
 }
 
 /** @param {Record<string, unknown>} item */

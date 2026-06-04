@@ -79,6 +79,7 @@ function makeClient({ caseRow = BASE_ROW, patchOk = true } = {}) {
     async getCase() { return caseRow; },
     async getCurrentUser() { return { id: 'u1', displayName: 'User 1' }; },
     async patchCase() { return { ok: patchOk, status: patchOk ? 200 : 500 }; },
+    async searchPeople() { return []; },
   };
 }
 

@@ -56,6 +56,13 @@
  */
 
 /**
+ * A directory person returned by `searchPeople`, already reduced to a bare
+ * account `loginName` (claims prefix + domain stripped, see ADR-0013).
+ *
+ * @typedef {{ loginName: string, displayName: string, email?: string }} PersonResult
+ */
+
+/**
  * @typedef {{ ok: boolean, status: number, data?: CaseRow }} PatchResult
  */
 
@@ -69,7 +76,8 @@
  *   getQuestionDefinitions: (ids: string[]) => Promise<QuestionDefinition[]>,
  *   listCases: (filter: ListCasesFilter) => Promise<CaseRow[]>,
  *   getCurrentUserGroups: () => Promise<string[]>,
- *   getCurrentUser: () => Promise<CurrentUser>
+ *   getCurrentUser: () => Promise<CurrentUser>,
+ *   searchPeople: (query: string) => Promise<PersonResult[]>
  * }} SharePointClient
  */
 

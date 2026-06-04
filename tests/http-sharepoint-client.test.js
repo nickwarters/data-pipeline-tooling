@@ -614,6 +614,7 @@ test('HttpSharePointClient: assignable to SharePointClient interface', () => {
   assert.equal(typeof c.getQuestionDefinitions, 'function');
   assert.equal(typeof c.getCurrentUserGroups, 'function');
   assert.equal(typeof c.getCurrentUser, 'function');
+  assert.equal(typeof c.searchPeople, 'function');
 });
 
 // --- listCases overdue OData filter ---
@@ -648,4 +649,81 @@ test('HttpSharePointClient: listCases without overdue filter omits DueDate condi
 
   const url = decodeURIComponent(calls[0].url);
   assert.ok(!url.includes('DueDate'), 'should not include DueDate when overdue filter not set');
+});
+
+// --- searchPeople ---
+
+test('HttpSharePointClient: searchPeople POSTs to the people-picker endpoint, queries the directory, and returns bare accounts', async () => {
+  const entities = [
+    { Key: 'i:0#.w|CONTOSO\\jsmith', DisplayText: 'John Smith', EntityData: { Email: 'jsmith@contoso.com' } },
+    { Key: 'i:0#.w|CONTOSO\\bjones', DisplayText: 'Bola Jones' },
+    { Key: 'i:0#.w|CONTOSO\\noname' },
+  ];
+  const { fetch, calls } = makeFetch([
+    { when: c => c.url.endsWith('/_api/contextinfo'), respond: () => digestResponse('d1') },
+    {
+      when: c => c.method === 'POST',
+      respond: () => new Response(JSON.stringify({ value: JSON.stringify(entities) }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      }),
+    },
+  ]);
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+
+  const results = await client.searchPeople('smith');
+
+  assert.deepEqual(results, [
+    { loginName: 'jsmith', displayName: 'John Smith', email: 'jsmith@contoso.com' },
+    { loginName: 'bjones', displayName: 'Bola Jones' },
+    { loginName: 'noname', displayName: 'noname' },
+  ]);
+  const post = calls.find(c => c.method === 'POST' && c.url.includes('clientPeoplePickerSearchUser'));
+  assert.ok(post, 'POSTs to clientPeoplePickerSearchUser');
+  const sent = JSON.parse(/** @type {string} */ (post?.body));
+  assert.equal(sent.queryParams.QueryString, 'smith');
+  assert.equal(sent.queryParams.PrincipalSource, 15, 'queries all sources incl. the directory');
+  assert.equal(sent.queryParams.PrincipalType, 1, 'users only');
+});
+
+test('HttpSharePointClient: searchPeople reads the verbose d.ClientPeoplePickerSearchUser envelope', async () => {
+  const entities = [{ Key: 'CONTOSO\\asmith', DisplayText: 'Anna Smith' }];
+  const { fetch } = makeFetch([
+    { when: c => c.url.endsWith('/_api/contextinfo'), respond: () => digestResponse('d1') },
+    {
+      when: c => c.method === 'POST',
+      respond: () => new Response(JSON.stringify({ d: { ClientPeoplePickerSearchUser: JSON.stringify(entities) } }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+
+  const results = await client.searchPeople('anna');
+  assert.deepEqual(results, [{ loginName: 'asmith', displayName: 'Anna Smith' }]);
+});
+
+test('HttpSharePointClient: searchPeople returns [] when the response carries no recognised payload', async () => {
+  const { fetch } = makeFetch([
+    { when: c => c.url.endsWith('/_api/contextinfo'), respond: () => digestResponse('d1') },
+    { when: c => c.method === 'POST', respond: () => new Response(JSON.stringify({}), { status: 200 }) },
+  ]);
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+
+  assert.deepEqual(await client.searchPeople('x'), []);
+});
+
+test('HttpSharePointClient: searchPeople short-circuits a blank query without calling fetch', async () => {
+  const { fetch, calls } = makeFetch([]);
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+
+  assert.deepEqual(await client.searchPeople('   '), []);
+  assert.equal(calls.length, 0);
+});
+
+test('HttpSharePointClient: searchPeople throws on a non-ok response', async () => {
+  const { fetch } = makeFetch([
+    { when: c => c.url.endsWith('/_api/contextinfo'), respond: () => digestResponse('d1') },
+    { when: c => c.method === 'POST', respond: () => new Response('err', { status: 500 }) },
+  ]);
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+
+  await assert.rejects(() => client.searchPeople('x'), /searchPeople failed: 500/);
 });

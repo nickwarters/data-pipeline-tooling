@@ -3,6 +3,7 @@
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').ListCasesFilter} ListCasesFilter */
 /** @typedef {import('../sharepoint-client.js').PatchResult} PatchResult */
+/** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
 
 export class MockSharePointClient {
   /**
@@ -10,15 +11,17 @@ export class MockSharePointClient {
    *   cases: CaseRow[],
    *   questionDefinitions: QuestionDefinition[],
    *   personas: Record<string, { groups: string[], userId?: string, displayName?: string }>,
-   *   persona?: string
+   *   persona?: string,
+   *   people?: PersonResult[]
    * }} opts
    */
-  constructor({ cases, questionDefinitions, personas, persona = 'reviewer' }) {
+  constructor({ cases, questionDefinitions, personas, persona = 'reviewer', people = [] }) {
     // Deep-clone cases so fixture arrays are not mutated across tests.
     this._cases = cases.map(c => ({ ...c, answers: { ...c.answers } }));
     this._questionDefinitions = questionDefinitions.slice();
     this._personas = personas;
     this._persona = persona;
+    this._people = people.slice();
     this._etagCounter = 1000;
     this._injectNext412 = false;
   }
@@ -91,6 +94,22 @@ export class MockSharePointClient {
   /** @returns {Promise<string[]>} */
   async getCurrentUserGroups() {
     return this._personas[this._persona]?.groups ?? [];
+  }
+
+  /**
+   * @param {string} query
+   * @returns {Promise<PersonResult[]>}
+   */
+  async searchPeople(query) {
+    const q = query.trim().toLowerCase();
+    if (q === '') return [];
+    return this._people
+      .filter(
+        p =>
+          p.displayName.toLowerCase().includes(q) ||
+          p.loginName.toLowerCase().includes(q)
+      )
+      .map(p => ({ ...p }));
   }
 
   /** @returns {Promise<import('../sharepoint-client.js').CurrentUser>} */

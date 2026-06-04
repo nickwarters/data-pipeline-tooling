@@ -44,3 +44,12 @@ test('createSharePointClient: mock client defaults to reviewer persona when asUs
   const user = await client.getCurrentUser();
   assert.ok(user.id, 'should return a user from the default reviewer persona');
 });
+
+test('createSharePointClient: mock client searchPeople is backed by the people fixture', async () => {
+  const { people } = await import('../dev/fixtures/people.js');
+  const client = await createSharePointClient(new URLSearchParams('mock=1'));
+  const sample = people[0];
+  const results = await client.searchPeople(sample.displayName.split(' ')[0]);
+  assert.ok(results.length > 0, 'fixture-backed search returns at least one match');
+  assert.ok(results.every(r => typeof r.loginName === 'string' && r.loginName.length > 0));
+});

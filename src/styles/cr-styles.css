@@ -872,3 +872,58 @@ cr-status-banner {
   border-bottom-color: var(--cr-color-accent);
   font-weight: var(--cr-font-weight-semibold);
 }
+
+/* ── People picker ───────────────────────────────────────────────────────── */
+
+cr-people-picker {
+  position: relative;
+  display: block;
+}
+
+.cr-people-picker-input {
+  font: inherit;
+  width: 100%;
+  padding: var(--cr-space-2) var(--cr-space-3);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-md);
+  background: var(--cr-color-surface);
+  color: inherit;
+  transition: border-color var(--cr-duration-fast) var(--cr-easing-standard);
+}
+
+.cr-people-picker-input:focus {
+  outline: none;
+  border-color: var(--cr-color-accent);
+  box-shadow: var(--cr-focus-ring);
+}
+
+.cr-people-picker-results {
+  position: absolute;
+  z-index: 10;
+  left: 0;
+  right: 0;
+  margin: var(--cr-space-1) 0 0;
+  padding: var(--cr-space-1);
+  list-style: none;
+  background: var(--cr-color-surface);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-md);
+  box-shadow: var(--cr-shadow-sm);
+}
+
+.cr-people-picker-results[hidden] {
+  display: none;
+}
+
+.cr-people-picker-option {
+  padding: var(--cr-space-2) var(--cr-space-3);
+  border-radius: var(--cr-radius-sm);
+  cursor: pointer;
+  color: var(--cr-color-on-surface);
+}
+
+.cr-people-picker-option:hover,
+.cr-people-picker-option:focus-visible {
+  background: var(--cr-color-surface-2);
+  outline: none;
+}

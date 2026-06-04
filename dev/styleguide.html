@@ -815,6 +815,7 @@
           <li><a href="#navigation"  class="sg-nav-link" data-section="navigation">Navigation</a></li>
           <li><a href="#notifications" class="sg-nav-link" data-section="notifications">Notifications</a></li>
           <li><a href="#questions"   class="sg-nav-link" data-section="questions">Case Review</a></li>
+          <li><a href="#people"      class="sg-nav-link" data-section="people">People Picker</a></li>
         </ul>
       </nav>
 
@@ -1621,6 +1622,31 @@
           </div>
         </section>
 
+        <!-- ══ People picker ═══════════════════════════════════════════════ -->
+        <section id="people" class="sg-section">
+          <div class="sg-section-header">
+            <h2 class="sg-section-title">People Picker</h2>
+            <span class="sg-section-id">#people</span>
+          </div>
+
+          <div class="sg-subsection">
+            <p class="sg-subsection-title">cr-people-picker — live type-ahead (mock directory)</p>
+            <p style="font-size:0.875rem;color:var(--cr-color-text-muted);max-width:46ch;margin:0 0 var(--cr-space-3);line-height:1.55;">
+              Type a name (try <code>smith</code>, <code>jones</code>, or <code>wei</code>) to search the
+              mock directory. Selecting a result emits <code>cr-person-selected</code> with the bare
+              account name. With no matches, a free-text fallback offers the typed text as a raw account.
+            </p>
+            <div class="sg-demo" style="overflow:visible;">
+              <div style="max-width:24rem;">
+                <cr-people-picker id="sg-people-picker"></cr-people-picker>
+              </div>
+              <p id="sg-people-selected" style="margin-top:var(--cr-space-3);font-family:var(--cr-font-mono);font-size:0.8125rem;color:var(--cr-color-text-muted);">
+                No selection yet.
+              </p>
+            </div>
+          </div>
+        </section>
+
       </main>
     </div><!-- .sg-layout -->
   </div><!-- #sg-root -->
@@ -1689,6 +1715,27 @@
     }, { rootMargin: `-${navHeight + 8}px 0px -60% 0px`, threshold: 0 });
 
     sections.forEach(s => obs.observe(s));
+  </script>
+
+  <!-- ── Live cr-people-picker demo (mock directory, no fetch) ───────────── -->
+  <script type="module">
+    import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js';
+    import { people } from './fixtures/people.js';
+    import { CRPeoplePicker } from '../src/components/cr-people-picker.js';
+
+    const client = new MockSharePointClient({
+      cases: [], questionDefinitions: [], personas: {}, people,
+    });
+
+    const picker = document.getElementById('sg-people-picker');
+    picker.client = client;
+    // Snappier than the production default for an interactive demo.
+    picker.debounceMs = 120;
+
+    const out = document.getElementById('sg-people-selected');
+    picker.addEventListener('cr-person-selected', (e) => {
+      out.textContent = `selected → { loginName: "${e.detail.loginName}", displayName: "${e.detail.displayName}" }`;
+    });
   </script>
 </body>
 </html>

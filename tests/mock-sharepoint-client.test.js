@@ -277,3 +277,62 @@ test('MockSharePointClient: listCases with overdue:false returns all cases (no o
   const sameWithFalse = await client.listCases({ overdue: false });
   assert.equal(sameWithFalse.length, all.length);
 });
+
+// --- searchPeople ---
+
+/** @type {Array<{ loginName: string, displayName: string, email?: string }>} */
+const PEOPLE = [
+  { loginName: 'jsmith', displayName: 'John Smith', email: 'jsmith@contoso.com' },
+  { loginName: 'asmith', displayName: 'Anna Smith', email: 'asmith@contoso.com' },
+  { loginName: 'bjones', displayName: 'Bola Jones' },
+];
+
+/** @param {Array<{ loginName: string, displayName: string, email?: string }>} [people] */
+function makePeopleClient(people = PEOPLE) {
+  return new MockSharePointClient({
+    cases: CASES,
+    questionDefinitions: QUESTION_DEFS,
+    personas: PERSONAS,
+    people,
+  });
+}
+
+test('MockSharePointClient: searchPeople matches displayName substring (case-insensitive)', async () => {
+  const client = makePeopleClient();
+  const results = await client.searchPeople('smith');
+  assert.deepEqual(
+    results.map(r => r.loginName).sort(),
+    ['asmith', 'jsmith']
+  );
+});
+
+test('MockSharePointClient: searchPeople matches loginName substring', async () => {
+  const client = makePeopleClient();
+  const results = await client.searchPeople('bjon');
+  assert.equal(results.length, 1);
+  assert.equal(results[0].loginName, 'bjones');
+});
+
+test('MockSharePointClient: searchPeople returns full PersonResult shape including email', async () => {
+  const client = makePeopleClient();
+  const results = await client.searchPeople('john');
+  assert.deepEqual(results, [
+    { loginName: 'jsmith', displayName: 'John Smith', email: 'jsmith@contoso.com' },
+  ]);
+});
+
+test('MockSharePointClient: searchPeople returns [] for a blank query', async () => {
+  const client = makePeopleClient();
+  assert.deepEqual(await client.searchPeople('   '), []);
+  assert.deepEqual(await client.searchPeople(''), []);
+});
+
+test('MockSharePointClient: searchPeople returns [] when nothing matches', async () => {
+  const client = makePeopleClient();
+  assert.deepEqual(await client.searchPeople('zzz'), []);
+});
+
+test('MockSharePointClient: searchPeople defaults to an empty directory when no people provided', async () => {
+  const client = makeClient();
+  assert.deepEqual(await client.searchPeople('smith'), []);
+});
