@@ -60,6 +60,7 @@ function makeClient({ patchResponses = [], getCaseRow } = {}) {
     async getCurrentUserGroups() { return []; },
     async getCurrentUser() { return { id: 'user-test', displayName: 'Test User' }; },
     async searchPeople() { return []; },
+    async resolveUsers() { return {}; },
   };
 }
 

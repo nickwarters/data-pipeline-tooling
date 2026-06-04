@@ -101,3 +101,43 @@ test('materializeRemediationActions: returns answer unchanged when question has 
   const out = materializeRemediationActions(q, ans);
   assert.equal(out.remediationActions, undefined);
 });
+
+// ===== Attributed Party stripping (ADR-0013) =====
+
+test('materializeRemediationActions: strips attributedParty when answer becomes passing', () => {
+  const stale = {
+    value: 'Yes',
+    attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
+  };
+  const out = materializeRemediationActions(Q_FAIL_NO, stale);
+  assert.equal(out.attributedParty, undefined);
+  assert.equal(out.value, 'Yes');
+});
+
+test('materializeRemediationActions: strips both attributedParty and remediationActions when answer becomes passing', () => {
+  const stale = {
+    value: 'Yes',
+    remediationActions: [{ id: 'q-needs-ra-0', text: 'old', completed: false }],
+    attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
+  };
+  const out = materializeRemediationActions(Q_FAIL_NO, stale);
+  assert.equal(out.attributedParty, undefined);
+  assert.equal(out.remediationActions, undefined);
+});
+
+test('materializeRemediationActions: retains attributedParty on a still-failing answer', () => {
+  const ans = {
+    value: 'No',
+    attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
+  };
+  const out = materializeRemediationActions(Q_FAIL_NO, ans);
+  assert.deepEqual(out.attributedParty, { loginName: 'jsmith', displayName: 'Jane Smith' });
+});
+
+test('materializeRemediationActions: retains attributedParty on a still-failing answer with no remediationActions defined', () => {
+  /** @type {QuestionDefinition} */
+  const q = { id: 'q-x', text: 'q', responseType: 'yes-no-na', failureCriteria: 'No', deprecated: false };
+  const ans = { value: 'No', attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' } };
+  const out = materializeRemediationActions(q, ans);
+  assert.deepEqual(out.attributedParty, { loginName: 'jsmith', displayName: 'Jane Smith' });
+});

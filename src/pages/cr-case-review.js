@@ -118,6 +118,47 @@ export class CRCaseReview extends CRElement {
     }
 
     this._buildLayout({ caseRow, catalogue, computeOutcome: config.computeOutcome, attributeFailures: config.attributeFailures, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access });
+
+    // Render with cached display names first, then upgrade to the authoritative
+    // directory names once they resolve (ADR-0013, #97).
+    await this._resolveAttributedParties(client, answersSignal);
+  }
+
+  /**
+   * Resolve the bare account names stored on each Attributed Party to their
+   * authoritative display names (ADR-0013), updating the answers signal for
+   * display only. The cached `displayName` stays as the fallback when a lookup
+   * returns null. Not persisted: the answers signal is the single source of
+   * truth and a later edit refreshes the cache naturally.
+   *
+   * @param {SharePointClient} client
+   * @param {{ get: () => Record<string, Answer>, set: (v: Record<string, Answer>) => void }} answersSignal
+   */
+  async _resolveAttributedParties(client, answersSignal) {
+    /** @type {string[]} */
+    const accounts = [];
+    for (const answer of Object.values(answersSignal.get())) {
+      const login = answer.attributedParty?.loginName;
+      if (login && !accounts.includes(login)) accounts.push(login);
+    }
+    if (accounts.length === 0) return;
+
+    const resolved = await client.resolveUsers(accounts);
+
+    let changed = false;
+    /** @type {Record<string, Answer>} */
+    const next = {};
+    for (const [id, answer] of Object.entries(answersSignal.get())) {
+      const party = answer.attributedParty;
+      const name = party ? resolved[party.loginName] : null;
+      if (party && name && name !== party.displayName) {
+        next[id] = { ...answer, attributedParty: { ...party, displayName: name } };
+        changed = true;
+      } else {
+        next[id] = answer;
+      }
+    }
+    if (changed) answersSignal.set(next);
   }
 
   _renderAccessDenied() {

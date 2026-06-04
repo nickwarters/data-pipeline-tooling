@@ -30,8 +30,9 @@ class StubEl {
   setAttribute(/** @type {string} */ k, /** @type {string} */ v) { this._attrs[k] = v; }
   getAttribute(/** @type {string} */ k) { return this._attrs[k] ?? null; }
   focus() {}
-  // Stub for CRQuestionList.update / CRRemediationSection.update / CROutcome.update
-  update() {}
+  // Stub for CRQuestionList.update / CRRemediationSection.update / CROutcome.update.
+  // Records the most recent call so tests can observe what the page rendered.
+  update(/** @type {any[]} */ ...args) { this._update = args; }
 }
 
 class StubCustomEvent {
@@ -74,12 +75,16 @@ const BASE_ROW = {
   etag: 'e1'
 };
 
-function makeClient({ caseRow = BASE_ROW, patchOk = true } = {}) {
+/**
+ * @param {{ caseRow?: CaseRow, patchOk?: boolean, resolveUsers?: (accounts: string[]) => Promise<Record<string, string | null>> }} [opts]
+ */
+function makeClient({ caseRow = BASE_ROW, patchOk = true, resolveUsers } = {}) {
   return {
     async getCase() { return caseRow; },
     async getCurrentUser() { return { id: 'u1', displayName: 'User 1' }; },
     async patchCase() { return { ok: patchOk, status: patchOk ? 200 : 500 }; },
     async searchPeople() { return []; },
+    resolveUsers: resolveUsers ?? (async () => ({})),
   };
 }
 
@@ -902,4 +907,108 @@ test('CRCaseReview: non-assigned viewer cannot attribute (read-only)', async () 
     detail: { questionId: 'q-needs', attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' } },
   });
   assert.equal(enqueued.length, 0, 'non-assigned viewer must not enqueue an attribution');
+});
+
+// ===== Attributed Party resolution at page load (#97, ADR-0013) =====
+
+test('CRCaseReview: resolves stored Attributed Party names to authoritative display names at load', async () => {
+  const failRow = {
+    ...BASE_ROW,
+    assignedReviewer: 'u1',
+    answers: { 'q-needs': { value: 'No', attributedParty: { loginName: 'jsmith', displayName: 'jsmith' } } },
+  };
+  /** @type {string[]} */
+  let askedFor = [];
+  const client = makeClient({
+    caseRow: failRow,
+    resolveUsers: async (/** @type {string[]} */ accounts) => { askedFor = accounts; return { jsmith: 'Jane Smith' }; },
+  });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  el.currentUserId = 'u1';
+  await el.connectedCallback();
+
+  assert.deepEqual(askedFor, ['jsmith'], 'collects the unique attributed-party accounts');
+  const remediation = (/** @type {any} */ (el))._children[3];
+  assert.equal(
+    remediation._update[1]['q-needs'].attributedParty.displayName,
+    'Jane Smith',
+    'authoritative display name is rendered after resolution'
+  );
+});
+
+test('CRCaseReview: collects unique Attributed Party accounts across answers before resolving', async () => {
+  const failRow = {
+    ...BASE_ROW,
+    assignedReviewer: 'u1',
+    answers: {
+      'q-needs': { value: 'No', attributedParty: { loginName: 'jsmith', displayName: 'jsmith' } },
+      'q-welcome': { value: 'No', attributedParty: { loginName: 'jsmith', displayName: 'jsmith' } },
+    },
+  };
+  /** @type {string[]} */
+  let askedFor = [];
+  const client = makeClient({
+    caseRow: failRow,
+    resolveUsers: async (/** @type {string[]} */ accounts) => { askedFor = accounts; return { jsmith: 'Jane Smith' }; },
+  });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  el.currentUserId = 'u1';
+  await el.connectedCallback();
+
+  assert.deepEqual(askedFor, ['jsmith'], 'the repeated account is requested once');
+});
+
+test('CRCaseReview: keeps the cached Attributed Party name when resolution returns null', async () => {
+  const failRow = {
+    ...BASE_ROW,
+    assignedReviewer: 'u1',
+    answers: { 'q-needs': { value: 'No', attributedParty: { loginName: 'ghost', displayName: 'Cached Ghost' } } },
+  };
+  const client = makeClient({
+    caseRow: failRow,
+    resolveUsers: async () => ({ ghost: null }),
+  });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  el.currentUserId = 'u1';
+  await el.connectedCallback();
+
+  const remediation = (/** @type {any} */ (el))._children[3];
+  assert.equal(
+    remediation._update[1]['q-needs'].attributedParty.displayName,
+    'Cached Ghost',
+    'cached display name is retained as the fallback'
+  );
+});
+
+test('CRCaseReview: does not resolve users when no Answer carries an Attributed Party', async () => {
+  let called = false;
+  const client = makeClient({
+    caseRow: { ...BASE_ROW, assignedReviewer: 'u1', answers: { 'q-needs': { value: 'No' } } },
+    resolveUsers: async () => { called = true; return {}; },
+  });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  el.currentUserId = 'u1';
+  await el.connectedCallback();
+
+  assert.equal(called, false, 'no resolution round-trip when there is nothing to resolve');
 });

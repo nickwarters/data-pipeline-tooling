@@ -112,6 +112,25 @@ export class MockSharePointClient {
       .map(p => ({ ...p }));
   }
 
+  /**
+   * Resolve bare account names to authoritative display names from the fixture
+   * directory (ADR-0013). Dedupes input; an account with no directory match
+   * resolves to `null` so callers fall back to the cached displayName.
+   *
+   * @param {string[]} accountNames
+   * @returns {Promise<Record<string, string | null>>}
+   */
+  async resolveUsers(accountNames) {
+    /** @type {Record<string, string | null>} */
+    const out = {};
+    for (const account of accountNames) {
+      if (account in out) continue;
+      const person = this._people.find(p => p.loginName === account);
+      out[account] = person ? person.displayName : null;
+    }
+    return out;
+  }
+
   /** @returns {Promise<import('../sharepoint-client.js').CurrentUser>} */
   async getCurrentUser() {
     const p = this._personas[this._persona];

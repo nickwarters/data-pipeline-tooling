@@ -1,5 +1,5 @@
 // @ts-check
-import { toBareAccount } from './account-name.js';
+import { toBareAccount, toClaimsLogin } from './account-name.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
@@ -180,6 +180,44 @@ export class HttpSharePointClient {
       /** @type {any} */ (json?.d)?.ClientPeoplePickerSearchUser;
     const entities = typeof raw === 'string' ? JSON.parse(raw) : [];
     return entities.map(personFromEntity);
+  }
+
+  /**
+   * Resolve stored bare account names to authoritative display names at page
+   * load (ADR-0013). Each unique account is expanded back to a full claims login
+   * (prefix + domain) and read via the User Profile Service `GetPropertiesFor`.
+   * Reads are deduped and run in parallel. An account that cannot be resolved
+   * (failed read, or no `DisplayName`) maps to `null` so callers fall back to the
+   * cached `displayName`.
+   *
+   * @param {string[]} accountNames
+   * @returns {Promise<Record<string, string | null>>}
+   */
+  async resolveUsers(accountNames) {
+    const unique = [...new Set(accountNames)];
+    const entries = await Promise.all(
+      unique.map(async account => {
+        const displayName = await this._resolveOneUser(account);
+        return /** @type {[string, string | null]} */ ([account, displayName]);
+      })
+    );
+    return Object.fromEntries(entries);
+  }
+
+  /**
+   * @param {string} account
+   * @returns {Promise<string | null>}
+   */
+  async _resolveOneUser(account) {
+    const login = toClaimsLogin(account);
+    const url = this._absolute(
+      `/_api/SP.UserProfiles.PeopleManager/GetPropertiesFor(accountName=@v)?@v='${encodeURIComponent(login)}'`
+    );
+    const res = await this._read(url);
+    if (!res.ok) return null;
+    const body = /** @type {Record<string, unknown>} */ (await res.json());
+    const name = body?.DisplayName;
+    return typeof name === 'string' && name !== '' ? name : null;
   }
 
   // --- internals -----------------------------------------------------------

@@ -727,3 +727,67 @@ test('HttpSharePointClient: searchPeople throws on a non-ok response', async () 
 
   await assert.rejects(() => client.searchPeople('x'), /searchPeople failed: 500/);
 });
+
+// --- resolveUsers ---
+
+/** @param {string} displayName */
+function profileResponse(displayName) {
+  return new Response(JSON.stringify({ DisplayName: displayName }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+test('HttpSharePointClient: resolveUsers resolves display names via GetPropertiesFor, reattaching the claims prefix and domain', async () => {
+  const { fetch, calls } = makeFetch([
+    { when: c => c.url.includes('GetPropertiesFor') && c.url.includes('jsmith'), respond: () => profileResponse('John Smith') },
+    { when: c => c.url.includes('GetPropertiesFor') && c.url.includes('bjones'), respond: () => profileResponse('Bola Jones') },
+  ]);
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+
+  const resolved = await client.resolveUsers(['jsmith', 'bjones']);
+  assert.deepEqual(resolved, { jsmith: 'John Smith', bjones: 'Bola Jones' });
+
+  // The stored bare account is expanded to a full claims login at the boundary.
+  const jcall = calls.find(c => c.url.includes('jsmith'));
+  assert.ok(jcall, 'a profile read was made for jsmith');
+  assert.equal(jcall?.method, 'GET');
+  assert.ok(jcall?.url.includes('CONTOSO'), 'reattaches the AD domain');
+});
+
+test('HttpSharePointClient: resolveUsers dedupes repeated accounts into a single read', async () => {
+  const { fetch, calls } = makeFetch([
+    { when: c => c.url.includes('GetPropertiesFor'), respond: () => profileResponse('John Smith') },
+  ]);
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+
+  const resolved = await client.resolveUsers(['jsmith', 'jsmith', 'jsmith']);
+  assert.deepEqual(resolved, { jsmith: 'John Smith' });
+  assert.equal(calls.filter(c => c.url.includes('GetPropertiesFor')).length, 1, 'one read per unique account');
+});
+
+test('HttpSharePointClient: resolveUsers maps to null when the profile has no DisplayName', async () => {
+  const { fetch } = makeFetch([
+    { when: c => c.url.includes('GetPropertiesFor'), respond: () => profileResponse('') },
+  ]);
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+
+  assert.deepEqual(await client.resolveUsers(['ghost']), { ghost: null });
+});
+
+test('HttpSharePointClient: resolveUsers maps to null when the profile read fails', async () => {
+  const { fetch } = makeFetch([
+    { when: c => c.url.includes('GetPropertiesFor'), respond: () => new Response('nope', { status: 500 }) },
+  ]);
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+
+  assert.deepEqual(await client.resolveUsers(['ghost']), { ghost: null });
+});
+
+test('HttpSharePointClient: resolveUsers returns an empty map without any read for an empty list', async () => {
+  const { fetch, calls } = makeFetch([]);
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+
+  assert.deepEqual(await client.resolveUsers([]), {});
+  assert.equal(calls.length, 0);
+});

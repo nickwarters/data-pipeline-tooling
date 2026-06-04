@@ -110,6 +110,7 @@ function makeStubClient({ patchReturn = { ok: true, status: 200 }, getRow = case
     },
     async getQuestionDefinitions(/** @type {string[]} */ _ids) { return []; },
     async getCurrentUserGroups() { return []; },
+    async resolveUsers(/** @type {string[]} */ _accounts) { return {}; },
     async getCurrentUser() { return { id: 'user-reviewer', displayName: 'Alex Reviewer' }; },
   };
 }
@@ -285,6 +286,7 @@ test('CRCaseReview: connectedCallback calls getCase and saveQueue.loadCase', asy
     async listCases() { return []; },
     async getQuestionDefinitions() { return []; },
     async getCurrentUserGroups() { return []; },
+    async resolveUsers() { return {}; },
     async getCurrentUser() { return { id: 'user-reviewer', displayName: 'Alex' }; },
   };
 

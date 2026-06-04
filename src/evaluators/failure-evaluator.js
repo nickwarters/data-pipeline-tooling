@@ -20,26 +20,39 @@ export function isFailure(question, answer) {
 }
 
 /**
- * If the answer is a failure and the question has remediationActions defined,
- * returns a fresh materialized Answer with `remediationActions` populated as
- * { id, text, completed: false } items. Otherwise returns the answer unchanged
- * (with any prior remediationActions stripped, so passing answers don't carry
- * stale failure metadata).
+ * Reconciles an Answer's failure-derived metadata with whether it is still a
+ * failure (ADR-0013). When the Answer remains a failure and the question has
+ * remediationActions defined, returns a fresh Answer with `remediationActions`
+ * populated as { id, text, completed: false } items. When the Answer is no
+ * longer a failure, any stale `remediationActions` and `attributedParty` are
+ * stripped, so passing answers never carry leftover failure metadata. The
+ * `attributedParty` is kept on a still-failing Answer even when the question
+ * defines no remediationActions.
  *
  * @param {QuestionDefinition} question
  * @param {Answer} answer
  * @returns {Answer}
  */
 export function materializeRemediationActions(question, answer) {
-  if (!isFailure(question, answer) || !question.remediationActions?.length) {
-    if (answer.remediationActions) {
-      const { remediationActions: _drop, ...rest } = answer;
+  const failing = isFailure(question, answer);
+
+  // The Attributed Party only survives while the Answer is a failure; a re-failed
+  // Answer starts with none so the reviewer re-attributes.
+  let result = answer;
+  if (!failing && result.attributedParty) {
+    const { attributedParty: _dropParty, ...rest } = result;
+    result = rest;
+  }
+
+  if (!failing || !question.remediationActions?.length) {
+    if (result.remediationActions) {
+      const { remediationActions: _drop, ...rest } = result;
       return rest;
     }
-    return answer;
+    return result;
   }
   return {
-    ...answer,
+    ...result,
     remediationActions: question.remediationActions.map((text, i) => ({
       id: `${question.id}-ra-${i}`,
       text,

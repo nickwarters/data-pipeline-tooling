@@ -77,7 +77,8 @@
  *   listCases: (filter: ListCasesFilter) => Promise<CaseRow[]>,
  *   getCurrentUserGroups: () => Promise<string[]>,
  *   getCurrentUser: () => Promise<CurrentUser>,
- *   searchPeople: (query: string) => Promise<PersonResult[]>
+ *   searchPeople: (query: string) => Promise<PersonResult[]>,
+ *   resolveUsers: (accountNames: string[]) => Promise<Record<string, string | null>>
  * }} SharePointClient
  */
 

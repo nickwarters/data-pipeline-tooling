@@ -336,3 +336,26 @@ test('MockSharePointClient: searchPeople defaults to an empty directory when no 
   const client = makeClient();
   assert.deepEqual(await client.searchPeople('smith'), []);
 });
+
+// --- resolveUsers ---
+
+test('MockSharePointClient: resolveUsers maps bare accounts to display names', async () => {
+  const client = makePeopleClient();
+  const resolved = await client.resolveUsers(['jsmith', 'bjones']);
+  assert.deepEqual(resolved, { jsmith: 'John Smith', bjones: 'Bola Jones' });
+});
+
+test('MockSharePointClient: resolveUsers returns null for an account not in the directory', async () => {
+  const client = makePeopleClient();
+  assert.deepEqual(await client.resolveUsers(['nobody']), { nobody: null });
+});
+
+test('MockSharePointClient: resolveUsers dedupes repeated accounts', async () => {
+  const client = makePeopleClient();
+  assert.deepEqual(await client.resolveUsers(['jsmith', 'jsmith']), { jsmith: 'John Smith' });
+});
+
+test('MockSharePointClient: resolveUsers returns an empty map for an empty list', async () => {
+  const client = makePeopleClient();
+  assert.deepEqual(await client.resolveUsers([]), {});
+});

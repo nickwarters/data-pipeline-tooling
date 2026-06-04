@@ -10,6 +10,21 @@
 /** The on-prem AD claims provider prefix, e.g. `i:0#.w|CONTOSO\jsmith`. */
 export const CLAIMS_PREFIX = 'i:0#.w|';
 
+/** The single AD domain for this farm (ADR-0013). */
+export const AD_DOMAIN = 'CONTOSO';
+
+/**
+ * Reattach the claims prefix and AD domain to a bare account name, producing the
+ * full claims login string the SharePoint/User Profile API expects. The inverse
+ * of {@link toBareAccount} for this single-domain farm (ADR-0013).
+ *
+ * @param {string} account
+ * @returns {string}
+ */
+export function toClaimsLogin(account) {
+  return `${CLAIMS_PREFIX}${AD_DOMAIN}\\${account}`;
+}
+
 /**
  * Reduce a people-picker `Key` (or any login string) to its bare account name:
  * strips the claims prefix and any `DOMAIN\` segment.
