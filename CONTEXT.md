@@ -160,7 +160,11 @@ file is contained to one subject rather than poisoning the whole store
 Detect a violation and stop at the **earliest** boundary, rather than letting bad
 data propagate downstream where the failure is harder to trace. _Here_:
 **Validators** abort at the silver boundary *before* silver is written, so an
-invalid feed never lands.
+invalid feed never lands. Some failures are invisible per-row — a **truncated
+source export** where every row is valid yet thousands are missing — and are
+caught only run-over-run: the **volume-anomaly guardrail** (`VolumeAnomalyValidator`,
+#54) trips when a run's row count deviates wildly from a baseline derived from the
+feed's **recent run history** (the run registry), not a hand-set threshold.
 
 ## Relationships
 

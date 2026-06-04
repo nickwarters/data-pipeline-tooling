@@ -16,7 +16,11 @@ from framework.builder import Pipeline
 from framework.dataset import Dataset
 from framework.run_log import RunLog
 from framework.run_registry import RunRegistry
-from framework.validators import ColumnValidator, ValidationError
+from framework.validators import (
+    ColumnValidator,
+    ValidationError,
+    VolumeAnomalyValidator,
+)
 
 
 class RecordingReader:
@@ -188,6 +192,96 @@ def test_runs_that_warned_surfaces_tolerated_warn_hits(tmp_path):
     assert clean not in {r["run_id"] for r in warned_runs}
     hits = warned_runs[0]["warn_hits"]
     assert isinstance(hits, list) and any("case_ref" in h for h in hits)
+
+
+def test_recent_row_counts_returns_read_volumes_most_recent_first(tmp_path):
+    # The volume guardrail (#54) derives its baseline from the read-step volume
+    # of recent runs. recent_row_counts returns those counts for one pipeline,
+    # most-recent-first, capped at `limit` — so a band can be built over "the
+    # last N runs" without re-grepping logs.
+    log_path = tmp_path / "runs.log"
+    for rows in (100, 110, 90, 105):  # four healthy nights, in time order
+        _run_pipeline(log_path, name="cases", rows=rows)
+    _run_pipeline(log_path, name="other", rows=5)  # a different feed
+
+    registry = RunRegistry(tmp_path / "registry.db")
+    registry.ingest(log_path)
+
+    assert registry.recent_row_counts("cases", limit=3) == [105, 90, 110]
+
+
+def test_recent_row_counts_excludes_aborted_runs_from_the_baseline(tmp_path):
+    # A run that read rows but then aborted (its summary is "error") must not
+    # count toward the volume baseline (#54): otherwise a run the guardrail
+    # itself tripped would drag tonight's baseline down toward the bad value.
+    log_path = tmp_path / "runs.log"
+    _run_pipeline(log_path, name="cases", rows=100)
+    _run_failing_pipeline(log_path, name="cases")  # reads 1 row, then aborts
+    _run_pipeline(log_path, name="cases", rows=110)
+
+    registry = RunRegistry(tmp_path / "registry.db")
+    registry.ingest(log_path)
+
+    # Only the two healthy runs' read volumes appear — not the aborted run's 1.
+    assert registry.recent_row_counts("cases", limit=10) == [110, 100]
+
+
+def test_volume_guardrail_trips_against_real_history_and_records_to_the_runlog(
+    tmp_path,
+):
+    # End-to-end (#54): healthy runs build a baseline in the registry, then a
+    # truncated run attaches a VolumeAnomalyValidator that reads that baseline.
+    # Attached as warn, the run completes but its trip is recorded to the RunLog
+    # — visible via the registry's runs_that_warned (AC #5: trips recorded).
+    history_log = tmp_path / "history.log"
+    for rows in (100, 110, 90, 105):
+        _run_pipeline(history_log, name="cases", rows=rows)
+
+    registry = RunRegistry(tmp_path / "registry.db")
+    registry.ingest(history_log)
+
+    # Tonight's source export is truncated to 5 rows — far below the ~100 base.
+    truncated_log = tmp_path / "tonight.log"
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [0, 1, 2, 3, 4]})))
+    pipeline = (
+        Pipeline("cases", reader, run_log=RunLog(truncated_log))
+        .with_validator(
+            VolumeAnomalyValidator(registry, pipeline="cases", tolerance=0.5),
+            severity="warn",
+        )
+        .write_to(CapturingWriter())
+    )
+    pipeline.run()  # warn-severity: completes rather than aborting
+
+    registry.ingest(truncated_log)
+    warned = registry.runs_that_warned()
+    assert pipeline.run_id in {r["run_id"] for r in warned}
+    (this_run,) = [r for r in warned if r["run_id"] == pipeline.run_id]
+    assert any("deviates" in hit for hit in this_run["warn_hits"])
+
+
+def test_volume_guardrail_aborts_the_run_at_error_severity(tmp_path):
+    # At the default error severity the same trip aborts the run fail-fast
+    # (ADR-0007) before anything lands, and the run is recorded as errored.
+    history_log = tmp_path / "history.log"
+    for rows in (100, 110, 90, 105):
+        _run_pipeline(history_log, name="cases", rows=rows)
+    registry = RunRegistry(tmp_path / "registry.db")
+    registry.ingest(history_log)
+
+    truncated_log = tmp_path / "tonight.log"
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [0, 1, 2]})))
+    pipeline = (
+        Pipeline("cases", reader, run_log=RunLog(truncated_log))
+        .with_validator(VolumeAnomalyValidator(registry, pipeline="cases"))
+        .write_to(CapturingWriter())
+    )
+    with pytest.raises(ValidationError, match="deviates"):
+        pipeline.run()
+
+    registry.ingest(truncated_log)
+    (summary,) = registry.query_runs(pipeline="cases", status="error")
+    assert summary["run_id"] == pipeline.run_id
 
 
 def test_repeated_process_steps_are_kept_distinct_not_deduped(tmp_path):

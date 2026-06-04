@@ -194,7 +194,21 @@ the Dataset seam — ADR-0002):
 - `ColumnValidator(required_columns)` — every required column is present
   (presence, not dtype).
 - `RowCountValidator(minimum=…, maximum=…)` — row count within an inclusive
-  `[min, max]`; either bound is optional (`None` leaves that side open).
+  `[min, max]`; either bound is optional (`None` leaves that side open). This is
+  the *static* floor/ceiling; the **`VolumeAnomalyValidator`** below is its
+  history-derived sibling.
+- `VolumeAnomalyValidator(history, pipeline, tolerance=…, floor=…)` — the
+  **volume-anomaly guardrail** (#54): catches a truncated source export where
+  every row is individually valid yet thousands are missing — invisible to
+  per-row checks, visible only run-over-run. It derives a baseline from the feed's
+  **recent run history** (`history.recent_row_counts(pipeline)` — the median of
+  recent runs' read volumes, robust to one prior outlier) rather than a hand-set
+  threshold, and trips when the count falls outside `median × (1 ± tolerance)` in
+  *either* direction (a collapse or a suspicious explosion). An optional absolute
+  `floor` is an independent, **always-on** guard; below `min_history` prior
+  *successful* runs the relative band is skipped so first nights don't trip
+  spuriously. `history` is any `RunHistory` — the `RunRegistry` is the production
+  one. See [`RunRegistry`](#runregistry--the-run-history-that-ingests-the-jsonl).
 
 A Validator knows only how to *check*; it does **not** decide what a failure
 means. **Severity is set where the Validator is attached to the builder**
@@ -343,6 +357,7 @@ registry.query_runs(pipeline="cases", status="error")  # narrow by pipeline/stat
 registry.latest_run_per_pipeline()                     # one row per pipeline
 registry.runs_that_warned()                            # tolerated warns (incl. drift)
 registry.records_for_run(run_id)                       # every step of one run
+registry.recent_row_counts("cases", limit=10)          # read volumes, newest first
 ```
 
 - **Ingest is idempotent** (AC #3): a record's identity is `run_id` + step (+ a
@@ -359,6 +374,11 @@ registry.records_for_run(run_id)                       # every step of one run
 - **Schema-drift surfaces as a warn-hit** (ADR-0008), so `runs_that_warned()` is
   also the drift-surfacing query (AC #6) — it pairs with the raw-drift detector
   when that lands.
+- **It is also a baseline source.** `recent_row_counts(pipeline, limit=…)` returns
+  the read-step volumes of recent *successful* runs, newest first — the history a
+  [`VolumeAnomalyValidator`](#validator--a-fail-fast-check-at-a-layer-boundary)
+  builds its band over (#54). Only `ok` runs count, so a run the guardrail itself
+  tripped can't poison the next night's baseline.
 
 Reading the JSONL needs no change to the emitter (ADR-0007); the one format
 addition this slice made is the per-record `timestamp` (run-log-format.md), the
