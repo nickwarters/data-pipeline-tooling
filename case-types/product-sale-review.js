@@ -5,6 +5,7 @@
 /** @type {CaseTypeConfig} */
 const config = {
   eligibleGroups: ['Reviewers'],
+  attributeFailures: true,
   questions: [
     // Customer Verification
     {

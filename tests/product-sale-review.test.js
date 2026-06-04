@@ -20,6 +20,10 @@ test('product-sale-review: catalogue has at least 8 questions', () => {
   assert.ok(config.questions.length >= 8, `got ${config.questions.length} questions`);
 });
 
+test('product-sale-review: attributes failures to a person', () => {
+  assert.equal(config.attributeFailures, true);
+});
+
 test('product-sale-review: catalogue spans at least 2 distinct sections (category)', () => {
   const cats = new Set(config.questions.map(q => q.category).filter(Boolean));
   assert.ok(cats.size >= 2, `got categories: ${[...cats].join(', ')}`);

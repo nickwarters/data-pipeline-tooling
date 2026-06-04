@@ -505,6 +505,138 @@ cr-status-banner {
   margin: 0 0 var(--cr-space-2);
 }
 
+/* ── Attribute menu (compact icon/chip + popover) ─────────────────────────── */
+
+cr-attribute-menu {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cr-space-1);
+  margin: 0 0 var(--cr-space-2);
+}
+
+/* Collapsed, unset: a quiet icon-led trigger. */
+.cr-attribute-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cr-space-1);
+  padding: var(--cr-space-1) var(--cr-space-2);
+  font: inherit;
+  font-size: var(--cr-font-size-xs);
+  font-weight: var(--cr-font-weight-medium);
+  color: var(--cr-color-text-muted);
+  background: transparent;
+  border: 1px dashed var(--cr-color-border);
+  border-radius: var(--cr-radius-sm);
+  cursor: pointer;
+  transition: border-color var(--cr-duration-fast) var(--cr-easing-standard),
+    color var(--cr-duration-fast) var(--cr-easing-standard);
+}
+
+.cr-attribute-trigger::before {
+  content: '\1F464'; /* 👤 */
+}
+
+.cr-attribute-trigger:hover,
+.cr-attribute-trigger:focus-visible {
+  color: var(--cr-color-text);
+  border-color: var(--cr-color-accent);
+  outline: none;
+}
+
+/* Collapsed, set: a solid chip naming the attributed person. */
+.cr-attribute-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cr-space-1);
+  padding: var(--cr-space-1) var(--cr-space-3);
+  font: inherit;
+  font-size: var(--cr-font-size-xs);
+  font-weight: var(--cr-font-weight-medium);
+  color: var(--cr-color-on-surface);
+  background: var(--cr-color-surface-2);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-pill, 999px);
+  cursor: pointer;
+}
+
+.cr-attribute-chip::before {
+  content: '\1F464'; /* 👤 */
+}
+
+.cr-attribute-chip:hover,
+.cr-attribute-chip:focus-visible {
+  border-color: var(--cr-color-accent);
+  outline: none;
+}
+
+.cr-attribute-clear {
+  display: inline-flex;
+  padding: var(--cr-space-1);
+  font: inherit;
+  font-size: var(--cr-font-size-xs);
+  line-height: 1;
+  color: var(--cr-color-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--cr-radius-sm);
+  cursor: pointer;
+}
+
+.cr-attribute-clear:hover,
+.cr-attribute-clear:focus-visible {
+  color: var(--cr-color-danger);
+  outline: none;
+}
+
+.cr-attribute-popover {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + var(--cr-space-1));
+  left: 0;
+  min-width: 16rem;
+  padding: var(--cr-space-3);
+  background: var(--cr-color-surface);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-md);
+  box-shadow: var(--cr-shadow-md, var(--cr-shadow-sm));
+}
+
+.cr-attribute-popover[hidden] {
+  display: none;
+}
+
+.cr-attribute-popover-title {
+  margin: 0 0 var(--cr-space-2);
+  font-size: var(--cr-font-size-xs);
+  font-weight: var(--cr-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cr-color-text-muted);
+}
+
+.cr-attribute-responsible {
+  display: block;
+  width: 100%;
+  margin: 0 0 var(--cr-space-2);
+  padding: var(--cr-space-2) var(--cr-space-3);
+  font: inherit;
+  font-size: var(--cr-font-size-sm);
+  font-weight: var(--cr-font-weight-medium);
+  text-align: left;
+  color: var(--cr-color-on-surface);
+  background: var(--cr-color-surface-2);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-sm);
+  cursor: pointer;
+}
+
+.cr-attribute-responsible:hover,
+.cr-attribute-responsible:focus-visible {
+  border-color: var(--cr-color-accent);
+  outline: none;
+}
+
 .cr-remediation-actions {
   margin: 0;
   padding-left: var(--cr-space-5);

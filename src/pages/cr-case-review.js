@@ -220,6 +220,38 @@ export class CRCaseReview extends CRElement {
     const remediationSection = /** @type {import('../components/cr-remediation-section.js').CRRemediationSection} */ (
       document.createElement('cr-remediation-section')
     );
+    remediationSection.client = client;
+    // Attribution is editable only for the Assigned Reviewer (remediation edit)
+    // on an In-progress Case — frozen at completion per ADR-0013. The matrix
+    // does not freeze on status, so the status guard lives here.
+    const canAttribute = attributeFailures === true
+      && access.remediation === 'edit'
+      && caseRow.status === 'In-progress';
+    remediationSection.canAttribute = canAttribute;
+    // The Case's Responsible Party, offered as a one-click quick-pick in each
+    // attribute menu. Stored as a bare account today, so displayName mirrors it
+    // until the page-load resolver (issue #97) supplies a real name.
+    remediationSection.responsibleParty = caseRow.responsibleParty
+      ? { loginName: caseRow.responsibleParty, displayName: caseRow.responsibleParty }
+      : null;
+    remediationSection.addEventListener('cr-attribute', (ev) => {
+      if (!canAttribute) return;
+      const { questionId, attributedParty } =
+        /** @type {CustomEvent<{ questionId: string, attributedParty: { loginName: string, displayName: string } | null }>} */ (ev).detail;
+      const current = answersSignal.get();
+      const existing = current[questionId];
+      if (!existing) return;
+      let nextAnswer;
+      if (attributedParty) {
+        nextAnswer = { ...existing, attributedParty };
+      } else {
+        const { attributedParty: _drop, ...rest } = existing;
+        nextAnswer = rest;
+      }
+      const newAnswers = { ...current, [questionId]: nextAnswer };
+      answersSignal.set(newAnswers);
+      saveQueue.enqueue(caseRow.id, 'answers', newAnswers);
+    });
 
     const outcomeEl = /** @type {import('../components/cr-outcome.js').CROutcome} */ (
       document.createElement('cr-outcome')

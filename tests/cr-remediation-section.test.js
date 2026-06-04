@@ -10,6 +10,8 @@ class StubEl {
     this._children = [];
     /** @type {Record<string, Function[]>} */
     this._listeners = {};
+    /** @type {Record<string, string>} */
+    this._attrs = {};
     this.textContent = '';
     this.className = '';
     /** @type {string} */
@@ -20,6 +22,24 @@ class StubEl {
   append(/** @type {StubEl[]} */ ...cs) { this._children.push(...cs); }
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
+  }
+  setAttribute(/** @type {string} */ k, /** @type {string} */ v) { this._attrs[k] = v; }
+  dispatchEvent(/** @type {any} */ e) {
+    (this._listeners[e.type] ?? []).forEach(h => h(e));
+    return true;
+  }
+  /** @param {string} ev fire a listener as if the user triggered it */
+  _fire(/** @type {string} */ ev, /** @type {any} */ payload) {
+    (this._listeners[ev] ?? []).forEach(h => h(payload));
+  }
+}
+
+class StubCustomEvent {
+  /** @param {string} type @param {{ detail?: any, bubbles?: boolean }} [init] */
+  constructor(type, init) {
+    this.type = type;
+    this.detail = init?.detail ?? null;
+    this.bubbles = init?.bubbles ?? false;
   }
 }
 
@@ -33,6 +53,7 @@ class StubEl {
   },
 };
 (/** @type {any} */ (globalThis)).customElements = { define() {} };
+(/** @type {any} */ (globalThis)).CustomEvent = StubCustomEvent;
 
 // ===== IMPORTS (after stubs) =====
 const { CRRemediationSection } = await import('../src/components/cr-remediation-section.js');
@@ -103,6 +124,20 @@ function findAllByClass(root, cls) {
   }
   walk(root);
   return out;
+}
+
+/**
+ * @param {any} root
+ * @param {string} tag
+ * @returns {any}
+ */
+function findByTag(root, tag) {
+  for (const c of root._children ?? []) {
+    if (c._tagName === tag) return c;
+    const nested = findByTag(c, tag);
+    if (nested) return nested;
+  }
+  return null;
 }
 
 // ===== TESTS =====
@@ -316,4 +351,95 @@ test('CRRemediationSection: _renderItem with null remediationActions renders no 
   const item = /** @type {any} */ (el)._renderItem(q);
   const actionsList = findByClass(item, 'cr-remediation-actions');
   assert.equal(actionsList, null, 'null remediationActions → no actions list rendered');
+});
+
+// ===== Attributed Party: editable picker (canAttribute) =====
+
+/** @type {QuestionDefinition[]} */
+const FAIL_CAT = [
+  { id: 'q1', text: 'Greeted?', responseType: 'yes-no-na', failureCriteria: 'No', deprecated: false },
+];
+
+test('CRRemediationSection: read-only viewer (canAttribute off) shows display name, no attribute menu', () => {
+  const el = new CRRemediationSection();
+  el.client = /** @type {any} */ ({ async searchPeople() { return []; } });
+  el.canAttribute = false;
+  el.update(FAIL_CAT, { q1: { value: 'No', attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' } } }, true);
+
+  assert.ok(findByClass(el, 'cr-remediation-attributed-party'), 'displayName still shown read-only');
+  assert.equal(findByTag(el, 'cr-attribute-menu'), null, 'no editable menu when not editable');
+});
+
+test('CRRemediationSection: editable failure renders an attribute menu wired with client and responsibleParty', () => {
+  const client = /** @type {any} */ ({ async searchPeople() { return []; } });
+  const el = new CRRemediationSection();
+  el.client = client;
+  el.responsibleParty = { loginName: 'rparty', displayName: 'rparty' };
+  el.canAttribute = true;
+  el.update(FAIL_CAT, { q1: { value: 'No' } }, true);
+
+  const menu = findByTag(el, 'cr-attribute-menu');
+  assert.ok(menu, 'attribute menu rendered for an editable failure');
+  assert.equal(menu.client, client, 'menu receives the SharePointClient');
+  assert.equal(menu.attributedParty, null, 'unattributed failure passes null to the menu');
+  assert.deepEqual(menu.responsibleParty, { loginName: 'rparty', displayName: 'rparty' }, 'menu receives the Responsible Party quick-pick');
+  // The standalone read-only line is replaced by the menu's own chip.
+  assert.equal(findByClass(el, 'cr-remediation-attributed-party'), null);
+});
+
+test('CRRemediationSection: editable failure with an attribution passes the party to the menu', () => {
+  const el = new CRRemediationSection();
+  el.client = /** @type {any} */ ({ async searchPeople() { return []; } });
+  el.canAttribute = true;
+  el.update(FAIL_CAT, { q1: { value: 'No', attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' } } }, true);
+
+  const menu = findByTag(el, 'cr-attribute-menu');
+  assert.ok(menu, 'menu rendered');
+  assert.deepEqual(menu.attributedParty, { loginName: 'jsmith', displayName: 'Jane Smith' });
+});
+
+test('CRRemediationSection: editable surface is suppressed when attributeFailures is off', () => {
+  const el = new CRRemediationSection();
+  el.client = /** @type {any} */ ({ async searchPeople() { return []; } });
+  el.canAttribute = true;
+  el.update(FAIL_CAT, { q1: { value: 'No' } }, false);
+
+  assert.equal(findByTag(el, 'cr-attribute-menu'), null, 'menu only appears when attributeFailures is on');
+});
+
+test('CRRemediationSection: menu cr-attribute-change re-dispatches as bubbling cr-attribute with the question id', () => {
+  const el = new CRRemediationSection();
+  el.client = /** @type {any} */ ({ async searchPeople() { return []; } });
+  el.canAttribute = true;
+  el.update(FAIL_CAT, { q1: { value: 'No' } }, true);
+
+  /** @type {any[]} */
+  const events = [];
+  el.addEventListener('cr-attribute', (/** @type {any} */ e) => events.push(e));
+
+  const menu = findByTag(el, 'cr-attribute-menu');
+  menu._fire('cr-attribute-change', { detail: { attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' } } });
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].bubbles, true);
+  assert.deepEqual(events[0].detail, {
+    questionId: 'q1',
+    attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
+  });
+});
+
+test('CRRemediationSection: a null cr-attribute-change re-dispatches cr-attribute clearing the party', () => {
+  const el = new CRRemediationSection();
+  el.client = /** @type {any} */ ({ async searchPeople() { return []; } });
+  el.canAttribute = true;
+  el.update(FAIL_CAT, { q1: { value: 'No', attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' } } }, true);
+
+  /** @type {any[]} */
+  const events = [];
+  el.addEventListener('cr-attribute', (/** @type {any} */ e) => events.push(e));
+
+  findByTag(el, 'cr-attribute-menu')._fire('cr-attribute-change', { detail: { attributedParty: null } });
+
+  assert.equal(events.length, 1);
+  assert.deepEqual(events[0].detail, { questionId: 'q1', attributedParty: null });
 });

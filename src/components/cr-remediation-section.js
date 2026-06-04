@@ -2,9 +2,12 @@
 import { CRElement } from './cr-element.js';
 import { evaluate } from '../evaluators/applicability-evaluator.js';
 import { isFailure } from '../evaluators/failure-evaluator.js';
+import './cr-attribute-menu.js';
 
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
+/** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
+/** @typedef {{ loginName: string, displayName: string }} Party */
 
 export class CRRemediationSection extends CRElement {
   constructor() {
@@ -15,6 +18,21 @@ export class CRRemediationSection extends CRElement {
     this.answers = {};
     /** @type {boolean} Whether this Case Type attributes failures to a person. */
     this.attributeFailures = false;
+    /** @type {SharePointClient | null} Backs the embedded people picker. */
+    this.client = null;
+    /**
+     * The Case's Responsible Party, offered as a one-click quick-pick in each
+     * attribute menu. `null` when the Case has none. ADR-0013.
+     * @type {Party | null}
+     */
+    this.responsibleParty = null;
+    /**
+     * Whether the viewer may set/change/clear the Attributed Party: Assigned
+     * Reviewer only, on an In-progress Case (frozen at completion). UX-only per
+     * ADR-0010/0011; the server ACL is the real boundary.
+     * @type {boolean}
+     */
+    this.canAttribute = false;
   }
 
   connectedCallback() {
@@ -85,12 +103,8 @@ export class CRRemediationSection extends CRElement {
     ans.textContent = `Answer: ${Array.isArray(v) ? v.join(', ') : v ?? ''}`;
     li.appendChild(ans);
 
-    const attributedParty = this.answers[q.id]?.attributedParty;
-    if (this.attributeFailures && attributedParty) {
-      const ap = document.createElement('p');
-      ap.className = 'cr-remediation-attributed-party';
-      ap.textContent = `Attributed to: ${attributedParty.displayName}`;
-      li.appendChild(ap);
+    if (this.attributeFailures) {
+      this._renderAttribution(li, q);
     }
 
     if (q.remediationActions?.length) {
@@ -105,6 +119,57 @@ export class CRRemediationSection extends CRElement {
     }
 
     return li;
+  }
+
+  /**
+   * Renders the Attributed Party surface on a failed item (ADR-0013). Read-only
+   * viewers see just the cached displayName. Editors get the compact
+   * `cr-attribute-menu` (icon/chip + popover) instead, which offers the
+   * Responsible Party quick-pick and people search; its `cr-attribute-change`
+   * is re-dispatched here as a bubbling `cr-attribute` carrying the question id.
+   * Persistence is the page's responsibility so the answers signal stays the
+   * single source of truth.
+   *
+   * @param {HTMLElement} li
+   * @param {QuestionDefinition} q
+   */
+  _renderAttribution(li, q) {
+    const attributedParty = this.answers[q.id]?.attributedParty;
+
+    if (!this.canAttribute) {
+      if (attributedParty) {
+        const ap = document.createElement('p');
+        ap.className = 'cr-remediation-attributed-party';
+        ap.textContent = `Attributed to: ${attributedParty.displayName}`;
+        li.appendChild(ap);
+      }
+      return;
+    }
+
+    const menu = /** @type {import('./cr-attribute-menu.js').CRAttributeMenu} */ (
+      document.createElement('cr-attribute-menu')
+    );
+    menu.client = this.client;
+    menu.attributedParty = attributedParty ?? null;
+    menu.responsibleParty = this.responsibleParty;
+    menu.addEventListener('cr-attribute-change', (ev) => {
+      const detail = /** @type {CustomEvent<{ attributedParty: Party | null }>} */ (ev).detail;
+      this._dispatchAttribute(q.id, detail.attributedParty);
+    });
+    li.appendChild(/** @type {any} */ (menu));
+  }
+
+  /**
+   * @param {string} questionId
+   * @param {{ loginName: string, displayName: string } | null} attributedParty
+   */
+  _dispatchAttribute(questionId, attributedParty) {
+    this.dispatchEvent(
+      new CustomEvent('cr-attribute', {
+        detail: { questionId, attributedParty },
+        bubbles: true,
+      })
+    );
   }
 }
 

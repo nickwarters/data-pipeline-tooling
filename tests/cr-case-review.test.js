@@ -728,3 +728,178 @@ test('CRCaseReview: cr-jump-unanswered handler calls scrollIntoView on first una
   assert.equal(scrollCalls.length, 1, 'scrollIntoView should be called exactly once');
   assert.equal(scrollCalls[0].id, 'q-needs', 'should scroll to first unanswered applicable question');
 });
+
+// ===== Attributed Party persistence (cr-attribute) =====
+
+test('CRCaseReview: Assigned Reviewer can set an Attributed Party, persisting via SaveQueue', async () => {
+  const failRow = { ...BASE_ROW, assignedReviewer: 'u1', answers: { 'q-needs': { value: 'No' } } };
+  const client = makeClient({ caseRow: failRow });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  /** @type {any[]} */
+  const enqueued = [];
+  saveQueue.enqueue = (...args) => { enqueued.push(args); };
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  el.currentUserId = 'u1';
+  await el.connectedCallback();
+
+  const remediation = (/** @type {any} */ (el))._children[3];
+  assert.equal(remediation.canAttribute, true, 'Assigned Reviewer on In-progress case may attribute');
+  assert.equal(remediation.client, client, 'client is handed to the section for the picker');
+
+  remediation._listeners['cr-attribute'][0]({
+    detail: { questionId: 'q-needs', attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' } },
+  });
+
+  assert.equal(enqueued.length, 1);
+  assert.equal(enqueued[0][1], 'answers');
+  assert.deepEqual(enqueued[0][2]['q-needs'].attributedParty, { loginName: 'jsmith', displayName: 'Jane Smith' });
+});
+
+test("CRCaseReview: forwards the Case's Responsible Party to the remediation section as a quick-pick", async () => {
+  const failRow = { ...BASE_ROW, assignedReviewer: 'u1', responsibleParty: 'rparty', answers: { 'q-needs': { value: 'No' } } };
+  const client = makeClient({ caseRow: failRow });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  el.currentUserId = 'u1';
+  await el.connectedCallback();
+
+  const remediation = (/** @type {any} */ (el))._children[3];
+  assert.deepEqual(
+    remediation.responsibleParty,
+    { loginName: 'rparty', displayName: 'rparty' },
+    'bare account doubles as the display name until the page-load resolver lands (#97)'
+  );
+});
+
+test('CRCaseReview: forwards a null Responsible Party when the Case has none', async () => {
+  const failRow = { ...BASE_ROW, assignedReviewer: 'u1', responsibleParty: '', answers: { 'q-needs': { value: 'No' } } };
+  const client = makeClient({ caseRow: failRow });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  el.currentUserId = 'u1';
+  await el.connectedCallback();
+
+  const remediation = (/** @type {any} */ (el))._children[3];
+  assert.equal(remediation.responsibleParty, null);
+});
+
+test('CRCaseReview: clearing an Attributed Party strips it from the Answer and persists', async () => {
+  const failRow = {
+    ...BASE_ROW,
+    assignedReviewer: 'u1',
+    answers: { 'q-needs': { value: 'No', attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' } } },
+  };
+  const client = makeClient({ caseRow: failRow });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  /** @type {any[]} */
+  const enqueued = [];
+  saveQueue.enqueue = (...args) => { enqueued.push(args); };
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  el.currentUserId = 'u1';
+  await el.connectedCallback();
+
+  const remediation = (/** @type {any} */ (el))._children[3];
+  remediation._listeners['cr-attribute'][0]({ detail: { questionId: 'q-needs', attributedParty: null } });
+
+  assert.equal(enqueued.length, 1);
+  assert.equal('attributedParty' in enqueued[0][2]['q-needs'], false, 'attributedParty removed from the Answer');
+  assert.equal(enqueued[0][2]['q-needs'].value, 'No', 'the rest of the Answer is preserved');
+});
+
+test('CRCaseReview: cr-attribute is ignored when the referenced Answer is missing', async () => {
+  const client = makeClient({ caseRow: { ...BASE_ROW, assignedReviewer: 'u1' } });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  /** @type {any[]} */
+  const enqueued = [];
+  saveQueue.enqueue = (...args) => { enqueued.push(args); };
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  el.currentUserId = 'u1';
+  await el.connectedCallback();
+
+  const remediation = (/** @type {any} */ (el))._children[3];
+  remediation._listeners['cr-attribute'][0]({
+    detail: { questionId: 'q-nonexistent', attributedParty: { loginName: 'x', displayName: 'X' } },
+  });
+
+  assert.equal(enqueued.length, 0, 'no persistence when there is no Answer to attribute');
+});
+
+test('CRCaseReview: attribution is frozen (read-only) on a Completed case', async () => {
+  const completedRow = {
+    ...BASE_ROW,
+    status: /** @type {'Completed'} */ ('Completed'),
+    assignedReviewer: 'u1',
+    answers: { 'q-needs': { value: 'No' } },
+  };
+  const client = makeClient({ caseRow: completedRow });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  saveQueue.loadCase(completedRow);
+  /** @type {any[]} */
+  const enqueued = [];
+  saveQueue.enqueue = (...args) => { enqueued.push(args); };
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  el.currentUserId = 'u1';
+  await el.connectedCallback();
+
+  const remediation = (/** @type {any} */ (el))._children[3];
+  assert.equal(remediation.canAttribute, false, 'Completed case freezes attribution');
+
+  remediation._listeners['cr-attribute'][0]({
+    detail: { questionId: 'q-needs', attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' } },
+  });
+  assert.equal(enqueued.length, 0, 'a frozen attribution must not enqueue even if an event fires');
+});
+
+test('CRCaseReview: non-assigned viewer cannot attribute (read-only)', async () => {
+  const failRow = {
+    ...BASE_ROW,
+    assignedReviewer: 'other-reviewer',
+    responsibleParty: 'user-rp',
+    answers: { 'q-needs': { value: 'No' } },
+  };
+  const client = makeClient({ caseRow: failRow });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  /** @type {any[]} */
+  const enqueued = [];
+  saveQueue.enqueue = (...args) => { enqueued.push(args); };
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  el.currentUserId = 'user-rp';
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false };
+  await el.connectedCallback();
+
+  const remediation = (/** @type {any} */ (el))._children[3];
+  assert.equal(remediation.canAttribute, false, 'Responsible Party cannot attribute');
+
+  remediation._listeners['cr-attribute'][0]({
+    detail: { questionId: 'q-needs', attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' } },
+  });
+  assert.equal(enqueued.length, 0, 'non-assigned viewer must not enqueue an attribution');
+});
