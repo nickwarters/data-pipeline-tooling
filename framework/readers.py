@@ -16,6 +16,12 @@ import pandas as pd
 
 from framework.connection import connect
 from framework.dataset import Dataset
+from framework.remote import (
+    RemoteRunner,
+    SharePointFetcher,
+    StubbedRemoteRunner,
+    StubbedSharePointFetcher,
+)
 
 
 @runtime_checkable
@@ -122,3 +128,75 @@ class SqliteReader:
         finally:
             con.close()
         return Dataset.from_pandas(frame)
+
+
+class SasReader:
+    """Read a SAS feed by running it remotely and reading the landed output.
+
+    SAS never runs on the framework host, so a ``SasReader`` is configured with
+    three knobs — ``script`` (run on the remote box), ``copy_glob`` (which output
+    files to copy back), ``dest`` (the local landing directory) — and on
+    ``read()``: (1) runs the script, (2) fetches the matching files into ``dest``,
+    (3) reads the landed files via the ordinary file read path. Steps (1) and (2)
+    are delegated to a swappable :class:`~framework.remote.RemoteRunner`; the
+    default is the no-op stub, so the feed is testable against landed fixtures
+    with no SSH/SAS/network (ADR-0004, ADR-0005).
+    """
+
+    def __init__(
+        self,
+        script: str,
+        copy_glob: str,
+        dest: str | os.PathLike[str],
+        *,
+        runner: RemoteRunner | None = None,
+    ) -> None:
+        self._script = script
+        self._copy_glob = copy_glob
+        # Path keeps separators OS-agnostic across Windows and macOS.
+        self._dest = Path(dest)
+        self._runner = runner or StubbedRemoteRunner()
+
+    def read(self) -> Dataset:
+        self._runner.run_script(self._script)
+        self._runner.fetch(self._copy_glob, self._dest)
+        # The ordinary local file read path: the same CSV engine the CsvReader
+        # uses, behind the Dataset seam. Files are read in sorted order so a
+        # multi-file glob lands deterministically.
+        paths = sorted(self._dest.glob(self._copy_glob))
+        if not paths:
+            raise FileNotFoundError(
+                f"No files match {self._copy_glob!r} in landing directory {self._dest}"
+            )
+        frame = pd.concat(
+            [pd.read_csv(path) for path in paths], ignore_index=True
+        )
+        return Dataset.from_pandas(frame)
+
+
+class SharePointReader:
+    """Read a SharePoint list into a Dataset.
+
+    Configured with the SharePoint ``site``, ``list_name``, and ``auth`` config;
+    the fetch is delegated to a swappable
+    :class:`~framework.remote.SharePointFetcher`. The default fetcher defers the
+    real client (auth/tenant out of scope — ADR-0004) and raises on ``read()``;
+    pass a :class:`~framework.remote.LocalCsvFetcher` to read a local fixture, or
+    a real client later, without changing this Reader (ADR-0005).
+    """
+
+    def __init__(
+        self,
+        site: str,
+        list_name: str,
+        auth: object = None,
+        *,
+        fetcher: SharePointFetcher | None = None,
+    ) -> None:
+        self._site = site
+        self._list_name = list_name
+        self._auth = auth
+        self._fetcher = fetcher or StubbedSharePointFetcher()
+
+    def read(self) -> Dataset:
+        return self._fetcher.fetch(self._site, self._list_name, self._auth)

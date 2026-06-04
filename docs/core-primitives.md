@@ -118,10 +118,13 @@ worksheet of an `.xlsx` workbook (sheet selectable by name or zero-based index;
 pandas + **openpyxl** behind the seam); `SqliteReader(db_path, table)` is the
 read-side dual of the Sqlite Writers — it reads one table from a layer db back
 into a `Dataset` (a subject's own layer, or another subject's read-only
-Reference Data medallion, joined in Python — ADR-0002). `Sas`/`SharePoint`
-follow the same shape (ADR-0004, ADR-0005; later slice). Readers are the home of
-the concrete engine and are tested against **local fixture files** — no network,
-no SAS, no SharePoint. Paths are handled with `pathlib` so they behave
+Reference Data medallion, joined in Python — ADR-0002). `SasReader(script,
+copy_glob, dest)` and `SharePointReader(site, list_name, auth)` follow the same
+`read()` shape but reach a remote source whose client is **stubbed for now**,
+behind a swappable seam in `framework.remote` (ADR-0004, ADR-0005); see
+[`adding-a-feed.md`](adding-a-feed.md#remote-feeds-sas-sharepoint). Readers are
+the home of the concrete engine and are tested against **local fixture files** —
+no network, no SAS, no SharePoint. Paths are handled with `pathlib` so they behave
 identically on Windows and macOS. **How to add a Feed:**
 [`adding-a-feed.md`](adding-a-feed.md).
 
