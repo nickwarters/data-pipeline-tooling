@@ -173,6 +173,39 @@ class RunRegistry:
             (),
         )
 
+    def recent_row_counts(
+        self, pipeline: str, limit: int = 10, step: str = "read"
+    ) -> list[int]:
+        """Read-step volumes of recent *successful* runs of ``pipeline``, newest first.
+
+        The baseline source for the volume-anomaly guardrail (#54): the row count
+        each of the last ``limit`` runs read, most-recent-first. Only runs whose
+        summary closed ``ok`` count — an aborted run (including one this guardrail
+        itself tripped) must not poison the baseline it derives. ``step`` selects
+        which step's ``rows_out`` is the feed's "volume"; it defaults to ``read``
+        (the just-ingested source count, before any processing).
+        """
+        con = self._connect()
+        try:
+            cur = con.execute(
+                """
+                SELECT r.rows_out
+                FROM run_records r
+                WHERE r.pipeline = ? AND r.step = ? AND r.rows_out IS NOT NULL
+                  AND EXISTS (
+                      SELECT 1 FROM run_records s
+                      WHERE s.run_id = r.run_id
+                        AND s.step = 'run' AND s.status = 'ok'
+                  )
+                ORDER BY r.timestamp DESC, r.rowid DESC
+                LIMIT ?
+                """,
+                (pipeline, step, limit),
+            )
+            return [row[0] for row in cur.fetchall()]
+        finally:
+            con.close()
+
     def _select(self, where: str, params: tuple) -> list[dict]:
         """Run a SELECT over run_records and decode each row to a record dict."""
         con = self._connect()

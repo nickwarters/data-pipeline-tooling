@@ -15,6 +15,7 @@ the same shape.
 
 from __future__ import annotations
 
+import statistics
 from typing import Iterable, Literal, Protocol, runtime_checkable
 
 from framework.dataset import Dataset
@@ -75,6 +76,87 @@ class RowCountValidator:
         if self._maximum is not None and rows > self._maximum:
             raise ValidationError(
                 f"row count {rows} above maximum {self._maximum}"
+            )
+
+
+class RunHistory(Protocol):
+    """The slice of the run registry a volume baseline needs (#52, #54).
+
+    Anything that can answer "what did the recent runs of this feed read?" is a
+    baseline source; ``RunRegistry`` is the production one. Stated as a Protocol
+    so the band logic stays behind a narrow seam and is exercised in isolation.
+    """
+
+    def recent_row_counts(
+        self, pipeline: str, limit: int = ..., step: str = ...
+    ) -> list[int]:
+        ...
+
+
+class VolumeAnomalyValidator:
+    """Trip when a run's row count deviates wildly from its recent history (#54).
+
+    The truncated-export guardrail: per-row and value-level checks (#24) cannot
+    see a half-written source export where every row is valid yet thousands are
+    missing — only run-over-run **volume** can. This compares the dataset's row
+    count against a baseline derived from the feed's recent runs (the median of
+    their read volumes, robust to a single prior outlier) and raises when the
+    count falls outside ``median × (1 ± tolerance)`` in *either* direction — a
+    sudden collapse *or* a suspicious explosion.
+
+    The baseline is sourced from run history (``RunHistory``), not a hand-set
+    per-feed threshold (AC #3). An optional absolute ``floor`` is an independent,
+    **always-on** guard that holds even before any history exists. With fewer
+    than ``min_history`` prior successful runs the relative band is skipped so a
+    feed's first nights don't trip spuriously (AC #4) — only the floor, if set,
+    applies. Severity (warn vs abort) and recording the trip to the ``RunLog``
+    are owned by the builder where this is attached, like any Validator
+    (ADR-0007).
+    """
+
+    def __init__(
+        self,
+        history: RunHistory,
+        pipeline: str,
+        *,
+        tolerance: float = 0.5,
+        floor: int | None = None,
+        min_history: int = 3,
+        lookback: int = 10,
+    ) -> None:
+        self._history = history
+        self._pipeline = pipeline
+        self._tolerance = tolerance
+        self._floor = floor
+        self._min_history = min_history
+        self._lookback = lookback
+
+    def validate(self, dataset: Dataset) -> None:
+        rows = len(dataset)
+
+        # The absolute floor is always-on — independent of history, it guards a
+        # feed's very first run (AC #3, AC #4).
+        if self._floor is not None and rows < self._floor:
+            raise ValidationError(
+                f"row count {rows} below floor {self._floor}"
+            )
+
+        counts = self._history.recent_row_counts(
+            self._pipeline, limit=self._lookback
+        )
+        # Insufficient history degrades gracefully: no relative baseline, no
+        # spurious trip (AC #4). The floor above still applied.
+        if len(counts) < self._min_history:
+            return
+
+        baseline = statistics.median(counts)
+        low = baseline * (1 - self._tolerance)
+        high = baseline * (1 + self._tolerance)
+        if rows < low or rows > high:
+            raise ValidationError(
+                f"row count {rows} deviates from recent baseline "
+                f"{baseline:g} (tolerance ±{self._tolerance:g}; "
+                f"expected {low:g}–{high:g} over last {len(counts)} runs)"
             )
 
 
