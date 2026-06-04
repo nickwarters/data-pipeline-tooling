@@ -77,7 +77,11 @@ export const cases = [
     responsibleParty: 'user-agent-c',
     answers: {
       'q-welcome': { value: 'Yes' },
-      'q-needs': { value: 'No', justification: 'Agent jumped straight to resolution without confirming the issue.' },
+      'q-needs': {
+        value: 'No',
+        justification: 'Agent jumped straight to resolution without confirming the issue.',
+        attributedParty: { loginName: 'agent.c', displayName: 'Agent C (Casey Doyle)' },
+      },
       'q-channel': { value: 'Phone' },
       'q-products': { value: ['Billing'] },
     },

@@ -6,6 +6,7 @@
 const config = {
   eligibleGroups: ['Reviewers'],
   slaHours: 48,
+  attributeFailures: true,
   questions: [
     {
       id: 'q-welcome',

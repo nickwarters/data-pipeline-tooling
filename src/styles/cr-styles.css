@@ -498,6 +498,13 @@ cr-status-banner {
   margin: 0 0 var(--cr-space-2);
 }
 
+.cr-remediation-attributed-party {
+  font-size: var(--cr-font-size-sm);
+  font-weight: var(--cr-font-weight-medium);
+  color: var(--cr-color-text-muted);
+  margin: 0 0 var(--cr-space-2);
+}
+
 .cr-remediation-actions {
   margin: 0;
   padding-left: var(--cr-space-5);

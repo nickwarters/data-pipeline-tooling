@@ -117,7 +117,7 @@ export class CRCaseReview extends CRElement {
       return;
     }
 
-    this._buildLayout({ caseRow, catalogue, computeOutcome: config.computeOutcome, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access });
+    this._buildLayout({ caseRow, catalogue, computeOutcome: config.computeOutcome, attributeFailures: config.attributeFailures, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access });
   }
 
   _renderAccessDenied() {
@@ -136,6 +136,7 @@ export class CRCaseReview extends CRElement {
    * @param {CaseRow} opts.caseRow
    * @param {QuestionDefinition[]} opts.catalogue
    * @param {(answers: Record<string, Answer>) => import('../sharepoint-client.js').OutcomeResult} opts.computeOutcome
+   * @param {boolean} [opts.attributeFailures]
    * @param {SharePointClient} opts.client
    * @param {SaveQueue} opts.saveQueue
    * @param {{ get: () => Record<string, Answer>, set: (v: Record<string, Answer>) => void }} opts.answersSignal
@@ -144,7 +145,7 @@ export class CRCaseReview extends CRElement {
    * @param {CurrentUser} opts.currentUser
    * @param {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} opts.access
    */
-  _buildLayout({ caseRow, catalogue, computeOutcome, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access }) {
+  _buildLayout({ caseRow, catalogue, computeOutcome, attributeFailures, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access }) {
 
     const searchStr = typeof location !== 'undefined' ? (/** @type {any} */ (location).search ?? '') : '';
     const panelMode = new URLSearchParams(searchStr).get('conversation') ?? 'popover';
@@ -232,7 +233,7 @@ export class CRCaseReview extends CRElement {
     }));
     this.subscribe(viewState, ({ questions, answers, allAnswered: done }) => {
       qList.update(questions, answers);
-      remediationSection.update(catalogue, answers);
+      remediationSection.update(catalogue, answers, attributeFailures);
       outcomeEl.update(computeOutcome, answers, done);
       const sectionData = computeSectionProgress(catalogue, answers);
       const unanswered = questions.filter(q => {

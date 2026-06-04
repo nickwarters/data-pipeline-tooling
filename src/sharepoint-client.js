@@ -4,7 +4,11 @@
  * The `value` is a string for `yes-no-na` and `single-choice` questions, and a
  * string[] for `multi-choice` questions. Empty array == unanswered.
  *
- * @typedef {{ value: string | string[], justification?: string, remediationActions?: Array<{id: string, text: string, completed: boolean}> }} Answer
+ * The optional `attributedParty` records the single person responsible for a
+ * *failed* Answer (see ADR-0013): a bare account `loginName` plus a cached
+ * `displayName`. Only present when the Case Type enables `attributeFailures`.
+ *
+ * @typedef {{ value: string | string[], justification?: string, remediationActions?: Array<{id: string, text: string, completed: boolean}>, attributedParty?: { loginName: string, displayName: string } }} Answer
  */
 
 /**
@@ -85,7 +89,8 @@
  *   computeOutcome: (answers: Record<string, Answer>) => OutcomeResult,
  *   eligibleGroups?: string[],
  *   sections?: Array<'questions'|'conversation'|'notes'|'remediation'|'outcome'>,
- *   slaHours?: number
+ *   slaHours?: number,
+ *   attributeFailures?: boolean
  * }} CaseTypeConfig
  */
 

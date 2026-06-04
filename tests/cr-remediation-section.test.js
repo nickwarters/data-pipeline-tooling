@@ -107,7 +107,7 @@ function findAllByClass(root, cls) {
 
 // ===== TESTS =====
 
-test('CRRemediationSection: empty answers renders "No remediation required"', () => {
+test('CRRemediationSection: empty answers renders "No failures"', () => {
   const el = new CRRemediationSection();
   el.catalogue = CATALOGUE;
   el.answers = {};
@@ -115,7 +115,7 @@ test('CRRemediationSection: empty answers renders "No remediation required"', ()
 
   const empty = findByClass(el, 'cr-remediation-empty');
   assert.ok(empty);
-  assert.equal(empty.textContent, 'No remediation required.');
+  assert.equal(empty.textContent, 'No failures.');
 });
 
 test('CRRemediationSection: only passing answers renders empty state', () => {
@@ -125,6 +125,22 @@ test('CRRemediationSection: only passing answers renders empty state', () => {
   el.connectedCallback();
 
   assert.ok(findByClass(el, 'cr-remediation-empty'));
+});
+
+test('CRRemediationSection: lists a failed answer that has no remediationActions', () => {
+  /** @type {QuestionDefinition[]} */
+  const cat = [
+    { id: 'q1', text: 'No actions defined?', responseType: 'yes-no-na', failureCriteria: 'No', deprecated: false },
+  ];
+  const el = new CRRemediationSection();
+  el.catalogue = cat;
+  el.answers = { q1: { value: 'No' } };
+  el.connectedCallback();
+
+  const items = findAllByClass(el, 'cr-remediation-item');
+  assert.equal(items.length, 1, 'a failure with zero remediation actions is still listed');
+  const qText = findByClass(items[0], 'cr-remediation-question');
+  assert.equal(qText.textContent, 'No actions defined?');
 });
 
 test('CRRemediationSection: renders one item per failed answer with remediationActions', () => {
@@ -219,7 +235,7 @@ test('CRRemediationSection: multi-choice answer renders array as comma-joined', 
   assert.equal(ansText.textContent, 'Answer: Account, Billing');
 });
 
-test('CRRemediationSection: skips failed questions without remediationActions', () => {
+test('CRRemediationSection: failed question without remediationActions renders no actions list', () => {
   /** @type {QuestionDefinition[]} */
   const cat = [
     { id: 'q1', text: 'Q1', responseType: 'yes-no-na', failureCriteria: 'No', deprecated: false },
@@ -229,7 +245,45 @@ test('CRRemediationSection: skips failed questions without remediationActions', 
   el.answers = { q1: { value: 'No' } };
   el.connectedCallback();
 
-  assert.ok(findByClass(el, 'cr-remediation-empty'));
+  // The failure is listed (failures view), but with no remediation actions list.
+  assert.equal(findAllByClass(el, 'cr-remediation-item').length, 1);
+  assert.equal(findByClass(el, 'cr-remediation-actions'), null);
+});
+
+test('CRRemediationSection: renders Attributed Party displayName read-only when attributeFailures is on', () => {
+  /** @type {QuestionDefinition[]} */
+  const cat = [
+    { id: 'q1', text: 'Greeted?', responseType: 'yes-no-na', failureCriteria: 'No', deprecated: false },
+  ];
+  const el = new CRRemediationSection();
+  el.update(cat, { q1: { value: 'No', attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' } } }, true);
+
+  const ap = findByClass(el, 'cr-remediation-attributed-party');
+  assert.ok(ap, 'attributed party surface is rendered');
+  assert.equal(ap.textContent, 'Attributed to: Jane Smith');
+});
+
+test('CRRemediationSection: does not render Attributed Party when attributeFailures is off', () => {
+  /** @type {QuestionDefinition[]} */
+  const cat = [
+    { id: 'q1', text: 'Greeted?', responseType: 'yes-no-na', failureCriteria: 'No', deprecated: false },
+  ];
+  const el = new CRRemediationSection();
+  el.update(cat, { q1: { value: 'No', attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' } } }, false);
+
+  assert.equal(findByClass(el, 'cr-remediation-attributed-party'), null);
+});
+
+test('CRRemediationSection: no Attributed Party surface when failure has none, even with attributeFailures on', () => {
+  /** @type {QuestionDefinition[]} */
+  const cat = [
+    { id: 'q1', text: 'Greeted?', responseType: 'yes-no-na', failureCriteria: 'No', deprecated: false },
+  ];
+  const el = new CRRemediationSection();
+  el.update(cat, { q1: { value: 'No' } }, true);
+
+  assert.equal(findAllByClass(el, 'cr-remediation-item').length, 1);
+  assert.equal(findByClass(el, 'cr-remediation-attributed-party'), null);
 });
 
 test('CRRemediationSection: _renderItem with no answer shows empty string via ?? fallback', () => {
@@ -248,8 +302,8 @@ test('CRRemediationSection: _renderItem with no answer shows empty string via ??
   assert.equal(answerEl.textContent, 'Answer: ');
 });
 
-test('CRRemediationSection: _renderItem with null remediationActions falls back to empty array', () => {
-  // Exercises `q.remediationActions ?? []` when remediationActions is null
+test('CRRemediationSection: _renderItem with null remediationActions renders no actions list', () => {
+  // Exercises the `q.remediationActions?.length` guard when remediationActions is null
   const q = /** @type {any} */ ({
     id: 'q-null-actions',
     text: 'No actions?',
@@ -261,5 +315,5 @@ test('CRRemediationSection: _renderItem with null remediationActions falls back 
   el.answers = { 'q-null-actions': { value: 'No' } };
   const item = /** @type {any} */ (el)._renderItem(q);
   const actionsList = findByClass(item, 'cr-remediation-actions');
-  assert.equal(actionsList._children.length, 0, 'null remediationActions falls back to [] → no action items');
+  assert.equal(actionsList, null, 'null remediationActions → no actions list rendered');
 });
