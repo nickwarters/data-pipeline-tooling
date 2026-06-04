@@ -1,14 +1,27 @@
-# Selection processors & the lazy cross-feed join
+# Processors — the Selection & Ingest transforms
 
-This documents the `Processor` primitives that drive the **Selection** workload —
-`Filter`, `Score`, `Sort`, `Rename` — and `JoinWith`, the cross-feed join that
-holds a **lazy reference to another builder** (#9). For the *why*, see
+This documents the concrete `Processor` primitives in `framework.processors`.
+They fall into two workload families:
+
+- **Selection narrowing** (#9, #62) — `Filter`, `Score`, `Sort`, `Rename`,
+  `Stamp`, the per-group `TopNPerGroup` / `SamplePerGroup`, and `JoinWith`, the
+  cross-feed join that holds a **lazy reference to another builder**. The
+  Selection Pipeline reads the **CasePool**, narrows and ranks it, joins in
+  Reference Data, and emits the **SelectionPool**.
+- **Ingest & fan-out reshaping** (#35, #36, #39) — `SelectColumns`, `Unpivot`,
+  `DeriveKey`, `LatestPerKey`: the transforms that fan one wide feed into a Case
+  table and its Detail Tables, derive the deterministic `case_id`, and reduce
+  accumulated history to current-state gold (ADR-0009).
+
+For the *why*, see
 [ADR-0002](adr/0002-python-only-processing-dumb-store-two-tier-carrier.md)
-(Python-only processing) and
+(Python-only processing),
 [ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md) (deferred
-builder, joins as lazy references); for the surrounding primitives and the
-`SchemaCoercion` processor, [core-primitives.md](core-primitives.md) and
-[schema-enforcement.md](schema-enforcement.md).
+builder, joins as lazy references), and
+[ADR-0009](adr/0009-case-identity-and-gold-grain.md) (case identity, gold grain,
+multi-table feeds). The schema-driven `SchemaCoercion` processor lives with the
+schema and is documented separately — [core-primitives.md](core-primitives.md)
+and [schema-enforcement.md](schema-enforcement.md).
 
 ## What a processor is
 
@@ -28,9 +41,10 @@ vectorised operations, so it reaches the backing frame via
 processor has **no severity**: a transform either applies or it can't, so a
 failure is always fail-fast (ADR-0007) — it raises and the run aborts.
 
-These five are the **Selection** transforms (the `filter/score/sort/join` of
-`CONTEXT.md`): the Selection Pipeline reads the **CasePool**, narrows and ranks
-it, joins in Reference Data, and emits the **SelectionPool**. The
+The sections below cover the **Selection** transforms first (the
+`filter/score/sort/join` of `CONTEXT.md`): the Selection Pipeline reads the
+**CasePool**, narrows and ranks it, joins in Reference Data, and emits the
+**SelectionPool**. The **Ingest & fan-out** transforms follow. The
 `SchemaCoercion` processor (#23) is documented separately —
 [schema-enforcement.md](schema-enforcement.md).
 
@@ -142,7 +156,7 @@ JoinWith(reference_builder, on="adviser", how="inner")
   just returns that feed's dataset).
 - `on` — the shared key column(s).
 - `how` — the join kind: `inner` (default — unmatched rows dropped),
-  `left`/`right`/`outer`.
+  `left`/`right`/`outer`, or `cross`.
 - `name=` (optional) — labels the join so Selection explainability records a Case
   an *inner* join drops as excluded by this join, rather than silently absent
   (#53; see [`selection.md`](selection.md)).
@@ -248,6 +262,139 @@ an empty feed in yields an empty feed out (consistent with `Filter`). The
 aggregate considered/kept/dropped counts land on the run's `process` step
 (`rows_in`/`rows_out`). Exposing the *per-row* dropped reason ("ranked Kth of M",
 "not drawn") at the cut point for the explainability trace (#53) is a follow-on.
+
+## Ingest & fan-out processors — multi-table feeds (ADR-0009)
+
+The transforms above narrow the CasePool *into* the SelectionPool. The four
+below sit on the other side of the medallion: **Ingest**, where one wide source
+feed (650+ columns) is fanned out into a Case table and zero or more **Detail
+Tables**, each a single-table pipeline over the shared raw table (#39, #35, #36;
+[ADR-0009](adr/0009-case-identity-and-gold-grain.md)). They are ordinary
+`Processor`s — same `process(dataset) -> Dataset` shape, same engine-confined,
+fail-fast contract — composed on the `raw → silver` and `silver → gold` builders.
+
+### `SelectColumns` — project the columns this pipeline needs
+
+```python
+from framework.processors import SelectColumns
+
+SelectColumns(["case_ref", "adviser", "activity_date", "amount"])
+```
+
+Keeps only the listed columns and drops the rest. It is the **projection seam**
+that keeps each single-table pipeline narrow over a wide shared raw table
+(ADR-0009): the Case pipeline projects the Case columns, each Detail pipeline
+projects its own slice + the natural key. A requested column that is **absent**
+raises `ValueError` naming the missing column(s) and the available ones — so a
+mis-typed projection fails at run time rather than silently producing an
+incomplete result. (At read time the planned reader `columns=` parameter pushes
+the same projection into the `SELECT`; `SelectColumns` is the processor form for
+a feed already in memory.)
+
+### `Unpivot` — wide→long, for a Detail Table
+
+```python
+from framework.processors import Unpivot
+
+Unpivot(
+    id_vars=["case_id"],                 # kept on every output row
+    value_vars=[f"product_{i}" for i in range(1, 11)],  # melted into rows
+    var_name="product_slot",             # records which source column a row came from
+    value_name="product_name",           # holds the value
+)
+```
+
+Melts a repeated column group (`product_1..10`) into **one row per value**,
+keeping the `id_vars` on each — the wide→long reshape that turns a wide feed's
+repeated section into a Detail Table at its own finer grain (many lines per
+Case). `var_name` labels the column recording *which* source column each row came
+from; `value_name` the column holding the value. With `drop_empty=True` (the
+default), rows whose value is `None` or an empty/whitespace-only string are
+dropped — the usual case for `product 1..10` feeds where unoccupied slots are
+blank. Pass `drop_empty=False` to keep them.
+
+### `DeriveKey` — stamp the deterministic `case_id`
+
+```python
+import uuid
+from framework.processors import DeriveKey
+
+namespace = uuid.uuid5(uuid.NAMESPACE_DNS, "wide_cases")  # the case-type namespace
+DeriveKey(into="case_id", namespace=namespace, natural_key=["case_ref"])
+```
+
+Computes `uuid5(namespace, natural_key_string)` for every row and writes it into
+the `into` column (new or overwrite). The natural-key string joins the `str()` of
+each `natural_key` column's value with `"|"`, in declared order — so the **same
+values always produce the same UUID on every run and every machine** (pure stdlib
+`uuid`, no platform variance). This is the deterministic `case_id` of ADR-0009:
+because the Case pipeline and each Detail pipeline derive it from the *same*
+`namespace` + `natural_key`, a Detail row links back to its Case with **no join**
+and idempotency holds across runs. (Contrast `Stamp`, which writes one constant;
+`DeriveKey` computes a per-row key from the row's natural-key columns.)
+
+### `LatestPerKey` — collapse accumulated history to current state
+
+```python
+from framework.processors import LatestPerKey
+
+LatestPerKey(key="case_id", by="load_date")
+```
+
+Keeps the **latest row per `key`**, where "latest" is the maximum `by` value (a
+timestamp or load column). `key` is one column or a list. This is the
+*current-gold* reduction of the history-upstream / current-gold Ingest profile
+(ADR-0006 amendment): raw + silver accumulate the change-over-time record, and
+`LatestPerKey` reduces accumulated silver to the one-row-per-Case current state
+the CasePool reads. **Tie-break:** when rows for a key share the maximum `by`
+value, the row appearing **last in the input** is kept — deterministic given a
+stable input order (accumulating silver is appended in load order, so the last
+tied row is the most recently appended). A missing `key`/`by` column raises
+`ValueError`. Structurally this is `TopNPerGroup(key, by, n=1)`; the two keep
+separate names for separate domains — Ingest current-state reduction vs Selection
+narrowing.
+
+### Worked example — fanning one wide feed into a Case table + Detail Table
+
+These processors are composed both **directly** on a pipeline (`SelectColumns`,
+`Unpivot`) and **inside** the ingest gold builders (`ingest_silver_to_gold` wires
+`DeriveKey → LatestPerKey → UniqueValidator`; `detail_ingest_silver_to_gold`
+wires `DeriveKey → Unpivot`, with **no** `LatestPerKey` because a Detail Table
+keeps many lines per Case). The full path — one wide CSV → a `cases` gold table +
+a `case_products` Detail Table — is the runnable
+[`../pipelines/demo_fan_out.py`](../pipelines/demo_fan_out.py):
+
+```sh
+python -m pipelines.demo_fan_out /tmp/demo_fan_out
+```
+
+```python
+# Cases pipeline: shared raw → project case columns → coerce/validate → silver
+(
+    Pipeline("cases", store.reader("raw", SUBJECT))
+    .with_processor(Filter(lambda row: row["run_id"] == RUN_ID))
+    .with_processor(Rename({"case_ref_no": "case_ref"}))     # shared normalisation
+    .with_processor(SelectColumns(["case_ref", "adviser", "activity_date", "amount"]))
+    .with_processor(SchemaCoercion(CaseSchema))
+    .with_post_validator(SchemaValidator(CaseSchema))
+    .write_to(store.writer("silver", "cases", AccumulateByRun(RUN_ID, RUN_ID)))
+    .run()
+)
+# Cases gold: DeriveKey → LatestPerKey → UniqueValidator → current-only gold
+ingest_silver_to_gold(store, "cases", namespace=CASE_NAMESPACE, natural_key=["case_ref"]).run()
+
+# Products Detail Table gold: DeriveKey (same namespace + key) → Unpivot wide→long
+detail_ingest_silver_to_gold(
+    store, "case_products", namespace=CASE_NAMESPACE, natural_key=["case_ref"],
+    unpivot=Unpivot(id_vars=["case_id"], value_vars=PRODUCT_COLS,
+                    var_name="product_slot", value_name="product_name"),
+).run()
+```
+
+Both pipelines read the *same* raw table and share one `Rename` normalisation
+instance; each is independently validated and writes its own gold. See
+[gold-accumulation.md](gold-accumulation.md) for the gold builders and
+[ADR-0009](adr/0009-case-identity-and-gold-grain.md) for the fan-out rationale.
 
 ## Not yet (follow-on tickets)
 
