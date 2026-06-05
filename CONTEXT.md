@@ -25,6 +25,13 @@ _Avoid_: Closed, finished, done
 A separate **Case** that references a **Completed Case** and records a meta-review of whether the original **Assigned Reviewer** conducted that Case properly. Has its own **Assigned Reviewer** (the QA reviewer), its own **Answers**, and its own **Outcome**. The original Case is read-only input. A QA Check is modeled as a distinct Case Type (e.g. `qa-{slug}`), not a mode on an existing Case. Only some Completed Cases are selected for QA Check; selection is manual and performed by a role not yet fully defined in the domain.
 _Avoid_: Re-review, audit (overloaded)
 
+**Case Details**:
+The **Section** that displays the **Case Type**-specific descriptive fields that frame a Case — e.g. customer name, account numbers, relevant dates. The set of fields is declared per **Case Type**, so different types show different details. Read-only for every role and never hidden: visible to anyone who can open the Case. The sixth Section (alongside Questions, Conversation, Notes, Remediation, Outcome) and the default view on the case review page.
+_Avoid_: Metadata, header, summary
+
+**Section**:
+One of the role-gated areas of a Case — **Case Details**, Questions, Conversation, Notes, Remediation, Outcome. Each Section has an access mode (`edit` / `read-only` / `hidden`) resolved per viewer-role (ADR-0011), and a **Case Type** may omit Sections via its `sections` allow-list.
+
 ### Questions & answers
 
 **Question Definition**:
