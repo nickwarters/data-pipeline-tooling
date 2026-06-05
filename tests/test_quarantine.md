@@ -1,0 +1,290 @@
+```python
+"""Quarantine — row-level value-rule partitioning and pipeline integration (issue #50).
+
+Tests the opt-in quarantine path: value-rule-failing rows are routed to a
+reject table; good rows proceed. Structural breaches (missing columns, wrong
+dtypes) still abort via SchemaValidator — the abort-vs-quarantine boundary is
+the key invariant.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Annotated
+
+import pandas as pd
+import pytest
+
+from framework.dataset import Dataset
+from framework.quarantine import SchemaValueRulePartitioner
+from framework.schema import Length, OneOf, Pattern, Unique
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+@dataclass
+class RefCase:
+    case_ref: Annotated[str, Pattern(r"\d{9,10}")]
+    status: Annotated[str, OneOf("open", "closed")]
+
+
+def _dataset(**cols) -> Dataset:
+    return Dataset.from_pandas(pd.DataFrame(cols))
+
+
+# ---------------------------------------------------------------------------
+# Cycle 1 — partitioner separates good rows from value-rule breaches
+# ---------------------------------------------------------------------------
+
+def test_partitioner_routes_violating_rows_to_rejected():
+    # A row with a case_ref that doesn't match the 9–10 digit pattern is a
+    # value-rule breach; it should land in rejected, not in good.
+    ds = _dataset(
+        case_ref=pd.Series(["123456789", "BAD", "987654321"], dtype="string"),
+        status=pd.Series(["open", "open", "closed"], dtype="string"),
+    )
+    good, rejected = SchemaValueRulePartitioner(RefCase).partition(ds)
+
+    assert len(good) == 2
+    assert len(rejected) == 1
+
+
+def test_partitioner_all_good_when_no_violations():
+    # When every row satisfies all value rules, good == full dataset and
+    # rejected is empty.
+    ds = _dataset(
+        case_ref=pd.Series(["123456789", "1234567890"], dtype="string"),
+        status=pd.Series(["open", "closed"], dtype="string"),
+    )
+    good, rejected = SchemaValueRulePartitioner(RefCase).partition(ds)
+
+    assert len(good) == 2
+    assert len(rejected) == 0
+
+
+def test_partitioner_rejected_rows_carry_failed_rule_column():
+    # Rejected rows must name the breach so operators can diagnose the reject
+    # table without re-running the pipeline.
+    ds = _dataset(
+        case_ref=pd.Series(["BAD"], dtype="string"),
+        status=pd.Series(["open"], dtype="string"),
+    )
+    _, rejected = SchemaValueRulePartitioner(RefCase).partition(ds)
+
+    assert "failed_rule" in rejected.to_pandas().columns
+    assert "case_ref" in rejected.to_pandas()["failed_rule"].iloc[0]
+
+
+def test_partitioner_row_failing_multiple_rules_gets_all_reasons():
+    # A row that breaches two rules (bad pattern AND bad status) should have
+    # both breach descriptions in failed_rule (semicolon-joined).
+    ds = _dataset(
+        case_ref=pd.Series(["BAD"], dtype="string"),
+        status=pd.Series(["pending"], dtype="string"),  # not in {open, closed}
+    )
+    _, rejected = SchemaValueRulePartitioner(RefCase).partition(ds)
+
+    reason = rejected.to_pandas()["failed_rule"].iloc[0]
+    assert "case_ref" in reason
+    assert "status" in reason
+
+
+# ---------------------------------------------------------------------------
+# Cycle 2 — violating_mask on individual rules
+# ---------------------------------------------------------------------------
+
+def test_pattern_violating_mask_returns_true_for_non_matching_rows():
+    rule = Pattern(r"\d{9,10}")
+    series = pd.Series(["123456789", "BAD", "1234567890"], dtype="string")
+    mask = rule.violating_mask(series)
+    assert list(mask) == [False, True, False]
+
+
+def test_pattern_violating_mask_returns_false_for_nulls():
+    # Null values are not a pattern violation (nullability is separate).
+    rule = Pattern(r"\d+")
+    series = pd.Series(["123", pd.NA, "456"], dtype="string")
+    mask = rule.violating_mask(series)
+    assert list(mask) == [False, False, False]
+
+
+def test_length_violating_mask_returns_true_for_out_of_bounds():
+    rule = Length(minimum=2, maximum=4)
+    series = pd.Series(["ok", "x", "four", "toolong"], dtype="string")
+    mask = rule.violating_mask(series)
+    assert list(mask) == [False, True, False, True]
+
+
+def test_one_of_violating_mask_returns_true_for_non_members():
+    rule = OneOf("open", "closed")
+    series = pd.Series(["open", "pending", "closed"], dtype="string")
+    mask = rule.violating_mask(series)
+    assert list(mask) == [False, True, False]
+
+
+def test_unique_violating_mask_returns_true_for_duplicate_rows():
+    rule = Unique()
+    series = pd.Series(["a", "dup", "b", "dup"], dtype="string")
+    mask = rule.violating_mask(series)
+    assert list(mask) == [False, True, False, True]
+
+
+# ---------------------------------------------------------------------------
+# Cycle 3 — pipeline quarantine integration
+# ---------------------------------------------------------------------------
+
+def test_pipeline_quarantine_routes_rejected_rows_to_reject_writer(tmp_path):
+    # A pipeline configured with quarantine should write bad rows to the reject
+    # writer and good rows to the main writer — in the same run.
+    import sqlite3
+    from framework.builder import Pipeline
+    from framework.readers import CsvReader
+    from framework.quarantine import SchemaValueRulePartitioner
+    from framework.writers import QuarantineWriter, SqliteTruncateReloadWriter
+
+    # Write a CSV with two good rows and one bad row.
+    csv_file = tmp_path / "feed.csv"
+    csv_file.write_text(
+        "case_ref,status\n"
+        "123456789,open\n"
+        "BAD,open\n"
+        "987654321,closed\n"
+    )
+
+    main_db = tmp_path / "main.db"
+    reject_db = tmp_path / "rejects.db"
+
+    pipeline = (
+        Pipeline("test-feed", CsvReader(csv_file))
+        .quarantine(
+            SchemaValueRulePartitioner(RefCase),
+            QuarantineWriter(reject_db, "rejects"),
+        )
+        .write_to(SqliteTruncateReloadWriter(main_db, "feed"))
+    )
+    pipeline.run()
+
+    con_main = sqlite3.connect(main_db)
+    rows_main = con_main.execute("SELECT * FROM feed").fetchall()
+    con_main.close()
+
+    con_reject = sqlite3.connect(reject_db)
+    rows_reject = con_reject.execute("SELECT * FROM rejects").fetchall()
+    cols_reject = [d[1] for d in con_reject.execute("PRAGMA table_info(rejects)").fetchall()]
+    con_reject.close()
+
+    assert len(rows_main) == 2
+    assert len(rows_reject) == 1
+    assert "failed_rule" in cols_reject
+    assert "run_id" in cols_reject
+    assert "load_date" in cols_reject
+
+
+def test_pipeline_quarantine_is_idempotent_on_rerun(tmp_path):
+    # Re-running the same pipeline should replace the prior run's rejects,
+    # not accumulate duplicates (delete-by-run_id + append).
+    import sqlite3
+    from framework.builder import Pipeline
+    from framework.readers import CsvReader
+    from framework.writers import QuarantineWriter, SqliteTruncateReloadWriter
+
+    csv_file = tmp_path / "feed.csv"
+    csv_file.write_text(
+        "case_ref,status\n"
+        "BAD,open\n"
+    )
+
+    reject_db = tmp_path / "rejects.db"
+
+    def run():
+        p = (
+            Pipeline("feed", CsvReader(csv_file))
+            .quarantine(
+                SchemaValueRulePartitioner(RefCase),
+                QuarantineWriter(reject_db, "rejects"),
+            )
+            .write_to(SqliteTruncateReloadWriter(tmp_path / "main.db", "feed"))
+        )
+        p.run()
+        return p.run_id
+
+    run_id_1 = run()
+    run_id_2 = run()
+
+    con = sqlite3.connect(reject_db)
+    rows = con.execute("SELECT run_id FROM rejects").fetchall()
+    con.close()
+
+    # Two different run_ids should each have one row — not four rows total.
+    assert len(rows) == 2
+    assert {r[0] for r in rows} == {run_id_1, run_id_2}
+
+
+def test_structural_breach_aborts_even_with_quarantine_configured(tmp_path):
+    # A SchemaValidator (structural: missing column) must still abort the run —
+    # quarantine only applies to value-rule breaches, not schema shape.
+    from framework.builder import Pipeline
+    from framework.readers import CsvReader
+    from framework.schema import SchemaValidator
+    from framework.validators import ValidationError
+    from framework.writers import QuarantineWriter, SqliteTruncateReloadWriter
+
+    csv_file = tmp_path / "feed.csv"
+    # Missing "status" column — structural breach.
+    csv_file.write_text("case_ref\n123456789\n")
+
+    pipeline = (
+        Pipeline("feed", CsvReader(csv_file))
+        .with_validator(SchemaValidator(RefCase))
+        .quarantine(
+            SchemaValueRulePartitioner(RefCase),
+            QuarantineWriter(tmp_path / "rejects.db", "rejects"),
+        )
+        .write_to(SqliteTruncateReloadWriter(tmp_path / "main.db", "feed"))
+    )
+
+    with pytest.raises(ValidationError):
+        pipeline.run()
+
+
+# ---------------------------------------------------------------------------
+# Cycle 4 — RunLog records quarantine counts
+# ---------------------------------------------------------------------------
+
+def test_run_log_quarantine_step_records_rows_quarantined(tmp_path):
+    # The quarantine step in the run log should record how many rows were
+    # routed to the reject table so operators can audit without opening the db.
+    import json
+    from framework.builder import Pipeline
+    from framework.readers import CsvReader
+    from framework.run_log import RunLog
+    from framework.writers import QuarantineWriter, SqliteTruncateReloadWriter
+
+    csv_file = tmp_path / "feed.csv"
+    csv_file.write_text(
+        "case_ref,status\n"
+        "BAD,open\n"
+        "123456789,closed\n"
+    )
+
+    log_file = tmp_path / "run.log"
+    pipeline = (
+        Pipeline("feed", CsvReader(csv_file), run_log=RunLog(log_file))
+        .quarantine(
+            SchemaValueRulePartitioner(RefCase),
+            QuarantineWriter(tmp_path / "rejects.db", "rejects"),
+        )
+        .write_to(SqliteTruncateReloadWriter(tmp_path / "main.db", "feed"))
+    )
+    pipeline.run()
+
+    records = [json.loads(line) for line in log_file.read_text().splitlines()]
+    quarantine_record = next(r for r in records if r["step"] == "quarantine")
+
+    assert quarantine_record["rows_in"] == 2
+    assert quarantine_record["rows_out"] == 1
+    assert quarantine_record["rows_quarantined"] == 1
+
+```
