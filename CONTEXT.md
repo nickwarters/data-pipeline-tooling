@@ -38,6 +38,10 @@ One of the role-gated areas of a Case — **Case Details**, Questions, Conversat
 The canonical question — stable ID, text, response type, options, conditional triggers, failure criteria, attached remediation actions. **Shared across Case Types**: the same definition can appear in many catalogues. Edits are live: in-progress Cases see updates immediately.
 _Avoid_: Question (ambiguous between definition and instance), QuestionTemplate
 
+**Question Bank**:
+The curated, per-**Case Type** working set of **Question Definitions** — their text, response types, options, conditional triggers (`showWhen`), and failure criteria — assembled and edited in the question bank editor (`#/question-bank`) by **Case Type Owners**, then compiled into that Case Type's module and into its function-free **reporting export** (ADR-0015). One per Case Type.
+_Avoid_: Catalogue (reserve for the runtime form — the bank joined to **Answers** to compute applicability), Question pool
+
 **Applicable Question**:
 A **Question Definition** that, given the current state of a Case's **Answers**, should be presented to the **Reviewer**. Computed live by evaluating conditional triggers — not a stored set.
 
@@ -102,6 +106,7 @@ The computed verdict for a **Case**, derived by the **Case Type**'s algorithm fr
 ## Relationships
 
 - A **Case** belongs to exactly one **Case Type**.
+- A **Case Type** has one **Question Bank**, compiled into its module and into its reporting export.
 - A **Case Type** references many **Question Definitions** (a catalogue).
 - A **Question Definition** can appear in many **Case Types**.
 - A **Case** has many **Answers**, one per **Applicable Question**.
@@ -124,3 +129,4 @@ The computed verdict for a **Case**, derived by the **Case Type**'s algorithm fr
 - "Outcome" was nearly modeled as a stored entity — resolved as a *computed* property of a Case.
 - "Reviewer" was being used for both group membership and per-Case assignment — resolved as **Reviewer** (group) vs **Assigned Reviewer** (per-Case role). See ADR-0011.
 - "Visitor" is *derived* (absence of all named-group memberships), not a SharePoint group — consistent with ADR-0010, capability flags are UX-only and the real boundary is SharePoint list ACLs.
+- "Question Bank" vs "catalogue" — both name a Case Type's set of **Question Definitions**. Resolved: **Question Bank** is the *authoring* form (edited in `#/question-bank`, compiled to a module + reporting export); *catalogue* is the *runtime* form (the same questions joined to **Answers** to compute applicability). One concept, two lifecycle stages.
