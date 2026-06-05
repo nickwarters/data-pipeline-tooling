@@ -809,6 +809,7 @@
           <li><a href="#badges"      class="sg-nav-link" data-section="badges">Status & Badges</a></li>
           <li><a href="#tables"      class="sg-nav-link" data-section="tables">Data Tables</a></li>
           <li><a href="#kpi"         class="sg-nav-link" data-section="kpi">KPI Tiles</a></li>
+          <li><a href="#tabs"        class="sg-nav-link" data-section="tabs">Tabs</a></li>
         </ul>
         <div class="sg-nav-section">Patterns</div>
         <ul class="sg-nav-list" role="list">
@@ -1647,6 +1648,30 @@
           </div>
         </section>
 
+        <section id="tabs" class="sg-section">
+          <div class="sg-section-header">
+            <h2 class="sg-section-title">Tabs</h2>
+            <span class="sg-section-id">#tabs</span>
+          </div>
+
+          <div class="sg-subsection">
+            <p class="sg-subsection-title">cr-tabs — generic, domain-free tab navigation</p>
+            <p style="font-size:0.875rem;color:var(--cr-color-text-muted);max-width:52ch;margin:0 0 var(--cr-space-3);line-height:1.55;">
+              A reusable tablist primitive driven by a <code>{ id, label, hidden }</code> list and a
+              selected id. It renders ARIA <code>tablist</code>/<code>tab</code>/<code>tabpanel</code>
+              roles, shows only the active panel, owns left/right arrow-key navigation between visible
+              tabs, and emits <code>cr-tab-change</code> with the newly-selected id. It holds no domain
+              knowledge — the consumer supplies tab metadata and panel content nodes.
+            </p>
+            <div class="sg-demo" style="overflow:visible;">
+              <cr-tabs id="sg-tabs"></cr-tabs>
+              <p id="sg-tabs-event" style="margin-top:var(--cr-space-3);font-family:var(--cr-font-mono);font-size:0.8125rem;color:var(--cr-color-text-muted);">
+                No tab change yet — click a tab or use ← / → keys.
+              </p>
+            </div>
+          </div>
+        </section>
+
       </main>
     </div><!-- .sg-layout -->
   </div><!-- #sg-root -->
@@ -1735,6 +1760,40 @@
     const out = document.getElementById('sg-people-selected');
     picker.addEventListener('cr-person-selected', (e) => {
       out.textContent = `selected → { loginName: "${e.detail.loginName}", displayName: "${e.detail.displayName}" }`;
+    });
+
+    // ── cr-tabs demo ──────────────────────────────────────────────────────
+    import('../src/components/cr-tabs.js').then(() => {
+      const tabs = document.getElementById('sg-tabs');
+
+      const panel = (text) => {
+        const p = document.createElement('p');
+        p.style.margin = '0';
+        p.style.color = 'var(--cr-color-on-surface)';
+        p.style.lineHeight = '1.55';
+        p.textContent = text;
+        return p;
+      };
+
+      tabs.tabs = [
+        { id: 'overview', label: 'Overview' },
+        { id: 'details', label: 'Details' },
+        { id: 'archived', label: 'Archived', hidden: true },
+        { id: 'activity', label: 'Activity' },
+      ];
+      tabs.panels = {
+        overview: panel('The Overview panel. Note the "Archived" tab is hidden, so it renders no button and no panel.'),
+        details: panel('The Details panel. Arrow keys move between visible tabs and wrap at the ends.'),
+        archived: panel('You should never see this — the tab is hidden.'),
+        activity: panel('The Activity panel.'),
+      };
+      tabs.selected = 'overview';
+      tabs.render();
+
+      const evtOut = document.getElementById('sg-tabs-event');
+      tabs.addEventListener('cr-tab-change', (e) => {
+        evtOut.textContent = `cr-tab-change → { id: "${e.detail.id}" }`;
+      });
     });
   </script>
 </body>

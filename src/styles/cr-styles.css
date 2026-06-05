@@ -1059,3 +1059,64 @@ cr-people-picker {
   background: var(--cr-color-surface-2);
   outline: none;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   cr-tabs — generic, domain-free tab navigation primitive
+   ───────────────────────────────────────────────────────────────────────── */
+cr-tabs {
+  display: block;
+}
+
+.cr-tabs-list {
+  display: flex;
+  gap: var(--cr-space-1);
+  border-bottom: 1px solid var(--cr-color-border);
+}
+
+.cr-tabs-tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  margin: 0;
+  padding: var(--cr-space-2) var(--cr-space-4);
+  font-family: var(--cr-font-display);
+  font-size: var(--cr-font-size-sm);
+  font-weight: var(--cr-font-weight-semibold);
+  letter-spacing: var(--cr-tracking-wide);
+  text-transform: uppercase;
+  color: var(--cr-color-text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition:
+    color var(--cr-duration-fast) var(--cr-easing-standard),
+    border-color var(--cr-duration-fast) var(--cr-easing-standard);
+}
+
+.cr-tabs-tab:hover {
+  color: var(--cr-color-on-surface);
+}
+
+.cr-tabs-tab[aria-selected="true"] {
+  color: var(--cr-color-accent);
+  border-bottom-color: var(--cr-color-accent);
+}
+
+.cr-tabs-tab:focus-visible {
+  outline: var(--cr-focus-outline);
+  outline-offset: calc(-1 * var(--cr-focus-offset));
+  border-radius: var(--cr-radius-sm);
+}
+
+.cr-tabs-panel {
+  padding: var(--cr-space-4) 0;
+}
+
+.cr-tabs-panel[hidden] {
+  display: none;
+}
+
+.cr-tabs-panel:focus-visible {
+  outline: var(--cr-focus-outline);
+  outline-offset: var(--cr-focus-offset);
+}

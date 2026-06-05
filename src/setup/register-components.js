@@ -5,6 +5,7 @@ export async function registerComponents() {
   await Promise.all([
     import('../components/cr-allocation.js'),
     import('../components/cr-app-nav.js'),
+    import('../components/cr-tabs.js'),
     import('../components/cr-command-palette.js'),
     import('../components/cr-owner-summary.js'),
     import('../components/cr-case-details.js'),
