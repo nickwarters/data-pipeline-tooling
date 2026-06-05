@@ -22,7 +22,7 @@ function makeContext() {
     currentUser: { id: 'u1' },
     capabilities: {},
     eligibleCaseTypes: [],
-    appEl: { classList: { add() {}, remove() {} }, setAttribute() {} },
+    appEl: { classList: { add() {}, remove() {} }, setAttribute() {}, appendChild() {}, replaceChildren() {} },
   });
 }
 
@@ -61,22 +61,30 @@ test('registerRoutes: registers #/case/:id route', () => {
   assert.ok(router._routes.some(r => r.re.test('#/case/99')), '#/case/:id should be registered');
 });
 
-test('registerRoutes: #/ mount redirects to #/dashboard', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
-  registerRoutes(router, makeContext());
+test('registerRoutes: #/ mount creates cr-home element (no redirect)', () => {
+  const created = /** @type {string[]} */ ([]);
+  const origDoc = (/** @type {any} */ (globalThis)).document;
+  (/** @type {any} */ (globalThis)).document = {
+    createElement(/** @type {string} */ tag) { created.push(tag); return { setAttribute() {} }; },
+    createTreeWalker() { return { nextNode() { return null; } }; },
+  };
 
   const locations = /** @type {string[]} */ ([]);
   const origLocation = globalThis.location;
   (/** @type {any} */ (globalThis)).location = {
-    get hash() { return origLocation.hash; },
+    get hash() { return ''; },
     set hash(v) { locations.push(v); },
   };
 
   try {
+    const router = new Router();
+    router._container = /** @type {any} */ ({});
+    registerRoutes(router, makeContext());
     router.navigate('#/');
-    assert.deepEqual(locations, ['#/dashboard']);
+    assert.ok(created.includes('cr-home'), 'cr-home should be created on mount');
+    assert.deepEqual(locations, [], 'should not redirect away from #/');
   } finally {
+    (/** @type {any} */ (globalThis)).document = origDoc;
     (/** @type {any} */ (globalThis)).location = origLocation;
   }
 });

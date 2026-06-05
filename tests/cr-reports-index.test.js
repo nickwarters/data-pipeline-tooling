@@ -44,12 +44,12 @@ const { CRReportsIndex } = await import('../src/pages/cr-reports-index.js');
 
 /** @returns {import('../src/services/permissions.js').Capabilities} */
 function managerCaps() {
-  return { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: true };
+  return { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: true, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
 }
 
 /** @returns {import('../src/services/permissions.js').Capabilities} */
 function nonManagerCaps() {
-  return { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false };
+  return { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
 }
 
 /** @param {any} node @param {string} text @returns {boolean} */

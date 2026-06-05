@@ -8,18 +8,24 @@
  *   reviewer: string,
  *   caseTypeOwners: Record<string, string>,
  *   responsibleParty: string,
- *   reviewerManager: string
+ *   reviewerManager: string,
+ *   responsiblePartyManager: string,
+ *   maintainer: string
  * }} PermissionsConfig
  */
 
 /**
  * Resolved capabilities for the current user, derived from group membership.
+ * `isVisitor` is DERIVED (not config-driven): true iff the user holds no role.
  *
  * @typedef {{
  *   isReviewer: boolean,
  *   ownedCaseTypes: string[],
  *   isResponsibleParty: boolean,
- *   isReviewerManager: boolean
+ *   isReviewerManager: boolean,
+ *   isResponsiblePartyManager: boolean,
+ *   isMaintainer: boolean,
+ *   isVisitor: boolean
  * }} Capabilities
  */
 
@@ -31,6 +37,9 @@ export const permissions = {
   },
   responsibleParty: 'CR-ResponsibleParty',
   reviewerManager: 'Reviewer-Managers',
+  // TBC: placeholder SharePoint group names — confirm with the platform owner.
+  responsiblePartyManager: 'ResponsibleParty-Managers',
+  maintainer: 'CR-Maintainers',
 };
 
 /**
@@ -48,5 +57,22 @@ export function resolveCapabilities(userGroups, config = permissions) {
     .map(([slug]) => slug);
   const isResponsibleParty = userGroups.includes(config.responsibleParty);
   const isReviewerManager = userGroups.includes(config.reviewerManager);
-  return { isReviewer, ownedCaseTypes, isResponsibleParty, isReviewerManager };
+  const isResponsiblePartyManager = userGroups.includes(config.responsiblePartyManager);
+  const isMaintainer = userGroups.includes(config.maintainer);
+  const isVisitor =
+    !isReviewer &&
+    !isReviewerManager &&
+    !isResponsiblePartyManager &&
+    !isMaintainer &&
+    !isResponsibleParty &&
+    ownedCaseTypes.length === 0;
+  return {
+    isReviewer,
+    ownedCaseTypes,
+    isResponsibleParty,
+    isReviewerManager,
+    isResponsiblePartyManager,
+    isMaintainer,
+    isVisitor,
+  };
 }

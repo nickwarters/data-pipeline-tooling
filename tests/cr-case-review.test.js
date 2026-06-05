@@ -166,7 +166,7 @@ test('CRCaseReview: a Section that resolves to hidden produces a hidden tab (RP:
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
   el.currentUserId = 'u1';
-  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false };
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
   await el.connectedCallback();
 
   assert.equal(tabFor(el, 'notes').hidden, true, 'Notes is hidden for the Responsible Party');
@@ -375,7 +375,7 @@ test('CRCaseReview: connectedCallback handles access denied', async () => {
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
   el.currentUserId = 'u1';
-  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false };
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
   
   await el.connectedCallback();
   
@@ -447,7 +447,7 @@ test('CRCaseReview: remediation and conversation can be hidden', async () => {
   // but those are hardcoded in resolveRoles.
   
   // Instead, I can test if sections are hidden for an RP (Notes should be hidden).
-  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false };
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
   const rpRow = { ...BASE_ROW, responsibleParty: 'u1', assignedReviewer: 'other' };
   (/** @type {any} */ (el.client)).getCase = async () => rpRow;
   
@@ -520,7 +520,7 @@ test('CRCaseReview: cr-answer is ignored when questions access is read-only (RP 
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
   el.currentUserId = 'user-rp';
-  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false };
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
   await el.connectedCallback();
 
   // For RP, access.questions = 'read-only', so the cr-answer handler must early-return.
@@ -551,7 +551,7 @@ test('CRCaseReview: complete button stays hidden for a Completed case even when 
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
   el.currentUserId = 'u1';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
   await el.connectedCallback();
 
   const completeBtn = completeBtnOf(el);
@@ -1190,7 +1190,7 @@ test('CRCaseReview: non-assigned viewer cannot attribute (read-only)', async () 
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
   el.currentUserId = 'user-rp';
-  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false };
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
   await el.connectedCallback();
 
   const remediation = remediationOf(el);
