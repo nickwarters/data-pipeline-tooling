@@ -88,7 +88,254 @@ function makeClient({ caseRow = BASE_ROW, patchOk = true, resolveUsers } = {}) {
   };
 }
 
+// ===== STRUCTURAL ACCESSORS =====
+// The tabbed layout (ADR-0014) renders persistent chrome as direct children and
+// the five Section panels inside a cr-tabs primitive. These accessors locate
+// elements by role/panel id rather than raw child index so the assertions
+// survive incidental layout shuffling.
+const bannerOf = (/** @type {any} */ el) => el._children[0];
+const headerOf = (/** @type {any} */ el) => el._children[1];
+const tabsOf = (/** @type {any} */ el) => el._children[2];
+const conversationOf = (/** @type {any} */ el) => el._children[3];
+const completeBtnOf = (/** @type {any} */ el) => el._children[4];
+const panelOf = (/** @type {any} */ el, /** @type {string} */ id) => tabsOf(el).panels[id];
+const tabFor = (/** @type {any} */ el, /** @type {string} */ id) =>
+  tabsOf(el).tabs.find((/** @type {any} */ t) => t.id === id);
+const questionSectionOf = (/** @type {any} */ el) => panelOf(el, 'questions');
+const remediationOf = (/** @type {any} */ el) => panelOf(el, 'remediation');
+const outcomeOf = (/** @type {any} */ el) => panelOf(el, 'outcome');
+const notesOf = (/** @type {any} */ el) => panelOf(el, 'notes');
+const detailsOf = (/** @type {any} */ el) => panelOf(el, 'details');
+
 // ===== TESTS =====
+
+// ===== TABBED LAYOUT (ADR-0014, #106) =====
+
+test('CRCaseReview: renders a cr-tabs with Details · Questions · Remediation · Outcome · Notes in order', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  const tabs = tabsOf(el).tabs;
+  assert.deepEqual(
+    tabs.map((/** @type {any} */ t) => t.id),
+    ['details', 'questions', 'remediation', 'outcome', 'notes'],
+    'tab order follows Section order with Details first'
+  );
+  assert.deepEqual(
+    tabs.map((/** @type {any} */ t) => t.label),
+    ['Details', 'Questions', 'Remediation', 'Outcome', 'Notes']
+  );
+  // For the Assigned Reviewer on an In-progress case every Section is visible.
+  assert.ok(tabs.every((/** @type {any} */ t) => !t.hidden), 'no Section is hidden for the assigned reviewer');
+});
+
+test('CRCaseReview: each tab panel carries the matching Section content node', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  // The Questions panel is the <section> that holds qList + section-progress and
+  // owns the cr-answer listener; the others are their respective custom elements.
+  assert.ok(Array.isArray(questionSectionOf(el)._listeners['cr-answer']), 'questions panel owns the cr-answer listener');
+  assert.equal(detailsOf(el).caseRow, BASE_ROW, 'details panel receives the Case row');
+  assert.ok(remediationOf(el), 'remediation panel present');
+  assert.ok(outcomeOf(el), 'outcome panel present');
+  assert.ok(notesOf(el), 'notes panel present');
+});
+
+test('CRCaseReview: default selected tab is Details', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  assert.equal(tabsOf(el).selected, 'details', 'Details is the default tab');
+});
+
+test('CRCaseReview: a Section that resolves to hidden produces a hidden tab (RP: Notes + Outcome while In-progress)', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient({
+    caseRow: { ...BASE_ROW, responsibleParty: 'u1', assignedReviewer: 'other' },
+  }));
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  el.currentUserId = 'u1';
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false };
+  await el.connectedCallback();
+
+  assert.equal(tabFor(el, 'notes').hidden, true, 'Notes is hidden for the Responsible Party');
+  assert.equal(tabFor(el, 'outcome').hidden, true, 'Outcome is hidden for the RP on an In-progress case');
+  assert.equal(tabFor(el, 'details').hidden, false, 'Details stays visible');
+  assert.equal(tabFor(el, 'questions').hidden, false, 'Questions stays visible (read-only)');
+  assert.equal(tabFor(el, 'remediation').hidden, false, 'Remediation stays visible (read-only)');
+});
+
+test('CRCaseReview: default tab falls back to the first visible Section when Details is absent', () => {
+  const el = new CRCaseReview();
+  const fakeClient = makeClient();
+  const fakeSaveQueue = new SaveQueue(/** @type {any} */ (fakeClient));
+  fakeSaveQueue.loadCase(BASE_ROW);
+  el.subscribe = (/** @type {any} */ _sig, /** @type {any} */ _cb) => {};
+
+  el._buildLayout({
+    caseRow: BASE_ROW,
+    catalogue: [],
+    computeOutcome: () => ({ verdict: 'pass' }),
+    client: /** @type {any} */ (fakeClient),
+    saveQueue: /** @type {any} */ (fakeSaveQueue),
+    answersSignal: /** @type {any} */ ({ get: () => ({}), set: () => {} }),
+    applicableQuestions: /** @type {any} */ ({ get: () => [] }),
+    allAnswered: /** @type {any} */ ({ get: () => false }),
+    currentUser: { id: 'u1', displayName: 'User 1' },
+    access: /** @type {any} */ ({
+      details: 'hidden',
+      questions: 'edit',
+      conversation: 'edit',
+      notes: 'edit',
+      remediation: 'edit',
+      outcome: 'edit',
+    }),
+  });
+
+  assert.equal(tabFor(el, 'details').hidden, true, 'no Details tab when the Case Type omits it');
+  assert.equal(tabsOf(el).selected, 'questions', 'falls back to the first visible tab in Section order');
+});
+
+/**
+ * Drive _buildLayout directly with an arbitrary access matrix so the Section→tab
+ * mapping can be exercised for combinations no fixed role produces.
+ * @param {CRCaseReview} el
+ * @param {Record<string, string>} access
+ */
+function buildLayoutWith(el, access) {
+  const fakeClient = makeClient();
+  const fakeSaveQueue = new SaveQueue(/** @type {any} */ (fakeClient));
+  fakeSaveQueue.loadCase(BASE_ROW);
+  el.subscribe = (/** @type {any} */ _sig, /** @type {any} */ _cb) => {};
+  el._buildLayout({
+    caseRow: BASE_ROW,
+    catalogue: [],
+    computeOutcome: () => /** @type {any} */ ({ verdict: 'pass' }),
+    client: /** @type {any} */ (fakeClient),
+    saveQueue: /** @type {any} */ (fakeSaveQueue),
+    answersSignal: /** @type {any} */ ({ get: () => ({}), set: () => {} }),
+    applicableQuestions: /** @type {any} */ ({ get: () => [] }),
+    allAnswered: /** @type {any} */ ({ get: () => false }),
+    currentUser: { id: 'u1', displayName: 'User 1' },
+    access: /** @type {any} */ (access),
+  });
+}
+
+test('CRCaseReview: a hidden Questions or Remediation Section renders no tab', () => {
+  const el = new CRCaseReview();
+  buildLayoutWith(el, {
+    details: 'edit', questions: 'hidden', conversation: 'edit',
+    notes: 'edit', remediation: 'hidden', outcome: 'edit',
+  });
+  assert.equal(tabFor(el, 'questions').hidden, true, 'no Questions tab when that Section is hidden');
+  assert.equal(tabFor(el, 'remediation').hidden, true, 'no Remediation tab when that Section is hidden');
+  assert.equal(tabsOf(el).selected, 'details', 'Details remains the default among the visible tabs');
+});
+
+test('CRCaseReview: when every tab-bearing Section is hidden, no tab is selected', () => {
+  const el = new CRCaseReview();
+  // Conversation stays visible so this is not the all-Sections-hidden short-circuit,
+  // yet none of the five tab-bearing Sections is visible — selection resolves to none.
+  buildLayoutWith(el, {
+    details: 'hidden', questions: 'hidden', conversation: 'edit',
+    notes: 'hidden', remediation: 'hidden', outcome: 'hidden',
+  });
+  assert.equal(tabsOf(el).selected, '', 'no tab is selected when no tab-bearing Section is visible');
+  assert.equal((/** @type {any} */ (el))._activeTab.get(), '', 'the in-component active-tab signal is empty');
+});
+
+test('CRCaseReview: active tab is in-component state updated on cr-tab-change, never the URL', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  (/** @type {any} */ (globalThis)).location.hash = '';
+  await el.connectedCallback();
+
+  assert.equal((/** @type {any} */ (el))._activeTab.get(), 'details', 'starts on the default tab');
+
+  tabsOf(el)._listeners['cr-tab-change'][0]({ detail: { id: 'notes' } });
+
+  assert.equal((/** @type {any} */ (el))._activeTab.get(), 'notes', 'cr-tab-change updates the in-component signal');
+  assert.equal((/** @type {any} */ (globalThis)).location.hash, '', 'switching tabs does not touch the URL');
+});
+
+test('CRCaseReview: switching tabs does not refetch the Case and preserves the live answers signal', async () => {
+  const client = makeClient();
+  let getCaseCalls = 0;
+  client.getCase = async () => { getCaseCalls++; return BASE_ROW; };
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = new SaveQueue(/** @type {any} */ (client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+  assert.equal(getCaseCalls, 1, 'the Case is fetched once on mount');
+
+  // Edit an answer, then switch tabs.
+  const section = questionSectionOf(el);
+  section._listeners['cr-answer'][0]({ detail: { questionId: 'q-welcome', value: 'Yes' } });
+  tabsOf(el)._listeners['cr-tab-change'][0]({ detail: { id: 'outcome' } });
+
+  assert.equal(getCaseCalls, 1, 'switching tabs must not refetch the Case');
+  // The same qList element keeps receiving updates: the answers signal survived.
+  const qList = section._children[1];
+  assert.equal(qList._update[1]['q-welcome'].value, 'Yes', 'the live answer edit is preserved across the tab switch');
+});
+
+test('CRCaseReview: persistent chrome (banner, conversation toggle, complete button) lives outside the tabs', async () => {
+  const client = makeClient();
+  const completableRow = {
+    ...BASE_ROW,
+    answers: {
+      'q-welcome': { value: 'Yes' },
+      'q-needs': { value: 'No' },
+      'q-channel': { value: 'Email' },
+      'q-products': { value: ['Billing'] },
+    },
+  };
+  client.getCase = async () => completableRow;
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = new SaveQueue(/** @type {any} */ (client));
+  el.saveQueue.loadCase(completableRow);
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  // Banner is a direct child, not a panel.
+  assert.ok(bannerOf(el).saveQueue, 'status banner is wired and sits in the persistent chrome');
+  // Conversation toggle lives in the header (direct child), reachable from any tab.
+  const toggleBtn = headerOf(el)._children.find(
+    (/** @type {any} */ c) => c.className === 'cr-conversation-toggle-btn'
+  );
+  assert.ok(toggleBtn, 'conversation toggle is in the header, outside the tabs');
+  // Complete button is a direct child too.
+  assert.equal(completeBtnOf(el).className, 'cr-complete-btn');
+  assert.equal(completeBtnOf(el).hidden, false, 'complete button is reachable (visible) for a completable case');
+});
+
+test('CRCaseReview: Conversation is a floating overlay (direct child), not a tab panel', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  const tabIds = tabsOf(el).tabs.map((/** @type {any} */ t) => t.id);
+  assert.ok(!tabIds.includes('conversation'), 'Conversation is never a tab');
+  assert.equal(conversationOf(el).caseId, 'c1', 'Conversation is a direct child overlay');
+  assert.equal(tabsOf(el).panels.conversation, undefined, 'Conversation has no tab panel');
+});
 
 test('CRCaseReview: constructor initializes with nulls/empty', () => {
   const el = new CRCaseReview();
@@ -206,9 +453,8 @@ test('CRCaseReview: remediation and conversation can be hidden', async () => {
   
   await el.connectedCallback();
   
-  // children index 7 is Notes
-  const notesEl = (/** @type {any} */ (el))._children[6];
-  assert.equal(notesEl.hidden, true, 'Notes should be hidden for RP');
+  // A Section that resolves to hidden renders no tab (ADR-0014).
+  assert.equal(tabFor(el, 'notes').hidden, true, 'Notes should be hidden for RP');
 });
 
 test('CRCaseReview: cr-answer handles unmapped question', async () => {
@@ -224,7 +470,7 @@ test('CRCaseReview: cr-answer handles unmapped question', async () => {
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const section = (/** @type {any} */ (el))._children[2];
+  const section = questionSectionOf(el);
   // Dispatch answer for an ID not in the catalogue
   section._listeners['cr-answer'][0]({ detail: { questionId: 'unknown', value: 'Yes' } });
   
@@ -245,7 +491,7 @@ test('CRCaseReview: cr-answer clears answers for questions that become non-appli
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const section = (/** @type {any} */ (el))._children[2];
+  const section = questionSectionOf(el);
   const handler = section._listeners['cr-answer'][0];
   
   // 1. q-needs = Yes (triggers q-resolve)
@@ -278,7 +524,7 @@ test('CRCaseReview: cr-answer is ignored when questions access is read-only (RP 
   await el.connectedCallback();
 
   // For RP, access.questions = 'read-only', so the cr-answer handler must early-return.
-  const section = (/** @type {any} */ (el))._children[2];
+  const section = questionSectionOf(el);
   section._listeners['cr-answer'][0]({ detail: { questionId: 'q-welcome', value: 'Yes' } });
 
   assert.equal(enqueued.length, 0, 'cr-answer must not enqueue when questions access is read-only');
@@ -308,7 +554,7 @@ test('CRCaseReview: complete button stays hidden for a Completed case even when 
   el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false };
   await el.connectedCallback();
 
-  const completeBtn = (/** @type {any} */ (el))._children[7];
+  const completeBtn = completeBtnOf(el);
   assert.equal(completeBtn.hidden, true, 'Complete button must be hidden for a Completed case');
 });
 
@@ -333,7 +579,7 @@ test('CRCaseReview: complete button click is no-op when button is already disabl
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const completeBtn = (/** @type {any} */ (el))._children[7];
+  const completeBtn = completeBtnOf(el);
   completeBtn.disabled = true; // pre-disable
 
   let completeCalled = false;
@@ -365,7 +611,7 @@ test('CRCaseReview: complete button click invokes _completeCase', async () => {
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const completeBtn = (/** @type {any} */ (el))._children[7];
+  const completeBtn = completeBtnOf(el);
   assert.equal(completeBtn.hidden, false, 'Complete button should be visible');
   
   let completeCalled = false;
@@ -384,7 +630,7 @@ test('CRCaseReview: cr-section-progress is mounted inside the question section',
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const section = (/** @type {any} */ (el))._children[2];
+  const section = questionSectionOf(el);
   // section._children: [h2, qList, cr-section-progress]
   const progressEl = section._children[2];
   assert.ok(progressEl, 'cr-section-progress should be mounted inside the question section');
@@ -398,7 +644,7 @@ test('CRCaseReview: cr-section-progress.update is called with section data on in
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const section = (/** @type {any} */ (el))._children[2];
+  const section = questionSectionOf(el);
   const progressEl = section._children[2];
 
   /** @type {any[]} */
@@ -424,7 +670,7 @@ test('CRCaseReview: cr-section-progress.update answered count increases after cr
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const section = (/** @type {any} */ (el))._children[2];
+  const section = questionSectionOf(el);
   const progressEl = section._children[2];
 
   /** @type {any[][]} */
@@ -447,7 +693,7 @@ test('CRCaseReview: cr-section-progress receives unanswered applicable questions
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const section = (/** @type {any} */ (el))._children[2];
+  const section = questionSectionOf(el);
   const progressEl = section._children[2];
 
   /** @type {any[][]} */
@@ -468,7 +714,7 @@ test('CRCaseReview: cr-section-jump event on section scrolls first question of t
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const section = (/** @type {any} */ (el))._children[2];
+  const section = questionSectionOf(el);
   // Check the event listener is registered for cr-section-jump
   assert.ok(
     Array.isArray(section._listeners['cr-section-jump']) && section._listeners['cr-section-jump'].length > 0,
@@ -487,7 +733,7 @@ test('CRCaseReview: cr-jump-unanswered event scrolls to first unanswered applica
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const section = (/** @type {any} */ (el))._children[2];
+  const section = questionSectionOf(el);
   assert.ok(
     Array.isArray(section._listeners['cr-jump-unanswered']) && section._listeners['cr-jump-unanswered'].length > 0,
     'section should have a cr-jump-unanswered listener'
@@ -506,7 +752,7 @@ test('CRCaseReview: conversation panel starts hidden by default', async () => {
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const conversationEl = (/** @type {any} */ (el))._children[5];
+  const conversationEl = conversationOf(el);
   assert.equal(conversationEl.hidden, true, 'conversation panel must start hidden');
 });
 
@@ -517,14 +763,13 @@ test('CRCaseReview: layout includes a cr-case-details element with the Case row 
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  // Case Details is appended last so existing child indices stay stable.
-  const detailsEl = (/** @type {any} */ (el))._children[8];
+  const detailsEl = detailsOf(el);
   assert.equal(detailsEl.caseRow, BASE_ROW, 'details element receives the Case row');
   assert.equal(detailsEl.access, 'read-only', 'details is read-only for the assigned reviewer');
-  assert.notEqual(detailsEl.hidden, true, 'details must not be hidden when the Case Type allows it');
+  assert.equal(tabFor(el, 'details').hidden, false, 'details tab is shown when the Case Type allows it');
 });
 
-test('CRCaseReview: _buildLayout hides cr-case-details when access.details is hidden', () => {
+test('CRCaseReview: _buildLayout renders no Details tab when access.details is hidden', () => {
   const el = new CRCaseReview();
   const fakeClient = makeClient();
   const fakeSaveQueue = new SaveQueue(/** @type {any} */ (fakeClient));
@@ -555,8 +800,7 @@ test('CRCaseReview: _buildLayout hides cr-case-details when access.details is hi
     }),
   });
 
-  const detailsEl = (/** @type {any} */ (el))._children[8];
-  assert.equal(detailsEl.hidden, true, 'details must be hidden when access.details is hidden');
+  assert.equal(tabFor(el, 'details').hidden, true, 'no Details tab when access.details is hidden');
 });
 
 test('CRCaseReview: toggle button is in the header when conversation access is not hidden', async () => {
@@ -566,7 +810,7 @@ test('CRCaseReview: toggle button is in the header when conversation access is n
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const header = (/** @type {any} */ (el))._children[1];
+  const header = headerOf(el);
   const toggleBtn = (/** @type {any} */ (header))._children.find(
     (/** @type {any} */ c) => c.className === 'cr-conversation-toggle-btn'
   );
@@ -581,8 +825,8 @@ test('CRCaseReview: toggle button click shows then hides conversation', async ()
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const conversationEl = (/** @type {any} */ (el))._children[5];
-  const header = (/** @type {any} */ (el))._children[1];
+  const conversationEl = conversationOf(el);
+  const header = headerOf(el);
   const toggleBtn = (/** @type {any} */ (header))._children.find(
     (/** @type {any} */ c) => c.className === 'cr-conversation-toggle-btn'
   );
@@ -625,7 +869,7 @@ test('CRCaseReview: Alt+C via _handleKeydown opens then closes the panel', async
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const conversationEl = (/** @type {any} */ (el))._children[5];
+  const conversationEl = conversationOf(el);
   assert.equal(conversationEl.hidden, true);
 
   el._handleKeydown(/** @type {any} */ ({ altKey: true, code: 'KeyC' }));
@@ -642,7 +886,7 @@ test('CRCaseReview: _handleKeydown ignores keys that are not Alt+C', async () =>
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const conversationEl = (/** @type {any} */ (el))._children[5];
+  const conversationEl = conversationOf(el);
   el._handleKeydown(/** @type {any} */ ({ altKey: false, code: 'KeyC' }));
   assert.equal(conversationEl.hidden, true, 'bare C must not toggle');
   el._handleKeydown(/** @type {any} */ ({ altKey: true, code: 'KeyK' }));
@@ -737,7 +981,7 @@ test('CRCaseReview: _buildLayout with access.conversation=hidden omits toggle bu
   });
 
   // No toggle button should appear in the header
-  const header = (/** @type {any} */ (el))._children[1];
+  const header = headerOf(el);
   const toggleBtn = (/** @type {any} */ (header))._children.find(
     (/** @type {any} */ c) => c.className === 'cr-conversation-toggle-btn'
   );
@@ -753,7 +997,7 @@ test('CRCaseReview: cr-jump-unanswered handler calls scrollIntoView on first una
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const section = (/** @type {any} */ (el))._children[2];
+  const section = questionSectionOf(el);
   // section._children: [h2, qList, cr-section-progress]
   const qList = section._children[1];
 
@@ -800,7 +1044,7 @@ test('CRCaseReview: Assigned Reviewer can set an Attributed Party, persisting vi
   el.currentUserId = 'u1';
   await el.connectedCallback();
 
-  const remediation = (/** @type {any} */ (el))._children[3];
+  const remediation = remediationOf(el);
   assert.equal(remediation.canAttribute, true, 'Assigned Reviewer on In-progress case may attribute');
   assert.equal(remediation.client, client, 'client is handed to the section for the picker');
 
@@ -825,7 +1069,7 @@ test("CRCaseReview: forwards the Case's Responsible Party to the remediation sec
   el.currentUserId = 'u1';
   await el.connectedCallback();
 
-  const remediation = (/** @type {any} */ (el))._children[3];
+  const remediation = remediationOf(el);
   assert.deepEqual(
     remediation.responsibleParty,
     { loginName: 'rparty', displayName: 'rparty' },
@@ -845,7 +1089,7 @@ test('CRCaseReview: forwards a null Responsible Party when the Case has none', a
   el.currentUserId = 'u1';
   await el.connectedCallback();
 
-  const remediation = (/** @type {any} */ (el))._children[3];
+  const remediation = remediationOf(el);
   assert.equal(remediation.responsibleParty, null);
 });
 
@@ -868,7 +1112,7 @@ test('CRCaseReview: clearing an Attributed Party strips it from the Answer and p
   el.currentUserId = 'u1';
   await el.connectedCallback();
 
-  const remediation = (/** @type {any} */ (el))._children[3];
+  const remediation = remediationOf(el);
   remediation._listeners['cr-attribute'][0]({ detail: { questionId: 'q-needs', attributedParty: null } });
 
   assert.equal(enqueued.length, 1);
@@ -890,7 +1134,7 @@ test('CRCaseReview: cr-attribute is ignored when the referenced Answer is missin
   el.currentUserId = 'u1';
   await el.connectedCallback();
 
-  const remediation = (/** @type {any} */ (el))._children[3];
+  const remediation = remediationOf(el);
   remediation._listeners['cr-attribute'][0]({
     detail: { questionId: 'q-nonexistent', attributedParty: { loginName: 'x', displayName: 'X' } },
   });
@@ -919,7 +1163,7 @@ test('CRCaseReview: attribution is frozen (read-only) on a Completed case', asyn
   el.currentUserId = 'u1';
   await el.connectedCallback();
 
-  const remediation = (/** @type {any} */ (el))._children[3];
+  const remediation = remediationOf(el);
   assert.equal(remediation.canAttribute, false, 'Completed case freezes attribution');
 
   remediation._listeners['cr-attribute'][0]({
@@ -949,7 +1193,7 @@ test('CRCaseReview: non-assigned viewer cannot attribute (read-only)', async () 
   el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false };
   await el.connectedCallback();
 
-  const remediation = (/** @type {any} */ (el))._children[3];
+  const remediation = remediationOf(el);
   assert.equal(remediation.canAttribute, false, 'Responsible Party cannot attribute');
 
   remediation._listeners['cr-attribute'][0]({
@@ -982,7 +1226,7 @@ test('CRCaseReview: resolves stored Attributed Party names to authoritative disp
   await el.connectedCallback();
 
   assert.deepEqual(askedFor, ['jsmith'], 'collects the unique attributed-party accounts');
-  const remediation = (/** @type {any} */ (el))._children[3];
+  const remediation = remediationOf(el);
   assert.equal(
     remediation._update[1]['q-needs'].attributedParty.displayName,
     'Jane Smith',
@@ -1036,7 +1280,7 @@ test('CRCaseReview: keeps the cached Attributed Party name when resolution retur
   el.currentUserId = 'u1';
   await el.connectedCallback();
 
-  const remediation = (/** @type {any} */ (el))._children[3];
+  const remediation = remediationOf(el);
   assert.equal(
     remediation._update[1]['q-needs'].attributedParty.displayName,
     'Cached Ghost',

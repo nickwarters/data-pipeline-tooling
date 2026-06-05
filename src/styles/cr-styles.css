@@ -1073,7 +1073,10 @@ cr-tabs {
   border-bottom: 1px solid var(--cr-color-border);
 }
 
-.cr-tabs-tab {
+/* Scoped under [data-cr-root] so these win over the global `[data-cr-root]
+   button` reset (0,1,1), which would otherwise paint each tab as a solid accent
+   pill — and render the selected tab's accent text on an accent fill. */
+[data-cr-root] .cr-tabs-tab {
   appearance: none;
   border: none;
   background: transparent;
@@ -1087,25 +1090,29 @@ cr-tabs {
   color: var(--cr-color-text-muted);
   cursor: pointer;
   border-bottom: 2px solid transparent;
+  border-radius: 0;
   margin-bottom: -1px;
   transition:
     color var(--cr-duration-fast) var(--cr-easing-standard),
     border-color var(--cr-duration-fast) var(--cr-easing-standard);
 }
 
-.cr-tabs-tab:hover {
+[data-cr-root] .cr-tabs-tab:hover {
   color: var(--cr-color-on-surface);
+  background: transparent;
+  border-color: transparent;
 }
 
-.cr-tabs-tab[aria-selected="true"] {
+[data-cr-root] .cr-tabs-tab[aria-selected="true"] {
   color: var(--cr-color-accent);
   border-bottom-color: var(--cr-color-accent);
 }
 
-.cr-tabs-tab:focus-visible {
+[data-cr-root] .cr-tabs-tab:focus-visible {
   outline: var(--cr-focus-outline);
   outline-offset: calc(-1 * var(--cr-focus-offset));
   border-radius: var(--cr-radius-sm);
+  box-shadow: none;
 }
 
 .cr-tabs-panel {

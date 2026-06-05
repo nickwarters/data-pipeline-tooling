@@ -12,6 +12,7 @@ import '../components/cr-conversation.js';
 import '../components/cr-notes.js';
 import '../components/cr-outcome.js';
 import '../components/cr-status-banner.js';
+import '../components/cr-tabs.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
@@ -42,6 +43,13 @@ export class CRCaseReview extends CRElement {
     this._conversationEl = null;
     /** @type {HTMLElement | null} */
     this._conversationToggleBtn = null;
+    /**
+     * The active tab id, held in component state rather than the URL (ADR-0014):
+     * ADR-0002's router remounts the route on hashchange, which would refetch the
+     * Case and discard the in-memory answers signal plus any un-flushed auto-save.
+     * @type {{ get: () => string, set: (v: string) => void } | null}
+     */
+    this._activeTab = null;
   }
 
   disconnectedCallback() {
@@ -374,34 +382,63 @@ export class CRCaseReview extends CRElement {
     notesEl.caseId = caseRow.id;
     notesEl.access = access.notes;
 
-    // Case Details Section (ADR-0014, #105). Placeholder content this slice;
-    // appended after the existing blocks so the scrolling layout's stable child
-    // indices are preserved until the tab conversion lands.
+    // Case Details Section (ADR-0014, #105). Placeholder content this slice.
     const detailsEl = /** @type {import('../components/cr-case-details.js').CRCaseDetails} */ (
       document.createElement('cr-case-details')
     );
     detailsEl.caseRow = caseRow;
     detailsEl.access = access.details;
 
+    // Each visible Section becomes a tab (ADR-0014); a Section that resolves to
+    // `hidden` (ADR-0011) renders no tab. Conversation is deliberately NOT a tab —
+    // it stays a floating overlay so a Reviewer can read it alongside the
+    // Questions. Tab order is the Section order with Details first.
+    /** @type {import('../components/cr-tabs.js').Tab[]} */
+    const tabs = [
+      { id: 'details', label: 'Details', hidden: access.details === 'hidden' },
+      { id: 'questions', label: 'Questions', hidden: access.questions === 'hidden' },
+      { id: 'remediation', label: 'Remediation', hidden: access.remediation === 'hidden' },
+      { id: 'outcome', label: 'Outcome', hidden: access.outcome === 'hidden' },
+      { id: 'notes', label: 'Notes', hidden: access.notes === 'hidden' },
+    ];
+    /** @type {Record<string, Node>} */
+    const panels = {
+      details: /** @type {any} */ (detailsEl),
+      questions: section,
+      remediation: /** @type {any} */ (remediationSection),
+      outcome: /** @type {any} */ (outcomeEl),
+      notes: /** @type {any} */ (notesEl),
+    };
+
+    // Default tab is Details; because Details leads the array, the first visible
+    // tab is Details when present and otherwise the next visible Section in order
+    // (the fallback). The all-Sections-hidden short-circuit upstream guarantees
+    // at least one tab-bearing Section is visible here in practice.
+    const firstVisible = tabs.find(t => !t.hidden);
+    const activeTab = signal(firstVisible ? firstVisible.id : '');
+    this._activeTab = activeTab;
+
+    const tabsEl = /** @type {import('../components/cr-tabs.js').CRTabs} */ (
+      document.createElement('cr-tabs')
+    );
+    tabsEl.tabs = tabs;
+    tabsEl.panels = panels;
+    tabsEl.selected = activeTab.get();
+    tabsEl.addEventListener('cr-tab-change', (ev) => {
+      const { id } = /** @type {CustomEvent<{ id: string }>} */ (ev).detail;
+      activeTab.set(id);
+    });
+
+    // Persistent chrome (banner, Conversation overlay + its header toggle, and the
+    // Complete Case button) lives OUTSIDE the tabs so it is reachable from any tab.
     /** @type {HTMLElement[]} */
     const children = [
       /** @type {HTMLElement} */ (/** @type {unknown} */ (bannerEl)),
       header,
-      section,
-      /** @type {HTMLElement} */ (/** @type {unknown} */ (remediationSection)),
-      /** @type {HTMLElement} */ (/** @type {unknown} */ (outcomeEl)),
+      /** @type {HTMLElement} */ (/** @type {unknown} */ (tabsEl)),
       /** @type {HTMLElement} */ (/** @type {unknown} */ (conversationEl)),
-      /** @type {HTMLElement} */ (/** @type {unknown} */ (notesEl)),
       completeBtn,
-      /** @type {HTMLElement} */ (/** @type {unknown} */ (detailsEl)),
     ];
-    // Hide rather than unmount so existing layout indices stay stable and so
-    // tests can still inspect properties on the hidden elements.
-    if (access.questions === 'hidden') section.hidden = true;
-    if (access.remediation === 'hidden') /** @type {any} */ (remediationSection).hidden = true;
-    if (access.outcome === 'hidden') /** @type {any} */ (outcomeEl).hidden = true;
-    if (access.notes === 'hidden') /** @type {any} */ (notesEl).hidden = true;
-    if (access.details === 'hidden') /** @type {any} */ (detailsEl).hidden = true;
 
     this.replaceChildren(...children);
   }

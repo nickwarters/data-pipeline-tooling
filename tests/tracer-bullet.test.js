@@ -87,6 +87,20 @@ const caseCompletable = cases[2]; // case-3: all applicable questions answered
 /** @type {QuestionDefinition[]} */
 const CATALOGUE = questionDefinitions; // q-welcome, q-needs, q-resolve(conditional)
 
+// ===== TABBED-LAYOUT ACCESSORS (ADR-0014) =====
+// Persistent chrome is rendered as direct children: banner(0), header(1),
+// cr-tabs(2), conversation overlay(3), complete button(4). The five Section
+// panels hang off cr-tabs via its `panels` map; locate them by id rather than
+// by raw index.
+const tabsOf = (/** @type {any} */ el) => el._children[2];
+const conversationOf = (/** @type {any} */ el) => el._children[3];
+const completeBtnOf = (/** @type {any} */ el) => el._children[4];
+const panelOf = (/** @type {any} */ el, /** @type {string} */ id) => tabsOf(el).panels[id];
+const questionSectionOf = (/** @type {any} */ el) => panelOf(el, 'questions');
+const remediationOf = (/** @type {any} */ el) => panelOf(el, 'remediation');
+const outcomeOf = (/** @type {any} */ el) => panelOf(el, 'outcome');
+const notesOf = (/** @type {any} */ el) => panelOf(el, 'notes');
+
 // Minimal client stub for component tests
 /**
  * @param {{ patchReturn?: import('../src/sharepoint-client.js').PatchResult, getRow?: CaseRow }} [opts]
@@ -317,8 +331,7 @@ test('CRCaseReview: complete button is hidden when not all applicable questions 
 
   await el.connectedCallback();
 
-  // children: bannerEl(0), header(1), section(2), remediationSection(3), outcomeEl(4), conversationEl(5), notesEl(6), completeBtn(7)
-  const completeBtn = (/** @type {any} */ (el))._children[7];
+  const completeBtn = completeBtnOf(el);
   assert.equal(completeBtn.hidden, true);
 });
 
@@ -333,8 +346,7 @@ test('CRCaseReview: complete button is visible when all applicable questions ans
 
   await el.connectedCallback();
 
-  // children: bannerEl(0), header(1), section(2), remediationSection(3), outcomeEl(4), conversationEl(5), notesEl(6), completeBtn(7)
-  const completeBtn = (/** @type {any} */ (el))._children[7];
+  const completeBtn = completeBtnOf(el);
   assert.equal(completeBtn.hidden, false);
 });
 
@@ -378,7 +390,7 @@ test('CRCaseReview: cr-answer with failing value materializes remediationActions
   await el.connectedCallback();
 
   // Find the section element and dispatch a cr-answer for q-needs = No (a failure with remediationActions)
-  const section = (/** @type {any} */ (el))._children[2];
+  const section = questionSectionOf(el);
   const handler = section._listeners['cr-answer'][0];
   handler({ detail: { questionId: 'q-needs', value: 'No' } });
 
@@ -418,7 +430,7 @@ test('CRCaseReview: changing a failed Answer to a passing value strips remediati
   el.caseId = failed.id;
   await el.connectedCallback();
 
-  const section = (/** @type {any} */ (el))._children[2];
+  const section = questionSectionOf(el);
   section._listeners['cr-answer'][0]({ detail: { questionId: 'q-needs', value: 'Yes' } });
 
   assert.equal(enqueued.length, 1);
@@ -445,7 +457,7 @@ test('CRCaseReview: hiding a conditional question clears its previous Answer', a
   el.caseId = caseUntouched.id;
   await el.connectedCallback();
 
-  const section = (/** @type {any} */ (el))._children[2];
+  const section = questionSectionOf(el);
   const handler = section._listeners['cr-answer'][0];
 
   // 1. q-needs = Yes → q-resolve becomes applicable
@@ -479,7 +491,7 @@ test('CRCaseReview: re-showing a conditional question after hide reveals it blan
   el.caseId = caseUntouched.id;
   await el.connectedCallback();
 
-  const section = (/** @type {any} */ (el))._children[2];
+  const section = questionSectionOf(el);
   const handler = section._listeners['cr-answer'][0];
 
   handler({ detail: { questionId: 'q-needs', value: 'Yes' } });
@@ -502,8 +514,7 @@ test('CRCaseReview: layout includes a cr-remediation-section', async () => {
   el.caseId = caseUntouched.id;
   await el.connectedCallback();
 
-  // children: bannerEl(0), header(1), section(2), remediationSection(3), outcomeEl(4), conversationEl(5), notesEl(6), completeBtn(7)
-  const remediationSection = (/** @type {any} */ (el))._children[3];
+  const remediationSection = remediationOf(el);
   assert.ok(remediationSection, 'remediation section should exist');
   // The stub's update method should have been called with catalogue + answers
   assert.ok(remediationSection._updateArgs, 'update() should have been called on remediation section');
@@ -519,8 +530,7 @@ test('CRCaseReview: layout includes a cr-conversation element with case messages
   el.caseId = cases[1].id;
   await el.connectedCallback();
 
-  // children: bannerEl(0), header(1), section(2), remediationSection(3), outcomeEl(4), conversationEl(5), notesEl(6), completeBtn(7)
-  const conversationEl = (/** @type {any} */ (el))._children[5];
+  const conversationEl = conversationOf(el);
   assert.ok(conversationEl, 'conversation element should exist');
   assert.ok(Array.isArray(conversationEl._messages), '_messages should be set');
   assert.equal(conversationEl._messages.length, 2);
@@ -536,8 +546,7 @@ test('CRCaseReview: layout includes a cr-notes element with case notes value', a
   el.caseId = cases[2].id;
   await el.connectedCallback();
 
-  // children: bannerEl(0), header(1), section(2), remediationSection(3), outcomeEl(4), conversationEl(5), notesEl(6), completeBtn(7)
-  const notesEl = (/** @type {any} */ (el))._children[6];
+  const notesEl = notesOf(el);
   assert.ok(notesEl, 'notes element should exist');
   assert.equal(notesEl.notes, cases[2].notes);
   assert.equal(notesEl.caseId, cases[2].id);
@@ -553,8 +562,7 @@ test('CRCaseReview: layout includes a cr-outcome element updated with computeOut
   el.caseId = caseUntouched.id;
   await el.connectedCallback();
 
-  // children: bannerEl(0), header(1), section(2), remediationSection(3), outcomeEl(4), conversationEl(5), notesEl(6), completeBtn(7)
-  const outcomeEl = (/** @type {any} */ (el))._children[4];
+  const outcomeEl = outcomeOf(el);
   assert.ok(outcomeEl, 'outcome element should exist');
   assert.ok(outcomeEl._updateArgs, 'update() should have been called on outcome element');
   // case-1 has no answers so allAnswered is false
@@ -573,7 +581,7 @@ test('CRCaseReview: outcome element receives allAnswered=true when all applicabl
   await el.connectedCallback();
 
   // case-3 has all applicable questions answered (q-welcome + q-needs + q-channel + q-products)
-  const outcomeEl = (/** @type {any} */ (el))._children[4];
+  const outcomeEl = outcomeOf(el);
   assert.equal(outcomeEl._updateArgs.a3, true, 'allAnswered should be true for completable case');
 });
 
