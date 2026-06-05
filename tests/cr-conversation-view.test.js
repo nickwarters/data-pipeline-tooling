@@ -19,9 +19,12 @@ class StubEl {
     /** @type {string} */
     this._tagName = '';
     // Properties that cr-conversation element needs
+    /** @type {any} */
     this.client = null;
+    /** @type {any} */
     this.saveQueue = null;
     this.caseId = '';
+    /** @type {any} */
     this.currentUser = null;
     /** @type {any} */
     this._updateArg = undefined;
@@ -92,6 +95,17 @@ const BASE_CASE = {
 // ===== HELPERS =====
 
 /**
+ * The view extends HTMLElement, which TS resolves to the real DOM type, but at
+ * runtime HTMLElement is the StubEl above — so the rendered nodes live in the
+ * stub's `_children` array. Read them back through the StubEl type.
+ * @param {InstanceType<typeof CRConversationView>} el
+ * @returns {StubEl[]}
+ */
+function childrenOf(el) {
+  return /** @type {StubEl} */ (/** @type {unknown} */ (el))._children;
+}
+
+/**
  * @param {{ title?: string, id?: string, conversation?: any[] } | null} [caseRow]
  */
 function makeStubClient(caseRow = BASE_CASE) {
@@ -117,7 +131,7 @@ test('CRConversationView: connectedCallback returns early when client is null', 
   el.caseId = 'case-1';
   // client is null
   await el.connectedCallback();
-  assert.deepEqual(el._children, [], 'should not render anything when client is null');
+  assert.deepEqual(childrenOf(el), [], 'should not render anything when client is null');
 });
 
 test('CRConversationView: connectedCallback returns early when caseId is empty', async () => {
@@ -125,7 +139,7 @@ test('CRConversationView: connectedCallback returns early when caseId is empty',
   el.client = /** @type {any} */ (makeStubClient());
   // caseId is ''
   await el.connectedCallback();
-  assert.deepEqual(el._children, [], 'should not render anything when caseId is empty');
+  assert.deepEqual(childrenOf(el), [], 'should not render anything when caseId is empty');
 });
 
 test('CRConversationView: connectedCallback returns early when getCase returns null', async () => {
@@ -133,7 +147,7 @@ test('CRConversationView: connectedCallback returns early when getCase returns n
   el.client = /** @type {any} */ (makeStubClient(null));
   el.caseId = 'case-1';
   await el.connectedCallback();
-  assert.deepEqual(el._children, [], 'should not render anything when getCase returns null');
+  assert.deepEqual(childrenOf(el), [], 'should not render anything when getCase returns null');
 });
 
 test('CRConversationView: connectedCallback renders header at _children[0] and conversationEl at _children[1]', async () => {
@@ -142,9 +156,9 @@ test('CRConversationView: connectedCallback renders header at _children[0] and c
   el.caseId = 'case-1';
   await el.connectedCallback();
 
-  assert.equal(el._children.length, 2, 'should have exactly two top-level children');
-  assert.equal(el._children[0]._tagName, 'header', 'first child should be a header');
-  assert.equal(el._children[1]._tagName, 'cr-conversation', 'second child should be cr-conversation');
+  assert.equal(childrenOf(el).length, 2, 'should have exactly two top-level children');
+  assert.equal(childrenOf(el)[0]._tagName, 'header', 'first child should be a header');
+  assert.equal(childrenOf(el)[1]._tagName, 'cr-conversation', 'second child should be cr-conversation');
 });
 
 test('CRConversationView: header has className cr-conversation-view-header', async () => {
@@ -153,7 +167,7 @@ test('CRConversationView: header has className cr-conversation-view-header', asy
   el.caseId = 'case-1';
   await el.connectedCallback();
 
-  const header = el._children[0];
+  const header = childrenOf(el)[0];
   assert.equal(header.className, 'cr-conversation-view-header');
 });
 
@@ -163,7 +177,7 @@ test('CRConversationView: header children are backBtn then h1', async () => {
   el.caseId = 'case-1';
   await el.connectedCallback();
 
-  const header = el._children[0];
+  const header = childrenOf(el)[0];
   assert.equal(header._children.length, 2, 'header should have two children');
   assert.equal(header._children[0]._tagName, 'button', 'first header child should be button');
   assert.equal(header._children[1]._tagName, 'h1', 'second header child should be h1');
@@ -175,7 +189,7 @@ test('CRConversationView: h1 text uses caseRow.title when present', async () => 
   el.caseId = 'case-1';
   await el.connectedCallback();
 
-  const header = el._children[0];
+  const header = childrenOf(el)[0];
   const h1 = header._children[1];
   assert.equal(h1.textContent, 'My Case Title');
 });
@@ -186,7 +200,7 @@ test('CRConversationView: h1 text falls back to caseRow.id when title is falsy',
   el.caseId = 'case-fallback-id';
   await el.connectedCallback();
 
-  const header = el._children[0];
+  const header = childrenOf(el)[0];
   const h1 = header._children[1];
   assert.equal(h1.textContent, 'case-fallback-id');
 });
@@ -197,7 +211,7 @@ test('CRConversationView: back button has correct className, type, and text', as
   el.caseId = 'case-1';
   await el.connectedCallback();
 
-  const header = el._children[0];
+  const header = childrenOf(el)[0];
   const backBtn = header._children[0];
   assert.equal(backBtn.className, 'cr-back-btn');
   assert.equal(backBtn.type, 'button');
@@ -210,7 +224,7 @@ test('CRConversationView: back button click sets location.hash to #/my-reviews',
   el.caseId = 'case-1';
   await el.connectedCallback();
 
-  const header = el._children[0];
+  const header = childrenOf(el)[0];
   const backBtn = header._children[0];
   // reset hash
   (/** @type {any} */ (globalThis)).location.hash = '';
@@ -228,7 +242,7 @@ test('CRConversationView: cr-conversation element receives client, saveQueue, ca
   el.currentUser = CURRENT_USER;
   await el.connectedCallback();
 
-  const conversationEl = el._children[1];
+  const conversationEl = childrenOf(el)[1];
   assert.equal(conversationEl.client, client, 'client should be set on conversation element');
   assert.equal(conversationEl.saveQueue, saveQueue, 'saveQueue should be set on conversation element');
   assert.equal(conversationEl.caseId, 'case-1', 'caseId should be set on conversation element');
@@ -244,6 +258,6 @@ test('CRConversationView: cr-conversation.update is called with caseRow.conversa
   el.caseId = 'case-1';
   await el.connectedCallback();
 
-  const conversationEl = el._children[1];
+  const conversationEl = childrenOf(el)[1];
   assert.equal(conversationEl._updateArg, conversation, 'update should be called with caseRow.conversation');
 });

@@ -210,7 +210,7 @@ test('CRCaseReview: default tab falls back to the first visible Section when Det
 /**
  * Drive _buildLayout directly with an arbitrary access matrix so the Section→tab
  * mapping can be exercised for combinations no fixed role produces.
- * @param {CRCaseReview} el
+ * @param {import('../src/pages/cr-case-review.js').CRCaseReview} el
  * @param {Record<string, string>} access
  */
 function buildLayoutWith(el, access) {
@@ -964,7 +964,7 @@ test('CRCaseReview: _buildLayout with access.conversation=hidden omits toggle bu
   el._buildLayout({
     caseRow: BASE_ROW,
     catalogue: [],
-    computeOutcome: () => ({ passed: true, findings: [] }),
+    computeOutcome: () => ({ verdict: 'pass' }),
     client: /** @type {any} */ (fakeClient),
     saveQueue: /** @type {any} */ (fakeSaveQueue),
     answersSignal: /** @type {any} */ (answersSignal),
