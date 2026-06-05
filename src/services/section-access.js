@@ -4,7 +4,7 @@
  * Section-level role-based access on the case page. UX-only per ADR-0010;
  * SharePoint list ACLs remain the real boundary. See ADR-0011 for design.
  *
- * @typedef {'questions'|'conversation'|'notes'|'remediation'|'outcome'} Section
+ * @typedef {'details'|'questions'|'conversation'|'notes'|'remediation'|'outcome'} Section
  * @typedef {'assignedReviewer'|'otherReviewer'|'responsibleParty'|'caseTypeOwner'|'none'} Role
  * @typedef {'edit'|'read-only'|'hidden'} Mode
  */
@@ -14,13 +14,20 @@
 /** @typedef {import('./permissions.js').Capabilities} Capabilities */
 
 /** @type {Section[]} */
-export const SECTIONS = ['questions', 'conversation', 'notes', 'remediation', 'outcome'];
+export const SECTIONS = ['details', 'questions', 'conversation', 'notes', 'remediation', 'outcome'];
 
 /**
  * Default access matrix. Function-valued cells receive the CaseRow and return a Mode.
  * @type {Record<Section, Record<Role, Mode | ((c: CaseRow) => Mode)>>}
  */
 const MATRIX = {
+  details: {
+    assignedReviewer: 'read-only',
+    otherReviewer: 'read-only',
+    responsibleParty: 'read-only',
+    caseTypeOwner: 'read-only',
+    none: 'hidden',
+  },
   questions: {
     assignedReviewer: 'edit',
     otherReviewer: 'read-only',

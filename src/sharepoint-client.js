@@ -97,7 +97,7 @@
  *   questions: QuestionDefinition[],
  *   computeOutcome: (answers: Record<string, Answer>) => OutcomeResult,
  *   eligibleGroups?: string[],
- *   sections?: Array<'questions'|'conversation'|'notes'|'remediation'|'outcome'>,
+ *   sections?: Array<'details'|'questions'|'conversation'|'notes'|'remediation'|'outcome'>,
  *   slaHours?: number,
  *   attributeFailures?: boolean
  * }} CaseTypeConfig

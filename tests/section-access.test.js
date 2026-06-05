@@ -171,6 +171,35 @@ test('evaluateAccess: most-permissive wins (otherReviewer + RP → notes read-on
   );
 });
 
+// --- Case Details: read-only for every real role, never hidden per-role ---
+
+test('SECTIONS includes details', () => {
+  assert.ok(SECTIONS.includes('details'));
+});
+
+test('evaluateAccess: details is read-only for every real role and never hidden', () => {
+  const cfg = makeConfig();
+  /** @type {import('../src/services/section-access.js').Role[]} */
+  const realRoles = ['assignedReviewer', 'otherReviewer', 'responsibleParty', 'caseTypeOwner'];
+  for (const role of realRoles) {
+    assert.equal(
+      evaluateAccess('details', [role], makeCase({ status: 'In-progress' }), cfg),
+      'read-only',
+      `role ${role} in-progress`
+    );
+    assert.equal(
+      evaluateAccess('details', [role], makeCase({ status: 'Completed' }), cfg),
+      'read-only',
+      `role ${role} completed`
+    );
+  }
+});
+
+test('evaluateAccess: details is hidden for the none role', () => {
+  const cfg = makeConfig();
+  assert.equal(evaluateAccess('details', ['none'], makeCase(), cfg), 'hidden');
+});
+
 // --- Case Type opt-out ---
 
 test('evaluateAccess: section omitted from sections allow-list → hidden regardless of role', () => {

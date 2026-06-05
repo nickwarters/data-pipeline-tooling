@@ -7,6 +7,7 @@ export async function registerComponents() {
     import('../components/cr-app-nav.js'),
     import('../components/cr-command-palette.js'),
     import('../components/cr-owner-summary.js'),
+    import('../components/cr-case-details.js'),
     import('../pages/cr-dashboard.js'),
     import('../pages/cr-case-review.js'),
     import('../pages/cr-conversation-view.js'),

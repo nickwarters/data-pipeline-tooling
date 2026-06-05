@@ -374,6 +374,15 @@ export class CRCaseReview extends CRElement {
     notesEl.caseId = caseRow.id;
     notesEl.access = access.notes;
 
+    // Case Details Section (ADR-0014, #105). Placeholder content this slice;
+    // appended after the existing blocks so the scrolling layout's stable child
+    // indices are preserved until the tab conversion lands.
+    const detailsEl = /** @type {import('../components/cr-case-details.js').CRCaseDetails} */ (
+      document.createElement('cr-case-details')
+    );
+    detailsEl.caseRow = caseRow;
+    detailsEl.access = access.details;
+
     /** @type {HTMLElement[]} */
     const children = [
       /** @type {HTMLElement} */ (/** @type {unknown} */ (bannerEl)),
@@ -384,6 +393,7 @@ export class CRCaseReview extends CRElement {
       /** @type {HTMLElement} */ (/** @type {unknown} */ (conversationEl)),
       /** @type {HTMLElement} */ (/** @type {unknown} */ (notesEl)),
       completeBtn,
+      /** @type {HTMLElement} */ (/** @type {unknown} */ (detailsEl)),
     ];
     // Hide rather than unmount so existing layout indices stay stable and so
     // tests can still inspect properties on the hidden elements.
@@ -391,6 +401,7 @@ export class CRCaseReview extends CRElement {
     if (access.remediation === 'hidden') /** @type {any} */ (remediationSection).hidden = true;
     if (access.outcome === 'hidden') /** @type {any} */ (outcomeEl).hidden = true;
     if (access.notes === 'hidden') /** @type {any} */ (notesEl).hidden = true;
+    if (access.details === 'hidden') /** @type {any} */ (detailsEl).hidden = true;
 
     this.replaceChildren(...children);
   }

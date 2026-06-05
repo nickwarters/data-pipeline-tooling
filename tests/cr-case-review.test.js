@@ -510,6 +510,55 @@ test('CRCaseReview: conversation panel starts hidden by default', async () => {
   assert.equal(conversationEl.hidden, true, 'conversation panel must start hidden');
 });
 
+test('CRCaseReview: layout includes a cr-case-details element with the Case row and read-only access', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  // Case Details is appended last so existing child indices stay stable.
+  const detailsEl = (/** @type {any} */ (el))._children[8];
+  assert.equal(detailsEl.caseRow, BASE_ROW, 'details element receives the Case row');
+  assert.equal(detailsEl.access, 'read-only', 'details is read-only for the assigned reviewer');
+  assert.notEqual(detailsEl.hidden, true, 'details must not be hidden when the Case Type allows it');
+});
+
+test('CRCaseReview: _buildLayout hides cr-case-details when access.details is hidden', () => {
+  const el = new CRCaseReview();
+  const fakeClient = makeClient();
+  const fakeSaveQueue = new SaveQueue(/** @type {any} */ (fakeClient));
+  fakeSaveQueue.loadCase(BASE_ROW);
+
+  const answersSignal = { get: () => ({}), set: (/** @type {any} */ _v) => {} };
+  const applicableQuestions = { get: () => [] };
+  const allAnswered = { get: () => false };
+  el.subscribe = (/** @type {any} */ _sig, /** @type {any} */ _cb) => {};
+
+  el._buildLayout({
+    caseRow: BASE_ROW,
+    catalogue: [],
+    computeOutcome: () => ({ verdict: 'pass' }),
+    client: /** @type {any} */ (fakeClient),
+    saveQueue: /** @type {any} */ (fakeSaveQueue),
+    answersSignal: /** @type {any} */ (answersSignal),
+    applicableQuestions: /** @type {any} */ (applicableQuestions),
+    allAnswered: /** @type {any} */ (allAnswered),
+    currentUser: { id: 'u1', displayName: 'User 1' },
+    access: /** @type {any} */ ({
+      details: 'hidden',
+      questions: 'edit',
+      conversation: 'edit',
+      notes: 'edit',
+      remediation: 'edit',
+      outcome: 'edit',
+    }),
+  });
+
+  const detailsEl = (/** @type {any} */ (el))._children[8];
+  assert.equal(detailsEl.hidden, true, 'details must be hidden when access.details is hidden');
+});
+
 test('CRCaseReview: toggle button is in the header when conversation access is not hidden', async () => {
   const el = new CRCaseReview();
   el.client = /** @type {any} */ (makeClient());
