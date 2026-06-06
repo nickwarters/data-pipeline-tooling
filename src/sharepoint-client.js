@@ -8,7 +8,20 @@
  * *failed* Answer (see ADR-0013): a bare account `loginName` plus a cached
  * `displayName`. Only present when the Case Type enables `attributeFailures`.
  *
- * @typedef {{ value: string | string[], justification?: string, remediationActions?: Array<{id: string, text: string, completed: boolean}>, attributedParty?: { loginName: string, displayName: string } }} Answer
+ * The optional `remediationDetails` holds the Case Type's configurable
+ * per-failure capture fields (ADR-0017), keyed by `RemediationField.key`. Like
+ * `attributedParty` it lives only while the Answer is a failure: stripped when
+ * the Answer stops failing, and frozen once the Case is Completed.
+ *
+ * @typedef {{ value: string | string[], justification?: string, remediationActions?: Array<{id: string, text: string, completed: boolean}>, attributedParty?: { loginName: string, displayName: string }, remediationDetails?: Record<string, string> }} Answer
+ */
+
+/**
+ * A configurable per-failure capture field declared by a Case Type (ADR-0017).
+ * One shared set applies to every failed Answer; `select` values are validated
+ * against `options` at capture time.
+ *
+ * @typedef {{ key: string, label: string, type: 'text' | 'select', options?: string[], required?: boolean }} RemediationField
  */
 
 /**
@@ -102,7 +115,8 @@
  *   eligibleGroups?: string[],
  *   sections?: Array<'details'|'questions'|'conversation'|'notes'|'remediation'|'summary'>,
  *   slaHours?: number,
- *   attributeFailures?: boolean
+ *   attributeFailures?: boolean,
+ *   remediationFields?: RemediationField[]
  * }} CaseTypeConfig
  */
 

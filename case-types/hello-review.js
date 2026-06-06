@@ -7,6 +7,12 @@ const config = {
   eligibleGroups: ['Reviewers'],
   slaHours: 48,
   attributeFailures: true,
+  // Configurable per-failure capture fields (ADR-0017). One shared set applies
+  // to every failed Answer; captured inline as Answer.remediationDetails.
+  remediationFields: [
+    { key: 'rootCause', label: 'Root cause', type: 'text', required: true },
+    { key: 'severity', label: 'Severity', type: 'select', options: ['Low', 'Med', 'High'] },
+  ],
   questions: [
     {
       id: 'q-welcome',

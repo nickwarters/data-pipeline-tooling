@@ -443,3 +443,98 @@ test('CRRemediationSection: a null cr-attribute-change re-dispatches cr-attribut
   assert.equal(events.length, 1);
   assert.deepEqual(events[0].detail, { questionId: 'q1', attributedParty: null });
 });
+
+// ===== Remediation Details capture surface (ADR-0017) =====
+
+/** @type {import('../src/sharepoint-client.js').RemediationField[]} */
+const DETAIL_FIELDS = [
+  { key: 'rootCause', label: 'Root cause', type: 'text' },
+  { key: 'severity', label: 'Severity', type: 'select', options: ['Low', 'Med', 'High'] },
+];
+
+test('CRRemediationSection: no Remediation Details surface when the Case Type declares no fields', () => {
+  const el = new CRRemediationSection();
+  el.remediationFields = [];
+  el.canCaptureDetails = true;
+  el.update(FAIL_CAT, { q1: { value: 'No' } }, false);
+
+  assert.equal(findByClass(el, 'cr-remediation-detail-field'), null);
+});
+
+test('CRRemediationSection: editable failure renders a labelled input per Remediation Detail field', () => {
+  const el = new CRRemediationSection();
+  el.remediationFields = DETAIL_FIELDS;
+  el.canCaptureDetails = true;
+  el.update(FAIL_CAT, { q1: { value: 'No' } }, false);
+
+  const fields = findAllByClass(el, 'cr-remediation-detail-field');
+  assert.equal(fields.length, 2, 'one row per declared field');
+  const labels = findAllByClass(el, 'cr-remediation-detail-label').map(l => l.textContent);
+  assert.deepEqual(labels, ['Root cause', 'Severity']);
+
+  const inputs = findAllByClass(el, 'cr-remediation-detail-input');
+  assert.equal(inputs[0]._tagName, 'input', 'text field renders an input');
+  assert.equal(inputs[1]._tagName, 'select', 'select field renders a select');
+});
+
+test('CRRemediationSection: select control offers an option per declared option plus a blank', () => {
+  const el = new CRRemediationSection();
+  el.remediationFields = DETAIL_FIELDS;
+  el.canCaptureDetails = true;
+  el.update(FAIL_CAT, { q1: { value: 'No' } }, false);
+
+  const select = findAllByClass(el, 'cr-remediation-detail-input')[1];
+  const optionValues = select._children.map((/** @type {any} */ o) => o.value);
+  assert.deepEqual(optionValues, ['', 'Low', 'Med', 'High']);
+});
+
+test('CRRemediationSection: editable input pre-fills the captured value', () => {
+  const el = new CRRemediationSection();
+  el.remediationFields = DETAIL_FIELDS;
+  el.canCaptureDetails = true;
+  el.update(FAIL_CAT, { q1: { value: 'No', remediationDetails: { rootCause: 'Rushed', severity: 'High' } } }, false);
+
+  const inputs = findAllByClass(el, 'cr-remediation-detail-input');
+  assert.equal(inputs[0].value, 'Rushed');
+  assert.equal(inputs[1].value, 'High');
+});
+
+test('CRRemediationSection: changing a Remediation Detail dispatches a bubbling cr-remediation-detail', () => {
+  const el = new CRRemediationSection();
+  el.remediationFields = DETAIL_FIELDS;
+  el.canCaptureDetails = true;
+  el.update(FAIL_CAT, { q1: { value: 'No' } }, false);
+
+  /** @type {any[]} */
+  const events = [];
+  el.addEventListener('cr-remediation-detail', (/** @type {any} */ e) => events.push(e));
+
+  const input = findAllByClass(el, 'cr-remediation-detail-input')[0];
+  input.value = 'Agent rushed the call';
+  input._fire('change', { target: input });
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].bubbles, true);
+  assert.deepEqual(events[0].detail, { questionId: 'q1', key: 'rootCause', value: 'Agent rushed the call' });
+});
+
+test('CRRemediationSection: read-only viewer sees captured values as text with no inputs', () => {
+  const el = new CRRemediationSection();
+  el.remediationFields = DETAIL_FIELDS;
+  el.canCaptureDetails = false;
+  el.update(FAIL_CAT, { q1: { value: 'No', remediationDetails: { rootCause: 'Rushed', severity: 'High' } } }, false);
+
+  assert.equal(findByClass(el, 'cr-remediation-detail-input'), null, 'no editable inputs when frozen');
+  const values = findAllByClass(el, 'cr-remediation-detail-value').map(v => v.textContent);
+  assert.deepEqual(values, ['Root cause: Rushed', 'Severity: High']);
+});
+
+test('CRRemediationSection: read-only viewer omits fields with no captured value', () => {
+  const el = new CRRemediationSection();
+  el.remediationFields = DETAIL_FIELDS;
+  el.canCaptureDetails = false;
+  el.update(FAIL_CAT, { q1: { value: 'No', remediationDetails: { rootCause: 'Rushed' } } }, false);
+
+  const values = findAllByClass(el, 'cr-remediation-detail-value').map(v => v.textContent);
+  assert.deepEqual(values, ['Root cause: Rushed'], 'only captured fields are shown read-only');
+});

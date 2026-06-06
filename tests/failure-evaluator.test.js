@@ -141,3 +141,37 @@ test('materializeRemediationActions: retains attributedParty on a still-failing 
   const out = materializeRemediationActions(q, ans);
   assert.deepEqual(out.attributedParty, { loginName: 'jsmith', displayName: 'Jane Smith' });
 });
+
+// ===== Remediation Details stripping (ADR-0017, shares ADR-0013 lifecycle) =====
+
+test('materializeRemediationActions: strips remediationDetails when answer becomes passing', () => {
+  const stale = {
+    value: 'Yes',
+    remediationDetails: { rootCause: 'Rushed', severity: 'High' },
+  };
+  const out = materializeRemediationActions(Q_FAIL_NO, stale);
+  assert.equal(out.remediationDetails, undefined);
+  assert.equal(out.value, 'Yes');
+});
+
+test('materializeRemediationActions: retains remediationDetails on a still-failing answer', () => {
+  const ans = {
+    value: 'No',
+    remediationDetails: { rootCause: 'Rushed' },
+  };
+  const out = materializeRemediationActions(Q_FAIL_NO, ans);
+  assert.deepEqual(out.remediationDetails, { rootCause: 'Rushed' });
+});
+
+test('materializeRemediationActions: strips remediationDetails alongside attributedParty when passing with no remediationActions defined', () => {
+  /** @type {QuestionDefinition} */
+  const q = { id: 'q-x', text: 'q', responseType: 'yes-no-na', failureCriteria: 'No', deprecated: false };
+  const stale = {
+    value: 'Yes',
+    attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
+    remediationDetails: { rootCause: 'Rushed' },
+  };
+  const out = materializeRemediationActions(q, stale);
+  assert.equal(out.attributedParty, undefined);
+  assert.equal(out.remediationDetails, undefined);
+});

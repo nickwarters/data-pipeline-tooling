@@ -60,6 +60,23 @@ test('hello-review: no cycles in showWhen graph', () => {
   assert.strictEqual(detectCycles(config.questions), false);
 });
 
+// --- Remediation Details (ADR-0017) ---
+
+test('hello-review: declares a remediationFields set with at least one text and one select', () => {
+  const fields = config.remediationFields ?? [];
+  assert.ok(fields.some(f => f.type === 'text'), 'expected at least one text field');
+  assert.ok(fields.some(f => f.type === 'select'), 'expected at least one select field');
+});
+
+test('hello-review: every select remediationField carries a non-empty options[]', () => {
+  for (const f of config.remediationFields ?? []) {
+    if (f.type === 'select') {
+      assert.ok(Array.isArray(f.options) && f.options.length > 0,
+        `${f.key} (select) should have options[]`);
+    }
+  }
+});
+
 // --- computeOutcome ---
 
 test('computeOutcome: all Yes → pass', () => {

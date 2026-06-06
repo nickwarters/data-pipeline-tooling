@@ -24,10 +24,10 @@ export function isFailure(question, answer) {
  * failure (ADR-0013). When the Answer remains a failure and the question has
  * remediationActions defined, returns a fresh Answer with `remediationActions`
  * populated as { id, text, completed: false } items. When the Answer is no
- * longer a failure, any stale `remediationActions` and `attributedParty` are
- * stripped, so passing answers never carry leftover failure metadata. The
- * `attributedParty` is kept on a still-failing Answer even when the question
- * defines no remediationActions.
+ * longer a failure, any stale `remediationActions`, `attributedParty`, and
+ * `remediationDetails` are stripped, so passing answers never carry leftover
+ * failure metadata. The `attributedParty` and `remediationDetails` are kept on a
+ * still-failing Answer even when the question defines no remediationActions.
  *
  * @param {QuestionDefinition} question
  * @param {Answer} answer
@@ -41,6 +41,13 @@ export function materializeRemediationActions(question, answer) {
   let result = answer;
   if (!failing && result.attributedParty) {
     const { attributedParty: _dropParty, ...rest } = result;
+    result = rest;
+  }
+
+  // Remediation Details (ADR-0017) share the Attributed Party lifecycle: they
+  // only survive while the Answer is a failure.
+  if (!failing && result.remediationDetails) {
+    const { remediationDetails: _dropDetails, ...rest } = result;
     result = rest;
   }
 

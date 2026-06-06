@@ -33,6 +33,19 @@ export class CRRemediationSection extends CRElement {
      * @type {boolean}
      */
     this.canAttribute = false;
+    /**
+     * The Case Type's configurable per-failure capture fields (ADR-0017). One
+     * shared set applies to every failed Answer; empty when the Case Type
+     * declares none.
+     * @type {import('../sharepoint-client.js').RemediationField[]}
+     */
+    this.remediationFields = [];
+    /**
+     * Whether the viewer may capture Remediation Details. Mirrors `canAttribute`:
+     * Assigned Reviewer only, on an In-progress Case (frozen at completion).
+     * @type {boolean}
+     */
+    this.canCaptureDetails = false;
   }
 
   connectedCallback() {
@@ -107,6 +120,10 @@ export class CRRemediationSection extends CRElement {
       this._renderAttribution(li, q);
     }
 
+    if (this.remediationFields?.length) {
+      this._renderDetails(li, q);
+    }
+
     if (q.remediationActions?.length) {
       const actions = document.createElement('ul');
       actions.className = 'cr-remediation-actions';
@@ -157,6 +174,95 @@ export class CRRemediationSection extends CRElement {
       this._dispatchAttribute(q.id, detail.attributedParty);
     });
     li.appendChild(/** @type {any} */ (menu));
+  }
+
+  /**
+   * Renders the configurable Remediation Details surface on a failed item
+   * (ADR-0017). This slice is a minimal capture surface: editors get one control
+   * per declared field (text input or select); read-only viewers see only the
+   * fields that already carry a captured value. Persistence is the page's
+   * responsibility (it owns the answers signal), so each change is re-dispatched
+   * as a bubbling `cr-remediation-detail` carrying the question id, field key,
+   * and new value.
+   *
+   * @param {HTMLElement} li
+   * @param {QuestionDefinition} q
+   */
+  _renderDetails(li, q) {
+    const details = this.answers[q.id]?.remediationDetails ?? {};
+
+    for (const field of this.remediationFields) {
+      if (!this.canCaptureDetails) {
+        const captured = details[field.key];
+        if (captured === undefined || captured === '') continue;
+        const value = document.createElement('p');
+        value.className = 'cr-remediation-detail-value';
+        value.textContent = `${field.label}: ${captured}`;
+        li.appendChild(value);
+        continue;
+      }
+
+      const wrap = document.createElement('div');
+      wrap.className = 'cr-remediation-detail-field';
+
+      const label = document.createElement('label');
+      label.className = 'cr-remediation-detail-label';
+      label.textContent = field.label;
+      wrap.appendChild(label);
+
+      const control = this._buildDetailControl(field, details[field.key] ?? '');
+      control.addEventListener('change', (ev) => {
+        const target = /** @type {{ value: string }} */ (/** @type {any} */ (ev).target);
+        this._dispatchDetail(q.id, field.key, target.value);
+      });
+      wrap.appendChild(control);
+
+      li.appendChild(wrap);
+    }
+  }
+
+  /**
+   * @param {import('../sharepoint-client.js').RemediationField} field
+   * @param {string} current
+   * @returns {HTMLElement}
+   */
+  _buildDetailControl(field, current) {
+    if (field.type === 'select') {
+      const select = /** @type {any} */ (document.createElement('select'));
+      select.className = 'cr-remediation-detail-input';
+      const blank = /** @type {any} */ (document.createElement('option'));
+      blank.value = '';
+      blank.textContent = '—';
+      select.appendChild(blank);
+      for (const opt of field.options ?? []) {
+        const option = /** @type {any} */ (document.createElement('option'));
+        option.value = opt;
+        option.textContent = opt;
+        select.appendChild(option);
+      }
+      select.value = current;
+      return select;
+    }
+
+    const input = /** @type {any} */ (document.createElement('input'));
+    input.className = 'cr-remediation-detail-input';
+    input.type = 'text';
+    input.value = current;
+    return input;
+  }
+
+  /**
+   * @param {string} questionId
+   * @param {string} key
+   * @param {string} value
+   */
+  _dispatchDetail(questionId, key, value) {
+    this.dispatchEvent(
+      new CustomEvent('cr-remediation-detail', {
+        detail: { questionId, key, value },
+        bubbles: true,
+      })
+    );
   }
 
   /**
