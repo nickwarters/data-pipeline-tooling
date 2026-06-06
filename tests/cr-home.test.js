@@ -134,13 +134,13 @@ test('CRHome: responsible party manager — links to responsible party team repo
   assert.deepEqual(sectionLinks(el), ['#/reports/responsible-party-team']);
 });
 
-test('CRHome: responsible party — links to conversation', () => {
+test('CRHome: responsible party — links to my cases', () => {
   const el = new CRHome();
   el.capabilities = caps({ isResponsibleParty: true });
   el.connectedCallback();
 
   assert.deepEqual(sectionHeadings(el), ['Responsible Party']);
-  assert.deepEqual(sectionLinks(el), ['#/conversation']);
+  assert.deepEqual(sectionLinks(el), ['#/my-cases']);
 });
 
 test('CRHome: case type owner — links to question bank', () => {

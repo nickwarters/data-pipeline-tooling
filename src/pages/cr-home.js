@@ -42,7 +42,7 @@ export class CRHome extends CRElement {
       );
     }
     if (caps.isResponsibleParty) {
-      sections.push(this._roleSection('Responsible Party', '#/conversation'));
+      sections.push(this._roleSection('Responsible Party', '#/my-cases'));
     }
     if (caps.ownedCaseTypes.length > 0) {
       sections.push(this._roleSection('Case Type Owner', '#/question-bank'));
