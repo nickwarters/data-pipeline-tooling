@@ -87,6 +87,7 @@ export const cases = [
     },
     conversation: [],
     notes: 'All applicable questions answered — ready to complete.',
+    caseJustification: 'Reviewed against the Q2 contact-handling policy; resolution path was acceptable despite the missed needs check.',
     completedAt: null,
     created: '2026-05-03T08:00:00Z',
     etag: 'etag-c3-v1',

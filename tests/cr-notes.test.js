@@ -52,6 +52,28 @@ function makeQueue(caseId = 'case-1') {
   };
 }
 
+/**
+ * Find a descendant element by its className.
+ * @param {any} el
+ * @param {string} className
+ * @returns {any}
+ */
+function byClass(el, className) {
+  return el._children.find((/** @type {any} */ c) => c.className === className);
+}
+
+/**
+ * The general-note textarea.
+ * @param {any} el
+ */
+const noteInput = (el) => byClass(el, 'cr-notes-input');
+
+/**
+ * The Case Justification textarea.
+ * @param {any} el
+ */
+const justificationInput = (el) => byClass(el, 'cr-case-justification-input');
+
 test('CRNotes: renders h2 Notes heading', () => {
   const el = new CRNotes();
   el.notes = '';
@@ -63,40 +85,37 @@ test('CRNotes: renders h2 Notes heading', () => {
   assert.equal(h2.textContent, 'Notes');
 });
 
-test('CRNotes: textarea carries existing notes value', () => {
+test('CRNotes: general-note textarea carries existing notes value', () => {
   const el = new CRNotes();
   el.notes = 'Some existing notes';
   el.saveQueue = /** @type {any} */ (makeQueue());
   el.caseId = 'case-1';
   el.connectedCallback();
 
-  const textarea = (/** @type {any} */ (el))._children[1];
-  assert.equal(textarea.value, 'Some existing notes');
+  assert.equal(noteInput(el).value, 'Some existing notes');
 });
 
-test('CRNotes: textarea has placeholder when notes is empty', () => {
+test('CRNotes: general-note textarea has placeholder when notes is empty', () => {
   const el = new CRNotes();
   el.notes = '';
   el.saveQueue = /** @type {any} */ (makeQueue());
   el.caseId = 'case-1';
   el.connectedCallback();
 
-  const textarea = (/** @type {any} */ (el))._children[1];
-  assert.equal(textarea.placeholder, 'Add notes…');
+  assert.equal(noteInput(el).placeholder, 'Add notes…');
 });
 
-test('CRNotes: textarea has cr-notes-input class', () => {
+test('CRNotes: general-note textarea has cr-notes-input class', () => {
   const el = new CRNotes();
   el.notes = 'text';
   el.saveQueue = /** @type {any} */ (makeQueue());
   el.caseId = 'case-1';
   el.connectedCallback();
 
-  const textarea = (/** @type {any} */ (el))._children[1];
-  assert.equal(textarea.className, 'cr-notes-input');
+  assert.ok(noteInput(el));
 });
 
-test('CRNotes: input event enqueues save of notes field with current value', () => {
+test('CRNotes: general-note input event enqueues save of notes field with current value', () => {
   const saveQueue = makeQueue('case-2');
   const el = new CRNotes();
   el.notes = '';
@@ -104,9 +123,9 @@ test('CRNotes: input event enqueues save of notes field with current value', () 
   el.caseId = 'case-2';
   el.connectedCallback();
 
-  const textarea = (/** @type {any} */ (el))._children[1];
+  const textarea = noteInput(el);
   textarea.value = 'new notes content';
-  (/** @type {any} */ (textarea))._listeners['input'][0]({ target: textarea });
+  textarea._listeners['input'][0]({ target: textarea });
 
   assert.equal(saveQueue.enqueued.length, 1);
   assert.equal(saveQueue.enqueued[0].id, 'case-2');
@@ -114,21 +133,21 @@ test('CRNotes: input event enqueues save of notes field with current value', () 
   assert.equal(saveQueue.enqueued[0].value, 'new notes content');
 });
 
-test('CRNotes: input event does not throw when saveQueue is null', () => {
+test('CRNotes: general-note input event does not throw when saveQueue is null', () => {
   const el = new CRNotes();
   el.notes = '';
   el.saveQueue = null;
   el.caseId = 'case-1';
   el.connectedCallback();
 
-  const textarea = (/** @type {any} */ (el))._children[1];
+  const textarea = noteInput(el);
   textarea.value = 'anything';
   assert.doesNotThrow(() => {
-    (/** @type {any} */ (textarea))._listeners['input'][0]({ target: textarea });
+    textarea._listeners['input'][0]({ target: textarea });
   });
 });
 
-test('CRNotes: access read-only sets textarea readOnly and readonly attribute', () => {
+test('CRNotes: access read-only sets general-note readOnly and readonly attribute', () => {
   const el = new CRNotes();
   el.notes = 'some notes';
   el.saveQueue = /** @type {any} */ (makeQueue());
@@ -136,12 +155,12 @@ test('CRNotes: access read-only sets textarea readOnly and readonly attribute', 
   el.access = 'read-only';
   el.connectedCallback();
 
-  const textarea = (/** @type {any} */ (el))._children[1];
+  const textarea = noteInput(el);
   assert.equal(textarea.readOnly, true);
   assert.equal(textarea._attrs?.['readonly'], 'readonly');
 });
 
-test('CRNotes: read-only input event does not enqueue a save', () => {
+test('CRNotes: read-only general-note input event does not enqueue a save', () => {
   const saveQueue = makeQueue('case-1');
   const el = new CRNotes();
   el.notes = 'text';
@@ -150,13 +169,13 @@ test('CRNotes: read-only input event does not enqueue a save', () => {
   el.access = 'read-only';
   el.connectedCallback();
 
-  const textarea = (/** @type {any} */ (el))._children[1];
+  const textarea = noteInput(el);
   textarea.value = 'changed';
-  (/** @type {any} */ (textarea))._listeners['input'][0]({ target: textarea });
+  textarea._listeners['input'][0]({ target: textarea });
   assert.equal(saveQueue.enqueued.length, 0);
 });
 
-test('CRNotes: input event does not throw when caseId is empty', () => {
+test('CRNotes: general-note input event does not throw when caseId is empty', () => {
   const saveQueue = makeQueue('');
   const el = new CRNotes();
   el.notes = '';
@@ -164,15 +183,15 @@ test('CRNotes: input event does not throw when caseId is empty', () => {
   el.caseId = '';
   el.connectedCallback();
 
-  const textarea = (/** @type {any} */ (el))._children[1];
+  const textarea = noteInput(el);
   textarea.value = 'anything';
   assert.doesNotThrow(() => {
-    (/** @type {any} */ (textarea))._listeners['input'][0]({ target: textarea });
+    textarea._listeners['input'][0]({ target: textarea });
   });
   assert.equal(saveQueue.enqueued.length, 0);
 });
 
-test('CRNotes: input event with null target value falls back to empty string', () => {
+test('CRNotes: general-note input with null target value falls back to empty string', () => {
   const saveQueue = makeQueue('case-1');
   const el = new CRNotes();
   el.notes = '';
@@ -180,9 +199,135 @@ test('CRNotes: input event with null target value falls back to empty string', (
   el.caseId = 'case-1';
   el.connectedCallback();
 
-  const textarea = (/** @type {any} */ (el))._children[1];
+  const textarea = noteInput(el);
   // Simulate ev.target.value being null (covers the `?? ''` branch)
-  (/** @type {any} */ (textarea))._listeners['input'][0]({ target: { value: null } });
+  textarea._listeners['input'][0]({ target: { value: null } });
   assert.equal(saveQueue.enqueued.length, 1);
   assert.equal(saveQueue.enqueued[0].value, '');
+});
+
+// --- Case Justification (issue #122) ---
+
+test('CRNotes: renders a Case Justification box with its own label', () => {
+  const el = new CRNotes();
+  el.notes = '';
+  el.caseJustification = '';
+  el.saveQueue = /** @type {any} */ (makeQueue());
+  el.caseId = 'case-1';
+  el.connectedCallback();
+
+  const textarea = justificationInput(el);
+  assert.ok(textarea, 'Case Justification textarea should be rendered');
+  assert.equal(textarea._attrs?.['aria-label'], 'Case Justification');
+});
+
+test('CRNotes: Case Justification textarea carries existing value', () => {
+  const el = new CRNotes();
+  el.notes = '';
+  el.caseJustification = 'Existing justification';
+  el.saveQueue = /** @type {any} */ (makeQueue());
+  el.caseId = 'case-1';
+  el.connectedCallback();
+
+  assert.equal(justificationInput(el).value, 'Existing justification');
+});
+
+test('CRNotes: Case Justification textarea has its own placeholder when empty', () => {
+  const el = new CRNotes();
+  el.notes = '';
+  el.caseJustification = '';
+  el.saveQueue = /** @type {any} */ (makeQueue());
+  el.caseId = 'case-1';
+  el.connectedCallback();
+
+  assert.equal(justificationInput(el).placeholder, 'Add Case Justification…');
+});
+
+test('CRNotes: Case Justification input enqueues save of caseJustification field independently', () => {
+  const saveQueue = makeQueue('case-3');
+  const el = new CRNotes();
+  el.notes = '';
+  el.caseJustification = '';
+  el.saveQueue = /** @type {any} */ (saveQueue);
+  el.caseId = 'case-3';
+  el.connectedCallback();
+
+  const textarea = justificationInput(el);
+  textarea.value = 'Because policy X applies';
+  textarea._listeners['input'][0]({ target: textarea });
+
+  assert.equal(saveQueue.enqueued.length, 1);
+  assert.equal(saveQueue.enqueued[0].id, 'case-3');
+  assert.equal(saveQueue.enqueued[0].field, 'caseJustification');
+  assert.equal(saveQueue.enqueued[0].value, 'Because policy X applies');
+});
+
+test('CRNotes: the two boxes autosave to different fields independently', () => {
+  const saveQueue = makeQueue('case-4');
+  const el = new CRNotes();
+  el.notes = '';
+  el.caseJustification = '';
+  el.saveQueue = /** @type {any} */ (saveQueue);
+  el.caseId = 'case-4';
+  el.connectedCallback();
+
+  const note = noteInput(el);
+  note.value = 'a note';
+  note._listeners['input'][0]({ target: note });
+
+  const just = justificationInput(el);
+  just.value = 'a justification';
+  just._listeners['input'][0]({ target: just });
+
+  assert.deepEqual(
+    saveQueue.enqueued.map((e) => e.field),
+    ['notes', 'caseJustification']
+  );
+  assert.equal(saveQueue.enqueued[0].value, 'a note');
+  assert.equal(saveQueue.enqueued[1].value, 'a justification');
+});
+
+test('CRNotes: access read-only sets Case Justification readOnly', () => {
+  const el = new CRNotes();
+  el.notes = '';
+  el.caseJustification = 'x';
+  el.saveQueue = /** @type {any} */ (makeQueue());
+  el.caseId = 'case-1';
+  el.access = 'read-only';
+  el.connectedCallback();
+
+  const textarea = justificationInput(el);
+  assert.equal(textarea.readOnly, true);
+  assert.equal(textarea._attrs?.['readonly'], 'readonly');
+});
+
+test('CRNotes: read-only Case Justification input does not enqueue a save', () => {
+  const saveQueue = makeQueue('case-1');
+  const el = new CRNotes();
+  el.notes = '';
+  el.caseJustification = 'x';
+  el.saveQueue = /** @type {any} */ (saveQueue);
+  el.caseId = 'case-1';
+  el.access = 'read-only';
+  el.connectedCallback();
+
+  const textarea = justificationInput(el);
+  textarea.value = 'changed';
+  textarea._listeners['input'][0]({ target: textarea });
+  assert.equal(saveQueue.enqueued.length, 0);
+});
+
+test('CRNotes: each box has a visible label element', () => {
+  const el = new CRNotes();
+  el.notes = '';
+  el.caseJustification = '';
+  el.saveQueue = /** @type {any} */ (makeQueue());
+  el.caseId = 'case-1';
+  el.connectedCallback();
+
+  const labels = (/** @type {any} */ (el))._children
+    .map((/** @type {any} */ c) => c.textContent)
+    .filter(Boolean);
+  assert.ok(labels.includes('Case notes'));
+  assert.ok(labels.includes('Case Justification'));
 });

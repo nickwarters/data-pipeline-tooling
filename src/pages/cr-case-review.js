@@ -378,6 +378,7 @@ export class CRCaseReview extends CRElement {
       document.createElement('cr-notes')
     );
     notesEl.notes = caseRow.notes;
+    notesEl.caseJustification = caseRow.caseJustification ?? '';
     notesEl.saveQueue = saveQueue;
     notesEl.caseId = caseRow.id;
     notesEl.access = access.notes;

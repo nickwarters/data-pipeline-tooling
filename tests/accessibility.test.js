@@ -233,8 +233,24 @@ test('CRNotes: textarea has aria-label="Case notes"', () => {
   el.caseId = 'case-1';
   el.connectedCallback();
 
-  const textarea = (/** @type {any} */ (el))._children[1];
+  const textarea = (/** @type {any} */ (el))._children.find(
+    (/** @type {any} */ c) => c.className === 'cr-notes-input'
+  );
   assert.equal(textarea._attrs['aria-label'], 'Case notes');
+});
+
+test('CRNotes: Case Justification textarea has aria-label="Case Justification"', () => {
+  const el = new CRNotes();
+  el.notes = '';
+  el.caseJustification = '';
+  el.saveQueue = /** @type {any} */ ({ enqueue() {} });
+  el.caseId = 'case-1';
+  el.connectedCallback();
+
+  const textarea = (/** @type {any} */ (el))._children.find(
+    (/** @type {any} */ c) => c.className === 'cr-case-justification-input'
+  );
+  assert.equal(textarea._attrs['aria-label'], 'Case Justification');
 });
 
 test('CRConversation: compose textarea has aria-label="Message to Responsible Party"', () => {

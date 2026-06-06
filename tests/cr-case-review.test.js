@@ -148,6 +148,19 @@ test('CRCaseReview: each tab panel carries the matching Section content node', a
   assert.ok(notesOf(el), 'notes panel present');
 });
 
+test('CRCaseReview: notes panel receives notes and Case Justification from the Case row', async () => {
+  /** @type {CaseRow} */
+  const row = { ...BASE_ROW, notes: 'general note', caseJustification: 'why this case passes' };
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient({ caseRow: row }));
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  assert.equal(notesOf(el).notes, 'general note');
+  assert.equal(notesOf(el).caseJustification, 'why this case passes');
+});
+
 test('CRCaseReview: default selected tab is Details', async () => {
   const el = new CRCaseReview();
   el.client = /** @type {any} */ (makeClient());

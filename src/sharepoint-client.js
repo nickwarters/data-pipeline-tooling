@@ -26,6 +26,7 @@
  *   answers: Record<string, Answer>,
  *   conversation: Message[],
  *   notes: string,
+ *   caseJustification?: string,
  *   completedAt: string | null,
  *   outcome?: string | null,
  *   dueDate?: string | null,
