@@ -119,7 +119,8 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`Processor`** | `process(dataset) -> Dataset`, run mid-pipeline via `.with_processor()`. `SchemaCoercion` (repair storage-lossy types); the Selection transforms `Filter` / `Score` / `Sort` / `Rename` / `Stamp`, the per-group `TopNPerGroup` / `SamplePerGroup`, the lazy cross-feed `JoinWith`; and the Ingest / fan-out transforms `SelectColumns` / `Unpivot` / `DeriveKey` / `LatestPerKey`. → [processors.md](processors.md) |
 | **`Pipeline`** (builder) | The deferred fluent builder: `Pipeline(name, reader).with_processor(…).write_to(writer).run()`. Runs nothing until `.run()`, which is **fail-fast and atomic** and drives the RunLog. ([ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md)) |
 | **`RunLog` / `RunRegistry`** | `RunLog` emits one JSON record per step (+ a run summary) to a `.log` file — the observability seam. `RunRegistry` ingests that JSONL into a queryable run-history store. → [run-log-format.md](run-log-format.md) ([ADR-0007](adr/0007-fail-fast-atomic-runs-jsonl-observability.md)) |
-| **`CaseType` / `Variation`** | The declarative domain objects: a Case Type bundles its `schema` + `variations`, imported directly (no global registry). A Variation overrides only what differs — most often the `question_bank_id`. → [selection.md](selection.md) |
+| **`PipelineRunner` / `FreshnessRequirement`** | The thin domain runner: register handlers by `(case_type, pipeline)`, run them with `python -m pipelines.run …`, and block stale downstream runs by querying `RunRegistry` for recent successful upstream history. → [core-primitives.md](core-primitives.md) |
+| **`CaseType` / `Variation`** | The declarative domain objects: a Case Type bundles its `schema` + `variations`, imported directly (no global CaseType config registry). A Variation overrides only what differs — most often the `question_bank_id`. → [selection.md](selection.md) |
 | **`CasePool`** | The per-Case-Type population read from ingested silver, surfaced through intention-revealing retrievals (e.g. `fetch_available_cases(...)`) instead of raw `read_*`. → [selection.md](selection.md) |
 | **`WorkingDayCalendar`** | A config-seeded **pure utility** for availability arithmetic ("the last 20 working days"). Touches no Dataset/Store/engine; not a Feed. → [working-day-calendar.md](working-day-calendar.md) |
 
@@ -271,6 +272,9 @@ reference = Pipeline("advisers", Store("/share/advisers").reader("silver", "advi
   chosen) as a sibling table — the eligibility twin of quarantine.
 - The SelectionPool reaches the review platform as a **Deliverable** (a later
   slice); the returned **Review Outcomes** come back via **Sync**, not here.
+- Run domain Pipelines through the thin runner when freshness matters:
+  `python -m pipelines.run cases selection /tmp/demo --run-date 2026-05-29`
+  checks recent successful `cases/ingest` history before Selection executes.
 
 ---
 
