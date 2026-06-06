@@ -29,7 +29,6 @@ sample feed and the run is deterministic.
 
 from __future__ import annotations
 
-import sys
 import uuid
 from dataclasses import dataclass
 from datetime import date
@@ -42,6 +41,7 @@ from framework.case_type import CaseType, Variation
 from framework.gold import ingest_silver_to_gold
 from framework.processors import Filter, Sort, Stamp
 from framework.readers import CsvReader, DatasetReader
+from framework.runner import FreshnessRequirement, PipelineRunner, RunContext
 from framework.silver import raw_to_silver
 from framework.store import Store
 from framework.strategy import AccumulateByRun
@@ -75,25 +75,40 @@ CASE_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_DNS, CASES.name)
 # Fixed so the working-day window aligns with the bundled feed (Fri 2026-05-29);
 # doubles as the Ingest run_id / load_date idempotency key (ADR-0006).
 AS_OF = date(2026, 5, 29)
-RUN_ID = AS_OF.isoformat()
 
 
-def main(target_dir: str) -> None:
+def run_ingest(context: RunContext):
+    run_id = context.run_date.isoformat()
     sample = Path(__file__).parent / "sample_data" / "activity_cases.csv"
-    store = Store(Path(target_dir) / CASES.name)
+    store = Store(context.base_dir / CASES.name)
 
     # 1. Ingest: CSV feed -> raw (accumulate, system-of-record) -> silver
     #    (accumulate, schema enforced) -> gold (current-only, one row per Case).
     Pipeline("cases", CsvReader(sample)).write_to(
-        store.writer("raw", "cases", AccumulateByRun(RUN_ID, RUN_ID))
+        store.writer("raw", "cases", AccumulateByRun(run_id, run_id))
     ).run()
-    raw_to_silver(store, "cases", CASES.schema, strategy=AccumulateByRun(RUN_ID, RUN_ID)).run()
-    ingest_silver_to_gold(store, "cases", namespace=CASE_NAMESPACE, natural_key=["case_ref"]).run()
+    raw_to_silver(
+        store,
+        "cases",
+        CASES.schema,
+        strategy=AccumulateByRun(run_id, run_id),
+    ).run()
+    return ingest_silver_to_gold(
+        store,
+        "cases",
+        namespace=CASE_NAMESPACE,
+        natural_key=["case_ref"],
+    ).run()
+
+
+def run_selection(context: RunContext):
+    run_id = context.run_date.isoformat()
+    store = Store(context.base_dir / CASES.name)
 
     # 2. Selection: fetch the available cases from the CasePool, then narrow them.
     pool = CasePool(CASES, store, WorkingDayCalendar())
     available = pool.fetch_available_cases(
-        as_of=AS_OF, activity_column="activity_date", within_working_days=5
+        as_of=context.run_date, activity_column="activity_date", within_working_days=5
     )
     variation = CASES.variation("v1")
     selection_pool = (
@@ -104,10 +119,10 @@ def main(target_dir: str) -> None:
         # Explainability (#53): land a per-Case trace of why each available Case
         # was/wasn't selected in a sibling table, stamped by this run.
         .explain(
-            store.writer("gold", "selection_trace", AccumulateByRun(RUN_ID, RUN_ID)),
+            store.writer("gold", "selection_trace", AccumulateByRun(run_id, run_id)),
             id_column="case_ref",
         )
-        .write_to(store.writer("gold", "selection_pool", AccumulateByRun(RUN_ID, RUN_ID)))
+        .write_to(store.writer("gold", "selection_pool", AccumulateByRun(run_id, run_id)))
         .run()
     )
 
@@ -116,12 +131,33 @@ def main(target_dir: str) -> None:
     print(
         f"available cases: {len(available)} -> "
         f"SelectionPool: {len(selection_pool)} cases "
-        f"(Question Bank {variation.question_bank_id}, run {RUN_ID}); "
+        f"(Question Bank {variation.question_bank_id}, run {run_id}); "
         f"trace: {len(trace)} considered, {excluded} excluded with a reason"
     )
+    return selection_pool
+
+
+def build_runner() -> PipelineRunner:
+    runner = PipelineRunner()
+    runner.register(CASES.name, "ingest", run_ingest)
+    runner.register(
+        CASES.name,
+        "selection",
+        run_selection,
+        freshness=(FreshnessRequirement(upstream_pipeline="ingest"),),
+    )
+    return runner
+
+
+def main(target_dir: str) -> None:
+    runner = build_runner()
+    runner.run(CASES.name, "ingest", target_dir, run_date=AS_OF)
+    runner.run(CASES.name, "selection", target_dir, run_date=AS_OF)
 
 
 if __name__ == "__main__":  # pragma: no cover - thin CLI entry
+    import sys
+
     if len(sys.argv) != 2:
         raise SystemExit(
             "usage: python -m pipelines.demo_source_to_selection <target_dir>"

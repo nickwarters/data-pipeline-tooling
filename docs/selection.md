@@ -32,7 +32,9 @@ accumulating layer is gold, where the **SelectionPool** lands stamped by run.
 A **Case Type** is a first-class classification of Cases that determines its
 fields, its Variations, and — over time — its ingest/selection/processing
 (CONTEXT.md). It is an **explicit declarative object imported directly**, not an
-entry in a global registry: a registry is deferred to the runner era (ADR-0005).
+entry in a global domain registry. The minimal `PipelineRunner` registry is only
+for dispatching named domain Pipelines such as `cases/ingest` and
+`cases/selection` (ADR-0005).
 
 ```python
 from dataclasses import dataclass
@@ -146,6 +148,13 @@ The SelectionPool reaches the review platform as a **Deliverable** (a later
 slice); the returned **Review Outcomes** come back through the **Sync** Pipeline,
 not here — they live in the Sync store, not the SelectionPool (CONTEXT.md).
 
+Selection is guarded by current Ingest history when it is run through the domain
+runner. `cases/selection` declares a freshness requirement on `cases/ingest`; the
+runner checks the latest successful upstream run in `RunRegistry` before calling
+the Selection handler. A stale Ingest aborts Selection before any SelectionPool
+write. A first run with no upstream history is allowed, but the runner records a
+`freshness` warn-hit so the missing baseline is visible.
+
 ## Explainability — why each Case was (or wasn't) selected
 
 Selecting *which advisers' Cases get reviewed* is itself a governed act that will
@@ -211,3 +220,14 @@ available cases: 3 -> SelectionPool: 2 cases (Question Bank qb-100, run 2026-05-
 
 The `as_of` date is fixed so the working-day window lines up with the sample feed
 and the run is deterministic.
+
+The same demo handlers are registered with the runner and can be dispatched one
+domain Pipeline at a time:
+
+```sh
+python -m pipelines.run cases ingest /tmp/demo --run-date 2026-05-29
+python -m pipelines.run cases selection /tmp/demo --run-date 2026-05-29
+```
+
+The runner records domain summaries under stable labels (`cases/ingest`,
+`cases/selection`) and writes the `freshness` guard record for Selection.
