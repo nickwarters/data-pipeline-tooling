@@ -96,17 +96,15 @@ test('CRHome: visitor only — renders single Visitor section, no other roles', 
   assert.deepEqual(sectionHeadings(el), ['Visitor']);
 });
 
-test('CRHome: visitor section has explainer text and a mailto access-request, no nav link', () => {
+test('CRHome: visitor section has explainer text and no links', () => {
   const el = new CRHome();
   el.capabilities = caps({ isVisitor: true });
   el.connectedCallback();
 
-  const links = findAll(el, 'a');
-  const mailtos = links.filter(a => a.href.startsWith('mailto:'));
-  assert.equal(mailtos.length, 1, 'one mailto access-request affordance');
-  assert.equal(links.length, 1, 'no non-mailto nav link in visitor section');
   // explainer paragraph present
   assert.ok(findAll(el, 'p').length >= 1, 'visitor explainer text present');
+  // no anchors at all — access is managed out-of-band, no in-app affordance
+  assert.equal(findAll(el, 'a').length, 0, 'no anchors in visitor section');
 });
 
 test('CRHome: reviewer — single section linking to dashboard', () => {

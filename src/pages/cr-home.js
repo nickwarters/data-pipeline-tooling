@@ -3,14 +3,11 @@ import { CRElement } from '../components/cr-element.js';
 
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
 
-// TBC: placeholder Maintainer mailbox for Visitor access requests.
-// Confirm the real shared mailbox with the platform owner.
-const ACCESS_REQUEST_MAILBOX = 'cr-maintainers@example.com';
-
 /**
  * Role-gated landing page. Renders one structural section per capability the
  * current user holds, each with a primary link to that role's main surface.
- * Visitors (no role) get an explainer plus a mailto access-request affordance.
+ * Visitors (no role) get an explainer only; access is managed out-of-band by
+ * their team, so there is no in-app access-request affordance.
  */
 export class CRHome extends CRElement {
   constructor() {
@@ -51,7 +48,6 @@ export class CRHome extends CRElement {
       sections.push(this._roleSection('Case Type Owner', '#/question-bank'));
     }
     if (caps.isMaintainer) {
-      // Until a Maintainer-only surface exists, point at the Question Bank.
       sections.push(this._roleSection('Maintainer', '#/question-bank'));
     }
     if (caps.isVisitor) {
@@ -91,14 +87,11 @@ export class CRHome extends CRElement {
 
     const explainer = document.createElement('p');
     explainer.textContent =
-      'You do not currently have access to any Case Review surfaces. ' +
-      'Request access from the Case Review maintainers.';
+      "You're signed in, but your account isn't enrolled in any Case Review " +
+      'role yet. Access is managed by your team — once you\'re enrolled, your ' +
+      'tools will appear here.';
 
-    const a = document.createElement('a');
-    a.href = `mailto:${ACCESS_REQUEST_MAILBOX}?subject=${encodeURIComponent('Case Review access request')}`;
-    a.textContent = 'Request access';
-
-    section.append(h2, explainer, a);
+    section.append(h2, explainer);
     return section;
   }
 }
