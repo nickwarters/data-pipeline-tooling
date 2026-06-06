@@ -94,7 +94,7 @@ test('evaluateAccess: assigned reviewer gets edit on all editable sections', () 
   assert.equal(evaluateAccess('conversation', ['assignedReviewer'], c, cfg), 'edit');
   assert.equal(evaluateAccess('notes', ['assignedReviewer'], c, cfg), 'edit');
   assert.equal(evaluateAccess('remediation', ['assignedReviewer'], c, cfg), 'edit');
-  assert.equal(evaluateAccess('outcome', ['assignedReviewer'], c, cfg), 'read-only');
+  assert.equal(evaluateAccess('summary', ['assignedReviewer'], c, cfg), 'read-only');
 });
 
 test('evaluateAccess: other reviewer is read-only everywhere', () => {
@@ -114,16 +114,36 @@ test('evaluateAccess: responsible party — questions R, conversation E, notes H
   assert.equal(evaluateAccess('remediation', ['responsibleParty'], c, cfg), 'read-only');
 });
 
-test('evaluateAccess: RP outcome — hidden while in-progress, read-only when completed', () => {
+test('evaluateAccess: RP summary — hidden while in-progress, read-only when completed', () => {
   const cfg = makeConfig();
   assert.equal(
-    evaluateAccess('outcome', ['responsibleParty'], makeCase({ status: 'In-progress' }), cfg),
+    evaluateAccess('summary', ['responsibleParty'], makeCase({ status: 'In-progress' }), cfg),
     'hidden'
   );
   assert.equal(
-    evaluateAccess('outcome', ['responsibleParty'], makeCase({ status: 'Completed' }), cfg),
+    evaluateAccess('summary', ['responsibleParty'], makeCase({ status: 'Completed' }), cfg),
     'read-only'
   );
+});
+
+test('SECTIONS includes summary and no longer includes outcome', () => {
+  assert.ok(SECTIONS.includes('summary'));
+  assert.ok(!(/** @type {string[]} */ (SECTIONS)).includes('outcome'));
+});
+
+test('evaluateAccess: summary never resolves to edit for any role', () => {
+  const cfg = makeConfig();
+  /** @type {import('../src/services/section-access.js').Role[]} */
+  const roles = ['assignedReviewer', 'otherReviewer', 'responsibleParty', 'caseTypeOwner', 'none'];
+  for (const role of roles) {
+    for (const status of /** @type {const} */ (['In-progress', 'Completed'])) {
+      assert.notEqual(
+        evaluateAccess('summary', [role], makeCase({ status }), cfg),
+        'edit',
+        `summary must never be edit for ${role} (${status})`
+      );
+    }
+  }
 });
 
 test('evaluateAccess: case type owner read-only across the board', () => {
@@ -203,7 +223,7 @@ test('evaluateAccess: details is hidden for the none role', () => {
 // --- Case Type opt-out ---
 
 test('evaluateAccess: section omitted from sections allow-list → hidden regardless of role', () => {
-  const cfg = makeConfig({ sections: ['questions', 'remediation', 'outcome'] });
+  const cfg = makeConfig({ sections: ['questions', 'remediation', 'summary'] });
   const c = makeCase();
   assert.equal(evaluateAccess('conversation', ['assignedReviewer'], c, cfg), 'hidden');
   assert.equal(evaluateAccess('notes', ['assignedReviewer'], c, cfg), 'hidden');

@@ -103,7 +103,7 @@ const tabFor = (/** @type {any} */ el, /** @type {string} */ id) =>
   tabsOf(el).tabs.find((/** @type {any} */ t) => t.id === id);
 const questionSectionOf = (/** @type {any} */ el) => panelOf(el, 'questions');
 const remediationOf = (/** @type {any} */ el) => panelOf(el, 'remediation');
-const outcomeOf = (/** @type {any} */ el) => panelOf(el, 'outcome');
+const summaryOf = (/** @type {any} */ el) => panelOf(el, 'summary');
 const notesOf = (/** @type {any} */ el) => panelOf(el, 'notes');
 const detailsOf = (/** @type {any} */ el) => panelOf(el, 'details');
 
@@ -111,7 +111,7 @@ const detailsOf = (/** @type {any} */ el) => panelOf(el, 'details');
 
 // ===== TABBED LAYOUT (ADR-0014, #106) =====
 
-test('CRCaseReview: renders a cr-tabs with Details · Questions · Remediation · Outcome · Notes in order', async () => {
+test('CRCaseReview: renders a cr-tabs with Details · Questions · Notes · Issues · Summary in order', async () => {
   const el = new CRCaseReview();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
@@ -121,15 +121,55 @@ test('CRCaseReview: renders a cr-tabs with Details · Questions · Remediation �
   const tabs = tabsOf(el).tabs;
   assert.deepEqual(
     tabs.map((/** @type {any} */ t) => t.id),
-    ['details', 'questions', 'remediation', 'outcome', 'notes'],
-    'tab order follows Section order with Details first'
+    ['details', 'questions', 'notes', 'remediation', 'summary'],
+    'tab order is Details · Questions · Notes · Issues · Summary (Issues keeps the remediation id)'
   );
   assert.deepEqual(
     tabs.map((/** @type {any} */ t) => t.label),
-    ['Details', 'Questions', 'Remediation', 'Outcome', 'Notes']
+    ['Details', 'Questions', 'Notes', 'Issues', 'Summary'],
+    'the Remediation Section surfaces under the UI label "Issues"'
   );
   // For the Assigned Reviewer on an In-progress case every Section is visible.
   assert.ok(tabs.every((/** @type {any} */ t) => !t.hidden), 'no Section is hidden for the assigned reviewer');
+});
+
+test('CRCaseReview: there is no standalone Outcome tab', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  const tabIds = tabsOf(el).tabs.map((/** @type {any} */ t) => t.id);
+  assert.ok(!tabIds.includes('outcome'), 'the Outcome tab is removed (ADR-0016)');
+  assert.equal(tabsOf(el).panels.outcome, undefined, 'no Outcome panel remains');
+});
+
+test('CRCaseReview: the Summary panel reads the frozen outcomeAtCompletion on a Completed Case', async () => {
+  const completedRow = {
+    ...BASE_ROW,
+    status: /** @type {'Completed'} */ ('Completed'),
+    outcomeAtCompletion: 'fail',
+    answers: {
+      'q-welcome': { value: 'Yes' },
+      'q-needs': { value: 'No' },
+      'q-channel': { value: 'Email' },
+      'q-products': { value: ['Billing'] },
+    },
+  };
+  const client = makeClient({ caseRow: completedRow });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  saveQueue.loadCase(completedRow);
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  el.currentUserId = 'u1';
+  await el.connectedCallback();
+
+  const summaryEl = summaryOf(el);
+  assert.equal(summaryEl.caseRow, completedRow, 'Summary receives the Case row so it can read the frozen snapshot');
 });
 
 test('CRCaseReview: each tab panel carries the matching Section content node', async () => {
@@ -143,8 +183,8 @@ test('CRCaseReview: each tab panel carries the matching Section content node', a
   // owns the cr-answer listener; the others are their respective custom elements.
   assert.ok(Array.isArray(questionSectionOf(el)._listeners['cr-answer']), 'questions panel owns the cr-answer listener');
   assert.equal(detailsOf(el).caseRow, BASE_ROW, 'details panel receives the Case row');
-  assert.ok(remediationOf(el), 'remediation panel present');
-  assert.ok(outcomeOf(el), 'outcome panel present');
+  assert.ok(remediationOf(el), 'remediation (Issues) panel present');
+  assert.ok(summaryOf(el), 'summary panel present');
   assert.ok(notesOf(el), 'notes panel present');
 });
 
@@ -171,7 +211,7 @@ test('CRCaseReview: default selected tab is Details', async () => {
   assert.equal(tabsOf(el).selected, 'details', 'Details is the default tab');
 });
 
-test('CRCaseReview: a Section that resolves to hidden produces a hidden tab (RP: Notes + Outcome while In-progress)', async () => {
+test('CRCaseReview: a Section that resolves to hidden produces a hidden tab (RP: Notes + Summary while In-progress)', async () => {
   const el = new CRCaseReview();
   el.client = /** @type {any} */ (makeClient({
     caseRow: { ...BASE_ROW, responsibleParty: 'u1', assignedReviewer: 'other' },
@@ -183,10 +223,10 @@ test('CRCaseReview: a Section that resolves to hidden produces a hidden tab (RP:
   await el.connectedCallback();
 
   assert.equal(tabFor(el, 'notes').hidden, true, 'Notes is hidden for the Responsible Party');
-  assert.equal(tabFor(el, 'outcome').hidden, true, 'Outcome is hidden for the RP on an In-progress case');
+  assert.equal(tabFor(el, 'summary').hidden, true, 'Summary is hidden for the RP on an In-progress case');
   assert.equal(tabFor(el, 'details').hidden, false, 'Details stays visible');
   assert.equal(tabFor(el, 'questions').hidden, false, 'Questions stays visible (read-only)');
-  assert.equal(tabFor(el, 'remediation').hidden, false, 'Remediation stays visible (read-only)');
+  assert.equal(tabFor(el, 'remediation').hidden, false, 'Issues stays visible (read-only)');
 });
 
 test('CRCaseReview: default tab falls back to the first visible Section when Details is absent', () => {
@@ -212,7 +252,7 @@ test('CRCaseReview: default tab falls back to the first visible Section when Det
       conversation: 'edit',
       notes: 'edit',
       remediation: 'edit',
-      outcome: 'edit',
+      summary: 'read-only',
     }),
   });
 
@@ -249,10 +289,10 @@ test('CRCaseReview: a hidden Questions or Remediation Section renders no tab', (
   const el = new CRCaseReview();
   buildLayoutWith(el, {
     details: 'edit', questions: 'hidden', conversation: 'edit',
-    notes: 'edit', remediation: 'hidden', outcome: 'edit',
+    notes: 'edit', remediation: 'hidden', summary: 'read-only',
   });
   assert.equal(tabFor(el, 'questions').hidden, true, 'no Questions tab when that Section is hidden');
-  assert.equal(tabFor(el, 'remediation').hidden, true, 'no Remediation tab when that Section is hidden');
+  assert.equal(tabFor(el, 'remediation').hidden, true, 'no Issues tab when the Remediation Section is hidden');
   assert.equal(tabsOf(el).selected, 'details', 'Details remains the default among the visible tabs');
 });
 
@@ -262,7 +302,7 @@ test('CRCaseReview: when every tab-bearing Section is hidden, no tab is selected
   // yet none of the five tab-bearing Sections is visible — selection resolves to none.
   buildLayoutWith(el, {
     details: 'hidden', questions: 'hidden', conversation: 'edit',
-    notes: 'hidden', remediation: 'hidden', outcome: 'hidden',
+    notes: 'hidden', remediation: 'hidden', summary: 'hidden',
   });
   assert.equal(tabsOf(el).selected, '', 'no tab is selected when no tab-bearing Section is visible');
   assert.equal((/** @type {any} */ (el))._activeTab.get(), '', 'the in-component active-tab signal is empty');
@@ -298,7 +338,7 @@ test('CRCaseReview: switching tabs does not refetch the Case and preserves the l
   // Edit an answer, then switch tabs.
   const section = questionSectionOf(el);
   section._listeners['cr-answer'][0]({ detail: { questionId: 'q-welcome', value: 'Yes' } });
-  tabsOf(el)._listeners['cr-tab-change'][0]({ detail: { id: 'outcome' } });
+  tabsOf(el)._listeners['cr-tab-change'][0]({ detail: { id: 'summary' } });
 
   assert.equal(getCaseCalls, 1, 'switching tabs must not refetch the Case');
   // The same qList element keeps receiving updates: the answers signal survived.
@@ -809,7 +849,7 @@ test('CRCaseReview: _buildLayout renders no Details tab when access.details is h
       conversation: 'edit',
       notes: 'edit',
       remediation: 'edit',
-      outcome: 'edit',
+      summary: 'read-only',
     }),
   });
 
@@ -989,7 +1029,7 @@ test('CRCaseReview: _buildLayout with access.conversation=hidden omits toggle bu
       conversation: hidden,
       notes: edit,
       remediation: edit,
-      outcome: edit,
+      summary: edit,
     }),
   });
 

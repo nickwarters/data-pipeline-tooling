@@ -98,7 +98,7 @@ const completeBtnOf = (/** @type {any} */ el) => el._children[4];
 const panelOf = (/** @type {any} */ el, /** @type {string} */ id) => tabsOf(el).panels[id];
 const questionSectionOf = (/** @type {any} */ el) => panelOf(el, 'questions');
 const remediationOf = (/** @type {any} */ el) => panelOf(el, 'remediation');
-const outcomeOf = (/** @type {any} */ el) => panelOf(el, 'outcome');
+const summaryOf = (/** @type {any} */ el) => panelOf(el, 'summary');
 const notesOf = (/** @type {any} */ el) => panelOf(el, 'notes');
 
 // Minimal client stub for component tests
@@ -552,7 +552,7 @@ test('CRCaseReview: layout includes a cr-notes element with case notes value', a
   assert.equal(notesEl.caseId, cases[2].id);
 });
 
-test('CRCaseReview: layout includes a cr-outcome element updated with computeOutcome', async () => {
+test('CRCaseReview: Summary panel is updated with computeOutcome (Outcome block reused inside Summary)', async () => {
   const client = makeStubClient({ getRow: caseUntouched });
   const saveQueue = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
 
@@ -562,15 +562,15 @@ test('CRCaseReview: layout includes a cr-outcome element updated with computeOut
   el.caseId = caseUntouched.id;
   await el.connectedCallback();
 
-  const outcomeEl = outcomeOf(el);
-  assert.ok(outcomeEl, 'outcome element should exist');
-  assert.ok(outcomeEl._updateArgs, 'update() should have been called on outcome element');
+  const summaryEl = summaryOf(el);
+  assert.ok(summaryEl, 'summary element should exist');
+  assert.ok(summaryEl._updateArgs, 'update() should have been called on the summary element');
   // case-1 has no answers so allAnswered is false
-  assert.equal(outcomeEl._updateArgs.a3, false, 'allAnswered should be false for untouched case');
-  assert.equal(typeof outcomeEl._updateArgs.a1, 'function', 'computeOutcome should be a function');
+  assert.equal(summaryEl._updateArgs.a3, false, 'allAnswered should be false for untouched case');
+  assert.equal(typeof summaryEl._updateArgs.a1, 'function', 'computeOutcome should be a function');
 });
 
-test('CRCaseReview: outcome element receives allAnswered=true when all applicable questions answered', async () => {
+test('CRCaseReview: Summary panel receives allAnswered=true when all applicable questions answered', async () => {
   const client = makeStubClient({ getRow: caseCompletable });
   const saveQueue = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
 
@@ -581,8 +581,8 @@ test('CRCaseReview: outcome element receives allAnswered=true when all applicabl
   await el.connectedCallback();
 
   // case-3 has all applicable questions answered (q-welcome + q-needs + q-channel + q-products)
-  const outcomeEl = outcomeOf(el);
-  assert.equal(outcomeEl._updateArgs.a3, true, 'allAnswered should be true for completable case');
+  const summaryEl = summaryOf(el);
+  assert.equal(summaryEl._updateArgs.a3, true, 'allAnswered should be true for completable case');
 });
 
 test('CRCaseReview: _completeCase navigates to #/dashboard on success', async () => {

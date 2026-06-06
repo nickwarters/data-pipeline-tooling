@@ -10,7 +10,7 @@ import '../components/cr-section-progress.js';
 import '../components/cr-remediation-section.js';
 import '../components/cr-conversation.js';
 import '../components/cr-notes.js';
-import '../components/cr-outcome.js';
+import '../components/cr-summary.js';
 import '../components/cr-status-banner.js';
 import '../components/cr-tabs.js';
 
@@ -302,9 +302,12 @@ export class CRCaseReview extends CRElement {
       saveQueue.enqueue(caseRow.id, 'answers', newAnswers);
     });
 
-    const outcomeEl = /** @type {import('../components/cr-outcome.js').CROutcome} */ (
-      document.createElement('cr-outcome')
+    // The Summary Section (ADR-0016) absorbs the former Outcome tab: it wraps
+    // cr-outcome and reads the frozen outcomeAtCompletion snapshot once Completed.
+    const summaryEl = /** @type {import('../components/cr-summary.js').CRSummary} */ (
+      document.createElement('cr-summary')
     );
+    summaryEl.caseRow = caseRow;
 
     // viewState combines applicability + answers + allAnswered so the subscribe fires once per state change.
     const viewState = computed(() => ({
@@ -315,7 +318,7 @@ export class CRCaseReview extends CRElement {
     this.subscribe(viewState, ({ questions, answers, allAnswered: done }) => {
       qList.update(questions, answers);
       remediationSection.update(catalogue, answers, attributeFailures);
-      outcomeEl.update(computeOutcome, answers, done);
+      summaryEl.update(computeOutcome, answers, done);
       const sectionData = computeSectionProgress(catalogue, answers);
       const unanswered = questions.filter(q => {
         const v = answers[q.id]?.value;
@@ -394,21 +397,24 @@ export class CRCaseReview extends CRElement {
     // `hidden` (ADR-0011) renders no tab. Conversation is deliberately NOT a tab —
     // it stays a floating overlay so a Reviewer can read it alongside the
     // Questions. Tab order is the Section order with Details first.
+    // Tab row is Details · Questions · Notes · Issues · Summary (ADR-0016). The
+    // Remediation Section surfaces under the UI label "Issues" while keeping its
+    // Section id `remediation`; the Outcome tab is gone, absorbed into Summary.
     /** @type {import('../components/cr-tabs.js').Tab[]} */
     const tabs = [
       { id: 'details', label: 'Details', hidden: access.details === 'hidden' },
       { id: 'questions', label: 'Questions', hidden: access.questions === 'hidden' },
-      { id: 'remediation', label: 'Remediation', hidden: access.remediation === 'hidden' },
-      { id: 'outcome', label: 'Outcome', hidden: access.outcome === 'hidden' },
       { id: 'notes', label: 'Notes', hidden: access.notes === 'hidden' },
+      { id: 'remediation', label: 'Issues', hidden: access.remediation === 'hidden' },
+      { id: 'summary', label: 'Summary', hidden: access.summary === 'hidden' },
     ];
     /** @type {Record<string, Node>} */
     const panels = {
       details: /** @type {any} */ (detailsEl),
       questions: section,
-      remediation: /** @type {any} */ (remediationSection),
-      outcome: /** @type {any} */ (outcomeEl),
       notes: /** @type {any} */ (notesEl),
+      remediation: /** @type {any} */ (remediationSection),
+      summary: /** @type {any} */ (summaryEl),
     };
 
     // Default tab is Details; because Details leads the array, the first visible

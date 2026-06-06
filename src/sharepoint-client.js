@@ -29,6 +29,8 @@
  *   caseJustification?: string,
  *   completedAt: string | null,
  *   outcome?: string | null,
+ *   outcomeAtCompletion?: string,
+ *   hadRemediation?: boolean,
  *   dueDate?: string | null,
  *   relatedDate?: string | null,
  *   created?: string,
@@ -98,7 +100,7 @@
  *   questions: QuestionDefinition[],
  *   computeOutcome: (answers: Record<string, Answer>) => OutcomeResult,
  *   eligibleGroups?: string[],
- *   sections?: Array<'details'|'questions'|'conversation'|'notes'|'remediation'|'outcome'>,
+ *   sections?: Array<'details'|'questions'|'conversation'|'notes'|'remediation'|'summary'>,
  *   slaHours?: number,
  *   attributeFailures?: boolean
  * }} CaseTypeConfig

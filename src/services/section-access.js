@@ -4,7 +4,7 @@
  * Section-level role-based access on the case page. UX-only per ADR-0010;
  * SharePoint list ACLs remain the real boundary. See ADR-0011 for design.
  *
- * @typedef {'details'|'questions'|'conversation'|'notes'|'remediation'|'outcome'} Section
+ * @typedef {'details'|'questions'|'conversation'|'notes'|'remediation'|'summary'} Section
  * @typedef {'assignedReviewer'|'otherReviewer'|'responsibleParty'|'caseTypeOwner'|'none'} Role
  * @typedef {'edit'|'read-only'|'hidden'} Mode
  */
@@ -14,7 +14,7 @@
 /** @typedef {import('./permissions.js').Capabilities} Capabilities */
 
 /** @type {Section[]} */
-export const SECTIONS = ['details', 'questions', 'conversation', 'notes', 'remediation', 'outcome'];
+export const SECTIONS = ['details', 'questions', 'conversation', 'notes', 'remediation', 'summary'];
 
 /**
  * Default access matrix. Function-valued cells receive the CaseRow and return a Mode.
@@ -56,7 +56,11 @@ const MATRIX = {
     caseTypeOwner: 'read-only',
     none: 'hidden',
   },
-  outcome: {
+  // Summary is never `edit` — only `read-only` or `hidden` (ADR-0016). It
+  // inherits the function-valued Outcome × Responsible Party cell that
+  // previously governed the removed Outcome Section: hidden from the Responsible
+  // Party while In-progress, read-only once Completed.
+  summary: {
     assignedReviewer: 'read-only',
     otherReviewer: 'read-only',
     responsibleParty: (c) => (c.status === 'Completed' ? 'read-only' : 'hidden'),
