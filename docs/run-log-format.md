@@ -3,8 +3,8 @@
 Every `.run()` can emit **structured run observability**: one JSON object per
 line to a `.log` file, plus a human-readable line per record to the console for
 development. The file is deliberately infrastructure-free now, yet it is the
-**seam the deferred run-registry will ingest** (ADR-0005) without parsing free
-text. See ADR-0007 for the *why* (fail-fast, atomic, no silent drops).
+**seam the run-registry ingests** (ADR-0005) without parsing free text. See
+ADR-0007 for the *why* (fail-fast, atomic, no silent drops).
 
 ## Wiring it in
 
@@ -53,8 +53,8 @@ leads each line; the examples below elide it for width but it is always present:
 |-------------|---------------------|---------|
 | `timestamp` | string              | ISO-8601 **UTC** instant the record was emitted (step close / run end). The time dimension the run-registry orders by — "latest run per pipeline", "row counts over time". |
 | `run_id`    | string              | The run's correlating id (same on every line of the run). |
-| `pipeline`  | string              | The feed/pipeline name (the builder's `name`). |
-| `step`      | string              | `read`, `pre-validate`, `quarantine`, `process`, `explain`, `post-validate`, `write`, or `run` (the summary). |
+| `pipeline`  | string              | The feed/pipeline name (the builder's `name`) or the runner's stable domain label (`<case_type>/<pipeline>`, e.g. `cases/selection`). |
+| `step`      | string              | `read`, `pre-validate`, `quarantine`, `process`, `explain`, `post-validate`, `write`, `freshness`, or `run` (the summary). |
 | `status`    | `"ok"` \| `"error"` | Step/run outcome. |
 | `rows_in`   | int \| null         | Rows the step consumed (`null` where N/A, e.g. `read`). |
 | `rows_out`  | int \| null         | Rows the step produced. |
@@ -80,6 +80,14 @@ Two opt-in steps appear only when their path is configured: `quarantine` (betwee
 `explain` (after `post-validate` — ADR-0007 amd 02, with `rows_excluded`; its
 `rows_in`/`rows_out` are the Cases considered/selected by Selection). A `process`
 step is recorded per attached processor.
+
+The runner adds one domain-level opt-in step before a handler executes:
+`freshness`. It is emitted for a downstream Pipeline that declares an upstream
+freshness requirement. If the latest successful upstream run is current enough,
+the step is `ok`. If there is no successful upstream history yet, the step is
+also `ok` but carries a `warn_hits` message so the first-run gap is visible. If
+history exists but is stale, the step is `error`, the runner writes an errored
+`run` summary for the downstream label, and the handler is not called.
 
 ### Happy path (a successful run of 4 rows)
 

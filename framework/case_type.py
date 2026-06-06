@@ -3,9 +3,9 @@
 A **Case Type** is a first-class classification of Cases that determines its
 fields (its :mod:`~framework.schema` dataclass), its Variations, and — over time
 — its ingest/selection/processing (CONTEXT.md). It is an **explicit declarative
-object imported directly**, not entries in a global registry: a registry is
-deferred to the runner era (ADR-0005; the CasePool-scope resolution in
-CONTEXT.md).
+object imported directly**, not entries in a global CaseType config registry
+(ADR-0005; the CasePool-scope resolution in CONTEXT.md). The runner's registry
+is separate: it dispatches named domain Pipelines and checks upstream freshness.
 
 A **Variation** is a specialization within a Case Type that inherits its config
 and overrides only what differs — most commonly the **Question Bank**
@@ -41,8 +41,8 @@ class CaseType:
 
     ``name`` is the subject (the medallion directory / table name); ``schema`` is
     the Case Type dataclass enforced at the silver/gold boundaries; ``variations``
-    are its declared Variations. No global registry — a CaseType is imported and
-    passed directly (ADR-0005).
+    are its declared Variations. No global CaseType config registry — a CaseType
+    is imported and passed directly (ADR-0005).
     """
 
     name: str

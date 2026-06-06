@@ -2,7 +2,7 @@
 """Structured JSONL run observability (issue #4, ADR-0007).
 
 A ``RunLog`` composed onto a ``Pipeline`` emits one JSON object per line to a
-``.log`` file (the seam the future run-registry ingests) and human-readable
+``.log`` file (the seam the run-registry ingests) and human-readable
 lines to the console. Every record of a single run shares one ``run_id``.
 """
 

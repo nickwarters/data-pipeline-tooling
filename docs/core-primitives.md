@@ -59,7 +59,7 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > `.run()` is fail-fast and atomic. **Structured JSONL observability** has
 > landed: a `RunLog` composed onto the builder emits one JSON record per step
 > plus a run summary to a `.log` file (and human-readable lines to the console)
-> — the seam the future run-registry ingests (ADR-0007;
+> — the seam the run-registry ingests (ADR-0007;
 > [format doc](run-log-format.md)). **Schema enforcement at silver** has landed:
 > a `SchemaValidator` derived from a Case Type's dataclass checks columns +
 > dtypes, and the `raw_to_silver` builder attaches it as a post-validator so a
@@ -80,7 +80,10 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > has landed: a `RunRegistry` ingests the `RunLog` JSONL into its own queryable
 > SQLite store — idempotent by `run_id` + step, queryable by pipeline / status /
 > time, surfacing warned (incl. schema-drift) runs (ADR-0005/0007, #52;
-> [run-log-format doc](run-log-format.md)). Still ahead: the value-level schema
+> [run-log-format doc](run-log-format.md)). **The thin Pipeline runner** has
+> landed: `PipelineRunner` dispatches domain Pipelines by `(case_type, pipeline)`
+> and `FreshnessRequirement` blocks stale downstream runs from `RunRegistry`
+> history without changing the builder contract (#61). Still ahead: the value-level schema
 > rules (format / uniqueness / encoding, #24), the domain capstone
 > (CaseType/Variation + CasePool → SelectionPool, #11), and the multi-table feed work
 > (ADR-0006 amendment, ADR-0009): per-feed load strategy (Store maps
@@ -384,6 +387,48 @@ Reading the JSONL needs no change to the emitter (ADR-0007); the one format
 addition this slice made is the per-record `timestamp` (run-log-format.md), the
 time dimension the registry orders by.
 
+### `PipelineRunner` — thin domain orchestration + freshness guard
+`PipelineRunner` (`framework.runner`) is the minimal orchestration layer above
+the builder. It registers domain Pipelines by `(case_type, pipeline)` and runs
+one requested Pipeline by name, without changing the builder contract:
+
+```python
+from framework.runner import FreshnessRequirement, PipelineRunner
+
+runner = PipelineRunner()
+runner.register("cases", "ingest", run_ingest)
+runner.register(
+    "cases",
+    "selection",
+    run_selection,
+    freshness=(FreshnessRequirement(upstream_pipeline="ingest"),),
+)
+
+runner.run("cases", "selection", "/path/to/share", run_date=date(2026, 5, 29))
+```
+
+Handlers receive a `RunContext` carrying `base_dir`, `case_type`, `pipeline`,
+`run_date`, an orchestration `run_id`, the runner-level `RunLog`, the
+`RunRegistry`, and `freshness_days`. The runner records stable domain labels in
+history as `<case_type>/<pipeline>` (`cases/ingest`, `cases/selection`) and
+stores its metadata under `<base_dir>/_runs/` and `<base_dir>/_registry/`.
+
+`FreshnessRequirement` declares the upstream domain Pipeline a downstream run
+needs. The default policy is same-business-date freshness (`max_age_days=0`):
+the latest successful upstream `run` summary timestamp must be on or after the
+downstream `run_date` minus the allowed age. Failed upstream runs do not count.
+No successful upstream history is treated as a first-run skip: the runner allows
+the handler and writes a `freshness` record with a warning. Stale history aborts
+before the handler executes and writes both a `freshness` error and an errored
+domain `run` summary.
+
+The current CLI entry point builds the demo registry and dispatches one Pipeline:
+
+```sh
+python -m pipelines.run cases ingest /tmp/demo --run-date 2026-05-29
+python -m pipelines.run cases selection /tmp/demo --run-date 2026-05-29
+```
+
 ### `Pipeline` — the deferred fluent builder
 A `Pipeline` describes a feed's path and runs **nothing** until `.run()`
 (ADR-0003):
@@ -446,7 +491,7 @@ brief:
 
 ### `CaseType` / `Variation` — the declarative domain objects
 A `CaseType` (`framework.case_type`) bundles a Case Type's `schema` with its
-`variations`, imported directly — no global registry (ADR-0005).
+`variations`, imported directly — no global CaseType config registry (ADR-0005).
 `CaseType.variation(id)` resolves a `Variation` (its `question_bank_id` + later
 overrides) and raises a located `KeyError` on an unknown id. Declarative data,
 not code (one Case Type has many Variations — `CONTEXT.md`).
