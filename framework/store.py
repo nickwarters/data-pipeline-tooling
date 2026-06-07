@@ -93,6 +93,7 @@ class Store:
                 table,
                 strategy.run_id,
                 strategy.load_date,
+                execution_id=strategy.execution_id,
                 busy_timeout_ms=self._busy_timeout_ms,
             )
         raise TypeError(f"unknown strategy {strategy!r}")

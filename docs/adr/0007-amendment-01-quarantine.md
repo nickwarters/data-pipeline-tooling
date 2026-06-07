@@ -35,8 +35,10 @@ columns stamped by the pipeline:
 | Column | Source | Meaning |
 |---|---|---|
 | `failed_rule` | `SchemaValueRulePartitioner` | Semicolon-joined breach descriptions for this row |
-| `run_id` | `Pipeline.run()` | Correlates with the main run's JSONL records |
-| `load_date` | `Pipeline.run()` (today's date, ISO format) | When the row was quarantined |
+| `run_id` | `RunContext.logical_run_id` | Logical/idempotency key for replacing rejects from a re-driven business run |
+| `logical_run_id` | `RunContext.logical_run_id` | Explicit name for the same logical/idempotency key |
+| `execution_id` | `RunContext.execution_id` | Correlates with the main run's JSONL/RunRegistry records |
+| `load_date` | `RunContext.load_date` | When the row was quarantined |
 
 Rejects accumulate across runs via `QuarantineWriter` (delete-by-run_id + append),
 so a re-driven day replaces only its own prior rejects without touching other runs.

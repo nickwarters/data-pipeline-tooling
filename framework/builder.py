@@ -10,15 +10,14 @@ which owns its own location and load strategy (ADR-0003, ADR-0006).
 
 from __future__ import annotations
 
-import datetime
 import logging
 import time
-import uuid
 from functools import partial
 
 from framework.dataset import Dataset
 from framework.processors import Processor
 from framework.readers import Reader
+from framework.run_context import RunContext
 from framework.run_log import NULL_RUN_LOG, RunLog, StepMetrics
 from framework.trace import RowTrace
 from framework.validators import Severity, ValidationError, Validator
@@ -41,8 +40,8 @@ class Pipeline:
         self._writer: Writer | None = None
         # The run-log sink (ADR-0007); when none is composed, a null sink lets
         # `.run()` drive the same branch-free code path while emitting nothing.
-        # `run_id` is minted per `.run()` (see below) and correlates every
-        # record of that run.
+        # `run_id` is the execution identity of the most recent `.run()` and
+        # correlates every RunLog/RunRegistry record for that execution.
         self._run_log = run_log or NULL_RUN_LOG
         self.run_id: str | None = None
         # Validators are attached with their severity and run in attach order:
@@ -86,10 +85,11 @@ class Pipeline:
     def quarantine(self, row_validator, reject_writer: Writer) -> "Pipeline":
         """Configure opt-in row-level quarantine. Deferred — nothing runs until .run().
 
-        After pre-validation, value-rule-failing rows are routed to ``reject_writer``
-        (stamped with ``run_id`` + ``load_date``); good rows continue through the
-        pipeline. Structural breaches (missing columns, wrong dtypes) still abort via
-        the pre-validators — quarantine is only for value-rule breaches (ADR-0007 §2).
+        After pre-validation, value-rule-failing rows are routed to
+        ``reject_writer`` with the current context's run metadata; good rows
+        continue through the pipeline. Structural breaches (missing columns,
+        wrong dtypes) still abort via the pre-validators — quarantine is only
+        for value-rule breaches (ADR-0007 §2).
         """
         self._quarantine_validator = row_validator
         self._quarantine_writer = reject_writer
@@ -129,7 +129,7 @@ class Pipeline:
         self._writer = writer
         return self
 
-    def run(self) -> Dataset:
+    def run(self, context: RunContext | None = None) -> Dataset:
         """Execute: read, validate, hand the dataset to the Writer, return it.
 
         Fail-fast and atomic (ADR-0007): an error-severity validator aborts the
@@ -138,15 +138,19 @@ class Pipeline:
         SQLite transaction owned by the Writer. Returns the bulk-tier
         ``Dataset`` (ADR-0003).
 
-        ``.run()`` is also the home of cross-cutting observability: it mints a
-        fresh ``run_id`` (exposed as :attr:`run_id`) and drives the composed
-        :class:`RunLog` per step plus a final ``run`` summary, so every record
-        of this run correlates and an abort is still recorded before it raises.
+        ``.run()`` is also the home of cross-cutting observability: it uses the
+        supplied :class:`RunContext` or creates one for ad hoc builder execution.
+        The context's execution id is exposed as :attr:`run_id` and drives the
+        composed :class:`RunLog` per step plus a final ``run`` summary, so every
+        record of this execution correlates and an abort is still recorded before
+        it raises.
         """
-        self.run_id = uuid.uuid4().hex
+        context = context or RunContext(pipeline=self._name, run_log=self._run_log)
+        run_log = context.run_log if context.run_log is not NULL_RUN_LOG else self._run_log
+        self.run_id = context.execution_id
         # Bind the per-run identity once so each step/summary call stays terse.
-        step = partial(self._run_log.step, self.run_id, self._name)
-        record = partial(self._run_log.record, self.run_id, self._name)
+        step = partial(run_log.step, context.execution_id, self._name)
+        record = partial(run_log.record, context.execution_id, self._name)
         started = time.perf_counter()
         warn_hits: list[str] = []
         try:
@@ -169,8 +173,10 @@ class Pipeline:
                     metrics.rows_quarantined = len(rejected)
                     if len(rejected) > 0 and self._quarantine_writer is not None:
                         stamped = rejected.with_columns(
-                            run_id=self.run_id,
-                            load_date=datetime.date.today().isoformat(),
+                            run_id=context.logical_run_id,
+                            logical_run_id=context.logical_run_id,
+                            execution_id=context.execution_id,
+                            load_date=context.load_date,
                         )
                         self._quarantine_writer.write(stamped)
                     dataset = good
@@ -237,6 +243,7 @@ class Pipeline:
                 duration=time.perf_counter() - started,
                 errors=[str(exc)],
             )
+            context.mark_run_summary_recorded()
             raise
 
         record(
@@ -247,6 +254,7 @@ class Pipeline:
             duration=time.perf_counter() - started,
             warn_hits=warn_hits,
         )
+        context.mark_run_summary_recorded()
         return dataset
 
     def _validate(

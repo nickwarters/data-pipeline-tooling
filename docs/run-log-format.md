@@ -37,14 +37,19 @@ logged at `INFO` on the `framework.run_log` logger, so an entry-point that calls
 does) will surface them. The `.log` file is always written when a `RunLog` is
 present, regardless of logging configuration.
 
-## `run_id` — the correlation key
+## `run_id` — the execution correlation key
 
-`.run()` mints a fresh `run_id` (a uuid4 hex) on every call and exposes it as
-`pipeline.run_id`. **Every record of a single run carries the same `run_id`**,
-so the registry can group a run's steps and its summary. Re-running the same
-builder is a new run with a new id. (For this slice the run-log `run_id` is
-independent of the gold `AccumulateByRunWriter`'s own `run_id`; unifying them is
-a later seam.)
+Run-log `run_id` is the **execution id**: the concrete attempt being observed.
+Ad hoc `Pipeline.run()` creates a fresh execution id and exposes it as
+`pipeline.run_id`; `Pipeline.run(context=...)` uses the supplied
+`RunContext.execution_id`. **Every record of a single execution carries the same
+`run_id`**, so the registry can group a run's steps and its summary.
+
+Accumulating tables use a separate **logical run id** for idempotency: a
+re-driven business run uses the same logical id so it replaces its prior rows,
+while each execution still has its own execution id for traceability. Context-
+derived accumulated writes stamp `run_id` and `logical_run_id` with the logical
+id, and `execution_id` with the value that matches the run-log/registry `run_id`.
 
 ## Record schema
 

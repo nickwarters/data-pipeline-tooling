@@ -19,6 +19,7 @@ from typing import Callable
 
 from framework.dataset import Dataset
 from framework.run_log import RunLog
+from framework.run_context import RunContext
 from framework.run_registry import RunRegistry
 
 
@@ -37,25 +38,6 @@ class FreshnessRequirement:
     upstream_pipeline: str
     upstream_case_type: str | None = None
     max_age_days: int = 0
-
-
-@dataclass(frozen=True)
-class RunContext:
-    """Context passed to registered domain Pipeline handlers."""
-
-    base_dir: Path
-    case_type: str
-    pipeline: str
-    run_date: dt.date
-    run_id: str
-    run_log: RunLog
-    run_registry: RunRegistry
-    freshness_days: int = 0
-
-    @property
-    def label(self) -> str:
-        """Stable run-history label for this domain Pipeline."""
-        return pipeline_label(self.case_type, self.pipeline)
 
 
 def pipeline_label(case_type: str, pipeline: str) -> str:
@@ -176,7 +158,7 @@ class PipelineRunner:
             case_type=case_type,
             pipeline=pipeline,
             run_date=run_date or dt.date.today(),
-            run_id=uuid.uuid4().hex,
+            execution_id=uuid.uuid4().hex,
             run_log=run_log,
             run_registry=run_registry,
             freshness_days=freshness_days,
@@ -188,27 +170,31 @@ class PipelineRunner:
                 self._freshness_guard.check(context, requirement)
             result = registered.handler(context)
         except Exception as exc:
-            run_log.record(
-                context.run_id,
-                context.label,
-                "run",
-                "error",
-                duration=time.perf_counter() - started,
-                errors=[str(exc)],
-            )
+            if not context.run_summary_recorded:
+                run_log.record(
+                    context.run_id,
+                    context.label,
+                    "run",
+                    "error",
+                    duration=time.perf_counter() - started,
+                    errors=[str(exc)],
+                )
+                context.mark_run_summary_recorded()
             run_registry.ingest(run_log_path)
             raise
 
         rows = len(result) if isinstance(result, Dataset) else None
-        run_log.record(
-            context.run_id,
-            context.label,
-            "run",
-            "ok",
-            rows_in=rows,
-            rows_out=rows,
-            duration=time.perf_counter() - started,
-        )
+        if not context.run_summary_recorded:
+            run_log.record(
+                context.run_id,
+                context.label,
+                "run",
+                "ok",
+                rows_in=rows,
+                rows_out=rows,
+                duration=time.perf_counter() - started,
+            )
+            context.mark_run_summary_recorded()
         run_registry.ingest(run_log_path)
         return result
 

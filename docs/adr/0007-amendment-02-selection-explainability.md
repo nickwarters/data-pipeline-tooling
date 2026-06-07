@@ -11,8 +11,9 @@ A Selection pipeline may be configured with an opt-in **explainability path** vi
 `.explain(writer, id_column=…, score_column=None)`. When configured, `.run()`
 follows each considered Case across the processor stages and writes a per-Case
 **verdict** — selected/excluded, the gate that excluded it, its score, and the
-survivor's rank — to a **sibling trace table** stamped by `run_id`. The
-SelectionPool write is unchanged; the trace lands alongside it.
+survivor's rank — to a **sibling trace table** stamped with the same logical and
+execution identity model as the SelectionPool. The SelectionPool write is
+unchanged; the trace lands alongside it.
 
 This is the **eligibility-stage twin of quarantine** (ADR-0007 amendment 01).
 Both share one shape — *route aside with a located reason, never silently drop* —
@@ -70,7 +71,8 @@ Every considered Case lands one row in the configured trace table:
 | `reason` | located: `passed high-value, not-x` or `excluded by filter 'high-value'` |
 | `score` | the `score_column` value, retained even for excluded Cases (omitted if no `score_column`) |
 | `rank` | 1-based rank among survivors; null for excluded |
-| `run_id`, `load_date` | stamped by the Writer's `AccumulateByRun` strategy (idempotent re-run) |
+| `run_id`, `logical_run_id`, `load_date` | stamped by the Writer's `AccumulateByRun` strategy as the logical/idempotency run metadata |
+| `execution_id` | stamped when the strategy is derived from `RunContext`; correlates to RunLog/RunRegistry |
 
 ## Observability
 

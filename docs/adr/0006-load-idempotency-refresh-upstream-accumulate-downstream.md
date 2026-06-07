@@ -2,9 +2,9 @@
 status: accepted
 ---
 
-# Load & idempotency: refresh upstream, accumulate downstream, stamp by run
+# Load & idempotency: refresh upstream, accumulate downstream, stamp by logical run
 
-Sources are treated as current-state snapshots, so **raw and silver are full-refreshed each run** (truncate + reload). **Gold (SelectionPool) and Review Outcomes accumulate** — every row is stamped with `run_id` and `load_date`. A re-run is made idempotent by **delete-by-run then insert** (`DELETE WHERE run_id = X; INSERT …`). This keeps re-running a given day safe and deterministic while preserving the historical record of past selections and reviews for audit/reporting.
+Sources are treated as current-state snapshots, so **raw and silver are full-refreshed each run** (truncate + reload). **Gold (SelectionPool) and Review Outcomes accumulate** — every row is stamped with a logical `run_id` / `logical_run_id` and `load_date`, plus `execution_id` when written from a `RunContext`. A re-run is made idempotent by **delete-by-logical-run then insert** (`DELETE WHERE run_id = X; INSERT …`). This keeps re-running a given business day safe and deterministic while preserving the historical record of past selections and reviews for audit/reporting.
 
 ## Why
 
@@ -19,15 +19,15 @@ Sources are treated as current-state snapshots, so **raw and silver are full-ref
 
 ## Consequences
 
-- `run_id` and `load_date` are first-class columns on accumulating tables; they also seed future lineage / run-registry (see ADR-0005).
-- Re-running a day must scope its delete by `run_id` (or the run's logical date) to avoid wiping other runs' rows.
+- Logical `run_id`, `logical_run_id`, and `load_date` are first-class columns on accumulating tables. Context-derived writes also stamp `execution_id`, which is the value recorded as `run_id` in RunLog/RunRegistry.
+- Re-running a day must scope its delete by logical `run_id` (or the run's logical date) to avoid wiping other runs' rows.
 - If a source ever becomes delta-based rather than a full snapshot, the raw load strategy for that feed must be revisited.
 
 ## Amendment (#8): `run_id` is a load key, and gold is reused across Pipelines
 
 Clarifications from building the `silver_to_gold` builder (#8); see [gold-accumulation.md](../gold-accumulation.md):
 
-- **`run_id` is the load / idempotency key, not a business version key.** The delete-by-run is scoped to `run_id` alone, never to a business key (`case_ref`), so gold never updates a record in place. A record that changes between runs yields one stamped row per run that observed it; its version axis is `(case_ref, load_date)`. The "current" value of a record is `max(load_date)` per business key (and, when a run writes the full set, equivalently the latest `run_id`). That derivation is Python on the read side (ADR-0002), not the Writer.
+- **Logical `run_id` is the load / idempotency key, not a business version key or execution trace key.** The delete-by-run is scoped to logical `run_id` alone, never to a business key (`case_ref`) or execution id, so gold never updates a record in place. A record that changes between logical runs yields one stamped row per run that observed it; its version axis is `(case_ref, load_date)`. The "current" value of a record is `max(load_date)` per business key (and, when a run writes the full set, equivalently the latest logical `run_id`). That derivation is Python on the read side (ADR-0002), not the Writer.
 
 - **This is a periodic-snapshot pattern as much as an event log.** The original decision framed gold around accumulating *selections / outcomes* (append-only events). Reused for a full per-run snapshot of a mutable entity (e.g. the Sync **Pipeline** re-syncing the review platform), the same primitive re-copies unchanged rows every run — periodic-snapshot growth (records × runs), bounded here at ~1M rows. Whether a given gold should stay a periodic snapshot or grow change-detection / SCD-style current+history is a per-Pipeline decision, deferred until a Pipeline needs it.
 
@@ -77,3 +77,20 @@ Consequences:
 - The original "refresh-up / accumulate-down" framing remains the **default
   starting profile** for a simple current-state feed whose source is
   non-destructive; it is just no longer the only profile.
+
+## Amendment (2026-06-07): RunContext separates execution identity from logical idempotency identity
+
+Pipeline execution now has one shared `RunContext` carrying:
+
+- `execution_id` — the concrete attempt, recorded as `run_id` in RunLog and
+  RunRegistry.
+- `logical_run_id` — the business/idempotency key reused by a re-driven run.
+- `load_date` and `run_date` — the persisted load stamp and business run date.
+- `run_log` and `run_registry` collaborators for orchestration.
+
+`AccumulateByRun.from_context(context)` derives the Writer strategy from that
+context. Persisted accumulated rows keep the legacy `run_id` column as the
+logical idempotency key, also stamp `logical_run_id`, and stamp `execution_id`
+so operators can correlate rows to RunRegistry records without guessing which
+`run_id` meaning applies. Quarantine and explainability artifacts follow the
+same model as the main accumulated output.

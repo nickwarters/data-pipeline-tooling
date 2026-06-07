@@ -71,22 +71,17 @@ Every Pipeline reuses the **same generic** three-layer medallion. A **subject**
 SQLite databases `<subject>/{raw,silver,gold}.db` on a network share, isolated
 from every other subject's files for blast-radius containment and independent
 onboarding ([ADR-0001](adr/0001-sqlite-medallion-store-on-network-share.md)).
-Use the framework layer constants (`RAW`, `SILVER`, `GOLD`) rather than new
-string literals when composing new pipeline code.
 
-| Layer  | Generic guarantee | Discipline |
-|--------|-------------------|------------|
-| **raw**   | Landed source data with minimal framework interpretation. | Keep it faithful and diagnosable; the caller still chooses `Refresh()` or `AccumulateByRun(...)`. |
-| **silver** | Refined data that has crossed declared validation and normalisation checks. | Coerce/repair storage-lossy types where needed, validate, then write using the caller's explicit strategy. |
-| **gold**  | Consumption-ready data for the pipeline's caller. | Enforce the pipeline-specific consumption contract, such as current grain or audit history, with an explicit strategy. |
+| Layer  | Holds | Discipline |
+|--------|-------|------------|
+| **raw**   | A faithful, **schema-light** mirror of the source as landed (booleans as `TRUE`/`FALSE` text, dates unparsed). | Full refresh each run, so re-runs are deterministic. The diagnosable landing zone. |
+| **silver** | Validated, normalised data — the **schema boundary**: a Case Type's declared columns + dtypes are enforced *before* data lands. | Coerce (repair storage-lossy types) → validate → write. This **silver is the CasePool**. |
+| **gold**  | The accumulating record: the **SelectionPool**, Review Outcomes, Reporting views. Ingest's gold is current-only, one row per Case (the **grain boundary**). | Accumulates, stamped with logical run id / `load_date` and, when context-driven, `execution_id`; idempotent re-run. |
 
-Case-review meanings are layered on top by the application code: Ingest may make
-gold the current CasePool, Selection may make gold an accumulating SelectionPool,
-and Sync may make gold review-platform history. Those meanings are not built
-into the framework layer names. Common boundaries still apply by convention:
-silver is often the schema boundary ([ADR-0008](adr/0008-graduated-schema-enforcement.md))
-and gold is often the consumption/grain boundary
-([ADR-0009](adr/0009-case-identity-and-gold-grain.md)).
+Two boundaries fall out of this: **silver is the schema boundary** (declared
+columns + dtypes validated — [ADR-0008](adr/0008-graduated-schema-enforcement.md))
+and **gold is the grain boundary** (one row per Case enforced —
+[ADR-0009](adr/0009-case-identity-and-gold-grain.md)).
 
 > **Load strategy is per-feed, owned by the Writer** — the Store maps `layer →
 > location` only ([ADR-0006](adr/0006-load-idempotency-refresh-upstream-accumulate-downstream.md)
@@ -122,9 +117,9 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`Validator`** | `validate(dataset) -> None`, **raises** on breach. `ColumnValidator`, `RowCountValidator` (engine-agnostic), `VolumeAnomalyValidator` (trips when a run's volume deviates from its recent-history baseline — catches truncated source exports, #54). Severity (`error`/`warn`) is set where it's attached. |
 | **`Schema` / `SchemaValidator`** | A Case Type **dataclass** whose annotations *are* the column+dtype contract; the validator is the dataclass→validator adapter, enforced at silver (and optionally gold). Value-level rules extend the same dataclass via `Annotated`. → [schema-enforcement.md](schema-enforcement.md) ([ADR-0008](adr/0008-graduated-schema-enforcement.md)) |
 | **`Processor`** | `process(dataset) -> Dataset`, run mid-pipeline via `.with_processor()`. `SchemaCoercion` (repair storage-lossy types); the Selection transforms `Filter` / `Score` / `Sort` / `Rename` / `Stamp`, the per-group `TopNPerGroup` / `SamplePerGroup`, the lazy cross-feed `JoinWith`; and the Ingest / fan-out transforms `SelectColumns` / `Unpivot` / `DeriveKey` / `LatestPerKey`. → [processors.md](processors.md) |
-| **`Pipeline`** (builder) | The deferred fluent builder: `Pipeline(name, reader).with_processor(…).write_to(writer).run()`. Runs nothing until `.run()`, which is **fail-fast and atomic** and drives the RunLog. ([ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md)) |
+| **`Pipeline`** (builder) | The deferred fluent builder: `Pipeline(name, reader).with_processor(…).write_to(writer).run(context=…)`. Runs nothing until `.run()`, which is **fail-fast and atomic** and drives the RunLog. ([ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md)) |
 | **`RunLog` / `RunRegistry`** | `RunLog` emits one JSON record per step (+ a run summary) to a `.log` file — the observability seam. `RunRegistry` ingests that JSONL into a queryable run-history store. → [run-log-format.md](run-log-format.md) ([ADR-0007](adr/0007-fail-fast-atomic-runs-jsonl-observability.md)) |
-| **`PipelineRunner` / `FreshnessRequirement`** | The thin domain runner: register handlers by `(case_type, pipeline)`, run them with `python -m pipelines.run …`, and block stale downstream runs by querying `RunRegistry` for recent successful upstream history. → [core-primitives.md](core-primitives.md) |
+| **`RunContext` / `PipelineRunner` / `FreshnessRequirement`** | The thin domain runner: register handlers by `(case_type, pipeline)`, receive a context carrying execution/logical identity, dates, RunLog, and RunRegistry, and block stale downstream runs by querying recent successful upstream history. → [core-primitives.md](core-primitives.md) |
 | **`CaseType` / `Variation`** | Case-review application/domain objects in `case_review.case_type`, not framework primitives: a Case Type bundles its `schema` + `variations`, imported directly (no global CaseType config registry). A Variation overrides only what differs — most often the `question_bank_id`. → [selection.md](selection.md) |
 | **`CasePool`** | Case-review application/domain helper in `case_review.case_pool`: the per-Case-Type population read from ingested silver, surfaced through intention-revealing retrievals (e.g. `fetch_available_cases(...)`) instead of raw `read_*`. → [selection.md](selection.md) |
 | **`WorkingDayCalendar`** | A config-seeded **pure utility** for availability arithmetic ("the last 20 working days"). Touches no Dataset/Store/engine; not a Feed. → [working-day-calendar.md](working-day-calendar.md) |
@@ -249,12 +244,11 @@ and the processor reference [`processors.md`](processors.md).
 from framework.builder import Pipeline
 from framework.processors import Filter, Sort, Stamp, JoinWith, TopNPerGroup
 from framework.readers import DatasetReader
-from framework.store import GOLD, SILVER, StoreCatalog
 from framework.strategy import AccumulateByRun
 
 variation = CASES.variation("v1")
-catalog = StoreCatalog("/share")
-reference = Pipeline("advisers", catalog.store("advisers").reader(SILVER, "advisers"))
+reference = Pipeline("advisers", Store("/share/advisers").reader("silver", "advisers"))
+strategy = AccumulateByRun.from_context(context)
 
 (
     Pipeline("selection", DatasetReader(available))
@@ -264,11 +258,11 @@ reference = Pipeline("advisers", catalog.store("advisers").reader(SILVER, "advis
     .with_processor(Sort("amount", ascending=False))
     .with_processor(Stamp("question_bank_id", variation.question_bank_id))
     .explain(                                                    # optional: RowTrace
-        store.writer(GOLD, "selection_trace", AccumulateByRun(run_id, load_date)),
+        store.writer("gold", "selection_trace", strategy),
         id_column="case_ref",
     )
-    .write_to(store.writer(GOLD, "selection_pool", AccumulateByRun(run_id, load_date)))
-    .run()
+    .write_to(store.writer("gold", "selection_pool", strategy))
+    .run(context=context)
 )
 ```
 
