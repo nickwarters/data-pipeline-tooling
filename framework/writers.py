@@ -64,10 +64,11 @@ class SqliteTruncateReloadWriter:
 class QuarantineWriter:
     """A Writer for the quarantine reject table — accumulates rejects across runs.
 
-    Owns its target location (db_path + table). The pipeline stamps ``run_id``
-    and ``load_date`` on the rejected dataset before calling ``write()``, so this
-    writer just does the idempotent delete-by-run_id + append that lets a re-driven
-    run replace only its own prior rejects without touching other runs (ADR-0006).
+    Owns its target location (db_path + table). The pipeline stamps logical
+    ``run_id`` and ``load_date`` on the rejected dataset before calling
+    ``write()``, so this writer just does the idempotent delete-by-run_id +
+    append that lets a re-driven run replace only its own prior rejects without
+    touching other runs (ADR-0006).
 
     Unlike ``AccumulateByRunWriter``, this writer does NOT stamp ``run_id`` or
     ``load_date`` — those come from the dataset (added by the pipeline at quarantine
@@ -108,8 +109,10 @@ class AccumulateByRunWriter:
 
     Owns its target location (a single layer db file + table). Used for the gold
     layer (the accumulating SelectionPool / Review Outcomes), whose history must
-    survive across runs. Each row is stamped ``run_id`` / ``load_date``; a
-    re-driven run is idempotent via delete-by-run then insert.
+    survive across runs. Each row is stamped with the logical ``run_id`` /
+    ``logical_run_id`` / ``load_date`` plus ``execution_id`` when the strategy
+    was derived from a RunContext. A re-driven logical run is idempotent via
+    delete-by-run then insert.
     """
 
     def __init__(
@@ -118,17 +121,22 @@ class AccumulateByRunWriter:
         table: str,
         run_id: str,
         load_date: str,
+        execution_id: str | None = None,
         busy_timeout_ms: int = 5000,
     ) -> None:
         self._db_path = Path(db_path)
         self._table = table
         self._run_id = run_id
         self._load_date = load_date
+        self._execution_id = execution_id
         self._busy_timeout_ms = busy_timeout_ms
 
     def write(self, dataset: Dataset) -> None:
         frame = dataset.to_pandas().copy()
         frame["run_id"] = self._run_id
+        frame["logical_run_id"] = self._run_id
+        if self._execution_id is not None:
+            frame["execution_id"] = self._execution_id
         frame["load_date"] = self._load_date
 
         # Create the subject's medallion directory on first write — a new

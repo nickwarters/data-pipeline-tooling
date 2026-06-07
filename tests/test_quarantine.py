@@ -181,6 +181,52 @@ def test_pipeline_quarantine_routes_rejected_rows_to_reject_writer(tmp_path):
     assert "load_date" in cols_reject
 
 
+def test_pipeline_quarantine_uses_run_context_identity(tmp_path):
+    import datetime as dt
+    import sqlite3
+    from framework.builder import Pipeline
+    from framework.readers import CsvReader
+    from framework.run_context import RunContext
+    from framework.writers import QuarantineWriter, SqliteTruncateReloadWriter
+
+    csv_file = tmp_path / "feed.csv"
+    csv_file.write_text(
+        "case_ref,status\n"
+        "BAD,open\n"
+    )
+
+    context = RunContext(
+        case_type="cases",
+        pipeline="ingest",
+        run_date=dt.date(2026, 5, 29),
+        execution_id="exec-1",
+    )
+    (
+        Pipeline("feed", CsvReader(csv_file))
+        .quarantine(
+            SchemaValueRulePartitioner(RefCase),
+            QuarantineWriter(tmp_path / "rejects.db", "rejects"),
+        )
+        .write_to(SqliteTruncateReloadWriter(tmp_path / "main.db", "feed"))
+        .run(context=context)
+    )
+
+    con = sqlite3.connect(tmp_path / "rejects.db")
+    try:
+        row = con.execute(
+            "SELECT run_id, logical_run_id, execution_id, load_date FROM rejects"
+        ).fetchone()
+    finally:
+        con.close()
+
+    assert row == (
+        "cases/ingest:2026-05-29",
+        "cases/ingest:2026-05-29",
+        "exec-1",
+        "2026-05-29",
+    )
+
+
 def test_pipeline_quarantine_is_idempotent_on_rerun(tmp_path):
     # Re-running the same pipeline should replace the prior run's rejects,
     # not accumulate duplicates (delete-by-run_id + append).

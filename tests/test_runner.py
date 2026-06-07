@@ -5,7 +5,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from framework.builder import Pipeline
 from framework.dataset import Dataset
+from framework.readers import DatasetReader, SqliteReader
 from framework.run_log import RunLog
 from framework.run_registry import RunRegistry
 from framework.runner import (
@@ -16,6 +18,8 @@ from framework.runner import (
     RunContext,
     UnknownPipelineError,
 )
+from framework.store import Store
+from framework.strategy import AccumulateByRun
 
 
 def _record_run(
@@ -137,6 +141,40 @@ def test_runner_registers_and_runs_handler_by_case_type_and_pipeline(tmp_path):
     registry = RunRegistry(tmp_path / "_registry" / "runs.db")
     (run,) = registry.query_runs(pipeline="cases/ingest")
     assert run["status"] == "ok"
+
+
+def test_runner_context_correlates_logs_registry_and_accumulated_rows(tmp_path):
+    runner = PipelineRunner()
+
+    def handler(context):
+        store = Store(context.base_dir / context.case_type)
+        source = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c1", "c2"]}))
+        return (
+            Pipeline(context.label, DatasetReader(source))
+            .write_to(
+                store.writer(
+                    "gold",
+                    "selection_pool",
+                    AccumulateByRun.from_context(context),
+                )
+            )
+            .run(context=context)
+        )
+
+    runner.register("cases", "selection", handler)
+
+    runner.run("cases", "selection", tmp_path, run_date=dt.date(2026, 5, 29))
+
+    registry = RunRegistry(tmp_path / "_registry" / "runs.db")
+    (run,) = registry.query_runs(pipeline="cases/selection")
+    landed = SqliteReader(
+        tmp_path / "cases" / "gold.db", "selection_pool"
+    ).read().to_pandas()
+
+    assert set(landed["execution_id"]) == {run["run_id"]}
+    assert set(landed["run_id"]) == {"cases/selection:2026-05-29"}
+    assert set(landed["logical_run_id"]) == {"cases/selection:2026-05-29"}
+    assert set(landed["load_date"]) == {"2026-05-29"}
 
 
 def test_runner_unknown_pipeline_raises_clear_error(tmp_path):

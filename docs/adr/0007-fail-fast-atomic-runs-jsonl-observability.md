@@ -4,7 +4,7 @@ status: accepted
 
 # Fail-fast atomic runs, no silent drops, structured JSONL observability
 
-`.run()` is **fail-fast and atomic**. Each builder targets one layer DB, and its writes (truncate+reload for raw/silver; delete-by-`run_id`+insert for gold) execute in a **single SQLite transaction** — any validator or processor failure aborts the run and rolls back, so a layer is never left half-written. Validators default to **error severity (abort)**; an individual validator can be marked `warn` to log-and-continue. **Rows are never silently dropped** — in a regulated review domain, excluding a reviewable case must be explicit and visible, so bad data fails the run rather than being quietly quarantined. Each run emits **structured JSONL** records (one JSON object per line: `run_id`, pipeline, step, status, `rows_in`/`rows_out`, duration, errors, warn-hits) to a `.log` file, with human-readable console output for development.
+`.run()` is **fail-fast and atomic**. Each builder targets one layer DB, and its writes (truncate+reload for raw/silver; delete-by-logical-`run_id`+insert for accumulated outputs) execute in a **single SQLite transaction** — any validator or processor failure aborts the run and rolls back, so a layer is never left half-written. Validators default to **error severity (abort)**; an individual validator can be marked `warn` to log-and-continue. **Rows are never silently dropped** — in a regulated review domain, excluding a reviewable case must be explicit and visible, so bad data fails the run rather than being quietly quarantined. Each run emits **structured JSONL** records (one JSON object per line: execution `run_id`, pipeline, step, status, `rows_in`/`rows_out`, duration, errors, warn-hits) to a `.log` file, with human-readable console output for development.
 
 ## Why
 
@@ -16,4 +16,4 @@ status: accepted
 
 - Bad upstream data stops the pipeline; operators must fix the source or mark specific validators `warn` deliberately.
 - `warn` severity is the explicit escape hatch for known-tolerable conditions.
-- The JSONL schema (run_id + per-step metrics) is effectively the contract the future run-registry will consume.
+- The JSONL schema (execution `run_id` + per-step metrics) is effectively the contract the future run-registry will consume.

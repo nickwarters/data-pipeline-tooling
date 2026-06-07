@@ -32,7 +32,7 @@ names are placeholders pending a domain rename — see CONTEXT.)
 |--------|----------------------------------------|----------------|
 | **raw** | A faithful, schema-light snapshot of the source as landed — the framework's landing zone. | **Full refresh** each run: truncate + reload from the source snapshot, so re-runs are deterministic (ADR-0006). |
 | silver | Validated, normalised data: the **schema boundary** — a Case Type's declared columns + dtypes are enforced here as a post-validator before the data lands (ADR-0008, #7). Normalising *coercion* (parsing dates, casting booleans) runs as a `process` step ahead of that check (#23). | Full refresh from raw. |
-| gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. The `silver_to_gold` builder carries validated silver forward (#8). | Accumulates, stamped `run_id` / `load_date`; idempotent re-run via delete-by-run then insert (ADR-0006; [gold-accumulation doc](gold-accumulation.md)). |
+| gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. The `silver_to_gold` builder carries validated silver forward (#8). | Accumulates, stamped with logical run id / `load_date` and, when context-driven, `execution_id`; idempotent re-run via delete-by-logical-run then insert (ADR-0006; [gold-accumulation doc](gold-accumulation.md)). |
 
 raw stays schema-light on purpose: it mirrors the source so the landing zone is
 faithful, and schema enforcement arrives at silver and gold (ADR-0008).
@@ -42,7 +42,8 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > and gold → accumulate-by-run. That layer→strategy mapping is being replaced:
 > **load strategy becomes per-feed, owned by the Writer**, with the Store mapping
 > `layer → location` only (`store.writer(layer, table, strategy)` where strategy
-> is `Refresh()` or `AccumulateByRun(run_id, load_date)`). The **Ingest** profile
+> is `Refresh()` or `AccumulateByRun(run_id, load_date)`, or
+> `AccumulateByRun.from_context(context)`). The **Ingest** profile
 > then flips to *history-upstream / current-gold* — raw + silver accumulate the
 > change-over-time record, gold is reduced to a current **one-row-per-Case**
 > grain (`LatestPerKey` by `case_id` + a uniqueness validator). Selection/Sync/
@@ -70,8 +71,9 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > booleans) ahead of the validator so a date/bool schema survives the round-trip
 > (ADR-0008, #23). **Gold accumulation** has landed: the `silver_to_gold` builder
 > carries validated silver into gold via the `AccumulateByRunWriter`, stamping each
-> row `run_id` / `load_date` and making a re-driven run idempotent via
-> delete-by-run then insert (ADR-0006;
+> row with the logical run id / `load_date` and, for context-derived strategies,
+> `execution_id`; a re-driven business run is idempotent via delete-by-logical-run
+> then insert (ADR-0006;
 > [gold-accumulation doc](gold-accumulation.md)). **The Selection processors**
 > have landed: `Filter`/`Score` (plain-Python row callables — ADR-0002),
 > `Sort`/`Rename`, and **`JoinWith`** — the cross-feed join that holds a lazy
@@ -81,9 +83,10 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > SQLite store — idempotent by `run_id` + step, queryable by pipeline / status /
 > time, surfacing warned (incl. schema-drift) runs (ADR-0005/0007, #52;
 > [run-log-format doc](run-log-format.md)). **The thin Pipeline runner** has
-> landed: `PipelineRunner` dispatches domain Pipelines by `(case_type, pipeline)`
-> and `FreshnessRequirement` blocks stale downstream runs from `RunRegistry`
-> history without changing the builder contract (#61). Still ahead: the value-level schema
+> landed: `PipelineRunner` dispatches domain Pipelines by `(case_type, pipeline)`,
+> passes a shared `RunContext` into handlers, and `FreshnessRequirement` blocks
+> stale downstream runs from `RunRegistry` history without changing the builder
+> contract (#61, #77). Still ahead: the value-level schema
 > rules (format / uniqueness / encoding, #24), the domain capstone
 > (CaseType/Variation + CasePool → SelectionPool, #11), and the multi-table feed work
 > (ADR-0006 amendment, ADR-0009): per-feed load strategy (Store maps
@@ -153,10 +156,13 @@ concrete writers ship now:
 
 - `SqliteTruncateReloadWriter(db_path, table)` — **full refresh** (truncate +
   reload). Used for raw/silver, which mirror a current-state source snapshot.
-- `AccumulateByRunWriter(db_path, table, run_id, load_date)` — **accumulate by
-  run** for gold: stamps each row `run_id` / `load_date` and makes a re-driven
-  run idempotent via *delete-by-run then insert*. Wired by the `silver_to_gold`
-  builder (#8; [gold-accumulation doc](gold-accumulation.md)).
+- `AccumulateByRunWriter(db_path, table, run_id, load_date, execution_id=None)` —
+  **accumulate by logical run** for gold: stamps each row `run_id`,
+  `logical_run_id`, `load_date`, and optional `execution_id`. The legacy `run_id`
+  column is the logical/idempotency key; `execution_id` is the trace key that
+  matches RunLog/RunRegistry when the strategy is derived from a `RunContext`.
+  A re-driven run is idempotent via *delete-by-run then insert*. Wired by the
+  `silver_to_gold` builder (#8; [gold-accumulation doc](gold-accumulation.md)).
 
 ### `Store` — one subject's medallion, minting its Writers/Readers
 `Store(subject_dir, busy_timeout_ms=5000)` is the mouth of **one subject's**
@@ -165,9 +171,9 @@ files `<subject_dir>/{raw,silver,gold}.db`, isolated from every other subject's.
 It holds **no business logic** (ADR-0002) and makes **no** load decision
 (ADR-0003 amendment) — it merely mints the layer-appropriate component:
 
-- `store.writer(layer, table)` — raw/silver get a `SqliteTruncateReloadWriter`
-  (full refresh); gold gets an `AccumulateByRunWriter` and so requires
-  `run_id` / `load_date` (stamped per the run that mints it).
+- `store.writer(layer, table, strategy)` — mints a Writer over the chosen layer
+  using the caller's explicit `Refresh()` or `AccumulateByRun(...)` strategy.
+  Context-driven accumulation uses `AccumulateByRun.from_context(context)`.
 - `store.reader(layer, table)` — a `SqliteReader` over the same file.
 
 The strategy lives on the Writer the store mints, not on the store. A new
@@ -338,13 +344,16 @@ class RunLog:
     def step(self, run_id, pipeline, step, rows_in=None): ...  # times a block
 ```
 
-Every record of a single run carries the same `run_id` (minted by `.run()`,
-exposed as `pipeline.run_id`) and a `timestamp` (the ISO-8601 UTC instant it was
-emitted), so the run registry can group and order a run without parsing free
-text. The builder owns no path or format knowledge — it just drives the sink;
-when no `RunLog` is composed a null sink keeps `.run()` branch-free while
-emitting nothing. The full record schema, the per-step breakdown, and the
-fail-fast/warn examples live in [`run-log-format.md`](run-log-format.md).
+Every record of a single execution carries the same `run_id`: an execution id
+created by ad hoc `.run()` or supplied as `RunContext.execution_id`. Accumulated
+rows use the separate `logical_run_id` for idempotency and stamp `execution_id`
+for traceability when the writer strategy is context-derived. The record
+`timestamp` (the ISO-8601 UTC instant it was emitted) lets the run registry group
+and order a run without parsing free text. The builder owns no path or format
+knowledge — it just drives the sink; when no `RunLog` is composed a null sink
+keeps `.run()` branch-free while emitting nothing. The full record schema, the
+per-step breakdown, and the fail-fast/warn examples live in
+[`run-log-format.md`](run-log-format.md).
 
 ### `RunRegistry` — the run history that ingests the JSONL
 A `RunRegistry` is the **consumer** for the `RunLog` JSONL — the seam ADR-0005
@@ -408,10 +417,13 @@ runner.run("cases", "selection", "/path/to/share", run_date=date(2026, 5, 29))
 ```
 
 Handlers receive a `RunContext` carrying `base_dir`, `case_type`, `pipeline`,
-`run_date`, an orchestration `run_id`, the runner-level `RunLog`, the
-`RunRegistry`, and `freshness_days`. The runner records stable domain labels in
-history as `<case_type>/<pipeline>` (`cases/ingest`, `cases/selection`) and
-stores its metadata under `<base_dir>/_runs/` and `<base_dir>/_registry/`.
+`run_date`, `load_date`, `execution_id`, `logical_run_id`, the runner-level
+`RunLog`, the `RunRegistry`, and `freshness_days`. `execution_id` is the concrete
+attempt recorded in RunLog/RunRegistry; `logical_run_id` is the idempotency key a
+re-driven business run reuses for accumulated rows. The runner records stable
+domain labels in history as `<case_type>/<pipeline>` (`cases/ingest`,
+`cases/selection`) and stores its metadata under `<base_dir>/_runs/` and
+`<base_dir>/_registry/`.
 
 `FreshnessRequirement` declares the upstream domain Pipeline a downstream run
 needs. The default policy is same-business-date freshness (`max_age_days=0`):
@@ -464,8 +476,9 @@ hands the bulk-tier `Dataset` to the Writer and returns it.
 
 The builder still makes **no** write decisions — no layer logic, no
 refresh-vs-accumulate branching; that all lives on the Writer. Because the
-terminus owns execution, it is the home of the cross-cutting concerns: it now
-mints the run's `run_id`, times each step, and drives the composed `RunLog`
+terminus owns execution, it is the home of the cross-cutting concerns: it uses
+the supplied `RunContext` or creates one for ad hoc runs, exposes the execution
+id as `pipeline.run_id`, times each step, and drives the composed `RunLog`
 (timing + structured JSONL logging — landed in #4). The `process` step
 (`.with_processor()`) landed in #23; lineage checkpoints (`.checkpoint(writer)`)
 remain ahead.
