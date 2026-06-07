@@ -7,7 +7,8 @@ import pytest
 
 from framework.connection import connect
 from framework.dataset import Dataset
-from framework.gold import ingest_silver_to_gold, silver_to_gold
+from case_review.gold import ingest_silver_to_gold
+from framework.gold import silver_to_gold
 from framework.store import Store
 from framework.strategy import AccumulateByRun, Refresh
 from framework.validators import ValidationError

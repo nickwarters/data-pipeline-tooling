@@ -39,7 +39,7 @@ for dispatching named domain Pipelines such as `cases/ingest` and
 ```python
 from dataclasses import dataclass
 from datetime import date
-from framework.case_type import CaseType, Variation
+from case_review.case_type import CaseType, Variation
 
 @dataclass
 class ActivityCase:          # the Case Type's schema (its columns + types)
@@ -63,9 +63,9 @@ CASES.variation("v1").question_bank_id   # -> "qb-100"
 A **Variation** is a specialization within a Case Type that inherits its config
 and overrides only what differs — most commonly the **Question Bank**
 (`question_bank_id`). One Case Type has many Variations (A ~3; B ~100), so they
-are data, not code. The framework stores only the **reference** id, never the
-bank's content (owned by the review platform — CONTEXT.md); Selection stamps that
-id onto the chosen Cases. `CaseType.variation(id)` resolves a Variation and
+are data, not code. The case-review domain stores only the **reference** id,
+never the bank's content (owned by the review platform — CONTEXT.md); Selection
+stamps that id onto the chosen Cases. `CaseType.variation(id)` resolves a Variation and
 raises `KeyError` with a located message on an unknown id, so a mis-config
 surfaces where it is asked for rather than as a silent miss downstream. Further
 overrides (ingest, selection criteria, divergent processing) are deferred
@@ -80,7 +80,7 @@ its silver), and a `WorkingDayCalendar` (the availability arithmetic — see
 [`working-day-calendar.md`](working-day-calendar.md)):
 
 ```python
-from framework.case_pool import CasePool
+from case_review.case_pool import CasePool
 from framework.calendar import WorkingDayCalendar
 from framework.store import Store
 
@@ -180,8 +180,9 @@ same *route aside with a reason, never silently drop* shape, pointed at
 )
 ```
 
-The **SelectionTrace** lands as a sibling table of the SelectionPool, one row per
-*considered* Case (not just the survivors), stamped `run_id`:
+The framework's generic **RowTrace** mechanics land a case-review selection trace
+as a sibling table of the SelectionPool, one row per *considered* Case (not just
+the survivors), stamped `run_id`:
 
 | `case_ref` | `verdict` | `reason` | `rank` |
 |---|---|---|---|

@@ -3,7 +3,7 @@ status: accepted
 amends: 0007-fail-fast-atomic-runs-jsonl-observability.md
 ---
 
-# ADR-0007 Amendment 02 — Per-Case Selection explainability (the SelectionTrace)
+# ADR-0007 Amendment 02 — Per-Case Selection explainability using RowTrace
 
 ## Decision
 
@@ -40,8 +40,9 @@ excluded it, a run correlation, and a date.
 ## How — a ledger watches the stages run
 
 Selection narrows through a *sequence* of processors, so the trace cannot be a
-single partition. `SelectionTrace` (`framework/explain.py`) is a ledger keyed by
-the Case identity column:
+single partition. The framework provides the generic `RowTrace`
+(`framework/trace.py`) ledger, while the case-review pipeline chooses the Case
+identity column and sibling selection-trace writer:
 
 - The pipeline **seeds** it with the considered population (the rows entering the
   stages), then lets it **observe** each processor stage, then **finalize**s it
@@ -54,7 +55,7 @@ the Case identity column:
 - Survivors record the gates they passed and their **rank** — their 1-based
   position in the final (sorted) SelectionPool order (AC4).
 
-Processors expose a light `selection_role` / `selection_name` so the ledger can
+Processors expose a light `trace_role` / `trace_name` so the ledger can
 locate reasons without the builder type-sniffing; `Filter`/`JoinWith` gain an
 optional `name=` to label the gate.
 

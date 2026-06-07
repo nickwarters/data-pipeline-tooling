@@ -17,10 +17,10 @@ import uuid
 from functools import partial
 
 from framework.dataset import Dataset
-from framework.explain import SelectionTrace
 from framework.processors import Processor
 from framework.readers import Reader
 from framework.run_log import NULL_RUN_LOG, RunLog, StepMetrics
+from framework.trace import RowTrace
 from framework.validators import Severity, ValidationError, Validator
 from framework.writers import Writer
 
@@ -58,8 +58,8 @@ class Pipeline:
         # routed to the reject writer; good rows continue through the pipeline.
         self._quarantine_validator = None
         self._quarantine_writer: Writer | None = None
-        # Optional Selection explainability (issue #53): a per-Case trace of why
-        # each considered Case was/wasn't selected, routed to a sibling table.
+        # Optional row-level explainability: a per-row trace of why each
+        # considered row survived or was excluded, routed to a caller-chosen table.
         self._explain_writer: Writer | None = None
         self._explain_id_column: str | None = None
         self._explain_score_column: str | None = None
@@ -102,14 +102,12 @@ class Pipeline:
         id_column: str,
         score_column: str | None = None,
     ) -> "Pipeline":
-        """Configure Selection explainability. Deferred — nothing runs until .run().
+        """Configure row-level explainability. Deferred — nothing runs until .run().
 
-        When configured, ``.run()`` follows each considered Case (identified by
-        ``id_column``) across the processor stages and writes a per-Case verdict
-        — selected/excluded, the gate that excluded it, its ``score_column``
-        score, and the survivor's rank — to ``writer`` (a sibling trace table,
-        stamped ``run_id`` by the Writer's strategy). This is the eligibility-
-        stage twin of ``.quarantine()`` (ADR-0007 amendment 02, issue #53).
+        When configured, ``.run()`` follows each considered row (identified by
+        ``id_column``) across the processor stages and writes a per-row verdict
+        to ``writer``. Application code gives the trace its domain meaning by
+        choosing the writer, table name, id column, and processor labels.
         """
         self._explain_writer = writer
         self._explain_id_column = id_column
@@ -177,12 +175,11 @@ class Pipeline:
                         self._quarantine_writer.write(stamped)
                     dataset = good
 
-            # Selection explainability (issue #53): when configured, seed the
-            # trace with the considered population, then watch each processor
-            # stage to record which gate excludes each Case (ADR-0007 amd 02).
+            # Row-level explainability: when configured, seed the trace with the
+            # considered population, then watch each processor stage.
             trace = None
             if self._explain_writer is not None:
-                trace = SelectionTrace(
+                trace = RowTrace(
                     self._explain_id_column,
                     score_column=self._explain_score_column,
                 )
@@ -201,8 +198,8 @@ class Pipeline:
                         metrics.rows_out = len(dataset)
                     if trace is not None:
                         trace.observe(
-                            getattr(component, "selection_role", None),
-                            getattr(component, "selection_name", type(component).__name__),
+                            getattr(component, "trace_role", None),
+                            getattr(component, "trace_name", type(component).__name__),
                             before,
                             dataset,
                         )
@@ -218,10 +215,8 @@ class Pipeline:
                 metrics.rows_out = len(dataset)
             warn_hits += metrics.warn_hits
 
-            # Explainability (issue #53): the post-stage dataset *is* the
-            # SelectionPool, so finalize the trace against it (survivors' ranks)
-            # and land it in its sibling table. The step records the governance
-            # counts considered/selected/excluded (ADR-0007 amendment 02).
+            # Explainability: the post-stage dataset contains the survivors, so
+            # finalize the trace against it and land it through the configured writer.
             if trace is not None:
                 with step("explain", rows_in=trace.considered) as metrics:
                     self._explain_writer.write(trace.finalize(dataset))

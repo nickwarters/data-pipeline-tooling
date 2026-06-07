@@ -11,7 +11,7 @@ import pandas as pd
 
 from framework.builder import Pipeline
 from framework.dataset import Dataset
-from framework.gold import detail_ingest_silver_to_gold, ingest_silver_to_gold
+from case_review.gold import detail_ingest_silver_to_gold, ingest_silver_to_gold
 from framework.processors import Filter, Rename, SelectColumns, Unpivot
 from framework.store import Store
 from framework.strategy import AccumulateByRun, Refresh

@@ -481,23 +481,24 @@ before `from_date`, most-recent first, skipping weekends + holidays). Full
 config and boundary semantics in
 [`working-day-calendar.md`](working-day-calendar.md).
 
-## The domain layer (#11)
+## The case-review application/domain layer (#11)
 
-Above the engine primitives sits the thin **domain layer** the framework exists
-to expose — the declarative Case Type objects and the `CasePool` that reads the
+Above the generic framework primitives sits the thin **case-review application
+layer**: the declarative Case Type objects and the `CasePool` that reads the
 ingested silver, surfaced through intention-revealing retrievals instead of raw
-`pandas.read_*` calls. The full flow lives in [`selection.md`](selection.md); in
-brief:
+`pandas.read_*` calls. These helpers live in the `case_review` package; new
+case-review concepts belong there (or in pipeline support modules), not under
+`framework/`. The full flow lives in [`selection.md`](selection.md); in brief:
 
 ### `CaseType` / `Variation` — the declarative domain objects
-A `CaseType` (`framework.case_type`) bundles a Case Type's `schema` with its
+A `CaseType` (`case_review.case_type`) bundles a Case Type's `schema` with its
 `variations`, imported directly — no global CaseType config registry (ADR-0005).
 `CaseType.variation(id)` resolves a `Variation` (its `question_bank_id` + later
 overrides) and raises a located `KeyError` on an unknown id. Declarative data,
 not code (one Case Type has many Variations — `CONTEXT.md`).
 
 ### `CasePool` — the domain population, behind named reads
-`CasePool(case_type, store, calendar)` (`framework.case_pool`) is the
+`CasePool(case_type, store, calendar)` (`case_review.case_pool`) is the
 per-Case-Type population of Cases read from the **ingested silver**. Its headline
 retrieval is the *concept* of fetching **available cases** — e.g.
 `fetch_available_cases(as_of, activity_column=…, within_working_days=…)` narrows

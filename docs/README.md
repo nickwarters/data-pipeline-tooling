@@ -120,14 +120,15 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`Pipeline`** (builder) | The deferred fluent builder: `Pipeline(name, reader).with_processor(…).write_to(writer).run()`. Runs nothing until `.run()`, which is **fail-fast and atomic** and drives the RunLog. ([ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md)) |
 | **`RunLog` / `RunRegistry`** | `RunLog` emits one JSON record per step (+ a run summary) to a `.log` file — the observability seam. `RunRegistry` ingests that JSONL into a queryable run-history store. → [run-log-format.md](run-log-format.md) ([ADR-0007](adr/0007-fail-fast-atomic-runs-jsonl-observability.md)) |
 | **`PipelineRunner` / `FreshnessRequirement`** | The thin domain runner: register handlers by `(case_type, pipeline)`, run them with `python -m pipelines.run …`, and block stale downstream runs by querying `RunRegistry` for recent successful upstream history. → [core-primitives.md](core-primitives.md) |
-| **`CaseType` / `Variation`** | The declarative domain objects: a Case Type bundles its `schema` + `variations`, imported directly (no global CaseType config registry). A Variation overrides only what differs — most often the `question_bank_id`. → [selection.md](selection.md) |
-| **`CasePool`** | The per-Case-Type population read from ingested silver, surfaced through intention-revealing retrievals (e.g. `fetch_available_cases(...)`) instead of raw `read_*`. → [selection.md](selection.md) |
+| **`CaseType` / `Variation`** | Case-review application/domain objects in `case_review.case_type`, not framework primitives: a Case Type bundles its `schema` + `variations`, imported directly (no global CaseType config registry). A Variation overrides only what differs — most often the `question_bank_id`. → [selection.md](selection.md) |
+| **`CasePool`** | Case-review application/domain helper in `case_review.case_pool`: the per-Case-Type population read from ingested silver, surfaced through intention-revealing retrievals (e.g. `fetch_available_cases(...)`) instead of raw `read_*`. → [selection.md](selection.md) |
 | **`WorkingDayCalendar`** | A config-seeded **pure utility** for availability arithmetic ("the last 20 working days"). Touches no Dataset/Store/engine; not a Feed. → [working-day-calendar.md](working-day-calendar.md) |
 
 Two cross-cutting flows extend the pipeline: **quarantine** routes value-rule
 rejects aside (keeping good rows — [ADR-0007 amd 01](adr/0007-amendment-01-quarantine.md))
-and **`.explain()`** lands a per-Case **SelectionTrace** of *why* each Case was or
-wasn't chosen ([ADR-0007 amd 02](adr/0007-amendment-02-selection-explainability.md);
+and **`.explain()`** lands a per-row **RowTrace**. The framework owns the generic
+trace mechanics; the case-review pipeline gives them domain meaning by writing a
+selection trace table ([ADR-0007 amd 02](adr/0007-amendment-02-selection-explainability.md);
 see the Selection how-to below).
 
 ---
@@ -157,11 +158,11 @@ class ActivityCase:
 
 **2. Declare the Case Type + its Variations** — a Variation inherits the type's
 config and overrides only what differs, most often the `question_bank_id` (the
-framework stores only the *reference* id; the bank's content is the review
-platform's). One Case Type has many Variations, so they are data.
+case-review domain stores only the *reference* id; the bank's content is the
+review platform's). One Case Type has many Variations, so they are data.
 
 ```python
-from framework.case_type import CaseType, Variation
+from case_review.case_type import CaseType, Variation
 
 CASES = CaseType(
     name="cases",                 # the subject: medallion dir + table name
@@ -180,7 +181,7 @@ See the *Add a new Feed* how-to.
 **4. Read it through the CasePool** — the clean domain abstraction over silver:
 
 ```python
-from framework.case_pool import CasePool
+from case_review.case_pool import CasePool
 from framework.calendar import WorkingDayCalendar
 from framework.store import Store
 
@@ -252,7 +253,7 @@ reference = Pipeline("advisers", Store("/share/advisers").reader("silver", "advi
     .with_processor(TopNPerGroup(key="adviser", by="amount", n=1))  # one per adviser
     .with_processor(Sort("amount", ascending=False))
     .with_processor(Stamp("question_bank_id", variation.question_bank_id))
-    .explain(                                                    # optional: SelectionTrace
+    .explain(                                                    # optional: RowTrace
         store.writer("gold", "selection_trace", run_id, load_date),
         id_column="case_ref",
     )
@@ -268,8 +269,8 @@ reference = Pipeline("advisers", Store("/share/advisers").reader("silver", "advi
   ([ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md)).
 - **Reference Data** (the Adviser hierarchy, product codes) is read-only to Case
   Types and joined in Python — never written by them.
-- **`.explain()`** lands a per-Case **SelectionTrace** (why each Case was/wasn't
-  chosen) as a sibling table — the eligibility twin of quarantine.
+- **`.explain()`** uses the framework's generic **RowTrace** mechanics to land a
+  case-review selection trace (why each Case was/wasn't chosen) as a sibling table.
 - The SelectionPool reaches the review platform as a **Deliverable** (a later
   slice); the returned **Review Outcomes** come back via **Sync**, not here.
 - Run domain Pipelines through the thin runner when freshness matters:
@@ -282,7 +283,7 @@ reference = Pipeline("advisers", Store("/share/advisers").reader("silver", "advi
 
 | Doc | Covers |
 |-----|--------|
-| [`core-primitives.md`](core-primitives.md) | The consolidated primitives reference with worked examples and build status per slice. |
+| [`core-primitives.md`](core-primitives.md) | The consolidated framework primitives reference with worked examples and build status per slice. |
 | [`adding-a-feed.md`](adding-a-feed.md) | Every Reader, and the stubbed remote (SAS / SharePoint) seams. |
 | [`schema-enforcement.md`](schema-enforcement.md) | `Schema` / `SchemaValidator` / `SchemaCoercion`, value-level rules, `raw_to_silver`. |
 | [`gold-accumulation.md`](gold-accumulation.md) | Gold's accumulate-by-run semantics, idempotent re-run, reading "current". |

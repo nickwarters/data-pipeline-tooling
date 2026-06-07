@@ -15,8 +15,8 @@ the run aborts.
 Two families of concrete processor live in the framework. The schema-driven
 ``SchemaCoercion`` (in :mod:`framework.schema`) is the write-side companion of
 ``SchemaValidator`` that repairs the representation raw loses to storage (#23).
-This module holds the **Selection** transforms (#9): ``Filter`` and ``Score``
-carry plain-Python row callables (the business rule never names the engine —
+This module holds reusable transforms: ``Filter`` and ``Score`` carry
+plain-Python row callables (the business rule never names the engine —
 ADR-0002), ``Sort`` and ``Rename`` reshape the frame, and ``JoinWith`` holds a
 **lazy reference to another builder** (a :class:`Runnable`), resolved to a DAG
 and joined in Python only at ``.run()`` (ADR-0003).
@@ -61,8 +61,8 @@ class Runnable(Protocol):
         ...
 
 
-# The Selection workload's business rules (filter/score) are expressed as plain
-# Python callables over a row mapping — never the engine (ADR-0002). The
+# Business rules (filter/score) are expressed as plain Python callables over a
+# row mapping — never the engine (ADR-0002). The
 # processor applies them row-wise behind the Dataset seam; the caller's rule
 # stays pure Python and pandas-free.
 RowPredicate = Callable[[Mapping[str, Any]], bool]
@@ -72,22 +72,19 @@ RowScorer = Callable[[Mapping[str, Any]], Any]
 class Filter:
     """Keep only the rows for which a plain-Python row predicate is true.
 
-    The narrowing half of Selection (CONTEXT.md): ``predicate`` is a callable
-    over a row as a ``{column: value}`` mapping, so the availability/eligibility
-    rule is pure Python (ADR-0002) and never names the engine. Applied row-wise
-    behind the Dataset seam.
+    ``predicate`` is a callable over a row as a ``{column: value}`` mapping, so
+    business rules are pure Python (ADR-0002) and never name the engine. Applied
+    row-wise behind the Dataset seam.
 
-    An optional ``name`` labels the eligibility gate so Selection
-    explainability (#53) can record *which* filter excluded a Case — the
-    ``selection_role``/``selection_name`` the trace reads. Unnamed filters still
-    work; they trace under a generic ``"filter"`` label.
+    An optional ``name`` labels the gate for row-level explainability. Unnamed
+    filters still work; they trace under a generic ``"filter"`` label.
     """
 
-    selection_role = "filter"
+    trace_role = "filter"
 
     def __init__(self, predicate: RowPredicate, *, name: str | None = None) -> None:
         self._predicate = predicate
-        self.selection_name = name or "filter"
+        self.trace_name = name or "filter"
 
     def process(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()  # engine-confined (ADR-0002)
@@ -98,22 +95,21 @@ class Filter:
 class Score:
     """Compute a column from each row via a plain-Python scorer.
 
-    The scoring half of Selection (CONTEXT.md): ``scorer`` is a callable over a
-    row mapping returning that row's value for ``column`` (a new column, or an
-    overwrite of an existing one). Pure Python (ADR-0002), applied row-wise
-    behind the seam; every other column is left untouched.
+    ``scorer`` is a callable over a row mapping returning that row's value for
+    ``column`` (a new column, or an overwrite of an existing one). Pure Python
+    (ADR-0002), applied row-wise behind the seam; every other column is left
+    untouched.
 
-    Its ``selection_role``/``selection_name`` let Selection explainability (#53)
-    snapshot each considered Case's score — retained in the trace even for a
-    Case a later gate excludes (AC2).
+    Its trace metadata lets row-level explainability snapshot each considered
+    row's score before later gates may exclude it.
     """
 
-    selection_role = "score"
+    trace_role = "score"
 
     def __init__(self, column: str, scorer: RowScorer) -> None:
         self._column = column
         self._scorer = scorer
-        self.selection_name = column
+        self.trace_name = column
 
     def process(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas().copy()  # engine-confined (ADR-0002)
@@ -124,12 +120,10 @@ class Score:
 class Stamp:
     """Write one constant value onto every row of a column.
 
-    The declarative half of "mark these Cases" in Selection: where ``Score``
-    derives a column from each row, ``Stamp`` records a single run-level constant
-    — chiefly the applicable ``question_bank_id`` the Variation resolves
-    (CONTEXT.md) — so the stamp reads as the constant it is, not a degenerate
-    scorer. The column is added (or overwritten) even on an empty feed, so the
-    output shape is stable whether or not any Case was selected.
+    Where ``Score`` derives a column from each row, ``Stamp`` records a single
+    run-level constant, so the stamp reads as the constant it is, not a
+    degenerate scorer. The column is added (or overwritten) even on an empty
+    feed, so the output shape is stable whether or not any row survives.
     """
 
     def __init__(self, column: str, value: Any) -> None:
@@ -199,13 +193,12 @@ class JoinWith:
     ``on`` is the shared key column(s); ``how`` the join kind (``inner`` default,
     or ``left``/``right``/``outer``).
 
-    An optional ``name`` labels the join so Selection explainability (#53) can
-    record a Case an *inner* join drops as excluded by this join, rather than
-    leaving it silently absent (AC5) — the ``selection_role``/``selection_name``
-    the trace reads.
+    An optional ``name`` labels the join for row-level explainability, so an
+    *inner* join can explain a row it drops rather than leaving it silently
+    absent.
     """
 
-    selection_role = "join"
+    trace_role = "join"
 
     def __init__(
         self,
@@ -218,7 +211,7 @@ class JoinWith:
         self._other = other
         self._on = on
         self._how = how
-        self.selection_name = name or "join"
+        self.trace_name = name or "join"
 
     def process(self, dataset: Dataset) -> Dataset:
         # Resolve the lazy reference now (ADR-0003): run the other builder and
@@ -371,13 +364,12 @@ class DeriveKey:
 def _cut_per_group(frame, key, select):
     """Group ``frame`` by ``key`` and keep, per group, the rows ``select`` returns.
 
-    The shared spine of the per-group Selection processors (#62):
-    :class:`TopNPerGroup` and :class:`SamplePerGroup` differ only in *which*
-    rows they keep from each group — ``select(group_key, group)`` returns that
-    group's kept sub-frame. Groups are iterated in canonical key order and the
-    kept rows concatenated, so the output is deterministic regardless of
-    incoming row order. An empty feed in yields an empty feed out (consistent
-    with :class:`Filter`).
+    The shared spine of the per-group processors: :class:`TopNPerGroup` and
+    :class:`SamplePerGroup` differ only in *which* rows they keep from each group
+    — ``select(group_key, group)`` returns that group's kept sub-frame. Groups
+    are iterated in canonical key order and the kept rows concatenated, so the
+    output is deterministic regardless of incoming row order. An empty feed in
+    yields an empty feed out (consistent with :class:`Filter`).
     """
     if len(frame) == 0:
         return frame
@@ -388,26 +380,24 @@ def _cut_per_group(frame, key, select):
 
 
 class TopNPerGroup:
-    """Reduce each group of Cases to its top ``n`` by a ranking column.
+    """Reduce each group of rows to its top ``n`` by a ranking column.
 
-    The ranked half of per-group Selection narrowing (#62): ``n=1`` is "the
-    single highest-scoring available Case per Adviser". ``key`` is one or more
-    group columns (mirroring :class:`LatestPerKey`); the processor carries its
-    **own** sort (``by``/``ascending``) so it does not depend on a preceding
-    :class:`Sort` surviving the grouping, and applies a stable secondary
-    tie-break on ``tiebreak`` (default ``"case_id"`` — every Case has one,
-    ADR-0009) so ranked output is reproducible when scores tie.
+    ``key`` is one or more group columns (mirroring :class:`LatestPerKey`); the
+    processor carries its **own** sort (``by``/``ascending``) so it does not
+    depend on a preceding :class:`Sort` surviving the grouping, and applies a
+    stable secondary tie-break on ``tiebreak`` so ranked output is reproducible
+    when scores tie.
 
     A group with fewer than ``n`` rows passes through whole; an empty feed in
     yields an empty feed out (consistent with :class:`Filter`).
 
     Structurally this generalises ``LatestPerKey(key=K, by=B)`` to top-``n`` per
-    key, but the two keep separate names for separate domains — Ingest
-    current-state reduction vs Selection narrowing.
+    key, but keeps a separate name because it preserves a bounded subset rather
+    than one current row.
     """
 
-    selection_role = "topn"
-    selection_name = "top-N per group"
+    trace_role = "topn"
+    trace_name = "top-N per group"
 
     def __init__(
         self,
@@ -446,13 +436,12 @@ _DEFAULT_SAMPLE_SEED = 0
 
 
 class SamplePerGroup:
-    """Draw at most ``n`` Cases per group by a seeded, reproducible sample.
+    """Draw at most ``n`` rows per group by a seeded, reproducible sample.
 
-    The random half of per-group Selection narrowing (#62), and a **pure
-    function** of (input dataset, seed) — ADR-0010. ``key`` is one or more group
-    columns; ``seed`` a fixed, configurable constant (*not* ``run_id`` or the
-    clock); ``order`` the column that puts each group into a canonical order
-    (default ``"case_id"``) before the draw.
+    A **pure function** of (input dataset, seed) — ADR-0010. ``key`` is one or
+    more group columns; ``seed`` a fixed, configurable constant (*not* ``run_id``
+    or the clock); ``order`` the column that puts each group into a canonical
+    order before the draw.
 
     Each group is drawn independently via a per-group seed derived from
     ``hash(seed, group_key)`` using stdlib hashing (``hashlib`` — stable across
@@ -465,8 +454,8 @@ class SamplePerGroup:
     yields an empty feed out (consistent with :class:`Filter`).
     """
 
-    selection_role = "sample"
-    selection_name = "sample per group"
+    trace_role = "sample"
+    trace_name = "sample per group"
 
     def __init__(
         self,

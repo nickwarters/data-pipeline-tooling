@@ -1,6 +1,6 @@
 import pytest
 
-from framework.case_type import CaseType, Variation
+from case_review.case_type import CaseType, Variation
 from tests._schema_fixtures import LandedCase
 
 
