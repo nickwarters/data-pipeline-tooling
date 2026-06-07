@@ -43,7 +43,7 @@ from framework.processors import Filter, Sort, Stamp
 from framework.readers import CsvReader, DatasetReader
 from framework.runner import FreshnessRequirement, PipelineRunner, RunContext
 from framework.silver import raw_to_silver
-from framework.store import Store
+from framework.store import GOLD, RAW, StoreCatalog
 from framework.strategy import AccumulateByRun
 
 
@@ -80,12 +80,12 @@ AS_OF = date(2026, 5, 29)
 def run_ingest(context: RunContext):
     run_id = context.run_date.isoformat()
     sample = Path(__file__).parent / "sample_data" / "activity_cases.csv"
-    store = Store(context.base_dir / CASES.name)
+    store = StoreCatalog(context.base_dir).store(CASES.name)
 
     # 1. Ingest: CSV feed -> raw (accumulate, system-of-record) -> silver
     #    (accumulate, schema enforced) -> gold (current-only, one row per Case).
     Pipeline("cases", CsvReader(sample)).write_to(
-        store.writer("raw", "cases", AccumulateByRun(run_id, run_id))
+        store.writer(RAW, "cases", AccumulateByRun(run_id, run_id))
     ).run()
     raw_to_silver(
         store,
@@ -103,7 +103,7 @@ def run_ingest(context: RunContext):
 
 def run_selection(context: RunContext):
     run_id = context.run_date.isoformat()
-    store = Store(context.base_dir / CASES.name)
+    store = StoreCatalog(context.base_dir).store(CASES.name)
 
     # 2. Selection: fetch the available cases from the CasePool, then narrow them.
     pool = CasePool(CASES, store, WorkingDayCalendar())
@@ -119,14 +119,14 @@ def run_selection(context: RunContext):
         # Explainability (#53): land a per-Case trace of why each available Case
         # was/wasn't selected in a sibling table, stamped by this run.
         .explain(
-            store.writer("gold", "selection_trace", AccumulateByRun(run_id, run_id)),
+            store.writer(GOLD, "selection_trace", AccumulateByRun(run_id, run_id)),
             id_column="case_ref",
         )
-        .write_to(store.writer("gold", "selection_pool", AccumulateByRun(run_id, run_id)))
+        .write_to(store.writer(GOLD, "selection_pool", AccumulateByRun(run_id, run_id)))
         .run()
     )
 
-    trace = store.reader("gold", "selection_trace").read()
+    trace = store.reader(GOLD, "selection_trace").read()
     excluded = sum(1 for v in trace.to_pandas()["verdict"] if v == "excluded")
     print(
         f"available cases: {len(available)} -> "

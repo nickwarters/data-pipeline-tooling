@@ -82,9 +82,10 @@ its silver), and a `WorkingDayCalendar` (the availability arithmetic — see
 ```python
 from case_review.case_pool import CasePool
 from framework.calendar import WorkingDayCalendar
-from framework.store import Store
+from framework.store import StoreCatalog
 
-pool = CasePool(CASES, Store("/share/cases"), WorkingDayCalendar())
+store = StoreCatalog("/share").store(CASES.name)
+pool = CasePool(CASES, store, WorkingDayCalendar())
 available = pool.fetch_available_cases(
     as_of=date(2026, 5, 29),
     activity_column="activity_date",
@@ -122,6 +123,8 @@ round-trip:
 from framework.builder import Pipeline
 from framework.processors import Filter, Sort, Stamp
 from framework.readers import DatasetReader
+from framework.store import GOLD
+from framework.strategy import AccumulateByRun
 
 variation = CASES.variation("v1")
 (
@@ -129,7 +132,7 @@ variation = CASES.variation("v1")
     .with_processor(Filter(lambda row: row["amount"] >= 100))   # high-value only
     .with_processor(Sort("amount", ascending=False))            # rank top-first
     .with_processor(Stamp("question_bank_id", variation.question_bank_id))
-    .write_to(store.writer("gold", "selection_pool", run_id, load_date))
+    .write_to(store.writer(GOLD, "selection_pool", AccumulateByRun(run_id, load_date)))
     .run()
 )
 ```
@@ -172,10 +175,10 @@ same *route aside with a reason, never silently drop* shape, pointed at
     .with_processor(Sort("amount", ascending=False))
     .with_processor(Stamp("question_bank_id", variation.question_bank_id))
     .explain(                                   # land a per-Case trace alongside
-        store.writer("gold", "selection_trace", AccumulateByRun(run_id, load_date)),
+        store.writer(GOLD, "selection_trace", AccumulateByRun(run_id, load_date)),
         id_column="case_ref",
     )
-    .write_to(store.writer("gold", "selection_pool", AccumulateByRun(run_id, load_date)))
+    .write_to(store.writer(GOLD, "selection_pool", AccumulateByRun(run_id, load_date)))
     .run()
 )
 ```

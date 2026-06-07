@@ -26,3 +26,17 @@ The original decision framed *one* store of three databases. As we onboard many 
 Reference Data sets (e.g. the Adviser hierarchy, product codes) are subjects too: each gets its own medallion, refined by its own pipeline, and is **read-only** to Case Types' Selection. Cross-medallion joins happen in Python (ADR-0002), so splitting files costs nothing on the join path.
 
 The core decision is unchanged: SQLite, in-place writes on the share, rollback-journal mode, `busy_timeout`, and the **single-writer-per-file** rule — which now holds per subject's file and gets *safer* with smaller, isolated databases (less contention, smaller blast radius).
+
+## Amendment (2026-06-07): catalog mints subject stores from shared configuration
+
+Pipeline code should not repeat physical layout arithmetic for every subject. A
+`StoreCatalog(root).store(subject)` now mints the subject-scoped `Store` from a
+shared root/configuration, with a small backend interface for alternate layout
+mapping. The default backend maps subjects to `<root>/<subject>`, preserving the
+current three-file medallion layout while keeping that choice behind the catalog.
+
+The `Store` remains the binding point for `(subject, layer, table)` to concrete
+Readers/Writers. Layer names are generic framework conventions (`RAW`, `SILVER`,
+`GOLD` / `raw`, `silver`, `gold`) and are validated before resolving
+`<subject>/<layer>.db`. Load strategy is still caller-provided through the
+Writer strategy (`Refresh` or `AccumulateByRun`) and is not inferred from layer.

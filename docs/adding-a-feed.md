@@ -49,13 +49,14 @@ about medallion layers or load rules:
 ```python
 from framework.builder import Pipeline
 from framework.readers import ExcelReader
-from framework.store import Store
+from framework.store import RAW, StoreCatalog
+from framework.strategy import Refresh
 
-store = Store("/path/to/share/cases")          # the "cases" subject's medallion
+store = StoreCatalog("/path/to/share").store("cases")
 landed = (
     Pipeline("cases", ExcelReader("feed.xlsx", sheet="cases"))
     .with_validator(ColumnValidator(["case_id"]))   # optional: gate the input
-    .write_to(store.writer("raw", "cases"))         # raw = full-refresh Writer
+    .write_to(store.writer(RAW, "cases", Refresh()))
     .run()
 )
 ```
