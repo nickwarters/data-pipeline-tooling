@@ -183,7 +183,7 @@ feed's **recent run history** (the run registry), not a hand-set threshold.
 
 ## Pipelines, layers & stores
 
-A **subject** owns a **medallion**: three SQLite databases, one per **layer** (**raw → silver → gold**), on a network share, isolated from every other subject's files (blast-radius isolation, independent onboarding — ADR-0001). The same `raw → silver → gold` framework is **reused by every Pipeline**:
+A **subject** owns a **medallion**: three SQLite databases, one per generic framework **layer** (**raw → silver → gold**), on a network share, isolated from every other subject's files (blast-radius isolation, independent onboarding — ADR-0001). The same `raw → silver → gold` framework is **reused by every Pipeline**; business meanings such as "current CasePool" or "SelectionPool audit" are imposed by the application pipeline, not by the layer names themselves:
 
 | Pipeline | Scope | Load profile & what its gold holds |
 |----------|-------|------------------------------------|
@@ -194,7 +194,7 @@ A **subject** owns a **medallion**: three SQLite databases, one per **layer** (*
 
 So **CasePool** and **SelectionPool** relate to **Ingest** and **Selection** only; **Review Outcomes** live in the **Sync** store. **Load strategy is per-feed, owned by the Writer** (the Store maps `layer → location` only — ADR-0006 amendment); there is no longer a single "gold accumulates everywhere" rule. Where a layer accumulates, its history survives across runs (stamped with a logical run id / `load_date` and, when context-driven, execution id; idempotent re-run via delete-by-logical-run — ADR-0006). Ingest's *current* gold is reduced from accumulated silver (`LatestPerKey` by `case_id`) and its one-row-per-Case grain is enforced at the gold boundary (ADR-0009).
 
-**Store topology (current working assumption).** Logically each Pipeline has its own **Store**. Physically that maps to: one SQLite database **per Case Type** shared by Ingest + Selection; **one** database for **Sync** (all Case Types); **one** for **Reporting** (all Case Types). Separate Python `Store`s/Writers may point at the same underlying database file — the `Store` abstraction is decoupled from the physical file. (Layer names are placeholders — see Flagged ambiguities.)
+**Store topology (current working assumption).** `StoreCatalog(root).store(subject)` mints the subject's **Store** from shared root/configuration. A `Store` binds `(subject, layer, table)` to concrete Readers/Writers over that subject's files; it does not infer load strategy or business meaning from the layer. Physically this maps to one three-file medallion **per subject** for now. Revisit the physical topology when Sync/Reporting are built.
 
 ## Example dialogue
 

@@ -138,9 +138,9 @@ The builder wires the convention together for one subject's table:
 
 ```python
 from framework.silver import raw_to_silver
-from framework.store import Store
+from framework.store import StoreCatalog
 
-store = Store("/path/to/share/cases")
+store = StoreCatalog("/path/to/share").store("cases")
 raw_to_silver(store, "cases", CaseA).run()   # reads raw, coerces, validates, writes silver.db
 ```
 

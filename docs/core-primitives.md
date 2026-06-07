@@ -52,10 +52,12 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > `records × snapshots`).
 
 > **Build status.** The **per-subject `Store`** has landed: `Store(subject_dir)`
-> *mints* that subject's layer-appropriate Writers/Readers over its own
-> `<subject_dir>/{raw,silver,gold}.db`, and the legacy global `Store.write`/`read`
-> is retired. The shared `connect` factory now lives in `framework.connection`
-> (the seam that keeps `store` and `writers` cycle-free). **Validators** now
+> *mints* that subject's Writers/Readers over its own
+> `<subject_dir>/{raw,silver,gold}.db`, and `StoreCatalog(root).store(subject)`
+> mints those subject stores from shared root/configuration. The legacy global
+> `Store.write`/`read` is retired. The shared `connect` factory now lives in
+> `framework.connection` (the seam that keeps `store` and `writers` cycle-free).
+> **Validators** now
 > attach to the builder (`.with_validator()` / `.with_post_validator()`) and
 > `.run()` is fail-fast and atomic. **Structured JSONL observability** has
 > landed: a `RunLog` composed onto the builder emits one JSON record per step
@@ -164,7 +166,7 @@ concrete writers ship now:
   A re-driven run is idempotent via *delete-by-run then insert*. Wired by the
   `silver_to_gold` builder (#8; [gold-accumulation doc](gold-accumulation.md)).
 
-### `Store` — one subject's medallion, minting its Writers/Readers
+### `Store` / `StoreCatalog` — subject medallions, minted from shared configuration
 `Store(subject_dir, busy_timeout_ms=5000)` is the mouth of **one subject's**
 medallion (a Case Type or a Reference Data set — ADR-0001 amendment): its three
 files `<subject_dir>/{raw,silver,gold}.db`, isolated from every other subject's.
@@ -176,8 +178,18 @@ It holds **no business logic** (ADR-0002) and makes **no** load decision
   Context-driven accumulation uses `AccumulateByRun.from_context(context)`.
 - `store.reader(layer, table)` — a `SqliteReader` over the same file.
 
-The strategy lives on the Writer the store mints, not on the store. A new
-subject's directory is created on first write, so onboarding migrates nothing.
+Layer names are validated through `RAW`, `SILVER`, `GOLD` / `Layer`; existing
+string calls remain accepted for compatibility and are rejected if they are not
+one of the three conventional names. The strategy lives on the Writer the store
+mints, not on the store. A new subject's directory is created on first write, so
+onboarding migrates nothing.
+
+`StoreCatalog(root, backend=..., busy_timeout_ms=5000)` owns shared
+configuration and mints subject stores with `catalog.store(subject)`. The
+default `DirectoryStoreBackend` maps to `<root>/<subject>`, keeping that
+physical layout out of every pipeline script while preserving the same
+`Store` responsibility: binding `(subject, layer, table)` to concrete
+Readers/Writers.
 
 The connection factory `connect(db_path, busy_timeout_ms)` lives in
 `framework.connection` — the single place connections are configured (ADR-0001),
@@ -532,13 +544,13 @@ the gold `SelectionPool`.
 ```python
 from framework.builder import Pipeline
 from framework.readers import CsvReader
-from framework.store import Store
+from framework.store import RAW, StoreCatalog
+from framework.strategy import Refresh
 
-# The "cases" subject's medallion mints the raw Writer over its own raw.db.
-store = Store("/path/to/share/cases")
+store = StoreCatalog("/path/to/share").store("cases")
 landed = (
     Pipeline("cases", CsvReader("feed.csv"))
-    .write_to(store.writer("raw", "cases"))
+    .write_to(store.writer(RAW, "cases", Refresh()))
     .run()
 )
 print(len(landed), landed.columns)

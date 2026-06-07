@@ -183,16 +183,17 @@ Python, and join another subject's silver Reference Data via a lazy `JoinWith`.
 ```python
 from framework.builder import Pipeline
 from framework.processors import Filter, JoinWith
-from framework.store import Store
+from framework.store import SILVER, StoreCatalog
 
-cases = Store("/path/to/share/cases")
-advisers = Store("/path/to/share/advisers")
+catalog = StoreCatalog("/path/to/share")
+cases = catalog.store("cases")
+advisers = catalog.store("advisers")
 
 # The other feed is an *unexecuted* read-only builder (no writer).
-reference = Pipeline("advisers", advisers.reader("silver", "advisers"))
+reference = Pipeline("advisers", advisers.reader(SILVER, "advisers"))
 
 selection_pool = (
-    Pipeline("cases", cases.reader("silver", "cases"))
+    Pipeline("cases", cases.reader(SILVER, "cases"))
     .with_processor(Filter(lambda row: row["amount"] >= 50))   # narrow (Python)
     .with_processor(JoinWith(reference, on="adviser"))          # join Reference Data
     .run()                                                      # resolves the DAG

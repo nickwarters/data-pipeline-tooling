@@ -66,10 +66,10 @@ builder runs.
 
 ### The medallion layers (raw → silver → gold)
 
-Every Pipeline reuses the **same** three-layer medallion. A **subject** (a Case
-Type, or a shared Reference Data set) owns its own medallion — three SQLite
-databases `<subject>/{raw,silver,gold}.db` on a network share, isolated from
-every other subject's files for blast-radius containment and independent
+Every Pipeline reuses the **same generic** three-layer medallion. A **subject**
+(a Case Type, or a shared Reference Data set) owns its own medallion — three
+SQLite databases `<subject>/{raw,silver,gold}.db` on a network share, isolated
+from every other subject's files for blast-radius containment and independent
 onboarding ([ADR-0001](adr/0001-sqlite-medallion-store-on-network-share.md)).
 
 | Layer  | Holds | Discipline |
@@ -85,11 +85,11 @@ and **gold is the grain boundary** (one row per Case enforced —
 
 > **Load strategy is per-feed, owned by the Writer** — the Store maps `layer →
 > location` only ([ADR-0006](adr/0006-load-idempotency-refresh-upstream-accumulate-downstream.md)
-> amendment). The "refresh upstream / accumulate downstream" rule above is the
-> *default* profile, not a law. The **Ingest** profile is moving to
-> *history-upstream / current-gold* (raw + silver accumulate the change-over-time
-> record; gold reduces to one current row per Case). See the deep docs below for
-> what has landed vs. what is decided-not-yet-built.
+> amendment). "Refresh upstream / accumulate downstream" is a common profile,
+> not a framework law. The **Ingest** profile is moving to *history-upstream /
+> current-gold* (raw + silver accumulate the change-over-time record; gold
+> reduces to one current row per Case). See the deep docs below for what has
+> landed vs. what is decided-not-yet-built.
 
 ### How the pieces fit
 
@@ -113,7 +113,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`Dataset`** | The opaque, bulk in-memory **tabular carrier** — pandas behind the seam, swappable later. Tiny public surface (`.columns`, `len()`); pandas never leaks past it. ([ADR-0002](adr/0002-python-only-processing-dumb-store-two-tier-carrier.md)) |
 | **`Reader`** | `read() -> Dataset`. One per source type: `CsvReader`, `ExcelReader`, `SqliteReader`, and the stubbed-remote `SasReader` / `SharePointReader`. Swap the Reader to ingest the same feed from a different source. → [adding-a-feed.md](adding-a-feed.md) |
 | **`Writer`** | `write(dataset) -> None`. The dual of Reader. Owns **both** target location and **load strategy** (`SqliteTruncateReloadWriter` for full-refresh raw/silver; `AccumulateByRunWriter` for gold). → [gold-accumulation.md](gold-accumulation.md) |
-| **`Store`** | One subject's medallion mouth: `Store(subject_dir)` *mints* the layer-appropriate Writer/Reader over `<subject>/{raw,silver,gold}.db`. Holds no business logic and makes no load decision. ([ADR-0001](adr/0001-sqlite-medallion-store-on-network-share.md)) |
+| **`Store` / `StoreCatalog`** | `Store(subject_dir)` binds one subject to Writer/Reader creation over `<subject>/{raw,silver,gold}.db`; `StoreCatalog(root).store(subject)` mints those stores from shared root/configuration. Holds no business logic and makes no load decision. ([ADR-0001](adr/0001-sqlite-medallion-store-on-network-share.md)) |
 | **`Validator`** | `validate(dataset) -> None`, **raises** on breach. `ColumnValidator`, `RowCountValidator` (engine-agnostic), `VolumeAnomalyValidator` (trips when a run's volume deviates from its recent-history baseline — catches truncated source exports, #54). Severity (`error`/`warn`) is set where it's attached. |
 | **`Schema` / `SchemaValidator`** | A Case Type **dataclass** whose annotations *are* the column+dtype contract; the validator is the dataclass→validator adapter, enforced at silver (and optionally gold). Value-level rules extend the same dataclass via `Annotated`. → [schema-enforcement.md](schema-enforcement.md) ([ADR-0008](adr/0008-graduated-schema-enforcement.md)) |
 | **`Processor`** | `process(dataset) -> Dataset`, run mid-pipeline via `.with_processor()`. `SchemaCoercion` (repair storage-lossy types); the Selection transforms `Filter` / `Score` / `Sort` / `Rename` / `Stamp`, the per-group `TopNPerGroup` / `SamplePerGroup`, the lazy cross-feed `JoinWith`; and the Ingest / fan-out transforms `SelectColumns` / `Unpivot` / `DeriveKey` / `LatestPerKey`. → [processors.md](processors.md) |
@@ -183,9 +183,10 @@ See the *Add a new Feed* how-to.
 ```python
 from case_review.case_pool import CasePool
 from framework.calendar import WorkingDayCalendar
-from framework.store import Store
+from framework.store import StoreCatalog
 
-pool = CasePool(CASES, Store("/share/cases"), WorkingDayCalendar())
+store = StoreCatalog("/share").store(CASES.name)
+pool = CasePool(CASES, store, WorkingDayCalendar())
 available = pool.fetch_available_cases(
     as_of=date(2026, 5, 29), activity_column="activity_date", within_working_days=5,
 )
@@ -204,14 +205,15 @@ remote SAS / SharePoint feeds and their stubbed seams):
 ```python
 from framework.builder import Pipeline
 from framework.readers import ExcelReader
-from framework.store import Store
+from framework.store import RAW, StoreCatalog
+from framework.strategy import Refresh
 from framework.validators import ColumnValidator  # optional input gate
 
-store = Store("/share/cases")                       # the "cases" subject
+store = StoreCatalog("/share").store("cases")       # the "cases" subject
 (
     Pipeline("cases", ExcelReader("feed.xlsx", sheet="cases"))
     .with_validator(ColumnValidator(["case_ref"]))  # optional: gate the input
-    .write_to(store.writer("raw", "cases"))         # raw = full-refresh Writer
+    .write_to(store.writer(RAW, "cases", Refresh()))
     .run()
 )
 ```
@@ -221,7 +223,7 @@ Then refine raw → silver with the schema enforced:
 ```python
 from framework.silver import raw_to_silver
 
-raw_to_silver(store, "cases", ActivityCase).run()   # coerce → validate → write silver
+raw_to_silver(store, "cases", ActivityCase).run()   # coerce -> validate -> write silver
 ```
 
 Swapping the Reader is the only change needed to ingest the same feed from a

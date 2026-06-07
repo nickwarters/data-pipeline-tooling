@@ -22,7 +22,7 @@ from framework.builder import Pipeline
 from framework.processors import Filter
 from framework.run_log import RunLog
 from framework.schema import SchemaCoercion, SchemaValidator
-from framework.store import Store
+from framework.store import RAW, SILVER, Store
 from framework.strategy import AccumulateByRun, Refresh
 
 
@@ -47,7 +47,7 @@ def raw_to_silver(
     call ``.run()`` to execute.
     """
     effective_strategy = strategy if strategy is not None else Refresh()
-    pipeline = Pipeline(name or table, store.reader("raw", table), run_log)
+    pipeline = Pipeline(name or table, store.reader(RAW, table), run_log)
     if isinstance(effective_strategy, AccumulateByRun):
         # Raw has accumulated rows from multiple runs; narrow to this run's rows
         # before schema coercion so previous snapshots don't bleed into the
@@ -60,5 +60,5 @@ def raw_to_silver(
         pipeline
         .with_processor(SchemaCoercion(schema))
         .with_post_validator(SchemaValidator(schema))
-        .write_to(store.writer("silver", table, effective_strategy))
+        .write_to(store.writer(SILVER, table, effective_strategy))
     )

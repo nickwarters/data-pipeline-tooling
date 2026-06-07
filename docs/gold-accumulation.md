@@ -145,9 +145,9 @@ The builder wires one subject's table from silver into gold:
 
 ```python
 from framework.gold import silver_to_gold
-from framework.store import Store
+from framework.store import StoreCatalog
 
-store = Store("/path/to/share/cases")
+store = StoreCatalog("/path/to/share").store("cases")
 silver_to_gold(
     store, "selection_pool", run_id="2026-05-30", load_date="2026-05-30"
 ).run()   # reads silver, accumulates into gold.db stamped by run

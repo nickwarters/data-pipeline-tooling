@@ -5,7 +5,7 @@ import pytest
 
 from framework.dataset import Dataset
 from framework.readers import CsvReader
-from framework.store import Store
+from framework.store import GOLD, RAW, SILVER, Store, StoreCatalog
 from framework.strategy import AccumulateByRun, Refresh
 
 FIXTURE = Path(__file__).parent / "fixtures" / "cases.csv"
@@ -23,6 +23,21 @@ def test_store_writer_with_refresh_strategy_round_trips_a_dataset(tmp_path):
 
     assert landed.columns == dataset.columns
     assert len(landed) == len(dataset)
+
+
+def test_layer_constants_can_be_used_instead_of_bare_strings(tmp_path):
+    dataset = CsvReader(FIXTURE).read()
+    store = Store(tmp_path)
+
+    store.writer(RAW, "cases", Refresh()).write(dataset)
+    raw = store.reader(RAW, "cases").read()
+
+    store.writer(SILVER, "cases", Refresh()).write(raw)
+    store.writer(GOLD, "cases", AccumulateByRun("r1", "2026-05-29")).write(raw)
+
+    assert (tmp_path / "raw.db").exists()
+    assert (tmp_path / "silver.db").exists()
+    assert (tmp_path / "gold.db").exists()
 
 
 def test_refresh_strategy_full_refreshes_rather_than_accumulates(tmp_path):
@@ -97,6 +112,22 @@ def test_subjects_are_isolated_same_table_name_no_collision(tmp_path):
     assert (tmp_path / "case_type_b" / "raw.db").exists()
     assert len(type_a.reader("raw", "cases").read()) == len(dataset)
     assert len(type_b.reader("raw", "cases").read()) == len(dataset)
+
+
+def test_store_catalog_mints_subject_stores_from_a_shared_root(tmp_path):
+    dataset = CsvReader(FIXTURE).read()
+    catalog = StoreCatalog(tmp_path)
+
+    cases = catalog.store("cases")
+    advisers = catalog.store("advisers")
+
+    cases.writer(RAW, "shared_table", Refresh()).write(dataset)
+    advisers.writer(RAW, "shared_table", Refresh()).write(dataset)
+
+    assert (tmp_path / "cases" / "raw.db").exists()
+    assert (tmp_path / "advisers" / "raw.db").exists()
+    assert len(cases.reader(RAW, "shared_table").read()) == len(dataset)
+    assert len(advisers.reader(RAW, "shared_table").read()) == len(dataset)
 
 
 def test_reference_data_medallion_is_read_and_joined_by_another_subject(tmp_path):

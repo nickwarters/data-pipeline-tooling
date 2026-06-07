@@ -14,8 +14,7 @@ from __future__ import annotations
 import os
 import sqlite3
 
-# The three medallion layers a subject owns, one SQLite file each.
-LAYERS = ("raw", "silver", "gold")
+from framework.layers import LAYERS
 
 
 def connect(
