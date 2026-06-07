@@ -35,7 +35,7 @@ from case_review.gold import detail_ingest_silver_to_gold, ingest_silver_to_gold
 from framework.processors import Filter, Rename, SelectColumns, Unpivot
 from framework.readers import CsvReader
 from framework.schema import SchemaCoercion, SchemaValidator
-from framework.store import Store
+from framework.store import GOLD, RAW, SILVER, StoreCatalog
 from framework.strategy import AccumulateByRun
 
 PRODUCT_COLS = [f"product_{i}" for i in range(1, 11)]
@@ -58,11 +58,11 @@ RUN_ID = "2026-05-29"
 
 def main(target_dir: str) -> None:
     sample = Path(__file__).parent / "sample_data" / "wide_cases.csv"
-    store = Store(Path(target_dir) / SUBJECT)
+    store = StoreCatalog(target_dir).store(SUBJECT)
 
     # 1. Land the wide CSV into a shared raw table (all columns, accumulated).
     Pipeline(SUBJECT, CsvReader(sample)).write_to(
-        store.writer("raw", SUBJECT, AccumulateByRun(RUN_ID, RUN_ID))
+        store.writer(RAW, SUBJECT, AccumulateByRun(RUN_ID, RUN_ID))
     ).run()
 
     # Shared normalisation: the feed uses `case_ref_no`; both pipelines rename
@@ -71,13 +71,13 @@ def main(target_dir: str) -> None:
 
     # 2a. Cases pipeline: raw → silver (case columns only).
     (
-        Pipeline("cases", store.reader("raw", SUBJECT))
+        Pipeline("cases", store.reader(RAW, SUBJECT))
         .with_processor(Filter(lambda row, rid=RUN_ID: row["run_id"] == rid))
         .with_processor(normalise)
         .with_processor(SelectColumns(["case_ref", "adviser", "activity_date", "amount"]))
         .with_processor(SchemaCoercion(CaseSchema))
         .with_post_validator(SchemaValidator(CaseSchema))
-        .write_to(store.writer("silver", "cases", AccumulateByRun(RUN_ID, RUN_ID)))
+        .write_to(store.writer(SILVER, "cases", AccumulateByRun(RUN_ID, RUN_ID)))
         .run()
     )
 
@@ -88,11 +88,11 @@ def main(target_dir: str) -> None:
 
     # 3a. Products pipeline: raw → silver (product columns + natural key only).
     (
-        Pipeline("case_products", store.reader("raw", SUBJECT))
+        Pipeline("case_products", store.reader(RAW, SUBJECT))
         .with_processor(Filter(lambda row, rid=RUN_ID: row["run_id"] == rid))
         .with_processor(normalise)
         .with_processor(SelectColumns(["case_ref"] + PRODUCT_COLS))
-        .write_to(store.writer("silver", "case_products", AccumulateByRun(RUN_ID, RUN_ID)))
+        .write_to(store.writer(SILVER, "case_products", AccumulateByRun(RUN_ID, RUN_ID)))
         .run()
     )
 
@@ -110,8 +110,8 @@ def main(target_dir: str) -> None:
         ),
     ).run()
 
-    cases_gold = store.reader("gold", "cases").read()
-    products_gold = store.reader("gold", "case_products").read()
+    cases_gold = store.reader(GOLD, "cases").read()
+    products_gold = store.reader(GOLD, "case_products").read()
     print(
         f"cases gold: {len(cases_gold)} rows | "
         f"case_products gold: {len(products_gold)} rows (run {RUN_ID})"

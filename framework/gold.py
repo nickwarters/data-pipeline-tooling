@@ -33,7 +33,7 @@ from framework.builder import Pipeline
 from framework.processors import DeriveKey, LatestPerKey, Unpivot
 from framework.run_log import RunLog
 from framework.schema import SchemaValidator
-from framework.store import Store
+from framework.store import GOLD, SILVER, Store
 from framework.strategy import AccumulateByRun, Refresh
 from framework.validators import UniqueValidator
 
@@ -59,10 +59,10 @@ def silver_to_gold(
     ``table``); ``run_log`` is the optional run-log sink. Returns the composed
     :class:`~framework.builder.Pipeline`; call ``.run()`` to execute.
     """
-    pipeline = Pipeline(name or table, store.reader("silver", table), run_log)
+    pipeline = Pipeline(name or table, store.reader(SILVER, table), run_log)
     if schema is not None:
         pipeline.with_post_validator(SchemaValidator(schema))
-    return pipeline.write_to(store.writer("gold", table, AccumulateByRun(run_id, load_date)))
+    return pipeline.write_to(store.writer(GOLD, table, AccumulateByRun(run_id, load_date)))
 
 
 def current_silver_to_gold(
@@ -87,11 +87,11 @@ def current_silver_to_gold(
     :class:`~framework.builder.Pipeline`; call ``.run()`` to execute.
     """
     return (
-        Pipeline(name or table, store.reader("silver", table), run_log)
+        Pipeline(name or table, store.reader(SILVER, table), run_log)
         .with_processor(DeriveKey(into=entity_id_column, namespace=namespace, natural_key=natural_key))
         .with_processor(LatestPerKey(key=entity_id_column, by=by))
         .with_post_validator(UniqueValidator(entity_id_column))
-        .write_to(store.writer("gold", table, Refresh()))
+        .write_to(store.writer(GOLD, table, Refresh()))
     )
 
 
@@ -121,8 +121,8 @@ def detail_current_silver_to_gold(
     appropriate here.
     """
     return (
-        Pipeline(name or table, store.reader("silver", table), run_log)
+        Pipeline(name or table, store.reader(SILVER, table), run_log)
         .with_processor(DeriveKey(into=entity_id_column, namespace=namespace, natural_key=natural_key))
         .with_processor(unpivot)
-        .write_to(store.writer("gold", table, Refresh()))
+        .write_to(store.writer(GOLD, table, Refresh()))
     )

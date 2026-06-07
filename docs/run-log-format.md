@@ -15,13 +15,16 @@ or format knowledge — it just drives the sink:
 from framework.builder import Pipeline
 from framework.readers import CsvReader
 from framework.run_log import RunLog
-from framework.store import Store
+from framework.store import RAW, StoreCatalog
+from framework.strategy import Refresh
 
 run_log = RunLog("/path/to/share/cases/runs.log")
 pipeline = Pipeline("cases", CsvReader("feed.csv"), run_log=run_log)
 landed = (
     pipeline
-    .write_to(Store("/path/to/share/cases").writer("raw", "cases"))
+    .write_to(
+        StoreCatalog("/path/to/share").store("cases").writer(RAW, "cases", Refresh())
+    )
     .run()
 )
 print(pipeline.run_id)  # the run's correlating id, shared by every record

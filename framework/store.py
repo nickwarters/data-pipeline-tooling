@@ -23,8 +23,9 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Protocol
 
-from framework.connection import LAYERS
+from framework.layers import GOLD, RAW, SILVER, Layer, layer_name
 from framework.readers import Reader, SqliteReader
 from framework.strategy import AccumulateByRun, Refresh
 from framework.writers import (
@@ -32,6 +33,25 @@ from framework.writers import (
     SqliteTruncateReloadWriter,
     Writer,
 )
+
+
+class StoreBackend(Protocol):
+    """Maps a catalog root and subject name to that subject's store directory."""
+
+    def subject_dir(
+        self, root: Path, subject: str | os.PathLike[str]
+    ) -> str | os.PathLike[str]:
+        """Return the concrete directory for one subject's medallion."""
+        ...
+
+
+class DirectoryStoreBackend:
+    """Filesystem backend using ``<root>/<subject>`` medallion directories."""
+
+    def subject_dir(
+        self, root: Path, subject: str | os.PathLike[str]
+    ) -> str | os.PathLike[str]:
+        return root / Path(subject)
 
 
 class Store:
@@ -44,14 +64,12 @@ class Store:
         self._subject_dir = Path(subject_dir)
         self._busy_timeout_ms = busy_timeout_ms
 
-    def _db_path(self, layer: str) -> Path:
-        if layer not in LAYERS:
-            raise ValueError(f"unknown layer {layer!r}; expected one of {LAYERS}")
-        return self._subject_dir / f"{layer}.db"
+    def _db_path(self, layer: Layer | str) -> Path:
+        return self._subject_dir / f"{layer_name(layer)}.db"
 
     def writer(
         self,
-        layer: str,
+        layer: Layer | str,
         table: str,
         strategy: Refresh | AccumulateByRun,
     ) -> Writer:
@@ -79,8 +97,30 @@ class Store:
             )
         raise TypeError(f"unknown strategy {strategy!r}")
 
-    def reader(self, layer: str, table: str) -> Reader:
+    def reader(self, layer: Layer | str, table: str) -> Reader:
         """Mint a Reader over the subject's layer file."""
         return SqliteReader(
             self._db_path(layer), table, busy_timeout_ms=self._busy_timeout_ms
+        )
+
+
+class StoreCatalog:
+    """Mints subject-scoped Stores from shared root/configuration."""
+
+    def __init__(
+        self,
+        root: str | os.PathLike[str],
+        *,
+        backend: StoreBackend | None = None,
+        busy_timeout_ms: int = 5000,
+    ) -> None:
+        self._root = Path(root)
+        self._backend = backend or DirectoryStoreBackend()
+        self._busy_timeout_ms = busy_timeout_ms
+
+    def store(self, subject: str | os.PathLike[str]) -> Store:
+        """Mint the Store for ``subject`` without exposing physical layout."""
+        return Store(
+            self._backend.subject_dir(self._root, subject),
+            busy_timeout_ms=self._busy_timeout_ms,
         )

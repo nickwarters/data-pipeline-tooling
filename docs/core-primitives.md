@@ -20,41 +20,32 @@ CasePool, Feed, Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
 
 ## Medallion layers
 
-A medallion is three SQLite databases, one per layer (raw, silver, gold), on a
-network share: **raw → silver → gold**. Each **subject** — a Case Type or a
-shared Reference Data set — owns its **own** medallion, isolated from every
-other subject's files (ADR-0001 amendment: blast-radius isolation, independent
-onboarding). A Feed is ingested and refined upward; the Selection pipeline reads
-the ingested silver/gold and writes the SelectionPool back into gold. (The layer
-names are placeholders pending a domain rename — see CONTEXT.)
+A medallion is three SQLite databases, one per generic framework layer (`raw`,
+`silver`, `gold`), on a network share: **raw → silver → gold**. Each
+**subject** — a Case Type or a shared Reference Data set — owns its **own**
+medallion, isolated from every other subject's files (ADR-0001 amendment:
+blast-radius isolation, independent onboarding). New pipeline code should use
+the layer constants (`RAW`, `SILVER`, `GOLD`) rather than fresh string literals.
 
-| Layer  | Holds                                  | Load behaviour |
-|--------|----------------------------------------|----------------|
-| **raw** | A faithful, schema-light snapshot of the source as landed — the framework's landing zone. | **Full refresh** each run: truncate + reload from the source snapshot, so re-runs are deterministic (ADR-0006). |
-| silver | Validated, normalised data: the **schema boundary** — a Case Type's declared columns + dtypes are enforced here as a post-validator before the data lands (ADR-0008, #7). Normalising *coercion* (parsing dates, casting booleans) runs as a `process` step ahead of that check (#23). | Full refresh from raw. |
-| gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. The `silver_to_gold` builder carries validated silver forward (#8). | Accumulates, stamped `run_id` / `load_date`; idempotent re-run via delete-by-run then insert (ADR-0006; [gold-accumulation doc](gold-accumulation.md)). |
+| Layer  | Generic guarantee | Load behaviour |
+|--------|-------------------|----------------|
+| **raw** | Landed source data with minimal framework interpretation. | Caller-provided: `Refresh()` for a replaceable snapshot or `AccumulateByRun(...)` for retained history. |
+| silver | Refined data that has crossed declared validation and normalisation checks. | Caller-provided: the Store maps the layer to a file; the Writer's strategy decides refresh vs accumulation. |
+| gold   | Consumption-ready data for the pipeline's caller. | Caller-provided: a pipeline may refresh current-state gold or accumulate an audit/history table. |
 
-raw stays schema-light on purpose: it mirrors the source so the landing zone is
-faithful, and schema enforcement arrives at silver and gold (ADR-0008).
-
-> **Decided, not yet built (ADR-0006 amendment, ADR-0009).** The table above
-> describes the *current* build, where the Store maps raw/silver → full-refresh
-> and gold → accumulate-by-run. That layer→strategy mapping is being replaced:
-> **load strategy becomes per-feed, owned by the Writer**, with the Store mapping
-> `layer → location` only (`store.writer(layer, table, strategy)` where strategy
-> is `Refresh()` or `AccumulateByRun(run_id, load_date)`). The **Ingest** profile
-> then flips to *history-upstream / current-gold* — raw + silver accumulate the
-> change-over-time record, gold is reduced to a current **one-row-per-Case**
-> grain (`LatestPerKey` by `case_id` + a uniqueness validator). Selection/Sync/
-> Reporting keep accumulate-by-run gold. See the two ADRs for the rationale and
-> consequences (raw becomes a backed-up system of record; volume grows
-> `records × snapshots`).
+The framework deliberately does not give the layers business-specific meanings:
+gold is not inherently "current Cases", and silver is not inherently the
+CasePool. Case-review code can impose those meanings for a particular Pipeline,
+for example Ingest reducing accumulated silver to current one-row-per-Case gold
+or Selection accumulating a SelectionPool audit trail.
 
 > **Build status.** The **per-subject `Store`** has landed: `Store(subject_dir)`
-> *mints* that subject's layer-appropriate Writers/Readers over its own
-> `<subject_dir>/{raw,silver,gold}.db`, and the legacy global `Store.write`/`read`
-> is retired. The shared `connect` factory now lives in `framework.connection`
-> (the seam that keeps `store` and `writers` cycle-free). **Validators** now
+> *mints* that subject's Writers/Readers over its own
+> `<subject_dir>/{raw,silver,gold}.db`, and `StoreCatalog(root).store(subject)`
+> mints those subject stores from shared root/configuration. The legacy global
+> `Store.write`/`read` is retired. The shared `connect` factory now lives in
+> `framework.connection` (the seam that keeps `store` and `writers` cycle-free).
+> **Validators** now
 > attach to the builder (`.with_validator()` / `.with_post_validator()`) and
 > `.run()` is fail-fast and atomic. **Structured JSONL observability** has
 > landed: a `RunLog` composed onto the builder emits one JSON record per step
@@ -158,20 +149,30 @@ concrete writers ship now:
   run idempotent via *delete-by-run then insert*. Wired by the `silver_to_gold`
   builder (#8; [gold-accumulation doc](gold-accumulation.md)).
 
-### `Store` — one subject's medallion, minting its Writers/Readers
+### `Store` / `StoreCatalog` — subject medallions, minted from shared configuration
 `Store(subject_dir, busy_timeout_ms=5000)` is the mouth of **one subject's**
 medallion (a Case Type or a Reference Data set — ADR-0001 amendment): its three
 files `<subject_dir>/{raw,silver,gold}.db`, isolated from every other subject's.
 It holds **no business logic** (ADR-0002) and makes **no** load decision
 (ADR-0003 amendment) — it merely mints the layer-appropriate component:
 
-- `store.writer(layer, table)` — raw/silver get a `SqliteTruncateReloadWriter`
-  (full refresh); gold gets an `AccumulateByRunWriter` and so requires
-  `run_id` / `load_date` (stamped per the run that mints it).
+- `store.writer(layer, table, strategy)` — returns a Writer over
+  `<subject>/<layer>.db` with the caller-provided `Refresh()` or
+  `AccumulateByRun(run_id, load_date)` strategy.
 - `store.reader(layer, table)` — a `SqliteReader` over the same file.
 
-The strategy lives on the Writer the store mints, not on the store. A new
-subject's directory is created on first write, so onboarding migrates nothing.
+Layer names are validated through `RAW`, `SILVER`, `GOLD` / `Layer`; existing
+string calls remain accepted for compatibility and are rejected if they are not
+one of the three conventional names. The strategy lives on the Writer the store
+mints, not on the store. A new subject's directory is created on first write, so
+onboarding migrates nothing.
+
+`StoreCatalog(root, backend=..., busy_timeout_ms=5000)` owns shared
+configuration and mints subject stores with `catalog.store(subject)`. The
+default `DirectoryStoreBackend` maps to `<root>/<subject>`, keeping that
+physical layout out of every pipeline script while preserving the same
+`Store` responsibility: binding `(subject, layer, table)` to concrete
+Readers/Writers.
 
 The connection factory `connect(db_path, busy_timeout_ms)` lives in
 `framework.connection` — the single place connections are configured (ADR-0001),
@@ -519,13 +520,13 @@ the gold `SelectionPool`.
 ```python
 from framework.builder import Pipeline
 from framework.readers import CsvReader
-from framework.store import Store
+from framework.store import RAW, StoreCatalog
+from framework.strategy import Refresh
 
-# The "cases" subject's medallion mints the raw Writer over its own raw.db.
-store = Store("/path/to/share/cases")
+store = StoreCatalog("/path/to/share").store("cases")
 landed = (
     Pipeline("cases", CsvReader("feed.csv"))
-    .write_to(store.writer("raw", "cases"))
+    .write_to(store.writer(RAW, "cases", Refresh()))
     .run()
 )
 print(len(landed), landed.columns)

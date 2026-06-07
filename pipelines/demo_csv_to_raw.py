@@ -1,9 +1,9 @@
 """Walking-skeleton demo: read a CSV feed and land it in the raw layer.
 
 The thinnest end-to-end path through the framework. ``base_dir`` is the
-``cases`` subject's medallion directory; the demo mints its raw Writer from a
-per-subject ``Store`` (ADR-0001 amendment), which lands ``raw.db`` under that
-directory. Run it as a module from the repo root (so the import-only
+medallion root; the demo asks a ``StoreCatalog`` for the ``cases`` subject's
+Store (ADR-0001 amendment), which lands ``raw.db`` under that subject directory.
+Run it as a module from the repo root (so the import-only
 ``framework`` package resolves on ``sys.path``), or import ``run`` from a test.
 
     python -m pipelines.demo_csv_to_raw [BASE_DIR]
@@ -20,7 +20,7 @@ from framework.builder import Pipeline
 from framework.dataset import Dataset
 from framework.readers import CsvReader
 from framework.run_log import RunLog
-from framework.store import Store
+from framework.store import RAW, StoreCatalog
 from framework.strategy import Refresh
 
 FEED_NAME = "cases"
@@ -32,13 +32,13 @@ def run(
     base_dir: str | os.PathLike[str],
     csv_path: str | os.PathLike[str] = SAMPLE_CSV,
 ) -> Dataset:
-    """Land the CSV feed into ``raw.db`` under ``base_dir``; return the rows.
+    """Land the CSV feed into the subject's ``raw.db`` under ``base_dir``.
 
     Composes a :class:`RunLog` so the run emits structured JSONL records to
     ``<base_dir>/runs.log`` (and human-readable lines to the console) — the
     observability seam described in ADR-0007.
     """
-    writer = Store(base_dir).writer("raw", FEED_NAME, Refresh())
+    writer = StoreCatalog(base_dir).store(FEED_NAME).writer(RAW, FEED_NAME, Refresh())
     run_log = RunLog(Path(base_dir) / RUN_LOG_NAME)
     return (
         Pipeline(FEED_NAME, CsvReader(csv_path), run_log=run_log)
@@ -56,7 +56,7 @@ def main(argv: list[str]) -> int:
     dataset = run(base_dir)
     print(
         f"Landed {len(dataset)} rows into "
-        f"{Path(base_dir) / 'raw.db'} (table '{FEED_NAME}'); "
+        f"{Path(base_dir) / FEED_NAME / 'raw.db'} (table '{FEED_NAME}'); "
         f"run log at {Path(base_dir) / RUN_LOG_NAME}"
     )
     return 0
