@@ -31,7 +31,7 @@ from datetime import date
 from pathlib import Path
 
 from framework.builder import Pipeline
-from framework.gold import detail_ingest_silver_to_gold, ingest_silver_to_gold
+from case_review.gold import detail_ingest_silver_to_gold, ingest_silver_to_gold
 from framework.processors import Filter, Rename, SelectColumns, Unpivot
 from framework.readers import CsvReader
 from framework.schema import SchemaCoercion, SchemaValidator

@@ -9,14 +9,14 @@ the primitives the earlier slices built:
    enforced), then reduce it to a current-only **gold** (one-row-per-Case via
    ``DeriveKey`` → ``LatestPerKey`` → ``UniqueValidator`` → ``Refresh``).
    Gold *is* the CasePool (ADR-0006 amendment).
-2. **Selection** — a :class:`~framework.case_pool.CasePool` fetches the
+2. **Selection** — a :class:`~case_review.case_pool.CasePool` fetches the
    **available cases** from gold (activity within the working-day window), and a
    Selection :class:`~framework.builder.Pipeline` narrows them with specific
    Python processors (filter the low-value cases out, rank highest-amount first),
-   stamps the chosen :class:`~framework.case_type.Variation`'s
+   stamps the chosen :class:`~case_review.case_type.Variation`'s
    ``question_bank_id``, and accumulates the **SelectionPool** into ``gold``
    stamped ``run_id`` / ``load_date`` (ADR-0006). ``.explain(...)`` lands a
-   sibling **SelectionTrace** alongside it — a per-Case verdict of why each
+   sibling **RowTrace** alongside it — a per-Case verdict of why each
    available Case was or wasn't selected (#53, ADR-0007 amendment 02).
 
 Run from the repo root as a module so the import-only ``framework`` package
@@ -38,9 +38,9 @@ from pathlib import Path
 
 from framework.builder import Pipeline
 from framework.calendar import WorkingDayCalendar
-from framework.case_pool import CasePool
-from framework.case_type import CaseType, Variation
-from framework.gold import ingest_silver_to_gold
+from case_review.case_pool import CasePool
+from case_review.case_type import CaseType, Variation
+from case_review.gold import ingest_silver_to_gold
 from framework.processors import Filter, Sort, Stamp
 from framework.readers import CsvReader, DatasetReader
 from framework.silver import raw_to_silver

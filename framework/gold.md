@@ -66,65 +66,64 @@ def silver_to_gold(
     return pipeline.write_to(store.writer("gold", table, AccumulateByRun(run_id, load_date)))
 
 
-def ingest_silver_to_gold(
+def current_silver_to_gold(
     store: Store,
     table: str,
     *,
     namespace: uuid.UUID,
     natural_key: list[str],
     by: str = "load_date",
-    case_id_column: str = "case_id",
+    entity_id_column: str,
     name: str | None = None,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Compose the Ingest silver->gold reduction for one subject's ``table``.
+    """Compose a history-upstream/current-gold reduction for one subject table.
 
     Reads the subject's accumulated silver (full change-over-time history),
-    derives a deterministic ``case_id`` from ``natural_key`` under ``namespace``
-    (ADR-0009), collapses history to the latest row per Case via
-    ``LatestPerKey`` (ordered by ``by``, defaults to ``load_date``), enforces
-    the one-row-per-Case grain at the gold boundary via ``UniqueValidator``,
-    and writes a current-only gold via ``Refresh`` (truncate + reload) so that
-    gold always holds exactly one row per live Case. Returns the composed
+    derives a deterministic entity id from ``natural_key`` under ``namespace``,
+    collapses history to the latest row per entity via ``LatestPerKey`` (ordered
+    by ``by``, defaults to ``load_date``), enforces the one-row-per-entity grain
+    at the gold boundary via ``UniqueValidator``, and writes current-only gold
+    via ``Refresh`` (truncate + reload). Returns the composed
     :class:`~framework.builder.Pipeline`; call ``.run()`` to execute.
     """
     return (
         Pipeline(name or table, store.reader("silver", table), run_log)
-        .with_processor(DeriveKey(into=case_id_column, namespace=namespace, natural_key=natural_key))
-        .with_processor(LatestPerKey(key=case_id_column, by=by))
-        .with_post_validator(UniqueValidator(case_id_column))
+        .with_processor(DeriveKey(into=entity_id_column, namespace=namespace, natural_key=natural_key))
+        .with_processor(LatestPerKey(key=entity_id_column, by=by))
+        .with_post_validator(UniqueValidator(entity_id_column))
         .write_to(store.writer("gold", table, Refresh()))
     )
 
 
-def detail_ingest_silver_to_gold(
+def detail_current_silver_to_gold(
     store: Store,
     table: str,
     *,
     namespace: uuid.UUID,
     natural_key: list[str],
     unpivot: Unpivot,
-    case_id_column: str = "case_id",
+    entity_id_column: str,
     name: str | None = None,
     run_log: RunLog | None = None,
 ) -> Pipeline:
-    """Compose the Ingest silver->gold reduction for a Detail Table.
+    """Compose a current-gold reduction for a detail table.
 
     Reads the subject's accumulated silver (the projected, normalised product
-    rows), derives a deterministic ``case_id`` from ``natural_key`` under
-    ``namespace`` (ADR-0009), then applies ``unpivot`` to reshape the wide feed
-    into one row per detail line (e.g. product 1..N → one row each). Empty
-    detail slots are dropped by the Unpivot processor. Writes current-only gold
-    via ``Refresh`` (truncate + reload) so gold always reflects the latest full
-    set of Detail rows. Returns the composed Pipeline; call ``.run()`` to execute.
+    rows), derives a deterministic entity id from ``natural_key`` under
+    ``namespace``, then applies ``unpivot`` to reshape the wide feed into one row
+    per detail line (e.g. product 1..N → one row each). Empty detail slots are
+    dropped by the Unpivot processor. Writes current-only gold via ``Refresh``
+    (truncate + reload) so gold always reflects the latest full set of Detail
+    rows. Returns the composed Pipeline; call ``.run()`` to execute.
 
-    Unlike ``ingest_silver_to_gold`` there is no ``LatestPerKey`` step: the
-    Detail Table grain is many rows per Case, not one, so deduplication is not
+    Unlike ``current_silver_to_gold`` there is no ``LatestPerKey`` step: the
+    detail grain is many rows per entity, not one, so deduplication is not
     appropriate here.
     """
     return (
         Pipeline(name or table, store.reader("silver", table), run_log)
-        .with_processor(DeriveKey(into=case_id_column, namespace=namespace, natural_key=natural_key))
+        .with_processor(DeriveKey(into=entity_id_column, namespace=namespace, natural_key=natural_key))
         .with_processor(unpivot)
         .write_to(store.writer("gold", table, Refresh()))
     )

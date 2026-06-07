@@ -2,8 +2,8 @@ from datetime import date
 
 import pandas as pd
 
-from framework.case_pool import CasePool
-from framework.case_type import CaseType, Variation
+from case_review.case_pool import CasePool
+from case_review.case_type import CaseType, Variation
 from framework.calendar import WorkingDayCalendar
 from framework.dataset import Dataset
 from framework.store import Store
