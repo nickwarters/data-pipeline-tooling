@@ -71,17 +71,23 @@ Every Pipeline reuses the **same generic** three-layer medallion. A **subject**
 SQLite databases `<subject>/{raw,silver,gold}.db` on a network share, isolated
 from every other subject's files for blast-radius containment and independent
 onboarding ([ADR-0001](adr/0001-sqlite-medallion-store-on-network-share.md)).
+Use the framework layer constants (`RAW`, `SILVER`, `GOLD`) rather than new
+string literals when composing new pipeline code.
 
-| Layer  | Holds | Discipline |
-|--------|-------|------------|
-| **raw**   | A faithful, **schema-light** mirror of the source as landed (booleans as `TRUE`/`FALSE` text, dates unparsed). | Full refresh each run, so re-runs are deterministic. The diagnosable landing zone. |
-| **silver** | Validated, normalised data — the **schema boundary**: a Case Type's declared columns + dtypes are enforced *before* data lands. | Coerce (repair storage-lossy types) → validate → write. This **silver is the CasePool**. |
-| **gold**  | The accumulating record: the **SelectionPool**, Review Outcomes, Reporting views. Ingest's gold is current-only, one row per Case (the **grain boundary**). | Accumulates, stamped with logical run id / `load_date` and, when context-driven, `execution_id`; idempotent re-run. |
+| Layer  | Generic guarantee | Discipline |
+|--------|-------------------|------------|
+| **raw**   | Landed source data with minimal framework interpretation. | Keep it faithful and diagnosable; the caller still chooses `Refresh()` or `AccumulateByRun(...)`. |
+| **silver** | Refined data that has crossed declared validation and normalisation checks. | Coerce/repair storage-lossy types where needed, validate, then write using the caller's explicit strategy. |
+| **gold**  | Consumption-ready data for the pipeline's caller. | Enforce the pipeline-specific consumption contract, such as current grain or audit history, with an explicit strategy. |
 
-Two boundaries fall out of this: **silver is the schema boundary** (declared
-columns + dtypes validated — [ADR-0008](adr/0008-graduated-schema-enforcement.md))
-and **gold is the grain boundary** (one row per Case enforced —
-[ADR-0009](adr/0009-case-identity-and-gold-grain.md)).
+Case-review meanings are layered on top by the application code: Ingest may make
+gold the current CasePool, Selection may make gold an accumulating SelectionPool,
+and Sync may make gold review-platform history. Those meanings are common
+case-review profiles, not framework guarantees. Common boundaries still apply by
+convention: silver is often the schema boundary
+([ADR-0008](adr/0008-graduated-schema-enforcement.md)) and gold is often the
+consumption/grain boundary
+([ADR-0009](adr/0009-case-identity-and-gold-grain.md)).
 
 > **Load strategy is per-feed, owned by the Writer** — the Store maps `layer →
 > location` only ([ADR-0006](adr/0006-load-idempotency-refresh-upstream-accumulate-downstream.md)
@@ -244,10 +250,12 @@ and the processor reference [`processors.md`](processors.md).
 from framework.builder import Pipeline
 from framework.processors import Filter, Sort, Stamp, JoinWith, TopNPerGroup
 from framework.readers import DatasetReader
+from framework.store import GOLD, SILVER, StoreCatalog
 from framework.strategy import AccumulateByRun
 
 variation = CASES.variation("v1")
-reference = Pipeline("advisers", Store("/share/advisers").reader("silver", "advisers"))
+catalog = StoreCatalog("/share")
+reference = Pipeline("advisers", catalog.store("advisers").reader(SILVER, "advisers"))
 strategy = AccumulateByRun.from_context(context)
 
 (
@@ -258,10 +266,10 @@ strategy = AccumulateByRun.from_context(context)
     .with_processor(Sort("amount", ascending=False))
     .with_processor(Stamp("question_bank_id", variation.question_bank_id))
     .explain(                                                    # optional: RowTrace
-        store.writer("gold", "selection_trace", strategy),
+        store.writer(GOLD, "selection_trace", strategy),
         id_column="case_ref",
     )
-    .write_to(store.writer("gold", "selection_pool", strategy))
+    .write_to(store.writer(GOLD, "selection_pool", strategy))
     .run(context=context)
 )
 ```
