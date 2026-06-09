@@ -11,8 +11,10 @@ which owns its own location and load strategy (ADR-0003, ADR-0006).
 from __future__ import annotations
 
 import logging
+import re
 import time
 from functools import partial
+from pathlib import Path
 
 from framework.dataset import Dataset
 from framework.processors import Processor
@@ -128,6 +130,55 @@ class Pipeline:
         """Compose in the destination Writer. Deferred — nothing runs yet."""
         self._writer = writer
         return self
+
+    def describe(self) -> str:
+        """Return a human-readable plan of the deferred run.
+
+        The plan is an authoring/debugging aid: it reports the components that
+        will participate in execution, in execution order, without touching the
+        Reader, processors, checkpoints, or Writer. Configuration values are
+        best-effort and scrubbed so obvious credentials do not leak into logs or
+        test output.
+        """
+        lines = [f"Pipeline {self._name}"]
+        lines.append(f"  reader: {_describe_component(self._reader)}")
+        lines.extend(_describe_validators("pre-validators", self._pre_validators))
+
+        lines.append("  stages:")
+        if self._stages:
+            for kind, component in self._stages:
+                lines.append(f"    - {kind}: {_describe_component(component)}")
+        else:
+            lines.append("    - none")
+
+        lines.extend(_describe_validators("post-validators", self._post_validators))
+
+        if self._quarantine_validator is None:
+            lines.append("  quarantine: none")
+        else:
+            lines.append(
+                "  quarantine: "
+                f"{_describe_component(self._quarantine_validator)} -> "
+                f"{_describe_component(self._quarantine_writer)}"
+            )
+
+        if self._explain_writer is None:
+            lines.append("  explain: none")
+        else:
+            parts = [f"writer={_describe_component(self._explain_writer)}"]
+            parts.append(f"id_column={self._explain_id_column!r}")
+            if self._explain_score_column is not None:
+                parts.append(f"score_column={self._explain_score_column!r}")
+            lines.append(f"  explain: {', '.join(parts)}")
+
+        writer = (
+            _describe_component(self._writer)
+            if self._writer is not None
+            else "none"
+        )
+        lines.append(f"  writer: {writer}")
+        lines.append(f"  run-log: {_describe_run_log(self._run_log)}")
+        return "\n".join(lines)
 
     def run(self, context: RunContext | None = None) -> Dataset:
         """Execute: read, validate, hand the dataset to the Writer, return it.
@@ -277,3 +328,118 @@ class Pipeline:
                 # tolerated, then continue.
                 log.warning("%s %s warn: %s", self._name, phase, exc)
                 metrics.warn_hits.append(str(exc))
+
+
+def _describe_validators(
+    label: str, validators: list[tuple[Validator, Severity]]
+) -> list[str]:
+    lines = [f"  {label}:"]
+    if not validators:
+        lines.append("    - none")
+        return lines
+    for validator, severity in validators:
+        lines.append(f"    - {_describe_component(validator)} severity={severity}")
+    return lines
+
+
+def _describe_run_log(run_log: RunLog) -> str:
+    if run_log is NULL_RUN_LOG:
+        return "none"
+    return _describe_component(run_log)
+
+
+def _describe_component(component: object) -> str:
+    if component is None:
+        return "none"
+    describer = getattr(component, "describe", None)
+    if callable(describer):
+        description = str(describer())
+        return _scrub(description)
+
+    attrs = _safe_attrs(component)
+    if not attrs:
+        return type(component).__name__
+    rendered = ", ".join(f"{key}={value}" for key, value in attrs)
+    return f"{type(component).__name__}({rendered})"
+
+
+def _safe_attrs(component: object) -> list[tuple[str, str]]:
+    attrs = getattr(component, "__dict__", {})
+    safe: list[tuple[str, str]] = []
+    for raw_name, value in attrs.items():
+        name = raw_name.removeprefix("_")
+        if name.endswith("count") or name in {"dataset", "written"}:
+            continue
+        safe_value = _safe_value(name, value)
+        if safe_value is None:
+            continue
+        safe.append((_display_name(name), safe_value))
+    return safe
+
+
+def _display_name(name: str) -> str:
+    return {
+        "db_path": "db_path",
+        "path": "path",
+        "required": "required_columns",
+    }.get(name, name)
+
+
+def _safe_value(name: str, value: object) -> str | None:
+    if _looks_sensitive(name):
+        return "'<redacted>'"
+    if isinstance(value, Path):
+        return repr(_scrub(str(value)))
+    if isinstance(value, str):
+        return repr(_scrub(value))
+    if isinstance(value, (int, float, bool)) or value is None:
+        return repr(value)
+    if isinstance(value, tuple):
+        values = [_safe_value(name, item) for item in value]
+        if any(item is None for item in values):
+            return None
+        return "[" + ", ".join(values) + "]"
+    if isinstance(value, list):
+        values = [_safe_value(name, item) for item in value]
+        if any(item is None for item in values):
+            return None
+        return "[" + ", ".join(values) + "]"
+    if isinstance(value, dict):
+        parts = []
+        for key, item in value.items():
+            key_text = str(key)
+            if _looks_sensitive(key_text):
+                parts.append(f"{key_text!r}: '<redacted>'")
+                continue
+            item_text = _safe_value(key_text, item)
+            if item_text is None:
+                return None
+            parts.append(f"{key_text!r}: {item_text}")
+        return "{" + ", ".join(parts) + "}"
+    return None
+
+
+def _looks_sensitive(name: str) -> bool:
+    lowered = name.lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "auth",
+            "credential",
+            "password",
+            "secret",
+            "token",
+            "api_key",
+            "apikey",
+        )
+    )
+
+
+def _scrub(text: str) -> str:
+    scrubbed = re.sub(r"(://)[^/@:\s]+:[^/@\s]+@", r"\1<redacted>@", text)
+    scrubbed = re.sub(
+        r"(?i)(password|secret|token|api_key|apikey)=([^&\s]+)",
+        r"\1=<redacted>",
+        scrubbed,
+    )
+    return scrubbed
