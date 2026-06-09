@@ -13,7 +13,7 @@ slice #23 added the **`Processor`** seam (`.with_processor`) and the
 that validator; slice #8 added the **`silver_to_gold`** builder that accumulates
 validated silver into the gold layer, stamped by run; slice #9 added the
 **Selection processors** (`Filter`/`Score`/`Sort`/`Rename`) and **`JoinWith`**,
-the cross-feed join holding a lazy reference to another builder. Every later slice
+the cross-feed join over an explicit read-only dependency. Every later slice
 builds on these shapes. For the
 *why* behind each, see the ADRs referenced inline; for domain language (Case,
 CasePool, Feed, Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
@@ -369,11 +369,12 @@ message naming the column. `raw_to_silver` composes it ahead of the
   join); unnamed columns pass through.
 - `Stamp(column, value)` — write one constant column (the run-level
   `question_bank_id` a Variation resolves), even onto an empty feed (#11).
-- `JoinWith(other, on=..., how="inner")` — the cross-feed join. `other` is a
-  **lazy reference to another builder** (any `Runnable` — typically a read-only
-  `Pipeline` over another subject's silver/gold), **not executed** until the
-  join's `process` step runs `other.run()` and merges in Python. That is how a
-  pipeline resolves to a **DAG without a separate DAG engine** (ADR-0003).
+- `JoinDependency(name, source)` / `JoinWith(other, on=..., how="inner")` — the
+  cross-feed join. `other` is a read-only dependency (`JoinDependency`, `Reader`,
+  or materialized `Dataset`), never another pipeline run hidden inside
+  `process()`. Upstream execution is owned by runner/catalog code; the builder
+  materializes each named dependency once, logs it as `dependency:<name>`, and
+  merges in Python.
 - `TopNPerGroup(key, by, n, ascending=False, tiebreak="case_id")` /
   `SamplePerGroup(key, n, seed=0, order="case_id")` — reduce each group to at
   most *N* Cases (CONTEXT.md **Sampling**, #62). `TopNPerGroup` is **ranked**

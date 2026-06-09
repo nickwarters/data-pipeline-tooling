@@ -29,7 +29,6 @@ from framework.orchestration import (
     ForEachOutcome,
     ForEachPipelineError,
 )
-from framework.processors import Runnable
 from framework.run_context import RunContext
 from framework.run_log import RunLog
 from framework.run_registry import RunRegistry
@@ -50,7 +49,6 @@ from framework.stages import (
 __all__ = [
     # The builder + its contract
     "Pipeline",
-    "Runnable",
     "Stage",
     "ValidationStage",
     "ProcessingStage",

@@ -16,9 +16,8 @@ Two families of concrete processor live in the framework. The schema-driven
 ``SchemaValidator`` that repairs the representation raw loses to storage (#23).
 This module holds reusable transforms: ``Filter`` and ``Score`` carry
 plain-Python row callables (the business rule never names the engine —
-ADR-0002), ``Sort`` and ``Rename`` reshape the frame, and ``JoinWith`` holds a
-**lazy reference to another builder** (a :class:`Runnable`), resolved to a DAG
-and joined in Python only at ``.run()`` (ADR-0003).
+ADR-0002), ``Sort`` and ``Rename`` reshape the frame, and ``JoinWith`` joins an
+explicit read-only dependency in Python.
 """
 
 from __future__ import annotations
@@ -29,6 +28,7 @@ import uuid
 from typing import Any, Callable, Literal, Mapping, Protocol, Sequence, runtime_checkable
 
 from framework.dataset import Dataset
+from framework.readers import Reader
 
 
 class CoercionError(Exception):
@@ -41,22 +41,6 @@ class Processor(Protocol):
 
     def process(self, dataset: Dataset) -> Dataset:
         """Return a transformed dataset; raise on a value it cannot transform."""
-        ...
-
-
-@runtime_checkable
-class Runnable(Protocol):
-    """Anything that materialises a feed on demand — i.e. another builder.
-
-    The structural seam ``JoinWith`` holds its lazy reference through: a
-    ``Pipeline`` satisfies it (``run() -> Dataset``) without ``processors``
-    importing ``builder`` (which would cycle, since ``builder`` imports this
-    module). Naming the shape rather than the class is what lets the join carry
-    an *unexecuted* builder and resolve it to a DAG only at run time (ADR-0003).
-    """
-
-    def run(self) -> Dataset:
-        """Execute the referenced builder and return its dataset."""
         ...
 
 
@@ -178,16 +162,41 @@ class Rename:
 _MergeHow = Literal["left", "right", "inner", "outer", "cross"]
 
 
-class JoinWith:
-    """Join the feed against another feed, resolved lazily at run time.
+class JoinDependency:
+    """A read-only dataset dependency for a cross-feed join.
 
-    ``other`` is a **lazy reference to another builder** (any :class:`Runnable`,
-    typically a read-only :class:`~framework.builder.Pipeline` over another
-    subject's silver/gold). It is **not** executed at construction; only
-    :meth:`process` calls ``other.run()`` and merges the two feeds in Python
-    (ADR-0002 — never SQL). This is how a pipeline resolves to a DAG without a
-    separate DAG engine (ADR-0003): the join is just a processor holding an
-    unexecuted builder.
+    ``source`` is either a ``Reader`` (read once on demand by the pipeline
+    runner) or an already materialized ``Dataset``. It is deliberately not a
+    ``Pipeline``: upstream execution belongs to the runner/catalog layer, while
+    ``JoinWith`` only consumes the explicit read dependency it was given.
+    """
+
+    def __init__(self, name: str, source: Reader | Dataset) -> None:
+        self.name = name
+        self._source = source
+        self._cached: Dataset | None = source if isinstance(source, Dataset) else None
+
+    @property
+    def materialized(self) -> bool:
+        return self._cached is not None
+
+    def read(self) -> Dataset:
+        if self._cached is None:
+            self._cached = self._source.read()
+        return self._cached
+
+    def dataset(self) -> Dataset:
+        return self.read()
+
+
+class JoinWith:
+    """Join the feed against an explicit read-only dependency.
+
+    ``other`` is a :class:`JoinDependency`, a ``Reader``, or a materialized
+    ``Dataset``. Readers are read once and cached; Datasets are already
+    materialized. ``JoinWith`` never executes another pipeline from
+    :meth:`process`, so upstream execution, failure attribution, and logging stay
+    explicit in the runner/catalog layer.
 
     ``on`` is the shared key column(s); ``how`` the join kind (``inner`` default,
     or ``left``/``right``/``outer``).
@@ -201,22 +210,28 @@ class JoinWith:
 
     def __init__(
         self,
-        other: Runnable,
+        other: JoinDependency | Reader | Dataset,
         *,
         on: str | Sequence[str],
         how: _MergeHow = "inner",
         name: str | None = None,
     ) -> None:
-        self._other = other
+        self._other = (
+            other
+            if isinstance(other, JoinDependency)
+            else JoinDependency(name or "join", other)
+        )
         self._on = on
         self._how = how
         self.trace_name = name or "join"
 
+    @property
+    def dependencies(self) -> list[JoinDependency]:
+        return [self._other]
+
     def process(self, dataset: Dataset) -> Dataset:
-        # Resolve the lazy reference now (ADR-0003): run the other builder and
-        # merge in Python, both behind the Dataset seam (ADR-0002).
         frame = dataset.to_pandas()
-        other_frame = self._other.run().to_pandas()
+        other_frame = self._other.dataset().to_pandas()
         merged = frame.merge(other_frame, on=self._on, how=self._how)  # type: ignore[arg-type]
         return Dataset.from_pandas(merged)
 

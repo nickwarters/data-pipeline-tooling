@@ -80,11 +80,14 @@ One record per step, in execution order, then a final `run` summary:
 5. `run` — the **summary**: overall `status`, total `duration`, and the
    run's aggregated `warn_hits`.
 
-Two opt-in steps appear only when their path is configured: `quarantine` (between
-`pre-validate` and the processors — ADR-0007 amd 01, with `rows_quarantined`) and
-`explain` (after `post-validate` — ADR-0007 amd 02, with `rows_excluded`; its
-`rows_in`/`rows_out` are the Cases considered/selected by Selection). A `process`
-step is recorded per attached processor.
+Opt-in steps appear only when their path is configured: `quarantine` (between
+`pre-validate` and the processors — ADR-0007 amd 01, with `rows_quarantined`),
+`dependency:<name>` (a read-only join dependency materialized before the
+processor that consumes it), and `explain` (after `post-validate` — ADR-0007 amd
+02, with `rows_excluded`; its `rows_in`/`rows_out` are the Cases
+considered/selected by Selection). A `process` step is recorded per attached
+processor, so dependency reads are distinguishable from downstream join
+processing.
 
 The runner adds one domain-level opt-in step before a handler executes:
 `freshness`. It is emitted for a downstream Pipeline that declares an upstream

@@ -45,7 +45,7 @@ Moving data across the boundary.
 | Names | What |
 |-------|------|
 | `Processor` | The `process(dataset) -> Dataset` seam. |
-| `Filter`, `Score`, `Stamp`, `Sort`, `Rename`, `JoinWith`, `LatestPerKey`, `SelectColumns`, `Unpivot`, `DeriveKey`, `TopNPerGroup`, `SamplePerGroup` | The concrete Selection / Ingest / fan-out transforms. |
+| `Filter`, `Score`, `Stamp`, `Sort`, `Rename`, `JoinDependency`, `JoinWith`, `LatestPerKey`, `SelectColumns`, `Unpivot`, `DeriveKey`, `TopNPerGroup`, `SamplePerGroup` | The concrete Selection / Ingest / fan-out transforms. |
 | `CoercionError` | Raised by `SchemaCoercion` on an uncastable value. |
 | `Validator`, `ValidationError`, `ColumnValidator`, `RowCountValidator`, `VolumeAnomalyValidator`, `UniqueValidator`, `RunHistory` | The `validate(dataset)` checks (raise on breach). |
 | `SchemaValidator`, `SchemaCoercion`, `ValueRule`, `Pattern`, `Length`, `Unique`, `OneOf` | The declared-schema contract + value-level rules. |
@@ -55,7 +55,7 @@ Moving data across the boundary.
 
 | Names | What |
 |-------|------|
-| `Pipeline`, `Runnable` | The deferred fluent builder (`.add_stage(...)`, `.describe()` for a pre-run plan, `.run()` to execute) and the runnable it satisfies. |
+| `Pipeline` | The deferred fluent builder (`.add_stage(...)`, `.describe()` for a pre-run plan, `.run()` to execute). |
 | `Stage`, `ValidationStage`, `ProcessingStage`, `CheckpointStage` | Ordered stage contract and built-in stage types for validation, processing, and explicit checkpoint side effects inside one class-level `Pipeline` run. |
 | `raw_to_silver`, `silver_to_gold`, `current_silver_to_gold`, `detail_current_silver_to_gold` | The layer-composing builders. |
 | `ForEach`, `ForEachOutcome`, `ForEachPipelineError` | Independent per-item runs. |

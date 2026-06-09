@@ -146,12 +146,12 @@ def test_trace_lands_in_a_sibling_table_stamped_with_run_id(tmp_path):
 
 
 class _StaticFeed:
-    """A minimal ``Runnable`` returning a fixed Dataset — a stand-in reference feed."""
+    """A minimal Reader returning a fixed Dataset stand-in reference feed."""
 
     def __init__(self, dataset: Dataset) -> None:
         self._dataset = dataset
 
-    def run(self) -> Dataset:
+    def read(self) -> Dataset:
         return self._dataset
 
 
@@ -167,7 +167,9 @@ def test_case_dropped_by_an_inner_join_is_explained_not_silently_absent(tmp_path
     )
     (
         Pipeline("selection", DatasetReader(_available()))
-        .with_processor(JoinWith(advisers, on="case_ref", how="inner", name="adviser-hierarchy"))
+        .with_processor(
+            JoinWith(advisers, on="case_ref", how="inner", name="adviser-hierarchy")
+        )
         .explain(
             store.writer("gold", "selection_trace", strategy),
             id_column="case_ref",

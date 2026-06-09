@@ -13,6 +13,7 @@ from functools import partial
 from typing import ContextManager, Literal
 
 from framework.dataset import Dataset
+from framework.processors import JoinDependency
 from framework.run_context import RunContext
 from framework.run_log import RunLog, StepMetrics
 from framework.trace import RowTrace
@@ -77,6 +78,22 @@ class PipelineExecution:
         self, name: str, rows_in: int | None = None
     ) -> ContextManager[StepMetrics]:
         return self.step(name, rows_in=rows_in)
+
+    def materialize_dependencies(self, processors: list[object]) -> None:
+        seen: set[int] = set()
+        for processor in processors:
+            dependencies = getattr(processor, "dependencies", [])
+            for dependency in dependencies:
+                if not isinstance(dependency, JoinDependency):
+                    continue
+                identity = id(dependency)
+                if identity in seen or dependency.materialized:
+                    seen.add(identity)
+                    continue
+                seen.add(identity)
+                with self.timed_step(f"dependency:{dependency.name}") as metrics:
+                    dataset = dependency.read()
+                    metrics.rows_out = len(dataset)
 
     def validate(
         self,
@@ -226,6 +243,7 @@ class ProcessorStep(PipelineStep):
         assert dataset is not None
         with session.timed_step(self.name, rows_in=len(dataset)) as metrics:
             before = dataset
+            session.materialize_dependencies([self.processor])
             result = self.processor.process(dataset)
             metrics.rows_out = len(result)
         if session.trace is not None:
@@ -257,6 +275,7 @@ class ProcessorStageStep(PipelineStep):
     ) -> Dataset:
         assert dataset is not None
         current = dataset
+        session.materialize_dependencies(self.processors)
         with session.timed_step(self.name, rows_in=len(dataset)) as metrics:
             for processor in self.processors:
                 before = current

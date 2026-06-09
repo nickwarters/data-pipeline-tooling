@@ -132,7 +132,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`Store` / `StoreCatalog`** | `Store(subject_dir)` binds one subject to Writer/Reader creation over `<subject>/{raw,silver,gold}.db`; `StoreCatalog(root).store(subject)` mints those stores from shared root/configuration. Holds no business logic and makes no load decision. ([ADR-0001](adr/0001-sqlite-medallion-store-on-network-share.md)) |
 | **`Validator`** | `validate(dataset) -> None`, **raises** on breach. `ColumnValidator`, `RowCountValidator` (engine-agnostic), `VolumeAnomalyValidator` (trips when a run's volume deviates from its recent-history baseline — catches truncated source exports, #54). Severity (`error`/`warn`) is set where it's attached. |
 | **`Schema` / `SchemaValidator`** | A Case Type **dataclass** whose annotations *are* the column+dtype contract; the validator is the dataclass→validator adapter, enforced at silver (and optionally gold). Value-level rules extend the same dataclass via `Annotated`. → [schema-enforcement.md](schema-enforcement.md) ([ADR-0008](adr/0008-graduated-schema-enforcement.md)) |
-| **`Processor`** | `process(dataset) -> Dataset`, run mid-pipeline via `.with_processor()`. `SchemaCoercion` (repair storage-lossy types); the Selection transforms `Filter` / `Score` / `Sort` / `Rename` / `Stamp`, the per-group `TopNPerGroup` / `SamplePerGroup`, the lazy cross-feed `JoinWith`; and the Ingest / fan-out transforms `SelectColumns` / `Unpivot` / `DeriveKey` / `LatestPerKey`. → [processors.md](processors.md) |
+| **`Processor`** | `process(dataset) -> Dataset`, run mid-pipeline via `.with_processor()`. `SchemaCoercion` (repair storage-lossy types); the Selection transforms `Filter` / `Score` / `Sort` / `Rename` / `Stamp`, the per-group `TopNPerGroup` / `SamplePerGroup`, the explicit-dependency cross-feed `JoinWith`; and the Ingest / fan-out transforms `SelectColumns` / `Unpivot` / `DeriveKey` / `LatestPerKey`. → [processors.md](processors.md) |
 | **`Stage`** | A position-sensitive step inside one class-level `Pipeline` run: current `Dataset` in, next `Dataset` out. Compose with `.add_stage(...)` when validation, processing, or explicit checkpoint writes must appear at an exact point. Built-ins: `ValidationStage`, `ProcessingStage`, `CheckpointStage`. |
 | **`Pipeline`** (builder) | The deferred fluent builder: `Pipeline(name, reader).add_stage(…).write_to(writer)`. It builds one ordered plan; call `.describe()` to inspect the planned reader/stages/governance/writer without executing, then `.run(context=…)` to execute that plan fail-fast and atomic with RunLog observability. ([ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md)) |
 | **`ForEach`** | Runnable orchestration for independent repeated runs: pass items plus `pipeline_builder(item, context)`, then call `.run(context)`. It creates a fresh builder and per-item `RunContext` for each item. Default behavior fails fast on the first failed item; `continue_on_error=True` returns per-item success/failure outcomes and continues. Use when files must remain separate logical runs. |
@@ -303,7 +303,15 @@ from typing import Any, Mapping
 
 from framework.io import GOLD, SILVER, AccumulateByRun, DatasetReader, StoreCatalog
 from framework.run import Pipeline
-from framework.transform import Filter, JoinWith, Score, Sort, Stamp, TopNPerGroup
+from framework.transform import (
+    Filter,
+    JoinDependency,
+    JoinWith,
+    Score,
+    Sort,
+    Stamp,
+    TopNPerGroup,
+)
 
 
 def high_value_case(row: Mapping[str, Any]) -> bool:
@@ -316,14 +324,16 @@ def priority_score(row: Mapping[str, Any]) -> int:
 
 variation = CASES.variation("v1")
 catalog = StoreCatalog("/share")
-reference = Pipeline("advisers", catalog.store("advisers").reader(SILVER, "advisers"))
+reference = JoinDependency(
+    "advisers", catalog.store("advisers").reader(SILVER, "advisers")
+)
 strategy = AccumulateByRun.from_context(context)
 
 (
     Pipeline("selection", DatasetReader(available))
     .with_processor(Score("priority_score", priority_score))
     .with_processor(Filter(high_value_case, name="high-value"))
-    .with_processor(JoinWith(reference, on="adviser"))          # lazy cross-feed join
+    .with_processor(JoinWith(reference, on="adviser"))          # read-only dependency join
     .with_processor(TopNPerGroup(key="adviser", by="priority_score", n=1))
     .with_processor(Sort("priority_score", ascending=False))
     .with_processor(Stamp("question_bank_id", variation.question_bank_id))
@@ -351,9 +361,9 @@ strategy = AccumulateByRun.from_context(context)
 - **Remember row-wise cost**: each `Filter`/`Score` callable runs once per row,
   so avoid network I/O, disk I/O, expensive parsing, or repeated reference
   lookups inside the row function. Precompute or join Reference Data instead.
-- **`JoinWith` is lazy**: `reference` is an *unexecuted* builder resolved at
-  `.run()` — a DAG without a DAG engine
-  ([ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md)).
+- **Declare join dependencies explicitly** with `JoinDependency(name, reader)`
+  or a materialized `Dataset`. `JoinWith.process()` never runs another pipeline;
+  upstream execution belongs to the runner/catalog layer.
 - **Reference Data** (the Adviser hierarchy, product codes) is read-only to Case
   Types and joined in Python — never written by them.
 - **`.explain()`** uses the framework's generic **RowTrace** mechanics to land a

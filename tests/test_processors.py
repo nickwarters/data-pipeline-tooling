@@ -1,36 +1,42 @@
-"""Selection processors — filter/score/sort/rename + the lazy cross-feed join (#9).
+"""Selection processors — filter/score/sort/rename + cross-feed joins.
 
 These are the engine-confined transforms the Selection workload composes between
 a feed's read and its post-validators (ADR-0002: all business logic in Python,
 no business-rule SQL). ``Filter`` and ``Score`` carry **plain-Python row
-callables** so the business rule never names the engine; ``JoinWith`` holds a
-**lazy reference to another builder**, resolved to a DAG only at ``.run()``
-(ADR-0003), so a pipeline can filter one feed and join another feed's silver/gold.
+callables** so the business rule never names the engine; ``JoinWith`` consumes
+an explicit read-only dependency so upstream execution is not hidden inside
+``process``.
 """
+
+import json
 
 import pandas as pd
 
 from framework.builder import Pipeline
 from framework.dataset import Dataset
-from framework.processors import Filter, JoinWith, Rename, Score, Sort, Stamp
+from framework.processors import (
+    Filter,
+    JoinDependency,
+    JoinWith,
+    Rename,
+    Score,
+    Sort,
+    Stamp,
+)
+from framework.run_log import RunLog
 from framework.store import Store
 from framework.strategy import Refresh
 
 
-class RecordingBuilder:
-    """A lazy builder stand-in: returns a dataset and counts how often it ran.
-
-    Stands in for another feed's pipeline (`Pipeline.run() -> Dataset`) so a
-    test can assert JoinWith holds an *unexecuted* reference (ADR-0003) without
-    needing a real Store-backed pipeline.
-    """
+class RecordingReader:
+    """A Reader stand-in: returns a dataset and counts reads."""
 
     def __init__(self, dataset: Dataset) -> None:
         self._dataset = dataset
-        self.run_count = 0
+        self.read_count = 0
 
-    def run(self) -> Dataset:
-        self.run_count += 1
+    def read(self) -> Dataset:
+        self.read_count += 1
         return self._dataset
 
 
@@ -141,10 +147,15 @@ def test_join_with_brings_in_the_other_feeds_columns_on_the_key():
     cases = Dataset.from_pandas(
         pd.DataFrame({"adviser": ["a1", "a2"], "case_ref": ["c1", "c2"]})
     )
-    advisers = RecordingBuilder(
-        Dataset.from_pandas(
-            pd.DataFrame({"adviser": ["a1", "a2"], "region": ["north", "south"]})
-        )
+    advisers = JoinDependency(
+        "advisers",
+        RecordingReader(
+            Dataset.from_pandas(
+                pd.DataFrame(
+                    {"adviser": ["a1", "a2"], "region": ["north", "south"]}
+                )
+            )
+        ),
     )
 
     joined = JoinWith(advisers, on="adviser").process(cases).to_pandas()
@@ -153,18 +164,31 @@ def test_join_with_brings_in_the_other_feeds_columns_on_the_key():
     assert list(joined["region"]) == ["north", "south"]
 
 
-def test_join_with_holds_an_unexecuted_reference_until_process():
-    # ADR-0003: the referenced builder is lazy — constructing JoinWith runs
-    # nothing; the other feed is materialised only when the join is processed.
-    advisers = RecordingBuilder(
-        Dataset.from_pandas(pd.DataFrame({"adviser": ["a1"], "region": ["north"]}))
+def test_join_dependency_is_read_once_for_multiple_joins_and_logged_separately(tmp_path):
+    cases = Dataset.from_pandas(
+        pd.DataFrame({"adviser": ["a1"], "case_ref": ["c1"]})
+    )
+    reader = RecordingReader(
+        Dataset.from_pandas(
+            pd.DataFrame({"adviser": ["a1"], "region": ["north"], "team": ["A"]})
+        )
+    )
+    advisers = JoinDependency("advisers", reader)
+    log_path = tmp_path / "selection.log"
+
+    result = (
+        Pipeline("selection", RecordingReader(cases), run_log=RunLog(log_path))
+        .with_processor(JoinWith(advisers, on="adviser"))
+        .with_processor(JoinWith(advisers, on="adviser", how="left"))
+        .run()
+        .to_pandas()
     )
 
-    join = JoinWith(advisers, on="adviser")
-    assert advisers.run_count == 0
-
-    join.process(Dataset.from_pandas(pd.DataFrame({"adviser": ["a1"]})))
-    assert advisers.run_count == 1
+    records = [json.loads(line) for line in log_path.read_text().splitlines()]
+    assert reader.read_count == 1
+    assert list(result["case_ref"]) == ["c1"]
+    assert [record["step"] for record in records].count("dependency:advisers") == 1
+    assert "process" in [record["step"] for record in records]
 
 
 def test_join_with_inner_default_drops_unmatched_rows():
@@ -173,7 +197,7 @@ def test_join_with_inner_default_drops_unmatched_rows():
     cases = Dataset.from_pandas(
         pd.DataFrame({"adviser": ["a1", "a2"], "case_ref": ["c1", "c2"]})
     )
-    advisers = RecordingBuilder(
+    advisers = RecordingReader(
         Dataset.from_pandas(
             pd.DataFrame({"adviser": ["a1"], "region": ["north"]})
         )
@@ -185,11 +209,10 @@ def test_join_with_inner_default_drops_unmatched_rows():
 
 
 def test_pipeline_filters_one_feed_and_joins_another_feeds_silver(tmp_path):
-    # Acceptance (#9): end to end through the real builder — a Selection-shaped
+    # Acceptance (#9/#78): end to end through the real builder — a Selection-shaped
     # pipeline reads one subject's silver, filters it in Python, and joins
-    # another subject's silver Reference Data via a lazy JoinWith whose reference
-    # is a read-only Pipeline over that other subject's medallion. The DAG is two
-    # builders resolved at one .run() (ADR-0003), all joined in Python (ADR-0002).
+    # another subject's silver Reference Data via an explicit read-only
+    # dependency. Upstream execution is not hidden in JoinWith.process().
     cases = Store(tmp_path / "cases")
     advisers = Store(tmp_path / "advisers")
     cases.writer("silver", "cases", Refresh()).write(
@@ -209,9 +232,7 @@ def test_pipeline_filters_one_feed_and_joins_another_feeds_silver(tmp_path):
         )
     )
 
-    # The other feed is an unexecuted read-only builder (no writer) — the lazy
-    # reference JoinWith resolves at run time.
-    reference = Pipeline("advisers", advisers.reader("silver", "advisers"))
+    reference = JoinDependency("advisers", advisers.reader("silver", "advisers"))
     selected = (
         Pipeline("cases", cases.reader("silver", "cases"))
         .with_processor(Filter(lambda row: row["amount"] >= 50))
