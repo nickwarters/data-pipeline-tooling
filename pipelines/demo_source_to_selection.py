@@ -10,8 +10,9 @@ the primitives the earlier slices built:
    Gold *is* the CasePool (ADR-0006 amendment).
 2. **Selection** — a :class:`~case_review.case_pool.CasePool` fetches the
    **available cases** from gold (activity within the working-day window), and a
-   Selection :class:`~framework.builder.Pipeline` narrows them with specific
-   Python processors (filter the low-value cases out, rank highest-amount first),
+   Selection :class:`~framework.builder.Pipeline` narrows them with named,
+   testable Python rules (score priority, filter the low-value cases out, rank
+   highest-priority first),
    stamps the chosen :class:`~case_review.case_type.Variation`'s
    ``question_bank_id``, and accumulates the **SelectionPool** into ``gold``
    stamped ``run_id`` / ``load_date`` (ADR-0006). ``.explain(...)`` lands a
@@ -33,13 +34,14 @@ import uuid
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+from typing import Any, Mapping
 
 from case_review.case_pool import CasePool
 from case_review.case_type import CaseType, Variation
 from framework.builder import Pipeline
 from framework.calendar import WorkingDayCalendar
 from case_review.gold import ingest_silver_to_gold
-from framework.processors import Filter, Sort, Stamp
+from framework.processors import Filter, Score, Sort, Stamp
 from framework.readers import CsvReader, DatasetReader
 from framework.runner import FreshnessRequirement, PipelineRunner, RunContext
 from framework.silver import raw_to_silver
@@ -77,6 +79,24 @@ CASE_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_DNS, CASES.name)
 AS_OF = date(2026, 5, 29)
 
 
+def high_value_case(row: Mapping[str, Any]) -> bool:
+    """Return whether a Case clears the demo's explainable value gate.
+
+    Kept as a named pure function so the rule can be reused, traced by a named
+    ``Filter``, and tested without running a Pipeline.
+    """
+    return row["amount"] >= 100
+
+
+def priority_score(row: Mapping[str, Any]) -> int:
+    """Return the demo priority score used to rank selected Cases.
+
+    The scorer is deterministic and depends only on the row, so the
+    SelectionPool ordering and selection trace score are reproducible.
+    """
+    return row["amount"] * 2
+
+
 def run_ingest(context: RunContext):
     run_id = context.run_date.isoformat()
     sample = Path(__file__).parent / "sample_data" / "activity_cases.csv"
@@ -105,7 +125,10 @@ def run_selection(context: RunContext):
     run_id = context.run_date.isoformat()
     store = StoreCatalog(context.base_dir).store(CASES.name)
 
-    # 2. Selection: fetch the available cases from the CasePool, then narrow them.
+    # 2. Selection: fetch available cases from the CasePool, then narrow them
+    #    with named, pure rule functions. The functions stay independently
+    #    testable while Filter/Score provide the framework wiring and trace
+    #    metadata.
     pool = CasePool(CASES, store, WorkingDayCalendar())
     available = pool.fetch_available_cases(
         as_of=context.run_date, activity_column="activity_date", within_working_days=5
@@ -113,14 +136,16 @@ def run_selection(context: RunContext):
     variation = CASES.variation("v1")
     selection_pool = (
         Pipeline("selection", DatasetReader(available))
-        .with_processor(Filter(lambda row: row["amount"] >= 100, name="high-value"))
-        .with_processor(Sort("amount", ascending=False))  # rank top-amount first
+        .with_processor(Score("priority_score", priority_score))
+        .with_processor(Filter(high_value_case, name="high-value"))
+        .with_processor(Sort("priority_score", ascending=False))
         .with_processor(Stamp("question_bank_id", variation.question_bank_id))
         # Explainability (#53): land a per-Case trace of why each available Case
         # was/wasn't selected in a sibling table, stamped by this run.
         .explain(
             store.writer(GOLD, "selection_trace", AccumulateByRun(run_id, run_id)),
             id_column="case_ref",
+            score_column="priority_score",
         )
         .write_to(store.writer(GOLD, "selection_pool", AccumulateByRun(run_id, run_id)))
         .run()

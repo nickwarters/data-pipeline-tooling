@@ -1,7 +1,16 @@
 from pathlib import Path
 
 from framework.store import Store
-from pipelines.demo_source_to_selection import main
+from pipelines.demo_source_to_selection import main, high_value_case, priority_score
+
+
+def test_demo_selection_rules_are_independently_testable():
+    # Rule authors should be able to test predicates and scorers without running
+    # a full Pipeline; the demo keeps them as named pure functions rather than
+    # burying business logic in inline lambdas.
+    assert high_value_case({"amount": 100})
+    assert not high_value_case({"amount": 99})
+    assert priority_score({"amount": 100}) == 200
 
 
 def test_demo_runs_the_full_source_to_selection_path(tmp_path, capsys):
@@ -16,10 +25,11 @@ def test_demo_runs_the_full_source_to_selection_path(tmp_path, capsys):
     assert (cases_dir / "silver.db").exists()
     assert (cases_dir / "gold.db").exists()
 
-    # The SelectionPool holds only the available, high-value cases, ranked
-    # highest-amount first, each stamped with the chosen Variation's bank.
+    # The SelectionPool holds only the available, high-value cases, ranked by a
+    # named priority score, each stamped with the chosen Variation's bank.
     selection_pool = Store(cases_dir).reader("gold", "selection_pool").read().to_pandas()
     assert list(selection_pool["case_ref"]) == ["c1", "c2"]
+    assert list(selection_pool["priority_score"]) == [1000, 240]
     assert set(selection_pool["question_bank_id"]) == {"qb-100"}
     assert set(selection_pool["run_id"]) == {"2026-05-29"}
 
@@ -30,7 +40,9 @@ def test_demo_runs_the_full_source_to_selection_path(tmp_path, capsys):
     assert set(trace["case_ref"]) == {"c1", "c2", "c3"}  # all considered, not just survivors
     assert set(trace["run_id"]) == {"2026-05-29"}
     assert by_ref.loc["c1", "verdict"] == "selected"
+    assert by_ref.loc["c1", "score"] == 1000
     assert by_ref.loc["c3", "verdict"] == "excluded"  # below the high-value gate
+    assert by_ref.loc["c3", "score"] == 160
     assert "high-value" in by_ref.loc["c3", "reason"]
 
     captured = capsys.readouterr()

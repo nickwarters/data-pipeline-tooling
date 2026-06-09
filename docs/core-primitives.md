@@ -323,7 +323,10 @@ message naming the column. `raw_to_silver` composes it ahead of the
 
 - `Filter(predicate)` / `Score(column, scorer)` — carry the business rule as a
   **plain-Python callable over a row mapping**, never SQL or a column DSL
-  (ADR-0002); applied row-wise behind the seam.
+  (ADR-0002); applied row-wise behind the seam. For Selection business rules,
+  prefer named pure helper functions over inline lambdas, pass `name=` to gates
+  that can exclude a Case, and test predicates/scorers directly with small row
+  mappings before wiring them into a Pipeline.
 - `Sort(by, ascending=True)` — order rows (`by` a column or sequence; index
   reset so the output reads positionally clean) for a meaningful "top N".
 - `Rename({old: new})` — align column vocabulary (e.g. agree a key name before a
