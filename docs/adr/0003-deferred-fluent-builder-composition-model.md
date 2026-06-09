@@ -4,14 +4,14 @@ status: accepted
 
 # Deferred fluent-builder composition model, one builder per layer transition
 
-Pipelines are described with a **deferred (lazy) fluent builder**: callers chain typed component-adders (`.with_validator()`, `.with_processor()`, `.with_post_validator()`, …) and nothing executes until `.run()` (or `.to(layer)` / `.checkpoint(layer)`). Components (Readers, Processors, Validators, Writers) are reusable, role-typed, parameter-constructed objects. A builder spans **one medallion layer transition** (source→raw ingest, raw→silver, silver→gold selection); each layer's output is persisted and reusable as another builder's lazy input. **Cross-feed joins are processors that carry a lazy reference to another builder** (`JoinWith(feed_b, on=...)`), so `.run()` resolves a DAG without a separate DAG engine.
+Pipelines are described with a **deferred (lazy) fluent builder**: callers chain typed component-adders (`.with_validator()`, `.with_processor()`, `.with_post_validator()`, …) and nothing executes until `.run()` (or `.to(layer)` / `.checkpoint(layer)`). Components (Readers, Processors, Validators, Writers) are reusable, role-typed, parameter-constructed objects. A builder spans **one medallion layer transition** (source→raw ingest, raw→silver, silver→gold selection); each layer's output is persisted and reusable as another builder's input through an explicit read-only dependency. **Cross-feed joins are processors that consume a `JoinDependency`, `Reader`, or materialized `Dataset`** (`JoinWith(reference, on=...)`), so upstream execution is controlled outside the processor.
 
 ## Why
 
 - **Config later, for free.** A deferred builder *is* a spec; a future YAML/declarative loader makes the same `.with_*()` calls or builds the same object. Builder and config become two front-ends to one representation — no rewrite.
 - **Type safety preserved.** Role-specific adder methods keep static typing while composition stays uniform.
 - **Cross-cutting concerns centralised.** Because `.run()` owns execution, timing, logging, lineage, and error handling wrap every stage uniformly.
-- **Joins fit naturally.** Lazy references let multi-input selection form a DAG behind a linear-looking fluent surface — matching the join-heavy Selection workload without a flat-step side-channel.
+- **Joins fit naturally.** Explicit read dependencies let multi-input selection keep a linear-looking fluent surface while runner/catalog code owns upstream execution, caching, and freshness.
 
 ## Considered options
 
@@ -41,6 +41,21 @@ one class-level `Pipeline` run: current `Dataset` in, next `Dataset` out, with
 explicit side effects only for checkpoint-style stages. `.describe()` renders
 from the same planned representation that `.run()` executes, so the inspected
 plan and executed plan cannot drift.
+
+## Amendment (2026-06-09): joins consume explicit read dependencies
+
+`JoinWith` no longer accepts a pipeline-shaped `Runnable` and no longer calls
+another builder's `.run()` from inside `process()`. Cross-feed joins now depend
+on a `JoinDependency`, `Reader`, or already materialized `Dataset`. The
+runner/catalog layer is responsible for deciding whether an upstream pipeline
+must execute first; the downstream builder only reads the declared dependency
+and joins it in Python.
+
+During a builder run, each `JoinDependency` is materialized once before the
+processor step and logged as `dependency:<name>`. Reusing the same dependency in
+multiple joins reuses the cached `Dataset`, which keeps run logs and failure
+attribution explicit instead of hiding upstream work inside a downstream
+processor.
 
 ## Amendment (2026-05-29): the terminus is a Writer port, not a layer string
 

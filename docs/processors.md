@@ -5,9 +5,9 @@ They fall into two workload families:
 
 - **Selection narrowing** (#9, #62) — `Filter`, `Score`, `Sort`, `Rename`,
   `Stamp`, the per-group `TopNPerGroup` / `SamplePerGroup`, and `JoinWith`, the
-  cross-feed join that holds a **lazy reference to another builder**. The
-  Selection Pipeline reads the **CasePool**, narrows and ranks it, joins in
-  Reference Data, and emits the **SelectionPool**.
+  cross-feed join that consumes an explicit read-only dependency. The Selection
+  Pipeline reads the **CasePool**, narrows and ranks it, joins in Reference Data,
+  and emits the **SelectionPool**.
 - **Ingest & fan-out reshaping** (#35, #36, #39) — `SelectColumns`, `Unpivot`,
   `DeriveKey`, `LatestPerKey`: the transforms that fan one wide feed into a Case
   table and its Detail Tables, derive the deterministic `case_id`, and reduce
@@ -17,7 +17,7 @@ For the *why*, see
 [ADR-0002](adr/0002-python-only-processing-dumb-store-two-tier-carrier.md)
 (Python-only processing),
 [ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md) (deferred
-builder, joins as lazy references), and
+builder, explicit join dependencies), and
 [ADR-0009](adr/0009-case-identity-and-gold-grain.md) (case identity, gold grain,
 multi-table feeds). The schema-driven `SchemaCoercion` processor lives with the
 schema and is documented separately — [core-primitives.md](core-primitives.md)
@@ -205,7 +205,7 @@ from framework.transform import Stamp
 Stamp("question_bank_id", variation.question_bank_id)
 ```
 
-## `JoinWith` — the lazy cross-feed join
+## `JoinWith` — explicit cross-feed dependency join
 
 A Case Type's Selection joins against other feeds — most commonly **Reference
 Data** (the Adviser hierarchy, product codes, mappings), which is read-only to
@@ -213,15 +213,15 @@ Case Types and joined in Python, never written by them (`CONTEXT.md`, ADR-0002).
 `JoinWith` is that join, and it is a `Processor`:
 
 ```python
-from framework.transform import JoinWith
+from framework.transform import JoinDependency, JoinWith
 
-JoinWith(reference_builder, on="adviser", how="inner")
+reference = JoinDependency("advisers", advisers.reader(SILVER, "advisers"))
+JoinWith(reference, on="adviser", how="inner")
 ```
 
-- `other` — a **lazy reference to another builder**: any `Runnable`
-  (`run() -> Dataset`), typically a read-only `Pipeline` over another
-  subject's silver/gold (a `Store.reader(...)` with **no** writer, so `.run()`
-  just returns that feed's dataset).
+- `other` — a `JoinDependency`, `Reader`, or materialized `Dataset`.
+  `JoinDependency(name, reader)` is the preferred form because the name appears
+  in run logs as `dependency:<name>` and the reader is cached after one read.
 - `on` — the shared key column(s).
 - `how` — the join kind: `inner` (default — unmatched rows dropped),
   `left`/`right`/`outer`, or `cross`.
@@ -229,36 +229,31 @@ JoinWith(reference_builder, on="adviser", how="inner")
   an *inner* join drops as excluded by this join, rather than silently absent
   (#53; see [`selection.md`](selection.md)).
 
-### Lazy: a DAG without a DAG engine
+### Explicit dependencies
 
-The defining property (ADR-0003): `other` is **not executed when `JoinWith` is
-constructed**. The reference stays unexecuted until the join's `process` step
-runs `other.run()`, materialises that feed, and merges the two in Python. So a
-pipeline that joins another feed is a small **DAG** — two builders resolved at
-one `.run()` — expressed behind a linear-looking fluent surface, with no separate
-DAG engine to build.
-
-To keep `JoinWith` from importing the builder (which imports this module — a
-cycle), the reference is held through a structural `Runnable` Protocol
-(`run() -> Dataset`) rather than the concrete `Pipeline` class. Naming the
-*shape* is what lets the join carry any unexecuted builder.
+`JoinWith.process()` never runs another pipeline. Upstream feeds should be run
+by the runner/catalog layer, freshness-checked there, and exposed to downstream
+selection as a read-only `Reader`, cached `Dataset`, or future named upstream
+output. The builder materializes each `JoinDependency` once before the processor
+step and records that read separately, so upstream dependency reads and
+downstream join processing have distinct failure attribution and run-log rows.
 
 ## Worked example — filter one feed, join another's silver
 
 A Selection-shaped pipeline: read one subject's silver CasePool, narrow it in
-Python, and join another subject's silver Reference Data via a lazy `JoinWith`.
+Python, and join another subject's silver Reference Data via an explicit
+read-only dependency.
 
 ```python
 from framework.io import SILVER, StoreCatalog
 from framework.run import Pipeline
-from framework.transform import Filter, JoinWith
+from framework.transform import Filter, JoinDependency, JoinWith
 
 catalog = StoreCatalog("/path/to/share")
 cases = catalog.store("cases")
 advisers = catalog.store("advisers")
 
-# The other feed is an *unexecuted* read-only builder (no writer).
-reference = Pipeline("advisers", advisers.reader(SILVER, "advisers"))
+reference = JoinDependency("advisers", advisers.reader(SILVER, "advisers"))
 
 
 def selection_value_case(row):
@@ -268,15 +263,15 @@ selection_pool = (
     Pipeline("cases", cases.reader(SILVER, "cases"))
     .with_processor(Filter(selection_value_case, name="selection-value"))
     .with_processor(JoinWith(reference, on="adviser", name="adviser-reference"))
-    .run()                                                      # resolves the DAG
+    .run()
 )
 ```
 
-At `.run()` the outer pipeline reads `cases` silver, filters it, then the
-`JoinWith` step runs the `reference` builder, reads `advisers` silver, and merges
-on `adviser` — all in Python, the store never asked to join. The result is the
-bulk-tier `Dataset` the Selection Pipeline would accumulate into gold as the
-SelectionPool (via [`silver_to_gold`](gold-accumulation.md)).
+At `.run()` the pipeline reads `cases` silver, reads the `advisers` dependency
+once under `dependency:advisers`, filters, then merges on `adviser` in Python.
+The store never performs the join. The result is the bulk-tier `Dataset` the
+Selection Pipeline would accumulate into gold as the SelectionPool (via
+[`silver_to_gold`](gold-accumulation.md)).
 
 The domain capstone (#11, landed) composes these processors into a Case Type's
 full Selection flow — `CaseType`/`Variation` + `CasePool` → `SelectionPool`,
