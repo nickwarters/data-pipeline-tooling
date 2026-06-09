@@ -125,6 +125,11 @@ def high_score(row):
     return row["score"] >= 10
 
 
+
+def high_score(row):
+    return row["score"] >= 10
+
+
 # keep cases scored at least 10
 Filter(high_score, name="high-score")
 ```
@@ -144,6 +149,11 @@ new column name adds; an existing one overwrites:
 
 ```python
 from framework.transform import Score
+
+
+def priority_score(row):
+    return row["amount"] * 2
+
 
 
 def priority_score(row):
