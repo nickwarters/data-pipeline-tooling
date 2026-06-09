@@ -5,7 +5,7 @@ import pytest
 
 from framework.builder import Pipeline
 from framework.dataset import Dataset
-from framework.orchestration import ForEachPipelineError, run_for_each
+from framework.orchestration import ForEach, ForEachPipelineError
 from framework.run_context import RunContext
 from framework.store import Store
 from framework.strategy import AccumulateByRun
@@ -32,13 +32,13 @@ class BrokenReader:
         raise RuntimeError("source unavailable")
 
 
-def test_run_for_each_executes_one_pipeline_per_item():
+def test_for_each_executes_one_pipeline_per_item():
     writer = CapturingWriter()
 
     def build_pipeline(item: str, context) -> Pipeline:
         return Pipeline(f"feed-{item}", RecordingReader(item)).write_to(writer)
 
-    results = run_for_each(["a", "b"], build_pipeline)
+    results = ForEach(["a", "b"], build_pipeline).run()
 
     assert [dataset.to_pandas()["value"].iloc[0] for dataset in results] == ["a", "b"]
     assert [dataset.to_pandas()["value"].iloc[0] for dataset in writer.written] == [
@@ -47,7 +47,7 @@ def test_run_for_each_executes_one_pipeline_per_item():
     ]
 
 
-def test_run_for_each_builds_a_fresh_pipeline_for_each_item():
+def test_for_each_builds_a_fresh_pipeline_for_each_item():
     pipelines: list[Pipeline] = []
 
     def build_pipeline(item: str, context) -> Pipeline:
@@ -57,13 +57,13 @@ def test_run_for_each_builds_a_fresh_pipeline_for_each_item():
         pipelines.append(pipeline)
         return pipeline
 
-    run_for_each(["a", "b"], build_pipeline)
+    ForEach(["a", "b"], build_pipeline).run()
 
     assert len(pipelines) == 2
     assert pipelines[0] is not pipelines[1]
 
 
-def test_run_for_each_stops_at_first_failed_item_and_names_it():
+def test_for_each_stops_at_first_failed_item_and_names_it():
     completed: list[str] = []
 
     def build_pipeline(item: str, context) -> Pipeline:
@@ -77,12 +77,12 @@ def test_run_for_each_stops_at_first_failed_item_and_names_it():
         return Pipeline(f"feed-{item}", RecordingReader(item)).write_to(RecordingWriter())
 
     with pytest.raises(ForEachPipelineError, match="bad"):
-        run_for_each(["first", "bad", "never"], build_pipeline)
+        ForEach(["first", "bad", "never"], build_pipeline).run()
 
     assert completed == ["first"]
 
 
-def test_run_for_each_passes_per_item_context_with_derived_logical_run_id():
+def test_for_each_passes_per_item_context_with_derived_logical_run_id():
     contexts: list[RunContext] = []
     parent = RunContext(
         run_date=dt.date(2026, 6, 9),
@@ -99,12 +99,11 @@ def test_run_for_each_passes_per_item_context_with_derived_logical_run_id():
             CapturingWriter()
         )
 
-    run_for_each(
+    ForEach(
         ["a", "b"],
         build_pipeline,
-        context=parent,
         logical_run_id=logical_run_id,
-    )
+    ).run(parent)
 
     assert [context.logical_run_id for context in contexts] == [
         "selection:2026-06-09:0:a",
@@ -114,7 +113,7 @@ def test_run_for_each_passes_per_item_context_with_derived_logical_run_id():
     assert contexts[0].execution_id != contexts[1].execution_id
 
 
-def test_run_for_each_context_supports_per_item_accumulate_by_run_writes(tmp_path):
+def test_for_each_context_supports_per_item_accumulate_by_run_writes(tmp_path):
     store = Store(tmp_path / "cases")
     parent = RunContext(logical_run_id="selection:2026-06-09", load_date="2026-06-09")
 
@@ -127,12 +126,11 @@ def test_run_for_each_context_supports_per_item_accumulate_by_run_writes(tmp_pat
         )
         return Pipeline(f"feed-{item}", RecordingReader(item)).write_to(writer)
 
-    run_for_each(
+    ForEach(
         ["file-a", "file-b"],
         build_pipeline,
-        context=parent,
         logical_run_id=logical_run_id,
-    )
+    ).run(parent)
 
     frame = store.reader("gold", "selection_pool").read().to_pandas()
     assert set(frame["logical_run_id"]) == {

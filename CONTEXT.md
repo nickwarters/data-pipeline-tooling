@@ -168,10 +168,10 @@ feed's **recent run history** (the run registry), not a hand-set threshold.
 
 **For-each orchestration**:
 A repeated-run shape for independent items that all use the same pipeline recipe.
-_Here_: `run_for_each(items, build_pipeline, ...)` calls
-`build_pipeline(item, context)` for each item, using a fresh `Pipeline` builder
-and per-item `RunContext` every time. Use it when each file/source item is its
-own logical run (including its own logical run id for idempotent
+_Here_: `ForEach(items, pipeline_builder, ...).run(context)` calls
+`pipeline_builder(item, context)` for each item, using a fresh `Pipeline`
+builder and per-item `RunContext` every time. Use it when each file/source item
+is its own logical run (including its own logical run id for idempotent
 `AccumulateByRun` writes). Do **not** use it for many files that together form
 one Feed snapshot; that is a multi-file Reader returning one `Dataset`.
 

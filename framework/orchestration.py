@@ -1,9 +1,9 @@
-"""Small orchestration helpers that sit outside the Pipeline builder."""
+"""Small orchestration primitives that sit outside the Pipeline builder."""
 
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from typing import TypeVar
+from typing import Generic, TypeVar
 
 from framework.builder import Pipeline
 from framework.dataset import Dataset
@@ -20,24 +20,34 @@ class ForEachPipelineError(RuntimeError):
     """Raised when one item in a for-each orchestration fails."""
 
 
-def run_for_each(
-    items: Iterable[Item],
-    build_pipeline: BuildPipeline[Item],
-    *,
-    context: RunContext | None = None,
-    logical_run_id: LogicalRunId[Item] | None = None,
-) -> list[Dataset]:
-    """Run a freshly built Pipeline for each item and return the results."""
-    parent_context = context or RunContext()
-    results: list[Dataset] = []
-    for index, item in enumerate(items):
-        item_context = _item_context(item, index, parent_context, logical_run_id)
-        try:
-            pipeline = build_pipeline(item, item_context)
-            results.append(pipeline.run(context=item_context))
-        except Exception as exc:
-            raise ForEachPipelineError(f"for-each item failed: {item!r}") from exc
-    return results
+class ForEach(Generic[Item]):
+    """Run one freshly built Pipeline per item."""
+
+    def __init__(
+        self,
+        items: Iterable[Item],
+        pipeline_builder: BuildPipeline[Item],
+        *,
+        logical_run_id: LogicalRunId[Item] | None = None,
+    ) -> None:
+        self._items = items
+        self._pipeline_builder = pipeline_builder
+        self._logical_run_id = logical_run_id
+
+    def run(self, context: RunContext | None = None) -> list[Dataset]:
+        """Run the recipe once per item using per-item child contexts."""
+        parent_context = context or RunContext()
+        results: list[Dataset] = []
+        for index, item in enumerate(self._items):
+            item_context = _item_context(
+                item, index, parent_context, self._logical_run_id
+            )
+            try:
+                pipeline = self._pipeline_builder(item, item_context)
+                results.append(pipeline.run(context=item_context))
+            except Exception as exc:
+                raise ForEachPipelineError(f"for-each item failed: {item!r}") from exc
+        return results
 
 
 def _item_context(
