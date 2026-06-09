@@ -555,11 +555,11 @@ input); `.with_post_validator(v, severity="error")` attaches a **post**-validato
 the destination Writer. All deferred — nothing runs until `.run()`.
 
 Call `.describe()` before `.run()` to inspect the plan while authoring or
-debugging. It returns a human-readable string naming the reader, pre-validators,
-processors and checkpoints in order, post-validators, quarantine/explain
-configuration, writer, and run-log sink where configured. It does not execute
-the reader or writer, and it scrubs obvious credential fields/URLs before
-rendering component configuration:
+debugging. The builder constructs one ordered internal step plan and renders the
+same planned reader, pre-validators, processors and checkpoints in order,
+post-validators, quarantine/explain configuration, writer, and run-log sink that
+`.run()` will execute. It does not execute the reader or writer, and it scrubs
+obvious credential fields/URLs before rendering component configuration:
 
 ```python
 pipeline = (
@@ -572,10 +572,10 @@ pipeline = (
 print(pipeline.describe())
 ```
 
-`.run()` is the terminus and is **fail-fast and atomic** (ADR-0007): it reads the
-source, runs the pre-validators, runs the processors (the `process` step —
-`.with_processor`), runs the post-validators over that transformed dataset, then
-hands the bulk-tier `Dataset` to the Writer and returns it.
+`.run()` is the terminus and is **fail-fast and atomic** (ADR-0007): it executes
+that ordered internal plan — read, pre-validate, optional quarantine,
+processors/checkpoints in attach order, post-validate, optional explain write,
+and final write — then returns the bulk-tier `Dataset`.
 
 - An **error**-severity failure aborts the run by raising `ValidationError`
   *before* the Writer is ever called — so a bad dataset never reaches the layer
@@ -590,10 +590,13 @@ The builder still makes **no** write decisions — no layer logic, no
 refresh-vs-accumulate branching; that all lives on the Writer. Because the
 terminus owns execution, it is the home of the cross-cutting concerns: it uses
 the supplied `RunContext` or creates one for ad hoc runs, exposes the execution
-id as `pipeline.run_id`, times each step, and drives the composed `RunLog`
-(timing + structured JSONL logging — landed in #4). The `process` step
-(`.with_processor()`) landed in #23; lineage checkpoints (`.checkpoint(writer)`)
-landed in #49.
+id as `pipeline.run_id`, times each planned step, and drives the composed
+`RunLog` (timing + structured JSONL logging — landed in #4). The planned step
+objects are internal: they expose stable name/kind/order, the wrapped component
+where applicable, and read-only/side-effect metadata for future plan-validation
+and dry-run work, but pipeline scripts still use only the builder methods. The
+`process` step (`.with_processor()`) landed in #23; lineage checkpoints
+(`.checkpoint(writer)`) landed in #49.
 
 ### `WorkingDayCalendar` — working-day arithmetic (pure utility)
 A config-seeded `WorkingDayCalendar(holidays=…, weekend=…)` answers working-day

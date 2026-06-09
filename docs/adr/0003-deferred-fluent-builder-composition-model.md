@@ -26,6 +26,20 @@ Pipelines are described with a **deferred (lazy) fluent builder**: callers chain
 - The builder/run layer is the natural home for lineage, run metadata, and uniform error handling.
 - Keeping every component parameter-constructed is a standing discipline — it's what makes the config-later path real.
 
+## Amendment (2026-06-09): builder runs execute an internal step plan
+
+The author-facing builder remains the same fluent API, but `.run()` now executes
+one ordered internal plan of `PipelineStep` objects rather than carrying the
+whole read/validate/process/checkpoint/explain/write procedure inline. Each step
+has a stable name/kind/order, a wrapped component where applicable, and
+read-only/side-effect metadata for future plan validation and dry-run work.
+
+This is not a public orchestration engine and not a DAG model. Pipeline scripts
+still compose Readers, Validators, Processors, checkpoints, optional governance
+outputs, and one final Writer through the builder. `.describe()` renders from
+the same planned representation that `.run()` executes, so the inspected plan
+and executed plan cannot drift.
+
 ## Amendment (2026-05-29): the terminus is a Writer port, not a layer string
 
 `.to(layer)` — a stringly-typed medallion layer name threaded through the generic builder — is replaced by **`.write_to(writer)`**, where `writer` is a **Writer**: the component-role dual of `Reader` (`Reader.read() -> Dataset` on the way in; `Writer.write(dataset)` on the way out). This removes the medallion vocabulary (and the placeholder layer names — see CONTEXT) from the core composition machinery, and is in fact *more* faithful to this ADR's own component model, which already lists Writers as a parameter-constructed role. The string form was shorthand in tension with that model.

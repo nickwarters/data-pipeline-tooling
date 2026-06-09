@@ -73,6 +73,9 @@ without notice:
   the public layer surface is `Layer`/`RAW`/`SILVER`/`GOLD` via `framework.io`.
 - `framework.trace` (`RowTrace`) — the generic per-row trace mechanics behind
   `Pipeline.explain()`; reached through the builder, not imported directly.
+- `framework.pipeline_steps` (`PipelineStep`, `PipelineExecution`, …) — the
+  builder's internal ordered execution plan; inspected by `.describe()` and
+  executed by `.run()`, not imported by pipeline scripts.
 - `framework.remote` (`RemoteRunner`, `StubbedRemoteRunner`, `SharePointFetcher`,
   …) — the **stubbed remote-client seam** behind `SasReader` / `SharePointReader`
   (ADR-0004/0005). An advanced extension point, documented in
