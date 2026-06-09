@@ -17,7 +17,7 @@ import pandas as pd
 
 from framework.builder import Pipeline
 from framework.dataset import Dataset
-from framework.processors import Filter, JoinWith, Score, Sort
+from framework.processors import AntiJoinWith, Filter, JoinWith, Score, Sort
 from framework.readers import DatasetReader
 from framework.store import Store
 from framework.run_log import RunLog
@@ -182,6 +182,29 @@ def test_case_dropped_by_an_inner_join_is_explained_not_silently_absent(tmp_path
     assert trace.loc["c3", "verdict"] == "excluded"
     assert "adviser-hierarchy" in trace.loc["c3", "reason"]
     assert "join" in trace.loc["c3", "reason"]
+
+
+def test_case_dropped_by_an_anti_join_is_explained_not_silently_absent(tmp_path):
+    store = Store(tmp_path)
+    strategy = AccumulateByRun("run-1", "2026-05-29")
+    already_reviewed = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c2"]}))
+    (
+        Pipeline("selection", DatasetReader(_available()))
+        .with_processor(
+            AntiJoinWith(already_reviewed, on="case_ref", name="already-reviewed")
+        )
+        .explain(
+            store.writer("gold", "selection_trace", strategy),
+            id_column="case_ref",
+        )
+        .write_to(store.writer("gold", "selection_pool", strategy))
+        .run()
+    )
+
+    trace = _trace(store)
+    assert trace.loc["c2", "verdict"] == "excluded"
+    assert "already-reviewed" in trace.loc["c2", "reason"]
+    assert "join" in trace.loc["c2", "reason"]
 
 
 def test_run_log_records_an_explain_step_with_governance_counts(tmp_path):

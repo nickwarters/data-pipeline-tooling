@@ -16,8 +16,9 @@ Two families of concrete processor live in the framework. The schema-driven
 ``SchemaValidator`` that repairs the representation raw loses to storage (#23).
 This module holds reusable transforms: ``Filter`` and ``Score`` carry
 plain-Python row callables (the business rule never names the engine —
-ADR-0002), ``Sort`` and ``Rename`` reshape the frame, and ``JoinWith`` joins an
-explicit read-only dependency in Python.
+ADR-0002), ``Sort`` and ``Rename`` reshape the frame, ``JoinWith`` joins an
+explicit read-only dependency in Python, and ``AntiJoinWith`` excludes rows
+whose key is present in a read-only dependency.
 """
 
 from __future__ import annotations
@@ -234,6 +235,58 @@ class JoinWith:
         other_frame = self._other.dataset().to_pandas()
         merged = frame.merge(other_frame, on=self._on, how=self._how)  # type: ignore[arg-type]
         return Dataset.from_pandas(merged)
+
+
+class AntiJoinWith:
+    """Exclude feed rows whose key appears in an explicit read-only dependency.
+
+    ``other`` is a :class:`JoinDependency`, a ``Reader``, or a materialized
+    ``Dataset``. Readers are read once and cached through ``JoinDependency``.
+
+    ``on`` is the shared key column(s). The output keeps the current feed's
+    columns only; the dependency acts as a set-membership exclusion list.
+    """
+
+    trace_role = "join"
+
+    def __init__(
+        self,
+        other: JoinDependency | Reader | Dataset,
+        *,
+        on: str | Sequence[str],
+        name: str | None = None,
+    ) -> None:
+        self._other = (
+            other
+            if isinstance(other, JoinDependency)
+            else JoinDependency(name or "anti-join", other)
+        )
+        self._on = [on] if isinstance(on, str) else list(on)
+        self.trace_name = name or "anti-join"
+
+    @property
+    def dependencies(self) -> list[JoinDependency]:
+        return [self._other]
+
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas()
+        other_frame = self._other.dataset().to_pandas()
+        missing_left = [column for column in self._on if column not in frame.columns]
+        missing_right = [
+            column for column in self._on if column not in other_frame.columns
+        ]
+        if missing_left or missing_right:
+            raise ValueError(
+                "AntiJoinWith: key column(s) not found: "
+                f"dataset={missing_left!r}, other={missing_right!r}."
+            )
+
+        keys = other_frame[self._on].drop_duplicates()
+        joined = frame.merge(keys, on=self._on, how="left", indicator=True)
+        kept = joined.loc[joined["_merge"] == "left_only", frame.columns].reset_index(
+            drop=True
+        )
+        return Dataset.from_pandas(kept)
 
 
 class LatestPerKey:

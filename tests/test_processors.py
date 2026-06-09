@@ -15,6 +15,7 @@ import pandas as pd
 from framework.builder import Pipeline
 from framework.dataset import Dataset
 from framework.processors import (
+    AntiJoinWith,
     Filter,
     JoinDependency,
     JoinWith,
@@ -23,6 +24,7 @@ from framework.processors import (
     Sort,
     Stamp,
 )
+from framework.transform import AntiJoinWith as PublicAntiJoinWith
 from framework.run_log import RunLog
 from framework.store import Store
 from framework.strategy import Refresh
@@ -206,6 +208,118 @@ def test_join_with_inner_default_drops_unmatched_rows():
     joined = JoinWith(advisers, on="adviser").process(cases).to_pandas()
 
     assert list(joined["case_ref"]) == ["c1"]
+
+
+def test_anti_join_with_excludes_rows_whose_key_is_in_the_other_dataset():
+    cases = Dataset.from_pandas(
+        pd.DataFrame(
+            {
+                "case_id": ["c1", "c2", "c3"],
+                "amount": [100, 200, 300],
+            }
+        )
+    )
+    already_seen = Dataset.from_pandas(pd.DataFrame({"case_id": ["c2"]}))
+
+    kept = (
+        PublicAntiJoinWith(already_seen, on="case_id", name="already-seen")
+        .process(cases)
+        .to_pandas()
+    )
+
+    assert list(kept["case_id"]) == ["c1", "c3"]
+    assert list(kept["amount"]) == [100, 300]
+
+
+def test_anti_join_with_supports_composite_keys():
+    cases = Dataset.from_pandas(
+        pd.DataFrame(
+            {
+                "case_id": ["c1", "c1", "c2"],
+                "run_id": ["r1", "r2", "r1"],
+                "amount": [100, 200, 300],
+            }
+        )
+    )
+    excluded = Dataset.from_pandas(
+        pd.DataFrame({"case_id": ["c1"], "run_id": ["r2"]})
+    )
+
+    kept = AntiJoinWith(excluded, on=["case_id", "run_id"]).process(cases).to_pandas()
+
+    assert list(kept["case_id"]) == ["c1", "c2"]
+    assert list(kept["run_id"]) == ["r1", "r1"]
+
+
+def test_anti_join_with_keeps_all_rows_when_no_keys_match():
+    cases = Dataset.from_pandas(pd.DataFrame({"case_id": ["c1", "c2"]}))
+    excluded = Dataset.from_pandas(pd.DataFrame({"case_id": ["c3"]}))
+
+    kept = AntiJoinWith(excluded, on="case_id").process(cases).to_pandas()
+
+    assert list(kept["case_id"]) == ["c1", "c2"]
+
+
+def test_anti_join_with_treats_duplicate_other_keys_as_set_membership():
+    cases = Dataset.from_pandas(
+        pd.DataFrame({"case_id": ["c1", "c2", "c3"], "amount": [10, 20, 30]})
+    )
+    excluded = Dataset.from_pandas(pd.DataFrame({"case_id": ["c2", "c2"]}))
+
+    kept = AntiJoinWith(excluded, on="case_id").process(cases).to_pandas()
+
+    assert list(kept["case_id"]) == ["c1", "c3"]
+    assert list(kept["amount"]) == [10, 30]
+
+
+def test_anti_join_dependency_is_read_once_for_multiple_anti_joins_and_logged_separately(
+    tmp_path,
+):
+    cases = Dataset.from_pandas(pd.DataFrame({"case_id": ["c1", "c2", "c3"]}))
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"case_id": ["c2"]})))
+    excluded = JoinDependency("already-reviewed", reader)
+    log_path = tmp_path / "selection.log"
+
+    result = (
+        Pipeline("selection", RecordingReader(cases), run_log=RunLog(log_path))
+        .with_processor(AntiJoinWith(excluded, on="case_id"))
+        .with_processor(AntiJoinWith(excluded, on="case_id"))
+        .run()
+        .to_pandas()
+    )
+
+    records = [json.loads(line) for line in log_path.read_text().splitlines()]
+    assert reader.read_count == 1
+    assert list(result["case_id"]) == ["c1", "c3"]
+    assert (
+        [record["step"] for record in records].count("dependency:already-reviewed")
+        == 1
+    )
+
+
+def test_anti_join_with_missing_key_columns_fails_fast_with_context():
+    cases = Dataset.from_pandas(pd.DataFrame({"case_id": ["c1"]}))
+    excluded = Dataset.from_pandas(pd.DataFrame({"other_id": ["c1"]}))
+
+    try:
+        AntiJoinWith(excluded, on="case_id").process(cases)
+    except ValueError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("AntiJoinWith should fail when a key column is missing")
+
+    assert "AntiJoinWith" in message
+    assert "case_id" in message
+    assert "other" in message
+
+
+def test_anti_join_with_exposes_trace_metadata_for_selection_explainability():
+    excluded = Dataset.from_pandas(pd.DataFrame({"case_id": ["c1"]}))
+
+    gate = AntiJoinWith(excluded, on="case_id", name="already-reviewed")
+
+    assert gate.trace_role == "join"
+    assert gate.trace_name == "already-reviewed"
 
 
 def test_pipeline_filters_one_feed_and_joins_another_feeds_silver(tmp_path):

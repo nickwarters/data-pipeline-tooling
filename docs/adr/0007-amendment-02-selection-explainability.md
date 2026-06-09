@@ -50,15 +50,15 @@ identity column and sibling selection-trace writer:
   against the surviving SelectionPool.
 - A Case present *before* a stage and absent *after* was **dropped by that
   stage** — the first such drop excludes it, located by the stage's name. This is
-  generic over `Filter` and inner `JoinWith` alike (AC1, AC5).
+  generic over `Filter`, inner `JoinWith`, and `AntiJoinWith` alike (AC1, AC5).
 - A `Score` stage **snapshots** the score for every Case still present, so a Case
   a later gate excludes still carries the score it earned (AC2).
 - Survivors record the gates they passed and their **rank** — their 1-based
   position in the final (sorted) SelectionPool order (AC4).
 
 Processors expose a light `trace_role` / `trace_name` so the ledger can
-locate reasons without the builder type-sniffing; `Filter`/`JoinWith` gain an
-optional `name=` to label the gate.
+locate reasons without the builder type-sniffing; `Filter`/`JoinWith` /
+`AntiJoinWith` have an optional `name=` to label the gate.
 
 ## Trace table schema
 

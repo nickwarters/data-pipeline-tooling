@@ -182,10 +182,11 @@ write. A first run with no upstream history is allowed, but the runner records a
 
 Selecting *which advisers' Cases get reviewed* is itself a governed act that will
 be challenged after the fact ("why wasn't this adviser picked up last quarter?").
-But `Filter`/`Score`/`JoinWith` **silently drop** the Cases they exclude (ADR-0002
-plain-Python callables), leaving no trace. `.explain(writer, id_column=…)` closes
-that gap (#53): it is the eligibility-stage twin of `.quarantine()` (#50) — the
-same *route aside with a reason, never silently drop* shape, pointed at
+But `Filter`/`Score`/`JoinWith`/`AntiJoinWith` **silently drop** the Cases they
+exclude (ADR-0002 plain-Python callables), leaving no trace.
+`.explain(writer, id_column=…)` closes that gap (#53): it is the
+eligibility-stage twin of `.quarantine()` (#50) — the same *route aside with a
+reason, never silently drop* shape, pointed at
 **eligibility** rather than **validity** (ADR-0007 amendment 02).
 
 ```python
@@ -215,13 +216,14 @@ the survivors), stamped `run_id`:
 | `c2` | `selected` | `passed high-value` | 240 | 2 |
 | `c3` | `excluded` | `excluded by filter 'high-value'` | 160 | — |
 
-Naming a gate (`Filter(..., name="high-value")`, `JoinWith(..., name=…)`) locates
-its reasons; an unnamed gate still traces, under a generic label. Pass
-`score_column="…"` to retain each Case's score — kept even for a Case a *later*
-gate excludes, so a low scorer dropped by a top-N cut still shows what it scored.
-A Case dropped by an **inner** `JoinWith` (e.g. an adviser absent from the
-hierarchy Reference Data) is recorded as excluded by that join, not silently
-absent. The run's `explain` step logs the governance counts —
+Naming a gate (`Filter(..., name="high-value")`, `JoinWith(..., name=…)`,
+`AntiJoinWith(..., name=…)`) locates its reasons; an unnamed gate still traces,
+under a generic label. Pass `score_column="…"` to retain each Case's score —
+kept even for a Case a *later* gate excludes, so a low scorer dropped by a top-N
+cut still shows what it scored. A Case dropped by an **inner** `JoinWith` (e.g.
+an adviser absent from the hierarchy Reference Data) or by an `AntiJoinWith`
+exclusion list is recorded as excluded by that gate, not silently absent. The
+run's `explain` step logs the governance counts —
 considered / selected / excluded (see [`run-log-format.md`](run-log-format.md)).
 
 Explainability is the trace of *one run*. Re-deriving what Selection *would* have

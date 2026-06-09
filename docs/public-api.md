@@ -45,7 +45,7 @@ Moving data across the boundary.
 | Names | What |
 |-------|------|
 | `Processor` | The `process(dataset) -> Dataset` seam. |
-| `Filter`, `Score`, `Stamp`, `Sort`, `Rename`, `JoinDependency`, `JoinWith`, `LatestPerKey`, `SelectColumns`, `Unpivot`, `DeriveKey`, `TopNPerGroup`, `SamplePerGroup` | The concrete Selection / Ingest / fan-out transforms. |
+| `Filter`, `Score`, `Stamp`, `Sort`, `Rename`, `JoinDependency`, `JoinWith`, `AntiJoinWith`, `LatestPerKey`, `SelectColumns`, `Unpivot`, `DeriveKey`, `TopNPerGroup`, `SamplePerGroup` | The concrete Selection / Ingest / fan-out transforms. |
 | `CoercionError` | Raised by `SchemaCoercion` on an uncastable value. |
 | `Validator`, `ValidationError`, `ColumnValidator`, `RowCountValidator`, `VolumeAnomalyValidator`, `UniqueValidator`, `RunHistory` | The `validate(dataset)` checks (raise on breach). |
 | `SchemaValidator`, `SchemaCoercion`, `ValueRule`, `Pattern`, `Length`, `Unique`, `OneOf` | The declared-schema contract + value-level rules. |

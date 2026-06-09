@@ -4,10 +4,11 @@ This documents the concrete `Processor` primitives in `framework.processors`.
 They fall into two workload families:
 
 - **Selection narrowing** (#9, #62) — `Filter`, `Score`, `Sort`, `Rename`,
-  `Stamp`, the per-group `TopNPerGroup` / `SamplePerGroup`, and `JoinWith`, the
-  cross-feed join that consumes an explicit read-only dependency. The Selection
-  Pipeline reads the **CasePool**, narrows and ranks it, joins in Reference Data,
-  and emits the **SelectionPool**.
+  `Stamp`, the per-group `TopNPerGroup` / `SamplePerGroup`, `JoinWith`, and
+  `AntiJoinWith`, the cross-feed join/exclusion gates that consume explicit
+  read-only dependencies. The Selection Pipeline reads the **CasePool**, narrows
+  and ranks it, joins in Reference Data, filters exclusion lists, and emits the
+  **SelectionPool**.
 - **Ingest & fan-out reshaping** (#35, #36, #39) — `SelectColumns`, `Unpivot`,
   `DeriveKey`, `LatestPerKey`: the transforms that fan one wide feed into a Case
   table and its Detail Tables, derive the deterministic `case_id`, and reduce
@@ -238,6 +239,33 @@ output. The builder materializes each `JoinDependency` once before the processor
 step and records that read separately, so upstream dependency reads and
 downstream join processing have distinct failure attribution and run-log rows.
 
+## `AntiJoinWith` — exclusion-list dependency gate
+
+`AntiJoinWith` is the "x not in y" companion to `JoinWith`: it keeps rows from
+the current `Dataset` only when their key does **not** appear in another
+read-only dependency. Use it when Selection needs to remove Cases already present
+in a prior result, review outcome feed, suppression list, or other materialized
+dataset.
+
+```python
+from framework.transform import AntiJoinWith, JoinDependency
+
+already_reviewed = JoinDependency(
+    "already-reviewed", reviews.reader(SILVER, "review_outcomes")
+)
+AntiJoinWith(already_reviewed, on="case_id", name="already-reviewed")
+```
+
+- `other` — a `JoinDependency`, `Reader`, or materialized `Dataset`, cached the
+  same way as `JoinWith`.
+- `on` — one key column or a sequence of key columns.
+- `name=` (optional) — labels the exclusion gate so Selection explainability
+  records a dropped Case as excluded by this anti-join.
+
+Duplicate keys in `other` are treated as set membership, so they do not duplicate
+or distort the kept rows. The output keeps the current feed's columns only; the
+dependency supplies membership, not additional columns.
+
 ## Worked example — filter one feed, join another's silver
 
 A Selection-shaped pipeline: read one subject's silver CasePool, narrow it in
@@ -247,13 +275,16 @@ read-only dependency.
 ```python
 from framework.io import SILVER, StoreCatalog
 from framework.run import Pipeline
-from framework.transform import Filter, JoinDependency, JoinWith
+from framework.transform import AntiJoinWith, Filter, JoinDependency, JoinWith
 
 catalog = StoreCatalog("/path/to/share")
 cases = catalog.store("cases")
 advisers = catalog.store("advisers")
 
 reference = JoinDependency("advisers", advisers.reader(SILVER, "advisers"))
+already_reviewed = JoinDependency(
+    "already-reviewed", cases.reader(SILVER, "review_outcomes")
+)
 
 
 def selection_value_case(row):
@@ -262,15 +293,17 @@ def selection_value_case(row):
 selection_pool = (
     Pipeline("cases", cases.reader(SILVER, "cases"))
     .with_processor(Filter(selection_value_case, name="selection-value"))
+    .with_processor(AntiJoinWith(already_reviewed, on="case_ref", name="already-reviewed"))
     .with_processor(JoinWith(reference, on="adviser", name="adviser-reference"))
     .run()
 )
 ```
 
 At `.run()` the pipeline reads `cases` silver, reads the `advisers` dependency
-once under `dependency:advisers`, filters, then merges on `adviser` in Python.
-The store never performs the join. The result is the bulk-tier `Dataset` the
-Selection Pipeline would accumulate into gold as the SelectionPool (via
+once under `dependency:advisers`, reads `already-reviewed` once under its own
+dependency step, filters, anti-joins on `case_ref`, then merges on `adviser` in
+Python. The store never performs the join. The result is the bulk-tier `Dataset`
+the Selection Pipeline would accumulate into gold as the SelectionPool (via
 [`silver_to_gold`](gold-accumulation.md)).
 
 The domain capstone (#11, landed) composes these processors into a Case Type's

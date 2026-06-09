@@ -12,7 +12,8 @@ slice #23 added the **`Processor`** seam (`.with_processor`) and the
 **`SchemaCoercion`** processor that repairs raw's round-trip-lossy types ahead of
 that validator; slice #8 added the **`silver_to_gold`** builder that accumulates
 validated silver into the gold layer, stamped by run; slice #9 added the
-**Selection processors** (`Filter`/`Score`/`Sort`/`Rename`) and **`JoinWith`**,
+**Selection processors** (`Filter`/`Score`/`Sort`/`Rename`) and **`JoinWith`** /
+**`AntiJoinWith`**,
 the cross-feed join over an explicit read-only dependency. Every later slice
 builds on these shapes. For the
 *why* behind each, see the ADRs referenced inline; for domain language (Case,
@@ -83,7 +84,8 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > then insert (ADR-0006;
 > [gold-accumulation doc](gold-accumulation.md)). **The Selection processors**
 > have landed: `Filter`/`Score` (plain-Python row callables — ADR-0002),
-> `Sort`/`Rename`, and **`JoinWith`** — the cross-feed join that holds a lazy
+> `Sort`/`Rename`, and **`JoinWith`** / **`AntiJoinWith`** — the cross-feed join
+> and exclusion-list gate that hold a lazy
 > reference to another builder and resolves it to a DAG at `.run()`, joined in
 > Python (ADR-0003, #9; [processors doc](processors.md)). **The run registry**
 > has landed: a `RunRegistry` ingests the `RunLog` JSONL into its own queryable
@@ -369,12 +371,13 @@ message naming the column. `raw_to_silver` composes it ahead of the
   join); unnamed columns pass through.
 - `Stamp(column, value)` — write one constant column (the run-level
   `question_bank_id` a Variation resolves), even onto an empty feed (#11).
-- `JoinDependency(name, source)` / `JoinWith(other, on=..., how="inner")` — the
-  cross-feed join. `other` is a read-only dependency (`JoinDependency`, `Reader`,
-  or materialized `Dataset`), never another pipeline run hidden inside
-  `process()`. Upstream execution is owned by runner/catalog code; the builder
-  materializes each named dependency once, logs it as `dependency:<name>`, and
-  merges in Python.
+- `JoinDependency(name, source)` / `JoinWith(other, on=..., how="inner")` /
+  `AntiJoinWith(other, on=...)` — cross-feed joins and exclusion-list gates.
+  `other` is a read-only dependency (`JoinDependency`, `Reader`, or materialized
+  `Dataset`), never another pipeline run hidden inside `process()`. Upstream
+  execution is owned by runner/catalog code; the builder materializes each named
+  dependency once, logs it as `dependency:<name>`, and joins or anti-joins in
+  Python.
 - `TopNPerGroup(key, by, n, ascending=False, tiebreak="case_id")` /
   `SamplePerGroup(key, n, seed=0, order="case_id")` — reduce each group to at
   most *N* Cases (CONTEXT.md **Sampling**, #62). `TopNPerGroup` is **ranked**
