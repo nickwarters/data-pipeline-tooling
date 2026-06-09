@@ -35,7 +35,7 @@ Moving data across the boundary.
 |-------|------|
 | `Dataset` | The opaque bulk tabular carrier (pandas behind the seam). |
 | `Reader`, `DatasetReader`, `CsvReader`, `GlobCsvReader`, `ExcelReader`, `SqliteReader`, `SasReader`, `SharePointReader` | The `read() -> Dataset` port and its concrete sources. |
-| `Writer`, `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `QuarantineWriter` | The `write(dataset)` port and its concrete sinks. |
+| `Writer`, `CsvWriter`, `ExcelWriter`, `JsonWriter`, `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `QuarantineWriter`, `SharePointWriter` | The `write(dataset)` port and its concrete sinks. |
 | `Store`, `StoreCatalog`, `StoreBackend`, `DirectoryStoreBackend` | Per-subject medallions minted from shared configuration. |
 | `Layer`, `RAW`, `SILVER`, `GOLD` | The medallion layer constants. |
 | `Refresh`, `AccumulateByRun` | The load strategies a Writer carries. |
@@ -78,8 +78,9 @@ without notice:
   builder's internal ordered execution plan; inspected by `.describe()` and
   executed by `.run()`, not imported by pipeline scripts.
 - `framework.remote` (`RemoteRunner`, `StubbedRemoteRunner`, `SharePointFetcher`,
+  `SharePointPusher`,
   …) — the **stubbed remote-client seam** behind `SasReader` / `SharePointReader`
-  (ADR-0004/0005). An advanced extension point, documented in
+  / `SharePointWriter` (ADR-0004/0005). An advanced extension point, documented in
   [adding-a-feed.md](adding-a-feed.md); not part of the day-to-day surface.
 - `framework.quarantine` (`SchemaValueRulePartitioner`, …) — the value-rule
   quarantine partitioner; wired by the schema/quarantine flow.
@@ -91,9 +92,9 @@ Code examples throughout the docs import via the facades. The per-slice deep
 docs may still name a primitive's **home module** in prose to locate the
 implementation (e.g. the processors live in `framework.processors`); that is
 where the code is, but it is not how pipeline scripts import it. The one
-exception in an example is `framework.remote`, shown in
-[adding-a-feed.md](adding-a-feed.md) only to swap the stubbed remote fetcher —
-an internal seam with no facade.
+exception in examples is `framework.remote`, shown in
+[adding-a-feed.md](adding-a-feed.md) only to swap the stubbed remote fetcher or
+pusher — internal seams with no facade.
 
 ## The case-review application layer is separate
 

@@ -151,7 +151,28 @@ reader = SharePointReader(
 dataset = reader.read()
 ```
 
-Implementing either feed for real means writing one new class behind the seam (a
-`RemoteRunner` that drives `ssh`/`scp`, or a `SharePointFetcher` that calls the
-API) and passing it in — no change to the Readers, the builder, or the docs
-above.
+### `SharePointWriter(site, list_name, auth, strategy=Refresh())`
+
+The outbound dual of `SharePointReader`: configured with the target `site`,
+`list_name`, `auth`, and an explicit Writer load strategy. On `write(dataset)`,
+it delegates to a `SharePointPusher` — the upload seam — handing it the
+configured target, the `Dataset`, and the strategy. The default
+`StubbedSharePointPusher` raises `NotImplementedError` until the real tenant
+client exists, so tests pass a recording pusher and never touch the network.
+
+```python
+from framework.io import Refresh, SharePointWriter
+
+writer = SharePointWriter(
+    "https://contoso.sharepoint.com/sites/cases",
+    "SelectionPool",
+    auth_config,
+    Refresh(),
+    pusher=real_pusher,  # later: a SharePointPusher implementation
+)
+```
+
+Implementing either remote direction for real means writing one new class behind
+the seam (a `RemoteRunner` that drives `ssh`/`scp`, a `SharePointFetcher` that
+downloads list rows, or a `SharePointPusher` that uploads rows) and passing it
+in — no change to the Reader/Writer, the builder, or the docs above.

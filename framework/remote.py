@@ -69,6 +69,22 @@ class SharePointFetcher(Protocol):
         ...
 
 
+@runtime_checkable
+class SharePointPusher(Protocol):
+    """The SharePoint upload seam: push a Dataset to one list."""
+
+    def push(
+        self,
+        site: str,
+        list_name: str,
+        auth: object,
+        dataset: Dataset,
+        strategy: object,
+    ) -> None:
+        """Push ``dataset`` to ``list_name`` at ``site`` using ``strategy``."""
+        ...
+
+
 class StubbedSharePointFetcher:
     """The deferred SharePoint client: fetching raises until it is implemented.
 
@@ -82,6 +98,24 @@ class StubbedSharePointFetcher:
             "SharePoint fetch is not implemented yet (auth/tenant deferred — "
             "ADR-0004). Pass a fetcher, e.g. LocalCsvFetcher(path), to read "
             "from a local fixture."
+        )
+
+
+class StubbedSharePointPusher:
+    """The deferred SharePoint write client: pushing raises until implemented."""
+
+    def push(
+        self,
+        site: str,
+        list_name: str,
+        auth: object,
+        dataset: Dataset,
+        strategy: object,
+    ) -> None:
+        raise NotImplementedError(
+            "SharePoint push is not implemented yet (auth/tenant deferred — "
+            "ADR-0004). Pass a pusher test double, or a real client later, to "
+            "write to a SharePoint list."
         )
 
 
