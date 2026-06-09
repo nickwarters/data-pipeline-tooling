@@ -4,8 +4,9 @@ The stable import surface for everything that reshapes or gates a
 :class:`~framework.dataset.Dataset` between the read and the write: the
 ``Processor`` seam and its concrete transforms (the Selection ``Filter`` /
 ``Score`` / ``Sort`` / ``Rename`` / ``Stamp``, the per-group ``TopNPerGroup`` /
-``SamplePerGroup``, the lazy ``JoinWith``, the Ingest / fan-out ``SelectColumns``
-/ ``Unpivot`` / ``DeriveKey`` / ``LatestPerKey``), the ``Validator`` checks, the
+``SamplePerGroup``, the lazy ``JoinWith`` / ``AntiJoinWith``, the Ingest /
+fan-out ``SelectColumns`` / ``Unpivot`` / ``DeriveKey`` / ``LatestPerKey``),
+the ``Validator`` checks, the
 ``Schema`` adapter (``SchemaValidator`` / ``SchemaCoercion`` + value rules), and
 the ``WorkingDayCalendar`` availability utility.
 
@@ -21,6 +22,7 @@ here are the public contract, the submodule paths are not. See
 
 from framework.calendar import WorkingDayCalendar
 from framework.processors import (
+    AntiJoinWith,
     CoercionError,
     DeriveKey,
     Filter,
@@ -66,6 +68,7 @@ __all__ = [
     "Rename",
     "JoinDependency",
     "JoinWith",
+    "AntiJoinWith",
     "LatestPerKey",
     "SelectColumns",
     "Unpivot",
