@@ -103,7 +103,7 @@ is that repair step — the **write-side companion** of `SchemaValidator`, deriv
 from the *same* dataclass:
 
 ```python
-from framework.schema import SchemaCoercion
+from framework.transform import SchemaCoercion
 
 coerced = SchemaCoercion(CaseA).process(dataset)   # returns a transformed dataset
 ```
@@ -137,8 +137,8 @@ CaseA coercion: column 'active' has unrecognized boolean encoding(s): 'maybe'
 The builder wires the convention together for one subject's table:
 
 ```python
-from framework.silver import raw_to_silver
-from framework.store import StoreCatalog
+from framework.io import StoreCatalog
+from framework.run import raw_to_silver
 
 store = StoreCatalog("/path/to/share").store("cases")
 raw_to_silver(store, "cases", CaseA).run()   # reads raw, coerces, validates, writes silver.db
@@ -167,7 +167,7 @@ takes the **same** optional `schema=` and attaches the **same** `SchemaValidator
 as a post-validator before the gold write.
 
 ```python
-from framework.gold import silver_to_gold
+from framework.run import silver_to_gold
 
 silver_to_gold(
     store, "selection_pool",
@@ -202,7 +202,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Annotated
 
-from framework.schema import Pattern, Length, Unique, OneOf
+from framework.transform import Pattern, Length, Unique, OneOf
 
 @dataclass
 class CaseA:

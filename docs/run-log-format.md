@@ -12,11 +12,8 @@ ADR-0007 for the *why* (fail-fast, atomic, no silent drops).
 or format knowledge — it just drives the sink:
 
 ```python
-from framework.builder import Pipeline
-from framework.readers import CsvReader
-from framework.run_log import RunLog
-from framework.store import RAW, StoreCatalog
-from framework.strategy import Refresh
+from framework.io import RAW, CsvReader, Refresh, StoreCatalog
+from framework.run import Pipeline, RunLog
 
 run_log = RunLog("/path/to/share/cases/runs.log")
 pipeline = Pipeline("cases", CsvReader("feed.csv"), run_log=run_log)

@@ -13,7 +13,7 @@ import datetime as dt
 import sys
 from pathlib import Path
 
-from framework.runner import FreshnessError, UnknownPipelineError
+from framework.run import FreshnessError, UnknownPipelineError
 from pipelines.demo_source_to_selection import build_runner
 
 

@@ -1,0 +1,108 @@
+"""The public framework API: three subpackage facades (#95).
+
+A pipeline author depends on ``framework.io`` / ``framework.transform`` /
+``framework.run`` — the stable public surface — not on internal modules by
+accident. These tests exercise that surface the way an author would: by building
+and running a real pipeline through the facades, and by asserting the internal
+plumbing stays out of reach.
+"""
+
+import ast
+from pathlib import Path
+
+FIXTURE = Path(__file__).parent / "fixtures" / "cases.csv"
+
+PIPELINES_DIR = Path(__file__).parent.parent / "pipelines"
+PUBLIC_FACADES = {"io", "run", "transform"}
+
+
+def _framework_submodules_imported(source: str) -> set[str]:
+    """Return the ``framework.<submodule>`` paths a pipeline module imports."""
+    tree = ast.parse(source)
+    used: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(
+            "framework."
+        ):
+            used.add(node.module.split(".", 2)[1])
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.startswith("framework."):
+                    used.add(alias.name.split(".", 2)[1])
+    return used
+
+
+def test_an_author_can_ingest_a_feed_through_the_io_and_run_facades(tmp_path):
+    # The blessed import path: sources/sinks from framework.io, the builder from
+    # framework.run. Composing and running them lands the feed and reads back.
+    from framework.io import RAW, CsvReader, Refresh, Store
+    from framework.run import Pipeline
+
+    store = Store(tmp_path / "cases")
+    (
+        Pipeline("cases", CsvReader(FIXTURE))
+        .write_to(store.writer(RAW, "cases", Refresh()))
+        .run()
+    )
+
+    landed = store.reader(RAW, "cases").read()
+    assert len(landed) == 3
+    assert "case_id" in landed.columns
+
+
+def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_path):
+    # Selection-style narrowing: processors and validators come from
+    # framework.transform, composed onto the framework.run Pipeline.
+    from framework.io import RAW, CsvReader, Refresh, Store
+    from framework.run import Pipeline
+    from framework.transform import ColumnValidator, Filter, Score
+
+    store = Store(tmp_path / "cases")
+    landed = (
+        Pipeline("cases", CsvReader(FIXTURE))
+        .with_validator(ColumnValidator(["amount"]))
+        .with_processor(Score("priority", lambda row: row["amount"] * 2))
+        .with_processor(Filter(lambda row: row["amount"] >= 1000, name="high-value"))
+        .write_to(store.writer(RAW, "cases", Refresh()))
+        .run()
+    )
+
+    # The Filter dropped the sub-1000 Case; Score added its column.
+    assert len(landed) == 2
+    assert "priority" in landed.columns
+
+
+def test_internal_plumbing_stays_out_of_the_public_facades():
+    # Authors must not reach internal seams through the facades. These names are
+    # implementation detail (connection factory, layer-name helper, trace
+    # mechanics, remote client seam, runner/run-log internals) — documented as
+    # internal in docs/public-api.md and absent from every facade's __all__.
+    from framework import io, run, transform
+
+    internal = {
+        "connect",       # framework.connection — connection factory seam
+        "layer_name",    # framework.layers — internal validation helper
+        "LAYERS",        # framework.layers — internal tuple
+        "RowTrace",      # framework.trace — generic trace mechanics
+        "RemoteRunner",  # framework.remote — stubbed remote client seam
+        "FreshnessGuard",  # framework.runner — internal guard
+        "StepMetrics",   # framework.run_log — internal timing record
+        "pipeline_label",  # framework.runner — internal label helper
+    }
+    for facade in (io, run, transform):
+        leaked = internal & set(facade.__all__)
+        assert not leaked, f"{facade.__name__} leaks internal names: {leaked}"
+        # __all__ is also honest: every advertised name resolves on the facade.
+        for name in facade.__all__:
+            assert hasattr(facade, name), f"{facade.__name__}.{name} missing"
+
+
+def test_demo_pipelines_import_framework_only_through_the_public_facades():
+    # AC4: downstream scripts depend on the stable surface, not internal modules
+    # by accident. Every framework import in pipelines/ must go through a facade.
+    offenders: dict[str, set[str]] = {}
+    for path in sorted(PIPELINES_DIR.glob("*.py")):
+        internal = _framework_submodules_imported(path.read_text()) - PUBLIC_FACADES
+        if internal:
+            offenders[path.name] = internal
+    assert not offenders, f"pipelines bypassing the public facades: {offenders}"

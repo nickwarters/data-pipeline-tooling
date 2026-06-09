@@ -56,10 +56,8 @@ mints the destination Writer for the target layer, so the builder never learns
 about medallion layers or load rules:
 
 ```python
-from framework.builder import Pipeline
-from framework.readers import ExcelReader
-from framework.store import RAW, StoreCatalog
-from framework.strategy import Refresh
+from framework.io import RAW, ExcelReader, Refresh, StoreCatalog
+from framework.run import Pipeline
 
 store = StoreCatalog("/path/to/share").store("cases")
 landed = (
@@ -120,7 +118,7 @@ fetch with an empty Dataset. Swap in a different `RemoteRunner` (keyword-only
 `runner=`) to add the real exec/transfer behind the same interface.
 
 ```python
-from framework.readers import SasReader
+from framework.io import SasReader
 
 # Reads cases.csv already landed in /data/landing/cases (stubbed transfer).
 reader = SasReader("run_cases.sas", "*.csv", "/data/landing/cases")
@@ -141,8 +139,8 @@ the `(site, list_name, auth)` config verbatim. Two fetchers ship:
   exercised with no tenant. It has the same shape a real client will take.
 
 ```python
-from framework.readers import SharePointReader
-from framework.remote import LocalCsvFetcher
+from framework.io import SharePointReader
+from framework.remote import LocalCsvFetcher  # internal seam: swappable fetcher
 
 # Offline: reads a local fixture in place of the SharePoint list.
 reader = SharePointReader(

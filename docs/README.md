@@ -116,6 +116,14 @@ best-effort when later items should continue after one item fails.
 The foundational vocabulary. Each links to its deep doc; the consolidated
 reference with worked examples is [`core-primitives.md`](core-primitives.md).
 
+> **Importing.** Pipeline code imports these through the three public **facades**
+> — `framework.io` (sources/sinks/stores), `framework.transform` (processors,
+> validators, schema, calendar), and `framework.run` (the `Pipeline` builder,
+> orchestration, runner, observability) — not from the modules behind them. The
+> facade names are the stable surface; see [`public-api.md`](public-api.md) for
+> the full member list, the internal-module boundary, and why packaging is an
+> explicit non-goal.
+
 | Primitive | What it is / when to use it |
 |-----------|------------------------------|
 | **`Dataset`** | The opaque, bulk in-memory **tabular carrier** — pandas behind the seam, swappable later. Tiny public surface (`.columns`, `len()`); pandas never leaks past it. ([ADR-0002](adr/0002-python-only-processing-dumb-store-two-tier-carrier.md)) |
@@ -191,8 +199,8 @@ See the *Add a new Feed* how-to.
 
 ```python
 from case_review.case_pool import CasePool
-from framework.calendar import WorkingDayCalendar
-from framework.store import StoreCatalog
+from framework.io import StoreCatalog
+from framework.transform import WorkingDayCalendar
 
 store = StoreCatalog("/share").store(CASES.name)
 pool = CasePool(CASES, store, WorkingDayCalendar())
@@ -212,11 +220,9 @@ remote SAS / SharePoint feeds and their stubbed seams):
 [`adding-a-feed.md`](adding-a-feed.md).
 
 ```python
-from framework.builder import Pipeline
-from framework.readers import ExcelReader
-from framework.store import RAW, StoreCatalog
-from framework.strategy import Refresh
-from framework.validators import ColumnValidator  # optional input gate
+from framework.io import RAW, ExcelReader, Refresh, StoreCatalog
+from framework.run import Pipeline
+from framework.transform import ColumnValidator  # optional input gate
 
 store = StoreCatalog("/share").store("cases")       # the "cases" subject
 (
@@ -230,7 +236,7 @@ store = StoreCatalog("/share").store("cases")       # the "cases" subject
 Then refine raw → silver with the schema enforced:
 
 ```python
-from framework.silver import raw_to_silver
+from framework.run import raw_to_silver
 
 raw_to_silver(store, "cases", ActivityCase).run()   # coerce -> validate -> write silver
 ```
@@ -273,13 +279,11 @@ bank, and accumulate into gold. Full treatment: [`selection.md`](selection.md)
 and the processor reference [`processors.md`](processors.md).
 
 ```python
-from framework.builder import Pipeline
 from typing import Any, Mapping
 
-from framework.processors import Filter, Score, Sort, Stamp, JoinWith, TopNPerGroup
-from framework.readers import DatasetReader
-from framework.store import GOLD, SILVER, StoreCatalog
-from framework.strategy import AccumulateByRun
+from framework.io import GOLD, SILVER, AccumulateByRun, DatasetReader, StoreCatalog
+from framework.run import Pipeline
+from framework.transform import Filter, JoinWith, Score, Sort, Stamp, TopNPerGroup
 
 
 def high_value_case(row: Mapping[str, Any]) -> bool:
@@ -346,6 +350,7 @@ strategy = AccumulateByRun.from_context(context)
 
 | Doc | Covers |
 |-----|--------|
+| [`public-api.md`](public-api.md) | The public API: the three facades (`framework.io` / `transform` / `run`), the internal-module boundary, and the packaging non-goal. |
 | [`core-primitives.md`](core-primitives.md) | The consolidated framework primitives reference with worked examples and build status per slice. |
 | [`adding-a-feed.md`](adding-a-feed.md) | Every Reader, and the stubbed remote (SAS / SharePoint) seams. |
 | [`schema-enforcement.md`](schema-enforcement.md) | `Schema` / `SchemaValidator` / `SchemaCoercion`, value-level rules, `raw_to_silver`. |

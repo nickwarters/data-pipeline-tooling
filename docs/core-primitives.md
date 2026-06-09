@@ -18,6 +18,11 @@ builds on these shapes. For the
 *why* behind each, see the ADRs referenced inline; for domain language (Case,
 CasePool, Feed, Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
 
+Pipeline code imports these primitives through the three public facades
+(`framework.io` / `framework.transform` / `framework.run`), not the home modules
+named per-primitive below; the home modules locate the code, the facades are the
+stable contract. See [`public-api.md`](public-api.md).
+
 ## Medallion layers
 
 A medallion is three SQLite databases, one per layer (raw, silver, gold), on a
@@ -422,7 +427,7 @@ the builder. It registers domain Pipelines by `(case_type, pipeline)` and runs
 one requested Pipeline by name, without changing the builder contract:
 
 ```python
-from framework.runner import FreshnessRequirement, PipelineRunner
+from framework.run import FreshnessRequirement, PipelineRunner
 
 runner = PipelineRunner()
 runner.register("cases", "ingest", run_ingest)
@@ -468,9 +473,8 @@ same recipe. It sits outside the `Pipeline` builder so the builder keeps its
 single Reader/single `Dataset`/single Writer contract:
 
 ```python
-from framework.builder import Pipeline
-from framework.orchestration import ForEach
-from framework.strategy import AccumulateByRun
+from framework.io import AccumulateByRun
+from framework.run import ForEach, Pipeline
 
 def item_run_id(path, index, parent_context):
     return f"{parent_context.logical_run_id}:{path.stem}"
@@ -618,10 +622,8 @@ the gold `SelectionPool`.
 ## Worked example
 
 ```python
-from framework.builder import Pipeline
-from framework.readers import CsvReader
-from framework.store import RAW, StoreCatalog
-from framework.strategy import Refresh
+from framework.io import RAW, CsvReader, Refresh, StoreCatalog
+from framework.run import Pipeline
 
 store = StoreCatalog("/path/to/share").store("cases")
 landed = (
