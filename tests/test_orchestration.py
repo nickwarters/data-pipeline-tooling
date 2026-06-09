@@ -82,6 +82,79 @@ def test_for_each_stops_at_first_failed_item_and_names_it():
     assert completed == ["first"]
 
 
+def test_for_each_best_effort_records_mixed_success_and_failure_outcomes():
+    completed: list[str] = []
+
+    def build_pipeline(item: str, context) -> Pipeline:
+        if item == "bad":
+            return Pipeline(f"feed-{item}", BrokenReader())
+
+        class RecordingWriter:
+            def write(self, dataset: Dataset) -> None:
+                completed.append(item)
+
+        return Pipeline(f"feed-{item}", RecordingReader(item)).write_to(RecordingWriter())
+
+    outcomes = ForEach(
+        ["first", "bad", "last"],
+        build_pipeline,
+        continue_on_error=True,
+    ).run()
+
+    assert [outcome.item for outcome in outcomes] == ["first", "bad", "last"]
+    assert [outcome.succeeded for outcome in outcomes] == [True, False, True]
+    assert [outcome.dataset is not None for outcome in outcomes] == [True, False, True]
+    assert isinstance(outcomes[1].exception, RuntimeError)
+    assert str(outcomes[1].exception) == "source unavailable"
+    assert completed == ["first", "last"]
+
+
+def test_for_each_best_effort_records_all_failure_outcomes_without_raising():
+    def build_pipeline(item: str, context) -> Pipeline:
+        return Pipeline(f"feed-{item}", BrokenReader())
+
+    outcomes = ForEach(
+        ["bad-a", "bad-b"],
+        build_pipeline,
+        continue_on_error=True,
+    ).run()
+
+    assert [outcome.item for outcome in outcomes] == ["bad-a", "bad-b"]
+    assert [outcome.index for outcome in outcomes] == [0, 1]
+    assert [outcome.succeeded for outcome in outcomes] == [False, False]
+    assert [type(outcome.exception) for outcome in outcomes] == [
+        RuntimeError,
+        RuntimeError,
+    ]
+
+
+def test_for_each_best_effort_outcomes_include_summary_identity():
+    parent = RunContext(logical_run_id="ingest:2026-06-09")
+
+    def logical_run_id(item: str, index: int, context: RunContext) -> str:
+        return f"{context.logical_run_id}:{item}"
+
+    def build_pipeline(item: str, context) -> Pipeline:
+        if item == "bad":
+            return Pipeline(f"feed-{item}", BrokenReader())
+        return Pipeline(f"feed-{item}", RecordingReader(item)).write_to(
+            CapturingWriter()
+        )
+
+    outcomes = ForEach(
+        ["good", "bad"],
+        build_pipeline,
+        logical_run_id=logical_run_id,
+        continue_on_error=True,
+    ).run(parent)
+
+    assert [outcome.status for outcome in outcomes] == ["success", "failure"]
+    assert [outcome.logical_run_id for outcome in outcomes] == [
+        "ingest:2026-06-09:good",
+        "ingest:2026-06-09:bad",
+    ]
+
+
 def test_for_each_passes_per_item_context_with_derived_logical_run_id():
     contexts: list[RunContext] = []
     parent = RunContext(

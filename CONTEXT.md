@@ -172,8 +172,11 @@ _Here_: `ForEach(items, pipeline_builder, ...).run(context)` calls
 `pipeline_builder(item, context)` for each item, using a fresh `Pipeline`
 builder and per-item `RunContext` every time. Use it when each file/source item
 is its own logical run (including its own logical run id for idempotent
-`AccumulateByRun` writes). Do **not** use it for many files that together form
-one Feed snapshot; that is a multi-file Reader returning one `Dataset`.
+`AccumulateByRun` writes). It is fail-fast by default, or can explicitly run
+best-effort and return one success/failure outcome per item while preserving the
+original exception for failed items. Do **not** use it for many files that
+together form one Feed snapshot; that is a multi-file Reader returning one
+`Dataset`.
 
 ## Relationships
 

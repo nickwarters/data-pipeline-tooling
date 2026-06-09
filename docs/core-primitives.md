@@ -495,6 +495,32 @@ The initial behavior is fail-fast. If building or running an item fails,
 `ForEachPipelineError` is raised with the failing item in the message and the
 original exception preserved as `__cause__`; later items are not run.
 
+When the batch should continue after an item fails, opt in explicitly:
+
+```python
+outcomes = ForEach(
+    files,
+    pipeline_builder,
+    logical_run_id=item_run_id,
+    continue_on_error=True,
+).run(context)
+
+failed = [outcome for outcome in outcomes if outcome.status == "failure"]
+```
+
+Best-effort returns one `ForEachOutcome` per item instead of the old success-only
+dataset list. Each outcome includes the original `item`, `index`,
+`logical_run_id`, `status` (`"success"` or `"failure"`), the successful
+`dataset`, or the original `exception` for caller inspection/logging. The outer
+orchestrator owns only the continue/stop policy; each individual
+`Pipeline.run()` remains fail-fast and atomic, and each Writer keeps its own
+transaction/idempotency behavior.
+
+Best-effort can leave a batch partially complete by design. Use stable per-item
+logical run ids when items write with `AccumulateByRun`; a retry can then
+replace the failed item's logical slice, while already-successful item slices
+remain independently addressable.
+
 Use `ForEach` when each file is a separate logical run, needs its own
 run/logical identity, or should fail independently. Use a multi-file Reader
 instead when many files together are one logical Feed snapshot that should be
