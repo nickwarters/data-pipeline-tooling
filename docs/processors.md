@@ -64,6 +64,54 @@ RowScorer    = Callable[[Mapping[str, Any]], Any]     # Score
 Volumes are small (≤ ~1M rows per feed/run — ADR-0002), so row-wise application
 is fine; chunking/streaming is explicitly deferred.
 
+### Authoring selection rules
+
+Selection rules should be written so the Selection trace can explain them and a
+reader can test them without booting a whole Pipeline:
+
+- **Name every explainable gate**: pass `name=` to `Filter` and `JoinWith` when
+  the processor may exclude a Case. Use the business reason, e.g.
+  `name="high-value"` or `name="adviser-hierarchy"`, not an implementation note.
+  Unnamed gates still run, but the trace can only report a generic label.
+- **Keep predicates and scorers pure**: make them deterministic functions of the
+  row mapping and explicit constants. Do not read the clock, open files, query a
+  database, mutate module state, or depend on run order inside the callable. Pass
+  run-level facts in as ordinary constants when constructing the pipeline.
+- **Extract repeated rules into helpers**: if the same expression appears in two
+  gates, or a scorer shares sub-calculation with a predicate, move it to a named
+  function. The function name becomes documentation, and the rule can be tested
+  independently.
+- **Test rule functions directly**: a predicate/scorer is just Python, so unit
+  tests can call it with a small `dict` row. Use full Pipeline tests for the
+  wiring: score column present, filter named in the trace, rank/order correct,
+  and the SelectionPool write.
+- **Budget for row-wise Python**: `Filter` and `Score` call your function once
+  per row via the backing engine. That keeps business logic portable and
+  debuggable, but a slow callable scales linearly with row count. Avoid network
+  calls, disk I/O, expensive parsing, and repeated reference lookups in the row
+  function; pre-compute reference data before the processor or use `JoinWith`.
+
+```python
+from typing import Any, Mapping
+
+from framework.processors import Filter, Score
+
+
+def high_value_case(row: Mapping[str, Any]) -> bool:
+    return row["amount"] >= 100
+
+
+def priority_score(row: Mapping[str, Any]) -> int:
+    return row["amount"] * 2
+
+
+pipeline = (
+    pipeline
+    .with_processor(Score("priority_score", priority_score))
+    .with_processor(Filter(high_value_case, name="high-value"))
+)
+```
+
 ### `Filter` — narrow the rows
 
 Keeps only the rows for which the predicate is true (the narrowing half of
@@ -72,15 +120,20 @@ Selection — eligibility/availability criteria computed in Python):
 ```python
 from framework.processors import Filter
 
+
+def high_score(row):
+    return row["score"] >= 10
+
+
 # keep cases scored at least 10
-Filter(lambda row: row["score"] >= 10)
+Filter(high_score, name="high-score")
 ```
 
 An empty feed in yields an empty feed out (no error) — realistic when an upstream
 filter has already matched nothing.
 
 An optional `name=` labels the eligibility gate so Selection explainability can
-record *which* filter excluded a Case — `Filter(lambda r: r["score"] >= 10,
+record *which* filter excluded a Case — `Filter(high_value_case,
 name="high-value")`. Unnamed filters still work; see
 [`selection.md`](selection.md) for the per-Case trace (#53).
 
@@ -92,8 +145,13 @@ new column name adds; an existing one overwrites:
 ```python
 from framework.processors import Score
 
+
+def priority_score(row):
+    return row["amount"] * 2
+
+
 # derive a priority from the row's amount
-Score("priority", lambda row: row["amount"] * 2)
+Score("priority", priority_score)
 ```
 
 ### `Sort` — order the rows
@@ -192,10 +250,14 @@ advisers = catalog.store("advisers")
 # The other feed is an *unexecuted* read-only builder (no writer).
 reference = Pipeline("advisers", advisers.reader(SILVER, "advisers"))
 
+
+def selection_value_case(row):
+    return row["amount"] >= 50
+
 selection_pool = (
     Pipeline("cases", cases.reader(SILVER, "cases"))
-    .with_processor(Filter(lambda row: row["amount"] >= 50))   # narrow (Python)
-    .with_processor(JoinWith(reference, on="adviser"))          # join Reference Data
+    .with_processor(Filter(selection_value_case, name="selection-value"))
+    .with_processor(JoinWith(reference, on="adviser", name="adviser-reference"))
     .run()                                                      # resolves the DAG
 )
 ```

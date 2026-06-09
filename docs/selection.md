@@ -121,16 +121,28 @@ round-trip:
 
 ```python
 from framework.builder import Pipeline
-from framework.processors import Filter, Sort, Stamp
+from typing import Any, Mapping
+
+from framework.processors import Filter, Score, Sort, Stamp
 from framework.readers import DatasetReader
 from framework.store import GOLD
 from framework.strategy import AccumulateByRun
 
+
+def high_value_case(row: Mapping[str, Any]) -> bool:
+    return row["amount"] >= 100
+
+
+def priority_score(row: Mapping[str, Any]) -> int:
+    return row["amount"] * 2
+
+
 variation = CASES.variation("v1")
 (
     Pipeline("selection", DatasetReader(available))
-    .with_processor(Filter(lambda row: row["amount"] >= 100))   # high-value only
-    .with_processor(Sort("amount", ascending=False))            # rank top-first
+    .with_processor(Score("priority_score", priority_score))
+    .with_processor(Filter(high_value_case, name="high-value"))
+    .with_processor(Sort("priority_score", ascending=False))    # rank top-first
     .with_processor(Stamp("question_bank_id", variation.question_bank_id))
     .write_to(store.writer(GOLD, "selection_pool", AccumulateByRun(run_id, load_date)))
     .run()
@@ -146,6 +158,16 @@ accumulated into **gold** by the `AccumulateByRunWriter` (stamped `run_id` /
 [`gold-accumulation.md`](gold-accumulation.md)). Cross-feed joins (e.g. against
 the Adviser hierarchy Reference Data) slot in as a `JoinWith` processor — see
 [`processors.md`](processors.md).
+
+Write the row rules as named, pure functions rather than inline lambdas once
+they are business rules. Name filters and joins that can exclude a Case, keep
+predicates/scorers deterministic and free of hidden external state, and extract
+shared calculations into helpers that can be tested directly with a small row
+`dict`. Row-wise Python keeps rules traceable and portable, but it calls the
+predicate/scorer once per row, so do not put network calls, file reads, database
+queries, or expensive repeated parsing inside the callable. See
+[`processors.md#authoring-selection-rules`](processors.md#authoring-selection-rules)
+for the full conventions.
 
 The SelectionPool reaches the review platform as a **Deliverable** (a later
 slice); the returned **Review Outcomes** come back through the **Sync** Pipeline,
@@ -171,12 +193,14 @@ same *route aside with a reason, never silently drop* shape, pointed at
 ```python
 (
     Pipeline("selection", DatasetReader(available))
-    .with_processor(Filter(lambda row: row["amount"] >= 100, name="high-value"))
-    .with_processor(Sort("amount", ascending=False))
+    .with_processor(Score("priority_score", priority_score))
+    .with_processor(Filter(high_value_case, name="high-value"))
+    .with_processor(Sort("priority_score", ascending=False))
     .with_processor(Stamp("question_bank_id", variation.question_bank_id))
     .explain(                                   # land a per-Case trace alongside
         store.writer(GOLD, "selection_trace", AccumulateByRun(run_id, load_date)),
         id_column="case_ref",
+        score_column="priority_score",
     )
     .write_to(store.writer(GOLD, "selection_pool", AccumulateByRun(run_id, load_date)))
     .run()
@@ -187,11 +211,11 @@ The framework's generic **RowTrace** mechanics land a case-review selection trac
 as a sibling table of the SelectionPool, one row per *considered* Case (not just
 the survivors), stamped `run_id`:
 
-| `case_ref` | `verdict` | `reason` | `rank` |
-|---|---|---|---|
-| `c1` | `selected` | `passed high-value` | 1 |
-| `c2` | `selected` | `passed high-value` | 2 |
-| `c3` | `excluded` | `excluded by filter 'high-value'` | — |
+| `case_ref` | `verdict` | `reason` | `score` | `rank` |
+|---|---|---|---:|---|
+| `c1` | `selected` | `passed high-value` | 1000 | 1 |
+| `c2` | `selected` | `passed high-value` | 240 | 2 |
+| `c3` | `excluded` | `excluded by filter 'high-value'` | 160 | — |
 
 Naming a gate (`Filter(..., name="high-value")`, `JoinWith(..., name=…)`) locates
 its reasons; an unnamed gate still traces, under a generic label. Pass

@@ -274,10 +274,21 @@ and the processor reference [`processors.md`](processors.md).
 
 ```python
 from framework.builder import Pipeline
-from framework.processors import Filter, Sort, Stamp, JoinWith, TopNPerGroup
+from typing import Any, Mapping
+
+from framework.processors import Filter, Score, Sort, Stamp, JoinWith, TopNPerGroup
 from framework.readers import DatasetReader
 from framework.store import GOLD, SILVER, StoreCatalog
 from framework.strategy import AccumulateByRun
+
+
+def high_value_case(row: Mapping[str, Any]) -> bool:
+    return row["amount"] >= 100
+
+
+def priority_score(row: Mapping[str, Any]) -> int:
+    return row["amount"] * 2
+
 
 variation = CASES.variation("v1")
 catalog = StoreCatalog("/share")
@@ -286,14 +297,16 @@ strategy = AccumulateByRun.from_context(context)
 
 (
     Pipeline("selection", DatasetReader(available))
-    .with_processor(Filter(lambda row: row["amount"] >= 100, name="high-value"))
+    .with_processor(Score("priority_score", priority_score))
+    .with_processor(Filter(high_value_case, name="high-value"))
     .with_processor(JoinWith(reference, on="adviser"))          # lazy cross-feed join
-    .with_processor(TopNPerGroup(key="adviser", by="amount", n=1))  # one per adviser
-    .with_processor(Sort("amount", ascending=False))
+    .with_processor(TopNPerGroup(key="adviser", by="priority_score", n=1))
+    .with_processor(Sort("priority_score", ascending=False))
     .with_processor(Stamp("question_bank_id", variation.question_bank_id))
     .explain(                                                    # optional: RowTrace
         store.writer(GOLD, "selection_trace", strategy),
         id_column="case_ref",
+        score_column="priority_score",
     )
     .write_to(store.writer(GOLD, "selection_pool", strategy))
     .run(context=context)
@@ -302,6 +315,18 @@ strategy = AccumulateByRun.from_context(context)
 
 - **Business rules are plain Python** over a row mapping, never SQL —
   [ADR-0002](adr/0002-python-only-processing-dumb-store-two-tier-carrier.md).
+- **Name explainable gates and joins** (`name="high-value"`,
+  `name="adviser-hierarchy"`) so the Selection trace can report the business
+  reason a Case was excluded.
+- **Keep predicates and scorers pure**: deterministic functions of the row and
+  explicit constants, with no hidden reads from files, databases, clocks, or
+  mutable module state.
+- **Extract and test repeated rules as helpers**. A predicate or scorer can be
+  tested directly with a small `dict`; reserve full Pipeline tests for wiring,
+  trace, ranking, and writes.
+- **Remember row-wise cost**: each `Filter`/`Score` callable runs once per row,
+  so avoid network I/O, disk I/O, expensive parsing, or repeated reference
+  lookups inside the row function. Precompute or join Reference Data instead.
 - **`JoinWith` is lazy**: `reference` is an *unexecuted* builder resolved at
   `.run()` — a DAG without a DAG engine
   ([ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md)).
