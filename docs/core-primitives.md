@@ -453,6 +453,48 @@ python -m pipelines.run cases ingest /tmp/demo --run-date 2026-05-29
 python -m pipelines.run cases selection /tmp/demo --run-date 2026-05-29
 ```
 
+### `ForEach` — independent per-item builder runs
+`ForEach` (`framework.orchestration`) is the small runnable orchestration
+primitive for repeated runs where each item must stay independent but use the
+same recipe. It sits outside the `Pipeline` builder so the builder keeps its
+single Reader/single `Dataset`/single Writer contract:
+
+```python
+from framework.builder import Pipeline
+from framework.orchestration import ForEach
+from framework.strategy import AccumulateByRun
+
+def item_run_id(path, index, parent_context):
+    return f"{parent_context.logical_run_id}:{path.stem}"
+
+def pipeline_builder(path, context):
+    writer = store.writer(
+        "gold",
+        "selection_pool",
+        AccumulateByRun.from_context(context),
+    )
+    return Pipeline(f"selection:{path.name}", CsvReader(path)).write_to(writer)
+
+ForEach(files, pipeline_builder, logical_run_id=item_run_id).run(context)
+```
+
+For every item, the orchestrator creates a per-item `RunContext`, calls
+`pipeline_builder(item, context)`, and runs the returned builder. The factory
+must return a **fresh** `Pipeline`; the orchestration object never mutates and
+reuses one builder across items. By default it derives logical ids as
+`<parent logical_run_id>:<index>`; pass `logical_run_id(item, index, context)`
+when a file name, source id, or other stable key should drive idempotent
+`AccumulateByRun` writes.
+
+The initial behavior is fail-fast. If building or running an item fails,
+`ForEachPipelineError` is raised with the failing item in the message and the
+original exception preserved as `__cause__`; later items are not run.
+
+Use `ForEach` when each file is a separate logical run, needs its own
+run/logical identity, or should fail independently. Use a multi-file Reader
+instead when many files together are one logical Feed snapshot that should be
+read, validated, and written as a single `Dataset` under one logical run id.
+
 ### `Pipeline` — the deferred fluent builder
 A `Pipeline` describes a feed's path and runs **nothing** until `.run()`
 (ADR-0003):

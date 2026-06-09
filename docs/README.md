@@ -124,6 +124,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`Schema` / `SchemaValidator`** | A Case Type **dataclass** whose annotations *are* the column+dtype contract; the validator is the dataclass→validator adapter, enforced at silver (and optionally gold). Value-level rules extend the same dataclass via `Annotated`. → [schema-enforcement.md](schema-enforcement.md) ([ADR-0008](adr/0008-graduated-schema-enforcement.md)) |
 | **`Processor`** | `process(dataset) -> Dataset`, run mid-pipeline via `.with_processor()`. `SchemaCoercion` (repair storage-lossy types); the Selection transforms `Filter` / `Score` / `Sort` / `Rename` / `Stamp`, the per-group `TopNPerGroup` / `SamplePerGroup`, the lazy cross-feed `JoinWith`; and the Ingest / fan-out transforms `SelectColumns` / `Unpivot` / `DeriveKey` / `LatestPerKey`. → [processors.md](processors.md) |
 | **`Pipeline`** (builder) | The deferred fluent builder: `Pipeline(name, reader).with_processor(…).write_to(writer).run(context=…)`. Runs nothing until `.run()`, which is **fail-fast and atomic** and drives the RunLog. ([ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md)) |
+| **`ForEach`** | Runnable orchestration for independent repeated runs: pass items plus `pipeline_builder(item, context)`, then call `.run(context)`. It creates a fresh builder and per-item `RunContext` for each item, and fails fast on the first failed item. Use when files must remain separate logical runs. |
 | **`RunLog` / `RunRegistry`** | `RunLog` emits one JSON record per step (+ a run summary) to a `.log` file — the observability seam. `RunRegistry` ingests that JSONL into a queryable run-history store. → [run-log-format.md](run-log-format.md) ([ADR-0007](adr/0007-fail-fast-atomic-runs-jsonl-observability.md)) |
 | **`RunContext` / `PipelineRunner` / `FreshnessRequirement`** | The thin domain runner: register handlers by `(case_type, pipeline)`, receive a context carrying execution/logical identity, dates, RunLog, and RunRegistry, and block stale downstream runs by querying recent successful upstream history. → [core-primitives.md](core-primitives.md) |
 | **`CaseType` / `Variation`** | Case-review application/domain objects in `case_review.case_type`, not framework primitives: a Case Type bundles its `schema` + `variations`, imported directly (no global CaseType config registry). A Variation overrides only what differs — most often the `question_bank_id`. → [selection.md](selection.md) |
@@ -236,6 +237,18 @@ Swapping the Reader is the only change needed to ingest the same feed from a
 different source type. A wide feed (one Case table + Detail Tables) is fanned out
 into N single-table pipelines over the shared raw table —
 [ADR-0009](adr/0009-case-identity-and-gold-grain.md), `pipelines/demo_fan_out.py`.
+
+When a directory contains many files, choose the shape by the logical run you
+need:
+
+- Use a **multi-file Reader** when the files together form one Feed snapshot:
+  one read, one `Dataset`, one validation/write, one logical run id.
+- Use `ForEach(files, pipeline_builder, ...).run(context)` when each file is its
+  own independent run using the same recipe. The factory receives
+  `pipeline_builder(item, context)`, where `context.logical_run_id` can be
+  derived per item for idempotent `AccumulateByRun` writes. The orchestrator
+  builds a fresh `Pipeline` per item and stops at the first failure, naming the
+  item that failed.
 
 ### Write a Selection pipeline — CasePool → processors → gold
 
