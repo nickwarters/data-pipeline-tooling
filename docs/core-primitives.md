@@ -121,24 +121,29 @@ class Reader(Protocol):
     def read(self) -> Dataset: ...
 ```
 
-`CsvReader(path)` reads a source feed; `ExcelReader(path, sheet=0)` reads one
-worksheet of an `.xlsx` workbook (sheet selectable by name or zero-based index;
-pandas + **openpyxl** behind the seam); `SqliteReader(db_path, table)` is the
-read-side dual of the Sqlite Writers — it reads one table from a layer db back
-into a `Dataset` (a subject's own layer, or another subject's read-only
-Reference Data medallion, joined in Python — ADR-0002). `SasReader(script,
-copy_glob, dest)` and `SharePointReader(site, list_name, auth)` follow the same
-`read()` shape but reach a remote source whose client is **stubbed for now**,
-behind a swappable seam in `framework.remote` (ADR-0004, ADR-0005); see
+`CsvReader(path)` reads one source CSV file. `GlobCsvReader(directory, pattern)`
+reads many local CSV files that together form one logical Feed snapshot: it
+matches files with `pathlib.Path.glob`, reads them in sorted deterministic
+order, concatenates them behind the `Dataset` seam, and raises
+`FileNotFoundError` naming the directory and pattern when nothing matches.
+`ExcelReader(path, sheet=0)` reads one worksheet of an `.xlsx` workbook (sheet
+selectable by name or zero-based index; pandas + **openpyxl** behind the seam);
+`SqliteReader(db_path, table)` is the read-side dual of the Sqlite Writers — it
+reads one table from a layer db back into a `Dataset` (a subject's own layer, or
+another subject's read-only Reference Data medallion, joined in Python —
+ADR-0002). `SasReader(script, copy_glob, dest)` and
+`SharePointReader(site, list_name, auth)` follow the same `read()` shape but
+reach a remote source whose client is **stubbed for now**, behind a swappable
+seam in `framework.remote` (ADR-0004, ADR-0005); see
 [`adding-a-feed.md`](adding-a-feed.md#remote-feeds-sas-sharepoint). Readers are
 the home of the concrete engine and are tested against **local fixture files** —
-no network, no SAS, no SharePoint. Paths are handled with `pathlib` so they behave
-identically on Windows and macOS. **How to add a Feed:**
+no network, no SAS, no SharePoint. Paths are handled with `pathlib` so they
+behave identically on Windows and macOS. **How to add a Feed:**
 [`adding-a-feed.md`](adding-a-feed.md).
 
-*Decided, not yet built (ADR-0009):* a `columns=[...]` parameter on the readers
-(`CsvReader` via pandas `usecols`, `SqliteReader` pushed into the `SELECT`) lets
-a pipeline read only the columns it needs, leaving `read() -> Dataset`
+A `columns=[...]` parameter on readers that support projection (`CsvReader` and
+`GlobCsvReader` via pandas `usecols`, `SqliteReader` pushed into the `SELECT`)
+lets a pipeline read only the columns it needs, leaving `read() -> Dataset`
 unchanged. This is what keeps each single-table pipeline narrow when a wide feed
 (650+ columns) is fanned out into a Case table and its Detail Tables.
 
