@@ -94,7 +94,7 @@ reader can test them without booting a whole Pipeline:
 ```python
 from typing import Any, Mapping
 
-from framework.processors import Filter, Score
+from framework.transform import Filter, Score
 
 
 def high_value_case(row: Mapping[str, Any]) -> bool:
@@ -118,7 +118,7 @@ Keeps only the rows for which the predicate is true (the narrowing half of
 Selection — eligibility/availability criteria computed in Python):
 
 ```python
-from framework.processors import Filter
+from framework.transform import Filter
 
 
 def high_score(row):
@@ -143,7 +143,7 @@ Computes a column from each row via a scorer; every other column is untouched. A
 new column name adds; an existing one overwrites:
 
 ```python
-from framework.processors import Score
+from framework.transform import Score
 
 
 def priority_score(row):
@@ -162,7 +162,7 @@ index is reset (`0..n-1`) so it reads positionally clean and no stale source
 order leaks through to storage:
 
 ```python
-from framework.processors import Sort
+from framework.transform import Sort
 
 Sort("priority", ascending=False)        # highest first
 Sort(["region", "priority"])             # by region, then priority
@@ -175,7 +175,7 @@ through in place and in order. Typically used to make two feeds agree on a key
 name before a join:
 
 ```python
-from framework.processors import Rename
+from framework.transform import Rename
 
 Rename({"ref": "case_ref", "amt": "amount"})
 ```
@@ -190,7 +190,7 @@ even on an empty feed, so the SelectionPool's shape is stable whether or not any
 Case was selected:
 
 ```python
-from framework.processors import Stamp
+from framework.transform import Stamp
 
 Stamp("question_bank_id", variation.question_bank_id)
 ```
@@ -203,7 +203,7 @@ Case Types and joined in Python, never written by them (`CONTEXT.md`, ADR-0002).
 `JoinWith` is that join, and it is a `Processor`:
 
 ```python
-from framework.processors import JoinWith
+from framework.transform import JoinWith
 
 JoinWith(reference_builder, on="adviser", how="inner")
 ```
@@ -239,9 +239,9 @@ A Selection-shaped pipeline: read one subject's silver CasePool, narrow it in
 Python, and join another subject's silver Reference Data via a lazy `JoinWith`.
 
 ```python
-from framework.builder import Pipeline
-from framework.processors import Filter, JoinWith
-from framework.store import SILVER, StoreCatalog
+from framework.io import SILVER, StoreCatalog
+from framework.run import Pipeline
+from framework.transform import Filter, JoinWith
 
 catalog = StoreCatalog("/path/to/share")
 cases = catalog.store("cases")
@@ -286,7 +286,7 @@ keeps `Filter` and `Score` apart, and share a private group-and-cut helper.
 ### `TopNPerGroup` — ranked
 
 ```python
-from framework.processors import TopNPerGroup
+from framework.transform import TopNPerGroup
 
 # the single highest-scoring Case per adviser
 TopNPerGroup(key="adviser", by="score", n=1)
@@ -305,7 +305,7 @@ for separate domains — Selection narrowing vs current-state reduction.
 ### `SamplePerGroup` — seeded random, pure
 
 ```python
-from framework.processors import SamplePerGroup
+from framework.transform import SamplePerGroup
 
 SamplePerGroup(key="region", n=5, seed=7)   # 5 Cases per region, reproducibly
 ```
@@ -339,7 +339,7 @@ fail-fast contract — composed on the `raw → silver` and `silver → gold` bu
 ### `SelectColumns` — project the columns this pipeline needs
 
 ```python
-from framework.processors import SelectColumns
+from framework.transform import SelectColumns
 
 SelectColumns(["case_ref", "adviser", "activity_date", "amount"])
 ```
@@ -357,7 +357,7 @@ a feed already in memory.)
 ### `Unpivot` — wide→long, for a Detail Table
 
 ```python
-from framework.processors import Unpivot
+from framework.transform import Unpivot
 
 Unpivot(
     id_vars=["case_id"],                 # kept on every output row
@@ -380,7 +380,7 @@ blank. Pass `drop_empty=False` to keep them.
 
 ```python
 import uuid
-from framework.processors import DeriveKey
+from framework.transform import DeriveKey
 
 namespace = uuid.uuid5(uuid.NAMESPACE_DNS, "wide_cases")  # the case-type namespace
 DeriveKey(into="case_id", namespace=namespace, natural_key=["case_ref"])
@@ -399,7 +399,7 @@ and idempotency holds across runs. (Contrast `Stamp`, which writes one constant;
 ### `LatestPerKey` — collapse accumulated history to current state
 
 ```python
-from framework.processors import LatestPerKey
+from framework.transform import LatestPerKey
 
 LatestPerKey(key="case_id", by="load_date")
 ```

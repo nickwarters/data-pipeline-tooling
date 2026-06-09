@@ -81,8 +81,8 @@ its silver), and a `WorkingDayCalendar` (the availability arithmetic — see
 
 ```python
 from case_review.case_pool import CasePool
-from framework.calendar import WorkingDayCalendar
-from framework.store import StoreCatalog
+from framework.io import StoreCatalog
+from framework.transform import WorkingDayCalendar
 
 store = StoreCatalog("/share").store(CASES.name)
 pool = CasePool(CASES, store, WorkingDayCalendar())
@@ -120,13 +120,11 @@ the `Reader` shape, so Selection composes read → process → write without a S
 round-trip:
 
 ```python
-from framework.builder import Pipeline
 from typing import Any, Mapping
 
-from framework.processors import Filter, Score, Sort, Stamp
-from framework.readers import DatasetReader
-from framework.store import GOLD
-from framework.strategy import AccumulateByRun
+from framework.io import GOLD, AccumulateByRun, DatasetReader
+from framework.run import Pipeline
+from framework.transform import Filter, Score, Sort, Stamp
 
 
 def high_value_case(row: Mapping[str, Any]) -> bool:

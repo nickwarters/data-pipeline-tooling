@@ -427,7 +427,7 @@ the builder. It registers domain Pipelines by `(case_type, pipeline)` and runs
 one requested Pipeline by name, without changing the builder contract:
 
 ```python
-from framework.runner import FreshnessRequirement, PipelineRunner
+from framework.run import FreshnessRequirement, PipelineRunner
 
 runner = PipelineRunner()
 runner.register("cases", "ingest", run_ingest)
@@ -473,9 +473,8 @@ same recipe. It sits outside the `Pipeline` builder so the builder keeps its
 single Reader/single `Dataset`/single Writer contract:
 
 ```python
-from framework.builder import Pipeline
-from framework.orchestration import ForEach
-from framework.strategy import AccumulateByRun
+from framework.io import AccumulateByRun
+from framework.run import ForEach, Pipeline
 
 def item_run_id(path, index, parent_context):
     return f"{parent_context.logical_run_id}:{path.stem}"

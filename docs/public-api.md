@@ -83,10 +83,13 @@ without notice:
   run-log/runner internals not listed in a facade (`StepMetrics`,
   `FreshnessGuard`, `pipeline_label`).
 
-The per-slice deep docs (`processors.md`, `schema-enforcement.md`,
-`adding-a-feed.md`, …) reference each primitive's **home module** to locate it
-(e.g. processors live in `framework.processors`); that is where the code is, but
-pipeline scripts should still import via the facade above.
+Code examples throughout the docs import via the facades. The per-slice deep
+docs may still name a primitive's **home module** in prose to locate the
+implementation (e.g. the processors live in `framework.processors`); that is
+where the code is, but it is not how pipeline scripts import it. The one
+exception in an example is `framework.remote`, shown in
+[adding-a-feed.md](adding-a-feed.md) only to swap the stubbed remote fetcher —
+an internal seam with no facade.
 
 ## The case-review application layer is separate
 
