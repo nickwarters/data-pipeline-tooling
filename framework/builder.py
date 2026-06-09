@@ -13,16 +13,27 @@ from __future__ import annotations
 import logging
 import re
 import time
-from functools import partial
 from pathlib import Path
 
 from framework.dataset import Dataset
+from framework.pipeline_steps import (
+    CheckpointStep,
+    ExplainWriteStep,
+    PipelineExecution,
+    PipelineStep,
+    ProcessorStep,
+    QuarantineStep,
+    ReadStep,
+    TraceStartStep,
+    ValidatorStep,
+    WriteStep,
+    ordered,
+)
 from framework.processors import Processor
 from framework.readers import Reader
 from framework.run_context import RunContext
-from framework.run_log import NULL_RUN_LOG, RunLog, StepMetrics
-from framework.trace import RowTrace
-from framework.validators import Severity, ValidationError, Validator
+from framework.run_log import NULL_RUN_LOG, RunLog
+from framework.validators import Severity, Validator
 from framework.writers import Writer
 
 log = logging.getLogger(__name__)
@@ -140,45 +151,91 @@ class Pipeline:
         best-effort and scrubbed so obvious credentials do not leak into logs or
         test output.
         """
+        plan = self._execution_plan()
         lines = [f"Pipeline {self._name}"]
-        lines.append(f"  reader: {_describe_component(self._reader)}")
-        lines.extend(_describe_validators("pre-validators", self._pre_validators))
+        reader = _first_step(plan, "read")
+        lines.append(f"  reader: {_describe_component(reader.component)}")
+        pre = _first_named_step(plan, "pre-validate")
+        lines.extend(_describe_validators("pre-validators", pre.validators))
 
         lines.append("  stages:")
-        if self._stages:
-            for kind, component in self._stages:
-                lines.append(f"    - {kind}: {_describe_component(component)}")
+        stages = [step for step in plan if step.kind in {"processor", "checkpoint"}]
+        if stages:
+            for step in stages:
+                kind = "processor" if step.kind == "processor" else "checkpoint"
+                lines.append(f"    - {kind}: {_describe_component(step.component)}")
         else:
             lines.append("    - none")
 
-        lines.extend(_describe_validators("post-validators", self._post_validators))
+        post = _first_named_step(plan, "post-validate")
+        lines.extend(_describe_validators("post-validators", post.validators))
 
-        if self._quarantine_validator is None:
+        quarantine = _first_step(plan, "quarantine", required=False)
+        if quarantine is None:
             lines.append("  quarantine: none")
         else:
             lines.append(
                 "  quarantine: "
-                f"{_describe_component(self._quarantine_validator)} -> "
-                f"{_describe_component(self._quarantine_writer)}"
+                f"{_describe_component(quarantine.component)} -> "
+                f"{_describe_component(quarantine.reject_writer)}"
             )
 
-        if self._explain_writer is None:
+        explain = _first_step(plan, "explain", required=False)
+        trace = _first_step(plan, "trace", required=False)
+        if explain is None:
             lines.append("  explain: none")
         else:
-            parts = [f"writer={_describe_component(self._explain_writer)}"]
-            parts.append(f"id_column={self._explain_id_column!r}")
-            if self._explain_score_column is not None:
-                parts.append(f"score_column={self._explain_score_column!r}")
+            parts = [f"writer={_describe_component(explain.component)}"]
+            parts.append(f"id_column={trace.id_column!r}")
+            if trace.score_column is not None:
+                parts.append(f"score_column={trace.score_column!r}")
             lines.append(f"  explain: {', '.join(parts)}")
 
-        writer = (
-            _describe_component(self._writer)
-            if self._writer is not None
-            else "none"
-        )
+        write = _first_step(plan, "write", required=False)
+        writer = _describe_component(write.component) if write is not None else "none"
         lines.append(f"  writer: {writer}")
         lines.append(f"  run-log: {_describe_run_log(self._run_log)}")
         return "\n".join(lines)
+
+    def _execution_plan(self) -> list[PipelineStep]:
+        """Build the ordered internal step plan used by ``describe`` and ``run``."""
+        steps: list[PipelineStep] = [
+            ReadStep(self._reader),
+            ValidatorStep(name="pre-validate", validators=self._pre_validators),
+        ]
+        if self._quarantine_validator is not None:
+            steps.append(
+                QuarantineStep(self._quarantine_validator, self._quarantine_writer)
+            )
+        if self._explain_writer is not None:
+            steps.append(
+                TraceStartStep(
+                    id_column=self._explain_id_column,
+                    score_column=self._explain_score_column,
+                )
+            )
+
+        checkpoint_idx = 0
+        for kind, component in self._stages:
+            if kind == "processor":
+                steps.append(ProcessorStep(component))
+            else:
+                steps.append(
+                    CheckpointStep(
+                        name=f"checkpoint:{checkpoint_idx}",
+                        writer=component,
+                    )
+                )
+                checkpoint_idx += 1
+
+        steps.append(
+            ValidatorStep(name="post-validate", validators=self._post_validators)
+        )
+        if self._explain_writer is not None:
+            steps.append(ExplainWriteStep(self._explain_writer))
+        if self._writer is not None:
+            steps.append(WriteStep(self._writer))
+        return ordered(steps)
 
     def run(self, context: RunContext | None = None) -> Dataset:
         """Execute: read, validate, hand the dataset to the Writer, return it.
@@ -197,98 +254,27 @@ class Pipeline:
         it raises.
         """
         context = context or RunContext(pipeline=self._name, run_log=self._run_log)
-        run_log = context.run_log if context.run_log is not NULL_RUN_LOG else self._run_log
+        run_log = (
+            context.run_log
+            if context.run_log is not NULL_RUN_LOG
+            else self._run_log
+        )
         self.run_id = context.execution_id
-        # Bind the per-run identity once so each step/summary call stays terse.
-        step = partial(run_log.step, context.execution_id, self._name)
-        record = partial(run_log.record, context.execution_id, self._name)
+        session = PipelineExecution(
+            pipeline_name=self._name,
+            context=context,
+            run_log=run_log,
+        )
         started = time.perf_counter()
-        warn_hits: list[str] = []
+        dataset: Dataset | None = None
         try:
-            with step("read") as metrics:
-                dataset = self._reader.read()
-                metrics.rows_out = len(dataset)
-
-            with step("pre-validate", rows_in=len(dataset)) as metrics:
-                self._validate(self._pre_validators, dataset, "pre-validate", metrics)
-                metrics.rows_out = len(dataset)
-            warn_hits += metrics.warn_hits
-
-            # Quarantine (issue #50): row-level value-rule partitioning runs after
-            # structural pre-validators (which abort on missing columns / wrong dtypes)
-            # and before stages (processors/checkpoints on the clean subset).
-            if self._quarantine_validator is not None:
-                with step("quarantine", rows_in=len(dataset)) as metrics:
-                    good, rejected = self._quarantine_validator.partition(dataset)
-                    metrics.rows_out = len(good)
-                    metrics.rows_quarantined = len(rejected)
-                    if len(rejected) > 0 and self._quarantine_writer is not None:
-                        stamped = rejected.with_columns(
-                            run_id=context.logical_run_id,
-                            logical_run_id=context.logical_run_id,
-                            execution_id=context.execution_id,
-                            load_date=context.load_date,
-                        )
-                        self._quarantine_writer.write(stamped)
-                    dataset = good
-
-            # Row-level explainability: when configured, seed the trace with the
-            # considered population, then watch each processor stage.
-            trace = None
-            if self._explain_writer is not None:
-                trace = RowTrace(
-                    self._explain_id_column,
-                    score_column=self._explain_score_column,
-                )
-                trace.consider(dataset)
-
-            # Stages (processors and checkpoints) run in attach order between
-            # the pre- and post-validators. Processors transform the dataset;
-            # checkpoints snapshot it and pass it through unchanged. Both are
-            # fail-fast (ADR-0007): a failure aborts the run before any write.
-            checkpoint_idx = 0
-            for kind, component in self._stages:
-                if kind == "processor":
-                    with step("process", rows_in=len(dataset)) as metrics:
-                        before = dataset
-                        dataset = component.process(dataset)  # type: ignore[union-attr]
-                        metrics.rows_out = len(dataset)
-                    if trace is not None:
-                        trace.observe(
-                            getattr(component, "trace_role", None),
-                            getattr(component, "trace_name", type(component).__name__),
-                            before,
-                            dataset,
-                        )
-                else:
-                    cp_name = f"checkpoint:{checkpoint_idx}"
-                    with step(cp_name, rows_in=len(dataset)) as metrics:
-                        component.write(dataset)  # type: ignore[union-attr]
-                        metrics.rows_out = len(dataset)
-                    checkpoint_idx += 1
-
-            with step("post-validate", rows_in=len(dataset)) as metrics:
-                self._validate(self._post_validators, dataset, "post-validate", metrics)
-                metrics.rows_out = len(dataset)
-            warn_hits += metrics.warn_hits
-
-            # Explainability: the post-stage dataset contains the survivors, so
-            # finalize the trace against it and land it through the configured writer.
-            if trace is not None:
-                with step("explain", rows_in=trace.considered) as metrics:
-                    self._explain_writer.write(trace.finalize(dataset))
-                    metrics.rows_out = trace.selected
-                    metrics.rows_excluded = trace.excluded
-
-            if self._writer is not None:
-                with step("write", rows_in=len(dataset)) as metrics:
-                    self._writer.write(dataset)
-                    metrics.rows_out = len(dataset)
+            for plan_step in self._execution_plan():
+                dataset = plan_step.execute(dataset, session)
         except Exception as exc:
             # Fail-fast (ADR-0007): the failing step already logged its own
             # `error` record; the run summary closes the run as aborted before
             # the exception propagates to the caller.
-            record(
+            session.record(
                 "run",
                 "error",
                 duration=time.perf_counter() - started,
@@ -297,37 +283,17 @@ class Pipeline:
             context.mark_run_summary_recorded()
             raise
 
-        record(
+        assert dataset is not None
+        session.record(
             "run",
             "ok",
             rows_in=len(dataset),
             rows_out=len(dataset),
             duration=time.perf_counter() - started,
-            warn_hits=warn_hits,
+            warn_hits=session.warn_hits,
         )
         context.mark_run_summary_recorded()
         return dataset
-
-    def _validate(
-        self,
-        validators: list[tuple[Validator, Severity]],
-        dataset: Dataset,
-        phase: str,
-        metrics: StepMetrics,
-    ) -> None:
-        for validator, severity in validators:
-            try:
-                validator.validate(dataset)
-            except ValidationError as exc:
-                if severity == "error":
-                    raise ValidationError(
-                        f"{self._name} {phase} failed: {exc}"
-                    ) from exc
-                # warn is the explicit escape hatch (ADR-0007): log it and
-                # record it as a warn-hit so the run record names what was
-                # tolerated, then continue.
-                log.warning("%s %s warn: %s", self._name, phase, exc)
-                metrics.warn_hits.append(str(exc))
 
 
 def _describe_validators(
@@ -340,6 +306,24 @@ def _describe_validators(
     for validator, severity in validators:
         lines.append(f"    - {_describe_component(validator)} severity={severity}")
     return lines
+
+
+def _first_step(
+    plan: list[PipelineStep], kind: str, *, required: bool = True
+) -> PipelineStep | None:
+    for step in plan:
+        if step.kind == kind:
+            return step
+    if required:
+        raise ValueError(f"execution plan has no {kind!r} step")
+    return None
+
+
+def _first_named_step(plan: list[PipelineStep], name: str) -> PipelineStep:
+    for step in plan:
+        if step.name == name:
+            return step
+    raise ValueError(f"execution plan has no {name!r} step")
 
 
 def _describe_run_log(run_log: RunLog) -> str:

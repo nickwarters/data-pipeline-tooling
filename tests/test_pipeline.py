@@ -138,6 +138,55 @@ def test_pipeline_describe_includes_optional_governance_without_leaking_secrets(
     assert "quarantine-token" not in plan
 
 
+def test_pipeline_execution_plan_exposes_ordered_step_metadata():
+    # The builder's public API remains fluent, but internally .run() and
+    # .describe() now share a planned sequence of explicit step objects. The
+    # metadata is the hook future plan validation and dry-run slices inspect.
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
+    checkpoint = CapturingWriter()
+    writer = CapturingWriter()
+
+    pipeline = (
+        Pipeline("cases", reader)
+        .with_validator(ColumnValidator(["id"]))
+        .quarantine(SecretPartitioner(), CapturingWriter())
+        .with_processor(AddingProcessor("derived"))
+        .checkpoint(checkpoint)
+        .with_post_validator(ColumnValidator(["derived"]))
+        .explain(CapturingWriter(), id_column="id")
+        .write_to(writer)
+    )
+
+    plan = pipeline._execution_plan()
+
+    assert [step.order for step in plan] == list(range(len(plan)))
+    assert [step.name for step in plan] == [
+        "read",
+        "pre-validate",
+        "quarantine",
+        "explain:trace",
+        "process",
+        "checkpoint:0",
+        "post-validate",
+        "explain",
+        "write",
+    ]
+    assert [step.kind for step in plan] == [
+        "read",
+        "validator",
+        "quarantine",
+        "trace",
+        "processor",
+        "checkpoint",
+        "validator",
+        "explain",
+        "write",
+    ]
+    assert plan[4].component is not None
+    assert plan[5].side_effect is True
+    assert plan[8].component is writer
+
+
 def test_processor_transforms_the_dataset_before_the_writer():
     # A processor attached with .with_processor runs between read and write and
     # its transformed dataset — not the read one — is what reaches the Writer.
