@@ -6,10 +6,12 @@ import pytest
 
 from framework.builder import Pipeline
 from framework.dataset import Dataset
-from framework.readers import CsvReader
+from framework.readers import CsvReader, SharePointReader
+from framework.run_log import RunLog
 from framework.store import Store
 from framework.strategy import AccumulateByRun
 from framework.validators import ColumnValidator, RowCountValidator, ValidationError
+from framework.writers import QuarantineWriter
 
 FIXTURE = Path(__file__).parent / "fixtures" / "cases.csv"
 
@@ -50,6 +52,90 @@ class AddingProcessor:
         frame = dataset.to_pandas().copy()
         frame[self._column] = "derived"
         return Dataset.from_pandas(frame)
+
+
+class SecretPartitioner:
+    """A partitioner-shaped probe with sensitive config for plan scrubbing."""
+
+    def __init__(self) -> None:
+        self._token = "quarantine-token"
+
+    def partition(self, dataset: Dataset) -> tuple[Dataset, Dataset]:
+        return dataset, Dataset.from_pandas(pd.DataFrame())
+
+
+def test_pipeline_describe_shows_the_deferred_execution_plan():
+    # describe() is an authoring/debugging aid: it should expose the composed
+    # steps before .run() without triggering the Reader or Writer.
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
+    checkpoint = CapturingWriter()
+    writer = CapturingWriter()
+
+    plan = (
+        Pipeline("cases", reader)
+        .with_validator(ColumnValidator(["id"]))
+        .with_processor(AddingProcessor("derived"))
+        .checkpoint(checkpoint)
+        .with_post_validator(ColumnValidator(["derived"]), severity="warn")
+        .write_to(writer)
+        .describe()
+    )
+
+    assert plan == (
+        "Pipeline cases\n"
+        "  reader: RecordingReader\n"
+        "  pre-validators:\n"
+        "    - ColumnValidator(required_columns=['id']) severity=error\n"
+        "  stages:\n"
+        "    - processor: AddingProcessor(column='derived')\n"
+        "    - checkpoint: CapturingWriter\n"
+        "  post-validators:\n"
+        "    - ColumnValidator(required_columns=['derived']) severity=warn\n"
+        "  quarantine: none\n"
+        "  explain: none\n"
+        "  writer: CapturingWriter\n"
+        "  run-log: none"
+    )
+    assert reader.read_count == 0
+    assert checkpoint.write_count == 0
+    assert writer.write_count == 0
+
+
+def test_pipeline_describe_includes_optional_governance_without_leaking_secrets(
+    tmp_path,
+):
+    reader = SharePointReader(
+        "https://user:hunter2@example.test/sites/cases",
+        "Cases",
+        auth={"password": "hunter2", "token": "abc123"},
+    )
+
+    plan = (
+        Pipeline("selection", reader, run_log=RunLog(tmp_path / "runs.log"))
+        .quarantine(
+            SecretPartitioner(),
+            QuarantineWriter(tmp_path / "rejects.db", "rejects"),
+        )
+        .explain(CapturingWriter(), id_column="case_ref", score_column="priority")
+        .write_to(CapturingWriter())
+        .describe()
+    )
+
+    assert "reader: SharePointReader(" in plan
+    assert "site='https://<redacted>@example.test/sites/cases'" in plan
+    assert "auth='<redacted>'" in plan
+    assert (
+        "quarantine: SecretPartitioner(token='<redacted>') -> QuarantineWriter("
+        in plan
+    )
+    assert (
+        "explain: writer=CapturingWriter, id_column='case_ref', "
+        "score_column='priority'"
+    ) in plan
+    assert f"run-log: RunLog(path='{tmp_path / 'runs.log'}')" in plan
+    assert "hunter2" not in plan
+    assert "abc123" not in plan
+    assert "quarantine-token" not in plan
 
 
 def test_processor_transforms_the_dataset_before_the_writer():

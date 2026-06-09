@@ -55,7 +55,7 @@ Moving data across the boundary.
 
 | Names | What |
 |-------|------|
-| `Pipeline`, `Runnable` | The deferred fluent builder and the runnable it satisfies. |
+| `Pipeline`, `Runnable` | The deferred fluent builder (`.describe()` for a pre-run plan, `.run()` to execute) and the runnable it satisfies. |
 | `raw_to_silver`, `silver_to_gold`, `current_silver_to_gold`, `detail_current_silver_to_gold` | The layer-composing builders. |
 | `ForEach`, `ForEachOutcome`, `ForEachPipelineError` | Independent per-item runs. |
 | `PipelineRunner`, `RunContext`, `FreshnessRequirement`, `FreshnessError`, `UnknownPipelineError` | Thin domain orchestration + the freshness guard. |

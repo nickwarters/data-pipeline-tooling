@@ -541,6 +541,8 @@ A `Pipeline` describes a feed's path and runs **nothing** until `.run()`
 (
     Pipeline("cases", CsvReader(path))
     .with_validator(ColumnValidator(["case_ref"]))        # pre: gate the input
+    .with_processor(NormaliseCases())                     # transform
+    .checkpoint(audit_writer)                             # mid-run snapshot
     .with_post_validator(RowCountValidator(minimum=1))     # post: gate the output
     .write_to(writer)
     .run()
@@ -551,6 +553,24 @@ A `Pipeline` describes a feed's path and runs **nothing** until `.run()`
 input); `.with_post_validator(v, severity="error")` attaches a **post**-validator
 (checks the output that is about to be written). `.write_to(writer)` composes in
 the destination Writer. All deferred — nothing runs until `.run()`.
+
+Call `.describe()` before `.run()` to inspect the plan while authoring or
+debugging. It returns a human-readable string naming the reader, pre-validators,
+processors and checkpoints in order, post-validators, quarantine/explain
+configuration, writer, and run-log sink where configured. It does not execute
+the reader or writer, and it scrubs obvious credential fields/URLs before
+rendering component configuration:
+
+```python
+pipeline = (
+    Pipeline("cases", CsvReader(path))
+    .with_validator(ColumnValidator(["case_ref"]))
+    .with_processor(NormaliseCases())
+    .write_to(writer)
+)
+
+print(pipeline.describe())
+```
 
 `.run()` is the terminus and is **fail-fast and atomic** (ADR-0007): it reads the
 source, runs the pre-validators, runs the processors (the `process` step —
@@ -573,7 +593,7 @@ the supplied `RunContext` or creates one for ad hoc runs, exposes the execution
 id as `pipeline.run_id`, times each step, and drives the composed `RunLog`
 (timing + structured JSONL logging — landed in #4). The `process` step
 (`.with_processor()`) landed in #23; lineage checkpoints (`.checkpoint(writer)`)
-remain ahead.
+landed in #49.
 
 ### `WorkingDayCalendar` — working-day arithmetic (pure utility)
 A config-seeded `WorkingDayCalendar(holidays=…, weekend=…)` answers working-day
