@@ -26,10 +26,19 @@ Concrete Readers that ship:
 | Reader | Source | Construct with |
 |--------|--------|----------------|
 | `CsvReader(path)` | A CSV file | the file path |
+| `GlobCsvReader(directory, pattern)` | Many local CSV files that together form one Feed snapshot | directory path + glob pattern |
 | `ExcelReader(path, sheet=0)` | One worksheet of an `.xlsx` workbook | path + sheet **name or zero-based index** (default the first sheet) |
 | `SqliteReader(db_path, table)` | One table of a SQLite layer db | db path + table name |
 | `SasReader(script, copy_glob, dest)` | A SAS feed run on a remote box | script name + glob of outputs to copy back + local landing dir |
 | `SharePointReader(site, list_name, auth)` | A SharePoint list | site URL + list name + auth config |
+
+`GlobCsvReader` reads every file matching `directory / pattern` in sorted
+deterministic order, concatenates them behind the `Dataset` seam, and returns
+one `Dataset`. Use it when a source export is split across files but should be
+validated, processed, written, and failed as one logical Feed snapshot. If no
+files match, it raises `FileNotFoundError` naming the directory and pattern;
+`columns=[...]` projects columns with the same pandas `usecols` behavior as
+`CsvReader`.
 
 `ExcelReader` reads `.xlsx` via pandas + **openpyxl** (a pure-Python,
 cross-platform engine; in `requirements.txt`). `SqliteReader` is the read-side
@@ -65,6 +74,14 @@ Swapping the Reader is the only change needed to ingest the same feed from a
 different source type — the rest of the pipeline is identical. Validators and
 (later) processors compose in the same fluent way; see
 [`core-primitives.md`](core-primitives.md).
+
+If a landing directory contains many files, choose the component by the logical
+run boundary:
+
+- Use `GlobCsvReader(directory, "*.csv")` when the files are one split snapshot:
+  one read, one `Dataset`, one validation/write, one logical run id.
+- Use `ForEach(files, pipeline_builder, ...)` when each file is an independent
+  run that needs its own context, failure boundary, and idempotency key.
 
 ## Remote feeds (SAS, SharePoint)
 

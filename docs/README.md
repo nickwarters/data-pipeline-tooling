@@ -117,7 +117,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | Primitive | What it is / when to use it |
 |-----------|------------------------------|
 | **`Dataset`** | The opaque, bulk in-memory **tabular carrier** — pandas behind the seam, swappable later. Tiny public surface (`.columns`, `len()`); pandas never leaks past it. ([ADR-0002](adr/0002-python-only-processing-dumb-store-two-tier-carrier.md)) |
-| **`Reader`** | `read() -> Dataset`. One per source type: `CsvReader`, `ExcelReader`, `SqliteReader`, and the stubbed-remote `SasReader` / `SharePointReader`. Swap the Reader to ingest the same feed from a different source. → [adding-a-feed.md](adding-a-feed.md) |
+| **`Reader`** | `read() -> Dataset`. One per source shape: `CsvReader`, `GlobCsvReader`, `ExcelReader`, `SqliteReader`, and the stubbed-remote `SasReader` / `SharePointReader`. Swap the Reader to ingest the same feed from a different source. → [adding-a-feed.md](adding-a-feed.md) |
 | **`Writer`** | `write(dataset) -> None`. The dual of Reader. Owns **both** target location and **load strategy** (`SqliteTruncateReloadWriter` for full-refresh raw/silver; `AccumulateByRunWriter` for gold). → [gold-accumulation.md](gold-accumulation.md) |
 | **`Store` / `StoreCatalog`** | `Store(subject_dir)` binds one subject to Writer/Reader creation over `<subject>/{raw,silver,gold}.db`; `StoreCatalog(root).store(subject)` mints those stores from shared root/configuration. Holds no business logic and makes no load decision. ([ADR-0001](adr/0001-sqlite-medallion-store-on-network-share.md)) |
 | **`Validator`** | `validate(dataset) -> None`, **raises** on breach. `ColumnValidator`, `RowCountValidator` (engine-agnostic), `VolumeAnomalyValidator` (trips when a run's volume deviates from its recent-history baseline — catches truncated source exports, #54). Severity (`error`/`warn`) is set where it's attached. |
@@ -241,8 +241,10 @@ into N single-table pipelines over the shared raw table —
 When a directory contains many files, choose the shape by the logical run you
 need:
 
-- Use a **multi-file Reader** when the files together form one Feed snapshot:
-  one read, one `Dataset`, one validation/write, one logical run id.
+- Use `GlobCsvReader(directory, pattern)` when the files together form one Feed
+  snapshot: files are matched with `pathlib.Path.glob`, read in sorted order,
+  concatenated into one `Dataset`, then validated/written under one logical run
+  id. Pass `columns=[...]` to project the same way `CsvReader` does.
 - Use `ForEach(files, pipeline_builder, ...).run(context)` when each file is its
   own independent run using the same recipe. The factory receives
   `pipeline_builder(item, context)`, where `context.logical_run_id` can be

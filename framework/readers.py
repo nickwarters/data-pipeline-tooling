@@ -68,6 +68,35 @@ class CsvReader:
         return Dataset.from_pandas(pd.read_csv(self._path, **kwargs))
 
 
+class GlobCsvReader:
+    """Read many local CSV files that together form one logical feed snapshot."""
+
+    def __init__(
+        self,
+        directory: str | os.PathLike[str],
+        pattern: str,
+        columns: list[str] | None = None,
+    ) -> None:
+        # Path keeps separators OS-agnostic across Windows and macOS.
+        self._directory = Path(directory)
+        self._pattern = pattern
+        self._columns = columns
+
+    def read(self) -> Dataset:
+        paths = sorted(self._directory.glob(self._pattern))
+        if not paths:
+            raise FileNotFoundError(
+                f"No files match {self._pattern!r} in directory {self._directory}"
+            )
+        kwargs: dict = {}
+        if self._columns is not None:
+            kwargs["usecols"] = self._columns
+        frame = pd.concat(
+            [pd.read_csv(path, **kwargs) for path in paths], ignore_index=True
+        )
+        return Dataset.from_pandas(frame)
+
+
 class ExcelReader:
     """Read one sheet of an Excel workbook into a Dataset.
 
@@ -158,18 +187,9 @@ class SasReader:
     def read(self) -> Dataset:
         self._runner.run_script(self._script)
         self._runner.fetch(self._copy_glob, self._dest)
-        # The ordinary local file read path: the same CSV engine the CsvReader
-        # uses, behind the Dataset seam. Files are read in sorted order so a
-        # multi-file glob lands deterministically.
-        paths = sorted(self._dest.glob(self._copy_glob))
-        if not paths:
-            raise FileNotFoundError(
-                f"No files match {self._copy_glob!r} in landing directory {self._dest}"
-            )
-        frame = pd.concat(
-            [pd.read_csv(path) for path in paths], ignore_index=True
-        )
-        return Dataset.from_pandas(frame)
+        # The ordinary local file read path: reuse the same multi-file CSV
+        # reader that local split feed snapshots use.
+        return GlobCsvReader(self._dest, self._copy_glob).read()
 
 
 class SharePointReader:
