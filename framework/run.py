@@ -40,11 +40,21 @@ from framework.runner import (
     UnknownPipelineError,
 )
 from framework.silver import raw_to_silver
+from framework.stages import (
+    CheckpointStage,
+    ProcessingStage,
+    Stage,
+    ValidationStage,
+)
 
 __all__ = [
     # The builder + its contract
     "Pipeline",
     "Runnable",
+    "Stage",
+    "ValidationStage",
+    "ProcessingStage",
+    "CheckpointStage",
     # Layer-composing builders
     "raw_to_silver",
     "silver_to_gold",

@@ -69,8 +69,7 @@ load strategy and is responsible for idempotency on re-run (ADR-0006).
 ## Consequences
 
 - `.checkpoint(writer)` is added to the `Pipeline` builder alongside
-  `.with_processor()`. Both are appended to a unified `_stages` list that
-  preserves insertion order.
+  `.with_processor()`. Both append ordered stages and preserve insertion order.
 - The former single "process" step in the RunLog is replaced by per-stage
   steps (`"process"` for each processor, `"checkpoint:N"` for each checkpoint).
 - The Selection two-write case (#48) is **not** a checkpoint use case — it

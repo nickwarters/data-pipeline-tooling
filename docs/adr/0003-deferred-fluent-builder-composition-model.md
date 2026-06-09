@@ -34,11 +34,13 @@ whole read/validate/process/checkpoint/explain/write procedure inline. Each step
 has a stable name/kind/order, a wrapped component where applicable, and
 read-only/side-effect metadata for future plan validation and dry-run work.
 
-This is not a public orchestration engine and not a DAG model. Pipeline scripts
-still compose Readers, Validators, Processors, checkpoints, optional governance
-outputs, and one final Writer through the builder. `.describe()` renders from
-the same planned representation that `.run()` executes, so the inspected plan
-and executed plan cannot drift.
+This is not an orchestration engine and not a DAG model. Pipeline scripts still
+compose Readers, ordered single-dataset stages, optional governance outputs, and
+one final Writer through the builder. The public `Stage` contract is scoped to
+one class-level `Pipeline` run: current `Dataset` in, next `Dataset` out, with
+explicit side effects only for checkpoint-style stages. `.describe()` renders
+from the same planned representation that `.run()` executes, so the inspected
+plan and executed plan cannot drift.
 
 ## Amendment (2026-05-29): the terminus is a Writer port, not a layer string
 
