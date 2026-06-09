@@ -202,19 +202,46 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Annotated
 
-from framework.transform import Pattern, Length, Unique, OneOf
+from framework.transform import NonNull, Nullable, Pattern, Length, Unique, OneOf
 
 @dataclass
 class CaseA:
-    case_ref: Annotated[str, Pattern(r"\d{9,10}"), Unique()]  # 9–10 digits, no dup keys
-    name:     Annotated[str, Length(maximum=50)]              # at most 50 chars
-    status:   Annotated[str, OneOf("open", "closed")]         # value-set membership
-    opened:   date                                            # plain field — unchanged
+    case_ref: Annotated[str, NonNull(), Pattern(r"\d{9,10}"), Unique()]  # required id
+    name:     Annotated[str, Nullable(), Length(maximum=50)]             # optional name
+    status:   Annotated[str, OneOf("open", "closed")]                    # nullable by default
+    opened:   date                                                       # plain field — unchanged
 ```
 
 A field can carry **several** rules (they all run), or none — a bare
 `opened: date` keeps the exact columns+dtypes behaviour from #7, so the plain
 path is untouched.
+
+## Nullability — nullable by default, non-null when declared (#90)
+
+Nullability is field-level schema metadata, declared with the same
+`typing.Annotated` form as value rules:
+
+| Marker | Meaning | Breach phrase |
+|--------|---------|---------------|
+| `Nullable()` | the field may contain null values; this is also the default for plain fields | none |
+| `NonNull()` | the field must not contain null values | `contains null value(s)` |
+
+The default is **nullable** for compatibility with existing schemas and with the
+value-rule model below. Use `Nullable()` when a contract should say that
+explicitly; use `NonNull()` for required consumer-facing identifiers or fields
+that must be populated before silver/gold writes.
+
+Nullability is checked after column presence and dtype, and before value-rule
+breaches are reported. It joins the same one-message validator output, for
+example:
+
+```
+CaseA schema: column 'case_ref' contains null value(s)
+```
+
+An empty dataset satisfies `NonNull()` because there are no null values present.
+Declaring both `Nullable()` and `NonNull()` on one field is a schema
+configuration error raised when `SchemaValidator` is built.
 
 ### The rule vocabulary
 
@@ -227,8 +254,10 @@ path is untouched.
 
 Three shared properties:
 
-- **Null values are out of scope.** Each rule checks only *present* (non-null)
-  values; nullability is a separate concern (a possible future `Required` rule).
+- **Value rules check present values only.** Null values are handled by the
+  field's nullability marker: allowed for `Nullable()`/plain fields, rejected by
+  `NonNull()`. A nullable `Pattern`, `Length`, `Unique`, or `OneOf` field can
+  therefore be missing without creating a value-rule breach.
 - **Configuration errors fail where the schema is composed**, not mid-run: a
   malformed `Pattern` regex, a `Length` with `min > max`, or an empty `OneOf`
   raises when the rule is constructed — mirroring the validator's
@@ -253,16 +282,10 @@ column would only add a spurious second failure.
 ### Where they bite
 
 `SchemaValidator` is already the post-validator on both `raw_to_silver` and
-`silver_to_gold`, so the value rules enforce at **both** boundaries with no
-builder change. As with dtype breaches, a value-rule breach raises at the
-post-validate step **before** the writer runs — so the run aborts fail-fast and
-atomically (ADR-0007) and nothing partial lands. `Unique` here is the
-field-annotation form of uniqueness; the one-row-per-Case *grain* on a (possibly
-composite) key stays the job of `UniqueValidator` at the gold boundary (#37,
-ADR-0009).
-
-## Not yet (follow-on tickets)
-
-- **Nullability.** A `Required` rule (or a nullable-by-default policy) is the
-  natural next field-level contract — value rules deliberately leave nulls out
-  of scope today.
+`silver_to_gold`, so nullability and value rules enforce at **both** boundaries
+with no builder change. As with dtype breaches, a nullability or value-rule
+breach raises at the post-validate step **before** the writer runs — so the run
+aborts fail-fast and atomically (ADR-0007) and nothing partial lands. `Unique`
+here is the field-annotation form of uniqueness; the one-row-per-Case *grain*
+on a (possibly composite) key stays the job of `UniqueValidator` at the gold
+boundary (#37, ADR-0009).

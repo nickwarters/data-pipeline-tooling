@@ -18,12 +18,11 @@ dataset's engine-agnostic shape), both inspect/transform column *values*, so the
 are **engine-confined**: they reach the backing frame via ``to_pandas()`` exactly
 as a Reader/Writer/processor does (ADR-0002).
 
-``SchemaValidator`` also runs **value-level rules** (#24) — ``Pattern`` / ``Length``
-/ ``Unique`` / ``OneOf``, attached to a field via ``Annotated[type, Rule(...)]`` so
-the dataclass annotations stay the single source of truth they extend. The rules
-check column *contents* (format, length, uniqueness, membership) on the same
-engine-confined seam as the dtype check, and their breaches join the dtype
-breaches in the validator's one located message.
+``SchemaValidator`` also runs **field-level rules** attached via
+``Annotated[type, Rule(...)]`` so the dataclass annotations stay the single
+source of truth they extend: nullability markers (``Nullable`` / ``NonNull``)
+and value-level rules (``Pattern`` / ``Length`` / ``Unique`` / ``OneOf``). Their
+breaches join the dtype breaches in the validator's one located message.
 """
 
 from __future__ import annotations
@@ -71,6 +70,18 @@ class ValueRule(Protocol):
         the reject table (issue #50).
         """
         ...
+
+
+class Nullable:
+    """Declare that a schema field may contain null values.
+
+    Plain schema fields are nullable by default for compatibility; this marker
+    makes that contract explicit alongside value rules in ``Annotated``.
+    """
+
+
+class NonNull:
+    """Declare that a schema field must not contain null values."""
 
 
 def _sample(values: "pd.Series") -> str:
@@ -266,6 +277,29 @@ def _declared_rules(schema: type) -> list[tuple[str, list[ValueRule]]]:
     return declared
 
 
+def _declared_nullability(schema: type) -> dict[str, bool]:
+    """Return whether each declared field allows null values.
+
+    The default is nullable for compatibility with existing schemas and value
+    rules. ``Annotated[T, NonNull()]`` makes the field required/non-null;
+    ``Annotated[T, Nullable()]`` records the default explicitly. Declaring both
+    on one field is a schema configuration error.
+    """
+    hints = get_type_hints(schema, include_extras=True)
+    declared: dict[str, bool] = {}
+    for f in fields(schema):
+        metadata = _unwrap(hints[f.name])[1]
+        allows_null = any(isinstance(m, Nullable) for m in metadata)
+        requires_value = any(isinstance(m, NonNull) for m in metadata)
+        if allows_null and requires_value:
+            raise ValueError(
+                f"{schema.__name__} schema declares conflicting nullability "
+                f"for field {f.name!r}"
+            )
+        declared[f.name] = not requires_value
+    return declared
+
+
 class SchemaValidator:
     """Check a dataset against a Case Type schema (a dataclass): columns + dtypes.
 
@@ -279,6 +313,7 @@ class SchemaValidator:
         self._schema = schema
         self._expected = _declared_fields(schema)
         self._rules = _declared_rules(schema)
+        self._nullable = _declared_nullability(schema)
         # Fail at build time on a type the adapter cannot map to a dtype, so a
         # mis-declared schema surfaces where it is composed, not mid-run.
         unsupported = [
@@ -312,6 +347,8 @@ class SchemaValidator:
                     f"column {name!r} expected {label} but found {actual}"
                 )
                 ill_typed.add(name)
+            elif not self._nullable[name] and frame[name].isna().any():
+                problems.append(f"column {name!r} contains null value(s)")
         # Value rules run on the same engine-confined frame, but only over columns
         # that are present and carry the declared dtype — a wrong-typed column's
         # dtype breach is the prior problem to fix, and running e.g. a string rule
