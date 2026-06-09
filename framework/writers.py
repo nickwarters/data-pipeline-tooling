@@ -13,10 +13,15 @@ from __future__ import annotations
 import os
 import sqlite3
 from pathlib import Path
+from collections.abc import Callable
 from typing import Protocol, runtime_checkable
+
+import pandas as pd
 
 from framework.connection import connect
 from framework.dataset import Dataset
+from framework.remote import SharePointPusher, StubbedSharePointPusher
+from framework.strategy import AccumulateByRun, Refresh
 
 
 @runtime_checkable
@@ -26,6 +31,150 @@ class Writer(Protocol):
     def write(self, dataset: Dataset) -> None:
         """Persist the dataset to this Writer's target, per its load strategy."""
         ...
+
+
+def _frame_for_strategy(
+    dataset: Dataset,
+    strategy: Refresh | AccumulateByRun,
+    read_existing: Callable[[], pd.DataFrame],
+) -> pd.DataFrame:
+    frame = dataset.to_pandas().copy()
+    if isinstance(strategy, Refresh):
+        return frame
+    if isinstance(strategy, AccumulateByRun):
+        frame = _stamp_accumulate_frame(frame, strategy)
+
+        existing = read_existing()
+        if len(existing) > 0 and "run_id" in existing.columns:
+            existing = existing[existing["run_id"] != strategy.run_id]
+        return pd.concat([existing, frame], ignore_index=True)
+    raise TypeError(f"Unsupported load strategy: {type(strategy).__name__}")
+
+
+def _stamp_accumulate_frame(
+    frame: pd.DataFrame, strategy: AccumulateByRun
+) -> pd.DataFrame:
+    frame["run_id"] = strategy.run_id
+    frame["logical_run_id"] = strategy.run_id
+    if strategy.execution_id is not None:
+        frame["execution_id"] = strategy.execution_id
+    frame["load_date"] = strategy.load_date
+    return frame
+
+
+class CsvWriter:
+    """A file Deliverable Writer for CSV.
+
+    Owns its target file and load strategy. ``Refresh`` overwrites the file with
+    the current dataset; ``AccumulateByRun`` rewrites the file after replacing
+    only that logical run's stamped rows.
+    """
+
+    def __init__(
+        self,
+        path: str | os.PathLike[str],
+        strategy: Refresh | AccumulateByRun,
+    ) -> None:
+        # Path keeps separators OS-agnostic across Windows and macOS.
+        self._path = Path(path)
+        self._strategy = strategy
+
+    def write(self, dataset: Dataset) -> None:
+        frame = _frame_for_strategy(dataset, self._strategy, self._read_existing)
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        frame.to_csv(self._path, index=False, lineterminator="\n")
+
+    def _read_existing(self) -> pd.DataFrame:
+        if not self._path.exists():
+            return pd.DataFrame()
+        return pd.read_csv(self._path)
+
+
+class ExcelWriter:
+    """A file Deliverable Writer for one Excel worksheet."""
+
+    def __init__(
+        self,
+        path: str | os.PathLike[str],
+        strategy: Refresh | AccumulateByRun,
+        sheet: str = "Sheet1",
+    ) -> None:
+        # Path keeps separators OS-agnostic across Windows and macOS.
+        self._path = Path(path)
+        self._strategy = strategy
+        self._sheet = sheet
+
+    def write(self, dataset: Dataset) -> None:
+        frame = _frame_for_strategy(dataset, self._strategy, self._read_existing)
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        with pd.ExcelWriter(self._path) as writer:
+            frame.to_excel(writer, sheet_name=self._sheet, index=False)
+
+    def _read_existing(self) -> pd.DataFrame:
+        if not self._path.exists():
+            return pd.DataFrame()
+        return pd.read_excel(self._path, sheet_name=self._sheet)
+
+
+class JsonWriter:
+    """A file Deliverable Writer for JSON record arrays."""
+
+    def __init__(
+        self,
+        path: str | os.PathLike[str],
+        strategy: Refresh | AccumulateByRun,
+    ) -> None:
+        # Path keeps separators OS-agnostic across Windows and macOS.
+        self._path = Path(path)
+        self._strategy = strategy
+
+    def write(self, dataset: Dataset) -> None:
+        frame = _frame_for_strategy(dataset, self._strategy, self._read_existing)
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        frame.to_json(
+            self._path,
+            orient="records",
+            date_format="iso",
+            indent=2,
+            force_ascii=False,
+        )
+
+    def _read_existing(self) -> pd.DataFrame:
+        if not self._path.exists():
+            return pd.DataFrame()
+        return pd.read_json(self._path, orient="records")
+
+
+class SharePointWriter:
+    """Write a Dataset to a SharePoint list through a swappable pusher seam."""
+
+    def __init__(
+        self,
+        site: str,
+        list_name: str,
+        auth: object = None,
+        strategy: Refresh | AccumulateByRun = Refresh(),
+        *,
+        pusher: SharePointPusher | None = None,
+    ) -> None:
+        self._site = site
+        self._list_name = list_name
+        self._auth = auth
+        self._strategy = strategy
+        self._pusher = pusher or StubbedSharePointPusher()
+
+    def write(self, dataset: Dataset) -> None:
+        if isinstance(self._strategy, AccumulateByRun):
+            dataset = Dataset.from_pandas(
+                _stamp_accumulate_frame(dataset.to_pandas().copy(), self._strategy)
+            )
+        self._pusher.push(
+            self._site,
+            self._list_name,
+            self._auth,
+            dataset,
+            self._strategy,
+        )
 
 
 class SqliteTruncateReloadWriter:

@@ -152,6 +152,21 @@ lets a pipeline read only the columns it needs, leaving `read() -> Dataset`
 unchanged. This is what keeps each single-table pipeline narrow when a wide feed
 (650+ columns) is fanned out into a Case table and its Detail Tables.
 
+#### Source type coverage
+
+The Reader/Writer set is symmetric where the framework supports both inbound
+Feeds and outbound Deliverables for a source type. Intentionally absent
+directions are explicit:
+
+| Source type | Reader | Writer | Notes |
+|-------------|--------|--------|-------|
+| CSV file | `CsvReader`, `GlobCsvReader` | `CsvWriter` | `CsvWriter(path, strategy)` emits one CSV file; `GlobCsvReader` is read-only because many inbound files together form one logical snapshot. |
+| Excel file | `ExcelReader` | `ExcelWriter` | Both target one worksheet (`sheet=...`). |
+| JSON file | _intentionally absent_ | `JsonWriter` | JSON is currently a Reporting Deliverable format only; no inbound JSON Feed has been needed yet. |
+| SQLite table | `SqliteReader` | `SqliteTruncateReloadWriter`, `AccumulateByRunWriter` | The Store mints these over medallion layer databases. |
+| SAS extract | `SasReader` | _intentionally absent_ | SAS is an inbound-only remote source; the framework lands the remote output then reads local CSV files. |
+| SharePoint list | `SharePointReader` | `SharePointWriter` | Both sides are stubbed behind swappable `SharePointFetcher` / `SharePointPusher` seams until auth/tenant work lands. |
+
 ### `Writer` — the destination, behind one method
 A `Writer` is the component-role **dual of `Reader`**: a Reader brings data in,
 a Writer takes it out (ADR-0003 amendment).
@@ -161,11 +176,19 @@ class Writer(Protocol):
     def write(self, dataset: Dataset) -> None: ...
 ```
 
-A Writer owns **both** its target location (a layer db file + table) **and** its
-load strategy (ADR-0006). Swapping the Writer is how you target a different
-database — the builder never learns about medallion layers or load rules. Two
-concrete writers ship now:
+A Writer owns **both** its target location (a layer db file + table, or a file
+Deliverable path) **and** its load strategy (ADR-0006). Swapping the Writer is
+how you target a different sink — the builder never learns about medallion
+layers, file formats, or load rules. Concrete writers ship for file
+Deliverables and SQLite tables:
 
+- `CsvWriter(path, strategy)` — writes a CSV file with stable LF line endings.
+- `ExcelWriter(path, strategy, sheet="Sheet1")` — writes one worksheet in an
+  `.xlsx` workbook.
+- `JsonWriter(path, strategy)` — writes a UTF-8 JSON array of record objects.
+- `SharePointWriter(site, list_name, auth=None, strategy=Refresh(), pusher=...)`
+  — pushes rows to a SharePoint list through a swappable pusher seam; the default
+  pusher raises until auth/tenant work lands.
 - `SqliteTruncateReloadWriter(db_path, table)` — **full refresh** (truncate +
   reload). Used for raw/silver, which mirror a current-state source snapshot.
 - `AccumulateByRunWriter(db_path, table, run_id, load_date, execution_id=None)` —
@@ -175,6 +198,14 @@ concrete writers ship now:
   matches RunLog/RunRegistry when the strategy is derived from a `RunContext`.
   A re-driven run is idempotent via *delete-by-run then insert*. Wired by the
   `silver_to_gold` builder (#8; [gold-accumulation doc](gold-accumulation.md)).
+
+The file Writers accept the same explicit strategy objects as Store-minted
+Writers: `Refresh()` overwrites the file; `AccumulateByRun(...)` reads any
+existing file, replaces rows for that logical run, stamps the new rows, and
+rewrites the file. Round-tripping through matching Readers is stable for CSV and
+Excel at the Dataset shape level; exact pandas dtype inference can still differ
+after a file round-trip, so schema-sensitive flows should continue to validate
+after reading.
 
 ### `Store` / `StoreCatalog` — subject medallions, minted from shared configuration
 `Store(subject_dir, busy_timeout_ms=5000)` is the mouth of **one subject's**

@@ -1,12 +1,21 @@
+import json
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
+from framework.builder import Pipeline
 from framework.connection import connect
 from framework.dataset import Dataset
-from framework.readers import CsvReader, SqliteReader
-from framework.writers import AccumulateByRunWriter, SqliteTruncateReloadWriter
+from framework.readers import CsvReader, ExcelReader, SqliteReader
+from framework.strategy import AccumulateByRun, Refresh
+from framework.writers import (
+    AccumulateByRunWriter,
+    CsvWriter,
+    ExcelWriter,
+    JsonWriter,
+    SqliteTruncateReloadWriter,
+)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "cases.csv"
 
@@ -48,6 +57,72 @@ def test_connection_factory_sets_busy_timeout(tmp_path):
         con.close()
 
     assert value == 7000
+
+
+def test_csv_writer_round_trips_through_the_matching_reader(tmp_path):
+    # File-form Deliverables are ordinary Writers: the pipeline hands over a
+    # Dataset, the Writer owns the path and refresh strategy, and CSV is read
+    # back through the matching Reader.
+    source = CsvReader(FIXTURE).read()
+    target = tmp_path / "deliverables" / "cases.csv"
+
+    landed = (
+        Pipeline("cases", CsvReader(FIXTURE))
+        .write_to(CsvWriter(target, Refresh()))
+        .run()
+    )
+
+    round_tripped = CsvReader(target).read()
+    assert landed.columns == source.columns
+    assert round_tripped.columns == source.columns
+    assert len(round_tripped) == len(source)
+    assert b"\r\n" not in target.read_bytes()
+
+
+def test_excel_writer_round_trips_through_the_matching_reader(tmp_path):
+    # Excel is another file-form Deliverable Writer; sheet selection remains
+    # owned by the file adapter rather than the Pipeline builder.
+    source = CsvReader(FIXTURE).read()
+    target = tmp_path / "deliverables" / "cases.xlsx"
+
+    Pipeline("cases", CsvReader(FIXTURE)).write_to(
+        ExcelWriter(target, Refresh(), sheet="cases")
+    ).run()
+
+    round_tripped = ExcelReader(target, sheet="cases").read()
+    assert round_tripped.columns == source.columns
+    assert len(round_tripped) == len(source)
+
+
+def test_json_writer_emits_file_deliverable_records(tmp_path):
+    # JSON currently has a Writer but no matching Reader; the observable
+    # Deliverable contract is a JSON array of record objects at the target path.
+    source = CsvReader(FIXTURE).read()
+    target = tmp_path / "deliverables" / "cases.json"
+
+    Pipeline("cases", CsvReader(FIXTURE)).write_to(
+        JsonWriter(target, Refresh())
+    ).run()
+
+    records = json.loads(target.read_text(encoding="utf-8"))
+    assert len(records) == len(source)
+    assert list(records[0]) == source.columns
+
+
+def test_file_writer_accumulate_by_run_replaces_only_that_run(tmp_path):
+    # File Deliverables can also carry the accumulation strategy: re-driving the
+    # same logical run replaces that run's rows while preserving other runs.
+    dataset = CsvReader(FIXTURE).read()
+    target = tmp_path / "deliverables" / "cases.csv"
+
+    CsvWriter(target, AccumulateByRun("r1", "2026-05-29")).write(dataset)
+    CsvWriter(target, AccumulateByRun("r2", "2026-05-30")).write(dataset)
+    CsvWriter(target, AccumulateByRun("r1", "2026-05-29")).write(dataset)
+
+    landed = CsvReader(target).read()
+    assert len(landed) == 2 * len(dataset)
+    assert "run_id" in landed.columns
+    assert "load_date" in landed.columns
 
 
 def test_accumulate_by_run_writer_keeps_each_run(tmp_path):

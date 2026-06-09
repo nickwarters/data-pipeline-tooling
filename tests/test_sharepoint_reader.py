@@ -5,9 +5,10 @@ import pytest
 
 from framework.builder import Pipeline
 from framework.dataset import Dataset
-from framework.readers import SharePointReader
+from framework.readers import CsvReader, SharePointReader
 from framework.remote import LocalCsvFetcher
-from framework.writers import SqliteTruncateReloadWriter
+from framework.strategy import AccumulateByRun, Refresh
+from framework.writers import SharePointWriter, SqliteTruncateReloadWriter
 
 
 @pytest.fixture
@@ -93,3 +94,63 @@ def test_sharepoint_reader_composes_in_the_pipeline_builder(fixture_csv, tmp_pat
 
     assert landed.columns == ["adviser_id", "name"]
     assert len(landed) == 3
+
+
+def test_default_sharepoint_writer_defers_until_implemented(fixture_csv):
+    writer = SharePointWriter(
+        "https://contoso.sharepoint.com",
+        "Advisers",
+        strategy=Refresh(),
+    )
+
+    with pytest.raises(NotImplementedError):
+        writer.write(CsvReader(fixture_csv).read())
+
+
+class RecordingPusher:
+    """A swapped-in SharePointPusher that records the config and dataset."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple] = []
+
+    def push(self, site, list_name, auth, dataset, strategy):
+        self.calls.append((site, list_name, auth, dataset, strategy))
+
+
+def test_sharepoint_writer_composes_in_the_pipeline_builder(fixture_csv):
+    # The SharePoint write side is the outbound dual of SharePointReader:
+    # Pipeline hands it a Dataset, and the configured pusher owns the remote IO.
+    pusher = RecordingPusher()
+    auth = {"client_id": "abc", "secret": "xyz"}
+    strategy = AccumulateByRun("r1", "2026-05-29")
+
+    Pipeline(
+        "advisers",
+        SharePointReader(
+            "https://contoso.sharepoint.com",
+            "Advisers",
+            fetcher=LocalCsvFetcher(fixture_csv),
+        ),
+    ).write_to(
+        SharePointWriter(
+            "https://contoso.sharepoint.com/sites/cases",
+            "Advisers",
+            auth,
+            strategy,
+            pusher=pusher,
+        )
+    ).run()
+
+    [(site, list_name, pushed_auth, dataset, pushed_strategy)] = pusher.calls
+    assert site == "https://contoso.sharepoint.com/sites/cases"
+    assert list_name == "Advisers"
+    assert pushed_auth == auth
+    assert pushed_strategy == strategy
+    assert dataset.columns == [
+        "adviser_id",
+        "name",
+        "run_id",
+        "logical_run_id",
+        "load_date",
+    ]
+    assert len(dataset) == 3

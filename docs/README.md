@@ -128,7 +128,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 |-----------|------------------------------|
 | **`Dataset`** | The opaque, bulk in-memory **tabular carrier** — pandas behind the seam, swappable later. Tiny public surface (`.columns`, `len()`); pandas never leaks past it. ([ADR-0002](adr/0002-python-only-processing-dumb-store-two-tier-carrier.md)) |
 | **`Reader`** | `read() -> Dataset`. One per source shape: `CsvReader`, `GlobCsvReader`, `ExcelReader`, `SqliteReader`, and the stubbed-remote `SasReader` / `SharePointReader`. Swap the Reader to ingest the same feed from a different source. → [adding-a-feed.md](adding-a-feed.md) |
-| **`Writer`** | `write(dataset) -> None`. The dual of Reader. Owns **both** target location and **load strategy** (`SqliteTruncateReloadWriter` for full-refresh raw/silver; `AccumulateByRunWriter` for gold). → [gold-accumulation.md](gold-accumulation.md) |
+| **`Writer`** | `write(dataset) -> None`. The dual of Reader. Owns **both** target location and **load strategy**. File Deliverables use `CsvWriter`, `ExcelWriter`, or `JsonWriter`; SharePoint list Deliverables use the stubbed `SharePointWriter`; SQLite tables use `SqliteTruncateReloadWriter` or `AccumulateByRunWriter`. → [gold-accumulation.md](gold-accumulation.md) |
 | **`Store` / `StoreCatalog`** | `Store(subject_dir)` binds one subject to Writer/Reader creation over `<subject>/{raw,silver,gold}.db`; `StoreCatalog(root).store(subject)` mints those stores from shared root/configuration. Holds no business logic and makes no load decision. ([ADR-0001](adr/0001-sqlite-medallion-store-on-network-share.md)) |
 | **`Validator`** | `validate(dataset) -> None`, **raises** on breach. `ColumnValidator`, `RowCountValidator` (engine-agnostic), `VolumeAnomalyValidator` (trips when a run's volume deviates from its recent-history baseline — catches truncated source exports, #54). Severity (`error`/`warn`) is set where it's attached. |
 | **`Schema` / `SchemaValidator`** | A Case Type **dataclass** whose annotations *are* the column+dtype contract; the validator is the dataclass→validator adapter, enforced at silver (and optionally gold). Value-level rules extend the same dataclass via `Annotated`. → [schema-enforcement.md](schema-enforcement.md) ([ADR-0008](adr/0008-graduated-schema-enforcement.md)) |
@@ -246,6 +246,25 @@ Swapping the Reader is the only change needed to ingest the same feed from a
 different source type. A wide feed (one Case table + Detail Tables) is fanned out
 into N single-table pipelines over the shared raw table —
 [ADR-0009](adr/0009-case-identity-and-gold-grain.md), `pipelines/demo_fan_out.py`.
+
+### Emit a file Deliverable
+
+Reporting can emit file-form Deliverables by swapping the destination Writer.
+The builder still sees only `write_to(writer).run()`; the file adapter owns the
+path, format, and load strategy.
+
+```python
+from framework.io import CsvReader, CsvWriter, JsonWriter, Refresh
+from framework.run import Pipeline
+
+Pipeline("report", CsvReader("report_rows.csv")).write_to(
+    CsvWriter("deliverables/report.csv", Refresh())
+).run()
+
+Pipeline("report-json", CsvReader("report_rows.csv")).write_to(
+    JsonWriter("deliverables/report.json", Refresh())
+).run()
+```
 
 When a directory contains many files, choose the shape by the logical run you
 need:

@@ -65,7 +65,7 @@ A single configured **inbound** data stream the framework ingests (e.g. one Exce
 _Avoid_: source (reserved for source *type*: Excel/CSV/SAS/SQLite/SharePoint), import, Deliverable (that is outbound)
 
 **Deliverable**:
-An outbound artifact a Pipeline produces for downstream consumption, in one of three concrete forms: a **file** (CSV/Excel/JSON), a **directly-readable view/table** the consumer reads, or **rows pushed to a platform-owned remote list** (a SharePoint Subscription Edition list — the canonical **Selection** Deliverable, one list per Case Type). The push form is an *active* write to a system the framework does not own, not a passive artifact left for collection; files are reserved for **Reporting** outputs. Emitted by a **Writer** — for the SharePoint list, the outbound dual of the **SharePoint Reader** (same source type, both directions).
+An outbound artifact a Pipeline produces for downstream consumption, in one of three concrete forms: a **file** (CSV/Excel/JSON), a **directly-readable view/table** the consumer reads, or **rows pushed to a platform-owned remote list** (a SharePoint Subscription Edition list — the canonical **Selection** Deliverable, one list per Case Type). The push form is an *active* write to a system the framework does not own, not a passive artifact left for collection; files are reserved for **Reporting** outputs. Emitted by a **Writer**: `CsvWriter`, `ExcelWriter`, and `JsonWriter` emit file Deliverables; SQLite Writers emit directly-readable tables; the stubbed `SharePointWriter` is the outbound dual of the **SharePoint Reader** (same source type, both directions).
 _Avoid_: report, export, output feed
 
 **Reference Data**:

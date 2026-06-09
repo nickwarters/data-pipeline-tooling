@@ -50,6 +50,28 @@ def test_an_author_can_ingest_a_feed_through_the_io_and_run_facades(tmp_path):
     assert "case_id" in landed.columns
 
 
+def test_file_deliverable_writers_are_available_through_the_io_facade(tmp_path):
+    from framework.io import (
+        CsvReader,
+        CsvWriter,
+        ExcelWriter,
+        JsonWriter,
+        Refresh,
+        SharePointWriter,
+    )
+    from framework.run import Pipeline
+
+    target = tmp_path / "deliverables" / "cases.csv"
+    Pipeline("cases", CsvReader(FIXTURE)).write_to(
+        CsvWriter(target, Refresh())
+    ).run()
+
+    assert target.exists()
+    assert ExcelWriter is not None
+    assert JsonWriter is not None
+    assert SharePointWriter is not None
+
+
 def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_path):
     # Selection-style narrowing: processors and validators come from
     # framework.transform, composed onto the framework.run Pipeline.

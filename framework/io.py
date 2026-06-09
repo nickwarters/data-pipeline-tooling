@@ -7,7 +7,7 @@ medallion ``Layer`` constants, and the load strategies a Writer carries.
 
 Import from here rather than the underlying modules::
 
-    from framework.io import CsvReader, StoreCatalog, RAW, Refresh
+    from framework.io import CsvReader, CsvWriter, StoreCatalog, RAW, Refresh
 
 The modules behind this facade (``framework.readers``, ``framework.writers``,
 ``framework.store``, ``framework.strategy``, ``framework.layers``,
@@ -36,7 +36,11 @@ from framework.store import (
 from framework.strategy import AccumulateByRun, Refresh
 from framework.writers import (
     AccumulateByRunWriter,
+    CsvWriter,
+    ExcelWriter,
+    JsonWriter,
     QuarantineWriter,
+    SharePointWriter,
     SqliteTruncateReloadWriter,
     Writer,
 )
@@ -55,9 +59,13 @@ __all__ = [
     "SharePointReader",
     # Sinks
     "Writer",
+    "CsvWriter",
+    "ExcelWriter",
+    "JsonWriter",
     "SqliteTruncateReloadWriter",
     "AccumulateByRunWriter",
     "QuarantineWriter",
+    "SharePointWriter",
     # Stores + the medallion layers
     "Store",
     "StoreCatalog",
