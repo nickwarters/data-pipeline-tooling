@@ -16,7 +16,15 @@ import pandas as pd
 import pytest
 
 from framework.dataset import Dataset
-from framework.schema import Length, OneOf, Pattern, SchemaValidator, Unique
+from framework.schema import (
+    Length,
+    NonNull,
+    Nullable,
+    OneOf,
+    Pattern,
+    SchemaValidator,
+    Unique,
+)
 from framework.validators import ValidationError
 
 
@@ -224,3 +232,55 @@ def test_value_rules_resolve_under_postponed_annotations():
     )
     with pytest.raises(ValidationError, match="column 'case_ref' violates pattern"):
         SchemaValidator(RuledCase).validate(Dataset.from_pandas(bad))
+
+
+@dataclass
+class RequiredCase:
+    case_ref: Annotated[str, NonNull(), Pattern(r"\d+")]
+    status: Annotated[str, Nullable(), OneOf("open", "closed")]
+
+
+def test_non_null_field_rejects_missing_values_with_a_located_message():
+    frame = pd.DataFrame(
+        {
+            "case_ref": pd.Series(["123", pd.NA], dtype="string"),
+            "status": pd.Series(["open", "closed"], dtype="string"),
+        }
+    )
+
+    with pytest.raises(
+        ValidationError, match="column 'case_ref' contains null value\\(s\\)"
+    ):
+        SchemaValidator(RequiredCase).validate(Dataset.from_pandas(frame))
+
+
+def test_nullable_field_allows_nulls_without_running_value_rules_on_them():
+    frame = pd.DataFrame(
+        {
+            "case_ref": pd.Series(["123", "456"], dtype="string"),
+            "status": pd.Series(["open", pd.NA], dtype="string"),
+        }
+    )
+
+    SchemaValidator(RequiredCase).validate(Dataset.from_pandas(frame))
+
+
+def test_non_null_field_passes_on_an_empty_dataset():
+    frame = pd.DataFrame(
+        {
+            "case_ref": pd.Series([], dtype="string"),
+            "status": pd.Series([], dtype="string"),
+        }
+    )
+
+    SchemaValidator(RequiredCase).validate(Dataset.from_pandas(frame))
+
+
+@dataclass
+class ConflictingNullabilityCase:
+    case_ref: Annotated[str, Nullable(), NonNull()]
+
+
+def test_schema_validator_rejects_conflicting_nullability_markers_early():
+    with pytest.raises(ValueError, match="conflicting nullability.*case_ref"):
+        SchemaValidator(ConflictingNullabilityCase)

@@ -95,7 +95,7 @@ The final Pipeline: it reads across all upstream Pipelines, builds the cross-Pip
 _Avoid_: analytics, BI, warehouse
 
 **Schema** (of a Case Type):
-The declared expected columns + types for a Case Type — the single, named replacement for today's scattered, implicit "assume field X exists" checks. A validation contract first (enforced at silver & gold), and the optional basis for typed objects. Currently a dataclass; Pydantic later.
+The declared expected columns, types, and field-level nullability/value rules for a Case Type — the single, named replacement for today's scattered, implicit "assume field X exists" checks. A validation contract first (enforced at silver & gold), and the optional basis for typed objects. Currently a dataclass; Pydantic later.
 _Avoid_: model, shape, structure (informal)
 
 ## Engineering vocabulary (cross-cutting)

@@ -48,7 +48,7 @@ Moving data across the boundary.
 | `Filter`, `Score`, `Stamp`, `Sort`, `Rename`, `JoinDependency`, `JoinWith`, `AntiJoinWith`, `LatestPerKey`, `SelectColumns`, `Unpivot`, `DeriveKey`, `TopNPerGroup`, `SamplePerGroup` | The concrete Selection / Ingest / fan-out transforms. |
 | `CoercionError` | Raised by `SchemaCoercion` on an uncastable value. |
 | `Validator`, `ValidationError`, `ColumnValidator`, `RowCountValidator`, `VolumeAnomalyValidator`, `UniqueValidator`, `RunHistory` | The `validate(dataset)` checks (raise on breach). |
-| `SchemaValidator`, `SchemaCoercion`, `ValueRule`, `Pattern`, `Length`, `Unique`, `OneOf` | The declared-schema contract + value-level rules. |
+| `SchemaValidator`, `SchemaCoercion`, `ValueRule`, `Nullable`, `NonNull`, `Pattern`, `Length`, `Unique`, `OneOf` | The declared-schema contract + nullability/value-level rules. |
 | `WorkingDayCalendar` | Availability arithmetic (pure utility). |
 
 ### `framework.run` — composing, executing, observing

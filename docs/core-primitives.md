@@ -303,14 +303,17 @@ a schema check inspects column *dtypes*, so it reaches the frame via
 - each present column's **dtype** matches the declared Python type — the
   Python-type ↔ pandas-dtype mapping lives here, engine-confined (`str`,
   `int`, `float`, `bool`, `date`/`datetime`).
+- each `Annotated[..., NonNull()]` column contains no null values. Plain fields
+  and `Annotated[..., Nullable()]` fields are nullable by default; value rules
+  still check only present values.
 
 Every breach is reported at once in one **located** message naming the column
 and the expected-vs-actual type, then raised as `ValidationError`. A type the
 adapter cannot map is a configuration error caught **when the validator is
 built**, not mid-run. Postponed (string) annotations from
 `from __future__ import annotations` are resolved via `typing.get_type_hints`.
-Value-level rules (format / length / uniqueness / encoding) are later validators
-of this same engine-confined shape and extend the same dataclass.
+Nullability and value-level rules (format / length / uniqueness / encoding)
+extend the same dataclass through `typing.Annotated`.
 
 ### `raw_to_silver` — the schema-enforcing builder
 `raw_to_silver(store, table, schema)` encodes the ADR-0008 convention in one
