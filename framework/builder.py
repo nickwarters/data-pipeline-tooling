@@ -17,13 +17,12 @@ from pathlib import Path
 
 from framework.dataset import Dataset
 from framework.pipeline_steps import (
-    CheckpointStep,
     ExplainWriteStep,
     PipelineExecution,
     PipelineStep,
-    ProcessorStep,
     QuarantineStep,
     ReadStep,
+    StageStep,
     TraceStartStep,
     ValidatorStep,
     WriteStep,
@@ -33,6 +32,7 @@ from framework.processors import Processor
 from framework.readers import Reader
 from framework.run_context import RunContext
 from framework.run_log import NULL_RUN_LOG, RunLog
+from framework.stages import CheckpointStage, ProcessingStage, Stage
 from framework.validators import Severity, Validator
 from framework.writers import Writer
 
@@ -62,10 +62,9 @@ class Pipeline:
         # about to be written.
         self._pre_validators: list[tuple[Validator, Severity]] = []
         self._post_validators: list[tuple[Validator, Severity]] = []
-        # Stages are processors and checkpoints in attach order; they run
-        # between pre- and post-validators. A "processor" stage transforms the
-        # dataset; a "checkpoint" stage writes a snapshot and passes through.
-        self._stages: list[tuple[str, Processor | Writer]] = []
+        # Stages run in attach order between the read and final write. Legacy
+        # validator/processor/checkpoint helpers append public stages here.
+        self._stages: list[Stage] = []
         # Optional row-level quarantine (issue #50): value-rule-failing rows are
         # routed to the reject writer; good rows continue through the pipeline.
         self._quarantine_validator = None
@@ -90,9 +89,14 @@ class Pipeline:
         self._post_validators.append((validator, severity))
         return self
 
+    def add_stage(self, stage: Stage) -> "Pipeline":
+        """Append an ordered stage. Deferred — nothing runs until ``.run()``."""
+        self._stages.append(stage)
+        return self
+
     def with_processor(self, processor: Processor) -> "Pipeline":
         """Attach a processor (transforms the dataset mid-run). Deferred."""
-        self._stages.append(("processor", processor))
+        self.add_stage(ProcessingStage(name="process", processors=[processor]))
         return self
 
     def quarantine(self, row_validator, reject_writer: Writer) -> "Pipeline":
@@ -134,7 +138,8 @@ class Pipeline:
         sequence and the dataset passes through unchanged so the pipeline
         continues. A checkpoint failure aborts the run (ADR-0007 fail-fast).
         """
-        self._stages.append(("checkpoint", writer))
+        name = f"checkpoint:{self._checkpoint_count()}"
+        self.add_stage(CheckpointStage(name=name, writer=writer))
         return self
 
     def write_to(self, writer: Writer) -> "Pipeline":
@@ -159,11 +164,21 @@ class Pipeline:
         lines.extend(_describe_validators("pre-validators", pre.validators))
 
         lines.append("  stages:")
-        stages = [step for step in plan if step.kind in {"processor", "checkpoint"}]
+        stages = [
+            step
+            for step in plan
+            if step.kind in {"processor", "checkpoint"}
+            or (
+                step.kind == "validator"
+                and step.name not in {"pre-validate", "post-validate"}
+            )
+        ]
         if stages:
             for step in stages:
-                kind = "processor" if step.kind == "processor" else "checkpoint"
-                lines.append(f"    - {kind}: {_describe_component(step.component)}")
+                lines.append(
+                    f"    - {_describe_stage_label(step)}: "
+                    f"{_describe_stage_component(step)}"
+                )
         else:
             lines.append("    - none")
 
@@ -215,18 +230,12 @@ class Pipeline:
                 )
             )
 
-        checkpoint_idx = 0
-        for kind, component in self._stages:
-            if kind == "processor":
-                steps.append(ProcessorStep(component))
+        for stage in self._stages:
+            to_step = getattr(stage, "to_pipeline_step", None)
+            if callable(to_step):
+                steps.append(to_step())
             else:
-                steps.append(
-                    CheckpointStep(
-                        name=f"checkpoint:{checkpoint_idx}",
-                        writer=component,
-                    )
-                )
-                checkpoint_idx += 1
+                steps.append(StageStep(stage))
 
         steps.append(
             ValidatorStep(name="post-validate", validators=self._post_validators)
@@ -236,6 +245,9 @@ class Pipeline:
         if self._writer is not None:
             steps.append(WriteStep(self._writer))
         return ordered(steps)
+
+    def _checkpoint_count(self) -> int:
+        return sum(1 for stage in self._stages if isinstance(stage, CheckpointStage))
 
     def run(self, context: RunContext | None = None) -> Dataset:
         """Execute: read, validate, hand the dataset to the Writer, return it.
@@ -306,6 +318,24 @@ def _describe_validators(
     for validator, severity in validators:
         lines.append(f"    - {_describe_component(validator)} severity={severity}")
     return lines
+
+
+def _describe_stage_label(step: PipelineStep) -> str:
+    if step.name == "process":
+        return "processor"
+    if step.name.startswith("checkpoint:"):
+        return "checkpoint"
+    return step.name
+
+
+def _describe_stage_component(step: PipelineStep) -> str:
+    validators = getattr(step, "validators", None)
+    if validators is not None:
+        return ", ".join(
+            f"{_describe_component(validator)} severity={severity}"
+            for validator, severity in validators
+        )
+    return _describe_component(step.component)
 
 
 def _first_step(

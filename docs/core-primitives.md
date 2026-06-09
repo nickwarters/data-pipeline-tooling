@@ -549,17 +549,56 @@ A `Pipeline` describes a feed's path and runs **nothing** until `.run()`
 )
 ```
 
+For position-sensitive checks and transforms, compose explicit ordered stages:
+
+```python
+pipeline = (
+    Pipeline("cases", CsvReader(path))
+    .add_stage(
+        ValidationStage(
+            name="Validate file shape",
+            validators=[ColumnValidator(["case_ref"])],
+        )
+    )
+    .add_stage(
+        ProcessingStage(
+            name="Normalise cases",
+            processors=[NormaliseCases()],
+        )
+    )
+    .add_stage(
+        ValidationStage(
+            name="Validate normalised cases",
+            validators=[RowCountValidator(minimum=1)],
+        )
+    )
+    .write_to(writer)
+)
+```
+
+`Stage` is the public contract for a step inside one class-level `Pipeline` run:
+it operates on the current `Dataset` and returns the next `Dataset`. Built-in
+stages are `ValidationStage` (one or more validators, with the same
+`error`/`warn` severity behavior as validator helpers), `ProcessingStage` (one
+or more processors, preserving row trace/explain observations), and
+`CheckpointStage` (an explicit side-effect stage that writes a snapshot and
+passes the same dataset onward). This is not a domain Pipeline, medallion layer,
+DAG, or multi-writer terminus; the invariant remains:
+`Reader -> Dataset -> Stage* -> Writer`.
+
 `.with_validator(v, severity="error")` attaches a **pre**-validator (checks the
 input); `.with_post_validator(v, severity="error")` attaches a **post**-validator
-(checks the output that is about to be written). `.write_to(writer)` composes in
-the destination Writer. All deferred — nothing runs until `.run()`.
+(checks the output that is about to be written). `.with_processor(p)` and
+`.checkpoint(writer)` remain compatibility helpers over the ordered stage chain.
+`.write_to(writer)` composes in the destination Writer. All deferred — nothing
+runs until `.run()`.
 
 Call `.describe()` before `.run()` to inspect the plan while authoring or
-debugging. The builder constructs one ordered internal step plan and renders the
-same planned reader, pre-validators, processors and checkpoints in order,
-post-validators, quarantine/explain configuration, writer, and run-log sink that
-`.run()` will execute. It does not execute the reader or writer, and it scrubs
-obvious credential fields/URLs before rendering component configuration:
+debugging. The builder constructs one ordered plan and renders the same planned
+reader, pre-validators, user-added stages in execution order, post-validators,
+quarantine/explain configuration, writer, and run-log sink that `.run()` will
+execute. It does not execute the reader or writer, and it scrubs obvious
+credential fields/URLs before rendering component configuration:
 
 ```python
 pipeline = (
@@ -574,8 +613,8 @@ print(pipeline.describe())
 
 `.run()` is the terminus and is **fail-fast and atomic** (ADR-0007): it executes
 that ordered internal plan — read, pre-validate, optional quarantine,
-processors/checkpoints in attach order, post-validate, optional explain write,
-and final write — then returns the bulk-tier `Dataset`.
+stages in attach order, post-validate, optional explain write, and final write —
+then returns the bulk-tier `Dataset`.
 
 - An **error**-severity failure aborts the run by raising `ValidationError`
   *before* the Writer is ever called — so a bad dataset never reaches the layer
@@ -596,7 +635,7 @@ objects are internal: they expose stable name/kind/order, the wrapped component
 where applicable, and read-only/side-effect metadata for future plan-validation
 and dry-run work, but pipeline scripts still use only the builder methods. The
 `process` step (`.with_processor()`) landed in #23; lineage checkpoints
-(`.checkpoint(writer)`) landed in #49.
+(`.checkpoint(writer)`) landed in #49; public ordered stages landed in #122.
 
 ### `WorkingDayCalendar` — working-day arithmetic (pure utility)
 A config-seeded `WorkingDayCalendar(holidays=…, weekend=…)` answers working-day

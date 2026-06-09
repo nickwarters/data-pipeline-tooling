@@ -239,6 +239,63 @@ class ProcessorStep(PipelineStep):
 
 
 @dataclass(frozen=True)
+class ProcessorStageStep(PipelineStep):
+    processors: list[object] = None
+
+    def __init__(self, *, name: str, processors: list[object]) -> None:
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "kind", "processor")
+        object.__setattr__(self, "order", -1)
+        component = processors[0] if len(processors) == 1 else processors
+        object.__setattr__(self, "component", component)
+        object.__setattr__(self, "read_only", False)
+        object.__setattr__(self, "side_effect", False)
+        object.__setattr__(self, "processors", processors)
+
+    def execute(
+        self, dataset: Dataset | None, session: PipelineExecution
+    ) -> Dataset:
+        assert dataset is not None
+        current = dataset
+        with session.timed_step(self.name, rows_in=len(dataset)) as metrics:
+            for processor in self.processors:
+                before = current
+                current = processor.process(current)
+                if session.trace is not None:
+                    session.trace.observe(
+                        getattr(processor, "trace_role", None),
+                        getattr(processor, "trace_name", type(processor).__name__),
+                        before,
+                        current,
+                    )
+            metrics.rows_out = len(current)
+        return current
+
+
+@dataclass(frozen=True)
+class StageStep(PipelineStep):
+    stage: object = None
+
+    def __init__(self, stage: object) -> None:
+        object.__setattr__(self, "name", stage.name)
+        object.__setattr__(self, "kind", "processor")
+        object.__setattr__(self, "order", -1)
+        object.__setattr__(self, "component", stage)
+        object.__setattr__(self, "read_only", False)
+        object.__setattr__(self, "side_effect", False)
+        object.__setattr__(self, "stage", stage)
+
+    def execute(
+        self, dataset: Dataset | None, session: PipelineExecution
+    ) -> Dataset:
+        assert dataset is not None
+        with session.timed_step(self.name, rows_in=len(dataset)) as metrics:
+            result = self.stage.apply(dataset)
+            metrics.rows_out = len(result)
+            return result
+
+
+@dataclass(frozen=True)
 class CheckpointStep(PipelineStep):
     writer: object = None
 

@@ -8,6 +8,7 @@ from framework.builder import Pipeline
 from framework.dataset import Dataset
 from framework.readers import CsvReader, SharePointReader
 from framework.run_log import RunLog
+from framework.stages import ProcessingStage, ValidationStage
 from framework.store import Store
 from framework.strategy import AccumulateByRun
 from framework.validators import ColumnValidator, RowCountValidator, ValidationError
@@ -51,6 +52,19 @@ class AddingProcessor:
         self.process_count += 1
         frame = dataset.to_pandas().copy()
         frame[self._column] = "derived"
+        return Dataset.from_pandas(frame)
+
+
+class DroppingProcessor:
+    """A Processor that removes a column and counts how often it ran."""
+
+    def __init__(self, column: str) -> None:
+        self._column = column
+        self.process_count = 0
+
+    def process(self, dataset: Dataset) -> Dataset:
+        self.process_count += 1
+        frame = dataset.to_pandas().drop(columns=[self._column])
         return Dataset.from_pandas(frame)
 
 
@@ -185,6 +199,121 @@ def test_pipeline_execution_plan_exposes_ordered_step_metadata():
     assert plan[4].component is not None
     assert plan[5].side_effect is True
     assert plan[8].component is writer
+
+
+def test_add_stage_validates_before_processing_and_stays_deferred():
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
+    processor = AddingProcessor("derived")
+    writer = CapturingWriter()
+    pipeline = (
+        Pipeline("cases", reader)
+        .add_stage(
+            ValidationStage(
+                name="Validate file shape",
+                validators=[ColumnValidator(["case_ref"])],
+            )
+        )
+        .add_stage(
+            ProcessingStage(name="Normalise cases", processors=[processor])
+        )
+        .write_to(writer)
+    )
+
+    assert reader.read_count == 0
+    assert processor.process_count == 0
+
+    with pytest.raises(ValidationError, match="Validate file shape"):
+        pipeline.run()
+
+    assert processor.process_count == 0
+    assert writer.write_count == 0
+
+
+def test_add_stage_validates_between_two_processors():
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
+    first = AddingProcessor("normalised")
+    second = DroppingProcessor("normalised")
+    writer = CapturingWriter()
+
+    (
+        Pipeline("cases", reader)
+        .add_stage(ProcessingStage(name="Add normalised", processors=[first]))
+        .add_stage(
+            ValidationStage(
+                name="Validate normalised",
+                validators=[ColumnValidator(["normalised"])],
+            )
+        )
+        .add_stage(ProcessingStage(name="Drop working column", processors=[second]))
+        .write_to(writer)
+        .run()
+    )
+
+    assert first.process_count == 1
+    assert second.process_count == 1
+    assert "normalised" not in writer.written.columns
+
+
+def test_add_stage_validates_after_processing_before_write():
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
+    writer = CapturingWriter()
+
+    (
+        Pipeline("cases", reader)
+        .add_stage(
+            ProcessingStage(
+                name="Normalise cases",
+                processors=[AddingProcessor("derived")],
+            )
+        )
+        .add_stage(
+            ValidationStage(
+                name="Validate normalised cases",
+                validators=[ColumnValidator(["derived"])],
+            )
+        )
+        .write_to(writer)
+        .run()
+    )
+
+    assert writer.write_count == 1
+    assert "derived" in writer.written.columns
+
+
+def test_add_stage_describe_renders_user_stages_in_execution_order():
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
+
+    plan = (
+        Pipeline("cases", reader)
+        .add_stage(
+            ValidationStage(
+                name="Validate file shape",
+                validators=[ColumnValidator(["id"])],
+            )
+        )
+        .add_stage(
+            ProcessingStage(
+                name="Normalise cases",
+                processors=[AddingProcessor("derived")],
+            )
+        )
+        .add_stage(
+            ValidationStage(
+                name="Validate normalised cases",
+                validators=[ColumnValidator(["derived"])],
+            )
+        )
+        .describe()
+    )
+
+    assert (
+        "  stages:\n"
+        "    - Validate file shape: ColumnValidator(required_columns=['id']) "
+        "severity=error\n"
+        "    - Normalise cases: AddingProcessor(column='derived')\n"
+        "    - Validate normalised cases: "
+        "ColumnValidator(required_columns=['derived']) severity=error\n"
+    ) in plan
 
 
 def test_processor_transforms_the_dataset_before_the_writer():

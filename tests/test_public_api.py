@@ -72,6 +72,40 @@ def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_p
     assert "priority" in landed.columns
 
 
+def test_an_author_can_compose_ordered_stages_through_the_run_facade(tmp_path):
+    from framework.io import RAW, CsvReader, Refresh, Store
+    from framework.run import Pipeline, ProcessingStage, ValidationStage
+    from framework.transform import ColumnValidator, Score
+
+    store = Store(tmp_path / "cases")
+    landed = (
+        Pipeline("cases", CsvReader(FIXTURE))
+        .add_stage(
+            ValidationStage(
+                name="Validate source shape",
+                validators=[ColumnValidator(["amount"])],
+            )
+        )
+        .add_stage(
+            ProcessingStage(
+                name="Score cases",
+                processors=[Score("priority", lambda row: row["amount"] * 2)],
+            )
+        )
+        .add_stage(
+            ValidationStage(
+                name="Validate scored cases",
+                validators=[ColumnValidator(["priority"])],
+            )
+        )
+        .write_to(store.writer(RAW, "cases", Refresh()))
+        .run()
+    )
+
+    assert len(landed) == 3
+    assert "priority" in landed.columns
+
+
 def test_internal_plumbing_stays_out_of_the_public_facades():
     # Authors must not reach internal seams through the facades. These names are
     # implementation detail (connection factory, layer-name helper, trace

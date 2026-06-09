@@ -16,6 +16,7 @@ import pytest
 from framework.builder import Pipeline
 from framework.dataset import Dataset
 from framework.run_log import RunLog
+from framework.stages import ProcessingStage, ValidationStage
 from framework.validators import ColumnValidator, ValidationError
 
 
@@ -37,6 +38,16 @@ class CapturingWriter:
 
     def write(self, dataset: Dataset) -> None:
         self.written = dataset
+
+
+class AddingProcessor:
+    def __init__(self, column: str) -> None:
+        self._column = column
+
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas().copy()
+        frame[self._column] = "derived"
+        return Dataset.from_pandas(frame)
 
 
 def _read_records(log_path: Path) -> list[dict]:
@@ -204,6 +215,41 @@ def test_checkpoint_failure_is_recorded_before_run_aborts(tmp_path):
     steps = _by_step(_read_records(log_path))
     assert steps["checkpoint:0"]["status"] == "error"
     assert steps["run"]["status"] == "error"
+
+
+def test_named_stages_emit_named_run_log_records(tmp_path):
+    log_path = tmp_path / "cases.log"
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
+
+    (
+        Pipeline("cases", reader, run_log=RunLog(log_path))
+        .add_stage(
+            ValidationStage(
+                name="Validate file shape",
+                validators=[ColumnValidator(["id"])],
+            )
+        )
+        .add_stage(
+            ProcessingStage(
+                name="Normalise cases",
+                processors=[AddingProcessor("derived")],
+            )
+        )
+        .add_stage(
+            ValidationStage(
+                name="Validate normalised cases",
+                validators=[ColumnValidator(["derived"])],
+            )
+        )
+        .write_to(CapturingWriter())
+        .run()
+    )
+
+    steps = _by_step(_read_records(log_path))
+
+    assert steps["Validate file shape"]["status"] == "ok"
+    assert steps["Normalise cases"]["rows_out"] == 1
+    assert steps["Validate normalised cases"]["status"] == "ok"
 
 
 def test_every_record_carries_a_parseable_utc_timestamp(tmp_path):
