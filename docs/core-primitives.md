@@ -18,6 +18,11 @@ builds on these shapes. For the
 *why* behind each, see the ADRs referenced inline; for domain language (Case,
 CasePool, Feed, Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
 
+Pipeline code imports these primitives through the three public facades
+(`framework.io` / `framework.transform` / `framework.run`), not the home modules
+named per-primitive below; the home modules locate the code, the facades are the
+stable contract. See [`public-api.md`](public-api.md).
+
 ## Medallion layers
 
 A medallion is three SQLite databases, one per layer (raw, silver, gold), on a
@@ -618,10 +623,8 @@ the gold `SelectionPool`.
 ## Worked example
 
 ```python
-from framework.builder import Pipeline
-from framework.readers import CsvReader
-from framework.store import RAW, StoreCatalog
-from framework.strategy import Refresh
+from framework.io import RAW, CsvReader, Refresh, StoreCatalog
+from framework.run import Pipeline
 
 store = StoreCatalog("/path/to/share").store("cases")
 landed = (

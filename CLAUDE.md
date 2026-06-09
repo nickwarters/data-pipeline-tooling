@@ -11,8 +11,15 @@ domain language in `CONTEXT.md`; the core primitives are documented in
 
 - **Language/runtime:** Python 3.12. The `framework/` package is **import-only**
   (on `sys.path`, never `pip install`ed); `pipelines/` holds runnable scripts.
+  Packaging/installing the framework is an **explicit non-goal** (#95).
 - **Layout:** `framework/` (engine + domain), `pipelines/` (scripts),
   `tests/` (pytest), `docs/` (architecture, ADRs).
+- **Public API (#95):** pipeline code imports through the three facades
+  `framework.io` / `framework.transform` / `framework.run`, not the modules
+  behind them (those are internal layout). The facades are the stable contract;
+  [`docs/public-api.md`](docs/public-api.md) lists the surface, the internal
+  modules, and the packaging non-goal. `tests/test_public_api.py` holds
+  `pipelines/` to this boundary.
 - **Core primitives:** `Dataset` (opaque tabular carrier, pandas behind the
   seam), `Reader` (`read() -> Dataset`; `CsvReader`, `SqliteReader`),
   `Writer` (`write(dataset) -> None`; owns target location + load strategy —

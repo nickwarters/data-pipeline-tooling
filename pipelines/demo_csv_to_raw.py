@@ -16,12 +16,8 @@ import os
 import sys
 from pathlib import Path
 
-from framework.builder import Pipeline
-from framework.dataset import Dataset
-from framework.readers import CsvReader
-from framework.run_log import RunLog
-from framework.store import RAW, StoreCatalog
-from framework.strategy import Refresh
+from framework.io import RAW, CsvReader, Dataset, Refresh, StoreCatalog
+from framework.run import Pipeline, RunLog
 
 FEED_NAME = "cases"
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "cases.csv"
