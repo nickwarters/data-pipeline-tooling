@@ -378,8 +378,28 @@ strategy = AccumulateByRun.from_context(context)
 - The SelectionPool reaches the review platform as a **Deliverable** (a later
   slice); the returned **Review Outcomes** come back via **Sync**, not here.
 - Run domain Pipelines through the thin runner when freshness matters:
-  `python -m pipelines.run cases selection /tmp/demo --run-date 2026-05-29`
+  `python -m pipelines.cli run cases selection /tmp/demo --run-date 2026-05-29`
   checks recent successful `cases/ingest` history before Selection executes.
+
+### Operate pipelines from the CLI — run, status, runs, log
+
+For the everyday operator tasks — running a pipeline, checking its status,
+listing recent runs, inspecting a run log — use `python -m pipelines.cli` instead
+of writing a wrapper script. It is a thin shell over the runner and the
+`RunRegistry` / `RunLog` seam; full reference with example output is
+[`operator-cli.md`](operator-cli.md).
+
+```sh
+python -m pipelines.cli run cases ingest /data --run-date 2026-05-29
+python -m pipelines.cli status /data --case-type cases
+python -m pipelines.cli runs /data --pipeline cases/ingest --limit 5
+python -m pipelines.cli log /data cases --run-id 5f8ff8c7
+```
+
+Each command reports a clear one-line error and a non-zero exit on the expected
+failures (unknown pipeline, stale upstream, validation failure, missing run
+history) rather than a traceback. `python -m pipelines.run …` remains as the
+historical `run`-only shortcut.
 
 ---
 
@@ -396,6 +416,7 @@ strategy = AccumulateByRun.from_context(context)
 | [`selection.md`](selection.md) | The full CaseType / Variation → CasePool → SelectionPool flow + explainability. |
 | [`working-day-calendar.md`](working-day-calendar.md) | Availability arithmetic. |
 | [`run-log-format.md`](run-log-format.md) | The JSONL record schema and the run registry. |
+| [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `status` / `runs` / `log`) with example commands and output. |
 | [`adr/`](adr/) | Every architectural decision (the *why*). |
 | [`../CONTEXT.md`](../CONTEXT.md) | The domain language — the canonical glossary. |
 </content>

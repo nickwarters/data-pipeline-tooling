@@ -1,0 +1,106 @@
+# The operator CLI — run, status, runs, log
+
+`python -m pipelines.cli` is a small command surface for the everyday operator
+tasks that would otherwise need a hand-written wrapper script: **run** a
+registered pipeline, check its **status**, list recent **runs**, and inspect a
+run **log** (issue #99). It is a thin shell over the public `framework.run`
+orchestration (`PipelineRunner`) and the `RunLog` / `RunRegistry` observability
+seam — everything stays local SQLite + JSONL, with no external services
+([ADR-0001](adr/0001-sqlite-medallion-store-on-network-share.md),
+[ADR-0007](adr/0007-fail-fast-atomic-runs-jsonl-observability.md)).
+
+Run it as a module from the repository root so the import-only `framework`
+package resolves on `sys.path`:
+
+```sh
+python -m pipelines.cli <command> ...
+```
+
+All commands take the **base directory** of the run store — the same path you
+pass to `run`. The runner lays out `<base>/_runs/<case_type>.log` (the JSONL run
+logs) and `<base>/_registry/runs.db` (the queryable run registry) underneath it;
+`status` / `runs` / `log` read from there.
+
+> `python -m pipelines.run <case_type> <pipeline> <base> …` is the historical
+> `run`-only shortcut, kept working — it is exactly `python -m pipelines.cli run
+> …`.
+
+## `run` — execute a registered pipeline
+
+```sh
+python -m pipelines.cli run <case_type> <pipeline> <base_dir> \
+    [--run-date YYYY-MM-DD] [--freshness-days N]
+```
+
+Runs the domain Pipeline registered for `(case_type, pipeline)`. `--run-date`
+sets the run/idempotency date (the part of the run model the CLI can drive
+today); it defaults to today. `--freshness-days` relaxes the upstream-freshness
+window. Exit code is `0` on success, non-zero on a clear error (see below).
+
+```console
+$ python -m pipelines.cli run cases selection /data --run-date 2026-05-29
+available cases: 3 -> SelectionPool: 2 cases (Question Bank qb-100, run 2026-05-29); trace: 3 considered, 1 excluded with a reason
+```
+
+## `status` — the latest run per pipeline
+
+```sh
+python -m pipelines.cli status <base_dir> [--case-type cases] [--pipeline cases/ingest]
+```
+
+With no filter, prints the most recent run summary for **every** pipeline.
+`--case-type` narrows to one subject's pipelines; `--pipeline` shows a single
+named pipeline's latest run.
+
+```console
+$ python -m pipelines.cli status /data --case-type cases
+2026-06-10T09:39:30.627378+00:00  cases/ingest  ok  rows_out=5  [run 5f8ff8c7]
+2026-06-10T09:39:30.882733+00:00  cases/selection  ok  rows_out=2  [run fbde70de]
+```
+
+## `runs` — recent run history
+
+```sh
+python -m pipelines.cli runs <base_dir> [--pipeline cases/ingest] [--status ok] [--limit N]
+```
+
+Lists recent run summaries from the registry, oldest-to-newest, capped to the
+most recent `--limit` (default 10). `--pipeline` and `--status` narrow the list.
+
+```console
+$ python -m pipelines.cli runs /data --pipeline cases/ingest --limit 5
+2026-06-10T09:39:30.627378+00:00  cases/ingest  ok  rows_out=5  [run 5f8ff8c7]
+```
+
+## `log` — inspect a run log file
+
+```sh
+python -m pipelines.cli log <base_dir> <case_type> [--run-id <execution-id-prefix>]
+```
+
+Reads `<base>/_runs/<case_type>.log`, prints one line per step record, and ends
+with a summary across the runs in the file. `--run-id` filters to a single
+execution (a prefix of the execution id — the eight-character id shown by
+`status` / `runs` works).
+
+```console
+$ python -m pipelines.cli log /data cases
+run log: /data/_runs/cases.log
+  cases/ingest  run: ok  rows_in=5  rows_out=5  0.010s
+  cases/selection  freshness: ok
+  cases/selection  run: ok  rows_in=2  rows_out=2  0.008s
+3 step records across 2 run(s): 0 failed, 0 warned
+```
+
+## Errors
+
+The CLI turns the expected failure modes into a clear one-line message on
+`stderr` and a non-zero exit code — never an unhandled traceback:
+
+| Situation | Message |
+|-----------|---------|
+| Unknown pipeline | `unknown pipeline 'nope' for case type 'cases'` |
+| Stale upstream | `upstream cases/ingest is stale: latest successful run was …` |
+| Validation failure | the `ValidationError` message from the failing check |
+| No registry yet (`status` / `runs`) | `no run registry under '/data'; run a pipeline first` |
+| No run log (`log`) | `no run log at /data/_runs/cases.log` |
