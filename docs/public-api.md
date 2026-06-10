@@ -36,6 +36,7 @@ Moving data across the boundary.
 | `Dataset` | The opaque bulk tabular carrier (pandas behind the seam). |
 | `Reader`, `DatasetReader`, `CsvReader`, `GlobCsvReader`, `ExcelReader`, `SqliteReader`, `SasReader`, `SharePointReader` | The `read() -> Dataset` port and its concrete sources. |
 | `Writer`, `CsvWriter`, `ExcelWriter`, `JsonWriter`, `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `QuarantineWriter`, `SharePointWriter` | The `write(dataset)` port and its concrete sinks. |
+| `RetryPolicy`, `RetryingReader`, `RetryingWriter` | Targeted retry for transient I/O-edge failures — see [retry.md](retry.md). |
 | `Store`, `StoreCatalog`, `StoreBackend`, `DirectoryStoreBackend` | Per-subject medallions minted from shared configuration. |
 | `Layer`, `RAW`, `SILVER`, `GOLD` | The medallion layer constants. |
 | `Refresh`, `AccumulateByRun` | The load strategies a Writer carries. |

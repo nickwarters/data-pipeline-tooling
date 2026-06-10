@@ -132,6 +132,7 @@ class ReadStep(PipelineStep):
     ) -> Dataset:
         with session.timed_step(self.name) as metrics:
             result = self.reader.read()
+            _drain_retry_attempts(self.reader, metrics)
             metrics.rows_out = len(result)
             return result
 
@@ -381,8 +382,23 @@ class WriteStep(PipelineStep):
         assert dataset is not None
         with session.timed_step(self.name, rows_in=len(dataset)) as metrics:
             self.writer.write(dataset)
+            _drain_retry_attempts(self.writer, metrics)
             metrics.rows_out = len(dataset)
             return dataset
+
+
+def _drain_retry_attempts(component: object, metrics: StepMetrics) -> None:
+    """Surface a retrying reader/writer's attempts as this step's warn_hits.
+
+    A :class:`~framework.retry.RetryingReader` / ``RetryingWriter`` collects a
+    human note per retried attempt on ``retry_attempts``; draining them onto the
+    open step's metrics records the attempts on the same correlated read/write
+    record whose status already carries the final outcome (issue #87). Duck-typed
+    so the seam stays free of any retry dependency.
+    """
+    attempts = getattr(component, "retry_attempts", None)
+    if attempts:
+        metrics.warn_hits.extend(attempts)
 
 
 def ordered(steps: list[PipelineStep]) -> list[PipelineStep]:
