@@ -34,7 +34,7 @@ from framework.store import (
     StoreCatalog,
 )
 from framework.retry import RetryingReader, RetryingWriter, RetryPolicy
-from framework.strategy import AccumulateByRun, Refresh
+from framework.strategy import AccumulateByRun, Refresh, UpsertStrategy
 from framework.writers import (
     AccumulateByRunWriter,
     CsvWriter,
@@ -42,6 +42,7 @@ from framework.writers import (
     JsonWriter,
     QuarantineWriter,
     SharePointWriter,
+    SqliteUpsertWriter,
     SqliteTruncateReloadWriter,
     Writer,
 )
@@ -83,4 +84,7 @@ __all__ = [
     # Load strategies (owned by the Writer)
     "Refresh",
     "AccumulateByRun",
+    "UpsertStrategy",
+    # Concrete upsert writer (exposed for direct construction outside Store)
+    "SqliteUpsertWriter",
 ]

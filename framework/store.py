@@ -28,9 +28,10 @@ from typing import Protocol
 from framework.connection import connect
 from framework.layers import GOLD, RAW, SILVER, Layer, layer_name
 from framework.readers import Reader, SqliteReader
-from framework.strategy import AccumulateByRun, Refresh
+from framework.strategy import AccumulateByRun, Refresh, UpsertStrategy
 from framework.writers import (
     AccumulateByRunWriter,
+    SqliteUpsertWriter,
     SqliteTruncateReloadWriter,
     Writer,
 )
@@ -72,14 +73,15 @@ class Store:
         self,
         layer: Layer | str,
         table: str,
-        strategy: Refresh | AccumulateByRun,
+        strategy: Refresh | AccumulateByRun | UpsertStrategy,
     ) -> Writer:
         """Mint a Writer over the subject's layer file with the given strategy.
 
         The Store resolves only *which* ``<subject>/<layer>.db`` the Writer
         targets; the caller declares *how* data is loaded via ``strategy``
         (:class:`~framework.strategy.Refresh` for truncate+reload,
-        :class:`~framework.strategy.AccumulateByRun` for accumulate-by-run —
+        :class:`~framework.strategy.AccumulateByRun` for accumulate-by-run,
+        :class:`~framework.strategy.UpsertStrategy` for update-or-insert —
         ADR-0006 amendment). Two feeds may land in the same layer with different
         strategies.
         """
@@ -95,6 +97,13 @@ class Store:
                 strategy.run_id,
                 strategy.load_date,
                 execution_id=strategy.execution_id,
+                busy_timeout_ms=self._busy_timeout_ms,
+            )
+        if isinstance(strategy, UpsertStrategy):
+            return SqliteUpsertWriter(
+                db_path,
+                table,
+                strategy.key_columns,
                 busy_timeout_ms=self._busy_timeout_ms,
             )
         raise TypeError(f"unknown strategy {strategy!r}")
