@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from framework.store import Store
+from framework.io import GOLD, Store
+from framework.testing import read_rows
 from pipelines.demo_source_to_selection import main, high_value_case, priority_score
 
 
@@ -27,27 +28,28 @@ def test_demo_runs_the_full_source_to_selection_path(tmp_path, capsys):
 
     # The SelectionPool holds only the available, high-value cases, ranked by a
     # named priority score, each stamped with the chosen Variation's bank.
-    selection_pool = Store(cases_dir).reader("gold", "selection_pool").read().to_pandas()
-    assert list(selection_pool["case_ref"]) == ["c1", "c2"]
-    assert list(selection_pool["priority_score"]) == [1000, 240]
-    assert set(selection_pool["question_bank_id"]) == {"qb-100"}
+    store = Store(cases_dir)
+    selection_pool = read_rows(store, GOLD, "selection_pool")
+    assert [r["case_ref"] for r in selection_pool] == ["c1", "c2"]
+    assert [r["priority_score"] for r in selection_pool] == [1000, 240]
+    assert {r["question_bank_id"] for r in selection_pool} == {"qb-100"}
     # Stamped with the namespaced logical run id derived from the RunContext, and
     # a per-execution execution_id for traceability (#77, ADR-0006).
-    assert set(selection_pool["run_id"]) == {"cases/selection:2026-05-29"}
-    assert set(selection_pool["logical_run_id"]) == {"cases/selection:2026-05-29"}
-    assert selection_pool["execution_id"].notna().all()
+    assert {r["run_id"] for r in selection_pool} == {"cases/selection:2026-05-29"}
+    assert {r["logical_run_id"] for r in selection_pool} == {"cases/selection:2026-05-29"}
+    assert all(r["execution_id"] for r in selection_pool)
 
     # Selection explainability (#53): a sibling trace landed alongside the pool,
     # stamped by the same run, with a per-Case verdict for every available Case.
-    trace = Store(cases_dir).reader("gold", "selection_trace").read().to_pandas()
-    by_ref = trace.set_index("case_ref")
-    assert set(trace["case_ref"]) == {"c1", "c2", "c3"}  # all considered, not just survivors
-    assert set(trace["run_id"]) == {"cases/selection:2026-05-29"}
-    assert by_ref.loc["c1", "verdict"] == "selected"
-    assert by_ref.loc["c1", "score"] == 1000
-    assert by_ref.loc["c3", "verdict"] == "excluded"  # below the high-value gate
-    assert by_ref.loc["c3", "score"] == 160
-    assert "high-value" in by_ref.loc["c3", "reason"]
+    trace = read_rows(store, GOLD, "selection_trace")
+    by_ref = {r["case_ref"]: r for r in trace}
+    assert set(by_ref) == {"c1", "c2", "c3"}  # all considered, not just survivors
+    assert {r["run_id"] for r in trace} == {"cases/selection:2026-05-29"}
+    assert by_ref["c1"]["verdict"] == "selected"
+    assert by_ref["c1"]["score"] == 1000
+    assert by_ref["c3"]["verdict"] == "excluded"  # below the high-value gate
+    assert by_ref["c3"]["score"] == 160
+    assert "high-value" in by_ref["c3"]["reason"]
 
     captured = capsys.readouterr()
     assert "SelectionPool" in captured.out

@@ -97,6 +97,18 @@ exception in examples is `framework.remote`, shown in
 [adding-a-feed.md](adding-a-feed.md) only to swap the stubbed remote fetcher or
 pusher — internal seams with no facade.
 
+## `framework.testing` — a test-only surface
+
+`framework.testing` (`given_rows`, `rows_of`, `make_dataset`, `read_rows`,
+`RecordingWriter`, `RecordingRunLog`, `read_run_log`) is a **test-support**
+surface for pipeline authors, documented in
+[testing-helpers.md](testing-helpers.md). It is *not* one of the three runtime
+facades and **pipeline code must not import it at runtime** — only a pipeline's
+tests do (the [boundary test](../tests/test_public_api.py) holds `pipelines/` to
+the three facades, and `framework.testing` is not among them). It is intentional
+public surface for tests, so unlike the internal modules below its names are
+stable, but it carries no runtime role.
+
 ## The case-review application layer is separate
 
 `case_review` (`CaseType`, `Variation`, `CasePool`, `ingest_silver_to_gold`, …)

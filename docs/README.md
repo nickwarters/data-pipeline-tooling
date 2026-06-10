@@ -405,6 +405,30 @@ failures (unknown pipeline, stale upstream, validation failure, missing run
 history) rather than a traceback. `python -m pipelines.run …` remains as the
 historical `run`-only shortcut.
 
+### Test a pipeline — given source rows, expect output rows
+
+To test a concrete pipeline script, reach for `framework.testing` rather than
+wiring temp directories and SQLite assertions by hand. `given_rows(...)` hands a
+pipeline an in-memory feed, `RecordingWriter()` captures what it wrote, and
+`rows_of(...)` reads it back as plain row dicts for a direct `==`:
+
+```python
+from framework.run import Pipeline
+from framework.transform import Filter
+from framework.testing import given_rows, rows_of, RecordingWriter
+
+reader = given_rows([{"amount": 100}, {"amount": 50}])
+writer = RecordingWriter()
+Pipeline("selection", reader).with_processor(
+    Filter(lambda row: row["amount"] >= 100, name="high-value")
+).write_to(writer).run()
+assert rows_of(writer) == [{"amount": 100}]
+```
+
+`read_rows(store, layer, table)` reads a landed table back; `RecordingRunLog()`
+and `read_run_log(path)` make run-log records and validation failures easy to
+assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
+
 ---
 
 ## The rest of the docs
@@ -422,6 +446,7 @@ historical `run`-only shortcut.
 | [`run-log-format.md`](run-log-format.md) | The JSONL record schema and the run registry. |
 | [`retry.md`](retry.md) | Targeted retry at the reader/writer edges — `RetryPolicy`, where to use it and where not. |
 | [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `status` / `runs` / `log`) with example commands and output. |
+| [`testing-helpers.md`](testing-helpers.md) | `framework.testing` — the test-only helpers for testing concrete pipelines (`given_rows`, `RecordingWriter`, `read_rows`, `RecordingRunLog`, `read_run_log`). |
 | [`adr/`](adr/) | Every architectural decision (the *why*). |
 | [`../CONTEXT.md`](../CONTEXT.md) | The domain language — the canonical glossary. |
 </content>
