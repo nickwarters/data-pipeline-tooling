@@ -23,6 +23,7 @@ import statistics
 from typing import Iterable, Literal, Protocol, runtime_checkable
 
 from framework.dataset import Dataset
+from framework.describe import render
 
 # Severity is set where a Validator is *attached* to the builder, not on the
 # Validator itself (ADR-0007: validators default to error/abort; warn is the
@@ -57,6 +58,9 @@ class ColumnValidator:
                 f"missing required column(s): {', '.join(missing)}"
             )
 
+    def describe(self) -> str:
+        return render(self, required_columns=list(self._required))
+
 
 class RowCountValidator:
     """Assert the dataset's row count sits within an inclusive ``[min, max]``.
@@ -81,6 +85,9 @@ class RowCountValidator:
             raise ValidationError(
                 f"row count {rows} above maximum {self._maximum}"
             )
+
+    def describe(self) -> str:
+        return render(self, minimum=self._minimum, maximum=self._maximum)
 
 
 class RunHistory(Protocol):
@@ -163,6 +170,16 @@ class VolumeAnomalyValidator:
                 f"expected {low:g}–{high:g} over last {len(counts)} runs)"
             )
 
+    def describe(self) -> str:
+        return render(
+            self,
+            pipeline=self._pipeline,
+            tolerance=self._tolerance,
+            floor=self._floor,
+            min_history=self._min_history,
+            lookback=self._lookback,
+        )
+
 
 class PriorColumns(Protocol):
     """The slice of the raw layer a drift check needs: last landing's columns.
@@ -223,6 +240,9 @@ class SchemaDriftValidator:
             + "; ".join(parts)
         )
 
+    def describe(self) -> str:
+        return render(self, prior=self._prior.label)
+
 
 class UniqueValidator:
     """Assert that a column (or column set) is unique across the dataset.
@@ -263,3 +283,6 @@ class UniqueValidator:
             raise ValidationError(
                 f"duplicate key(s) on {col_str!r}: {keys_str}"
             )
+
+    def describe(self) -> str:
+        return render(self, columns=list(self._columns))

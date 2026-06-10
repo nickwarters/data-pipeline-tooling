@@ -20,6 +20,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
+from framework.describe import render
+
 log = logging.getLogger(__name__)
 
 
@@ -45,6 +47,9 @@ class RunLog:
     def __init__(self, log_path: str | os.PathLike[str]) -> None:
         # Path keeps separators OS-agnostic across Windows and macOS.
         self._path = Path(log_path)
+
+    def describe(self) -> str:
+        return render(self, path=str(self._path))
 
     @contextmanager
     def step(

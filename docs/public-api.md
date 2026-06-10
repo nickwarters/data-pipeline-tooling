@@ -81,6 +81,9 @@ without notice:
 - `framework.pipeline_steps` (`PipelineStep`, `PipelineExecution`, …) — the
   builder's internal ordered execution plan; inspected by `.describe()` and
   executed by `.run()`, not imported by pipeline scripts.
+- `framework.describe` (`render`, `redact_url`) — shared helpers for the opt-in
+  `describe()` protocol (#145); a component implements `describe()` using these
+  to render its own safe plan summary, not imported by pipeline scripts.
 - `framework.remote` (`RemoteRunner`, `StubbedRemoteRunner`, `SharePointFetcher`,
   `SharePointPusher`,
   …) — the **stubbed remote-client seam** behind `SasReader` / `SharePointReader`

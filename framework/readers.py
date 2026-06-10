@@ -16,6 +16,7 @@ import pandas as pd
 
 from framework.connection import connect
 from framework.dataset import Dataset
+from framework.describe import redact_url, render
 from framework.sql import quote_identifier
 from framework.remote import (
     RemoteRunner,
@@ -68,6 +69,9 @@ class CsvReader:
             kwargs["usecols"] = self._columns
         return Dataset.from_pandas(pd.read_csv(self._path, **kwargs))
 
+    def describe(self) -> str:
+        return render(self, path=str(self._path), columns=self._columns)
+
 
 class GlobCsvReader:
     """Read many local CSV files that together form one logical feed snapshot."""
@@ -97,6 +101,14 @@ class GlobCsvReader:
         )
         return Dataset.from_pandas(frame)
 
+    def describe(self) -> str:
+        return render(
+            self,
+            directory=str(self._directory),
+            pattern=self._pattern,
+            columns=self._columns,
+        )
+
 
 class ExcelReader:
     """Read one sheet of an Excel workbook into a Dataset.
@@ -119,6 +131,9 @@ class ExcelReader:
     def read(self) -> Dataset:
         frame = pd.read_excel(self._path, sheet_name=self._sheet)
         return Dataset.from_pandas(frame)
+
+    def describe(self) -> str:
+        return render(self, path=str(self._path), sheet=self._sheet)
 
 
 class SqliteReader:
@@ -158,6 +173,14 @@ class SqliteReader:
             con.close()
         return Dataset.from_pandas(frame)
 
+    def describe(self) -> str:
+        return render(
+            self,
+            db_path=str(self._db_path),
+            table=self._table,
+            columns=self._columns,
+        )
+
 
 class SasReader:
     """Read a SAS feed by running it remotely and reading the landed output.
@@ -193,6 +216,14 @@ class SasReader:
         # reader that local split feed snapshots use.
         return GlobCsvReader(self._dest, self._copy_glob).read()
 
+    def describe(self) -> str:
+        return render(
+            self,
+            script=self._script,
+            copy_glob=self._copy_glob,
+            dest=str(self._dest),
+        )
+
 
 class SharePointReader:
     """Read a SharePoint list into a Dataset.
@@ -221,3 +252,10 @@ class SharePointReader:
 
     def read(self) -> Dataset:
         return self._fetcher.fetch(self._site, self._list_name, self._auth)
+
+    def describe(self) -> str:
+        # Render the site with any embedded credentials stripped and omit the
+        # auth config entirely — the plan never surfaces secrets (issue #145).
+        return render(
+            self, site=redact_url(self._site), list_name=self._list_name
+        )

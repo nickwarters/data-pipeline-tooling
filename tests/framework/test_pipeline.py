@@ -54,6 +54,10 @@ class AddingProcessor:
         frame[self._column] = "derived"
         return Dataset.from_pandas(frame)
 
+    def describe(self) -> str:
+        # A user component opting into the describe() protocol (issue #145).
+        return f"AddingProcessor(column={self._column!r})"
+
 
 class DroppingProcessor:
     """A Processor that removes a column and counts how often it ran."""
@@ -136,12 +140,13 @@ def test_pipeline_describe_includes_optional_governance_without_leaking_secrets(
     )
 
     assert "reader: SharePointReader(" in plan
+    # The reader's own describe() strips credentials from the site URL and omits
+    # the auth config entirely — nothing name-based, the component self-redacts.
     assert "site='https://<redacted>@example.test/sites/cases'" in plan
-    assert "auth='<redacted>'" in plan
-    assert (
-        "quarantine: SecretPartitioner(token='<redacted>') -> QuarantineWriter("
-        in plan
-    )
+    assert "auth" not in plan
+    # SecretPartitioner opts out of describe(), so it renders as a bare class
+    # name: with no reflection, its _token simply cannot reach the plan.
+    assert "quarantine: SecretPartitioner -> QuarantineWriter(" in plan
     assert (
         "explain: writer=CapturingWriter, id_column='case_ref', "
         "score_column='priority'"
@@ -150,6 +155,41 @@ def test_pipeline_describe_includes_optional_governance_without_leaking_secrets(
     assert "hunter2" not in plan
     assert "abc123" not in plan
     assert "quarantine-token" not in plan
+
+
+class DescribingReader:
+    """A Reader that renders its own safe summary via the describe() protocol."""
+
+    def __init__(self) -> None:
+        self._token = "should-never-appear"
+
+    def describe(self) -> str:
+        return "DescribingReader(source='cases')"
+
+    def read(self) -> Dataset:  # pragma: no cover - never run in describe()
+        return Dataset.from_pandas(pd.DataFrame({"id": [1]}))
+
+
+def test_describe_uses_a_components_own_summary_and_never_reflects_attributes():
+    # The plan renders a component through its opt-in describe() verbatim. A
+    # component without describe() falls back to its bare class name only — the
+    # plan never introspects private attributes, so a secret stored under any
+    # name (here RecordingReader has no describe()) simply cannot leak.
+    describing = DescribingReader()
+    leaky_writer = CapturingWriter()
+    setattr(leaky_writer, "password", "hunter2")  # a benign-looking field
+
+    plan = Pipeline("cases", describing).write_to(leaky_writer).describe()
+
+    assert "  reader: DescribingReader(source='cases')" in plan
+    # No describe() => bare class name, no parenthesised attributes at all.
+    assert "  writer: CapturingWriter\n" in plan or plan.endswith(
+        "  writer: CapturingWriter"
+    )
+    assert "CapturingWriter(" not in plan
+    assert "should-never-appear" not in plan
+    assert "hunter2" not in plan
+    assert "redacted" not in plan  # nothing was reflected, so nothing to redact
 
 
 def test_pipeline_execution_plan_exposes_ordered_step_metadata():

@@ -29,6 +29,7 @@ import uuid
 from typing import Any, Callable, Literal, Mapping, Protocol, Sequence, runtime_checkable
 
 from framework.dataset import Dataset
+from framework.describe import render
 from framework.readers import Reader
 
 
@@ -75,6 +76,9 @@ class Filter:
         kept = frame.loc[frame.apply(lambda row: self._predicate(row), axis=1)]
         return Dataset.from_pandas(kept)
 
+    def describe(self) -> str:
+        return render(self, name=self.trace_name)
+
 
 class Score:
     """Compute a column from each row via a plain-Python scorer.
@@ -100,6 +104,9 @@ class Score:
         frame[self._column] = frame.apply(lambda row: self._scorer(row), axis=1)
         return Dataset.from_pandas(frame)
 
+    def describe(self) -> str:
+        return render(self, column=self._column)
+
 
 class Stamp:
     """Write one constant value onto every row of a column.
@@ -118,6 +125,9 @@ class Stamp:
         frame = dataset.to_pandas().copy()  # engine-confined (ADR-0002)
         frame[self._column] = self._value
         return Dataset.from_pandas(frame)
+
+    def describe(self) -> str:
+        return render(self, column=self._column, value=self._value)
 
 
 class Sort:
@@ -143,6 +153,9 @@ class Sort:
         ).reset_index(drop=True)
         return Dataset.from_pandas(ordered)
 
+    def describe(self) -> str:
+        return render(self, by=self._by, ascending=self._ascending)
+
 
 class Rename:
     """Rename columns by an ``{old: new}`` mapping; leave the rest untouched.
@@ -158,6 +171,9 @@ class Rename:
     def process(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()  # engine-confined (ADR-0002)
         return Dataset.from_pandas(frame.rename(columns=self._mapping))
+
+    def describe(self) -> str:
+        return render(self, mapping=self._mapping)
 
 
 _MergeHow = Literal["left", "right", "inner", "outer", "cross"]
@@ -236,6 +252,9 @@ class JoinWith:
         merged = frame.merge(other_frame, on=self._on, how=self._how)  # type: ignore[arg-type]
         return Dataset.from_pandas(merged)
 
+    def describe(self) -> str:
+        return render(self, on=self._on, how=self._how, name=self.trace_name)
+
 
 class AntiJoinWith:
     """Exclude feed rows whose key appears in an explicit read-only dependency.
@@ -288,6 +307,9 @@ class AntiJoinWith:
         )
         return Dataset.from_pandas(kept)
 
+    def describe(self) -> str:
+        return render(self, on=self._on, name=self.trace_name)
+
 
 class LatestPerKey:
     """Collapse accumulated history to current state: keep the latest row per key.
@@ -322,6 +344,9 @@ class LatestPerKey:
         latest = sorted_frame.drop_duplicates(subset=self._key, keep="last").reset_index(drop=True)
         return Dataset.from_pandas(latest)
 
+    def describe(self) -> str:
+        return render(self, key=self._key, by=self._by)
+
 
 class SelectColumns:
     """Keep only the listed columns from the dataset; drop everything else.
@@ -347,6 +372,9 @@ class SelectColumns:
                 f"Available columns: {list(frame.columns)!r}"
             )
         return Dataset.from_pandas(frame.loc[:, self._columns])
+
+    def describe(self) -> str:
+        return render(self, columns=self._columns)
 
 
 class Unpivot:
@@ -390,6 +418,16 @@ class Unpivot:
             melted = melted.loc[~(is_null | is_blank)].reset_index(drop=True)
         return Dataset.from_pandas(melted)
 
+    def describe(self) -> str:
+        return render(
+            self,
+            id_vars=self._id_vars,
+            value_vars=self._value_vars,
+            var_name=self._var_name,
+            value_name=self._value_name,
+            drop_empty=self._drop_empty,
+        )
+
 
 class DeriveKey:
     """Stamp a deterministic ``uuid5`` key onto every row.
@@ -426,6 +464,14 @@ class DeriveKey:
             axis=1,
         )
         return Dataset.from_pandas(frame)
+
+    def describe(self) -> str:
+        return render(
+            self,
+            into=self._into,
+            namespace=str(self._namespace),
+            natural_key=self._natural_key,
+        )
 
 
 def _cut_per_group(frame, key, select):
@@ -495,6 +541,16 @@ class TopNPerGroup:
         frame = dataset.to_pandas()  # engine-confined (ADR-0002)
         return Dataset.from_pandas(_cut_per_group(frame, self._key, self._select))
 
+    def describe(self) -> str:
+        return render(
+            self,
+            key=self._key,
+            by=self._by,
+            n=self._n,
+            ascending=self._ascending,
+            tiebreak=self._tiebreak,
+        )
+
 
 # A constant default seed (ADR-0010): the sampler is a *pure* function of input
 # state and this seed — never derived from run_id or the clock. Run-to-run
@@ -557,3 +613,8 @@ class SamplePerGroup:
     def process(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()  # engine-confined (ADR-0002)
         return Dataset.from_pandas(_cut_per_group(frame, self._key, self._select))
+
+    def describe(self) -> str:
+        return render(
+            self, key=self._key, n=self._n, seed=self._seed, order=self._order
+        )
