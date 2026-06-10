@@ -25,6 +25,7 @@ import os
 from pathlib import Path
 from typing import Protocol
 
+from framework.connection import connect
 from framework.layers import GOLD, RAW, SILVER, Layer, layer_name
 from framework.readers import Reader, SqliteReader
 from framework.strategy import AccumulateByRun, Refresh
@@ -103,6 +104,62 @@ class Store:
         return SqliteReader(
             self._db_path(layer), table, busy_timeout_ms=self._busy_timeout_ms
         )
+
+    def columns_of(self, layer: Layer | str, table: str) -> "RawTableColumns":
+        """Mint the prior-columns source for a table — the drift seam (#51).
+
+        Returns a ``PriorColumns`` (``framework.validators``) over the subject's
+        layer file: it reports the table's currently-landed column set via
+        ``PRAGMA`` so a ``SchemaDriftValidator`` can diff the next run's incoming
+        columns against the prior landing (ADR-0008 amendment). Reads no rows and
+        returns ``None`` when the table does not yet exist (first run).
+        """
+        return RawTableColumns(
+            self._db_path(layer),
+            table,
+            layer_name(layer),
+            busy_timeout_ms=self._busy_timeout_ms,
+        )
+
+
+class RawTableColumns:
+    """A ``PriorColumns`` source: a table's landed columns via ``PRAGMA`` (#51).
+
+    The production implementation of the seam ``SchemaDriftValidator`` reads. It
+    inspects the live layer table's columns without materialising any rows —
+    ``PRAGMA table_info`` over the shared ``connect`` factory (ADR-0001) — so the
+    diff against the next run's incoming columns is cheap even for a large raw
+    table. A missing table yields ``None`` (no prior landing); the ``label``
+    (``<layer>.<table>``) names the table in the drift warning.
+    """
+
+    def __init__(
+        self,
+        db_path: str | os.PathLike[str],
+        table: str,
+        layer: str,
+        busy_timeout_ms: int = 5000,
+    ) -> None:
+        # Path keeps separators OS-agnostic across Windows and macOS.
+        self._db_path = Path(db_path)
+        self._table = table
+        self._busy_timeout_ms = busy_timeout_ms
+        self.label = f"{layer}.{table}"
+
+    def columns(self) -> tuple[str, ...] | None:
+        if not self._db_path.exists():
+            return None  # the subject has landed nothing yet (first run)
+        con = connect(self._db_path, self._busy_timeout_ms)
+        try:
+            rows = con.execute(
+                f'PRAGMA table_info("{self._table}")'
+            ).fetchall()
+        finally:
+            con.close()
+        if not rows:
+            return None  # the table does not exist yet (first run for this feed)
+        # PRAGMA table_info yields (cid, name, type, ...); name is index 1.
+        return tuple(row[1] for row in rows)
 
 
 class StoreCatalog:

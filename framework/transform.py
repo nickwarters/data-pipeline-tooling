@@ -52,8 +52,10 @@ from framework.schema import (
 )
 from framework.validators import (
     ColumnValidator,
+    PriorColumns,
     RowCountValidator,
     RunHistory,
+    SchemaDriftValidator,
     UniqueValidator,
     ValidationError,
     Validator,
@@ -86,6 +88,8 @@ __all__ = [
     "VolumeAnomalyValidator",
     "UniqueValidator",
     "RunHistory",
+    "SchemaDriftValidator",
+    "PriorColumns",
     # The declared-schema contract + value rules
     "SchemaValidator",
     "SchemaCoercion",

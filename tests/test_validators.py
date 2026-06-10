@@ -2,9 +2,11 @@ import pandas as pd
 import pytest
 
 from framework.dataset import Dataset
+from framework.strategy import Refresh
 from framework.validators import (
     ColumnValidator,
     RowCountValidator,
+    SchemaDriftValidator,
     UniqueValidator,
     ValidationError,
     VolumeAnomalyValidator,
@@ -159,3 +161,97 @@ def test_volume_anomaly_floor_is_always_on_even_without_history():
 
     with pytest.raises(ValidationError, match="below floor"):
         validator.validate(_rows(10))
+
+
+class _FakePrior:
+    """A stand-in prior-columns source returning a fixed landed column set.
+
+    Mirrors the ``PriorColumns`` seam (``Store.columns_of``) so the drift diff
+    can be exercised in isolation; an integration test drives the real PRAGMA
+    seam end-to-end.
+    """
+
+    def __init__(self, columns, label="raw.cases") -> None:
+        self._columns = columns
+        self.label = label
+
+    def columns(self):
+        return self._columns
+
+
+def test_schema_drift_validator_warns_on_an_added_column():
+    # An upstream source that grew a column drifts vs the prior landing; the
+    # message names the added column and the table (#51, ADR-0008 amendment).
+    prior = _FakePrior(("id", "name"))
+    validator = SchemaDriftValidator(prior)
+
+    with pytest.raises(ValidationError, match=r"added \[region\].*raw\.cases|raw\.cases.*added \[region\]"):
+        validator.validate(_dataset(id=[1], name=["a"], region=["x"]))
+
+
+def test_schema_drift_validator_warns_on_a_dropped_column():
+    # A source that lost a column drifts; the message names what is now missing.
+    validator = SchemaDriftValidator(_FakePrior(("id", "name", "tier")))
+
+    with pytest.raises(ValidationError, match=r"dropped \[tier\]"):
+        validator.validate(_dataset(id=[1], name=["a"]))
+
+
+def test_schema_drift_validator_names_both_added_and_dropped():
+    # Both sides are reported; an upstream rename surfaces honestly as a
+    # drop + an add (names-only — we cannot know it was a rename).
+    validator = SchemaDriftValidator(_FakePrior(("id", "client_id")))
+
+    with pytest.raises(ValidationError) as exc:
+        validator.validate(_dataset(id=[1], customer_id=["a"]))
+    assert "added [customer_id]" in str(exc.value)
+    assert "dropped [client_id]" in str(exc.value)
+
+
+def test_schema_drift_validator_passes_on_identical_columns():
+    # Same column set, no drift — the common case must stay silent.
+    validator = SchemaDriftValidator(_FakePrior(("id", "name")))
+
+    validator.validate(_dataset(id=[1], name=["a"]))  # does not raise
+
+
+def test_schema_drift_validator_ignores_column_reordering():
+    # A set difference, not a sequence one: source tools reorder columns freely
+    # and that is not drift.
+    validator = SchemaDriftValidator(_FakePrior(("id", "name")))
+
+    validator.validate(_dataset(name=["a"], id=[1]))  # does not raise
+
+
+def test_schema_drift_validator_is_case_sensitive():
+    # Column identifiers are case-sensitive (like every other column check);
+    # `Status` vs `status` reads as a drop + an add, not a match.
+    validator = SchemaDriftValidator(_FakePrior(("id", "Status")))
+
+    with pytest.raises(ValidationError) as exc:
+        validator.validate(_dataset(id=[1], status=["open"]))
+    assert "added [status]" in str(exc.value)
+    assert "dropped [Status]" in str(exc.value)
+
+
+def test_schema_drift_validator_no_op_on_first_ever_run():
+    # No prior landing (the table did not exist) → None → a clean no-op, not a
+    # spurious warning (AC #4).
+    validator = SchemaDriftValidator(_FakePrior(None))
+
+    validator.validate(_dataset(id=[1], anything=["x"]))  # does not raise
+
+
+def test_schema_drift_validator_drives_the_real_store_prior_columns_seam(tmp_path):
+    # End-to-end over the production PriorColumns seam (Store.columns_of's PRAGMA
+    # read of the live raw table): land one shape, then a drifted snapshot warns
+    # vs the prior landing — the next run reads the door, one layer before silver.
+    from framework.store import RAW, Store
+
+    store = Store(tmp_path)
+    store.writer(RAW, "cases", Refresh()).write(_dataset(id=[1], name=["a"]))
+
+    validator = SchemaDriftValidator(store.columns_of(RAW, "cases"))
+
+    with pytest.raises(ValidationError, match=r"raw\.cases.*dropped \[name\]"):
+        validator.validate(_dataset(id=[2], region=["x"]))

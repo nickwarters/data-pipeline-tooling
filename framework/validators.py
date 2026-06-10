@@ -8,7 +8,11 @@ continues — ADR-0007) and the run ordering, so a Validator itself only knows
 how to check, not what to do about a failure.
 
 Checks read the dataset's public shape (``columns`` / ``len``) and never name the
-concrete engine, so they stay behind the Dataset seam (ADR-0002). Schema /
+concrete engine, so they stay behind the Dataset seam (ADR-0002). Some take an
+extra narrow seam for a run-over-run comparison the in-flight dataset can't
+supply: ``VolumeAnomalyValidator`` reads a ``RunHistory`` baseline (#54), and
+``SchemaDriftValidator`` reads a ``PriorColumns`` source — the prior run's landed
+columns — to warn on raw-boundary source drift (#51, ADR-0008 amendment). Schema /
 dtype enforcement at silver & gold (ADR-0008) is a later, richer Validator of
 the same shape.
 """
@@ -158,6 +162,66 @@ class VolumeAnomalyValidator:
                 f"{baseline:g} (tolerance ±{self._tolerance:g}; "
                 f"expected {low:g}–{high:g} over last {len(counts)} runs)"
             )
+
+
+class PriorColumns(Protocol):
+    """The slice of the raw layer a drift check needs: last landing's columns.
+
+    Anything that can answer "what columns did the prior run land for this
+    table, and what is the table called?" is a prior-columns source;
+    ``Store.columns_of`` is the production one (a ``PRAGMA`` over the live raw
+    table). Stated as a Protocol so the drift diff stays behind a narrow seam
+    and is exercised in isolation (mirrors ``RunHistory``).
+    """
+
+    label: str
+
+    def columns(self) -> tuple[str, ...] | None:
+        """The prior run's landed columns, or ``None`` if there is no prior."""
+        ...
+
+
+class SchemaDriftValidator:
+    """Warn when a feed's incoming columns drift from the prior run's (#51).
+
+    Raw is schema-light (ADR-0008): an owner-controlled source (SharePoint list,
+    SAS export) can silently add or drop a column between snapshots, and today
+    that only surfaces a layer later as a silver Schema Breach. This catches it
+    **at the door** by diffing the incoming :class:`Dataset`'s columns against
+    the prior run's landed columns (the ``PriorColumns`` seam — read from the
+    live raw table) and raising with the added/dropped columns named.
+
+    The diff is **names-only** (a dtype change on a surviving column stays a
+    silver concern — ADR-0008) and a **case-sensitive set** difference (order is
+    not drift; an upstream rename surfaces honestly as one drop + one add). The
+    first-ever run has no prior (``columns()`` returns ``None``) and is a clean
+    no-op. Severity is the builder's call like any Validator (ADR-0007); attached
+    at ``warn`` the message rides ``warn_hits`` onto the run summary, where the
+    run registry's ``runs_that_warned`` surfaces it (AC #5/#6).
+    """
+
+    def __init__(self, prior: PriorColumns) -> None:
+        self._prior = prior
+
+    def validate(self, dataset: Dataset) -> None:
+        prior = self._prior.columns()
+        if prior is None:
+            return  # first-ever run — no baseline to drift from (AC #4)
+        incoming = set(dataset.columns)
+        baseline = set(prior)
+        added = [c for c in dataset.columns if c not in baseline]
+        dropped = [c for c in prior if c not in incoming]
+        if not added and not dropped:
+            return
+        parts = []
+        if added:
+            parts.append(f"added [{', '.join(added)}]")
+        if dropped:
+            parts.append(f"dropped [{', '.join(dropped)}]")
+        raise ValidationError(
+            f"schema drift in {self._prior.label} vs prior run: "
+            + "; ".join(parts)
+        )
 
 
 class UniqueValidator:

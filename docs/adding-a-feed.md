@@ -58,11 +58,18 @@ about medallion layers or load rules:
 ```python
 from framework.io import RAW, ExcelReader, Refresh, StoreCatalog
 from framework.run import Pipeline
+from framework.transform import ColumnValidator, SchemaDriftValidator
 
 store = StoreCatalog("/path/to/share").store("cases")
 landed = (
     Pipeline("cases", ExcelReader("feed.xlsx", sheet="cases"))
     .with_validator(ColumnValidator(["case_id"]))   # optional: gate the input
+    # optional: warn (don't abort) when the source's columns drift from the
+    # prior run's landed set — catches owner-controlled schema change at the
+    # door (#51). First run has no prior, so it's a clean no-op.
+    .with_validator(
+        SchemaDriftValidator(store.columns_of(RAW, "cases")), severity="warn"
+    )
     .write_to(store.writer(RAW, "cases", Refresh()))
     .run()
 )
