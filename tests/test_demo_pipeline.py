@@ -1,8 +1,7 @@
-import json
-
 from pipelines import demo_csv_to_raw
 
-from framework.store import RAW, StoreCatalog
+from framework.io import RAW, StoreCatalog
+from framework.testing import read_rows, read_run_log
 
 
 def test_demo_reads_fixture_csv_and_lands_rows_in_raw(tmp_path):
@@ -14,12 +13,8 @@ def test_demo_reads_fixture_csv_and_lands_rows_in_raw(tmp_path):
     assert len(dataset) > 0
     assert (tmp_path / demo_csv_to_raw.FEED_NAME / "raw.db").exists()
 
-    landed = (
-        StoreCatalog(tmp_path)
-        .store(demo_csv_to_raw.FEED_NAME)
-        .reader(RAW, demo_csv_to_raw.FEED_NAME)
-        .read()
-    )
+    store = StoreCatalog(tmp_path).store(demo_csv_to_raw.FEED_NAME)
+    landed = read_rows(store, RAW, demo_csv_to_raw.FEED_NAME)
     assert len(landed) == len(dataset)
 
 
@@ -37,12 +32,6 @@ def test_demo_warns_on_raw_schema_drift_between_runs(tmp_path):
     # The run still completes (warn, not abort) and lands the drifted shape.
     assert "region" in dataset.columns
 
-    records = [
-        json.loads(line)
-        for line in (tmp_path / demo_csv_to_raw.RUN_LOG_NAME)
-        .read_text(encoding="utf-8")
-        .splitlines()
-        if line.strip()
-    ]
+    records = read_run_log(tmp_path / demo_csv_to_raw.RUN_LOG_NAME)
     warns = [w for r in records for w in r["warn_hits"]]
     assert any("schema drift" in w and "added [region]" in w and "dropped [amount]" in w for w in warns)
