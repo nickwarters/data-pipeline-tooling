@@ -736,6 +736,17 @@ write) without a SQL round-trip. Selection is its own pipeline that reuses the
 builder, narrowing the CasePool with the Selection processors and `Stamp` into
 the gold `SelectionPool`.
 
+### `RetryPolicy` / `RetryingReader` / `RetryingWriter` — retry at the I/O edge
+`RetryPolicy(attempts, retry_on, backoff_seconds=…)` (`framework.retry`) encodes
+a retry decision as an **allowlist** of transient exception types; only those are
+retried, so schema-validation and configuration errors abort immediately.
+`RetryingReader(inner, policy)` / `RetryingWriter(inner, policy)` apply it at the
+`read()` / `write()` seam — retry stays scoped to the edge, never wrapping
+validation or business rules (which live in the stages, not the seam). A remote
+client can also call through `policy.call(...)` directly. Retried attempts are
+recorded on the same `read`/`write` run-log record (as `warn_hits`) whose status
+carries the final outcome. Full treatment: [retry.md](retry.md).
+
 ## Worked example
 
 ```python

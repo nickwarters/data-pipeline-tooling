@@ -33,6 +33,7 @@ from framework.store import (
     StoreBackend,
     StoreCatalog,
 )
+from framework.retry import RetryingReader, RetryingWriter, RetryPolicy
 from framework.strategy import AccumulateByRun, Refresh
 from framework.writers import (
     AccumulateByRunWriter,
@@ -66,6 +67,10 @@ __all__ = [
     "AccumulateByRunWriter",
     "QuarantineWriter",
     "SharePointWriter",
+    # Targeted retry at the I/O edges (issue #87)
+    "RetryPolicy",
+    "RetryingReader",
+    "RetryingWriter",
     # Stores + the medallion layers
     "Store",
     "StoreCatalog",
