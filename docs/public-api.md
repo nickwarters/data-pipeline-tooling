@@ -10,7 +10,7 @@ rule that follows from that split.
 > `framework.io`, `framework.transform`, `framework.run` — never from the
 > modules behind them. The facade names are the stable surface; the submodule
 > paths can be reorganised without notice. A test
-> (`tests/test_public_api.py`) holds `pipelines/` to this boundary.
+> (`tests/integration/test_public_api.py`) holds `pipelines/` to this boundary.
 
 ```python
 from framework.io import CsvReader, StoreCatalog, RAW, Refresh
@@ -107,7 +107,7 @@ pusher — internal seams with no facade.
 surface for pipeline authors, documented in
 [testing-helpers.md](testing-helpers.md). It is *not* one of the three runtime
 facades and **pipeline code must not import it at runtime** — only a pipeline's
-tests do (the [boundary test](../tests/test_public_api.py) holds `pipelines/` to
+tests do (the [boundary test](../tests/integration/test_public_api.py) holds `pipelines/` to
 the three facades, and `framework.testing` is not among them). It is intentional
 public surface for tests, so unlike the internal modules below its names are
 stable, but it carries no runtime role.
@@ -118,7 +118,7 @@ stable, but it carries no runtime role.
 is the application/domain layer that sits **on top of** the framework, not part
 of its public API. New case-review concepts belong in `case_review` (or pipeline
 support modules), not under `framework/` — see
-[`test_framework_boundary.py`](../tests/test_framework_boundary.py) and
+[`test_framework_boundary.py`](../tests/integration/test_framework_boundary.py) and
 [selection.md](selection.md).
 
 ## Packaging — an explicit non-goal

@@ -17,7 +17,7 @@ from framework.writers import (
     SqliteTruncateReloadWriter,
 )
 
-FIXTURE = Path(__file__).parent / "fixtures" / "cases.csv"
+FIXTURE = Path(__file__).parent.parent / "fixtures" / "cases.csv"
 
 
 def test_truncate_reload_writer_round_trips_a_dataset(tmp_path):

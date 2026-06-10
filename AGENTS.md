@@ -11,8 +11,13 @@ domain language in `CONTEXT.md`; the core primitives are documented in
 
 - **Language/runtime:** Python 3.12. The `framework/` package is **import-only**
   (on `sys.path`, never `pip install`ed); `pipelines/` holds runnable scripts.
-- **Layout:** `framework/` (engine + domain), `pipelines/` (scripts),
-  `tests/` (pytest), `docs/` (architecture, ADRs).
+- **Layout:** `framework/` (reusable engine), `case_review/` (the case-review
+  *application* — domain types and gold helpers that live outside the framework),
+  `pipelines/` (scripts), `tests/` (pytest), `docs/` (architecture, ADRs).
+- **Test layout:** `tests/` mirrors the source shape — `tests/framework/`,
+  `tests/case_review/`, `tests/pipelines/`, and `tests/integration/` for
+  cross-tree tests. Shared helpers (`tests/_schema_fixtures.py`,
+  `tests/fixtures/`) live at the `tests/` root; each test dir is a package.
 - **Core primitives:** `Dataset` (opaque tabular carrier, pandas behind the
   seam), `Reader` (`read() -> Dataset`; `CsvReader`, `SqliteReader`),
   `Writer` (`write(dataset) -> None`; owns target location + load strategy —

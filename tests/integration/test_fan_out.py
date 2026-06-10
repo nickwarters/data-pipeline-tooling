@@ -235,7 +235,7 @@ def test_demo_fan_out_is_runnable_as_a_module(tmp_path):
         [sys.executable, "-m", "pipelines.demo_fan_out", str(tmp_path)],
         capture_output=True,
         text=True,
-        cwd=P(__file__).resolve().parent.parent,
+        cwd=P(__file__).resolve().parent.parent.parent,
     )
     assert result.returncode == 0
     assert "case_products gold" in result.stdout

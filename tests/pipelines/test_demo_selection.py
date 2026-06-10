@@ -66,7 +66,7 @@ def test_demo_is_runnable_as_a_module(tmp_path):
         [sys.executable, "-m", "pipelines.demo_source_to_selection", str(tmp_path)],
         capture_output=True,
         text=True,
-        cwd=Path(__file__).resolve().parent.parent,
+        cwd=Path(__file__).resolve().parent.parent.parent,
     )
     assert result.returncode == 0
     assert "SelectionPool" in result.stdout

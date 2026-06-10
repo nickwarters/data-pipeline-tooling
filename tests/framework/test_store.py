@@ -8,7 +8,7 @@ from framework.readers import CsvReader
 from framework.store import GOLD, RAW, SILVER, Store, StoreCatalog
 from framework.strategy import AccumulateByRun, Refresh
 
-FIXTURE = Path(__file__).parent / "fixtures" / "cases.csv"
+FIXTURE = Path(__file__).parent.parent / "fixtures" / "cases.csv"
 
 
 def test_store_writer_with_refresh_strategy_round_trips_a_dataset(tmp_path):
