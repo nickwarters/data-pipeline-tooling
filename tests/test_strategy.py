@@ -1,8 +1,8 @@
-"""Tests for explicit load strategy value types (Refresh, AccumulateByRun)."""
+"""Tests for explicit load strategy value types (Refresh, AccumulateByRun, UpsertStrategy)."""
 
 import pytest
 
-from framework.strategy import AccumulateByRun, Refresh
+from framework.strategy import AccumulateByRun, Refresh, UpsertStrategy
 
 
 def test_refresh_is_a_value_type_with_no_required_args():
@@ -24,3 +24,23 @@ def test_accumulate_by_run_rejects_empty_run_id():
 def test_accumulate_by_run_rejects_empty_load_date():
     with pytest.raises(ValueError, match="load_date"):
         AccumulateByRun(run_id="r1", load_date="")
+
+
+# --- UpsertStrategy ---
+
+
+def test_upsert_strategy_normalises_bare_string_to_single_element_tuple():
+    s = UpsertStrategy("case_id")
+    assert s.key_columns == ("case_id",)
+
+
+def test_upsert_strategy_rejects_empty_key_columns():
+    with pytest.raises(ValueError, match="key column"):
+        UpsertStrategy(())
+
+
+def test_upsert_strategy_is_a_value_type():
+    assert UpsertStrategy("id") == UpsertStrategy(("id",))
+    assert hash(UpsertStrategy("id")) == hash(UpsertStrategy(("id",)))
+    assert UpsertStrategy(("a", "b")) == UpsertStrategy(("a", "b"))
+    assert UpsertStrategy("a") != UpsertStrategy("b")

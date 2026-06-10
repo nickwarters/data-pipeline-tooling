@@ -48,8 +48,9 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > and gold → accumulate-by-run. That layer→strategy mapping is being replaced:
 > **load strategy becomes per-feed, owned by the Writer**, with the Store mapping
 > `layer → location` only (`store.writer(layer, table, strategy)` where strategy
-> is `Refresh()` or `AccumulateByRun(run_id, load_date)`, or
-> `AccumulateByRun.from_context(context)`). The **Ingest** profile
+> is `Refresh()`, `AccumulateByRun(run_id, load_date)`,
+> `AccumulateByRun.from_context(context)`, or `UpsertStrategy(key_columns)`).
+> The **Ingest** profile
 > then flips to *history-upstream / current-gold* — raw + silver accumulate the
 > change-over-time record, gold is reduced to a current **one-row-per-Case**
 > grain (`LatestPerKey` by `case_id` + a uniqueness validator). Selection/Sync/
@@ -165,7 +166,7 @@ directions are explicit:
 | CSV file | `CsvReader`, `GlobCsvReader` | `CsvWriter` | `CsvWriter(path, strategy)` emits one CSV file; `GlobCsvReader` is read-only because many inbound files together form one logical snapshot. |
 | Excel file | `ExcelReader` | `ExcelWriter` | Both target one worksheet (`sheet=...`). |
 | JSON file | _intentionally absent_ | `JsonWriter` | JSON is currently a Reporting Deliverable format only; no inbound JSON Feed has been needed yet. |
-| SQLite table | `SqliteReader` | `SqliteTruncateReloadWriter`, `AccumulateByRunWriter` | The Store mints these over medallion layer databases. |
+| SQLite table | `SqliteReader` | `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter` | The Store mints these over medallion layer databases. |
 | SAS extract | `SasReader` | _intentionally absent_ | SAS is an inbound-only remote source; the framework lands the remote output then reads local CSV files. |
 | SharePoint list | `SharePointReader` | `SharePointWriter` | Target is **SE on-prem**. Both sides are stubbed behind swappable `SharePointFetcher` / `SharePointPusher` seams until the on-prem SE client (NTLM/Kerberos/REST) lands. `SharePointWriter` emits the canonical Selection Deliverable — one list per Case Type. |
 
@@ -201,6 +202,13 @@ Deliverables and SQLite tables:
   matches RunLog/RunRegistry when the strategy is derived from a `RunContext`.
   A re-driven run is idempotent via *delete-by-run then insert*. Wired by the
   `silver_to_gold` builder (#8; [gold-accumulation doc](gold-accumulation.md)).
+- `SqliteUpsertWriter(db_path, table, key_columns)` — **update-or-insert** by a
+  declared key set (#136): for each incoming row whose key already exists in the
+  target the row is replaced; new keys are inserted; target rows whose key is
+  absent from the incoming batch are preserved. The merge is a single atomic
+  transaction. Minted by `Store.writer(layer, table, UpsertStrategy(...))`.
+  Useful for a table that holds the **current state of a keyed entity**, e.g.
+  `active_cases` keyed on `case_id`.
 
 The file Writers accept the same explicit strategy objects as Store-minted
 Writers: `Refresh()` overwrites the file; `AccumulateByRun(...)` reads any
@@ -218,8 +226,9 @@ It holds **no business logic** (ADR-0002) and makes **no** load decision
 (ADR-0003 amendment) — it merely mints the layer-appropriate component:
 
 - `store.writer(layer, table, strategy)` — mints a Writer over the chosen layer
-  using the caller's explicit `Refresh()` or `AccumulateByRun(...)` strategy.
-  Context-driven accumulation uses `AccumulateByRun.from_context(context)`.
+  using the caller's explicit `Refresh()`, `AccumulateByRun(...)`, or
+  `UpsertStrategy(...)` strategy. Context-driven accumulation uses
+  `AccumulateByRun.from_context(context)`.
 - `store.reader(layer, table)` — a `SqliteReader` over the same file.
 
 Layer names are validated through `RAW`, `SILVER`, `GOLD` / `Layer`; existing

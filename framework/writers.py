@@ -21,7 +21,7 @@ import pandas as pd
 from framework.connection import connect
 from framework.dataset import Dataset
 from framework.remote import SharePointPusher, StubbedSharePointPusher
-from framework.strategy import AccumulateByRun, Refresh
+from framework.strategy import AccumulateByRun, Refresh, UpsertStrategy
 
 
 @runtime_checkable
@@ -35,7 +35,7 @@ class Writer(Protocol):
 
 def _frame_for_strategy(
     dataset: Dataset,
-    strategy: Refresh | AccumulateByRun,
+    strategy: Refresh | AccumulateByRun | UpsertStrategy,
     read_existing: Callable[[], pd.DataFrame],
 ) -> pd.DataFrame:
     frame = dataset.to_pandas().copy()
@@ -263,6 +263,62 @@ class QuarantineWriter:
             con.commit()
         finally:
             con.close()
+
+
+class SqliteUpsertWriter:
+    """A Writer that merges incoming rows by a declared key set (issue #136).
+
+    For every incoming row whose key already exists in the target, that row is
+    replaced. New keys are inserted. Target rows whose key is absent from the
+    incoming batch are preserved. The merge is atomic: a failure before commit
+    rolls back, leaving prior state intact.
+    """
+
+    def __init__(
+        self,
+        db_path: str | os.PathLike[str],
+        table: str,
+        key_columns: tuple[str, ...],
+        busy_timeout_ms: int = 5000,
+    ) -> None:
+        self._db_path = Path(db_path)
+        self._table = table
+        self._key_columns = key_columns
+        self._busy_timeout_ms = busy_timeout_ms
+
+    def write(self, dataset: Dataset) -> None:
+        frame = dataset.to_pandas().copy()
+        missing = [c for c in self._key_columns if c not in frame.columns]
+        if missing:
+            raise ValueError(
+                f"UpsertStrategy key column(s) not found in dataset: {missing}"
+            )
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        con = connect(self._db_path, self._busy_timeout_ms)
+        try:
+            existing = self._read_existing(con)
+            result = self._merge(existing, frame)
+            result.to_sql(self._table, con, if_exists="replace", index=False)
+            con.commit()
+        finally:
+            con.close()
+
+    def _read_existing(self, con: sqlite3.Connection) -> pd.DataFrame:
+        try:
+            return pd.read_sql(f"SELECT * FROM {self._table}", con)
+        except Exception:
+            return pd.DataFrame()
+
+    def _merge(self, existing: pd.DataFrame, incoming: pd.DataFrame) -> pd.DataFrame:
+        if existing.empty:
+            return incoming
+        key_cols = list(self._key_columns)
+        incoming_key_set = set(map(tuple, incoming[key_cols].values.tolist()))
+        mask = existing[key_cols].apply(
+            lambda row: tuple(row) in incoming_key_set, axis=1
+        )
+        preserved = existing[~mask]
+        return pd.concat([preserved, incoming], ignore_index=True)
 
 
 class AccumulateByRunWriter:
