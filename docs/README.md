@@ -222,6 +222,16 @@ into a `Pipeline`, point it at a Store-minted Writer. Full walkthrough (incl.
 remote SAS / SharePoint feeds and their stubbed seams):
 [`adding-a-feed.md`](adding-a-feed.md).
 
+To skip the boilerplate for a fresh CSV feed, **scaffold** a self-contained feed
+subpackage (schema + pipeline + sample fixture + test, ready to run) and then
+customise it (#97):
+
+```sh
+python -m pipelines.scaffold orders          # -> pipelines/orders/
+python -m pipelines.orders.pipeline /data    # land the bundled sample into raw
+python -m pytest pipelines/orders            # the generated test passes as-is
+```
+
 ```python
 from framework.io import RAW, ExcelReader, Refresh, StoreCatalog
 from framework.run import Pipeline

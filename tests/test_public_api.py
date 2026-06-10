@@ -155,10 +155,14 @@ def test_internal_plumbing_stays_out_of_the_public_facades():
 
 def test_demo_pipelines_import_framework_only_through_the_public_facades():
     # AC4: downstream scripts depend on the stable surface, not internal modules
-    # by accident. Every framework import in pipelines/ must go through a facade.
+    # by accident. Every framework import in pipelines/ must go through a facade —
+    # including feed subpackages (pipelines/<feed>/, scaffolded by #97). Test
+    # modules are excluded: their tests legitimately import framework.testing.
     offenders: dict[str, set[str]] = {}
-    for path in sorted(PIPELINES_DIR.glob("*.py")):
+    for path in sorted(PIPELINES_DIR.rglob("*.py")):
+        if path.name.startswith("test_") or "__pycache__" in path.parts:
+            continue
         internal = _framework_submodules_imported(path.read_text()) - PUBLIC_FACADES
         if internal:
-            offenders[path.name] = internal
+            offenders[str(path.relative_to(PIPELINES_DIR))] = internal
     assert not offenders, f"pipelines bypassing the public facades: {offenders}"
