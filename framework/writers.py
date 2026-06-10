@@ -268,10 +268,18 @@ class QuarantineWriter:
 class SqliteUpsertWriter:
     """A Writer that merges incoming rows by a declared key set (issue #136).
 
-    For every incoming row whose key already exists in the target, that row is
-    replaced. New keys are inserted. Target rows whose key is absent from the
-    incoming batch are preserved. The merge is atomic: a failure before commit
-    rolls back, leaving prior state intact.
+    Uses a SQL-native DELETE + INSERT via a scratch staging table — no full
+    table read. Only the rows being replaced are touched:
+
+    1. Incoming rows are written to a per-table scratch staging table (DDL,
+       auto-committed per SQLite's default isolation).
+    2. Target rows whose key appears in staging are deleted (O(incoming)).
+    3. All staging rows are inserted into the target (O(incoming)).
+    4. Steps 2–3 commit atomically; a failure rolls back, leaving prior state.
+    5. Staging table is dropped as post-commit cleanup.
+
+    Target rows whose key does NOT appear in the incoming batch are never
+    read or written.
     """
 
     def __init__(
@@ -285,6 +293,9 @@ class SqliteUpsertWriter:
         self._table = table
         self._key_columns = key_columns
         self._busy_timeout_ms = busy_timeout_ms
+        # Staging name is table-scoped to avoid collision when multiple
+        # UpsertWriters target different tables in the same layer db.
+        self._staging = f"_upsert_stage_{table}"
 
     def write(self, dataset: Dataset) -> None:
         frame = dataset.to_pandas().copy()
@@ -296,29 +307,37 @@ class SqliteUpsertWriter:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         con = connect(self._db_path, self._busy_timeout_ms)
         try:
-            existing = self._read_existing(con)
-            result = self._merge(existing, frame)
-            result.to_sql(self._table, con, if_exists="replace", index=False)
+            col_list = ", ".join(frame.columns)
+
+            # Write incoming rows to staging (DDL auto-commits; staging data
+            # is visible to subsequent statements on this connection).
+            frame.to_sql(self._staging, con, if_exists="replace", index=False)
+
+            # Ensure the target table exists before DELETEing from it.
+            # "append" on an empty frame: creates the table if absent (DDL,
+            # auto-commits), or is a DML no-op if it already exists.
+            frame.iloc[:0].to_sql(self._table, con, if_exists="append", index=False)
+
+            # Atomic merge: delete matching rows, then insert all incoming.
+            # EXISTS join handles composite keys without row-value syntax.
+            key_match = " AND ".join(
+                f"{self._staging}.{k} = {self._table}.{k}"
+                for k in self._key_columns
+            )
+            con.execute(
+                f"DELETE FROM {self._table} WHERE EXISTS "
+                f"(SELECT 1 FROM {self._staging} WHERE {key_match})"
+            )
+            con.execute(
+                f"INSERT INTO {self._table} ({col_list}) "
+                f"SELECT {col_list} FROM {self._staging}"
+            )
             con.commit()
+
+            # Drop the staging table now that the merge is committed.
+            con.execute(f"DROP TABLE IF EXISTS {self._staging}")
         finally:
             con.close()
-
-    def _read_existing(self, con: sqlite3.Connection) -> pd.DataFrame:
-        try:
-            return pd.read_sql(f"SELECT * FROM {self._table}", con)
-        except Exception:
-            return pd.DataFrame()
-
-    def _merge(self, existing: pd.DataFrame, incoming: pd.DataFrame) -> pd.DataFrame:
-        if existing.empty:
-            return incoming
-        key_cols = list(self._key_columns)
-        incoming_key_set = set(map(tuple, incoming[key_cols].values.tolist()))
-        mask = existing[key_cols].apply(
-            lambda row: tuple(row) in incoming_key_set, axis=1
-        )
-        preserved = existing[~mask]
-        return pd.concat([preserved, incoming], ignore_index=True)
 
 
 class AccumulateByRunWriter:
