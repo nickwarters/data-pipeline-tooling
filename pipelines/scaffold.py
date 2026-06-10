@@ -1,28 +1,29 @@
 """Scaffold a new feed from a template (issue #97).
 
-Renders the runnable template under ``pipelines/_scaffold_template/`` into a
-self-contained feed subpackage ``<dest>/<feed>/`` -- a schema file, an ingest
-pipeline (CSV -> raw, via the public facades), a sample fixture, and a test that
-shows source rows becoming landed output rows. The template is the source of
-truth; this module only substitutes the feed name (and its PascalCase class
-form) into a fresh copy.
+Renders the runnable template under ``pipelines/_scaffold_template/`` into a new
+feed: the feed *code* (schema, an ingest pipeline CSV -> raw via the public
+facades, and a sample fixture) as a subpackage ``pipelines/<feed>/``, and its
+*test* (given source rows -> expected landed rows) under ``tests/pipelines/`` so
+it sits with the rest of the suite, mirroring the source layout. The template is
+the source of truth; this module only substitutes the feed name (and its
+PascalCase class form) into a fresh copy.
 
 Run from the repository root so the import-only ``framework`` package resolves::
 
-    python -m pipelines.scaffold orders                 # -> pipelines/orders/
-    python -m pipelines.scaffold orders --dest /tmp/x   # -> /tmp/x/orders/
-    python -m pipelines.scaffold orders --force         # overwrite if it exists
+    python -m pipelines.scaffold orders            # -> pipelines/orders/ + tests/pipelines/test_orders.py
+    python -m pipelines.scaffold orders --force    # overwrite if it exists
 
 The generated feed runs as a module from the repo root::
 
     python -m pipelines.orders.pipeline /data
+    python -m pytest tests/pipelines/test_orders.py
 """
 
 from __future__ import annotations
 
 import argparse
 import keyword
-import os
+import re
 import sys
 from pathlib import Path
 
@@ -31,6 +32,10 @@ from pathlib import Path
 _TEMPLATE_DIR = Path(__file__).parent / "_scaffold_template"
 _SLUG_TOKEN = "myfeed"
 _CLASS_TOKEN = "Myfeed"
+
+# scaffold.py lives at ``pipelines/scaffold.py``, so its grandparent is the repo
+# root under which ``pipelines/`` and ``tests/`` sit.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _pascal(feed: str) -> str:
@@ -60,34 +65,68 @@ def _substitute(text: str, feed: str) -> str:
     return text.replace(_CLASS_TOKEN, _pascal(feed)).replace(_SLUG_TOKEN, feed)
 
 
+def _is_test_file(relative: Path) -> bool:
+    """Whether a template file is the feed's test (lands under ``tests/``)."""
+    return relative.name.startswith("test_") and relative.suffix == ".py"
+
+
+def _absolutise_imports(text: str, feed: str) -> str:
+    """Rewrite the test's intra-package imports from relative to absolute.
+
+    In the template the test sits *inside* the feed package, so it imports the
+    pipeline and schema relatively (``from .pipeline import ...``). The rendered
+    test lives under ``tests/pipelines/`` instead, outside the package, so those
+    must become absolute (``from pipelines.<feed>.pipeline import ...``).
+    """
+    return re.sub(r"(?m)^from \.", f"from pipelines.{feed}.", text)
+
+
 def render(
     feed: str,
-    dest: str | os.PathLike[str],
+    root: str | Path | None = None,
     *,
     force: bool = False,
 ) -> list[Path]:
-    """Render the feed template into ``<dest>/<feed>/`` and return the files made.
+    """Render the feed under ``root`` and return the files made.
 
-    Raises ``ValueError`` for an invalid feed name and ``FileExistsError`` if the
-    feed directory already exists (pass ``force=True`` to overwrite in place).
+    Feed code lands in ``<root>/pipelines/<feed>/`` and the test in
+    ``<root>/tests/pipelines/test_<feed>.py``. ``root`` is the repository root;
+    it defaults to this repo (``_REPO_ROOT``), and tests pass a temporary one.
+
+    Raises ``ValueError`` for an invalid feed name and ``FileExistsError`` if any
+    target already exists (pass ``force=True`` to overwrite in place).
     """
     _validate_feed_name(feed)
-    feed_dir = Path(dest) / feed
-    if feed_dir.exists() and not force:
-        raise FileExistsError(
-            f"{feed_dir} already exists; pass force=True (CLI: --force) to overwrite"
-        )
+    root = Path(root) if root is not None else _REPO_ROOT
+    feed_dir = root / "pipelines" / feed
+    tests_dir = root / "tests" / "pipelines"
 
-    created: list[Path] = []
+    # Plan every (target, contents) pair up front so an existing-file refusal
+    # leaves the tree untouched rather than half-written.
+    plan: list[tuple[Path, str]] = []
     for source in sorted(_TEMPLATE_DIR.rglob("*")):
         if source.is_dir() or "__pycache__" in source.parts:
             continue
         relative = Path(_substitute(str(source.relative_to(_TEMPLATE_DIR)), feed))
-        target = feed_dir / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(
-            _substitute(source.read_text(encoding="utf-8"), feed), encoding="utf-8"
+        text = _substitute(source.read_text(encoding="utf-8"), feed)
+        if _is_test_file(relative):
+            target = tests_dir / relative.name
+            text = _absolutise_imports(text, feed)
+        else:
+            target = feed_dir / relative
+        plan.append((target, text))
+
+    clashing = [target for target, _ in plan if target.exists()]
+    if clashing and not force:
+        raise FileExistsError(
+            f"{feed_dir} (or its test) already exists; pass force=True "
+            "(CLI: --force) to overwrite"
         )
+
+    created: list[Path] = []
+    for target, text in plan:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
         created.append(target)
     return created
 
@@ -95,18 +134,13 @@ def render(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m pipelines.scaffold",
-        description="Scaffold a new feed subpackage from the template.",
+        description="Scaffold a new feed (code in pipelines/, test in tests/pipelines/).",
     )
     parser.add_argument("feed", help="the feed name (a lowercase identifier, e.g. orders)")
     parser.add_argument(
-        "--dest",
-        default="pipelines",
-        help="directory the <feed>/ package is created under (default: pipelines)",
-    )
-    parser.add_argument(
         "--force",
         action="store_true",
-        help="overwrite the feed directory if it already exists",
+        help="overwrite the feed's files if they already exist",
     )
     return parser
 
@@ -114,7 +148,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        created = render(args.feed, args.dest, force=args.force)
+        created = render(args.feed, force=args.force)
     except (ValueError, FileExistsError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
@@ -122,7 +156,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"created {path}")
     print(
         f"\nRun it from the repo root:\n"
-        f"    python -m {args.dest.replace(os.sep, '.')}.{args.feed}.pipeline /data"
+        f"    python -m pipelines.{args.feed}.pipeline /data\n"
+        f"    python -m pytest tests/pipelines/test_{args.feed}.py"
     )
     return 0
 
