@@ -702,6 +702,30 @@ A `CaseType` (`case_review.case_type`) bundles a Case Type's `schema` with its
 overrides) and raises a located `KeyError` on an unknown id. Declarative data,
 not code (one Case Type has many Variations — `CONTEXT.md`).
 
+### Variation registry — declare ~100 Variations in YAML (#58)
+A Case Type's `schema` is a Python type and stays in code, but its Variations are
+data — Case Type B has ~100, A only ~3 — so they are declared in a YAML file and
+loaded by `case_review.variation_registry`. The common case is a one-line
+`id: question_bank_id` entry under a `variations:` mapping:
+
+```yaml
+# case_type_b.yaml
+variations:
+  v001: qb-1001
+  v002: qb-1002
+  # … ~100 more, one line each
+```
+
+`load_variations(path)` mints the `Variation` tuple; `case_type_from_config(name,
+schema, path)` binds it to the code-defined `schema` in one `CaseType` — which is
+how a Variation *inherits* its Case Type and *overrides* only its Question Bank.
+This is **per-Case-Type config you load explicitly**, not the global CaseType
+registry ADR-0005 rules out. Degradation is deliberate: an absent or empty
+`variations:` mapping yields a Case Type with no Variations (still valid), while a
+wrong shape (e.g. a list) raises a located `ValueError` naming the file — the seam
+the future config-lint pass builds on. Loading is pathlib + a pure-Python parser,
+so it is cross-platform.
+
 ### `CasePool` — the domain population, behind named reads
 `CasePool(case_type, store, calendar)` (`case_review.case_pool`) is the
 per-Case-Type population of Cases read from the **ingested silver**. Its headline

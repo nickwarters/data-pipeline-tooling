@@ -138,7 +138,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`ForEach`** | Runnable orchestration for independent repeated runs: pass items plus `pipeline_builder(item, context)`, then call `.run(context)`. It creates a fresh builder and per-item `RunContext` for each item. Default behavior fails fast on the first failed item; `continue_on_error=True` returns per-item success/failure outcomes and continues. Use when files must remain separate logical runs. |
 | **`RunLog` / `RunRegistry`** | `RunLog` emits one JSON record per step (+ a run summary) to a `.log` file — the observability seam. `RunRegistry` ingests that JSONL into a queryable run-history store. → [run-log-format.md](run-log-format.md) ([ADR-0007](adr/0007-fail-fast-atomic-runs-jsonl-observability.md)) |
 | **`RunContext` / `PipelineRunner` / `FreshnessRequirement`** | The thin domain runner: register handlers by `(case_type, pipeline)`, receive a context carrying execution/logical identity, dates, RunLog, and RunRegistry, and block stale downstream runs by querying recent successful upstream history. → [core-primitives.md](core-primitives.md) |
-| **`CaseType` / `Variation`** | Case-review application/domain objects in `case_review.case_type`, not framework primitives: a Case Type bundles its `schema` + `variations`, imported directly (no global CaseType config registry). A Variation overrides only what differs — most often the `question_bank_id`. → [selection.md](selection.md) |
+| **`CaseType` / `Variation`** | Case-review application/domain objects in `case_review.case_type`, not framework primitives: a Case Type bundles its `schema` + `variations`, imported directly (no global CaseType config registry). A Variation overrides only what differs — most often the `question_bank_id`. At ~100 Variations, declare them in YAML and load via `case_review.variation_registry` (`case_type_from_config`, #58). → [selection.md](selection.md) |
 | **`CasePool`** | Case-review application/domain helper in `case_review.case_pool`: the per-Case-Type population read from ingested silver, surfaced through intention-revealing retrievals (e.g. `fetch_available_cases(...)`) instead of raw `read_*`. → [selection.md](selection.md) |
 | **`WorkingDayCalendar`** | A config-seeded **pure utility** for availability arithmetic ("the last 20 working days"). Touches no Dataset/Store/engine; not a Feed. → [working-day-calendar.md](working-day-calendar.md) |
 
@@ -192,6 +192,28 @@ CASES = CaseType(
     ),
 )
 ```
+
+A handful of Variations are fine to write inline like this. At Case Type B's
+~100, declare them in a YAML file instead and load with the **Variation
+registry** (#58) — one line `id: question_bank_id` per Variation:
+
+```yaml
+# case_type_b.yaml
+variations:
+  v001: qb-1001
+  v002: qb-1002
+```
+
+```python
+from case_review.variation_registry import case_type_from_config
+
+CASES = case_type_from_config("cases", ActivityCase, Path("case_type_b.yaml"))
+```
+
+The `schema` stays in code; only the Variations are data. An absent/empty
+`variations:` mapping gives a Case Type with no Variations (still valid); a wrong
+shape raises a located error. See
+[core-primitives.md](core-primitives.md#variation-registry--declare-100-variations-in-yaml-58).
 
 **3. Ingest a Feed into the medallion** — land raw, then refine to silver with the
 schema enforced (`raw_to_silver` coerces storage-lossy types, then validates).

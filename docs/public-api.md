@@ -98,7 +98,8 @@ pusher — internal seams with no facade.
 
 ## The case-review application layer is separate
 
-`case_review` (`CaseType`, `Variation`, `CasePool`, `ingest_silver_to_gold`, …)
+`case_review` (`CaseType`, `Variation`, `CasePool`, `ingest_silver_to_gold`,
+`load_variations` / `case_type_from_config`, …)
 is the application/domain layer that sits **on top of** the framework, not part
 of its public API. New case-review concepts belong in `case_review` (or pipeline
 support modules), not under `framework/` — see

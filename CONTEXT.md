@@ -49,7 +49,7 @@ A first-class classification of Cases that determines its fields, selection crit
 _Avoid_: category, kind
 
 **Variation**:
-A specialization within a Case Type that inherits the Case Type's config and overrides only what differs — most commonly the Question Bank, occasionally the ingest, selection criteria, or processing. One Case Type has many Variations (A ~3; B ~100). Declarative/data-driven; code only for the rare divergent processing.
+A specialization within a Case Type that inherits the Case Type's config and overrides only what differs — most commonly the Question Bank, occasionally the ingest, selection criteria, or processing. One Case Type has many Variations (A ~3; B ~100). Declarative/data-driven; code only for the rare divergent processing. At the ~100 scale this is made workable by the **Variation registry** (`case_review.variation_registry`, #58): Variations are declared in a per-Case-Type YAML file — one line `id: question_bank_id` in the common case — and loaded against the type's code-defined Schema. This is per-Case-Type config loaded explicitly, *not* the global CaseType registry ADR-0005 rules out.
 _Avoid_: variant, subtype, flavour
 
 **Question Bank**:
