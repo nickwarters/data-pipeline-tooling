@@ -11,9 +11,7 @@ which owns its own location and load strategy (ADR-0003, ADR-0006).
 from __future__ import annotations
 
 import logging
-import re
 import time
-from pathlib import Path
 
 from framework.dataset import Dataset
 from framework.pipeline_steps import (
@@ -152,9 +150,12 @@ class Pipeline:
 
         The plan is an authoring/debugging aid: it reports the components that
         will participate in execution, in execution order, without touching the
-        Reader, processors, checkpoints, or Writer. Configuration values are
-        best-effort and scrubbed so obvious credentials do not leak into logs or
-        test output.
+        Reader, processors, checkpoints, or Writer. Each component renders its
+        own summary through the opt-in ``describe()`` protocol (issue #145); a
+        component that does not implement ``describe()`` is shown by bare class
+        name only. The builder never introspects a component's attributes, so a
+        value stored under any name cannot leak into the plan, and a component
+        decides exactly what is safe to surface (credentials are self-redacted).
         """
         plan = self._execution_plan()
         lines = [f"Pipeline {self._name}"]
@@ -363,97 +364,17 @@ def _describe_run_log(run_log: RunLog) -> str:
 
 
 def _describe_component(component: object) -> str:
+    """Render a component for the plan via its opt-in ``describe()`` protocol.
+
+    A component renders its own safe summary by implementing ``describe()``
+    (issue #145). Anything that does not is shown by bare class name only — the
+    builder never introspects a component's attributes, so a value stored under
+    any name simply cannot leak into the plan, and a component decides exactly
+    what is safe to surface.
+    """
     if component is None:
         return "none"
     describer = getattr(component, "describe", None)
     if callable(describer):
-        description = str(describer())
-        return _scrub(description)
-
-    attrs = _safe_attrs(component)
-    if not attrs:
-        return type(component).__name__
-    rendered = ", ".join(f"{key}={value}" for key, value in attrs)
-    return f"{type(component).__name__}({rendered})"
-
-
-def _safe_attrs(component: object) -> list[tuple[str, str]]:
-    attrs = getattr(component, "__dict__", {})
-    safe: list[tuple[str, str]] = []
-    for raw_name, value in attrs.items():
-        name = raw_name.removeprefix("_")
-        if name.endswith("count") or name in {"dataset", "written"}:
-            continue
-        safe_value = _safe_value(name, value)
-        if safe_value is None:
-            continue
-        safe.append((_display_name(name), safe_value))
-    return safe
-
-
-def _display_name(name: str) -> str:
-    return {
-        "db_path": "db_path",
-        "path": "path",
-        "required": "required_columns",
-    }.get(name, name)
-
-
-def _safe_value(name: str, value: object) -> str | None:
-    if _looks_sensitive(name):
-        return "'<redacted>'"
-    if isinstance(value, Path):
-        return repr(_scrub(str(value)))
-    if isinstance(value, str):
-        return repr(_scrub(value))
-    if isinstance(value, (int, float, bool)) or value is None:
-        return repr(value)
-    if isinstance(value, tuple):
-        values = [_safe_value(name, item) for item in value]
-        if any(item is None for item in values):
-            return None
-        return "[" + ", ".join(values) + "]"
-    if isinstance(value, list):
-        values = [_safe_value(name, item) for item in value]
-        if any(item is None for item in values):
-            return None
-        return "[" + ", ".join(values) + "]"
-    if isinstance(value, dict):
-        parts = []
-        for key, item in value.items():
-            key_text = str(key)
-            if _looks_sensitive(key_text):
-                parts.append(f"{key_text!r}: '<redacted>'")
-                continue
-            item_text = _safe_value(key_text, item)
-            if item_text is None:
-                return None
-            parts.append(f"{key_text!r}: {item_text}")
-        return "{" + ", ".join(parts) + "}"
-    return None
-
-
-def _looks_sensitive(name: str) -> bool:
-    lowered = name.lower()
-    return any(
-        marker in lowered
-        for marker in (
-            "auth",
-            "credential",
-            "password",
-            "secret",
-            "token",
-            "api_key",
-            "apikey",
-        )
-    )
-
-
-def _scrub(text: str) -> str:
-    scrubbed = re.sub(r"(://)[^/@:\s]+:[^/@\s]+@", r"\1<redacted>@", text)
-    scrubbed = re.sub(
-        r"(?i)(password|secret|token|api_key|apikey)=([^&\s]+)",
-        r"\1=<redacted>",
-        scrubbed,
-    )
-    return scrubbed
+        return str(describer())
+    return type(component).__name__

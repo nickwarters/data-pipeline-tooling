@@ -20,6 +20,7 @@ import pandas as pd
 
 from framework.connection import connect
 from framework.dataset import Dataset
+from framework.describe import redact_url, render
 from framework.remote import SharePointPusher, StubbedSharePointPusher
 from framework.sql import quote_identifier
 from framework.strategy import AccumulateByRun, Refresh, UpsertStrategy
@@ -90,6 +91,9 @@ class CsvWriter:
             return pd.DataFrame()
         return pd.read_csv(self._path)
 
+    def describe(self) -> str:
+        return render(self, path=str(self._path))
+
 
 class ExcelWriter:
     """A file Deliverable Writer for one Excel worksheet."""
@@ -115,6 +119,9 @@ class ExcelWriter:
         if not self._path.exists():
             return pd.DataFrame()
         return pd.read_excel(self._path, sheet_name=self._sheet)
+
+    def describe(self) -> str:
+        return render(self, path=str(self._path), sheet=self._sheet)
 
 
 class JsonWriter:
@@ -144,6 +151,9 @@ class JsonWriter:
         if not self._path.exists():
             return pd.DataFrame()
         return pd.read_json(self._path, orient="records")
+
+    def describe(self) -> str:
+        return render(self, path=str(self._path))
 
 
 class SharePointWriter:
@@ -189,6 +199,13 @@ class SharePointWriter:
             self._strategy,
         )
 
+    def describe(self) -> str:
+        # Strip any credentials embedded in the site URL and omit auth config
+        # entirely — the plan never surfaces secrets (issue #145).
+        return render(
+            self, site=redact_url(self._site), list_name=self._list_name
+        )
+
 
 class SqliteTruncateReloadWriter:
     """A Writer that full-refreshes one table: truncate + reload (ADR-0006).
@@ -221,6 +238,9 @@ class SqliteTruncateReloadWriter:
             con.commit()
         finally:
             con.close()
+
+    def describe(self) -> str:
+        return render(self, db_path=str(self._db_path), table=self._table)
 
 
 class QuarantineWriter:
@@ -266,6 +286,9 @@ class QuarantineWriter:
             con.commit()
         finally:
             con.close()
+
+    def describe(self) -> str:
+        return render(self, db_path=str(self._db_path), table=self._table)
 
 
 class SqliteUpsertWriter:
@@ -344,6 +367,14 @@ class SqliteUpsertWriter:
         finally:
             con.close()
 
+    def describe(self) -> str:
+        return render(
+            self,
+            db_path=str(self._db_path),
+            table=self._table,
+            key_columns=list(self._key_columns),
+        )
+
 
 class AccumulateByRunWriter:
     """A Writer that accumulates runs into one table, stamped by run (ADR-0006).
@@ -403,3 +434,6 @@ class AccumulateByRunWriter:
             con.commit()
         finally:
             con.close()
+
+    def describe(self) -> str:
+        return render(self, db_path=str(self._db_path), table=self._table)
