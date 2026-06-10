@@ -98,6 +98,14 @@ _Avoid_: analytics, BI, warehouse
 The declared expected columns, types, and field-level nullability/value rules for a Case Type — the single, named replacement for today's scattered, implicit "assume field X exists" checks. A validation contract first (enforced at silver & gold), and the optional basis for typed objects. Currently a dataclass; Pydantic later.
 _Avoid_: model, shape, structure (informal)
 
+**Schema Drift**:
+A **Feed**'s landed column set changing run-over-run — an owner-controlled source (SharePoint list, SAS export) silently adding or dropping a column between snapshots. Detected at the **raw** boundary by diffing the incoming columns against the prior run's landed columns, and surfaced as a **warning** that does not stop the run (raw stays a faithful mirror of the source — ADR-0008). Names-only and run-over-run; a type change on a surviving column is a **Schema Breach**'s concern, not drift.
+_Avoid_: schema change, schema mismatch (use the precise term)
+
+**Schema Breach**:
+Data violating a Case Type's declared **Schema** (a missing column or wrong dtype) at the **silver** or **gold** boundary — a hard, fail-fast abort (ADR-0007/0008), not a warning. Contrast **Schema Drift**: drift is a soft, run-over-run *change* signal at raw; a breach is a hard *contract* violation downstream.
+_Avoid_: drift, schema error
+
 ## Engineering vocabulary (cross-cutting)
 
 General software-engineering terms that recur in design discussion. Unlike the

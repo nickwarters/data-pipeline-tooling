@@ -253,8 +253,9 @@ class Validator(Protocol):
     def validate(self, dataset: Dataset) -> None: ...   # raises on failure
 ```
 
-Two ship now, both reading only the dataset's public shape (so they stay behind
-the Dataset seam — ADR-0002):
+These ship now, each reading only the dataset's public shape (so they stay behind
+the Dataset seam — ADR-0002); the history-/prior-derived ones take an extra
+narrow seam (`RunHistory` / `PriorColumns`) for the run-over-run comparison:
 
 - `ColumnValidator(required_columns)` — every required column is present
   (presence, not dtype).
@@ -274,12 +275,26 @@ the Dataset seam — ADR-0002):
   *successful* runs the relative band is skipped so first nights don't trip
   spuriously. `history` is any `RunHistory` — the `RunRegistry` is the production
   one. See [`RunRegistry`](#runregistry--the-run-history-that-ingests-the-jsonl).
+- `SchemaDriftValidator(prior)` — the **raw-boundary drift detector** (#51):
+  warns (it does not abort) when a feed's incoming columns differ from the
+  **prior run's landed columns**, catching an owner-controlled source silently
+  adding/dropping a column *at the door*, one layer before it would surface as a
+  silver **Schema Breach**. The diff is **names-only** and a case-sensitive set
+  difference (a rename reads as a drop + an add; order and dtype are not drift —
+  dtype is silver's job, ADR-0008). The prior set comes from `prior` — a
+  `PriorColumns` seam minted by `store.columns_of(RAW, table)`, which reads the
+  live raw table's columns via `PRAGMA` (no rows) and returns `None` for the
+  first-ever run, making it a clean no-op. Attach at `severity="warn"`; the
+  warning rides `warn_hits` onto the run summary (see drift surfacing under
+  [`RunRegistry`](#runregistry--the-run-history-that-ingests-the-jsonl)).
 
 A Validator knows only how to *check*; it does **not** decide what a failure
 means. **Severity is set where the Validator is attached to the builder**
 (`severity="error" | "warn"`, default `error` — ADR-0007), so the same Validator
-can abort one pipeline and merely warn another. These two are **engine-agnostic**
-(shape only); the richer `SchemaValidator` below is the *engine-confined* kind.
+can abort one pipeline and merely warn another. These are **engine-agnostic**
+(the check reads shape only; `SchemaDriftValidator`'s `PriorColumns` seam reads
+the prior table via stdlib `sqlite3`, never pandas); the richer `SchemaValidator`
+below is the *engine-confined* kind.
 
 ### `Schema` & `SchemaValidator` — the declared contract, enforced at silver
 A Case Type's **`Schema`** is an ordinary **dataclass** whose annotations *are*
@@ -449,7 +464,8 @@ registry.recent_row_counts("cases", limit=10)          # read volumes, newest fi
   (ADR-0001) like any other medallion db; paths are `pathlib` (Windows/macOS).
 - **Schema-drift surfaces as a warn-hit** (ADR-0008), so `runs_that_warned()` is
   also the drift-surfacing query (AC #6) — it pairs with the raw-drift detector
-  when that lands.
+  ([`SchemaDriftValidator`](#validator--a-fail-fast-check-at-a-layer-boundary), #51),
+  whose warn-severity message rides `warn_hits` onto the run summary.
 - **It is also a baseline source.** `recent_row_counts(pipeline, limit=…)` returns
   the read-step volumes of recent *successful* runs, newest first — the history a
   [`VolumeAnomalyValidator`](#validator--a-fail-fast-check-at-a-layer-boundary)

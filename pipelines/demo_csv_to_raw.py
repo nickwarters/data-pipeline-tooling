@@ -18,6 +18,7 @@ from pathlib import Path
 
 from framework.io import RAW, CsvReader, Dataset, Refresh, StoreCatalog
 from framework.run import Pipeline, RunLog
+from framework.transform import SchemaDriftValidator
 
 FEED_NAME = "cases"
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "cases.csv"
@@ -33,11 +34,21 @@ def run(
     Composes a :class:`RunLog` so the run emits structured JSONL records to
     ``<base_dir>/runs.log`` (and human-readable lines to the console) — the
     observability seam described in ADR-0007.
+
+    A warn-severity :class:`SchemaDriftValidator` is attached at the raw boundary
+    (#51): it diffs the incoming columns against the prior run's landed columns
+    (read from ``raw.db`` via ``store.columns_of``) and warns — without aborting —
+    when the owner-controlled source adds or drops a column. The first run has no
+    prior landing, so it is a clean no-op (ADR-0008 amendment).
     """
-    writer = StoreCatalog(base_dir).store(FEED_NAME).writer(RAW, FEED_NAME, Refresh())
+    store = StoreCatalog(base_dir).store(FEED_NAME)
+    writer = store.writer(RAW, FEED_NAME, Refresh())
     run_log = RunLog(Path(base_dir) / RUN_LOG_NAME)
     return (
         Pipeline(FEED_NAME, CsvReader(csv_path), run_log=run_log)
+        .with_validator(
+            SchemaDriftValidator(store.columns_of(RAW, FEED_NAME)), severity="warn"
+        )
         .write_to(writer)
         .run()
     )
