@@ -114,6 +114,28 @@ def test_subjects_are_isolated_same_table_name_no_collision(tmp_path):
     assert len(type_b.reader("raw", "cases").read()) == len(dataset)
 
 
+def test_store_columns_of_reads_the_prior_landing_and_labels_the_table(tmp_path):
+    # The PriorColumns seam the raw drift check reads (#51): after a landing,
+    # columns_of reports that table's columns (order preserved) and a label that
+    # names the layer + table for the warning message.
+    dataset = CsvReader(FIXTURE).read()
+    store = Store(tmp_path)
+    store.writer(RAW, "cases", Refresh()).write(dataset)
+
+    prior = store.columns_of(RAW, "cases")
+
+    assert prior.columns() == tuple(dataset.columns)
+    assert prior.label == "raw.cases"
+
+
+def test_store_columns_of_returns_none_when_the_table_does_not_exist(tmp_path):
+    # First-ever run: nothing has landed, so there is no prior column set — the
+    # seam returns None (a clean no-op for the drift check, AC #4), not an error.
+    store = Store(tmp_path)
+
+    assert store.columns_of(RAW, "cases").columns() is None
+
+
 def test_store_catalog_mints_subject_stores_from_a_shared_root(tmp_path):
     dataset = CsvReader(FIXTURE).read()
     catalog = StoreCatalog(tmp_path)

@@ -1,3 +1,5 @@
+import json
+
 from pipelines import demo_csv_to_raw
 
 from framework.store import RAW, StoreCatalog
@@ -19,3 +21,28 @@ def test_demo_reads_fixture_csv_and_lands_rows_in_raw(tmp_path):
         .read()
     )
     assert len(landed) == len(dataset)
+
+
+def test_demo_warns_on_raw_schema_drift_between_runs(tmp_path):
+    # First run lands a baseline shape (no prior → drift check is a clean no-op);
+    # a second run from a drifted source warns (does not abort) and the warning
+    # is recorded in the run log, where the run registry can flag it (#51).
+    demo_csv_to_raw.run(tmp_path)  # baseline landing, no prior
+
+    drifted = tmp_path / "drifted.csv"
+    # Drop `amount`, add `region` vs the sample feed's columns.
+    drifted.write_text("case_id,advisor,activity_date,region\n1,a,2026-01-01,North\n")
+    dataset = demo_csv_to_raw.run(tmp_path, csv_path=drifted)
+
+    # The run still completes (warn, not abort) and lands the drifted shape.
+    assert "region" in dataset.columns
+
+    records = [
+        json.loads(line)
+        for line in (tmp_path / demo_csv_to_raw.RUN_LOG_NAME)
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    ]
+    warns = [w for r in records for w in r["warn_hits"]]
+    assert any("schema drift" in w and "added [region]" in w and "dropped [amount]" in w for w in warns)

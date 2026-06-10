@@ -99,20 +99,24 @@ def priority_score(row: Mapping[str, Any]) -> int:
 
 
 def run_ingest(context: RunContext):
-    run_id = context.run_date.isoformat()
     sample = Path(__file__).parent / "sample_data" / "activity_cases.csv"
     store = StoreCatalog(context.base_dir).store(CASES.name)
+
+    # The accumulation strategy carries the run's logical idempotency key (the
+    # business run a re-drive replaces) and its execution id, derived from the
+    # shared RunContext so `--logical-run-id` flows straight through (ADR-0006).
+    strategy = AccumulateByRun.from_context(context)
 
     # 1. Ingest: CSV feed -> raw (accumulate, system-of-record) -> silver
     #    (accumulate, schema enforced) -> gold (current-only, one row per Case).
     Pipeline("cases", CsvReader(sample)).write_to(
-        store.writer(RAW, "cases", AccumulateByRun(run_id, run_id))
+        store.writer(RAW, "cases", strategy)
     ).run()
     raw_to_silver(
         store,
         "cases",
         CASES.schema,
-        strategy=AccumulateByRun(run_id, run_id),
+        strategy=strategy,
     ).run()
     return ingest_silver_to_gold(
         store,
@@ -123,8 +127,8 @@ def run_ingest(context: RunContext):
 
 
 def run_selection(context: RunContext):
-    run_id = context.run_date.isoformat()
     store = StoreCatalog(context.base_dir).store(CASES.name)
+    strategy = AccumulateByRun.from_context(context)
 
     # 2. Selection: fetch available cases from the CasePool, then narrow them
     #    with named, pure rule functions. The functions stay independently
@@ -144,11 +148,11 @@ def run_selection(context: RunContext):
         # Explainability (#53): land a per-Case trace of why each available Case
         # was/wasn't selected in a sibling table, stamped by this run.
         .explain(
-            store.writer(GOLD, "selection_trace", AccumulateByRun(run_id, run_id)),
+            store.writer(GOLD, "selection_trace", strategy),
             id_column="case_ref",
             score_column="priority_score",
         )
-        .write_to(store.writer(GOLD, "selection_pool", AccumulateByRun(run_id, run_id)))
+        .write_to(store.writer(GOLD, "selection_pool", strategy))
         .run()
     )
 
@@ -157,7 +161,8 @@ def run_selection(context: RunContext):
     print(
         f"available cases: {len(available)} -> "
         f"SelectionPool: {len(selection_pool)} cases "
-        f"(Question Bank {variation.question_bank_id}, run {run_id}); "
+        f"(Question Bank {variation.question_bank_id}, "
+        f"logical run {context.logical_run_id}); "
         f"trace: {len(trace)} considered, {excluded} excluded with a reason"
     )
     return selection_pool

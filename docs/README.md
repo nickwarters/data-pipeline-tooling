@@ -131,7 +131,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`Writer`** | `write(dataset) -> None`. The dual of Reader. Owns **both** target location and **load strategy**. File Deliverables use `CsvWriter`, `ExcelWriter`, or `JsonWriter`; SharePoint list Deliverables use the stubbed `SharePointWriter`; SQLite tables use `SqliteTruncateReloadWriter` or `AccumulateByRunWriter`. → [gold-accumulation.md](gold-accumulation.md) |
 | **`RetryPolicy` / `RetryingReader` / `RetryingWriter`** | Targeted retry for **transient I/O-edge failures** (remote access, SharePoint/SAS fetch, SQLite busy). An allowlist of exception types is retried; schema-validation and configuration errors abort immediately. Scoped to the `read()`/`write()` seam, never around validation. → [retry.md](retry.md) |
 | **`Store` / `StoreCatalog`** | `Store(subject_dir)` binds one subject to Writer/Reader creation over `<subject>/{raw,silver,gold}.db`; `StoreCatalog(root).store(subject)` mints those stores from shared root/configuration. Holds no business logic and makes no load decision. ([ADR-0001](adr/0001-sqlite-medallion-store-on-network-share.md)) |
-| **`Validator`** | `validate(dataset) -> None`, **raises** on breach. `ColumnValidator`, `RowCountValidator` (engine-agnostic), `VolumeAnomalyValidator` (trips when a run's volume deviates from its recent-history baseline — catches truncated source exports, #54). Severity (`error`/`warn`) is set where it's attached. |
+| **`Validator`** | `validate(dataset) -> None`, **raises** on breach. `ColumnValidator`, `RowCountValidator` (engine-agnostic), `VolumeAnomalyValidator` (trips when a run's volume deviates from its recent-history baseline — catches truncated source exports, #54), `SchemaDriftValidator` (warns at the raw boundary when a feed's columns drift from the prior run's landed set — catches owner-controlled source schema change, #51). Severity (`error`/`warn`) is set where it's attached. |
 | **`Schema` / `SchemaValidator`** | A Case Type **dataclass** whose annotations *are* the column, dtype, nullability, and value-rule contract; the validator is the dataclass→validator adapter, enforced at silver (and optionally gold). Nullability/value rules extend the same dataclass via `Annotated`. → [schema-enforcement.md](schema-enforcement.md) ([ADR-0008](adr/0008-graduated-schema-enforcement.md)) |
 | **`Processor`** | `process(dataset) -> Dataset`, run mid-pipeline via `.with_processor()`. `SchemaCoercion` (repair storage-lossy types); the Selection transforms `Filter` / `Score` / `Sort` / `Rename` / `Stamp`, the per-group `TopNPerGroup` / `SamplePerGroup`, the explicit-dependency cross-feed `JoinWith` / `AntiJoinWith`; and the Ingest / fan-out transforms `SelectColumns` / `Unpivot` / `DeriveKey` / `LatestPerKey`. → [processors.md](processors.md) |
 | **`Stage`** | A position-sensitive step inside one class-level `Pipeline` run: current `Dataset` in, next `Dataset` out. Compose with `.add_stage(...)` when validation, processing, or explicit checkpoint writes must appear at an exact point. Built-ins: `ValidationStage`, `ProcessingStage`, `CheckpointStage`. |
@@ -379,8 +379,31 @@ strategy = AccumulateByRun.from_context(context)
 - The SelectionPool reaches the review platform as a **Deliverable** (a later
   slice); the returned **Review Outcomes** come back via **Sync**, not here.
 - Run domain Pipelines through the thin runner when freshness matters:
-  `python -m pipelines.run cases selection /tmp/demo --run-date 2026-05-29`
+  `python -m pipelines.cli run cases selection /tmp/demo --run-date 2026-05-29`
   checks recent successful `cases/ingest` history before Selection executes.
+
+### Operate pipelines from the CLI — run, status, runs, log
+
+For the everyday operator tasks — running a pipeline, checking its status,
+listing recent runs, inspecting a run log — use `python -m pipelines.cli` instead
+of writing a wrapper script. It is a thin shell over the runner and the
+`RunRegistry` / `RunLog` seam; full reference with example output is
+[`operator-cli.md`](operator-cli.md).
+
+```sh
+python -m pipelines.cli run cases ingest /data --run-date 2026-05-29
+python -m pipelines.cli status /data --case-type cases
+python -m pipelines.cli runs /data --pipeline cases/ingest --limit 5
+python -m pipelines.cli log /data cases --run-id 5f8ff8c7
+```
+
+Pass `run --logical-run-id <id>` to re-drive a business run: a re-run under the
+same logical id replaces that run's accumulated rows instead of duplicating them
+(it defaults to `case_type/pipeline:run_date`). Each command reports a clear
+one-line error and a non-zero exit on the expected
+failures (unknown pipeline, stale upstream, validation failure, missing run
+history) rather than a traceback. `python -m pipelines.run …` remains as the
+historical `run`-only shortcut.
 
 ---
 
@@ -398,6 +421,7 @@ strategy = AccumulateByRun.from_context(context)
 | [`working-day-calendar.md`](working-day-calendar.md) | Availability arithmetic. |
 | [`run-log-format.md`](run-log-format.md) | The JSONL record schema and the run registry. |
 | [`retry.md`](retry.md) | Targeted retry at the reader/writer edges — `RetryPolicy`, where to use it and where not. |
+| [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `status` / `runs` / `log`) with example commands and output. |
 | [`adr/`](adr/) | Every architectural decision (the *why*). |
 | [`../CONTEXT.md`](../CONTEXT.md) | The domain language — the canonical glossary. |
 </content>
