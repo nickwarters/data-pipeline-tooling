@@ -31,14 +31,18 @@ def test_demo_runs_the_full_source_to_selection_path(tmp_path, capsys):
     assert list(selection_pool["case_ref"]) == ["c1", "c2"]
     assert list(selection_pool["priority_score"]) == [1000, 240]
     assert set(selection_pool["question_bank_id"]) == {"qb-100"}
-    assert set(selection_pool["run_id"]) == {"2026-05-29"}
+    # Stamped with the namespaced logical run id derived from the RunContext, and
+    # a per-execution execution_id for traceability (#77, ADR-0006).
+    assert set(selection_pool["run_id"]) == {"cases/selection:2026-05-29"}
+    assert set(selection_pool["logical_run_id"]) == {"cases/selection:2026-05-29"}
+    assert selection_pool["execution_id"].notna().all()
 
     # Selection explainability (#53): a sibling trace landed alongside the pool,
     # stamped by the same run, with a per-Case verdict for every available Case.
     trace = Store(cases_dir).reader("gold", "selection_trace").read().to_pandas()
     by_ref = trace.set_index("case_ref")
     assert set(trace["case_ref"]) == {"c1", "c2", "c3"}  # all considered, not just survivors
-    assert set(trace["run_id"]) == {"2026-05-29"}
+    assert set(trace["run_id"]) == {"cases/selection:2026-05-29"}
     assert by_ref.loc["c1", "verdict"] == "selected"
     assert by_ref.loc["c1", "score"] == 1000
     assert by_ref.loc["c3", "verdict"] == "excluded"  # below the high-value gate

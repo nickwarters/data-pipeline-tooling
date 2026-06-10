@@ -396,7 +396,10 @@ python -m pipelines.cli runs /data --pipeline cases/ingest --limit 5
 python -m pipelines.cli log /data cases --run-id 5f8ff8c7
 ```
 
-Each command reports a clear one-line error and a non-zero exit on the expected
+Pass `run --logical-run-id <id>` to re-drive a business run: a re-run under the
+same logical id replaces that run's accumulated rows instead of duplicating them
+(it defaults to `case_type/pipeline:run_date`). Each command reports a clear
+one-line error and a non-zero exit on the expected
 failures (unknown pipeline, stale upstream, validation failure, missing run
 history) rather than a traceback. `python -m pipelines.run …` remains as the
 historical `run`-only shortcut.

@@ -32,6 +32,30 @@ def test_run_executes_a_registered_pipeline(tmp_path):
     assert (tmp_path / "_registry" / "runs.db").exists()
 
 
+def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
+    from framework.io import GOLD, StoreCatalog
+
+    assert _cli("run", "cases", "ingest", str(tmp_path), "--run-date", "2026-05-29").returncode == 0
+
+    def selection():
+        return _cli(
+            "run", "cases", "selection", str(tmp_path),
+            "--run-date", "2026-05-29", "--logical-run-id", "REDRIVE-7",
+        )
+
+    assert selection().returncode == 0, selection().stderr
+    # Re-drive the same business run a second time.
+    assert selection().returncode == 0
+
+    pool = (
+        StoreCatalog(tmp_path).store("cases").reader(GOLD, "selection_pool").read().to_pandas()
+    )
+    # Replaced under the one logical run id, not accumulated into duplicates.
+    assert set(pool["run_id"]) == {"REDRIVE-7"}
+    assert set(pool["logical_run_id"]) == {"REDRIVE-7"}
+    assert list(pool["case_ref"]) == ["c1", "c2"]
+
+
 def test_run_unknown_pipeline_reports_clear_error(tmp_path):
     result = _cli("run", "cases", "nope", str(tmp_path))
 

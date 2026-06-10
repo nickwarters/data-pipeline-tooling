@@ -25,6 +25,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("pipeline")
     parser.add_argument("base_dir")
     parser.add_argument("--run-date", type=_date, default=dt.date.today())
+    parser.add_argument(
+        "--logical-run-id",
+        help="re-drive this business run: a re-run with the same id replaces its rows",
+    )
     parser.add_argument("--freshness-days", type=int, default=0)
     args = parser.parse_args(argv)
     return _run(args)

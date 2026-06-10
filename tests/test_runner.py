@@ -177,6 +177,43 @@ def test_runner_context_correlates_logs_registry_and_accumulated_rows(tmp_path):
     assert set(landed["load_date"]) == {"2026-05-29"}
 
 
+def test_runner_redrives_a_business_run_under_an_explicit_logical_run_id(tmp_path):
+    # Re-driving a business run: two distinct executions sharing one
+    # logical_run_id must replace the same rows (idempotent), each traceable by
+    # its own execution_id (#77, ADR-0006).
+    runner = PipelineRunner()
+
+    def handler(context):
+        store = Store(context.base_dir / context.case_type)
+        source = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c1", "c2"]}))
+        return (
+            Pipeline(context.label, DatasetReader(source))
+            .write_to(
+                store.writer(
+                    "gold", "selection_pool", AccumulateByRun.from_context(context)
+                )
+            )
+            .run(context=context)
+        )
+
+    runner.register("cases", "selection", handler)
+
+    runner.run("cases", "selection", tmp_path, logical_run_id="REDRIVE-7")
+    runner.run("cases", "selection", tmp_path, logical_run_id="REDRIVE-7")
+
+    landed = (
+        SqliteReader(tmp_path / "cases" / "gold.db", "selection_pool")
+        .read()
+        .to_pandas()
+    )
+    # Replaced, not duplicated: still two rows, all under the one logical run id.
+    assert len(landed) == 2
+    assert set(landed["run_id"]) == {"REDRIVE-7"}
+    assert set(landed["logical_run_id"]) == {"REDRIVE-7"}
+    # Each execution stays individually traceable.
+    assert len(set(landed["execution_id"])) == 1  # the latest execution's rows
+
+
 def test_runner_unknown_pipeline_raises_clear_error(tmp_path):
     runner = PipelineRunner()
 
