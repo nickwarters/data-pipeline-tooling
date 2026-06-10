@@ -21,6 +21,7 @@ import pandas as pd
 from framework.connection import connect
 from framework.dataset import Dataset
 from framework.remote import SharePointPusher, StubbedSharePointPusher
+from framework.sql import quote_identifier
 from framework.strategy import AccumulateByRun, Refresh, UpsertStrategy
 
 
@@ -255,7 +256,9 @@ class QuarantineWriter:
                 run_id = frame["run_id"].iloc[0]
                 try:
                     con.execute(
-                        f"DELETE FROM {self._table} WHERE run_id = ?", (run_id,)
+                        f"DELETE FROM {quote_identifier(self._table)} "
+                        "WHERE run_id = ?",
+                        (run_id,),
                     )
                 except sqlite3.OperationalError:
                     pass  # table does not exist yet
@@ -307,7 +310,9 @@ class SqliteUpsertWriter:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         con = connect(self._db_path, self._busy_timeout_ms)
         try:
-            col_list = ", ".join(frame.columns)
+            table = quote_identifier(self._table)
+            staging = quote_identifier(self._staging)
+            col_list = ", ".join(quote_identifier(c) for c in frame.columns)
 
             # Write incoming rows to staging (DDL auto-commits; staging data
             # is visible to subsequent statements on this connection).
@@ -321,21 +326,21 @@ class SqliteUpsertWriter:
             # Atomic merge: delete matching rows, then insert all incoming.
             # EXISTS join handles composite keys without row-value syntax.
             key_match = " AND ".join(
-                f"{self._staging}.{k} = {self._table}.{k}"
+                f"{staging}.{quote_identifier(k)} = {table}.{quote_identifier(k)}"
                 for k in self._key_columns
             )
             con.execute(
-                f"DELETE FROM {self._table} WHERE EXISTS "
-                f"(SELECT 1 FROM {self._staging} WHERE {key_match})"
+                f"DELETE FROM {table} WHERE EXISTS "
+                f"(SELECT 1 FROM {staging} WHERE {key_match})"
             )
             con.execute(
-                f"INSERT INTO {self._table} ({col_list}) "
-                f"SELECT {col_list} FROM {self._staging}"
+                f"INSERT INTO {table} ({col_list}) "
+                f"SELECT {col_list} FROM {staging}"
             )
             con.commit()
 
             # Drop the staging table now that the merge is committed.
-            con.execute(f"DROP TABLE IF EXISTS {self._staging}")
+            con.execute(f"DROP TABLE IF EXISTS {staging}")
         finally:
             con.close()
 
@@ -388,7 +393,9 @@ class AccumulateByRunWriter:
             # re-driven day replaces only its own rows and never other runs'.
             try:
                 con.execute(
-                    f"DELETE FROM {self._table} WHERE run_id = ?", (self._run_id,)
+                    f"DELETE FROM {quote_identifier(self._table)} "
+                    "WHERE run_id = ?",
+                    (self._run_id,),
                 )
             except sqlite3.OperationalError:
                 pass  # table does not exist yet — nothing to clear

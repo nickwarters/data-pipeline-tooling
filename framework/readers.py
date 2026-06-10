@@ -16,6 +16,7 @@ import pandas as pd
 
 from framework.connection import connect
 from framework.dataset import Dataset
+from framework.sql import quote_identifier
 from framework.remote import (
     RemoteRunner,
     SharePointFetcher,
@@ -144,11 +145,12 @@ class SqliteReader:
         self._columns = columns
 
     def read(self) -> Dataset:
+        table = quote_identifier(self._table)
         if self._columns is not None:
-            col_list = ", ".join(self._columns)
-            query = f"SELECT {col_list} FROM {self._table}"
+            col_list = ", ".join(quote_identifier(c) for c in self._columns)
+            query = f"SELECT {col_list} FROM {table}"
         else:
-            query = f"SELECT * FROM {self._table}"
+            query = f"SELECT * FROM {table}"
         con = connect(self._db_path, self._busy_timeout_ms)
         try:
             frame = pd.read_sql(query, con)
