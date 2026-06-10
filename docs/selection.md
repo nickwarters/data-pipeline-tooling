@@ -243,7 +243,7 @@ It lands the bundled feed into `raw`, refines it to `silver` (the CasePool),
 fetches the available cases, and runs Selection into `gold` — printing, e.g.:
 
 ```
-available cases: 3 -> SelectionPool: 2 cases (Question Bank qb-100, run 2026-05-29)
+available cases: 3 -> SelectionPool: 2 cases (Question Bank qb-100, logical run cases/selection:2026-05-29)
 ```
 
 The `as_of` date is fixed so the working-day window lines up with the sample feed
@@ -258,4 +258,10 @@ python -m pipelines.run cases selection /tmp/demo --run-date 2026-05-29
 ```
 
 The runner records domain summaries under stable labels (`cases/ingest`,
-`cases/selection`) and writes the `freshness` guard record for Selection.
+`cases/selection`) and writes the `freshness` guard record for Selection. The
+handlers derive their `AccumulateByRun` strategy from the `RunContext`
+(`AccumulateByRun.from_context(context)`), so each gold row is stamped with the
+run's logical run id (default `case_type/pipeline:run_date`) and `execution_id`.
+Re-driving a business run under the same id replaces its rows rather than
+duplicating them — over the CLI, `python -m pipelines.cli run cases selection
+/tmp/demo --logical-run-id <id>` (see [operator-cli.md](operator-cli.md)).

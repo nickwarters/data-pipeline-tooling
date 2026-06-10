@@ -73,6 +73,7 @@ def _run(args: argparse.Namespace) -> int:
             args.pipeline,
             Path(args.base_dir),
             run_date=args.run_date,
+            logical_run_id=args.logical_run_id,
             freshness_days=args.freshness_days,
         )
     except (FreshnessError, UnknownPipelineError, ValidationError) as exc:
@@ -167,6 +168,11 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("pipeline")
     run.add_argument("base_dir")
     run.add_argument("--run-date", type=_date, default=dt.date.today())
+    run.add_argument(
+        "--logical-run-id",
+        help="re-drive this business run: a re-run with the same id replaces its "
+        "rows (default: case_type/pipeline:run_date)",
+    )
     run.add_argument("--freshness-days", type=int, default=0)
     run.set_defaults(func=_run)
 

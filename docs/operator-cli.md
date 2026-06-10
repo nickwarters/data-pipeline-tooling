@@ -29,18 +29,40 @@ logs) and `<base>/_registry/runs.db` (the queryable run registry) underneath it;
 
 ```sh
 python -m pipelines.cli run <case_type> <pipeline> <base_dir> \
-    [--run-date YYYY-MM-DD] [--freshness-days N]
+    [--run-date YYYY-MM-DD] [--logical-run-id ID] [--freshness-days N]
 ```
 
 Runs the domain Pipeline registered for `(case_type, pipeline)`. `--run-date`
-sets the run/idempotency date (the part of the run model the CLI can drive
-today); it defaults to today. `--freshness-days` relaxes the upstream-freshness
-window. Exit code is `0` on success, non-zero on a clear error (see below).
+sets the run date (defaults to today). `--freshness-days` relaxes the
+upstream-freshness window. Exit code is `0` on success, non-zero on a clear error
+(see below).
 
 ```console
 $ python -m pipelines.cli run cases selection /data --run-date 2026-05-29
-available cases: 3 -> SelectionPool: 2 cases (Question Bank qb-100, run 2026-05-29); trace: 3 considered, 1 excluded with a reason
+available cases: 3 -> SelectionPool: 2 cases (Question Bank qb-100, logical run cases/selection:2026-05-29); trace: 3 considered, 1 excluded with a reason
 ```
+
+### Re-driving a business run — `--logical-run-id`
+
+A run's **logical run id** is the idempotency key for its accumulated rows: a
+re-run under the *same* logical id replaces that run's rows rather than adding
+duplicates, while each execution stays individually traceable by its own
+`execution_id` ([ADR-0006](adr/0006-load-idempotency-refresh-upstream-accumulate-downstream.md),
+#77). When omitted it defaults to `case_type/pipeline:run_date`, so re-running a
+given date is already idempotent.
+
+Pass `--logical-run-id` to re-drive a specific business run explicitly — for
+example to reprocess a correction batch under a stable id independent of the
+calendar date:
+
+```console
+$ python -m pipelines.cli run cases selection /data --logical-run-id 2026-05-correction
+$ python -m pipelines.cli run cases selection /data --logical-run-id 2026-05-correction
+```
+
+The second invocation replaces the first run's rows in the SelectionPool (the
+`run_id` / `logical_run_id` columns hold `2026-05-correction`); the row count
+stays stable instead of doubling.
 
 ## `status` — the latest run per pipeline
 

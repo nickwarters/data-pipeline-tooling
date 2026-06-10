@@ -137,6 +137,7 @@ class PipelineRunner:
         base_dir: str | Path,
         *,
         run_date: dt.date | None = None,
+        logical_run_id: str | None = None,
         freshness_days: int = 0,
     ) -> object:
         registered = self._registered.get((case_type, pipeline))
@@ -159,6 +160,7 @@ class PipelineRunner:
             pipeline=pipeline,
             run_date=run_date or dt.date.today(),
             execution_id=uuid.uuid4().hex,
+            logical_run_id=logical_run_id,
             run_log=run_log,
             run_registry=run_registry,
             freshness_days=freshness_days,
