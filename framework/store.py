@@ -28,6 +28,7 @@ from typing import Protocol
 from framework.connection import connect
 from framework.layers import GOLD, RAW, SILVER, Layer, layer_name
 from framework.readers import Reader, SqliteReader
+from framework.sql import quote_identifier
 from framework.strategy import AccumulateByRun, Refresh, UpsertStrategy
 from framework.writers import (
     AccumulateByRunWriter,
@@ -161,7 +162,7 @@ class RawTableColumns:
         con = connect(self._db_path, self._busy_timeout_ms)
         try:
             rows = con.execute(
-                f'PRAGMA table_info("{self._table}")'
+                f"PRAGMA table_info({quote_identifier(self._table)})"
             ).fetchall()
         finally:
             con.close()

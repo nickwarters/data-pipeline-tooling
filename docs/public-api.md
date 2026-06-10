@@ -71,6 +71,9 @@ without notice:
 
 - `framework.connection` (`connect`) — the connection factory seam (ADR-0001);
   used by Readers/Writers/Store, not by pipelines.
+- `framework.sql` (`quote_identifier`) — the single place a table/column name is
+  turned into a safely-quoted SQL identifier (issue #138); applied at every
+  identifier interpolation across the SQLite seam, not imported by pipelines.
 - `framework.layers` (`layer_name`, `LAYERS`) — internal layer-name validation;
   the public layer surface is `Layer`/`RAW`/`SILVER`/`GOLD` via `framework.io`.
 - `framework.trace` (`RowTrace`) — the generic per-row trace mechanics behind
