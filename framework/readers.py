@@ -198,9 +198,10 @@ class SharePointReader:
     Configured with the SharePoint ``site``, ``list_name``, and ``auth`` config;
     the fetch is delegated to a swappable
     :class:`~framework.remote.SharePointFetcher`. The default fetcher defers the
-    real client (auth/tenant out of scope — ADR-0004) and raises on ``read()``;
-    pass a :class:`~framework.remote.LocalCsvFetcher` to read a local fixture, or
-    a real client later, without changing this Reader (ADR-0005).
+    real on-prem SE client (NTLM/Kerberos/REST auth out of scope — ADR-0004) and
+    raises on ``read()``; pass a :class:`~framework.remote.LocalCsvFetcher` to
+    read a local fixture, or a real client later, without changing this Reader
+    (ADR-0005).
     """
 
     def __init__(

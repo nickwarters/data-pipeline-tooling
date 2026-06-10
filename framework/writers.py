@@ -146,7 +146,19 @@ class JsonWriter:
 
 
 class SharePointWriter:
-    """Write a Dataset to a SharePoint list through a swappable pusher seam."""
+    """Emit a Dataset to a SharePoint list through a swappable pusher seam.
+
+    The outbound dual of :class:`~framework.readers.SharePointReader` and the
+    emitter of the canonical **Selection** Deliverable: the SelectionPool pushed
+    to **one list per Case Type** (CONTEXT.md). Owns its target (``site`` +
+    ``list_name``) and its load strategy, exactly as the SQLite Writers own
+    location + strategy (ADR-0006). The push is delegated to a swappable
+    :class:`~framework.remote.SharePointPusher`; the default defers the real
+    on-prem SE client (NTLM/Kerberos/REST auth — ADR-0004) and raises on
+    ``write()``, so a test double drives both directions with no network. The
+    Deliverable is emitted by a **second pipeline** that reads the gold
+    SelectionPool and writes here — not a mid-run checkpoint (CONTEXT.md, #48).
+    """
 
     def __init__(
         self,

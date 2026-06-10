@@ -5,10 +5,40 @@ import pytest
 
 from framework.builder import Pipeline
 from framework.dataset import Dataset
-from framework.readers import CsvReader, SharePointReader
+from framework.readers import CsvReader, SharePointReader, SqliteReader
 from framework.remote import LocalCsvFetcher
 from framework.strategy import AccumulateByRun, Refresh
-from framework.writers import SharePointWriter, SqliteTruncateReloadWriter
+from framework.writers import (
+    AccumulateByRunWriter,
+    SharePointWriter,
+    SqliteTruncateReloadWriter,
+)
+
+
+class FakeListBackend:
+    """An in-memory SharePoint list backend standing in for the deferred client.
+
+    Plays *both* seam roles (fetch + push) over a dict keyed by (site, list), so a
+    Dataset pushed by ``SharePointWriter`` can be fetched straight back by
+    ``SharePointReader`` with no network, no tenant — the SharePoint-list dual of
+    the way ``SasReader`` tests against landed fixture files (ADR-0004/0005). One
+    object covers both directions, mirroring the single client seam a real on-prem
+    SE client will sit behind. ``Refresh`` overwrites a list; ``AccumulateByRun``
+    appends to it, so per-Case-Type lists stay independent and runs accumulate.
+    """
+
+    def __init__(self) -> None:
+        self._lists: dict[tuple[str, str], pd.DataFrame] = {}
+
+    def push(self, site, list_name, auth, dataset, strategy) -> None:
+        key = (site, list_name)
+        frame = dataset.to_pandas().copy()
+        if isinstance(strategy, AccumulateByRun) and key in self._lists:
+            frame = pd.concat([self._lists[key], frame], ignore_index=True)
+        self._lists[key] = frame
+
+    def fetch(self, site, list_name, auth) -> Dataset:
+        return Dataset.from_pandas(self._lists[(site, list_name)].copy())
 
 
 @pytest.fixture
@@ -154,3 +184,77 @@ def test_sharepoint_writer_composes_in_the_pipeline_builder(fixture_csv):
         "load_date",
     ]
     assert len(dataset) == 3
+
+
+def test_write_then_read_round_trips_through_an_in_memory_list_backend():
+    # AC4: both directions exercised against a fake in-memory list backend — no
+    # network, no real SharePoint. One backend object plays fetcher and pusher,
+    # so a Dataset pushed out comes straight back through the read seam.
+    backend = FakeListBackend()
+    site = "http://sharepoint.corp.local/sites/cases"
+    pushed = Dataset.from_pandas(
+        pd.DataFrame({"case_ref": ["c1", "c2"], "amount": [100, 200]})
+    )
+
+    SharePointWriter(site, "Selection", strategy=Refresh(), pusher=backend).write(pushed)
+    read_back = SharePointReader(site, "Selection", fetcher=backend).read()
+
+    assert read_back.columns == ["case_ref", "amount"]
+    assert len(read_back) == 2
+
+
+def test_accumulate_by_run_stamps_survive_the_round_trip():
+    # The Writer's AccumulateByRun stamps reach the list and a later run appends
+    # rather than replacing, so the backend holds the across-run audit trail the
+    # SelectionPool Deliverable carries (ADR-0006).
+    backend = FakeListBackend()
+    site = "http://sharepoint.corp.local/sites/cases"
+    rows = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c1"]}))
+
+    SharePointWriter(
+        site, "Selection", strategy=AccumulateByRun("r1", "2026-06-10"), pusher=backend
+    ).write(rows)
+    SharePointWriter(
+        site, "Selection", strategy=AccumulateByRun("r2", "2026-06-11"), pusher=backend
+    ).write(rows)
+
+    landed = SharePointReader(site, "Selection", fetcher=backend).read()
+    frame = landed.to_pandas()
+    assert landed.columns == ["case_ref", "run_id", "logical_run_id", "load_date"]
+    assert list(frame["run_id"]) == ["r1", "r2"]
+
+
+def test_selection_pool_is_delivered_to_a_per_case_type_list(tmp_path):
+    # AC5: the Selection Deliverable terminus. A *second* pipeline reads the gold
+    # SelectionPool and writes it to the Case Type's own SharePoint list — the
+    # two-pipelines mechanism settled in #48 (CONTEXT.md), not a mid-run
+    # checkpoint. Gold SelectionPool -> SqliteReader -> SharePointWriter -> list.
+    case_type = "cases"
+    gold_db = tmp_path / case_type / "gold.db"
+    selection_pool = Dataset.from_pandas(
+        pd.DataFrame({"case_ref": ["c1", "c3"], "question_bank_id": ["qb-100", "qb-100"]})
+    )
+    # Land the SelectionPool into gold exactly as the Selection pipeline does
+    # (accumulate-by-run audit trail), so the Deliverable pipeline reads a real
+    # gold table rather than an in-memory hand-off.
+    AccumulateByRunWriter(gold_db, "selection_pool", "2026-06-10", "2026-06-10").write(
+        selection_pool
+    )
+
+    backend = FakeListBackend()
+    site = "http://sharepoint.corp.local/sites/cases"
+    list_name = f"Selection - {case_type}"  # one list per Case Type
+
+    Pipeline(
+        "selection-deliverable", SqliteReader(gold_db, "selection_pool")
+    ).write_to(
+        SharePointWriter(site, list_name, strategy=Refresh(), pusher=backend)
+    ).run()
+
+    delivered = SharePointReader(site, list_name, fetcher=backend).read()
+    frame = delivered.to_pandas()
+    assert list(frame["case_ref"]) == ["c1", "c3"]
+    assert set(frame["question_bank_id"]) == {"qb-100"}
+    # The push landed in exactly this Case Type's list and nowhere else — the
+    # SelectionPool Deliverable is one list per Case Type.
+    assert list(backend._lists.keys()) == [(site, list_name)]

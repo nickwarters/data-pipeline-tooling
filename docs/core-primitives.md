@@ -167,7 +167,7 @@ directions are explicit:
 | JSON file | _intentionally absent_ | `JsonWriter` | JSON is currently a Reporting Deliverable format only; no inbound JSON Feed has been needed yet. |
 | SQLite table | `SqliteReader` | `SqliteTruncateReloadWriter`, `AccumulateByRunWriter` | The Store mints these over medallion layer databases. |
 | SAS extract | `SasReader` | _intentionally absent_ | SAS is an inbound-only remote source; the framework lands the remote output then reads local CSV files. |
-| SharePoint list | `SharePointReader` | `SharePointWriter` | Both sides are stubbed behind swappable `SharePointFetcher` / `SharePointPusher` seams until auth/tenant work lands. |
+| SharePoint list | `SharePointReader` | `SharePointWriter` | Target is **SE on-prem**. Both sides are stubbed behind swappable `SharePointFetcher` / `SharePointPusher` seams until the on-prem SE client (NTLM/Kerberos/REST) lands. `SharePointWriter` emits the canonical Selection Deliverable — one list per Case Type. |
 
 ### `Writer` — the destination, behind one method
 A `Writer` is the component-role **dual of `Reader`**: a Reader brings data in,
@@ -189,8 +189,9 @@ Deliverables and SQLite tables:
   `.xlsx` workbook.
 - `JsonWriter(path, strategy)` — writes a UTF-8 JSON array of record objects.
 - `SharePointWriter(site, list_name, auth=None, strategy=Refresh(), pusher=...)`
-  — pushes rows to a SharePoint list through a swappable pusher seam; the default
-  pusher raises until auth/tenant work lands.
+  — pushes rows to an on-prem SE SharePoint list through a swappable pusher seam;
+  the default pusher raises until the on-prem SE client (NTLM/Kerberos/REST)
+  lands. Emits the Selection Deliverable — one list per Case Type.
 - `SqliteTruncateReloadWriter(db_path, table)` — **full refresh** (truncate +
   reload). Used for raw/silver, which mirror a current-state source snapshot.
 - `AccumulateByRunWriter(db_path, table, run_id, load_date, execution_id=None)` —
