@@ -11,13 +11,13 @@ For a fresh CSV feed, generate a runnable starting point instead of writing the
 files by hand (#97):
 
 ```sh
-python -m pipelines.scaffold orders            # -> pipelines/orders/
-python -m pipelines.scaffold orders --dest /tmp/x   # land it elsewhere
+python -m pipelines.scaffold orders            # -> pipelines/orders/ + tests/pipelines/test_orders.py
 python -m pipelines.scaffold orders --force    # overwrite if it exists
 ```
 
-This renders a **self-contained feed subpackage** from the template under
-`pipelines/_scaffold_template/` — four artifacts wired together and ready to run:
+This renders, from the template under `pipelines/_scaffold_template/`, the feed
+**code** as a subpackage and its **test** under `tests/pipelines/` (with the rest
+of the suite, mirroring the source layout) — wired together and ready to run:
 
 ```
 pipelines/orders/
@@ -25,18 +25,19 @@ pipelines/orders/
   schema.py            # @dataclass OrdersRow — the column/dtype contract
   pipeline.py          # CSV -> raw via the facades; gates on the schema's columns
   sample_data/orders.csv
+tests/pipelines/
   test_orders.py       # given source rows -> expected landed rows
 ```
 
 The feed name must be a lowercase Python identifier (it becomes the package
-name); `--force` overwrites an existing feed directory. The generated code
-imports only through the public facades (no engine types, no case-review
-assumptions) and uses **relative** intra-package imports, so it runs as a module
-from the repo root and is portable:
+name); `--force` overwrites an existing feed's files. The generated code imports
+only through the public facades (no engine types, no case-review assumptions);
+the pipeline uses **relative** intra-package imports, and the relocated test
+imports the feed absolutely (`from pipelines.orders.pipeline import …`):
 
 ```sh
-python -m pipelines.orders.pipeline /data   # land the bundled sample into raw
-python -m pytest pipelines/orders           # the generated test passes as-is
+python -m pipelines.orders.pipeline /data        # land the bundled sample into raw
+python -m pytest tests/pipelines/test_orders.py  # the generated test passes as-is
 ```
 
 Then **customise**: edit `schema.py`'s fields to your source columns (and add

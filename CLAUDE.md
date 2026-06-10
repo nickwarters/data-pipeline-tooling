@@ -21,9 +21,9 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   that span trees (e.g. the public-API and framework/domain boundary tests).
   Shared helpers (`tests/_schema_fixtures.py`, `tests/fixtures/`) sit at the
   `tests/` root. Each test dir is a package (`__init__.py`) so module paths are
-  unique under pytest's default import mode — no basename collisions. Generated
-  *feed* tests are the exception: the scaffold (#97) puts a feed's test next to
-  its code under `pipelines/<feed>/`, not in `tests/`.
+  unique under pytest's default import mode — no basename collisions. A
+  scaffolded feed (#97) follows the same convention: its code lands in
+  `pipelines/<feed>/` and its test in `tests/pipelines/test_<feed>.py`.
 - **Public API (#95):** pipeline code imports through the three facades
   `framework.io` / `framework.transform` / `framework.run`, not the modules
   behind them (those are internal layout). The facades are the stable contract;
@@ -46,16 +46,17 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt   # pandas + pytest
 .venv/bin/python -m pytest                       # run the suite
 .venv/bin/python -m pipelines.demo_csv_to_raw /tmp/demo   # run the demo (module form, from repo root)
-.venv/bin/python -m pipelines.scaffold orders            # scaffold a new CSV feed -> pipelines/orders/ (#97)
+.venv/bin/python -m pipelines.scaffold orders            # scaffold a feed -> pipelines/orders/ + tests/pipelines/test_orders.py (#97)
 ```
 
 Run pipelines as **modules from the repo root** (`python -m pipelines.<name>`)
 so the import-only `framework` package resolves on `sys.path`.
 
-Scaffold a new feed with `python -m pipelines.scaffold <feed>`: it renders a
-self-contained `pipelines/<feed>/` subpackage (schema, pipeline, sample fixture,
-test) from the template under `pipelines/_scaffold_template/`, ready to run and
-customise. See [`docs/adding-a-feed.md`](docs/adding-a-feed.md).
+Scaffold a new feed with `python -m pipelines.scaffold <feed>`: it renders the
+feed code as a `pipelines/<feed>/` subpackage (schema, pipeline, sample fixture)
+and its test as `tests/pipelines/test_<feed>.py`, from the template under
+`pipelines/_scaffold_template/`, ready to run and customise. See
+[`docs/adding-a-feed.md`](docs/adding-a-feed.md).
 
 ## Core constraint: cross-platform (Windows-first, macOS-compatible)
 
