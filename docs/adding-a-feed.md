@@ -5,6 +5,51 @@ is: pick the `Reader` for the source type, compose it into a `Pipeline`, and
 point the pipeline at a layer Writer minted by the subject's `Store`. No new
 engine code is needed for the source types that already ship.
 
+## 0. Scaffold the feed (the quickest start)
+
+For a fresh CSV feed, generate a runnable starting point instead of writing the
+files by hand (#97):
+
+```sh
+python -m pipelines.scaffold orders            # -> pipelines/orders/
+python -m pipelines.scaffold orders --dest /tmp/x   # land it elsewhere
+python -m pipelines.scaffold orders --force    # overwrite if it exists
+```
+
+This renders a **self-contained feed subpackage** from the template under
+`pipelines/_scaffold_template/` — four artifacts wired together and ready to run:
+
+```
+pipelines/orders/
+  __init__.py
+  schema.py            # @dataclass OrdersRow — the column/dtype contract
+  pipeline.py          # CSV -> raw via the facades; gates on the schema's columns
+  sample_data/orders.csv
+  test_orders.py       # given source rows -> expected landed rows
+```
+
+The feed name must be a lowercase Python identifier (it becomes the package
+name); `--force` overwrites an existing feed directory. The generated code
+imports only through the public facades (no engine types, no case-review
+assumptions) and uses **relative** intra-package imports, so it runs as a module
+from the repo root and is portable:
+
+```sh
+python -m pipelines.orders.pipeline /data   # land the bundled sample into raw
+python -m pytest pipelines/orders           # the generated test passes as-is
+```
+
+Then **customise**: edit `schema.py`'s fields to your source columns (and add
+`Annotated` value rules as needed — see
+[schema-enforcement.md](schema-enforcement.md)), replace the sample CSV, swap
+`CsvReader` for another Reader (next section) if the source isn't a CSV, and grow
+`test_<feed>.py` to assert the rows and any processors you add. To refine the
+landed feed raw → silver with the schema enforced, add a `raw_to_silver(store,
+"orders", OrdersRow)` run — see [`schema-enforcement.md`](schema-enforcement.md).
+
+The rest of this guide is the reference behind that scaffold: every Reader, and
+the stubbed remote (SAS / SharePoint) seams.
+
 ## 1. Pick a `Reader`
 
 A `Reader` encapsulates *how one source type is read* behind a single method

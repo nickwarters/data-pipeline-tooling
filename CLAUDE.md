@@ -36,10 +36,16 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt   # pandas + pytest
 .venv/bin/python -m pytest                       # run the suite
 .venv/bin/python -m pipelines.demo_csv_to_raw /tmp/demo   # run the demo (module form, from repo root)
+.venv/bin/python -m pipelines.scaffold orders            # scaffold a new CSV feed -> pipelines/orders/ (#97)
 ```
 
 Run pipelines as **modules from the repo root** (`python -m pipelines.<name>`)
 so the import-only `framework` package resolves on `sys.path`.
+
+Scaffold a new feed with `python -m pipelines.scaffold <feed>`: it renders a
+self-contained `pipelines/<feed>/` subpackage (schema, pipeline, sample fixture,
+test) from the template under `pipelines/_scaffold_template/`, ready to run and
+customise. See [`docs/adding-a-feed.md`](docs/adding-a-feed.md).
 
 ## Core constraint: cross-platform (Windows-first, macOS-compatible)
 
