@@ -85,13 +85,17 @@ run boundary:
 
 Two source types live on a remote system the framework host can't run itself:
 SAS (no macOS runtime, and the cross-platform constraint forbids a Windows-only
-path) and SharePoint (tenant + auth out of scope for now). Their Readers keep
-the same `read() -> Dataset` shape, but the remote behaviour — shelling to
-`ssh`/`scp`, calling the SharePoint API — sits behind a **swappable seam in
-`framework.remote` that is stubbed today** (ADR-0004, ADR-0005). Because the
-remote step is a seam, the whole feed is testable against local fixtures with
-**no SSH, SAS box, network, or tenant**, and the real client drops in later
-without touching the Reader or any pipeline script.
+path) and SharePoint (**Subscription Edition on-prem**; the connection drops in
+from a separate repo). Their Readers keep the same `read() -> Dataset` shape,
+but the remote behaviour — shelling to `ssh`/`scp`, calling the SharePoint list
+API — sits behind a **swappable seam in `framework.remote` that is stubbed
+today** (ADR-0004, ADR-0005). The on-prem SE auth (NTLM/Kerberos/REST — **not**
+Azure AD/Graph) is a client-seam concern designed once for both directions, and
+keeping it behind the seam keeps the cross-platform constraint (Windows + macOS)
+the framework's, not the caller's. Because the remote step is a seam, the whole
+feed is testable against local fixtures with **no SSH, SAS box, network, or live
+SharePoint**, and the real client drops in later without touching the Reader,
+the Writer, or any pipeline script.
 
 ### `SasReader(script, copy_glob, dest)`
 
@@ -131,12 +135,14 @@ Configured with the SharePoint `site` URL, `list_name`, and `auth` config; on
 `read()` it delegates to a `SharePointFetcher` — the download seam — handing it
 the `(site, list_name, auth)` config verbatim. Two fetchers ship:
 
-- **`StubbedSharePointFetcher`** (the default): the real client is deferred
-  (auth/tenant out of scope — ADR-0004), so `read()` raises `NotImplementedError`
-  rather than pretending to reach the network.
+- **`StubbedSharePointFetcher`** (the default): the real on-prem SE client is
+  deferred (NTLM/Kerberos/REST auth out of scope — ADR-0004), so `read()` raises
+  `NotImplementedError` rather than pretending to reach the network.
 - **`LocalCsvFetcher(path)`**: an offline fetcher backed by a local CSV fixture;
   it ignores the SharePoint config and reads the file, so the read path is
-  exercised with no tenant. It has the same shape a real client will take.
+  exercised with no live connection. It has the same shape a real client will
+  take. (Tests that exercise **both** directions through one object use an
+  in-memory fake list backend — see `tests/test_sharepoint_reader.py`.)
 
 ```python
 from framework.io import SharePointReader
@@ -153,12 +159,28 @@ dataset = reader.read()
 
 ### `SharePointWriter(site, list_name, auth, strategy=Refresh())`
 
-The outbound dual of `SharePointReader`: configured with the target `site`,
-`list_name`, `auth`, and an explicit Writer load strategy. On `write(dataset)`,
-it delegates to a `SharePointPusher` — the upload seam — handing it the
-configured target, the `Dataset`, and the strategy. The default
-`StubbedSharePointPusher` raises `NotImplementedError` until the real tenant
-client exists, so tests pass a recording pusher and never touch the network.
+The outbound dual of `SharePointReader` and the emitter of the canonical
+**Selection** Deliverable — the SelectionPool pushed to **one list per Case
+Type**. Configured with the target `site`, `list_name`, `auth`, and an explicit
+Writer load strategy. On `write(dataset)`, it delegates to a `SharePointPusher`
+— the upload seam — handing it the configured target, the `Dataset`, and the
+strategy. The default `StubbedSharePointPusher` raises `NotImplementedError`
+until the real on-prem SE client exists, so tests pass a recording or in-memory
+fake pusher and never touch the network.
+
+The Deliverable is emitted by a **second pipeline** that reads the gold
+SelectionPool and writes here (`SqliteReader(gold, "selection_pool")` →
+`SharePointWriter`) — consistent with ADR-0009's single-Writer pipelines over a
+shared source, not a mid-run checkpoint (CONTEXT.md, #48):
+
+```python
+from framework.io import Refresh, SharePointWriter, SqliteReader
+from framework.builder import Pipeline
+
+Pipeline("selection-deliverable", SqliteReader(gold_db, "selection_pool")).write_to(
+    SharePointWriter(site, f"Selection - {case_type}", strategy=Refresh(), pusher=client)
+).run()
+```
 
 ```python
 from framework.io import Refresh, SharePointWriter
