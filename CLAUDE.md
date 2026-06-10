@@ -12,14 +12,24 @@ domain language in `CONTEXT.md`; the core primitives are documented in
 - **Language/runtime:** Python 3.12. The `framework/` package is **import-only**
   (on `sys.path`, never `pip install`ed); `pipelines/` holds runnable scripts.
   Packaging/installing the framework is an **explicit non-goal** (#95).
-- **Layout:** `framework/` (engine + domain), `pipelines/` (scripts),
-  `tests/` (pytest), `docs/` (architecture, ADRs).
+- **Layout:** `framework/` (reusable engine), `case_review/` (the case-review
+  *application* — domain types like `CaseType`/`CasePool` and its gold helpers,
+  which live outside the framework), `pipelines/` (scripts), `tests/` (pytest),
+  `docs/` (architecture, ADRs).
+- **Test layout:** `tests/` mirrors the source shape — `tests/framework/`,
+  `tests/case_review/`, `tests/pipelines/`, plus `tests/integration/` for tests
+  that span trees (e.g. the public-API and framework/domain boundary tests).
+  Shared helpers (`tests/_schema_fixtures.py`, `tests/fixtures/`) sit at the
+  `tests/` root. Each test dir is a package (`__init__.py`) so module paths are
+  unique under pytest's default import mode — no basename collisions. Generated
+  *feed* tests are the exception: the scaffold (#97) puts a feed's test next to
+  its code under `pipelines/<feed>/`, not in `tests/`.
 - **Public API (#95):** pipeline code imports through the three facades
   `framework.io` / `framework.transform` / `framework.run`, not the modules
   behind them (those are internal layout). The facades are the stable contract;
   [`docs/public-api.md`](docs/public-api.md) lists the surface, the internal
-  modules, and the packaging non-goal. `tests/test_public_api.py` holds
-  `pipelines/` to this boundary.
+  modules, and the packaging non-goal. `tests/integration/test_public_api.py`
+  holds `pipelines/` to this boundary.
 - **Core primitives:** `Dataset` (opaque tabular carrier, pandas behind the
   seam), `Reader` (`read() -> Dataset`; `CsvReader`, `SqliteReader`),
   `Writer` (`write(dataset) -> None`; owns target location + load strategy —

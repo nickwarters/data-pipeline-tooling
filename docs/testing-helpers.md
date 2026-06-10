@@ -113,5 +113,5 @@ warns = [w for r in records for w in r["warn_hits"]]
 assert any("schema drift" in w for w in warns)
 ```
 
-The demo-pipeline tests (`tests/test_demo_pipeline.py`,
-`tests/test_demo_selection.py`) use these helpers — a working reference.
+The demo-pipeline tests (`tests/pipelines/test_demo_pipeline.py`,
+`tests/pipelines/test_demo_selection.py`) use these helpers — a working reference.

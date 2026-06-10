@@ -10,9 +10,9 @@ plumbing stays out of reach.
 import ast
 from pathlib import Path
 
-FIXTURE = Path(__file__).parent / "fixtures" / "cases.csv"
+FIXTURE = Path(__file__).parent.parent / "fixtures" / "cases.csv"
 
-PIPELINES_DIR = Path(__file__).parent.parent / "pipelines"
+PIPELINES_DIR = Path(__file__).parent.parent.parent / "pipelines"
 PUBLIC_FACADES = {"io", "run", "transform"}
 
 

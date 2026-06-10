@@ -14,7 +14,7 @@ from framework.strategy import AccumulateByRun
 from framework.validators import ColumnValidator, RowCountValidator, ValidationError
 from framework.writers import QuarantineWriter
 
-FIXTURE = Path(__file__).parent / "fixtures" / "cases.csv"
+FIXTURE = Path(__file__).parent.parent / "fixtures" / "cases.csv"
 
 
 class RecordingReader:

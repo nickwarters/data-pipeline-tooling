@@ -194,7 +194,7 @@ the `(site, list_name, auth)` config verbatim. Two fetchers ship:
   it ignores the SharePoint config and reads the file, so the read path is
   exercised with no live connection. It has the same shape a real client will
   take. (Tests that exercise **both** directions through one object use an
-  in-memory fake list backend — see `tests/test_sharepoint_reader.py`.)
+  in-memory fake list backend — see `tests/framework/test_sharepoint_reader.py`.)
 
 ```python
 from framework.io import SharePointReader
