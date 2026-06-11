@@ -226,38 +226,6 @@ class TraceStartStep(PipelineStep):
 
 
 @dataclass(frozen=True)
-class ProcessorStep(PipelineStep):
-    processor: object = None
-
-    def __init__(self, processor: object) -> None:
-        object.__setattr__(self, "name", "process")
-        object.__setattr__(self, "kind", "processor")
-        object.__setattr__(self, "order", -1)
-        object.__setattr__(self, "component", processor)
-        object.__setattr__(self, "read_only", False)
-        object.__setattr__(self, "side_effect", False)
-        object.__setattr__(self, "processor", processor)
-
-    def execute(
-        self, dataset: Dataset | None, session: PipelineExecution
-    ) -> Dataset:
-        assert dataset is not None
-        with session.timed_step(self.name, rows_in=len(dataset)) as metrics:
-            before = dataset
-            session.materialize_dependencies([self.processor])
-            result = self.processor.process(dataset)
-            metrics.rows_out = len(result)
-        if session.trace is not None:
-            session.trace.observe(
-                getattr(self.processor, "trace_role", None),
-                getattr(self.processor, "trace_name", type(self.processor).__name__),
-                before,
-                result,
-            )
-        return result
-
-
-@dataclass(frozen=True)
 class ProcessorStageStep(PipelineStep):
     processors: list[object] = None
 
@@ -290,29 +258,6 @@ class ProcessorStageStep(PipelineStep):
                     )
             metrics.rows_out = len(current)
         return current
-
-
-@dataclass(frozen=True)
-class StageStep(PipelineStep):
-    stage: object = None
-
-    def __init__(self, stage: object) -> None:
-        object.__setattr__(self, "name", stage.name)
-        object.__setattr__(self, "kind", "processor")
-        object.__setattr__(self, "order", -1)
-        object.__setattr__(self, "component", stage)
-        object.__setattr__(self, "read_only", False)
-        object.__setattr__(self, "side_effect", False)
-        object.__setattr__(self, "stage", stage)
-
-    def execute(
-        self, dataset: Dataset | None, session: PipelineExecution
-    ) -> Dataset:
-        assert dataset is not None
-        with session.timed_step(self.name, rows_in=len(dataset)) as metrics:
-            result = self.stage.apply(dataset)
-            metrics.rows_out = len(result)
-            return result
 
 
 @dataclass(frozen=True)

@@ -20,7 +20,6 @@ from framework.pipeline_steps import (
     PipelineStep,
     QuarantineStep,
     ReadStep,
-    StageStep,
     TraceStartStep,
     ValidatorStep,
     WriteStep,
@@ -232,11 +231,7 @@ class Pipeline:
             )
 
         for stage in self._stages:
-            to_step = getattr(stage, "to_pipeline_step", None)
-            if callable(to_step):
-                steps.append(to_step())
-            else:
-                steps.append(StageStep(stage))
+            steps.append(stage.to_pipeline_step())
 
         steps.append(
             ValidatorStep(name="post-validate", validators=self._post_validators)

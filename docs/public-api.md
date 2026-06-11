@@ -57,7 +57,7 @@ Moving data across the boundary.
 | Names | What |
 |-------|------|
 | `Pipeline` | The deferred fluent builder (`.add_stage(...)`, `.describe()` for a pre-run plan, `.run()` to execute). |
-| `Stage`, `ValidationStage`, `ProcessingStage`, `CheckpointStage` | Ordered stage contract and built-in stage types for validation, processing, and explicit checkpoint side effects inside one class-level `Pipeline` run. |
+| `ValidationStage`, `ProcessingStage`, `CheckpointStage` | Built-in ordered stage types for validation, processing, and explicit checkpoint side effects inside one class-level `Pipeline` run, composed via `.add_stage(...)`. Each is a spec that compiles to the internal step plan `.run()` executes — there is no public custom-`Stage` contract; the dataset→dataset transform extension point is the `Processor` (`framework.transform`). |
 | `raw_to_silver`, `silver_to_gold`, `current_silver_to_gold`, `detail_current_silver_to_gold` | The layer-composing builders. |
 | `ForEach`, `ForEachOutcome`, `ForEachPipelineError` | Independent per-item runs. |
 | `PipelineRunner`, `RunContext`, `FreshnessRequirement`, `FreshnessError`, `UnknownPipelineError` | Thin domain orchestration + the freshness guard. |

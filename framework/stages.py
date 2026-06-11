@@ -1,17 +1,20 @@
-"""Public ordered stages for a single-feed ``Pipeline`` run.
+"""Ordered stages — the authoring vocabulary for one single-feed ``Pipeline`` run.
 
-A stage is one position-sensitive operation over the current ``Dataset``. It
-receives the dataset produced by the previous step and returns the dataset for
-the next step. Stages are still inside one class-level ``Pipeline`` run:
-``Reader -> Dataset -> Stage* -> Writer``.
+A stage is one position-sensitive operation a caller composes into the middle of
+a run via ``.add_stage(...)`` (or the ``.with_processor`` / ``.checkpoint``
+shorthands). Stages are **specs, not executors**: each compiles to an internal
+:class:`~framework.pipeline_steps.PipelineStep` through ``to_pipeline_step()``,
+and ``.run()`` executes that one ordered step plan (ADR-0003 amendment) — so a
+stage's behaviour, timing, and row-trace observation live in its Step, with no
+second execution path. Stages stay inside one class-level ``Pipeline`` run:
+``Reader -> Dataset -> Stage* -> Writer``. The dataset->dataset *transform*
+extension point is :class:`~framework.processors.Processor`, not a custom Stage.
 """
 
 from __future__ import annotations
 
-import logging
 from typing import Iterable, Protocol, Sequence, runtime_checkable
 
-from framework.dataset import Dataset
 from framework.pipeline_steps import (
     CheckpointStep,
     PipelineStep,
@@ -19,20 +22,24 @@ from framework.pipeline_steps import (
     ValidatorStep,
 )
 from framework.processors import Processor
-from framework.validators import Severity, ValidationError, Validator
+from framework.validators import Severity, Validator
 from framework.writers import Writer
-
-log = logging.getLogger(__name__)
 
 
 @runtime_checkable
 class Stage(Protocol):
-    """A supported ordered operation inside one ``Pipeline`` run."""
+    """A composed ordered operation that compiles to an executable step.
+
+    Internal: the concrete stages below are the public authoring vocabulary; this
+    protocol is the shared shape the builder composes and converts. A stage owns
+    no execution — it returns the :class:`~framework.pipeline_steps.PipelineStep`
+    that does.
+    """
 
     name: str
 
-    def apply(self, dataset: Dataset) -> Dataset:
-        """Return the dataset that should continue to the next stage."""
+    def to_pipeline_step(self) -> PipelineStep:
+        """Return the executable step this stage compiles to."""
         ...
 
 
@@ -51,16 +58,6 @@ class ValidationStage:
         if not self.validators:
             raise ValueError("ValidationStage requires at least one validator")
 
-    def apply(self, dataset: Dataset) -> Dataset:
-        for validator, severity in self.validators:
-            try:
-                validator.validate(dataset)
-            except ValidationError:
-                if severity == "error":
-                    raise
-                log.warning("%s warn: validator failed", self.name, exc_info=True)
-        return dataset
-
     def to_pipeline_step(self) -> PipelineStep:
         return ValidatorStep(name=self.name, validators=self.validators)
 
@@ -74,12 +71,6 @@ class ProcessingStage:
         if not self.processors:
             raise ValueError("ProcessingStage requires at least one processor")
 
-    def apply(self, dataset: Dataset) -> Dataset:
-        current = dataset
-        for processor in self.processors:
-            current = processor.process(current)
-        return current
-
     def to_pipeline_step(self) -> PipelineStep:
         return ProcessorStageStep(name=self.name, processors=self.processors)
 
@@ -90,10 +81,6 @@ class CheckpointStage:
     def __init__(self, *, name: str, writer: Writer) -> None:
         self.name = name
         self.writer = writer
-
-    def apply(self, dataset: Dataset) -> Dataset:
-        self.writer.write(dataset)
-        return dataset
 
     def to_pipeline_step(self) -> PipelineStep:
         return CheckpointStep(name=self.name, writer=self.writer)
