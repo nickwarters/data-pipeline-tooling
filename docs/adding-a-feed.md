@@ -48,6 +48,56 @@ Then **customise**: edit `schema.py`'s fields to your source columns (and add
 landed feed raw → silver with the schema enforced, add a `raw_to_silver(store,
 "orders", OrdersRow)` run — see [`schema-enforcement.md`](schema-enforcement.md).
 
+### When your feed *is* a Case Type: `--case-type`
+
+The generic scaffold above is deliberately source → raw and **case-review-agnostic**
+— a Feed isn't necessarily a Case Type (Reference Data feeds are ordinary Feeds
+with no Case identity). When the feed's rows *are* a Case Type, reach for the
+additive variant instead (#155):
+
+```sh
+python -m pipelines.scaffold --case-type claims   # -> pipelines/claims/ + tests/pipelines/test_claims.py
+```
+
+It renders, from `pipelines/_scaffold_template_case_type/`, a case-review-flavoured
+slice that does two things the generic scaffold won't:
+
+```
+pipelines/claims/
+  __init__.py
+  schema.py            # @dataclass ClaimsRow — the column/dtype contract
+  case_type.py         # CASE_TYPE = CaseType(schema, natural_key) — the identity contract
+  pipeline.py          # source -> raw -> silver; gold left as a commented seam
+  sample_data/claims.csv
+tests/pipelines/
+  test_claims.py
+```
+
+- **It declares the Case Type's identity contract** in `case_type.py`: a
+  `CaseType` bundling the `schema` with its `natural_key`, from which the derived
+  `namespace` and deterministic `case_id` come for free (ADR-0009). This is the
+  part that's tedious to hand-assemble, and the generic scaffold deliberately
+  omits it.
+- **It refines through the settled ingest spine** — source → raw (a faithful,
+  accumulated copy, the system of record) → silver (schema coerced + validated,
+  accumulated via `raw_to_silver`) — importing only `case_review` + the public
+  facades, never framework internals.
+
+**It deliberately stops at silver.** How accumulated silver is reduced or
+assembled into **gold** — a single-feed current reduce, a multi-feed *join*
+enriching one Case Type, Detail Tables — is unique per Case Type and is an open
+design decision (snapshot-vs-join, single- vs multi-feed — issue #163), so the
+gold step is left to you rather than baked into the template. `pipeline.py`
+sketches it as a commented seam with pointers to `ingest_silver_to_gold` (the
+single-feed current-gold reduce) and, for repeated sections / child rows,
+`detail_ingest_silver_to_gold` + [`pipelines/demo_fan_out.py`](../pipelines/demo_fan_out.py).
+Add the gold step reading the **same** `CASE_TYPE` so any Detail Table's
+`case_id` derives consistently (ADR-0009).
+
+Reach for the **generic** `scaffold <feed>` when the feed has no Case identity
+(Reference Data, an outbound staging table); reach for `--case-type` when the
+feed yields Cases.
+
 The rest of this guide is the reference behind that scaffold: every Reader, and
 the stubbed remote (SAS / SharePoint) seams.
 
