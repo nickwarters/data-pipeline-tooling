@@ -21,7 +21,7 @@ def test_demo_reads_fixture_csv_and_lands_rows_in_raw(tmp_path):
 def test_demo_warns_on_raw_schema_drift_between_runs(tmp_path):
     # First run lands a baseline shape (no prior → drift check is a clean no-op);
     # a second run from a drifted source warns (does not abort) and the warning
-    # is recorded in the run log, where the run registry can flag it (#51).
+    # is recorded in the run log, where the run registry can flag it.
     demo_csv_to_raw.run(tmp_path)  # baseline landing, no prior
 
     drifted = tmp_path / "drifted.csv"

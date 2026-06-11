@@ -1,11 +1,7 @@
-"""Writers — the component-role dual of ``Reader``.
+"""Writers persist datasets to destinations they own.
 
-A ``Reader`` brings a feed's data in (``read() -> Dataset``); a ``Writer``
-takes it out (``write(dataset) -> None``). A Writer owns **both** its target
-location *and* its load strategy (truncate+reload vs accumulate-by-run —
-ADR-0006); the builder/terminus hands it the dataset and makes no write
-decisions of its own (ADR-0003). The concrete engine (pandas) lives behind the
-Dataset seam, never in the Protocol signature. See ADR-0002, ADR-0003.
+A Writer owns both its target location and load strategy. The pipeline hands it
+the dataset and makes no write decisions of its own.
 """
 
 from __future__ import annotations
@@ -77,7 +73,6 @@ class CsvWriter:
         path: str | os.PathLike[str],
         strategy: Refresh | AccumulateByRun,
     ) -> None:
-        # Path keeps separators OS-agnostic across Windows and macOS.
         self._path = Path(path)
         self._strategy = strategy
 
@@ -104,7 +99,6 @@ class ExcelWriter:
         strategy: Refresh | AccumulateByRun,
         sheet: str = "Sheet1",
     ) -> None:
-        # Path keeps separators OS-agnostic across Windows and macOS.
         self._path = Path(path)
         self._strategy = strategy
         self._sheet = sheet
@@ -132,7 +126,6 @@ class JsonWriter:
         path: str | os.PathLike[str],
         strategy: Refresh | AccumulateByRun,
     ) -> None:
-        # Path keeps separators OS-agnostic across Windows and macOS.
         self._path = Path(path)
         self._strategy = strategy
 
@@ -157,19 +150,7 @@ class JsonWriter:
 
 
 class SharePointWriter:
-    """Emit a Dataset to a SharePoint list through a swappable pusher seam.
-
-    The outbound dual of :class:`~framework.readers.SharePointReader` and the
-    emitter of the canonical **Selection** Deliverable: the SelectionPool pushed
-    to **one list per Case Type** (CONTEXT.md). Owns its target (``site`` +
-    ``list_name``) and its load strategy, exactly as the SQLite Writers own
-    location + strategy (ADR-0006). The push is delegated to a swappable
-    :class:`~framework.remote.SharePointPusher`; the default defers the real
-    on-prem SE client (NTLM/Kerberos/REST auth — ADR-0004) and raises on
-    ``write()``, so a test double drives both directions with no network. The
-    Deliverable is emitted by a **second pipeline** that reads the gold
-    SelectionPool and writes here — not a mid-run checkpoint (CONTEXT.md, #48).
-    """
+    """Emit a Dataset to a SharePoint list through a swappable pusher."""
 
     def __init__(
         self,
@@ -201,19 +182,14 @@ class SharePointWriter:
 
     def describe(self) -> str:
         # Strip any credentials embedded in the site URL and omit auth config
-        # entirely — the plan never surfaces secrets (issue #145).
+        # entirely — the plan never surfaces secrets.
         return render(
             self, site=redact_url(self._site), list_name=self._list_name
         )
 
 
 class SqliteTruncateReloadWriter:
-    """A Writer that full-refreshes one table: truncate + reload (ADR-0006).
-
-    Owns its target location (a single layer db file + table). Used for the raw
-    and silver layers, whose contents mirror a current-state source snapshot, so
-    re-runs are deterministic and never accumulate.
-    """
+    """A Writer that full-refreshes one table: truncate + reload."""
 
     def __init__(
         self,
@@ -221,14 +197,11 @@ class SqliteTruncateReloadWriter:
         table: str,
         busy_timeout_ms: int = 5000,
     ) -> None:
-        # Path keeps separators OS-agnostic across Windows and macOS.
         self._db_path = Path(db_path)
         self._table = table
         self._busy_timeout_ms = busy_timeout_ms
 
     def write(self, dataset: Dataset) -> None:
-        # Create the subject's medallion directory on first write — a new
-        # subject lands its own files and migrates nothing (ADR-0001 amendment).
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         con = connect(self._db_path, self._busy_timeout_ms)
         try:
@@ -244,13 +217,13 @@ class SqliteTruncateReloadWriter:
 
 
 class QuarantineWriter:
-    """A Writer for the quarantine reject table — accumulates rejects across runs.
+    """A Writer for the quarantine reject table.
 
     Owns its target location (db_path + table). The pipeline stamps logical
     ``run_id`` and ``load_date`` on the rejected dataset before calling
     ``write()``, so this writer just does the idempotent delete-by-run_id +
     append that lets a re-driven run replace only its own prior rejects without
-    touching other runs (ADR-0006).
+    touching other runs.
 
     Unlike ``AccumulateByRunWriter``, this writer does NOT stamp ``run_id`` or
     ``load_date`` — those come from the dataset (added by the pipeline at quarantine
@@ -292,7 +265,7 @@ class QuarantineWriter:
 
 
 class SqliteUpsertWriter:
-    """A Writer that merges incoming rows by a declared key set (issue #136).
+    """A Writer that merges incoming rows by a declared key set.
 
     Uses a SQL-native DELETE + INSERT via a scratch staging table — no full
     table read. Only the rows being replaced are touched:
@@ -377,7 +350,7 @@ class SqliteUpsertWriter:
 
 
 class AccumulateByRunWriter:
-    """A Writer that accumulates runs into one table, stamped by run (ADR-0006).
+    """A Writer that accumulates runs into one table, stamped by run.
 
     Owns its target location (a single layer db file + table). Used for the gold
     layer (the accumulating SelectionPool / Review Outcomes), whose history must
@@ -411,15 +384,9 @@ class AccumulateByRunWriter:
             frame["execution_id"] = self._execution_id
         frame["load_date"] = self._load_date
 
-        # Create the subject's medallion directory on first write — a new
-        # subject lands its own files and migrates nothing (ADR-0001 amendment).
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         con = connect(self._db_path, self._busy_timeout_ms)
         try:
-            # Delete + append commit as a single transaction (one commit at the
-            # end; an error before it rolls back on close) — atomic, so a failed
-            # re-run never half-wipes prior rows (ADR-0007).
-            #
             # Idempotent re-run: clear this run's prior rows, then append, so a
             # re-driven day replaces only its own rows and never other runs'.
             try:

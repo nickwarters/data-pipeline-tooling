@@ -1,4 +1,4 @@
-"""Helpers for the opt-in ``describe()`` protocol (issue #145).
+"""Helpers for the opt-in ``describe()`` protocol.
 
 A component renders its own safe summary for ``Pipeline.describe()`` by
 implementing ``describe() -> str``. The builder no longer reflects over a

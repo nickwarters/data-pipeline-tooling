@@ -4,8 +4,7 @@ The thinnest source -> raw path, composed entirely through the public facades
 (``framework.io`` / ``framework.transform`` / ``framework.run``) -- no engine
 types and no case-review assumptions. Swap ``CsvReader`` for another Reader
 (``ExcelReader``, ``GlobCsvReader``, ``SqliteReader``, ...) to ingest the same
-feed from a different source; the rest of the pipeline is unchanged
-(``docs/adding-a-feed.md``).
+feed from a different source; the rest of the pipeline is unchanged.
 
 Run it as a module from the repo root so the import-only ``framework`` package
 resolves on ``sys.path``::
@@ -38,8 +37,7 @@ def run(
 
     A ``ColumnValidator`` gates the feed at the door: every column the schema
     declares must be present before any row is landed (an error-severity breach
-    aborts the run fail-fast). The Store mints the raw Writer, so this builder
-    never learns about medallion layers or load strategy.
+    aborts the run fail-fast).
     """
     store = StoreCatalog(base_dir).store(FEED_NAME)
     return (

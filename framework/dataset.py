@@ -1,11 +1,10 @@
-"""The opaque tabular carrier — the bulk tier of the two-tier data carrier.
+"""The opaque tabular carrier.
 
 ``Dataset`` is the seam that keeps the concrete in-memory engine (pandas
 today, polars or other later) out of the rest of the system. Readers, the
 Store, and processors construct and unwrap datasets through ``from_pandas`` /
 ``to_pandas``; everything else (Protocol signatures, pipeline scripts, the
 domain layer) sees only the small public surface below and never names pandas.
-See ADR-0002.
 """
 
 from __future__ import annotations

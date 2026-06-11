@@ -38,7 +38,7 @@ class _FakeHistory:
 
 def test_column_validator_raises_when_a_required_column_is_missing():
     # A required-columns check fails loudly with a located message naming the
-    # missing column (ADR-0008: failure at a predictable place, not mid-process).
+    # missing column.
     dataset = _dataset(id=[1, 2], name=["a", "b"])
 
     with pytest.raises(ValidationError, match="case_ref"):
@@ -72,7 +72,7 @@ def test_row_count_validator_passes_within_inclusive_bounds():
 
 
 def test_unique_validator_raises_naming_duplicate_key_on_single_column_breach():
-    # The gold grain (ADR-0009) requires one row per case_id; a duplicate
+    # The gold grain requires one row per case_id; a duplicate
     # must abort the run with a message that identifies the offending key.
     dataset = _dataset(case_id=["A", "B", "A"], value=[1, 2, 3])
 
@@ -113,7 +113,7 @@ def test_unique_validator_passes_when_multi_column_key_is_unique():
 
 
 def test_volume_anomaly_validator_trips_on_a_far_shortfall():
-    # The motivating case (#54): recent nights read ~10k rows, tonight's source
+    # The motivating case: recent nights read ~10k rows, tonight's source
     # export is truncated to 200. Every row may be individually valid, yet the
     # run is catastrophically incomplete — the guardrail must trip, naming the
     # count and the baseline it deviated from.
@@ -135,7 +135,7 @@ def test_volume_anomaly_validator_passes_within_the_band():
 
 def test_volume_anomaly_validator_trips_on_a_far_excess():
     # The guardrail is two-sided: a sudden explosion (e.g. a duplicated export)
-    # is as suspicious as a collapse, and must trip too (#54, both directions).
+    # is as suspicious as a collapse, and must trip too.
     history = _FakeHistory([100, 110, 90, 105])
     validator = VolumeAnomalyValidator(history, pipeline="cases", tolerance=0.5)
 
@@ -145,7 +145,7 @@ def test_volume_anomaly_validator_trips_on_a_far_excess():
 
 def test_volume_anomaly_validator_degrades_gracefully_below_min_history():
     # A feed's first nights have too little history for a baseline; the band is
-    # skipped rather than tripping spuriously (AC #4). Two prior runs < the
+    # skipped rather than tripping spuriously. Two prior runs < the
     # default min_history of 3, so even a wildly different count passes.
     history = _FakeHistory([100, 110])
     validator = VolumeAnomalyValidator(history, pipeline="cases")
@@ -155,7 +155,7 @@ def test_volume_anomaly_validator_degrades_gracefully_below_min_history():
 
 def test_volume_anomaly_floor_is_always_on_even_without_history():
     # The absolute floor is an independent guard that holds before any history
-    # exists (AC #3) — a first run below the floor still aborts.
+    # exists, so a first run below the floor still aborts.
     history = _FakeHistory([])
     validator = VolumeAnomalyValidator(history, pipeline="cases", floor=50)
 
@@ -181,7 +181,7 @@ class _FakePrior:
 
 def test_schema_drift_validator_warns_on_an_added_column():
     # An upstream source that grew a column drifts vs the prior landing; the
-    # message names the added column and the table (#51, ADR-0008 amendment).
+    # message names the added column and the table.
     prior = _FakePrior(("id", "name"))
     validator = SchemaDriftValidator(prior)
 
@@ -236,7 +236,7 @@ def test_schema_drift_validator_is_case_sensitive():
 
 def test_schema_drift_validator_no_op_on_first_ever_run():
     # No prior landing (the table did not exist) → None → a clean no-op, not a
-    # spurious warning (AC #4).
+    # spurious warning.
     validator = SchemaDriftValidator(_FakePrior(None))
 
     validator.validate(_dataset(id=[1], anything=["x"]))  # does not raise

@@ -1,9 +1,9 @@
-"""Operator CLI (`python -m pipelines.cli`) — issue #99.
+"""Operator CLI (`python -m pipelines.cli`).
 
 Drives the CLI as a subprocess so the tests exercise the same entry point an
 operator does: argument parsing, dispatch, exit codes, and console output. Every
-behaviour runs on the bundled CSV feed + local SQLite only — no external
-services (ADR-0001/0005).
+behaviour runs on the bundled CSV feed + local SQLite only, with no external
+services.
 """
 
 import json

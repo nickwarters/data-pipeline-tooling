@@ -1,4 +1,4 @@
-"""Back-compat shortcut for running a registered pipeline.
+"""Shortcut for running a registered pipeline.
 
 The full operator surface lives in :mod:`pipelines.cli`
 (``run`` / ``status`` / ``runs`` / ``log``); this module is the historical

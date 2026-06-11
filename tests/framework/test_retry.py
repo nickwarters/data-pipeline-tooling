@@ -1,4 +1,4 @@
-"""Retry policy at the reader/writer edges (issue #87).
+"""Retry policy at the reader/writer edges.
 
 A ``RetryPolicy`` retries only the transient I/O failures it is told to (an
 explicit allowlist), and ``RetryingReader`` / ``RetryingWriter`` apply it at the
@@ -184,7 +184,7 @@ def test_policy_wraps_a_bare_remote_client_call():
 
 
 def test_retry_surface_is_public_through_the_io_facade():
-    # Pipeline authors reach retry through the stable framework.io facade (#95),
+    # Pipeline authors reach retry through the stable framework.io facade,
     # not the internal framework.retry module.
     from framework import io
 

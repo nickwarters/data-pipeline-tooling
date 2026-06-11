@@ -1,9 +1,7 @@
-"""Readers — encapsulate source IO behind ``read() -> Dataset``.
+"""Readers encapsulate source IO behind ``read() -> Dataset``.
 
-A Reader is the only place that knows how a given source type is read; the
-concrete engine (pandas) lives here and behind the Dataset seam, never in
-the Protocol signature. Readers are tested against local fixture files.
-See ADR-0002, ADR-0005.
+The concrete engine lives inside readers and behind the Dataset seam, never in
+the protocol signature.
 """
 
 from __future__ import annotations
@@ -59,7 +57,6 @@ class CsvReader:
         path: str | os.PathLike[str],
         columns: list[str] | None = None,
     ) -> None:
-        # Path keeps separators OS-agnostic across Windows and macOS.
         self._path = Path(path)
         self._columns = columns
 
@@ -82,7 +79,6 @@ class GlobCsvReader:
         pattern: str,
         columns: list[str] | None = None,
     ) -> None:
-        # Path keeps separators OS-agnostic across Windows and macOS.
         self._directory = Path(directory)
         self._pattern = pattern
         self._columns = columns
@@ -111,20 +107,13 @@ class GlobCsvReader:
 
 
 class ExcelReader:
-    """Read one sheet of an Excel workbook into a Dataset.
-
-    ``sheet`` selects the worksheet by name or zero-based index (default the
-    first sheet). The concrete engine (pandas + openpyxl for ``.xlsx``) lives
-    here behind the Dataset seam, never in the Protocol (ADR-0002). Tested
-    against a local fixture workbook — no external system (ADR-0005).
-    """
+    """Read one sheet of an Excel workbook into a Dataset."""
 
     def __init__(
         self,
         path: str | os.PathLike[str],
         sheet: str | int = 0,
     ) -> None:
-        # Path keeps separators OS-agnostic across Windows and macOS.
         self._path = Path(path)
         self._sheet = sheet
 
@@ -137,14 +126,7 @@ class ExcelReader:
 
 
 class SqliteReader:
-    """Read one table from a SQLite layer database into a Dataset.
-
-    The read-side dual of the Sqlite Writers: where a Writer owns its target
-    location, a ``SqliteReader`` owns its source location (a single layer db
-    file + table). Opens through the shared ``connect`` factory so it inherits
-    the share-tolerant settings (ADR-0001). Used to read a subject's own layer
-    or another subject's Reference Data medallion (joined in Python — ADR-0002).
-    """
+    """Read one table from a SQLite layer database into a Dataset."""
 
     def __init__(
         self,
@@ -153,7 +135,6 @@ class SqliteReader:
         busy_timeout_ms: int = 5000,
         columns: list[str] | None = None,
     ) -> None:
-        # Path keeps separators OS-agnostic across Windows and macOS.
         self._db_path = Path(db_path)
         self._table = table
         self._busy_timeout_ms = busy_timeout_ms
@@ -183,17 +164,7 @@ class SqliteReader:
 
 
 class SasReader:
-    """Read a SAS feed by running it remotely and reading the landed output.
-
-    SAS never runs on the framework host, so a ``SasReader`` is configured with
-    three knobs — ``script`` (run on the remote box), ``copy_glob`` (which output
-    files to copy back), ``dest`` (the local landing directory) — and on
-    ``read()``: (1) runs the script, (2) fetches the matching files into ``dest``,
-    (3) reads the landed files via the ordinary file read path. Steps (1) and (2)
-    are delegated to a swappable :class:`~framework.remote.RemoteRunner`; the
-    default is the no-op stub, so the feed is testable against landed fixtures
-    with no SSH/SAS/network (ADR-0004, ADR-0005).
-    """
+    """Read a SAS feed by running it remotely and reading the landed output."""
 
     def __init__(
         self,
@@ -205,15 +176,12 @@ class SasReader:
     ) -> None:
         self._script = script
         self._copy_glob = copy_glob
-        # Path keeps separators OS-agnostic across Windows and macOS.
         self._dest = Path(dest)
         self._runner = runner or StubbedRemoteRunner()
 
     def read(self) -> Dataset:
         self._runner.run_script(self._script)
         self._runner.fetch(self._copy_glob, self._dest)
-        # The ordinary local file read path: reuse the same multi-file CSV
-        # reader that local split feed snapshots use.
         return GlobCsvReader(self._dest, self._copy_glob).read()
 
     def describe(self) -> str:
@@ -226,16 +194,7 @@ class SasReader:
 
 
 class SharePointReader:
-    """Read a SharePoint list into a Dataset.
-
-    Configured with the SharePoint ``site``, ``list_name``, and ``auth`` config;
-    the fetch is delegated to a swappable
-    :class:`~framework.remote.SharePointFetcher`. The default fetcher defers the
-    real on-prem SE client (NTLM/Kerberos/REST auth out of scope — ADR-0004) and
-    raises on ``read()``; pass a :class:`~framework.remote.LocalCsvFetcher` to
-    read a local fixture, or a real client later, without changing this Reader
-    (ADR-0005).
-    """
+    """Read a SharePoint list into a Dataset through a swappable fetcher."""
 
     def __init__(
         self,
@@ -255,7 +214,7 @@ class SharePointReader:
 
     def describe(self) -> str:
         # Render the site with any embedded credentials stripped and omit the
-        # auth config entirely — the plan never surfaces secrets (issue #145).
+        # auth config entirely — the plan never surfaces secrets.
         return render(
             self, site=redact_url(self._site), list_name=self._list_name
         )

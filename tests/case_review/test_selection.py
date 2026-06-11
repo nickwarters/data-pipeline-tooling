@@ -28,16 +28,16 @@ def _case_type() -> CaseType:
 
 def _land_gold_cases(store: Store, frame: pd.DataFrame) -> None:
     # Land Cases into ingest gold (current-only, one row per Case) as an
-    # ingest_silver_to_gold run would — CasePool reads gold (ADR-0006 amendment).
+    # ingest_silver_to_gold run would — CasePool reads gold.
     store.writer("gold", "cases", Refresh()).write(Dataset.from_pandas(frame))
 
 
 def test_selection_narrows_the_casepool_into_a_stamped_selection_pool(tmp_path):
-    # Acceptance (#11): the full source->selection path for one Case Type. Ingest
+    # Acceptance: the full source->selection path for one Case Type. Ingest
     # has landed Cases into silver; the Selection pipeline fetches available cases
     # from the CasePool, narrows them with specific Python processors (a high-value
     # filter, a sort), stamps the chosen Variation's question_bank_id, and writes
-    # the SelectionPool into gold stamped run_id / load_date (CONTEXT.md; ADR-0006).
+    # the SelectionPool into gold stamped run_id / load_date (CONTEXT.md; ).
     store = Store(tmp_path / "cases")
     _land_gold_cases(
         store,

@@ -1,12 +1,11 @@
-"""The shared SQLite connection factory — the seam Readers, Writers, and the
-Store all open connections through.
+"""The shared SQLite connection factory.
 
 Kept in its own module so the per-subject ``Store`` can mint Writers/Readers
 (importing those modules) while those modules still depend only on this factory
-— no ``store`` ↔ ``writers`` import cycle (ADR-0001). It is the single place
-SQLite connections are configured: a ``busy_timeout`` so read-only clients ride
-out the single writer's in-place commits instead of erroring, on the default
-rollback journal because WAL is unavailable over a network share.
+without a cycle. It is the single place SQLite connections are configured:
+``busy_timeout`` lets read-only clients ride out the single writer's in-place
+commits instead of erroring. The default rollback journal is used because WAL is
+unavailable over a network share.
 """
 
 from __future__ import annotations
@@ -20,7 +19,7 @@ from framework.layers import LAYERS
 def connect(
     db_path: str | os.PathLike[str], busy_timeout_ms: int = 5000
 ) -> sqlite3.Connection:
-    """Open a connection with the share-tolerant settings (ADR-0001)."""
+    """Open a connection with the share-tolerant settings."""
     con = sqlite3.connect(db_path)
     con.execute(f"PRAGMA busy_timeout = {busy_timeout_ms}")
     return con

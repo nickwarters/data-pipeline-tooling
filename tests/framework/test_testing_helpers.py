@@ -1,4 +1,4 @@
-"""The pipeline-author testing helpers (issue #94).
+"""The pipeline-author testing helpers.
 
 These exercise ``framework.testing`` the way a pipeline author would: build a
 feed from in-memory rows, run a real :class:`~framework.run.Pipeline`, and assert
@@ -71,7 +71,7 @@ def test_recording_run_log_captures_warn_hits_in_memory():
 
 
 def test_recording_run_log_captures_a_validation_failure():
-    # An error-severity breach aborts the run (ADR-0007). The failing step and
+    # An error-severity breach aborts the run. The failing step and
     # the run summary are both recorded as errors before the exception raises, so
     # a test asserts the failure message through the captured records.
     from framework.transform import ValidationError

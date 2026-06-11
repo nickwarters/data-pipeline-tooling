@@ -1,4 +1,4 @@
-"""Domain capstone demo: one Case Type, source feed → SelectionPool (#11).
+"""Domain capstone demo: one Case Type, source feed -> SelectionPool.
 
 Runs the full per-Case-Type path the framework exists to make routine, composing
 the primitives the earlier slices built:
@@ -7,7 +7,7 @@ the primitives the earlier slices built:
    ``run_id`` / ``load_date``), refine it into **silver** (accumulated, schema
    enforced), then reduce it to a current-only **gold** (one-row-per-Case via
    ``DeriveKey`` → ``LatestPerKey`` → ``UniqueValidator`` → ``Refresh``).
-   Gold *is* the CasePool (ADR-0006 amendment).
+   Gold is the CasePool.
 2. **Selection** — a :class:`~case_review.case_pool.CasePool` fetches the
    **available cases** from gold (activity within the working-day window), and a
    Selection :class:`~framework.builder.Pipeline` narrows them with named,
@@ -15,9 +15,9 @@ the primitives the earlier slices built:
    highest-priority first),
    stamps the chosen :class:`~case_review.case_type.Variation`'s
    ``question_bank_id``, and accumulates the **SelectionPool** into ``gold``
-   stamped ``run_id`` / ``load_date`` (ADR-0006). ``.explain(...)`` lands a
-   sibling trace alongside it — a per-Case verdict of why each
-   available Case was or wasn't selected (#53, ADR-0007 amendment 02).
+   stamped ``run_id`` / ``load_date``. ``.explain(...)`` lands a sibling trace
+   alongside it — a per-Case verdict of why each available Case was or wasn't
+   selected.
 
 Run from the repo root as a module so the import-only ``framework`` package
 resolves on ``sys.path``::
@@ -60,10 +60,9 @@ class ActivityCase:
 
 
 # The Case Type bundles its schema and identity contract with its Variations —
-# declarative, imported directly, no registry (ADR-0005). ``natural_key`` is the
-# stable identifying column; the Case Type derives its own ``namespace`` from its
-# name, so case_id derivation is owned in one place (ADR-0009). This demo selects
-# under Variation "v1".
+# declarative and imported directly. ``natural_key`` is the stable identifying
+# column; the Case Type derives its own ``namespace`` from its name, so case_id
+# derivation is owned in one place. This demo selects under Variation "v1".
 CASES = CaseType(
     name="cases",
     schema=ActivityCase,
@@ -75,7 +74,7 @@ CASES = CaseType(
 )
 
 # Fixed so the working-day window aligns with the bundled feed (Fri 2026-05-29);
-# doubles as the Ingest run_id / load_date idempotency key (ADR-0006).
+# doubles as the Ingest run_id / load_date idempotency key.
 AS_OF = date(2026, 5, 29)
 
 
@@ -103,11 +102,9 @@ def run_ingest(context: RunContext):
 
     # The accumulation strategy carries the run's logical idempotency key (the
     # business run a re-drive replaces) and its execution id, derived from the
-    # shared RunContext so `--logical-run-id` flows straight through (ADR-0006).
+    # shared RunContext so `--logical-run-id` flows straight through.
     strategy = AccumulateByRun.from_context(context)
 
-    # 1. Ingest: CSV feed -> raw (accumulate, system-of-record) -> silver
-    #    (accumulate, schema enforced) -> gold (current-only, one row per Case).
     Pipeline("cases", CsvReader(sample)).write_to(
         store.writer(RAW, "cases", strategy)
     ).run()
@@ -124,10 +121,8 @@ def run_selection(context: RunContext):
     store = StoreCatalog(context.base_dir).store(CASES.name)
     strategy = AccumulateByRun.from_context(context)
 
-    # 2. Selection: fetch available cases from the CasePool, then narrow them
-    #    with named, pure rule functions. The functions stay independently
-    #    testable while Filter/Score provide the framework wiring and trace
-    #    metadata.
+    # Named, pure rule functions stay independently testable while Filter/Score
+    # provide the framework wiring and trace metadata.
     pool = CasePool(CASES, store, WorkingDayCalendar())
     available = pool.fetch_available_cases(
         as_of=context.run_date, activity_column="activity_date", within_working_days=5
@@ -139,8 +134,8 @@ def run_selection(context: RunContext):
         .with_processor(Filter(high_value_case, name="high-value"))
         .with_processor(Sort("priority_score", ascending=False))
         .with_processor(Stamp("question_bank_id", variation.question_bank_id))
-        # Explainability (#53): land a per-Case trace of why each available Case
-        # was/wasn't selected in a sibling table, stamped by this run.
+        # Land a per-Case trace of why each available Case was or wasn't
+        # selected in a sibling table, stamped by this run.
         .explain(
             store.writer(GOLD, "selection_trace", strategy),
             id_column="case_ref",

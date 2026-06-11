@@ -1,4 +1,4 @@
-"""Integration tests for UpsertStrategy via Store.writer (issue #136)."""
+"""Integration tests for UpsertStrategy via Store.writer."""
 
 import pandas as pd
 import pytest

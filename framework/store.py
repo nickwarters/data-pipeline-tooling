@@ -1,22 +1,8 @@
-"""The medallion store — scoped to one subject, mints that subject's Writers
-and Readers.
+"""Subject-scoped medallion stores that mint layer Readers and Writers.
 
-A ``Store`` is the mouth of one **subject**'s medallion (a Case Type or a shared
-Reference Data set — ADR-0001 amendment): its three SQLite files
-``<subject_dir>/{raw,silver,gold}.db``, isolated from every other subject's
-files. The store holds **no** business logic and makes **no** load decisions
-(ADR-0002, ADR-0003 amendment); it maps ``layer → location`` only and the
-caller supplies an explicit load strategy:
-
-- ``store.writer(layer, table, strategy)`` — mints the Writer over the
-  subject's layer file, wired to the caller-supplied :class:`~framework.strategy.Refresh`
-  or :class:`~framework.strategy.AccumulateByRun` strategy (ADR-0006 amendment).
-- ``store.reader(layer, table)`` — a Reader over the same file.
-
-The minted Writers/Readers each open through the shared ``connect`` factory in
-``framework.connection`` — the single place connections are configured
-(ADR-0001) and the seam that keeps ``store`` and ``writers`` from importing each
-other in a cycle.
+A ``Store`` maps a subject and layer to ``<subject_dir>/{raw,silver,gold}.db``.
+It owns no business logic and makes no load decisions; callers choose the
+strategy when minting a Writer.
 """
 
 from __future__ import annotations
@@ -63,7 +49,6 @@ class Store:
     def __init__(
         self, subject_dir: str | os.PathLike[str], busy_timeout_ms: int = 5000
     ) -> None:
-        # Path keeps separators OS-agnostic across Windows and macOS.
         self._subject_dir = Path(subject_dir)
         self._busy_timeout_ms = busy_timeout_ms
 
@@ -76,16 +61,7 @@ class Store:
         table: str,
         strategy: Refresh | AccumulateByRun | UpsertStrategy,
     ) -> Writer:
-        """Mint a Writer over the subject's layer file with the given strategy.
-
-        The Store resolves only *which* ``<subject>/<layer>.db`` the Writer
-        targets; the caller declares *how* data is loaded via ``strategy``
-        (:class:`~framework.strategy.Refresh` for truncate+reload,
-        :class:`~framework.strategy.AccumulateByRun` for accumulate-by-run,
-        :class:`~framework.strategy.UpsertStrategy` for update-or-insert —
-        ADR-0006 amendment). Two feeds may land in the same layer with different
-        strategies.
-        """
+        """Mint a Writer over the subject's layer file with the given strategy."""
         db_path = self._db_path(layer)
         if isinstance(strategy, Refresh):
             return SqliteTruncateReloadWriter(
@@ -116,14 +92,7 @@ class Store:
         )
 
     def columns_of(self, layer: Layer | str, table: str) -> "RawTableColumns":
-        """Mint the prior-columns source for a table — the drift seam (#51).
-
-        Returns a ``PriorColumns`` (``framework.validators``) over the subject's
-        layer file: it reports the table's currently-landed column set via
-        ``PRAGMA`` so a ``SchemaDriftValidator`` can diff the next run's incoming
-        columns against the prior landing (ADR-0008 amendment). Reads no rows and
-        returns ``None`` when the table does not yet exist (first run).
-        """
+        """Mint the prior-columns source used for schema drift checks."""
         return RawTableColumns(
             self._db_path(layer),
             table,
@@ -133,14 +102,11 @@ class Store:
 
 
 class RawTableColumns:
-    """A ``PriorColumns`` source: a table's landed columns via ``PRAGMA`` (#51).
+    """A ``PriorColumns`` source backed by ``PRAGMA table_info``.
 
-    The production implementation of the seam ``SchemaDriftValidator`` reads. It
-    inspects the live layer table's columns without materialising any rows —
-    ``PRAGMA table_info`` over the shared ``connect`` factory (ADR-0001) — so the
-    diff against the next run's incoming columns is cheap even for a large raw
-    table. A missing table yields ``None`` (no prior landing); the ``label``
-    (``<layer>.<table>``) names the table in the drift warning.
+    It inspects the live table columns without materialising rows, so drift
+    checks stay cheap even for a large raw table. A missing table yields
+    ``None``; ``label`` names the table in the drift warning.
     """
 
     def __init__(
@@ -150,7 +116,6 @@ class RawTableColumns:
         layer: str,
         busy_timeout_ms: int = 5000,
     ) -> None:
-        # Path keeps separators OS-agnostic across Windows and macOS.
         self._db_path = Path(db_path)
         self._table = table
         self._busy_timeout_ms = busy_timeout_ms

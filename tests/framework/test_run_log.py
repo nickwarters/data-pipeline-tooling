@@ -1,4 +1,4 @@
-"""Structured JSONL run observability (issue #4, ADR-0007).
+"""Structured JSONL run observability.
 
 A ``RunLog`` composed onto a ``Pipeline`` emits one JSON object per line to a
 ``.log`` file (the seam the run-registry ingests) and human-readable
@@ -99,7 +99,7 @@ def test_per_step_records_carry_row_counts_and_a_run_summary(tmp_path):
 
 
 def test_failed_validation_records_the_failing_step_and_aborts(tmp_path):
-    # An error-severity validator aborts the run (ADR-0007 fail-fast): the
+    # An error-severity validator aborts the run: the
     # failing step is recorded `error` with the message, the run summary is
     # `error`, no `write` record is emitted (nothing partial lands), and the
     # ValidationError still propagates to the caller.
@@ -128,7 +128,7 @@ def test_failed_validation_records_the_failing_step_and_aborts(tmp_path):
 
 
 def test_warn_validator_is_recorded_as_a_warn_hit_and_the_run_continues(tmp_path):
-    # warn is the explicit escape hatch (ADR-0007): the failure is recorded as a
+    # warn is the explicit escape hatch: the failure is recorded as a
     # warn-hit on its step, the step status stays "ok", the run proceeds to the
     # write, and the run summary surfaces the warn-hit so a tolerated condition
     # is still visible to the registry.
@@ -175,7 +175,7 @@ def test_console_output_is_human_readable_not_raw_json(tmp_path, caplog):
 
 def test_checkpoint_emits_its_own_step_record(tmp_path):
     # Each checkpoint emits a "checkpoint:N" step record in the JSONL log
-    # (ADR-0007 lineage requirement); two checkpoints produce "checkpoint:0"
+    #; two checkpoints produce "checkpoint:0"
     # and "checkpoint:1" in attach order, each with row counts and status "ok".
     log_path = tmp_path / "cases.log"
     ds = Dataset.from_pandas(pd.DataFrame({"id": [1, 2, 3]}))
@@ -199,7 +199,7 @@ def test_checkpoint_emits_its_own_step_record(tmp_path):
 
 def test_checkpoint_failure_is_recorded_before_run_aborts(tmp_path):
     # A checkpoint that raises logs its own "checkpoint:0" step as "error" and
-    # the run summary as "error" before the exception propagates (ADR-0007).
+    # the run summary as "error" before the exception propagates.
     log_path = tmp_path / "cases.log"
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
 

@@ -1,4 +1,4 @@
-"""Tests for the new-feed scaffold (issue #97).
+"""Tests for the new-feed scaffold.
 
 The scaffold renders a feed from the template under ``pipelines/_scaffold_template/``:
 the feed *code* as a subpackage ``pipelines/<feed>/`` and its *test* under
@@ -140,11 +140,10 @@ def test_cli_rejects_an_invalid_feed_name(tmp_path, capsys, monkeypatch):
     assert "identifier" in capsys.readouterr().err
 
 
-# --- The Case Type ingest variant (--case-type, issue #155) -----------------
 # A separate, additive variant for a feed whose rows *are* a Case Type: it
 # declares the Case Type's identity contract and refines source -> raw -> silver
 # (the settled ingest spine), deliberately stopping at silver and leaving gold
-# as the author's seam (the snapshot-vs-join assembly is open -- #163).
+# as the author's seam while the snapshot-vs-join assembly remains open.
 
 
 def test_case_type_variant_lays_down_the_feed_with_its_case_type(tmp_path):
@@ -154,7 +153,7 @@ def test_case_type_variant_lays_down_the_feed_with_its_case_type(tmp_path):
     expected = {
         feed_dir / "__init__.py",
         feed_dir / "schema.py",
-        feed_dir / "case_type.py",  # the distinguishing file: the identity contract
+        feed_dir / "case_type.py",
         feed_dir / "pipeline.py",
         feed_dir / "sample_data" / "orders.csv",
         tmp_path / "tests" / "pipelines" / "test_orders.py",
@@ -195,14 +194,12 @@ def test_case_type_variant_refines_to_silver_and_leaves_gold_a_commented_seam(tm
     assert "raw_to_silver(" in pipeline
     assert "from framework.run import Pipeline, raw_to_silver" in pipeline
 
-    # Gold is the author's seam, NOT a live call -- so the scaffold makes no bet
-    # on the open snapshot-vs-join assembly decision (#163). The guidance is
-    # present but every gold line is commented out, and it points at #163.
+    # Gold is the author's seam, not a live call, so the scaffold makes no bet
+    # on the open snapshot-vs-join assembly decision.
     assert "ingest_silver_to_gold" in pipeline  # shown as guidance...
     for line in pipeline.splitlines():
         if "ingest_silver_to_gold" in line:
             assert line.lstrip().startswith("#"), f"gold step must be inert: {line!r}"
-    assert "#163" in pipeline
 
 
 def test_rendered_case_type_pipeline_runs_and_refines_to_silver(tmp_path):

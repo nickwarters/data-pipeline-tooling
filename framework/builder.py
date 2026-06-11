@@ -1,11 +1,11 @@
-"""The deferred fluent builder — describes a pipeline; executes on ``.run()``.
+"""The deferred fluent builder: describes a pipeline; executes on ``.run()``.
 
 A ``Pipeline`` composes a feed's reader, its validators and processors, and its
 destination Writer without running anything. Execution
 happens only at the ``.run()`` terminus, which owns the cross-cutting concerns
-— timing, logging, lineage, error handling — for every stage. The builder makes
-**no** write decisions: it hands the read ``Dataset`` to the composed Writer,
-which owns its own location and load strategy (ADR-0003, ADR-0006).
+of timing, logging, lineage, and error handling. The builder makes no write
+decisions: it hands the read ``Dataset`` to the composed Writer, which owns its
+own location and load strategy.
 """
 
 from __future__ import annotations
@@ -43,14 +43,12 @@ class Pipeline:
     def __init__(
         self, name: str, reader: Reader, run_log: RunLog | None = None
     ) -> None:
-        # `name` labels the feed/pipeline (for lineage in later slices); it is
-        # not a write decision — the Writer owns the target table. Nothing runs
-        # at construction.
+        # `name` labels the feed/pipeline; it is not a write decision because
+        # the Writer owns the target table.
         self._name = name
         self._reader = reader
         self._writer: Writer | None = None
-        # The run-log sink (ADR-0007); when none is composed, a null sink lets
-        # `.run()` drive the same branch-free code path while emitting nothing.
+        # When no run log is composed, a null sink keeps `.run()` branch-free.
         # `run_id` is the execution identity of the most recent `.run()` and
         # correlates every RunLog/RunRegistry record for that execution.
         self._run_log = run_log or NULL_RUN_LOG
@@ -60,11 +58,10 @@ class Pipeline:
         # about to be written.
         self._pre_validators: list[tuple[Validator, Severity]] = []
         self._post_validators: list[tuple[Validator, Severity]] = []
-        # Stages run in attach order between the read and final write. Legacy
-        # validator/processor/checkpoint helpers append public stages here.
+        # Stages run in attach order between the read and final write.
         self._stages: list[Stage] = []
-        # Optional row-level quarantine (issue #50): value-rule-failing rows are
-        # routed to the reject writer; good rows continue through the pipeline.
+        # Value-rule-failing rows are routed to the reject writer; good rows
+        # continue through the pipeline.
         self._quarantine_validator = None
         self._quarantine_writer: Writer | None = None
         # Optional row-level explainability: a per-row trace of why each
@@ -76,35 +73,35 @@ class Pipeline:
     def with_validator(
         self, validator: Validator, severity: Severity = "error"
     ) -> "Pipeline":
-        """Attach a pre-validator (checks the input). Deferred — nothing runs."""
+        """Attach a pre-validator for the input dataset."""
         self._pre_validators.append((validator, severity))
         return self
 
     def with_post_validator(
         self, validator: Validator, severity: Severity = "error"
     ) -> "Pipeline":
-        """Attach a post-validator (checks the output). Deferred."""
+        """Attach a post-validator for the output dataset."""
         self._post_validators.append((validator, severity))
         return self
 
     def add_stage(self, stage: Stage) -> "Pipeline":
-        """Append an ordered stage. Deferred — nothing runs until ``.run()``."""
+        """Append an ordered stage."""
         self._stages.append(stage)
         return self
 
     def with_processor(self, processor: Processor) -> "Pipeline":
-        """Attach a processor (transforms the dataset mid-run). Deferred."""
+        """Attach a processor that transforms the dataset mid-run."""
         self.add_stage(ProcessingStage(name="process", processors=[processor]))
         return self
 
     def quarantine(self, row_validator, reject_writer: Writer) -> "Pipeline":
-        """Configure opt-in row-level quarantine. Deferred — nothing runs until .run().
+        """Configure opt-in row-level quarantine.
 
         After pre-validation, value-rule-failing rows are routed to
         ``reject_writer`` with the current context's run metadata; good rows
         continue through the pipeline. Structural breaches (missing columns,
         wrong dtypes) still abort via the pre-validators — quarantine is only
-        for value-rule breaches (ADR-0007 §2).
+        for value-rule breaches.
         """
         self._quarantine_validator = row_validator
         self._quarantine_writer = reject_writer
@@ -117,7 +114,7 @@ class Pipeline:
         id_column: str,
         score_column: str | None = None,
     ) -> "Pipeline":
-        """Configure row-level explainability. Deferred — nothing runs until .run().
+        """Configure row-level explainability.
 
         When configured, ``.run()`` follows each considered row (identified by
         ``id_column``) across the processor stages and writes a per-row verdict
@@ -130,18 +127,18 @@ class Pipeline:
         return self
 
     def checkpoint(self, writer: Writer) -> "Pipeline":
-        """Attach a mid-run lineage write. Deferred — nothing runs until .run().
+        """Attach a mid-run lineage write.
 
         The writer receives the current dataset at this point in the stage
         sequence and the dataset passes through unchanged so the pipeline
-        continues. A checkpoint failure aborts the run (ADR-0007 fail-fast).
+        continues. A checkpoint failure aborts the run.
         """
         name = f"checkpoint:{self._checkpoint_count()}"
         self.add_stage(CheckpointStage(name=name, writer=writer))
         return self
 
     def write_to(self, writer: Writer) -> "Pipeline":
-        """Compose in the destination Writer. Deferred — nothing runs yet."""
+        """Compose in the destination Writer."""
         self._writer = writer
         return self
 
@@ -202,11 +199,10 @@ class Pipeline:
     def run(self, context: RunContext | None = None) -> Dataset:
         """Execute: read, validate, hand the dataset to the Writer, return it.
 
-        Fail-fast and atomic (ADR-0007): an error-severity validator aborts the
-        run *before* the Writer is called, so nothing partial lands; a
-        warn-severity failure logs and continues. The write itself is a single
-        SQLite transaction owned by the Writer. Returns the bulk-tier
-        ``Dataset`` (ADR-0003).
+        Fail-fast and atomic: an error-severity validator aborts the run
+        *before* the Writer is called, so nothing partial lands; a warn-severity
+        failure logs and continues. The write itself is a single SQLite
+        transaction owned by the Writer. Returns the bulk-tier ``Dataset``.
 
         ``.run()`` is also the home of cross-cutting observability: it uses the
         supplied :class:`RunContext` or creates one for ad hoc builder execution.
@@ -233,9 +229,8 @@ class Pipeline:
             for plan_step in self._execution_plan():
                 dataset = plan_step.execute(dataset, session)
         except Exception as exc:
-            # Fail-fast (ADR-0007): the failing step already logged its own
-            # `error` record; the run summary closes the run as aborted before
-            # the exception propagates to the caller.
+            # The failing step already logged its own `error` record; the run
+            # summary closes the run as aborted before the exception propagates.
             session.record(
                 "run",
                 "error",
@@ -256,5 +251,4 @@ class Pipeline:
         )
         context.mark_run_summary_recorded()
         return dataset
-
 

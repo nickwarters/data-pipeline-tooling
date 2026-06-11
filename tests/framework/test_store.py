@@ -14,7 +14,7 @@ FIXTURE = Path(__file__).parent.parent / "fixtures" / "cases.csv"
 def test_store_writer_with_refresh_strategy_round_trips_a_dataset(tmp_path):
     # Store.writer accepts an explicit Refresh strategy; the minted Writer
     # truncates + reloads (full-refresh) on each run — strategy is now the
-    # caller's declaration, not an implicit layer rule (ADR-0006 amendment).
+    # caller's declaration, not an implicit layer rule.
     dataset = CsvReader(FIXTURE).read()
     store = Store(tmp_path)
 
@@ -55,7 +55,7 @@ def test_refresh_strategy_full_refreshes_rather_than_accumulates(tmp_path):
 
 def test_store_writer_with_accumulate_by_run_strategy_accumulates(tmp_path):
     # Store.writer accepts an explicit AccumulateByRun strategy; the minted
-    # Writer stamps rows by run and accumulates across runs (ADR-0006 amendment).
+    # Writer stamps rows by run and accumulates across runs.
     dataset = CsvReader(FIXTURE).read()
     store = Store(tmp_path)
 
@@ -71,7 +71,7 @@ def test_store_writer_with_accumulate_by_run_strategy_accumulates(tmp_path):
 def test_silver_table_can_be_configured_to_accumulate(tmp_path):
     # Strategy is no longer layer-bound: a silver feed can declare AccumulateByRun
     # instead of Refresh, letting two distinct runs land in silver.db side-by-side.
-    # This is AC#5 of issue #33 — the proof that the Store makes no load decision.
+    # This is of  — the proof that the Store makes no load decision.
     dataset = CsvReader(FIXTURE).read()
     store = Store(tmp_path)
 
@@ -95,7 +95,7 @@ def test_unknown_layer_is_rejected(tmp_path):
 
 
 def test_subjects_are_isolated_same_table_name_no_collision(tmp_path):
-    # Each subject owns its own medallion files (ADR-0001 amendment): two
+    # Each subject owns its own medallion files: two
     # subjects can land a same-named table with different contents, each under
     # its own directory, with no collision.
     dataset = CsvReader(FIXTURE).read()
@@ -115,7 +115,7 @@ def test_subjects_are_isolated_same_table_name_no_collision(tmp_path):
 
 
 def test_store_columns_of_reads_the_prior_landing_and_labels_the_table(tmp_path):
-    # The PriorColumns seam the raw drift check reads (#51): after a landing,
+    # The PriorColumns seam the raw drift check reads: after a landing,
     # columns_of reports that table's columns (order preserved) and a label that
     # names the layer + table for the warning message.
     dataset = CsvReader(FIXTURE).read()
@@ -130,7 +130,7 @@ def test_store_columns_of_reads_the_prior_landing_and_labels_the_table(tmp_path)
 
 def test_store_columns_of_returns_none_when_the_table_does_not_exist(tmp_path):
     # First-ever run: nothing has landed, so there is no prior column set — the
-    # seam returns None (a clean no-op for the drift check, AC #4), not an error.
+    # seam returns None (a clean no-op for the drift check, ), not an error.
     store = Store(tmp_path)
 
     assert store.columns_of(RAW, "cases").columns() is None
@@ -154,8 +154,8 @@ def test_store_catalog_mints_subject_stores_from_a_shared_root(tmp_path):
 
 def test_reference_data_medallion_is_read_and_joined_by_another_subject(tmp_path):
     # Reference Data is its own subject's medallion, read-only to Case Types: a
-    # Case Type's Selection reads it through a Reader and joins it in Python
-    # (ADR-0001 amendment, ADR-0002). Split files cost nothing on the join path.
+    # Case Type's Selection reads it through a Reader and joins it in Python.
+    # Split files cost nothing on the join path.
     advisers = Store(tmp_path / "advisers")  # a Reference Data subject
     cases = Store(tmp_path / "activity")  # a Case Type subject
 

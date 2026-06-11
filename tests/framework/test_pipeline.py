@@ -55,7 +55,7 @@ class AddingProcessor:
         return Dataset.from_pandas(frame)
 
     def describe(self) -> str:
-        # A user component opting into the describe() protocol (issue #145).
+        # A user component opting into the describe() protocol.
         return f"AddingProcessor(column={self._column!r})"
 
 
@@ -378,7 +378,7 @@ def test_processor_runs_before_post_validators():
 
 def test_processor_is_deferred_until_run():
     # Composing .with_processor is side-effect-free; the processor fires only at
-    # .run() (ADR-0003), like the reader and writer.
+    # .run(), like the reader and writer.
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
     processor = AddingProcessor("derived")
 
@@ -394,7 +394,7 @@ def test_processor_is_deferred_until_run():
 def test_run_hands_the_read_dataset_to_the_writer_and_returns_it():
     # The builder makes no write decisions: it reads via the Reader and hands
     # the exact bulk-tier dataset to whatever Writer was composed in, then
-    # returns it (ADR-0003: .run() returns the opaque tabular dataset).
+    # returns it.
     source = CsvReader(FIXTURE).read()
     reader = RecordingReader(source)
     writer = CapturingWriter()
@@ -407,7 +407,7 @@ def test_run_hands_the_read_dataset_to_the_writer_and_returns_it():
 
 def test_pipeline_defers_all_work_until_run():
     # Composing the builder — including write_to — is side-effect-free; the
-    # single read and the single write fire only at .run() (ADR-0003).
+    # single read and the single write fire only at .run().
     reader = RecordingReader(CsvReader(FIXTURE).read())
     writer = CapturingWriter()
 
@@ -421,7 +421,7 @@ def test_pipeline_defers_all_work_until_run():
 
 
 def test_error_severity_pre_validator_aborts_before_any_write():
-    # Validators default to error severity (ADR-0007); a failing pre-validator
+    # Validators default to error severity; a failing pre-validator
     # aborts the run before the Writer is ever called, so nothing partial lands.
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
     writer = CapturingWriter()
@@ -440,8 +440,7 @@ def test_error_severity_pre_validator_aborts_before_any_write():
 def test_failed_run_leaves_the_gold_layer_untouched(tmp_path):
     # End to end through a real Store-minted gold Writer: a re-run that fails an
     # error-severity validator aborts before the accumulate-by-run write, so the
-    # prior run's rows are neither deleted nor appended — nothing partial lands
-    # (ADR-0007 fail-fast + atomic).
+    # prior run's rows are neither deleted nor appended.
     store = Store(tmp_path / "cases")
     seed = Dataset.from_pandas(pd.DataFrame({"id": [1, 2]}))
     store.writer("gold", "casepool", AccumulateByRun("r1", "2026-05-29")).write(seed)
@@ -462,7 +461,7 @@ def test_failed_run_leaves_the_gold_layer_untouched(tmp_path):
 
 
 def test_warn_severity_validator_logs_and_continues(caplog):
-    # warn is the explicit escape hatch (ADR-0007): a failure logs a warning
+    # warn is the explicit escape hatch: a failure logs a warning
     # naming the problem but the run proceeds and the write still lands.
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
     writer = CapturingWriter()
@@ -481,8 +480,7 @@ def test_warn_severity_validator_logs_and_continues(caplog):
 
 def test_error_severity_post_validator_aborts_before_any_write():
     # A post-validator gates the output that is about to be written; an
-    # error-severity failure aborts before the Writer is called (ADR-0008
-    # silver/gold schema checks run here), so nothing partial lands.
+    # error-severity failure aborts before the Writer is called, so nothing partial lands.
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
     writer = CapturingWriter()
     pipeline = (
@@ -497,14 +495,9 @@ def test_error_severity_post_validator_aborts_before_any_write():
     assert writer.write_count == 0
 
 
-# ---------------------------------------------------------------------------
-# checkpoint tests (issue #49)
-# ---------------------------------------------------------------------------
-
-
 def test_checkpoint_is_deferred_until_run():
     # Composing .checkpoint() is side-effect-free; the write fires only at
-    # .run() (ADR-0003), like the reader and terminus writer.
+    # .run(), like the reader and terminus writer.
     ds = Dataset.from_pandas(pd.DataFrame({"id": [1]}))
     reader = RecordingReader(ds)
     cp = CapturingWriter()
@@ -544,7 +537,7 @@ def test_multiple_checkpoints_fire_in_attach_order():
 
 
 def test_checkpoint_failure_aborts_before_terminus_write():
-    # A checkpoint that raises aborts the run (ADR-0007 fail-fast): the
+    # A checkpoint that raises aborts the run: the
     # terminus writer is never called, so nothing partial lands.
     class BrokenWriter:
         def write(self, dataset: Dataset) -> None:

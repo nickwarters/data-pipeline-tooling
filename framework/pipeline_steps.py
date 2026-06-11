@@ -381,8 +381,8 @@ def _drain_retry_attempts(component: object, metrics: StepMetrics) -> None:
     A :class:`~framework.retry.RetryingReader` / ``RetryingWriter`` collects a
     human note per retried attempt on ``retry_attempts``; draining them onto the
     open step's metrics records the attempts on the same correlated read/write
-    record whose status already carries the final outcome (issue #87). Duck-typed
-    so the seam stays free of any retry dependency.
+    record whose status already carries the final outcome. Duck-typed so this
+    module stays free of any retry dependency.
     """
     attempts = getattr(component, "retry_attempts", None)
     if attempts:

@@ -1,8 +1,8 @@
-"""Value-level schema rules (#24) — format, length, uniqueness, value-set.
+"""Value-level schema rules: format, length, uniqueness, and value-set.
 
 These rules ride on the *same* Case Type dataclass as the columns+dtypes
-contract from #7, attached to a field via ``Annotated[type, Rule(...), ...]`` so
-the annotations stay the single source of truth (ADR-0008). ``SchemaValidator``
+contract from , attached to a field via ``Annotated[type, Rule(...), ...]`` so
+the annotations stay the single source of truth. ``SchemaValidator``
 runs them over column values on the same engine-confined seam it uses for
 dtypes, collecting every breach into one located message naming column + rule.
 """

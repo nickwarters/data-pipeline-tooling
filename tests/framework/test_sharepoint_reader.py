@@ -21,7 +21,7 @@ class FakeListBackend:
     Plays *both* seam roles (fetch + push) over a dict keyed by (site, list), so a
     Dataset pushed by ``SharePointWriter`` can be fetched straight back by
     ``SharePointReader`` with no network, no tenant — the SharePoint-list dual of
-    the way ``SasReader`` tests against landed fixture files (ADR-0004/0005). One
+    the way ``SasReader`` tests against landed fixture files. One
     object covers both directions, mirroring the single client seam a real on-prem
     SE client will sit behind. ``Refresh`` overwrites a list; ``AccumulateByRun``
     appends to it, so per-Case-Type lists stay independent and runs accumulate.
@@ -44,7 +44,7 @@ class FakeListBackend:
 @pytest.fixture
 def fixture_csv(tmp_path) -> Path:
     # A local CSV standing in for a SharePoint list export — no tenant, no auth,
-    # no network (ADR-0004).
+    # no network.
     path = tmp_path / "advisers.csv"
     path.write_text("adviser_id,name\n1,Ada\n2,Linus\n3,Grace\n")
     return path
@@ -61,15 +61,14 @@ def test_reads_a_list_through_a_fixture_fetcher(fixture_csv):
 
     dataset = reader.read()
 
-    # Observed only through the Dataset's public surface (ADR-0002).
+    # Observed only through the Dataset's public surface.
     assert dataset.columns == ["adviser_id", "name"]
     assert len(dataset) == 3
 
 
 def test_default_fetcher_defers_until_implemented():
     # Without a fetcher the real SharePoint client is deferred (auth/tenant out
-    # of scope — ADR-0004): read() refuses rather than pretending to reach the
-    # network.
+    # of scope): read() refuses rather than pretending to reach the network.
     reader = SharePointReader("https://contoso.sharepoint.com", "Advisers")
 
     with pytest.raises(NotImplementedError):
@@ -187,7 +186,7 @@ def test_sharepoint_writer_composes_in_the_pipeline_builder(fixture_csv):
 
 
 def test_write_then_read_round_trips_through_an_in_memory_list_backend():
-    # AC4: both directions exercised against a fake in-memory list backend — no
+    # both directions exercised against a fake in-memory list backend — no
     # network, no real SharePoint. One backend object plays fetcher and pusher,
     # so a Dataset pushed out comes straight back through the read seam.
     backend = FakeListBackend()
@@ -206,7 +205,7 @@ def test_write_then_read_round_trips_through_an_in_memory_list_backend():
 def test_accumulate_by_run_stamps_survive_the_round_trip():
     # The Writer's AccumulateByRun stamps reach the list and a later run appends
     # rather than replacing, so the backend holds the across-run audit trail the
-    # SelectionPool Deliverable carries (ADR-0006).
+    # SelectionPool Deliverable carries.
     backend = FakeListBackend()
     site = "http://sharepoint.corp.local/sites/cases"
     rows = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c1"]}))
@@ -225,9 +224,9 @@ def test_accumulate_by_run_stamps_survive_the_round_trip():
 
 
 def test_selection_pool_is_delivered_to_a_per_case_type_list(tmp_path):
-    # AC5: the Selection Deliverable terminus. A *second* pipeline reads the gold
+    # the Selection Deliverable terminus. A *second* pipeline reads the gold
     # SelectionPool and writes it to the Case Type's own SharePoint list — the
-    # two-pipelines mechanism settled in #48 (CONTEXT.md), not a mid-run
+    # two-pipelines mechanism settled in  (CONTEXT.md), not a mid-run
     # checkpoint. Gold SelectionPool -> SqliteReader -> SharePointWriter -> list.
     case_type = "cases"
     gold_db = tmp_path / case_type / "gold.db"

@@ -1,20 +1,19 @@
-"""Validators — fail-fast checks over a ``Dataset`` at a layer boundary.
+"""Validators: fail-fast checks over a ``Dataset`` at a layer boundary.
 
 A ``Validator`` states an expectation about a feed's data and raises
 ``ValidationError`` when the data breaks it. Validators are attached to the
 builder as **pre** (input) or **post** (output) checks; the builder owns the
 *severity* of each attachment (``error`` aborts the run, ``warn`` logs and
-continues — ADR-0007) and the run ordering, so a Validator itself only knows
-how to check, not what to do about a failure.
+continues) and the run ordering, so a Validator itself only knows how to check,
+not what to do about a failure.
 
 Checks read the dataset's public shape (``columns`` / ``len``) and never name the
-concrete engine, so they stay behind the Dataset seam (ADR-0002). Some take an
-extra narrow seam for a run-over-run comparison the in-flight dataset can't
-supply: ``VolumeAnomalyValidator`` reads a ``RunHistory`` baseline (#54), and
+concrete engine, so they stay behind the Dataset seam. Some take an extra narrow
+seam for a run-over-run comparison the in-flight dataset can't supply:
+``VolumeAnomalyValidator`` reads a ``RunHistory`` baseline, and
 ``SchemaDriftValidator`` reads a ``PriorColumns`` source — the prior run's landed
-columns — to warn on raw-boundary source drift (#51, ADR-0008 amendment). Schema /
-dtype enforcement at silver & gold (ADR-0008) is a later, richer Validator of
-the same shape.
+columns — to warn on raw-boundary source drift. Schema/dtype enforcement at
+silver and gold is a later, richer Validator of the same shape.
 """
 
 from __future__ import annotations
@@ -26,8 +25,7 @@ from framework.dataset import Dataset
 from framework.describe import render
 
 # Severity is set where a Validator is *attached* to the builder, not on the
-# Validator itself (ADR-0007: validators default to error/abort; warn is the
-# explicit, deliberate escape hatch).
+# Validator itself.
 Severity = Literal["error", "warn"]
 
 
@@ -91,7 +89,7 @@ class RowCountValidator:
 
 
 class RunHistory(Protocol):
-    """The slice of the run registry a volume baseline needs (#52, #54).
+    """The slice of the run registry a volume baseline needs.
 
     Anything that can answer "what did the recent runs of this feed read?" is a
     baseline source; ``RunRegistry`` is the production one. Stated as a Protocol
@@ -105,24 +103,22 @@ class RunHistory(Protocol):
 
 
 class VolumeAnomalyValidator:
-    """Trip when a run's row count deviates wildly from its recent history (#54).
+    """Trip when a run's row count deviates wildly from its recent history.
 
-    The truncated-export guardrail: per-row and value-level checks (#24) cannot
-    see a half-written source export where every row is valid yet thousands are
-    missing — only run-over-run **volume** can. This compares the dataset's row
-    count against a baseline derived from the feed's recent runs (the median of
-    their read volumes, robust to a single prior outlier) and raises when the
-    count falls outside ``median × (1 ± tolerance)`` in *either* direction — a
-    sudden collapse *or* a suspicious explosion.
+    Per-row and value-level checks cannot see a half-written source export where
+    every row is valid yet thousands are missing; only run-over-run **volume**
+    can. This compares the dataset's row count against a baseline derived from
+    the feed's recent runs (the median of their read volumes, robust to a single
+    prior outlier) and raises when the count falls outside
+    ``median × (1 ± tolerance)`` in either direction.
 
     The baseline is sourced from run history (``RunHistory``), not a hand-set
-    per-feed threshold (AC #3). An optional absolute ``floor`` is an independent,
+    per-feed threshold. An optional absolute ``floor`` is an independent,
     **always-on** guard that holds even before any history exists. With fewer
     than ``min_history`` prior successful runs the relative band is skipped so a
-    feed's first nights don't trip spuriously (AC #4) — only the floor, if set,
-    applies. Severity (warn vs abort) and recording the trip to the ``RunLog``
-    are owned by the builder where this is attached, like any Validator
-    (ADR-0007).
+    feed's first nights don't trip spuriously; only the floor, if set,
+    applies. Severity and recording the trip to the ``RunLog`` are owned by the
+    builder where this is attached, like any Validator.
     """
 
     def __init__(
@@ -145,8 +141,7 @@ class VolumeAnomalyValidator:
     def validate(self, dataset: Dataset) -> None:
         rows = len(dataset)
 
-        # The absolute floor is always-on — independent of history, it guards a
-        # feed's very first run (AC #3, AC #4).
+        # The absolute floor is always on, independent of history.
         if self._floor is not None and rows < self._floor:
             raise ValidationError(
                 f"row count {rows} below floor {self._floor}"
@@ -156,7 +151,7 @@ class VolumeAnomalyValidator:
             self._pipeline, limit=self._lookback
         )
         # Insufficient history degrades gracefully: no relative baseline, no
-        # spurious trip (AC #4). The floor above still applied.
+        # spurious trip. The floor above still applied.
         if len(counts) < self._min_history:
             return
 
@@ -199,22 +194,19 @@ class PriorColumns(Protocol):
 
 
 class SchemaDriftValidator:
-    """Warn when a feed's incoming columns drift from the prior run's (#51).
+    """Warn when a feed's incoming columns drift from the prior run's.
 
-    Raw is schema-light (ADR-0008): an owner-controlled source (SharePoint list,
-    SAS export) can silently add or drop a column between snapshots, and today
-    that only surfaces a layer later as a silver Schema Breach. This catches it
-    **at the door** by diffing the incoming :class:`Dataset`'s columns against
-    the prior run's landed columns (the ``PriorColumns`` seam — read from the
-    live raw table) and raising with the added/dropped columns named.
+    Raw is schema-light: an owner-controlled source can silently add or drop a
+    column between snapshots, and that may only surface a layer later as a silver
+    schema breach. This catches it at the door by diffing the incoming
+    :class:`Dataset`'s columns against the prior run's landed columns and raising
+    with the added/dropped columns named.
 
     The diff is **names-only** (a dtype change on a surviving column stays a
-    silver concern — ADR-0008) and a **case-sensitive set** difference (order is
+    silver concern) and a **case-sensitive set** difference (order is
     not drift; an upstream rename surfaces honestly as one drop + one add). The
     first-ever run has no prior (``columns()`` returns ``None``) and is a clean
-    no-op. Severity is the builder's call like any Validator (ADR-0007); attached
-    at ``warn`` the message rides ``warn_hits`` onto the run summary, where the
-    run registry's ``runs_that_warned`` surfaces it (AC #5/#6).
+    no-op. Severity is the builder's call like any Validator.
     """
 
     def __init__(self, prior: PriorColumns) -> None:
@@ -223,7 +215,7 @@ class SchemaDriftValidator:
     def validate(self, dataset: Dataset) -> None:
         prior = self._prior.columns()
         if prior is None:
-            return  # first-ever run — no baseline to drift from (AC #4)
+            return  # first-ever run: no baseline to drift from
         incoming = set(dataset.columns)
         baseline = set(prior)
         added = [c for c in dataset.columns if c not in baseline]
@@ -247,9 +239,8 @@ class SchemaDriftValidator:
 class UniqueValidator:
     """Assert that a column (or column set) is unique across the dataset.
 
-    Attached at the gold boundary it enforces the one-row-per-Case grain on
-    ``case_id`` (ADR-0009), aborting the run before a duplicated-grain gold is
-    written (fail-fast, ADR-0007).
+    Attached at the gold boundary it enforces the one-row-per-Case grain,
+    aborting the run before duplicated-grain gold is written.
 
     ``columns`` may be a single column name (str) or a list of column names for
     a composite key.

@@ -1,9 +1,8 @@
-"""Selection processors — filter/score/sort/rename + cross-feed joins.
+"""Selection processors: filter, score, sort, rename, and cross-feed joins.
 
 These are the engine-confined transforms the Selection workload composes between
-a feed's read and its post-validators (ADR-0002: all business logic in Python,
-no business-rule SQL). ``Filter`` and ``Score`` carry **plain-Python row
-callables** so the business rule never names the engine; ``JoinWith`` consumes
+a feed's read and its post-validators. ``Filter`` and ``Score`` carry
+plain-Python row callables so the business rule never names the engine; ``JoinWith`` consumes
 an explicit read-only dependency so upstream execution is not hidden inside
 ``process``.
 """
@@ -43,8 +42,6 @@ class RecordingReader:
 
 
 def test_filter_keeps_only_rows_matching_the_predicate():
-    # The predicate is a plain-Python callable over a row mapping (ADR-0002):
-    # rows it returns True for survive, the rest are dropped.
     dataset = Dataset.from_pandas(
         pd.DataFrame({"case_ref": ["c1", "c2", "c3"], "score": [10, 5, 20]})
     )
@@ -66,8 +63,6 @@ def test_filter_handles_an_empty_feed():
 
 
 def test_score_writes_a_column_computed_per_row():
-    # Score derives a new column from each row via a plain-Python scorer; the
-    # rest of the row is untouched. The scoring half of Selection (CONTEXT.md).
     dataset = Dataset.from_pandas(
         pd.DataFrame({"case_ref": ["c1", "c2"], "amount": [100, 50]})
     )
@@ -81,9 +76,6 @@ def test_score_writes_a_column_computed_per_row():
 
 
 def test_stamp_writes_a_constant_column_onto_every_row():
-    # Stamp puts one constant value on every row — how Selection records the
-    # applicable question_bank_id (CONTEXT.md) onto the selected Cases. Unlike
-    # Score it carries no per-row rule, so it reads as the constant it is.
     dataset = Dataset.from_pandas(
         pd.DataFrame({"case_ref": ["c1", "c2", "c3"]})
     )
@@ -143,9 +135,7 @@ def test_rename_renames_mapped_columns_and_leaves_the_rest():
 
 
 def test_join_with_brings_in_the_other_feeds_columns_on_the_key():
-    # The cross-feed join (ADR-0003): the processed feed gains the other feed's
-    # columns matched on the shared key — e.g. a CasePool joined to the Adviser
-    # hierarchy Reference Data. Joined in Python, not SQL (ADR-0002).
+    # Joined in Python, not SQL, so business logic stays out of storage.
     cases = Dataset.from_pandas(
         pd.DataFrame({"adviser": ["a1", "a2"], "case_ref": ["c1", "c2"]})
     )
@@ -323,7 +313,7 @@ def test_anti_join_with_exposes_trace_metadata_for_selection_explainability():
 
 
 def test_pipeline_filters_one_feed_and_joins_another_feeds_silver(tmp_path):
-    # Acceptance (#9/#78): end to end through the real builder — a Selection-shaped
+    # Acceptance: end to end through the real builder — a Selection-shaped
     # pipeline reads one subject's silver, filters it in Python, and joins
     # another subject's silver Reference Data via an explicit read-only
     # dependency. Upstream execution is not hidden in JoinWith.process().
@@ -359,10 +349,6 @@ def test_pipeline_filters_one_feed_and_joins_another_feeds_silver(tmp_path):
     assert list(selected["case_ref"]) == ["c1", "c3"]
     assert list(selected["region"]) == ["north", "south"]
 
-
-# ---------------------------------------------------------------------------
-# DeriveKey — deterministic uuid5 processor (issue #35)
-# ---------------------------------------------------------------------------
 
 import uuid as _uuid
 
@@ -441,7 +427,7 @@ def test_derive_key_multi_column_key_order_matters():
 
 
 def test_derive_key_returns_a_dataset_not_a_dataframe():
-    # Engine-confined (ADR-0002): DeriveKey.process must return a Dataset, not
+    # Engine-confined: DeriveKey.process must return a Dataset, not
     # a pandas DataFrame — pandas stays behind the seam.
     dataset = Dataset.from_pandas(pd.DataFrame({"ref": ["A"]}))
 
@@ -449,10 +435,6 @@ def test_derive_key_returns_a_dataset_not_a_dataframe():
 
     assert isinstance(result, Dataset)
 
-
-# ---------------------------------------------------------------------------
-# LatestPerKey — collapse accumulated history to current state (issue #36)
-# ---------------------------------------------------------------------------
 
 from framework.processors import LatestPerKey
 
@@ -540,7 +522,7 @@ def test_latest_per_key_raises_when_by_column_is_missing():
 
 
 def test_latest_per_key_returns_a_dataset_not_a_dataframe():
-    # Engine-confined (ADR-0002): process() must return a Dataset, keeping
+    # Engine-confined: process() must return a Dataset, keeping
     # pandas behind the seam — callers never touch the backing frame directly.
     dataset = Dataset.from_pandas(
         pd.DataFrame({"case_id": ["A"], "load_date": ["2024-01-01"], "status": ["open"]})
@@ -551,16 +533,12 @@ def test_latest_per_key_returns_a_dataset_not_a_dataframe():
     assert isinstance(result, Dataset)
 
 
-# ---------------------------------------------------------------------------
-# SelectColumns — project a subset of columns (issue #39)
-# ---------------------------------------------------------------------------
-
 from framework.processors import SelectColumns
 
 
 def test_select_columns_keeps_only_the_listed_columns():
     # SelectColumns is the column-projection seam: each fan-out pipeline reads
-    # only the columns it needs from the shared raw table (ADR-0009).
+    # only the columns it needs from the shared raw table.
     dataset = Dataset.from_pandas(
         pd.DataFrame({"case_ref": ["c1"], "amount": [100], "product_1": ["widget"]})
     )
@@ -582,17 +560,13 @@ def test_select_columns_raises_when_a_column_is_missing():
         SelectColumns(["case_ref", "product_1"]).process(dataset)
 
 
-# ---------------------------------------------------------------------------
-# DropColumns — drop a subset of columns, the SelectColumns complement (issue #153)
-# ---------------------------------------------------------------------------
-
 from framework.processors import DropColumns
 
 
 def test_drop_columns_removes_the_listed_columns_and_keeps_the_rest_in_order():
     # DropColumns is the exclusion form of the projection seam: a wide feed that
     # wants almost every column strips the few it doesn't, rather than enumerate
-    # the many it keeps (the SelectColumns complement, ADR-0009).
+    # the many it keeps.
     dataset = Dataset.from_pandas(
         pd.DataFrame({"case_ref": ["c1"], "scratch": [1], "amount": [100]})
     )
@@ -614,16 +588,11 @@ def test_drop_columns_raises_when_a_column_is_missing():
         DropColumns(["scratch"]).process(dataset)
 
 
-# ---------------------------------------------------------------------------
-# Unpivot — wide→long reshape for Detail Tables (issue #39)
-# ---------------------------------------------------------------------------
-
 from framework.processors import Unpivot
 
 
 def test_unpivot_melts_value_vars_into_one_row_per_value():
-    # The wide→long unpivot at the heart of the Detail Table fan-out (ADR-0009):
-    # each product column becomes a row, so product_1..N are not repeated fields
+    # Each product column becomes a row, so product_1..N are not repeated fields
     # but a proper one-row-per-product Detail Table.
     dataset = Dataset.from_pandas(
         pd.DataFrame({
@@ -671,7 +640,7 @@ def test_unpivot_drops_null_and_blank_values_by_default():
 
 
 def test_unpivot_returns_a_dataset_not_a_dataframe():
-    # Engine-confined (ADR-0002): process() must return a Dataset.
+    # Engine-confined: process() must return a Dataset.
     dataset = Dataset.from_pandas(
         pd.DataFrame({"case_ref": ["c1"], "product_1": ["widget"]})
     )
@@ -682,10 +651,6 @@ def test_unpivot_returns_a_dataset_not_a_dataframe():
 
     assert isinstance(result, Dataset)
 
-
-# ---------------------------------------------------------------------------
-# TopNPerGroup / SamplePerGroup — per-group Selection narrowing (issue #62)
-# ---------------------------------------------------------------------------
 
 from framework.processors import TopNPerGroup
 
@@ -946,7 +911,7 @@ def test_sample_per_group_different_seeds_can_draw_different_samples():
 
 
 def test_per_group_processors_conform_to_the_processor_protocol():
-    # AC1: both are Processors, attachable via .with_processor (ADR-0002).
+    # both are Processors, attachable via .with_processor.
     from framework.processors import Processor
 
     assert isinstance(TopNPerGroup(key="adviser", by="score", n=1), Processor)

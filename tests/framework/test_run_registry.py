@@ -1,4 +1,4 @@
-"""The run registry (issue #52, ADR-0005/0007).
+"""The run registry.
 
 A ``RunRegistry`` ingests the structured JSONL a ``RunLog`` emits into its own
 queryable SQLite store, so operators can answer "did last night's run succeed,
@@ -73,7 +73,7 @@ def test_ingest_makes_a_runs_steps_queryable_by_run_id(tmp_path):
 
 
 def test_ingest_is_idempotent_re_reading_does_not_double_count(tmp_path):
-    # Re-reading the same JSONL must not double-count (AC #3): a record's
+    # Re-reading the same JSONL must not double-count: a record's
     # identity is run_id + step (+ ordinal), so the second ingest inserts nothing
     # and the per-run record set is unchanged.
     log_path = tmp_path / "cases.log"
@@ -92,7 +92,7 @@ def test_ingest_is_idempotent_re_reading_does_not_double_count(tmp_path):
 
 
 def test_latest_run_per_pipeline_returns_the_most_recent_summary_each(tmp_path):
-    # "Latest run per pipeline" (AC #2): for each pipeline, the most recent run
+    # "Latest run per pipeline": for each pipeline, the most recent run
     # summary by emit time — one row per pipeline, regardless of how many runs.
     log_path = tmp_path / "runs.log"
     _run_pipeline(log_path, name="alpha")
@@ -121,7 +121,7 @@ def _run_failing_pipeline(log_path, name="cases"):
 
 def test_query_runs_returns_summaries_filterable_by_pipeline_and_status(tmp_path):
     # The run summary (step="run") is the operator's headline row. query_runs
-    # returns one per run and narrows by pipeline and by status (AC #2).
+    # returns one per run and narrows by pipeline and by status.
     log_path = tmp_path / "runs.log"
     ok_a = _run_pipeline(log_path, name="alpha")
     ok_b = _run_pipeline(log_path, name="beta")
@@ -143,7 +143,7 @@ def test_query_runs_returns_summaries_filterable_by_pipeline_and_status(tmp_path
 
 def test_ingest_tolerates_a_pre_timestamp_log(tmp_path):
     # The registry must read a log written before the timestamp field existed
-    # (AC #5, the format the emitter produced previously): the record ingests,
+    # (, the format the emitter produced previously): the record ingests,
     # its missing timestamp lands as null, and it is still queryable by run_id.
     log_path = tmp_path / "old.log"
     old_record = {  # the pre-amendment shape — no "timestamp" key
@@ -168,11 +168,11 @@ def test_ingest_tolerates_a_pre_timestamp_log(tmp_path):
 
 
 def test_runs_that_warned_surfaces_tolerated_warn_hits(tmp_path):
-    # A warn-severity breach (the home of a schema-drift warning, ADR-0008) is
+    # A warn-severity breach (the home of a schema-drift warning, ) is
     # tolerated — the run stays "ok" — but its message is carried on the run
     # summary's warn_hits. runs_that_warned returns exactly those runs, with the
     # messages decoded back to a list, so a drift is visible without re-grepping
-    # (AC #2 "runs that warned" + AC #6 schema-drift surfacing).
+    # ("runs that warned" + schema-drift surfacing).
     log_path = tmp_path / "runs.log"
     clean = _run_pipeline(log_path, name="alpha")  # no warns
 
@@ -195,7 +195,7 @@ def test_runs_that_warned_surfaces_tolerated_warn_hits(tmp_path):
 
 
 def test_recent_row_counts_returns_read_volumes_most_recent_first(tmp_path):
-    # The volume guardrail (#54) derives its baseline from the read-step volume
+    # The volume guardrail derives its baseline from the read-step volume
     # of recent runs. recent_row_counts returns those counts for one pipeline,
     # most-recent-first, capped at `limit` — so a band can be built over "the
     # last N runs" without re-grepping logs.
@@ -212,7 +212,7 @@ def test_recent_row_counts_returns_read_volumes_most_recent_first(tmp_path):
 
 def test_recent_row_counts_excludes_aborted_runs_from_the_baseline(tmp_path):
     # A run that read rows but then aborted (its summary is "error") must not
-    # count toward the volume baseline (#54): otherwise a run the guardrail
+    # count toward the volume baseline: otherwise a run the guardrail
     # itself tripped would drag tonight's baseline down toward the bad value.
     log_path = tmp_path / "runs.log"
     _run_pipeline(log_path, name="cases", rows=100)
@@ -229,10 +229,10 @@ def test_recent_row_counts_excludes_aborted_runs_from_the_baseline(tmp_path):
 def test_volume_guardrail_trips_against_real_history_and_records_to_the_runlog(
     tmp_path,
 ):
-    # End-to-end (#54): healthy runs build a baseline in the registry, then a
+    # End-to-end: healthy runs build a baseline in the registry, then a
     # truncated run attaches a VolumeAnomalyValidator that reads that baseline.
     # Attached as warn, the run completes but its trip is recorded to the RunLog
-    # — visible via the registry's runs_that_warned (AC #5: trips recorded).
+    # — visible via the registry's runs_that_warned (trips recorded).
     history_log = tmp_path / "history.log"
     for rows in (100, 110, 90, 105):
         _run_pipeline(history_log, name="cases", rows=rows)
@@ -262,7 +262,7 @@ def test_volume_guardrail_trips_against_real_history_and_records_to_the_runlog(
 
 def test_volume_guardrail_aborts_the_run_at_error_severity(tmp_path):
     # At the default error severity the same trip aborts the run fail-fast
-    # (ADR-0007) before anything lands, and the run is recorded as errored.
+    # before anything lands, and the run is recorded as errored.
     history_log = tmp_path / "history.log"
     for rows in (100, 110, 90, 105):
         _run_pipeline(history_log, name="cases", rows=rows)

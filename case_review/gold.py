@@ -6,7 +6,7 @@ hand it to the generic framework reducers, which know only ``entity_id`` /
 ``namespace`` / ``natural_key`` and nothing about Cases. The Case builder and
 each Detail-Table builder take the *same* Case Type, so a Case and its Detail
 rows derive the same deterministic ``case_id`` independently — the parent/child
-link is structural (ADR-0009), not two call sites that must be kept in step.
+link is structural, not two call sites that must be kept in step.
 """
 
 from __future__ import annotations
@@ -21,9 +21,8 @@ from framework.run import (
 )
 from framework.transform import Unpivot
 
-# The domain's entity-id column name — a Case is identified by its ``case_id``
-# everywhere downstream (ADR-0009). The generic reducer calls this its
-# ``entity_id_column``; the case-review layer fixes it to ``case_id``.
+# A Case is identified by its ``case_id`` everywhere downstream. The generic
+# reducer calls this its ``entity_id_column``; the case-review layer fixes it.
 CASE_ID_COLUMN = "case_id"
 
 
@@ -63,8 +62,8 @@ def detail_ingest_silver_to_gold(
     """Reduce accumulated detail silver to current gold rows linked by case id.
 
     Takes the *same* ``case_type`` as its Case table, so the Detail Table's
-    ``case_id`` derives identically (ADR-0009). ``table`` is the Detail Table's
-    own name (distinct from the Case table).
+    ``case_id`` derives identically. ``table`` is the Detail Table's own name
+    (distinct from the Case table).
     """
     return detail_current_silver_to_gold(
         store,

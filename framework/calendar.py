@@ -6,7 +6,7 @@ those questions deterministically from a seeded weekend rule plus a set of
 holidays. It is **pure logic**: no ``Store``, no in-memory engine, no
 ``Dataset`` — it depends only on the stdlib ``datetime``, so it is the same on
 Windows and macOS. Reference Data lives in per-subject medallions; the
-working-day calendar is deliberately *not* a feed (ADR-0001 amendment).
+working-day calendar is deliberately not a feed.
 """
 
 from __future__ import annotations

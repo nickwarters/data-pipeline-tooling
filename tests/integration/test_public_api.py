@@ -1,4 +1,4 @@
-"""The public framework API: three subpackage facades (#95).
+"""The public framework API: three subpackage facades.
 
 A pipeline author depends on ``framework.io`` / ``framework.transform`` /
 ``framework.run`` — the stable public surface — not on internal modules by
@@ -172,9 +172,9 @@ def test_internal_plumbing_stays_out_of_the_public_facades():
 
 
 def test_demo_pipelines_import_framework_only_through_the_public_facades():
-    # AC4: downstream scripts depend on the stable surface, not internal modules
+    # downstream scripts depend on the stable surface, not internal modules
     # by accident. Every framework import in pipelines/ must go through a facade —
-    # including feed subpackages (pipelines/<feed>/, scaffolded by #97). Test
+    # including feed subpackages (pipelines/<feed>/, scaffolded by ). Test
     # modules are excluded: their tests legitimately import framework.testing.
     assert not _facade_offenders(PIPELINES_DIR), (
         f"pipelines bypassing the public facades: {_facade_offenders(PIPELINES_DIR)}"
@@ -184,7 +184,7 @@ def test_demo_pipelines_import_framework_only_through_the_public_facades():
 def test_case_review_imports_framework_only_through_the_public_facades():
     # case_review/ is an application layer above the framework — the same
     # architectural position as pipelines/ — so it depends on the same stable
-    # surface (#159). Production code only: domain *tests* (tests/case_review/)
+    # surface. Production code only: domain *tests* (tests/case_review/)
     # legitimately import framework internals and stay out of scope.
     assert not _facade_offenders(CASE_REVIEW_DIR), (
         f"case_review bypassing the public facades: {_facade_offenders(CASE_REVIEW_DIR)}"
