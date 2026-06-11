@@ -110,9 +110,13 @@ $ python -m pipelines.cli log /data cases
 run log: /data/_runs/cases.log
   cases/ingest  run: ok  rows_in=5  rows_out=5  0.010s
   cases/selection  freshness: ok
-  cases/selection  run: ok  rows_in=2  rows_out=2  0.008s
+  cases/selection  run: ok  rows_in=2  rows_out=2  rows_quarantined=0  rows_excluded=0  0.008s
 3 step records across 2 run(s): 0 failed, 0 warned
 ```
+
+Zero-valued row metrics are printed explicitly because they distinguish a step
+that produced, quarantined, or excluded no rows from a metric that does not
+apply to that step.
 
 ## Errors
 

@@ -124,6 +124,29 @@ def test_log_summarizes_a_run_log_file(tmp_path):
     assert "step records" in result.stdout
 
 
+def test_format_record_includes_zero_row_metrics():
+    from pipelines.cli import _format_record
+
+    line = _format_record(
+        {
+            "step": "write",
+            "status": "ok",
+            "rows_in": None,
+            "rows_out": 0,
+            "rows_quarantined": 0,
+            "rows_excluded": 0,
+            "duration": None,
+            "errors": [],
+            "warn_hits": [],
+        }
+    )
+
+    assert "rows_in=" not in line
+    assert "rows_out=0" in line
+    assert "rows_quarantined=0" in line
+    assert "rows_excluded=0" in line
+
+
 def test_status_without_a_registry_reports_clear_error(tmp_path):
     result = _cli("status", str(tmp_path))
 

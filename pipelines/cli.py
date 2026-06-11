@@ -99,8 +99,9 @@ def _format_record(record: dict) -> str:
     """One human-readable line for any RunLog step/summary record."""
     parts = [f"{record.get('step', '?')}: {record.get('status', '?')}"]
     for field in ("rows_in", "rows_out", "rows_quarantined", "rows_excluded"):
-        if record.get(field):
-            parts.append(f"{field}={record[field]}")
+        value = record.get(field)
+        if value is not None:
+            parts.append(f"{field}={value}")
     if record.get("duration") is not None:
         parts.append(f"{record['duration']:.3f}s")
     if record.get("errors"):
