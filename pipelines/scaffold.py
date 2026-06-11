@@ -30,6 +30,10 @@ from pathlib import Path
 # The placeholder tokens in the template: the feed slug and its PascalCase form.
 # Both are substituted in file contents and in file/directory names.
 _TEMPLATE_DIR = Path(__file__).parent / "_scaffold_template"
+# The Case Type ingest variant (--case-type, #155): a case-review-flavoured
+# template that declares the Case Type's identity contract and refines source ->
+# raw -> silver, stopping at silver (gold is the feed author's seam — #163).
+_TEMPLATE_DIR_CASE_TYPE = Path(__file__).parent / "_scaffold_template_case_type"
 _SLUG_TOKEN = "myfeed"
 _CLASS_TOKEN = "Myfeed"
 
@@ -86,12 +90,18 @@ def render(
     root: str | Path | None = None,
     *,
     force: bool = False,
+    case_type: bool = False,
 ) -> list[Path]:
     """Render the feed under ``root`` and return the files made.
 
     Feed code lands in ``<root>/pipelines/<feed>/`` and the test in
     ``<root>/tests/pipelines/test_<feed>.py``. ``root`` is the repository root;
     it defaults to this repo (``_REPO_ROOT``), and tests pass a temporary one.
+
+    ``case_type`` selects the **Case Type ingest variant** (#155): the
+    case-review-flavoured template that additionally declares the Case Type's
+    identity contract (``case_type.py``) and refines source -> raw -> silver,
+    stopping at silver. The default renders the generic source -> raw feed.
 
     Raises ``ValueError`` for an invalid feed name and ``FileExistsError`` if any
     target already exists (pass ``force=True`` to overwrite in place).
@@ -100,14 +110,15 @@ def render(
     root = Path(root) if root is not None else _REPO_ROOT
     feed_dir = root / "pipelines" / feed
     tests_dir = root / "tests" / "pipelines"
+    template_dir = _TEMPLATE_DIR_CASE_TYPE if case_type else _TEMPLATE_DIR
 
     # Plan every (target, contents) pair up front so an existing-file refusal
     # leaves the tree untouched rather than half-written.
     plan: list[tuple[Path, str]] = []
-    for source in sorted(_TEMPLATE_DIR.rglob("*")):
+    for source in sorted(template_dir.rglob("*")):
         if source.is_dir() or "__pycache__" in source.parts:
             continue
-        relative = Path(_substitute(str(source.relative_to(_TEMPLATE_DIR)), feed))
+        relative = Path(_substitute(str(source.relative_to(template_dir)), feed))
         text = _substitute(source.read_text(encoding="utf-8"), feed)
         if _is_test_file(relative):
             target = tests_dir / relative.name
@@ -142,13 +153,22 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="overwrite the feed's files if they already exist",
     )
+    parser.add_argument(
+        "--case-type",
+        action="store_true",
+        help=(
+            "render the Case Type ingest variant (#155): declares the Case "
+            "Type's identity contract and refines source -> raw -> silver, "
+            "stopping at silver (gold is yours to assemble)"
+        ),
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        created = render(args.feed, force=args.force)
+        created = render(args.feed, force=args.force, case_type=args.case_type)
     except (ValueError, FileExistsError) as exc:
         print(str(exc), file=sys.stderr)
         return 1

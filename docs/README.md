@@ -234,6 +234,15 @@ python -m pipelines.orders.pipeline /data        # land the bundled sample into 
 python -m pytest tests/pipelines/test_orders.py  # the generated test passes as-is
 ```
 
+When the feed's rows *are* a Case Type, add `--case-type` for the variant that
+also declares the Case Type's identity contract and refines source → raw →
+silver (stopping at silver — gold assembly is the author's call, #163); see
+[`adding-a-feed.md`](adding-a-feed.md):
+
+```sh
+python -m pipelines.scaffold --case-type claims  # + case_type.py; source -> raw -> silver
+```
+
 ```python
 from framework.io import RAW, ExcelReader, Refresh, StoreCatalog
 from framework.run import Pipeline
