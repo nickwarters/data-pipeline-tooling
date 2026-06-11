@@ -5,7 +5,8 @@ The stable import surface for everything that reshapes or gates a
 ``Processor`` seam and its concrete transforms (the Selection ``Filter`` /
 ``Score`` / ``Sort`` / ``Rename`` / ``Stamp``, the per-group ``TopNPerGroup`` /
 ``SamplePerGroup``, the lazy ``JoinWith`` / ``AntiJoinWith``, the Ingest /
-fan-out ``SelectColumns`` / ``Unpivot`` / ``DeriveKey`` / ``LatestPerKey``),
+fan-out ``SelectColumns`` / ``DropColumns`` / ``Unpivot`` / ``DeriveKey`` /
+``LatestPerKey``),
 the ``Validator`` checks, the
 ``Schema`` adapter (``SchemaValidator`` / ``SchemaCoercion`` + value rules), and
 the ``WorkingDayCalendar`` availability utility.
@@ -25,6 +26,7 @@ from framework.processors import (
     AntiJoinWith,
     CoercionError,
     DeriveKey,
+    DropColumns,
     Filter,
     JoinDependency,
     JoinWith,
@@ -75,6 +77,7 @@ __all__ = [
     "AntiJoinWith",
     "LatestPerKey",
     "SelectColumns",
+    "DropColumns",
     "Unpivot",
     "DeriveKey",
     "TopNPerGroup",

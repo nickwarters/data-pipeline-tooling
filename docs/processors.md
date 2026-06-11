@@ -9,7 +9,7 @@ They fall into two workload families:
   read-only dependencies. The Selection Pipeline reads the **CasePool**, narrows
   and ranks it, joins in Reference Data, filters exclusion lists, and emits the
   **SelectionPool**.
-- **Ingest & fan-out reshaping** (#35, #36, #39) — `SelectColumns`, `Unpivot`,
+- **Ingest & fan-out reshaping** (#35, #36, #39, #153) — `SelectColumns`, `DropColumns`, `Unpivot`,
   `DeriveKey`, `LatestPerKey`: the transforms that fan one wide feed into a Case
   table and its Detail Tables, derive the deterministic `case_id`, and reduce
   accumulated history to current-state gold (ADR-0009).
@@ -391,6 +391,23 @@ mis-typed projection fails at run time rather than silently producing an
 incomplete result. (At read time the planned reader `columns=` parameter pushes
 the same projection into the `SELECT`; `SelectColumns` is the processor form for
 a feed already in memory.)
+
+### `DropColumns` — drop the columns this pipeline doesn't want
+
+```python
+from framework.transform import DropColumns
+
+DropColumns(["scratch", "internal_flag"])
+```
+
+The **exclusion** form of the projection seam and the complement of
+`SelectColumns`: where `SelectColumns` names the columns to **keep**,
+`DropColumns` names the columns to **remove**, keeping the rest in their
+original order. It is the ergonomic choice for a wide feed that wants *almost*
+every column — strip a couple of internal/scratch columns off a wide raw table
+without enumerating the many it keeps. A column named for dropping that is
+**absent** raises `ValueError` naming the missing column(s) and the available
+ones — so a mis-typed drop fails at run time rather than silently doing nothing.
 
 ### `Unpivot` — wide→long, for a Detail Table
 

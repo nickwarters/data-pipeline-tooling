@@ -377,6 +377,37 @@ class SelectColumns:
         return render(self, columns=self._columns)
 
 
+class DropColumns:
+    """Drop the listed columns from the dataset; keep everything else.
+
+    The exclusion form of the projection seam (ADR-0009) and the complement of
+    :class:`SelectColumns`: where ``SelectColumns`` names the columns to keep,
+    ``DropColumns`` names the columns to remove. It is the ergonomic choice for a
+    wide feed that wants *almost* every column — strip a couple of internal /
+    scratch columns off a wide raw table without enumerating the many it keeps.
+    The surviving columns keep their original order.
+
+    Raises ``ValueError`` if any requested column is absent from the dataset, so
+    a mis-typed drop is caught at run time rather than silently doing nothing.
+    """
+
+    def __init__(self, columns: Sequence[str]) -> None:
+        self._columns = list(columns)
+
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
+        missing = [c for c in self._columns if c not in frame.columns]
+        if missing:
+            raise ValueError(
+                f"DropColumns: column(s) not found in dataset: {missing!r}. "
+                f"Available columns: {list(frame.columns)!r}"
+            )
+        return Dataset.from_pandas(frame.drop(columns=self._columns))
+
+    def describe(self) -> str:
+        return render(self, columns=self._columns)
+
+
 class Unpivot:
     """Wide→long reshape: melt repeated column groups into one row per value.
 
