@@ -23,7 +23,9 @@ Application code (`pipelines/` + the `case_review/` domain layer) imports these
 primitives through the three public facades (`framework.io` /
 `framework.transform` / `framework.run`), not the home modules named
 per-primitive below; the home modules locate the code, the facades are the
-stable contract. See [`public-api.md`](public-api.md).
+stable contract. The package root exposes only those facade modules for
+discovery (`framework.io`, `framework.transform`, `framework.run`); it does not
+re-export primitive classes directly. See [`public-api.md`](public-api.md).
 
 ## Medallion layers
 

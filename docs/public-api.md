@@ -20,6 +20,21 @@ from framework.transform import Filter, Score, SchemaValidator, ColumnValidator
 from framework.run import Pipeline, PipelineRunner, RunContext
 ```
 
+For interactive discovery, `import framework` exposes only those facade modules:
+
+```python
+import framework
+
+framework.__all__  # ["io", "run", "transform"]
+framework.io.CsvReader
+framework.transform.Filter
+framework.run.Pipeline
+```
+
+The package root is intentionally not a mega-facade: names such as `CsvReader`,
+`Filter`, and `Pipeline` stay on their task-oriented facades and are not
+available as `framework.CsvReader`, `framework.Filter`, or `framework.Pipeline`.
+
 The facades are thin re-export modules: `framework.transform.Filter` **is**
 `framework.processors.Filter` (the same object). Nothing is reimplemented — the
 facade only curates and groups.
