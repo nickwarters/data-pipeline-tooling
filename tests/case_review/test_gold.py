@@ -6,6 +6,7 @@ import pytest
 
 from framework.connection import connect
 from framework.dataset import Dataset
+from case_review.case_type import CaseType
 from case_review.gold import ingest_silver_to_gold
 from framework.gold import silver_to_gold
 from framework.store import Store
@@ -13,6 +14,9 @@ from framework.strategy import AccumulateByRun, Refresh
 from framework.validators import ValidationError
 from tests._schema_fixtures import LandedCase, RuledCase
 
+# The Case Type owns identity now; its namespace derives from its name, so this
+# is the same UUID space the explicit _NS used to name (ADR-0009).
+_CASES = CaseType(name="cases", schema=LandedCase, natural_key=("case_ref",))
 _NS = uuid.uuid5(uuid.NAMESPACE_DNS, "cases")
 
 
@@ -252,7 +256,7 @@ def test_ingest_silver_to_gold_reduces_to_one_row_per_case(tmp_path):
         strategy=AccumulateByRun("2026-05-29", "2026-05-29"),
     )
 
-    ingest_silver_to_gold(store, "cases", namespace=_NS, natural_key=["case_ref"]).run()
+    ingest_silver_to_gold(store, _CASES).run()
 
     landed = store.reader("gold", "cases").read().to_pandas()
     assert len(landed) == 2
@@ -275,7 +279,7 @@ def test_ingest_silver_to_gold_keeps_latest_version_of_a_changed_case(tmp_path):
         strategy=AccumulateByRun("2026-05-30", "2026-05-30"),
     )
 
-    ingest_silver_to_gold(store, "cases", namespace=_NS, natural_key=["case_ref"]).run()
+    ingest_silver_to_gold(store, _CASES).run()
 
     silver = store.reader("silver", "cases").read().to_pandas()
     gold = store.reader("gold", "cases").read().to_pandas()
@@ -294,8 +298,8 @@ def test_ingest_silver_to_gold_idempotent_re_run_leaves_gold_unchanged(tmp_path)
         strategy=AccumulateByRun("2026-05-29", "2026-05-29"),
     )
 
-    ingest_silver_to_gold(store, "cases", namespace=_NS, natural_key=["case_ref"]).run()
-    ingest_silver_to_gold(store, "cases", namespace=_NS, natural_key=["case_ref"]).run()
+    ingest_silver_to_gold(store, _CASES).run()
+    ingest_silver_to_gold(store, _CASES).run()
 
     gold = store.reader("gold", "cases").read().to_pandas()
     assert len(gold) == 1
@@ -311,7 +315,7 @@ def test_ingest_silver_to_gold_new_snapshot_updates_gold_to_current(tmp_path):
         pd.DataFrame({"case_ref": ["c1"], "score": [10], "load_date": ["2026-05-29"]}),
         strategy=AccumulateByRun("2026-05-29", "2026-05-29"),
     )
-    ingest_silver_to_gold(store, "cases", namespace=_NS, natural_key=["case_ref"]).run()
+    ingest_silver_to_gold(store, _CASES).run()
     assert store.reader("gold", "cases").read().to_pandas()["score"].iloc[0] == 10
 
     _land_silver(
@@ -319,7 +323,7 @@ def test_ingest_silver_to_gold_new_snapshot_updates_gold_to_current(tmp_path):
         pd.DataFrame({"case_ref": ["c1"], "score": [42], "load_date": ["2026-05-30"]}),
         strategy=AccumulateByRun("2026-05-30", "2026-05-30"),
     )
-    ingest_silver_to_gold(store, "cases", namespace=_NS, natural_key=["case_ref"]).run()
+    ingest_silver_to_gold(store, _CASES).run()
 
     gold = store.reader("gold", "cases").read().to_pandas()
     assert len(gold) == 1
@@ -336,10 +340,10 @@ def test_ingest_silver_to_gold_deterministic_case_id(tmp_path):
         strategy=AccumulateByRun("2026-05-29", "2026-05-29"),
     )
 
-    ingest_silver_to_gold(store, "cases", namespace=_NS, natural_key=["case_ref"]).run()
+    ingest_silver_to_gold(store, _CASES).run()
     first_id = store.reader("gold", "cases").read().to_pandas()["case_id"].iloc[0]
 
-    ingest_silver_to_gold(store, "cases", namespace=_NS, natural_key=["case_ref"]).run()
+    ingest_silver_to_gold(store, _CASES).run()
     second_id = store.reader("gold", "cases").read().to_pandas()["case_id"].iloc[0]
 
     assert first_id == second_id

@@ -25,11 +25,11 @@ Run from the repo root::
 from __future__ import annotations
 
 import sys
-import uuid
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+from case_review.case_type import CaseType
 from case_review.gold import detail_ingest_silver_to_gold, ingest_silver_to_gold
 from framework.io import GOLD, RAW, SILVER, AccumulateByRun, CsvReader, StoreCatalog
 from framework.run import Pipeline
@@ -56,8 +56,12 @@ class CaseSchema:
 
 
 SUBJECT = "wide_cases"
-CASE_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_DNS, SUBJECT)
 RUN_ID = "2026-05-29"
+
+# One Case Type owns the identity contract for this wide feed; both the Cases
+# pipeline and the Products Detail-Table pipeline read its namespace + natural
+# key, so they derive the *same* case_id with no cross-pipeline join (ADR-0009).
+WIDE_CASES = CaseType(name=SUBJECT, schema=CaseSchema, natural_key=("case_ref",))
 
 
 def main(target_dir: str) -> None:
@@ -86,9 +90,7 @@ def main(target_dir: str) -> None:
     )
 
     # 2b. Cases gold: DeriveKey → LatestPerKey → UniqueValidator → Refresh.
-    ingest_silver_to_gold(
-        store, "cases", namespace=CASE_NAMESPACE, natural_key=["case_ref"]
-    ).run()
+    ingest_silver_to_gold(store, WIDE_CASES, "cases").run()
 
     # 3a. Products pipeline: raw → silver (product columns + natural key only).
     (
@@ -100,12 +102,12 @@ def main(target_dir: str) -> None:
         .run()
     )
 
-    # 3b. Products gold: DeriveKey (same namespace+key as cases) → Unpivot → Refresh.
+    # 3b. Products gold: DeriveKey → Unpivot → Refresh. Same WIDE_CASES Case Type
+    #     as the Cases pipeline, so case_id matches without a cross-pipeline join.
     detail_ingest_silver_to_gold(
         store,
+        WIDE_CASES,
         "case_products",
-        namespace=CASE_NAMESPACE,
-        natural_key=["case_ref"],
         unpivot=Unpivot(
             id_vars=["case_id"],
             value_vars=PRODUCT_COLS,

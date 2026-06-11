@@ -481,12 +481,14 @@ python -m pipelines.demo_fan_out /tmp/demo_fan_out
     .write_to(store.writer("silver", "cases", AccumulateByRun(RUN_ID, RUN_ID)))
     .run()
 )
+# CASES is the feed's CaseType — it owns the identity contract (namespace +
+# natural_key), so both builders below derive the same case_id (ADR-0009).
 # Cases gold: DeriveKey → LatestPerKey → UniqueValidator → current-only gold
-ingest_silver_to_gold(store, "cases", namespace=CASE_NAMESPACE, natural_key=["case_ref"]).run()
+ingest_silver_to_gold(store, CASES, "cases").run()
 
-# Products Detail Table gold: DeriveKey (same namespace + key) → Unpivot wide→long
+# Products Detail Table gold: DeriveKey (same CaseType → same key) → Unpivot wide→long
 detail_ingest_silver_to_gold(
-    store, "case_products", namespace=CASE_NAMESPACE, natural_key=["case_ref"],
+    store, CASES, "case_products",
     unpivot=Unpivot(id_vars=["case_id"], value_vars=PRODUCT_COLS,
                     var_name="product_slot", value_name="product_name"),
 ).run()

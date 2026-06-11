@@ -45,7 +45,7 @@ The actor who reviews a Case.
 _Avoid_: checker, assessor
 
 **Case Type**:
-A first-class classification of Cases that determines its fields, selection criteria, ingest rules, destination, and processing; new case types are added over time without changing the core. Referred to generically (case type A, B, C…) — the specific set is not yet fixed.
+A first-class classification of Cases that determines its fields, selection criteria, ingest rules, destination, and processing; new case types are added over time without changing the core. Referred to generically (case type A, B, C…) — the specific set is not yet fixed. It also **owns its identity contract** (ADR-0009): the **natural key** column(s) that identify a Case, and the per-type **namespace** they are hashed under to mint the deterministic `case_id`. The namespace is *derived from the Case Type's name*, so each type gets its own UUID space without a hand-written UUID — at the cost that renaming a Case Type re-keys its history (a rare, documented trade-off). Both the Case builder and each Detail-Table builder read this one contract off the Case Type, so a Case and its Detail rows derive the *same* `case_id` independently — the parent/child link is structural, not a convention kept in step by hand.
 _Avoid_: category, kind
 
 **Variation**:

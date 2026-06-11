@@ -70,6 +70,20 @@ terminus and not by a splitting Processor.
   SelectionPool, Deliverables, Reporting joins. Its derivation (the namespace and
   the chosen natural-key columns) is therefore a **stable contract**: changing it
   re-keys all history.
+- The identity contract is **owned by the `CaseType`** (`case_review.case_type`):
+  the `natural_key` is a declared field and the `namespace` is a property *derived
+  from the Case Type's `name`* — `uuid5(NAMESPACE_DNS, name)`. The Case builder
+  (`ingest_silver_to_gold`) and each Detail builder (`detail_ingest_silver_to_gold`)
+  take the *same* `CaseType`, so the "same namespace + key" invariant the
+  parent/child link depends on is **structural**, not two call sites kept in step
+  by a comment.
+- **Known shortfall (accepted):** because the namespace derives from `name`,
+  **renaming a Case Type silently re-keys all its history.** This is rare
+  (observed once or twice in six years) and we deliberately do *not* engineer a
+  pinned-namespace escape hatch for it — the run-to-run determinism that idempotency
+  actually needs is unaffected (the key is a pure function of fixed inputs). A
+  rename is a conscious "re-key everything" act; treat the `name` as part of the
+  stable contract.
 - The current-gold reduction (`LatestPerKey`) and the uniqueness grain validator
   are **new components to build**, both plain Python over the `Dataset` seam
   (ADR-0002). The per-table reshape for a Detail Table (e.g. the wide→long unpivot
