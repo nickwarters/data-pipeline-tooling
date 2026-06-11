@@ -1,5 +1,7 @@
 # Section-level role-based access on the case page
 
+> **Superseded in part by ADR-0016.** The **Outcome** Section is removed; a read-only **Summary** Section replaces it and inherits the function-valued *Outcome × Responsible Party* cell described below (hidden from the Responsible Party while In-progress). Summary is never `edit` — only `read-only`/`hidden`. The `sections` *allow-list* mentioned here grows into a per-Section config object (membership + a `showInSummary` flag). The evaluator, role derivation, most-permissive resolution, and the rest of this ADR are unchanged.
+
 The case page renders five sections — **Questions**, **Conversation**, **Notes**, **Remediation**, **Outcome** — and a user's access to each is resolved by a global evaluator `(section, role, case) → 'edit' | 'read-only' | 'hidden'`. Roles are derived from the user's relationship to *this specific* Case — **Assigned Reviewer**, **Other Reviewer** (in the Reviewers group but not assigned), **Responsible Party**, **Case Type Owner**, or **None** — not from group membership alone. The default access matrix is a single platform-level constant; Case Type modules opt sections out via an optional `sections` allow-list, but do not override individual cells. Multi-role users get the most-permissive mode across their roles (`edit > read-only > hidden`); a user with no applicable role renders a dedicated access-denied panel rather than an empty section layout.
 
 ## Considered alternatives

@@ -1,5 +1,7 @@
 # Tabbed case review layout
 
+> **Superseded in part by ADR-0016.** The tab row below (**Details · Questions · Remediation · Outcome · Notes**) is replaced by **Details · Questions · Notes · Issues · Summary**: Remediation surfaces under the UI label "Issues", the Outcome tab is removed, and a read-only Summary Section is added. The rest of this ADR — Conversation as a non-tab overlay, tab state held off the URL, the `cr-tabs` primitive, and the persistent-chrome Complete button — still holds.
+
 The case review page presents its **Section**s as tabs instead of one long scroll. **Case Details** is a new sixth Section and the default tab; the tab row is **Details · Questions · Remediation · Outcome · Notes**. Tabs are rendered by a generic, domain-free `cr-tabs` primitive (label list + selected id + ARIA roles + arrow-key nav, emits `cr-tab-change`); `cr-case-review.js` owns the Section→tab mapping, the access-driven visibility, and the default/fallback selection.
 
 ## Two deliberate exclusions

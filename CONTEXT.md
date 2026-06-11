@@ -26,11 +26,15 @@ A separate **Case** that references a **Completed Case** and records a meta-revi
 _Avoid_: Re-review, audit (overloaded)
 
 **Case Details**:
-The **Section** that displays the **Case Type**-specific descriptive fields that frame a Case — e.g. customer name, account numbers, relevant dates. The set of fields is declared per **Case Type**, so different types show different details. Read-only for every role and never hidden: visible to anyone who can open the Case. The sixth Section (alongside Questions, Conversation, Notes, Remediation, Outcome) and the default view on the case review page.
-_Avoid_: Metadata, header, summary
+The **Section** that displays the **Case Type**-specific descriptive fields that frame a Case — e.g. customer name, account numbers, relevant dates. The set of fields is declared per **Case Type**, so different types show different details. Read-only for every role and never hidden: visible to anyone who can open the Case. One of the six Sections (alongside Questions, Conversation, Notes, Remediation, Summary) and the default view on the case review page.
+_Avoid_: Metadata, header, summary (the latter is now a distinct Section — see **Summary**)
 
 **Section**:
-One of the role-gated areas of a Case — **Case Details**, Questions, Conversation, Notes, Remediation, Outcome. Each Section has an access mode (`edit` / `read-only` / `hidden`) resolved per viewer-role (ADR-0011), and a **Case Type** may omit Sections via its `sections` allow-list.
+One of the role-gated areas of a Case — **Case Details**, Questions, Conversation, Notes, Remediation, **Summary**. Each Section has an access mode (`edit` / `read-only` / `hidden`) resolved per viewer-role (ADR-0011), and a **Case Type** declares per-Section config (membership + a `showInSummary` flag) — replacing the old plain `sections` allow-list. The five tabs the **Reviewer** sees are **Details · Questions · Notes · Issues · Summary** (Remediation surfaces as the **"Issues"** tab); **Conversation** is a Section but not a tab — it stays a floating overlay (ADR-0014).
+
+**Summary**:
+A read-only Section that rolls up the whole Case onto one page: the **Case Details** fields, pass/fail counts per question category, **Remediation Action** counts, each *failed* **Answer** with its actions, key dates, and the computed **Outcome**. Composed from the other Sections by their per-Section `showInSummary` flag (**Notes** is excluded by default). Never editable — only `read-only` or `hidden`; inherits the old Outcome×**Responsible Party** gating (hidden from the Responsible Party while **In-progress**, visible read-only once **Completed**). Derivation is *hybrid*: live from current **Answers** while In-progress; once Completed, the Outcome block reads the frozen `outcomeAtCompletion` (ADR-0012) while counts and the failed-Answer list recompute from the Case's frozen Answers. **Outcome** is a block *within* Summary, not its own Section or tab.
+_Avoid_: Outcome (now a block inside Summary, not a standalone Section), Overview, Report
 
 ### Questions & answers
 
@@ -46,12 +50,28 @@ _Avoid_: Catalogue (reserve for the runtime form — the bank joined to **Answer
 A **Question Definition** that, given the current state of a Case's **Answers**, should be presented to the **Reviewer**. Computed live by evaluating conditional triggers — not a stored set.
 
 **Answer**:
-A **Reviewer**'s response to one **Question Definition** for one **Case**. Carries a value, an optional justification, and zero-to-many **Remediation Actions**.
+A **Reviewer**'s response to one **Question Definition** for one **Case**. Carries a value, an optional **Answer Justification**, and zero-to-many **Remediation Actions**.
 _Avoid_: Response (overloaded — used in HTTP context elsewhere)
 
+**Answer Justification**:
+The per-**Answer** free-text rationale: why the **Reviewer** answered *one specific* **Question Definition** the way they did. Lives inside the Answer (per-question scope). Always qualified — never the bare word "justification" — to keep it distinct from **Case Justification**.
+_Avoid_: Justification (bare — ambiguous with Case Justification)
+
+**Case Justification**:
+A **case-level** free-text box in the **Notes** Section: the **Reviewer**'s overall rationale for the Case as a whole. Distinct from **Answer Justification** (which is per-question). One of the **Notes** Section's two fixed free-text boxes (the other being the general note); stored as its own plain-text field on the Case row (ADR-0007). Like the rest of Notes, deliberately excluded from the **Summary** Section.
+_Avoid_: Justification (bare — ambiguous with Answer Justification)
+
 **Remediation Action**:
-A corrective action attached to a *failed* **Answer**. A failed Answer can have many Remediation Actions.
+A corrective action attached to a *failed* **Answer**. A failed Answer can have many Remediation Actions. The **Section** that surfaces failed Answers and their actions is labelled **"Issues"** in the UI (the tab the **Reviewer** sees), but the domain concept and code remain *Remediation* / *Remediation Action*.
 _Avoid_: Remediation (ambiguous — refers to the section, not the item)
+
+**Issue**:
+UI-only term for a **failed Answer** (a question whose value meets its failure criteria). Not a separate entity: an "Issue" *is* a failed Answer. The **"Issues"** tab lists the Case's failed Answers together with each one's **Attributed Party**, **Remediation Actions**, and any Case-Type-configured extra capture fields. Used because "the Issues for this Case" reads more naturally to **Reviewer**s than "the failed Answers".
+_Avoid_: Issue as a distinct stored thing — there is no Issue record; it is a failed Answer viewed through the Issues Section.
+
+**Remediation Detail**:
+A configurable extra capture field recorded against a *failed* **Answer**, beyond its **Attributed Party** and **Remediation Actions** — e.g. a free-text "root cause" box or a "severity" select. The *set* of fields is declared once per **Case Type** (`remediationFields: [{ key, label, type: 'text' | 'select', options?, required? }]`, ADR-0004) and applies to every failed Answer in that Case Type; a Case Type that needs only attribution declares none. The *values* are stored inline on the Answer (`remediationDetails: Record<string,string>`) in the Answers JSON blob (ADR-0007), sharing the **Attributed Party** lifecycle (ADR-0013): stripped when the Answer is no longer a failure, frozen once the Case is **Completed**. A field marked `required` extends the completion gate — the Case cannot be **Completed** until every required Remediation Detail on every failed Answer is filled (alongside the existing "all **Applicable Question**s answered" rule). Captured in the **Issues** Section via a master–detail drawer (one failed Answer's fields at a time), never a box-per-row grid.
+_Avoid_: Issue field, Custom field (overloaded), Metadata
 
 ### People
 
@@ -101,7 +121,7 @@ One entry in a **Conversation** — author, timestamp, body.
 ### Outcome
 
 **Outcome**:
-The computed verdict for a **Case**, derived by the **Case Type**'s algorithm from the Case's **Answers**. The *live* Outcome is always re-derivable from Answers — it is not a stored entity. However, a **snapshot** (`outcomeAtCompletion`) is stamped onto the Case row at the moment the Case becomes a **Completed Case**, to support historical reporting. The snapshot is frozen: it is not updated if Question Definitions or the outcome function change afterwards. A pass Outcome implies no **Remediation Actions** were attached (Remediation Actions only attach to failed Answers, and a failing Answer cannot yield a pass Outcome).
+The computed verdict for a **Case**, derived by the **Case Type**'s algorithm from the Case's **Answers**. No longer has its own Section or tab — it is rendered as one block *within* the **Summary** Section (the `computeOutcome` function and `cr-outcome` rendering survive; the standalone Outcome tab and its ADR-0011 matrix row do not). The *live* Outcome is always re-derivable from Answers — it is not a stored entity. However, a **snapshot** (`outcomeAtCompletion`) is stamped onto the Case row at the moment the Case becomes a **Completed Case**, to support historical reporting. The snapshot is frozen: it is not updated if Question Definitions or the outcome function change afterwards. A pass Outcome implies no **Remediation Actions** were attached (Remediation Actions only attach to failed Answers, and a failing Answer cannot yield a pass Outcome).
 
 ## Relationships
 
