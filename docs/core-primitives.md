@@ -666,17 +666,19 @@ input); `.with_post_validator(v, severity="error")` attaches a **post**-validato
 runs until `.run()`.
 
 Call `.describe()` before `.run()` to inspect the plan while authoring or
-debugging. The builder constructs one ordered plan and renders the same planned
-reader, pre-validators, user-added stages in execution order, post-validators,
-quarantine/explain configuration, writer, and run-log sink that `.run()` will
-execute. It does not execute the reader or writer. Each component renders its
-own summary through the opt-in `describe()` protocol (#145): a component
-implements `describe() -> str` to surface the config it chooses (the framework
-readers/writers/validators/processors/`RunLog` do, self-redacting any
-credentials — e.g. `SharePointReader` strips `user:pass@` from its site URL and
-never shows `auth`). A component without `describe()` is shown by bare class
-name only; the builder never introspects a component's attributes, so a value
-stored under any name cannot leak into the plan:
+debugging. The output is a **flat, plan-ordered list**: one line per step, in
+the order `.run()` will execute them. Empty steps (e.g. no validators attached)
+are omitted entirely — there are no `none` placeholders. Each step renders its
+own entry via its `plan_entry()` method, so adding a new step kind touches one
+place and `describe()` requires no changes.
+
+Each component renders its own summary through the opt-in `describe()` protocol
+(#145): a component implements `describe() -> str` to surface the config it
+chooses (the framework readers/writers/validators/processors/`RunLog` do,
+self-redacting any credentials — e.g. `SharePointReader` strips `user:pass@`
+from its site URL and never shows `auth`). A component without `describe()` is
+shown by bare class name only; the builder never introspects a component's
+attributes, so a value stored under any name cannot leak into the plan:
 
 ```python
 pipeline = (

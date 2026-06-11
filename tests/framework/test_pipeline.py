@@ -101,18 +101,12 @@ def test_pipeline_describe_shows_the_deferred_execution_plan():
 
     assert plan == (
         "Pipeline cases\n"
-        "  reader: RecordingReader\n"
-        "  pre-validators:\n"
-        "    - ColumnValidator(required_columns=['id']) severity=error\n"
-        "  stages:\n"
-        "    - processor: AddingProcessor(column='derived')\n"
-        "    - checkpoint: CapturingWriter\n"
-        "  post-validators:\n"
-        "    - ColumnValidator(required_columns=['derived']) severity=warn\n"
-        "  quarantine: none\n"
-        "  explain: none\n"
-        "  writer: CapturingWriter\n"
-        "  run-log: none"
+        "  read: RecordingReader\n"
+        "  pre-validate: ColumnValidator(required_columns=['id']) severity=error\n"
+        "  process: AddingProcessor(column='derived')\n"
+        "  checkpoint: CapturingWriter\n"
+        "  post-validate: ColumnValidator(required_columns=['derived']) severity=warn\n"
+        "  write: CapturingWriter"
     )
     assert reader.read_count == 0
     assert checkpoint.write_count == 0
@@ -139,7 +133,7 @@ def test_pipeline_describe_includes_optional_governance_without_leaking_secrets(
         .describe()
     )
 
-    assert "reader: SharePointReader(" in plan
+    assert "read: SharePointReader(" in plan
     # The reader's own describe() strips credentials from the site URL and omits
     # the auth config entirely — nothing name-based, the component self-redacts.
     assert "site='https://<redacted>@example.test/sites/cases'" in plan
@@ -147,10 +141,9 @@ def test_pipeline_describe_includes_optional_governance_without_leaking_secrets(
     # SecretPartitioner opts out of describe(), so it renders as a bare class
     # name: with no reflection, its _token simply cannot reach the plan.
     assert "quarantine: SecretPartitioner -> QuarantineWriter(" in plan
-    assert (
-        "explain: writer=CapturingWriter, id_column='case_ref', "
-        "score_column='priority'"
-    ) in plan
+    # explain splits into two plan-ordered entries: trace config early, writer late.
+    assert "explain-trace: id_column='case_ref', score_column='priority'" in plan
+    assert "explain: writer=CapturingWriter" in plan
     assert f"run-log: RunLog(path='{tmp_path / 'runs.log'}')" in plan
     assert "hunter2" not in plan
     assert "abc123" not in plan
@@ -181,11 +174,9 @@ def test_describe_uses_a_components_own_summary_and_never_reflects_attributes():
 
     plan = Pipeline("cases", describing).write_to(leaky_writer).describe()
 
-    assert "  reader: DescribingReader(source='cases')" in plan
+    assert "  read: DescribingReader(source='cases')" in plan
     # No describe() => bare class name, no parenthesised attributes at all.
-    assert "  writer: CapturingWriter\n" in plan or plan.endswith(
-        "  writer: CapturingWriter"
-    )
+    assert "  write: CapturingWriter" in plan
     assert "CapturingWriter(" not in plan
     assert "should-never-appear" not in plan
     assert "hunter2" not in plan
@@ -347,12 +338,10 @@ def test_add_stage_describe_renders_user_stages_in_execution_order():
     )
 
     assert (
-        "  stages:\n"
-        "    - Validate file shape: ColumnValidator(required_columns=['id']) "
-        "severity=error\n"
-        "    - Normalise cases: AddingProcessor(column='derived')\n"
-        "    - Validate normalised cases: "
-        "ColumnValidator(required_columns=['derived']) severity=error\n"
+        "  Validate file shape: ColumnValidator(required_columns=['id']) severity=error\n"
+        "  Normalise cases: AddingProcessor(column='derived')\n"
+        "  Validate normalised cases: "
+        "ColumnValidator(required_columns=['derived']) severity=error"
     ) in plan
 
 

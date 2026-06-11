@@ -19,6 +19,21 @@ import re
 _URL_CREDENTIALS = re.compile(r"(://)[^/@:\s]+:[^/@\s]+@")
 
 
+def component_summary(component: object) -> str:
+    """Render a component for the plan via its opt-in ``describe()`` protocol.
+
+    Returns the component's own ``describe()`` string when available, its bare
+    class name when not, or ``"none"`` for ``None``. The plan never introspects
+    attributes, so no value can leak into the summary unexpectedly.
+    """
+    if component is None:
+        return "none"
+    describer = getattr(component, "describe", None)
+    if callable(describer):
+        return str(describer())
+    return type(component).__name__
+
+
 def render(component: object, **fields: object) -> str:
     """Render ``ClassName(key=repr, ...)`` from explicitly chosen fields.
 
