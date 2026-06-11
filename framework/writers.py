@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import os
 import sqlite3
-from pathlib import Path
 from collections.abc import Callable
+from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 import pandas as pd
@@ -183,9 +183,7 @@ class SharePointWriter:
     def describe(self) -> str:
         # Strip any credentials embedded in the site URL and omit auth config
         # entirely — the plan never surfaces secrets.
-        return render(
-            self, site=redact_url(self._site), list_name=self._list_name
-        )
+        return render(self, site=redact_url(self._site), list_name=self._list_name)
 
 
 class SqliteTruncateReloadWriter:
@@ -249,8 +247,7 @@ class QuarantineWriter:
                 run_id = frame["run_id"].iloc[0]
                 try:
                     con.execute(
-                        f"DELETE FROM {quote_identifier(self._table)} "
-                        "WHERE run_id = ?",
+                        f"DELETE FROM {quote_identifier(self._table)} WHERE run_id = ?",
                         (run_id,),
                     )
                 except sqlite3.OperationalError:
@@ -330,8 +327,7 @@ class SqliteUpsertWriter:
                 f"(SELECT 1 FROM {staging} WHERE {key_match})"
             )
             con.execute(
-                f"INSERT INTO {table} ({col_list}) "
-                f"SELECT {col_list} FROM {staging}"
+                f"INSERT INTO {table} ({col_list}) SELECT {col_list} FROM {staging}"
             )
             con.commit()
 
@@ -391,8 +387,7 @@ class AccumulateByRunWriter:
             # re-driven day replaces only its own rows and never other runs'.
             try:
                 con.execute(
-                    f"DELETE FROM {quote_identifier(self._table)} "
-                    "WHERE run_id = ?",
+                    f"DELETE FROM {quote_identifier(self._table)} WHERE run_id = ?",
                     (self._run_id,),
                 )
             except sqlite3.OperationalError:

@@ -10,7 +10,7 @@ PascalCase class form) into a fresh copy.
 
 Run from the repository root so the import-only ``framework`` package resolves::
 
-    python -m pipelines.scaffold orders            # -> pipelines/orders/ + tests/pipelines/test_orders.py
+    python -m pipelines.scaffold orders
     python -m pipelines.scaffold orders --force    # overwrite if it exists
 
 The generated feed runs as a module from the repo root::
@@ -142,9 +142,13 @@ def render(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m pipelines.scaffold",
-        description="Scaffold a new feed (code in pipelines/, test in tests/pipelines/).",
+        description=(
+            "Scaffold a new feed (code in pipelines/, test in tests/pipelines/)."
+        ),
     )
-    parser.add_argument("feed", help="the feed name (a lowercase identifier, e.g. orders)")
+    parser.add_argument(
+        "feed", help="the feed name (a lowercase identifier, e.g. orders)"
+    )
     parser.add_argument(
         "--force",
         action="store_true",

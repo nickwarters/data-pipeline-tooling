@@ -80,7 +80,9 @@ def main(target_dir: str) -> None:
         Pipeline("cases", store.reader(RAW, SUBJECT))
         .with_processor(Filter(lambda row, rid=RUN_ID: row["run_id"] == rid))
         .with_processor(normalise)
-        .with_processor(SelectColumns(["case_ref", "adviser", "activity_date", "amount"]))
+        .with_processor(
+            SelectColumns(["case_ref", "adviser", "activity_date", "amount"])
+        )
         .with_processor(SchemaCoercion(CaseSchema))
         .with_post_validator(SchemaValidator(CaseSchema))
         .write_to(store.writer(SILVER, "cases", AccumulateByRun(RUN_ID, RUN_ID)))
@@ -94,7 +96,9 @@ def main(target_dir: str) -> None:
         .with_processor(Filter(lambda row, rid=RUN_ID: row["run_id"] == rid))
         .with_processor(normalise)
         .with_processor(SelectColumns(["case_ref"] + PRODUCT_COLS))
-        .write_to(store.writer(SILVER, "case_products", AccumulateByRun(RUN_ID, RUN_ID)))
+        .write_to(
+            store.writer(SILVER, "case_products", AccumulateByRun(RUN_ID, RUN_ID))
+        )
         .run()
     )
 
@@ -122,7 +126,5 @@ def main(target_dir: str) -> None:
 
 if __name__ == "__main__":  # pragma: no cover - thin CLI entry
     if len(sys.argv) != 2:
-        raise SystemExit(
-            "usage: python -m pipelines.demo_fan_out <target_dir>"
-        )
+        raise SystemExit("usage: python -m pipelines.demo_fan_out <target_dir>")
     main(sys.argv[1])

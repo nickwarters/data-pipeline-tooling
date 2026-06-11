@@ -57,7 +57,10 @@ def test_reader_describe_renders_its_own_target():
 
 def test_reader_describe_includes_columns_when_set():
     described = SqliteReader("raw.db", "cases", columns=["id", "name"]).describe()
-    assert described == "SqliteReader(db_path='raw.db', table='cases', columns=['id', 'name'])"
+    assert (
+        described
+        == "SqliteReader(db_path='raw.db', table='cases', columns=['id', 'name'])"
+    )
 
 
 def test_writer_describe_renders_its_own_target():

@@ -134,9 +134,7 @@ class ReadStep(PipelineStep):
     def plan_entry(self) -> str:
         return f"  read: {component_summary(self.reader)}"
 
-    def execute(
-        self, dataset: Dataset | None, session: PipelineExecution
-    ) -> Dataset:
+    def execute(self, dataset: Dataset | None, session: PipelineExecution) -> Dataset:
         with session.timed_step(self.name) as metrics:
             result = self.reader.read()
             _drain_retry_attempts(self.reader, metrics)
@@ -173,9 +171,7 @@ class ValidatorStep(PipelineStep):
             lines.append(f"    - {component_summary(v)} severity={sev}")
         return "\n".join(lines)
 
-    def execute(
-        self, dataset: Dataset | None, session: PipelineExecution
-    ) -> Dataset:
+    def execute(self, dataset: Dataset | None, session: PipelineExecution) -> Dataset:
         assert dataset is not None
         with session.timed_step(self.name, rows_in=len(dataset)) as metrics:
             session.validate(self.validators, dataset, self.name, metrics)
@@ -205,9 +201,7 @@ class QuarantineStep(PipelineStep):
             f" -> {component_summary(self.reject_writer)}"
         )
 
-    def execute(
-        self, dataset: Dataset | None, session: PipelineExecution
-    ) -> Dataset:
+    def execute(self, dataset: Dataset | None, session: PipelineExecution) -> Dataset:
         assert dataset is not None
         with session.timed_step(self.name, rows_in=len(dataset)) as metrics:
             good, rejected = self.row_validator.partition(dataset)
@@ -245,9 +239,7 @@ class TraceStartStep(PipelineStep):
             parts.append(f"score_column={self.score_column!r}")
         return f"  explain-trace: {', '.join(parts)}"
 
-    def execute(
-        self, dataset: Dataset | None, session: PipelineExecution
-    ) -> Dataset:
+    def execute(self, dataset: Dataset | None, session: PipelineExecution) -> Dataset:
         assert dataset is not None
         trace = RowTrace(self.id_column, score_column=self.score_column)
         trace.consider(dataset)
@@ -272,9 +264,7 @@ class ProcessorStageStep(PipelineStep):
     def plan_entry(self) -> str:
         return f"  {self.name}: {component_summary(self.component)}"
 
-    def execute(
-        self, dataset: Dataset | None, session: PipelineExecution
-    ) -> Dataset:
+    def execute(self, dataset: Dataset | None, session: PipelineExecution) -> Dataset:
         assert dataset is not None
         current = dataset
         session.materialize_dependencies(self.processors)
@@ -310,9 +300,7 @@ class CheckpointStep(PipelineStep):
         label = self.name.split(":")[0]
         return f"  {label}: {component_summary(self.component)}"
 
-    def execute(
-        self, dataset: Dataset | None, session: PipelineExecution
-    ) -> Dataset:
+    def execute(self, dataset: Dataset | None, session: PipelineExecution) -> Dataset:
         assert dataset is not None
         with session.timed_step(self.name, rows_in=len(dataset)) as metrics:
             self.writer.write(dataset)
@@ -336,9 +324,7 @@ class ExplainWriteStep(PipelineStep):
     def plan_entry(self) -> str:
         return f"  explain: writer={component_summary(self.component)}"
 
-    def execute(
-        self, dataset: Dataset | None, session: PipelineExecution
-    ) -> Dataset:
+    def execute(self, dataset: Dataset | None, session: PipelineExecution) -> Dataset:
         assert dataset is not None
         assert session.trace is not None
         with session.timed_step(self.name, rows_in=session.trace.considered) as metrics:
@@ -364,9 +350,7 @@ class WriteStep(PipelineStep):
     def plan_entry(self) -> str:
         return f"  write: {component_summary(self.component)}"
 
-    def execute(
-        self, dataset: Dataset | None, session: PipelineExecution
-    ) -> Dataset:
+    def execute(self, dataset: Dataset | None, session: PipelineExecution) -> Dataset:
         assert dataset is not None
         with session.timed_step(self.name, rows_in=len(dataset)) as metrics:
             self.writer.write(dataset)

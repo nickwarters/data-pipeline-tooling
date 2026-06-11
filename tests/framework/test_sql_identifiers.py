@@ -50,7 +50,7 @@ def test_reader_projects_a_column_whose_name_needs_quoting(tmp_path):
     con = sqlite3.connect(db)
     try:
         con.execute('CREATE TABLE advisers (id INTEGER, "full name" TEXT)')
-        con.execute('INSERT INTO advisers VALUES (1, ?)', ("Ada",))
+        con.execute("INSERT INTO advisers VALUES (1, ?)", ("Ada",))
         con.commit()
     finally:
         con.close()
@@ -66,17 +66,13 @@ def test_upsert_writer_merges_into_table_and_columns_needing_quoting(tmp_path):
 
     writer.write(
         Dataset.from_pandas(
-            pd.DataFrame(
-                {"case id": [1, 2], "full name": ["Ada", "Linus"]}
-            )
+            pd.DataFrame({"case id": [1, 2], "full name": ["Ada", "Linus"]})
         )
     )
     # A second batch updates row 1 and inserts row 3.
     writer.write(
         Dataset.from_pandas(
-            pd.DataFrame(
-                {"case id": [1, 3], "full name": ["Ada Lovelace", "Grace"]}
-            )
+            pd.DataFrame({"case id": [1, 3], "full name": ["Ada Lovelace", "Grace"]})
         )
     )
 

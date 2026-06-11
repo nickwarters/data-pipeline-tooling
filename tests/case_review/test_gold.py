@@ -4,10 +4,10 @@ import uuid
 import pandas as pd
 import pytest
 
-from framework.connection import connect
-from framework.dataset import Dataset
 from case_review.case_type import CaseType
 from case_review.gold import ingest_silver_to_gold
+from framework.connection import connect
+from framework.dataset import Dataset
 from framework.gold import silver_to_gold
 from framework.store import Store
 from framework.strategy import AccumulateByRun, Refresh
@@ -23,9 +23,9 @@ _NS = uuid.uuid5(uuid.NAMESPACE_DNS, "cases")
 def _land_silver(store: Store, table: str, frame: pd.DataFrame, strategy=None) -> None:
     # Land a snapshot into silver exactly as a raw->silver pipeline would, so the
     # gold builder has a validated upstream to read from.
-    store.writer("silver", table, strategy if strategy is not None else Refresh()).write(
-        Dataset.from_pandas(frame)
-    )
+    store.writer(
+        "silver", table, strategy if strategy is not None else Refresh()
+    ).write(Dataset.from_pandas(frame))
 
 
 def test_silver_to_gold_accumulates_stamped_by_run(tmp_path):
@@ -145,9 +145,7 @@ def test_silver_to_gold_aborts_on_a_value_rule_breach_without_writing(tmp_path):
     _land_silver(
         store,
         "selection_pool",
-        pd.DataFrame(
-            {"case_ref": ["123456789", "NOPE"], "status": ["open", "closed"]}
-        ),
+        pd.DataFrame({"case_ref": ["123456789", "NOPE"], "status": ["open", "closed"]}),
     )
 
     with pytest.raises(ValidationError, match="post-validate failed.*violates pattern"):
@@ -167,20 +165,29 @@ def test_silver_to_gold_breach_leaves_prior_accumulation_intact(tmp_path):
     # or insert anything — the post-validate abort happens before the writer's
     # delete-by-run/insert transaction, so a prior run's gold rows survive intact.
     store = Store(tmp_path)
-    _land_silver(store, "selection_pool", pd.DataFrame({"case_ref": ["c1"], "score": [10]}))
+    _land_silver(
+        store, "selection_pool", pd.DataFrame({"case_ref": ["c1"], "score": [10]})
+    )
     silver_to_gold(
-        store, "selection_pool", run_id="2026-05-29", load_date="2026-05-29",
+        store,
+        "selection_pool",
+        run_id="2026-05-29",
+        load_date="2026-05-29",
         schema=LandedCase,
     ).run()
 
     # A second snapshot that breaches the schema (score as text) — its run aborts.
     _land_silver(
-        store, "selection_pool",
+        store,
+        "selection_pool",
         pd.DataFrame({"case_ref": ["c2"], "score": ["nope"]}),
     )
     with pytest.raises(ValidationError, match="post-validate failed.*score"):
         silver_to_gold(
-            store, "selection_pool", run_id="2026-05-30", load_date="2026-05-30",
+            store,
+            "selection_pool",
+            run_id="2026-05-30",
+            load_date="2026-05-30",
             schema=LandedCase,
         ).run()
 
@@ -223,9 +230,7 @@ def test_gold_reader_rides_out_an_in_flight_writer_commit(tmp_path):
         # — proof the contention is real, not incidental. (pandas wraps the
         # underlying sqlite3.OperationalError as a DatabaseError.)
         with pytest.raises(pd.errors.DatabaseError, match="locked"):
-            Store(tmp_path, busy_timeout_ms=0).reader(
-                "gold", "selection_pool"
-            ).read()
+            Store(tmp_path, busy_timeout_ms=0).reader("gold", "selection_pool").read()
 
         # The default share-tolerant reader rides the lock out: release it
         # shortly, and the in-flight read completes instead of erroring.
@@ -242,12 +247,15 @@ def test_ingest_silver_to_gold_reduces_to_one_row_per_case(tmp_path):
     # to the latest row per Case, validates uniqueness, and writes a Refresh gold.
     store = Store(tmp_path)
     _land_silver(
-        store, "cases",
-        pd.DataFrame({
-            "case_ref": ["c1", "c2"],
-            "score": [10, 20],
-            "load_date": ["2026-05-29", "2026-05-29"],
-        }),
+        store,
+        "cases",
+        pd.DataFrame(
+            {
+                "case_ref": ["c1", "c2"],
+                "score": [10, 20],
+                "load_date": ["2026-05-29", "2026-05-29"],
+            }
+        ),
         strategy=AccumulateByRun("2026-05-29", "2026-05-29"),
     )
 
@@ -264,12 +272,14 @@ def test_ingest_silver_to_gold_keeps_latest_version_of_a_changed_case(tmp_path):
     # once (latest) in gold — the framework is the historian for a destructive source.
     store = Store(tmp_path)
     _land_silver(
-        store, "cases",
+        store,
+        "cases",
         pd.DataFrame({"case_ref": ["c1"], "score": [10], "load_date": ["2026-05-29"]}),
         strategy=AccumulateByRun("2026-05-29", "2026-05-29"),
     )
     _land_silver(
-        store, "cases",
+        store,
+        "cases",
         pd.DataFrame({"case_ref": ["c1"], "score": [99], "load_date": ["2026-05-30"]}),
         strategy=AccumulateByRun("2026-05-30", "2026-05-30"),
     )
@@ -278,9 +288,9 @@ def test_ingest_silver_to_gold_keeps_latest_version_of_a_changed_case(tmp_path):
 
     silver = store.reader("silver", "cases").read().to_pandas()
     gold = store.reader("gold", "cases").read().to_pandas()
-    assert len(silver) == 2                          # both versions in silver
-    assert len(gold) == 1                            # one row in gold (latest)
-    assert gold["score"].iloc[0] == 99               # latest value
+    assert len(silver) == 2  # both versions in silver
+    assert len(gold) == 1  # one row in gold (latest)
+    assert gold["score"].iloc[0] == 99  # latest value
 
 
 def test_ingest_silver_to_gold_idempotent_re_run_leaves_gold_unchanged(tmp_path):
@@ -288,7 +298,8 @@ def test_ingest_silver_to_gold_idempotent_re_run_leaves_gold_unchanged(tmp_path)
     # reloads, and LatestPerKey yields the same deterministic result each run.
     store = Store(tmp_path)
     _land_silver(
-        store, "cases",
+        store,
+        "cases",
         pd.DataFrame({"case_ref": ["c1"], "score": [10], "load_date": ["2026-05-29"]}),
         strategy=AccumulateByRun("2026-05-29", "2026-05-29"),
     )
@@ -306,7 +317,8 @@ def test_ingest_silver_to_gold_new_snapshot_updates_gold_to_current(tmp_path):
     # reflect the latest state — gold is always one row per Case.
     store = Store(tmp_path)
     _land_silver(
-        store, "cases",
+        store,
+        "cases",
         pd.DataFrame({"case_ref": ["c1"], "score": [10], "load_date": ["2026-05-29"]}),
         strategy=AccumulateByRun("2026-05-29", "2026-05-29"),
     )
@@ -314,7 +326,8 @@ def test_ingest_silver_to_gold_new_snapshot_updates_gold_to_current(tmp_path):
     assert store.reader("gold", "cases").read().to_pandas()["score"].iloc[0] == 10
 
     _land_silver(
-        store, "cases",
+        store,
+        "cases",
         pd.DataFrame({"case_ref": ["c1"], "score": [42], "load_date": ["2026-05-30"]}),
         strategy=AccumulateByRun("2026-05-30", "2026-05-30"),
     )
@@ -330,7 +343,8 @@ def test_ingest_silver_to_gold_deterministic_case_id(tmp_path):
     # id across runs and machines.
     store = Store(tmp_path)
     _land_silver(
-        store, "cases",
+        store,
+        "cases",
         pd.DataFrame({"case_ref": ["c1"], "load_date": ["2026-05-29"]}),
         strategy=AccumulateByRun("2026-05-29", "2026-05-29"),
     )

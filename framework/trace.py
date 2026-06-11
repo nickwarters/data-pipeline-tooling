@@ -44,7 +44,9 @@ class RowTrace:
             self._rows.setdefault(row_id, _RowVerdict())
         self._considered = len(self._rows)
 
-    def observe(self, role: str | None, name: str, before: Dataset, after: Dataset) -> None:
+    def observe(
+        self, role: str | None, name: str, before: Dataset, after: Dataset
+    ) -> None:
         """Record what one stage did to each row."""
         after_frame = after.to_pandas()
         before_ids = list(before.to_pandas()[self._id_column])
@@ -81,7 +83,11 @@ class RowTrace:
         rows = []
         for row_id, verdict in self._rows.items():
             if verdict.verdict == "selected":
-                passed = ", ".join(verdict.passed) if verdict.passed else "no eligibility gates"
+                passed = (
+                    ", ".join(verdict.passed)
+                    if verdict.passed
+                    else "no eligibility gates"
+                )
                 reason = f"passed {passed}"
                 rank = ranks.get(row_id)
             else:
@@ -113,4 +119,3 @@ class RowTrace:
     def selected(self) -> int:
         """How many rows survived."""
         return sum(1 for row in self._rows.values() if row.verdict == "selected")
-

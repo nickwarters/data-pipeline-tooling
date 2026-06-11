@@ -1,7 +1,8 @@
 """Row-level quarantine: partition value-rule breaches from good rows.
 
 The abort-vs-quarantine boundary:
-- Structural breaches (missing columns, wrong dtypes) → still abort via ``SchemaValidator``.
+- Structural breaches (missing columns, wrong dtypes) still abort via
+  ``SchemaValidator``.
 - Value-rule breaches (Pattern, Length, Unique, OneOf) → eligible for quarantine when
   the pipeline is configured with ``.quarantine(partitioner, reject_writer)``.
 

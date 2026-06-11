@@ -119,9 +119,7 @@ def test_unique_rejects_duplicate_values_naming_the_offenders():
 
 
 def test_unique_passes_when_all_present_values_are_distinct():
-    frame = pd.DataFrame(
-        {"case_ref": pd.Series(["a", "b", "c"], dtype="string")}
-    )
+    frame = pd.DataFrame({"case_ref": pd.Series(["a", "b", "c"], dtype="string")})
 
     SchemaValidator(UniqueRefCase).validate(Dataset.from_pandas(frame))  # no raise
 

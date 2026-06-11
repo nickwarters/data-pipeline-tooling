@@ -109,9 +109,7 @@ class RunRegistry:
 
     def records_for_run(self, run_id: str) -> list[dict]:
         """Every step record of one run, in execution (ingest) order."""
-        return self._select(
-            "WHERE run_id = ? ORDER BY timestamp, rowid", (run_id,)
-        )
+        return self._select("WHERE run_id = ? ORDER BY timestamp, rowid", (run_id,))
 
     def query_runs(
         self, pipeline: str | None = None, status: str | None = None

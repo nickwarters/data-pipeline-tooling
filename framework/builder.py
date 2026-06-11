@@ -213,9 +213,7 @@ class Pipeline:
         """
         context = context or RunContext(pipeline=self._name, run_log=self._run_log)
         run_log = (
-            context.run_log
-            if context.run_log is not NULL_RUN_LOG
-            else self._run_log
+            context.run_log if context.run_log is not NULL_RUN_LOG else self._run_log
         )
         self.run_id = context.execution_id
         session = PipelineExecution(
@@ -251,4 +249,3 @@ class Pipeline:
         )
         context.mark_run_summary_recorded()
         return dataset
-

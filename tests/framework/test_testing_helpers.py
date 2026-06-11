@@ -106,5 +106,11 @@ def test_read_run_log_parses_an_on_disk_jsonl_file(tmp_path):
     )
 
     records = read_run_log(log_path)
-    assert [r["step"] for r in records] == ["read", "pre-validate", "post-validate", "write", "run"]
+    assert [r["step"] for r in records] == [
+        "read",
+        "pre-validate",
+        "post-validate",
+        "write",
+        "run",
+    ]
     assert records[-1]["status"] == "ok"

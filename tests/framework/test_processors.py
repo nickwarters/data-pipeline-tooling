@@ -2,31 +2,40 @@
 
 These are the engine-confined transforms the Selection workload composes between
 a feed's read and its post-validators. ``Filter`` and ``Score`` carry
-plain-Python row callables so the business rule never names the engine; ``JoinWith`` consumes
-an explicit read-only dependency so upstream execution is not hidden inside
-``process``.
+plain-Python row callables so the business rule never names the engine;
+``JoinWith`` consumes an explicit read-only dependency so upstream execution is
+not hidden inside ``process``.
 """
 
 import json
+import uuid as _uuid
 
 import pandas as pd
+import pytest
 
 from framework.builder import Pipeline
 from framework.dataset import Dataset
 from framework.processors import (
     AntiJoinWith,
+    DeriveKey,
+    DropColumns,
     Filter,
     JoinDependency,
     JoinWith,
+    LatestPerKey,
     Rename,
+    SamplePerGroup,
     Score,
+    SelectColumns,
     Sort,
     Stamp,
+    TopNPerGroup,
+    Unpivot,
 )
-from framework.transform import AntiJoinWith as PublicAntiJoinWith
 from framework.run_log import RunLog
 from framework.store import Store
 from framework.strategy import Refresh
+from framework.transform import AntiJoinWith as PublicAntiJoinWith
 
 
 class RecordingReader:
@@ -76,9 +85,7 @@ def test_score_writes_a_column_computed_per_row():
 
 
 def test_stamp_writes_a_constant_column_onto_every_row():
-    dataset = Dataset.from_pandas(
-        pd.DataFrame({"case_ref": ["c1", "c2", "c3"]})
-    )
+    dataset = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c1", "c2", "c3"]}))
 
     stamped = Stamp("question_bank_id", "qb-100").process(dataset).to_pandas()
 
@@ -143,9 +150,7 @@ def test_join_with_brings_in_the_other_feeds_columns_on_the_key():
         "advisers",
         RecordingReader(
             Dataset.from_pandas(
-                pd.DataFrame(
-                    {"adviser": ["a1", "a2"], "region": ["north", "south"]}
-                )
+                pd.DataFrame({"adviser": ["a1", "a2"], "region": ["north", "south"]})
             )
         ),
     )
@@ -156,10 +161,8 @@ def test_join_with_brings_in_the_other_feeds_columns_on_the_key():
     assert list(joined["region"]) == ["north", "south"]
 
 
-def test_join_dependency_is_read_once_for_multiple_joins_and_logged_separately(tmp_path):
-    cases = Dataset.from_pandas(
-        pd.DataFrame({"adviser": ["a1"], "case_ref": ["c1"]})
-    )
+def test_join_dependency_is_read_once_and_logged_separately(tmp_path):
+    cases = Dataset.from_pandas(pd.DataFrame({"adviser": ["a1"], "case_ref": ["c1"]}))
     reader = RecordingReader(
         Dataset.from_pandas(
             pd.DataFrame({"adviser": ["a1"], "region": ["north"], "team": ["A"]})
@@ -190,9 +193,7 @@ def test_join_with_inner_default_drops_unmatched_rows():
         pd.DataFrame({"adviser": ["a1", "a2"], "case_ref": ["c1", "c2"]})
     )
     advisers = RecordingReader(
-        Dataset.from_pandas(
-            pd.DataFrame({"adviser": ["a1"], "region": ["north"]})
-        )
+        Dataset.from_pandas(pd.DataFrame({"adviser": ["a1"], "region": ["north"]}))
     )
 
     joined = JoinWith(advisers, on="adviser").process(cases).to_pandas()
@@ -231,9 +232,7 @@ def test_anti_join_with_supports_composite_keys():
             }
         )
     )
-    excluded = Dataset.from_pandas(
-        pd.DataFrame({"case_id": ["c1"], "run_id": ["r2"]})
-    )
+    excluded = Dataset.from_pandas(pd.DataFrame({"case_id": ["c1"], "run_id": ["r2"]}))
 
     kept = AntiJoinWith(excluded, on=["case_id", "run_id"]).process(cases).to_pandas()
 
@@ -262,7 +261,7 @@ def test_anti_join_with_treats_duplicate_other_keys_as_set_membership():
     assert list(kept["amount"]) == [10, 30]
 
 
-def test_anti_join_dependency_is_read_once_for_multiple_anti_joins_and_logged_separately(
+def test_anti_join_dependency_is_read_once_and_logged_separately(
     tmp_path,
 ):
     cases = Dataset.from_pandas(pd.DataFrame({"case_id": ["c1", "c2", "c3"]}))
@@ -281,10 +280,9 @@ def test_anti_join_dependency_is_read_once_for_multiple_anti_joins_and_logged_se
     records = [json.loads(line) for line in log_path.read_text().splitlines()]
     assert reader.read_count == 1
     assert list(result["case_id"]) == ["c1", "c3"]
-    assert (
-        [record["step"] for record in records].count("dependency:already-reviewed")
-        == 1
-    )
+    assert [record["step"] for record in records].count(
+        "dependency:already-reviewed"
+    ) == 1
 
 
 def test_anti_join_with_missing_key_columns_fails_fast_with_context():
@@ -350,10 +348,6 @@ def test_pipeline_filters_one_feed_and_joins_another_feeds_silver(tmp_path):
     assert list(selected["region"]) == ["north", "south"]
 
 
-import uuid as _uuid
-
-from framework.processors import DeriveKey
-
 _NS = _uuid.UUID("12345678-1234-5678-1234-567812345678")
 
 
@@ -365,7 +359,11 @@ def test_derive_key_stamps_uuid5_for_a_single_column_key():
         pd.DataFrame({"surname": ["SMITH"], "dob": ["2024-01-15"]})
     )
 
-    result = DeriveKey(into="case_id", namespace=_NS, natural_key=["surname"]).process(dataset).to_pandas()
+    result = (
+        DeriveKey(into="case_id", namespace=_NS, natural_key=["surname"])
+        .process(dataset)
+        .to_pandas()
+    )
 
     expected = str(_uuid.uuid5(_NS, "SMITH"))
     assert result["case_id"].iloc[0] == expected
@@ -375,9 +373,7 @@ def test_derive_key_is_deterministic_across_runs():
     # Re-running DeriveKey over identical input must produce identical case_ids —
     # the same natural-key values always map to the same UUID on every run and
     # every machine (determinism criterion).
-    dataset = Dataset.from_pandas(
-        pd.DataFrame({"ref": ["A", "B"]})
-    )
+    dataset = Dataset.from_pandas(pd.DataFrame({"ref": ["A", "B"]}))
     processor = DeriveKey(into="case_id", namespace=_NS, natural_key=["ref"])
 
     first = list(processor.process(dataset).to_pandas()["case_id"])
@@ -392,8 +388,18 @@ def test_derive_key_different_namespaces_yield_different_ids():
     _NS2 = _uuid.UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
     dataset = Dataset.from_pandas(pd.DataFrame({"ref": ["X"]}))
 
-    id_ns1 = DeriveKey(into="case_id", namespace=_NS, natural_key=["ref"]).process(dataset).to_pandas()["case_id"].iloc[0]
-    id_ns2 = DeriveKey(into="case_id", namespace=_NS2, natural_key=["ref"]).process(dataset).to_pandas()["case_id"].iloc[0]
+    id_ns1 = (
+        DeriveKey(into="case_id", namespace=_NS, natural_key=["ref"])
+        .process(dataset)
+        .to_pandas()["case_id"]
+        .iloc[0]
+    )
+    id_ns2 = (
+        DeriveKey(into="case_id", namespace=_NS2, natural_key=["ref"])
+        .process(dataset)
+        .to_pandas()["case_id"]
+        .iloc[0]
+    )
 
     assert id_ns1 != id_ns2
 
@@ -405,9 +411,11 @@ def test_derive_key_multi_column_key_composes_in_declared_order():
         pd.DataFrame({"surname": ["SMITH"], "dob": ["2024-01-15"]})
     )
 
-    result = DeriveKey(
-        into="case_id", namespace=_NS, natural_key=["surname", "dob"]
-    ).process(dataset).to_pandas()
+    result = (
+        DeriveKey(into="case_id", namespace=_NS, natural_key=["surname", "dob"])
+        .process(dataset)
+        .to_pandas()
+    )
 
     expected = str(_uuid.uuid5(_NS, "SMITH|2024-01-15"))
     assert result["case_id"].iloc[0] == expected
@@ -420,8 +428,18 @@ def test_derive_key_multi_column_key_order_matters():
         pd.DataFrame({"surname": ["SMITH"], "dob": ["2024-01-15"]})
     )
 
-    id_ab = DeriveKey(into="case_id", namespace=_NS, natural_key=["surname", "dob"]).process(dataset).to_pandas()["case_id"].iloc[0]
-    id_ba = DeriveKey(into="case_id", namespace=_NS, natural_key=["dob", "surname"]).process(dataset).to_pandas()["case_id"].iloc[0]
+    id_ab = (
+        DeriveKey(into="case_id", namespace=_NS, natural_key=["surname", "dob"])
+        .process(dataset)
+        .to_pandas()["case_id"]
+        .iloc[0]
+    )
+    id_ba = (
+        DeriveKey(into="case_id", namespace=_NS, natural_key=["dob", "surname"])
+        .process(dataset)
+        .to_pandas()["case_id"]
+        .iloc[0]
+    )
 
     assert id_ab != id_ba
 
@@ -431,12 +449,11 @@ def test_derive_key_returns_a_dataset_not_a_dataframe():
     # a pandas DataFrame — pandas stays behind the seam.
     dataset = Dataset.from_pandas(pd.DataFrame({"ref": ["A"]}))
 
-    result = DeriveKey(into="case_id", namespace=_NS, natural_key=["ref"]).process(dataset)
+    result = DeriveKey(into="case_id", namespace=_NS, natural_key=["ref"]).process(
+        dataset
+    )
 
     assert isinstance(result, Dataset)
-
-
-from framework.processors import LatestPerKey
 
 
 def test_latest_per_key_keeps_one_row_per_key_with_maximum_by_value():
@@ -444,11 +461,13 @@ def test_latest_per_key_keeps_one_row_per_key_with_maximum_by_value():
     # different load_dates. LatestPerKey must return the row with the max
     # load_date and drop the earlier one.
     dataset = Dataset.from_pandas(
-        pd.DataFrame({
-            "case_id": ["A", "A", "B"],
-            "load_date": ["2024-01-01", "2024-03-01", "2024-02-01"],
-            "status": ["open", "closed", "open"],
-        })
+        pd.DataFrame(
+            {
+                "case_id": ["A", "A", "B"],
+                "load_date": ["2024-01-01", "2024-03-01", "2024-02-01"],
+                "status": ["open", "closed", "open"],
+            }
+        )
     )
 
     result = LatestPerKey(key="case_id", by="load_date").process(dataset).to_pandas()
@@ -465,15 +484,19 @@ def test_latest_per_key_supports_multi_column_keys():
     # Entity (type="complaint", ref="C1") has two rows; (type="request", ref="C1")
     # has one. Result must have one row per (type, ref) pair.
     dataset = Dataset.from_pandas(
-        pd.DataFrame({
-            "type": ["complaint", "complaint", "request"],
-            "ref": ["C1", "C1", "C1"],
-            "load_date": ["2024-01-01", "2024-06-01", "2024-03-01"],
-            "status": ["open", "resolved", "pending"],
-        })
+        pd.DataFrame(
+            {
+                "type": ["complaint", "complaint", "request"],
+                "ref": ["C1", "C1", "C1"],
+                "load_date": ["2024-01-01", "2024-06-01", "2024-03-01"],
+                "status": ["open", "resolved", "pending"],
+            }
+        )
     )
 
-    result = LatestPerKey(key=["type", "ref"], by="load_date").process(dataset).to_pandas()
+    result = (
+        LatestPerKey(key=["type", "ref"], by="load_date").process(dataset).to_pandas()
+    )
 
     assert len(result) == 2
     complaint_row = result[result["type"] == "complaint"].iloc[0]
@@ -484,11 +507,13 @@ def test_latest_per_key_ties_resolve_to_last_row_in_input_order():
     # When two rows share the same maximum `by` value (a tie), the row that
     # appears last in the input is kept. This is the documented tie-break rule.
     dataset = Dataset.from_pandas(
-        pd.DataFrame({
-            "case_id": ["A", "A"],
-            "load_date": ["2024-01-01", "2024-01-01"],
-            "status": ["first", "second"],
-        })
+        pd.DataFrame(
+            {
+                "case_id": ["A", "A"],
+                "load_date": ["2024-01-01", "2024-01-01"],
+                "status": ["first", "second"],
+            }
+        )
     )
 
     result = LatestPerKey(key="case_id", by="load_date").process(dataset).to_pandas()
@@ -500,7 +525,6 @@ def test_latest_per_key_ties_resolve_to_last_row_in_input_order():
 def test_latest_per_key_raises_when_key_column_is_missing():
     # A located error (naming the missing column) is raised when the key column
     # is absent from the dataset — prevents silent wrong results.
-    import pytest
     dataset = Dataset.from_pandas(
         pd.DataFrame({"load_date": ["2024-01-01"], "status": ["open"]})
     )
@@ -512,10 +536,7 @@ def test_latest_per_key_raises_when_key_column_is_missing():
 def test_latest_per_key_raises_when_by_column_is_missing():
     # A located error is raised when the `by` column is absent — the caller
     # must know exactly which column is missing to fix their pipeline.
-    import pytest
-    dataset = Dataset.from_pandas(
-        pd.DataFrame({"case_id": ["A"], "status": ["open"]})
-    )
+    dataset = Dataset.from_pandas(pd.DataFrame({"case_id": ["A"], "status": ["open"]}))
 
     with pytest.raises(ValueError, match="load_date"):
         LatestPerKey(key="case_id", by="load_date").process(dataset)
@@ -525,15 +546,14 @@ def test_latest_per_key_returns_a_dataset_not_a_dataframe():
     # Engine-confined: process() must return a Dataset, keeping
     # pandas behind the seam — callers never touch the backing frame directly.
     dataset = Dataset.from_pandas(
-        pd.DataFrame({"case_id": ["A"], "load_date": ["2024-01-01"], "status": ["open"]})
+        pd.DataFrame(
+            {"case_id": ["A"], "load_date": ["2024-01-01"], "status": ["open"]}
+        )
     )
 
     result = LatestPerKey(key="case_id", by="load_date").process(dataset)
 
     assert isinstance(result, Dataset)
-
-
-from framework.processors import SelectColumns
 
 
 def test_select_columns_keeps_only_the_listed_columns():
@@ -552,15 +572,10 @@ def test_select_columns_keeps_only_the_listed_columns():
 def test_select_columns_raises_when_a_column_is_missing():
     # A misconfigured projection is caught immediately so a silent wrong result
     # (missing column without error) can't reach the Writer.
-    import pytest
-
     dataset = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c1"]}))
 
     with pytest.raises(ValueError, match="product_1"):
         SelectColumns(["case_ref", "product_1"]).process(dataset)
-
-
-from framework.processors import DropColumns
 
 
 def test_drop_columns_removes_the_listed_columns_and_keeps_the_rest_in_order():
@@ -580,35 +595,36 @@ def test_drop_columns_removes_the_listed_columns_and_keeps_the_rest_in_order():
 def test_drop_columns_raises_when_a_column_is_missing():
     # A mis-typed drop is caught immediately rather than silently doing nothing,
     # mirroring SelectColumns' fail-fast contract.
-    import pytest
-
     dataset = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c1"]}))
 
     with pytest.raises(ValueError, match="scratch"):
         DropColumns(["scratch"]).process(dataset)
 
 
-from framework.processors import Unpivot
-
-
 def test_unpivot_melts_value_vars_into_one_row_per_value():
     # Each product column becomes a row, so product_1..N are not repeated fields
     # but a proper one-row-per-product Detail Table.
     dataset = Dataset.from_pandas(
-        pd.DataFrame({
-            "case_ref": ["c1", "c2"],
-            "product_1": ["widget", "gadget"],
-            "product_2": ["doodad", None],
-        })
+        pd.DataFrame(
+            {
+                "case_ref": ["c1", "c2"],
+                "product_1": ["widget", "gadget"],
+                "product_2": ["doodad", None],
+            }
+        )
     )
 
-    result = Unpivot(
-        id_vars=["case_ref"],
-        value_vars=["product_1", "product_2"],
-        var_name="product_slot",
-        value_name="product_name",
-        drop_empty=False,
-    ).process(dataset).to_pandas()
+    result = (
+        Unpivot(
+            id_vars=["case_ref"],
+            value_vars=["product_1", "product_2"],
+            var_name="product_slot",
+            value_name="product_name",
+            drop_empty=False,
+        )
+        .process(dataset)
+        .to_pandas()
+    )
 
     # 2 cases × 2 products = 4 rows (before dropping empties)
     assert len(result) == 4
@@ -619,20 +635,26 @@ def test_unpivot_drops_null_and_blank_values_by_default():
     # drop_empty=True (the default) removes rows where the value is None or
     # blank — the normal behaviour for wide product feeds with unoccupied slots.
     dataset = Dataset.from_pandas(
-        pd.DataFrame({
-            "case_ref": ["c1"],
-            "product_1": ["widget"],
-            "product_2": [None],
-            "product_3": ["   "],
-        })
+        pd.DataFrame(
+            {
+                "case_ref": ["c1"],
+                "product_1": ["widget"],
+                "product_2": [None],
+                "product_3": ["   "],
+            }
+        )
     )
 
-    result = Unpivot(
-        id_vars=["case_ref"],
-        value_vars=["product_1", "product_2", "product_3"],
-        var_name="slot",
-        value_name="name",
-    ).process(dataset).to_pandas()
+    result = (
+        Unpivot(
+            id_vars=["case_ref"],
+            value_vars=["product_1", "product_2", "product_3"],
+            var_name="slot",
+            value_name="name",
+        )
+        .process(dataset)
+        .to_pandas()
+    )
 
     # Only the non-empty product_1 row survives
     assert len(result) == 1
@@ -646,13 +668,13 @@ def test_unpivot_returns_a_dataset_not_a_dataframe():
     )
 
     result = Unpivot(
-        id_vars=["case_ref"], value_vars=["product_1"], var_name="slot", value_name="name"
+        id_vars=["case_ref"],
+        value_vars=["product_1"],
+        var_name="slot",
+        value_name="name",
     ).process(dataset)
 
     assert isinstance(result, Dataset)
-
-
-from framework.processors import TopNPerGroup
 
 
 def test_top_n_per_group_n1_keeps_the_single_highest_by_row_per_group():
@@ -668,11 +690,7 @@ def test_top_n_per_group_n1_keeps_the_single_highest_by_row_per_group():
         )
     )
 
-    kept = (
-        TopNPerGroup(key="adviser", by="score", n=1)
-        .process(dataset)
-        .to_pandas()
-    )
+    kept = TopNPerGroup(key="adviser", by="score", n=1).process(dataset).to_pandas()
 
     assert set(kept["case_id"]) == {"c2", "c3"}  # top of each adviser
 
@@ -682,9 +700,9 @@ def test_top_n_per_group_breaks_score_ties_on_tiebreak_deterministically():
     # must pick the lower case_id reproducibly, regardless of input row order.
     rows = pd.DataFrame(
         {
-            "case_id": ["c2", "c1"],   # deliberately reverse-ordered
+            "case_id": ["c2", "c1"],  # deliberately reverse-ordered
             "adviser": ["a", "a"],
-            "score": [40, 40],         # tied
+            "score": [40, 40],  # tied
         }
     )
     kept = (
@@ -706,11 +724,7 @@ def test_top_n_per_group_n_gt_1_keeps_the_top_n_ranked_per_group():
             }
         )
     )
-    kept = (
-        TopNPerGroup(key="adviser", by="score", n=2)
-        .process(dataset)
-        .to_pandas()
-    )
+    kept = TopNPerGroup(key="adviser", by="score", n=2).process(dataset).to_pandas()
 
     # adviser a: top-2 of {10,30,20} = c2(30), c3(20); adviser b: both (<n+... 2 rows)
     assert set(kept.loc[kept["adviser"] == "a", "case_id"]) == {"c2", "c3"}
@@ -728,11 +742,7 @@ def test_top_n_per_group_passes_a_group_smaller_than_n_through_whole():
             }
         )
     )
-    kept = (
-        TopNPerGroup(key="adviser", by="score", n=5)
-        .process(dataset)
-        .to_pandas()
-    )
+    kept = TopNPerGroup(key="adviser", by="score", n=5).process(dataset).to_pandas()
 
     assert set(kept["case_id"]) == {"c1", "c2", "c3"}
 
@@ -795,9 +805,6 @@ def test_top_n_per_group_returns_a_dataset_not_a_dataframe():
     )
 
 
-from framework.processors import SamplePerGroup
-
-
 def test_sample_per_group_keeps_at_most_n_per_group():
     dataset = Dataset.from_pandas(
         pd.DataFrame(
@@ -807,11 +814,7 @@ def test_sample_per_group_keeps_at_most_n_per_group():
             }
         )
     )
-    kept = (
-        SamplePerGroup(key="adviser", n=2, seed=7)
-        .process(dataset)
-        .to_pandas()
-    )
+    kept = SamplePerGroup(key="adviser", n=2, seed=7).process(dataset).to_pandas()
 
     counts = kept.groupby("adviser").size()
     assert counts["a"] == 2  # 3 -> sampled down to 2
@@ -844,8 +847,16 @@ def test_sample_per_group_is_invariant_to_incoming_row_order():
     forward = pd.DataFrame(rows)
     shuffled = forward.iloc[[4, 0, 2, 1, 3]].reset_index(drop=True)
 
-    a = SamplePerGroup(key="adviser", n=2, seed=7).process(Dataset.from_pandas(forward)).to_pandas()
-    b = SamplePerGroup(key="adviser", n=2, seed=7).process(Dataset.from_pandas(shuffled)).to_pandas()
+    a = (
+        SamplePerGroup(key="adviser", n=2, seed=7)
+        .process(Dataset.from_pandas(forward))
+        .to_pandas()
+    )
+    b = (
+        SamplePerGroup(key="adviser", n=2, seed=7)
+        .process(Dataset.from_pandas(shuffled))
+        .to_pandas()
+    )
 
     assert set(a["case_id"]) == set(b["case_id"])
     assert list(a["case_id"]) == list(b["case_id"])  # canonical output order too

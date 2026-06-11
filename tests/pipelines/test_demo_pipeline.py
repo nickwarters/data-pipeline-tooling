@@ -1,7 +1,6 @@
-from pipelines import demo_csv_to_raw
-
 from framework.io import RAW, StoreCatalog
 from framework.testing import read_rows, read_run_log
+from pipelines import demo_csv_to_raw
 
 
 def test_demo_reads_fixture_csv_and_lands_rows_in_raw(tmp_path):
@@ -34,4 +33,7 @@ def test_demo_warns_on_raw_schema_drift_between_runs(tmp_path):
 
     records = read_run_log(tmp_path / demo_csv_to_raw.RUN_LOG_NAME)
     warns = [w for r in records for w in r["warn_hits"]]
-    assert any("schema drift" in w and "added [region]" in w and "dropped [amount]" in w for w in warns)
+    assert any(
+        "schema drift" in w and "added [region]" in w and "dropped [amount]" in w
+        for w in warns
+    )

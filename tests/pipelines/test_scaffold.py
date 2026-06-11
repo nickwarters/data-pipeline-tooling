@@ -15,7 +15,6 @@ import sys
 
 from framework.io import RAW, SILVER, StoreCatalog
 from framework.testing import read_rows, rows_of
-
 from pipelines import scaffold
 
 
@@ -68,9 +67,9 @@ def test_render_rewrites_the_relocated_test_to_absolute_imports(tmp_path):
 
 def test_render_pascal_cases_a_multi_word_feed_name(tmp_path):
     scaffold.render("review_outcomes", tmp_path)
-    schema = (
-        tmp_path / "pipelines" / "review_outcomes" / "schema.py"
-    ).read_text(encoding="utf-8")
+    schema = (tmp_path / "pipelines" / "review_outcomes" / "schema.py").read_text(
+        encoding="utf-8"
+    )
     assert "class ReviewOutcomesRow" in schema
 
 
@@ -186,9 +185,9 @@ def test_case_type_variant_substitutes_the_identity_contract(tmp_path):
 
 def test_case_type_variant_refines_to_silver_and_leaves_gold_a_commented_seam(tmp_path):
     scaffold.render("orders", tmp_path, case_type=True)
-    pipeline = (
-        tmp_path / "pipelines" / "orders" / "pipeline.py"
-    ).read_text(encoding="utf-8")
+    pipeline = (tmp_path / "pipelines" / "orders" / "pipeline.py").read_text(
+        encoding="utf-8"
+    )
 
     # The settled ingest spine is rendered live: source -> raw -> silver.
     assert "raw_to_silver(" in pipeline

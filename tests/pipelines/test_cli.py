@@ -11,7 +11,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parent.parent.parent
 
 
@@ -35,12 +34,23 @@ def test_run_executes_a_registered_pipeline(tmp_path):
 def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
     from framework.io import GOLD, StoreCatalog
 
-    assert _cli("run", "cases", "ingest", str(tmp_path), "--run-date", "2026-05-29").returncode == 0
+    assert (
+        _cli(
+            "run", "cases", "ingest", str(tmp_path), "--run-date", "2026-05-29"
+        ).returncode
+        == 0
+    )
 
     def selection():
         return _cli(
-            "run", "cases", "selection", str(tmp_path),
-            "--run-date", "2026-05-29", "--logical-run-id", "REDRIVE-7",
+            "run",
+            "cases",
+            "selection",
+            str(tmp_path),
+            "--run-date",
+            "2026-05-29",
+            "--logical-run-id",
+            "REDRIVE-7",
         )
 
     assert selection().returncode == 0, selection().stderr
@@ -48,7 +58,11 @@ def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
     assert selection().returncode == 0
 
     pool = (
-        StoreCatalog(tmp_path).store("cases").reader(GOLD, "selection_pool").read().to_pandas()
+        StoreCatalog(tmp_path)
+        .store("cases")
+        .reader(GOLD, "selection_pool")
+        .read()
+        .to_pandas()
     )
     # Replaced under the one logical run id, not accumulated into duplicates.
     assert set(pool["run_id"]) == {"REDRIVE-7"}
@@ -65,7 +79,12 @@ def test_run_unknown_pipeline_reports_clear_error(tmp_path):
 
 
 def test_runs_lists_recent_runs_from_the_registry(tmp_path):
-    assert _cli("run", "cases", "ingest", str(tmp_path), "--run-date", "2026-05-29").returncode == 0
+    assert (
+        _cli(
+            "run", "cases", "ingest", str(tmp_path), "--run-date", "2026-05-29"
+        ).returncode
+        == 0
+    )
 
     result = _cli("runs", str(tmp_path))
 
@@ -75,7 +94,12 @@ def test_runs_lists_recent_runs_from_the_registry(tmp_path):
 
 
 def test_status_shows_latest_run_for_a_case_type(tmp_path):
-    assert _cli("run", "cases", "ingest", str(tmp_path), "--run-date", "2026-05-29").returncode == 0
+    assert (
+        _cli(
+            "run", "cases", "ingest", str(tmp_path), "--run-date", "2026-05-29"
+        ).returncode
+        == 0
+    )
 
     result = _cli("status", str(tmp_path), "--case-type", "cases")
 
@@ -85,7 +109,12 @@ def test_status_shows_latest_run_for_a_case_type(tmp_path):
 
 
 def test_log_summarizes_a_run_log_file(tmp_path):
-    assert _cli("run", "cases", "ingest", str(tmp_path), "--run-date", "2026-05-29").returncode == 0
+    assert (
+        _cli(
+            "run", "cases", "ingest", str(tmp_path), "--run-date", "2026-05-29"
+        ).returncode
+        == 0
+    )
 
     result = _cli("log", str(tmp_path), "cases")
 
@@ -132,7 +161,9 @@ def test_run_stale_upstream_reports_clear_error(tmp_path):
         encoding="utf-8",
     )
 
-    result = _cli("run", "cases", "selection", str(tmp_path), "--run-date", "2026-05-29")
+    result = _cli(
+        "run", "cases", "selection", str(tmp_path), "--run-date", "2026-05-29"
+    )
 
     assert result.returncode != 0
     assert "upstream cases/ingest is stale" in result.stderr

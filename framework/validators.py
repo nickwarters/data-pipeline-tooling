@@ -52,9 +52,7 @@ class ColumnValidator:
         present = set(dataset.columns)
         missing = [c for c in self._required if c not in present]
         if missing:
-            raise ValidationError(
-                f"missing required column(s): {', '.join(missing)}"
-            )
+            raise ValidationError(f"missing required column(s): {', '.join(missing)}")
 
     def describe(self) -> str:
         return render(self, required_columns=list(self._required))
@@ -67,22 +65,16 @@ class RowCountValidator:
     ``maximum`` against an unexpectedly large one. ``None`` leaves that side open.
     """
 
-    def __init__(
-        self, minimum: int | None = None, maximum: int | None = None
-    ) -> None:
+    def __init__(self, minimum: int | None = None, maximum: int | None = None) -> None:
         self._minimum = minimum
         self._maximum = maximum
 
     def validate(self, dataset: Dataset) -> None:
         rows = len(dataset)
         if self._minimum is not None and rows < self._minimum:
-            raise ValidationError(
-                f"row count {rows} below minimum {self._minimum}"
-            )
+            raise ValidationError(f"row count {rows} below minimum {self._minimum}")
         if self._maximum is not None and rows > self._maximum:
-            raise ValidationError(
-                f"row count {rows} above maximum {self._maximum}"
-            )
+            raise ValidationError(f"row count {rows} above maximum {self._maximum}")
 
     def describe(self) -> str:
         return render(self, minimum=self._minimum, maximum=self._maximum)
@@ -98,8 +90,7 @@ class RunHistory(Protocol):
 
     def recent_row_counts(
         self, pipeline: str, limit: int = ..., step: str = ...
-    ) -> list[int]:
-        ...
+    ) -> list[int]: ...
 
 
 class VolumeAnomalyValidator:
@@ -143,13 +134,9 @@ class VolumeAnomalyValidator:
 
         # The absolute floor is always on, independent of history.
         if self._floor is not None and rows < self._floor:
-            raise ValidationError(
-                f"row count {rows} below floor {self._floor}"
-            )
+            raise ValidationError(f"row count {rows} below floor {self._floor}")
 
-        counts = self._history.recent_row_counts(
-            self._pipeline, limit=self._lookback
-        )
+        counts = self._history.recent_row_counts(self._pipeline, limit=self._lookback)
         # Insufficient history degrades gracefully: no relative baseline, no
         # spurious trip. The floor above still applied.
         if len(counts) < self._min_history:
@@ -228,8 +215,7 @@ class SchemaDriftValidator:
         if dropped:
             parts.append(f"dropped [{', '.join(dropped)}]")
         raise ValidationError(
-            f"schema drift in {self._prior.label} vs prior run: "
-            + "; ".join(parts)
+            f"schema drift in {self._prior.label} vs prior run: " + "; ".join(parts)
         )
 
     def describe(self) -> str:
@@ -259,21 +245,15 @@ class UniqueValidator:
         if not duplicated.empty:
             dup_values = duplicated.apply(
                 lambda row: (
-                    str(row.iloc[0])
-                    if len(self._columns) == 1
-                    else str(tuple(row))
+                    str(row.iloc[0]) if len(self._columns) == 1 else str(tuple(row))
                 ),
                 axis=1,
             ).tolist()
             keys_str = ", ".join(dup_values)
             col_str = (
-                self._columns[0]
-                if len(self._columns) == 1
-                else str(self._columns)
+                self._columns[0] if len(self._columns) == 1 else str(self._columns)
             )
-            raise ValidationError(
-                f"duplicate key(s) on {col_str!r}: {keys_str}"
-            )
+            raise ValidationError(f"duplicate key(s) on {col_str!r}: {keys_str}")
 
     def describe(self) -> str:
         return render(self, columns=list(self._columns))

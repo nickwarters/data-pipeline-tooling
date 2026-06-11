@@ -18,8 +18,8 @@ from pathlib import Path
 from typing import Callable
 
 from framework.dataset import Dataset
-from framework.run_log import RunLog
 from framework.run_context import RunContext
+from framework.run_log import RunLog
 from framework.run_registry import RunRegistry
 
 
@@ -53,9 +53,7 @@ class FreshnessGuard:
         upstream = pipeline_label(upstream_case_type, requirement.upstream_pipeline)
         successful = [
             r
-            for r in context.run_registry.query_runs(
-                pipeline=upstream, status="ok"
-            )
+            for r in context.run_registry.query_runs(pipeline=upstream, status="ok")
             if r.get("timestamp")
         ]
         if not successful:
@@ -65,7 +63,8 @@ class FreshnessGuard:
                 "freshness",
                 "ok",
                 warn_hits=[
-                    f"no successful run history for upstream {upstream}; allowing first run"
+                    "no successful run history for upstream "
+                    f"{upstream}; allowing first run"
                 ],
             )
             return

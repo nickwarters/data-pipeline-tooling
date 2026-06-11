@@ -133,15 +133,11 @@ class Length:
     construction. Null values are out of scope.
     """
 
-    def __init__(
-        self, minimum: int | None = None, maximum: int | None = None
-    ) -> None:
+    def __init__(self, minimum: int | None = None, maximum: int | None = None) -> None:
         if minimum is None and maximum is None:
             raise ValueError("Length requires at least one of minimum / maximum")
         if minimum is not None and maximum is not None and minimum > maximum:
-            raise ValueError(
-                f"Length minimum {minimum} exceeds maximum {maximum}"
-            )
+            raise ValueError(f"Length minimum {minimum} exceeds maximum {maximum}")
         self._minimum = minimum
         self._maximum = maximum
 
@@ -150,8 +146,16 @@ class Length:
         present_idx = series.dropna().index
         if len(present_idx):
             lengths = series[present_idx].astype("string").str.len()
-            too_short = lengths < self._minimum if self._minimum is not None else pd.Series(False, index=present_idx)
-            too_long = lengths > self._maximum if self._maximum is not None else pd.Series(False, index=present_idx)
+            too_short = (
+                lengths < self._minimum
+                if self._minimum is not None
+                else pd.Series(False, index=present_idx)
+            )
+            too_long = (
+                lengths > self._maximum
+                if self._maximum is not None
+                else pd.Series(False, index=present_idx)
+            )
             mask.loc[present_idx] = too_short | too_long
         return mask
 
@@ -339,9 +343,7 @@ class SchemaValidator:
             check, label = _DTYPE_CHECKS[declared]
             actual = frame[name].dtype
             if not check(actual):
-                problems.append(
-                    f"column {name!r} expected {label} but found {actual}"
-                )
+                problems.append(f"column {name!r} expected {label} but found {actual}")
                 ill_typed.add(name)
             elif not self._nullable[name] and frame[name].isna().any():
                 problems.append(f"column {name!r} contains null value(s)")

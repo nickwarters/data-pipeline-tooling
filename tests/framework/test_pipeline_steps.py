@@ -4,8 +4,6 @@ Each concrete PipelineStep renders its own describe() entry; these tests verify
 the rendering in isolation, independent of the full Pipeline.describe() path.
 """
 
-import pytest
-
 from framework.pipeline_steps import (
     CheckpointStep,
     ExplainWriteStep,
@@ -79,7 +77,8 @@ def test_validator_step_plan_entry_uses_custom_stage_name():
     v = ColumnValidator(["case_ref"])
     step = ValidatorStep(name="Validate file shape", validators=[(v, "error")])
     assert step.plan_entry() == (
-        "  Validate file shape: ColumnValidator(required_columns=['case_ref']) severity=error"
+        "  Validate file shape: "
+        "ColumnValidator(required_columns=['case_ref']) severity=error"
     )
 
 
