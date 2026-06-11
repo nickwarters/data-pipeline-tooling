@@ -40,7 +40,7 @@ def _frame_for_strategy(
     strategy: Refresh | AccumulateByRun | UpsertStrategy,
     read_existing: Callable[[], pd.DataFrame],
 ) -> pd.DataFrame:
-    frame = dataset.to_pandas().copy()
+    frame = dataset.to_pandas()
     if isinstance(strategy, Refresh):
         return frame
     if isinstance(strategy, AccumulateByRun):
@@ -189,7 +189,7 @@ class SharePointWriter:
     def write(self, dataset: Dataset) -> None:
         if isinstance(self._strategy, AccumulateByRun):
             dataset = Dataset.from_pandas(
-                _stamp_accumulate_frame(dataset.to_pandas().copy(), self._strategy)
+                _stamp_accumulate_frame(dataset.to_pandas(), self._strategy)
             )
         self._pusher.push(
             self._site,
@@ -324,7 +324,7 @@ class SqliteUpsertWriter:
         self._staging = f"_upsert_stage_{table}"
 
     def write(self, dataset: Dataset) -> None:
-        frame = dataset.to_pandas().copy()
+        frame = dataset.to_pandas()
         missing = [c for c in self._key_columns if c not in frame.columns]
         if missing:
             raise ValueError(
@@ -404,7 +404,7 @@ class AccumulateByRunWriter:
         self._busy_timeout_ms = busy_timeout_ms
 
     def write(self, dataset: Dataset) -> None:
-        frame = dataset.to_pandas().copy()
+        frame = dataset.to_pandas()
         frame["run_id"] = self._run_id
         frame["logical_run_id"] = self._run_id
         if self._execution_id is not None:

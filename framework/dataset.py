@@ -33,9 +33,14 @@ class Dataset:
         """Wrap a pandas frame. Engine-confined entry point."""
         return cls(frame)
 
-    def to_pandas(self) -> "pd.DataFrame":
-        """Return the backing pandas frame. Engine-confined exit point."""
-        return self._frame
+    def to_pandas(self, *, copy: bool = True) -> "pd.DataFrame":
+        """Return the backing pandas frame. Engine-confined exit point.
+
+        Returns a copy by default so callers cannot mutate the carrier's
+        internal state. Pass ``copy=False`` only in hot paths where the
+        caller guarantees it will not mutate the frame.
+        """
+        return self._frame.copy() if copy else self._frame
 
     @property
     def columns(self) -> list[str]:
