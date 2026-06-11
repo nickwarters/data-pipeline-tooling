@@ -583,6 +583,38 @@ def test_select_columns_raises_when_a_column_is_missing():
 
 
 # ---------------------------------------------------------------------------
+# DropColumns — drop a subset of columns, the SelectColumns complement (issue #153)
+# ---------------------------------------------------------------------------
+
+from framework.processors import DropColumns
+
+
+def test_drop_columns_removes_the_listed_columns_and_keeps_the_rest_in_order():
+    # DropColumns is the exclusion form of the projection seam: a wide feed that
+    # wants almost every column strips the few it doesn't, rather than enumerate
+    # the many it keeps (the SelectColumns complement, ADR-0009).
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"case_ref": ["c1"], "scratch": [1], "amount": [100]})
+    )
+
+    result = DropColumns(["scratch"]).process(dataset).to_pandas()
+
+    assert list(result.columns) == ["case_ref", "amount"]
+    assert "scratch" not in result.columns
+
+
+def test_drop_columns_raises_when_a_column_is_missing():
+    # A mis-typed drop is caught immediately rather than silently doing nothing,
+    # mirroring SelectColumns' fail-fast contract.
+    import pytest
+
+    dataset = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c1"]}))
+
+    with pytest.raises(ValueError, match="scratch"):
+        DropColumns(["scratch"]).process(dataset)
+
+
+# ---------------------------------------------------------------------------
 # Unpivot — wide→long reshape for Detail Tables (issue #39)
 # ---------------------------------------------------------------------------
 
