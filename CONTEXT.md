@@ -22,7 +22,7 @@ A **Case** where every applicable **Question Definition** has an **Answer**. Has
 _Avoid_: Closed, finished, done
 
 **QA Check**:
-A separate **Case** that references a **Completed Case** and records a meta-review of whether the original **Assigned Reviewer** conducted that Case properly. Has its own **Assigned Reviewer** (the QA reviewer), its own **Answers**, and its own **Outcome**. The original Case is read-only input. A QA Check is modeled as a distinct Case Type (e.g. `qa-{slug}`), not a mode on an existing Case. Only some Completed Cases are selected for QA Check; selection is manual and performed by a role not yet fully defined in the domain.
+A separate **Case** that references a **Completed Case** and records a meta-review of whether the original **Assigned Reviewer** conducted that Case properly. Has its own **Assigned Reviewer** (the QA reviewer), its own **Answers**, and its own **Outcome**. The original Case's **Answers** are read-only input, but a QA Check *may append* **Answer Overrides** to the original Case row (the original's frozen fields stay frozen; overrides are additive — see **Answer Override**, ADR-0018). A QA Check is modeled as a distinct Case Type (e.g. `qa-{slug}`), not a mode on an existing Case. The Override editor is *embedded* in the QA Check as a convenience surface so the **QA Reviewer** need not navigate to the original to override — but the Override remains a **single record on the original row** with authority resolved against the original (not the QA Check): the embedded editor performs a **cross-row, ETag-guarded write** to the original (ADR-0008/0018). An override authored during a QA Check stamps `sourceCaseId`; the same override could equally be authored on the original Case page with no QA Check. Only some Completed Cases are selected for QA Check; selection is manual and performed by a role not yet fully defined in the domain.
 _Avoid_: Re-review, audit (overloaded)
 
 **Case Details**:
@@ -102,6 +102,10 @@ _Avoid_: Line Manager (overloaded), RP Manager (jargon abbreviation)
 **Case Type Owner**:
 A SharePoint group that "owns" a **Case Type** and sees aggregate dashboard stats for it (outstanding, overdue, completed today / last 7 days). Case Type Owners are also the **authors** of Question Bank changes — they propose additions, edits, and deprecations via the question bank editor. Maintainers act as implementors who confirm (publish) those changes; they do not author them.
 
+**QA Reviewer**:
+A SharePoint user in the **standalone** QA Reviewers **SharePoint Group** (not a superset of **Reviewer** — a distinct job; membership of Case Reviewers is not required). The single accountable authority for review-of-the-review: a QA Reviewer (1) selects **Completed Cases** for **QA Check** and is the **Assigned Reviewer** on the resulting `qa-{slug}` Case, (2) authors **Answer Overrides** on any Completed Case — with or without a QA Check — this being the *only* role that may, and (3) resolves **Appeals** (agree/reject with rationale). The "different reviewer than the original" rule (a QA Reviewer should not QA or override their own Case as original **Assigned Reviewer**) is a **UX guard only**, not a hard boundary — per ADR-0010 client-side group checks are UX, and an ACL cannot express "anyone except this person." Resolves the previously-parked "who selects Cases for QA" role.
+_Avoid_: Auditor, Checker, QA (bare — ambiguous with QA Check the artefact), Reviewer (the original role)
+
 **Maintainer**:
 A platform administrator responsible for deploying and configuring the framework. When Question Bank changes are authored by a **Case Type Owner**, the Maintainer's role is to confirm (publish) the changes — not to author or approve them. Maintainers also handle SharePoint list/group provisioning and code deployments.
 _Avoid_: Admin (overloaded with SharePoint admin), developer
@@ -109,6 +113,12 @@ _Avoid_: Admin (overloaded with SharePoint admin), developer
 **Visitor**:
 A SharePoint user who is authenticated (browser NTLM/Kerberos passes) but does not belong to any named Case Review **SharePoint Group** — not a **Reviewer**, **Reviewer Manager**, **Responsible Party**, **Responsible Party Manager**, **Case Type Owner**, or **Maintainer**. Cannot be an **Assigned Reviewer**, cannot produce **Answers**, has no ownership or management responsibilities. The `#/` landing page shows a Visitor a read-only explainer only — *no* access-request affordance, because access is granted out-of-band via the team's centralised hierarchy record, outside this app; all other routes are inaccessible (enforced by SharePoint list ACLs, surfaced as UX by capability checks). Visitor is *derived* from the absence of all other group memberships — there is no "Visitors" SharePoint group.
 _Avoid_: Guest (collides with SharePoint's external-guest concept), Unenrolled (jargon), Anonymous (the user *is* authenticated)
+
+### Review of the review
+
+**Appeal**:
+A case-level objection to a **Completed Case**'s **Current Outcome**, raised by the **Responsible Party** or their **Responsible Party Manager**, who disagree with the result of the review. Stored as an additive `appeals[]` JSON blob on the original Case row (ADR-0007); never mutates the frozen original. Lifecycle `raised → underReview → resolved`, where resolved is `agreed | rejected`. Carries the **appellant's rationale** (required on raise) and the **QA resolver's rationale** (required on resolve) — "reject or agree with rationale" for both ends. May *cite* specific failed **Answers** in dispute to aim the reviewer, but does not itself set Answer values. **Agreeing** means QA accepts that the outcome was wrong and then authors the corrective **Answer Override**(s) (`source: 'appeal'`, linked to the Appeal id) *as QA sees fit* — agreement is not adoption of the appellant's requested value. **Rejecting** records rationale and changes nothing. At most one open Appeal per Case at a time; after resolution a new Appeal may be raised (full history kept in the array). Independent of **QA Check** — an Appeal can exist on a Case that was never QA-checked, and is resolved by the QA team regardless.
+_Avoid_: Dispute, Complaint, Grievance, Challenge
 
 ### Communication
 
@@ -121,7 +131,18 @@ One entry in a **Conversation** — author, timestamp, body.
 ### Outcome
 
 **Outcome**:
-The computed verdict for a **Case**, derived by the **Case Type**'s algorithm from the Case's **Answers**. No longer has its own Section or tab — it is rendered as one block *within* the **Summary** Section (the `computeOutcome` function and `cr-outcome` rendering survive; the standalone Outcome tab and its ADR-0011 matrix row do not). The *live* Outcome is always re-derivable from Answers — it is not a stored entity. However, a **snapshot** (`outcomeAtCompletion`) is stamped onto the Case row at the moment the Case becomes a **Completed Case**, to support historical reporting. The snapshot is frozen: it is not updated if Question Definitions or the outcome function change afterwards. A pass Outcome implies no **Remediation Actions** were attached (Remediation Actions only attach to failed Answers, and a failing Answer cannot yield a pass Outcome).
+The computed verdict for a **Case**, derived by the **Case Type**'s algorithm from the Case's **Answers**. No longer has its own Section or tab — it is rendered as one block *within* the **Summary** Section (the `computeOutcome` function and `cr-outcome` rendering survive; the standalone Outcome tab and its ADR-0011 matrix row do not). The *live* Outcome is always re-derivable from Answers — it is not a stored entity. However, a **snapshot** (`outcomeAtCompletion`) is stamped onto the Case row at the moment the Case becomes a **Completed Case**, to support historical reporting. The snapshot is frozen: it is not updated if Question Definitions or the outcome function change afterwards. A pass Outcome implies no **Remediation Actions** were attached (Remediation Actions only attach to failed Answers, and a failing Answer cannot yield a pass Outcome). After completion, the Outcome may be displaced (not mutated) by one or more **Answer Overrides** — see **Answer Override** and **Current Outcome**.
+
+**Answer Override**:
+A post-completion, per-**Answer** correction that *displaces* the original Answer without mutating it. The original **Completed Case** stays immutable (its Answers, `outcomeAtCompletion`, attribution and actions are frozen); an Override is a separate record carrying a **replacement value** and, where the override changes the Answer's failure status, a **complete replacement set** of **Remediation Actions** / **Attributed Party** / **Remediation Details** (replace, never merge — ADR-0018), plus mandatory **reasoning** and provenance (who, when, and the source: **QA Check** or **Appeal**). An Override can flip an Answer fail→pass (the original's actions persist in the frozen record but vanish from the effective view), fail→still-fail-but-different (swap the action set), or pass→fail (add an action set that never existed). A pass→fail Override must satisfy the same completion gate the Case did (required Remediation Details, Attributed Party when the Case Type sets `attributeFailures`) for the Answers it touches. Override must work **without** a QA Check. Does not require a verdict-level override: the **Current Outcome** is *derived* by re-running `computeOutcome` over the effective Answers (there is no hand-edited Outcome verdict).
+_Avoid_: Amendment, Correction, Revised Answer, Outcome Override (the verdict is never overridden directly — only Answers are)
+
+**Effective Answers**:
+The set of **Answers** for a **Case** with every **Answer Override** applied over the frozen original — the input to the **Current Outcome**. The original frozen Answers remain available alongside, so any view can show original-vs-override per question.
+
+**Current Outcome**:
+The Outcome derived by running `computeOutcome` over the **Effective Answers**. Where no Override exists it equals `outcomeAtCompletion`; where Overrides exist it takes precedence over the original Outcome. Within a **QA Check**'s read-only current summary, this precedence resolves *per question* (each Answer shows original vs overridden, and the Outcome block recomputes from the effective set).
+_Avoid_: Overridden Outcome (the Outcome is derived, not overridden)
 
 ## Relationships
 
