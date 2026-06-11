@@ -13,6 +13,7 @@ from functools import partial
 from typing import ContextManager, Literal
 
 from framework.dataset import Dataset
+from framework.describe import component_summary
 from framework.processors import JoinDependency
 from framework.run_context import RunContext
 from framework.run_log import RunLog, StepMetrics
@@ -47,6 +48,9 @@ class PipelineStep:
     def execute(
         self, dataset: Dataset | None, session: PipelineExecution
     ) -> Dataset | None:
+        raise NotImplementedError
+
+    def plan_entry(self) -> str | None:
         raise NotImplementedError
 
     def at(self, order: int) -> "PipelineStep":
@@ -127,6 +131,9 @@ class ReadStep(PipelineStep):
         object.__setattr__(self, "side_effect", False)
         object.__setattr__(self, "reader", reader)
 
+    def plan_entry(self) -> str:
+        return f"  read: {component_summary(self.reader)}"
+
     def execute(
         self, dataset: Dataset | None, session: PipelineExecution
     ) -> Dataset:
@@ -155,6 +162,17 @@ class ValidatorStep(PipelineStep):
         object.__setattr__(self, "side_effect", False)
         object.__setattr__(self, "validators", validators)
 
+    def plan_entry(self) -> str | None:
+        if not self.validators:
+            return None
+        if len(self.validators) == 1:
+            v, sev = self.validators[0]
+            return f"  {self.name}: {component_summary(v)} severity={sev}"
+        lines = [f"  {self.name}:"]
+        for v, sev in self.validators:
+            lines.append(f"    - {component_summary(v)} severity={sev}")
+        return "\n".join(lines)
+
     def execute(
         self, dataset: Dataset | None, session: PipelineExecution
     ) -> Dataset:
@@ -180,6 +198,12 @@ class QuarantineStep(PipelineStep):
         object.__setattr__(self, "side_effect", True)
         object.__setattr__(self, "row_validator", row_validator)
         object.__setattr__(self, "reject_writer", reject_writer)
+
+    def plan_entry(self) -> str:
+        return (
+            f"  quarantine: {component_summary(self.row_validator)}"
+            f" -> {component_summary(self.reject_writer)}"
+        )
 
     def execute(
         self, dataset: Dataset | None, session: PipelineExecution
@@ -215,6 +239,12 @@ class TraceStartStep(PipelineStep):
         object.__setattr__(self, "id_column", id_column)
         object.__setattr__(self, "score_column", score_column)
 
+    def plan_entry(self) -> str:
+        parts = [f"id_column={self.id_column!r}"]
+        if self.score_column is not None:
+            parts.append(f"score_column={self.score_column!r}")
+        return f"  explain-trace: {', '.join(parts)}"
+
     def execute(
         self, dataset: Dataset | None, session: PipelineExecution
     ) -> Dataset:
@@ -238,6 +268,9 @@ class ProcessorStageStep(PipelineStep):
         object.__setattr__(self, "read_only", False)
         object.__setattr__(self, "side_effect", False)
         object.__setattr__(self, "processors", processors)
+
+    def plan_entry(self) -> str:
+        return f"  {self.name}: {component_summary(self.component)}"
 
     def execute(
         self, dataset: Dataset | None, session: PipelineExecution
@@ -273,6 +306,10 @@ class CheckpointStep(PipelineStep):
         object.__setattr__(self, "side_effect", True)
         object.__setattr__(self, "writer", writer)
 
+    def plan_entry(self) -> str:
+        label = self.name.split(":")[0]
+        return f"  {label}: {component_summary(self.component)}"
+
     def execute(
         self, dataset: Dataset | None, session: PipelineExecution
     ) -> Dataset:
@@ -295,6 +332,9 @@ class ExplainWriteStep(PipelineStep):
         object.__setattr__(self, "read_only", True)
         object.__setattr__(self, "side_effect", True)
         object.__setattr__(self, "writer", writer)
+
+    def plan_entry(self) -> str:
+        return f"  explain: writer={component_summary(self.component)}"
 
     def execute(
         self, dataset: Dataset | None, session: PipelineExecution
@@ -320,6 +360,9 @@ class WriteStep(PipelineStep):
         object.__setattr__(self, "read_only", True)
         object.__setattr__(self, "side_effect", True)
         object.__setattr__(self, "writer", writer)
+
+    def plan_entry(self) -> str:
+        return f"  write: {component_summary(self.component)}"
 
     def execute(
         self, dataset: Dataset | None, session: PipelineExecution

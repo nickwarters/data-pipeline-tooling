@@ -91,3 +91,7 @@ So the `Stage` model is consolidated onto the one step plan:
   trace-aware one), not a custom stage. This supersedes the "public `Stage`
   contract: current `Dataset` in, next `Dataset` out" note in the 2026-06-09
   amendment.
+- Each `PipelineStep` **owns its own rendering** via `plan_entry() -> str | None`.
+  `.describe()` maps over the ordered plan and collects non-`None` entries — flat,
+  plan-ordered, no `none` placeholders. Adding a step kind requires no change to
+  the builder.

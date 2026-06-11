@@ -14,6 +14,7 @@ import logging
 import time
 
 from framework.dataset import Dataset
+from framework.describe import component_summary
 from framework.pipeline_steps import (
     ExplainWriteStep,
     PipelineExecution,
@@ -149,67 +150,20 @@ class Pipeline:
 
         The plan is an authoring/debugging aid: it reports the components that
         will participate in execution, in execution order, without touching the
-        Reader, processors, checkpoints, or Writer. Each component renders its
-        own summary through the opt-in ``describe()`` protocol (issue #145); a
-        component that does not implement ``describe()`` is shown by bare class
-        name only. The builder never introspects a component's attributes, so a
-        value stored under any name cannot leak into the plan, and a component
-        decides exactly what is safe to surface (credentials are self-redacted).
+        Reader, processors, checkpoints, or Writer. Each step renders its own
+        entry via ``plan_entry()``; absent/empty steps return ``None`` and are
+        omitted (no ``none`` placeholders). The builder never introspects a
+        component's attributes, so a value stored under any name cannot leak
+        into the plan (credentials are self-redacted by the component).
         """
         plan = self._execution_plan()
         lines = [f"Pipeline {self._name}"]
-        reader = _first_step(plan, "read")
-        lines.append(f"  reader: {_describe_component(reader.component)}")
-        pre = _first_named_step(plan, "pre-validate")
-        lines.extend(_describe_validators("pre-validators", pre.validators))
-
-        lines.append("  stages:")
-        stages = [
-            step
-            for step in plan
-            if step.kind in {"processor", "checkpoint"}
-            or (
-                step.kind == "validator"
-                and step.name not in {"pre-validate", "post-validate"}
-            )
-        ]
-        if stages:
-            for step in stages:
-                lines.append(
-                    f"    - {_describe_stage_label(step)}: "
-                    f"{_describe_stage_component(step)}"
-                )
-        else:
-            lines.append("    - none")
-
-        post = _first_named_step(plan, "post-validate")
-        lines.extend(_describe_validators("post-validators", post.validators))
-
-        quarantine = _first_step(plan, "quarantine", required=False)
-        if quarantine is None:
-            lines.append("  quarantine: none")
-        else:
-            lines.append(
-                "  quarantine: "
-                f"{_describe_component(quarantine.component)} -> "
-                f"{_describe_component(quarantine.reject_writer)}"
-            )
-
-        explain = _first_step(plan, "explain", required=False)
-        trace = _first_step(plan, "trace", required=False)
-        if explain is None:
-            lines.append("  explain: none")
-        else:
-            parts = [f"writer={_describe_component(explain.component)}"]
-            parts.append(f"id_column={trace.id_column!r}")
-            if trace.score_column is not None:
-                parts.append(f"score_column={trace.score_column!r}")
-            lines.append(f"  explain: {', '.join(parts)}")
-
-        write = _first_step(plan, "write", required=False)
-        writer = _describe_component(write.component) if write is not None else "none"
-        lines.append(f"  writer: {writer}")
-        lines.append(f"  run-log: {_describe_run_log(self._run_log)}")
+        for step in plan:
+            entry = step.plan_entry()
+            if entry is not None:
+                lines.append(entry)
+        if self._run_log is not NULL_RUN_LOG:
+            lines.append(f"  run-log: {component_summary(self._run_log)}")
         return "\n".join(lines)
 
     def _execution_plan(self) -> list[PipelineStep]:
@@ -304,72 +258,3 @@ class Pipeline:
         return dataset
 
 
-def _describe_validators(
-    label: str, validators: list[tuple[Validator, Severity]]
-) -> list[str]:
-    lines = [f"  {label}:"]
-    if not validators:
-        lines.append("    - none")
-        return lines
-    for validator, severity in validators:
-        lines.append(f"    - {_describe_component(validator)} severity={severity}")
-    return lines
-
-
-def _describe_stage_label(step: PipelineStep) -> str:
-    if step.name == "process":
-        return "processor"
-    if step.name.startswith("checkpoint:"):
-        return "checkpoint"
-    return step.name
-
-
-def _describe_stage_component(step: PipelineStep) -> str:
-    validators = getattr(step, "validators", None)
-    if validators is not None:
-        return ", ".join(
-            f"{_describe_component(validator)} severity={severity}"
-            for validator, severity in validators
-        )
-    return _describe_component(step.component)
-
-
-def _first_step(
-    plan: list[PipelineStep], kind: str, *, required: bool = True
-) -> PipelineStep | None:
-    for step in plan:
-        if step.kind == kind:
-            return step
-    if required:
-        raise ValueError(f"execution plan has no {kind!r} step")
-    return None
-
-
-def _first_named_step(plan: list[PipelineStep], name: str) -> PipelineStep:
-    for step in plan:
-        if step.name == name:
-            return step
-    raise ValueError(f"execution plan has no {name!r} step")
-
-
-def _describe_run_log(run_log: RunLog) -> str:
-    if run_log is NULL_RUN_LOG:
-        return "none"
-    return _describe_component(run_log)
-
-
-def _describe_component(component: object) -> str:
-    """Render a component for the plan via its opt-in ``describe()`` protocol.
-
-    A component renders its own safe summary by implementing ``describe()``
-    (issue #145). Anything that does not is shown by bare class name only — the
-    builder never introspects a component's attributes, so a value stored under
-    any name simply cannot leak into the plan, and a component decides exactly
-    what is safe to surface.
-    """
-    if component is None:
-        return "none"
-    describer = getattr(component, "describe", None)
-    if callable(describer):
-        return str(describer())
-    return type(component).__name__

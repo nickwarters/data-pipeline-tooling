@@ -5,7 +5,7 @@ their attributes. These tests pin the shared ``render``/``redact_url`` helpers
 and the self-redaction the remote components are responsible for.
 """
 
-from framework.describe import redact_url, render
+from framework.describe import component_summary, redact_url, render
 from framework.readers import CsvReader, SharePointReader, SqliteReader
 from framework.validators import RowCountValidator
 from framework.writers import SharePointWriter, SqliteTruncateReloadWriter
@@ -13,6 +13,22 @@ from framework.writers import SharePointWriter, SqliteTruncateReloadWriter
 
 class Widget:
     pass
+
+
+def test_component_summary_uses_describe_if_present():
+    class Described:
+        def describe(self) -> str:
+            return "Described(x=1)"
+
+    assert component_summary(Described()) == "Described(x=1)"
+
+
+def test_component_summary_falls_back_to_class_name():
+    assert component_summary(Widget()) == "Widget"
+
+
+def test_component_summary_returns_none_string_for_none():
+    assert component_summary(None) == "none"
 
 
 def test_render_with_no_fields_is_the_bare_class_name():
