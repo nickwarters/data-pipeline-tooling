@@ -7,7 +7,7 @@ export class CRReportsIndex extends CRElement {
   constructor() {
     super();
     /** @type {Capabilities} */
-    this.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
+    this.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
   }
 
   connectedCallback() {

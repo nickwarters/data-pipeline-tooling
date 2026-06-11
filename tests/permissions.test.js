@@ -14,7 +14,23 @@ const sampleConfig = {
   reviewerManager: 'Reviewer-Managers',
   responsiblePartyManager: 'ResponsibleParty-Managers',
   maintainer: 'CR-Maintainers',
+  qaReviewer: 'QA-Reviewers',
 };
+
+test('resolveCapabilities: QA-Reviewers group → isQaReviewer=true', () => {
+  const caps = resolveCapabilities(['QA-Reviewers'], sampleConfig);
+  assert.equal(caps.isQaReviewer, true);
+  assert.equal(caps.isReviewer, false);
+});
+
+test('resolveCapabilities: no QA-Reviewers group → isQaReviewer=false', () => {
+  const caps = resolveCapabilities(['Reviewers'], sampleConfig);
+  assert.equal(caps.isQaReviewer, false);
+});
+
+test('resolveCapabilities: QA-Reviewers → isVisitor=false', () => {
+  assert.equal(resolveCapabilities(['QA-Reviewers'], sampleConfig).isVisitor, false);
+});
 
 test('resolveCapabilities: empty groups → not reviewer, no owned types', () => {
   const caps = resolveCapabilities([], sampleConfig);

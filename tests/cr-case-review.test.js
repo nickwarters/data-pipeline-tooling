@@ -252,7 +252,7 @@ test('CRCaseReview: a Section that resolves to hidden produces a hidden tab (RP:
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
   el.currentUserId = 'u1';
-  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
   await el.connectedCallback();
 
   assert.equal(tabFor(el, 'notes').hidden, true, 'Notes is hidden for the Responsible Party');
@@ -464,7 +464,7 @@ test('CRCaseReview: connectedCallback handles access denied', async () => {
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
   el.currentUserId = 'u1';
-  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
   
   await el.connectedCallback();
   
@@ -536,7 +536,7 @@ test('CRCaseReview: remediation and conversation can be hidden', async () => {
   // but those are hardcoded in resolveRoles.
   
   // Instead, I can test if sections are hidden for an RP (Notes should be hidden).
-  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
   const rpRow = { ...BASE_ROW, responsibleParty: 'u1', assignedReviewer: 'other' };
   (/** @type {any} */ (el.client)).getCase = async () => rpRow;
   
@@ -609,7 +609,7 @@ test('CRCaseReview: cr-answer is ignored when questions access is read-only (RP 
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
   el.currentUserId = 'user-rp';
-  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
   await el.connectedCallback();
 
   // For RP, access.questions = 'read-only', so the cr-answer handler must early-return.
@@ -640,7 +640,7 @@ test('CRCaseReview: complete button stays hidden for a Completed case even when 
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
   el.currentUserId = 'u1';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
+  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
   await el.connectedCallback();
 
   const completeBtn = completeBtnOf(el);
@@ -1279,7 +1279,7 @@ test('CRCaseReview: non-assigned viewer cannot attribute (read-only)', async () 
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
   el.currentUserId = 'user-rp';
-  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
   await el.connectedCallback();
 
   const remediation = remediationOf(el);
@@ -1393,4 +1393,55 @@ test('CRCaseReview: does not resolve users when no Answer carries an Attributed 
   await el.connectedCallback();
 
   assert.equal(called, false, 'no resolution round-trip when there is nothing to resolve');
+});
+
+// ===== QA Answer Override authoring (issue #133, ADR-0018) =====
+
+/** A client whose current user is a standalone QA Reviewer (not the Assigned Reviewer). */
+function makeQaClient(/** @type {CaseRow} */ caseRow) {
+  return {
+    async getCase() { return caseRow; },
+    async getCurrentUser() { return { id: 'qa1', displayName: 'QA One' }; },
+    async patchCase() { return { ok: true, status: 200 }; },
+    async searchPeople() { return []; },
+    resolveUsers: async () => ({}),
+  };
+}
+
+/** @type {import('../src/services/permissions.js').Capabilities} */
+const QA_CAPS = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: true, isVisitor: false };
+
+test('CRCaseReview: a QA Reviewer on a Completed Case gets the override editor and a read-only Questions list', async () => {
+  const client = makeQaClient({ ...BASE_ROW, status: 'Completed', completedAt: '2026-06-10T00:00:00Z' });
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = new SaveQueue(/** @type {any} */ (client));
+  el.caseId = 'c1';
+  el.currentUserId = 'qa1';
+  el.capabilities = QA_CAPS;
+  await el.connectedCallback();
+
+  const section = questionSectionOf(el);
+  const editor = section._children.find((/** @type {any} */ c) => c.access === 'override' && c.caseId === 'c1');
+  assert.ok(editor, 'the cr-override-editor is mounted under the Questions Section');
+  assert.equal(editor.currentUser.id, 'qa1');
+
+  // The read-only Questions list sees the override Mode coerced to read-only.
+  const qList = section._children.find((/** @type {any} */ c) => c.access === 'read-only');
+  assert.ok(qList, 'the Questions list is presented read-only to the QA Reviewer');
+});
+
+test('CRCaseReview: a QA Reviewer on an In-progress Case gets no override editor', async () => {
+  const client = makeQaClient({ ...BASE_ROW, status: 'In-progress' });
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = new SaveQueue(/** @type {any} */ (client));
+  el.caseId = 'c1';
+  el.currentUserId = 'qa1';
+  el.capabilities = QA_CAPS;
+  await el.connectedCallback();
+
+  const section = questionSectionOf(el);
+  const editor = section._children.find((/** @type {any} */ c) => c.access === 'override');
+  assert.equal(editor, undefined, 'no override authoring while In-progress');
 });

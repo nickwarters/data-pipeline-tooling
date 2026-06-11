@@ -12,6 +12,7 @@ import '../components/cr-conversation.js';
 import '../components/cr-notes.js';
 import '../components/cr-summary.js';
 import '../components/cr-appeal.js';
+import '../components/cr-override-editor.js';
 import '../components/cr-status-banner.js';
 import '../components/cr-tabs.js';
 
@@ -114,7 +115,7 @@ export class CRCaseReview extends CRElement {
 
     const currentUserId = this.currentUserId || currentUser.id;
     const capabilities = this.capabilities || /** @type {import('../services/permissions.js').Capabilities} */ (
-      { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false }
+      { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false }
     );
     const roles = resolveRoles(caseRow, currentUserId, capabilities);
     /** @type {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} */
@@ -133,7 +134,7 @@ export class CRCaseReview extends CRElement {
       s => access[s] !== 'hidden' && showInSummary(s, config)
     );
 
-    this._buildLayout({ caseRow, catalogue, computeOutcome: config.computeOutcome, attributeFailures: config.attributeFailures, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, summarySections });
+    this._buildLayout({ caseRow, catalogue, computeOutcome: config.computeOutcome, attributeFailures: config.attributeFailures, remediationFields: config.remediationFields ?? [], client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, summarySections });
 
     // Render with cached display names first, then upgrade to the authoritative
     // directory names once they resolve (ADR-0013, #97).
@@ -194,6 +195,7 @@ export class CRCaseReview extends CRElement {
    * @param {QuestionDefinition[]} opts.catalogue
    * @param {(answers: Record<string, Answer>) => import('../sharepoint-client.js').OutcomeResult} opts.computeOutcome
    * @param {boolean} [opts.attributeFailures]
+   * @param {import('../sharepoint-client.js').RemediationField[]} [opts.remediationFields]
    * @param {SharePointClient} opts.client
    * @param {SaveQueue} opts.saveQueue
    * @param {{ get: () => Record<string, Answer>, set: (v: Record<string, Answer>) => void }} opts.answersSignal
@@ -203,7 +205,7 @@ export class CRCaseReview extends CRElement {
    * @param {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} opts.access
    * @param {import('../services/section-access.js').Section[]} [opts.summarySections]
    */
-  _buildLayout({ caseRow, catalogue, computeOutcome, attributeFailures, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, summarySections = [] }) {
+  _buildLayout({ caseRow, catalogue, computeOutcome, attributeFailures, remediationFields = [], client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, summarySections = [] }) {
 
     const searchStr = typeof location !== 'undefined' ? (/** @type {any} */ (location).search ?? '') : '';
     const panelMode = new URLSearchParams(searchStr).get('conversation') ?? 'popover';
@@ -220,17 +222,43 @@ export class CRCaseReview extends CRElement {
     );
     bannerEl.saveQueue = saveQueue;
 
+    // The Override Mode (ADR-0018) is authored by the dedicated cr-override-editor;
+    // the read-only Section components only understand edit/read-only/hidden, so an
+    // `override` cell presents to them as read-only.
+    const displayMode = (/** @type {import('../services/section-access.js').Mode} */ m) =>
+      m === 'override' ? 'read-only' : m;
+
     const section = document.createElement('section');
     const h2 = document.createElement('h2');
     h2.textContent = 'Questions';
     const qList = /** @type {import('../components/cr-question-list.js').CRQuestionList} */ (
       document.createElement('cr-question-list')
     );
-    qList.access = access.questions;
+    qList.access = displayMode(access.questions);
     const progressEl = /** @type {import('../components/cr-section-progress.js').CRSectionProgress} */ (
       document.createElement('cr-section-progress')
     );
     section.append(h2, qList, progressEl);
+
+    // QA Answer Override authoring (ADR-0018): when the viewer holds the `override`
+    // Mode (a QA Reviewer on a Completed Case), mount the reusable editor below the
+    // read-only Questions. It appends to the original row's `overrides[]`; the
+    // frozen Answers are never mutated.
+    if (access.questions === 'override') {
+      const overrideEl = /** @type {import('../components/cr-override-editor.js').CROverrideEditor} */ (
+        document.createElement('cr-override-editor')
+      );
+      overrideEl.caseRow = caseRow;
+      overrideEl.saveQueue = saveQueue;
+      overrideEl.caseId = caseRow.id;
+      overrideEl.access = 'override';
+      overrideEl.currentUser = currentUser;
+      overrideEl.catalogue = catalogue;
+      overrideEl.attributeFailures = attributeFailures === true;
+      overrideEl.remediationFields = remediationFields;
+      overrideEl.client = client;
+      section.append(/** @type {any} */ (overrideEl));
+    }
 
     /** @type {Map<string, QuestionDefinition>} */
     const byId = new Map(catalogue.map(q => [q.id, q]));
@@ -364,7 +392,7 @@ export class CRCaseReview extends CRElement {
     conversationEl.saveQueue = saveQueue;
     conversationEl.caseId = caseRow.id;
     conversationEl.currentUser = currentUser;
-    conversationEl.access = access.conversation;
+    conversationEl.access = displayMode(access.conversation);
     conversationEl._messages = caseRow.conversation.slice();
     // Always start hidden; the toggle button controls visibility.
     /** @type {any} */ (conversationEl).hidden = true;
@@ -395,7 +423,7 @@ export class CRCaseReview extends CRElement {
     notesEl.caseJustification = caseRow.caseJustification ?? '';
     notesEl.saveQueue = saveQueue;
     notesEl.caseId = caseRow.id;
-    notesEl.access = access.notes;
+    notesEl.access = displayMode(access.notes);
 
     // Appeal Section (issue #132): lets the Responsible Party or their Manager
     // raise a case-level Appeal on a Completed Case. The Section is additive and
@@ -406,7 +434,7 @@ export class CRCaseReview extends CRElement {
     appealEl.caseRow = caseRow;
     appealEl.saveQueue = saveQueue;
     appealEl.caseId = caseRow.id;
-    appealEl.access = access.appeal;
+    appealEl.access = displayMode(access.appeal);
     appealEl.currentUser = currentUser;
     appealEl.catalogue = catalogue;
     appealEl.answers = caseRow.answers;
@@ -416,7 +444,7 @@ export class CRCaseReview extends CRElement {
       document.createElement('cr-case-details')
     );
     detailsEl.caseRow = caseRow;
-    detailsEl.access = access.details;
+    detailsEl.access = displayMode(access.details);
 
     // Each visible Section becomes a tab (ADR-0014); a Section that resolves to
     // `hidden` (ADR-0011) renders no tab. Conversation is deliberately NOT a tab —

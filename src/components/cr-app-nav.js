@@ -7,7 +7,7 @@ export class CRAppNav extends CRElement {
   constructor() {
     super();
     /** @type {Capabilities} */
-    this.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
+    this.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
     /** @type {Array<{el: any, href: string}>} */
     this._navItems = [];
     this._onHashChange = () => this._updateActive();

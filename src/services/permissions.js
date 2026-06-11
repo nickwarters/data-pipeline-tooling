@@ -10,7 +10,8 @@
  *   responsibleParty: string,
  *   reviewerManager: string,
  *   responsiblePartyManager: string,
- *   maintainer: string
+ *   maintainer: string,
+ *   qaReviewer: string
  * }} PermissionsConfig
  */
 
@@ -25,6 +26,7 @@
  *   isReviewerManager: boolean,
  *   isResponsiblePartyManager: boolean,
  *   isMaintainer: boolean,
+ *   isQaReviewer: boolean,
  *   isVisitor: boolean
  * }} Capabilities
  */
@@ -40,6 +42,7 @@ export const permissions = {
   // TBC: placeholder SharePoint group names — confirm with the platform owner.
   responsiblePartyManager: 'ResponsibleParty-Managers',
   maintainer: 'CR-Maintainers',
+  qaReviewer: 'QA-Reviewers',
 };
 
 /**
@@ -59,12 +62,14 @@ export function resolveCapabilities(userGroups, config = permissions) {
   const isReviewerManager = userGroups.includes(config.reviewerManager);
   const isResponsiblePartyManager = userGroups.includes(config.responsiblePartyManager);
   const isMaintainer = userGroups.includes(config.maintainer);
+  const isQaReviewer = userGroups.includes(config.qaReviewer);
   const isVisitor =
     !isReviewer &&
     !isReviewerManager &&
     !isResponsiblePartyManager &&
     !isMaintainer &&
     !isResponsibleParty &&
+    !isQaReviewer &&
     ownedCaseTypes.length === 0;
   return {
     isReviewer,
@@ -73,6 +78,7 @@ export function resolveCapabilities(userGroups, config = permissions) {
     isReviewerManager,
     isResponsiblePartyManager,
     isMaintainer,
+    isQaReviewer,
     isVisitor,
   };
 }

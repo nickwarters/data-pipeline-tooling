@@ -37,50 +37,50 @@ function makeConfig(overrides = {}) {
 // --- resolveRoles ---
 
 test('resolveRoles: assigned reviewer', () => {
-  const caps = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
+  const caps = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
   const roles = resolveRoles(makeCase(), 'user-reviewer', caps);
   assert.deepEqual(roles.sort(), ['assignedReviewer']);
 });
 
 test('resolveRoles: other reviewer (in group but not assigned)', () => {
-  const caps = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
+  const caps = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
   const roles = resolveRoles(makeCase(), 'user-other', caps);
   assert.deepEqual(roles, ['otherReviewer']);
 });
 
 test('resolveRoles: responsible party', () => {
-  const caps = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
+  const caps = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
   const roles = resolveRoles(makeCase(), 'user-rp', caps);
   assert.deepEqual(roles, ['responsibleParty']);
 });
 
 test('resolveRoles: case type owner', () => {
-  const caps = { isReviewer: false, ownedCaseTypes: ['hello-review'], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
+  const caps = { isReviewer: false, ownedCaseTypes: ['hello-review'], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
   const roles = resolveRoles(makeCase(), 'user-owner', caps);
   assert.deepEqual(roles, ['caseTypeOwner']);
 });
 
 test('resolveRoles: none', () => {
-  const caps = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
+  const caps = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
   const roles = resolveRoles(makeCase(), 'stranger', caps);
   assert.deepEqual(roles, ['none']);
 });
 
 test('resolveRoles: multiple roles — assigned reviewer + owner', () => {
-  const caps = { isReviewer: true, ownedCaseTypes: ['hello-review'], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
+  const caps = { isReviewer: true, ownedCaseTypes: ['hello-review'], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
   const roles = resolveRoles(makeCase(), 'user-reviewer', caps);
   assert.deepEqual(roles.sort(), ['assignedReviewer', 'caseTypeOwner']);
 });
 
 test('resolveRoles: other reviewer + RP (case where reviewer is also the RP for someone else? edge)', () => {
   // userId is RP of this case AND in reviewer group but not the assigned one.
-  const caps = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
+  const caps = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
   const roles = resolveRoles(makeCase(), 'user-rp', caps);
   assert.deepEqual(roles.sort(), ['otherReviewer', 'responsibleParty']);
 });
 
 test('resolveRoles: owner of a different case type does not get owner role', () => {
-  const caps = { isReviewer: false, ownedCaseTypes: ['other-case-type'], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isVisitor: false };
+  const caps = { isReviewer: false, ownedCaseTypes: ['other-case-type'], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
   const roles = resolveRoles(makeCase(), 'user-x', caps);
   assert.deepEqual(roles, ['none']);
 });
@@ -88,13 +88,13 @@ test('resolveRoles: owner of a different case type does not get owner role', () 
 // --- Appeal Section + Responsible Party Manager role (issue #132) ---
 
 test('resolveRoles: responsible party manager (matched via the row field)', () => {
-  const caps = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: true, isMaintainer: false, isVisitor: false };
+  const caps = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: true, isMaintainer: false, isQaReviewer: false, isVisitor: false };
   const roles = resolveRoles(makeCase({ responsiblePartyManager: 'user-rpm' }), 'user-rpm', caps);
   assert.deepEqual(roles, ['responsiblePartyManager']);
 });
 
 test('resolveRoles: not the case row manager → no responsiblePartyManager role', () => {
-  const caps = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: true, isMaintainer: false, isVisitor: false };
+  const caps = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: true, isMaintainer: false, isQaReviewer: false, isVisitor: false };
   const roles = resolveRoles(makeCase({ responsiblePartyManager: 'someone-else' }), 'user-rpm', caps);
   assert.deepEqual(roles, ['none']);
 });
@@ -343,4 +343,54 @@ test('evaluateAccess: empty sections object → all hidden', () => {
   for (const s of SECTIONS) {
     assert.equal(evaluateAccess(s, ['assignedReviewer'], c, cfg), 'hidden', `section ${s}`);
   }
+});
+
+// --- QA Reviewer role + Answer Override Mode (issue #133, ADR-0018) ---
+
+/** @returns {Capabilities} */
+function qaCaps(extra = {}) {
+  return { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: true, isVisitor: false, ...extra };
+}
+
+test('resolveRoles: QA Reviewer capability → qaReviewer role', () => {
+  const roles = resolveRoles(makeCase(), 'user-qa', qaCaps());
+  assert.deepEqual(roles, ['qaReviewer']);
+});
+
+test('resolveRoles: assigned reviewer who is also a QA Reviewer gets both roles', () => {
+  const roles = resolveRoles(makeCase(), 'user-reviewer', qaCaps({ isReviewer: true }));
+  assert.deepEqual(roles.sort(), ['assignedReviewer', 'qaReviewer']);
+});
+
+test('evaluateAccess: questions/remediation are override for a QA Reviewer on a Completed Case', () => {
+  const cfg = makeConfig();
+  const c = makeCase({ status: 'Completed' });
+  assert.equal(evaluateAccess('questions', ['qaReviewer'], c, cfg), 'override');
+  assert.equal(evaluateAccess('remediation', ['qaReviewer'], c, cfg), 'override');
+});
+
+test('evaluateAccess: questions/remediation are read-only for a QA Reviewer while In-progress', () => {
+  const cfg = makeConfig();
+  const c = makeCase({ status: 'In-progress' });
+  assert.equal(evaluateAccess('questions', ['qaReviewer'], c, cfg), 'read-only');
+  assert.equal(evaluateAccess('remediation', ['qaReviewer'], c, cfg), 'read-only');
+});
+
+test('evaluateAccess: QA Reviewer observes details/summary read-only, conversation/notes hidden', () => {
+  const cfg = makeConfig();
+  const c = makeCase({ status: 'Completed' });
+  assert.equal(evaluateAccess('details', ['qaReviewer'], c, cfg), 'read-only');
+  assert.equal(evaluateAccess('summary', ['qaReviewer'], c, cfg), 'read-only');
+  assert.equal(evaluateAccess('conversation', ['qaReviewer'], c, cfg), 'hidden');
+  assert.equal(evaluateAccess('notes', ['qaReviewer'], c, cfg), 'hidden');
+  assert.equal(evaluateAccess('appeal', ['qaReviewer'], c, cfg), 'read-only');
+});
+
+test('evaluateAccess: override Mode ranks between read-only and edit — edit still wins', () => {
+  const cfg = makeConfig();
+  const c = makeCase({ status: 'Completed' });
+  // A QA Reviewer who is also the Assigned Reviewer: edit beats override.
+  assert.equal(evaluateAccess('questions', ['qaReviewer', 'assignedReviewer'], c, cfg), 'edit');
+  // override beats a plain read-only role.
+  assert.equal(evaluateAccess('questions', ['qaReviewer', 'otherReviewer'], c, cfg), 'override');
 });

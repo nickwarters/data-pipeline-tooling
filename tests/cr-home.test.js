@@ -45,6 +45,7 @@ const NONE = {
   isReviewerManager: false,
   isResponsiblePartyManager: false,
   isMaintainer: false,
+  isQaReviewer: false,
   isVisitor: false,
 };
 

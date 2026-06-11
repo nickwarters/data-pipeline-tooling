@@ -5,8 +5,8 @@
  * SharePoint list ACLs remain the real boundary. See ADR-0011 for design.
  *
  * @typedef {'details'|'questions'|'conversation'|'notes'|'remediation'|'summary'|'appeal'} Section
- * @typedef {'assignedReviewer'|'otherReviewer'|'responsibleParty'|'responsiblePartyManager'|'caseTypeOwner'|'none'} Role
- * @typedef {'edit'|'read-only'|'hidden'} Mode
+ * @typedef {'assignedReviewer'|'otherReviewer'|'responsibleParty'|'responsiblePartyManager'|'caseTypeOwner'|'qaReviewer'|'none'} Role
+ * @typedef {'edit'|'override'|'read-only'|'hidden'} Mode
  */
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
@@ -55,14 +55,20 @@ const MATRIX = {
     responsibleParty: 'read-only',
     responsiblePartyManager: 'read-only',
     caseTypeOwner: 'read-only',
+    qaReviewer: 'read-only',
     none: 'hidden',
   },
+  // A QA Reviewer ("check the checker", ADR-0018) authors Answer Overrides on a
+  // Completed Case via the function-valued `override` Mode — read-only while the
+  // Case is still In-progress (nothing to correct yet). The Override appends to
+  // `overrides[]`; the frozen original Answers are never mutated.
   questions: {
     assignedReviewer: 'edit',
     otherReviewer: 'read-only',
     responsibleParty: 'read-only',
     responsiblePartyManager: 'read-only',
     caseTypeOwner: 'read-only',
+    qaReviewer: (c) => (c.status === 'Completed' ? 'override' : 'read-only'),
     none: 'hidden',
   },
   // The Conversation is the thread between the Assigned Reviewer and the Case's
@@ -74,6 +80,7 @@ const MATRIX = {
     responsibleParty: 'edit',
     responsiblePartyManager: 'hidden',
     caseTypeOwner: 'read-only',
+    qaReviewer: 'hidden',
     none: 'hidden',
   },
   notes: {
@@ -82,14 +89,18 @@ const MATRIX = {
     responsibleParty: 'hidden',
     responsiblePartyManager: 'hidden',
     caseTypeOwner: 'read-only',
+    qaReviewer: 'hidden',
     none: 'hidden',
   },
+  // Remediation shares the QA Override path with questions: a fail→pass / pass→fail
+  // Override revises which Remediation Actions apply (replace, never merge).
   remediation: {
     assignedReviewer: 'edit',
     otherReviewer: 'read-only',
     responsibleParty: 'read-only',
     responsiblePartyManager: 'read-only',
     caseTypeOwner: 'read-only',
+    qaReviewer: (c) => (c.status === 'Completed' ? 'override' : 'read-only'),
     none: 'hidden',
   },
   // Summary is never `edit` — only `read-only` or `hidden` (ADR-0016). It
@@ -102,6 +113,7 @@ const MATRIX = {
     responsibleParty: (c) => (c.status === 'Completed' ? 'read-only' : 'hidden'),
     responsiblePartyManager: (c) => (c.status === 'Completed' ? 'read-only' : 'hidden'),
     caseTypeOwner: 'read-only',
+    qaReviewer: 'read-only',
     none: 'hidden',
   },
   // The Appeal Section (issue #132, ADR-0011): the Responsible Party or their
@@ -114,12 +126,18 @@ const MATRIX = {
     responsibleParty: (c) => (c.status === 'Completed' ? 'edit' : 'hidden'),
     responsiblePartyManager: (c) => (c.status === 'Completed' ? 'edit' : 'hidden'),
     caseTypeOwner: 'read-only',
+    qaReviewer: 'read-only',
     none: 'hidden',
   },
 };
 
-/** @type {Record<Mode, number>} most-permissive wins */
-const RANK = { edit: 2, 'read-only': 1, hidden: 0 };
+/**
+ * Most-permissive wins. `override` (ADR-0018 QA correction) sits between
+ * `read-only` and `edit`: a QA Reviewer who is also the Assigned Reviewer keeps
+ * full `edit`, but `override` outranks any plain read-only role.
+ * @type {Record<Mode, number>}
+ */
+const RANK = { edit: 3, override: 2, 'read-only': 1, hidden: 0 };
 
 /**
  * Resolve the viewer's roles for this specific Case.
@@ -148,6 +166,11 @@ export function resolveRoles(caseRow, userId, capabilities) {
   }
   if (capabilities.ownedCaseTypes.includes(caseRow.caseType)) {
     roles.push('caseTypeOwner');
+  }
+  // The QA Reviewers group is standalone (ADR-0018): a QA Reviewer authors Answer
+  // Overrides regardless of whether they also reviewed or own the Case Type.
+  if (capabilities.isQaReviewer) {
+    roles.push('qaReviewer');
   }
   return roles.length ? roles : ['none'];
 }
