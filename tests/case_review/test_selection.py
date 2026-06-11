@@ -71,7 +71,11 @@ def test_selection_narrows_the_casepool_into_a_stamped_selection_pool(tmp_path):
         .with_processor(Filter(lambda row: row["amount"] >= 100))
         .with_processor(Sort("amount", ascending=False))
         .with_processor(Stamp("question_bank_id", variation.question_bank_id))
-        .write_to(store.writer("gold", "selection_pool", AccumulateByRun("2026-05-29", "2026-05-29")))
+        .write_to(
+            store.writer(
+                "gold", "selection_pool", AccumulateByRun("2026-05-29", "2026-05-29")
+            )
+        )
         .run()
     )
 

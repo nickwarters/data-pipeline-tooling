@@ -13,8 +13,6 @@ from __future__ import annotations
 import os
 import sqlite3
 
-from framework.layers import LAYERS
-
 
 def connect(
     db_path: str | os.PathLike[str], busy_timeout_ms: int = 5000

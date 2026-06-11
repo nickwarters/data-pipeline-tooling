@@ -15,13 +15,13 @@ import pandas as pd
 from framework.connection import connect
 from framework.dataset import Dataset
 from framework.describe import redact_url, render
-from framework.sql import quote_identifier
 from framework.remote import (
     RemoteRunner,
     SharePointFetcher,
     StubbedRemoteRunner,
     StubbedSharePointFetcher,
 )
+from framework.sql import quote_identifier
 
 
 @runtime_checkable
@@ -215,6 +215,4 @@ class SharePointReader:
     def describe(self) -> str:
         # Render the site with any embedded credentials stripped and omit the
         # auth config entirely — the plan never surfaces secrets.
-        return render(
-            self, site=redact_url(self._site), list_name=self._list_name
-        )
+        return render(self, site=redact_url(self._site), list_name=self._list_name)

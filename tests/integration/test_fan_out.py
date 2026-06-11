@@ -7,10 +7,10 @@ sharing one normalisation Processor, and landing current-state gold via Refresh.
 
 import pandas as pd
 
-from framework.builder import Pipeline
-from framework.dataset import Dataset
 from case_review.case_type import CaseType
 from case_review.gold import detail_ingest_silver_to_gold, ingest_silver_to_gold
+from framework.builder import Pipeline
+from framework.dataset import Dataset
 from framework.processors import Filter, Rename, SelectColumns, Unpivot
 from framework.store import Store
 from framework.strategy import AccumulateByRun, Refresh
@@ -87,19 +87,26 @@ def test_detail_case_id_matches_case_id_derived_independently(tmp_path):
     # Seed case silver (needs load_date for LatestPerKey in ingest_silver_to_gold)
     store.writer("silver", "cases", Refresh()).write(
         Dataset.from_pandas(
-            pd.DataFrame({"case_ref": ["c1"], "amount": [500], "load_date": ["2026-06-01"]})
+            pd.DataFrame(
+                {"case_ref": ["c1"], "amount": [500], "load_date": ["2026-06-01"]}
+            )
         )
     )
     # Seed product silver
     store.writer("silver", "products", Refresh()).write(
         Dataset.from_pandas(
-            pd.DataFrame({"case_ref": ["c1"], "product_1": ["widget"], "product_2": [None], "product_3": [None]})
+            pd.DataFrame(
+                {
+                    "case_ref": ["c1"],
+                    "product_1": ["widget"],
+                    "product_2": [None],
+                    "product_3": [None],
+                }
+            )
         )
     )
 
-    ingest_silver_to_gold(
-        store, _WIDE_CASES, "cases"
-    ).run()
+    ingest_silver_to_gold(store, _WIDE_CASES, "cases").run()
 
     detail_ingest_silver_to_gold(
         store,
@@ -138,9 +145,7 @@ def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path
         .run()
     )
 
-    ingest_silver_to_gold(
-        store, _WIDE_CASES, "cases"
-    ).run()
+    ingest_silver_to_gold(store, _WIDE_CASES, "cases").run()
 
     (
         Pipeline("products", store.reader("raw", "wide_cases"))

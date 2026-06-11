@@ -185,7 +185,10 @@ def test_schema_drift_validator_warns_on_an_added_column():
     prior = _FakePrior(("id", "name"))
     validator = SchemaDriftValidator(prior)
 
-    with pytest.raises(ValidationError, match=r"added \[region\].*raw\.cases|raw\.cases.*added \[region\]"):
+    with pytest.raises(
+        ValidationError,
+        match=r"added \[region\].*raw\.cases|raw\.cases.*added \[region\]",
+    ):
         validator.validate(_dataset(id=[1], name=["a"], region=["x"]))
 
 

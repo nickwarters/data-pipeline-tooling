@@ -38,9 +38,7 @@ def test_glob_csv_reader_projects_only_requested_columns(tmp_path):
         "case_id,advisor,amount\n2,b,20\n", encoding="utf-8"
     )
 
-    dataset = GlobCsvReader(
-        landing, "part_*.csv", columns=["case_id", "amount"]
-    ).read()
+    dataset = GlobCsvReader(landing, "part_*.csv", columns=["case_id", "amount"]).read()
 
     assert dataset.columns == ["case_id", "amount"]
     assert len(dataset) == 2

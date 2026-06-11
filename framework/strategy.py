@@ -83,7 +83,9 @@ class UpsertStrategy:
         raise AttributeError("UpsertStrategy is immutable")
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, UpsertStrategy) and self.key_columns == other.key_columns
+        return (
+            isinstance(other, UpsertStrategy) and self.key_columns == other.key_columns
+        )
 
     def __hash__(self) -> int:
         return hash(self.key_columns)

@@ -121,7 +121,9 @@ def _log(args: argparse.Namespace) -> int:
         if line.strip()
     ]
     if args.run_id is not None:
-        records = [r for r in records if (r.get("run_id") or "").startswith(args.run_id)]
+        records = [
+            r for r in records if (r.get("run_id") or "").startswith(args.run_id)
+        ]
         if not records:
             print(f"no records for run {args.run_id!r} in {path}", file=sys.stderr)
             return 1
@@ -178,21 +180,31 @@ def build_parser() -> argparse.ArgumentParser:
 
     runs = sub.add_parser("runs", help="list recent runs from the run registry")
     runs.add_argument("base_dir")
-    runs.add_argument("--pipeline", help="narrow to one pipeline label, e.g. cases/ingest")
+    runs.add_argument(
+        "--pipeline", help="narrow to one pipeline label, e.g. cases/ingest"
+    )
     runs.add_argument("--status", help="narrow to a run status, e.g. ok or error")
-    runs.add_argument("--limit", type=int, default=10, help="show the most recent N (default 10)")
+    runs.add_argument(
+        "--limit", type=int, default=10, help="show the most recent N (default 10)"
+    )
     runs.set_defaults(func=_runs)
 
     status = sub.add_parser("status", help="show the latest run status per pipeline")
     status.add_argument("base_dir")
     status.add_argument("--pipeline", help="one pipeline label, e.g. cases/ingest")
-    status.add_argument("--case-type", help="narrow to a subject's pipelines, e.g. cases")
+    status.add_argument(
+        "--case-type", help="narrow to a subject's pipelines, e.g. cases"
+    )
     status.set_defaults(func=_status)
 
     log = sub.add_parser("log", help="inspect/summarize a run log file")
     log.add_argument("base_dir")
-    log.add_argument("case_type", help="the subject whose _runs/<case_type>.log to read")
-    log.add_argument("--run-id", help="only records whose execution id starts with this")
+    log.add_argument(
+        "case_type", help="the subject whose _runs/<case_type>.log to read"
+    )
+    log.add_argument(
+        "--run-id", help="only records whose execution id starts with this"
+    )
     log.set_defaults(func=_log)
 
     return parser

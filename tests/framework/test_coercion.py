@@ -88,7 +88,8 @@ def test_leaves_round_trip_safe_and_undeclared_columns_untouched():
 
 
 def test_unparseable_date_fails_fast_with_a_located_message():
-    # A value the coercer cannot parse aborts at the coerce step with a message naming the column, so the breach is diagnosable.
+    # A value the coercer cannot parse aborts at the coerce step with a message
+    # naming the column, so the breach is diagnosable.
     raw = pd.DataFrame({"case_ref": ["c1"], "opened": ["not-a-date"]})
     dataset = Dataset.from_pandas(raw)
 

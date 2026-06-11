@@ -167,9 +167,11 @@ def test_runner_context_correlates_logs_registry_and_accumulated_rows(tmp_path):
 
     registry = RunRegistry(tmp_path / "_registry" / "runs.db")
     (run,) = registry.query_runs(pipeline="cases/selection")
-    landed = SqliteReader(
-        tmp_path / "cases" / "gold.db", "selection_pool"
-    ).read().to_pandas()
+    landed = (
+        SqliteReader(tmp_path / "cases" / "gold.db", "selection_pool")
+        .read()
+        .to_pandas()
+    )
 
     assert set(landed["execution_id"]) == {run["run_id"]}
     assert set(landed["run_id"]) == {"cases/selection:2026-05-29"}

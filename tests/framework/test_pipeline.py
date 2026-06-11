@@ -244,9 +244,7 @@ def test_add_stage_validates_before_processing_and_stays_deferred():
                 validators=[ColumnValidator(["case_ref"])],
             )
         )
-        .add_stage(
-            ProcessingStage(name="Normalise cases", processors=[processor])
-        )
+        .add_stage(ProcessingStage(name="Normalise cases", processors=[processor]))
         .write_to(writer)
     )
 
@@ -338,7 +336,8 @@ def test_add_stage_describe_renders_user_stages_in_execution_order():
     )
 
     assert (
-        "  Validate file shape: ColumnValidator(required_columns=['id']) severity=error\n"
+        "  Validate file shape: "
+        "ColumnValidator(required_columns=['id']) severity=error\n"
         "  Normalise cases: AddingProcessor(column='derived')\n"
         "  Validate normalised cases: "
         "ColumnValidator(required_columns=['derived']) severity=error"
@@ -382,8 +381,8 @@ def test_processor_is_deferred_until_run():
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
     processor = AddingProcessor("derived")
 
-    pipeline = Pipeline("cases", reader).with_processor(processor).write_to(
-        CapturingWriter()
+    pipeline = (
+        Pipeline("cases", reader).with_processor(processor).write_to(CapturingWriter())
     )
     assert processor.process_count == 0
 
@@ -449,9 +448,7 @@ def test_failed_run_leaves_the_gold_layer_untouched(tmp_path):
     pipeline = (
         Pipeline("cases", reader)
         .with_post_validator(RowCountValidator(minimum=100))
-        .write_to(
-            store.writer("gold", "casepool", AccumulateByRun("r2", "2026-05-30"))
-        )
+        .write_to(store.writer("gold", "casepool", AccumulateByRun("r2", "2026-05-30")))
     )
 
     with pytest.raises(ValidationError):
@@ -480,7 +477,8 @@ def test_warn_severity_validator_logs_and_continues(caplog):
 
 def test_error_severity_post_validator_aborts_before_any_write():
     # A post-validator gates the output that is about to be written; an
-    # error-severity failure aborts before the Writer is called, so nothing partial lands.
+    # error-severity failure aborts before the Writer is called, so nothing
+    # partial lands.
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
     writer = CapturingWriter()
     pipeline = (

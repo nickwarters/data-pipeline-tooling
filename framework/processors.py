@@ -25,7 +25,15 @@ from __future__ import annotations
 import hashlib
 import random
 import uuid
-from typing import Any, Callable, Literal, Mapping, Protocol, Sequence, runtime_checkable
+from typing import (
+    Any,
+    Callable,
+    Literal,
+    Mapping,
+    Protocol,
+    Sequence,
+    runtime_checkable,
+)
 
 from framework.dataset import Dataset
 from framework.describe import render
@@ -145,9 +153,9 @@ class Sort:
 
     def process(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
-        ordered = frame.sort_values(
-            by=self._by, ascending=self._ascending
-        ).reset_index(drop=True)
+        ordered = frame.sort_values(by=self._by, ascending=self._ascending).reset_index(
+            drop=True
+        )
         return Dataset.from_pandas(ordered)
 
     def describe(self) -> str:
@@ -338,7 +346,9 @@ class LatestPerKey:
         # order for equal `by` values), then drop_duplicates(keep="last") keeps
         # the last-in-input row when tied — the documented tie-break rule.
         sorted_frame = frame.sort_values(by=self._key + [self._by], kind="stable")
-        latest = sorted_frame.drop_duplicates(subset=self._key, keep="last").reset_index(drop=True)
+        latest = sorted_frame.drop_duplicates(
+            subset=self._key, keep="last"
+        ).reset_index(drop=True)
         return Dataset.from_pandas(latest)
 
     def describe(self) -> str:
@@ -485,9 +495,12 @@ class DeriveKey:
     def process(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         frame[self._into] = frame.apply(
-            lambda row: str(uuid.uuid5(
-                self._namespace, "|".join(str(row[col]) for col in self._natural_key)
-            )),
+            lambda row: str(
+                uuid.uuid5(
+                    self._namespace,
+                    "|".join(str(row[col]) for col in self._natural_key),
+                )
+            ),
             axis=1,
         )
         return Dataset.from_pandas(frame)

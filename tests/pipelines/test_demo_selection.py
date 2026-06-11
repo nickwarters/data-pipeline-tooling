@@ -2,7 +2,7 @@ from pathlib import Path
 
 from framework.io import GOLD, Store
 from framework.testing import read_rows
-from pipelines.demo_source_to_selection import main, high_value_case, priority_score
+from pipelines.demo_source_to_selection import high_value_case, main, priority_score
 
 
 def test_demo_selection_rules_are_independently_testable():
@@ -36,7 +36,9 @@ def test_demo_runs_the_full_source_to_selection_path(tmp_path, capsys):
     # Stamped with the namespaced logical run id derived from the RunContext, and
     # a per-execution execution_id for traceability.
     assert {r["run_id"] for r in selection_pool} == {"cases/selection:2026-05-29"}
-    assert {r["logical_run_id"] for r in selection_pool} == {"cases/selection:2026-05-29"}
+    assert {r["logical_run_id"] for r in selection_pool} == {
+        "cases/selection:2026-05-29"
+    }
     assert all(r["execution_id"] for r in selection_pool)
 
     # Selection explainability: a sibling trace landed alongside the pool,

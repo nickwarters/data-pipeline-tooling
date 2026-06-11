@@ -1,4 +1,4 @@
-"""Tests for explicit load strategy value types (Refresh, AccumulateByRun, UpsertStrategy)."""
+"""Tests for explicit load strategy value types."""
 
 import pytest
 

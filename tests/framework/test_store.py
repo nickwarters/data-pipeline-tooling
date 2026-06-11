@@ -165,9 +165,7 @@ def test_reference_data_medallion_is_read_and_joined_by_another_subject(tmp_path
         )
     )
     cases.writer("silver", "cases", Refresh()).write(
-        Dataset.from_pandas(
-            pd.DataFrame({"case_id": [10, 11], "adviser_id": [1, 2]})
-        )
+        Dataset.from_pandas(pd.DataFrame({"case_id": [10, 11], "adviser_id": [1, 2]}))
     )
 
     # The Case Type subject reaches across to the Reference Data medallion via a

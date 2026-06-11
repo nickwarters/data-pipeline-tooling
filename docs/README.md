@@ -22,6 +22,27 @@ through clean domain abstractions (a `CasePool` of `Case`s) instead of raw
 
 ---
 
+## Developer commands
+
+Run commands from the repository root so the import-only `framework/` package is
+on `sys.path`.
+
+```sh
+.venv/bin/python -m pytest
+.venv/bin/python -m ruff check .
+.venv/bin/python -m ruff format --check .
+```
+
+Use the same module form on Windows after activating `.venv`:
+
+```bat
+python -m pytest
+python -m ruff check .
+python -m ruff format --check .
+```
+
+---
+
 ## Concepts
 
 ### The four Pipelines form a loop

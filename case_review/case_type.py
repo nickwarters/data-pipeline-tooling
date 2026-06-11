@@ -55,6 +55,4 @@ class CaseType:
         for variation in self.variations:
             if variation.id == variation_id:
                 return variation
-        raise KeyError(
-            f"{self.name} Case Type has no Variation {variation_id!r}"
-        )
+        raise KeyError(f"{self.name} Case Type has no Variation {variation_id!r}")

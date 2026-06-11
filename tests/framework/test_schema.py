@@ -54,7 +54,9 @@ def test_schema_validator_locates_a_wrong_dtype_with_expected_and_actual():
     frame = _silver_frame(opened=pd.Series(["2026-01-01", "nope"], dtype="string"))
     dataset = Dataset.from_pandas(frame)
 
-    with pytest.raises(ValidationError, match="column 'opened' expected date but found"):
+    with pytest.raises(
+        ValidationError, match="column 'opened' expected date but found"
+    ):
         SchemaValidator(CaseA).validate(dataset)
 
 

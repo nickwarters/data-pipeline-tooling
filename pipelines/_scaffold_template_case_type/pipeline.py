@@ -54,9 +54,7 @@ def run(
         store.writer(RAW, FEED_NAME, strategy)
     ).run()
 
-    silver = raw_to_silver(
-        store, FEED_NAME, CASE_TYPE.schema, strategy=strategy
-    ).run()
+    silver = raw_to_silver(store, FEED_NAME, CASE_TYPE.schema, strategy=strategy).run()
 
     # --- gold is yours to assemble ------------------------------------------
     # How accumulated silver becomes gold is unique per Case Type, so the

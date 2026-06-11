@@ -195,7 +195,9 @@ def test_write_then_read_round_trips_through_an_in_memory_list_backend():
         pd.DataFrame({"case_ref": ["c1", "c2"], "amount": [100, 200]})
     )
 
-    SharePointWriter(site, "Selection", strategy=Refresh(), pusher=backend).write(pushed)
+    SharePointWriter(site, "Selection", strategy=Refresh(), pusher=backend).write(
+        pushed
+    )
     read_back = SharePointReader(site, "Selection", fetcher=backend).read()
 
     assert read_back.columns == ["case_ref", "amount"]
@@ -231,7 +233,9 @@ def test_selection_pool_is_delivered_to_a_per_case_type_list(tmp_path):
     case_type = "cases"
     gold_db = tmp_path / case_type / "gold.db"
     selection_pool = Dataset.from_pandas(
-        pd.DataFrame({"case_ref": ["c1", "c3"], "question_bank_id": ["qb-100", "qb-100"]})
+        pd.DataFrame(
+            {"case_ref": ["c1", "c3"], "question_bank_id": ["qb-100", "qb-100"]}
+        )
     )
     # Land the SelectionPool into gold exactly as the Selection pipeline does
     # (accumulate-by-run audit trail), so the Deliverable pipeline reads a real
@@ -244,9 +248,7 @@ def test_selection_pool_is_delivered_to_a_per_case_type_list(tmp_path):
     site = "http://sharepoint.corp.local/sites/cases"
     list_name = f"Selection - {case_type}"  # one list per Case Type
 
-    Pipeline(
-        "selection-deliverable", SqliteReader(gold_db, "selection_pool")
-    ).write_to(
+    Pipeline("selection-deliverable", SqliteReader(gold_db, "selection_pool")).write_to(
         SharePointWriter(site, list_name, strategy=Refresh(), pusher=backend)
     ).run()
 

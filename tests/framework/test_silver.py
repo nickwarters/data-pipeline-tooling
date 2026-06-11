@@ -139,12 +139,15 @@ def test_raw_to_silver_accumulates_when_strategy_is_accumulate_by_run(tmp_path):
     # current-state source.
     store = Store(tmp_path)
     _land_raw(
-        store, "cases",
+        store,
+        "cases",
         pd.DataFrame({"case_ref": ["c1", "c2"], "score": [10, 20]}),
         strategy=AccumulateByRun("2026-05-29", "2026-05-29"),
     )
 
-    raw_to_silver(store, "cases", LandedCase, strategy=AccumulateByRun("2026-05-29", "2026-05-29")).run()
+    raw_to_silver(
+        store, "cases", LandedCase, strategy=AccumulateByRun("2026-05-29", "2026-05-29")
+    ).run()
 
     landed = store.reader("silver", "cases").read().to_pandas()
     assert len(landed) == 2
@@ -157,13 +160,18 @@ def test_raw_to_silver_accumulate_re_run_is_idempotent(tmp_path):
     # then insert, so re-running the same snapshot never duplicates silver rows.
     store = Store(tmp_path)
     _land_raw(
-        store, "cases",
+        store,
+        "cases",
         pd.DataFrame({"case_ref": ["c1"], "score": [10]}),
         strategy=AccumulateByRun("2026-05-29", "2026-05-29"),
     )
 
-    raw_to_silver(store, "cases", LandedCase, strategy=AccumulateByRun("2026-05-29", "2026-05-29")).run()
-    raw_to_silver(store, "cases", LandedCase, strategy=AccumulateByRun("2026-05-29", "2026-05-29")).run()
+    raw_to_silver(
+        store, "cases", LandedCase, strategy=AccumulateByRun("2026-05-29", "2026-05-29")
+    ).run()
+    raw_to_silver(
+        store, "cases", LandedCase, strategy=AccumulateByRun("2026-05-29", "2026-05-29")
+    ).run()
 
     assert len(store.reader("silver", "cases").read()) == 1
 
@@ -175,18 +183,24 @@ def test_raw_to_silver_accumulate_retains_history_across_distinct_runs(tmp_path)
     store = Store(tmp_path)
 
     _land_raw(
-        store, "cases",
+        store,
+        "cases",
         pd.DataFrame({"case_ref": ["c1"], "score": [10]}),
         strategy=AccumulateByRun("2026-05-29", "2026-05-29"),
     )
-    raw_to_silver(store, "cases", LandedCase, strategy=AccumulateByRun("2026-05-29", "2026-05-29")).run()
+    raw_to_silver(
+        store, "cases", LandedCase, strategy=AccumulateByRun("2026-05-29", "2026-05-29")
+    ).run()
 
     _land_raw(
-        store, "cases",
+        store,
+        "cases",
         pd.DataFrame({"case_ref": ["c1"], "score": [99]}),
         strategy=AccumulateByRun("2026-05-30", "2026-05-30"),
     )
-    raw_to_silver(store, "cases", LandedCase, strategy=AccumulateByRun("2026-05-30", "2026-05-30")).run()
+    raw_to_silver(
+        store, "cases", LandedCase, strategy=AccumulateByRun("2026-05-30", "2026-05-30")
+    ).run()
 
     landed = store.reader("silver", "cases").read().to_pandas()
     assert len(landed) == 2

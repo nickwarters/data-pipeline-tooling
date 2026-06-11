@@ -15,7 +15,7 @@ import pytest
 
 from framework.builder import Pipeline
 from framework.dataset import Dataset
-from framework.retry import RetryPolicy, RetryingReader, RetryingWriter
+from framework.retry import RetryingReader, RetryingWriter, RetryPolicy
 from framework.run_log import RunLog
 
 
@@ -39,9 +39,7 @@ def test_transient_read_failure_succeeds_after_retry():
     # next attempt lands. The retry is invisible to the caller — it gets the
     # Dataset, not the error.
     inner = FlakyReader(ConnectionError("source briefly unavailable"), fails=1)
-    reader = RetryingReader(
-        inner, RetryPolicy(attempts=3, retry_on=(ConnectionError,))
-    )
+    reader = RetryingReader(inner, RetryPolicy(attempts=3, retry_on=(ConnectionError,)))
 
     dataset = reader.read()
 
@@ -53,9 +51,7 @@ def test_non_retryable_failure_aborts_immediately():
     # A configuration error (here, a missing file) is not on the allowlist, so it
     # propagates on the first attempt — retry never masks a non-transient fault.
     inner = FlakyReader(FileNotFoundError("source.csv is missing"), fails=99)
-    reader = RetryingReader(
-        inner, RetryPolicy(attempts=5, retry_on=(ConnectionError,))
-    )
+    reader = RetryingReader(inner, RetryPolicy(attempts=5, retry_on=(ConnectionError,)))
 
     with pytest.raises(FileNotFoundError):
         reader.read()
@@ -83,9 +79,7 @@ def test_transient_write_failure_succeeds_after_retry():
     # The sink edge is the dual of the source edge: a brief lock/unavailability is
     # retried, and the dataset eventually lands.
     inner = FlakyWriter(ConnectionError("sink briefly unavailable"), fails=1)
-    writer = RetryingWriter(
-        inner, RetryPolicy(attempts=3, retry_on=(ConnectionError,))
-    )
+    writer = RetryingWriter(inner, RetryPolicy(attempts=3, retry_on=(ConnectionError,)))
 
     writer.write(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
 
@@ -97,9 +91,7 @@ def test_exhausting_attempts_reraises_the_transient_error():
     # If every attempt fails, the run still aborts: the transient error is
     # re-raised after the last try rather than swallowed.
     inner = FlakyReader(ConnectionError("still down"), fails=99)
-    reader = RetryingReader(
-        inner, RetryPolicy(attempts=3, retry_on=(ConnectionError,))
-    )
+    reader = RetryingReader(inner, RetryPolicy(attempts=3, retry_on=(ConnectionError,)))
 
     with pytest.raises(ConnectionError):
         reader.read()
@@ -135,9 +127,7 @@ def test_run_log_records_retry_attempts_and_final_outcome(tmp_path):
     # the step's final outcome is `ok` because the retry recovered.
     log_path = tmp_path / "run.log"
     inner = FlakyReader(ConnectionError("source briefly unavailable"), fails=1)
-    reader = RetryingReader(
-        inner, RetryPolicy(attempts=3, retry_on=(ConnectionError,))
-    )
+    reader = RetryingReader(inner, RetryPolicy(attempts=3, retry_on=(ConnectionError,)))
 
     Pipeline("flaky-feed", reader, run_log=RunLog(log_path)).run()
 
@@ -152,9 +142,7 @@ def test_run_log_records_a_non_retryable_abort(tmp_path):
     # on the read step — no retry, no masking.
     log_path = tmp_path / "run.log"
     inner = FlakyReader(FileNotFoundError("source.csv is missing"), fails=99)
-    reader = RetryingReader(
-        inner, RetryPolicy(attempts=5, retry_on=(ConnectionError,))
-    )
+    reader = RetryingReader(inner, RetryPolicy(attempts=5, retry_on=(ConnectionError,)))
 
     with pytest.raises(FileNotFoundError):
         Pipeline("flaky-feed", reader, run_log=RunLog(log_path)).run()

@@ -80,9 +80,7 @@ def test_file_deliverable_writers_are_available_through_the_io_facade(tmp_path):
     from framework.run import Pipeline
 
     target = tmp_path / "deliverables" / "cases.csv"
-    Pipeline("cases", CsvReader(FIXTURE)).write_to(
-        CsvWriter(target, Refresh())
-    ).run()
+    Pipeline("cases", CsvReader(FIXTURE)).write_to(CsvWriter(target, Refresh())).run()
 
     assert target.exists()
     assert ExcelWriter is not None
@@ -154,13 +152,13 @@ def test_internal_plumbing_stays_out_of_the_public_facades():
     from framework import io, run, transform
 
     internal = {
-        "connect",       # framework.connection — connection factory seam
-        "layer_name",    # framework.layers — internal validation helper
-        "LAYERS",        # framework.layers — internal tuple
-        "RowTrace",      # framework.trace — generic trace mechanics
+        "connect",  # framework.connection — connection factory seam
+        "layer_name",  # framework.layers — internal validation helper
+        "LAYERS",  # framework.layers — internal tuple
+        "RowTrace",  # framework.trace — generic trace mechanics
         "RemoteRunner",  # framework.remote — stubbed remote client seam
         "FreshnessGuard",  # framework.runner — internal guard
-        "StepMetrics",   # framework.run_log — internal timing record
+        "StepMetrics",  # framework.run_log — internal timing record
         "pipeline_label",  # framework.runner — internal label helper
     }
     for facade in (io, run, transform):
@@ -186,6 +184,5 @@ def test_case_review_imports_framework_only_through_the_public_facades():
     # architectural position as pipelines/ — so it depends on the same stable
     # surface. Production code only: domain *tests* (tests/case_review/)
     # legitimately import framework internals and stay out of scope.
-    assert not _facade_offenders(CASE_REVIEW_DIR), (
-        f"case_review bypassing the public facades: {_facade_offenders(CASE_REVIEW_DIR)}"
-    )
+    offenders = _facade_offenders(CASE_REVIEW_DIR)
+    assert not offenders, f"case_review bypassing the public facades: {offenders}"

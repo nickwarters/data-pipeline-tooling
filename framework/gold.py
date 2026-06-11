@@ -61,7 +61,9 @@ def silver_to_gold(
     pipeline = Pipeline(name or table, store.reader(SILVER, table), run_log)
     if schema is not None:
         pipeline.with_post_validator(SchemaValidator(schema))
-    return pipeline.write_to(store.writer(GOLD, table, AccumulateByRun(run_id, load_date)))
+    return pipeline.write_to(
+        store.writer(GOLD, table, AccumulateByRun(run_id, load_date))
+    )
 
 
 def current_silver_to_gold(
@@ -87,7 +89,11 @@ def current_silver_to_gold(
     """
     return (
         Pipeline(name or table, store.reader(SILVER, table), run_log)
-        .with_processor(DeriveKey(into=entity_id_column, namespace=namespace, natural_key=natural_key))
+        .with_processor(
+            DeriveKey(
+                into=entity_id_column, namespace=namespace, natural_key=natural_key
+            )
+        )
         .with_processor(LatestPerKey(key=entity_id_column, by=by))
         .with_post_validator(UniqueValidator(entity_id_column))
         .write_to(store.writer(GOLD, table, Refresh()))
@@ -121,7 +127,11 @@ def detail_current_silver_to_gold(
     """
     return (
         Pipeline(name or table, store.reader(SILVER, table), run_log)
-        .with_processor(DeriveKey(into=entity_id_column, namespace=namespace, natural_key=natural_key))
+        .with_processor(
+            DeriveKey(
+                into=entity_id_column, namespace=namespace, natural_key=natural_key
+            )
+        )
         .with_processor(unpivot)
         .write_to(store.writer(GOLD, table, Refresh()))
     )

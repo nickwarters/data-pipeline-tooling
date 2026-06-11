@@ -18,8 +18,8 @@ from framework.builder import Pipeline
 from framework.dataset import Dataset
 from framework.processors import AntiJoinWith, Filter, JoinWith, Score, Sort
 from framework.readers import DatasetReader
-from framework.store import Store
 from framework.run_log import RunLog
+from framework.store import Store
 from framework.strategy import AccumulateByRun
 
 
@@ -37,10 +37,7 @@ def _available() -> Dataset:
 
 def _trace(store: Store) -> pd.DataFrame:
     return (
-        store.reader("gold", "selection_trace")
-        .read()
-        .to_pandas()
-        .set_index("case_ref")
+        store.reader("gold", "selection_trace").read().to_pandas().set_index("case_ref")
     )
 
 

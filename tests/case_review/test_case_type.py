@@ -14,9 +14,10 @@ def test_case_type_derives_its_namespace_from_its_name():
 
     assert case_type.namespace == uuid.uuid5(uuid.NAMESPACE_DNS, "cases")
     # Stable across constructions — same name, same space.
-    assert case_type.namespace == CaseType(
-        name="cases", schema=LandedCase, natural_key=("ref",)
-    ).namespace
+    assert (
+        case_type.namespace
+        == CaseType(name="cases", schema=LandedCase, natural_key=("ref",)).namespace
+    )
 
 
 def test_case_type_looks_up_a_variation_by_id():

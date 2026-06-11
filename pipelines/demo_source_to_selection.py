@@ -38,7 +38,14 @@ from typing import Any, Mapping
 from case_review.case_pool import CasePool
 from case_review.case_type import CaseType, Variation
 from case_review.gold import ingest_silver_to_gold
-from framework.io import GOLD, RAW, AccumulateByRun, CsvReader, DatasetReader, StoreCatalog
+from framework.io import (
+    GOLD,
+    RAW,
+    AccumulateByRun,
+    CsvReader,
+    DatasetReader,
+    StoreCatalog,
+)
 from framework.run import (
     FreshnessRequirement,
     Pipeline,

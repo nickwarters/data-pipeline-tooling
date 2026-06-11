@@ -175,7 +175,7 @@ def test_console_output_is_human_readable_not_raw_json(tmp_path, caplog):
 
 def test_checkpoint_emits_its_own_step_record(tmp_path):
     # Each checkpoint emits a "checkpoint:N" step record in the JSONL log
-    #; two checkpoints produce "checkpoint:0"
+    # ; two checkpoints produce "checkpoint:0"
     # and "checkpoint:1" in attach order, each with row counts and status "ok".
     log_path = tmp_path / "cases.log"
     ds = Dataset.from_pandas(pd.DataFrame({"id": [1, 2, 3]}))

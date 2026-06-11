@@ -122,18 +122,14 @@ def test_pipeline_quarantine_routes_rejected_rows_to_reject_writer(tmp_path):
     # A pipeline configured with quarantine should write bad rows to the reject
     # writer and good rows to the main writer — in the same run.
     import sqlite3
+
     from framework.builder import Pipeline
-    from framework.readers import CsvReader
     from framework.quarantine import SchemaValueRulePartitioner
+    from framework.readers import CsvReader
     from framework.writers import QuarantineWriter, SqliteTruncateReloadWriter
 
     csv_file = tmp_path / "feed.csv"
-    csv_file.write_text(
-        "case_ref,status\n"
-        "123456789,open\n"
-        "BAD,open\n"
-        "987654321,closed\n"
-    )
+    csv_file.write_text("case_ref,status\n123456789,open\nBAD,open\n987654321,closed\n")
 
     main_db = tmp_path / "main.db"
     reject_db = tmp_path / "rejects.db"
@@ -154,7 +150,9 @@ def test_pipeline_quarantine_routes_rejected_rows_to_reject_writer(tmp_path):
 
     con_reject = sqlite3.connect(reject_db)
     rows_reject = con_reject.execute("SELECT * FROM rejects").fetchall()
-    cols_reject = [d[1] for d in con_reject.execute("PRAGMA table_info(rejects)").fetchall()]
+    cols_reject = [
+        d[1] for d in con_reject.execute("PRAGMA table_info(rejects)").fetchall()
+    ]
     con_reject.close()
 
     assert len(rows_main) == 2
@@ -167,16 +165,14 @@ def test_pipeline_quarantine_routes_rejected_rows_to_reject_writer(tmp_path):
 def test_pipeline_quarantine_uses_run_context_identity(tmp_path):
     import datetime as dt
     import sqlite3
+
     from framework.builder import Pipeline
     from framework.readers import CsvReader
     from framework.run_context import RunContext
     from framework.writers import QuarantineWriter, SqliteTruncateReloadWriter
 
     csv_file = tmp_path / "feed.csv"
-    csv_file.write_text(
-        "case_ref,status\n"
-        "BAD,open\n"
-    )
+    csv_file.write_text("case_ref,status\nBAD,open\n")
 
     context = RunContext(
         case_type="cases",
@@ -214,15 +210,13 @@ def test_pipeline_quarantine_is_idempotent_on_rerun(tmp_path):
     # Re-running the same pipeline should replace the prior run's rejects,
     # not accumulate duplicates (delete-by-run_id + append).
     import sqlite3
+
     from framework.builder import Pipeline
     from framework.readers import CsvReader
     from framework.writers import QuarantineWriter, SqliteTruncateReloadWriter
 
     csv_file = tmp_path / "feed.csv"
-    csv_file.write_text(
-        "case_ref,status\n"
-        "BAD,open\n"
-    )
+    csv_file.write_text("case_ref,status\nBAD,open\n")
 
     reject_db = tmp_path / "rejects.db"
 
@@ -281,17 +275,14 @@ def test_run_log_quarantine_step_records_rows_quarantined(tmp_path):
     # The quarantine step in the run log should record how many rows were
     # routed to the reject table so operators can audit without opening the db.
     import json
+
     from framework.builder import Pipeline
     from framework.readers import CsvReader
     from framework.run_log import RunLog
     from framework.writers import QuarantineWriter, SqliteTruncateReloadWriter
 
     csv_file = tmp_path / "feed.csv"
-    csv_file.write_text(
-        "case_ref,status\n"
-        "BAD,open\n"
-        "123456789,closed\n"
-    )
+    csv_file.write_text("case_ref,status\nBAD,open\n123456789,closed\n")
 
     log_file = tmp_path / "run.log"
     pipeline = (

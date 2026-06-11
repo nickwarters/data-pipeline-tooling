@@ -46,10 +46,7 @@ class CasePool:
         dataset = self._store.reader("gold", self._case_type.name).read()
         dataset = SchemaCoercion(self._case_type.schema).process(dataset)
 
-        window = set(
-            self._calendar.last_n_working_days(within_working_days, as_of)
+        window = set(self._calendar.last_n_working_days(within_working_days, as_of))
+        return Filter(lambda row: row[activity_column].date() in window).process(
+            dataset
         )
-        return Filter(
-            lambda row: row[activity_column].date() in window
-        ).process(dataset)
-

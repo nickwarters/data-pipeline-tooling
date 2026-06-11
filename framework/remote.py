@@ -35,7 +35,9 @@ class StubbedRemoteRunner:
     def run_script(self, script: str) -> None:  # pragma: no cover - no-op stub
         return None
 
-    def fetch(self, copy_glob: str, dest: Path) -> None:  # pragma: no cover - no-op stub
+    def fetch(
+        self, copy_glob: str, dest: Path
+    ) -> None:  # pragma: no cover - no-op stub
         return None
 
 

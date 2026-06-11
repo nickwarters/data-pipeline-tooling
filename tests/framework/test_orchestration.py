@@ -74,7 +74,9 @@ def test_for_each_stops_at_first_failed_item_and_names_it():
             def write(self, dataset: Dataset) -> None:
                 completed.append(item)
 
-        return Pipeline(f"feed-{item}", RecordingReader(item)).write_to(RecordingWriter())
+        return Pipeline(f"feed-{item}", RecordingReader(item)).write_to(
+            RecordingWriter()
+        )
 
     with pytest.raises(ForEachPipelineError, match="bad"):
         ForEach(["first", "bad", "never"], build_pipeline).run()
@@ -93,7 +95,9 @@ def test_for_each_best_effort_records_mixed_success_and_failure_outcomes():
             def write(self, dataset: Dataset) -> None:
                 completed.append(item)
 
-        return Pipeline(f"feed-{item}", RecordingReader(item)).write_to(RecordingWriter())
+        return Pipeline(f"feed-{item}", RecordingReader(item)).write_to(
+            RecordingWriter()
+        )
 
     outcomes = ForEach(
         ["first", "bad", "last"],

@@ -15,9 +15,9 @@ def workbook(tmp_path) -> Path:
     # selection is observable.
     path = tmp_path / "cases.xlsx"
     with pd.ExcelWriter(path) as writer:
-        pd.DataFrame(
-            {"case_id": [1, 2, 3], "advisor": ["a", "b", "c"]}
-        ).to_excel(writer, sheet_name="cases", index=False)
+        pd.DataFrame({"case_id": [1, 2, 3], "advisor": ["a", "b", "c"]}).to_excel(
+            writer, sheet_name="cases", index=False
+        )
         pd.DataFrame({"region": ["north", "south"]}).to_excel(
             writer, sheet_name="reference", index=False
         )

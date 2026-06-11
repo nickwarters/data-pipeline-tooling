@@ -100,9 +100,7 @@ def test_json_writer_emits_file_deliverable_records(tmp_path):
     source = CsvReader(FIXTURE).read()
     target = tmp_path / "deliverables" / "cases.json"
 
-    Pipeline("cases", CsvReader(FIXTURE)).write_to(
-        JsonWriter(target, Refresh())
-    ).run()
+    Pipeline("cases", CsvReader(FIXTURE)).write_to(JsonWriter(target, Refresh())).run()
 
     records = json.loads(target.read_text(encoding="utf-8"))
     assert len(records) == len(source)

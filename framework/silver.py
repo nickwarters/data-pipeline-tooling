@@ -48,8 +48,7 @@ def raw_to_silver(
             Filter(lambda row, _rid=run_id: row["run_id"] == _rid)
         )
     return (
-        pipeline
-        .with_processor(SchemaCoercion(schema))
+        pipeline.with_processor(SchemaCoercion(schema))
         .with_post_validator(SchemaValidator(schema))
         .write_to(store.writer(SILVER, table, effective_strategy))
     )
