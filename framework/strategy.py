@@ -3,7 +3,7 @@
 A strategy is passed to ``Store.writer`` to declare the load behaviour for a
 feed, independent of which medallion layer it targets. The Store resolves only
 the *location* (which ``<subject>/<layer>.db``); the Writer owns both location
-and strategy (ADR-0003, ADR-0006 amendment).
+and strategy.
 
 Three strategies exist:
 
@@ -11,7 +11,7 @@ Three strategies exist:
   source snapshot after every run.
 - :class:`AccumulateByRun` — accumulate rows stamped by ``run_id`` /
   ``load_date`` plus optional ``execution_id``; a re-driven logical run is
-  idempotent via delete-by-logical-run then insert (ADR-0006).
+  idempotent via delete-by-logical-run then insert.
 - :class:`UpsertStrategy` — merge incoming rows into the target by a declared
   key set: matching keys are replaced, new keys are inserted, unmatched target
   rows are preserved.

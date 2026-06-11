@@ -1,4 +1,4 @@
-"""The opt-in ``describe()`` protocol (issue #145).
+"""The opt-in ``describe()`` protocol.
 
 Components render their own safe plan summary; the builder never reflects over
 their attributes. These tests pin the shared ``render``/``redact_url`` helpers

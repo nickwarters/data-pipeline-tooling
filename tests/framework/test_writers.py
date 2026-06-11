@@ -34,7 +34,7 @@ def test_truncate_reload_writer_round_trips_a_dataset(tmp_path):
 
 
 def test_truncate_reload_writer_replaces_rather_than_accumulates(tmp_path):
-    # A current-state snapshot is full-refreshed each run (ADR-0006): a second
+    # A current-state snapshot is full-refreshed each run: a second
     # write replaces the first rather than appending.
     dataset = CsvReader(FIXTURE).read()
     db = tmp_path / "raw.db"
@@ -47,7 +47,7 @@ def test_truncate_reload_writer_replaces_rather_than_accumulates(tmp_path):
 
 
 def test_connection_factory_sets_busy_timeout(tmp_path):
-    # The single connection factory (ADR-0001) sets a busy_timeout so read-only
+    # The single connection factory sets a busy_timeout so read-only
     # clients ride out the writer's in-place commits instead of erroring. Both
     # the Store and Writers open connections through here.
     con = connect(tmp_path / "raw.db", busy_timeout_ms=7000)
@@ -127,7 +127,7 @@ def test_file_writer_accumulate_by_run_replaces_only_that_run(tmp_path):
 
 def test_accumulate_by_run_writer_keeps_each_run(tmp_path):
     # Gold accumulates: each run's rows are retained and stamped run_id /
-    # load_date (ADR-0006). Two distinct runs land both sets.
+    # load_date. Two distinct runs land both sets.
     dataset = CsvReader(FIXTURE).read()
     db = tmp_path / "gold.db"
 
@@ -142,7 +142,7 @@ def test_accumulate_by_run_writer_keeps_each_run(tmp_path):
 
 def test_accumulate_by_run_writer_is_idempotent_per_run(tmp_path):
     # Re-driving the same run replaces only that run's rows (delete-by-run then
-    # insert — ADR-0006), so a re-run does not duplicate.
+    # insert — ), so a re-run does not duplicate.
     dataset = CsvReader(FIXTURE).read()
     db = tmp_path / "gold.db"
     writer = AccumulateByRunWriter(db, "selection_pool", "r1", "2026-05-29")
@@ -154,7 +154,7 @@ def test_accumulate_by_run_writer_is_idempotent_per_run(tmp_path):
 
 
 def test_accumulate_by_run_writer_is_atomic_when_the_write_fails(tmp_path):
-    # The layer write is a single SQLite transaction (ADR-0007): gold's
+    # The layer write is a single SQLite transaction: gold's
     # delete-by-run then insert is all-or-nothing. If the insert fails, the
     # delete must roll back so a re-driven run never half-wipes prior rows.
     db = tmp_path / "gold.db"

@@ -1,9 +1,9 @@
-"""Operator CLI for common pipeline tasks (issue #99).
+"""Operator CLI for common pipeline tasks.
 
 A small command surface so operators do not need to write wrapper scripts to run
 pipelines or inspect their history. It sits on top of the public ``framework.run``
-orchestration (``PipelineRunner``) and the ``RunRegistry`` / ``RunLog``
-observability seam — everything stays local SQLite + JSONL, no external services.
+orchestration (``PipelineRunner``), ``RunRegistry``, and ``RunLog``. Everything
+stays local SQLite + JSONL, with no external services.
 
 Run from the repository root so the import-only ``framework`` package resolves::
 

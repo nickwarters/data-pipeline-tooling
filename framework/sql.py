@@ -6,7 +6,7 @@ statement text. This module is the one choke point that turns an identifier into
 a safe SQL token: it double-quotes the name (so spaces, hyphens, and reserved
 words are legal) and doubles any embedded quote (so a name can neither break out
 of the quoting nor inject SQL). Every f-string interpolation of a table or column
-name across the SQLite seam goes through :func:`quote_identifier` (issue #138).
+name across the SQLite seam goes through :func:`quote_identifier`.
 """
 
 from __future__ import annotations

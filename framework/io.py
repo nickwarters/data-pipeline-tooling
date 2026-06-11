@@ -48,9 +48,7 @@ from framework.writers import (
 )
 
 __all__ = [
-    # The carrier
     "Dataset",
-    # Sources
     "Reader",
     "DatasetReader",
     "CsvReader",
@@ -59,7 +57,6 @@ __all__ = [
     "SqliteReader",
     "SasReader",
     "SharePointReader",
-    # Sinks
     "Writer",
     "CsvWriter",
     "ExcelWriter",
@@ -68,11 +65,9 @@ __all__ = [
     "AccumulateByRunWriter",
     "QuarantineWriter",
     "SharePointWriter",
-    # Targeted retry at the I/O edges (issue #87)
     "RetryPolicy",
     "RetryingReader",
     "RetryingWriter",
-    # Stores + the medallion layers
     "Store",
     "StoreCatalog",
     "StoreBackend",
@@ -81,10 +76,8 @@ __all__ = [
     "RAW",
     "SILVER",
     "GOLD",
-    # Load strategies (owned by the Writer)
     "Refresh",
     "AccumulateByRun",
     "UpsertStrategy",
-    # Concrete upsert writer (exposed for direct construction outside Store)
     "SqliteUpsertWriter",
 ]

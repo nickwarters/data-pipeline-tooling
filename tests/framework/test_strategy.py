@@ -26,9 +26,6 @@ def test_accumulate_by_run_rejects_empty_load_date():
         AccumulateByRun(run_id="r1", load_date="")
 
 
-# --- UpsertStrategy ---
-
-
 def test_upsert_strategy_normalises_bare_string_to_single_element_tuple():
     s = UpsertStrategy("case_id")
     assert s.key_columns == ("case_id",)

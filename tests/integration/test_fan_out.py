@@ -1,4 +1,4 @@
-"""Fan-out: one wide feed → Cases table + Detail Table (issue #39, ADR-0009).
+"""Fan-out: one wide feed -> Cases table + Detail Table.
 
 These tests verify the fan-out pattern end-to-end: a shared raw table is read
 by two independent single-table pipelines, each projecting only its columns,
@@ -17,7 +17,7 @@ from framework.strategy import AccumulateByRun, Refresh
 from tests._schema_fixtures import LandedCase
 
 # One Case Type owns identity for the wide feed; the Cases and Detail builders
-# both read it, so case_id matches with no cross-pipeline join (ADR-0009).
+# both read it, so case_id matches with no cross-pipeline join.
 _WIDE_CASES = CaseType(name="wide_cases", schema=LandedCase, natural_key=("case_ref",))
 
 PRODUCT_COLS = [f"product_{i}" for i in range(1, 4)]  # keep small for tests
@@ -43,14 +43,9 @@ def _write_wide_raw(store: Store, run_id: str) -> None:
     )
 
 
-# ---------------------------------------------------------------------------
-# detail_ingest_silver_to_gold factory
-# ---------------------------------------------------------------------------
-
-
 def test_detail_silver_to_gold_produces_one_row_per_product(tmp_path):
     # Verifies the factory: reads projected silver (case_ref + products), derives
-    # case_id, unpivots wide→long, writes Refresh to gold.
+    # case_id, unpivots wide to long, writes Refresh to gold.
     store = Store(tmp_path)
     # Seed the silver table (already-projected product columns + natural key)
     store.writer("silver", "products", Refresh()).write(
@@ -86,8 +81,8 @@ def test_detail_silver_to_gold_produces_one_row_per_product(tmp_path):
 
 
 def test_detail_case_id_matches_case_id_derived_independently(tmp_path):
-    # ADR-0009: the Detail Table's case_id is derived from the same natural_key
-    # under the same namespace as the Case table — no cross-pipeline join needed.
+    # The Detail Table's case_id is derived from the same natural_key under the
+    # same namespace as the Case table; no cross-pipeline join is needed.
     store = Store(tmp_path)
     # Seed case silver (needs load_date for LatestPerKey in ingest_silver_to_gold)
     store.writer("silver", "cases", Refresh()).write(
@@ -102,12 +97,10 @@ def test_detail_case_id_matches_case_id_derived_independently(tmp_path):
         )
     )
 
-    # Build cases gold (case_id derived independently)
     ingest_silver_to_gold(
         store, _WIDE_CASES, "cases"
     ).run()
 
-    # Build products gold (case_id derived independently — same namespace + key)
     detail_ingest_silver_to_gold(
         store,
         _WIDE_CASES,
@@ -123,31 +116,19 @@ def test_detail_case_id_matches_case_id_derived_independently(tmp_path):
     cases_gold = store.reader("gold", "cases").read().to_pandas()
     products_gold = store.reader("gold", "products").read().to_pandas()
 
-    # The case_id in products must equal the case_id in cases for the same case_ref
     assert len(cases_gold) == 1
     assert len(products_gold) == 1  # only widget; None rows dropped
     assert cases_gold.iloc[0]["case_id"] == products_gold.iloc[0]["case_id"]
 
 
-# ---------------------------------------------------------------------------
-# End-to-end fan-out acceptance (ADR-0009 shape)
-# ---------------------------------------------------------------------------
-
-
 def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path):
-    # Acceptance (ADR-0009): one wide feed → shared raw table → N independent
-    # single-table pipelines, each projecting its own columns, sharing one
-    # normalisation Processor instance, landing current-state gold.
     store = Store(tmp_path / "subject")
     run_id = "2026-06-01"
 
-    # ---- Seed shared raw (the wide feed — column case_ref_no normalised by the shared processor) ----
     _write_wide_raw(store, run_id)
 
-    # ---- Shared normalisation processor (defined once, used by both pipelines) ----
     normalise = Rename({"case_ref_no": "case_ref"})
 
-    # ---- Cases pipeline: raw → silver (case columns only) ----
     (
         Pipeline("cases", store.reader("raw", "wide_cases"))
         .with_processor(Filter(lambda row, rid=run_id: row["run_id"] == rid))
@@ -161,7 +142,6 @@ def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path
         store, _WIDE_CASES, "cases"
     ).run()
 
-    # ---- Products pipeline: raw → silver (product columns only) ----
     (
         Pipeline("products", store.reader("raw", "wide_cases"))
         .with_processor(Filter(lambda row, rid=run_id: row["run_id"] == rid))
@@ -186,21 +166,14 @@ def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path
     cases_gold = store.reader("gold", "cases").read().to_pandas()
     products_gold = store.reader("gold", "products").read().to_pandas()
 
-    # 2 cases in gold, one row each
     assert len(cases_gold) == 2
 
     # c1 has product_1=widget, product_2=doodad; c2 has product_1=gadget
     # product_2 for c2 and product_3 for both are None → dropped
     assert len(products_gold) == 3
 
-    # All product rows link back to a known case_id
     known_case_ids = set(cases_gold["case_id"])
     assert set(products_gold["case_id"]).issubset(known_case_ids)
-
-
-# ---------------------------------------------------------------------------
-# Demo pipeline
-# ---------------------------------------------------------------------------
 
 
 def test_demo_fan_out_runs_end_to_end(tmp_path):
@@ -219,7 +192,6 @@ def test_demo_fan_out_runs_end_to_end(tmp_path):
     # c1:2 + c2:1 + c3:3 + c4:1 = 7 non-empty product slots across 4 cases
     assert len(products) == 7
     assert set(products.columns) >= {"case_id", "product_slot", "product_name"}
-    # All product rows link to a valid case
     assert set(products["case_id"]).issubset(set(cases["case_id"]))
 
 

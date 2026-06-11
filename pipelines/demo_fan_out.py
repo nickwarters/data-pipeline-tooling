@@ -1,4 +1,4 @@
-"""Fan-out demo: one wide feed → Cases table + Detail Table (issue #39, ADR-0009).
+"""Fan-out demo: one wide feed -> Cases table + Detail Table.
 
 Shows how a single wide ingest feed is fanned into two independent single-table
 pipelines over the shared raw table:
@@ -58,9 +58,9 @@ class CaseSchema:
 SUBJECT = "wide_cases"
 RUN_ID = "2026-05-29"
 
-# One Case Type owns the identity contract for this wide feed; both the Cases
-# pipeline and the Products Detail-Table pipeline read its namespace + natural
-# key, so they derive the *same* case_id with no cross-pipeline join (ADR-0009).
+# One Case Type owns the identity contract for this wide feed; both pipelines
+# read its namespace + natural key, so they derive the same case_id without a
+# cross-pipeline join.
 WIDE_CASES = CaseType(name=SUBJECT, schema=CaseSchema, natural_key=("case_ref",))
 
 
@@ -68,7 +68,6 @@ def main(target_dir: str) -> None:
     sample = Path(__file__).parent / "sample_data" / "wide_cases.csv"
     store = StoreCatalog(target_dir).store(SUBJECT)
 
-    # 1. Land the wide CSV into a shared raw table (all columns, accumulated).
     Pipeline(SUBJECT, CsvReader(sample)).write_to(
         store.writer(RAW, SUBJECT, AccumulateByRun(RUN_ID, RUN_ID))
     ).run()
@@ -77,7 +76,6 @@ def main(target_dir: str) -> None:
     # it to the canonical `case_ref` (defined once, reused below).
     normalise = Rename({"case_ref_no": "case_ref"})
 
-    # 2a. Cases pipeline: raw → silver (case columns only).
     (
         Pipeline("cases", store.reader(RAW, SUBJECT))
         .with_processor(Filter(lambda row, rid=RUN_ID: row["run_id"] == rid))
@@ -89,10 +87,8 @@ def main(target_dir: str) -> None:
         .run()
     )
 
-    # 2b. Cases gold: DeriveKey → LatestPerKey → UniqueValidator → Refresh.
     ingest_silver_to_gold(store, WIDE_CASES, "cases").run()
 
-    # 3a. Products pipeline: raw → silver (product columns + natural key only).
     (
         Pipeline("case_products", store.reader(RAW, SUBJECT))
         .with_processor(Filter(lambda row, rid=RUN_ID: row["run_id"] == rid))
@@ -102,8 +98,8 @@ def main(target_dir: str) -> None:
         .run()
     )
 
-    # 3b. Products gold: DeriveKey → Unpivot → Refresh. Same WIDE_CASES Case Type
-    #     as the Cases pipeline, so case_id matches without a cross-pipeline join.
+    # The same Case Type is used here, so product rows carry case_ids that match
+    # the Cases gold table without joining back to it.
     detail_ingest_silver_to_gold(
         store,
         WIDE_CASES,

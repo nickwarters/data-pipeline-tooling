@@ -1,17 +1,15 @@
-"""The run registry — the consumer for the structured JSONL a ``RunLog`` emits.
+"""The run registry: a query store for structured ``RunLog`` records.
 
 A ``RunLog`` writes one JSON object per step plus a run summary to a ``.log``
-file, all sharing a ``run_id`` (ADR-0007, [run-log-format.md]). That file is the
-**seam a run-registry ingests** (ADR-0005); this module is that consumer. It
-loads the records into its own queryable SQLite store so operators can answer
+file, all sharing a ``run_id``. This module loads those records into its own
+queryable SQLite store so operators can answer
 "did last night's Ingest for Case Type B succeed, how many rows, did anything
 warn?" without grepping free text.
 
 It is a *query* store, not a ``Dataset`` carrier, so it stays stdlib-only
 (``json`` + ``sqlite3``) and never touches pandas. It opens through the shared
-``connect`` factory in ``framework.connection`` — the single place SQLite is
-configured (busy-timeout, rollback journal over a share — ADR-0001) — and the
-single-writer rule holds for its one file like any other medallion db.
+``connect`` factory in ``framework.connection`` so SQLite settings stay
+centralized.
 """
 
 from __future__ import annotations
@@ -24,12 +22,11 @@ from framework.connection import connect
 
 
 class RunRegistry:
-    """A queryable SQLite store of ingested RunLog records (issue #52)."""
+    """A queryable SQLite store of ingested RunLog records."""
 
     def __init__(
         self, db_path: str | os.PathLike[str], busy_timeout_ms: int = 5000
     ) -> None:
-        # Path keeps separators OS-agnostic across Windows and macOS.
         self._db_path = Path(db_path)
         self._busy_timeout_ms = busy_timeout_ms
 
@@ -123,8 +120,7 @@ class RunRegistry:
 
         Only the ``run`` summary record is returned — the operator's headline row
         per run (overall status, totals, aggregated warn-hits). ``pipeline`` and
-        ``status`` narrow the result; ordering is by emit ``timestamp`` (AC #2,
-        "by pipeline, status, and time").
+        ``status`` narrow the result; ordering is by emit ``timestamp``.
         """
         clauses = ["step = 'run'"]
         params: list[object] = []
@@ -140,12 +136,10 @@ class RunRegistry:
     def runs_that_warned(self) -> list[dict]:
         """Run summaries that tolerated a warn-severity breach, oldest first.
 
-        A ``warn`` is the explicit escape hatch (ADR-0007) and the home of a
-        schema-drift warning (ADR-0008): the run stays ``ok`` but its message is
-        carried on the summary's ``warn_hits``. Surfacing these is "runs that
-        warned" (AC #2) and the schema-drift surfacing (AC #6) — the empty
-        ``[]`` is stored as the literal JSON text, so a warned run is one whose
-        ``warn_hits`` column is neither null nor ``'[]'``.
+        A warn-severity breach keeps the run ``ok`` but carries its message on
+        the summary's ``warn_hits``. The empty ``[]`` is stored as literal JSON
+        text, so a warned run is one whose ``warn_hits`` column is neither null
+        nor ``'[]'``.
         """
         return self._select(
             "WHERE step = 'run' AND warn_hits IS NOT NULL AND warn_hits != '[]' "
@@ -158,7 +152,7 @@ class RunRegistry:
 
         "Latest" is by emit ``timestamp`` (``rowid`` breaks an exact tie), so the
         answer to "did last night's run for pipeline X succeed?" is a single row
-        per X (AC #2).
+        per X.
         """
         return self._select(
             """
@@ -178,12 +172,12 @@ class RunRegistry:
     ) -> list[int]:
         """Read-step volumes of recent *successful* runs of ``pipeline``, newest first.
 
-        The baseline source for the volume-anomaly guardrail (#54): the row count
-        each of the last ``limit`` runs read, most-recent-first. Only runs whose
-        summary closed ``ok`` count — an aborted run (including one this guardrail
-        itself tripped) must not poison the baseline it derives. ``step`` selects
-        which step's ``rows_out`` is the feed's "volume"; it defaults to ``read``
-        (the just-ingested source count, before any processing).
+        The baseline source for volume checks: the row count each of the last
+        ``limit`` runs read, most-recent-first. Only runs whose summary closed
+        ``ok`` count — an aborted run must not poison the baseline it derives.
+        ``step`` selects which step's ``rows_out`` is the feed's "volume"; it
+        defaults to ``read`` (the just-ingested source count, before any
+        processing).
         """
         con = self._connect()
         try:

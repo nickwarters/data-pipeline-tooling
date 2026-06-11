@@ -1,4 +1,4 @@
-"""Row-level quarantine — partition value-rule breaches from good rows (issue #50).
+"""Row-level quarantine: partition value-rule breaches from good rows.
 
 The abort-vs-quarantine boundary:
 - Structural breaches (missing columns, wrong dtypes) → still abort via ``SchemaValidator``.

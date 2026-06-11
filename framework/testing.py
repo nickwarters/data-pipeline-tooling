@@ -1,4 +1,4 @@
-"""Testing helpers for pipeline authors (issue #94).
+"""Testing helpers for pipeline authors.
 
 A small, test-only surface that makes a concrete pipeline script easy to test
 without hand-wiring temp directories, SQLite round-trips, or JSONL parsing. It
@@ -22,7 +22,7 @@ The helpers come in three pairs:
   file); :func:`read_run_log` parses an on-disk JSONL run-log file into the same
   record dicts.
 
-Everything stays behind the :class:`~framework.dataset.Dataset` seam (ADR-0002):
+Everything stays behind the :class:`~framework.dataset.Dataset` seam:
 helpers take and return plain Python row dicts, never a pandas frame.
 """
 
@@ -117,7 +117,7 @@ class RecordingRunLog(RunLog):
     Compose it with ``Pipeline(..., run_log=run_log)`` to assert a run's
     structured records without a file on disk. It inherits the base ``step``
     timing/abort behaviour (a raising step still records an ``error`` and
-    re-raises — ADR-0007), so capturing a validation failure is just running
+    re-raises), so capturing a validation failure is just running
     under ``pytest.raises`` and reading :attr:`errors` afterwards. Captured
     records share the on-disk JSONL shape, so :attr:`records` reads the same as
     :func:`read_run_log`.

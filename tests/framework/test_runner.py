@@ -180,7 +180,7 @@ def test_runner_context_correlates_logs_registry_and_accumulated_rows(tmp_path):
 def test_runner_redrives_a_business_run_under_an_explicit_logical_run_id(tmp_path):
     # Re-driving a business run: two distinct executions sharing one
     # logical_run_id must replace the same rows (idempotent), each traceable by
-    # its own execution_id (#77, ADR-0006).
+    # its own execution_id.
     runner = PipelineRunner()
 
     def handler(context):

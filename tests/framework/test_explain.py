@@ -1,10 +1,9 @@
-"""Selection explainability — the per-Case trace of why a Case was/wasn't
-selected (issue #53).
+"""Selection explainability: the per-Case trace of why a Case was/wasn't selected.
 
 Selection's ``Filter``/``Score``/``JoinWith`` processors silently drop Cases
-(ADR-0002 plain-Python callables), leaving no trace of *why* an adviser's Case
-was or wasn't picked up — a governance gap management raised as a requirement.
-``.explain(writer, id_column=...)`` is the quarantine-style terminus (#50) that
+plain-Python callables, leaving no trace of *why* an adviser's Case was or
+wasn't picked up, a governance gap management raised as a requirement.
+``.explain(writer, id_column=...)`` is the quarantine-style terminus that
 routes a per-Case verdict to a sibling trace table: who was considered, what
 each scored, which gate excluded the rest, and how the survivors ranked.
 """
@@ -25,7 +24,7 @@ from framework.strategy import AccumulateByRun
 
 
 def _available() -> Dataset:
-    """Three available Cases entering Selection — one below the value gate."""
+    """Three available Cases entering Selection, one below the value gate."""
     return Dataset.from_pandas(
         pd.DataFrame(
             {
@@ -100,7 +99,7 @@ def test_score_is_retained_for_every_considered_case_including_excluded(tmp_path
     (
         Pipeline("selection", DatasetReader(_available()))
         # Score the whole population first, *then* drop the low scorers — so the
-        # excluded Case's score must survive its exclusion (#53 AC2).
+        # excluded Case's score must survive its exclusion.
         .with_processor(Score("priority", lambda r: r["amount"] * 2))
         .with_processor(Filter(lambda r: r["amount"] >= 100, name="high-value"))
         .explain(
@@ -139,7 +138,7 @@ def test_trace_lands_in_a_sibling_table_stamped_with_run_id(tmp_path):
     trace_frame = store.reader("gold", "selection_trace").read().to_pandas()
     assert pool_refs == {"c1", "c2"}  # only survivors in the pool
     # Every considered Case is in the trace (selected + excluded), each stamped
-    # with the run that produced it (AC3 — per Case Type / run).
+    # with the run that produced it (— per Case Type / run).
     assert set(trace_frame["case_ref"]) == {"c1", "c2", "c3"}
     assert set(trace_frame["run_id"]) == {"run-1"}
     assert set(trace_frame["load_date"]) == {"2026-05-29"}
@@ -159,7 +158,7 @@ def test_case_dropped_by_an_inner_join_is_explained_not_silently_absent(tmp_path
     store = Store(tmp_path)
     strategy = AccumulateByRun("run-1", "2026-05-29")
     # The adviser hierarchy reference covers only c1 and c2 — an inner join drops
-    # c3, which AC5 says must be *explained*, not silently absent.
+    # c3, which says must be *explained*, not silently absent.
     advisers = _StaticFeed(
         Dataset.from_pandas(
             pd.DataFrame({"case_ref": ["c1", "c2"], "adviser": ["a1", "a2"]})
@@ -224,7 +223,7 @@ def test_run_log_records_an_explain_step_with_governance_counts(tmp_path):
 
     records = [json.loads(line) for line in log_path.read_text().splitlines()]
     explain = next(r for r in records if r["step"] == "explain")
-    # Considered 3, selected 2, excluded 1 — the governance summary (AC6).
+    # Considered 3, selected 2, excluded 1 — the governance summary.
     assert explain["rows_in"] == 3
     assert explain["rows_out"] == 2
     assert explain["rows_excluded"] == 1

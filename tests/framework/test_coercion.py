@@ -1,4 +1,4 @@
-"""Schema-driven coercion between raw and silver (issue #23, ADR-0008).
+"""Schema-driven coercion between raw and silver.
 
 ``SchemaCoercion`` is the processor that repairs the representation raw loses to
 storage: types that don't survive a SQLite round-trip (dates land as text,
@@ -66,7 +66,7 @@ def test_coerces_a_declared_bool_from_true_false_text():
 
 
 def test_leaves_round_trip_safe_and_undeclared_columns_untouched():
-    # Scope (ADR-0008): the coercer repairs only what storage loses. str/int/float
+    # Scope: the coercer repairs only what storage loses. str/int/float
     # survive a SQLite round-trip, so they pass through unchanged and stay the
     # validator's gate; columns the schema doesn't declare are left alone too.
     raw = pd.DataFrame(
@@ -88,8 +88,7 @@ def test_leaves_round_trip_safe_and_undeclared_columns_untouched():
 
 
 def test_unparseable_date_fails_fast_with_a_located_message():
-    # A value the coercer cannot parse aborts at the coerce step (ADR-0007
-    # fail-fast) with a message naming the column, so the breach is diagnosable.
+    # A value the coercer cannot parse aborts at the coerce step with a message naming the column, so the breach is diagnosable.
     raw = pd.DataFrame({"case_ref": ["c1"], "opened": ["not-a-date"]})
     dataset = Dataset.from_pandas(raw)
 

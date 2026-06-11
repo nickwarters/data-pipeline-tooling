@@ -1,23 +1,22 @@
-"""Processors — engine-confined transforms over a ``Dataset`` mid-pipeline.
+"""Processors: engine-confined transforms over a ``Dataset`` mid-pipeline.
 
-A ``Processor`` reshapes a feed's data between the read and the post-validators
-(issue #23): it takes the bulk-tier dataset and returns a transformed one. Unlike
-the structural validators it is **engine-confined** — it reaches the backing
-frame via ``to_pandas``/``from_pandas`` exactly as a Reader/Writer does
-(ADR-0002), because a transform needs the engine's vectorised operations.
+A ``Processor`` reshapes a feed's data between the read and the post-validators:
+it takes the bulk-tier dataset and returns a transformed one. Unlike the
+structural validators it is **engine-confined**: it reaches the backing frame via
+``to_pandas``/``from_pandas`` because a transform needs the engine's vectorised
+operations.
 
 The builder attaches processors with :meth:`Pipeline.with_processor` and runs
 them as the ``process`` step. A processor has no severity: a transform either
-applies or it can't, so a failure is always fail-fast (ADR-0007) — it raises and
-the run aborts.
+applies or it can't, so a failure is always fail-fast.
 
 Two families of concrete processor live in the framework. The schema-driven
 ``SchemaCoercion`` (in :mod:`framework.schema`) is the write-side companion of
-``SchemaValidator`` that repairs the representation raw loses to storage (#23).
+``SchemaValidator`` that repairs the representation raw loses to storage.
 This module holds reusable transforms: ``Filter`` and ``Score`` carry
-plain-Python row callables (the business rule never names the engine —
-ADR-0002), ``Sort`` and ``Rename`` reshape the frame, ``JoinWith`` joins an
-explicit read-only dependency in Python, and ``AntiJoinWith`` excludes rows
+plain-Python row callables, ``Sort`` and ``Rename`` reshape the frame,
+``JoinWith`` joins an explicit read-only dependency in Python, and
+``AntiJoinWith`` excludes rows
 whose key is present in a read-only dependency.
 """
 
@@ -46,10 +45,9 @@ class Processor(Protocol):
         ...
 
 
-# Business rules (filter/score) are expressed as plain Python callables over a
-# row mapping — never the engine (ADR-0002). The
-# processor applies them row-wise behind the Dataset seam; the caller's rule
-# stays pure Python and pandas-free.
+# Business rules are expressed as plain Python callables over a row mapping; the
+# processor applies them row-wise behind the Dataset seam so the caller's rule
+# stays pandas-free.
 RowPredicate = Callable[[Mapping[str, Any]], bool]
 RowScorer = Callable[[Mapping[str, Any]], Any]
 
@@ -58,8 +56,8 @@ class Filter:
     """Keep only the rows for which a plain-Python row predicate is true.
 
     ``predicate`` is a callable over a row as a ``{column: value}`` mapping, so
-    business rules are pure Python (ADR-0002) and never name the engine. Applied
-    row-wise behind the Dataset seam.
+    business rules are pure Python and never name the engine. Applied row-wise
+    behind the Dataset seam.
 
     An optional ``name`` labels the gate for row-level explainability. Unnamed
     filters still work; they trace under a generic ``"filter"`` label.
@@ -72,7 +70,7 @@ class Filter:
         self.trace_name = name or "filter"
 
     def process(self, dataset: Dataset) -> Dataset:
-        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
+        frame = dataset.to_pandas()
         kept = frame.loc[frame.apply(lambda row: self._predicate(row), axis=1)]
         return Dataset.from_pandas(kept)
 
@@ -85,8 +83,7 @@ class Score:
 
     ``scorer`` is a callable over a row mapping returning that row's value for
     ``column`` (a new column, or an overwrite of an existing one). Pure Python
-    (ADR-0002), applied row-wise behind the seam; every other column is left
-    untouched.
+    and is applied row-wise behind the seam; every other column is left untouched.
 
     Its trace metadata lets row-level explainability snapshot each considered
     row's score before later gates may exclude it.
@@ -100,7 +97,7 @@ class Score:
         self.trace_name = column
 
     def process(self, dataset: Dataset) -> Dataset:
-        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
+        frame = dataset.to_pandas()
         frame[self._column] = frame.apply(lambda row: self._scorer(row), axis=1)
         return Dataset.from_pandas(frame)
 
@@ -122,7 +119,7 @@ class Stamp:
         self._value = value
 
     def process(self, dataset: Dataset) -> Dataset:
-        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
+        frame = dataset.to_pandas()
         frame[self._column] = self._value
         return Dataset.from_pandas(frame)
 
@@ -147,7 +144,7 @@ class Sort:
         self._ascending = ascending
 
     def process(self, dataset: Dataset) -> Dataset:
-        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
+        frame = dataset.to_pandas()
         ordered = frame.sort_values(
             by=self._by, ascending=self._ascending
         ).reset_index(drop=True)
@@ -169,7 +166,7 @@ class Rename:
         self._mapping = dict(mapping)
 
     def process(self, dataset: Dataset) -> Dataset:
-        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
+        frame = dataset.to_pandas()
         return Dataset.from_pandas(frame.rename(columns=self._mapping))
 
     def describe(self) -> str:
@@ -330,7 +327,7 @@ class LatestPerKey:
         self._by = by
 
     def process(self, dataset: Dataset) -> Dataset:
-        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
+        frame = dataset.to_pandas()
         missing = [c for c in self._key + [self._by] if c not in frame.columns]
         if missing:
             raise ValueError(
@@ -351,9 +348,8 @@ class LatestPerKey:
 class SelectColumns:
     """Keep only the listed columns from the dataset; drop everything else.
 
-    The projection seam for fan-out pipelines (ADR-0009): each single-table
-    pipeline over a shared raw table reads only the columns it needs, keeping
-    its schema narrow over a potentially wide feed.
+    Each single-table pipeline over a shared raw table reads only the columns it
+    needs, keeping its schema narrow over a potentially wide feed.
 
     Raises ``ValueError`` if any requested column is absent from the dataset,
     so a misconfigured projection is caught at run time rather than silently
@@ -364,7 +360,7 @@ class SelectColumns:
         self._columns = list(columns)
 
     def process(self, dataset: Dataset) -> Dataset:
-        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
+        frame = dataset.to_pandas()
         missing = [c for c in self._columns if c not in frame.columns]
         if missing:
             raise ValueError(
@@ -380,9 +376,9 @@ class SelectColumns:
 class DropColumns:
     """Drop the listed columns from the dataset; keep everything else.
 
-    The exclusion form of the projection seam (ADR-0009) and the complement of
-    :class:`SelectColumns`: where ``SelectColumns`` names the columns to keep,
-    ``DropColumns`` names the columns to remove. It is the ergonomic choice for a
+    The complement of :class:`SelectColumns`: where ``SelectColumns`` names the
+    columns to keep, ``DropColumns`` names the columns to remove. It is the
+    ergonomic choice for a
     wide feed that wants *almost* every column — strip a couple of internal /
     scratch columns off a wide raw table without enumerating the many it keeps.
     The surviving columns keep their original order.
@@ -395,7 +391,7 @@ class DropColumns:
         self._columns = list(columns)
 
     def process(self, dataset: Dataset) -> Dataset:
-        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
+        frame = dataset.to_pandas()
         missing = [c for c in self._columns if c not in frame.columns]
         if missing:
             raise ValueError(
@@ -435,7 +431,7 @@ class Unpivot:
         self._drop_empty = drop_empty
 
     def process(self, dataset: Dataset) -> Dataset:
-        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
+        frame = dataset.to_pandas()
         melted = frame.melt(
             id_vars=self._id_vars,
             value_vars=self._value_vars,
@@ -487,7 +483,7 @@ class DeriveKey:
         self._natural_key = list(natural_key)
 
     def process(self, dataset: Dataset) -> Dataset:
-        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
+        frame = dataset.to_pandas()
         frame[self._into] = frame.apply(
             lambda row: str(uuid.uuid5(
                 self._namespace, "|".join(str(row[col]) for col in self._natural_key)
@@ -569,7 +565,7 @@ class TopNPerGroup:
         return ordered.head(self._n)
 
     def process(self, dataset: Dataset) -> Dataset:
-        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
+        frame = dataset.to_pandas()
         return Dataset.from_pandas(_cut_per_group(frame, self._key, self._select))
 
     def describe(self) -> str:
@@ -583,23 +579,23 @@ class TopNPerGroup:
         )
 
 
-# A constant default seed (ADR-0010): the sampler is a *pure* function of input
-# state and this seed — never derived from run_id or the clock. Run-to-run
-# variation comes from the upstream population shrinking, not from the seed.
+# The sampler is a pure function of input state and this seed, never run_id or
+# the clock. Run-to-run variation comes from the upstream population shrinking,
+# not from the seed.
 _DEFAULT_SAMPLE_SEED = 0
 
 
 class SamplePerGroup:
     """Draw at most ``n`` rows per group by a seeded, reproducible sample.
 
-    A **pure function** of (input dataset, seed) — ADR-0010. ``key`` is one or
-    more group columns; ``seed`` a fixed, configurable constant (*not* ``run_id``
-    or the clock); ``order`` the column that puts each group into a canonical
-    order before the draw.
+    A **pure function** of (input dataset, seed). ``key`` is one or more group
+    columns; ``seed`` a fixed, configurable constant (*not* ``run_id`` or the
+    clock); ``order`` the column that puts each group into a canonical order
+    before the draw.
 
     Each group is drawn independently via a per-group seed derived from
     ``hash(seed, group_key)`` using stdlib hashing (``hashlib`` — stable across
-    Windows/macOS, unlike the salted builtin ``hash``; mirrors ADR-0009). Because
+    Windows/macOS, unlike the salted builtin ``hash``). Because
     the group is ordered by ``order`` first and the draw keys only off the group
     identity, the result is **invariant to incoming row/group order**: the same
     set in with the same seed yields the same sample out.
@@ -642,7 +638,7 @@ class SamplePerGroup:
         return ordered.iloc[chosen]
 
     def process(self, dataset: Dataset) -> Dataset:
-        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
+        frame = dataset.to_pandas()
         return Dataset.from_pandas(_cut_per_group(frame, self._key, self._select))
 
     def describe(self) -> str:

@@ -11,7 +11,7 @@ from framework.validators import ValidationError
 
 @dataclass
 class CaseA:
-    """A Case Type schema: annotations are the contract (ADR-0008)."""
+    """A Case Type schema: annotations are the contract."""
 
     case_ref: str
     opened: date
@@ -40,7 +40,7 @@ def test_schema_validator_passes_when_columns_and_dtypes_match():
 
 def test_schema_validator_locates_a_missing_declared_column():
     # A declared column absent from the frame fails with a message naming it,
-    # so the breach is diagnosable at the boundary (ADR-0008).
+    # so the breach is diagnosable at the boundary.
     frame = _silver_frame().drop(columns=["case_ref"])
     dataset = Dataset.from_pandas(frame)
 

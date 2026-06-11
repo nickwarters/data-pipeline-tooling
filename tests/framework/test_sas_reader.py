@@ -11,7 +11,7 @@ from framework.writers import SqliteTruncateReloadWriter
 def landing(tmp_path) -> Path:
     # A local landing directory standing in for the scp destination: the SAS
     # box's output already copied back as a file. The reader is exercised
-    # against this fixture — no SSH, no SAS, no network (ADR-0004).
+    # against this fixture — no SSH, no SAS, no network.
     dest = tmp_path / "landing"
     dest.mkdir()
     (dest / "cases.csv").write_text("case_id,advisor\n1,a\n2,b\n3,c\n")
@@ -22,7 +22,7 @@ def test_reads_landed_output_file_into_a_dataset(landing):
     dataset = SasReader("run_cases.sas", "*.csv", landing).read()
 
     # Observed only through the Dataset's public surface — the test never
-    # touches pandas (ADR-0002 swappable engine seam).
+    # touches pandas.
     assert dataset.columns == ["case_id", "advisor"]
     assert len(dataset) == 3
 
@@ -41,7 +41,7 @@ class RecordingRunner:
 
 
 def test_runs_the_script_then_fetches_before_reading(landing):
-    # The shell/transfer is behind a swappable seam (AC4): a different runner
+    # The shell/transfer is behind a swappable seam: a different runner
     # drops in and observes that read() drives run -> fetch with the configured
     # script and glob, in that order.
     runner = RecordingRunner()

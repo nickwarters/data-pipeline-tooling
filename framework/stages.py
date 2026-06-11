@@ -4,9 +4,9 @@ A stage is one position-sensitive operation a caller composes into the middle of
 a run via ``.add_stage(...)`` (or the ``.with_processor`` / ``.checkpoint``
 shorthands). Stages are **specs, not executors**: each compiles to an internal
 :class:`~framework.pipeline_steps.PipelineStep` through ``to_pipeline_step()``,
-and ``.run()`` executes that one ordered step plan (ADR-0003 amendment) — so a
-stage's behaviour, timing, and row-trace observation live in its Step, with no
-second execution path. Stages stay inside one class-level ``Pipeline`` run:
+and ``.run()`` executes that one ordered step plan. A stage's behaviour, timing,
+and row-trace observation live in its Step, with no second execution path.
+Stages stay inside one class-level ``Pipeline`` run:
 ``Reader -> Dataset -> Stage* -> Writer``. The dataset->dataset *transform*
 extension point is :class:`~framework.processors.Processor`, not a custom Stage.
 """

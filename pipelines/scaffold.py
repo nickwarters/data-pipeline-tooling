@@ -1,4 +1,4 @@
-"""Scaffold a new feed from a template (issue #97).
+"""Scaffold a new feed from a template.
 
 Renders the runnable template under ``pipelines/_scaffold_template/`` into a new
 feed: the feed *code* (schema, an ingest pipeline CSV -> raw via the public
@@ -27,15 +27,12 @@ import re
 import sys
 from pathlib import Path
 
-# The placeholder tokens in the template: the feed slug and its PascalCase form.
-# Both are substituted in file contents and in file/directory names.
-_TEMPLATE_DIR = Path(__file__).parent / "_scaffold_template"
-# The Case Type ingest variant (--case-type, #155): a case-review-flavoured
-# template that declares the Case Type's identity contract and refines source ->
-# raw -> silver, stopping at silver (gold is the feed author's seam — #163).
-_TEMPLATE_DIR_CASE_TYPE = Path(__file__).parent / "_scaffold_template_case_type"
+# The placeholder tokens in the template: substituted in file contents and paths.
 _SLUG_TOKEN = "myfeed"
 _CLASS_TOKEN = "Myfeed"
+
+_TEMPLATE_DIR_CASE_TYPE = Path(__file__).parent / "_scaffold_template_case_type"
+_TEMPLATE_DIR = Path(__file__).parent / "_scaffold_template"
 
 # scaffold.py lives at ``pipelines/scaffold.py``, so its grandparent is the repo
 # root under which ``pipelines/`` and ``tests/`` sit.
@@ -98,10 +95,10 @@ def render(
     ``<root>/tests/pipelines/test_<feed>.py``. ``root`` is the repository root;
     it defaults to this repo (``_REPO_ROOT``), and tests pass a temporary one.
 
-    ``case_type`` selects the **Case Type ingest variant** (#155): the
-    case-review-flavoured template that additionally declares the Case Type's
-    identity contract (``case_type.py``) and refines source -> raw -> silver,
-    stopping at silver. The default renders the generic source -> raw feed.
+    ``case_type`` selects the case-review-flavoured template that declares the
+    Case Type's identity contract (``case_type.py``) and refines source -> raw
+    -> silver, stopping at silver. The default renders the generic source -> raw
+    feed.
 
     Raises ``ValueError`` for an invalid feed name and ``FileExistsError`` if any
     target already exists (pass ``force=True`` to overwrite in place).
@@ -157,7 +154,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--case-type",
         action="store_true",
         help=(
-            "render the Case Type ingest variant (#155): declares the Case "
+            "render the Case Type ingest variant: declares the Case "
             "Type's identity contract and refines source -> raw -> silver, "
             "stopping at silver (gold is yours to assemble)"
         ),

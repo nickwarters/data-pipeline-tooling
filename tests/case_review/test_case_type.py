@@ -7,7 +7,7 @@ from tests._schema_fixtures import LandedCase
 
 
 def test_case_type_derives_its_namespace_from_its_name():
-    # The identity contract (ADR-0009): the Case Type owns the UUID space its
+    # The identity contract: the Case Type owns the UUID space its
     # case_id derives under, computed deterministically from its name so each
     # Case Type has its own space without storing an opaque UUID by hand.
     case_type = CaseType(name="cases", schema=LandedCase, natural_key=("case_ref",))
@@ -22,7 +22,7 @@ def test_case_type_derives_its_namespace_from_its_name():
 def test_case_type_looks_up_a_variation_by_id():
     # A Case Type bundles its schema with its declarative Variations; the
     # variation(id) lookup is how Selection resolves "which Question Bank" for a
-    # run without a global CaseType config registry (ADR-0005; CONTEXT.md).
+    # run without a global CaseType config registry.
     case_type = CaseType(
         name="cases",
         schema=LandedCase,

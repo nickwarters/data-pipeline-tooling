@@ -1,4 +1,4 @@
-"""Public facade: shaping and checking a feed mid-pipeline.
+"""Public facade for shaping and checking a feed mid-pipeline.
 
 The stable import surface for everything that reshapes or gates a
 :class:`~framework.dataset.Dataset` between the read and the write: the
@@ -15,10 +15,8 @@ Import from here rather than the underlying modules::
 
     from framework.transform import Filter, Score, SchemaValidator, ColumnValidator
 
-The modules behind this facade (``framework.processors``, ``framework.schema``,
-``framework.validators``, ``framework.calendar``) are internal layout: re-exports
-here are the public contract, the submodule paths are not. See
-``docs/public-api.md``.
+The modules behind this facade are internal layout: re-exports here are the
+public contract, the submodule paths are not.
 """
 
 from framework.calendar import WorkingDayCalendar
@@ -65,7 +63,7 @@ from framework.validators import (
 )
 
 __all__ = [
-    # The transform seam + concrete processors
+    # Processors
     "Processor",
     "Filter",
     "Score",
@@ -83,7 +81,7 @@ __all__ = [
     "TopNPerGroup",
     "SamplePerGroup",
     "CoercionError",
-    # Structural validators
+    # Validators
     "Validator",
     "ValidationError",
     "ColumnValidator",
@@ -93,7 +91,7 @@ __all__ = [
     "RunHistory",
     "SchemaDriftValidator",
     "PriorColumns",
-    # The declared-schema contract + value rules
+    # Declared-schema contract and value rules
     "SchemaValidator",
     "SchemaCoercion",
     "ValueRule",
@@ -103,6 +101,6 @@ __all__ = [
     "Length",
     "Unique",
     "OneOf",
-    # Availability arithmetic (pure utility)
+    # Availability utility
     "WorkingDayCalendar",
 ]

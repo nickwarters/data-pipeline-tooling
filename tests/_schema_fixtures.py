@@ -33,7 +33,7 @@ class LandedCase:
 
 @dataclass
 class ActivityCase:
-    # The Case Type for the domain capstone (#11): an activity-dated Case with an
+    # The Case Type for the domain capstone: an activity-dated Case with an
     # adviser and an amount, so availability (a working-day window on
     # activity_date) and selection (filter/score on amount) both have something
     # to bite on. activity_date round-trips through SQLite as text, so the
@@ -48,7 +48,7 @@ class ActivityCase:
 class CoercedCase:
     # A schema whose declared types do NOT survive a SQLite round-trip: dates
     # land as text and booleans as 1/0 or TRUE/FALSE. Exercises the raw->silver
-    # coercion processor (#23) end-to-end ahead of the schema post-validator.
+    # coercion processor end-to-end ahead of the schema post-validator.
     case_ref: str
     opened: date
     active: bool
@@ -56,7 +56,7 @@ class CoercedCase:
 
 @dataclass
 class RuledCase:
-    # Value-level rules (#24) attached via Annotated on a module that uses
+    # Value-level rules attached via Annotated on a module that uses
     # `from __future__ import annotations`, so the rule-bearing hints arrive as
     # strings the validator must resolve with include_extras. The realistic
     # condition for the value-rule contract, mirroring DeferredCase for dtypes.

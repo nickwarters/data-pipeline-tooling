@@ -15,7 +15,7 @@ from framework.validators import ValidationError
 from tests._schema_fixtures import LandedCase, RuledCase
 
 # The Case Type owns identity now; its namespace derives from its name, so this
-# is the same UUID space the explicit _NS used to name (ADR-0009).
+# is the same UUID space the explicit _NS used to name.
 _CASES = CaseType(name="cases", schema=LandedCase, natural_key=("case_ref",))
 _NS = uuid.uuid5(uuid.NAMESPACE_DNS, "cases")
 
@@ -30,7 +30,7 @@ def _land_silver(store: Store, table: str, frame: pd.DataFrame, strategy=None) -
 
 def test_silver_to_gold_accumulates_stamped_by_run(tmp_path):
     # The builder reads the subject's silver table and accumulates it into gold,
-    # stamping each row with the run's run_id / load_date (ADR-0006).
+    # stamping each row with the run's run_id / load_date.
     store = Store(tmp_path)
     _land_silver(
         store,
@@ -51,7 +51,7 @@ def test_silver_to_gold_accumulates_stamped_by_run(tmp_path):
 
 def test_silver_to_gold_re_run_replaces_only_that_run(tmp_path):
     # Re-driving the same run_id through the builder is idempotent: delete-by-run
-    # then insert, so a re-run does not duplicate that run's rows (ADR-0006).
+    # then insert, so a re-run does not duplicate that run's rows.
     store = Store(tmp_path)
     _land_silver(
         store,
@@ -71,7 +71,7 @@ def test_silver_to_gold_re_run_replaces_only_that_run(tmp_path):
 
 def test_silver_to_gold_keeps_history_across_distinct_runs(tmp_path):
     # Distinct runs accumulate — gold is the audit trail of past selections, so a
-    # later run adds its rows rather than refreshing prior ones (ADR-0006). Here
+    # later run adds its rows rather than refreshing prior ones. Here
     # the silver snapshot itself changes between runs, as a real re-selection would.
     store = Store(tmp_path)
 
@@ -92,7 +92,7 @@ def test_silver_to_gold_keeps_history_across_distinct_runs(tmp_path):
 
 def test_silver_to_gold_enforces_schema_then_accumulates(tmp_path):
     # When a schema is supplied it is enforced as a post-validator on the data
-    # about to be written into gold (belt-and-braces, ADR-0008). Conforming
+    # about to be written into gold (belt-and-braces, ). Conforming
     # silver passes the check, so the run completes and the rows accumulate.
     store = Store(tmp_path)
     _land_silver(
@@ -116,7 +116,7 @@ def test_silver_to_gold_enforces_schema_then_accumulates(tmp_path):
 def test_silver_to_gold_aborts_at_the_gold_boundary_without_writing(tmp_path):
     # A schema breach in the data bound for gold (here: score as text, not int)
     # fails at the post-validate step with a located message — and because the
-    # run is fail-fast and atomic (ADR-0007), no gold.db is written.
+    # run is fail-fast and atomic, no gold.db is written.
     store = Store(tmp_path)
     _land_silver(
         store,
@@ -137,10 +137,10 @@ def test_silver_to_gold_aborts_at_the_gold_boundary_without_writing(tmp_path):
 
 
 def test_silver_to_gold_aborts_on_a_value_rule_breach_without_writing(tmp_path):
-    # Value-level rules (#24) enforce at the gold boundary on the same footing as
+    # Value-level rules enforce at the gold boundary on the same footing as
     # silver, via the same SchemaValidator post-validator: a breach (a case_ref
     # failing its 9-10 digit Pattern) aborts before the gold write — fail-fast and
-    # atomic (ADR-0007), so no gold.db is written.
+    # atomic, so no gold.db is written.
     store = Store(tmp_path)
     _land_silver(
         store,
@@ -191,7 +191,7 @@ def test_silver_to_gold_breach_leaves_prior_accumulation_intact(tmp_path):
 
 def test_gold_reader_rides_out_an_in_flight_writer_commit(tmp_path):
     # Read-only access to gold tolerates the single writer's in-place commits
-    # (ADR-0001): with a busy_timeout the reader waits out an exclusive lock
+    #: with a busy_timeout the reader waits out an exclusive lock
     # instead of erroring. Drive it by holding a real lock on gold.db while a
     # gold Store reader reads concurrently.
     store = Store(tmp_path)
@@ -235,11 +235,6 @@ def test_gold_reader_rides_out_an_in_flight_writer_commit(tmp_path):
     finally:
         release.set()
         writer.join(timeout=5)
-
-
-# ---------------------------------------------------------------------------
-# ingest_silver_to_gold — history-upstream / current-gold (ADR-0006 amendment)
-# ---------------------------------------------------------------------------
 
 
 def test_ingest_silver_to_gold_reduces_to_one_row_per_case(tmp_path):
@@ -331,8 +326,8 @@ def test_ingest_silver_to_gold_new_snapshot_updates_gold_to_current(tmp_path):
 
 
 def test_ingest_silver_to_gold_deterministic_case_id(tmp_path):
-    # case_id is a deterministic uuid5 — same natural key, same namespace, same
-    # id across runs and machines (ADR-0009).
+    # case_id is a deterministic uuid5: same natural key, same namespace, same
+    # id across runs and machines.
     store = Store(tmp_path)
     _land_silver(
         store, "cases",

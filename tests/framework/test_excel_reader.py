@@ -28,7 +28,7 @@ def test_read_returns_dataset_from_the_first_sheet(workbook):
     dataset = ExcelReader(workbook).read()
 
     # Observed only through the Dataset's public surface — the test never
-    # touches pandas (ADR-0002 swappable engine seam).
+    # touches pandas.
     assert dataset.columns == ["case_id", "advisor"]
     assert len(dataset) == 3
 

@@ -1,4 +1,4 @@
-"""Schema enforcement — the dataclass→{validator, coercer} adapter (ADR-0008).
+"""Schema enforcement: the dataclass-to-validator/coercer adapter.
 
 A Case Type's **schema** is declared as an ordinary dataclass whose annotations
 *are* the contract: each field is a column name and its declared Python type.
@@ -10,13 +10,12 @@ pandas knowledge this module owns:
   at a predictable place with a located message — before downstream logic touches
   the data.
 - ``SchemaCoercion`` *repairs* the representation raw loses to storage, casting
-  the round-trip-lossy declared types (dates, booleans) ahead of that validator
-  (the ``process`` step). It is the write-side companion of the validator (#23).
+  the round-trip-lossy declared types (dates, booleans) ahead of that validator.
 
 Unlike the structural checks in :mod:`framework.validators` (which read only the
 dataset's engine-agnostic shape), both inspect/transform column *values*, so they
 are **engine-confined**: they reach the backing frame via ``to_pandas()`` exactly
-as a Reader/Writer/processor does (ADR-0002).
+as a Reader/Writer/processor does.
 
 ``SchemaValidator`` also runs **field-level rules** attached via
 ``Annotated[type, Rule(...)]`` so the dataclass annotations stay the single
@@ -41,7 +40,7 @@ from framework.validators import ValidationError
 
 # Cap on how many offending values a breach message lists, so a column that is
 # wrong in thousands of rows still produces one readable located message rather
-# than dumping the frame (ADR-0007: a breach names the problem, not every row).
+# than dumping the frame.
 _SAMPLE_LIMIT = 5
 
 
@@ -52,7 +51,7 @@ class ValueRule(Protocol):
     Where the columns+dtypes contract checks a column's *shape*, a value rule
     checks its *contents* — format, length, uniqueness, membership. Rules are
     declared on the same Case Type dataclass (``Annotated[type, Rule(...)]``) so
-    the annotations stay the single source of truth (ADR-0008), and run on the
+    the annotations stay the single source of truth, and run on the
     same engine-confined seam as the dtype check: each is handed the column's
     pandas Series directly. A rule returns ``None`` when satisfied, else a short
     phrase describing the breach (the column name is prefixed by the validator).
@@ -67,7 +66,7 @@ class ValueRule(Protocol):
 
         Null values are always False — nullability is a separate concern.
         Used by the quarantine partitioner to identify which rows to route to
-        the reject table (issue #50).
+        the reject table.
         """
         ...
 
@@ -100,11 +99,9 @@ def _sample(values: "pd.Series") -> str:
 class Pattern:
     """Require every (non-null) value to fully match a regular expression.
 
-    The format check of the issue's worked example — an id that must be 9-10
-    numeric characters rejects letters and 11+ chars. The regex compiles at
-    construction so a malformed pattern fails where the schema is composed, not
-    mid-run (mirroring the validator's unsupported-dtype guard). Null values are
-    out of scope — nullability is a separate concern.
+    The regex compiles at construction so a malformed pattern fails where the
+    schema is composed, not mid-run. Null values are out of scope: nullability is
+    a separate concern.
     """
 
     def __init__(self, pattern: str) -> None:
@@ -173,9 +170,9 @@ class Unique:
     The field-annotation form of uniqueness, sitting beside the columns+dtypes
     contract. It complements :class:`~framework.validators.UniqueValidator`,
     which enforces the one-row-per-Case *grain* on a (possibly composite) key at
-    the gold boundary (ADR-0009); this rule states the expectation declaratively
-    on the schema field itself. Null values are out of scope, so repeated missing
-    values are not flagged as duplicates.
+    the gold boundary; this rule states the expectation declaratively on the
+    schema field itself. Null values are out of scope, so repeated missing values
+    are not flagged as duplicates.
     """
 
     def violating_mask(self, series: "pd.Series") -> "pd.Series":
@@ -222,8 +219,8 @@ class OneOf:
 
 # Python declared type -> (predicate over a pandas dtype, human label). The
 # mapping is the seam between the dataclass contract and the concrete engine; it
-# lives here, engine-confined, so the rest of the system keeps naming only
-# Python types. ``date``/``datetime`` both land as datetime64 (pandas has no
+# lives here so the rest of the system keeps naming only Python types.
+# ``date``/``datetime`` both land as datetime64 (pandas has no
 # pure-date dtype); ``str`` accepts object or the string dtype.
 _DTYPE_CHECKS: dict[type, tuple[Callable[[object], bool], str]] = {
     str: (pdt.is_string_dtype, "str"),
@@ -238,9 +235,8 @@ _DTYPE_CHECKS: dict[type, tuple[Callable[[object], bool], str]] = {
 def _unwrap(hint: object) -> tuple[type, tuple[object, ...]]:
     """Split an ``Annotated[type, *rules]`` hint into ``(base type, metadata)``.
 
-    A plain annotation passes through with empty metadata, so the columns+dtypes
-    path from #7 is untouched; an ``Annotated`` field yields its underlying type
-    (for the dtype check) and the attached value rules (``__metadata__``).
+    A plain annotation passes through with empty metadata; an ``Annotated`` field
+    yields its underlying type and the attached value rules.
     """
     if hasattr(hint, "__metadata__"):
         return hint.__origin__, hint.__metadata__  # type: ignore[attr-defined]
@@ -332,7 +328,7 @@ class SchemaValidator:
             )
 
     def validate(self, dataset: Dataset) -> None:
-        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
+        frame = dataset.to_pandas()
         present = set(frame.columns)
         problems: list[str] = []
         ill_typed: set[str] = set()
@@ -349,7 +345,7 @@ class SchemaValidator:
                 ill_typed.add(name)
             elif not self._nullable[name] and frame[name].isna().any():
                 problems.append(f"column {name!r} contains null value(s)")
-        # Value rules run on the same engine-confined frame, but only over columns
+        # Value rules run on the same frame, but only over columns
         # that are present and carry the declared dtype — a wrong-typed column's
         # dtype breach is the prior problem to fix, and running e.g. a string rule
         # over it would report a spurious second failure. Every breach still lands
@@ -394,7 +390,7 @@ class SchemaCoercion:
         self._expected = _declared_fields(schema)
 
     def process(self, dataset: Dataset) -> Dataset:
-        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
+        frame = dataset.to_pandas()
         for name, declared in self._expected:
             if name not in frame.columns:
                 continue  # a missing column is the validator's breach to report
@@ -422,8 +418,8 @@ class SchemaCoercion:
         return mapped.astype("bool")
 
     def _error(self, name: str, detail: str) -> CoercionError:
-        # One located message per ADR-0007: name the schema, the column, the
-        # reason — so an aborted coerce step diagnoses itself.
+        # Name the schema, column, and reason so an aborted coerce step diagnoses
+        # itself.
         return CoercionError(
             f"{self._schema.__name__} coercion: column {name!r} {detail}"
         )

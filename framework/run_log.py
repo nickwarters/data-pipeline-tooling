@@ -1,12 +1,11 @@
-"""Structured JSONL run observability — the seam the run-registry ingests.
+"""Structured JSONL run observability for registry ingestion.
 
 A ``RunLog`` emits one JSON object per line to a ``.log`` file and a
 human-readable line to the console for each record of a run. The builder's
 ``.run()`` drives it per step (read, validate, write) and with a final run-level
 summary; every record of a single run carries the same correlating ``run_id``.
-Structured-but-file-only needs no infrastructure now, yet the deferred
-run-registry (ADR-0005) can ingest the JSONL later without parsing free text
-(ADR-0007).
+Structured-but-file-only keeps local runs simple while giving the run registry
+machine-readable records to ingest.
 """
 
 from __future__ import annotations
@@ -45,7 +44,6 @@ class RunLog:
     """A structured JSONL sink (plus human-readable console) for one run-log file."""
 
     def __init__(self, log_path: str | os.PathLike[str]) -> None:
-        # Path keeps separators OS-agnostic across Windows and macOS.
         self._path = Path(log_path)
 
     def describe(self) -> str:
@@ -58,8 +56,8 @@ class RunLog:
         """Time a step; emit one record when it closes — or `error` if it raises.
 
         A raising step is recorded with ``status="error"`` and the exception
-        message, then the exception is re-raised so the run still aborts
-        (ADR-0007 fail-fast). Nothing is swallowed.
+        message, then the exception is re-raised so the run still aborts.
+        Nothing is swallowed.
         """
         metrics = StepMetrics()
         metrics.rows_in = rows_in
@@ -111,9 +109,7 @@ class RunLog:
     ) -> None:
         """Append one JSONL record and echo a human-readable line to the console."""
         record = {
-            # The wall-clock instant this record is emitted, ISO-8601 UTC. It is
-            # the time dimension the run-registry orders by; the registry cannot
-            # read an event time the emitter does not write (ADR-0007).
+            # The registry orders by the event time the emitter writes.
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "run_id": run_id,
             "pipeline": pipeline,

@@ -5,7 +5,7 @@ deferred :class:`Pipeline` builder, the layer-composing builders
 (``raw_to_silver`` / ``silver_to_gold`` / the current-grain reducers),
 ``ForEach`` orchestration, the thin domain ``PipelineRunner`` with its
 ``RunContext`` / freshness guard, and the ``RunLog`` / ``RunRegistry``
-observability seam.
+observability types.
 
 Import from here rather than the underlying modules::
 
@@ -46,27 +46,22 @@ from framework.stages import (
 )
 
 __all__ = [
-    # The builder + its contract
     "Pipeline",
     "ValidationStage",
     "ProcessingStage",
     "CheckpointStage",
-    # Layer-composing builders
     "raw_to_silver",
     "silver_to_gold",
     "current_silver_to_gold",
     "detail_current_silver_to_gold",
-    # Repeated independent runs
     "ForEach",
     "ForEachOutcome",
     "ForEachPipelineError",
-    # Thin domain orchestration + freshness
     "PipelineRunner",
     "RunContext",
     "FreshnessRequirement",
     "FreshnessError",
     "UnknownPipelineError",
-    # Observability
     "RunLog",
     "RunRegistry",
 ]

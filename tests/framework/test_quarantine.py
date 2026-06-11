@@ -1,8 +1,8 @@
-"""Quarantine — row-level value-rule partitioning and pipeline integration (issue #50).
+"""Quarantine row-level value-rule partitioning and pipeline integration.
 
 Tests the opt-in quarantine path: value-rule-failing rows are routed to a
 reject table; good rows proceed. Structural breaches (missing columns, wrong
-dtypes) still abort via SchemaValidator — the abort-vs-quarantine boundary is
+dtypes) still abort via SchemaValidator; the abort-vs-quarantine boundary is
 the key invariant.
 """
 
@@ -19,10 +19,6 @@ from framework.quarantine import SchemaValueRulePartitioner
 from framework.schema import Length, OneOf, Pattern, Unique
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
 @dataclass
 class RefCase:
     case_ref: Annotated[str, Pattern(r"\d{9,10}")]
@@ -32,10 +28,6 @@ class RefCase:
 def _dataset(**cols) -> Dataset:
     return Dataset.from_pandas(pd.DataFrame(cols))
 
-
-# ---------------------------------------------------------------------------
-# Cycle 1 — partitioner separates good rows from value-rule breaches
-# ---------------------------------------------------------------------------
 
 def test_partitioner_routes_violating_rows_to_rejected():
     # A row with a case_ref that doesn't match the 9–10 digit pattern is a
@@ -90,10 +82,6 @@ def test_partitioner_row_failing_multiple_rules_gets_all_reasons():
     assert "status" in reason
 
 
-# ---------------------------------------------------------------------------
-# Cycle 2 — violating_mask on individual rules
-# ---------------------------------------------------------------------------
-
 def test_pattern_violating_mask_returns_true_for_non_matching_rows():
     rule = Pattern(r"\d{9,10}")
     series = pd.Series(["123456789", "BAD", "1234567890"], dtype="string")
@@ -130,10 +118,6 @@ def test_unique_violating_mask_returns_true_for_duplicate_rows():
     assert list(mask) == [False, True, False, True]
 
 
-# ---------------------------------------------------------------------------
-# Cycle 3 — pipeline quarantine integration
-# ---------------------------------------------------------------------------
-
 def test_pipeline_quarantine_routes_rejected_rows_to_reject_writer(tmp_path):
     # A pipeline configured with quarantine should write bad rows to the reject
     # writer and good rows to the main writer — in the same run.
@@ -143,7 +127,6 @@ def test_pipeline_quarantine_routes_rejected_rows_to_reject_writer(tmp_path):
     from framework.quarantine import SchemaValueRulePartitioner
     from framework.writers import QuarantineWriter, SqliteTruncateReloadWriter
 
-    # Write a CSV with two good rows and one bad row.
     csv_file = tmp_path / "feed.csv"
     csv_file.write_text(
         "case_ref,status\n"
@@ -262,7 +245,7 @@ def test_pipeline_quarantine_is_idempotent_on_rerun(tmp_path):
     rows = con.execute("SELECT run_id FROM rejects").fetchall()
     con.close()
 
-    # Two different run_ids should each have one row — not four rows total.
+    # Different run_ids keep separate rejects rather than duplicating a rerun.
     assert len(rows) == 2
     assert {r[0] for r in rows} == {run_id_1, run_id_2}
 
@@ -293,10 +276,6 @@ def test_structural_breach_aborts_even_with_quarantine_configured(tmp_path):
     with pytest.raises(ValidationError):
         pipeline.run()
 
-
-# ---------------------------------------------------------------------------
-# Cycle 4 — RunLog records quarantine counts
-# ---------------------------------------------------------------------------
 
 def test_run_log_quarantine_step_records_rows_quarantined(tmp_path):
     # The quarantine step in the run log should record how many rows were

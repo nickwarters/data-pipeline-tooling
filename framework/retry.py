@@ -1,13 +1,12 @@
-"""Targeted retry at the reader/writer edges (issue #87).
+"""Targeted retry at the reader/writer edges.
 
 Transient edge failures — a remote source briefly unavailable, a SharePoint/SAS
 fetch dropping, a SQLite ``database is locked`` — are worth one more attempt;
 schema-validation and configuration errors are not. A :class:`RetryPolicy`
 encodes that distinction as an **allowlist**: it retries only the exception types
 it is told to and re-raises everything else immediately. :class:`RetryingReader`
-and :class:`RetryingWriter` apply a policy at the ``read()`` / ``write()`` seam,
-so the retry stays scoped to the I/O edge and never wraps validation or
-business-rule failures (which live in the pipeline's stages, not the seam).
+and :class:`RetryingWriter` apply a policy at the ``read()`` / ``write()`` edge,
+so retry never wraps validation or business-rule failures.
 
 The policy is a swappable collaborator in the same spirit as the load strategies
 and the remote stubs: a Reader/Writer is decorated with one, not rewritten.
@@ -83,7 +82,7 @@ class _RetryingEdge:
     Holds the policy and records each retried attempt as a human note on
     :attr:`retry_attempts` (reset per call), which the builder drains into the
     read/write step's run-log ``warn_hits``; every attempt is also logged for
-    live console visibility. ``_edge`` names the seam in those notes.
+    live console visibility. ``_edge`` names the I/O edge in those notes.
     """
 
     _edge = "io"

@@ -23,7 +23,7 @@ def _case_type() -> CaseType:
 def _land_gold_cases(store: Store, frame: pd.DataFrame) -> None:
     # Land Cases into the ingest gold exactly as an ingest_silver_to_gold run
     # would — one row per Case, dates as text (SQLite has no date type), which
-    # is what the CasePool re-reads (ADR-0006 amendment).
+    # is what the CasePool re-reads.
     store.writer("gold", "cases", Refresh()).write(Dataset.from_pandas(frame))
 
 

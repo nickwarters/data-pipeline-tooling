@@ -2,9 +2,9 @@
 
 The thinnest end-to-end path through the framework. ``base_dir`` is the
 medallion root; the demo asks a ``StoreCatalog`` for the ``cases`` subject's
-Store (ADR-0001 amendment), which lands ``raw.db`` under that subject directory.
-Run it as a module from the repo root (so the import-only
-``framework`` package resolves on ``sys.path``), or import ``run`` from a test.
+Store, which lands ``raw.db`` under that subject directory. Run it as a module
+from the repo root (so the import-only ``framework`` package resolves on
+``sys.path``), or import ``run`` from a test.
 
     python -m pipelines.demo_csv_to_raw [BASE_DIR]
 """
@@ -32,14 +32,12 @@ def run(
     """Land the CSV feed into the subject's ``raw.db`` under ``base_dir``.
 
     Composes a :class:`RunLog` so the run emits structured JSONL records to
-    ``<base_dir>/runs.log`` (and human-readable lines to the console) — the
-    observability seam described in ADR-0007.
+    ``<base_dir>/runs.log`` and human-readable lines to the console.
 
     A warn-severity :class:`SchemaDriftValidator` is attached at the raw boundary
-    (#51): it diffs the incoming columns against the prior run's landed columns
-    (read from ``raw.db`` via ``store.columns_of``) and warns — without aborting —
-    when the owner-controlled source adds or drops a column. The first run has no
-    prior landing, so it is a clean no-op (ADR-0008 amendment).
+    because the source owner can add or drop columns outside this pipeline's
+    control. It diffs incoming columns against the prior landed columns and warns
+    without aborting. The first run has no prior landing, so it is a clean no-op.
     """
     store = StoreCatalog(base_dir).store(FEED_NAME)
     writer = store.writer(RAW, FEED_NAME, Refresh())

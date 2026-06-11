@@ -12,15 +12,13 @@ from tests._schema_fixtures import CoercedCase, LandedCase, RuledCase
 
 def _land_raw(store: Store, table: str, frame: pd.DataFrame, strategy=None) -> None:
     # Land a snapshot into raw exactly as an upstream source->raw pipeline would
-    # — schema-light, no enforcement at raw (ADR-0008).
+    # with schema-light, unenforced raw storage.
     store.writer("raw", table, strategy if strategy is not None else Refresh()).write(
         Dataset.from_pandas(frame)
     )
 
 
 def test_raw_to_silver_validates_then_writes_silver_db(tmp_path):
-    # The builder reads raw, enforces the schema as a post-validator, and writes
-    # the conforming data into the subject's silver.db (ADR-0008).
     store = Store(tmp_path)
     _land_raw(
         store,
@@ -38,8 +36,7 @@ def test_raw_to_silver_validates_then_writes_silver_db(tmp_path):
 
 def test_raw_to_silver_aborts_at_the_silver_boundary_without_writing(tmp_path):
     # A schema breach in raw (here: score landed as text, not int) fails at the
-    # silver post-validate step with a located message — and because the run is
-    # fail-fast and atomic (ADR-0007), no silver.db is written.
+    # silver post-validate step with a located message, and no silver.db is written.
     store = Store(tmp_path)
     _land_raw(
         store,
@@ -54,10 +51,10 @@ def test_raw_to_silver_aborts_at_the_silver_boundary_without_writing(tmp_path):
 
 
 def test_raw_to_silver_aborts_on_a_value_rule_breach_without_writing(tmp_path):
-    # Value-level rules (#24) ride the same SchemaValidator post-validator, so a
+    # Value-level rules ride the same SchemaValidator post-validator, so a
     # breach (here a case_ref that fails its 9-10 digit Pattern) aborts at the
-    # silver boundary with a located message — and, fail-fast/atomic (ADR-0007),
-    # no silver.db is written. Both fields are str, so coercion is not involved.
+    # silver boundary with a located message, and no silver.db is written. Both
+    # fields are str, so coercion is not involved.
     store = Store(tmp_path)
     _land_raw(
         store,
@@ -102,8 +99,7 @@ def test_raw_to_silver_coerces_round_trip_lossy_types_through_to_silver(tmp_path
 
 def test_raw_to_silver_aborts_when_a_value_cannot_be_coerced(tmp_path):
     # A value the coercer cannot parse aborts at the process step (fail-fast,
-    # ADR-0007) with a located message — and because the run is atomic, no
-    # silver.db is written.
+    # atomic) with a located message, and no silver.db is written.
     store = Store(tmp_path)
     _land_raw(
         store,
@@ -137,15 +133,10 @@ def test_raw_stays_schema_light(tmp_path):
     assert list(landed.to_pandas()["score"]) == ["not-an-int"]
 
 
-# ---------------------------------------------------------------------------
-# Ingest history-upstream profile — AccumulateByRun strategy (ADR-0006 amendment)
-# ---------------------------------------------------------------------------
-
-
 def test_raw_to_silver_accumulates_when_strategy_is_accumulate_by_run(tmp_path):
     # With AccumulateByRun the builder stamps run_id / load_date and appends rows
-    # rather than refreshing — the Ingest profile's silver is a historian for a
-    # destructive current-state source (ADR-0006 amendment).
+    # rather than refreshing; silver is a historian for a destructive
+    # current-state source.
     store = Store(tmp_path)
     _land_raw(
         store, "cases",
@@ -178,9 +169,9 @@ def test_raw_to_silver_accumulate_re_run_is_idempotent(tmp_path):
 
 
 def test_raw_to_silver_accumulate_retains_history_across_distinct_runs(tmp_path):
-    # Distinct run_ids accumulate — silver becomes the system of record for a
+    # Distinct run_ids accumulate; silver becomes the system of record for a
     # destructive source, so a later snapshot adds its rows and never wipes prior
-    # runs' rows (ADR-0006 amendment).
+    # runs' rows.
     store = Store(tmp_path)
 
     _land_raw(
