@@ -100,7 +100,7 @@ class Score:
         self.trace_name = column
 
     def process(self, dataset: Dataset) -> Dataset:
-        frame = dataset.to_pandas().copy()  # engine-confined (ADR-0002)
+        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
         frame[self._column] = frame.apply(lambda row: self._scorer(row), axis=1)
         return Dataset.from_pandas(frame)
 
@@ -122,7 +122,7 @@ class Stamp:
         self._value = value
 
     def process(self, dataset: Dataset) -> Dataset:
-        frame = dataset.to_pandas().copy()  # engine-confined (ADR-0002)
+        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
         frame[self._column] = self._value
         return Dataset.from_pandas(frame)
 
@@ -487,7 +487,7 @@ class DeriveKey:
         self._natural_key = list(natural_key)
 
     def process(self, dataset: Dataset) -> Dataset:
-        frame = dataset.to_pandas().copy()  # engine-confined (ADR-0002)
+        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
         frame[self._into] = frame.apply(
             lambda row: str(uuid.uuid5(
                 self._namespace, "|".join(str(row[col]) for col in self._natural_key)

@@ -121,6 +121,10 @@ never appear** in a Protocol signature, a pipeline script, or the domain layer â
 only behind this seam. Typed domain objects (`Case`, `ReviewOutcome`) are the
 *other* tier, materialised on demand at the domain edge (later slice).
 
+`to_pandas()` returns a **copy** by default, enforcing the opacity guarantee:
+callers cannot mutate the carrier's backing frame. Use `to_pandas(copy=False)`
+only in hot paths where the caller guarantees it will not mutate the frame.
+
 ### `Reader` â€” source IO behind one method
 A `Reader` encapsulates how one source type is read:
 

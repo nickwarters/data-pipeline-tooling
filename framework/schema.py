@@ -394,7 +394,7 @@ class SchemaCoercion:
         self._expected = _declared_fields(schema)
 
     def process(self, dataset: Dataset) -> Dataset:
-        frame = dataset.to_pandas().copy()  # engine-confined (ADR-0002)
+        frame = dataset.to_pandas()  # engine-confined (ADR-0002)
         for name, declared in self._expected:
             if name not in frame.columns:
                 continue  # a missing column is the validator's breach to report
