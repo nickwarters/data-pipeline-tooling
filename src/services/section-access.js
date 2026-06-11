@@ -17,6 +17,34 @@
 export const SECTIONS = ['details', 'questions', 'conversation', 'notes', 'remediation', 'summary'];
 
 /**
+ * The Sections that can contribute a block to the read-only Summary Section
+ * (ADR-0016), in render order. Conversation (a floating overlay, never a tab)
+ * and Summary itself never appear as Summary blocks.
+ * @type {Section[]}
+ */
+export const SUMMARY_SECTIONS = ['details', 'questions', 'remediation', 'notes'];
+
+/**
+ * Whether a Section contributes a block to the Summary Section (ADR-0016).
+ * Membership in the Case Type's `sections` config object is the allow-list; a
+ * Section absent from a defined `sections` is never in Summary. For a member (or
+ * when `sections` is undefined, i.e. all enabled) the explicit `showInSummary`
+ * flag wins, otherwise the default applies: Notes is off, every other block
+ * Section is on.
+ *
+ * @param {Section} section
+ * @param {CaseTypeConfig} caseTypeConfig
+ * @returns {boolean}
+ */
+export function showInSummary(section, caseTypeConfig) {
+  const sections = caseTypeConfig.sections;
+  if (sections && !(section in sections)) return false;
+  const explicit = sections?.[section]?.showInSummary;
+  if (explicit !== undefined) return explicit;
+  return section !== 'notes';
+}
+
+/**
  * Default access matrix. Function-valued cells receive the CaseRow and return a Mode.
  * @type {Record<Section, Record<Role, Mode | ((c: CaseRow) => Mode)>>}
  */
@@ -105,7 +133,7 @@ export function resolveRoles(caseRow, userId, capabilities) {
  * @returns {Mode}
  */
 export function evaluateAccess(section, roles, caseRow, caseTypeConfig) {
-  if (caseTypeConfig.sections && !caseTypeConfig.sections.includes(section)) {
+  if (caseTypeConfig.sections && !(section in caseTypeConfig.sections)) {
     return 'hidden';
   }
   /** @type {Mode} */

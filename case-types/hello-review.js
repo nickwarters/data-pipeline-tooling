@@ -7,6 +7,17 @@ const config = {
   eligibleGroups: ['Reviewers'],
   slaHours: 48,
   attributeFailures: true,
+  // Per-Section config object (ADR-0016): membership is the allow-list, and
+  // showInSummary controls each Section's block in the read-only Summary. Notes
+  // is deliberately excluded from Summary (Case Justification + general note).
+  sections: {
+    details: { showInSummary: true },
+    questions: { showInSummary: true },
+    conversation: {},
+    notes: { showInSummary: false },
+    remediation: { showInSummary: true },
+    summary: {},
+  },
   // Configurable per-failure capture fields (ADR-0017). One shared set applies
   // to every failed Answer; captured inline as Answer.remediationDetails.
   remediationFields: [

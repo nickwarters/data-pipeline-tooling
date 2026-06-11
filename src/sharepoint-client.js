@@ -107,13 +107,21 @@
  */
 
 /**
+ * Per-Section configuration declared by a Case Type (ADR-0016). Membership in the
+ * `sections` object is the allow-list; `showInSummary` controls whether the
+ * Section contributes a block to the read-only Summary Section.
+ *
+ * @typedef {{ showInSummary?: boolean }} SectionConfig
+ */
+
+/**
  * Shape every Case Type module must satisfy.
  *
  * @typedef {{
  *   questions: QuestionDefinition[],
  *   computeOutcome: (answers: Record<string, Answer>) => OutcomeResult,
  *   eligibleGroups?: string[],
- *   sections?: Array<'details'|'questions'|'conversation'|'notes'|'remediation'|'summary'>,
+ *   sections?: Partial<Record<'details'|'questions'|'conversation'|'notes'|'remediation'|'summary', SectionConfig>>,
  *   slaHours?: number,
  *   attributeFailures?: boolean,
  *   remediationFields?: RemediationField[]

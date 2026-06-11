@@ -1,10 +1,14 @@
 // @ts-check
 import { CRElement } from './cr-element.js';
 import './cr-outcome.js';
+import { caseDetailFields } from './cr-case-details.js';
+import { buildSummaryModel } from '../evaluators/summary-model.js';
 
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../sharepoint-client.js').OutcomeResult} OutcomeResult */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
+/** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
+/** @typedef {import('../services/section-access.js').Section} Section */
 
 /**
  * The read-only Summary Section (ADR-0016). It rolls the whole Case up onto one
@@ -26,6 +30,19 @@ export class CRSummary extends CRElement {
     this.allAnswered = false;
     /** @type {CaseRow | null} */
     this.caseRow = null;
+    /**
+     * The Case Type's non-deprecated Question catalogue, used to recompute the
+     * counts and failed-Answer blocks from the current Answers.
+     * @type {QuestionDefinition[]}
+     */
+    this.catalogue = [];
+    /**
+     * The Sections to render as Summary blocks, already filtered by membership,
+     * `showInSummary`, and the viewer's access (ADR-0016). Rendered in the given
+     * order. The page resolves this; the component just renders it.
+     * @type {Section[]}
+     */
+    this.summarySections = [];
   }
 
   connectedCallback() {
@@ -68,10 +85,187 @@ export class CRSummary extends CRElement {
       outcomeEl.update(() => /** @type {OutcomeResult} */ ({ verdict: 'pass' }), {}, false);
     }
 
-    this.replaceChildren(
-      /** @type {any} */ (heading),
-      /** @type {any} */ (outcomeEl)
-    );
+    /** @type {Node[]} */
+    const children = [/** @type {any} */ (heading), /** @type {any} */ (outcomeEl)];
+
+    // Summary blocks (key dates + per-Section) only make sense for a loaded Case;
+    // the page always sets caseRow alongside summarySections.
+    if (this.caseRow) {
+      children.push(/** @type {any} */ (this._renderKeyDates(this.caseRow)));
+      for (const section of this.summarySections) {
+        const block = this._renderSectionBlock(section, this.caseRow);
+        if (block) children.push(/** @type {any} */ (block));
+      }
+    }
+
+    this.replaceChildren(...children);
+  }
+
+  /**
+   * Renders the Summary block for one Section (ADR-0016), or null when the
+   * Section contributes no block.
+   *
+   * @param {Section} section
+   * @param {CaseRow} caseRow
+   * @returns {HTMLElement | null}
+   */
+  _renderSectionBlock(section, caseRow) {
+    if (section === 'details') {
+      return this._renderFieldBlock('cr-summary-details', 'Case Details',
+        caseDetailFields(caseRow).map(f => ({ label: f.label, display: f.display })));
+    }
+    if (section === 'questions') {
+      return this._renderCounts();
+    }
+    if (section === 'remediation') {
+      return this._renderRemediation();
+    }
+    if (section === 'notes') {
+      const block = document.createElement('section');
+      block.className = 'cr-summary-notes';
+      const h3 = document.createElement('h3');
+      h3.textContent = 'Notes';
+      const body = document.createElement('p');
+      // textContent, never innerHTML (framework hard rules).
+      body.textContent = caseRow.notes;
+      block.appendChild(h3);
+      block.appendChild(body);
+      return block;
+    }
+    // Conversation/Summary are valid Sections but contribute no Summary block.
+    return null;
+  }
+
+  /**
+   * Remediation roll-up (ADR-0016): the total Remediation Action count plus each
+   * failed Answer with its actions, recomputed from the current Answers.
+   * @returns {HTMLElement}
+   */
+  _renderRemediation() {
+    const { remediationActionCount, failures } = buildSummaryModel(this.catalogue, this.answers);
+
+    const section = document.createElement('section');
+    section.className = 'cr-summary-remediation';
+    const h3 = document.createElement('h3');
+    h3.textContent = 'Issues';
+    section.appendChild(h3);
+
+    const count = document.createElement('p');
+    count.textContent = `Remediation Actions: ${remediationActionCount}`;
+    section.appendChild(count);
+
+    if (failures.length === 0) {
+      const empty = document.createElement('p');
+      empty.textContent = 'No failures.';
+      section.appendChild(empty);
+      return section;
+    }
+
+    const ul = document.createElement('ul');
+    for (const failure of failures) {
+      ul.appendChild(this._renderFailure(failure));
+    }
+    section.appendChild(ul);
+    return section;
+  }
+
+  /**
+   * @param {import('../evaluators/summary-model.js').SummaryFailure} failure
+   * @returns {HTMLElement}
+   */
+  _renderFailure(failure) {
+    const li = document.createElement('li');
+
+    const q = document.createElement('p');
+    q.textContent = failure.category ? `${failure.category}: ${failure.text}` : failure.text;
+    li.appendChild(q);
+
+    const ans = document.createElement('p');
+    ans.textContent = `Answer: ${failure.answer}`;
+    li.appendChild(ans);
+
+    if (failure.actions.length) {
+      const actions = document.createElement('ul');
+      for (const text of failure.actions) {
+        const item = document.createElement('li');
+        item.textContent = text;
+        actions.appendChild(item);
+      }
+      li.appendChild(actions);
+    }
+    return li;
+  }
+
+  /**
+   * Per-category pass/fail counts (ADR-0016), recomputed from the current
+   * Answers — live while In-progress, the frozen Answers once Completed.
+   * @returns {HTMLElement}
+   */
+  _renderCounts() {
+    const { categoryCounts } = buildSummaryModel(this.catalogue, this.answers);
+
+    const section = document.createElement('section');
+    section.className = 'cr-summary-counts';
+    const h3 = document.createElement('h3');
+    h3.textContent = 'Questions';
+    section.appendChild(h3);
+
+    const ul = document.createElement('ul');
+    for (const { category, pass, fail } of categoryCounts) {
+      const li = document.createElement('li');
+      li.textContent = `${category}: ${pass} pass, ${fail} fail`;
+      ul.appendChild(li);
+    }
+    section.appendChild(ul);
+    return section;
+  }
+
+  /**
+   * Key dates roll-up (ADR-0016): only the lifecycle timestamps already modelled
+   * on the Case row — `Created` and `completedAt`. No SharePoint version-history
+   * mining; further milestones get explicit fields when genuinely needed.
+   *
+   * @param {CaseRow} caseRow
+   * @returns {HTMLElement}
+   */
+  _renderKeyDates(caseRow) {
+    /** @type {Array<{ label: string, value: string | null | undefined }>} */
+    const dates = [
+      { label: 'Created', value: caseRow.created },
+      { label: 'Completed', value: caseRow.completedAt },
+    ];
+    return this._renderFieldBlock('cr-summary-key-dates', 'Key dates',
+      dates.map(d => ({ label: d.label, display: d.value ? d.value : '—' })));
+  }
+
+  /**
+   * Renders a titled block of label/value rows as a definition list. Values are
+   * assigned via textContent (no innerHTML) per the framework's hard rules.
+   *
+   * @param {string} className
+   * @param {string} title
+   * @param {Array<{ label: string, display: string }>} rows
+   * @returns {HTMLElement}
+   */
+  _renderFieldBlock(className, title, rows) {
+    const section = document.createElement('section');
+    section.className = className;
+
+    const h3 = document.createElement('h3');
+    h3.textContent = title;
+    section.appendChild(h3);
+
+    const dl = document.createElement('dl');
+    for (const { label, display } of rows) {
+      const dt = document.createElement('dt');
+      dt.textContent = label;
+      const dd = document.createElement('dd');
+      dd.textContent = display;
+      dl.appendChild(dt);
+      dl.appendChild(dd);
+    }
+    section.appendChild(dl);
+    return section;
   }
 }
 

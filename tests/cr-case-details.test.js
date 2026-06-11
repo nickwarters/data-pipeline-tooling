@@ -32,7 +32,7 @@ class StubEl {
 };
 (/** @type {any} */ (globalThis)).customElements = { define() {} };
 
-const { CRCaseDetails } = await import('../src/components/cr-case-details.js');
+const { CRCaseDetails, caseDetailFields } = await import('../src/components/cr-case-details.js');
 
 /** @returns {import('../src/sharepoint-client.js').CaseRow} */
 function makeCase(overrides = {}) {
@@ -82,6 +82,17 @@ function fieldMap(el) {
   }
   return map;
 }
+
+test('caseDetailFields: returns the labelled Case Details fields in order with em-dash fallback', () => {
+  const fields = caseDetailFields(makeCase({ title: 'T', dueDate: null, completedAt: '2026-06-05' }));
+  assert.deepEqual(fields.map(f => f.field), [
+    'title', 'assignedReviewer', 'status', 'dueDate', 'relatedDate', 'created', 'completedAt',
+  ]);
+  const byField = Object.fromEntries(fields.map(f => [f.field, f.display]));
+  assert.equal(byField.title, 'T');
+  assert.equal(byField.dueDate, '—');
+  assert.equal(byField.completedAt, '2026-06-05');
+});
 
 test('CRCaseDetails: defaults to read-only access', () => {
   const el = new CRCaseDetails();

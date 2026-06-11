@@ -77,6 +77,24 @@ test('hello-review: every select remediationField carries a non-empty options[]'
   }
 });
 
+// --- Section config (ADR-0016) ---
+
+test('hello-review: sections is a per-Section config object enabling all six Sections', () => {
+  const sections = config.sections ?? {};
+  assert.deepEqual(
+    Object.keys(sections).sort(),
+    ['conversation', 'details', 'notes', 'questions', 'remediation', 'summary'],
+  );
+});
+
+test('hello-review: Notes opts out of the Summary while the other block Sections opt in', () => {
+  const sections = config.sections ?? {};
+  assert.equal(sections.notes?.showInSummary, false, 'Notes is excluded from Summary');
+  assert.equal(sections.details?.showInSummary, true);
+  assert.equal(sections.questions?.showInSummary, true);
+  assert.equal(sections.remediation?.showInSummary, true);
+});
+
 // --- computeOutcome ---
 
 test('computeOutcome: all Yes → pass', () => {

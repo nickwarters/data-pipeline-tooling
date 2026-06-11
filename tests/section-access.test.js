@@ -1,7 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateAccess, resolveRoles, SECTIONS } from '../src/services/section-access.js';
+import { evaluateAccess, resolveRoles, showInSummary, SECTIONS, SUMMARY_SECTIONS } from '../src/services/section-access.js';
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../src/sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
@@ -220,14 +220,20 @@ test('evaluateAccess: details is hidden for the none role', () => {
   assert.equal(evaluateAccess('details', ['none'], makeCase(), cfg), 'hidden');
 });
 
-// --- Case Type opt-out ---
+// --- Case Type opt-out (per-Section config object, ADR-0016) ---
 
-test('evaluateAccess: section omitted from sections allow-list → hidden regardless of role', () => {
-  const cfg = makeConfig({ sections: ['questions', 'remediation', 'summary'] });
+test('evaluateAccess: section omitted from the sections config object → hidden regardless of role', () => {
+  const cfg = makeConfig({ sections: { questions: {}, remediation: {}, summary: {} } });
   const c = makeCase();
   assert.equal(evaluateAccess('conversation', ['assignedReviewer'], c, cfg), 'hidden');
   assert.equal(evaluateAccess('notes', ['assignedReviewer'], c, cfg), 'hidden');
   assert.equal(evaluateAccess('questions', ['assignedReviewer'], c, cfg), 'edit');
+});
+
+test('evaluateAccess: a section present in the config object (membership) keeps its role-based mode', () => {
+  const cfg = makeConfig({ sections: { notes: { showInSummary: true } } });
+  const c = makeCase();
+  assert.equal(evaluateAccess('notes', ['assignedReviewer'], c, cfg), 'edit');
 });
 
 test('evaluateAccess: sections undefined → defaults to all enabled', () => {
@@ -236,8 +242,36 @@ test('evaluateAccess: sections undefined → defaults to all enabled', () => {
   assert.equal(evaluateAccess('conversation', ['assignedReviewer'], c, cfg), 'edit');
 });
 
-test('evaluateAccess: empty sections array → all hidden', () => {
-  const cfg = makeConfig({ sections: [] });
+// --- showInSummary (ADR-0016) ---
+
+test('SUMMARY_SECTIONS lists the Sections that can appear as Summary blocks (not conversation/summary)', () => {
+  assert.deepEqual([...SUMMARY_SECTIONS], ['details', 'questions', 'remediation', 'notes']);
+});
+
+test('showInSummary: defaults — notes off, every other block Section on, when sections undefined', () => {
+  const cfg = makeConfig();
+  assert.equal(showInSummary('details', cfg), true);
+  assert.equal(showInSummary('questions', cfg), true);
+  assert.equal(showInSummary('remediation', cfg), true);
+  assert.equal(showInSummary('notes', cfg), false);
+});
+
+test('showInSummary: explicit flag overrides the default', () => {
+  const cfg = makeConfig({ sections: { notes: { showInSummary: true }, questions: { showInSummary: false } } });
+  assert.equal(showInSummary('notes', cfg), true);
+  assert.equal(showInSummary('questions', cfg), false);
+});
+
+test('showInSummary: a Section absent from the config object is never in Summary', () => {
+  const cfg = makeConfig({ sections: { questions: {} } });
+  assert.equal(showInSummary('details', cfg), false);
+  assert.equal(showInSummary('notes', cfg), false);
+  // present with no explicit flag → default (questions → true)
+  assert.equal(showInSummary('questions', cfg), true);
+});
+
+test('evaluateAccess: empty sections object → all hidden', () => {
+  const cfg = makeConfig({ sections: {} });
   const c = makeCase();
   for (const s of SECTIONS) {
     assert.equal(evaluateAccess(s, ['assignedReviewer'], c, cfg), 'hidden', `section ${s}`);

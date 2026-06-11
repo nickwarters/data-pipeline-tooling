@@ -4,7 +4,7 @@ import { signal, computed } from '../lib/signal.js';
 import { evaluate } from '../evaluators/applicability-evaluator.js';
 import { computeSectionProgress } from '../evaluators/section-progress.js';
 import { materializeRemediationActions } from '../evaluators/failure-evaluator.js';
-import { evaluateAccess, resolveRoles, SECTIONS } from '../services/section-access.js';
+import { evaluateAccess, resolveRoles, showInSummary, SECTIONS, SUMMARY_SECTIONS } from '../services/section-access.js';
 import '../components/cr-question-list.js';
 import '../components/cr-section-progress.js';
 import '../components/cr-remediation-section.js';
@@ -125,7 +125,14 @@ export class CRCaseReview extends CRElement {
       return;
     }
 
-    this._buildLayout({ caseRow, catalogue, computeOutcome: config.computeOutcome, attributeFailures: config.attributeFailures, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access });
+    // Which Sections contribute a Summary block: membership + showInSummary
+    // (ADR-0016), gated by the viewer's access so a Section hidden for their role
+    // never leaks into Summary (ADR-0011).
+    const summarySections = SUMMARY_SECTIONS.filter(
+      s => access[s] !== 'hidden' && showInSummary(s, config)
+    );
+
+    this._buildLayout({ caseRow, catalogue, computeOutcome: config.computeOutcome, attributeFailures: config.attributeFailures, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, summarySections });
 
     // Render with cached display names first, then upgrade to the authoritative
     // directory names once they resolve (ADR-0013, #97).
@@ -193,8 +200,9 @@ export class CRCaseReview extends CRElement {
    * @param {{ get: () => boolean }} opts.allAnswered
    * @param {CurrentUser} opts.currentUser
    * @param {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} opts.access
+   * @param {import('../services/section-access.js').Section[]} [opts.summarySections]
    */
-  _buildLayout({ caseRow, catalogue, computeOutcome, attributeFailures, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access }) {
+  _buildLayout({ caseRow, catalogue, computeOutcome, attributeFailures, client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, summarySections = [] }) {
 
     const searchStr = typeof location !== 'undefined' ? (/** @type {any} */ (location).search ?? '') : '';
     const panelMode = new URLSearchParams(searchStr).get('conversation') ?? 'popover';
@@ -308,6 +316,8 @@ export class CRCaseReview extends CRElement {
       document.createElement('cr-summary')
     );
     summaryEl.caseRow = caseRow;
+    summaryEl.catalogue = catalogue;
+    summaryEl.summarySections = summarySections;
 
     // viewState combines applicability + answers + allAnswered so the subscribe fires once per state change.
     const viewState = computed(() => ({

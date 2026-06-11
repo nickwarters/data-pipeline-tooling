@@ -172,6 +172,23 @@ test('CRCaseReview: the Summary panel reads the frozen outcomeAtCompletion on a 
   assert.equal(summaryEl.caseRow, completedRow, 'Summary receives the Case row so it can read the frozen snapshot');
 });
 
+test('CRCaseReview: Summary receives the catalogue and the resolved summarySections (Notes excluded by default)', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  el.currentUserId = 'u1'; // assigned reviewer → full access
+  await el.connectedCallback();
+
+  const summaryEl = summaryOf(el);
+  assert.ok(Array.isArray(summaryEl.catalogue) && summaryEl.catalogue.length > 0, 'Summary receives the Question catalogue');
+  assert.deepEqual(
+    summaryEl.summarySections,
+    ['details', 'questions', 'remediation'],
+    'Notes is excluded from Summary by default; Conversation/Summary never appear as blocks',
+  );
+});
+
 test('CRCaseReview: each tab panel carries the matching Section content node', async () => {
   const el = new CRCaseReview();
   el.client = /** @type {any} */ (makeClient());
