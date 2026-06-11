@@ -79,11 +79,11 @@ test('hello-review: every select remediationField carries a non-empty options[]'
 
 // --- Section config (ADR-0016) ---
 
-test('hello-review: sections is a per-Section config object enabling all six Sections', () => {
+test('hello-review: sections is a per-Section config object enabling all seven Sections', () => {
   const sections = config.sections ?? {};
   assert.deepEqual(
     Object.keys(sections).sort(),
-    ['conversation', 'details', 'notes', 'questions', 'remediation', 'summary'],
+    ['appeal', 'conversation', 'details', 'notes', 'questions', 'remediation', 'summary'],
   );
 });
 

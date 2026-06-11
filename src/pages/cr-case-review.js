@@ -11,6 +11,7 @@ import '../components/cr-remediation-section.js';
 import '../components/cr-conversation.js';
 import '../components/cr-notes.js';
 import '../components/cr-summary.js';
+import '../components/cr-appeal.js';
 import '../components/cr-status-banner.js';
 import '../components/cr-tabs.js';
 
@@ -396,6 +397,20 @@ export class CRCaseReview extends CRElement {
     notesEl.caseId = caseRow.id;
     notesEl.access = access.notes;
 
+    // Appeal Section (issue #132): lets the Responsible Party or their Manager
+    // raise a case-level Appeal on a Completed Case. The Section is additive and
+    // writes only the `appeals` field via the SaveQueue.
+    const appealEl = /** @type {import('../components/cr-appeal.js').CRAppeal} */ (
+      document.createElement('cr-appeal')
+    );
+    appealEl.caseRow = caseRow;
+    appealEl.saveQueue = saveQueue;
+    appealEl.caseId = caseRow.id;
+    appealEl.access = access.appeal;
+    appealEl.currentUser = currentUser;
+    appealEl.catalogue = catalogue;
+    appealEl.answers = caseRow.answers;
+
     // Case Details Section (ADR-0014, #105). Placeholder content this slice.
     const detailsEl = /** @type {import('../components/cr-case-details.js').CRCaseDetails} */ (
       document.createElement('cr-case-details')
@@ -417,6 +432,7 @@ export class CRCaseReview extends CRElement {
       { id: 'notes', label: 'Notes', hidden: access.notes === 'hidden' },
       { id: 'remediation', label: 'Issues', hidden: access.remediation === 'hidden' },
       { id: 'summary', label: 'Summary', hidden: access.summary === 'hidden' },
+      { id: 'appeal', label: 'Appeal', hidden: access.appeal === 'hidden' },
     ];
     /** @type {Record<string, Node>} */
     const panels = {
@@ -425,6 +441,7 @@ export class CRCaseReview extends CRElement {
       notes: /** @type {any} */ (notesEl),
       remediation: /** @type {any} */ (remediationSection),
       summary: /** @type {any} */ (summaryEl),
+      appeal: /** @type {any} */ (appealEl),
     };
 
     // Default tab is Details; because Details leads the array, the first visible

@@ -4,8 +4,8 @@
  * Section-level role-based access on the case page. UX-only per ADR-0010;
  * SharePoint list ACLs remain the real boundary. See ADR-0011 for design.
  *
- * @typedef {'details'|'questions'|'conversation'|'notes'|'remediation'|'summary'} Section
- * @typedef {'assignedReviewer'|'otherReviewer'|'responsibleParty'|'caseTypeOwner'|'none'} Role
+ * @typedef {'details'|'questions'|'conversation'|'notes'|'remediation'|'summary'|'appeal'} Section
+ * @typedef {'assignedReviewer'|'otherReviewer'|'responsibleParty'|'responsiblePartyManager'|'caseTypeOwner'|'none'} Role
  * @typedef {'edit'|'read-only'|'hidden'} Mode
  */
 
@@ -14,7 +14,7 @@
 /** @typedef {import('./permissions.js').Capabilities} Capabilities */
 
 /** @type {Section[]} */
-export const SECTIONS = ['details', 'questions', 'conversation', 'notes', 'remediation', 'summary'];
+export const SECTIONS = ['details', 'questions', 'conversation', 'notes', 'remediation', 'summary', 'appeal'];
 
 /**
  * The Sections that can contribute a block to the read-only Summary Section
@@ -53,6 +53,7 @@ const MATRIX = {
     assignedReviewer: 'read-only',
     otherReviewer: 'read-only',
     responsibleParty: 'read-only',
+    responsiblePartyManager: 'read-only',
     caseTypeOwner: 'read-only',
     none: 'hidden',
   },
@@ -60,13 +61,18 @@ const MATRIX = {
     assignedReviewer: 'edit',
     otherReviewer: 'read-only',
     responsibleParty: 'read-only',
+    responsiblePartyManager: 'read-only',
     caseTypeOwner: 'read-only',
     none: 'hidden',
   },
+  // The Conversation is the thread between the Assigned Reviewer and the Case's
+  // Responsible Party (ADR-0011); a Responsible Party Manager is not a
+  // participant, so they cannot post — not even read it.
   conversation: {
     assignedReviewer: 'edit',
     otherReviewer: 'read-only',
     responsibleParty: 'edit',
+    responsiblePartyManager: 'hidden',
     caseTypeOwner: 'read-only',
     none: 'hidden',
   },
@@ -74,6 +80,7 @@ const MATRIX = {
     assignedReviewer: 'edit',
     otherReviewer: 'read-only',
     responsibleParty: 'hidden',
+    responsiblePartyManager: 'hidden',
     caseTypeOwner: 'read-only',
     none: 'hidden',
   },
@@ -81,17 +88,31 @@ const MATRIX = {
     assignedReviewer: 'edit',
     otherReviewer: 'read-only',
     responsibleParty: 'read-only',
+    responsiblePartyManager: 'read-only',
     caseTypeOwner: 'read-only',
     none: 'hidden',
   },
   // Summary is never `edit` — only `read-only` or `hidden` (ADR-0016). It
   // inherits the function-valued Outcome × Responsible Party cell that
   // previously governed the removed Outcome Section: hidden from the Responsible
-  // Party while In-progress, read-only once Completed.
+  // Party (and their Manager) while In-progress, read-only once Completed.
   summary: {
     assignedReviewer: 'read-only',
     otherReviewer: 'read-only',
     responsibleParty: (c) => (c.status === 'Completed' ? 'read-only' : 'hidden'),
+    responsiblePartyManager: (c) => (c.status === 'Completed' ? 'read-only' : 'hidden'),
+    caseTypeOwner: 'read-only',
+    none: 'hidden',
+  },
+  // The Appeal Section (issue #132, ADR-0011): the Responsible Party or their
+  // Manager may raise a case-level Appeal, but only against a Completed Case —
+  // hidden while In-progress. Reviewers and the Case Type Owner observe it
+  // read-only; everyone else sees nothing.
+  appeal: {
+    assignedReviewer: 'read-only',
+    otherReviewer: 'read-only',
+    responsibleParty: (c) => (c.status === 'Completed' ? 'edit' : 'hidden'),
+    responsiblePartyManager: (c) => (c.status === 'Completed' ? 'edit' : 'hidden'),
     caseTypeOwner: 'read-only',
     none: 'hidden',
   },
@@ -117,6 +138,13 @@ export function resolveRoles(caseRow, userId, capabilities) {
   }
   if (caseRow.responsibleParty === userId) {
     roles.push('responsibleParty');
+  }
+  // The "Responsible Party X is managed by Manager Y" relationship is
+  // denormalised onto the Case row (CONTEXT.md), so the Manager role is resolved
+  // from the row field rather than group membership alone — mirroring how the
+  // Responsible Party role is matched.
+  if (caseRow.responsiblePartyManager === userId) {
+    roles.push('responsiblePartyManager');
   }
   if (capabilities.ownedCaseTypes.includes(caseRow.caseType)) {
     roles.push('caseTypeOwner');

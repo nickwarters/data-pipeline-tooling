@@ -17,6 +17,7 @@ const config = {
     notes: { showInSummary: false },
     remediation: { showInSummary: true },
     summary: {},
+    appeal: {},
   },
   // Configurable per-failure capture fields (ADR-0017). One shared set applies
   // to every failed Answer; captured inline as Answer.remediationDetails.

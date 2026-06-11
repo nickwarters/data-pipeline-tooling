@@ -121,15 +121,16 @@ test('CRCaseReview: renders a cr-tabs with Details · Questions · Notes · Issu
   const tabs = tabsOf(el).tabs;
   assert.deepEqual(
     tabs.map((/** @type {any} */ t) => t.id),
-    ['details', 'questions', 'notes', 'remediation', 'summary'],
-    'tab order is Details · Questions · Notes · Issues · Summary (Issues keeps the remediation id)'
+    ['details', 'questions', 'notes', 'remediation', 'summary', 'appeal'],
+    'tab order is Details · Questions · Notes · Issues · Summary · Appeal (Issues keeps the remediation id)'
   );
   assert.deepEqual(
     tabs.map((/** @type {any} */ t) => t.label),
-    ['Details', 'Questions', 'Notes', 'Issues', 'Summary'],
+    ['Details', 'Questions', 'Notes', 'Issues', 'Summary', 'Appeal'],
     'the Remediation Section surfaces under the UI label "Issues"'
   );
-  // For the Assigned Reviewer on an In-progress case every Section is visible.
+  // For the Assigned Reviewer on an In-progress case every Section is visible —
+  // the Appeal Section is read-only (not hidden) for reviewers.
   assert.ok(tabs.every((/** @type {any} */ t) => !t.hidden), 'no Section is hidden for the assigned reviewer');
 });
 
@@ -218,6 +219,21 @@ test('CRCaseReview: notes panel receives notes and Case Justification from the C
   assert.equal(notesOf(el).caseJustification, 'why this case passes');
 });
 
+test('CRCaseReview: appeal panel is wired with the Case row, access, user and catalogue', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  const appeal = panelOf(el, 'appeal');
+  assert.equal(appeal.caseId, 'c1', 'appeal panel knows the Case id');
+  assert.equal(appeal.access, 'read-only', 'assigned reviewer sees the Appeal Section read-only');
+  assert.equal(appeal.currentUser.id, 'u1', 'current user forwarded for the appellant');
+  assert.ok(Array.isArray(appeal.catalogue), 'catalogue forwarded so disputed Answers can be cited');
+  assert.equal(appeal.saveQueue, el.saveQueue, 'writes go through the SaveQueue');
+});
+
 test('CRCaseReview: default selected tab is Details', async () => {
   const el = new CRCaseReview();
   el.client = /** @type {any} */ (makeClient());
@@ -270,6 +286,7 @@ test('CRCaseReview: default tab falls back to the first visible Section when Det
       notes: 'edit',
       remediation: 'edit',
       summary: 'read-only',
+      appeal: 'hidden',
     }),
   });
 
@@ -298,7 +315,9 @@ function buildLayoutWith(el, access) {
     applicableQuestions: /** @type {any} */ ({ get: () => [] }),
     allAnswered: /** @type {any} */ ({ get: () => false }),
     currentUser: { id: 'u1', displayName: 'User 1' },
-    access: /** @type {any} */ (access),
+    // Appeal defaults to hidden so callers that only exercise the legacy Sections
+    // don't sprout an Appeal tab; a caller can override it explicitly.
+    access: /** @type {any} */ ({ appeal: 'hidden', ...access }),
   });
 }
 

@@ -55,6 +55,30 @@
  */
 
 /**
+ * A case-level **Appeal** (issue #132, CONTEXT.md): an objection to a Completed
+ * Case's Current Outcome raised by the Responsible Party or their Manager.
+ * Stored additively in a `CaseRow.appeals[]` JSON blob (ADR-0007); it never
+ * mutates the frozen original Case.
+ *
+ * `appellant` is the bare account `loginName` of whoever raised it; `at` is the
+ * ISO timestamp; `rationale` (required on raise) is the appellant's argument.
+ * `citedAnswerKeys` optionally aims the reviewer at the disputed *failed*
+ * Answers but does not itself set Answer values — an Appeal is case-level. The
+ * lifecycle is `raised → underReview → resolved`; `resolution` (the QA
+ * resolver's `agreed | rejected` verdict plus rationale) is stamped on resolve.
+ *
+ * @typedef {{
+ *   id: string,
+ *   appellant: string,
+ *   at: string,
+ *   rationale: string,
+ *   citedAnswerKeys?: string[],
+ *   state: 'raised' | 'underReview' | 'resolved',
+ *   resolution?: { verdict: 'agreed' | 'rejected', rationale: string, resolver: string, at: string }
+ * }} Appeal
+ */
+
+/**
  * @typedef {{
  *   id: string,
  *   caseType: string,
@@ -71,6 +95,8 @@
  *   outcomeAtCompletion?: string,
  *   hadRemediation?: boolean,
  *   overrides?: Override[],
+ *   appeals?: Appeal[],
+ *   responsiblePartyManager?: string | null,
  *   dueDate?: string | null,
  *   relatedDate?: string | null,
  *   created?: string,
@@ -148,7 +174,7 @@
  *   questions: QuestionDefinition[],
  *   computeOutcome: (answers: Record<string, Answer>) => OutcomeResult,
  *   eligibleGroups?: string[],
- *   sections?: Partial<Record<'details'|'questions'|'conversation'|'notes'|'remediation'|'summary', SectionConfig>>,
+ *   sections?: Partial<Record<'details'|'questions'|'conversation'|'notes'|'remediation'|'summary'|'appeal', SectionConfig>>,
  *   slaHours?: number,
  *   attributeFailures?: boolean,
  *   remediationFields?: RemediationField[]

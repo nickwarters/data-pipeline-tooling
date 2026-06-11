@@ -85,6 +85,73 @@ test('resolveRoles: owner of a different case type does not get owner role', () 
   assert.deepEqual(roles, ['none']);
 });
 
+// --- Appeal Section + Responsible Party Manager role (issue #132) ---
+
+test('resolveRoles: responsible party manager (matched via the row field)', () => {
+  const caps = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: true, isMaintainer: false, isVisitor: false };
+  const roles = resolveRoles(makeCase({ responsiblePartyManager: 'user-rpm' }), 'user-rpm', caps);
+  assert.deepEqual(roles, ['responsiblePartyManager']);
+});
+
+test('resolveRoles: not the case row manager → no responsiblePartyManager role', () => {
+  const caps = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: true, isMaintainer: false, isVisitor: false };
+  const roles = resolveRoles(makeCase({ responsiblePartyManager: 'someone-else' }), 'user-rpm', caps);
+  assert.deepEqual(roles, ['none']);
+});
+
+test('SECTIONS includes appeal', () => {
+  assert.ok(SECTIONS.includes('appeal'));
+});
+
+test('evaluateAccess: appeal — RP and RP-Manager edit only once Completed, else hidden', () => {
+  const cfg = makeConfig();
+  for (const role of /** @type {const} */ (['responsibleParty', 'responsiblePartyManager'])) {
+    assert.equal(
+      evaluateAccess('appeal', [role], makeCase({ status: 'In-progress' }), cfg),
+      'hidden',
+      `${role} cannot appeal an In-progress Case`
+    );
+    assert.equal(
+      evaluateAccess('appeal', [role], makeCase({ status: 'Completed' }), cfg),
+      'edit',
+      `${role} can raise an Appeal on a Completed Case`
+    );
+  }
+});
+
+test('evaluateAccess: appeal — reviewers and owner are read-only; none is hidden', () => {
+  const cfg = makeConfig();
+  const c = makeCase({ status: 'Completed' });
+  assert.equal(evaluateAccess('appeal', ['assignedReviewer'], c, cfg), 'read-only');
+  assert.equal(evaluateAccess('appeal', ['otherReviewer'], c, cfg), 'read-only');
+  assert.equal(evaluateAccess('appeal', ['caseTypeOwner'], c, cfg), 'read-only');
+  assert.equal(evaluateAccess('appeal', ['none'], c, cfg), 'hidden');
+});
+
+test('evaluateAccess: appeal never resolves to edit for reviewers/owner even when Completed', () => {
+  const cfg = makeConfig();
+  const c = makeCase({ status: 'Completed' });
+  for (const role of /** @type {const} */ (['assignedReviewer', 'otherReviewer', 'caseTypeOwner'])) {
+    assert.notEqual(evaluateAccess('appeal', [role], c, cfg), 'edit', `appeal must never be edit for ${role}`);
+  }
+});
+
+test('evaluateAccess: responsiblePartyManager — read-only on details/questions/remediation, hidden on conversation/notes', () => {
+  const cfg = makeConfig();
+  const c = makeCase({ status: 'Completed' });
+  assert.equal(evaluateAccess('details', ['responsiblePartyManager'], c, cfg), 'read-only');
+  assert.equal(evaluateAccess('questions', ['responsiblePartyManager'], c, cfg), 'read-only');
+  assert.equal(evaluateAccess('remediation', ['responsiblePartyManager'], c, cfg), 'read-only');
+  assert.equal(evaluateAccess('conversation', ['responsiblePartyManager'], c, cfg), 'hidden');
+  assert.equal(evaluateAccess('notes', ['responsiblePartyManager'], c, cfg), 'hidden');
+});
+
+test('evaluateAccess: responsiblePartyManager summary — hidden while in-progress, read-only when completed', () => {
+  const cfg = makeConfig();
+  assert.equal(evaluateAccess('summary', ['responsiblePartyManager'], makeCase({ status: 'In-progress' }), cfg), 'hidden');
+  assert.equal(evaluateAccess('summary', ['responsiblePartyManager'], makeCase({ status: 'Completed' }), cfg), 'read-only');
+});
+
 // --- evaluateAccess: default matrix ---
 
 test('evaluateAccess: assigned reviewer gets edit on all editable sections', () => {
