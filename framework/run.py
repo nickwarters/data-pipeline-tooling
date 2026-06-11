@@ -42,14 +42,12 @@ from framework.silver import raw_to_silver
 from framework.stages import (
     CheckpointStage,
     ProcessingStage,
-    Stage,
     ValidationStage,
 )
 
 __all__ = [
     # The builder + its contract
     "Pipeline",
-    "Stage",
     "ValidationStage",
     "ProcessingStage",
     "CheckpointStage",

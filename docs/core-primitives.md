@@ -640,15 +640,19 @@ pipeline = (
 )
 ```
 
-`Stage` is the public contract for a step inside one class-level `Pipeline` run:
-it operates on the current `Dataset` and returns the next `Dataset`. Built-in
-stages are `ValidationStage` (one or more validators, with the same
-`error`/`warn` severity behavior as validator helpers), `ProcessingStage` (one
-or more processors, preserving row trace/explain observations), and
-`CheckpointStage` (an explicit side-effect stage that writes a snapshot and
-passes the same dataset onward). This is not a domain Pipeline, medallion layer,
-DAG, or multi-writer terminus; the invariant remains:
-`Reader -> Dataset -> Stage* -> Writer`.
+The built-in stages are the **authoring vocabulary** for positioned operations
+inside one class-level `Pipeline` run, composed via `.add_stage(...)`:
+`ValidationStage` (one or more validators, with the same `error`/`warn` severity
+behavior as validator helpers), `ProcessingStage` (one or more processors,
+preserving row trace/explain observations), and `CheckpointStage` (an explicit
+side-effect stage that writes a snapshot and passes the same dataset onward).
+Each stage is a **spec, not an executor**: it compiles to one internal
+`PipelineStep` (via `to_pipeline_step()`) that `.run()` executes and `.describe()`
+renders, so a stage's behaviour and its plan can't drift and there is no second
+execution path (ADR-0003 amendment). There is no public custom-`Stage` contract;
+the dataset→dataset transform extension point is the `Processor`. This is not a
+domain Pipeline, medallion layer, DAG, or multi-writer terminus; the invariant
+remains: `Reader -> Dataset -> Stage* -> Writer`.
 
 `.with_validator(v, severity="error")` attaches a **pre**-validator (checks the
 input); `.with_post_validator(v, severity="error")` attaches a **post**-validator

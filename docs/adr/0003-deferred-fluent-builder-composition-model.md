@@ -36,11 +36,12 @@ read-only/side-effect metadata for future plan validation and dry-run work.
 
 This is not an orchestration engine and not a DAG model. Pipeline scripts still
 compose Readers, ordered single-dataset stages, optional governance outputs, and
-one final Writer through the builder. The public `Stage` contract is scoped to
-one class-level `Pipeline` run: current `Dataset` in, next `Dataset` out, with
-explicit side effects only for checkpoint-style stages. `.describe()` renders
-from the same planned representation that `.run()` executes, so the inspected
-plan and executed plan cannot drift.
+one final Writer through the builder. A stage is scoped to one class-level
+`Pipeline` run — current `Dataset` in, next `Dataset` out, with explicit side
+effects only for checkpoint-style stages — and `.describe()` renders from the
+same planned representation that `.run()` executes, so the inspected plan and
+executed plan cannot drift. (The `Stage`→`Step` execution detail is refined by
+the 2026-06-11 amendment below.)
 
 ## Amendment (2026-06-09): joins consume explicit read dependencies
 
@@ -66,3 +67,27 @@ processor.
 - **The two-tier carrier holds** (ADR-0002): a bulk Writer takes a `Dataset`; a domain-typed write-side (typed `Case`s) would be a different Writer implementation of the same port, so opaque frames are never silently handed to a typed destination.
 - **Layer-typed termini become writer-typed.** `.to(layer)` → `.write_to(writer)`; a future `.checkpoint(layer)` likewise carries a Writer rather than a layer string.
 - **Pipelines per subject — prefer one, allow per-layer.** A subject (Case Type or Reference Data set) is normally served by a **single** pipeline spanning its layer transitions. Where circumstances warrant — e.g. a reference subject's raw load runs on a different cadence than its silver/gold processing — it **may** be split into separate per-layer pipelines (a raw pipeline, a silver pipeline, a gold pipeline), still scoped to the one subject. This is an authoring choice, not a safety rule: the single-writer-per-file invariant (ADR-0001) is unaffected because per-layer pipelines write distinct layer files.
+
+## Amendment (2026-06-11): stages are specs, not a second execution path
+
+The 2026-06-09 amendment introduced the internal `PipelineStep` plan *and* left a
+public `Stage.apply(Dataset) -> Dataset` contract beside it. In practice every
+built-in stage compiled to its `PipelineStep` and executed there (so the per-step
+metadata and per-processor row-trace held), and `apply()` was never called — a
+second, divergent execution path that nothing used. Custom apply-only stages were
+never an adapter anyone wrote, and such a stage could not carry the per-processor
+trace the built-ins rely on.
+
+So the `Stage` model is consolidated onto the one step plan:
+
+- A **stage is a spec**: its only contract is `to_pipeline_step() -> PipelineStep`.
+  The vestigial `apply()` on the built-in stages, the unused generic stage executor,
+  and the never-constructed single-processor step are removed.
+- The three built-in stages (`ValidationStage`, `ProcessingStage`, `CheckpointStage`)
+  remain the **public authoring vocabulary**, composed via `.add_stage(...)`. The
+  `Stage` *protocol* is no longer part of the public facade (`framework.run`) — it is
+  an internal shape — because there is no longer a custom-stage extension point.
+- The **dataset→dataset transform extension point is the `Processor`** (the tested,
+  trace-aware one), not a custom stage. This supersedes the "public `Stage`
+  contract: current `Dataset` in, next `Dataset` out" note in the 2026-06-09
+  amendment.
