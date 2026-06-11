@@ -141,9 +141,11 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 > — `framework.io` (sources/sinks/stores), `framework.transform` (processors,
 > validators, schema, calendar), and `framework.run` (the `Pipeline` builder,
 > orchestration, runner, observability) — not from the modules behind them. The
-> facade names are the stable surface; see [`public-api.md`](public-api.md) for
-> the full member list, the internal-module boundary, and why packaging is an
-> explicit non-goal.
+> facade names are the stable surface. `import framework` exposes only those
+> three facade modules for discovery; it is not a shortcut for
+> `framework.CsvReader` / `framework.Filter` / `framework.Pipeline`. See
+> [`public-api.md`](public-api.md) for the full member list, the
+> internal-module boundary, and why packaging is an explicit non-goal.
 
 | Primitive | What it is / when to use it |
 |-----------|------------------------------|

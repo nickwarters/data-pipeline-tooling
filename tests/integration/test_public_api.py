@@ -50,6 +50,26 @@ def _facade_offenders(root: Path) -> dict[str, set[str]]:
     return offenders
 
 
+def test_package_root_exposes_only_public_facade_modules():
+    import framework
+
+    assert framework.__all__ == ["io", "run", "transform"]
+    assert framework.io.CsvReader is not None
+    assert framework.transform.Filter is not None
+    assert framework.run.Pipeline is not None
+
+    unsupported_facade_names = {
+        "CsvReader",
+        "Filter",
+        "Pipeline",
+        "Dataset",
+        "Store",
+        "RunLog",
+    }
+    for name in unsupported_facade_names:
+        assert not hasattr(framework, name), f"framework.{name} is not public"
+
+
 def test_an_author_can_ingest_a_feed_through_the_io_and_run_facades(tmp_path):
     # The blessed import path: sources/sinks from framework.io, the builder from
     # framework.run. Composing and running them lands the feed and reads back.
