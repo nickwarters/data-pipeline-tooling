@@ -3,6 +3,7 @@ import { CRElement } from './cr-element.js';
 import './cr-outcome.js';
 import { caseDetailFields } from './cr-case-details.js';
 import { buildSummaryModel } from '../evaluators/summary-model.js';
+import { currentOutcome, buildOverrideRows } from '../evaluators/effective-answers.js';
 
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../sharepoint-client.js').OutcomeResult} OutcomeResult */
@@ -69,8 +70,16 @@ export class CRSummary extends CRElement {
       document.createElement('cr-outcome')
     );
 
-    const frozen = this.caseRow?.status === 'Completed' ? this.caseRow.outcomeAtCompletion : null;
-    if (frozen) {
+    const completed = this.caseRow?.status === 'Completed';
+    const overrides = this.caseRow?.overrides ?? [];
+    const frozen = completed ? this.caseRow?.outcomeAtCompletion : null;
+    if (completed && overrides.length && this.computeOutcome) {
+      // Post-completion Answer Overrides exist (ADR-0018): the Outcome block shows
+      // the Current Outcome, re-derived by running computeOutcome over the
+      // Effective Answers rather than reading the frozen snapshot.
+      const result = currentOutcome(this.computeOutcome, this.answers, overrides);
+      outcomeEl.update(() => result, {}, true);
+    } else if (frozen) {
       // Read the frozen snapshot for a Completed Case (ADR-0012): the verdict is
       // whatever the system concluded at completion, not a recomputation.
       /** @type {OutcomeResult} */
@@ -87,6 +96,12 @@ export class CRSummary extends CRElement {
 
     /** @type {Node[]} */
     const children = [/** @type {any} */ (heading), /** @type {any} */ (outcomeEl)];
+
+    // Per-Answer original-vs-overridden detail sits directly under the Outcome
+    // block so the derived Current Outcome is never shown without its provenance.
+    if (completed && overrides.length) {
+      children.push(/** @type {any} */ (this._renderOverrides(overrides)));
+    }
 
     // Summary blocks (key dates + per-Section) only make sense for a loaded Case;
     // the page always sets caseRow alongside summarySections.
@@ -134,6 +149,52 @@ export class CRSummary extends CRElement {
     }
     // Conversation/Summary are valid Sections but contribute no Summary block.
     return null;
+  }
+
+  /**
+   * Outcome corrections block (ADR-0018): a read-only list of the post-completion
+   * Answer Overrides behind the Current Outcome. Each row shows the question, the
+   * original→overridden value, the source (QA or Appeal) and the reasoning, so
+   * the derived verdict is always shown with its provenance.
+   *
+   * @param {import('../sharepoint-client.js').Override[]} overrides
+   * @returns {HTMLElement}
+   */
+  _renderOverrides(overrides) {
+    const section = document.createElement('section');
+    section.className = 'cr-summary-outcome-overrides';
+
+    const h3 = document.createElement('h3');
+    h3.textContent = 'Outcome corrections';
+    section.appendChild(h3);
+
+    if (this.caseRow?.outcomeAtCompletion) {
+      const original = document.createElement('p');
+      original.className = 'cr-summary-outcome-original';
+      original.textContent = `Outcome at completion: ${this.caseRow.outcomeAtCompletion}`;
+      section.appendChild(original);
+    }
+
+    const ul = document.createElement('ul');
+    for (const row of buildOverrideRows(this.catalogue, this.answers, overrides)) {
+      const li = document.createElement('li');
+
+      const q = document.createElement('p');
+      q.textContent = row.questionText;
+      li.appendChild(q);
+
+      const change = document.createElement('p');
+      change.textContent = `${row.originalValue} → ${row.overriddenValue} (${row.source})`;
+      li.appendChild(change);
+
+      const reason = document.createElement('p');
+      reason.textContent = `Reason: ${row.reasoning}`;
+      li.appendChild(reason);
+
+      ul.appendChild(li);
+    }
+    section.appendChild(ul);
+    return section;
   }
 
   /**

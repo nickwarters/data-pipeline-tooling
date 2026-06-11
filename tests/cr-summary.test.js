@@ -310,3 +310,58 @@ test('CRSummary: notes block is omitted by default (notes absent from summarySec
   el.connectedCallback();
   assert.equal(findByClass(/** @type {any} */ (el), 'cr-summary-notes'), null);
 });
+
+/** @returns {import('../src/sharepoint-client.js').QuestionDefinition[]} */
+function overrideCatalogue() {
+  return [
+    { id: 'q-welcome', text: 'Was the customer greeted professionally?', responseType: 'yes-no-na', failureCriteria: 'No', deprecated: false },
+  ];
+}
+
+/** @returns {import('../src/sharepoint-client.js').Override[]} */
+function flipPassToFail() {
+  return [
+    { source: 'qa', author: 'qa-1', at: '2026-06-11T00:00:00Z', answerKey: 'q-welcome', value: 'No', reasoning: 'Greeting was absent.' },
+  ];
+}
+
+test('CRSummary: a Completed Case with Overrides shows the derived Current Outcome, not the frozen snapshot', () => {
+  const el = new CRSummary();
+  el.caseRow = makeCase({ status: 'Completed', outcomeAtCompletion: 'pass', overrides: flipPassToFail() });
+  el.catalogue = overrideCatalogue();
+  el.connectedCallback();
+
+  // Frozen Answers said pass; the Override flips q-welcome to a failure, so the
+  // Current Outcome derives to fail (ADR-0018).
+  el.update((/** @type {any} */ a) => makeComputeOutcome(a), { 'q-welcome': { value: 'Yes' } }, true);
+
+  const block = (/** @type {any} */ (el))._children[1];
+  assert.equal(block._updateArgs.a1().verdict, 'fail', 'Current Outcome derived over Effective Answers');
+  assert.equal(block._updateArgs.a3, true);
+});
+
+test('CRSummary: renders an Outcome corrections block with original→overridden, source and reasoning', () => {
+  const el = new CRSummary();
+  el.caseRow = makeCase({ status: 'Completed', outcomeAtCompletion: 'pass', overrides: flipPassToFail() });
+  el.catalogue = overrideCatalogue();
+  el.connectedCallback();
+  el.update((/** @type {any} */ a) => makeComputeOutcome(a), { 'q-welcome': { value: 'Yes' } }, true);
+
+  const block = findByClass(/** @type {any} */ (el), 'cr-summary-outcome-overrides');
+  assert.ok(block, 'a corrections block is rendered');
+  const text = allText(block);
+  assert.ok(text.includes('Was the customer greeted professionally?'), 'shows the question label');
+  assert.ok(text.includes('Yes'), 'shows the original value');
+  assert.ok(text.includes('No'), 'shows the overridden value');
+  assert.ok(text.includes('Greeting was absent.'), 'shows the reasoning');
+  assert.ok(/qa/i.test(text), 'shows the source');
+});
+
+test('CRSummary: no Outcome corrections block when the Completed Case has no Overrides', () => {
+  const el = new CRSummary();
+  el.caseRow = makeCase({ status: 'Completed', outcomeAtCompletion: 'pass' });
+  el.catalogue = overrideCatalogue();
+  el.connectedCallback();
+  el.update((/** @type {any} */ a) => makeComputeOutcome(a), {}, true);
+  assert.equal(findByClass(/** @type {any} */ (el), 'cr-summary-outcome-overrides'), null);
+});

@@ -29,6 +29,32 @@
  */
 
 /**
+ * A post-completion **Answer Override** (ADR-0018): an additive, per-Answer
+ * correction that *displaces* the frozen original Answer without mutating it.
+ *
+ * `source` is `qa` (a QA Reviewer correction, with or without a QA Check) or
+ * `appeal` (authored when an Appeal is agreed); `sourceCaseId` is stamped when
+ * authored during a formal QA Check, `sourceAppealId` when it resolves an
+ * Appeal. `value` plus the optional `remediationActions` / `attributedParty` /
+ * `remediationDetails` form a *complete replacement set* for the Answer (replace,
+ * never merge). `reasoning` is mandatory.
+ *
+ * @typedef {{
+ *   source: 'qa' | 'appeal',
+ *   sourceCaseId?: string,
+ *   sourceAppealId?: string,
+ *   author: string,
+ *   at: string,
+ *   answerKey: string,
+ *   value: string | string[],
+ *   remediationActions?: Array<{id: string, text: string, completed: boolean}>,
+ *   attributedParty?: { loginName: string, displayName: string },
+ *   remediationDetails?: Record<string, string>,
+ *   reasoning: string
+ * }} Override
+ */
+
+/**
  * @typedef {{
  *   id: string,
  *   caseType: string,
@@ -44,6 +70,7 @@
  *   outcome?: string | null,
  *   outcomeAtCompletion?: string,
  *   hadRemediation?: boolean,
+ *   overrides?: Override[],
  *   dueDate?: string | null,
  *   relatedDate?: string | null,
  *   created?: string,

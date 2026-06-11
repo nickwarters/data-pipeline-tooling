@@ -258,6 +258,46 @@ export const cases = [
     created: '2026-05-04T08:00:00Z',
     etag: 'etag-c13-v1',
   },
+  {
+    // Completed, then corrected by a post-completion Answer Override (ADR-0018):
+    // the frozen Answers all passed (outcomeAtCompletion 'pass'), but a QA
+    // Reviewer overrode q-welcome to a failure, so the Current Outcome derives to
+    // 'fail'. Demonstrates the read-only Current Outcome differing from the
+    // snapshot. Completed two months ago so it sits outside the owner roll-up's
+    // 7-day window.
+    id: 'case-14',
+    caseType: 'hello-review',
+    title: 'Hello Review #14 (overridden)',
+    status: 'Completed',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-rp',
+    answers: {
+      'q-welcome': { value: 'Yes' },
+      'q-needs': { value: 'Yes' },
+      'q-resolve': { value: 'Yes' },
+    },
+    overrides: [
+      {
+        source: 'qa',
+        author: 'user-qa',
+        at: _twoMonthsAgo.toISOString(),
+        answerKey: 'q-welcome',
+        value: 'No',
+        remediationActions: [
+          { id: 'ov-14-1', text: 'Coach agent on opening greeting standards.', completed: false },
+        ],
+        attributedParty: { loginName: 'agent-rp', displayName: 'Agent RP' },
+        remediationDetails: { rootCause: 'Greeting omitted on the call recording' },
+        reasoning: 'On review the recording shows no greeting was given; original Answer was wrong.',
+      },
+    ],
+    conversation: [],
+    notes: '',
+    completedAt: _twoMonthsAgo.toISOString(),
+    outcomeAtCompletion: 'pass',
+    created: '2026-04-05T08:00:00Z',
+    etag: 'etag-c14-v1',
+  },
   // --- Reviewer Manager (user-rm) report fixture cases ---
   {
     id: 'rm-case-1',
