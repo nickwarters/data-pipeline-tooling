@@ -13,6 +13,7 @@ from pathlib import Path
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "cases.csv"
 
 PIPELINES_DIR = Path(__file__).parent.parent.parent / "pipelines"
+CASE_REVIEW_DIR = Path(__file__).parent.parent.parent / "case_review"
 PUBLIC_FACADES = {"io", "run", "transform"}
 
 
@@ -30,6 +31,23 @@ def _framework_submodules_imported(source: str) -> set[str]:
                 if alias.name.startswith("framework."):
                     used.add(alias.name.split(".", 2)[1])
     return used
+
+
+def _facade_offenders(root: Path) -> dict[str, set[str]]:
+    """Map each production module under ``root`` to the framework internals it
+    imports — bypassing the public facades. Empty means the tree is clean.
+
+    Test modules are excluded: their tests legitimately import framework
+    internals (e.g. ``framework.testing``).
+    """
+    offenders: dict[str, set[str]] = {}
+    for path in sorted(root.rglob("*.py")):
+        if path.name.startswith("test_") or "__pycache__" in path.parts:
+            continue
+        internal = _framework_submodules_imported(path.read_text()) - PUBLIC_FACADES
+        if internal:
+            offenders[str(path.relative_to(root))] = internal
+    return offenders
 
 
 def test_an_author_can_ingest_a_feed_through_the_io_and_run_facades(tmp_path):
@@ -158,11 +176,16 @@ def test_demo_pipelines_import_framework_only_through_the_public_facades():
     # by accident. Every framework import in pipelines/ must go through a facade —
     # including feed subpackages (pipelines/<feed>/, scaffolded by #97). Test
     # modules are excluded: their tests legitimately import framework.testing.
-    offenders: dict[str, set[str]] = {}
-    for path in sorted(PIPELINES_DIR.rglob("*.py")):
-        if path.name.startswith("test_") or "__pycache__" in path.parts:
-            continue
-        internal = _framework_submodules_imported(path.read_text()) - PUBLIC_FACADES
-        if internal:
-            offenders[str(path.relative_to(PIPELINES_DIR))] = internal
-    assert not offenders, f"pipelines bypassing the public facades: {offenders}"
+    assert not _facade_offenders(PIPELINES_DIR), (
+        f"pipelines bypassing the public facades: {_facade_offenders(PIPELINES_DIR)}"
+    )
+
+
+def test_case_review_imports_framework_only_through_the_public_facades():
+    # case_review/ is an application layer above the framework — the same
+    # architectural position as pipelines/ — so it depends on the same stable
+    # surface (#159). Production code only: domain *tests* (tests/case_review/)
+    # legitimately import framework internals and stay out of scope.
+    assert not _facade_offenders(CASE_REVIEW_DIR), (
+        f"case_review bypassing the public facades: {_facade_offenders(CASE_REVIEW_DIR)}"
+    )

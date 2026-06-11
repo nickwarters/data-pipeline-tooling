@@ -24,12 +24,13 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   unique under pytest's default import mode — no basename collisions. A
   scaffolded feed (#97) follows the same convention: its code lands in
   `pipelines/<feed>/` and its test in `tests/pipelines/test_<feed>.py`.
-- **Public API (#95):** pipeline code imports through the three facades
-  `framework.io` / `framework.transform` / `framework.run`, not the modules
-  behind them (those are internal layout). The facades are the stable contract;
+- **Public API (#95):** application code (`pipelines/` + the `case_review/`
+  domain layer) imports through the three facades `framework.io` /
+  `framework.transform` / `framework.run`, not the modules behind them (those
+  are internal layout). The facades are the stable contract;
   [`docs/public-api.md`](docs/public-api.md) lists the surface, the internal
   modules, and the packaging non-goal. `tests/integration/test_public_api.py`
-  holds `pipelines/` to this boundary.
+  holds both `pipelines/` and `case_review/` to this boundary.
 - **Core primitives:** `Dataset` (opaque tabular carrier, pandas behind the
   seam), `Reader` (`read() -> Dataset`; `CsvReader`, `SqliteReader`),
   `Writer` (`write(dataset) -> None`; owns target location + load strategy —

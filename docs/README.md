@@ -116,7 +116,7 @@ best-effort when later items should continue after one item fails.
 The foundational vocabulary. Each links to its deep doc; the consolidated
 reference with worked examples is [`core-primitives.md`](core-primitives.md).
 
-> **Importing.** Pipeline code imports these through the three public **facades**
+> **Importing.** Application code (`pipelines/` + `case_review/`) imports these through the three public **facades**
 > — `framework.io` (sources/sinks/stores), `framework.transform` (processors,
 > validators, schema, calendar), and `framework.run` (the `Pipeline` builder,
 > orchestration, runner, observability) — not from the modules behind them. The
