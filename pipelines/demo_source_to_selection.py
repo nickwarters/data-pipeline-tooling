@@ -30,7 +30,6 @@ sample feed and the run is deterministic.
 
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -60,20 +59,20 @@ class ActivityCase:
     amount: int
 
 
-# The Case Type bundles its schema with its Variations — declarative, imported
-# directly, no registry (ADR-0005). This demo selects under Variation "v1".
+# The Case Type bundles its schema and identity contract with its Variations —
+# declarative, imported directly, no registry (ADR-0005). ``natural_key`` is the
+# stable identifying column; the Case Type derives its own ``namespace`` from its
+# name, so case_id derivation is owned in one place (ADR-0009). This demo selects
+# under Variation "v1".
 CASES = CaseType(
     name="cases",
     schema=ActivityCase,
+    natural_key=("case_ref",),
     variations=(
         Variation(id="v1", question_bank_id="qb-100"),
         Variation(id="v2", question_bank_id="qb-200"),
     ),
 )
-
-# Stable namespace for deterministic case_id derivation — uuid5(NAMESPACE_DNS,
-# Case Type name) so each Case Type has its own UUID space (ADR-0009).
-CASE_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_DNS, CASES.name)
 
 # Fixed so the working-day window aligns with the bundled feed (Fri 2026-05-29);
 # doubles as the Ingest run_id / load_date idempotency key (ADR-0006).
@@ -118,12 +117,7 @@ def run_ingest(context: RunContext):
         CASES.schema,
         strategy=strategy,
     ).run()
-    return ingest_silver_to_gold(
-        store,
-        "cases",
-        namespace=CASE_NAMESPACE,
-        natural_key=["case_ref"],
-    ).run()
+    return ingest_silver_to_gold(store, CASES).run()
 
 
 def run_selection(context: RunContext):

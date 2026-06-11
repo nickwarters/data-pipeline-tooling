@@ -49,8 +49,10 @@ class ActivityCase:          # the Case Type's schema (its columns + types)
     amount: int
 
 CASES = CaseType(
-    name="cases",            # the subject: medallion directory + table name
+    name="cases",            # the subject: medallion directory + table name;
+                             #   also seeds the case_id namespace (ADR-0009)
     schema=ActivityCase,     # enforced at the silver/gold boundaries
+    natural_key=("case_ref",),  # identifies a Case; hashed to the deterministic case_id
     variations=(
         Variation(id="v1", question_bank_id="qb-100"),
         Variation(id="v2", question_bank_id="qb-200"),

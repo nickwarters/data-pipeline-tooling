@@ -15,6 +15,7 @@ def _case_type() -> CaseType:
     return CaseType(
         name="cases",
         schema=ActivityCase,
+        natural_key=("case_ref",),
         variations=(Variation(id="v1", question_bank_id="qb-100"),),
     )
 

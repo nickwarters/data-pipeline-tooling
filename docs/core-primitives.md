@@ -728,11 +728,14 @@ case-review concepts belong there (or in pipeline support modules), not under
 `framework/`. The full flow lives in [`selection.md`](selection.md); in brief:
 
 ### `CaseType` / `Variation` — the declarative domain objects
-A `CaseType` (`case_review.case_type`) bundles a Case Type's `schema` with its
-`variations`, imported directly — no global CaseType config registry (ADR-0005).
-`CaseType.variation(id)` resolves a `Variation` (its `question_bank_id` + later
-overrides) and raises a located `KeyError` on an unknown id. Declarative data,
-not code (one Case Type has many Variations — `CONTEXT.md`).
+A `CaseType` (`case_review.case_type`) bundles a Case Type's `schema`, its
+identity contract, and its `variations`, imported directly — no global CaseType
+config registry (ADR-0005). The identity contract is the `natural_key` (the
+column(s) that identify a Case) plus a `namespace` property derived from `name`;
+the gold builders read both off the Case Type to mint the deterministic `case_id`
+(ADR-0009). `CaseType.variation(id)` resolves a `Variation` (its `question_bank_id`
++ later overrides) and raises a located `KeyError` on an unknown id. Declarative
+data, not code (one Case Type has many Variations — `CONTEXT.md`).
 
 ### `CasePool` — the domain population, behind named reads
 `CasePool(case_type, store, calendar)` (`case_review.case_pool`) is the

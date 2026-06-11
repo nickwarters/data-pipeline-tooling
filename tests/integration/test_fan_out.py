@@ -5,18 +5,20 @@ by two independent single-table pipelines, each projecting only its columns,
 sharing one normalisation Processor, and landing current-state gold via Refresh.
 """
 
-import uuid
-
 import pandas as pd
 
 from framework.builder import Pipeline
 from framework.dataset import Dataset
+from case_review.case_type import CaseType
 from case_review.gold import detail_ingest_silver_to_gold, ingest_silver_to_gold
 from framework.processors import Filter, Rename, SelectColumns, Unpivot
 from framework.store import Store
 from framework.strategy import AccumulateByRun, Refresh
+from tests._schema_fixtures import LandedCase
 
-_NS = uuid.uuid5(uuid.NAMESPACE_DNS, "wide_cases")
+# One Case Type owns identity for the wide feed; the Cases and Detail builders
+# both read it, so case_id matches with no cross-pipeline join (ADR-0009).
+_WIDE_CASES = CaseType(name="wide_cases", schema=LandedCase, natural_key=("case_ref",))
 
 PRODUCT_COLS = [f"product_{i}" for i in range(1, 4)]  # keep small for tests
 
@@ -66,9 +68,8 @@ def test_detail_silver_to_gold_produces_one_row_per_product(tmp_path):
 
     detail_ingest_silver_to_gold(
         store,
+        _WIDE_CASES,
         "products",
-        namespace=_NS,
-        natural_key=["case_ref"],
         unpivot=Unpivot(
             id_vars=["case_id"],
             value_vars=PRODUCT_COLS,
@@ -103,15 +104,14 @@ def test_detail_case_id_matches_case_id_derived_independently(tmp_path):
 
     # Build cases gold (case_id derived independently)
     ingest_silver_to_gold(
-        store, "cases", namespace=_NS, natural_key=["case_ref"]
+        store, _WIDE_CASES, "cases"
     ).run()
 
     # Build products gold (case_id derived independently — same namespace + key)
     detail_ingest_silver_to_gold(
         store,
+        _WIDE_CASES,
         "products",
-        namespace=_NS,
-        natural_key=["case_ref"],
         unpivot=Unpivot(
             id_vars=["case_id"],
             value_vars=PRODUCT_COLS,
@@ -158,7 +158,7 @@ def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path
     )
 
     ingest_silver_to_gold(
-        store, "cases", namespace=_NS, natural_key=["case_ref"]
+        store, _WIDE_CASES, "cases"
     ).run()
 
     # ---- Products pipeline: raw → silver (product columns only) ----
@@ -173,9 +173,8 @@ def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path
 
     detail_ingest_silver_to_gold(
         store,
+        _WIDE_CASES,
         "products",
-        namespace=_NS,
-        natural_key=["case_ref"],
         unpivot=Unpivot(
             id_vars=["case_id"],
             value_vars=PRODUCT_COLS,
