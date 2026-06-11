@@ -6,11 +6,13 @@ between the framework and the pipeline scripts that depend on it: it states
 **which names are public**, **which modules are internal layout**, and the one
 rule that follows from that split.
 
-> **The rule.** Pipeline code imports from the three **facades** —
-> `framework.io`, `framework.transform`, `framework.run` — never from the
-> modules behind them. The facade names are the stable surface; the submodule
-> paths can be reorganised without notice. A test
-> (`tests/integration/test_public_api.py`) holds `pipelines/` to this boundary.
+> **The rule.** Application code — both `pipelines/` and the `case_review/`
+> domain layer — imports from the three **facades** — `framework.io`,
+> `framework.transform`, `framework.run` — never from the modules behind them.
+> The facade names are the stable surface; the submodule paths can be
+> reorganised without notice. A test
+> (`tests/integration/test_public_api.py`) holds both `pipelines/` and
+> `case_review/` to this boundary.
 
 ```python
 from framework.io import CsvReader, StoreCatalog, RAW, Refresh
@@ -109,9 +111,10 @@ pusher — internal seams with no facade.
 `RecordingWriter`, `RecordingRunLog`, `read_run_log`) is a **test-support**
 surface for pipeline authors, documented in
 [testing-helpers.md](testing-helpers.md). It is *not* one of the three runtime
-facades and **pipeline code must not import it at runtime** — only a pipeline's
-tests do (the [boundary test](../tests/integration/test_public_api.py) holds `pipelines/` to
-the three facades, and `framework.testing` is not among them). It is intentional
+facades and **application code must not import it at runtime** — only a module's
+tests do (the [boundary test](../tests/integration/test_public_api.py) holds both
+`pipelines/` and `case_review/` to the three facades, and `framework.testing` is
+not among them). It is intentional
 public surface for tests, so unlike the internal modules below its names are
 stable, but it carries no runtime role.
 
@@ -123,6 +126,13 @@ of its public API. New case-review concepts belong in `case_review` (or pipeline
 support modules), not under `framework/` — see
 [`test_framework_boundary.py`](../tests/integration/test_framework_boundary.py) and
 [selection.md](selection.md).
+
+As a layer *above* the framework, `case_review` is a **plain facade consumer** —
+the same architectural position as `pipelines/` — so it imports the framework
+only through the three facades, and the boundary test holds it there (#159). The
+two boundary tests are complementary: `test_framework_boundary.py` governs *where
+domain code lives*, while `test_public_api.py` governs *how `case_review` imports
+the framework*.
 
 ## Packaging — an explicit non-goal
 

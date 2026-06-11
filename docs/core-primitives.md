@@ -19,9 +19,10 @@ builds on these shapes. For the
 *why* behind each, see the ADRs referenced inline; for domain language (Case,
 CasePool, Feed, Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
 
-Pipeline code imports these primitives through the three public facades
-(`framework.io` / `framework.transform` / `framework.run`), not the home modules
-named per-primitive below; the home modules locate the code, the facades are the
+Application code (`pipelines/` + the `case_review/` domain layer) imports these
+primitives through the three public facades (`framework.io` /
+`framework.transform` / `framework.run`), not the home modules named
+per-primitive below; the home modules locate the code, the facades are the
 stable contract. See [`public-api.md`](public-api.md).
 
 ## Medallion layers
