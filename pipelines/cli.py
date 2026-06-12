@@ -21,9 +21,14 @@ import json
 import sys
 from pathlib import Path
 
-from framework.run import FreshnessError, RunRegistry, UnknownPipelineError
-from framework.transform import ValidationError
-from pipelines.demo_source_to_selection import build_runner
+from framework.run import (
+    FreshnessError,
+    Orchestrator,
+    RunRegistry,
+    UnknownPipelineError,
+)
+from framework.transform import ValidationError, WorkingDayCalendar
+from pipelines.demo_source_to_selection import build_pipeline_sets, build_runner
 
 # Mirrors the layout PipelineRunner writes: a per-base run registry and the
 # per-case-type JSONL run logs the runner emits alongside it.
@@ -78,6 +83,43 @@ def _run(args: argparse.Namespace) -> int:
         )
     except (FreshnessError, UnknownPipelineError, ValidationError) as exc:
         print(str(exc), file=sys.stderr)
+        return 1
+    return 0
+
+
+def _orchestrate(args: argparse.Namespace) -> int:
+    runner = build_runner()
+    try:
+        orchestrator = Orchestrator(
+            runner,
+            build_pipeline_sets(),
+            WorkingDayCalendar(),
+        )
+        if args.loop:
+            results = orchestrator.run_until_complete(
+                Path(args.base_dir),
+                run_date=args.run_date,
+                poll_seconds=args.poll_seconds,
+                max_idle_polls=args.max_idle_polls,
+            )
+            decisions = [d for result in results for d in result.decisions]
+        else:
+            result = orchestrator.run_due_once(
+                Path(args.base_dir), run_date=args.run_date
+            )
+            decisions = list(result.decisions)
+    except (FreshnessError, UnknownPipelineError, ValidationError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    for decision in decisions:
+        line = (
+            f"{decision.run_date.isoformat()}  {decision.set_name}  "
+            f"{decision.case_type}/{decision.pipeline}  {decision.status}"
+        )
+        if decision.reason:
+            line += f"  {decision.reason}"
+        print(line)
+    if any(decision.status == "failed" for decision in decisions):
         return 1
     return 0
 
@@ -178,6 +220,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument("--freshness-days", type=int, default=0)
     run.set_defaults(func=_run)
+
+    orchestrate = sub.add_parser("orchestrate", help="run scheduled due work")
+    orchestrate.add_argument("base_dir")
+    orchestrate.add_argument("--run-date", type=_date, default=dt.date.today())
+    mode = orchestrate.add_mutually_exclusive_group()
+    mode.add_argument("--once", action="store_true", help="run one due-work pass")
+    mode.add_argument("--loop", action="store_true", help="poll until due work settles")
+    orchestrate.add_argument(
+        "--poll-seconds",
+        type=float,
+        default=5,
+        help="seconds between loop polls (default 5)",
+    )
+    orchestrate.add_argument(
+        "--max-idle-polls",
+        type=int,
+        default=3,
+        help="stop a loop after N idle polls (default 3)",
+    )
+    orchestrate.set_defaults(func=_orchestrate)
 
     runs = sub.add_parser("runs", help="list recent runs from the run registry")
     runs.add_argument("base_dir")

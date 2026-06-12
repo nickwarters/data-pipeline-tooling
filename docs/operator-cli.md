@@ -1,11 +1,12 @@
-# The operator CLI — run, status, runs, log
+# The operator CLI — run, orchestrate, status, runs, log
 
 `python -m pipelines.cli` is a small command surface for the everyday operator
 tasks that would otherwise need a hand-written wrapper script: **run** a
-registered pipeline, check its **status**, list recent **runs**, and inspect a
-run **log** (issue #99). It is a thin shell over the public `framework.run`
-orchestration (`PipelineRunner`) and the `RunLog` / `RunRegistry` observability
-seam — everything stays local SQLite + JSONL, with no external services
+registered pipeline, **orchestrate** scheduled due work, check its **status**,
+list recent **runs**, and inspect a run **log** (issue #99). It is a thin shell
+over the public `framework.run` runtime surface (`PipelineRunner`,
+`Orchestrator`) and the `RunLog` / `RunRegistry` observability seam —
+everything stays local SQLite + JSONL, with no external services
 ([ADR-0001](adr/0001-sqlite-medallion-store-on-network-share.md),
 [ADR-0007](adr/0007-fail-fast-atomic-runs-jsonl-observability.md)).
 
@@ -19,7 +20,10 @@ python -m pipelines.cli <command> ...
 All commands take the **base directory** of the run store — the same path you
 pass to `run`. The runner lays out `<base>/_runs/<case_type>.log` (the JSONL run
 logs) and `<base>/_registry/runs.db` (the queryable run registry) underneath it;
-`status` / `runs` / `log` read from there.
+`status` / `runs` / `log` read from there. `orchestrate` also writes
+`<base>/_orchestration/runs.db`, a separate SQLite decision log for due,
+skipped, succeeded, failed, and blocked scheduled items. Actual pipeline
+execution records remain in `RunLog` / `RunRegistry` only.
 
 > `python -m pipelines.run <case_type> <pipeline> <base> …` is the historical
 > `run`-only shortcut, kept working — it is exactly `python -m pipelines.cli run
@@ -63,6 +67,36 @@ $ python -m pipelines.cli run cases selection /data --logical-run-id 2026-05-cor
 The second invocation replaces the first run's rows in the SelectionPool (the
 `run_id` / `logical_run_id` columns hold `2026-05-correction`); the row count
 stays stable instead of doubling.
+
+## `orchestrate` — run scheduled due work
+
+```sh
+python -m pipelines.cli orchestrate <base_dir> \
+    [--run-date YYYY-MM-DD] [--once | --loop] [--poll-seconds N]
+```
+
+Runs the configured `PipelineSet`s for the given run date. `--once` performs one
+due-work pass. `--loop` keeps polling the same run date until work due that day
+has settled or the idle poll limit is reached. The current demo configuration is
+one `cases` set with `ingest -> selection`, both scheduled on `Weekdays()`.
+
+Schedules are Python definitions owned by the pipeline code. The framework
+provides `Weekdays`, `SpecificWeekdays`, `DayOfMonth`,
+`NthWorkingDayOfMonth`, `LastWorkingDayOfMonth`, and `ManualOnly`. `Weekdays()`
+is the normal "daily" schedule; weekends and holidays are evaluated by
+`WorkingDayCalendar`.
+
+Dependencies are freshness-based. A scheduled downstream runs through
+`PipelineRunner` only when its declared upstreams have successful history fresh
+enough for the run date. A failed scheduled item is terminal for that
+orchestrator invocation; its downstream dependants are marked `blocked`, while
+independent pipelines in the same set and all other `PipelineSet`s continue.
+
+```console
+$ python -m pipelines.cli orchestrate /data --run-date 2026-05-29 --once
+2026-05-29  cases  cases/ingest  succeeded
+2026-05-29  cases  cases/selection  succeeded
+```
 
 ## `status` — the latest run per pipeline
 

@@ -124,6 +124,22 @@ def test_log_summarizes_a_run_log_file(tmp_path):
     assert "step records" in result.stdout
 
 
+def test_orchestrate_once_runs_demo_set_and_writes_both_registries(tmp_path):
+    result = _cli(
+        "orchestrate",
+        str(tmp_path),
+        "--run-date",
+        "2026-05-29",
+        "--once",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "cases/ingest  succeeded" in result.stdout
+    assert "cases/selection  succeeded" in result.stdout
+    assert (tmp_path / "_orchestration" / "runs.db").exists()
+    assert (tmp_path / "_registry" / "runs.db").exists()
+
+
 def test_format_record_includes_zero_row_metrics():
     from pipelines.cli import _format_record
 

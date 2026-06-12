@@ -128,7 +128,10 @@ the target layer. The **CasePool** then reads the ingested silver and surfaces
 narrows them into the **SelectionPool**. Every `.run()` is fail-fast and atomic,
 and emits a structured **RunLog**. Repeated independent runs can choose their
 own orchestration policy: `ForEach` is fail-fast by default, or explicit
-best-effort when later items should continue after one item fails.
+best-effort when later items should continue after one item fails. Scheduled
+work uses `Orchestrator` above `PipelineRunner`: it evaluates the day's due
+`PipelineSet`s, enforces freshness dependencies, isolates failures, and records
+its decisions in a separate orchestration store.
 
 ---
 
@@ -160,6 +163,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`Stage`** | A position-sensitive step inside one class-level `Pipeline` run: current `Dataset` in, next `Dataset` out. Compose with `.add_stage(...)` when validation, processing, or explicit checkpoint writes must appear at an exact point. Built-ins: `ValidationStage`, `ProcessingStage`, `CheckpointStage`. |
 | **`Pipeline`** (builder) | The deferred fluent builder: `Pipeline(name, reader).add_stage(…).write_to(writer)`. It builds one ordered plan; call `.describe()` to inspect the planned reader/stages/governance/writer without executing, then `.run(context=…)` to execute that plan fail-fast and atomic with RunLog observability. ([ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md)) |
 | **`ForEach`** | Runnable orchestration for independent repeated runs: pass items plus `pipeline_builder(item, context)`, then call `.run(context)`. It creates a fresh builder and per-item `RunContext` for each item. Default behavior fails fast on the first failed item; `continue_on_error=True` returns per-item success/failure outcomes and continues. Use when files must remain separate logical runs. |
+| **`Orchestrator` / `PipelineSet` / `ScheduledPipeline`** | Scheduled due-work orchestration above `PipelineRunner`. Python definitions own sets, dependencies, and default schedules; YAML can override enablement, schedule timing, and freshness windows. A single pass or bounded loop runs due items for one run date, marks failed items terminal, blocks their downstream dependants, and lets independent items and other sets continue. |
 | **`RunLog` / `RunRegistry`** | `RunLog` emits one JSON record per step (+ a run summary) to a `.log` file — the observability seam. `RunRegistry` ingests that JSONL into a queryable run-history store. → [run-log-format.md](run-log-format.md) ([ADR-0007](adr/0007-fail-fast-atomic-runs-jsonl-observability.md)) |
 | **`RunContext` / `PipelineRunner` / `FreshnessRequirement`** | The thin domain runner: register handlers by `(case_type, pipeline)`, receive a context carrying execution/logical identity, dates, RunLog, and RunRegistry, and block stale downstream runs by querying recent successful upstream history. → [core-primitives.md](core-primitives.md) |
 | **`CaseType` / `Variation`** | Case-review application/domain objects in `case_review.case_type`, not framework primitives: a Case Type bundles its `schema`, its identity contract (`natural_key` + a `namespace` derived from `name`, ADR-0009), and its `variations`, imported directly (no global CaseType config registry). A Variation overrides only what differs — most often the `question_bank_id`. → [selection.md](selection.md) |

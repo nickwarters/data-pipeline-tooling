@@ -537,6 +537,62 @@ python -m pipelines.run cases ingest /tmp/demo --run-date 2026-05-29
 python -m pipelines.run cases selection /tmp/demo --run-date 2026-05-29
 ```
 
+### `Orchestrator` — scheduled PipelineSets
+`Orchestrator` (`framework.orchestration`) sits above `PipelineRunner`. It is
+not a builder-level `Pipeline`; it decides which registered domain Pipelines are
+due for one run date, invokes them through the runner, and records scheduling
+decisions separately from execution history:
+
+```python
+from framework.run import (
+    FreshnessRequirement,
+    Orchestrator,
+    PipelineSet,
+    ScheduledPipeline,
+    Weekdays,
+)
+
+sets = (
+    PipelineSet(
+        "cases",
+        (
+            ScheduledPipeline("cases", "ingest", Weekdays()),
+            ScheduledPipeline(
+                "cases",
+                "selection",
+                Weekdays(),
+                depends_on=(FreshnessRequirement("ingest"),),
+            ),
+        ),
+    ),
+)
+
+Orchestrator(runner, sets, WorkingDayCalendar()).run_due_once(
+    "/path/to/share",
+    run_date=date(2026, 5, 29),
+)
+```
+
+`PipelineSet` is the independent failure boundary, normally one Case Type or one
+platform-wide group. `ScheduledPipeline` references an existing runner
+registration and carries its default schedule, freshness dependencies, and
+enablement. `Weekdays()` is the normal daily schedule, using
+`WorkingDayCalendar` for weekends and holidays; other schedules are
+`SpecificWeekdays`, `DayOfMonth`, `NthWorkingDayOfMonth`,
+`LastWorkingDayOfMonth`, and `ManualOnly`.
+
+Each invocation writes decisions to `<base_dir>/_orchestration/runs.db` with a
+stable item key of `set_name/case_type/pipeline/run_date`. `RunLog` and
+`RunRegistry` stay reserved for actual Pipeline execution records. A failed
+scheduled item is terminal for that orchestrator run and blocks downstream
+dependants, but unrelated items in the same set and every other `PipelineSet`
+continue. `run_until_complete(...)` performs a bounded Python polling loop over
+the same run date; it does not retry failed items from the same invocation.
+
+Python definitions are canonical. YAML overrides may disable a scheduled item,
+replace its schedule timing, or override freshness windows for operations
+without changing the registered pipeline code.
+
 ### `ForEach` — independent per-item builder runs
 `ForEach` (`framework.orchestration`) is the small runnable orchestration
 primitive for repeated runs where each item must stay independent but use the

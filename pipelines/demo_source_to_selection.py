@@ -50,7 +50,10 @@ from framework.run import (
     FreshnessRequirement,
     Pipeline,
     PipelineRunner,
+    PipelineSet,
     RunContext,
+    ScheduledPipeline,
+    Weekdays,
     raw_to_silver,
 )
 from framework.transform import Filter, Score, Sort, Stamp, WorkingDayCalendar
@@ -174,6 +177,24 @@ def build_runner() -> PipelineRunner:
         freshness=(FreshnessRequirement(upstream_pipeline="ingest"),),
     )
     return runner
+
+
+def build_pipeline_sets() -> tuple[PipelineSet, ...]:
+    """Return the demo's canonical scheduled PipelineSets."""
+    return (
+        PipelineSet(
+            CASES.name,
+            (
+                ScheduledPipeline(CASES.name, "ingest", Weekdays()),
+                ScheduledPipeline(
+                    CASES.name,
+                    "selection",
+                    Weekdays(),
+                    depends_on=(FreshnessRequirement("ingest"),),
+                ),
+            ),
+        ),
+    )
 
 
 def main(target_dir: str) -> None:
