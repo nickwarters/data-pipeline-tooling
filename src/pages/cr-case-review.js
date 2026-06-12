@@ -330,6 +330,7 @@ export class CRCaseReview extends CRElement {
       overrideEl.catalogue = catalogue;
       overrideEl.attributeFailures = attributeFailures === true;
       overrideEl.remediationFields = remediationFields;
+      overrideEl.computeOutcome = computeOutcome;
       overrideEl.client = client;
       section.append(/** @type {any} */ (overrideEl));
     }
@@ -516,6 +517,7 @@ export class CRCaseReview extends CRElement {
     appealEl.canResolve = roles.includes('qaReviewer');
     appealEl.attributeFailures = attributeFailures === true;
     appealEl.remediationFields = remediationFields;
+    appealEl.computeOutcome = computeOutcome;
     appealEl.client = client;
     appealEl.currentUser = currentUser;
     appealEl.catalogue = catalogue;
@@ -656,6 +658,12 @@ export class CRCaseReview extends CRElement {
       fields.hadRemediation = Object.values(answers).some(
         a => (a.remediationActions?.length ?? 0) > 0
       );
+      // The effective-outcome columns (ADR-0019) start life equal to the frozen
+      // snapshot; an Override has not yet been authored, so nothing is corrected.
+      // They re-stamp on every Override write; outcomeAtCompletion stays frozen.
+      fields.effectiveOutcome = fields.outcomeAtCompletion;
+      fields.effectiveHadRemediation = fields.hadRemediation;
+      fields.outcomeOverridden = false;
     }
 
     const etag = saveQueue.getEtag(caseId);

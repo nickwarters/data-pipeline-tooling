@@ -551,6 +551,27 @@ test('CRCaseReview: _completeCase stamps the frozen outcome snapshot in the same
   assert.equal(fields.hadRemediation, true, 'hadRemediation is true when an Answer carries a Remediation Action');
 });
 
+test('CRCaseReview: _completeCase initialises the effective-outcome columns equal to the frozen snapshot (ADR-0019)', async () => {
+  const client = makeRecordingClient();
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = new SaveQueue(/** @type {any} */ (client));
+  el.saveQueue.loadCase(BASE_ROW);
+
+  const answers = {
+    'q-needs': { value: 'No', remediationActions: [{ id: 'ra-0', text: 'Retrain.', completed: false }] },
+  };
+  /** @param {Record<string, any>} a */
+  const computeOutcome = (a) => /** @type {any} */ ({ verdict: Object.values(a).some(x => x.value === 'No') ? 'fail' : 'pass' });
+
+  await el._completeCase('c1', el.client ?? undefined, el.saveQueue ?? undefined, computeOutcome, answers);
+
+  const { fields } = client.patches[0];
+  assert.equal(fields.effectiveOutcome, 'fail', 'effectiveOutcome initialises equal to outcomeAtCompletion');
+  assert.equal(fields.effectiveHadRemediation, true, 'effectiveHadRemediation initialises equal to hadRemediation');
+  assert.equal(fields.outcomeOverridden, false, 'no Override exists at completion');
+});
+
 test('CRCaseReview: hadRemediation=true is mutually exclusive with outcomeAtCompletion=pass', async () => {
   const client = makeRecordingClient();
   const el = new CRCaseReview();

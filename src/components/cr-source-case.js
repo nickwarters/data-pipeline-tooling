@@ -112,6 +112,7 @@ export class CRSourceCase extends CRElement {
     editor.catalogue = this.catalogue;
     editor.attributeFailures = this.attributeFailures;
     editor.remediationFields = this.remediationFields;
+    editor.computeOutcome = this.computeOutcome;
     editor.client = this.client;
     editor.source = 'qa';
     editor.sourceCaseId = this.sourceCaseId;

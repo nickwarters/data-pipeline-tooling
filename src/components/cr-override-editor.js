@@ -2,11 +2,13 @@
 import { CRElement } from './cr-element.js';
 import { isFailure, materializeRemediationActions } from '../evaluators/failure-evaluator.js';
 import { classifyTransition, validateOverride, buildOverride } from '../evaluators/override-author.js';
+import { effectiveAnswers } from '../evaluators/effective-answers.js';
 import './cr-attribute-menu.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').Override} Override */
+/** @typedef {import('../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../sharepoint-client.js').RemediationField} RemediationField */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
@@ -55,6 +57,12 @@ export class CROverrideEditor extends CRElement {
     this.remediationFields = [];
     /** Backs the embedded people picker for the Attributed Party. @type {SharePointClient | null} */
     this.client = null;
+    /**
+     * The original Case Type's outcome function, re-run over the Effective Answers
+     * to re-stamp the effective-outcome columns on every Override write (ADR-0019).
+     * @type {((answers: Record<string, Answer>) => import('../sharepoint-client.js').OutcomeResult) | null}
+     */
+    this.computeOutcome = null;
     /** @type {'qa' | 'appeal'} */
     this.source = 'qa';
     /** Set when authored during a formal QA Check. @type {string | undefined} */
@@ -367,8 +375,25 @@ export class CROverrideEditor extends CRElement {
     });
 
     const next = [...this._overrides(), override];
-    if (this.caseRow) this.caseRow.overrides = next;
-    this.saveQueue?.enqueue(this.caseId, 'overrides', next);
+    if (this.caseRow) {
+      this.caseRow.overrides = next;
+
+      // Re-stamp the effective-outcome columns in the *same* write that appends to
+      // overrides[] (ADR-0019): re-derive the Current Outcome over the Effective
+      // Answers and flag the Case as overridden. One atomic ETag-guarded PATCH
+      // (ADR-0008) so overrides[] and the columns can never desync — including on
+      // the cross-row write path, since `caseId` is the original row throughout.
+      const compute = this.computeOutcome ?? (() => /** @type {any} */ ({ verdict: 'pass' }));
+      const effective = effectiveAnswers(this.caseRow.answers, next);
+      this.saveQueue?.enqueueFields(this.caseId, {
+        overrides: next,
+        effectiveOutcome: compute(effective).verdict,
+        effectiveHadRemediation: Object.values(effective).some(
+          (a) => (a.remediationActions?.length ?? 0) > 0
+        ),
+        outcomeOverridden: next.length > 0,
+      });
+    }
     this._draft = this._emptyDraft();
     this._render();
   }

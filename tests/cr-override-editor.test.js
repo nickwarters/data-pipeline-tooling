@@ -71,12 +71,18 @@ const CATALOGUE = [
 ];
 
 function makeQueue() {
-  /** @type {{ id: string, field: string, value: any }[]} */
+  /** @type {{ id: string, field: string, value: any, fields?: any }[]} */
   const enqueued = [];
   return {
     enqueued,
     enqueue(/** @type {string} */ id, /** @type {string} */ field, /** @type {any} */ value) {
       enqueued.push({ id, field, value });
+    },
+    // The Override write is a single atomic multi-field PATCH (ADR-0019). Record
+    // the saved `overrides` array under `value` (so existing assertions on the
+    // appended Override hold) plus the full field set under `fields`.
+    enqueueFields(/** @type {string} */ id, /** @type {any} */ fields) {
+      enqueued.push({ id, field: 'overrides', value: fields.overrides, fields });
     },
   };
 }
@@ -104,7 +110,7 @@ function findAllByClass(el, cls) {
 
 /**
  * Build a `cr-override-editor` wired for the QA authoring flow.
- * @param {{ caseOverrides?: any, access?: string, currentUser?: any, attributeFailures?: boolean, remediationFields?: any[] }} [opts]
+ * @param {{ caseOverrides?: any, access?: string, currentUser?: any, attributeFailures?: boolean, remediationFields?: any[], computeOutcome?: any }} [opts]
  */
 function makeEditor(opts = {}) {
   const queue = makeQueue();
@@ -117,6 +123,12 @@ function makeEditor(opts = {}) {
   el.catalogue = /** @type {any} */ (CATALOGUE);
   el.attributeFailures = opts.attributeFailures ?? false;
   el.remediationFields = opts.remediationFields ?? [];
+  // The original Case Type's outcome fn, re-run over the Effective Answers to
+  // re-stamp the effective-outcome columns (ADR-0019). A failing q2 ⇒ fail.
+  el.computeOutcome = /** @type {any} */ (opts.computeOutcome ??
+    ((/** @type {Record<string, any>} */ a) => ({
+      verdict: Object.values(a).some(x => x.value === 'No') ? 'fail' : 'pass',
+    })));
   el.connectedCallback();
   return { el, queue };
 }
@@ -196,6 +208,50 @@ test('CROverrideEditor: a fail→pass Override enqueues an additive overrides sa
   assert.equal(saved[0].reasoning, 'Consent was on file.');
   assert.equal(saved[0].remediationActions, undefined, 'a pass carries no actions');
   assert.equal(saved[0].attributedParty, undefined);
+});
+
+// --- Re-stamping the effective-outcome columns (ADR-0019) ---
+
+test('CROverrideEditor: an Override re-stamps the effective-outcome columns in the same atomic write', () => {
+  // Frozen Answers fail (q2 = No). A fail→pass Override flips the Current Outcome.
+  const { el, queue } = makeEditor();
+  author(el, { answerKey: 'q2', value: 'Yes', reasoning: 'Consent was on file.' });
+
+  assert.equal(queue.enqueued.length, 1, 'overrides[] and the columns ride one PATCH');
+  const { fields } = queue.enqueued[0];
+  assert.equal(fields.effectiveOutcome, 'pass', 're-derived over the Effective Answers');
+  assert.equal(fields.effectiveHadRemediation, false, 'a fail→pass drops the original actions');
+  assert.equal(fields.outcomeOverridden, true, 'the Case is flagged corrected');
+  assert.ok(Array.isArray(fields.overrides), 'the appended overrides[] is in the same write');
+});
+
+test('CROverrideEditor: a pass→fail Override re-stamps effectiveOutcome=fail with remediation', () => {
+  // q1 is a passing Answer (Yes); override it to a failing No → the canned
+  // Remediation Action materialises onto the Effective Answer.
+  const { el, queue } = makeEditor();
+  author(el, { answerKey: 'q1', value: 'No', reasoning: 'It was not recorded after all.' });
+
+  const { fields } = queue.enqueued[0];
+  assert.equal(fields.effectiveOutcome, 'fail');
+  assert.equal(fields.effectiveHadRemediation, true, 'a newly-failed Answer carries Remediation Actions');
+  assert.equal(fields.outcomeOverridden, true);
+});
+
+test('CROverrideEditor: the re-stamp never touches the frozen outcomeAtCompletion snapshot', () => {
+  const { el, queue } = makeEditor();
+  author(el, { answerKey: 'q2', value: 'Yes', reasoning: 'Consent was on file.' });
+
+  const { fields } = queue.enqueued[0];
+  assert.ok(!('outcomeAtCompletion' in fields), 'outcomeAtCompletion stays frozen (ADR-0012)');
+  assert.ok(!('hadRemediation' in fields), 'hadRemediation stays frozen');
+});
+
+test('CROverrideEditor: re-stamp falls back to a pass verdict when no computeOutcome is wired', () => {
+  const { el, queue } = makeEditor();
+  el.computeOutcome = null;
+  author(el, { answerKey: 'q2', value: 'Yes', reasoning: 'Consent was on file.' });
+
+  assert.equal(queue.enqueued[0].fields.effectiveOutcome, 'pass');
 });
 
 // --- Authoring: reasoning required ---

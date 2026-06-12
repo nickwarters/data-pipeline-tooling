@@ -111,6 +111,15 @@ export class HttpSharePointClient {
       conds.push(`DueDate lt '${new Date().toISOString()}'`);
       conds.push(`Status eq 'In-progress'`);
     }
+    // Bounded server-side report query by the corrected result (ADR-0019). The
+    // column is indexed, so the RP-team / true-result reports stay one $filter
+    // per Case Type with no full-row fetch.
+    if (filter.effectiveOutcome) {
+      conds.push(`EffectiveOutcome eq '${escapeOData(filter.effectiveOutcome)}'`);
+    }
+    if (filter.outcomeOverridden !== undefined) {
+      conds.push(`OutcomeOverridden eq ${filter.outcomeOverridden ? 1 : 0}`);
+    }
     let url = this._listItemsUrl(this._caseListName);
     if (conds.length) url += `?$filter=${encodeURIComponent(conds.join(' and '))}`;
     const items = await this._getAllPages(url);

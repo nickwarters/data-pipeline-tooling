@@ -96,8 +96,39 @@ reporting-relevant fields:
 | `status`              | `In-progress` \| `Completed`  | Most reports filter to `Completed`.                              |
 | `answers`             | object (JSON blob)            | `{ [questionId]: Answer }`. See shape below.                     |
 | `completedAt`         | ISO-8601 \| null              | Use for date-range filters ("modified yesterday").              |
-| `outcomeAtCompletion` | string \| null                | **Frozen case verdict** (ADR-0012). Use this, never recompute. |
+| `outcomeAtCompletion` | string \| null                | **Frozen reviewer verdict** (ADR-0012). Use this, never recompute. |
 | `hadRemediation`      | boolean                       | Frozen at completion: any Answer carried a Remediation Action. |
+| `effectiveOutcome`    | string \| null                | **Corrected case verdict** (ADR-0019). Re-stamped on every Answer Override; equals `outcomeAtCompletion` when no Override exists. |
+| `effectiveHadRemediation` | boolean                   | The Effective-Answers counterpart of `hadRemediation`, re-derived alongside `effectiveOutcome`. |
+| `outcomeOverridden`   | boolean                       | `true` once an Answer Override has been authored — flags/segments corrected Cases. |
+
+> **Which verdict column to read (ADR-0019).** Two frozen-vs-corrected columns
+> serve two report audiences from the same row, and one column cannot serve both
+> honestly:
+> - **Reviewer-quality** reports (was the *reviewer* right?) read
+>   `outcomeAtCompletion` — the reviewer's original record. A wrongly-passed Case
+>   is the very error QA exists to surface; "fixing" it retroactively erases the
+>   evidence.
+> - **Responsible-Party / true-result** reports (how did the *agent* actually do?)
+>   read `effectiveOutcome` — the corrected result after any Answer Override.
+> - `outcomeOverridden` lets either report flag or filter the corrected subset.
+>
+> All three are **indexed**, so an `$filter` on `effectiveOutcome` /
+> `outcomeOverridden` stays server-side and bounded — no full-row fetch, no
+> client-side re-derivation. Never recompute either verdict.
+
+> **Provisioning (Maintainers).** On top of ADR-0012's two columns, every
+> per-Case-Type list now needs three more (ADR-0019), added when the Case Type
+> list is provisioned:
+> - `EffectiveOutcome` — Single line of text, **indexed**.
+> - `EffectiveHadRemediation` — Yes/No.
+> - `OutcomeOverridden` — Yes/No, **indexed**.
+>
+> The framework filters on `EffectiveOutcome` and `OutcomeOverridden`
+> server-side (`http-sharepoint-client.js`, `listCases`), so both must be indexed
+> for the bounded report query. Rows completed before ADR-0019 landed may have
+> these absent/null; treat them as un-corrected (`effectiveOutcome` ⇒ fall back to
+> `outcomeAtCompletion`, `outcomeOverridden` ⇒ `false`).
 
 > **Case-verdict snapshot.** ADR-0012 is implemented: the completion write
 > (`cr-case-review.js`, `_completeCase`) runs the outcome function over the

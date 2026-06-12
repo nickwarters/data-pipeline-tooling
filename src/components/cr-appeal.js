@@ -64,6 +64,13 @@ export class CRAppeal extends CRElement {
     this.catalogue = [];
     /** @type {Record<string, Answer>} */
     this.answers = {};
+    /**
+     * The Case Type's outcome function, forwarded to the corrective Override
+     * editor so an Appeal-sourced Override re-stamps the effective-outcome
+     * columns (ADR-0019).
+     * @type {((answers: Record<string, Answer>) => import('../sharepoint-client.js').OutcomeResult) | null}
+     */
+    this.computeOutcome = null;
   }
 
   connectedCallback() {
@@ -355,6 +362,7 @@ export class CRAppeal extends CRElement {
     editor.catalogue = this.catalogue;
     editor.attributeFailures = this.attributeFailures;
     editor.remediationFields = this.remediationFields;
+    editor.computeOutcome = this.computeOutcome;
     editor.client = this.client;
     editor.source = 'appeal';
     editor.sourceAppealId = this._authoringAppealId;

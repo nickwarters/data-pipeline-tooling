@@ -81,6 +81,8 @@ export class MockSharePointClient {
         if (filter.caseType !== undefined && c.caseType !== filter.caseType) return false;
         if (filter.responsibleParty !== undefined && c.responsibleParty !== filter.responsibleParty) return false;
         if (filter.assignedReviewerManager !== undefined && c.assignedReviewerManager !== filter.assignedReviewerManager) return false;
+        if (filter.effectiveOutcome !== undefined && c.effectiveOutcome !== filter.effectiveOutcome) return false;
+        if (filter.outcomeOverridden !== undefined && c.outcomeOverridden !== filter.outcomeOverridden) return false;
         if (filter.overdue === true) {
           if (c.status === 'Completed') return false;
           if (!c.dueDate) return false;

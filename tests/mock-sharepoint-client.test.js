@@ -221,6 +221,37 @@ test('MockSharePointClient: listCases filters by both caseType and responsiblePa
   assert.equal(cases[0].id, 'case-2');
 });
 
+test('MockSharePointClient: listCases filters by effectiveOutcome server-side (ADR-0019)', async () => {
+  const client = new MockSharePointClient({
+    cases: [
+      { ...CASES[2], id: 'r-pass', effectiveOutcome: 'pass' },
+      { ...CASES[2], id: 'r-fail', effectiveOutcome: 'fail' },
+      { ...CASES[2], id: 'r-fail2', effectiveOutcome: 'fail' },
+    ],
+    questionDefinitions: QUESTION_DEFS,
+    personas: PERSONAS,
+    persona: 'reviewer',
+  });
+
+  const failures = await client.listCases({ effectiveOutcome: 'fail' });
+  assert.deepEqual(failures.map(c => c.id).sort(), ['r-fail', 'r-fail2'], 'only corrected-to-fail Cases');
+});
+
+test('MockSharePointClient: listCases filters by outcomeOverridden server-side (ADR-0019)', async () => {
+  const client = new MockSharePointClient({
+    cases: [
+      { ...CASES[2], id: 'clean', outcomeOverridden: false },
+      { ...CASES[2], id: 'corrected', outcomeOverridden: true },
+    ],
+    questionDefinitions: QUESTION_DEFS,
+    personas: PERSONAS,
+    persona: 'reviewer',
+  });
+
+  const corrected = await client.listCases({ outcomeOverridden: true });
+  assert.deepEqual(corrected.map(c => c.id), ['corrected']);
+});
+
 test('MockSharePointClient: getCurrentUserGroups returns empty array for unknown persona', async () => {
   const client = makeClient('unknown-persona'); // not in PERSONAS
   const groups = await client.getCurrentUserGroups();

@@ -651,6 +651,30 @@ test('HttpSharePointClient: listCases without overdue filter omits DueDate condi
   assert.ok(!url.includes('DueDate'), 'should not include DueDate when overdue filter not set');
 });
 
+test('HttpSharePointClient: listCases with effectiveOutcome filters server-side on EffectiveOutcome (ADR-0019)', async () => {
+  const { fetch, calls } = makeFetch([
+    { when: c => c.method === 'GET', respond: () => new Response(JSON.stringify({ value: [] }), { status: 200 }) },
+  ]);
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+
+  await client.listCases({ effectiveOutcome: 'fail' });
+
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(url.includes("EffectiveOutcome eq 'fail'"), 'bounded server-side filter on the corrected result');
+});
+
+test('HttpSharePointClient: listCases with outcomeOverridden filters on the OutcomeOverridden flag (ADR-0019)', async () => {
+  const { fetch, calls } = makeFetch([
+    { when: c => c.method === 'GET', respond: () => new Response(JSON.stringify({ value: [] }), { status: 200 }) },
+  ]);
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+
+  await client.listCases({ outcomeOverridden: true });
+
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(url.includes('OutcomeOverridden eq 1'), 'corrected-Case segment uses the indexed boolean column');
+});
+
 // --- searchPeople ---
 
 test('HttpSharePointClient: searchPeople POSTs to the people-picker endpoint, queries the directory, and returns bare accounts', async () => {

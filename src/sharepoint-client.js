@@ -100,6 +100,9 @@
  *   outcome?: string | null,
  *   outcomeAtCompletion?: string,
  *   hadRemediation?: boolean,
+ *   effectiveOutcome?: string,
+ *   effectiveHadRemediation?: boolean,
+ *   outcomeOverridden?: boolean,
  *   overrides?: Override[],
  *   appeals?: Appeal[],
  *   sourceCaseId?: string,
@@ -128,7 +131,7 @@
  */
 
 /**
- * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, assignedReviewerManager?: string }} ListCasesFilter
+ * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean }} ListCasesFilter
  */
 
 /**

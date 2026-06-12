@@ -382,3 +382,68 @@ test('SaveQueue: _handle412 with null baselineAnswers uses {} for comparison', a
   // Both sides stringify to '{}' → no conflict → retried → saved
   assert.equal(q.status.get(), 'saved');
 });
+
+test('SaveQueue: enqueueFields writes all fields in a single ETag-guarded PATCH (ADR-0008/0019)', async () => {
+  const client = makeClient();
+  const q = new SaveQueue(client, { debounceMs: 0 });
+  q.loadCase(BASE_ROW);
+
+  q.enqueueFields('c1', {
+    overrides: [/** @type {any} */ ({ answerKey: 'q1' })],
+    effectiveOutcome: 'pass',
+    effectiveHadRemediation: false,
+    outcomeOverridden: true,
+  });
+  await tick();
+
+  assert.equal(client.patchCalls.length, 1, 'one PATCH carries every field — no desync on a partial write');
+  const { fields, etag } = client.patchCalls[0];
+  assert.equal(etag, 'etag-1', 'guarded by the loaded ETag');
+  assert.equal(fields.effectiveOutcome, 'pass');
+  assert.equal(fields.effectiveHadRemediation, false);
+  assert.equal(fields.outcomeOverridden, true);
+  assert.ok(Array.isArray(fields.overrides));
+  assert.equal(q.status.get(), 'saved');
+});
+
+test('SaveQueue: enqueueFields auto-initialises state for an unknown case', async () => {
+  const client = makeClient();
+  const q = new SaveQueue(client, { debounceMs: 0 });
+
+  q.enqueueFields('c1', { effectiveOutcome: 'fail' });
+  await tick();
+
+  assert.equal(client.patchCalls.length, 1);
+  assert.equal(client.patchCalls[0].fields.effectiveOutcome, 'fail');
+});
+
+test('SaveQueue: enqueueFields resets its debounce timer when re-enqueued', async () => {
+  const client = makeClient();
+  const q = new SaveQueue(client, { debounceMs: 30 });
+  q.loadCase(BASE_ROW);
+
+  q.enqueueFields('c1', { effectiveOutcome: 'pass' });
+  q.enqueueFields('c1', { effectiveOutcome: 'fail' });
+  await tick();
+  assert.equal(client.patchCalls.length, 0, 'the second enqueue cleared the first timer');
+
+  await new Promise(r => setTimeout(r, 40));
+  assert.equal(client.patchCalls.length, 1, 'only the latest field set is flushed');
+  assert.equal(client.patchCalls[0].fields.effectiveOutcome, 'fail');
+});
+
+test('SaveQueue: enqueueFields retries the whole field set after a 412 with no concurrent edit', async () => {
+  const client = makeClient({
+    patchResponses: [{ ok: false, status: 412 }],
+    getCaseRow: { ...BASE_ROW, etag: 'etag-2' },
+  });
+  const q = new SaveQueue(client, { debounceMs: 0 });
+  q.loadCase(BASE_ROW);
+
+  q.enqueueFields('c1', { effectiveOutcome: 'pass', outcomeOverridden: true });
+  await tick();
+
+  assert.equal(q.status.get(), 'saved', 'the reload + retry under the fresh ETag succeeds');
+  assert.equal(client.patchCalls.length, 2, 'first attempt 412s, second carries the same fields');
+  assert.equal(client.patchCalls[1].fields.outcomeOverridden, true);
+});
