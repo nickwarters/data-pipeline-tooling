@@ -49,6 +49,15 @@ The sections below cover the **Selection** transforms first (the
 `SchemaCoercion` processor (#23) is documented separately —
 [schema-enforcement.md](schema-enforcement.md).
 
+Pipeline authors may also define small, pipeline-local processors when the
+operation is specific to one Case Type or report, such as joining a contact-count
+aggregate onto a case snapshot or grouping selected cases into an adviser
+summary. Keep those classes beside the concrete pipeline and expose only the
+business behavior in tests; promote them into `framework.transform` only when
+the same transform becomes reusable across pipelines. See
+`pipelines/comprehensive_examples/` for a multi-source bronze-to-silver and
+silver-to-gold example using this pattern.
+
 ## Business rules are plain Python, not SQL
 
 `Filter` and `Score` carry their business rule as a **plain-Python callable over

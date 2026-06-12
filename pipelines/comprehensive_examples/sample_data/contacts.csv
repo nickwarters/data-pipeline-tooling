@@ -1,0 +1,6 @@
+case_ref,contact_date,contact_type,contact_status
+C-100,2026-05-25,call,open
+C-100,2026-05-26,email,open
+C-101,2026-05-25,letter,open
+C-101,2026-05-27,call,closed
+C-102,2026-05-26,email,closed
