@@ -16,7 +16,7 @@ rule that follows from that split.
 
 ```python
 from framework.io import CsvReader, StoreCatalog, RAW, Refresh
-from framework.transform import Filter, Score, SchemaValidator, ColumnValidator
+from framework.transform import Filter, VectorizedFilter, SchemaValidator, ColumnValidator
 from framework.run import Pipeline, PipelineRunner, RunContext
 ```
 
@@ -63,7 +63,7 @@ Moving data across the boundary.
 | Names | What |
 |-------|------|
 | `Processor` | The `process(dataset) -> Dataset` seam. |
-| `Filter`, `Score`, `Stamp`, `Sort`, `Rename`, `JoinDependency`, `JoinWith`, `AntiJoinWith`, `LatestPerKey`, `SelectColumns`, `DropColumns`, `Unpivot`, `DeriveKey`, `TopNPerGroup`, `SamplePerGroup` | The concrete Selection / Ingest / fan-out transforms. |
+| `Filter`, `Score`, `VectorizedFilter`, `VectorizedDerive`, `Stamp`, `Sort`, `Rename`, `JoinDependency`, `JoinWith`, `AntiJoinWith`, `LatestPerKey`, `SelectColumns`, `DropColumns`, `Unpivot`, `DeriveKey`, `TopNPerGroup`, `SamplePerGroup` | The concrete Selection / Ingest / fan-out transforms. |
 | `CoercionError` | Raised by `SchemaCoercion` on an uncastable value. |
 | `Validator`, `ValidationError`, `ColumnValidator`, `RowCountValidator`, `VolumeAnomalyValidator`, `UniqueValidator`, `RunHistory` | The `validate(dataset)` checks (raise on breach). |
 | `SchemaValidator`, `SchemaCoercion`, `ValueRule`, `Nullable`, `NonNull`, `Pattern`, `Length`, `Unique`, `OneOf` | The declared-schema contract + nullability/value-level rules. |

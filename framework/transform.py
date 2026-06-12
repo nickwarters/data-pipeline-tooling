@@ -3,9 +3,10 @@
 The stable import surface for everything that reshapes or gates a
 :class:`~framework.dataset.Dataset` between the read and the write: the
 ``Processor`` seam and its concrete transforms (the Selection ``Filter`` /
-``Score`` / ``Sort`` / ``Rename`` / ``Stamp``, the per-group ``TopNPerGroup`` /
-``SamplePerGroup``, the lazy ``JoinWith`` / ``AntiJoinWith``, the Ingest /
-fan-out ``SelectColumns`` / ``DropColumns`` / ``Unpivot`` / ``DeriveKey`` /
+``Score`` / ``VectorizedFilter`` / ``VectorizedDerive`` / ``Sort`` /
+``Rename`` / ``Stamp``, the per-group ``TopNPerGroup`` / ``SamplePerGroup``,
+the lazy ``JoinWith`` / ``AntiJoinWith``, the Ingest / fan-out
+``SelectColumns`` / ``DropColumns`` / ``Unpivot`` / ``DeriveKey`` /
 ``LatestPerKey``),
 the ``Validator`` checks, the
 ``Schema`` adapter (``SchemaValidator`` / ``SchemaCoercion`` + value rules), and
@@ -38,6 +39,8 @@ from framework.processors import (
     Stamp,
     TopNPerGroup,
     Unpivot,
+    VectorizedDerive,
+    VectorizedFilter,
 )
 from framework.schema import (
     Length,
@@ -67,6 +70,8 @@ __all__ = [
     "Processor",
     "Filter",
     "Score",
+    "VectorizedFilter",
+    "VectorizedDerive",
     "Stamp",
     "Sort",
     "Rename",

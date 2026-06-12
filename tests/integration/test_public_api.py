@@ -113,14 +113,27 @@ def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_p
     # framework.transform, composed onto the framework.run Pipeline.
     from framework.io import RAW, CsvReader, Refresh, Store
     from framework.run import Pipeline
-    from framework.transform import ColumnValidator, Filter, Score
+    from framework.transform import (
+        ColumnValidator,
+        Filter,
+        Score,
+        VectorizedDerive,
+        VectorizedFilter,
+    )
 
     store = Store(tmp_path / "cases")
     landed = (
         Pipeline("cases", CsvReader(FIXTURE))
         .with_validator(ColumnValidator(["amount"]))
         .with_processor(Score("priority", lambda row: row["amount"] * 2))
+        .with_processor(VectorizedDerive("priority_x2", lambda df: df["priority"] * 2))
         .with_processor(Filter(lambda row: row["amount"] >= 1000, name="high-value"))
+        .with_processor(
+            VectorizedFilter(
+                lambda df: df["priority_x2"] >= 4000,
+                name="high-priority",
+            )
+        )
         .write_to(store.writer(RAW, "cases", Refresh()))
         .run()
     )
@@ -128,6 +141,7 @@ def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_p
     # The Filter dropped the sub-1000 Case; Score added its column.
     assert len(landed) == 2
     assert "priority" in landed.columns
+    assert "priority_x2" in landed.columns
 
 
 def test_an_author_can_compose_ordered_stages_through_the_run_facade(tmp_path):

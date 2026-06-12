@@ -14,10 +14,11 @@ Two families of concrete processor live in the framework. The schema-driven
 ``SchemaCoercion`` (in :mod:`framework.schema`) is the write-side companion of
 ``SchemaValidator`` that repairs the representation raw loses to storage.
 This module holds reusable transforms: ``Filter`` and ``Score`` carry
-plain-Python row callables, ``Sort`` and ``Rename`` reshape the frame,
-``JoinWith`` joins an explicit read-only dependency in Python, and
-``AntiJoinWith`` excludes rows
-whose key is present in a read-only dependency.
+plain-Python row callables, ``VectorizedFilter`` and ``VectorizedDerive`` carry
+whole-frame callables for batch-friendly transforms, ``Sort`` and ``Rename``
+reshape the frame, ``JoinWith`` joins an explicit read-only dependency in
+Python, and ``AntiJoinWith`` excludes rows whose key is present in a read-only
+dependency.
 """
 
 from __future__ import annotations
@@ -58,6 +59,8 @@ class Processor(Protocol):
 # stays pandas-free.
 RowPredicate = Callable[[Mapping[str, Any]], bool]
 RowScorer = Callable[[Mapping[str, Any]], Any]
+FramePredicate = Callable[[Any], Any]
+FrameDeriver = Callable[[Any], Any]
 
 
 class Filter:
@@ -107,6 +110,51 @@ class Score:
     def process(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         frame[self._column] = frame.apply(lambda row: self._scorer(row), axis=1)
+        return Dataset.from_pandas(frame)
+
+    def describe(self) -> str:
+        return render(self, column=self._column)
+
+
+class VectorizedFilter:
+    """Keep rows using a whole-frame predicate.
+
+    ``predicate`` receives the backing pandas frame once and must return a
+    boolean mask with the same length. Use this for common column expressions on
+    large feeds where row-wise Python callbacks would dominate runtime.
+    """
+
+    trace_role = "filter"
+
+    def __init__(self, predicate: FramePredicate, *, name: str | None = None) -> None:
+        self._predicate = predicate
+        self.trace_name = name or "vectorized-filter"
+
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas()
+        mask = self._predicate(frame)
+        if len(mask) != len(frame):
+            raise ValueError("VectorizedFilter predicate returned wrong-length mask")
+        kept = frame.loc[mask].reset_index(drop=True)
+        return Dataset.from_pandas(kept)
+
+    def describe(self) -> str:
+        return render(self, name=self.trace_name)
+
+
+class VectorizedDerive:
+    """Compute or overwrite one column from a whole-frame expression."""
+
+    trace_role = "score"
+
+    def __init__(self, column: str, derive: FrameDeriver) -> None:
+        self._column = column
+        self._derive = derive
+        self.trace_name = column
+
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas()
+        frame[self._column] = self._derive(frame)
         return Dataset.from_pandas(frame)
 
     def describe(self) -> str:
