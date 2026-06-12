@@ -3,11 +3,12 @@
 This documents the concrete `Processor` primitives in `framework.processors`.
 They fall into two workload families:
 
-- **Selection narrowing** (#9, #62) — `Filter`, `Score`, `Sort`, `Rename`,
-  `Stamp`, the per-group `TopNPerGroup` / `SamplePerGroup`, `JoinWith`, and
-  `AntiJoinWith`, the cross-feed join/exclusion gates that consume explicit
-  read-only dependencies. The Selection Pipeline reads the **CasePool**, narrows
-  and ranks it, joins in Reference Data, filters exclusion lists, and emits the
+- **Selection narrowing** (#9, #62, #166) — `Filter`, `Score`,
+  `VectorizedFilter`, `VectorizedDerive`, `Sort`, `Rename`, `Stamp`, the
+  per-group `TopNPerGroup` / `SamplePerGroup`, `JoinWith`, and `AntiJoinWith`,
+  the cross-feed join/exclusion gates that consume explicit read-only
+  dependencies. The Selection Pipeline reads the **CasePool**, narrows and ranks
+  it, joins in Reference Data, filters exclusion lists, and emits the
   **SelectionPool**.
 - **Ingest & fan-out reshaping** (#35, #36, #39, #153) — `SelectColumns`, `DropColumns`, `Unpivot`,
   `DeriveKey`, `LatestPerKey`: the transforms that fan one wide feed into a Case
@@ -58,7 +59,7 @@ the same transform becomes reusable across pipelines. See
 `pipelines/comprehensive_examples/` for a multi-source bronze-to-silver and
 silver-to-gold example using this pattern.
 
-## Business rules are plain Python, not SQL
+## Row-callable and vectorized rules
 
 `Filter` and `Score` carry their business rule as a **plain-Python callable over
 a row mapping** (`{column: value}`), not a SQL string or a column-operator DSL.
@@ -71,8 +72,22 @@ RowPredicate = Callable[[Mapping[str, Any]], bool]   # Filter
 RowScorer    = Callable[[Mapping[str, Any]], Any]     # Score
 ```
 
-Volumes are small (≤ ~1M rows per feed/run — ADR-0002), so row-wise application
-is fine; chunking/streaming is explicitly deferred.
+Use row-callable processors when the rule is small, easiest to read as ordinary
+Python over one Case, or reused in direct unit tests with a `dict` row. For
+large feeds or common column expressions, use the vectorized processors:
+
+```python
+FramePredicate = Callable[[pd.DataFrame], pd.Series]  # VectorizedFilter
+FrameDeriver = Callable[[pd.DataFrame], object]       # VectorizedDerive
+```
+
+`VectorizedFilter` calls its predicate once with the whole frame and expects a
+same-length boolean mask. `VectorizedDerive` calls its deriver once with the
+whole frame and writes the returned series/scalar/array-like value into one
+column. These processors intentionally expose pandas inside the processor
+callable: they are still engine-confined behind the `Dataset` seam, but trade
+some portability for batch-friendly execution. Chunking/streaming remains
+explicitly deferred.
 
 ### Authoring selection rules
 
@@ -99,7 +114,9 @@ reader can test them without booting a whole Pipeline:
   per row via the backing engine. That keeps business logic portable and
   debuggable, but a slow callable scales linearly with row count. Avoid network
   calls, disk I/O, expensive parsing, and repeated reference lookups in the row
-  function; pre-compute reference data before the processor or use `JoinWith`.
+  function; pre-compute reference data before the processor, use `JoinWith`, or
+  express the rule as `VectorizedFilter` / `VectorizedDerive` when it is a
+  natural column operation.
 
 ```python
 from typing import Any, Mapping
@@ -172,6 +189,36 @@ def priority_score(row):
 
 # derive a priority from the row's amount
 Score("priority", priority_score)
+```
+
+### `VectorizedFilter` / `VectorizedDerive` — batch-friendly rules
+
+Use these when the rule is naturally a whole-column expression and row-wise
+callbacks would become the dominant cost for a large feed:
+
+```python
+from framework.transform import VectorizedDerive, VectorizedFilter
+
+pipeline = (
+    pipeline
+    .with_processor(
+        VectorizedFilter(lambda df: df["score"] >= 10, name="score-threshold")
+    )
+    .with_processor(VectorizedDerive("priority", lambda df: df["amount"] * 2))
+)
+```
+
+The equivalent row-callable form is still valid and remains the clearer choice
+for rules that read best one Case at a time:
+
+```python
+from framework.transform import Filter, Score
+
+pipeline = (
+    pipeline
+    .with_processor(Filter(lambda row: row["score"] >= 10, name="score-threshold"))
+    .with_processor(Score("priority", lambda row: row["amount"] * 2))
+)
 ```
 
 ### `Sort` — order the rows

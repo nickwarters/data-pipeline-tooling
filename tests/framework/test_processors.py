@@ -31,6 +31,8 @@ from framework.processors import (
     Stamp,
     TopNPerGroup,
     Unpivot,
+    VectorizedDerive,
+    VectorizedFilter,
 )
 from framework.run_log import RunLog
 from framework.store import Store
@@ -82,6 +84,62 @@ def test_score_writes_a_column_computed_per_row():
 
     assert list(scored["priority"]) == [200, 100]
     assert list(scored["case_ref"]) == ["c1", "c2"]
+
+
+def test_vectorized_filter_matches_row_filter_for_the_same_rule():
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"case_ref": ["c1", "c2", "c3"], "score": [5, 10, 15]})
+    )
+
+    row = Filter(lambda row: row["score"] >= 10).process(dataset).to_pandas()
+    vectorized = (
+        VectorizedFilter(lambda frame: frame["score"] >= 10)
+        .process(dataset)
+        .to_pandas()
+    )
+
+    assert vectorized.to_dict("records") == row.to_dict("records")
+
+
+def test_vectorized_derive_matches_row_score_for_the_same_rule():
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"case_ref": ["c1", "c2"], "amount": [100, 50]})
+    )
+
+    row = Score("priority", lambda row: row["amount"] * 2).process(dataset).to_pandas()
+    vectorized = (
+        VectorizedDerive("priority", lambda frame: frame["amount"] * 2)
+        .process(dataset)
+        .to_pandas()
+    )
+
+    assert vectorized.to_dict("records") == row.to_dict("records")
+
+
+def test_vectorized_processors_call_their_rules_once_per_dataset():
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"case_ref": ["c1", "c2", "c3"], "score": [5, 10, 15]})
+    )
+    calls = {"filter": 0, "derive": 0}
+
+    def high_score(frame: pd.DataFrame) -> pd.Series:
+        calls["filter"] += 1
+        return frame["score"] >= 10
+
+    def double_score(frame: pd.DataFrame) -> pd.Series:
+        calls["derive"] += 1
+        return frame["score"] * 2
+
+    filtered = VectorizedFilter(high_score).process(dataset)
+    result = (
+        VectorizedDerive("double_score", double_score).process(filtered).to_pandas()
+    )
+
+    assert calls == {"filter": 1, "derive": 1}
+    assert result.to_dict("records") == [
+        {"case_ref": "c2", "score": 10, "double_score": 20},
+        {"case_ref": "c3", "score": 15, "double_score": 30},
+    ]
 
 
 def test_stamp_writes_a_constant_column_onto_every_row():

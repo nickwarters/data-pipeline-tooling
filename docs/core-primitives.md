@@ -12,8 +12,8 @@ slice #23 added the **`Processor`** seam (`.with_processor`) and the
 **`SchemaCoercion`** processor that repairs raw's round-trip-lossy types ahead of
 that validator; slice #8 added the **`silver_to_gold`** builder that accumulates
 validated silver into the gold layer, stamped by run; slice #9 added the
-**Selection processors** (`Filter`/`Score`/`Sort`/`Rename`) and **`JoinWith`** /
-**`AntiJoinWith`**,
+**Selection processors** (`Filter`/`Score`/`VectorizedFilter`/
+`VectorizedDerive`/`Sort`/`Rename`) and **`JoinWith`** / **`AntiJoinWith`**,
 the cross-feed join over an explicit read-only dependency. Every later slice
 builds on these shapes. For the
 *why* behind each, see the ADRs referenced inline; for domain language (Case,
@@ -88,7 +88,9 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > then insert (ADR-0006;
 > [gold-accumulation doc](gold-accumulation.md)). **The Selection processors**
 > have landed: `Filter`/`Score` (plain-Python row callables — ADR-0002),
-> `Sort`/`Rename`, and **`JoinWith`** / **`AntiJoinWith`** — the cross-feed join
+> `VectorizedFilter`/`VectorizedDerive` (whole-frame callables for
+> batch-friendly filtering and column derivation), `Sort`/`Rename`, and
+> **`JoinWith`** / **`AntiJoinWith`** — the cross-feed join
 > and exclusion-list gate that hold a lazy
 > reference to another builder and resolves it to a DAG at `.run()`, joined in
 > Python (ADR-0003, #9; [processors doc](processors.md)). **The run registry**
@@ -400,6 +402,11 @@ message naming the column. `raw_to_silver` composes it ahead of the
   prefer named pure helper functions over inline lambdas, pass `name=` to gates
   that can exclude a Case, and test predicates/scorers directly with small row
   mappings before wiring them into a Pipeline.
+- `VectorizedFilter(predicate)` / `VectorizedDerive(column, derive)` — receive
+  the whole backing frame once for batch-friendly filtering and column
+  derivation. Use them for natural whole-column expressions on large feeds; keep
+  row-callable `Filter` / `Score` for one-Case-at-a-time rules that should stay
+  engine-agnostic at the callable boundary.
 - `Sort(by, ascending=True)` — order rows (`by` a column or sequence; index
   reset so the output reads positionally clean) for a meaningful "top N".
 - `Rename({old: new})` — align column vocabulary (e.g. agree a key name before a
