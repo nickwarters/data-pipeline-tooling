@@ -96,18 +96,18 @@ reporting-relevant fields:
 | `status`              | `In-progress` \| `Completed`  | Most reports filter to `Completed`.                              |
 | `answers`             | object (JSON blob)            | `{ [questionId]: Answer }`. See shape below.                     |
 | `completedAt`         | ISO-8601 \| null              | Use for date-range filters ("modified yesterday").              |
-| `outcomeAtCompletion` | string \| null                | **Frozen case verdict** (ADR-0012). Use this, never recompute. **⚠ Not yet written** — see below. |
-| `hadRemediation`      | boolean                       | Frozen at completion: any Answer carried a Remediation Action. **⚠ Not yet written** — see below. |
+| `outcomeAtCompletion` | string \| null                | **Frozen case verdict** (ADR-0012). Use this, never recompute. |
+| `hadRemediation`      | boolean                       | Frozen at completion: any Answer carried a Remediation Action. |
 
-> **⚠ Status of the case-verdict snapshot.** ADR-0012 is *Accepted* but **not yet
-> implemented**. The completion write (`cr-case-review.js`, `_completeCase`)
-> currently patches only `status` and `completedAt`; it does **not** run the
-> outcome function or stamp `outcomeAtCompletion` / `hadRemediation`. Until that
-> code lands, those columns are absent/null on every row, so **case-level verdict
-> and had-remediation reports are not yet derivable** by any means (you must not
-> recompute the verdict — see "What you do *not* need"). **Per-question failure
-> reporting — the headline use case — does not depend on these fields and works
-> today.** Track the gap before building any report that reads them.
+> **Case-verdict snapshot.** ADR-0012 is implemented: the completion write
+> (`cr-case-review.js`, `_completeCase`) runs the outcome function over the
+> answers at completion time and stamps `outcomeAtCompletion` + `hadRemediation`
+> in the same ETag-guarded PATCH as `status` / `completedAt`. The snapshot is
+> frozen — later edits to the Question Bank, the outcome function, or the answers
+> do not change a Completed Case's stamped values. Read these columns straight off
+> the row; **never recompute the verdict** (see "What you do *not* need"). Rows
+> completed *before* this landed may still have the columns absent/null; treat
+> those as un-snapshotted rather than recomputing.
 
 ### The `Answer` shape
 
@@ -179,13 +179,12 @@ for case in cases_modified_yesterday:           # filter on completedAt
    stability is ever needed, ADR-0015 notes the path: a per-question failure
    snapshot at completion — not built yet.)
 
-2. **Case verdicts are different — and stable (once implemented).** The
-   *case-level* pass/refer/fail is **not** re-derived from answers. Read
-   `outcomeAtCompletion` straight off the row; it is frozen at completion
-   (ADR-0012) and immune to later bank edits. Never recompute it. **As of this
-   writing the field is not yet stamped** (the completion path writes only
-   `status` + `completedAt`); until ADR-0012 is implemented, treat case-level
-   verdict reporting as blocked rather than recomputing it client-side.
+2. **Case verdicts are different — and stable.** The *case-level* pass/refer/fail
+   is **not** re-derived from answers. Read `outcomeAtCompletion` straight off the
+   row; it is frozen at completion (ADR-0012) and immune to later bank edits.
+   Never recompute it. The completion path stamps it in the same PATCH as
+   `status` + `completedAt`, so it is present on every Case completed after
+   ADR-0012 landed (older rows may carry a null — treat those as un-snapshotted).
 
 3. **Applicability (`showWhen`).** Counting *failures* needs no `showWhen` — a
    failed answer was, by definition, shown and answered. You only need `showWhen`

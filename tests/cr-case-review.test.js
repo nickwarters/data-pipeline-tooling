@@ -504,6 +504,106 @@ test('CRCaseReview: _completeCase does not navigate on failure', async () => {
   assert.equal((/** @type {any} */ (globalThis)).location.hash, 'keep-me');
 });
 
+// ===== OUTCOME SNAPSHOT AT COMPLETION (ADR-0012, #115) =====
+
+/**
+ * A client whose patchCase records the fields it was asked to write, so a test
+ * can assert exactly what landed in the single completion PATCH.
+ * @param {{ patchOk?: boolean }} [opts]
+ */
+function makeRecordingClient({ patchOk = true } = {}) {
+  /** @type {Array<{ id: string, fields: any, etag: string }>} */
+  const patches = [];
+  return {
+    patches,
+    async getCase() { return BASE_ROW; },
+    async getCurrentUser() { return { id: 'u1', displayName: 'User 1' }; },
+    async patchCase(/** @type {string} */ id, /** @type {any} */ fields, /** @type {string} */ etag) {
+      patches.push({ id, fields, etag });
+      return { ok: patchOk, status: patchOk ? 200 : 500 };
+    },
+    async searchPeople() { return []; },
+    async resolveUsers() { return {}; },
+  };
+}
+
+test('CRCaseReview: _completeCase stamps the frozen outcome snapshot in the same PATCH as status/completedAt', async () => {
+  const client = makeRecordingClient();
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = new SaveQueue(/** @type {any} */ (client));
+  el.saveQueue.loadCase(BASE_ROW);
+
+  // A failing Answer carrying a Remediation Action.
+  const answers = {
+    'q-needs': { value: 'No', remediationActions: [{ id: 'ra-0', text: 'Retrain.', completed: false }] },
+  };
+  /** @param {Record<string, any>} a */
+  const computeOutcome = (a) => /** @type {any} */ ({ verdict: Object.values(a).some(x => x.value === 'No') ? 'fail' : 'pass' });
+
+  await el._completeCase('c1', el.client ?? undefined, el.saveQueue ?? undefined, computeOutcome, answers);
+
+  assert.equal(client.patches.length, 1, 'completion is a single PATCH (ADR-0008 ETag-guarded write)');
+  const { fields } = client.patches[0];
+  assert.equal(fields.status, 'Completed');
+  assert.ok(fields.completedAt, 'completedAt is stamped');
+  assert.equal(fields.outcomeAtCompletion, 'fail', 'the frozen verdict is computed over the current answers');
+  assert.equal(fields.hadRemediation, true, 'hadRemediation is true when an Answer carries a Remediation Action');
+});
+
+test('CRCaseReview: hadRemediation=true is mutually exclusive with outcomeAtCompletion=pass', async () => {
+  const client = makeRecordingClient();
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = new SaveQueue(/** @type {any} */ (client));
+  el.saveQueue.loadCase(BASE_ROW);
+
+  // A passing Answer set: no failures, so no Remediation Actions attach.
+  const answers = { 'q-welcome': { value: 'Yes' } };
+  /** @param {Record<string, any>} a */
+  const computeOutcome = (a) => /** @type {any} */ ({ verdict: Object.values(a).some(x => x.value === 'No') ? 'fail' : 'pass' });
+
+  await el._completeCase('c1', el.client ?? undefined, el.saveQueue ?? undefined, computeOutcome, answers);
+
+  const { fields } = client.patches[0];
+  assert.equal(fields.outcomeAtCompletion, 'pass');
+  assert.equal(fields.hadRemediation, false, 'a pass never co-occurs with hadRemediation=true');
+});
+
+test('CRCaseReview: complete button feeds the live answers + computeOutcome into _completeCase', async () => {
+  const client = makeClient();
+  const completableRow = {
+    ...BASE_ROW,
+    answers: {
+      'q-welcome': { value: 'Yes' },
+      'q-needs': { value: 'No' },
+      'q-channel': { value: 'Email' },
+      'q-products': { value: ['Billing'] },
+    },
+  };
+  client.getCase = async () => completableRow;
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  saveQueue.loadCase(completableRow);
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  /** @type {any} */
+  let captured = null;
+  el._completeCase = async (/** @type {any[]} */ ...args) => { captured = args; };
+
+  completeBtnOf(el)._listeners['click'][0]();
+  await Promise.resolve();
+
+  assert.ok(captured, '_completeCase was invoked from the button');
+  assert.equal(typeof captured[3], 'function', 'the Case Type computeOutcome is passed through');
+  assert.equal(captured[3](captured[4]).verdict, 'fail', 'running it over the forwarded answers yields the live verdict');
+  assert.equal(captured[4]['q-needs'].value, 'No', 'the current answers snapshot is forwarded');
+});
+
 test('CRCaseReview: no inline cr-save-status paragraph in rendered children', async () => {
   const client = makeClient();
   const el = new CRCaseReview();

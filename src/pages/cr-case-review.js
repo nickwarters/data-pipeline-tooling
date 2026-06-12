@@ -455,7 +455,7 @@ export class CRCaseReview extends CRElement {
     completeBtn.addEventListener('click', async () => {
       if (completeBtn.disabled) return;
       completeBtn.disabled = true;
-      await this._completeCase(caseRow.id, client, saveQueue);
+      await this._completeCase(caseRow.id, client, saveQueue, computeOutcome, answersSignal.get());
       completeBtn.disabled = false;
     });
 
@@ -626,24 +626,40 @@ export class CRCaseReview extends CRElement {
 
   /**
    * Patches the case status to Completed and navigates to the dashboard.
+   *
+   * When the Case Type's `computeOutcome` and the current answers are supplied,
+   * a frozen outcome snapshot is stamped in the *same* ETag-guarded PATCH
+   * (ADR-0012): `outcomeAtCompletion` is the verdict computed over the answers at
+   * completion time, and `hadRemediation` is true iff any Answer carries one or
+   * more Remediation Actions. Because the snapshot is written once from these
+   * inputs, later edits to the answers, Question Definitions, or outcome function
+   * never change a Completed Case's stamped values.
+   *
    * @param {string} caseId
    * @param {SharePointClient} [clientArg]
    * @param {SaveQueue} [saveQueueArg]
+   * @param {(answers: Record<string, Answer>) => import('../sharepoint-client.js').OutcomeResult} [computeOutcome]
+   * @param {Record<string, Answer>} [answers]
    */
-  async _completeCase(caseId, clientArg, saveQueueArg) {
+  async _completeCase(caseId, clientArg, saveQueueArg, computeOutcome, answers) {
     const client = clientArg ?? this.client;
     const saveQueue = saveQueueArg ?? this.saveQueue;
     if (!client || !saveQueue) return;
 
+    /** @type {Partial<CaseRow>} */
+    const fields = {
+      status: /** @type {'Completed'} */ ('Completed'),
+      completedAt: new Date().toISOString(),
+    };
+    if (computeOutcome && answers) {
+      fields.outcomeAtCompletion = computeOutcome(answers).verdict;
+      fields.hadRemediation = Object.values(answers).some(
+        a => (a.remediationActions?.length ?? 0) > 0
+      );
+    }
+
     const etag = saveQueue.getEtag(caseId);
-    const result = await client.patchCase(
-      caseId,
-      {
-        status: /** @type {'Completed'} */ ('Completed'),
-        completedAt: new Date().toISOString(),
-      },
-      etag
-    );
+    const result = await client.patchCase(caseId, fields, etag);
     if (result.ok) {
       location.hash = '#/dashboard';
     }
