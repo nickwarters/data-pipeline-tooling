@@ -293,6 +293,17 @@ different source type. A wide feed (one Case table + Detail Tables) is fanned ou
 into N single-table pipelines over the shared raw table —
 [ADR-0009](adr/0009-case-identity-and-gold-grain.md), `pipelines/demo_fan_out.py`.
 
+For a fuller authoring example, run
+`python -m pipelines.comprehensive_examples /tmp/comprehensive-demo`. It lands
+four source feeds (cases, accounts, contacts, advisers), validates reference and
+detail tables, joins read-only dependencies into a `case_snapshot` silver table,
+derives an `open_contact_count`, then assembles two gold outputs: a scored review
+queue and an adviser-level summary. The example is intentionally multi-source so
+pipeline authors can copy a realistic shape instead of a three-row toy. It
+follows the scaffold layout under `pipelines/comprehensive_examples/`, with
+separate `schema.py`, `rules.py`, `processors.py`, `pipeline.py`, and
+`sample_data/` files.
+
 ### Emit a file Deliverable
 
 Reporting can emit file-form Deliverables by swapping the destination Writer.
@@ -425,6 +436,27 @@ strategy = AccumulateByRun.from_context(context)
 - Run domain Pipelines through the thin runner when freshness matters:
   `python -m pipelines.cli run cases selection /tmp/demo --run-date 2026-05-29`
   checks recent successful `cases/ingest` history before Selection executes.
+
+### Assemble silver into gold outputs
+
+Silver-to-gold work can be more than pass-through accumulation. A reporting or
+selection pipeline often reads one or more validated silver tables, derives
+business measures, filters to a consumption contract, and writes several gold
+tables with explicit load strategies. The comprehensive example keeps those
+steps separate from bronze-to-silver:
+
+```python
+from pipelines.comprehensive_examples import bronze_to_silver, silver_to_gold
+
+bronze_to_silver("/tmp/comprehensive-demo", run_id="2026-05-29")
+silver_to_gold("/tmp/comprehensive-demo", run_id="2026-05-29")
+```
+
+The gold half reads `complex_cases.silver.case_snapshot`, scores and filters the
+review queue with plain-Python rules, and separately aggregates an
+`adviser_summary`. Both are written to `complex_reporting/gold.db` using
+`AccumulateByRun`, so rerunning the same logical `run_id` replaces that run's
+rows without touching prior loads.
 
 ### Operate pipelines from the CLI — run, status, runs, log
 

@@ -1,0 +1,4 @@
+customer_id,account_status,last_review_date
+CU-001,open,2026-05-20
+CU-002,restricted,2026-05-21
+CU-003,open,2026-05-22
