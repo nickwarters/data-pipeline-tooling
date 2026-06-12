@@ -118,15 +118,17 @@ const MATRIX = {
   },
   // The Appeal Section (issue #132, ADR-0011): the Responsible Party or their
   // Manager may raise a case-level Appeal, but only against a Completed Case —
-  // hidden while In-progress. Reviewers and the Case Type Owner observe it
-  // read-only; everyone else sees nothing.
+  // hidden while In-progress. The QA Reviewer resolves Appeals (issue #134) and
+  // so gets `edit` on a Completed Case (read-only while In-progress — nothing to
+  // appeal yet). Other reviewers and the Case Type Owner observe it read-only;
+  // everyone else sees nothing.
   appeal: {
     assignedReviewer: 'read-only',
     otherReviewer: 'read-only',
     responsibleParty: (c) => (c.status === 'Completed' ? 'edit' : 'hidden'),
     responsiblePartyManager: (c) => (c.status === 'Completed' ? 'edit' : 'hidden'),
     caseTypeOwner: 'read-only',
-    qaReviewer: 'read-only',
+    qaReviewer: (c) => (c.status === 'Completed' ? 'edit' : 'read-only'),
     none: 'hidden',
   },
 };

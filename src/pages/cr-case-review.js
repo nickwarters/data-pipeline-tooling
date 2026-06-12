@@ -134,7 +134,7 @@ export class CRCaseReview extends CRElement {
       s => access[s] !== 'hidden' && showInSummary(s, config)
     );
 
-    this._buildLayout({ caseRow, catalogue, computeOutcome: config.computeOutcome, attributeFailures: config.attributeFailures, remediationFields: config.remediationFields ?? [], client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, summarySections });
+    this._buildLayout({ caseRow, catalogue, computeOutcome: config.computeOutcome, attributeFailures: config.attributeFailures, remediationFields: config.remediationFields ?? [], client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, roles, summarySections });
 
     // Render with cached display names first, then upgrade to the authoritative
     // directory names once they resolve (ADR-0013, #97).
@@ -203,9 +203,10 @@ export class CRCaseReview extends CRElement {
    * @param {{ get: () => boolean }} opts.allAnswered
    * @param {CurrentUser} opts.currentUser
    * @param {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} opts.access
+   * @param {import('../services/section-access.js').Role[]} [opts.roles]
    * @param {import('../services/section-access.js').Section[]} [opts.summarySections]
    */
-  _buildLayout({ caseRow, catalogue, computeOutcome, attributeFailures, remediationFields = [], client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, summarySections = [] }) {
+  _buildLayout({ caseRow, catalogue, computeOutcome, attributeFailures, remediationFields = [], client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, roles = [], summarySections = [] }) {
 
     const searchStr = typeof location !== 'undefined' ? (/** @type {any} */ (location).search ?? '') : '';
     const panelMode = new URLSearchParams(searchStr).get('conversation') ?? 'popover';
@@ -435,6 +436,14 @@ export class CRCaseReview extends CRElement {
     appealEl.saveQueue = saveQueue;
     appealEl.caseId = caseRow.id;
     appealEl.access = displayMode(access.appeal);
+    // A QA Reviewer holds the resolution path (issue #134): the appeal Section is
+    // `edit` for them and for the appellant, so the role flag selects the
+    // resolution form over the raise form. The Override editor an agreed Appeal
+    // reveals needs the same Case Type config the Questions-tab editor receives.
+    appealEl.canResolve = roles.includes('qaReviewer');
+    appealEl.attributeFailures = attributeFailures === true;
+    appealEl.remediationFields = remediationFields;
+    appealEl.client = client;
     appealEl.currentUser = currentUser;
     appealEl.catalogue = catalogue;
     appealEl.answers = caseRow.answers;

@@ -1431,6 +1431,41 @@ test('CRCaseReview: a QA Reviewer on a Completed Case gets the override editor a
   assert.ok(qList, 'the Questions list is presented read-only to the QA Reviewer');
 });
 
+test('CRCaseReview: a QA Reviewer on a Completed Case gets the Appeal resolution path', async () => {
+  const client = makeQaClient({ ...BASE_ROW, status: 'Completed', completedAt: '2026-06-10T00:00:00Z' });
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = new SaveQueue(/** @type {any} */ (client));
+  el.caseId = 'c1';
+  el.currentUserId = 'qa1';
+  el.capabilities = QA_CAPS;
+  await el.connectedCallback();
+
+  const appeal = panelOf(el, 'appeal');
+  assert.equal(appeal.access, 'edit', 'QA Reviewer gets edit on the Appeal Section');
+  assert.equal(appeal.canResolve, true, 'the resolver flag selects the resolution form');
+  // The Override editor an agreed Appeal reveals needs the Case Type config.
+  assert.equal(appeal.client, el.client, 'people picker client forwarded');
+  assert.ok(Array.isArray(appeal.remediationFields), 'remediation fields forwarded');
+});
+
+test('CRCaseReview: an appellant on a Completed Case does not get the resolver flag', async () => {
+  const client = makeClient({
+    caseRow: { ...BASE_ROW, status: 'Completed', completedAt: '2026-06-10T00:00:00Z', responsibleParty: 'u1', assignedReviewer: 'other' },
+  });
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = new SaveQueue(/** @type {any} */ (client));
+  el.caseId = 'c1';
+  el.currentUserId = 'u1';
+  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
+  await el.connectedCallback();
+
+  const appeal = panelOf(el, 'appeal');
+  assert.equal(appeal.access, 'edit', 'the appellant gets edit to raise');
+  assert.equal(appeal.canResolve, false, 'the appellant is not a resolver');
+});
+
 test('CRCaseReview: a QA Reviewer on an In-progress Case gets no override editor', async () => {
   const client = makeQaClient({ ...BASE_ROW, status: 'In-progress' });
   const el = new CRCaseReview();

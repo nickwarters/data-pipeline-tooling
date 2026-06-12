@@ -95,6 +95,21 @@ function findAllByClass(el, cls) {
   return out;
 }
 
+/**
+ * Find the embedded Override editor among the children. The DOM stub ignores tag
+ * names, so we identify it by the `source` provenance prop only it carries.
+ * @param {any} el
+ * @returns {any}
+ */
+function findOverrideEditor(el) {
+  for (const c of el._children) {
+    if (c.source === 'appeal') return c;
+    const found = findOverrideEditor(c);
+    if (found) return found;
+  }
+  return null;
+}
+
 /** Build a `cr-appeal` wired for the edit (raise) flow. */
 function makeEditable(caseOverrides = {}) {
   const queue = makeQueue();
@@ -104,6 +119,24 @@ function makeEditable(caseOverrides = {}) {
   el.caseId = 'c1';
   el.access = 'edit';
   el.currentUser = { id: 'u-rp', displayName: 'RP' };
+  el.connectedCallback();
+  return { el, queue };
+}
+
+/**
+ * Build a `cr-appeal` wired for the QA resolution flow: `edit` access plus the
+ * `canResolve` flag a QA Reviewer carries. Seeds one open Appeal by default.
+ */
+function makeResolver(caseOverrides = {}) {
+  const queue = makeQueue();
+  const open = { id: 'a1', appellant: 'u-rp', at: '2026-06-10T00:00:00Z', rationale: 'wrong outcome', state: 'raised' };
+  const el = new CRAppeal();
+  el.caseRow = makeCase({ appeals: [open], ...caseOverrides });
+  el.saveQueue = /** @type {any} */ (queue);
+  el.caseId = 'c1';
+  el.access = 'edit';
+  el.canResolve = true;
+  el.currentUser = { id: 'u-qa', displayName: 'QA' };
   el.connectedCallback();
   return { el, queue };
 }
@@ -256,6 +289,31 @@ test('CRAppeal: an Appeal item renders its state, rationale and cited Answers', 
   assert.ok(findByClass(item, 'cr-appeal-item-cited').textContent.includes('q-greet'));
 });
 
+test('CRAppeal: a resolved Appeal item renders its verdict and resolver rationale', () => {
+  const el = new CRAppeal();
+  el.access = 'read-only';
+  el.caseRow = makeCase({
+    appeals: [{
+      id: 'a1', appellant: 'u-rp', at: '2026-06-10T00:00:00Z', rationale: 'wrong', state: 'resolved',
+      resolution: { verdict: 'agreed', rationale: 'Reviewer misread the transcript.', resolver: 'u-qa', at: '2026-06-11T00:00:00Z' },
+    }],
+  });
+  el.connectedCallback();
+  const item = findByClass(el, 'cr-appeal-item');
+  assert.ok(findByClass(item, 'cr-appeal-resolution').textContent.includes('agreed'), 'verdict shown');
+  assert.ok(findByClass(item, 'cr-appeal-resolution').textContent.includes('Reviewer misread the transcript.'), 'resolver rationale shown');
+});
+
+test('CRAppeal: an open Appeal item omits the resolution line', () => {
+  const el = new CRAppeal();
+  el.access = 'read-only';
+  el.caseRow = makeCase({
+    appeals: [{ id: 'a1', appellant: 'u-rp', at: '2026-06-10T00:00:00Z', rationale: 'pending', state: 'raised' }],
+  });
+  el.connectedCallback();
+  assert.equal(findByClass(el, 'cr-appeal-resolution'), null);
+});
+
 test('CRAppeal: an Appeal item without citations omits the cited-Answers line', () => {
   const el = new CRAppeal();
   el.access = 'read-only';
@@ -280,6 +338,120 @@ test('CRAppeal: raising without a saveQueue or caseRow does not throw', () => {
   });
 });
 
+test('CRAppeal: resolving without a saveQueue, caseRow or user does not throw', () => {
+  const el = new CRAppeal();
+  el.access = 'edit';
+  el.canResolve = true;
+  el.caseRow = null;
+  el.saveQueue = null;
+  el.currentUser = null;
+  /** @type {any} */
+  const appeal = { id: 'a1', appellant: 'u-rp', at: 't', rationale: 'r', state: 'raised' };
+  const rationale = /** @type {any} */ ({ value: 'agreed now' });
+  const error = /** @type {any} */ ({ hidden: true });
+  assert.doesNotThrow(() => el._resolve(appeal, 'agreed', rationale, error));
+  assert.equal(appeal.state, 'resolved', 'the Appeal is still resolved in memory');
+  assert.equal(appeal.resolution.resolver, '', 'a missing user resolves to an empty resolver');
+});
+
 test('CRAppeal: newAppealId yields a non-empty string', () => {
   assert.ok(new CRAppeal().newAppealId().length > 0);
+});
+
+// --- QA resolution flow (issue #134) ---
+
+test('CRAppeal: a QA resolver with an open Appeal sees the resolution form, not the raise form', () => {
+  const { el } = makeResolver();
+  assert.ok(findByClass(el, 'cr-appeal-resolve'), 'resolution form rendered');
+  assert.ok(findByClass(el, 'cr-appeal-resolution-rationale'), 'resolver rationale input');
+  assert.ok(findByClass(el, 'cr-appeal-reject'), 'reject button');
+  assert.ok(findByClass(el, 'cr-appeal-agree'), 'agree button');
+  assert.equal(findByClass(el, 'cr-appeal-form'), null, 'no raise form for the resolver');
+});
+
+test('CRAppeal: Reject records the rationale, resolves the Appeal, and changes nothing else', () => {
+  const { el, queue } = makeResolver();
+  findByClass(el, 'cr-appeal-resolution-rationale').value = '  Outcome stands.  ';
+  findByClass(el, 'cr-appeal-reject')._listeners['click'][0]();
+
+  assert.equal(queue.enqueued.length, 1);
+  assert.equal(queue.enqueued[0].field, 'appeals', 'only the appeals field is written');
+  const saved = queue.enqueued[0].value;
+  assert.equal(saved[0].state, 'resolved');
+  assert.equal(saved[0].resolution.verdict, 'rejected');
+  assert.equal(saved[0].resolution.rationale, 'Outcome stands.', 'rationale is trimmed');
+  assert.equal(saved[0].resolution.resolver, 'u-qa');
+  assert.ok(saved[0].resolution.at, 'a timestamp is stamped');
+  // Reject leaves the Current Outcome unchanged — no Override is authored.
+  assert.equal(el.caseRow?.overrides, undefined, 'no override produced by a reject');
+  assert.equal(findOverrideEditor(el), null, 'no override editor on reject');
+});
+
+test('CRAppeal: Agree resolves the Appeal and reveals the Override editor stamped with the Appeal link', () => {
+  const { el, queue } = makeResolver();
+  el.catalogue = /** @type {any} */ (FAIL_CATALOGUE);
+  el.attributeFailures = true;
+  el.remediationFields = /** @type {any} */ ([{ key: 'root', label: 'Root cause', type: 'text', required: true }]);
+  el.client = /** @type {any} */ ({});
+  el.connectedCallback();
+
+  findByClass(el, 'cr-appeal-resolution-rationale').value = 'The greeting was present.';
+  findByClass(el, 'cr-appeal-agree')._listeners['click'][0]();
+
+  const saved = queue.enqueued[0].value;
+  assert.equal(saved[0].state, 'resolved');
+  assert.equal(saved[0].resolution.verdict, 'agreed');
+
+  const editor = findOverrideEditor(el);
+  assert.ok(editor, 'override editor revealed on agree');
+  assert.equal(editor.source, 'appeal', "stamped source 'appeal'");
+  assert.equal(editor.sourceAppealId, 'a1', 'linked to the resolved Appeal id');
+  assert.equal(editor.access, 'override', 'editor in override authoring mode');
+  assert.equal(editor.caseId, 'c1', 'writes target the original row');
+  // The shared editor receives the Case Type config it needs to author a failure.
+  assert.equal(editor.attributeFailures, true);
+  assert.equal(editor.remediationFields.length, 1);
+  assert.equal(editor.catalogue, el.catalogue);
+});
+
+test('CRAppeal: resolving keeps prior resolved Appeals and only resolves the open one', () => {
+  const prior = {
+    id: 'a0', appellant: 'u-rp', at: '2026-01-01T00:00:00Z', rationale: 'old', state: 'resolved',
+    resolution: { verdict: 'rejected', rationale: 'no', resolver: 'u-qa', at: '2026-01-02T00:00:00Z' },
+  };
+  const { el, queue } = makeResolver({ appeals: [prior, { id: 'a1', appellant: 'u-rp', at: '2026-06-10T00:00:00Z', rationale: 'second', state: 'raised' }] });
+  findByClass(el, 'cr-appeal-resolution-rationale').value = 'agreed now';
+  findByClass(el, 'cr-appeal-reject')._listeners['click'][0]();
+
+  const saved = queue.enqueued[0].value;
+  assert.equal(saved.length, 2, 'history retained');
+  assert.equal(saved[0].id, 'a0');
+  assert.equal(saved[0].resolution.rationale, 'no', 'the prior resolution is untouched');
+  assert.equal(saved[1].id, 'a1');
+  assert.equal(saved[1].state, 'resolved', 'the open Appeal is the one resolved');
+});
+
+test('CRAppeal: after an Appeal is resolved, a QA resolver with no open Appeal sees the empty placeholder', () => {
+  const resolved = {
+    id: 'a0', appellant: 'u-rp', at: '2026-01-01T00:00:00Z', rationale: 'old', state: 'resolved',
+    resolution: { verdict: 'rejected', rationale: 'no', resolver: 'u-qa', at: '2026-01-02T00:00:00Z' },
+  };
+  const { el } = makeResolver({ appeals: [resolved] });
+  assert.equal(findByClass(el, 'cr-appeal-resolve'), null, 'no resolution form without an open Appeal');
+  assert.ok(findByClass(el, 'cr-appeal-item'), 'the resolved Appeal still appears in history');
+});
+
+test('CRAppeal: a QA resolver on a Case with no Appeals sees the empty placeholder and no form', () => {
+  const { el } = makeResolver({ appeals: [] });
+  assert.equal(findByClass(el, 'cr-appeal-resolve'), null, 'no resolution form without an Appeal');
+  assert.ok(findByClass(el, 'cr-appeal-empty'), 'placeholder shown');
+});
+
+test('CRAppeal: an empty (or missing) resolver rationale shows an error and does not resolve', () => {
+  const { el, queue } = makeResolver();
+  // A null value (an untouched control) is treated as empty, like a whitespace one.
+  findByClass(el, 'cr-appeal-resolution-rationale').value = /** @type {any} */ (null);
+  findByClass(el, 'cr-appeal-reject')._listeners['click'][0]();
+  assert.equal(queue.enqueued.length, 0, 'nothing persisted');
+  assert.equal(findByClass(el, 'cr-appeal-resolution-error').hidden, false, 'error revealed');
 });

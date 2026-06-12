@@ -383,6 +383,19 @@ test('evaluateAccess: QA Reviewer observes details/summary read-only, conversati
   assert.equal(evaluateAccess('summary', ['qaReviewer'], c, cfg), 'read-only');
   assert.equal(evaluateAccess('conversation', ['qaReviewer'], c, cfg), 'hidden');
   assert.equal(evaluateAccess('notes', ['qaReviewer'], c, cfg), 'hidden');
+});
+
+test('evaluateAccess: appeal is edit for a QA Reviewer on a Completed Case (resolution path)', () => {
+  const cfg = makeConfig();
+  const c = makeCase({ status: 'Completed' });
+  // The QA Reviewer resolves Appeals (issue #134); read-only while In-progress
+  // (nothing to appeal yet).
+  assert.equal(evaluateAccess('appeal', ['qaReviewer'], c, cfg), 'edit');
+});
+
+test('evaluateAccess: appeal is read-only for a QA Reviewer while In-progress', () => {
+  const cfg = makeConfig();
+  const c = makeCase({ status: 'In-progress' });
   assert.equal(evaluateAccess('appeal', ['qaReviewer'], c, cfg), 'read-only');
 });
 

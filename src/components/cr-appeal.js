@@ -1,6 +1,7 @@
 // @ts-check
 import { CRElement } from './cr-element.js';
 import { isFailure } from '../evaluators/failure-evaluator.js';
+import './cr-override-editor.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').Appeal} Appeal */
@@ -32,6 +33,27 @@ export class CRAppeal extends CRElement {
     this.caseId = '';
     /** @type {'edit'|'read-only'|'hidden'} */
     this.access = 'read-only';
+    /**
+     * Whether the viewer is a QA Reviewer who may *resolve* the open Appeal
+     * (issue #134), as opposed to an appellant who *raises* one. Both hold `edit`
+     * on a Completed Case, so this flag selects the resolution form over the raise
+     * form.
+     * @type {boolean}
+     */
+    this.canResolve = false;
+    /**
+     * Set to the Appeal id once the QA Reviewer *agrees* with it, which reveals
+     * the corrective Override editor (stamped `source: 'appeal'`). Transient
+     * authoring state, not persisted.
+     * @type {string | null}
+     */
+    this._authoringAppealId = null;
+    /** Whether the Case Type attributes failures to a person (ADR-0013). @type {boolean} */
+    this.attributeFailures = false;
+    /** The Case Type's configurable per-failure capture fields (ADR-0017). @type {import('../sharepoint-client.js').RemediationField[]} */
+    this.remediationFields = [];
+    /** Backs the embedded Override editor's people picker. @type {import('../sharepoint-client.js').SharePointClient | null} */
+    this.client = null;
     /** @type {CurrentUser | null} */
     this.currentUser = null;
     /**
@@ -76,7 +98,18 @@ export class CRAppeal extends CRElement {
     }
 
     const openAppeal = this._openAppeal();
-    if (this.access === 'edit' && !openAppeal) {
+    if (this.access === 'edit' && this.canResolve) {
+      // QA Reviewer (issue #134): resolve the single open Appeal. With an agreed
+      // verdict the corrective Override editor is revealed below the form.
+      if (openAppeal) {
+        children.push(/** @type {any} */ (this._renderResolveForm(openAppeal)));
+      } else if (this._appeals().length === 0) {
+        children.push(/** @type {any} */ (this._renderEmpty()));
+      }
+      if (this._authoringAppealId) {
+        children.push(/** @type {any} */ (this._buildOverrideEditor()));
+      }
+    } else if (this.access === 'edit' && !openAppeal) {
       // Appellant on a Completed Case with no open Appeal — offer the raise form.
       children.push(/** @type {any} */ (this._renderForm()));
     } else if (this.access === 'edit' && openAppeal) {
@@ -87,13 +120,18 @@ export class CRAppeal extends CRElement {
       children.push(/** @type {any} */ (note));
     } else if (this._appeals().length === 0) {
       // Read-only viewers see a placeholder when there is nothing to show.
-      const empty = document.createElement('p');
-      empty.className = 'cr-appeal-empty';
-      empty.textContent = 'No Appeal has been raised.';
-      children.push(/** @type {any} */ (empty));
+      children.push(/** @type {any} */ (this._renderEmpty()));
     }
 
     this.replaceChildren(...children);
+  }
+
+  /** @returns {HTMLElement} */
+  _renderEmpty() {
+    const empty = document.createElement('p');
+    empty.className = 'cr-appeal-empty';
+    empty.textContent = 'No Appeal has been raised.';
+    return empty;
   }
 
   /**
@@ -120,6 +158,14 @@ export class CRAppeal extends CRElement {
       cited.className = 'cr-appeal-item-cited';
       cited.textContent = `Disputed Answers: ${appeal.citedAnswerKeys.join(', ')}`;
       card.appendChild(cited);
+    }
+
+    // Once resolved, show the QA Reviewer's verdict and rationale (issue #134).
+    if (appeal.resolution) {
+      const resolution = document.createElement('p');
+      resolution.className = 'cr-appeal-resolution';
+      resolution.textContent = `Resolution: ${appeal.resolution.verdict} — ${appeal.resolution.rationale}`;
+      card.appendChild(resolution);
     }
     return card;
   }
@@ -210,6 +256,109 @@ export class CRAppeal extends CRElement {
     if (this.caseRow) this.caseRow.appeals = next;
     this.saveQueue?.enqueue(this.caseId, 'appeals', next);
     this._render();
+  }
+
+  /**
+   * The QA Reviewer's resolution form for the single open Appeal (issue #134): a
+   * required resolver rationale plus the two verdicts. **Reject** records the
+   * rationale and changes nothing; **Agree** records it and reveals the corrective
+   * Override editor. The appellant's requested value is never auto-adopted —
+   * agreement is the QA Reviewer's correction as they see fit (ADR-0018).
+   *
+   * @param {Appeal} appeal
+   * @returns {HTMLElement}
+   */
+  _renderResolveForm(appeal) {
+    const form = document.createElement('section');
+    form.className = 'cr-appeal-resolve';
+
+    const label = document.createElement('label');
+    label.textContent = 'How are you resolving this Appeal?';
+    form.appendChild(label);
+
+    const rationale = /** @type {any} */ (document.createElement('textarea'));
+    rationale.className = 'cr-appeal-resolution-rationale';
+    rationale.setAttribute('aria-label', 'Resolution rationale');
+    form.appendChild(rationale);
+
+    const error = document.createElement('p');
+    error.className = 'cr-appeal-resolution-error';
+    error.hidden = true;
+    error.textContent = 'A rationale is required to resolve an Appeal.';
+    form.appendChild(error);
+
+    const reject = document.createElement('button');
+    reject.className = 'cr-appeal-reject';
+    reject.textContent = 'Reject Appeal';
+    reject.addEventListener('click', () => this._resolve(appeal, 'rejected', rationale, error));
+    form.appendChild(reject);
+
+    const agree = document.createElement('button');
+    agree.className = 'cr-appeal-agree';
+    agree.textContent = 'Agree with Appeal';
+    agree.addEventListener('click', () => this._resolve(appeal, 'agreed', rationale, error));
+    form.appendChild(agree);
+
+    return form;
+  }
+
+  /**
+   * Validate the resolver rationale, stamp the verdict onto the Appeal, and
+   * persist `appeals` additively (ETag-guarded by the SaveQueue, ADR-0008). The
+   * frozen original Case is never touched: a **Reject** leaves the Current Outcome
+   * unchanged, and an **Agree** authorises a separate corrective Override rather
+   * than mutating anything here.
+   *
+   * @param {Appeal} appeal
+   * @param {'agreed' | 'rejected'} verdict
+   * @param {{ value?: string }} rationaleEl
+   * @param {HTMLElement} errorEl
+   */
+  _resolve(appeal, verdict, rationaleEl, errorEl) {
+    const rationale = (rationaleEl.value ?? '').trim();
+    if (!rationale) {
+      errorEl.hidden = false;
+      return;
+    }
+
+    appeal.state = 'resolved';
+    appeal.resolution = {
+      verdict,
+      rationale,
+      resolver: this.currentUser?.id ?? '',
+      at: new Date().toISOString(),
+    };
+
+    const next = [...this._appeals()];
+    if (this.caseRow) this.caseRow.appeals = next;
+    this.saveQueue?.enqueue(this.caseId, 'appeals', next);
+
+    // An agreed Appeal links to the Override(s) it produces via `sourceAppealId`;
+    // reveal the editor stamped accordingly.
+    this._authoringAppealId = verdict === 'agreed' ? appeal.id : null;
+    this._render();
+  }
+
+  /**
+   * The reusable Answer Override editor (slice #133) configured to author the
+   * corrective Override(s) for an agreed Appeal: `source: 'appeal'` plus the
+   * `sourceAppealId` back-link. Writes target the original row's `overrides[]`.
+   * @returns {HTMLElement}
+   */
+  _buildOverrideEditor() {
+    const editor = /** @type {any} */ (document.createElement('cr-override-editor'));
+    editor.caseRow = this.caseRow;
+    editor.saveQueue = this.saveQueue;
+    editor.caseId = this.caseId;
+    editor.access = 'override';
+    editor.currentUser = this.currentUser;
+    editor.catalogue = this.catalogue;
+    editor.attributeFailures = this.attributeFailures;
+    editor.remediationFields = this.remediationFields;
+    editor.client = this.client;
+    editor.source = 'appeal';
+    editor.sourceAppealId = this._authoringAppealId;
+    return editor;
   }
 
   /**
