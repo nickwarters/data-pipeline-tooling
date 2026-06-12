@@ -133,3 +133,23 @@ One JSON object per line means trivial ingestion — no custom parser:
 import json
 records = [json.loads(line) for line in open("runs.log")]
 ```
+
+## Registry ingest — incremental high-water-mark
+
+`RunRegistry.ingest()` is **incremental**: the byte offset of the last fully
+consumed line is persisted in the registry DB's `ingest_progress` table, keyed
+by the normalised absolute path of the log file.  On each call only the tail
+bytes beyond that offset are read, so cost is proportional to new records rather
+than total history — important on a network-share deployment (ADR-0001).
+
+**Partial-line safety.** The tail is read in binary mode.  If the tail does not
+end with `\n` (the writer is mid-append), the trailing fragment is left for the
+next call; the stored offset advances only through the last complete line.
+
+**Truncation / rotation.** If the file is shorter than the stored offset, the
+offset is reset to 0 and the whole file is re-read from the top.
+`INSERT OR IGNORE` on the primary key `(run_id, step, step_ordinal)` guarantees
+idempotency — no record is double-counted even if earlier content is revisited.
+
+**Idempotent.** A second call on the same unchanged file returns 0 and costs
+only a stat + DB lookup.

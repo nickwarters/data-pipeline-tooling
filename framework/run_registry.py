@@ -10,6 +10,14 @@ It is a *query* store, not a ``Dataset`` carrier, so it stays stdlib-only
 (``json`` + ``sqlite3``) and never touches pandas. It opens through the shared
 ``connect`` factory in ``framework.connection`` so SQLite settings stay
 centralized.
+
+Ingest is incremental: each ``.log`` file's last consumed byte position is
+persisted in the registry DB (``ingest_progress`` table).  On the next call,
+only the new tail bytes are read so cost does not grow with total history — an
+important property when the file lives on a network share (ADR-0001).  If the
+file is shorter than the recorded offset (truncation / rotation), the offset is
+reset to 0 and the whole file is re-read from the top; idempotency via
+``INSERT OR IGNORE`` guarantees no double-counting.
 """
 
 from __future__ import annotations
@@ -53,27 +61,121 @@ class RunRegistry:
             )
             """
         )
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ingest_progress (
+                log_path    TEXT PRIMARY KEY,
+                byte_offset INTEGER NOT NULL
+            )
+            """
+        )
         return con
 
     def ingest(self, log_path: str | os.PathLike[str]) -> int:
         """Load a RunLog JSONL file into the store; return the count of new records.
 
-        Idempotent: re-reading the same file inserts nothing the second time. The
-        identity of a record is ``(run_id, step, step_ordinal)`` — the ordinal
-        disambiguates the repeated ``process`` step a multi-processor run emits
-        (the builder records one ``process`` per processor), which a bare
-        ``(run_id, step)`` key would collide. The ordinal is recomputed by
-        position on every scan, so it is stable across re-ingests.
+        Incremental (high-water-mark) ingest
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        The byte offset of the last fully consumed line is persisted in the
+        ``ingest_progress`` table, keyed by the normalised absolute path of the
+        log file.  On each call only the *new tail* is read, so cost is
+        proportional to new records rather than total history.
+
+        Truncation / rotation
+            If the file is shorter than the stored offset, the file has been
+            rotated or replaced.  The offset is reset to 0 and the whole file
+            is re-read from the top.  ``INSERT OR IGNORE`` on the primary key
+            ``(run_id, step, step_ordinal)`` guarantees idempotency — no row is
+            double-counted even if a later ingest revisits earlier content.
+
+        Partial-line safety
+            The tail is read in binary mode so byte positions are not distorted
+            by newline translation on Windows (CRLF/LF).  Only lines terminated
+            by ``\\n`` are parsed; a trailing fragment without a final ``\\n``
+            means the writer is still mid-append.  That fragment is left for the
+            next call: the stored offset advances only through the last complete
+            line (the last ``\\n`` in the tail).  Blank lines are skipped but
+            their bytes do count toward the consumed offset.
+
+        Ordinal seeding across the boundary
+            ``step_ordinal`` is the zero-based position of a record among all
+            records sharing the same ``(run_id, step)`` in the file.  When
+            ingesting only the tail, a naïve empty ``seen`` dict would restart
+            ordinal numbering from 0, colliding with rows already in the DB.
+            To prevent silent drops via ``INSERT OR IGNORE``, the distinct
+            ``run_id`` values appearing in the tail are looked up in
+            ``run_records`` first, and the ``seen`` dict is pre-seeded with
+            ``MAX(step_ordinal) + 1`` per ``(run_id, step)`` so tail records
+            continue from the correct next ordinal.
+
+        The new offset and the inserted records are committed in the same
+        transaction so a crash leaves the DB in a consistent, re-ingestion-safe
+        state.
         """
         path = Path(log_path)
+        norm_path = os.fspath(path.resolve())
         con = self._connect()
         try:
-            inserted = 0
+            # --- look up (or default) the stored byte offset ---
+            row = con.execute(
+                "SELECT byte_offset FROM ingest_progress WHERE log_path = ?",
+                (norm_path,),
+            ).fetchone()
+            offset = row[0] if row else 0
+
+            # --- truncation / rotation guard ---
+            file_size = path.stat().st_size
+            if file_size < offset:
+                offset = 0
+
+            # --- read the tail in binary mode ---
+            with path.open("rb") as fh:
+                fh.seek(offset)
+                tail = fh.read()
+
+            # Only consume through the last complete line (terminated by \n).
+            last_newline = tail.rfind(b"\n")
+            if last_newline == -1:
+                # No complete line in the tail — nothing to process.
+                return 0
+            consumed = tail[: last_newline + 1]
+            new_offset = offset + len(consumed)
+
+            # --- decode lines (strip \r to handle CRLF on Windows) ---
+            raw_lines = [
+                chunk.rstrip(b"\r").decode("utf-8")
+                for chunk in consumed.split(b"\n")
+            ]
+
+            # --- collect run_ids in the tail for ordinal seeding ---
+            tail_records: list[dict] = []
+            tail_run_ids: set[str] = set()
+            for raw in raw_lines:
+                if not raw.strip():
+                    continue
+                rec = json.loads(raw)
+                tail_records.append(rec)
+                tail_run_ids.add(rec["run_id"])
+
+            # --- seed seen dict from existing DB rows for those run_ids ---
             seen: dict[tuple[str, str], int] = {}
-            for line in path.read_text(encoding="utf-8").splitlines():
-                if not line.strip():
-                    continue  # tolerate blank lines (e.g. a trailing newline)
-                rec = json.loads(line)
+            if tail_run_ids:
+                placeholders = ",".join("?" * len(tail_run_ids))
+                rows = con.execute(
+                    f"""
+                    SELECT run_id, step, MAX(step_ordinal) + 1
+                    FROM run_records
+                    WHERE run_id IN ({placeholders})
+                    GROUP BY run_id, step
+                    """,
+                    tuple(tail_run_ids),
+                ).fetchall()
+                for run_id, step, next_ordinal in rows:
+                    seen[(run_id, step)] = next_ordinal
+
+            # --- insert tail records ---
+            inserted = 0
+            for rec in tail_records:
                 key = (rec["run_id"], rec["step"])
                 ordinal = seen.get(key, 0)
                 seen[key] = ordinal + 1
@@ -102,6 +204,16 @@ class RunRegistry:
                     ),
                 )
                 inserted += cur.rowcount
+
+            # --- upsert high-water mark in the same transaction ---
+            con.execute(
+                """
+                INSERT INTO ingest_progress (log_path, byte_offset)
+                VALUES (?, ?)
+                ON CONFLICT(log_path) DO UPDATE SET byte_offset = excluded.byte_offset
+                """,
+                (norm_path, new_offset),
+            )
             con.commit()
             return inserted
         finally:
