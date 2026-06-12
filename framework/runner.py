@@ -138,6 +138,7 @@ class PipelineRunner:
         run_date: dt.date | None = None,
         logical_run_id: str | None = None,
         freshness_days: int = 0,
+        freshness: tuple[FreshnessRequirement, ...] = (),
     ) -> object:
         registered = self._registered.get((case_type, pipeline))
         if registered is None:
@@ -167,7 +168,7 @@ class PipelineRunner:
 
         started = time.perf_counter()
         try:
-            for requirement in registered.freshness:
+            for requirement in (*registered.freshness, *freshness):
                 self._freshness_guard.check(context, requirement)
             result = registered.handler(context)
         except Exception as exc:

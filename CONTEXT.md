@@ -190,6 +190,18 @@ original exception for failed items. Do **not** use it for many files that
 together form one Feed snapshot; that is a multi-file Reader returning one
 `Dataset`.
 
+**Scheduled orchestration**:
+The framework-level coordinator that decides which registered domain Pipelines
+are due for a run date. _Here_: an `Orchestrator` owns one or more
+`PipelineSet`s of `ScheduledPipeline` references and invokes the existing
+`PipelineRunner`; it is not a Pipeline that runs other Pipelines. Python
+definitions own the canonical sets, dependencies, and default schedules, while
+YAML may override enablement, timing, and freshness windows. Decisions are
+recorded in `_orchestration/runs.db`; actual executions remain in
+`RunLog` / `RunRegistry`. Failures are isolated: a failed scheduled item blocks
+its downstream dependants for that orchestrator run, but independent items and
+other PipelineSets continue.
+
 ## Relationships
 
 - A **Case** is produced by exactly one **feed** but conforms to a single common shape regardless of origin

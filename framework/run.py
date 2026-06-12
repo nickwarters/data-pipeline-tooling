@@ -3,9 +3,9 @@
 The stable import surface for putting the pieces together and running them: the
 deferred :class:`Pipeline` builder, the layer-composing builders
 (``raw_to_silver`` / ``silver_to_gold`` / the current-grain reducers),
-``ForEach`` orchestration, the thin domain ``PipelineRunner`` with its
-``RunContext`` / freshness guard, and the ``RunLog`` / ``RunRegistry``
-observability types.
+``ForEach`` orchestration, scheduled ``PipelineSet`` orchestration through
+``Orchestrator``, the thin domain ``PipelineRunner`` with its ``RunContext`` /
+freshness guard, and the ``RunLog`` / ``RunRegistry`` observability types.
 
 Import from here rather than the underlying modules::
 
@@ -25,9 +25,21 @@ from framework.gold import (
     silver_to_gold,
 )
 from framework.orchestration import (
+    DayOfMonth,
     ForEach,
     ForEachOutcome,
     ForEachPipelineError,
+    LastWorkingDayOfMonth,
+    ManualOnly,
+    NthWorkingDayOfMonth,
+    OrchestrationDecision,
+    OrchestrationPassResult,
+    OrchestrationStore,
+    Orchestrator,
+    PipelineSet,
+    ScheduledPipeline,
+    SpecificWeekdays,
+    Weekdays,
 )
 from framework.run_context import RunContext
 from framework.run_log import RunLog
@@ -57,6 +69,18 @@ __all__ = [
     "ForEach",
     "ForEachOutcome",
     "ForEachPipelineError",
+    "PipelineSet",
+    "ScheduledPipeline",
+    "Weekdays",
+    "SpecificWeekdays",
+    "DayOfMonth",
+    "NthWorkingDayOfMonth",
+    "LastWorkingDayOfMonth",
+    "ManualOnly",
+    "Orchestrator",
+    "OrchestrationDecision",
+    "OrchestrationPassResult",
+    "OrchestrationStore",
     "PipelineRunner",
     "RunContext",
     "FreshnessRequirement",
