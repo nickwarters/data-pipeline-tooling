@@ -13,6 +13,7 @@ import '../components/cr-notes.js';
 import '../components/cr-summary.js';
 import '../components/cr-appeal.js';
 import '../components/cr-override-editor.js';
+import '../components/cr-source-case.js';
 import '../components/cr-status-banner.js';
 import '../components/cr-tabs.js';
 
@@ -23,6 +24,21 @@ import '../components/cr-tabs.js';
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
 /** @typedef {import('../services/save-queue.js').SaveQueue} SaveQueue */
 /** @typedef {import('../services/save-queue.js').SaveStatus} SaveStatus */
+
+/**
+ * The resolved source-Case panel inputs for a QA Check (ADR-0018). `originalRow`
+ * is null when the linked original could not be fetched.
+ *
+ * @typedef {{
+ *   originalRow: CaseRow | null,
+ *   catalogue: QuestionDefinition[],
+ *   computeOutcome: ((answers: Record<string, Answer>) => import('../sharepoint-client.js').OutcomeResult) | null,
+ *   attributeFailures: boolean,
+ *   remediationFields: import('../sharepoint-client.js').RemediationField[],
+ *   overrideAccess: 'override' | 'read-only',
+ *   sourceCaseId: string
+ * }} SourceCaseOpts
+ */
 
 /** @type {Record<SaveStatus, string>} */
 
@@ -134,7 +150,16 @@ export class CRCaseReview extends CRElement {
       s => access[s] !== 'hidden' && showInSummary(s, config)
     );
 
-    this._buildLayout({ caseRow, catalogue, computeOutcome: config.computeOutcome, attributeFailures: config.attributeFailures, remediationFields: config.remediationFields ?? [], client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, roles, summarySections });
+    // QA Check (issue #47, ADR-0018): when this Case links to an original via
+    // `sourceCaseId`, fetch that original read-only and resolve the source-Case
+    // panel. The override capability is resolved against the *linked original*,
+    // and its ETag is loaded into the SaveQueue so the embedded editor's write is
+    // a guarded, cross-row PATCH (the QA Check row stays the page's primary).
+    const sourceCase = caseRow.sourceCaseId
+      ? await this._resolveSourceCase(caseRow.sourceCaseId, caseRow.id, client, saveQueue, currentUserId, capabilities)
+      : null;
+
+    this._buildLayout({ caseRow, catalogue, computeOutcome: config.computeOutcome, attributeFailures: config.attributeFailures, remediationFields: config.remediationFields ?? [], client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, roles, summarySections, sourceCase });
 
     // Render with cached display names first, then upgrade to the authoritative
     // directory names once they resolve (ADR-0013, #97).
@@ -178,6 +203,53 @@ export class CRCaseReview extends CRElement {
     if (changed) answersSignal.set(next);
   }
 
+  /**
+   * Resolve the read-only source Case for a QA Check (ADR-0018). Fetches the
+   * linked original, loads the *original* Case Type config (for its catalogue and
+   * `computeOutcome`, used to render Effective Answers + Current Outcome), and
+   * resolves the Override Mode against the original row so the embedded editor's
+   * `override` capability follows the original, not the QA Check. The original's
+   * ETag is loaded into the SaveQueue for the cross-row PATCH. A missing original
+   * still yields an opts object (with a null row) so the panel renders its own
+   * not-found state.
+   *
+   * @param {string} sourceCaseId  the original row id (CaseRow.sourceCaseId)
+   * @param {string} qaCaseId      this QA Check's own id, stamped on overrides
+   * @param {SharePointClient} client
+   * @param {SaveQueue} saveQueue
+   * @param {string} currentUserId
+   * @param {import('../services/permissions.js').Capabilities} capabilities
+   * @returns {Promise<SourceCaseOpts>}
+   */
+  async _resolveSourceCase(sourceCaseId, qaCaseId, client, saveQueue, currentUserId, capabilities) {
+    const original = await client.getCase(sourceCaseId);
+    if (!original) {
+      return { originalRow: null, catalogue: [], computeOutcome: null, attributeFailures: false, remediationFields: [], overrideAccess: 'read-only', sourceCaseId: qaCaseId };
+    }
+
+    saveQueue.loadCase(original);
+
+    const mod = await import(`../../case-types/${original.caseType}.js`);
+    /** @type {import('../sharepoint-client.js').CaseTypeConfig} */
+    const origConfig = mod.default;
+    const origCatalogue = origConfig.questions.filter(q => !q.deprecated);
+
+    const roles = resolveRoles(original, currentUserId, capabilities);
+    const mode = evaluateAccess('questions', roles, original, origConfig);
+    /** @type {'override' | 'read-only'} */
+    const overrideAccess = mode === 'override' ? 'override' : 'read-only';
+
+    return {
+      originalRow: original,
+      catalogue: origCatalogue,
+      computeOutcome: origConfig.computeOutcome,
+      attributeFailures: origConfig.attributeFailures === true,
+      remediationFields: origConfig.remediationFields ?? [],
+      overrideAccess,
+      sourceCaseId: qaCaseId,
+    };
+  }
+
   _renderAccessDenied() {
     const panel = document.createElement('section');
     panel.className = 'cr-access-denied';
@@ -205,8 +277,9 @@ export class CRCaseReview extends CRElement {
    * @param {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} opts.access
    * @param {import('../services/section-access.js').Role[]} [opts.roles]
    * @param {import('../services/section-access.js').Section[]} [opts.summarySections]
+   * @param {SourceCaseOpts | null} [opts.sourceCase]
    */
-  _buildLayout({ caseRow, catalogue, computeOutcome, attributeFailures, remediationFields = [], client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, roles = [], summarySections = [] }) {
+  _buildLayout({ caseRow, catalogue, computeOutcome, attributeFailures, remediationFields = [], client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, roles = [], summarySections = [], sourceCase = null }) {
 
     const searchStr = typeof location !== 'undefined' ? (/** @type {any} */ (location).search ?? '') : '';
     const panelMode = new URLSearchParams(searchStr).get('conversation') ?? 'popover';
@@ -500,18 +573,55 @@ export class CRCaseReview extends CRElement {
       activeTab.set(id);
     });
 
+    // QA Check source-Case panel (issue #47, ADR-0018): a read-only view of the
+    // linked original's Effective Answers + Current Outcome, with the embedded
+    // Override editor. It sits outside the standard Section model (not a tab) and
+    // is only built when this Case links to an original.
+    const sourceCaseEl = sourceCase
+      ? this._buildSourceCasePanel(sourceCase, { saveQueue, currentUser, client })
+      : null;
+
     // Persistent chrome (banner, Conversation overlay + its header toggle, and the
     // Complete Case button) lives OUTSIDE the tabs so it is reachable from any tab.
     /** @type {HTMLElement[]} */
     const children = [
       /** @type {HTMLElement} */ (/** @type {unknown} */ (bannerEl)),
       header,
+    ];
+    if (sourceCaseEl) children.push(/** @type {HTMLElement} */ (/** @type {unknown} */ (sourceCaseEl)));
+    children.push(
       /** @type {HTMLElement} */ (/** @type {unknown} */ (tabsEl)),
       /** @type {HTMLElement} */ (/** @type {unknown} */ (conversationEl)),
       completeBtn,
-    ];
+    );
 
     this.replaceChildren(...children);
+  }
+
+  /**
+   * Build the read-only source-Case panel for a QA Check (ADR-0018), wiring the
+   * resolved original + the original Case Type config into cr-source-case. The
+   * embedded Override editor inside the panel performs the cross-row write.
+   *
+   * @param {SourceCaseOpts} sourceCase
+   * @param {{ saveQueue: SaveQueue, currentUser: CurrentUser, client: SharePointClient }} deps
+   * @returns {import('../components/cr-source-case.js').CRSourceCase}
+   */
+  _buildSourceCasePanel(sourceCase, { saveQueue, currentUser, client }) {
+    const el = /** @type {import('../components/cr-source-case.js').CRSourceCase} */ (
+      document.createElement('cr-source-case')
+    );
+    el.originalRow = sourceCase.originalRow;
+    el.catalogue = sourceCase.catalogue;
+    el.computeOutcome = sourceCase.computeOutcome;
+    el.attributeFailures = sourceCase.attributeFailures;
+    el.remediationFields = sourceCase.remediationFields;
+    el.saveQueue = saveQueue;
+    el.currentUser = currentUser;
+    el.client = client;
+    el.overrideAccess = sourceCase.overrideAccess;
+    el.sourceCaseId = sourceCase.sourceCaseId;
+    return el;
   }
 
   /**

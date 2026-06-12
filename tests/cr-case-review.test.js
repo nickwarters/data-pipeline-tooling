@@ -1480,3 +1480,140 @@ test('CRCaseReview: a QA Reviewer on an In-progress Case gets no override editor
   const editor = section._children.find((/** @type {any} */ c) => c.access === 'override');
   assert.equal(editor, undefined, 'no override authoring while In-progress');
 });
+
+// ===== QA Check source Case panel (issue #47, ADR-0018) =====
+
+/** The original Completed hello-review Case a QA Check meta-reviews. */
+function makeOriginalRow() {
+  return /** @type {CaseRow} */ ({
+    id: 'case-14', caseType: 'hello-review', title: 'Hello Review #14 (overridden)',
+    status: 'Completed', assignedReviewer: 'user-reviewer', responsibleParty: 'user-rp',
+    answers: { 'q-welcome': { value: 'Yes' }, 'q-needs': { value: 'Yes' } },
+    overrides: [{ source: 'qa', author: 'user-qa', at: '2026-04-05T00:00:00Z', answerKey: 'q-welcome', value: 'No', reasoning: 'No greeting.' }],
+    conversation: [], notes: '', completedAt: '2026-04-05T08:00:00Z', outcomeAtCompletion: 'pass', etag: 'etag-c14-v1',
+  });
+}
+
+/** The QA Check Case (qa-hello-review) linked to the original via sourceCaseId. */
+function makeQaCheckRow() {
+  return /** @type {CaseRow} */ ({
+    id: 'qa-case-1', caseType: 'qa-hello-review', title: 'QA Check — Hello Review #14',
+    status: 'In-progress', assignedReviewer: 'user-qa', responsibleParty: '',
+    sourceCaseId: 'case-14', answers: {}, conversation: [], notes: '', completedAt: null, etag: 'etag-qa1-v1',
+  });
+}
+
+/** A client serving the QA Check by its own id and the original by sourceCaseId.
+ * @param {CaseRow} qaRow @param {CaseRow} originalRow */
+function makeQaCheckClient(qaRow, originalRow) {
+  return {
+    async getCase(/** @type {string} */ id) { return id === originalRow.id ? originalRow : qaRow; },
+    async getCurrentUser() { return { id: 'user-qa', displayName: 'Quinn QA' }; },
+    async patchCase() { return { ok: true, status: 200 }; },
+    async searchPeople() { return []; },
+    resolveUsers: async () => ({}),
+  };
+}
+
+const sourceCaseOf = (/** @type {any} */ el) =>
+  /** @type {any[]} */ (el._children).find(c => 'originalRow' in c);
+
+test('CRCaseReview: a QA Check fetches its source Case and mounts a read-only source panel', async () => {
+  const qaRow = makeQaCheckRow();
+  const original = makeOriginalRow();
+  const client = makeQaCheckClient(qaRow, original);
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = new SaveQueue(/** @type {any} */ (client));
+  el.caseId = 'qa-case-1';
+  el.currentUserId = 'user-qa';
+  el.capabilities = QA_CAPS;
+  await el.connectedCallback();
+
+  const panel = sourceCaseOf(el);
+  assert.ok(panel, 'a cr-source-case panel is mounted for a QA Check');
+  assert.equal(panel.originalRow, original, 'the panel receives the fetched original row');
+  assert.ok(panel.catalogue.some((/** @type {any} */ q) => q.id === 'q-welcome'), "the original Case Type's catalogue is forwarded");
+  assert.equal(typeof panel.computeOutcome, 'function', "the original Case Type's outcome fn is forwarded");
+});
+
+test('CRCaseReview: the source panel resolves override access against the linked original and stamps the QA Check id', async () => {
+  const qaRow = makeQaCheckRow();
+  const original = makeOriginalRow();
+  const client = makeQaCheckClient(qaRow, original);
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = new SaveQueue(/** @type {any} */ (client));
+  el.caseId = 'qa-case-1';
+  el.currentUserId = 'user-qa';
+  el.capabilities = QA_CAPS;
+  await el.connectedCallback();
+
+  const panel = sourceCaseOf(el);
+  assert.equal(panel.overrideAccess, 'override', 'a QA Reviewer on a Completed original gets override access');
+  assert.equal(panel.sourceCaseId, 'qa-case-1', 'overrides authored here are stamped with the QA Check id');
+});
+
+test('CRCaseReview: the SaveQueue tracks the original ETag so the cross-row Override write is guarded', async () => {
+  const qaRow = makeQaCheckRow();
+  const original = makeOriginalRow();
+  const client = makeQaCheckClient(qaRow, original);
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = new SaveQueue(/** @type {any} */ (client));
+  el.caseId = 'qa-case-1';
+  el.currentUserId = 'user-qa';
+  el.capabilities = QA_CAPS;
+  await el.connectedCallback();
+
+  assert.equal(el.saveQueue.getEtag('case-14'), 'etag-c14-v1', 'the original row ETag is loaded for the cross-row PATCH');
+});
+
+test('CRCaseReview: an In-progress original yields read-only source access (nothing to override yet)', async () => {
+  const qaRow = makeQaCheckRow();
+  const original = { ...makeOriginalRow(), status: /** @type {'In-progress'} */ ('In-progress'), completedAt: null };
+  const client = makeQaCheckClient(qaRow, original);
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = new SaveQueue(/** @type {any} */ (client));
+  el.caseId = 'qa-case-1';
+  el.currentUserId = 'user-qa';
+  el.capabilities = QA_CAPS;
+  await el.connectedCallback();
+
+  assert.equal(sourceCaseOf(el).overrideAccess, 'read-only', 'no override while the original is In-progress');
+});
+
+test('CRCaseReview: a missing source Case still mounts the panel (renders its not-found state)', async () => {
+  const qaRow = makeQaCheckRow();
+  const client = {
+    async getCase(/** @type {string} */ id) { return id === 'qa-case-1' ? qaRow : null; },
+    async getCurrentUser() { return { id: 'user-qa', displayName: 'Quinn QA' }; },
+    async patchCase() { return { ok: true, status: 200 }; },
+    async searchPeople() { return []; },
+    resolveUsers: async () => ({}),
+  };
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = new SaveQueue(/** @type {any} */ (client));
+  el.caseId = 'qa-case-1';
+  el.currentUserId = 'user-qa';
+  el.capabilities = QA_CAPS;
+  await el.connectedCallback();
+
+  const panel = sourceCaseOf(el);
+  assert.ok(panel, 'the panel is mounted even when the original is missing');
+  assert.equal(panel.originalRow, null, 'the panel gets a null original and renders its own not-found message');
+});
+
+test('CRCaseReview: a standard Case (no sourceCaseId) mounts no source panel', async () => {
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  assert.equal(sourceCaseOf(el), undefined, 'no source panel without a sourceCaseId');
+  // The persistent-chrome indices are unchanged for a standard Case.
+  assert.equal(tabsOf(el).panels.questions !== undefined, true, 'tabs remain at their standard position');
+});

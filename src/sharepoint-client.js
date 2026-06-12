@@ -79,6 +79,12 @@
  */
 
 /**
+ * A Case row. `sourceCaseId`, when present, links a **QA Check** Case
+ * (`caseType: 'qa-{slug}'`, issue #47) to the original **Completed Case** it
+ * meta-reviews; standard Cases leave it empty. The link only points *at* the
+ * original — Answer Overrides authored from the QA Check are still written to the
+ * original row's `overrides[]` (ADR-0018), not stored here.
+ *
  * @typedef {{
  *   id: string,
  *   caseType: string,
@@ -96,6 +102,7 @@
  *   hadRemediation?: boolean,
  *   overrides?: Override[],
  *   appeals?: Appeal[],
+ *   sourceCaseId?: string,
  *   responsiblePartyManager?: string | null,
  *   dueDate?: string | null,
  *   relatedDate?: string | null,

@@ -298,6 +298,27 @@ export const cases = [
     created: '2026-04-05T08:00:00Z',
     etag: 'etag-c14-v1',
   },
+  {
+    // QA Check (issue #47): a qa-hello-review Case meta-reviewing case-14 (a
+    // Completed hello-review Case that already carries one Answer Override). The
+    // QA Reviewer (user-qa) is its Assigned Reviewer; opening it renders the
+    // standard shell with the QA questions plus a read-only source-Case panel
+    // (case-14's Effective Answers + Current Outcome) and the embedded Override
+    // editor, which writes cross-row to case-14's `overrides[]` (ADR-0018).
+    id: 'qa-case-1',
+    caseType: 'qa-hello-review',
+    title: 'QA Check — Hello Review #14',
+    status: 'In-progress',
+    assignedReviewer: 'user-qa',
+    responsibleParty: '',
+    sourceCaseId: 'case-14',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    created: '2026-06-11T08:00:00Z',
+    etag: 'etag-qa1-v1',
+  },
   // --- Reviewer Manager (user-rm) report fixture cases ---
   {
     id: 'rm-case-1',
