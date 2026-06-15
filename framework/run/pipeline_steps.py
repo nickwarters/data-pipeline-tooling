@@ -12,11 +12,11 @@ from dataclasses import dataclass
 from functools import partial
 from typing import ContextManager, Literal
 
+from framework._internal.describe import component_summary
 from framework.io.dataset import Dataset
 from framework.run.run_context import RunContext
 from framework.run.run_log import RunLog, StepMetrics
 from framework.run.trace import RowTrace
-from framework.shared.describe import component_summary
 from framework.transform.processors import JoinDependency
 from framework.validate.validators import Severity, ValidationError, Validator
 

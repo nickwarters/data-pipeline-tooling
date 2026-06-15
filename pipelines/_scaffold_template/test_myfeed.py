@@ -7,7 +7,7 @@ from dataclasses import fields
 from framework.io import RAW, StoreCatalog
 from framework.run import Pipeline
 from framework.testing import RecordingWriter, given_rows, read_rows, rows_of
-from framework.transform import ColumnValidator
+from framework.validate import ColumnValidator
 
 from .pipeline import FEED_NAME, run
 from .schema import MyfeedRow

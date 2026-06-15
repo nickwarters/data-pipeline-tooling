@@ -19,7 +19,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-from framework.shared.describe import render
+from framework._internal.describe import render
 
 log = logging.getLogger(__name__)
 

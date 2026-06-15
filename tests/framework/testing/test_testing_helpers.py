@@ -17,7 +17,8 @@ from framework.testing import (
     read_run_log,
     rows_of,
 )
-from framework.transform import ColumnValidator, Filter
+from framework.transform import Filter
+from framework.validate import ColumnValidator
 
 
 def test_given_rows_through_pipeline_into_recording_writer():
@@ -74,7 +75,7 @@ def test_recording_run_log_captures_a_validation_failure():
     # An error-severity breach aborts the run. The failing step and
     # the run summary are both recorded as errors before the exception raises, so
     # a test asserts the failure message through the captured records.
-    from framework.transform import ValidationError
+    from framework.validate import ValidationError
 
     run_log = RecordingRunLog()
     writer = RecordingWriter()

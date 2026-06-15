@@ -84,7 +84,7 @@ its silver), and a `WorkingDayCalendar` (the availability arithmetic — see
 ```python
 from case_review.case_pool import CasePool
 from framework.io import StoreCatalog
-from framework.transform import WorkingDayCalendar
+from framework.shared import WorkingDayCalendar
 
 store = StoreCatalog("/share").store(CASES.name)
 pool = CasePool(CASES, store, WorkingDayCalendar())

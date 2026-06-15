@@ -7,17 +7,19 @@ between the framework and the pipeline scripts that depend on it: it states
 rule that follows from that split.
 
 > **The rule.** Application code — both `pipelines/` and the `case_review/`
-> domain layer — imports from the three **facades** — `framework.io`,
-> `framework.transform`, `framework.run` — never from the modules behind them.
-> The facade names are the stable surface; the submodule paths can be
-> reorganised without notice. A test
-> (`tests/integration/test_public_api.py`) holds both `pipelines/` and
+> domain layer — imports from the five **facades** — `framework.io`,
+> `framework.transform`, `framework.validate`, `framework.run`,
+> `framework.shared` — never from the modules behind them. The facade names are
+> the stable surface; the submodule paths can be reorganised without notice. A
+> test (`tests/integration/test_public_api.py`) holds both `pipelines/` and
 > `case_review/` to this boundary.
 
 ```python
 from framework.io import CsvReader, StoreCatalog, RAW, Refresh
-from framework.transform import Filter, VectorizedFilter, SchemaValidator, ColumnValidator
+from framework.transform import Filter, VectorizedFilter, SchemaValidator
+from framework.validate import ColumnValidator, ValidationError
 from framework.run import Pipeline, PipelineRunner, RunContext
+from framework.shared import RetryPolicy, WorkingDayCalendar
 ```
 
 For interactive discovery, `import framework` exposes only those facade modules:
@@ -25,10 +27,12 @@ For interactive discovery, `import framework` exposes only those facade modules:
 ```python
 import framework
 
-framework.__all__  # ["io", "run", "transform"]
+framework.__all__  # ["io", "transform", "validate", "run", "shared"]
 framework.io.CsvReader
 framework.transform.Filter
+framework.validate.ColumnValidator
 framework.run.Pipeline
+framework.shared.WorkingDayCalendar
 ```
 
 The package root is intentionally not a mega-facade: names such as `CsvReader`,
@@ -46,27 +50,31 @@ the implementation modules living alongside it:
   `layers`, `sql`, `remote`.
 - `framework/transform/` — the dataset-reshaping primitives: `processors`,
   `schema`, `quarantine`.
-- `framework/validate/` — the `validate(dataset)` *checks* (they raise on
-  breach, they don't reshape), so they sit apart from the transforms. Surfaced
-  through `framework.transform`.
+- `framework/validate/` — the `validate(dataset)` *checks* (`validators`): they
+  raise on breach, they don't reshape, so they form their own facade apart from
+  the transforms.
 - `framework/run/` — `builder`, `stages`, `pipeline_steps`, `trace`, `silver`,
   `gold`, `orchestration`, `runner`, `run_context`, `run_log`, `run_registry`.
-- `framework/shared/` — cross-cutting internal helpers used by more than one
-  facade: `connection`, `describe`, `retry`, `calendar`. Not a facade; its names
-  surface through a facade (`RetryPolicy` & `WorkingDayCalendar` via
-  `framework.io` / `framework.transform`) or stay internal (`connect`, `render`).
+- `framework/shared/` — cross-cutting utilities that carry a public name but
+  don't belong to a task facade: `retry` (`RetryPolicy` & friends) and
+  `calendar` (`WorkingDayCalendar`).
+
+Two non-facade packages sit beside them:
+
+- `framework/_internal/` — cross-cutting helpers with **no** public name:
+  `connection` (`connect`) and `describe` (`render` / `redact_url`). The leading
+  underscore marks it private; nothing outside the framework imports from here.
 - `framework/testing/` — the test-only support surface (below).
 
-These sub-package paths are the *internal layout*; only the four facade names
-(`framework.io`/`framework.transform`/`framework.run`/`framework.testing`) are
-the stable import surface. `validate`, `shared`, and `testing` are not facades:
-`validate` and `shared` surface through the runtime facades, and `testing` is the
-test-only surface below.
+These sub-package paths are the *internal layout*; only the five facade names
+(`framework.io` / `framework.transform` / `framework.validate` / `framework.run`
+/ `framework.shared`) are the stable runtime import surface. `framework.testing`
+is the separate test-only surface, and `framework._internal` is private.
 
-## The three facades
+## The facades
 
-Grouped by what a pipeline author reaches for: get data in/out, shape & check it,
-compose & run it.
+Grouped by what a pipeline author reaches for: get data in/out, reshape it,
+check it, compose & run it, plus cross-cutting utilities.
 
 ### `framework.io` — sources, sinks, stores
 
@@ -77,21 +85,29 @@ Moving data across the boundary.
 | `Dataset` | The opaque bulk tabular carrier (pandas behind the seam). |
 | `Reader`, `DatasetReader`, `CsvReader`, `GlobCsvReader`, `ExcelReader`, `SqliteReader`, `SasReader`, `SharePointReader` | The `read() -> Dataset` port and its concrete sources. |
 | `Writer`, `CsvWriter`, `ExcelWriter`, `JsonWriter`, `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `QuarantineWriter`, `SharePointWriter` | The `write(dataset)` port and its concrete sinks. |
-| `RetryPolicy`, `RetryingReader`, `RetryingWriter` | Targeted retry for transient I/O-edge failures — see [retry.md](retry.md). |
 | `Store`, `StoreCatalog`, `StoreBackend`, `DirectoryStoreBackend` | Per-subject medallions minted from shared configuration. |
 | `Layer`, `RAW`, `SILVER`, `GOLD` | The medallion layer constants. |
 | `Refresh`, `AccumulateByRun`, `UpsertStrategy` | The load strategies a Writer carries. |
 
-### `framework.transform` — shaping & checking a feed mid-pipeline
+### `framework.transform` — reshaping a feed mid-pipeline
 
 | Names | What |
 |-------|------|
 | `Processor` | The `process(dataset) -> Dataset` seam. |
 | `Filter`, `Score`, `VectorizedFilter`, `VectorizedDerive`, `Stamp`, `Sort`, `Rename`, `JoinDependency`, `JoinWith`, `AntiJoinWith`, `LatestPerKey`, `SelectColumns`, `DropColumns`, `Unpivot`, `DeriveKey`, `TopNPerGroup`, `SamplePerGroup` | The concrete Selection / Ingest / fan-out transforms. |
 | `CoercionError` | Raised by `SchemaCoercion` on an uncastable value. |
-| `Validator`, `ValidationError`, `ColumnValidator`, `RowCountValidator`, `VolumeAnomalyValidator`, `UniqueValidator`, `RunHistory` | The `validate(dataset)` checks (raise on breach). |
-| `SchemaValidator`, `SchemaCoercion`, `ValueRule`, `Nullable`, `NonNull`, `Pattern`, `Length`, `Unique`, `OneOf` | The declared-schema contract + nullability/value-level rules. |
-| `WorkingDayCalendar` | Availability arithmetic (pure utility). |
+| `SchemaValidator`, `SchemaCoercion`, `ValueRule`, `Nullable`, `NonNull`, `Pattern`, `Length`, `Unique`, `OneOf` | The declared-schema contract + nullability/value-level rules. (`SchemaValidator` is the schema adapter's own check, kept here with `SchemaCoercion`.) |
+
+### `framework.validate` — checking a feed mid-pipeline
+
+The `validate(dataset)` checks: they raise on breach rather than reshaping, so
+they sit on their own facade. Composed onto a `Pipeline` as pre/post validators.
+
+| Names | What |
+|-------|------|
+| `Validator`, `ValidationError` | The check seam and the error it raises. |
+| `ColumnValidator`, `RowCountValidator`, `VolumeAnomalyValidator`, `UniqueValidator`, `SchemaDriftValidator` | The concrete structural / volume / uniqueness / drift checks. |
+| `RunHistory`, `PriorColumns` | History inputs the run-aware checks read. |
 
 ### `framework.run` — composing, executing, observing
 
@@ -105,13 +121,22 @@ Moving data across the boundary.
 | `PipelineRunner`, `RunContext`, `FreshnessRequirement`, `FreshnessError`, `UnknownPipelineError` | Thin domain runner + the freshness guard. |
 | `RunLog`, `RunRegistry` | The structured-observability seam and its query store. |
 
+### `framework.shared` — cross-cutting utilities
+
+Small helpers that carry a public name but don't belong to a single task facade.
+
+| Names | What |
+|-------|------|
+| `RetryPolicy`, `RetryingReader`, `RetryingWriter` | Targeted retry for transient I/O-edge failures — see [retry.md](retry.md). |
+| `WorkingDayCalendar` | Working-day availability arithmetic (pure utility). |
+
 ## Internal modules — do not import from these
 
 These are implementation detail. The facades draw from some of them, but the
 **module paths and any name not re-exported above are not public** and may change
 without notice:
 
-- `framework.shared.connection` (`connect`) — the connection factory seam (ADR-0001);
+- `framework._internal.connection` (`connect`) — the connection factory seam (ADR-0001);
   used by Readers/Writers/Store, not by pipelines.
 - `framework.io.sql` (`quote_identifier`) — the single place a table/column name is
   turned into a safely-quoted SQL identifier (issue #138); applied at every
@@ -123,7 +148,7 @@ without notice:
 - `framework.run.pipeline_steps` (`PipelineStep`, `PipelineExecution`, …) — the
   builder's internal ordered execution plan; inspected by `.describe()` and
   executed by `.run()`, not imported by pipeline scripts.
-- `framework.shared.describe` (`render`, `redact_url`) — shared helpers for the opt-in
+- `framework._internal.describe` (`render`, `redact_url`) — shared helpers for the opt-in
   `describe()` protocol (#145); a component implements `describe()` using these
   to render its own safe plan summary, not imported by pipeline scripts.
 - `framework.io.remote` (`RemoteRunner`, `StubbedRemoteRunner`, `SharePointFetcher`,
@@ -150,11 +175,11 @@ pusher — internal seams with no facade.
 `framework.testing` (`given_rows`, `rows_of`, `make_dataset`, `read_rows`,
 `RecordingWriter`, `RecordingRunLog`, `read_run_log`) is a **test-support**
 surface for pipeline authors, documented in
-[testing-helpers.md](testing-helpers.md). It is *not* one of the three runtime
+[testing-helpers.md](testing-helpers.md). It is *not* one of the five runtime
 facades and **application code must not import it at runtime** — only a module's
 tests do (the [boundary test](../tests/integration/test_public_api.py) holds both
-`pipelines/` and `case_review/` to the three facades, and `framework.testing` is
-not among them). It is intentional
+`pipelines/` and `case_review/` to the runtime facades, and `framework.testing`
+is not among them). It is intentional
 public surface for tests, so unlike the internal modules below its names are
 stable, but it carries no runtime role.
 
@@ -169,7 +194,7 @@ support modules), not under `framework/` — see
 
 As a layer *above* the framework, `case_review` is a **plain facade consumer** —
 the same architectural position as `pipelines/` — so it imports the framework
-only through the three facades, and the boundary test holds it there (#159). The
+only through the runtime facades, and the boundary test holds it there (#159). The
 two boundary tests are complementary: `test_framework_boundary.py` governs *where
 domain code lives*, while `test_public_api.py` governs *how `case_review` imports
 the framework*.

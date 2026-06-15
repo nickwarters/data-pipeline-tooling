@@ -154,7 +154,7 @@ about medallion layers or load rules:
 ```python
 from framework.io import RAW, ExcelReader, Refresh, StoreCatalog
 from framework.run import Pipeline
-from framework.transform import ColumnValidator, SchemaDriftValidator
+from framework.validate import ColumnValidator, SchemaDriftValidator
 
 store = StoreCatalog("/path/to/share").store("cases")
 landed = (

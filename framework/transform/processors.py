@@ -36,9 +36,9 @@ from typing import (
     runtime_checkable,
 )
 
+from framework._internal.describe import render
 from framework.io.dataset import Dataset
 from framework.io.readers import Reader
-from framework.shared.describe import render
 
 
 class CoercionError(Exception):

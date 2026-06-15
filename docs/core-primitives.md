@@ -20,12 +20,14 @@ builds on these shapes. For the
 CasePool, Feed, Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
 
 Application code (`pipelines/` + the `case_review/` domain layer) imports these
-primitives through the three public facades (`framework.io` /
-`framework.transform` / `framework.run`), not the home modules named
-per-primitive below; the home modules locate the code, the facades are the
-stable contract. The package root exposes only those facade modules for
-discovery (`framework.io`, `framework.transform`, `framework.run`); it does not
-re-export primitive classes directly. See [`public-api.md`](public-api.md).
+primitives through the five public facades (`framework.io` /
+`framework.transform` / `framework.validate` / `framework.run` /
+`framework.shared`), not the home modules named per-primitive below; the home
+modules locate the code, the facades are the stable contract. The package root
+exposes only those facade modules for discovery (`framework.io`,
+`framework.transform`, `framework.validate`, `framework.run`,
+`framework.shared`); it does not re-export primitive classes directly. See
+[`public-api.md`](public-api.md).
 
 ## Medallion layers
 
@@ -66,7 +68,7 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > `<subject_dir>/{raw,silver,gold}.db`, and `StoreCatalog(root).store(subject)`
 > mints those subject stores from shared root/configuration. The legacy global
 > `Store.write`/`read` is retired. The shared `connect` factory now lives in
-> `framework.shared.connection` (the seam that keeps `store` and `writers` cycle-free).
+> `framework._internal.connection` (the seam that keeps `store` and `writers` cycle-free).
 > **Validators** now
 > attach to the builder (`.with_validator()` / `.with_post_validator()`) and
 > `.run()` is fail-fast and atomic. **Structured JSONL observability** has
@@ -254,7 +256,7 @@ physical layout out of every pipeline script while preserving the same
 Readers/Writers.
 
 The connection factory `connect(db_path, busy_timeout_ms)` lives in
-`framework.shared.connection` — the single place connections are configured (ADR-0001),
+`framework._internal.connection` — the single place connections are configured (ADR-0001),
 which Readers, Writers, and the Store all open through. Keeping it in its own
 module is the seam that lets the `Store` mint Writers/Readers without a
 `store`↔`writers` import cycle. It sets a `busy_timeout` so read-only clients

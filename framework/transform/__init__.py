@@ -7,20 +7,23 @@ The stable import surface for everything that reshapes or gates a
 ``Rename`` / ``Stamp``, the per-group ``TopNPerGroup`` / ``SamplePerGroup``,
 the lazy ``JoinWith`` / ``AntiJoinWith``, the Ingest / fan-out
 ``SelectColumns`` / ``DropColumns`` / ``Unpivot`` / ``DeriveKey`` /
-``LatestPerKey``),
-the ``Validator`` checks, the
-``Schema`` adapter (``SchemaValidator`` / ``SchemaCoercion`` + value rules), and
-the ``WorkingDayCalendar`` availability utility.
+``LatestPerKey``)
+and the ``Schema`` adapter (``SchemaValidator`` / ``SchemaCoercion`` + value
+rules).
+
+The ``validate(dataset)`` checks (``ColumnValidator`` & friends) live on the
+sibling ``framework.validate`` facade, and ``WorkingDayCalendar`` on
+``framework.shared`` — neither reshapes a dataset, so they sit apart from these
+transforms.
 
 Import from here rather than the underlying modules::
 
-    from framework.transform import Filter, Score, SchemaValidator, ColumnValidator
+    from framework.transform import Filter, Score, SchemaValidator
 
 The modules behind this facade are internal layout: re-exports here are the
 public contract, the submodule paths are not.
 """
 
-from framework.shared.calendar import WorkingDayCalendar
 from framework.transform.processors import (
     AntiJoinWith,
     CoercionError,
@@ -53,17 +56,6 @@ from framework.transform.schema import (
     Unique,
     ValueRule,
 )
-from framework.validate.validators import (
-    ColumnValidator,
-    PriorColumns,
-    RowCountValidator,
-    RunHistory,
-    SchemaDriftValidator,
-    UniqueValidator,
-    ValidationError,
-    Validator,
-    VolumeAnomalyValidator,
-)
 
 __all__ = [
     # Processors
@@ -86,16 +78,6 @@ __all__ = [
     "TopNPerGroup",
     "SamplePerGroup",
     "CoercionError",
-    # Validators
-    "Validator",
-    "ValidationError",
-    "ColumnValidator",
-    "RowCountValidator",
-    "VolumeAnomalyValidator",
-    "UniqueValidator",
-    "RunHistory",
-    "SchemaDriftValidator",
-    "PriorColumns",
     # Declared-schema contract and value rules
     "SchemaValidator",
     "SchemaCoercion",
@@ -106,6 +88,4 @@ __all__ = [
     "Length",
     "Unique",
     "OneOf",
-    # Availability utility
-    "WorkingDayCalendar",
 ]

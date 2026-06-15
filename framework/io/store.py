@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 from typing import Protocol
 
+from framework._internal.connection import connect
 from framework.io.layers import GOLD, RAW, SILVER, Layer, layer_name
 from framework.io.readers import Reader, SqliteReader
 from framework.io.sql import quote_identifier
@@ -21,7 +22,6 @@ from framework.io.writers import (
     SqliteUpsertWriter,
     Writer,
 )
-from framework.shared.connection import connect
 
 __all__ = [
     "GOLD",
