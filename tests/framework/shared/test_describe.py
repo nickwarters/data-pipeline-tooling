@@ -8,7 +8,7 @@ and the self-redaction the remote components are responsible for.
 from framework.io.readers import CsvReader, SharePointReader, SqliteReader
 from framework.io.writers import SharePointWriter, SqliteTruncateReloadWriter
 from framework.shared.describe import component_summary, redact_url, render
-from framework.transform.validators import RowCountValidator
+from framework.validate.validators import RowCountValidator
 
 
 class Widget:

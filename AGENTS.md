@@ -12,15 +12,18 @@ domain language in `CONTEXT.md`; the core primitives are documented in
 - **Language/runtime:** Python 3.12. The `framework/` package is **import-only**
   (on `sys.path`, never `pip install`ed); `pipelines/` holds runnable scripts.
 - **Layout:** `framework/` (reusable engine, organised into the facade
-  sub-packages `framework/io`, `framework/transform`, `framework/run`, the
-  test-support `framework/testing`, and the cross-cutting internal
-  `framework/shared` — `connection`/`describe`/`retry`), `case_review/` (the
-  case-review *application* — domain types and gold helpers that live outside the
-  framework), `pipelines/` (scripts), `tests/` (pytest), `docs/` (architecture,
-  ADRs).
+  sub-packages `framework/io`, `framework/transform`, `framework/run`; the
+  checks package `framework/validate` and the cross-cutting internal
+  `framework/shared` (`connection`/`describe`/`retry`/`calendar`), both surfaced
+  through the facades; and the test-support `framework/testing`), `case_review/`
+  (the case-review *application* — domain types and gold helpers that live
+  outside the framework), `pipelines/` (scripts), `tests/` (pytest), `docs/`
+  (architecture, ADRs).
 - **Test layout:** `tests/` mirrors the source shape — `tests/framework/`
-  (itself split into `io/`, `transform/`, `run/`, `shared/`, `testing/` to
-  mirror the framework sub-packages), `tests/case_review/`, `tests/pipelines/`,
+  (itself split into `io/`, `transform/`, `run/`, `validate/`, `shared/`,
+  `testing/` to mirror the framework sub-packages; an implementation file
+  covered by several test files gets a `test_<impl>/` package, e.g.
+  `tests/framework/io/test_readers/`), `tests/case_review/`, `tests/pipelines/`,
   and `tests/integration/` for cross-tree tests. Shared helpers
   (`tests/_schema_fixtures.py`, `tests/fixtures/`) live at the `tests/` root;
   each test dir is a package.

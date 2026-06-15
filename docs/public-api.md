@@ -44,19 +44,24 @@ the implementation modules living alongside it:
 
 - `framework/io/` — `dataset`, `readers`, `writers`, `store`, `strategy`,
   `layers`, `sql`, `remote`.
-- `framework/transform/` — `processors`, `schema`, `validators`, `calendar`,
-  `quarantine`.
+- `framework/transform/` — the dataset-reshaping primitives: `processors`,
+  `schema`, `quarantine`.
+- `framework/validate/` — the `validate(dataset)` *checks* (they raise on
+  breach, they don't reshape), so they sit apart from the transforms. Surfaced
+  through `framework.transform`.
 - `framework/run/` — `builder`, `stages`, `pipeline_steps`, `trace`, `silver`,
   `gold`, `orchestration`, `runner`, `run_context`, `run_log`, `run_registry`.
 - `framework/shared/` — cross-cutting internal helpers used by more than one
-  facade: `connection`, `describe`, `retry`. Not a facade; its names surface
-  through `framework.io` (`RetryPolicy` & friends) or stay internal (`connect`,
-  `render`).
+  facade: `connection`, `describe`, `retry`, `calendar`. Not a facade; its names
+  surface through a facade (`RetryPolicy` & `WorkingDayCalendar` via
+  `framework.io` / `framework.transform`) or stay internal (`connect`, `render`).
 - `framework/testing/` — the test-only support surface (below).
 
 These sub-package paths are the *internal layout*; only the four facade names
 (`framework.io`/`framework.transform`/`framework.run`/`framework.testing`) are
-the stable import surface.
+the stable import surface. `validate`, `shared`, and `testing` are not facades:
+`validate` and `shared` surface through the runtime facades, and `testing` is the
+test-only surface below.
 
 ## The three facades
 

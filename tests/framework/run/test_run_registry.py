@@ -16,7 +16,7 @@ from framework.io.dataset import Dataset
 from framework.run.builder import Pipeline
 from framework.run.run_log import RunLog
 from framework.run.run_registry import RunRegistry
-from framework.transform.validators import (
+from framework.validate.validators import (
     ColumnValidator,
     ValidationError,
     VolumeAnomalyValidator,

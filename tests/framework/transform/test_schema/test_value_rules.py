@@ -25,7 +25,7 @@ from framework.transform.schema import (
     SchemaValidator,
     Unique,
 )
-from framework.transform.validators import ValidationError
+from framework.validate.validators import ValidationError
 
 
 @dataclass

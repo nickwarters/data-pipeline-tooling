@@ -24,7 +24,7 @@ from framework.run.pipeline_steps import (
     ValidatorStep,
 )
 from framework.transform.processors import Processor
-from framework.transform.validators import Severity, Validator
+from framework.validate.validators import Severity, Validator
 
 
 @runtime_checkable

@@ -14,8 +14,8 @@ from framework.io.dataset import Dataset
 from framework.run.builder import Pipeline
 from framework.run.run_context import RunContext
 from framework.run.runner import FreshnessError, FreshnessRequirement, PipelineRunner
+from framework.shared.calendar import WorkingDayCalendar
 from framework.shared.connection import connect
-from framework.transform.calendar import WorkingDayCalendar
 
 Item = TypeVar("Item")
 

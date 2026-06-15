@@ -12,11 +12,10 @@ pandas knowledge this module owns:
 - ``SchemaCoercion`` *repairs* the representation raw loses to storage, casting
   the round-trip-lossy declared types (dates, booleans) ahead of that validator.
 
-Unlike the structural checks in :mod:`framework.transform.validators` (which read
+Unlike the structural checks in :mod:`framework.validate.validators` (which read
 only the dataset's engine-agnostic shape), both inspect/transform column
-*values*, so they
-are **engine-confined**: they reach the backing frame via ``to_pandas()`` exactly
-as a Reader/Writer/processor does.
+*values*, so they are **engine-confined**: they reach the backing frame via
+``to_pandas()`` exactly as a Reader/Writer/processor does.
 
 ``SchemaValidator`` also runs **field-level rules** attached via
 ``Annotated[type, Rule(...)]`` so the dataclass annotations stay the single
@@ -37,7 +36,7 @@ from pandas.api import types as pdt
 
 from framework.io.dataset import Dataset
 from framework.transform.processors import CoercionError
-from framework.transform.validators import ValidationError
+from framework.validate.validators import ValidationError
 
 # Cap on how many offending values a breach message lists, so a column that is
 # wrong in thousands of rows still produces one readable located message rather
@@ -129,7 +128,7 @@ class Length:
 
     Either bound is optional — ``minimum`` guards against a truncated value,
     ``maximum`` against an overlong one; ``None`` leaves that side open (mirroring
-    :class:`~framework.transform.validators.RowCountValidator`'s inclusive bounds). A
+    :class:`~framework.validate.validators.RowCountValidator`'s inclusive bounds). A
     contradictory pair (min > max) is a configuration error raised at
     construction. Null values are out of scope.
     """
@@ -173,7 +172,7 @@ class Unique:
     """Require a field's (non-null) values to be distinct — no duplicate keys.
 
     The field-annotation form of uniqueness, sitting beside the columns+dtypes
-    contract. It complements :class:`~framework.transform.validators.UniqueValidator`,
+    contract. It complements :class:`~framework.validate.validators.UniqueValidator`,
     which enforces the one-row-per-Case *grain* on a (possibly composite) key at
     the gold boundary; this rule states the expectation declaratively on the
     schema field itself. Null values are out of scope, so repeated missing values
