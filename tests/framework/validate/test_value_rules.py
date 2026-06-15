@@ -16,7 +16,7 @@ import pandas as pd
 import pytest
 
 from framework.io.dataset import Dataset
-from framework.transform.schema import (
+from framework.validate import (
     Length,
     NonNull,
     Nullable,

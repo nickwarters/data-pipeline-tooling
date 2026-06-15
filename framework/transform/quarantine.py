@@ -18,8 +18,8 @@ from typing import Protocol, runtime_checkable
 
 import pandas as pd
 
+from framework._internal.schema import _declared_rules
 from framework.io.dataset import Dataset
-from framework.transform.schema import _declared_rules
 
 
 @runtime_checkable

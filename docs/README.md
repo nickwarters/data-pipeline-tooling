@@ -141,8 +141,9 @@ The foundational vocabulary. Each links to its deep doc; the consolidated
 reference with worked examples is [`core-primitives.md`](core-primitives.md).
 
 > **Importing.** Application code (`pipelines/` + `case_review/`) imports these through the five public **facades**
-> — `framework.io` (sources/sinks/stores), `framework.transform` (processors +
-> schema adapter), `framework.validate` (the `validate(dataset)` checks),
+> — `framework.io` (sources/sinks/stores), `framework.transform` (the reshaping
+> processors + `SchemaCoercion`), `framework.validate` (the `validate(dataset)`
+> checks + the declared-schema contract: `SchemaValidator` and the value rules),
 > `framework.run` (the `Pipeline` builder, orchestration, runner, observability),
 > and `framework.shared` (cross-cutting utilities — retry, `WorkingDayCalendar`)
 > — not from the modules behind them. The facade names are the stable surface.

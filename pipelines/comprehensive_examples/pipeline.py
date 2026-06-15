@@ -29,12 +29,11 @@ from framework.transform import (
     JoinDependency,
     JoinWith,
     SchemaCoercion,
-    SchemaValidator,
     Score,
     SelectColumns,
     Sort,
 )
-from framework.validate import ColumnValidator, UniqueValidator
+from framework.validate import ColumnValidator, SchemaValidator, UniqueValidator
 
 from .processors import AddOpenContactCounts, AdviserSummary
 from .rules import high_risk_or_vulnerable, review_priority

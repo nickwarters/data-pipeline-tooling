@@ -16,8 +16,9 @@ import pandas as pd
 import pytest
 
 from framework.io.dataset import Dataset
+from framework.transform import SchemaCoercion
 from framework.transform.processors import CoercionError
-from framework.transform.schema import SchemaCoercion, SchemaValidator
+from framework.validate import SchemaValidator
 
 
 @dataclass

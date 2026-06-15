@@ -16,7 +16,7 @@ import pytest
 
 from framework.io.dataset import Dataset
 from framework.transform.quarantine import SchemaValueRulePartitioner
-from framework.transform.schema import Length, OneOf, Pattern, Unique
+from framework.validate import Length, OneOf, Pattern, Unique
 
 
 @dataclass
@@ -250,7 +250,7 @@ def test_structural_breach_aborts_even_with_quarantine_configured(tmp_path):
     from framework.io.readers import CsvReader
     from framework.io.writers import QuarantineWriter, SqliteTruncateReloadWriter
     from framework.run.builder import Pipeline
-    from framework.transform.schema import SchemaValidator
+    from framework.validate import SchemaValidator
     from framework.validate.validators import ValidationError
 
     csv_file = tmp_path / "feed.csv"
