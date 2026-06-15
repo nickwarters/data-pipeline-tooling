@@ -4,10 +4,10 @@ import pandas as pd
 
 from case_review.case_pool import CasePool
 from case_review.case_type import CaseType, Variation
-from framework.calendar import WorkingDayCalendar
-from framework.dataset import Dataset
-from framework.store import Store
-from framework.strategy import Refresh
+from framework.io.dataset import Dataset
+from framework.io.store import Store
+from framework.io.strategy import Refresh
+from framework.transform.calendar import WorkingDayCalendar
 from tests._schema_fixtures import ActivityCase
 
 

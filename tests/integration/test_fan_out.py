@@ -9,11 +9,11 @@ import pandas as pd
 
 from case_review.case_type import CaseType
 from case_review.gold import detail_ingest_silver_to_gold, ingest_silver_to_gold
-from framework.builder import Pipeline
-from framework.dataset import Dataset
-from framework.processors import Filter, Rename, SelectColumns, Unpivot
-from framework.store import Store
-from framework.strategy import AccumulateByRun, Refresh
+from framework.io.dataset import Dataset
+from framework.io.store import Store
+from framework.io.strategy import AccumulateByRun, Refresh
+from framework.run.builder import Pipeline
+from framework.transform.processors import Filter, Rename, SelectColumns, Unpivot
 from tests._schema_fixtures import LandedCase
 
 # One Case Type owns identity for the wide feed; the Cases and Detail builders

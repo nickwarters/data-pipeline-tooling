@@ -186,14 +186,14 @@ def test_internal_plumbing_stays_out_of_the_public_facades():
     from framework import io, run, transform
 
     internal = {
-        "connect",  # framework.connection — connection factory seam
-        "layer_name",  # framework.layers — internal validation helper
-        "LAYERS",  # framework.layers — internal tuple
-        "RowTrace",  # framework.trace — generic trace mechanics
-        "RemoteRunner",  # framework.remote — stubbed remote client seam
-        "FreshnessGuard",  # framework.runner — internal guard
-        "StepMetrics",  # framework.run_log — internal timing record
-        "pipeline_label",  # framework.runner — internal label helper
+        "connect",  # framework.shared.connection — connection factory seam
+        "layer_name",  # framework.io.layers — internal validation helper
+        "LAYERS",  # framework.io.layers — internal tuple
+        "RowTrace",  # framework.run.trace — generic trace mechanics
+        "RemoteRunner",  # framework.io.remote — stubbed remote client seam
+        "FreshnessGuard",  # framework.run.runner — internal guard
+        "StepMetrics",  # framework.run.run_log — internal timing record
+        "pipeline_label",  # framework.run.runner — internal label helper
     }
     for facade in (io, run, transform):
         leaked = internal & set(facade.__all__)

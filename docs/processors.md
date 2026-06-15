@@ -1,6 +1,6 @@
 # Processors — the Selection & Ingest transforms
 
-This documents the concrete `Processor` primitives in `framework.processors`.
+This documents the concrete `Processor` primitives in `framework.transform.processors`.
 They fall into two workload families:
 
 - **Selection narrowing** (#9, #62, #166) — `Filter`, `Score`,

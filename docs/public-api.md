@@ -35,9 +35,28 @@ The package root is intentionally not a mega-facade: names such as `CsvReader`,
 `Filter`, and `Pipeline` stay on their task-oriented facades and are not
 available as `framework.CsvReader`, `framework.Filter`, or `framework.Pipeline`.
 
-The facades are thin re-export modules: `framework.transform.Filter` **is**
-`framework.processors.Filter` (the same object). Nothing is reimplemented — the
+The facades are thin re-export packages: `framework.transform.Filter` **is**
+`framework.transform.processors.Filter` (the same object). Nothing is reimplemented — the
 facade only curates and groups.
+
+Each facade is a **sub-package** whose `__init__.py` does the re-exporting, with
+the implementation modules living alongside it:
+
+- `framework/io/` — `dataset`, `readers`, `writers`, `store`, `strategy`,
+  `layers`, `sql`, `remote`.
+- `framework/transform/` — `processors`, `schema`, `validators`, `calendar`,
+  `quarantine`.
+- `framework/run/` — `builder`, `stages`, `pipeline_steps`, `trace`, `silver`,
+  `gold`, `orchestration`, `runner`, `run_context`, `run_log`, `run_registry`.
+- `framework/shared/` — cross-cutting internal helpers used by more than one
+  facade: `connection`, `describe`, `retry`. Not a facade; its names surface
+  through `framework.io` (`RetryPolicy` & friends) or stay internal (`connect`,
+  `render`).
+- `framework/testing/` — the test-only support surface (below).
+
+These sub-package paths are the *internal layout*; only the four facade names
+(`framework.io`/`framework.transform`/`framework.run`/`framework.testing`) are
+the stable import surface.
 
 ## The three facades
 
@@ -87,27 +106,27 @@ These are implementation detail. The facades draw from some of them, but the
 **module paths and any name not re-exported above are not public** and may change
 without notice:
 
-- `framework.connection` (`connect`) — the connection factory seam (ADR-0001);
+- `framework.shared.connection` (`connect`) — the connection factory seam (ADR-0001);
   used by Readers/Writers/Store, not by pipelines.
-- `framework.sql` (`quote_identifier`) — the single place a table/column name is
+- `framework.io.sql` (`quote_identifier`) — the single place a table/column name is
   turned into a safely-quoted SQL identifier (issue #138); applied at every
   identifier interpolation across the SQLite seam, not imported by pipelines.
-- `framework.layers` (`layer_name`, `LAYERS`) — internal layer-name validation;
+- `framework.io.layers` (`layer_name`, `LAYERS`) — internal layer-name validation;
   the public layer surface is `Layer`/`RAW`/`SILVER`/`GOLD` via `framework.io`.
-- `framework.trace` (`RowTrace`) — the generic per-row trace mechanics behind
+- `framework.run.trace` (`RowTrace`) — the generic per-row trace mechanics behind
   `Pipeline.explain()`; reached through the builder, not imported directly.
-- `framework.pipeline_steps` (`PipelineStep`, `PipelineExecution`, …) — the
+- `framework.run.pipeline_steps` (`PipelineStep`, `PipelineExecution`, …) — the
   builder's internal ordered execution plan; inspected by `.describe()` and
   executed by `.run()`, not imported by pipeline scripts.
-- `framework.describe` (`render`, `redact_url`) — shared helpers for the opt-in
+- `framework.shared.describe` (`render`, `redact_url`) — shared helpers for the opt-in
   `describe()` protocol (#145); a component implements `describe()` using these
   to render its own safe plan summary, not imported by pipeline scripts.
-- `framework.remote` (`RemoteRunner`, `StubbedRemoteRunner`, `SharePointFetcher`,
+- `framework.io.remote` (`RemoteRunner`, `StubbedRemoteRunner`, `SharePointFetcher`,
   `SharePointPusher`,
   …) — the **stubbed remote-client seam** behind `SasReader` / `SharePointReader`
   / `SharePointWriter` (ADR-0004/0005). An advanced extension point, documented in
   [adding-a-feed.md](adding-a-feed.md); not part of the day-to-day surface.
-- `framework.quarantine` (`SchemaValueRulePartitioner`, …) — the value-rule
+- `framework.transform.quarantine` (`SchemaValueRulePartitioner`, …) — the value-rule
   quarantine partitioner; wired by the schema/quarantine flow.
 - Names prefixed `_` anywhere (`_NullRunLog`, `_RegisteredPipeline`, …), and the
   run-log/runner internals not listed in a facade (`StepMetrics`,
@@ -115,9 +134,9 @@ without notice:
 
 Code examples throughout the docs import via the facades. The per-slice deep
 docs may still name a primitive's **home module** in prose to locate the
-implementation (e.g. the processors live in `framework.processors`); that is
+implementation (e.g. the processors live in `framework.transform.processors`); that is
 where the code is, but it is not how pipeline scripts import it. The one
-exception in examples is `framework.remote`, shown in
+exception in examples is `framework.io.remote`, shown in
 [adding-a-feed.md](adding-a-feed.md) only to swap the stubbed remote fetcher or
 pusher — internal seams with no facade.
 

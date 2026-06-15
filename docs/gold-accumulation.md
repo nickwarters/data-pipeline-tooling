@@ -76,7 +76,7 @@ metadata — is deferred to the run-registry, ADR-0005.)
 ## How a changing record is represented across runs
 
 The delete-by-run is scoped to `run_id` **only** — never to a business key like
-`case_ref` (`framework/writers.py`). So gold **never updates a record in place**:
+`case_ref` (`framework/io/writers.py`). So gold **never updates a record in place**:
 a record that changes between runs produces *one row per run that observed it*,
 each stamped with that run's `run_id` / `load_date`. The version axis of a record
 is `(case_ref, load_date)`; `run_id` is the *load* identity, not a per-row
