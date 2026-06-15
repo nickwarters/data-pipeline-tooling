@@ -1,9 +1,8 @@
-"""The pipeline-author testing helpers.
+"""The run-log helpers (``framework.testing.run_log``).
 
-These exercise ``framework.testing`` the way a pipeline author would: build a
-feed from in-memory rows, run a real :class:`~framework.run.Pipeline`, and assert
-the output rows / run-log records without wiring temp directories or SQLite by
-hand.
+Capture a run's structured records in memory with :class:`RecordingRunLog`, or
+read an on-disk JSONL run-log back with :func:`read_run_log`, and assert on warn
+hits / validation failures / step order without parsing files by hand.
 """
 
 import pytest
@@ -13,43 +12,9 @@ from framework.testing import (
     RecordingRunLog,
     RecordingWriter,
     given_rows,
-    read_rows,
     read_run_log,
-    rows_of,
 )
-from framework.transform import Filter
 from framework.validate import ColumnValidator
-
-
-def test_given_rows_through_pipeline_into_recording_writer():
-    # given-source-rows / expect-output-rows with no temp dir or SQLite: feed
-    # in-memory rows, run the real builder, read the captured output back.
-    reader = given_rows([{"amount": 100}, {"amount": 50}, {"amount": 200}])
-    writer = RecordingWriter()
-
-    (
-        Pipeline("selection", reader)
-        .with_processor(Filter(lambda row: row["amount"] >= 100, name="high-value"))
-        .write_to(writer)
-        .run()
-    )
-
-    assert rows_of(writer) == [{"amount": 100}, {"amount": 200}]
-
-
-def test_read_rows_reads_a_landed_layer_table_back(tmp_path):
-    # When a pipeline lands in a real Store, read_rows collapses the
-    # store.reader(layer, table).read().to_pandas() chain to a list of dicts.
-    from framework.io import RAW, Refresh, Store
-
-    store = Store(tmp_path / "cases")
-    (
-        Pipeline("cases", given_rows([{"case_id": "c1", "amount": 100}]))
-        .write_to(store.writer(RAW, "cases", Refresh()))
-        .run()
-    )
-
-    assert read_rows(store, RAW, "cases") == [{"case_id": "c1", "amount": 100}]
 
 
 def test_recording_run_log_captures_warn_hits_in_memory():
