@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun, Refresh
 from framework.run.silver import raw_to_silver

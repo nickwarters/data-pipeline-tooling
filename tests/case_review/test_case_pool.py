@@ -4,7 +4,7 @@ import pandas as pd
 
 from case_review.case_pool import CasePool
 from case_review.case_type import CaseType, Variation
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.io.store import Store
 from framework.io.strategy import Refresh
 from framework.shared.calendar import WorkingDayCalendar

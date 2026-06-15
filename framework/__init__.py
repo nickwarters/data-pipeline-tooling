@@ -2,9 +2,12 @@
 
 Use the public facade modules:
 
-- ``framework.io`` for Dataset, Readers, Writers, Store, and strategies.
-- ``framework.transform`` for processors and the schema adapter.
-- ``framework.validate`` for the ``validate(dataset)`` checks.
+- ``framework.core`` for Dataset and the medallion Layer constants — the
+  foundational vocabulary the other facades build on.
+- ``framework.io`` for Readers, Writers, Store, and strategies.
+- ``framework.transform`` for the reshaping processors and SchemaCoercion.
+- ``framework.validate`` for the ``validate(dataset)`` checks and the
+  declared-schema contract.
 - ``framework.run`` for Pipeline, orchestration, RunLog, and RunRegistry.
 - ``framework.shared`` for cross-cutting utilities (retry, WorkingDayCalendar).
 
@@ -12,6 +15,6 @@ Use the public facade modules:
 is private layout.)
 """
 
-from framework import io, run, shared, transform, validate
+from framework import core, io, run, shared, transform, validate
 
-__all__ = ["io", "transform", "validate", "run", "shared"]
+__all__ = ["core", "io", "transform", "validate", "run", "shared"]

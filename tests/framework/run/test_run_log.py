@@ -13,7 +13,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.run.builder import Pipeline
 from framework.run.run_log import RunLog
 from framework.run.stages import ProcessingStage, ValidationStage

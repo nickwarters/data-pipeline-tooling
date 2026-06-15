@@ -19,7 +19,7 @@ from datetime import date, datetime
 import pandas as pd
 
 from framework._internal.schema import _declared_fields
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.transform.processors import CoercionError
 
 # Boolean encodings raw can leave behind once a source's booleans survive a

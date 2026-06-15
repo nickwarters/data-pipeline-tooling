@@ -7,15 +7,16 @@ between the framework and the pipeline scripts that depend on it: it states
 rule that follows from that split.
 
 > **The rule.** Application code — both `pipelines/` and the `case_review/`
-> domain layer — imports from the five **facades** — `framework.io`,
-> `framework.transform`, `framework.validate`, `framework.run`,
+> domain layer — imports from the six **facades** — `framework.core`,
+> `framework.io`, `framework.transform`, `framework.validate`, `framework.run`,
 > `framework.shared` — never from the modules behind them. The facade names are
 > the stable surface; the submodule paths can be reorganised without notice. A
 > test (`tests/integration/test_public_api.py`) holds both `pipelines/` and
 > `case_review/` to this boundary.
 
 ```python
-from framework.io import CsvReader, StoreCatalog, RAW, Refresh
+from framework.core import Dataset, RAW, SILVER, GOLD
+from framework.io import CsvReader, StoreCatalog, Refresh
 from framework.transform import Filter, VectorizedFilter, SchemaCoercion
 from framework.validate import ColumnValidator, SchemaValidator, ValidationError
 from framework.run import Pipeline, PipelineRunner, RunContext
@@ -27,7 +28,8 @@ For interactive discovery, `import framework` exposes only those facade modules:
 ```python
 import framework
 
-framework.__all__  # ["io", "transform", "validate", "run", "shared"]
+framework.__all__  # ["core", "io", "transform", "validate", "run", "shared"]
+framework.core.Dataset
 framework.io.CsvReader
 framework.transform.Filter
 framework.validate.ColumnValidator
@@ -46,8 +48,10 @@ facade only curates and groups.
 Each facade is a **sub-package** whose `__init__.py` does the re-exporting, with
 the implementation modules living alongside it:
 
-- `framework/io/` — `dataset`, `readers`, `writers`, `store`, `strategy`,
-  `layers`, `sql`, `remote`.
+- `framework/core/` — the foundational vocabulary every other facade builds on:
+  `dataset` (`Dataset`) and `layers` (the medallion `Layer` / `RAW` / `SILVER` /
+  `GOLD`). It sits *below* the task facades and depends on nothing.
+- `framework/io/` — `readers`, `writers`, `store`, `strategy`, `sql`, `remote`.
 - `framework/transform/` — the dataset-reshaping primitives: `processors`,
   `coercion` (`SchemaCoercion` — the *coerce* half of the schema adapter),
   `quarantine`.
@@ -70,15 +74,26 @@ Two non-facade packages sit beside them:
   marks it private; nothing outside the framework imports from here.
 - `framework/testing/` — the test-only support surface (below).
 
-These sub-package paths are the *internal layout*; only the five facade names
-(`framework.io` / `framework.transform` / `framework.validate` / `framework.run`
-/ `framework.shared`) are the stable runtime import surface. `framework.testing`
-is the separate test-only surface, and `framework._internal` is private.
+These sub-package paths are the *internal layout*; only the six facade names
+(`framework.core` / `framework.io` / `framework.transform` / `framework.validate`
+/ `framework.run` / `framework.shared`) are the stable runtime import surface.
+`framework.testing` is the separate test-only surface, and `framework._internal`
+is private.
 
 ## The facades
 
-Grouped by what a pipeline author reaches for: get data in/out, reshape it,
-check it, compose & run it, plus cross-cutting utilities.
+Grouped by what a pipeline author reaches for: the base vocabulary, get data
+in/out, reshape it, check it, compose & run it, plus cross-cutting utilities.
+
+### `framework.core` — the foundational data vocabulary
+
+The two nouns every pipeline names regardless of task — what flows, and where it
+lands. They sit below the task facades; everything else builds on them.
+
+| Names | What |
+|-------|------|
+| `Dataset` | The opaque bulk tabular carrier (pandas behind the seam) that flows through every Reader, Processor, Validator, and Writer. |
+| `Layer`, `RAW`, `SILVER`, `GOLD` | The medallion layer constants. |
 
 ### `framework.io` — sources, sinks, stores
 
@@ -86,11 +101,9 @@ Moving data across the boundary.
 
 | Names | What |
 |-------|------|
-| `Dataset` | The opaque bulk tabular carrier (pandas behind the seam). |
 | `Reader`, `DatasetReader`, `CsvReader`, `GlobCsvReader`, `ExcelReader`, `SqliteReader`, `SasReader`, `SharePointReader` | The `read() -> Dataset` port and its concrete sources. |
 | `Writer`, `CsvWriter`, `ExcelWriter`, `JsonWriter`, `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `QuarantineWriter`, `SharePointWriter` | The `write(dataset)` port and its concrete sinks. |
 | `Store`, `StoreCatalog`, `StoreBackend`, `DirectoryStoreBackend` | Per-subject medallions minted from shared configuration. |
-| `Layer`, `RAW`, `SILVER`, `GOLD` | The medallion layer constants. |
 | `Refresh`, `AccumulateByRun`, `UpsertStrategy` | The load strategies a Writer carries. |
 
 ### `framework.transform` — reshaping a feed mid-pipeline
@@ -147,8 +160,8 @@ without notice:
 - `framework.io.sql` (`quote_identifier`) — the single place a table/column name is
   turned into a safely-quoted SQL identifier (issue #138); applied at every
   identifier interpolation across the SQLite seam, not imported by pipelines.
-- `framework.io.layers` (`layer_name`, `LAYERS`) — internal layer-name validation;
-  the public layer surface is `Layer`/`RAW`/`SILVER`/`GOLD` via `framework.io`.
+- `framework.core.layers` (`layer_name`, `LAYERS`) — internal layer-name validation;
+  the public layer surface is `Layer`/`RAW`/`SILVER`/`GOLD` via `framework.core`.
 - `framework.run.trace` (`RowTrace`) — the generic per-row trace mechanics behind
   `Pipeline.explain()`; reached through the builder, not imported directly.
 - `framework.run.pipeline_steps` (`PipelineStep`, `PipelineExecution`, …) — the

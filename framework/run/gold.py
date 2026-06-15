@@ -28,7 +28,8 @@ from __future__ import annotations
 
 import uuid
 
-from framework.io.store import GOLD, SILVER, Store
+from framework.core import GOLD, SILVER
+from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun, Refresh
 from framework.run.builder import Pipeline
 from framework.run.run_log import RunLog

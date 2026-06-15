@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.io.strategy import Refresh
 from framework.validate.validators import (
     ColumnValidator,
@@ -249,7 +249,8 @@ def test_schema_drift_validator_drives_the_real_store_prior_columns_seam(tmp_pat
     # End-to-end over the production PriorColumns seam (Store.columns_of's PRAGMA
     # read of the live raw table): land one shape, then a drifted snapshot warns
     # vs the prior landing — the next run reads the door, one layer before silver.
-    from framework.io.store import RAW, Store
+    from framework.core import RAW
+    from framework.io.store import Store
 
     store = Store(tmp_path)
     store.writer(RAW, "cases", Refresh()).write(_dataset(id=[1], name=["a"]))

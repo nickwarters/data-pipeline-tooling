@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import fields
 
-from framework.io import RAW, StoreCatalog
+from framework.core import RAW
+from framework.io import StoreCatalog
 from framework.run import Pipeline
 from framework.testing import RecordingWriter, given_rows, read_rows, rows_of
 from framework.validate import ColumnValidator

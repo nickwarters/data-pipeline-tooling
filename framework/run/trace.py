@@ -15,7 +15,7 @@ from typing import Any
 
 import pandas as pd
 
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 
 
 @dataclass

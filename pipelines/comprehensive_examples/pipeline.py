@@ -14,15 +14,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from framework.io import (
-    GOLD,
-    RAW,
-    SILVER,
-    AccumulateByRun,
-    CsvReader,
-    Refresh,
-    StoreCatalog,
-)
+from framework.core import GOLD, RAW, SILVER
+from framework.io import AccumulateByRun, CsvReader, Refresh, StoreCatalog
 from framework.run import Pipeline
 from framework.transform import (
     Filter,

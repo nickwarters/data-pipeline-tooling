@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.run.run_context import RunContext
 from framework.run.run_log import RunLog
 from framework.run.run_registry import RunRegistry

@@ -14,7 +14,7 @@ import json
 
 import pandas as pd
 
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.io.readers import DatasetReader
 from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun

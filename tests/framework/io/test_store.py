@@ -3,9 +3,10 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from framework.io.dataset import Dataset
+from framework.core import GOLD, RAW, SILVER
+from framework.core.dataset import Dataset
 from framework.io.readers import CsvReader
-from framework.io.store import GOLD, RAW, SILVER, Store, StoreCatalog
+from framework.io.store import Store, StoreCatalog
 from framework.io.strategy import AccumulateByRun, Refresh
 
 FIXTURE = Path(__file__).parent.parent.parent / "fixtures" / "cases.csv"

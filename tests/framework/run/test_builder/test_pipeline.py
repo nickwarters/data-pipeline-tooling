@@ -4,7 +4,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.io.readers import CsvReader, SharePointReader
 from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun

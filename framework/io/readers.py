@@ -14,7 +14,7 @@ import pandas as pd
 
 from framework._internal.connection import connect
 from framework._internal.describe import redact_url, render
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.io.remote import (
     RemoteRunner,
     SharePointFetcher,

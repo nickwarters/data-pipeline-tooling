@@ -1,4 +1,5 @@
-from framework.io import RAW, StoreCatalog
+from framework.core import RAW
+from framework.io import StoreCatalog
 from framework.testing import read_rows, read_run_log
 from pipelines import demo_csv_to_raw
 

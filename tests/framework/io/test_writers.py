@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from framework._internal.connection import connect
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.io.readers import CsvReader, ExcelReader, SqliteReader
 from framework.io.strategy import AccumulateByRun, Refresh
 from framework.io.writers import (

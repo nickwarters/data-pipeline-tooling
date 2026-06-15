@@ -15,7 +15,7 @@ from typing import Annotated
 import pandas as pd
 import pytest
 
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.validate import (
     Length,
     NonNull,
