@@ -16,7 +16,8 @@ import os
 import sys
 from pathlib import Path
 
-from framework.io import RAW, CsvReader, Dataset, Refresh, StoreCatalog
+from framework.core import RAW, Dataset
+from framework.io import CsvReader, Refresh, StoreCatalog
 from framework.run import Pipeline, RunLog
 from framework.validate import SchemaDriftValidator
 

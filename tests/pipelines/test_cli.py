@@ -32,7 +32,8 @@ def test_run_executes_a_registered_pipeline(tmp_path):
 
 
 def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
-    from framework.io import GOLD, StoreCatalog
+    from framework.core import GOLD
+    from framework.io import StoreCatalog
 
     assert (
         _cli(

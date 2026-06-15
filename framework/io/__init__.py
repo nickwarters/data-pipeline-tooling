@@ -1,22 +1,20 @@
 """Public facade: moving data across the boundary — sources, sinks, stores.
 
-The stable import surface for getting a feed *in* and a result *out*: the
-:class:`~framework.io.dataset.Dataset` carrier, every :class:`Reader` and
-:class:`Writer`, the per-subject :class:`Store` / :class:`StoreCatalog`, the
-medallion ``Layer`` constants, and the load strategies a Writer carries.
+The stable import surface for getting a feed *in* and a result *out*: every
+:class:`Reader` and :class:`Writer`, the per-subject :class:`Store` /
+:class:`StoreCatalog`, and the load strategies a Writer carries. The
+:class:`~framework.core.dataset.Dataset` they move and the medallion ``Layer``
+constants are the foundational vocabulary on ``framework.core``.
 
 Import from here rather than the underlying modules::
 
-    from framework.io import CsvReader, CsvWriter, StoreCatalog, RAW, Refresh
+    from framework.io import CsvReader, CsvWriter, StoreCatalog, Refresh
 
 The modules behind this facade (``framework.io.readers``, ``framework.io.writers``,
-``framework.io.store``, ``framework.io.strategy``, ``framework.io.layers``,
-``framework.io.dataset``) are internal layout: re-exports here are the public
-contract, the submodule paths are not. See ``docs/public-api.md``.
+``framework.io.store``, ``framework.io.strategy``) are internal layout: re-exports
+here are the public contract, the submodule paths are not. See ``docs/public-api.md``.
 """
 
-from framework.io.dataset import Dataset
-from framework.io.layers import GOLD, RAW, SILVER, Layer
 from framework.io.readers import (
     CsvReader,
     DatasetReader,
@@ -47,7 +45,6 @@ from framework.io.writers import (
 )
 
 __all__ = [
-    "Dataset",
     "Reader",
     "DatasetReader",
     "CsvReader",
@@ -68,10 +65,6 @@ __all__ = [
     "StoreCatalog",
     "StoreBackend",
     "DirectoryStoreBackend",
-    "Layer",
-    "RAW",
-    "SILVER",
-    "GOLD",
     "Refresh",
     "AccumulateByRun",
     "UpsertStrategy",

@@ -13,7 +13,7 @@ from functools import partial
 from typing import ContextManager, Literal
 
 from framework._internal.describe import component_summary
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.run.run_context import RunContext
 from framework.run.run_log import RunLog, StepMetrics
 from framework.run.trace import RowTrace

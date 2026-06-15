@@ -152,7 +152,8 @@ mints the destination Writer for the target layer, so the builder never learns
 about medallion layers or load rules:
 
 ```python
-from framework.io import RAW, ExcelReader, Refresh, StoreCatalog
+from framework.core import RAW
+from framework.io import ExcelReader, Refresh, StoreCatalog
 from framework.run import Pipeline
 from framework.validate import ColumnValidator, SchemaDriftValidator
 

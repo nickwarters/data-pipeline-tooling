@@ -3,7 +3,7 @@ import datetime as dt
 import pandas as pd
 import pytest
 
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.run import (
     DayOfMonth,
     FreshnessRequirement,

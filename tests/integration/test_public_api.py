@@ -1,10 +1,11 @@
-"""The public framework API: five subpackage facades.
+"""The public framework API: six subpackage facades.
 
-A pipeline author depends on ``framework.io`` / ``framework.transform`` /
-``framework.validate`` / ``framework.run`` / ``framework.shared`` — the stable
-public surface — not on internal modules by accident. These tests exercise that
-surface the way an author would: by building and running a real pipeline through
-the facades, and by asserting the internal plumbing stays out of reach.
+A pipeline author depends on ``framework.core`` / ``framework.io`` /
+``framework.transform`` / ``framework.validate`` / ``framework.run`` /
+``framework.shared`` — the stable public surface — not on internal modules by
+accident. These tests exercise that surface the way an author would: by building
+and running a real pipeline through the facades, and by asserting the internal
+plumbing stays out of reach.
 """
 
 import ast
@@ -14,7 +15,7 @@ FIXTURE = Path(__file__).parent.parent / "fixtures" / "cases.csv"
 
 PIPELINES_DIR = Path(__file__).parent.parent.parent / "pipelines"
 CASE_REVIEW_DIR = Path(__file__).parent.parent.parent / "case_review"
-PUBLIC_FACADES = {"io", "transform", "validate", "run", "shared"}
+PUBLIC_FACADES = {"core", "io", "transform", "validate", "run", "shared"}
 
 
 def _framework_submodules_imported(source: str) -> set[str]:
@@ -53,7 +54,8 @@ def _facade_offenders(root: Path) -> dict[str, set[str]]:
 def test_package_root_exposes_only_public_facade_modules():
     import framework
 
-    assert framework.__all__ == ["io", "transform", "validate", "run", "shared"]
+    assert framework.__all__ == ["core", "io", "transform", "validate", "run", "shared"]
+    assert framework.core.Dataset is not None
     assert framework.io.CsvReader is not None
     assert framework.transform.Filter is not None
     assert framework.validate.ColumnValidator is not None
@@ -75,7 +77,8 @@ def test_package_root_exposes_only_public_facade_modules():
 def test_an_author_can_ingest_a_feed_through_the_io_and_run_facades(tmp_path):
     # The blessed import path: sources/sinks from framework.io, the builder from
     # framework.run. Composing and running them lands the feed and reads back.
-    from framework.io import RAW, CsvReader, Refresh, Store
+    from framework.core import RAW
+    from framework.io import CsvReader, Refresh, Store
     from framework.run import Pipeline
 
     store = Store(tmp_path / "cases")
@@ -113,7 +116,8 @@ def test_file_deliverable_writers_are_available_through_the_io_facade(tmp_path):
 def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_path):
     # Selection-style narrowing: processors come from framework.transform and
     # the checks from framework.validate, composed onto the framework.run Pipeline.
-    from framework.io import RAW, CsvReader, Refresh, Store
+    from framework.core import RAW
+    from framework.io import CsvReader, Refresh, Store
     from framework.run import Pipeline
     from framework.transform import Filter, Score, VectorizedDerive, VectorizedFilter
     from framework.validate import ColumnValidator
@@ -142,7 +146,8 @@ def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_p
 
 
 def test_an_author_can_compose_ordered_stages_through_the_run_facade(tmp_path):
-    from framework.io import RAW, CsvReader, Refresh, Store
+    from framework.core import RAW
+    from framework.io import CsvReader, Refresh, Store
     from framework.run import Pipeline, ProcessingStage, ValidationStage
     from framework.transform import Score
     from framework.validate import ColumnValidator
@@ -181,19 +186,19 @@ def test_internal_plumbing_stays_out_of_the_public_facades():
     # implementation detail (connection factory, layer-name helper, trace
     # mechanics, remote client seam, runner/run-log internals) — documented as
     # internal in docs/public-api.md and absent from every facade's __all__.
-    from framework import io, run, transform
+    from framework import core, io, run, shared, transform, validate
 
     internal = {
         "connect",  # framework._internal.connection — connection factory seam
-        "layer_name",  # framework.io.layers — internal validation helper
-        "LAYERS",  # framework.io.layers — internal tuple
+        "layer_name",  # framework.core.layers — internal validation helper
+        "LAYERS",  # framework.core.layers — internal tuple
         "RowTrace",  # framework.run.trace — generic trace mechanics
         "RemoteRunner",  # framework.io.remote — stubbed remote client seam
         "FreshnessGuard",  # framework.run.runner — internal guard
         "StepMetrics",  # framework.run.run_log — internal timing record
         "pipeline_label",  # framework.run.runner — internal label helper
     }
-    for facade in (io, run, transform):
+    for facade in (core, io, transform, validate, run, shared):
         leaked = internal & set(facade.__all__)
         assert not leaked, f"{facade.__name__} leaks internal names: {leaked}"
         # __all__ is also honest: every advertised name resolves on the facade.

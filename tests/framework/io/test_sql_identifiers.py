@@ -3,7 +3,7 @@ import sqlite3
 import pandas as pd
 import pytest
 
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.io.readers import SqliteReader
 from framework.io.sql import quote_identifier
 from framework.io.writers import (

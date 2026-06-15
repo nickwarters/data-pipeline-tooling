@@ -38,7 +38,7 @@ from typing import (
 )
 
 from framework._internal.describe import render
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.io.readers import Reader
 
 

@@ -329,7 +329,8 @@ Python, and join another subject's silver Reference Data via an explicit
 read-only dependency.
 
 ```python
-from framework.io import SILVER, StoreCatalog
+from framework.core import SILVER
+from framework.io import StoreCatalog
 from framework.run import Pipeline
 from framework.transform import AntiJoinWith, Filter, JoinDependency, JoinWith
 

@@ -20,12 +20,12 @@ builds on these shapes. For the
 CasePool, Feed, Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
 
 Application code (`pipelines/` + the `case_review/` domain layer) imports these
-primitives through the five public facades (`framework.io` /
+primitives through the six public facades (`framework.core` / `framework.io` /
 `framework.transform` / `framework.validate` / `framework.run` /
 `framework.shared`), not the home modules named per-primitive below; the home
 modules locate the code, the facades are the stable contract. The package root
-exposes only those facade modules for discovery (`framework.io`,
-`framework.transform`, `framework.validate`, `framework.run`,
+exposes only those facade modules for discovery (`framework.core`,
+`framework.io`, `framework.transform`, `framework.validate`, `framework.run`,
 `framework.shared`); it does not re-export primitive classes directly. See
 [`public-api.md`](public-api.md).
 
@@ -846,7 +846,8 @@ carries the final outcome. Full treatment: [retry.md](retry.md).
 ## Worked example
 
 ```python
-from framework.io import RAW, CsvReader, Refresh, StoreCatalog
+from framework.core import RAW
+from framework.io import CsvReader, Refresh, StoreCatalog
 from framework.run import Pipeline
 
 store = StoreCatalog("/path/to/share").store("cases")

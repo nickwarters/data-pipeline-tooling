@@ -13,7 +13,8 @@ from __future__ import annotations
 import importlib
 import sys
 
-from framework.io import RAW, SILVER, StoreCatalog
+from framework.core import RAW, SILVER
+from framework.io import StoreCatalog
 from framework.testing import read_rows, rows_of
 from pipelines import scaffold
 

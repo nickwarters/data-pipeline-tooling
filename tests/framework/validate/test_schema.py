@@ -4,7 +4,7 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.validate import SchemaValidator
 from framework.validate.validators import ValidationError
 

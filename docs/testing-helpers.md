@@ -10,7 +10,7 @@ from framework.testing import given_rows, rows_of, read_rows
 from framework.testing import RecordingWriter, RecordingRunLog, read_run_log
 ```
 
-It sits *beside* the five production facades (`framework.io` /
+It sits *beside* the six production facades (`framework.core` / `framework.io` /
 `framework.transform` / `framework.validate` / `framework.run` /
 `framework.shared`), not inside them — see
 [public-api.md](public-api.md). Everything stays behind the `Dataset` seam
@@ -66,7 +66,8 @@ When the pipeline writes to a real `Store`, `read_rows` reads the table back
 through the Store's own Reader — the same seam a pipeline uses, not around it:
 
 ```python
-from framework.io import RAW, Refresh, Store
+from framework.core import RAW
+from framework.io import Refresh, Store
 from framework.testing import given_rows, read_rows
 from framework.run import Pipeline
 

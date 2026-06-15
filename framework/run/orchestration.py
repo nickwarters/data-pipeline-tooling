@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Generic, TypeVar
 
 from framework._internal.connection import connect
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.run.builder import Pipeline
 from framework.run.run_context import RunContext
 from framework.run.runner import FreshnessError, FreshnessRequirement, PipelineRunner

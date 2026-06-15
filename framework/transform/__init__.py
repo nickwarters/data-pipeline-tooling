@@ -1,7 +1,7 @@
 """Public facade for shaping and checking a feed mid-pipeline.
 
 The stable import surface for everything that reshapes or gates a
-:class:`~framework.io.dataset.Dataset` between the read and the write: the
+:class:`~framework.core.dataset.Dataset` between the read and the write: the
 ``Processor`` seam and its concrete transforms (the Selection ``Filter`` /
 ``Score`` / ``VectorizedFilter`` / ``VectorizedDerive`` / ``Sort`` /
 ``Rename`` / ``Stamp``, the per-group ``TopNPerGroup`` / ``SamplePerGroup``,

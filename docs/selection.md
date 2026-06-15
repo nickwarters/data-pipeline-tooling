@@ -124,7 +124,8 @@ round-trip:
 ```python
 from typing import Any, Mapping
 
-from framework.io import GOLD, AccumulateByRun, DatasetReader
+from framework.core import GOLD
+from framework.io import AccumulateByRun, DatasetReader
 from framework.run import Pipeline
 from framework.transform import Filter, Score, Sort, Stamp
 

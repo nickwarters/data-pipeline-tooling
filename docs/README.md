@@ -140,14 +140,15 @@ its decisions in a separate orchestration store.
 The foundational vocabulary. Each links to its deep doc; the consolidated
 reference with worked examples is [`core-primitives.md`](core-primitives.md).
 
-> **Importing.** Application code (`pipelines/` + `case_review/`) imports these through the five public **facades**
-> — `framework.io` (sources/sinks/stores), `framework.transform` (the reshaping
-> processors + `SchemaCoercion`), `framework.validate` (the `validate(dataset)`
-> checks + the declared-schema contract: `SchemaValidator` and the value rules),
+> **Importing.** Application code (`pipelines/` + `case_review/`) imports these through the six public **facades**
+> — `framework.core` (`Dataset` + the medallion `Layer` constants), `framework.io`
+> (sources/sinks/stores), `framework.transform` (the reshaping processors +
+> `SchemaCoercion`), `framework.validate` (the `validate(dataset)` checks + the
+> declared-schema contract: `SchemaValidator` and the value rules),
 > `framework.run` (the `Pipeline` builder, orchestration, runner, observability),
 > and `framework.shared` (cross-cutting utilities — retry, `WorkingDayCalendar`)
 > — not from the modules behind them. The facade names are the stable surface.
-> `import framework` exposes only those five facade modules for discovery; it is
+> `import framework` exposes only those six facade modules for discovery; it is
 > not a shortcut for
 > `framework.CsvReader` / `framework.Filter` / `framework.Pipeline`. See
 > [`public-api.md`](public-api.md) for the full member list, the
@@ -274,7 +275,8 @@ python -m pipelines.scaffold --case-type claims  # + case_type.py; source -> raw
 ```
 
 ```python
-from framework.io import RAW, ExcelReader, Refresh, StoreCatalog
+from framework.core import RAW
+from framework.io import ExcelReader, Refresh, StoreCatalog
 from framework.run import Pipeline
 from framework.validate import ColumnValidator  # optional input gate
 
@@ -365,7 +367,8 @@ and the processor reference [`processors.md`](processors.md).
 ```python
 from typing import Any, Mapping
 
-from framework.io import GOLD, SILVER, AccumulateByRun, DatasetReader, StoreCatalog
+from framework.core import GOLD, SILVER
+from framework.io import AccumulateByRun, DatasetReader, StoreCatalog
 from framework.run import Pipeline
 from framework.transform import (
     Filter,
@@ -520,7 +523,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 
 | Doc | Covers |
 |-----|--------|
-| [`public-api.md`](public-api.md) | The public API: the five facades (`framework.io` / `transform` / `validate` / `run` / `shared`), the internal-module boundary, and the packaging non-goal. |
+| [`public-api.md`](public-api.md) | The public API: the six facades (`framework.core` / `io` / `transform` / `validate` / `run` / `shared`), the internal-module boundary, and the packaging non-goal. |
 | [`core-primitives.md`](core-primitives.md) | The consolidated framework primitives reference with worked examples and build status per slice. |
 | [`adding-a-feed.md`](adding-a-feed.md) | Every Reader, and the stubbed remote (SAS / SharePoint) seams. |
 | [`schema-enforcement.md`](schema-enforcement.md) | `Schema` / `SchemaValidator` / `SchemaCoercion`, value-level rules, `raw_to_silver`. |

@@ -12,7 +12,8 @@ behaviour.
 
 from __future__ import annotations
 
-from framework.io.store import RAW, SILVER, Store
+from framework.core import RAW, SILVER
+from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun, Refresh
 from framework.run.builder import Pipeline
 from framework.run.run_log import RunLog

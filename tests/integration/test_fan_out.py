@@ -9,7 +9,7 @@ import pandas as pd
 
 from case_review.case_type import CaseType
 from case_review.gold import detail_ingest_silver_to_gold, ingest_silver_to_gold
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun, Refresh
 from framework.run.builder import Pipeline

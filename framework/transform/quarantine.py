@@ -19,7 +19,7 @@ from typing import Protocol, runtime_checkable
 import pandas as pd
 
 from framework._internal.schema import _declared_rules
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 
 
 @runtime_checkable

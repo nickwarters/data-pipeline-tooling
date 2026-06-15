@@ -32,7 +32,7 @@ from framework._internal.schema import (
     _declared_rules,
     _unwrap,
 )
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.validate.validators import ValidationError
 from framework.validate.value_rules import NonNull, Nullable
 

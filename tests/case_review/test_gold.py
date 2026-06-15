@@ -7,7 +7,7 @@ import pytest
 from case_review.case_type import CaseType
 from case_review.gold import ingest_silver_to_gold
 from framework._internal.connection import connect
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun, Refresh
 from framework.run.gold import silver_to_gold

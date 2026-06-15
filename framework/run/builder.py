@@ -14,7 +14,7 @@ import logging
 import time
 
 from framework._internal.describe import component_summary
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.io.readers import Reader
 from framework.io.writers import Writer
 from framework.run.pipeline_steps import (

@@ -19,7 +19,7 @@ import time
 from collections.abc import Callable
 from typing import TypeVar
 
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.io.readers import Reader
 from framework.io.writers import Writer
 

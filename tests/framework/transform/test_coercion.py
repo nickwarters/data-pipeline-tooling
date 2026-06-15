@@ -15,7 +15,7 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.transform import SchemaCoercion
 from framework.transform.processors import CoercionError
 from framework.validate import SchemaValidator

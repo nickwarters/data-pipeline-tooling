@@ -21,7 +21,7 @@ The surface splits into two implementation modules, both re-exported here:
   :func:`read_run_log` parses an on-disk JSONL run-log into the same record
   dicts.
 
-Everything stays behind the :class:`~framework.io.dataset.Dataset` seam:
+Everything stays behind the :class:`~framework.core.dataset.Dataset` seam:
 helpers take and return plain Python row dicts, never a pandas frame.
 """
 

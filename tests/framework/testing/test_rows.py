@@ -49,7 +49,8 @@ def test_given_csv_writes_a_csv_readable_by_csvreader(tmp_path):
 def test_read_rows_reads_a_landed_layer_table_back(tmp_path):
     # When a pipeline lands in a real Store, read_rows collapses the
     # store.reader(layer, table).read().to_pandas() chain to a list of dicts.
-    from framework.io import RAW, Refresh, Store
+    from framework.core import RAW
+    from framework.io import Refresh, Store
 
     store = Store(tmp_path / "cases")
     (

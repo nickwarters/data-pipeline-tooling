@@ -1,7 +1,7 @@
 """In-memory row helpers: build a source, capture a sink, assert on the result.
 
 The row-dict side of the testing surface. Everything speaks plain Python row
-dicts (``list[dict]``) behind the :class:`~framework.io.dataset.Dataset` seam, so
+dicts (``list[dict]``) behind the :class:`~framework.core.dataset.Dataset` seam, so
 a pipeline test never touches a pandas frame, a temp directory, or a SQLite
 round-trip unless it wants to. Re-exported from :mod:`framework.testing`.
 """
@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
-from framework.io.dataset import Dataset
+from framework.core.dataset import Dataset
 from framework.io.readers import DatasetReader, Reader
 
 __all__ = [
