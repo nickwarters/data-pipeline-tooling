@@ -16,32 +16,14 @@ from __future__ import annotations
 
 from typing import Iterable, Protocol, Sequence, runtime_checkable
 
-from framework.io.writers import Writer
-from framework.run.pipeline_steps import (
-    CheckpointStep,
-    PipelineStep,
-    ProcessorStageStep,
-    ValidatorStep,
-)
-from framework.transform.processors import Processor
-from framework.validate.validators import Severity, Validator
+from framework.core.contracts import Processor, Severity, Validator, Writer
 
 
 @runtime_checkable
 class Stage(Protocol):
-    """A composed ordered operation that compiles to an executable step.
-
-    Internal: the concrete stages below are the public authoring vocabulary; this
-    protocol is the shared shape the builder composes and converts. A stage owns
-    no execution — it returns the :class:`~framework.run.pipeline_steps.PipelineStep`
-    that does.
-    """
+    """A composed ordered operation in a pipeline authoring plan."""
 
     name: str
-
-    def to_pipeline_step(self) -> PipelineStep:
-        """Return the executable step this stage compiles to."""
-        ...
 
 
 class ValidationStage:
@@ -59,9 +41,6 @@ class ValidationStage:
         if not self.validators:
             raise ValueError("ValidationStage requires at least one validator")
 
-    def to_pipeline_step(self) -> PipelineStep:
-        return ValidatorStep(name=self.name, validators=self.validators)
-
 
 class ProcessingStage:
     """Run one or more processors at this exact point in a pipeline."""
@@ -72,9 +51,6 @@ class ProcessingStage:
         if not self.processors:
             raise ValueError("ProcessingStage requires at least one processor")
 
-    def to_pipeline_step(self) -> PipelineStep:
-        return ProcessorStageStep(name=self.name, processors=self.processors)
-
 
 class CheckpointStage:
     """Write the current dataset as an explicit side effect, then pass it on."""
@@ -82,9 +58,6 @@ class CheckpointStage:
     def __init__(self, *, name: str, writer: Writer) -> None:
         self.name = name
         self.writer = writer
-
-    def to_pipeline_step(self) -> PipelineStep:
-        return CheckpointStep(name=self.name, writer=self.writer)
 
 
 def _normalise_validators(

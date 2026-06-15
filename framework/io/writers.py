@@ -10,26 +10,16 @@ import os
 import sqlite3
 from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol, runtime_checkable
 
 import pandas as pd
 
 from framework._internal.connection import connect
 from framework._internal.describe import redact_url, render
+from framework.core.contracts import Writer
 from framework.core.dataset import Dataset
 from framework.io.remote import SharePointPusher, StubbedSharePointPusher
 from framework.io.sql import quote_identifier
 from framework.io.strategy import AccumulateByRun, Refresh, UpsertStrategy
-
-
-@runtime_checkable
-class Writer(Protocol):
-    """A destination for one feed's data."""
-
-    def write(self, dataset: Dataset) -> None:
-        """Persist the dataset to this Writer's target, per its load strategy."""
-        ...
-
 
 def _frame_for_strategy(
     dataset: Dataset,

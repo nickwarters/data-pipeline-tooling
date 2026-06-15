@@ -10,9 +10,9 @@ from framework.testing import given_rows, rows_of, read_rows
 from framework.testing import RecordingWriter, RecordingRunLog, read_run_log
 ```
 
-It sits *beside* the six production facades (`framework.core` / `framework.io` /
+It sits *beside* the production facades (`framework.core` / `framework.io` /
 `framework.transform` / `framework.validate` / `framework.run` /
-`framework.shared`), not inside them — see
+`framework.recipes` / `framework.shared`), not inside them — see
 [public-api.md](public-api.md). Everything stays behind the `Dataset` seam
 ([ADR-0002](adr/0002-python-only-processing-dumb-store-two-tier-carrier.md)):
 the helpers take and return plain Python **row dicts**, never a pandas frame.

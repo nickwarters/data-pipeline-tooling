@@ -7,12 +7,12 @@ between the framework and the pipeline scripts that depend on it: it states
 rule that follows from that split.
 
 > **The rule.** Application code — both `pipelines/` and the `case_review/`
-> domain layer — imports from the six **facades** — `framework.core`,
+> domain layer — imports from the public **facades** — `framework.core`,
 > `framework.io`, `framework.transform`, `framework.validate`, `framework.run`,
-> `framework.shared` — never from the modules behind them. The facade names are
-> the stable surface; the submodule paths can be reorganised without notice. A
-> test (`tests/integration/test_public_api.py`) holds both `pipelines/` and
-> `case_review/` to this boundary.
+> `framework.recipes`, `framework.shared` — never from the modules behind them.
+> The facade names are the stable surface; the submodule paths can be
+> reorganised without notice. A test (`tests/integration/test_public_api.py`)
+> holds both `pipelines/` and `case_review/` to this boundary.
 
 ```python
 from framework.core import Dataset, RAW, SILVER, GOLD
@@ -20,6 +20,7 @@ from framework.io import CsvReader, StoreCatalog, Refresh
 from framework.transform import Filter, VectorizedFilter, SchemaCoercion
 from framework.validate import ColumnValidator, SchemaValidator, ValidationError
 from framework.run import Pipeline, PipelineRunner, RunContext
+from framework.recipes import raw_to_silver, silver_to_gold
 from framework.shared import RetryPolicy, WorkingDayCalendar
 ```
 
@@ -28,12 +29,13 @@ For interactive discovery, `import framework` exposes only those facade modules:
 ```python
 import framework
 
-framework.__all__  # ["core", "io", "transform", "validate", "run", "shared"]
+framework.__all__  # ["core", "io", "transform", "validate", "run", "recipes", "shared"]
 framework.core.Dataset
 framework.io.CsvReader
 framework.transform.Filter
 framework.validate.ColumnValidator
 framework.run.Pipeline
+framework.recipes.raw_to_silver
 framework.shared.WorkingDayCalendar
 ```
 
@@ -49,8 +51,9 @@ Each facade is a **sub-package** whose `__init__.py` does the re-exporting, with
 the implementation modules living alongside it:
 
 - `framework/core/` — the foundational vocabulary every other facade builds on:
-  `dataset` (`Dataset`) and `layers` (the medallion `Layer` / `RAW` / `SILVER` /
-  `GOLD`). It sits *below* the task facades and depends on nothing.
+  `dataset` (`Dataset`), `layers` (the medallion `Layer` / `RAW` / `SILVER` /
+  `GOLD`), and `contracts` (the small shared `Reader` / `Writer` / `Processor` /
+  `Validator` shapes). It sits *below* the task facades.
 - `framework/io/` — `readers`, `writers`, `store`, `strategy`, `sql`, `remote`.
 - `framework/transform/` — the dataset-reshaping primitives: `processors`,
   `coercion` (`SchemaCoercion` — the *coerce* half of the schema adapter),
@@ -59,8 +62,10 @@ the implementation modules living alongside it:
   `validators`, the declared-schema check `schema` (`SchemaValidator`), and the
   `value_rules` (`Nullable` / `Pattern` / ...). They raise on breach, so they
   form their own facade apart from the transforms.
-- `framework/run/` — `builder`, `stages`, `pipeline_steps`, `trace`, `silver`,
-  `gold`, `orchestration`, `runner`, `run_context`, `run_log`, `run_registry`.
+- `framework/run/` — `builder`, `stages`, `execution`, `pipeline_steps`,
+  `trace`, `orchestration`, `runner`, `run_context`, `run_log`, `run_registry`.
+- `framework/recipes/` — higher-level builders composed from the generic
+  primitives, currently the medallion recipes.
 - `framework/shared/` — cross-cutting utilities that carry a public name but
   don't belong to a task facade: `retry` (`RetryPolicy` & friends) and
   `calendar` (`WorkingDayCalendar`).
@@ -74,11 +79,11 @@ Two non-facade packages sit beside them:
   marks it private; nothing outside the framework imports from here.
 - `framework/testing/` — the test-only support surface (below).
 
-These sub-package paths are the *internal layout*; only the six facade names
+These sub-package paths are the *internal layout*; only the facade names
 (`framework.core` / `framework.io` / `framework.transform` / `framework.validate`
-/ `framework.run` / `framework.shared`) are the stable runtime import surface.
-`framework.testing` is the separate test-only surface, and `framework._internal`
-is private.
+/ `framework.run` / `framework.recipes` / `framework.shared`) are the stable
+runtime import surface. `framework.testing` is the separate test-only surface,
+and `framework._internal` is private.
 
 ## The facades
 
@@ -94,6 +99,7 @@ lands. They sit below the task facades; everything else builds on them.
 |-------|------|
 | `Dataset` | The opaque bulk tabular carrier (pandas behind the seam) that flows through every Reader, Processor, Validator, and Writer. |
 | `Layer`, `RAW`, `SILVER`, `GOLD` | The medallion layer constants. |
+| `Reader`, `Writer`, `Processor`, `Validator`, `Severity` | Shared contracts used by framework internals and available for advanced typing. Concrete implementations still live on their task facades. |
 
 ### `framework.io` — sources, sinks, stores
 
@@ -134,11 +140,16 @@ they sit on their own facade. Composed onto a `Pipeline` as pre/post validators.
 |-------|------|
 | `Pipeline` | The deferred fluent builder (`.add_stage(...)`, `.describe()` for a pre-run plan, `.run()` to execute). |
 | `ValidationStage`, `ProcessingStage`, `CheckpointStage` | Built-in ordered stage types for validation, processing, and explicit checkpoint side effects inside one class-level `Pipeline` run, composed via `.add_stage(...)`. Each is a spec that compiles to the internal step plan `.run()` executes — there is no public custom-`Stage` contract; the dataset→dataset transform extension point is the `Processor` (`framework.transform`). |
-| `raw_to_silver`, `silver_to_gold`, `current_silver_to_gold`, `detail_current_silver_to_gold` | The layer-composing builders. |
 | `ForEach`, `ForEachOutcome`, `ForEachPipelineError` | Independent per-item runs. |
 | `PipelineSet`, `ScheduledPipeline`, `Weekdays`, `SpecificWeekdays`, `DayOfMonth`, `NthWorkingDayOfMonth`, `LastWorkingDayOfMonth`, `ManualOnly`, `Orchestrator` | Scheduled orchestration above `PipelineRunner`: evaluate due work for a run date, isolate failures by scheduled item/PipelineSet, and record decisions in `_orchestration/runs.db`. |
 | `PipelineRunner`, `RunContext`, `FreshnessRequirement`, `FreshnessError`, `UnknownPipelineError` | Thin domain runner + the freshness guard. |
 | `RunLog`, `RunRegistry` | The structured-observability seam and its query store. |
+
+### `framework.recipes` — composed medallion recipes
+
+| Names | What |
+|-------|------|
+| `raw_to_silver`, `silver_to_gold`, `current_silver_to_gold`, `detail_current_silver_to_gold` | Higher-level layer-composing builders built from `Pipeline`, `Store`, processors, validators, and load strategies. These are re-exported from `framework.run` for compatibility, but `framework.recipes` is their implementation home. |
 
 ### `framework.shared` — cross-cutting utilities
 

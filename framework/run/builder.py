@@ -14,13 +14,14 @@ import logging
 import time
 
 from framework._internal.describe import component_summary
+from framework.core.contracts import Processor, Reader, Severity, Validator, Writer
 from framework.core.dataset import Dataset
-from framework.io.readers import Reader
-from framework.io.writers import Writer
+from framework.run.execution import PipelineExecution
 from framework.run.pipeline_steps import (
+    CheckpointStep,
     ExplainWriteStep,
-    PipelineExecution,
     PipelineStep,
+    ProcessorStageStep,
     QuarantineStep,
     ReadStep,
     TraceStartStep,
@@ -30,9 +31,12 @@ from framework.run.pipeline_steps import (
 )
 from framework.run.run_context import RunContext
 from framework.run.run_log import NULL_RUN_LOG, RunLog
-from framework.run.stages import CheckpointStage, ProcessingStage, Stage
-from framework.transform.processors import Processor
-from framework.validate.validators import Severity, Validator
+from framework.run.stages import (
+    CheckpointStage,
+    ProcessingStage,
+    Stage,
+    ValidationStage,
+)
 
 log = logging.getLogger(__name__)
 
@@ -182,7 +186,7 @@ class Pipeline:
             )
 
         for stage in self._stages:
-            steps.append(stage.to_pipeline_step())
+            steps.append(_compile_stage(stage))
 
         steps.append(
             ValidatorStep(name="post-validate", validators=self._post_validators)
@@ -249,3 +253,13 @@ class Pipeline:
         )
         context.mark_run_summary_recorded()
         return dataset
+
+
+def _compile_stage(stage: Stage) -> PipelineStep:
+    if isinstance(stage, ValidationStage):
+        return ValidatorStep(name=stage.name, validators=stage.validators)
+    if isinstance(stage, ProcessingStage):
+        return ProcessorStageStep(name=stage.name, processors=stage.processors)
+    if isinstance(stage, CheckpointStage):
+        return CheckpointStep(name=stage.name, writer=stage.writer)
+    raise TypeError(f"unknown stage type {type(stage).__name__}")

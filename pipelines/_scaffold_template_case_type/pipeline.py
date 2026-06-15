@@ -23,7 +23,8 @@ from pathlib import Path
 
 from framework.core import RAW, SILVER, Dataset
 from framework.io import AccumulateByRun, CsvReader, StoreCatalog
-from framework.run import Pipeline, raw_to_silver
+from framework.recipes import raw_to_silver
+from framework.run import Pipeline
 
 from .case_type import CASE_TYPE
 
