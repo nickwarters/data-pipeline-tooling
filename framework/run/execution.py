@@ -6,7 +6,7 @@ import logging
 from functools import partial
 from typing import ContextManager
 
-from framework.core.contracts import Severity, Validator
+from framework.core.protocols import Severity, Validator
 from framework.core.dataset import Dataset
 from framework.run.run_context import RunContext
 from framework.run.run_log import RunLog, StepMetrics

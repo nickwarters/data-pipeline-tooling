@@ -15,7 +15,7 @@ import pandas as pd
 
 from framework._internal.connection import connect
 from framework._internal.describe import redact_url, render
-from framework.core.contracts import Writer
+from framework.core.protocols import Writer
 from framework.core.dataset import Dataset
 from framework.io.remote import SharePointPusher, StubbedSharePointPusher
 from framework.io.sql import quote_identifier

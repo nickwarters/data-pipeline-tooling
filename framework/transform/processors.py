@@ -36,7 +36,7 @@ from typing import (
 )
 
 from framework._internal.describe import render
-from framework.core.contracts import DatasetSupplier, Processor
+from framework.core.protocols import DatasetSupplier, Processor
 from framework.core.dataset import Dataset
 
 

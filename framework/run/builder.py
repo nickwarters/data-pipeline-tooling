@@ -14,7 +14,7 @@ import logging
 import time
 
 from framework._internal.describe import component_summary
-from framework.core.contracts import Processor, Reader, Severity, Validator, Writer
+from framework.core.protocols import Processor, Reader, Severity, Validator, Writer
 from framework.core.dataset import Dataset
 from framework.run.execution import PipelineExecution
 from framework.run.pipeline_steps import (
