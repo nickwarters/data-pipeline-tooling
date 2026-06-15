@@ -18,7 +18,7 @@ from framework.run.run_log import RunLog, StepMetrics
 from framework.run.trace import RowTrace
 from framework.shared.describe import component_summary
 from framework.transform.processors import JoinDependency
-from framework.transform.validators import Severity, ValidationError, Validator
+from framework.validate.validators import Severity, ValidationError, Validator
 
 log = logging.getLogger(__name__)
 

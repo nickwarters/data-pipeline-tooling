@@ -12,13 +12,13 @@ from framework.io.writers import QuarantineWriter
 from framework.run.builder import Pipeline
 from framework.run.run_log import RunLog
 from framework.run.stages import ProcessingStage, ValidationStage
-from framework.transform.validators import (
+from framework.validate.validators import (
     ColumnValidator,
     RowCountValidator,
     ValidationError,
 )
 
-FIXTURE = Path(__file__).parent.parent.parent / "fixtures" / "cases.csv"
+FIXTURE = Path(__file__).parent.parent.parent.parent / "fixtures" / "cases.csv"
 
 
 class RecordingReader:

@@ -3,7 +3,7 @@ import pytest
 
 from framework.io.dataset import Dataset
 from framework.io.strategy import Refresh
-from framework.transform.validators import (
+from framework.validate.validators import (
     ColumnValidator,
     RowCountValidator,
     SchemaDriftValidator,

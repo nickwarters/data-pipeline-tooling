@@ -2,7 +2,7 @@ from pathlib import Path
 
 from framework.io.readers import CsvReader
 
-FIXTURE = Path(__file__).parent.parent.parent / "fixtures" / "cases.csv"
+FIXTURE = Path(__file__).parent.parent.parent.parent / "fixtures" / "cases.csv"
 
 
 def test_read_returns_dataset_exposing_columns_and_row_count():

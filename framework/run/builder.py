@@ -32,7 +32,7 @@ from framework.run.run_log import NULL_RUN_LOG, RunLog
 from framework.run.stages import CheckpointStage, ProcessingStage, Stage
 from framework.shared.describe import component_summary
 from framework.transform.processors import Processor
-from framework.transform.validators import Severity, Validator
+from framework.validate.validators import Severity, Validator
 
 log = logging.getLogger(__name__)
 

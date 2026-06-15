@@ -17,7 +17,7 @@ from framework.io.dataset import Dataset
 from framework.run.builder import Pipeline
 from framework.run.run_log import RunLog
 from framework.run.stages import ProcessingStage, ValidationStage
-from framework.transform.validators import ColumnValidator, ValidationError
+from framework.validate.validators import ColumnValidator, ValidationError
 
 
 class RecordingReader:

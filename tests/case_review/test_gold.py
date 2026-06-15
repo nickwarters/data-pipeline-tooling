@@ -11,7 +11,7 @@ from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun, Refresh
 from framework.run.gold import silver_to_gold
 from framework.shared.connection import connect
-from framework.transform.validators import ValidationError
+from framework.validate.validators import ValidationError
 from tests._schema_fixtures import LandedCase, RuledCase
 
 # The Case Type owns identity now; its namespace derives from its name, so this

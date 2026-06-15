@@ -6,7 +6,7 @@ import pytest
 
 from framework.io.dataset import Dataset
 from framework.transform.schema import SchemaValidator
-from framework.transform.validators import ValidationError
+from framework.validate.validators import ValidationError
 
 
 @dataclass

@@ -34,7 +34,7 @@ from framework.run.builder import Pipeline
 from framework.run.run_log import RunLog
 from framework.transform.processors import DeriveKey, LatestPerKey, Unpivot
 from framework.transform.schema import SchemaValidator
-from framework.transform.validators import UniqueValidator
+from framework.validate.validators import UniqueValidator
 
 
 def silver_to_gold(

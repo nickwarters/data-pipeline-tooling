@@ -14,7 +14,7 @@ from framework.run.pipeline_steps import (
     ValidatorStep,
     WriteStep,
 )
-from framework.transform.validators import ColumnValidator
+from framework.validate.validators import ColumnValidator
 
 
 class DescribedReader:
