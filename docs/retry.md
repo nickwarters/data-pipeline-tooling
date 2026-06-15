@@ -14,10 +14,10 @@ seam, and those checks live in the pipeline's stages, not the seam.
 
 ## The pieces
 
-Import through the `framework.io` facade (see [public-api.md](public-api.md)):
+Import through the `framework.shared` facade (see [public-api.md](public-api.md)):
 
 ```python
-from framework.io import RetryPolicy, RetryingReader, RetryingWriter
+from framework.shared import RetryPolicy, RetryingReader, RetryingWriter
 ```
 
 ### `RetryPolicy` — what counts as transient

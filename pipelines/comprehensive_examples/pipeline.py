@@ -25,7 +25,6 @@ from framework.io import (
 )
 from framework.run import Pipeline
 from framework.transform import (
-    ColumnValidator,
     Filter,
     JoinDependency,
     JoinWith,
@@ -34,8 +33,8 @@ from framework.transform import (
     Score,
     SelectColumns,
     Sort,
-    UniqueValidator,
 )
+from framework.validate import ColumnValidator, UniqueValidator
 
 from .processors import AddOpenContactCounts, AdviserSummary
 from .rules import high_risk_or_vulnerable, review_priority

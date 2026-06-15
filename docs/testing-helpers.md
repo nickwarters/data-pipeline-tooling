@@ -10,8 +10,9 @@ from framework.testing import given_rows, rows_of, read_rows
 from framework.testing import RecordingWriter, RecordingRunLog, read_run_log
 ```
 
-It sits *beside* the three production facades (`framework.io` /
-`framework.transform` / `framework.run`), not inside them — see
+It sits *beside* the five production facades (`framework.io` /
+`framework.transform` / `framework.validate` / `framework.run` /
+`framework.shared`), not inside them — see
 [public-api.md](public-api.md). Everything stays behind the `Dataset` seam
 ([ADR-0002](adr/0002-python-only-processing-dumb-store-two-tier-carrier.md)):
 the helpers take and return plain Python **row dicts**, never a pandas frame.
@@ -85,7 +86,7 @@ records:
 ```python
 import pytest
 from framework.run import Pipeline
-from framework.transform import ColumnValidator, ValidationError
+from framework.validate import ColumnValidator, ValidationError
 from framework.testing import given_rows, RecordingWriter, RecordingRunLog
 
 def test_missing_required_column_aborts_and_is_recorded():

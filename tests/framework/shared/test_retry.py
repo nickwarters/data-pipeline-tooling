@@ -171,10 +171,10 @@ def test_policy_wraps_a_bare_remote_client_call():
     assert calls["n"] == 2
 
 
-def test_retry_surface_is_public_through_the_io_facade():
-    # Pipeline authors reach retry through the stable framework.io facade,
+def test_retry_surface_is_public_through_the_shared_facade():
+    # Pipeline authors reach retry through the stable framework.shared facade,
     # not the internal framework.shared.retry module.
-    from framework import io
+    from framework import shared
 
-    assert {"RetryPolicy", "RetryingReader", "RetryingWriter"} <= set(io.__all__)
-    assert io.RetryPolicy is RetryPolicy
+    assert {"RetryPolicy", "RetryingReader", "RetryingWriter"} <= set(shared.__all__)
+    assert shared.RetryPolicy is RetryPolicy

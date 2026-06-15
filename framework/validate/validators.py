@@ -21,8 +21,8 @@ from __future__ import annotations
 import statistics
 from typing import Iterable, Literal, Protocol, runtime_checkable
 
+from framework._internal.describe import render
 from framework.io.dataset import Dataset
-from framework.shared.describe import render
 
 # Severity is set where a Validator is *attached* to the builder, not on the
 # Validator itself.

@@ -14,12 +14,12 @@ from typing import Protocol, runtime_checkable
 
 import pandas as pd
 
+from framework._internal.connection import connect
+from framework._internal.describe import redact_url, render
 from framework.io.dataset import Dataset
 from framework.io.remote import SharePointPusher, StubbedSharePointPusher
 from framework.io.sql import quote_identifier
 from framework.io.strategy import AccumulateByRun, Refresh, UpsertStrategy
-from framework.shared.connection import connect
-from framework.shared.describe import redact_url, render
 
 
 @runtime_checkable

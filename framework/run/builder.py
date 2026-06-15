@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import time
 
+from framework._internal.describe import component_summary
 from framework.io.dataset import Dataset
 from framework.io.readers import Reader
 from framework.io.writers import Writer
@@ -30,7 +31,6 @@ from framework.run.pipeline_steps import (
 from framework.run.run_context import RunContext
 from framework.run.run_log import NULL_RUN_LOG, RunLog
 from framework.run.stages import CheckpointStage, ProcessingStage, Stage
-from framework.shared.describe import component_summary
 from framework.transform.processors import Processor
 from framework.validate.validators import Severity, Validator
 

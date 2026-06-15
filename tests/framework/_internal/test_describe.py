@@ -5,9 +5,9 @@ their attributes. These tests pin the shared ``render``/``redact_url`` helpers
 and the self-redaction the remote components are responsible for.
 """
 
+from framework._internal.describe import component_summary, redact_url, render
 from framework.io.readers import CsvReader, SharePointReader, SqliteReader
 from framework.io.writers import SharePointWriter, SqliteTruncateReloadWriter
-from framework.shared.describe import component_summary, redact_url, render
 from framework.validate.validators import RowCountValidator
 
 

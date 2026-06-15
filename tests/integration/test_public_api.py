@@ -1,10 +1,10 @@
-"""The public framework API: three subpackage facades.
+"""The public framework API: five subpackage facades.
 
 A pipeline author depends on ``framework.io`` / ``framework.transform`` /
-``framework.run`` — the stable public surface — not on internal modules by
-accident. These tests exercise that surface the way an author would: by building
-and running a real pipeline through the facades, and by asserting the internal
-plumbing stays out of reach.
+``framework.validate`` / ``framework.run`` / ``framework.shared`` — the stable
+public surface — not on internal modules by accident. These tests exercise that
+surface the way an author would: by building and running a real pipeline through
+the facades, and by asserting the internal plumbing stays out of reach.
 """
 
 import ast
@@ -14,7 +14,7 @@ FIXTURE = Path(__file__).parent.parent / "fixtures" / "cases.csv"
 
 PIPELINES_DIR = Path(__file__).parent.parent.parent / "pipelines"
 CASE_REVIEW_DIR = Path(__file__).parent.parent.parent / "case_review"
-PUBLIC_FACADES = {"io", "run", "transform"}
+PUBLIC_FACADES = {"io", "transform", "validate", "run", "shared"}
 
 
 def _framework_submodules_imported(source: str) -> set[str]:
@@ -53,10 +53,12 @@ def _facade_offenders(root: Path) -> dict[str, set[str]]:
 def test_package_root_exposes_only_public_facade_modules():
     import framework
 
-    assert framework.__all__ == ["io", "run", "transform"]
+    assert framework.__all__ == ["io", "transform", "validate", "run", "shared"]
     assert framework.io.CsvReader is not None
     assert framework.transform.Filter is not None
+    assert framework.validate.ColumnValidator is not None
     assert framework.run.Pipeline is not None
+    assert framework.shared.WorkingDayCalendar is not None
 
     unsupported_facade_names = {
         "CsvReader",
@@ -109,17 +111,12 @@ def test_file_deliverable_writers_are_available_through_the_io_facade(tmp_path):
 
 
 def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_path):
-    # Selection-style narrowing: processors and validators come from
-    # framework.transform, composed onto the framework.run Pipeline.
+    # Selection-style narrowing: processors come from framework.transform and
+    # the checks from framework.validate, composed onto the framework.run Pipeline.
     from framework.io import RAW, CsvReader, Refresh, Store
     from framework.run import Pipeline
-    from framework.transform import (
-        ColumnValidator,
-        Filter,
-        Score,
-        VectorizedDerive,
-        VectorizedFilter,
-    )
+    from framework.transform import Filter, Score, VectorizedDerive, VectorizedFilter
+    from framework.validate import ColumnValidator
 
     store = Store(tmp_path / "cases")
     landed = (
@@ -147,7 +144,8 @@ def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_p
 def test_an_author_can_compose_ordered_stages_through_the_run_facade(tmp_path):
     from framework.io import RAW, CsvReader, Refresh, Store
     from framework.run import Pipeline, ProcessingStage, ValidationStage
-    from framework.transform import ColumnValidator, Score
+    from framework.transform import Score
+    from framework.validate import ColumnValidator
 
     store = Store(tmp_path / "cases")
     landed = (
@@ -186,7 +184,7 @@ def test_internal_plumbing_stays_out_of_the_public_facades():
     from framework import io, run, transform
 
     internal = {
-        "connect",  # framework.shared.connection — connection factory seam
+        "connect",  # framework._internal.connection — connection factory seam
         "layer_name",  # framework.io.layers — internal validation helper
         "LAYERS",  # framework.io.layers — internal tuple
         "RowTrace",  # framework.run.trace — generic trace mechanics

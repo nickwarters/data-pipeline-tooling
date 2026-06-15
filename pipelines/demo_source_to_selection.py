@@ -56,7 +56,8 @@ from framework.run import (
     Weekdays,
     raw_to_silver,
 )
-from framework.transform import Filter, Score, Sort, Stamp, WorkingDayCalendar
+from framework.shared import WorkingDayCalendar
+from framework.transform import Filter, Score, Sort, Stamp
 
 
 @dataclass

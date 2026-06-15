@@ -140,12 +140,14 @@ its decisions in a separate orchestration store.
 The foundational vocabulary. Each links to its deep doc; the consolidated
 reference with worked examples is [`core-primitives.md`](core-primitives.md).
 
-> **Importing.** Application code (`pipelines/` + `case_review/`) imports these through the three public **facades**
-> — `framework.io` (sources/sinks/stores), `framework.transform` (processors,
-> validators, schema, calendar), and `framework.run` (the `Pipeline` builder,
-> orchestration, runner, observability) — not from the modules behind them. The
-> facade names are the stable surface. `import framework` exposes only those
-> three facade modules for discovery; it is not a shortcut for
+> **Importing.** Application code (`pipelines/` + `case_review/`) imports these through the five public **facades**
+> — `framework.io` (sources/sinks/stores), `framework.transform` (processors +
+> schema adapter), `framework.validate` (the `validate(dataset)` checks),
+> `framework.run` (the `Pipeline` builder, orchestration, runner, observability),
+> and `framework.shared` (cross-cutting utilities — retry, `WorkingDayCalendar`)
+> — not from the modules behind them. The facade names are the stable surface.
+> `import framework` exposes only those five facade modules for discovery; it is
+> not a shortcut for
 > `framework.CsvReader` / `framework.Filter` / `framework.Pipeline`. See
 > [`public-api.md`](public-api.md) for the full member list, the
 > internal-module boundary, and why packaging is an explicit non-goal.
@@ -232,7 +234,7 @@ See the *Add a new Feed* how-to.
 ```python
 from case_review.case_pool import CasePool
 from framework.io import StoreCatalog
-from framework.transform import WorkingDayCalendar
+from framework.shared import WorkingDayCalendar
 
 store = StoreCatalog("/share").store(CASES.name)
 pool = CasePool(CASES, store, WorkingDayCalendar())
@@ -273,7 +275,7 @@ python -m pipelines.scaffold --case-type claims  # + case_type.py; source -> raw
 ```python
 from framework.io import RAW, ExcelReader, Refresh, StoreCatalog
 from framework.run import Pipeline
-from framework.transform import ColumnValidator  # optional input gate
+from framework.validate import ColumnValidator  # optional input gate
 
 store = StoreCatalog("/share").store("cases")       # the "cases" subject
 (
@@ -517,7 +519,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 
 | Doc | Covers |
 |-----|--------|
-| [`public-api.md`](public-api.md) | The public API: the three facades (`framework.io` / `transform` / `run`), the internal-module boundary, and the packaging non-goal. |
+| [`public-api.md`](public-api.md) | The public API: the five facades (`framework.io` / `transform` / `validate` / `run` / `shared`), the internal-module boundary, and the packaging non-goal. |
 | [`core-primitives.md`](core-primitives.md) | The consolidated framework primitives reference with worked examples and build status per slice. |
 | [`adding-a-feed.md`](adding-a-feed.md) | Every Reader, and the stubbed remote (SAS / SharePoint) seams. |
 | [`schema-enforcement.md`](schema-enforcement.md) | `Schema` / `SchemaValidator` / `SchemaCoercion`, value-level rules, `raw_to_silver`. |

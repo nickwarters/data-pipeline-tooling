@@ -8,7 +8,7 @@ warn?" without grepping free text.
 
 It is a *query* store, not a ``Dataset`` carrier, so it stays stdlib-only
 (``json`` + ``sqlite3``) and never touches pandas. It opens through the shared
-``connect`` factory in ``framework.shared.connection`` so SQLite settings stay
+``connect`` factory in ``framework._internal.connection`` so SQLite settings stay
 centralized.
 
 Ingest is incremental: each ``.log`` file's last consumed byte position is
@@ -26,7 +26,7 @@ import json
 import os
 from pathlib import Path
 
-from framework.shared.connection import connect
+from framework._internal.connection import connect
 
 
 class RunRegistry:
