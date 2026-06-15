@@ -6,21 +6,16 @@ inspectable, ordered plan of small steps that each own one execution concern.
 
 from __future__ import annotations
 
-import logging
 from copy import copy
 from dataclasses import dataclass
-from functools import partial
-from typing import ContextManager, Literal
+from typing import Literal
 
 from framework._internal.describe import component_summary
+from framework.core.contracts import Severity, Validator
 from framework.core.dataset import Dataset
-from framework.run.run_context import RunContext
-from framework.run.run_log import RunLog, StepMetrics
+from framework.run.execution import PipelineExecution
+from framework.run.run_log import StepMetrics
 from framework.run.trace import RowTrace
-from framework.transform.processors import JoinDependency
-from framework.validate.validators import Severity, ValidationError, Validator
-
-log = logging.getLogger(__name__)
 
 StepKind = Literal[
     "read",
@@ -58,64 +53,6 @@ class PipelineStep:
         stamped = copy(self)
         object.__setattr__(stamped, "order", order)
         return stamped
-
-
-class PipelineExecution:
-    """Mutable state for one ``Pipeline.run()`` execution."""
-
-    def __init__(
-        self,
-        *,
-        pipeline_name: str,
-        context: RunContext,
-        run_log: RunLog,
-    ) -> None:
-        self.pipeline_name = pipeline_name
-        self.context = context
-        self.run_log = run_log
-        self.warn_hits: list[str] = []
-        self.trace: RowTrace | None = None
-        self.step = partial(run_log.step, context.execution_id, pipeline_name)
-        self.record = partial(run_log.record, context.execution_id, pipeline_name)
-
-    def timed_step(
-        self, name: str, rows_in: int | None = None
-    ) -> ContextManager[StepMetrics]:
-        return self.step(name, rows_in=rows_in)
-
-    def materialize_dependencies(self, processors: list[object]) -> None:
-        seen: set[int] = set()
-        for processor in processors:
-            dependencies = getattr(processor, "dependencies", [])
-            for dependency in dependencies:
-                if not isinstance(dependency, JoinDependency):
-                    continue
-                identity = id(dependency)
-                if identity in seen or dependency.materialized:
-                    seen.add(identity)
-                    continue
-                seen.add(identity)
-                with self.timed_step(f"dependency:{dependency.name}") as metrics:
-                    dataset = dependency.read()
-                    metrics.rows_out = len(dataset)
-
-    def validate(
-        self,
-        validators: list[tuple[Validator, Severity]],
-        dataset: Dataset,
-        phase: str,
-        metrics: StepMetrics,
-    ) -> None:
-        for validator, severity in validators:
-            try:
-                validator.validate(dataset)
-            except ValidationError as exc:
-                if severity == "error":
-                    raise ValidationError(
-                        f"{self.pipeline_name} {phase} failed: {exc}"
-                    ) from exc
-                log.warning("%s %s warn: %s", self.pipeline_name, phase, exc)
-                metrics.warn_hits.append(str(exc))
 
 
 @dataclass(frozen=True)

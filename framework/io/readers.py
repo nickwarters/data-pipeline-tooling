@@ -8,12 +8,11 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Protocol, runtime_checkable
-
 import pandas as pd
 
 from framework._internal.connection import connect
 from framework._internal.describe import redact_url, render
+from framework.core.contracts import Reader
 from framework.core.dataset import Dataset
 from framework.io.remote import (
     RemoteRunner,
@@ -22,16 +21,6 @@ from framework.io.remote import (
     StubbedSharePointFetcher,
 )
 from framework.io.sql import quote_identifier
-
-
-@runtime_checkable
-class Reader(Protocol):
-    """A source of one feed's data."""
-
-    def read(self) -> Dataset:
-        """Read the source and return its rows as a Dataset."""
-        ...
-
 
 class DatasetReader:
     """Adapt an already-in-memory ``Dataset`` to the ``Reader`` shape.

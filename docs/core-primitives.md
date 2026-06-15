@@ -20,13 +20,13 @@ builds on these shapes. For the
 CasePool, Feed, Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
 
 Application code (`pipelines/` + the `case_review/` domain layer) imports these
-primitives through the six public facades (`framework.core` / `framework.io` /
+primitives through the public facades (`framework.core` / `framework.io` /
 `framework.transform` / `framework.validate` / `framework.run` /
-`framework.shared`), not the home modules named per-primitive below; the home
+`framework.recipes` / `framework.shared`), not the home modules named per-primitive below; the home
 modules locate the code, the facades are the stable contract. The package root
 exposes only those facade modules for discovery (`framework.core`,
 `framework.io`, `framework.transform`, `framework.validate`, `framework.run`,
-`framework.shared`); it does not re-export primitive classes directly. See
+`framework.recipes`, `framework.shared`); it does not re-export primitive classes directly. See
 [`public-api.md`](public-api.md).
 
 ## Medallion layers
@@ -366,6 +366,8 @@ and atomic — ADR-0007), so nothing partial lands. Raw stays schema-light: data
 the schema would reject still lands faithfully in raw. The builder makes no
 write or load decisions — the Store mints the Writer, which owns location +
 strategy. Full walkthrough: [schema-enforcement.md](schema-enforcement.md).
+The implementation home is `framework.recipes`; `framework.run` re-exports the
+recipe for compatibility with existing pipeline code.
 
 ### `Processor` — an engine-confined transform, run mid-pipeline
 A `Processor` transforms the dataset between the read and the post-validators:

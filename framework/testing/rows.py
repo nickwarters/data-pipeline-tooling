@@ -13,8 +13,9 @@ import os
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
+from framework.core.contracts import Reader
 from framework.core.dataset import Dataset
-from framework.io.readers import DatasetReader, Reader
+from framework.io.readers import DatasetReader
 
 __all__ = [
     "make_dataset",

@@ -19,27 +19,14 @@ silver and gold is a later, richer Validator of the same shape.
 from __future__ import annotations
 
 import statistics
-from typing import Iterable, Literal, Protocol, runtime_checkable
+from typing import Iterable, Protocol
 
 from framework._internal.describe import render
+from framework.core.contracts import Severity, Validator
 from framework.core.dataset import Dataset
-
-# Severity is set where a Validator is *attached* to the builder, not on the
-# Validator itself.
-Severity = Literal["error", "warn"]
-
 
 class ValidationError(Exception):
     """Raised by a Validator when the data fails its check."""
-
-
-@runtime_checkable
-class Validator(Protocol):
-    """A fail-fast expectation about one feed's data."""
-
-    def validate(self, dataset: Dataset) -> None:
-        """Raise :class:`ValidationError` if ``dataset`` breaks the expectation."""
-        ...
 
 
 class ColumnValidator:

@@ -4,7 +4,7 @@ import pytest
 from framework.core.dataset import Dataset
 from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun, Refresh
-from framework.run.silver import raw_to_silver
+from framework.recipes import raw_to_silver
 from framework.transform.processors import CoercionError
 from framework.validate.validators import ValidationError
 from tests._schema_fixtures import CoercedCase, LandedCase, RuledCase

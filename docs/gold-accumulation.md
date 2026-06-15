@@ -145,7 +145,7 @@ The builder wires one subject's table from silver into gold:
 
 ```python
 from framework.io import StoreCatalog
-from framework.run import silver_to_gold
+from framework.recipes import silver_to_gold
 
 store = StoreCatalog("/path/to/share").store("cases")
 silver_to_gold(

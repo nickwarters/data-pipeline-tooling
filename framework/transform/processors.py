@@ -32,27 +32,16 @@ from typing import (
     Callable,
     Literal,
     Mapping,
-    Protocol,
     Sequence,
-    runtime_checkable,
 )
 
 from framework._internal.describe import render
+from framework.core.contracts import DatasetSupplier, Processor
 from framework.core.dataset import Dataset
-from framework.io.readers import Reader
 
 
 class CoercionError(Exception):
     """Raised by a Processor when it cannot cast a value to its declared type."""
-
-
-@runtime_checkable
-class Processor(Protocol):
-    """An engine-confined transform of one feed's data, run mid-pipeline."""
-
-    def process(self, dataset: Dataset) -> Dataset:
-        """Return a transformed dataset; raise on a value it cannot transform."""
-        ...
 
 
 # Business rules are expressed as plain Python callables over a row mapping; the
@@ -233,6 +222,17 @@ class Rename:
 _MergeHow = Literal["left", "right", "inner", "outer", "cross"]
 
 
+def _as_supplier(source: DatasetSupplier | Dataset | object) -> DatasetSupplier | Dataset:
+    if isinstance(source, Dataset):
+        return source
+    if callable(source):
+        return source
+    read = getattr(source, "read", None)
+    if callable(read):
+        return read
+    raise TypeError("join dependency must be a Dataset, callable, or object with read()")
+
+
 class JoinDependency:
     """A read-only dataset dependency for a cross-feed join.
 
@@ -242,10 +242,12 @@ class JoinDependency:
     ``JoinWith`` only consumes the explicit read dependency it was given.
     """
 
-    def __init__(self, name: str, source: Reader | Dataset) -> None:
+    def __init__(self, name: str, source: DatasetSupplier | Dataset | object) -> None:
         self.name = name
-        self._source = source
-        self._cached: Dataset | None = source if isinstance(source, Dataset) else None
+        self._source = _as_supplier(source)
+        self._cached: Dataset | None = (
+            self._source if isinstance(self._source, Dataset) else None
+        )
 
     @property
     def materialized(self) -> bool:
@@ -253,7 +255,7 @@ class JoinDependency:
 
     def read(self) -> Dataset:
         if self._cached is None:
-            self._cached = self._source.read()
+            self._cached = self._source()
         return self._cached
 
     def dataset(self) -> Dataset:
@@ -281,7 +283,7 @@ class JoinWith:
 
     def __init__(
         self,
-        other: JoinDependency | Reader | Dataset,
+        other: JoinDependency | DatasetSupplier | Dataset | object,
         *,
         on: str | Sequence[str],
         how: _MergeHow = "inner",
@@ -290,7 +292,7 @@ class JoinWith:
         self._other = (
             other
             if isinstance(other, JoinDependency)
-            else JoinDependency(name or "join", other)
+            else JoinDependency(name or "join", _as_supplier(other))
         )
         self._on = on
         self._how = how
@@ -324,7 +326,7 @@ class AntiJoinWith:
 
     def __init__(
         self,
-        other: JoinDependency | Reader | Dataset,
+        other: JoinDependency | DatasetSupplier | Dataset | object,
         *,
         on: str | Sequence[str],
         name: str | None = None,
@@ -332,7 +334,7 @@ class AntiJoinWith:
         self._other = (
             other
             if isinstance(other, JoinDependency)
-            else JoinDependency(name or "anti-join", other)
+            else JoinDependency(name or "anti-join", _as_supplier(other))
         )
         self._on = [on] if isinstance(on, str) else list(on)
         self.trace_name = name or "anti-join"

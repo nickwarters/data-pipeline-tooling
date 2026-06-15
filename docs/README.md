@@ -140,15 +140,16 @@ its decisions in a separate orchestration store.
 The foundational vocabulary. Each links to its deep doc; the consolidated
 reference with worked examples is [`core-primitives.md`](core-primitives.md).
 
-> **Importing.** Application code (`pipelines/` + `case_review/`) imports these through the six public **facades**
+> **Importing.** Application code (`pipelines/` + `case_review/`) imports these through the public **facades**
 > — `framework.core` (`Dataset` + the medallion `Layer` constants), `framework.io`
 > (sources/sinks/stores), `framework.transform` (the reshaping processors +
 > `SchemaCoercion`), `framework.validate` (the `validate(dataset)` checks + the
 > declared-schema contract: `SchemaValidator` and the value rules),
 > `framework.run` (the `Pipeline` builder, orchestration, runner, observability),
+> `framework.recipes` (higher-level medallion builders),
 > and `framework.shared` (cross-cutting utilities — retry, `WorkingDayCalendar`)
 > — not from the modules behind them. The facade names are the stable surface.
-> `import framework` exposes only those six facade modules for discovery; it is
+> `import framework` exposes only those facade modules for discovery; it is
 > not a shortcut for
 > `framework.CsvReader` / `framework.Filter` / `framework.Pipeline`. See
 > [`public-api.md`](public-api.md) for the full member list, the
@@ -292,7 +293,7 @@ store = StoreCatalog("/share").store("cases")       # the "cases" subject
 Then refine raw → silver with the schema enforced:
 
 ```python
-from framework.run import raw_to_silver
+from framework.recipes import raw_to_silver
 
 raw_to_silver(store, "cases", ActivityCase).run()   # coerce -> validate -> write silver
 ```
@@ -523,7 +524,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 
 | Doc | Covers |
 |-----|--------|
-| [`public-api.md`](public-api.md) | The public API: the six facades (`framework.core` / `io` / `transform` / `validate` / `run` / `shared`), the internal-module boundary, and the packaging non-goal. |
+| [`public-api.md`](public-api.md) | The public API: the facades (`framework.core` / `io` / `transform` / `validate` / `run` / `recipes` / `shared`), the internal-module boundary, and the packaging non-goal. |
 | [`core-primitives.md`](core-primitives.md) | The consolidated framework primitives reference with worked examples and build status per slice. |
 | [`adding-a-feed.md`](adding-a-feed.md) | Every Reader, and the stubbed remote (SAS / SharePoint) seams. |
 | [`schema-enforcement.md`](schema-enforcement.md) | `Schema` / `SchemaValidator` / `SchemaCoercion`, value-level rules, `raw_to_silver`. |
