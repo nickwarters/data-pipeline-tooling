@@ -22,7 +22,7 @@ import statistics
 from typing import Iterable, Protocol
 
 from framework._internal.describe import render
-from framework.core.contracts import Severity, Validator
+from framework.core.protocols import Severity, Validator
 from framework.core.dataset import Dataset
 
 class ValidationError(Exception):

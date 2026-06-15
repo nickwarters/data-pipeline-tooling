@@ -1,4 +1,4 @@
-"""Small framework contracts shared across the implementation.
+"""Small framework protocols shared across the implementation.
 
 These protocols are the dependency boundary between the public task facades:
 ``io`` implements readers/writers, ``transform`` implements processors,

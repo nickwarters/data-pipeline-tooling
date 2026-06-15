@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from framework._internal.describe import component_summary
-from framework.core.contracts import Severity, Validator
+from framework.core.protocols import Severity, Validator
 from framework.core.dataset import Dataset
 from framework.run.execution import PipelineExecution
 from framework.run.run_log import StepMetrics

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Iterable, Protocol, Sequence, runtime_checkable
 
-from framework.core.contracts import Processor, Severity, Validator, Writer
+from framework.core.protocols import Processor, Severity, Validator, Writer
 
 
 @runtime_checkable

@@ -52,7 +52,7 @@ the implementation modules living alongside it:
 
 - `framework/core/` — the foundational vocabulary every other facade builds on:
   `dataset` (`Dataset`), `layers` (the medallion `Layer` / `RAW` / `SILVER` /
-  `GOLD`), and `contracts` (the small shared `Reader` / `Writer` / `Processor` /
+  `GOLD`), and `protocols` (the small shared `Reader` / `Writer` / `Processor` /
   `Validator` shapes). It sits *below* the task facades.
 - `framework/io/` — `readers`, `writers`, `store`, `strategy`, `sql`, `remote`.
 - `framework/transform/` — the dataset-reshaping primitives: `processors`,
@@ -99,7 +99,7 @@ lands. They sit below the task facades; everything else builds on them.
 |-------|------|
 | `Dataset` | The opaque bulk tabular carrier (pandas behind the seam) that flows through every Reader, Processor, Validator, and Writer. |
 | `Layer`, `RAW`, `SILVER`, `GOLD` | The medallion layer constants. |
-| `Reader`, `Writer`, `Processor`, `Validator`, `Severity` | Shared contracts used by framework internals and available for advanced typing. Concrete implementations still live on their task facades. |
+| `Reader`, `Writer`, `Processor`, `Validator`, `Severity` | Shared protocols used by framework internals and available for advanced typing. Concrete implementations still live on their task facades. |
 
 ### `framework.io` — sources, sinks, stores
 
