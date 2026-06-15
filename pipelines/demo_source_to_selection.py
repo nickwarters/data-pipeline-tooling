@@ -10,7 +10,7 @@ the primitives the earlier slices built:
    Gold is the CasePool.
 2. **Selection** — a :class:`~case_review.case_pool.CasePool` fetches the
    **available cases** from gold (activity within the working-day window), and a
-   Selection :class:`~framework.builder.Pipeline` narrows them with named,
+   Selection :class:`~framework.run.builder.Pipeline` narrows them with named,
    testable Python rules (score priority, filter the low-value cases out, rank
    highest-priority first),
    stamps the chosen :class:`~case_review.case_type.Variation`'s

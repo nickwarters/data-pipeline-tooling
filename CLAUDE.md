@@ -12,13 +12,18 @@ domain language in `CONTEXT.md`; the core primitives are documented in
 - **Language/runtime:** Python 3.12. The `framework/` package is **import-only**
   (on `sys.path`, never `pip install`ed); `pipelines/` holds runnable scripts.
   Packaging/installing the framework is an **explicit non-goal** (#95).
-- **Layout:** `framework/` (reusable engine), `case_review/` (the case-review
-  *application* — domain types like `CaseType`/`CasePool` and its gold helpers,
-  which live outside the framework), `pipelines/` (scripts), `tests/` (pytest),
-  `docs/` (architecture, ADRs).
-- **Test layout:** `tests/` mirrors the source shape — `tests/framework/`,
-  `tests/case_review/`, `tests/pipelines/`, plus `tests/integration/` for tests
-  that span trees (e.g. the public-API and framework/domain boundary tests).
+- **Layout:** `framework/` (reusable engine, organised into the facade
+  sub-packages `framework/io`, `framework/transform`, `framework/run`, the
+  test-support `framework/testing`, and the cross-cutting internal
+  `framework/shared` — `connection`/`describe`/`retry`), `case_review/` (the
+  case-review *application* — domain types like `CaseType`/`CasePool` and its
+  gold helpers, which live outside the framework), `pipelines/` (scripts),
+  `tests/` (pytest), `docs/` (architecture, ADRs).
+- **Test layout:** `tests/` mirrors the source shape — `tests/framework/`
+  (itself split into `io/`, `transform/`, `run/`, `shared/`, `testing/` to
+  mirror the framework sub-packages), `tests/case_review/`, `tests/pipelines/`,
+  plus `tests/integration/` for tests that span trees (e.g. the public-API and
+  framework/domain boundary tests).
   Shared helpers (`tests/_schema_fixtures.py`, `tests/fixtures/`) sit at the
   `tests/` root. Each test dir is a package (`__init__.py`) so module paths are
   unique under pytest's default import mode — no basename collisions. A
@@ -36,7 +41,7 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `Writer` (`write(dataset) -> None`; owns target location + load strategy —
   added by #14), `Store` (per-subject medallion that mints the layer's
   Writers/Readers over `<subject>/{raw,silver,gold}.db` — #15; `connect` factory
-  now in `framework.connection`), `Pipeline` (deferred fluent builder;
+  now in `framework.shared.connection`), `Pipeline` (deferred fluent builder;
   `.write_to(writer)` composes, `.run()` executes — replaced `.to(layer)` in
   #14).
 

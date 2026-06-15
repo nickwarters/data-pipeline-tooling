@@ -11,8 +11,8 @@ def test_case_review_domain_helpers_live_outside_the_framework():
 
 
 def test_framework_trace_mechanics_use_generic_names():
-    from framework.processors import Filter
-    from framework.trace import RowTrace
+    from framework.run.trace import RowTrace
+    from framework.transform.processors import Filter
 
     gate = Filter(lambda row: True, name="eligible")
 
@@ -25,7 +25,7 @@ def test_framework_trace_mechanics_use_generic_names():
 
 
 def test_case_review_gold_helpers_wrap_generic_framework_reducers():
-    import framework.gold as framework_gold
+    import framework.run.gold as framework_gold
     from case_review import gold as case_review_gold
 
     assert hasattr(framework_gold, "current_silver_to_gold")
