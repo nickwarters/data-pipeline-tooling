@@ -12,11 +12,13 @@ domain language in `CONTEXT.md`; the core primitives are documented in
 - **Language/runtime:** Python 3.12. The `framework/` package is **import-only**
   (on `sys.path`, never `pip install`ed); `pipelines/` holds runnable scripts.
 - **Layout:** `framework/` (reusable engine, organised into the five public
-  facade sub-packages `framework/io`, `framework/transform` (reshaping),
-  `framework/validate` (the `validate(dataset)` checks), `framework/run`, and
-  `framework/shared` (cross-cutting utilities — `retry`, `calendar`); plus the
-  private `framework/_internal` (`connection`, `describe`) and the test-only
-  `framework/testing`), `case_review/` (the case-review *application* — domain
+  facade sub-packages `framework/io`, `framework/transform` (reshaping, incl.
+  `SchemaCoercion`), `framework/validate` (the `validate(dataset)` checks + the
+  declared-schema contract — `SchemaValidator` and the value rules),
+  `framework/run`, and `framework/shared` (cross-cutting utilities — `retry`,
+  `calendar`); plus the private `framework/_internal` (`connection`, `describe`,
+  `schema`) and the test-only `framework/testing`), `case_review/` (the
+  case-review *application* — domain
   types and gold helpers that live outside the framework), `pipelines/`
   (scripts), `tests/` (pytest), `docs/` (architecture, ADRs).
 - **Test layout:** `tests/` mirrors the source shape — `tests/framework/`

@@ -16,8 +16,8 @@ rule that follows from that split.
 
 ```python
 from framework.io import CsvReader, StoreCatalog, RAW, Refresh
-from framework.transform import Filter, VectorizedFilter, SchemaValidator
-from framework.validate import ColumnValidator, ValidationError
+from framework.transform import Filter, VectorizedFilter, SchemaCoercion
+from framework.validate import ColumnValidator, SchemaValidator, ValidationError
 from framework.run import Pipeline, PipelineRunner, RunContext
 from framework.shared import RetryPolicy, WorkingDayCalendar
 ```
@@ -49,10 +49,12 @@ the implementation modules living alongside it:
 - `framework/io/` — `dataset`, `readers`, `writers`, `store`, `strategy`,
   `layers`, `sql`, `remote`.
 - `framework/transform/` — the dataset-reshaping primitives: `processors`,
-  `schema`, `quarantine`.
-- `framework/validate/` — the `validate(dataset)` *checks* (`validators`): they
-  raise on breach, they don't reshape, so they form their own facade apart from
-  the transforms.
+  `coercion` (`SchemaCoercion` — the *coerce* half of the schema adapter),
+  `quarantine`.
+- `framework/validate/` — checking, not reshaping: the `validate(dataset)`
+  `validators`, the declared-schema check `schema` (`SchemaValidator`), and the
+  `value_rules` (`Nullable` / `Pattern` / ...). They raise on breach, so they
+  form their own facade apart from the transforms.
 - `framework/run/` — `builder`, `stages`, `pipeline_steps`, `trace`, `silver`,
   `gold`, `orchestration`, `runner`, `run_context`, `run_log`, `run_registry`.
 - `framework/shared/` — cross-cutting utilities that carry a public name but
@@ -62,8 +64,10 @@ the implementation modules living alongside it:
 Two non-facade packages sit beside them:
 
 - `framework/_internal/` — cross-cutting helpers with **no** public name:
-  `connection` (`connect`) and `describe` (`render` / `redact_url`). The leading
-  underscore marks it private; nothing outside the framework imports from here.
+  `connection` (`connect`), `describe` (`render` / `redact_url`), and `schema`
+  (the shared `ValueRule` protocol + the Python↔pandas type mapping and
+  annotation reading both schema adapters derive from). The leading underscore
+  marks it private; nothing outside the framework imports from here.
 - `framework/testing/` — the test-only support surface (below).
 
 These sub-package paths are the *internal layout*; only the five facade names
@@ -95,12 +99,12 @@ Moving data across the boundary.
 |-------|------|
 | `Processor` | The `process(dataset) -> Dataset` seam. |
 | `Filter`, `Score`, `VectorizedFilter`, `VectorizedDerive`, `Stamp`, `Sort`, `Rename`, `JoinDependency`, `JoinWith`, `AntiJoinWith`, `LatestPerKey`, `SelectColumns`, `DropColumns`, `Unpivot`, `DeriveKey`, `TopNPerGroup`, `SamplePerGroup` | The concrete Selection / Ingest / fan-out transforms. |
+| `SchemaCoercion` | The *coerce* half of the schema adapter: casts round-trip-lossy columns (`date` / `datetime` / `bool`) to the declared types — a reshape, so it lives here, not with the schema check. |
 | `CoercionError` | Raised by `SchemaCoercion` on an uncastable value. |
-| `SchemaValidator`, `SchemaCoercion`, `ValueRule`, `Nullable`, `NonNull`, `Pattern`, `Length`, `Unique`, `OneOf` | The declared-schema contract + nullability/value-level rules. (`SchemaValidator` is the schema adapter's own check, kept here with `SchemaCoercion`.) |
 
-### `framework.validate` — checking a feed mid-pipeline
+### `framework.validate` — declaring & enforcing the data contract
 
-The `validate(dataset)` checks: they raise on breach rather than reshaping, so
+The checks that *gate* a feed: they raise on breach rather than reshaping, so
 they sit on their own facade. Composed onto a `Pipeline` as pre/post validators.
 
 | Names | What |
@@ -108,6 +112,8 @@ they sit on their own facade. Composed onto a `Pipeline` as pre/post validators.
 | `Validator`, `ValidationError` | The check seam and the error it raises. |
 | `ColumnValidator`, `RowCountValidator`, `VolumeAnomalyValidator`, `UniqueValidator`, `SchemaDriftValidator` | The concrete structural / volume / uniqueness / drift checks. |
 | `RunHistory`, `PriorColumns` | History inputs the run-aware checks read. |
+| `SchemaValidator` | The declared-schema check: a Case Type dataclass's columns + dtypes + nullability + value rules, enforced at silver (and optionally gold). |
+| `ValueRule`, `Nullable`, `NonNull`, `Pattern`, `Length`, `Unique`, `OneOf` | The declared-schema value-level contract (`Annotated` field rules) the schema check runs. |
 
 ### `framework.run` — composing, executing, observing
 
@@ -158,6 +164,11 @@ without notice:
   [adding-a-feed.md](adding-a-feed.md); not part of the day-to-day surface.
 - `framework.transform.quarantine` (`SchemaValueRulePartitioner`, …) — the value-rule
   quarantine partitioner; wired by the schema/quarantine flow.
+- `framework._internal.schema` (the `ValueRule` protocol, the Python↔pandas type
+  mapping, and the dataclass-annotation reading) — the shared core both schema
+  adapters (`validate.SchemaValidator`, `transform.SchemaCoercion`) derive from,
+  so they stay consistent without depending on each other. The public `ValueRule`
+  name surfaces via `framework.validate`; the rest is private.
 - Names prefixed `_` anywhere (`_NullRunLog`, `_RegisteredPipeline`, …), and the
   run-log/runner internals not listed in a facade (`StepMetrics`,
   `FreshnessGuard`, `pipeline_label`).

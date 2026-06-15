@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from framework.io.dataset import Dataset
-from framework.transform.schema import SchemaValidator
+from framework.validate import SchemaValidator
 from framework.validate.validators import ValidationError
 
 

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Annotated
 
-from framework.transform import OneOf
+from framework.validate import OneOf
 
 
 @dataclass

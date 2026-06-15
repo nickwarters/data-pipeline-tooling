@@ -13,12 +13,14 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   (on `sys.path`, never `pip install`ed); `pipelines/` holds runnable scripts.
   Packaging/installing the framework is an **explicit non-goal** (#95).
 - **Layout:** `framework/` (reusable engine, organised into the five public
-  facade sub-packages `framework/io`, `framework/transform` (reshaping),
-  `framework/validate` (the `validate(dataset)` checks), `framework/run`, and
-  `framework/shared` (cross-cutting utilities — `retry`, `calendar`); plus two
-  non-facade packages — the private `framework/_internal` (`connection`,
-  `describe`: cross-cutting helpers with no public name) and the test-only
-  `framework/testing`), `case_review/` (the case-review *application* — domain
+  facade sub-packages `framework/io`, `framework/transform` (reshaping, incl.
+  `SchemaCoercion`), `framework/validate` (the `validate(dataset)` checks + the
+  declared-schema contract — `SchemaValidator` and the value rules),
+  `framework/run`, and `framework/shared` (cross-cutting utilities — `retry`,
+  `calendar`); plus two non-facade packages — the private `framework/_internal`
+  (`connection`, `describe`, `schema`: cross-cutting helpers with no public name)
+  and the test-only `framework/testing`), `case_review/` (the case-review
+  *application* — domain
   types like `CaseType`/`CasePool` and its gold helpers, which live outside the
   framework), `pipelines/` (scripts), `tests/` (pytest), `docs/` (architecture,
   ADRs).

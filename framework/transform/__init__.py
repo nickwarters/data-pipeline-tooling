@@ -8,22 +8,24 @@ The stable import surface for everything that reshapes or gates a
 the lazy ``JoinWith`` / ``AntiJoinWith``, the Ingest / fan-out
 ``SelectColumns`` / ``DropColumns`` / ``Unpivot`` / ``DeriveKey`` /
 ``LatestPerKey``)
-and the ``Schema`` adapter (``SchemaValidator`` / ``SchemaCoercion`` + value
-rules).
+and ``SchemaCoercion`` — the *coerce* half of the schema adapter, which casts a
+column's round-trip-lossy values to the declared types (a reshape, not a check).
 
-The ``validate(dataset)`` checks (``ColumnValidator`` & friends) live on the
-sibling ``framework.validate`` facade, and ``WorkingDayCalendar`` on
-``framework.shared`` — neither reshapes a dataset, so they sit apart from these
-transforms.
+The schema *check* (``SchemaValidator``) and the declared-schema value rules
+(``ValueRule`` / ``Nullable`` / ``Pattern`` / ...) live on the sibling
+``framework.validate`` facade, the ``validate(dataset)`` checks (``ColumnValidator``
+& friends) likewise, and ``WorkingDayCalendar`` on ``framework.shared`` — none of
+them reshape a dataset, so they sit apart from these transforms.
 
 Import from here rather than the underlying modules::
 
-    from framework.transform import Filter, Score, SchemaValidator
+    from framework.transform import Filter, Score, SchemaCoercion
 
 The modules behind this facade are internal layout: re-exports here are the
 public contract, the submodule paths are not.
 """
 
+from framework.transform.coercion import SchemaCoercion
 from framework.transform.processors import (
     AntiJoinWith,
     CoercionError,
@@ -44,17 +46,6 @@ from framework.transform.processors import (
     Unpivot,
     VectorizedDerive,
     VectorizedFilter,
-)
-from framework.transform.schema import (
-    Length,
-    NonNull,
-    Nullable,
-    OneOf,
-    Pattern,
-    SchemaCoercion,
-    SchemaValidator,
-    Unique,
-    ValueRule,
 )
 
 __all__ = [
@@ -78,14 +69,6 @@ __all__ = [
     "TopNPerGroup",
     "SamplePerGroup",
     "CoercionError",
-    # Declared-schema contract and value rules
-    "SchemaValidator",
+    # The coerce half of the schema adapter
     "SchemaCoercion",
-    "ValueRule",
-    "Nullable",
-    "NonNull",
-    "Pattern",
-    "Length",
-    "Unique",
-    "OneOf",
 ]

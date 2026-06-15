@@ -33,7 +33,7 @@ from framework.io.strategy import AccumulateByRun, Refresh
 from framework.run.builder import Pipeline
 from framework.run.run_log import RunLog
 from framework.transform.processors import DeriveKey, LatestPerKey, Unpivot
-from framework.transform.schema import SchemaValidator
+from framework.validate.schema import SchemaValidator
 from framework.validate.validators import UniqueValidator
 
 

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Annotated
 
-from framework.transform.schema import OneOf, Pattern, Unique
+from framework.validate import OneOf, Pattern, Unique
 
 
 @dataclass

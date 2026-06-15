@@ -1,10 +1,10 @@
 """The raw->silver builder.
 
-Raw is landed schema-light, then silver is where the declared
-:mod:`~framework.transform.schema` contract is enforced. ``SchemaCoercion`` casts
-round-trip-lossy types before ``SchemaValidator`` checks the output that is
-about to be written. Nothing runs until ``.run()``, and a coercion or schema
-breach aborts before silver is written.
+Raw is landed schema-light, then silver is where the declared schema contract is
+enforced. :class:`~framework.transform.coercion.SchemaCoercion` casts
+round-trip-lossy types before :class:`~framework.validate.schema.SchemaValidator`
+checks the output that is about to be written. Nothing runs until ``.run()``, and
+a coercion or schema breach aborts before silver is written.
 
 The caller supplies the load strategy; the Writer owns its location and load
 behaviour.
@@ -16,8 +16,9 @@ from framework.io.store import RAW, SILVER, Store
 from framework.io.strategy import AccumulateByRun, Refresh
 from framework.run.builder import Pipeline
 from framework.run.run_log import RunLog
+from framework.transform.coercion import SchemaCoercion
 from framework.transform.processors import Filter
-from framework.transform.schema import SchemaCoercion, SchemaValidator
+from framework.validate.schema import SchemaValidator
 
 
 def raw_to_silver(

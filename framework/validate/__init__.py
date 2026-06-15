@@ -1,24 +1,31 @@
-"""Public facade: the ``validate(dataset)`` checks.
+"""Public facade: declaring and enforcing a feed's data contract.
 
-The stable import surface for the structural / volume / uniqueness checks that
-**gate** a feed — they raise :class:`ValidationError` on breach rather than
-reshaping the data, which is why they sit apart from ``framework.transform``'s
-reshaping primitives. Compose them onto a ``framework.run`` ``Pipeline`` as
-pre/post validators.
+The stable import surface for everything that **checks** a feed rather than
+reshaping it. Two groups:
 
-Import from here rather than the underlying module::
+- the ``validate(dataset)`` structural / volume / uniqueness checks
+  (``ColumnValidator`` & friends) that raise :class:`ValidationError` on breach;
+- the **declared-schema contract**: ``SchemaValidator`` checks a dataset against
+  a Case Type dataclass (columns + dtypes + nullability + value rules), and the
+  value rules (``ValueRule`` / ``Nullable`` / ``NonNull`` / ``Pattern`` /
+  ``Length`` / ``Unique`` / ``OneOf``) declared on its fields.
 
-    from framework.validate import ColumnValidator, RowCountValidator, ValidationError
+Compose them onto a ``framework.run`` ``Pipeline`` as pre/post validators. The
+*coerce* half of the schema adapter — ``SchemaCoercion`` — lives on
+``framework.transform`` instead, because it reshapes rather than checks.
 
-The module behind this facade (``framework.validate.validators``) is internal
-layout: re-exports here are the public contract, the submodule path is not. See
+Import from here rather than the underlying modules::
+
+    from framework.validate import ColumnValidator, SchemaValidator, ValidationError
+
+The modules behind this facade (``framework.validate.validators``,
+``framework.validate.schema``, ``framework.validate.value_rules``) are internal
+layout: re-exports here are the public contract, the submodule paths are not. See
 ``docs/public-api.md``.
-
-(The declared-schema check ``SchemaValidator`` stays on ``framework.transform``
-with the rest of the schema adapter, since it is part of the coerce/validate
-schema contract.)
 """
 
+from framework._internal.schema import ValueRule
+from framework.validate.schema import SchemaValidator
 from framework.validate.validators import (
     ColumnValidator,
     PriorColumns,
@@ -30,8 +37,17 @@ from framework.validate.validators import (
     Validator,
     VolumeAnomalyValidator,
 )
+from framework.validate.value_rules import (
+    Length,
+    NonNull,
+    Nullable,
+    OneOf,
+    Pattern,
+    Unique,
+)
 
 __all__ = [
+    # validate(dataset) checks
     "Validator",
     "ValidationError",
     "ColumnValidator",
@@ -41,4 +57,13 @@ __all__ = [
     "RunHistory",
     "SchemaDriftValidator",
     "PriorColumns",
+    # Declared-schema contract + value rules
+    "SchemaValidator",
+    "ValueRule",
+    "Nullable",
+    "NonNull",
+    "Pattern",
+    "Length",
+    "Unique",
+    "OneOf",
 ]

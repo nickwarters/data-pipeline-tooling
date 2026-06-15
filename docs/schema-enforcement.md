@@ -91,7 +91,7 @@ operations over actual values. Re-exposing all of that engine-agnostically would
 re-implement a dataframe API on the `Dataset` seam. So `SchemaValidator`
 reaches the backing frame via `to_pandas()` exactly as a Reader/Writer/processor
 does — keeping `Dataset`'s public surface tiny and the pandas-dtype mapping in
-one place (`framework.transform.schema`). See ADR-0002 and ADR-0008.
+one place (`framework._internal.schema`). See ADR-0002 and ADR-0008.
 
 ## `SchemaCoercion` — repairing what storage loses
 
@@ -202,7 +202,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Annotated
 
-from framework.transform import NonNull, Nullable, Pattern, Length, Unique, OneOf
+from framework.validate import NonNull, Nullable, Pattern, Length, Unique, OneOf
 
 @dataclass
 class CaseA:
