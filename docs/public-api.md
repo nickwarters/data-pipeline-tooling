@@ -172,8 +172,11 @@ pusher — internal seams with no facade.
 
 ## `framework.testing` — a test-only surface
 
-`framework.testing` (`given_rows`, `rows_of`, `make_dataset`, `read_rows`,
-`RecordingWriter`, `RecordingRunLog`, `read_run_log`) is a **test-support**
+`framework.testing` (`given_rows`, `given_csv`, `rows_of`, `make_dataset`,
+`read_rows`, `without_columns`, `assert_rows_equal`, `RecordingWriter`,
+`RecordingRunLog`, `read_run_log` — split internally into the
+`framework.testing.rows` and `framework.testing.run_log` modules, both
+re-exported from the package) is a **test-support**
 surface for pipeline authors, documented in
 [testing-helpers.md](testing-helpers.md). It is *not* one of the five runtime
 facades and **application code must not import it at runtime** — only a module's
