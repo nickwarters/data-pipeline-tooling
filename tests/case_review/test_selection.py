@@ -4,13 +4,13 @@ import pandas as pd
 
 from case_review.case_pool import CasePool
 from case_review.case_type import CaseType, Variation
-from framework.builder import Pipeline
-from framework.calendar import WorkingDayCalendar
-from framework.dataset import Dataset
-from framework.processors import Filter, Sort, Stamp
-from framework.readers import DatasetReader
-from framework.store import Store
-from framework.strategy import AccumulateByRun, Refresh
+from framework.core.dataset import Dataset
+from framework.io.readers import DatasetReader
+from framework.io.store import Store
+from framework.io.strategy import AccumulateByRun, Refresh
+from framework.run.builder import Pipeline
+from framework.shared.calendar import WorkingDayCalendar
+from framework.transform.processors import Filter, Sort, Stamp
 from tests._schema_fixtures import ActivityCase
 
 

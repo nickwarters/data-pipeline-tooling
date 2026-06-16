@@ -20,12 +20,14 @@ builds on these shapes. For the
 CasePool, Feed, Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
 
 Application code (`pipelines/` + the `case_review/` domain layer) imports these
-primitives through the three public facades (`framework.io` /
-`framework.transform` / `framework.run`), not the home modules named
-per-primitive below; the home modules locate the code, the facades are the
-stable contract. The package root exposes only those facade modules for
-discovery (`framework.io`, `framework.transform`, `framework.run`); it does not
-re-export primitive classes directly. See [`public-api.md`](public-api.md).
+primitives through the public facades (`framework.core` / `framework.io` /
+`framework.transform` / `framework.validate` / `framework.run` /
+`framework.recipes` / `framework.shared`), not the home modules named per-primitive below; the home
+modules locate the code, the facades are the stable contract. The package root
+exposes only those facade modules for discovery (`framework.core`,
+`framework.io`, `framework.transform`, `framework.validate`, `framework.run`,
+`framework.recipes`, `framework.shared`); it does not re-export primitive classes directly. See
+[`public-api.md`](public-api.md).
 
 ## Medallion layers
 
@@ -66,7 +68,7 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > `<subject_dir>/{raw,silver,gold}.db`, and `StoreCatalog(root).store(subject)`
 > mints those subject stores from shared root/configuration. The legacy global
 > `Store.write`/`read` is retired. The shared `connect` factory now lives in
-> `framework.connection` (the seam that keeps `store` and `writers` cycle-free).
+> `framework._internal.connection` (the seam that keeps `store` and `writers` cycle-free).
 > **Validators** now
 > attach to the builder (`.with_validator()` / `.with_post_validator()`) and
 > `.run()` is fail-fast and atomic. **Structured JSONL observability** has
@@ -151,7 +153,7 @@ another subject's read-only Reference Data medallion, joined in Python —
 ADR-0002). `SasReader(script, copy_glob, dest)` and
 `SharePointReader(site, list_name, auth)` follow the same `read()` shape but
 reach a remote source whose client is **stubbed for now**, behind a swappable
-seam in `framework.remote` (ADR-0004, ADR-0005); see
+seam in `framework.io.remote` (ADR-0004, ADR-0005); see
 [`adding-a-feed.md`](adding-a-feed.md#remote-feeds-sas-sharepoint). Readers are
 the home of the concrete engine and are tested against **local fixture files** —
 no network, no SAS, no SharePoint. Paths are handled with `pathlib` so they
@@ -254,7 +256,7 @@ physical layout out of every pipeline script while preserving the same
 Readers/Writers.
 
 The connection factory `connect(db_path, busy_timeout_ms)` lives in
-`framework.connection` — the single place connections are configured (ADR-0001),
+`framework._internal.connection` — the single place connections are configured (ADR-0001),
 which Readers, Writers, and the Store all open through. Keeping it in its own
 module is the seam that lets the `Store` mint Writers/Readers without a
 `store`↔`writers` import cycle. It sets a `busy_timeout` so read-only clients
@@ -364,6 +366,8 @@ and atomic — ADR-0007), so nothing partial lands. Raw stays schema-light: data
 the schema would reject still lands faithfully in raw. The builder makes no
 write or load decisions — the Store mints the Writer, which owns location +
 strategy. Full walkthrough: [schema-enforcement.md](schema-enforcement.md).
+The implementation home is `framework.recipes`; `framework.run` re-exports the
+recipe for compatibility with existing pipeline code.
 
 ### `Processor` — an engine-confined transform, run mid-pipeline
 A `Processor` transforms the dataset between the read and the post-validators:
@@ -500,7 +504,7 @@ addition this slice made is the per-record `timestamp` (run-log-format.md), the
 time dimension the registry orders by.
 
 ### `PipelineRunner` — thin domain orchestration + freshness guard
-`PipelineRunner` (`framework.runner`) is the minimal orchestration layer above
+`PipelineRunner` (`framework.run.runner`) is the minimal orchestration layer above
 the builder. It registers domain Pipelines by `(case_type, pipeline)` and runs
 one requested Pipeline by name, without changing the builder contract:
 
@@ -545,7 +549,7 @@ python -m pipelines.run cases selection /tmp/demo --run-date 2026-05-29
 ```
 
 ### `Orchestrator` — scheduled PipelineSets
-`Orchestrator` (`framework.orchestration`) sits above `PipelineRunner`. It is
+`Orchestrator` (`framework.run.orchestration`) sits above `PipelineRunner`. It is
 not a builder-level `Pipeline`; it decides which registered domain Pipelines are
 due for one run date, invokes them through the runner, and records scheduling
 decisions separately from execution history:
@@ -601,7 +605,7 @@ replace its schedule timing, or override freshness windows for operations
 without changing the registered pipeline code.
 
 ### `ForEach` — independent per-item builder runs
-`ForEach` (`framework.orchestration`) is the small runnable orchestration
+`ForEach` (`framework.run.orchestration`) is the small runnable orchestration
 primitive for repeated runs where each item must stay independent but use the
 same recipe. It sits outside the `Pipeline` builder so the builder keeps its
 single Reader/single `Dataset`/single Writer contract:
@@ -823,7 +827,7 @@ text-stored dates first, and returns a bulk-tier `Dataset`. Fully typed `Case`
 objects are the typed-on-demand edge reserved for a later slice (ADR-0002).
 
 ### `DatasetReader` — bridge an in-memory Dataset into the builder
-`DatasetReader(dataset)` (`framework.readers`) adapts an already-in-memory
+`DatasetReader(dataset)` (`framework.io.readers`) adapts an already-in-memory
 `Dataset` to the `Reader` shape, so the **Selection** pipeline feeds the
 CasePool's available cases straight into the `Pipeline` builder (read → process →
 write) without a SQL round-trip. Selection is its own pipeline that reuses the
@@ -831,7 +835,7 @@ builder, narrowing the CasePool with the Selection processors and `Stamp` into
 the gold `SelectionPool`.
 
 ### `RetryPolicy` / `RetryingReader` / `RetryingWriter` — retry at the I/O edge
-`RetryPolicy(attempts, retry_on, backoff_seconds=…)` (`framework.retry`) encodes
+`RetryPolicy(attempts, retry_on, backoff_seconds=…)` (`framework.shared.retry`) encodes
 a retry decision as an **allowlist** of transient exception types; only those are
 retried, so schema-validation and configuration errors abort immediately.
 `RetryingReader(inner, policy)` / `RetryingWriter(inner, policy)` apply it at the
@@ -844,7 +848,8 @@ carries the final outcome. Full treatment: [retry.md](retry.md).
 ## Worked example
 
 ```python
-from framework.io import RAW, CsvReader, Refresh, StoreCatalog
+from framework.core import RAW
+from framework.io import CsvReader, Refresh, StoreCatalog
 from framework.run import Pipeline
 
 store = StoreCatalog("/path/to/share").store("cases")

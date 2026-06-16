@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Data Pipeline Tooling: Top 10 Code Issues</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "neutral" });
+  </script>
+</head>
+<body class="bg-stone-50 text-slate-900">
+  <main class="mx-auto max-w-7xl px-6 py-10">
+    <header class="mb-10">
+      <p class="text-sm font-semibold uppercase tracking-wide text-slate-500">Deep-dive review</p>
+      <h1 class="mt-2 text-4xl font-semibold tracking-tight">Top 10 issues in the data-pipeline-tooling codebase</h1>
+      <p class="mt-4 max-w-3xl text-lg text-slate-700">
+        Review scope: framework primitives, case-review domain helpers, runnable pipelines, tests, and docs. The suite is healthy
+        (<span class="font-semibold">390 passed</span>), so these are mostly latent correctness risks, user-experience traps, and maintainability drag rather than current red tests.
+      </p>
+    </header>
+
+    <section class="mb-10 grid gap-4 md:grid-cols-4">
+      <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="text-3xl font-semibold">18k+</div>
+        <div class="mt-1 text-sm text-slate-600">lines across code, tests, and docs</div>
+      </div>
+      <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="text-3xl font-semibold">390</div>
+        <div class="mt-1 text-sm text-slate-600">pytest tests passing</div>
+      </div>
+      <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="text-3xl font-semibold">3</div>
+        <div class="mt-1 text-sm text-slate-600">main public facades</div>
+      </div>
+      <div class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="text-3xl font-semibold">10</div>
+        <div class="mt-1 text-sm text-slate-600">ranked issues below</div>
+      </div>
+    </section>
+
+    <section class="mb-12 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+      <h2 class="text-2xl font-semibold">Where the biggest risks sit</h2>
+      <div class="mermaid mt-4">
+flowchart LR
+  user[Pipeline author / operator] --> api[Public facades]
+  api --> pipe[Pipeline execution]
+  pipe --> io[Readers and Writers]
+  io --> sqlite[(SQLite medallion)]
+  pipe --> obs[RunLog and RunRegistry]
+  pipe --> proc[Processors]
+
+  sqlite -. top risk .-> issue1[Write atomicity and staging cleanup]
+  proc -. user friction .-> issue3[Row-wise pandas apply at scale]
+  obs -. operator friction .-> issue4[Registry ingestion and log UX]
+  api -. confusion .-> issue6[Empty root package facade]
+      </div>
+    </section>
+
+    <section class="space-y-5">
+      <article class="rounded-lg border-l-4 border-red-500 bg-white p-6 shadow-sm">
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 class="text-xl font-semibold">1. SQLite writers overstate atomicity and can leave stale staging state</h2>
+          <span class="rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700">High</span>
+        </div>
+        <p class="mt-3 text-slate-700">
+          <code>SqliteUpsertWriter</code> writes a permanent staging table, performs delete/insert, commits, then drops staging without a second commit.
+          If cleanup fails or the connection closes before persisting the drop, the next run may inherit stale objects. The comments promise atomicity, but
+          <code>pandas.to_sql</code> DDL and SQLite transaction boundaries make that promise fragile.
+        </p>
+        <p class="mt-3 text-sm text-slate-600">Evidence: <code>framework/writers.py:340</code>, <code>:342</code>, <code>:347</code>, <code>:355</code>, <code>:363</code>, <code>:366</code>.</p>
+        <p class="mt-3 text-slate-700"><span class="font-semibold">Fix:</span> use a temporary staging table scoped to the connection, wrap delete/insert in an explicit transaction, commit cleanup deliberately, and add a failure-injection test that proves prior target rows survive.</p>
+      </article>
+
+      <article class="rounded-lg border-l-4 border-red-500 bg-white p-6 shadow-sm">
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 class="text-xl font-semibold">2. Broad OperationalError swallowing can hide real data-loss conditions</h2>
+          <span class="rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700">High</span>
+        </div>
+        <p class="mt-3 text-slate-700">
+          <code>QuarantineWriter</code> and <code>AccumulateByRunWriter</code> catch any <code>sqlite3.OperationalError</code> around delete-by-run and treat it as “table does not exist”.
+          That also masks schema drift, missing <code>run_id</code>, locked database failures after timeout, and malformed SQL. The next append can duplicate logical runs or produce confusing downstream errors.
+        </p>
+        <p class="mt-3 text-sm text-slate-600">Evidence: <code>framework/writers.py:277-284</code>, <code>:425-430</code> and following handler.</p>
+        <p class="mt-3 text-slate-700"><span class="font-semibold">Fix:</span> preflight table existence with <code>sqlite_master</code> or catch only the exact “no such table” case; re-raise every other operational failure with target table context.</p>
+      </article>
+
+      <article class="rounded-lg border-l-4 border-amber-500 bg-white p-6 shadow-sm">
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 class="text-xl font-semibold">3. Several processors rely on row-wise pandas apply, which will hurt real feed sizes</h2>
+          <span class="rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-700">Medium-high</span>
+        </div>
+        <p class="mt-3 text-slate-700">
+          <code>Filter</code>, <code>Score</code>, and <code>DeriveKey</code> execute Python callbacks per row. That is ergonomic, but the framework currently offers no batch/vectorized alternative, no warning, and no guidance about when this becomes expensive.
+          A pipeline that works in tests can become painfully slow in production.
+        </p>
+        <p class="mt-3 text-sm text-slate-600">Evidence: <code>framework/processors.py:74-77</code>, <code>:102-105</code>, <code>:489-497</code>.</p>
+        <p class="mt-3 text-slate-700"><span class="font-semibold">Fix:</span> keep the row-callable path for simple authoring, but add vectorized processor variants or document row-count limits. Add perf-oriented tests around representative feed sizes.</p>
+      </article>
+
+      <article class="rounded-lg border-l-4 border-amber-500 bg-white p-6 shadow-sm">
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 class="text-xl font-semibold">4. RunRegistry ingestion rereads whole JSONL logs every run</h2>
+          <span class="rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-700">Medium-high</span>
+        </div>
+        <p class="mt-3 text-slate-700">
+          The runner ingests the case-type log before and after each run, and <code>RunRegistry.ingest()</code> scans every line every time. Idempotency prevents duplicates, but runtime grows with total history. Operators will feel this first on long-lived case types.
+        </p>
+        <p class="mt-3 text-sm text-slate-600">Evidence: <code>framework/run_registry.py:61-80</code>; runner calls are in <code>framework/runner.py</code> around the pre-run and post-run ingest paths.</p>
+        <p class="mt-3 text-slate-700"><span class="font-semibold">Fix:</span> track per-log offsets or last ingested byte position, or rotate logs by date/run. Preserve idempotency, but avoid O(total log history) on every invocation.</p>
+      </article>
+
+      <article class="rounded-lg border-l-4 border-amber-500 bg-white p-6 shadow-sm">
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 class="text-xl font-semibold">5. QuarantineWriter fails on empty run-stamped datasets when called directly</h2>
+          <span class="rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-700">Medium</span>
+        </div>
+        <p class="mt-3 text-slate-700">
+          The pipeline step only calls the reject writer when rejected rows exist, but the writer itself indexes <code>frame["run_id"].iloc[0]</code>. Direct use with a zero-row, correctly shaped dataset raises <code>IndexError</code>.
+          That makes the writer less robust than its public <code>Writer</code> shape suggests.
+        </p>
+        <p class="mt-3 text-sm text-slate-600">Evidence: <code>framework/pipeline_steps.py:216-223</code>, <code>framework/writers.py:270-276</code>.</p>
+        <p class="mt-3 text-slate-700"><span class="font-semibold">Fix:</span> make <code>QuarantineWriter.write()</code> a no-op for empty frames, or require an explicit run id in its constructor if it must delete prior rejects for a zero-reject re-run.</p>
+      </article>
+
+      <article class="rounded-lg border-l-4 border-blue-500 bg-white p-6 shadow-sm">
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 class="text-xl font-semibold">6. The root framework package is empty while docs push facades</h2>
+          <span class="rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700">Medium</span>
+        </div>
+        <p class="mt-3 text-slate-700">
+          <code>framework.io</code>, <code>framework.transform</code>, and <code>framework.run</code> are clear public facades, but <code>import framework</code> exposes no helpful objects or pointer. New users often try package-root discovery first and get a dead end.
+        </p>
+        <p class="mt-3 text-sm text-slate-600">Evidence: <code>framework/__init__.py:1-5</code>, <code>framework/io.py:1-15</code>, <code>framework/transform.py:1-21</code>, <code>framework/run.py:1-18</code>.</p>
+        <p class="mt-3 text-slate-700"><span class="font-semibold">Fix:</span> either re-export the three facade modules at package root or add a small discoverability API and documentation examples that never suggest root imports.</p>
+      </article>
+
+      <article class="rounded-lg border-l-4 border-blue-500 bg-white p-6 shadow-sm">
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 class="text-xl font-semibold">7. CLI output drops meaningful zero values</h2>
+          <span class="rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700">Medium</span>
+        </div>
+        <p class="mt-3 text-slate-700">
+          The operator log formatter prints row metrics only when <code>record.get(field)</code> is truthy. A step with <code>rows_out=0</code>, <code>rows_quarantined=0</code>, or <code>rows_excluded=0</code> disappears from the display, which is exactly when operators need clarity.
+        </p>
+        <p class="mt-3 text-sm text-slate-600">Evidence: <code>pipelines/cli.py:98-110</code>.</p>
+        <p class="mt-3 text-slate-700"><span class="font-semibold">Fix:</span> check <code>is not None</code> for metrics, matching the more careful run summary formatter at <code>pipelines/cli.py:60</code>.</p>
+      </article>
+
+      <article class="rounded-lg border-l-4 border-blue-500 bg-white p-6 shadow-sm">
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 class="text-xl font-semibold">8. Read APIs leave common CSV/Excel controls trapped behind pandas defaults</h2>
+          <span class="rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700">Medium</span>
+        </div>
+        <p class="mt-3 text-slate-700">
+          The readers intentionally hide pandas, but they expose only path/sheet/columns. Real feeds often need encoding, delimiter, dtype, date parsing, null handling, and header controls. Without a sanctioned configuration shape, users will subclass or bypass the seam.
+        </p>
+        <p class="mt-3 text-sm text-slate-600">Evidence: <code>framework/readers.py:54-70</code>, <code>:76-102</code>, <code>:113-133</code>.</p>
+        <p class="mt-3 text-slate-700"><span class="font-semibold">Fix:</span> introduce typed options objects for CSV and Excel readers. Keep pandas hidden, but expose stable domain-level knobs for common ingestion variance.</p>
+      </article>
+
+      <article class="rounded-lg border-l-4 border-slate-400 bg-white p-6 shadow-sm">
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 class="text-xl font-semibold">9. Comments and docstrings are carrying too much implementation history</h2>
+          <span class="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">Medium-low</span>
+        </div>
+        <p class="mt-3 text-slate-700">
+          The code is unusually well documented, but many comments repeat “Path keeps separators OS-agnostic”, ADR numbers, and issue IDs in places where the code is already clear.
+          This adds scanning cost and makes maintenance harder because every behavioral change has more prose to keep aligned.
+        </p>
+        <p class="mt-3 text-sm text-slate-600">Evidence: repeated comments in <code>framework/readers.py:62</code>, <code>:85</code>, <code>:127</code>, <code>:156</code>, <code>:208</code>; similar comments in writers and store.</p>
+        <p class="mt-3 text-slate-700"><span class="font-semibold">Fix:</span> move rationale to docs/ADRs and keep inline comments for non-obvious mechanics only. Prefer a short module-level note over repeated per-constructor comments.</p>
+      </article>
+
+      <article class="rounded-lg border-l-4 border-slate-400 bg-white p-6 shadow-sm">
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 class="text-xl font-semibold">10. Minor dead code and formatting debt weakens signal</h2>
+          <span class="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">Low</span>
+        </div>
+        <p class="mt-3 text-slate-700">
+          There is at least one unused import (<code>LAYERS</code> in the connection factory), several long lines, and repeated manual dataclass initialization in pipeline steps.
+          None of this is severe, but it increases noise and makes real changes harder to review.
+        </p>
+        <p class="mt-3 text-sm text-slate-600">Evidence: <code>framework/connection.py:17</code>; long lines in <code>framework/processors.py:29</code>, <code>:344</code>, <code>:631</code>; repeated <code>object.__setattr__</code> blocks in <code>framework/pipeline_steps.py:121-375</code>.</p>
+        <p class="mt-3 text-slate-700"><span class="font-semibold">Fix:</span> run Ruff or equivalent linting, remove unused imports, enforce line length, and consider simple constructors over frozen dataclass subclasses where mutation is only internal stamping.</p>
+      </article>
+    </section>
+
+    <section class="mt-12 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+      <h2 class="text-2xl font-semibold">Suggested repair order</h2>
+      <ol class="mt-4 list-decimal space-y-2 pl-6 text-slate-700">
+        <li>Harden SQLite writer transactions and narrow OperationalError handling.</li>
+        <li>Add tests for empty quarantine writes, failed upserts, and stale staging cleanup.</li>
+        <li>Fix operator log zero-value display and add CLI output tests for zero rows.</li>
+        <li>Decide the public import story at package root and update docs/examples.</li>
+        <li>Introduce reader option objects and document supported ingestion variance.</li>
+        <li>Trim repeated comments and wire up linting for small hygiene issues.</li>
+      </ol>
+    </section>
+  </main>
+</body>
+</html>

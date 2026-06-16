@@ -13,7 +13,8 @@ from __future__ import annotations
 import importlib
 import sys
 
-from framework.io import RAW, SILVER, StoreCatalog
+from framework.core import RAW, SILVER
+from framework.io import StoreCatalog
 from framework.testing import read_rows, rows_of
 from pipelines import scaffold
 
@@ -191,7 +192,8 @@ def test_case_type_variant_refines_to_silver_and_leaves_gold_a_commented_seam(tm
 
     # The settled ingest spine is rendered live: source -> raw -> silver.
     assert "raw_to_silver(" in pipeline
-    assert "from framework.run import Pipeline, raw_to_silver" in pipeline
+    assert "from framework.recipes import raw_to_silver" in pipeline
+    assert "from framework.run import Pipeline" in pipeline
 
     # Gold is the author's seam, not a live call, so the scaffold makes no bet
     # on the open snapshot-vs-join assembly decision.

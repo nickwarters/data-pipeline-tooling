@@ -42,7 +42,7 @@ excluded it, a run correlation, and a date.
 
 Selection narrows through a *sequence* of processors, so the trace cannot be a
 single partition. The framework provides the generic `RowTrace`
-(`framework/trace.py`) ledger, while the case-review pipeline chooses the Case
+(`framework/run/trace.py`) ledger, while the case-review pipeline chooses the Case
 identity column and sibling selection-trace writer:
 
 - The pipeline **seeds** it with the considered population (the rows entering the

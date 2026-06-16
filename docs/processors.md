@@ -1,6 +1,6 @@
 # Processors — the Selection & Ingest transforms
 
-This documents the concrete `Processor` primitives in `framework.processors`.
+This documents the concrete `Processor` primitives in `framework.transform.processors`.
 They fall into two workload families:
 
 - **Selection narrowing** (#9, #62, #166) — `Filter`, `Score`,
@@ -329,7 +329,8 @@ Python, and join another subject's silver Reference Data via an explicit
 read-only dependency.
 
 ```python
-from framework.io import SILVER, StoreCatalog
+from framework.core import SILVER
+from framework.io import StoreCatalog
 from framework.run import Pipeline
 from framework.transform import AntiJoinWith, Filter, JoinDependency, JoinWith
 

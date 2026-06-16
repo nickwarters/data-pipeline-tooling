@@ -91,7 +91,7 @@ operations over actual values. Re-exposing all of that engine-agnostically would
 re-implement a dataframe API on the `Dataset` seam. So `SchemaValidator`
 reaches the backing frame via `to_pandas()` exactly as a Reader/Writer/processor
 does — keeping `Dataset`'s public surface tiny and the pandas-dtype mapping in
-one place (`framework.schema`). See ADR-0002 and ADR-0008.
+one place (`framework._internal.schema`). See ADR-0002 and ADR-0008.
 
 ## `SchemaCoercion` — repairing what storage loses
 
@@ -138,7 +138,7 @@ The builder wires the convention together for one subject's table:
 
 ```python
 from framework.io import StoreCatalog
-from framework.run import raw_to_silver
+from framework.recipes import raw_to_silver
 
 store = StoreCatalog("/path/to/share").store("cases")
 raw_to_silver(store, "cases", CaseA).run()   # reads raw, coerces, validates, writes silver.db
@@ -167,7 +167,7 @@ takes the **same** optional `schema=` and attaches the **same** `SchemaValidator
 as a post-validator before the gold write.
 
 ```python
-from framework.run import silver_to_gold
+from framework.recipes import silver_to_gold
 
 silver_to_gold(
     store, "selection_pool",
@@ -202,7 +202,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Annotated
 
-from framework.transform import NonNull, Nullable, Pattern, Length, Unique, OneOf
+from framework.validate import NonNull, Nullable, Pattern, Length, Unique, OneOf
 
 @dataclass
 class CaseA:

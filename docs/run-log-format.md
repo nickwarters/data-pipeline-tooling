@@ -12,7 +12,8 @@ ADR-0007 for the *why* (fail-fast, atomic, no silent drops).
 or format knowledge — it just drives the sink:
 
 ```python
-from framework.io import RAW, CsvReader, Refresh, StoreCatalog
+from framework.core import RAW
+from framework.io import CsvReader, Refresh, StoreCatalog
 from framework.run import Pipeline, RunLog
 
 run_log = RunLog("/path/to/share/cases/runs.log")
@@ -29,7 +30,7 @@ print(pipeline.run_id)  # the run's correlating id, shared by every record
 
 If no `RunLog` is composed, `.run()` behaves identically but emits nothing (a
 null sink keeps the terminus branch-free). The human-readable console lines are
-logged at `INFO` on the `framework.run_log` logger, so an entry-point that calls
+logged at `INFO` on the `framework.run.run_log` logger, so an entry-point that calls
 `logging.basicConfig(level=logging.INFO)` (as `pipelines/demo_csv_to_raw.py`
 does) will surface them. The `.log` file is always written when a `RunLog` is
 present, regardless of logging configuration.

@@ -12,22 +12,37 @@ domain language in `CONTEXT.md`; the core primitives are documented in
 - **Language/runtime:** Python 3.12. The `framework/` package is **import-only**
   (on `sys.path`, never `pip install`ed); `pipelines/` holds runnable scripts.
   Packaging/installing the framework is an **explicit non-goal** (#95).
-- **Layout:** `framework/` (reusable engine), `case_review/` (the case-review
-  *application* — domain types like `CaseType`/`CasePool` and its gold helpers,
-  which live outside the framework), `pipelines/` (scripts), `tests/` (pytest),
-  `docs/` (architecture, ADRs).
-- **Test layout:** `tests/` mirrors the source shape — `tests/framework/`,
-  `tests/case_review/`, `tests/pipelines/`, plus `tests/integration/` for tests
-  that span trees (e.g. the public-API and framework/domain boundary tests).
+- **Layout:** `framework/` (reusable engine, organised into the six public
+  facade sub-packages `framework/core` (the base vocabulary — `Dataset` + the
+  medallion `Layer` constants, which everything else builds on), `framework/io`,
+  `framework/transform` (reshaping, incl. `SchemaCoercion`), `framework/validate`
+  (the `validate(dataset)` checks + the declared-schema contract —
+  `SchemaValidator` and the value rules), `framework/run`, and `framework/shared`
+  (cross-cutting utilities — `retry`, `calendar`); plus two non-facade packages —
+  the private `framework/_internal` (`connection`, `describe`, `schema`:
+  cross-cutting helpers with no public name) and the test-only
+  `framework/testing`), `case_review/` (the case-review *application* — domain
+  types like `CaseType`/`CasePool` and its gold helpers, which live outside the
+  framework), `pipelines/` (scripts), `tests/` (pytest), `docs/` (architecture,
+  ADRs).
+- **Test layout:** `tests/` mirrors the source shape — `tests/framework/`
+  (itself split into `core/`, `io/`, `transform/`, `validate/`, `run/`,
+  `shared/`, `_internal/`, `testing/` to mirror the framework sub-packages; an
+  implementation file covered by several test files gets a `test_<impl>/`
+  package, e.g. `tests/framework/io/test_readers/`), `tests/case_review/`,
+  `tests/pipelines/`, plus `tests/integration/` for tests that span trees (e.g.
+  the public-API and framework/domain boundary tests).
   Shared helpers (`tests/_schema_fixtures.py`, `tests/fixtures/`) sit at the
   `tests/` root. Each test dir is a package (`__init__.py`) so module paths are
   unique under pytest's default import mode — no basename collisions. A
   scaffolded feed (#97) follows the same convention: its code lands in
   `pipelines/<feed>/` and its test in `tests/pipelines/test_<feed>.py`.
 - **Public API (#95):** application code (`pipelines/` + the `case_review/`
-  domain layer) imports through the three facades `framework.io` /
-  `framework.transform` / `framework.run`, not the modules behind them (those
-  are internal layout). The facades are the stable contract;
+  domain layer) imports through the six facades `framework.core` /
+  `framework.io` / `framework.transform` / `framework.validate` /
+  `framework.run` / `framework.shared`, not the modules behind them (those are
+  internal layout).
+  The facades are the stable contract;
   [`docs/public-api.md`](docs/public-api.md) lists the surface, the internal
   modules, and the packaging non-goal. `tests/integration/test_public_api.py`
   holds both `pipelines/` and `case_review/` to this boundary.
@@ -36,7 +51,7 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `Writer` (`write(dataset) -> None`; owns target location + load strategy —
   added by #14), `Store` (per-subject medallion that mints the layer's
   Writers/Readers over `<subject>/{raw,silver,gold}.db` — #15; `connect` factory
-  now in `framework.connection`), `Pipeline` (deferred fluent builder;
+  now in `framework._internal.connection`), `Pipeline` (deferred fluent builder;
   `.write_to(writer)` composes, `.run()` executes — replaced `.to(layer)` in
   #14).
 

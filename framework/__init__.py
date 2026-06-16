@@ -2,11 +2,21 @@
 
 Use the public facade modules:
 
-- ``framework.io`` for Dataset, Readers, Writers, Store, and strategies.
-- ``framework.transform`` for processors, validators, schemas, and calendar helpers.
+- ``framework.core`` for Dataset and the medallion Layer constants — the
+  foundational vocabulary the other facades build on.
+- ``framework.io`` for Readers, Writers, Store, and strategies.
+- ``framework.transform`` for the reshaping processors and SchemaCoercion.
+- ``framework.validate`` for the ``validate(dataset)`` checks and the
+  declared-schema contract.
 - ``framework.run`` for Pipeline, orchestration, RunLog, and RunRegistry.
+- ``framework.recipes`` for higher-level medallion pipeline recipes built from
+  the generic primitives.
+- ``framework.shared`` for cross-cutting utilities (retry, WorkingDayCalendar).
+
+(``framework.testing`` is a separate test-only surface; ``framework._internal``
+is private layout.)
 """
 
-from framework import io, run, transform
+from framework import core, io, run, recipes, shared, transform, validate
 
-__all__ = ["io", "run", "transform"]
+__all__ = ["core", "io", "transform", "validate", "run", "recipes", "shared"]

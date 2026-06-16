@@ -15,7 +15,7 @@ ingested (ADR-0001 amendment; `CONTEXT.md` Reference Data note).
 
 ```python
 from datetime import date
-from framework.transform import WorkingDayCalendar
+from framework.shared import WorkingDayCalendar
 
 cal = WorkingDayCalendar(
     holidays=[date(2026, 1, 1), date(2026, 12, 25)],  # individual non-working dates

@@ -21,8 +21,10 @@ import os
 import sys
 from pathlib import Path
 
-from framework.io import RAW, SILVER, AccumulateByRun, CsvReader, Dataset, StoreCatalog
-from framework.run import Pipeline, raw_to_silver
+from framework.core import RAW, SILVER, Dataset
+from framework.io import AccumulateByRun, CsvReader, StoreCatalog
+from framework.recipes import raw_to_silver
+from framework.run import Pipeline
 
 from .case_type import CASE_TYPE
 

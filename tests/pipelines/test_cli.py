@@ -32,7 +32,8 @@ def test_run_executes_a_registered_pipeline(tmp_path):
 
 
 def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
-    from framework.io import GOLD, StoreCatalog
+    from framework.core import GOLD
+    from framework.io import StoreCatalog
 
     assert (
         _cli(
@@ -213,7 +214,7 @@ def test_run_validation_failure_reports_clear_error(tmp_path, monkeypatch, capsy
     # A pipeline that fails a data check raises ValidationError; the operator
     # should see the message and a non-zero exit, not an unhandled traceback.
     from framework.run import PipelineRunner
-    from framework.transform import ValidationError
+    from framework.validate import ValidationError
     from pipelines import cli
 
     def boom(_context):

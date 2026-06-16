@@ -19,9 +19,10 @@ import sys
 from dataclasses import fields
 from pathlib import Path
 
-from framework.io import RAW, CsvReader, Dataset, Refresh, StoreCatalog
+from framework.core import RAW, Dataset
+from framework.io import CsvReader, Refresh, StoreCatalog
 from framework.run import Pipeline
-from framework.transform import ColumnValidator
+from framework.validate import ColumnValidator
 
 from .schema import MyfeedRow
 

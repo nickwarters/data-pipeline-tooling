@@ -140,12 +140,17 @@ its decisions in a separate orchestration store.
 The foundational vocabulary. Each links to its deep doc; the consolidated
 reference with worked examples is [`core-primitives.md`](core-primitives.md).
 
-> **Importing.** Application code (`pipelines/` + `case_review/`) imports these through the three public **facades**
-> — `framework.io` (sources/sinks/stores), `framework.transform` (processors,
-> validators, schema, calendar), and `framework.run` (the `Pipeline` builder,
-> orchestration, runner, observability) — not from the modules behind them. The
-> facade names are the stable surface. `import framework` exposes only those
-> three facade modules for discovery; it is not a shortcut for
+> **Importing.** Application code (`pipelines/` + `case_review/`) imports these through the public **facades**
+> — `framework.core` (`Dataset` + the medallion `Layer` constants), `framework.io`
+> (sources/sinks/stores), `framework.transform` (the reshaping processors +
+> `SchemaCoercion`), `framework.validate` (the `validate(dataset)` checks + the
+> declared-schema contract: `SchemaValidator` and the value rules),
+> `framework.run` (the `Pipeline` builder, orchestration, runner, observability),
+> `framework.recipes` (higher-level medallion builders),
+> and `framework.shared` (cross-cutting utilities — retry, `WorkingDayCalendar`)
+> — not from the modules behind them. The facade names are the stable surface.
+> `import framework` exposes only those facade modules for discovery; it is
+> not a shortcut for
 > `framework.CsvReader` / `framework.Filter` / `framework.Pipeline`. See
 > [`public-api.md`](public-api.md) for the full member list, the
 > internal-module boundary, and why packaging is an explicit non-goal.
@@ -232,7 +237,7 @@ See the *Add a new Feed* how-to.
 ```python
 from case_review.case_pool import CasePool
 from framework.io import StoreCatalog
-from framework.transform import WorkingDayCalendar
+from framework.shared import WorkingDayCalendar
 
 store = StoreCatalog("/share").store(CASES.name)
 pool = CasePool(CASES, store, WorkingDayCalendar())
@@ -271,9 +276,10 @@ python -m pipelines.scaffold --case-type claims  # + case_type.py; source -> raw
 ```
 
 ```python
-from framework.io import RAW, ExcelReader, Refresh, StoreCatalog
+from framework.core import RAW
+from framework.io import ExcelReader, Refresh, StoreCatalog
 from framework.run import Pipeline
-from framework.transform import ColumnValidator  # optional input gate
+from framework.validate import ColumnValidator  # optional input gate
 
 store = StoreCatalog("/share").store("cases")       # the "cases" subject
 (
@@ -287,7 +293,7 @@ store = StoreCatalog("/share").store("cases")       # the "cases" subject
 Then refine raw → silver with the schema enforced:
 
 ```python
-from framework.run import raw_to_silver
+from framework.recipes import raw_to_silver
 
 raw_to_silver(store, "cases", ActivityCase).run()   # coerce -> validate -> write silver
 ```
@@ -362,7 +368,8 @@ and the processor reference [`processors.md`](processors.md).
 ```python
 from typing import Any, Mapping
 
-from framework.io import GOLD, SILVER, AccumulateByRun, DatasetReader, StoreCatalog
+from framework.core import GOLD, SILVER
+from framework.io import AccumulateByRun, DatasetReader, StoreCatalog
 from framework.run import Pipeline
 from framework.transform import (
     Filter,
@@ -517,7 +524,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 
 | Doc | Covers |
 |-----|--------|
-| [`public-api.md`](public-api.md) | The public API: the three facades (`framework.io` / `transform` / `run`), the internal-module boundary, and the packaging non-goal. |
+| [`public-api.md`](public-api.md) | The public API: the facades (`framework.core` / `io` / `transform` / `validate` / `run` / `recipes` / `shared`), the internal-module boundary, and the packaging non-goal. |
 | [`core-primitives.md`](core-primitives.md) | The consolidated framework primitives reference with worked examples and build status per slice. |
 | [`adding-a-feed.md`](adding-a-feed.md) | Every Reader, and the stubbed remote (SAS / SharePoint) seams. |
 | [`schema-enforcement.md`](schema-enforcement.md) | `Schema` / `SchemaValidator` / `SchemaCoercion`, value-level rules, `raw_to_silver`. |
@@ -528,6 +535,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`run-log-format.md`](run-log-format.md) | The JSONL record schema and the run registry. |
 | [`retry.md`](retry.md) | Targeted retry at the reader/writer edges — `RetryPolicy`, where to use it and where not. |
 | [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `status` / `runs` / `log`) with example commands and output. |
+| [`escape-hatch-store.md`](escape-hatch-store.md) | Iterating against a flat scratch db (and a pre-baked SQL query) outside the medallion layer pattern, and migrating back. |
 | [`testing-helpers.md`](testing-helpers.md) | `framework.testing` — the test-only helpers for testing concrete pipelines (`given_rows`, `RecordingWriter`, `read_rows`, `RecordingRunLog`, `read_run_log`). |
 | [`adr/`](adr/) | Every architectural decision (the *why*). |
 | [`../CONTEXT.md`](../CONTEXT.md) | The domain language — the canonical glossary. |

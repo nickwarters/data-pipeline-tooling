@@ -152,9 +152,10 @@ mints the destination Writer for the target layer, so the builder never learns
 about medallion layers or load rules:
 
 ```python
-from framework.io import RAW, ExcelReader, Refresh, StoreCatalog
+from framework.core import RAW
+from framework.io import ExcelReader, Refresh, StoreCatalog
 from framework.run import Pipeline
-from framework.transform import ColumnValidator, SchemaDriftValidator
+from framework.validate import ColumnValidator, SchemaDriftValidator
 
 store = StoreCatalog("/path/to/share").store("cases")
 landed = (
@@ -191,7 +192,7 @@ SAS (no macOS runtime, and the cross-platform constraint forbids a Windows-only
 path) and SharePoint (**Subscription Edition on-prem**; the connection drops in
 from a separate repo). Their Readers keep the same `read() -> Dataset` shape,
 but the remote behaviour — shelling to `ssh`/`scp`, calling the SharePoint list
-API — sits behind a **swappable seam in `framework.remote` that is stubbed
+API — sits behind a **swappable seam in `framework.io.remote` that is stubbed
 today** (ADR-0004, ADR-0005). The on-prem SE auth (NTLM/Kerberos/REST — **not**
 Azure AD/Graph) is a client-seam concern designed once for both directions, and
 keeping it behind the seam keeps the cross-platform constraint (Windows + macOS)
@@ -249,7 +250,7 @@ the `(site, list_name, auth)` config verbatim. Two fetchers ship:
 
 ```python
 from framework.io import SharePointReader
-from framework.remote import LocalCsvFetcher  # internal seam: swappable fetcher
+from framework.io.remote import LocalCsvFetcher  # internal seam: swappable fetcher
 
 # Offline: reads a local fixture in place of the SharePoint list.
 reader = SharePointReader(
@@ -278,7 +279,7 @@ shared source, not a mid-run checkpoint (CONTEXT.md, #48):
 
 ```python
 from framework.io import Refresh, SharePointWriter, SqliteReader
-from framework.builder import Pipeline
+from framework.run.builder import Pipeline
 
 Pipeline("selection-deliverable", SqliteReader(gold_db, "selection_pool")).write_to(
     SharePointWriter(site, f"Selection - {case_type}", strategy=Refresh(), pusher=client)

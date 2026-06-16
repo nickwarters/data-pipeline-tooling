@@ -12,8 +12,10 @@ from __future__ import annotations
 from datetime import date
 
 from case_review.case_type import CaseType
-from framework.io import Dataset, Store
-from framework.transform import Filter, SchemaCoercion, WorkingDayCalendar
+from framework.core import Dataset
+from framework.io import Store
+from framework.shared import WorkingDayCalendar
+from framework.transform import Filter, SchemaCoercion
 
 
 class CasePool:

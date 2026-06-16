@@ -11,19 +11,32 @@ domain language in `CONTEXT.md`; the core primitives are documented in
 
 - **Language/runtime:** Python 3.12. The `framework/` package is **import-only**
   (on `sys.path`, never `pip install`ed); `pipelines/` holds runnable scripts.
-- **Layout:** `framework/` (reusable engine), `case_review/` (the case-review
-  *application* — domain types and gold helpers that live outside the framework),
-  `pipelines/` (scripts), `tests/` (pytest), `docs/` (architecture, ADRs).
-- **Test layout:** `tests/` mirrors the source shape — `tests/framework/`,
-  `tests/case_review/`, `tests/pipelines/`, and `tests/integration/` for
-  cross-tree tests. Shared helpers (`tests/_schema_fixtures.py`,
-  `tests/fixtures/`) live at the `tests/` root; each test dir is a package.
+- **Layout:** `framework/` (reusable engine, organised into the six public
+  facade sub-packages `framework/core` (the base vocabulary — `Dataset` + the
+  medallion `Layer` constants), `framework/io`, `framework/transform` (reshaping,
+  incl. `SchemaCoercion`), `framework/validate` (the `validate(dataset)` checks +
+  the declared-schema contract — `SchemaValidator` and the value rules),
+  `framework/run`, and `framework/shared` (cross-cutting utilities — `retry`,
+  `calendar`); plus the private `framework/_internal` (`connection`, `describe`,
+  `schema`) and the test-only `framework/testing`), `case_review/` (the
+  case-review *application* — domain
+  types and gold helpers that live outside the framework), `pipelines/`
+  (scripts), `tests/` (pytest), `docs/` (architecture, ADRs).
+- **Test layout:** `tests/` mirrors the source shape — `tests/framework/`
+  (itself split into `core/`, `io/`, `transform/`, `validate/`, `run/`,
+  `shared/`, `_internal/`, `testing/` to mirror the framework sub-packages; an
+  implementation file covered by several test files gets a `test_<impl>/`
+  package, e.g. `tests/framework/io/test_readers/`), `tests/case_review/`,
+  `tests/pipelines/`, and `tests/integration/` for cross-tree tests. Shared
+  helpers
+  (`tests/_schema_fixtures.py`, `tests/fixtures/`) live at the `tests/` root;
+  each test dir is a package.
 - **Core primitives:** `Dataset` (opaque tabular carrier, pandas behind the
   seam), `Reader` (`read() -> Dataset`; `CsvReader`, `SqliteReader`),
   `Writer` (`write(dataset) -> None`; owns target location + load strategy —
   added by #14), `Store` (per-subject medallion that mints the layer's
   Writers/Readers over `<subject>/{raw,silver,gold}.db` — #15; `connect` factory
-  now in `framework.connection`), `Pipeline` (deferred fluent builder;
+  now in `framework._internal.connection`), `Pipeline` (deferred fluent builder;
   `.write_to(writer)` composes, `.run()` executes — replaced `.to(layer)` in
   #14).
 
