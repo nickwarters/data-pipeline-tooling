@@ -1,5 +1,6 @@
 ```python
-from framework.io import GOLD, SILVER, StoreCatalog
+from framework.core import GOLD, SILVER
+from framework.io import StoreCatalog
 from framework.testing import read_rows
 from pipelines.comprehensive_examples import (
     bronze_to_silver,

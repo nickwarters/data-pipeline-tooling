@@ -17,9 +17,10 @@ import os
 import sys
 from pathlib import Path
 
-from framework.io import RAW, CsvReader, Dataset, Refresh, StoreCatalog
+from framework.core import RAW, Dataset
+from framework.io import CsvReader, Refresh, StoreCatalog
 from framework.run import Pipeline, RunLog
-from framework.transform import SchemaDriftValidator
+from framework.validate import SchemaDriftValidator
 
 FEED_NAME = "cases"
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "cases.csv"

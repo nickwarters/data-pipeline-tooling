@@ -7,12 +7,12 @@ import pytest
 
 from case_review.case_type import CaseType
 from case_review.gold import ingest_silver_to_gold
-from framework.connection import connect
-from framework.dataset import Dataset
-from framework.gold import silver_to_gold
-from framework.store import Store
-from framework.strategy import AccumulateByRun, Refresh
-from framework.validators import ValidationError
+from framework._internal.connection import connect
+from framework.core.dataset import Dataset
+from framework.io.store import Store
+from framework.io.strategy import AccumulateByRun, Refresh
+from framework.recipes import silver_to_gold
+from framework.validate.validators import ValidationError
 from tests._schema_fixtures import LandedCase, RuledCase
 
 # The Case Type owns identity now; its namespace derives from its name, so this

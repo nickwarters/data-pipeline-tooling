@@ -5,7 +5,8 @@ from __future__ import annotations
 
 from dataclasses import fields
 
-from framework.io import RAW, SILVER, StoreCatalog
+from framework.core import RAW, SILVER
+from framework.io import StoreCatalog
 from framework.testing import read_rows
 
 from .case_type import CASE_TYPE

@@ -1,7 +1,8 @@
 ```python
 from pathlib import Path
 
-from framework.io import GOLD, Store
+from framework.core import GOLD
+from framework.io import Store
 from framework.testing import read_rows
 from pipelines.demo_source_to_selection import high_value_case, main, priority_score
 

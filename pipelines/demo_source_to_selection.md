@@ -11,7 +11,7 @@ the primitives the earlier slices built:
    Gold is the CasePool.
 2. **Selection** — a :class:`~case_review.case_pool.CasePool` fetches the
    **available cases** from gold (activity within the working-day window), and a
-   Selection :class:`~framework.builder.Pipeline` narrows them with named,
+   Selection :class:`~framework.run.builder.Pipeline` narrows them with named,
    testable Python rules (score priority, filter the low-value cases out, rank
    highest-priority first),
    stamps the chosen :class:`~case_review.case_type.Variation`'s
@@ -39,14 +39,8 @@ from typing import Any, Mapping
 from case_review.case_pool import CasePool
 from case_review.case_type import CaseType, Variation
 from case_review.gold import ingest_silver_to_gold
-from framework.io import (
-    GOLD,
-    RAW,
-    AccumulateByRun,
-    CsvReader,
-    DatasetReader,
-    StoreCatalog,
-)
+from framework.core import GOLD, RAW
+from framework.io import AccumulateByRun, CsvReader, DatasetReader, StoreCatalog
 from framework.run import (
     FreshnessRequirement,
     Pipeline,
@@ -57,7 +51,8 @@ from framework.run import (
     Weekdays,
     raw_to_silver,
 )
-from framework.transform import Filter, Score, Sort, Stamp, WorkingDayCalendar
+from framework.shared import WorkingDayCalendar
+from framework.transform import Filter, Score, Sort, Stamp
 
 
 @dataclass
