@@ -22,6 +22,7 @@ from framework.validate import (
     Nullable,
     OneOf,
     Pattern,
+    Range,
     SchemaValidator,
     Unique,
 )
@@ -98,6 +99,47 @@ def test_length_requires_at_least_one_bound_at_construction():
     # where the schema is composed rather than left to misbehave at run time.
     with pytest.raises(ValueError, match="at least one"):
         Length()
+
+
+@dataclass
+class ScoreCase:
+    # A score constrained to the inclusive range [0, 100]: a negative or
+    # over-100 value is a value breach even though the dtype (int) is fine.
+    score: Annotated[int, Range(minimum=0, maximum=100)]
+
+
+def test_range_rejects_values_outside_the_inclusive_bounds():
+    # -5 (too low) and 150 (too high) breach; 0 / 50 / 100 are within.
+    frame = pd.DataFrame({"score": pd.Series([0, 50, 100, -5, 150], dtype="int64")})
+
+    with pytest.raises(
+        ValidationError,
+        match=r"column 'score' value not in \[0, 100\] .*'-5'.*'150'",
+    ):
+        SchemaValidator(ScoreCase).validate(Dataset.from_pandas(frame))
+
+
+def test_range_passes_when_present_values_are_within_and_skips_nulls():
+    @dataclass
+    class OpenCeiling:
+        # Only a floor: anything >= 0 is fine, missing values out of scope.
+        amount: Annotated[float, Range(minimum=0)]
+
+    frame = pd.DataFrame({"amount": pd.Series([0.0, 12.5, None], dtype="float64")})
+    SchemaValidator(OpenCeiling).validate(Dataset.from_pandas(frame))  # no raise
+
+
+def test_range_rejects_contradictory_bounds_at_construction():
+    # min > max can never be satisfied; flag it where the schema is composed.
+    with pytest.raises(ValueError, match="minimum 5 exceeds maximum 2"):
+        Range(minimum=5, maximum=2)
+
+
+def test_range_requires_at_least_one_bound_at_construction():
+    # A Range with neither bound constrains nothing — a meaningless rule, flagged
+    # where the schema is composed rather than left to misbehave at run time.
+    with pytest.raises(ValueError, match="at least one"):
+        Range()
 
 
 @dataclass

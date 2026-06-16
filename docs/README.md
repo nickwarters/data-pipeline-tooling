@@ -194,7 +194,7 @@ walkthrough (with the runnable demo) is [`selection.md`](selection.md); the step
 **1. Declare the schema** — an ordinary dataclass; its annotations *are* the
 column + type contract (enforced at silver, and optionally gold). Add explicit
 nullability and value-level rules with `typing.Annotated` (`Nullable`, `NonNull`,
-`Pattern`, `Length`, `Unique`, `OneOf`).
+`Pattern`, `Length`, `Range`, `Unique`, `OneOf`).
 
 ```python
 from dataclasses import dataclass

@@ -132,7 +132,7 @@ they sit on their own facade. Composed onto a `Pipeline` as pre/post validators.
 | `ColumnValidator`, `RowCountValidator`, `VolumeAnomalyValidator`, `UniqueValidator`, `SchemaDriftValidator` | The concrete structural / volume / uniqueness / drift checks. |
 | `RunHistory`, `PriorColumns` | History inputs the run-aware checks read. |
 | `SchemaValidator` | The declared-schema check: a Case Type dataclass's columns + dtypes + nullability + value rules, enforced at silver (and optionally gold). |
-| `ValueRule`, `Nullable`, `NonNull`, `Pattern`, `Length`, `Unique`, `OneOf` | The declared-schema value-level contract (`Annotated` field rules) the schema check runs. |
+| `ValueRule`, `Nullable`, `NonNull`, `Pattern`, `Length`, `Range`, `Unique`, `OneOf` | The declared-schema value-level contract (`Annotated` field rules) the schema check runs. |
 
 ### `framework.run` — composing, executing, observing
 
