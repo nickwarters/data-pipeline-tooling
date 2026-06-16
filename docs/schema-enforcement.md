@@ -43,6 +43,12 @@ No base class, no registration. Declaring the schema does **not** force you to
 materialise typed objects — it is a *validation contract first*; typed objects
 (`Iterator[CaseA]`) are an opt-in convenience for later (ADR-0008).
 
+Because the **field names are the column contract**, they must be valid Python
+identifiers — a source whose columns carry spaces or punctuation (`Case Number`)
+can't be declared directly. That's a `Rename` to the canonical names on the way
+to silver, not a schema limitation; see
+[adding-a-feed.md](adding-a-feed.md#when-source-column-names-arent-identifiers-spaces-punctuation).
+
 ## `SchemaValidator` — the dataclass→validator adapter
 
 `SchemaValidator(CaseA)` derives column + dtype expectations from the dataclass

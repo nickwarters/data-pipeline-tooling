@@ -98,6 +98,61 @@ Reach for the **generic** `scaffold <feed>` when the feed has no Case identity
 (Reference Data, an outbound staging table); reach for `--case-type` when the
 feed yields Cases.
 
+## When source column names aren't identifiers (spaces, punctuation)
+
+A schema is an ordinary dataclass, so its **field names are the column contract**
+(`SchemaValidator` derives the required columns from `fields(schema)` — see
+[`schema-enforcement.md`](schema-enforcement.md)). Dataclass fields must be valid
+Python identifiers, so a source whose columns carry spaces (`Case Number`) or
+punctuation **cannot be declared as schema fields directly**. This is not a
+validation rule rejecting spaces — it's the declaration form: there is no way to
+write `Case Number: str`.
+
+The fix is not a workaround — it's the canonicalisation that **raw → silver**
+exists to do. Raw stays faithful to the source (spaced names and all, so the
+landing zone is diagnosable and re-runnable); silver carries the **canonical,
+identifier-named** shape the schema declares. Renaming the columns is therefore a
+silver-stage reshape, in exactly the place the medallion already puts
+shape-hardening (`schema-enforcement.md`). The step order is:
+
+1. **`Rename`** the spaced/punctuated source names to the schema's canonical
+   identifiers — the canonicalisation.
+2. **`SchemaCoercion`** — repair the dtypes storage round-trips lose.
+3. **`SchemaValidator`** (as a post-validator) — check at the silver boundary.
+
+Because the canonicalisation has to run *before* `SchemaCoercion` and the
+validator, a spaced feed **composes the raw → silver pipeline directly** rather
+than calling the `raw_to_silver` recipe — that recipe hardcodes `SchemaCoercion`
+as its only processor and has no seam to slip a `Rename` in ahead of it:
+
+```python
+from framework.core import RAW, SILVER
+from framework.io import Refresh, StoreCatalog
+from framework.run import Pipeline
+from framework.transform import Rename, SchemaCoercion
+from framework.validate import ColumnValidator, SchemaValidator
+
+store = StoreCatalog("/path/to/share").store("cases")
+(
+    Pipeline("cases", store.reader(RAW, "cases"))
+    # optional: gate the *source* columns in the source's own vocabulary, so a
+    # missing/renamed source column fails as "missing 'Case Number'" rather than
+    # surfacing later as a confusing "missing 'case_number'" after the rename.
+    .with_validator(ColumnValidator(["Case Number", "Adviser Name"]))
+    .with_processor(Rename({"Case Number": "case_number", "Adviser Name": "adviser_name"}))
+    .with_processor(SchemaCoercion(CasesRow))
+    .with_post_validator(SchemaValidator(CasesRow))
+    .write_to(store.writer(SILVER, "cases", Refresh()))
+    .run()
+)
+```
+
+The leading `ColumnValidator` is **optional** and is about error legibility, not
+correctness: it asserts the expected *source* columns arrived, named as the
+source names them, so a feed whose upstream vocabulary you don't control fails at
+the door instead of mid-rename. Skip it when the rename's failure mode is already
+obvious.
+
 The rest of this guide is the reference behind that scaffold: every Reader, and
 the stubbed remote (SAS / SharePoint) seams.
 
