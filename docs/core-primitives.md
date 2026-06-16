@@ -180,6 +180,7 @@ directions are explicit:
 | SQLite table | `SqliteReader` | `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter` | The Store mints these over medallion layer databases. |
 | SAS extract | `SasReader` | _intentionally absent_ | SAS is an inbound-only remote source; the framework lands the remote output then reads local CSV files. |
 | SharePoint list | `SharePointReader` | `SharePointWriter` | Target is **SE on-prem**. Both sides are stubbed behind swappable `SharePointFetcher` / `SharePointPusher` seams until the on-prem SE client (NTLM/Kerberos/REST) lands. `SharePointWriter` emits the canonical Selection Deliverable — one list per Case Type. |
+| Console (stdout) | _intentionally absent_ | `StdoutWriter` | A terminal sink for *seeing* a result rather than persisting it — e.g. printing a Selection explainer's per-Case trace while driving a feed by hand. Owns no location or load strategy; prints the dataset as a plain-text table to the stream (defaulting to `sys.stdout`). |
 
 ### `Writer` — the destination, behind one method
 A `Writer` is the component-role **dual of `Reader`**: a Reader brings data in,
