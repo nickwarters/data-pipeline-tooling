@@ -121,6 +121,61 @@ class Length:
         return None
 
 
+class Range:
+    """Require every (non-null) value to sit in the closed interval ``[min, max]``.
+
+    The numeric counterpart to :class:`Length`: where ``Length`` bounds a value's
+    string length, ``Range`` bounds the value itself — a count that can't go
+    negative, an amount with a known ceiling, a rate confined to ``[0, 1]``.
+    Either bound is optional — ``minimum`` guards against an under-range value,
+    ``maximum`` against an over-range one; ``None`` leaves that side open
+    (mirroring :class:`~framework.validate.validators.RowCountValidator`'s
+    inclusive bounds). A contradictory pair (min > max) is a configuration error
+    raised at construction. Null values are out of scope.
+
+    The dtype check runs first, so by the time this rule sees the column its
+    values are already numeric and compare directly.
+    """
+
+    def __init__(
+        self,
+        minimum: float | None = None,
+        maximum: float | None = None,
+    ) -> None:
+        if minimum is None and maximum is None:
+            raise ValueError("Range requires at least one of minimum / maximum")
+        if minimum is not None and maximum is not None and minimum > maximum:
+            raise ValueError(f"Range minimum {minimum} exceeds maximum {maximum}")
+        self._minimum = minimum
+        self._maximum = maximum
+
+    def violating_mask(self, series: "pd.Series") -> "pd.Series":
+        mask = pd.Series(False, index=series.index)
+        present_idx = series.dropna().index
+        if len(present_idx):
+            values = series[present_idx]
+            too_low = (
+                values < self._minimum
+                if self._minimum is not None
+                else pd.Series(False, index=present_idx)
+            )
+            too_high = (
+                values > self._maximum
+                if self._maximum is not None
+                else pd.Series(False, index=present_idx)
+            )
+            mask.loc[present_idx] = too_low | too_high
+        return mask
+
+    def check(self, series: "pd.Series") -> str | None:
+        breaches = series[self.violating_mask(series)]
+        if not breaches.empty:
+            lo = self._minimum if self._minimum is not None else ""
+            hi = self._maximum if self._maximum is not None else ""
+            return f"value not in [{lo}, {hi}] (e.g. {_sample(breaches)})"
+        return None
+
+
 class Unique:
     """Require a field's (non-null) values to be distinct — no duplicate keys.
 

@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import sys
 from collections.abc import Callable
 from pathlib import Path
+from typing import TextIO
 
 import pandas as pd
 
@@ -138,6 +140,34 @@ class JsonWriter:
 
     def describe(self) -> str:
         return render(self, path=str(self._path))
+
+
+class StdoutWriter:
+    """A Writer that prints the dataset to the console instead of persisting it.
+
+    Owns neither a target location nor a load strategy — it is a terminal sink for
+    *seeing* a result rather than storing one, e.g. printing a Selection
+    explainer's per-Case trace while developing or driving a feed by hand. Each
+    ``write`` renders the whole dataset as a plain-text table (column headers +
+    rows) to the stream, which defaults to ``sys.stdout`` (resolved per call, so
+    test capture and redirection both work) but can be pointed at any text stream.
+
+    An optional ``label`` is printed above the table to caption what is being
+    shown when several datasets land on the same console.
+    """
+
+    def __init__(self, label: str | None = None, *, stream: TextIO | None = None) -> None:
+        self._label = label
+        self._stream = stream
+
+    def write(self, dataset: Dataset) -> None:
+        stream = self._stream if self._stream is not None else sys.stdout
+        if self._label:
+            print(self._label, file=stream)
+        print(dataset.to_pandas().to_string(index=False), file=stream)
+
+    def describe(self) -> str:
+        return render(self, label=self._label)
 
 
 class SharePointWriter:

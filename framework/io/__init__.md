@@ -42,6 +42,7 @@ from framework.io.writers import (
     SharePointWriter,
     SqliteTruncateReloadWriter,
     SqliteUpsertWriter,
+    StdoutWriter,
     Writer,
 )
 
@@ -62,6 +63,7 @@ __all__ = [
     "AccumulateByRunWriter",
     "QuarantineWriter",
     "SharePointWriter",
+    "StdoutWriter",
     "Store",
     "StoreCatalog",
     "StoreBackend",

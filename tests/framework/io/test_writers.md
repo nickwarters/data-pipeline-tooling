@@ -15,6 +15,7 @@ from framework.io.writers import (
     ExcelWriter,
     JsonWriter,
     SqliteTruncateReloadWriter,
+    StdoutWriter,
 )
 from framework.run.builder import Pipeline
 
@@ -106,6 +107,36 @@ def test_json_writer_emits_file_deliverable_records(tmp_path):
     records = json.loads(target.read_text(encoding="utf-8"))
     assert len(records) == len(source)
     assert list(records[0]) == source.columns
+
+
+def test_stdout_writer_prints_the_dataset_as_a_table():
+    # A terminal sink for *seeing* a result: it prints every row of the dataset
+    # to the stream rather than persisting it, with an optional caption.
+    import io
+
+    dataset = CsvReader(FIXTURE).read()
+    buffer = io.StringIO()
+
+    StdoutWriter("Explainer trace", stream=buffer).write(dataset)
+
+    printed = buffer.getvalue()
+    assert "Explainer trace" in printed
+    for column in dataset.columns:
+        assert column in printed
+    # One line per caption + header + each data row.
+    assert printed.count("\n") >= len(dataset) + 1
+
+
+def test_stdout_writer_defaults_to_stdout_and_describes_itself(capsys):
+    dataset = CsvReader(FIXTURE).read()
+
+    writer = StdoutWriter()
+    writer.write(dataset)
+
+    assert capsys.readouterr().out.strip() != ""
+    # No label: the plan summary is the bare class name (render omits None).
+    assert writer.describe() == "StdoutWriter"
+    assert StdoutWriter("trace").describe() == "StdoutWriter(label='trace')"
 
 
 def test_file_writer_accumulate_by_run_replaces_only_that_run(tmp_path):
