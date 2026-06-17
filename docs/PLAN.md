@@ -230,6 +230,28 @@ These have **deliberately not** been decided up-front because they're better ans
 
 ---
 
+## Slice 10 — Issue Capture engine + canonical tab restructure (Jun 2026 refinement)
+
+**Goal:** realize the Case Type Owners' workshopped consolidation — a canonical tab skeleton and a single, flexible **Issue Capture** engine that absorbs attribution, remediation actions, and free-form fields into one per-Case-Type-configurable model. Demo-driven: the next demo must show the Owners *their* requirements (a real Case Type configured end-to-end), not just a renamed tab bar.
+
+**Decisions:** [ADR-0020](./adr/0020-unified-issue-capture-engine.md) (supersedes ADR-0017, amends ADR-0013/0014/0016). Domain language: **Issue Capture Group** / **Issue Capture Field** in [`../CONTEXT.md`](../CONTEXT.md). Full grill record: [`refinement-grilling-session-plan.md`](./refinement-grilling-session-plan.md).
+
+Built as seven tracer-bullet issues (each cuts config → storage → Issues UI → autosave → Summary):
+
+1. **#146** — Tab skeleton: relabel Questions→"Review", reorder Summary to 4th. *AFK · no blockers.*
+2. **#147** — Issue Capture engine foundation: `captureGroups` + `Answer.capture` + the four string field types (`text`/`textarea`/`select`/`radio`) + collapsible groups + strip/freeze + Summary. *AFK · no blockers (the spine).*
+3. **#148** — `person` Capture Field — absorb Attributed Party. *AFK · blocked by #147.*
+4. **#149** — `actions` Capture Field — absorb Remediation Actions. *AFK · blocked by #147.*
+5. **#150** — Intra-group `showWhen` (+ strip-on-hide, empty-on-reshow). *AFK · blocked by #147.*
+6. **#151** — Visible-only `required` completion gate. *AFK · blocked by #147, #150.*
+7. **#152** — Case Type A config + retire legacy `remediationFields`/`remediationDetails`/`attributedParty` path. *HITL (Owner demo review) · blocked by #148, #149, #150, #151.*
+
+**Suggested order:** #146 and #147 in parallel immediately; #148/#149/#150 fan out from #147; #151 after #150; #152 lands last as the Owner-facing demo.
+
+**Parked for dedicated grills (out of this slice):** the standalone **Remediation** tab's purpose (#144) and moving the override from per-Answer to **Case level** via the **Amend Outcome** tab (#145, contradicts ADR-0018 — see CONTEXT.md). #152 only *flags* the Answer Override replacement-set typedef for #145; it does not rework it.
+
+---
+
 ## Notes that span multiple slices
 
 - **Every slice merges with `tsc --checkJs` clean and `node --test` green.** Non-negotiable from slice 1.

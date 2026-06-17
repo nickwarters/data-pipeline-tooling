@@ -1,6 +1,8 @@
 # Refinement Grilling-Session Plan
 
-**Status:** Pre-grill checklist — gather answers before the session.
+**Status:** Grilled 2026-06-17 — capture engine + tab skeleton landed (CONTEXT.md updated,
+ADR-0020 written, ADR-0013/0014/0016/0017 amended). Two items parked with tickets: Remediation
+tab (#144) and Amend Outcome → case-level override (#145). See "To grill later" below.
 **Created:** 2026-06-16
 **Driver:** Demo feedback. We're restructuring the case review tabs and generalising
 per-question extra data capture from a flat field list into fully flexible,
@@ -227,6 +229,38 @@ If we only get through five things in the grill, these are them:
        `Record<string,string>` (ADR-0007/0017)?
 
 ---
+
+## To grill later (raised, deliberately parked — tickets filed)
+
+- **Remediation tab — purpose undefined.** Confirmed it is NOT per-Issue remediation
+  capture (that's the "Issue Remediation" Issue Capture Group on the Issues tab). Leading
+  hypothesis: a cross-Issue aggregate view of all remediation actions + owners. Access,
+  editability, Summary inclusion, lifecycle all open. → **issue #144**.
+
+- **Override moving from per-Answer to CASE-LEVEL.** → **issue #145**. The "Amend Outcome" tab is confirmed
+  as the canonical authoring surface for the existing override behaviour (QA Check links to
+  it; same-row write), BUT the workshop wants the override to operate at the **Case level**
+  rather than per-question/per-**Answer**. ⚠️ This **directly contradicts ADR-0018 and
+  CONTEXT.md**, which deliberately made overrides per-**Answer** with the **Outcome
+  *derived*, never directly edited** (CONTEXT avoid-lists "Outcome Override"). A case-level
+  override implies editing the verdict directly. Must grill: does **Current Outcome** still
+  re-derive via `computeOutcome`, or become a stored hand-set verdict? What happens to the
+  per-Answer **replacement sets** (actions / attribution / **Issue Capture Field**s)? How do
+  **Appeal** links (`source: 'appeal'`) and the pass→fail completion gate work at case level?
+  Until resolved, CONTEXT.md's **Answer Override / Effective Answers / Current Outcome**
+  entries are left as-is. "Amend Outcome" is a **UI label only** for now; domain term stays
+  **Answer Override** pending this grill.
+
+## Deferred gaps (decided during grill — revisit later)
+
+- **Cross-Case-Type attribution reporting.** After unifying attribution/actions into the
+  capture-group engine (see §2), there is no longer a fixed `attributedParty` key for
+  reporting (ADR-0015/0019) to aggregate "who was blamed" across Case Types. Proposed fix:
+  optional **semantic `role` tag** on a field (`role: 'attributedParty' | 'remediationOwner'`)
+  that reporting keys off instead of the per-Case-Type field `key`. **Deferred** —
+  reporting is not on management's agenda. Safe to defer: a `role` tag is additive config
+  on a field declaration, so it can be added later by editing Case Type modules, with no
+  stored-data migration.
 
 ## 6. Parking lot (raise if time allows)
 

@@ -1,5 +1,11 @@
 # 13. Attributed Party identity stored as bare account name in Answer JSON, resolved via User Profile Service
 
+> **Amended by ADR-0020.** Attribution is no longer a dedicated `attributedParty` property
+> on the Answer; it is one **Issue Capture Field** of type `person` (optionally tagged
+> `role: 'attributedParty'`), declared in `captureGroups` and stored in `Answer.capture`.
+> The `{loginName, displayName}` shape, User-Profile resolution, and strip/freeze lifecycle
+> described below are unchanged — only the declaration and storage *site* moved.
+
 Date: 2026-06-04
 
 ## Status

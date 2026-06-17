@@ -1,5 +1,14 @@
 # Summary Section replaces the Outcome tab
 
+> **Tab row amended by the Jun 2026 restructure (see `docs/refinement-grilling-session-plan.md`).**
+> The bar is now seven tabs: **Case Details · Review · Issues · Summary · Remediation · Notes ·
+> Amend Outcome** ("Review" = UI label for the Questions Section; "Issues" / "Amend Outcome"
+> are UI labels too). Summary moves to 4th and is otherwise unchanged: read-only, hybrid
+> derivation, Outcome as a block within it, Notes excluded by default. The new **Remediation**
+> tab (#144) and **Amend Outcome** tab (#145, canonical home for **Answer Override**) are
+> parked for dedicated grills. Counts in Summary are over **Applicable Questions**; "Not
+> applicable" = the explicit N/A *answer value*, not `showWhen`-excluded questions.
+
 The case-review tab row becomes **Details · Questions · Notes · Issues · Summary**. The **Remediation** Section is surfaced under the UI label **"Issues"** (an *Issue* is just a failed **Answer** — not a new entity); the standalone **Outcome** tab is removed and its verdict becomes one block inside a new read-only **Summary** Section that rolls up the whole Case. This supersedes the tab row in ADR-0014 and the Section list in ADR-0011.
 
 ## What Summary is
