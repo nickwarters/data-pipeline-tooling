@@ -1,11 +1,11 @@
 """Scaffold a new feed from a template.
 
-Renders the runnable template under ``pipelines/_scaffold_template/`` into a new
-feed: the feed *code* (schema, an ingest pipeline CSV -> raw via the public
-facades, and a sample fixture) as a subpackage ``pipelines/<feed>/``, and its
-*test* (given source rows -> expected landed rows) under ``tests/pipelines/`` so
-it sits with the rest of the suite, mirroring the source layout. The template is
-the source of truth; this module only substitutes the feed name (and its
+Renders the runnable template under ``framework/_cli/scaffold_templates/feed/``
+into a new feed: the feed *code* (schema, an ingest pipeline CSV -> raw via the
+public facades, and a sample fixture) as a subpackage ``pipelines/<feed>/``, and
+its *test* (given source rows -> expected landed rows) under ``tests/pipelines/``
+so it sits with the rest of the suite, mirroring the source layout. The template
+is the source of truth; this module only substitutes the feed name (and its
 PascalCase class form) into a fresh copy.
 
 Pass ``--from-feed-file PATH`` to seed the scaffold from a real sample CSV: the
@@ -19,9 +19,9 @@ source, the schema carries the canonical shape silver will rename to.
 
 Run from the repository root so the import-only ``framework`` package resolves::
 
-    python -m pipelines.scaffold orders
-    python -m pipelines.scaffold orders --force    # overwrite if it exists
-    python -m pipelines.scaffold orders --from-feed-file sample.csv
+    python -m framework scaffold orders
+    python -m framework scaffold orders --force    # overwrite if it exists
+    python -m framework scaffold orders --from-feed-file sample.csv
 
 The generated feed runs as a module from the repo root::
 
@@ -54,12 +54,12 @@ _MAX_FEED_COLUMNS = 40
 _FEED_SAMPLE_ROWS = 50
 _TEST_SAMPLE_ROWS = 2
 
-_TEMPLATE_DIR_CASE_TYPE = Path(__file__).parent / "_scaffold_template_case_type"
-_TEMPLATE_DIR = Path(__file__).parent / "_scaffold_template"
+_TEMPLATE_DIR_CASE_TYPE = Path(__file__).parent / "scaffold_templates" / "case_type"
+_TEMPLATE_DIR = Path(__file__).parent / "scaffold_templates" / "feed"
 
-# scaffold.py lives at ``pipelines/scaffold.py``, so its grandparent is the repo
-# root under which ``pipelines/`` and ``tests/`` sit.
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+# scaffold.py lives at ``framework/_cli/scaffold.py``, so the repo root under
+# which the rendered ``pipelines/`` and ``tests/`` sit is three parents up.
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def _pascal(feed: str) -> str:
@@ -391,13 +391,7 @@ def render(
     return created
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="python -m pipelines.scaffold",
-        description=(
-            "Scaffold a new feed (code in pipelines/, test in tests/pipelines/)."
-        ),
-    )
+def _add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "feed", help="the feed name (a lowercase identifier, e.g. orders)"
     )
@@ -424,11 +418,30 @@ def build_parser() -> argparse.ArgumentParser:
             "test's sample rows (not supported with --case-type)"
         ),
     )
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="python -m framework scaffold",
+        description=(
+            "Scaffold a new feed (code in pipelines/, test in tests/pipelines/)."
+        ),
+    )
+    _add_arguments(parser)
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+def register(subparsers) -> None:
+    """Add the ``scaffold`` command to the unified ``python -m framework`` CLI."""
+    parser = subparsers.add_parser(
+        "scaffold",
+        help="scaffold a new feed (code in pipelines/, test in tests/pipelines/)",
+    )
+    _add_arguments(parser)
+    parser.set_defaults(func=_command)
+
+
+def _command(args: argparse.Namespace) -> int:
     try:
         created = render(
             args.feed,
@@ -447,6 +460,11 @@ def main(argv: list[str] | None = None) -> int:
         f"    python -m pytest tests/pipelines/test_{args.feed}.py"
     )
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Parse scaffold-only args and run it (the ``scaffold`` command standalone)."""
+    return _command(build_parser().parse_args(argv))
 
 
 if __name__ == "__main__":  # pragma: no cover - thin CLI entry

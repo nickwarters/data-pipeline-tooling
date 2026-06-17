@@ -7,16 +7,25 @@ stays local SQLite + JSONL, with no external services.
 
 Run from the repository root so the import-only ``framework`` package resolves::
 
-    python -m pipelines.cli run cases ingest /data --run-date 2026-05-29
-    python -m pipelines.cli status /data --case-type cases
-    python -m pipelines.cli runs /data --pipeline cases/ingest --limit 5
-    python -m pipelines.cli log /data cases --run-id <execution-id>
+    python -m framework run cases ingest /data --run-date 2026-05-29
+    python -m framework status /data --case-type cases
+    python -m framework runs /data --pipeline cases/ingest --limit 5
+    python -m framework log /data cases --run-id <execution-id>
+
+The framework knows the run/orchestrate machinery but not *which* pipelines an
+application defines: the ``run`` and ``orchestrate`` commands take a required
+``--app`` naming an application module that exposes ``build_runner()`` and
+``build_pipeline_sets()`` (e.g. ``--app pipelines.demo_source_to_selection``).
+This keeps the dependency one-way -- the framework imports the app *by name at
+runtime*, never statically -- so ``pipelines/`` depends on ``framework``, not the
+reverse, and the framework carries no application name of its own.
 """
 
 from __future__ import annotations
 
 import argparse
 import datetime as dt
+import importlib
 import json
 import sys
 from pathlib import Path
@@ -29,12 +38,19 @@ from framework.run import (
 )
 from framework.shared import WorkingDayCalendar
 from framework.validate import ValidationError
-from pipelines.demo_source_to_selection import build_pipeline_sets, build_runner
 
 # Mirrors the layout PipelineRunner writes: a per-base run registry and the
 # per-case-type JSONL run logs the runner emits alongside it.
 _REGISTRY_RELPATH = ("_registry", "runs.db")
 _RUNS_RELPATH = "_runs"
+
+def _resolve_app(name: str):
+    """Import the application module that supplies the pipeline registry.
+
+    A thin seam so the framework imports the app by name at runtime (keeping the
+    dependency one-way) and so tests can substitute a fake registry.
+    """
+    return importlib.import_module(name)
 
 
 def _open_registry(base_dir: str) -> RunRegistry | None:
@@ -72,7 +88,7 @@ def _format_run(record: dict) -> str:
 
 
 def _run(args: argparse.Namespace) -> int:
-    runner = build_runner()
+    runner = _resolve_app(args.app).build_runner()
     try:
         runner.run(
             args.case_type,
@@ -89,11 +105,11 @@ def _run(args: argparse.Namespace) -> int:
 
 
 def _orchestrate(args: argparse.Namespace) -> int:
-    runner = build_runner()
+    app = _resolve_app(args.app)
     try:
         orchestrator = Orchestrator(
-            runner,
-            build_pipeline_sets(),
+            app.build_runner(),
+            app.build_pipeline_sets(),
             WorkingDayCalendar(),
         )
         if args.loop:
@@ -205,10 +221,8 @@ def _status(args: argparse.Namespace) -> int:
     return 0
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="python -m pipelines.cli")
-    sub = parser.add_subparsers(dest="command", required=True)
-
+def register(sub) -> None:
+    """Add the operator commands to the unified ``python -m framework`` CLI."""
     run = sub.add_parser("run", help="run a registered pipeline")
     run.add_argument("case_type")
     run.add_argument("pipeline")
@@ -220,6 +234,12 @@ def build_parser() -> argparse.ArgumentParser:
         "rows (default: case_type/pipeline:run_date)",
     )
     run.add_argument("--freshness-days", type=int, default=0)
+    run.add_argument(
+        "--app",
+        required=True,
+        help="application module exposing build_runner()/build_pipeline_sets(), "
+        "e.g. pipelines.demo_source_to_selection",
+    )
     run.set_defaults(func=_run)
 
     orchestrate = sub.add_parser("orchestrate", help="run scheduled due work")
@@ -239,6 +259,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=3,
         help="stop a loop after N idle polls (default 3)",
+    )
+    orchestrate.add_argument(
+        "--app",
+        required=True,
+        help="application module exposing build_runner()/build_pipeline_sets(), "
+        "e.g. pipelines.demo_source_to_selection",
     )
     orchestrate.set_defaults(func=_orchestrate)
 
@@ -271,6 +297,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     log.set_defaults(func=_log)
 
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="python -m framework")
+    register(parser.add_subparsers(dest="command", required=True))
     return parser
 
 

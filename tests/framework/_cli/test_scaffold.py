@@ -1,7 +1,8 @@
 """Tests for the new-feed scaffold.
 
-The scaffold renders a feed from the template under ``pipelines/_scaffold_template/``:
-the feed *code* as a subpackage ``pipelines/<feed>/`` and its *test* under
+The scaffold renders a feed from the template under
+``framework/_cli/scaffold_templates/feed/``: the feed *code* as a subpackage
+``pipelines/<feed>/`` and its *test* under
 ``tests/pipelines/`` (mirroring the source layout). These tests drive the
 generator: that it lays the artifacts down in those two homes, substitutes the
 feed name everywhere, rewrites the relocated test's imports to absolute, and that
@@ -18,7 +19,7 @@ import pytest
 from framework.core import RAW
 from framework.io import StoreCatalog
 from framework.testing import read_rows, rows_of
-from pipelines import scaffold
+from framework._cli import scaffold
 
 
 def test_render_lays_down_the_feed_code_and_its_test(tmp_path):

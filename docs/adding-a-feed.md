@@ -11,12 +11,12 @@ For a fresh CSV feed, generate a runnable starting point instead of writing the
 files by hand (#97):
 
 ```sh
-python -m pipelines.scaffold orders            # -> pipelines/orders/ + tests/pipelines/test_orders.py
-python -m pipelines.scaffold orders --force    # overwrite if it exists
-python -m pipelines.scaffold orders --from-feed-file sample.csv  # seed from a real CSV
+python -m framework scaffold orders            # -> pipelines/orders/ + tests/pipelines/test_orders.py
+python -m framework scaffold orders --force    # overwrite if it exists
+python -m framework scaffold orders --from-feed-file sample.csv  # seed from a real CSV
 ```
 
-This renders, from the template under `pipelines/_scaffold_template/`, the feed
+This renders, from the template under `framework/_cli/scaffold_templates/feed/`, the feed
 **code** as a subpackage and its **test** under `tests/pipelines/` (with the rest
 of the suite, mirroring the source layout) — wired together and ready to run:
 
@@ -65,7 +65,7 @@ Most of that customising is mechanical — retyping a source's column names into
 instead and it does that for you:
 
 ```sh
-python -m pipelines.scaffold orders --from-feed-file path/to/sample.csv
+python -m framework scaffold orders --from-feed-file path/to/sample.csv
 ```
 
 From the CSV's **header** it derives the schema's fields (one per column,
@@ -94,10 +94,10 @@ with no Case identity). When the feed's rows *are* a Case Type, reach for the
 additive variant instead (#155):
 
 ```sh
-python -m pipelines.scaffold --case-type claims   # -> pipelines/claims/ + tests/pipelines/test_claims.py
+python -m framework scaffold --case-type claims   # -> pipelines/claims/ + tests/pipelines/test_claims.py
 ```
 
-It renders, from `pipelines/_scaffold_template_case_type/`, a case-review-flavoured
+It renders, from `framework/_cli/scaffold_templates/case_type/`, a case-review-flavoured
 slice that does two things the generic scaffold won't:
 
 ```
