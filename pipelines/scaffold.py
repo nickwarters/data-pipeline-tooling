@@ -8,10 +8,20 @@ it sits with the rest of the suite, mirroring the source layout. The template is
 the source of truth; this module only substitutes the feed name (and its
 PascalCase class form) into a fresh copy.
 
+Pass ``--from-feed-file PATH`` to seed the scaffold from a real sample CSV: the
+header becomes the schema's fields (names canonicalised to identifiers, dtypes
+inferred from the first rows), the file's contents replace the bundled sample,
+and the test's sample rows are taken from it. When any header name isn't already
+a clean identifier (spaces, punctuation, capitals), the *source* column names are
+emitted as a ``RAW_FEED_COLUMNS`` constant and the ColumnValidator gates on those
+raw names rather than the schema's canonical fields -- raw stays faithful to the
+source, the schema carries the canonical shape silver will rename to.
+
 Run from the repository root so the import-only ``framework`` package resolves::
 
     python -m pipelines.scaffold orders
     python -m pipelines.scaffold orders --force    # overwrite if it exists
+    python -m pipelines.scaffold orders --from-feed-file sample.csv
 
 The generated feed runs as a module from the repo root::
 
@@ -22,14 +32,27 @@ The generated feed runs as a module from the repo root::
 from __future__ import annotations
 
 import argparse
+import csv
 import keyword
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 # The placeholder tokens in the template: substituted in file contents and paths.
 _SLUG_TOKEN = "myfeed"
 _CLASS_TOKEN = "Myfeed"
+
+# A scaffold seeded from a feed file declares one schema field per source column.
+# Past this many the generated schema stops being a useful starting point, so the
+# extra columns are dropped (with a loud warning and a note in schema.py) rather
+# than rendering an unwieldy dataclass.
+_MAX_FEED_COLUMNS = 40
+
+# How many data rows to read from a feed file: enough to infer dtypes, of which
+# the first couple seed the generated test's sample rows.
+_FEED_SAMPLE_ROWS = 50
+_TEST_SAMPLE_ROWS = 2
 
 _TEMPLATE_DIR_CASE_TYPE = Path(__file__).parent / "_scaffold_template_case_type"
 _TEMPLATE_DIR = Path(__file__).parent / "_scaffold_template"
@@ -82,12 +105,219 @@ def _absolutise_imports(text: str, feed: str) -> str:
     return re.sub(r"(?m)^from \.", f"from pipelines.{feed}.", text)
 
 
+@dataclass
+class _FeedSpec:
+    """The shape derived from a ``--from-feed-file`` sample CSV.
+
+    ``columns`` are the kept source header names verbatim; ``names``/``inferred``
+    are the canonical identifier and inferred dtype for each (positionally
+    aligned). ``needs_raw`` is set when the canonical names diverge from the
+    source names (spaces, punctuation, capitals, or de-duplicated collisions), in
+    which case the validator must gate on the raw source names, not the schema's
+    fields. ``raw_text`` is the file's contents (for the bundled sample), and
+    ``sample_cells`` are the first data rows (for the generated test).
+    """
+
+    columns: list[str]
+    names: list[str]
+    inferred: list[str]
+    needs_raw: bool
+    dropped: int
+    raw_text: str
+    sample_cells: list[list[str]]
+
+
+def _is_int(value: str) -> bool:
+    try:
+        int(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _is_float(value: str) -> bool:
+    try:
+        float(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _infer_type(values: list[str]) -> str:
+    """Infer a field dtype from a column's sample values (blanks ignored)."""
+    seen = [v for v in values if v != ""]
+    if not seen:
+        return "str"
+    if all(_is_int(v) for v in seen):
+        return "int"
+    if all(_is_float(v) for v in seen):
+        return "float"
+    return "str"
+
+
+def _canonical_identifier(name: str) -> str:
+    """Canonicalise a source column name to a valid lowercase identifier."""
+    slug = re.sub(r"[^0-9a-zA-Z]+", "_", name).strip("_").lower()
+    if not slug:
+        slug = "column"
+    if slug[0].isdigit():
+        slug = f"col_{slug}"
+    if keyword.iskeyword(slug):
+        slug = f"{slug}_"
+    return slug
+
+
+def _esc(text: str) -> str:
+    """Escape a string for embedding in a double-quoted Python literal."""
+    return text.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _literal(value: str, type_name: str) -> str:
+    """Render a cell as a Python literal of the column's inferred dtype."""
+    if value != "" and type_name == "int" and _is_int(value):
+        return str(int(value))
+    if value != "" and type_name == "float" and _is_float(value):
+        return repr(float(value))
+    return f'"{_esc(value)}"'
+
+
+def _read_feed_file(path: str | Path) -> _FeedSpec:
+    """Parse a sample CSV into the spec the renderers consume.
+
+    Reads the header and the first rows (``utf-8-sig`` so a BOM is tolerated),
+    truncates to ``_MAX_FEED_COLUMNS`` (warning loudly when it does), canonicalises
+    each header to an identifier (de-duplicating collisions), and infers a dtype
+    per column from the sample rows.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"feed file {path} does not exist")
+    raw_text = path.read_text(encoding="utf-8-sig")
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.reader(handle)
+        try:
+            header = next(reader)
+        except StopIteration:
+            raise ValueError(f"feed file {path} is empty (no header row)") from None
+        data_rows = [row for _, row in zip(range(_FEED_SAMPLE_ROWS), reader)]
+
+    dropped = max(0, len(header) - _MAX_FEED_COLUMNS)
+    columns = header[:_MAX_FEED_COLUMNS]
+    if dropped:
+        print(
+            f"warning: feed file has {len(header)} columns; keeping the first "
+            f"{_MAX_FEED_COLUMNS} and dropping the remaining {dropped} from the "
+            "generated schema, validator, and test",
+            file=sys.stderr,
+        )
+
+    names: list[str] = []
+    seen: dict[str, int] = {}
+    for column in columns:
+        base = _canonical_identifier(column)
+        count = seen.get(base, 0)
+        names.append(base if count == 0 else f"{base}_{count + 1}")
+        seen[base] = count + 1
+
+    inferred = [
+        _infer_type([row[i] if i < len(row) else "" for row in data_rows])
+        for i in range(len(columns))
+    ]
+
+    return _FeedSpec(
+        columns=columns,
+        names=names,
+        inferred=inferred,
+        needs_raw=columns != names,
+        dropped=dropped,
+        raw_text=raw_text,
+        sample_cells=data_rows[:_TEST_SAMPLE_ROWS],
+    )
+
+
+def _render_schema(text: str, feed: str, spec: _FeedSpec) -> str:
+    """Replace the template dataclass with one field per feed-file column."""
+    cls = _pascal(feed) + "Row"
+    lines = ["@dataclass", f"class {cls}:"]
+    if spec.dropped:
+        lines.append(
+            f"    # {spec.dropped} column(s) beyond the scaffold's limit of "
+            f"{_MAX_FEED_COLUMNS} were dropped from this schema."
+        )
+    lines += [f"    {name}: {type_name}" for name, type_name in zip(spec.names, spec.inferred)]
+    body = "\n".join(lines) + "\n"
+    # The dataclass is the last thing in schema.py, so replace it to EOF; the
+    # module docstring and imports above it are left intact.
+    return re.sub(r"@dataclass\nclass .*", lambda _: body, text, flags=re.S)
+
+
+def _raw_columns_literal(spec: _FeedSpec) -> str:
+    lines = ["RAW_FEED_COLUMNS = ["]
+    lines += [f'    "{_esc(column)}",' for column in spec.columns]
+    lines.append("]")
+    return "\n".join(lines) + "\n"
+
+
+def _render_pipeline(text: str, feed: str, spec: _FeedSpec) -> str:
+    """Gate the validator on the raw source columns when they aren't identifiers.
+
+    Only needed when ``needs_raw``: the source names can't be schema fields, so
+    emit them as ``RAW_FEED_COLUMNS`` and validate against those. The schema (and
+    its now-unused imports here) is left for the silver rename the feed will add.
+    """
+    cls = _pascal(feed) + "Row"
+    anchor = f'SAMPLE_CSV = Path(__file__).parent / "sample_data" / "{feed}.csv"\n'
+    text = text.replace(anchor, anchor + "\n" + _raw_columns_literal(spec))
+    text = text.replace(
+        f".with_validator(ColumnValidator([f.name for f in fields({cls})]))",
+        ".with_validator(ColumnValidator(RAW_FEED_COLUMNS))",
+    )
+    text = text.replace("from dataclasses import fields\n", "")
+    text = text.replace(f"from .schema import {cls}\n", "")
+    return text
+
+
+def _source_literal(spec: _FeedSpec) -> str:
+    lines = ["    source = ["]
+    for cells in spec.sample_cells:
+        pairs = [
+            f'"{_esc(column)}": {_literal(cells[i] if i < len(cells) else "", spec.inferred[i])}'
+            for i, column in enumerate(spec.columns)
+        ]
+        lines.append("        {" + ", ".join(pairs) + "},")
+    lines.append("    ]")
+    return "\n".join(lines) + "\n"
+
+
+def _render_test(text: str, feed: str, spec: _FeedSpec) -> str:
+    """Seed the test's sample rows from the feed file; track the validator's columns."""
+    cls = _pascal(feed) + "Row"
+    text = re.sub(
+        r"(?ms)^    source = \[.*?\n    \]\n", lambda _: _source_literal(spec), text
+    )
+    if spec.needs_raw:
+        # The pipeline validates raw source names, and raw keeps them, so the
+        # landed-columns assertion checks RAW_FEED_COLUMNS, not the schema fields.
+        text = text.replace("from dataclasses import fields\n\n", "")
+        text = text.replace(f"from pipelines.{feed}.schema import {cls}\n", "")
+        text = text.replace(
+            f"from pipelines.{feed}.pipeline import FEED_NAME, builder, run",
+            f"from pipelines.{feed}.pipeline import FEED_NAME, RAW_FEED_COLUMNS, builder, run",
+        )
+        text = text.replace(
+            f"{{f.name for f in fields({cls})}}.issubset(landed[0].keys())",
+            "set(RAW_FEED_COLUMNS).issubset(landed[0].keys())",
+        )
+    return text
+
+
 def render(
     feed: str,
     root: str | Path | None = None,
     *,
     force: bool = False,
     case_type: bool = False,
+    feed_file: str | Path | None = None,
 ) -> list[Path]:
     """Render the feed under ``root`` and return the files made.
 
@@ -100,10 +330,23 @@ def render(
     -> silver, stopping at silver. The default renders the generic source -> raw
     feed.
 
-    Raises ``ValueError`` for an invalid feed name and ``FileExistsError`` if any
-    target already exists (pass ``force=True`` to overwrite in place).
+    ``feed_file`` seeds the scaffold from a real sample CSV (header -> schema
+    fields, contents -> bundled sample, first rows -> the test's sample rows). It
+    isn't supported with ``case_type`` (the Case Type variant also needs a
+    natural-key decision -- #155/#163).
+
+    Raises ``ValueError`` for an invalid feed name or an unsupported flag
+    combination, ``FileNotFoundError`` for a missing feed file, and
+    ``FileExistsError`` if any target already exists (pass ``force=True`` to
+    overwrite in place).
     """
     _validate_feed_name(feed)
+    if feed_file is not None and case_type:
+        raise ValueError(
+            "--from-feed-file is not supported with --case-type yet (the Case "
+            "Type variant also needs a natural-key decision)"
+        )
+    spec = _read_feed_file(feed_file) if feed_file is not None else None
     root = Path(root) if root is not None else _REPO_ROOT
     feed_dir = root / "pipelines" / feed
     tests_dir = root / "tests" / "pipelines"
@@ -120,8 +363,17 @@ def render(
         if _is_test_file(relative):
             target = tests_dir / relative.name
             text = _absolutise_imports(text, feed)
+            if spec is not None:
+                text = _render_test(text, feed, spec)
         else:
             target = feed_dir / relative
+            if spec is not None:
+                if relative.name == "schema.py":
+                    text = _render_schema(text, feed, spec)
+                elif relative.name == "pipeline.py" and spec.needs_raw:
+                    text = _render_pipeline(text, feed, spec)
+                elif relative.suffix == ".csv":
+                    text = spec.raw_text
         plan.append((target, text))
 
     clashing = [target for target, _ in plan if target.exists()]
@@ -163,14 +415,28 @@ def build_parser() -> argparse.ArgumentParser:
             "stopping at silver (gold is yours to assemble)"
         ),
     )
+    parser.add_argument(
+        "--from-feed-file",
+        metavar="PATH",
+        help=(
+            "seed the scaffold from a sample CSV: header -> schema fields "
+            "(dtypes inferred), contents -> bundled sample, first rows -> the "
+            "test's sample rows (not supported with --case-type)"
+        ),
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        created = render(args.feed, force=args.force, case_type=args.case_type)
-    except (ValueError, FileExistsError) as exc:
+        created = render(
+            args.feed,
+            force=args.force,
+            case_type=args.case_type,
+            feed_file=args.from_feed_file,
+        )
+    except (ValueError, FileNotFoundError, FileExistsError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
     for path in created:

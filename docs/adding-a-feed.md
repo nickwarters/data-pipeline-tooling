@@ -13,6 +13,7 @@ files by hand (#97):
 ```sh
 python -m pipelines.scaffold orders            # -> pipelines/orders/ + tests/pipelines/test_orders.py
 python -m pipelines.scaffold orders --force    # overwrite if it exists
+python -m pipelines.scaffold orders --from-feed-file sample.csv  # seed from a real CSV
 ```
 
 This renders, from the template under `pipelines/_scaffold_template/`, the feed
@@ -56,6 +57,34 @@ Then **customise**: edit `schema.py`'s fields to your source columns (and add
 `test_<feed>.py` to assert the rows and any processors you add. To refine the
 landed feed raw → silver with the schema enforced, add a `raw_to_silver(store,
 "orders", OrdersRow)` run — see [`schema-enforcement.md`](schema-enforcement.md).
+
+#### Seed it from a real feed file: `--from-feed-file`
+
+Most of that customising is mechanical — retyping a source's column names into
+`schema.py`, the sample CSV, and the test. Hand the scaffold a sample export
+instead and it does that for you:
+
+```sh
+python -m pipelines.scaffold orders --from-feed-file path/to/sample.csv
+```
+
+From the CSV's **header** it derives the schema's fields (one per column,
+canonicalised to identifiers, with dtypes **inferred** from the first rows —
+all-int → `int`, all-float → `float`, else `str`); the file's **contents**
+replace the bundled `sample_data/orders.csv`; and the first rows seed
+`test_orders.py`'s sample rows. The schema is capped at **40 columns** — past
+that the extra columns are dropped (with a loud warning and a note in `schema.py`
+recording how many) so the generated dataclass stays a usable starting point.
+
+When a header name **isn't already a clean identifier** (spaces, punctuation,
+capitals — e.g. `Case Number`), it can't be a dataclass field, so the scaffold
+emits the verbatim source names as a `RAW_FEED_COLUMNS` constant and gates the
+`ColumnValidator` on **those** rather than the schema's fields. This is the same
+raw-stays-faithful / silver-canonicalises split the next section describes: raw
+validates and keeps the source's own names; the generated `schema.py` already
+carries the canonical, identifier-named shape your silver `Rename` will produce.
+`--from-feed-file` is the generic source → raw scaffold only — it isn't supported
+with `--case-type` yet (a Case Type also needs a `natural_key` decision).
 
 ### When your feed *is* a Case Type: `--case-type`
 
@@ -116,6 +145,11 @@ Python identifiers, so a source whose columns carry spaces (`Case Number`) or
 punctuation **cannot be declared as schema fields directly**. This is not a
 validation rule rejecting spaces — it's the declaration form: there is no way to
 write `Case Number: str`.
+
+(The `--from-feed-file` scaffold above handles this split for you when it sees
+non-identifier headers: it gates the raw validator on a `RAW_FEED_COLUMNS`
+constant of the verbatim source names and still declares the canonical schema for
+the silver step described here.)
 
 The fix is not a workaround — it's the canonicalisation that **raw → silver**
 exists to do. Raw stays faithful to the source (spaced names and all, so the
