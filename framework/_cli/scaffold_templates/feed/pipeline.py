@@ -19,7 +19,7 @@ import sys
 from dataclasses import fields
 from pathlib import Path
 
-from framework.core import RAW, Dataset
+from framework.core import RAW, Dataset, PipelineError, format_failure
 from framework.io import CsvReader, Reader, Refresh, StoreCatalog, Writer
 from framework.run import Pipeline, RunLog
 from framework.validate import ColumnValidator
@@ -69,7 +69,15 @@ def run(
 
 def main(argv: list[str]) -> int:
     base_dir = Path(argv[1]) if len(argv) > 1 else Path.cwd() / "data"
-    dataset = run(base_dir)
+    # The pipeline is fail-fast: a Validator breach aborts before anything lands
+    # and raises a PipelineError. Catch the family and present it cleanly so an
+    # expected data failure reads as a clear message, not an unhandled traceback;
+    # a genuine bug is *not* a PipelineError and keeps its stack trace.
+    try:
+        dataset = run(base_dir)
+    except PipelineError as exc:
+        print(format_failure(exc), file=sys.stderr)
+        return 1
     print(
         f"Landed {len(dataset)} rows into "
         f"{Path(base_dir) / FEED_NAME / 'raw.db'} (table '{FEED_NAME}')"

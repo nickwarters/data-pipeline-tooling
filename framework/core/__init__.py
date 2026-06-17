@@ -18,6 +18,7 @@ contract, the submodule paths are not. See ``docs/public-api.md``.
 
 from framework.core.protocols import Processor, Reader, Severity, Validator, Writer
 from framework.core.dataset import Dataset
+from framework.core.errors import PipelineError, format_failure
 from framework.core.layers import GOLD, RAW, SILVER, Layer
 
 __all__ = [
@@ -31,4 +32,6 @@ __all__ = [
     "Processor",
     "Validator",
     "Severity",
+    "PipelineError",
+    "format_failure",
 ]

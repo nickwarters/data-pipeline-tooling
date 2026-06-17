@@ -30,14 +30,9 @@ import json
 import sys
 from pathlib import Path
 
-from framework.run import (
-    FreshnessError,
-    Orchestrator,
-    RunRegistry,
-    UnknownPipelineError,
-)
+from framework.core import PipelineError, format_failure
+from framework.run import Orchestrator, RunRegistry
 from framework.shared import WorkingDayCalendar
-from framework.validate import ValidationError
 
 # Mirrors the layout PipelineRunner writes: a per-base run registry and the
 # per-case-type JSONL run logs the runner emits alongside it.
@@ -98,8 +93,8 @@ def _run(args: argparse.Namespace) -> int:
             logical_run_id=args.logical_run_id,
             freshness_days=args.freshness_days,
         )
-    except (FreshnessError, UnknownPipelineError, ValidationError) as exc:
-        print(str(exc), file=sys.stderr)
+    except PipelineError as exc:
+        print(format_failure(exc), file=sys.stderr)
         return 1
     return 0
 
@@ -125,8 +120,8 @@ def _orchestrate(args: argparse.Namespace) -> int:
                 Path(args.base_dir), run_date=args.run_date
             )
             decisions = list(result.decisions)
-    except (FreshnessError, UnknownPipelineError, ValidationError) as exc:
-        print(str(exc), file=sys.stderr)
+    except PipelineError as exc:
+        print(format_failure(exc), file=sys.stderr)
         return 1
     for decision in decisions:
         line = (

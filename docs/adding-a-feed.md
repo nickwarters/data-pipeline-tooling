@@ -33,7 +33,11 @@ tests/pipelines/
 `pipeline.py` factors the composition into a single `builder(reader, writer,
 run_log=None) -> Pipeline` that returns the composed (not-yet-run) pipeline.
 `run()` wires the real `CsvReader` and the subject's layer Writer and calls
-`builder(...).run()`; `main()` is the thin CLI entry over `run()`. The generated
+`builder(...).run()`; `main()` is the thin CLI entry over `run()` — it catches the
+`PipelineError` family and prints `framework.core.format_failure(exc)` to
+`stderr` with a non-zero exit, so an expected fail-fast abort (a failed check)
+reads as a clear message rather than an unhandled traceback (a genuine bug is not
+a `PipelineError` and keeps its trace). The generated
 `test_orders.py` calls the **same** `builder` with sample rows (`given_rows`) and
 a `RecordingWriter`, so the first test exercises the real pipeline rather than a
 hand-rebuilt copy of it — a second test still runs the full `run()` filesystem
