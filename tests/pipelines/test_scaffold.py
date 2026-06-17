@@ -13,6 +13,8 @@ from __future__ import annotations
 import importlib
 import sys
 
+import pytest
+
 from framework.core import RAW
 from framework.io import StoreCatalog
 from framework.testing import read_rows, rows_of
@@ -138,4 +140,133 @@ def test_cli_rejects_an_invalid_feed_name(tmp_path, capsys, monkeypatch):
     assert scaffold.main(["123orders"]) == 1
     assert not (tmp_path / "pipelines" / "123orders").exists()
     assert "identifier" in capsys.readouterr().err
+
+
+# --- --from-feed-file: seed the scaffold from a real sample CSV ----------------
+
+
+def _write_feed(path, text):
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_feed_file_seeds_schema_fields_and_infers_dtypes(tmp_path):
+    feed = _write_feed(
+        tmp_path / "orders.csv",
+        "order_id,customer,total,rate\nO1,Acme,100,0.5\nO2,Globex,250,1.5\n",
+    )
+    scaffold.render("orders", tmp_path, feed_file=feed)
+
+    schema = (tmp_path / "pipelines" / "orders" / "schema.py").read_text("utf-8")
+    assert "class OrdersRow:" in schema
+    # Field names come from the header; dtypes are inferred from the sample rows.
+    assert "order_id: str" in schema
+    assert "total: int" in schema
+    assert "rate: float" in schema
+
+
+def test_feed_file_contents_replace_the_bundled_sample(tmp_path):
+    body = "order_id,customer,total\nO1,Acme,100\nO2,Globex,250\n"
+    feed = _write_feed(tmp_path / "orders.csv", body)
+    scaffold.render("orders", tmp_path, feed_file=feed)
+
+    sample = tmp_path / "pipelines" / "orders" / "sample_data" / "orders.csv"
+    assert sample.read_text("utf-8") == body
+
+
+def test_feed_file_seeds_the_tests_sample_rows(tmp_path):
+    feed = _write_feed(
+        tmp_path / "orders.csv",
+        "order_id,customer,total\nO1,Acme,100\nO2,Globex,250\n",
+    )
+    scaffold.render("orders", tmp_path, feed_file=feed)
+
+    test_text = (tmp_path / "tests" / "pipelines" / "test_orders.py").read_text("utf-8")
+    assert '{"order_id": "O1", "customer": "Acme", "total": 100}' in test_text
+    assert "record_id" not in test_text  # no leftover template sample rows
+
+
+def test_clean_identifier_columns_keep_the_schema_driven_validator(tmp_path):
+    feed = _write_feed(
+        tmp_path / "orders.csv", "order_id,customer\nO1,Acme\nO2,Globex\n"
+    )
+    scaffold.render("orders", tmp_path, feed_file=feed)
+
+    pipeline = (tmp_path / "pipelines" / "orders" / "pipeline.py").read_text("utf-8")
+    assert "RAW_FEED_COLUMNS" not in pipeline
+    assert "ColumnValidator([f.name for f in fields(OrdersRow)])" in pipeline
+
+
+def test_non_identifier_columns_gate_the_validator_on_raw_names(tmp_path):
+    feed = _write_feed(
+        tmp_path / "cases.csv",
+        "Case Number,Adviser Name\nC1,Smith\nC2,Jones\n",
+    )
+    scaffold.render("cases", tmp_path, feed_file=feed)
+
+    feed_dir = tmp_path / "pipelines" / "cases"
+    schema = (feed_dir / "schema.py").read_text("utf-8")
+    pipeline = (feed_dir / "pipeline.py").read_text("utf-8")
+    test_text = (tmp_path / "tests" / "pipelines" / "test_cases.py").read_text("utf-8")
+
+    # Schema canonicalises the source names to identifiers...
+    assert "case_number: str" in schema
+    assert "adviser_name: str" in schema
+    # ...while the validator gates on the verbatim source names.
+    assert 'RAW_FEED_COLUMNS = [\n    "Case Number",\n    "Adviser Name",\n]' in pipeline
+    assert "ColumnValidator(RAW_FEED_COLUMNS)" in pipeline
+    assert "fields(" not in pipeline  # schema-driven validator dropped
+    # The relocated test follows: validator columns, not schema fields.
+    assert "from pipelines.cases.pipeline import FEED_NAME, RAW_FEED_COLUMNS" in test_text
+    assert "set(RAW_FEED_COLUMNS).issubset(landed[0].keys())" in test_text
+
+
+def test_feed_file_over_the_column_limit_truncates_with_a_note(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(scaffold, "_MAX_FEED_COLUMNS", 3)
+    feed = _write_feed(tmp_path / "wide.csv", "a,b,c,d,e\n1,2,3,4,5\n")
+    scaffold.render("wide", tmp_path, feed_file=feed)
+
+    schema = (tmp_path / "pipelines" / "wide" / "schema.py").read_text("utf-8")
+    fields = [line for line in schema.splitlines() if line.startswith("    ") and ": " in line]
+    assert len(fields) == 3  # kept the first three columns only
+    assert "2 column(s) beyond the scaffold's limit of 3 were dropped" in schema
+    assert "dropping the remaining 2" in capsys.readouterr().err
+
+
+def test_feed_file_not_supported_with_case_type(tmp_path):
+    feed = _write_feed(tmp_path / "f.csv", "a\n1\n")
+    with pytest.raises(ValueError, match="not supported with --case-type"):
+        scaffold.render("foo", tmp_path, feed_file=feed, case_type=True)
+
+
+def test_missing_feed_file_is_reported(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        scaffold.render("foo", tmp_path, feed_file=tmp_path / "nope.csv")
+
+
+def test_rendered_feed_from_a_spaced_file_runs_and_its_test_passes(tmp_path):
+    # End-to-end: render a non-identifier-column feed from a sample file, then
+    # import and run it as a module the way production does, and land its sample.
+    repo = tmp_path / "repo"
+    feed = _write_feed(
+        tmp_path / "cases.csv",
+        "Case Number,Adviser Name\nC1,Smith\nC2,Jones\n",
+    )
+    scaffold.render("widgets", repo, feed_file=feed)
+
+    sys.path.insert(0, str(repo / "pipelines"))
+    try:
+        pipeline = importlib.import_module("widgets.pipeline")
+        importlib.reload(pipeline)
+        dataset = pipeline.run(tmp_path / "data")
+    finally:
+        sys.path.remove(str(repo / "pipelines"))
+        for name in list(sys.modules):
+            if name == "widgets" or name.startswith("widgets."):
+                del sys.modules[name]
+
+    store = StoreCatalog(tmp_path / "data").store("widgets")
+    landed = read_rows(store, RAW, "widgets")
+    assert len(landed) == len(dataset) > 0
+    assert {"Case Number", "Adviser Name"}.issubset(landed[0].keys())
 

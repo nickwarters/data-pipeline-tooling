@@ -63,6 +63,7 @@ python3 -m venv .venv
 .venv/bin/python -m pytest                       # run the suite
 .venv/bin/python -m pipelines.demo_csv_to_raw /tmp/demo   # run the demo (module form, from repo root)
 .venv/bin/python -m pipelines.scaffold orders            # scaffold a feed -> pipelines/orders/ + tests/pipelines/test_orders.py (#97)
+.venv/bin/python -m pipelines.scaffold orders --from-feed-file sample.csv  # seed schema/sample/test from a real CSV header
 .venv/bin/python -m pipelines.scaffold --case-type claims # scaffold a Case Type ingest feed (source->raw->silver, identity declared; #155)
 ```
 
@@ -72,7 +73,14 @@ so the import-only `framework` package resolves on `sys.path`.
 Scaffold a new feed with `python -m pipelines.scaffold <feed>`: it renders the
 feed code as a `pipelines/<feed>/` subpackage (schema, pipeline, sample fixture)
 and its test as `tests/pipelines/test_<feed>.py`, from the template under
-`pipelines/_scaffold_template/`, ready to run and customise. Add `--case-type`
+`pipelines/_scaffold_template/`, ready to run and customise. Pass
+`--from-feed-file <path>` to seed the scaffold from a real sample CSV: the header
+becomes the schema's fields (canonicalised to identifiers, dtypes inferred from
+the first rows, capped at 40 columns), the file's contents replace the bundled
+sample, and the test's sample rows are taken from it; when a header name isn't a
+clean identifier (spaces/punctuation/capitals) the source names are emitted as a
+`RAW_FEED_COLUMNS` constant the ColumnValidator gates on (raw stays faithful;
+schema carries the canonical shape). Add `--case-type`
 for the Case Type ingest variant (#155): a case-review-flavoured slice from
 `pipelines/_scaffold_template_case_type/` that additionally declares the Case
 Type's identity contract (`case_type.py`) and refines source → raw → silver,
