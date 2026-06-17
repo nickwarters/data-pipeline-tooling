@@ -162,8 +162,17 @@ apply to that step.
 
 ## Errors
 
-The CLI turns the expected failure modes into a clear one-line message on
-`stderr` and a non-zero exit code — never an unhandled traceback:
+The CLI turns the expected failure modes into a clear message on `stderr` and a
+non-zero exit code — never an unhandled traceback. `run` and `orchestrate` catch
+the whole `PipelineError` family with a single `except` and present it through
+`framework.core.format_failure`, which renders the failure kind and its message
+as a short ASCII block (a genuine bug is not a `PipelineError`, so it still
+surfaces its traceback). The block looks like:
+
+```
+Pipeline run failed [ValidationError]
+  cases ingest pre-validate failed: missing required column(s): case_id
+```
 
 | Situation | Message |
 |-----------|---------|
@@ -172,3 +181,7 @@ The CLI turns the expected failure modes into a clear one-line message on
 | Validation failure | the `ValidationError` message from the failing check |
 | No registry yet (`status` / `runs`) | `no run registry under '/data'; run a pipeline first` |
 | No run log (`log`) | `no run log at /data/_runs/cases.log` |
+
+The same `except PipelineError` / `format_failure` pair is what a scaffolded
+feed's `main()` uses, so running a feed directly (`python -m pipelines.<feed>.pipeline`)
+reports a failed check the same way.
