@@ -203,6 +203,45 @@ obvious.
 The rest of this guide is the reference behind that scaffold: every Reader, and
 the stubbed remote (SAS / SharePoint) seams.
 
+## Wide feeds (hundreds of columns)
+
+Some sources are very wide — a few hundred columns, sometimes 600+. The framework
+handles these with the medallion split it already has, not a special mode: **raw
+stays faithfully wide; silver carries only the columns you actually model.** Three
+levers, from most to least important:
+
+1. **Don't declare all of them.** A schema is a dataclass and `SchemaValidator`
+   **ignores columns it doesn't declare** ("silver may carry more than the schema
+   names" — [schema-enforcement.md](schema-enforcement.md)). So you declare the
+   subset that Selection / Reporting consume — typically a few dozen — and let raw
+   keep the rest faithfully. Modelling 600 fields you never read is the mistake;
+   project to the ones that matter.
+
+2. **Project the silver write.** Narrow the wide raw down to the modelled subset
+   with `SelectColumns([...])` (or `DropColumns([...])`) on the raw → silver path,
+   so silver is a clean, enforced, *narrow* table and the wide landing stays in
+   raw for diagnosis. (`SelectColumns` / `DropColumns` are in
+   [processors.md](processors.md).)
+
+3. **Project at read for cost, not just shape.** `CsvReader(path, columns=[...])`
+   and `GlobCsvReader(directory, pattern, columns=[...])` pass through to pandas
+   `usecols`, so the unwanted columns are **never materialised in memory** in the
+   first place. Use this when you don't even need the full width in raw — at large
+   row counts, reading 30 of 600 columns is the difference that keeps the run
+   inside its memory envelope. (If raw must stay a faithful full-width mirror,
+   skip this and project only at step 2.)
+
+A genuinely wide feed that's *one Case table plus repeated Detail Tables* is a
+different shape again — fan it out into N single-table pipelines over the shared
+raw table rather than one mega-row ([ADR-0009](adr/0009-case-identity-and-gold-grain.md),
+`pipelines/demo_fan_out.py`).
+
+> **Scaffolding caps at 40 columns.** `scaffold --from-feed-file` deliberately
+> stops generating fields past 40 (with a loud warning) so the starting dataclass
+> stays usable — it is *not* sized for a 600-column feed. For a wide feed, scaffold
+> from a header trimmed to the columns you intend to model, or scaffold bare and
+> hand-declare that subset; the dropped width lives in raw regardless.
+
 ## 1. Pick a `Reader`
 
 A `Reader` encapsulates *how one source type is read* behind a single method
