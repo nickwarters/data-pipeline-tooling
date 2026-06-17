@@ -70,13 +70,21 @@ the implementation modules living alongside it:
   don't belong to a task facade: `retry` (`RetryPolicy` & friends) and
   `calendar` (`WorkingDayCalendar`).
 
-Two non-facade packages sit beside them:
+Three non-facade packages sit beside them:
 
 - `framework/_internal/` — cross-cutting helpers with **no** public name:
   `connection` (`connect`), `describe` (`render` / `redact_url`), and `schema`
   (the shared `ValueRule` protocol + the Python↔pandas type mapping and
   annotation reading both schema adapters derive from). The leading underscore
   marks it private; nothing outside the framework imports from here.
+- `framework/_cli/` — the `python -m framework` **entry point**, not an import
+  surface: `scaffold` (generate a feed) and `operator` (the `run` /
+  `orchestrate` / `runs` / `status` / `log` commands), dispatched by
+  `framework/__main__.py`. Run as a tool, never imported by application code.
+  The `run` / `orchestrate` commands resolve an application module by name (a
+  required `--app`, e.g. `pipelines.demo_source_to_selection`) at runtime, so the
+  framework still never statically depends on `pipelines/` and carries no
+  application name of its own.
 - `framework/testing/` — the test-only support surface (below).
 
 These sub-package paths are the *internal layout*; only the facade names

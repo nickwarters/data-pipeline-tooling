@@ -1,7 +1,10 @@
 # The operator CLI — run, orchestrate, status, runs, log
 
-`python -m pipelines.cli` is a small command surface for the everyday operator
-tasks that would otherwise need a hand-written wrapper script: **run** a
+The framework is import-only, but it is also runnable as a tool:
+`python -m framework <command>` is the single entry point for both authoring
+(`scaffold`, see [adding a feed](adding-a-feed.md)) and operating pipelines. The
+operator side is a small command surface for the everyday tasks that would
+otherwise need a hand-written wrapper script: **run** a
 registered pipeline, **orchestrate** scheduled due work, check its **status**,
 list recent **runs**, and inspect a run **log** (issue #99). It is a thin shell
 over the public `framework.run` runtime surface (`PipelineRunner`,
@@ -14,7 +17,7 @@ Run it as a module from the repository root so the import-only `framework`
 package resolves on `sys.path`:
 
 ```sh
-python -m pipelines.cli <command> ...
+python -m framework <command> ...
 ```
 
 All commands take the **base directory** of the run store — the same path you
@@ -25,14 +28,19 @@ logs) and `<base>/_registry/runs.db` (the queryable run registry) underneath it;
 skipped, succeeded, failed, and blocked scheduled items. Actual pipeline
 execution records remain in `RunLog` / `RunRegistry` only.
 
-> `python -m pipelines.run <case_type> <pipeline> <base> …` is the historical
-> `run`-only shortcut, kept working — it is exactly `python -m pipelines.cli run
-> …`.
+The framework owns the run/orchestrate machinery but not *which* pipelines an
+application defines. `run` and `orchestrate` therefore take a **required `--app`**
+naming an application module that exposes `build_runner()` and
+`build_pipeline_sets()` — for this repo, `pipelines.demo_source_to_selection`.
+The framework imports it by name *at runtime*, so the dependency stays one-way —
+`pipelines/` depends on `framework`, never the reverse, and the framework carries
+no application name of its own. (`runs` / `status` / `log` read the run store
+directly and need no `--app`.) The examples below use the demo module.
 
 ## `run` — execute a registered pipeline
 
 ```sh
-python -m pipelines.cli run <case_type> <pipeline> <base_dir> \
+python -m framework run <case_type> <pipeline> <base_dir> --app MODULE \
     [--run-date YYYY-MM-DD] [--logical-run-id ID] [--freshness-days N]
 ```
 
@@ -42,7 +50,7 @@ upstream-freshness window. Exit code is `0` on success, non-zero on a clear erro
 (see below).
 
 ```console
-$ python -m pipelines.cli run cases selection /data --run-date 2026-05-29
+$ python -m framework run cases selection /data --app pipelines.demo_source_to_selection --run-date 2026-05-29
 available cases: 3 -> SelectionPool: 2 cases (Question Bank qb-100, logical run cases/selection:2026-05-29); trace: 3 considered, 1 excluded with a reason
 ```
 
@@ -60,8 +68,8 @@ example to reprocess a correction batch under a stable id independent of the
 calendar date:
 
 ```console
-$ python -m pipelines.cli run cases selection /data --logical-run-id 2026-05-correction
-$ python -m pipelines.cli run cases selection /data --logical-run-id 2026-05-correction
+$ python -m framework run cases selection /data --app pipelines.demo_source_to_selection --logical-run-id 2026-05-correction
+$ python -m framework run cases selection /data --app pipelines.demo_source_to_selection --logical-run-id 2026-05-correction
 ```
 
 The second invocation replaces the first run's rows in the SelectionPool (the
@@ -71,7 +79,7 @@ stays stable instead of doubling.
 ## `orchestrate` — run scheduled due work
 
 ```sh
-python -m pipelines.cli orchestrate <base_dir> \
+python -m framework orchestrate <base_dir> --app MODULE \
     [--run-date YYYY-MM-DD] [--once | --loop] [--poll-seconds N]
 ```
 
@@ -93,7 +101,7 @@ orchestrator invocation; its downstream dependants are marked `blocked`, while
 independent pipelines in the same set and all other `PipelineSet`s continue.
 
 ```console
-$ python -m pipelines.cli orchestrate /data --run-date 2026-05-29 --once
+$ python -m framework orchestrate /data --app pipelines.demo_source_to_selection --run-date 2026-05-29 --once
 2026-05-29  cases  cases/ingest  succeeded
 2026-05-29  cases  cases/selection  succeeded
 ```
@@ -101,7 +109,7 @@ $ python -m pipelines.cli orchestrate /data --run-date 2026-05-29 --once
 ## `status` — the latest run per pipeline
 
 ```sh
-python -m pipelines.cli status <base_dir> [--case-type cases] [--pipeline cases/ingest]
+python -m framework status <base_dir> [--case-type cases] [--pipeline cases/ingest]
 ```
 
 With no filter, prints the most recent run summary for **every** pipeline.
@@ -109,7 +117,7 @@ With no filter, prints the most recent run summary for **every** pipeline.
 named pipeline's latest run.
 
 ```console
-$ python -m pipelines.cli status /data --case-type cases
+$ python -m framework status /data --case-type cases
 2026-06-10T09:39:30.627378+00:00  cases/ingest  ok  rows_out=5  [run 5f8ff8c7]
 2026-06-10T09:39:30.882733+00:00  cases/selection  ok  rows_out=2  [run fbde70de]
 ```
@@ -117,21 +125,21 @@ $ python -m pipelines.cli status /data --case-type cases
 ## `runs` — recent run history
 
 ```sh
-python -m pipelines.cli runs <base_dir> [--pipeline cases/ingest] [--status ok] [--limit N]
+python -m framework runs <base_dir> [--pipeline cases/ingest] [--status ok] [--limit N]
 ```
 
 Lists recent run summaries from the registry, oldest-to-newest, capped to the
 most recent `--limit` (default 10). `--pipeline` and `--status` narrow the list.
 
 ```console
-$ python -m pipelines.cli runs /data --pipeline cases/ingest --limit 5
+$ python -m framework runs /data --pipeline cases/ingest --limit 5
 2026-06-10T09:39:30.627378+00:00  cases/ingest  ok  rows_out=5  [run 5f8ff8c7]
 ```
 
 ## `log` — inspect a run log file
 
 ```sh
-python -m pipelines.cli log <base_dir> <case_type> [--run-id <execution-id-prefix>]
+python -m framework log <base_dir> <case_type> [--run-id <execution-id-prefix>]
 ```
 
 Reads `<base>/_runs/<case_type>.log`, prints one line per step record, and ends
@@ -140,7 +148,7 @@ execution (a prefix of the execution id — the eight-character id shown by
 `status` / `runs` works).
 
 ```console
-$ python -m pipelines.cli log /data cases
+$ python -m framework log /data cases
 run log: /data/_runs/cases.log
   cases/ingest  run: ok  rows_in=5  rows_out=5  0.010s
   cases/selection  freshness: ok

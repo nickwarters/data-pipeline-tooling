@@ -261,7 +261,7 @@ To skip the boilerplate for a fresh CSV feed, **scaffold** one — feed code as 
 under `tests/pipelines/`, ready to run — and then customise it (#97):
 
 ```sh
-python -m pipelines.scaffold orders              # -> pipelines/orders/ + tests/pipelines/test_orders.py
+python -m framework scaffold orders              # -> pipelines/orders/ + tests/pipelines/test_orders.py
 python -m pipelines.orders.pipeline /data        # land the bundled sample into raw
 python -m pytest tests/pipelines/test_orders.py  # the generated test passes as-is
 ```
@@ -272,7 +272,7 @@ silver (stopping at silver — gold assembly is the author's call, #163); see
 [`adding-a-feed.md`](adding-a-feed.md):
 
 ```sh
-python -m pipelines.scaffold --case-type claims  # + case_type.py; source -> raw -> silver
+python -m framework scaffold --case-type claims  # + case_type.py; source -> raw -> silver
 ```
 
 ```python
@@ -447,7 +447,7 @@ strategy = AccumulateByRun.from_context(context)
 - The SelectionPool reaches the review platform as a **Deliverable** (a later
   slice); the returned **Review Outcomes** come back via **Sync**, not here.
 - Run domain Pipelines through the thin runner when freshness matters:
-  `python -m pipelines.cli run cases selection /tmp/demo --run-date 2026-05-29`
+  `python -m framework run cases selection /tmp/demo --run-date 2026-05-29`
   checks recent successful `cases/ingest` history before Selection executes.
 
 ### Assemble silver into gold outputs
@@ -474,16 +474,16 @@ rows without touching prior loads.
 ### Operate pipelines from the CLI — run, status, runs, log
 
 For the everyday operator tasks — running a pipeline, checking its status,
-listing recent runs, inspecting a run log — use `python -m pipelines.cli` instead
+listing recent runs, inspecting a run log — use `python -m framework` instead
 of writing a wrapper script. It is a thin shell over the runner and the
 `RunRegistry` / `RunLog` seam; full reference with example output is
 [`operator-cli.md`](operator-cli.md).
 
 ```sh
-python -m pipelines.cli run cases ingest /data --run-date 2026-05-29
-python -m pipelines.cli status /data --case-type cases
-python -m pipelines.cli runs /data --pipeline cases/ingest --limit 5
-python -m pipelines.cli log /data cases --run-id 5f8ff8c7
+python -m framework run cases ingest /data --app pipelines.demo_source_to_selection --run-date 2026-05-29
+python -m framework status /data --case-type cases
+python -m framework runs /data --pipeline cases/ingest --limit 5
+python -m framework log /data cases --run-id 5f8ff8c7
 ```
 
 Pass `run --logical-run-id <id>` to re-drive a business run: a re-run under the
@@ -491,8 +491,10 @@ same logical id replaces that run's accumulated rows instead of duplicating them
 (it defaults to `case_type/pipeline:run_date`). Each command reports a clear
 one-line error and a non-zero exit on the expected
 failures (unknown pipeline, stale upstream, validation failure, missing run
-history) rather than a traceback. `python -m pipelines.run …` remains as the
-historical `run`-only shortcut.
+history) rather than a traceback. `run` and `orchestrate` take a required `--app`
+naming the application's pipeline registry module (here
+`pipelines.demo_source_to_selection`), which the framework imports at runtime —
+so the dependency stays one-way and the framework carries no application name.
 
 ### Test a pipeline — given source rows, expect output rows
 
