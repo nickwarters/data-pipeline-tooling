@@ -538,6 +538,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`run-log-format.md`](run-log-format.md) | The JSONL record schema and the run registry. |
 | [`retry.md`](retry.md) | Targeted retry at the reader/writer edges — `RetryPolicy`, where to use it and where not. |
 | [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `status` / `runs` / `log`) with example commands and output. |
+| [`resolving-a-failed-run.md`](resolving-a-failed-run.md) | The operator loop from a failed run — investigate (`status`/`log`), diagnose, resolve, and re-drive idempotently. |
 | [`escape-hatch-store.md`](escape-hatch-store.md) | Iterating against a flat scratch db (and a pre-baked SQL query) outside the medallion layer pattern, and migrating back. |
 | [`testing-helpers.md`](testing-helpers.md) | `framework.testing` — the test-only helpers for testing concrete pipelines (`given_rows`, `RecordingWriter`, `read_rows`, `RecordingRunLog`, `read_run_log`). |
 | [`adr/`](adr/) | Every architectural decision (the *why*). |

@@ -185,3 +185,7 @@ Pipeline run failed [ValidationError]
 The same `except PipelineError` / `format_failure` pair is what a scaffolded
 feed's `main()` uses, so running a feed directly (`python -m pipelines.<feed>.pipeline`)
 reports a failed check the same way.
+
+For the full operator loop from one of these failures back to a green run —
+investigate, diagnose, resolve, and re-drive idempotently — see
+[resolving-a-failed-run.md](resolving-a-failed-run.md).
