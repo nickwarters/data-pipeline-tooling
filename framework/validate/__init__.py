@@ -8,7 +8,7 @@ reshaping it. Two groups:
 - the **declared-schema contract**: ``SchemaValidator`` checks a dataset against
   a Case Type dataclass (columns + dtypes + nullability + value rules), and the
   value rules (``ValueRule`` / ``Nullable`` / ``NonNull`` / ``Pattern`` /
-  ``Length`` / ``Unique`` / ``OneOf``) declared on its fields.
+  ``Length`` / ``Range`` / ``Unique`` / ``OneOf``) declared on its fields.
 
 Compose them onto a ``framework.run`` ``Pipeline`` as pre/post validators. The
 *coerce* half of the schema adapter — ``SchemaCoercion`` — lives on
@@ -43,6 +43,7 @@ from framework.validate.value_rules import (
     Nullable,
     OneOf,
     Pattern,
+    Range,
     Unique,
 )
 
@@ -64,6 +65,7 @@ __all__ = [
     "NonNull",
     "Pattern",
     "Length",
+    "Range",
     "Unique",
     "OneOf",
 ]

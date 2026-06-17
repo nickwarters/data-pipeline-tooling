@@ -43,6 +43,12 @@ No base class, no registration. Declaring the schema does **not** force you to
 materialise typed objects — it is a *validation contract first*; typed objects
 (`Iterator[CaseA]`) are an opt-in convenience for later (ADR-0008).
 
+Because the **field names are the column contract**, they must be valid Python
+identifiers — a source whose columns carry spaces or punctuation (`Case Number`)
+can't be declared directly. That's a `Rename` to the canonical names on the way
+to silver, not a schema limitation; see
+[adding-a-feed.md](adding-a-feed.md#when-source-column-names-arent-identifiers-spaces-punctuation).
+
 ## `SchemaValidator` — the dataclass→validator adapter
 
 `SchemaValidator(CaseA)` derives column + dtype expectations from the dataclass
@@ -249,6 +255,7 @@ configuration error raised when `SchemaValidator` is built.
 |------|--------|---------------|
 | `Pattern(regex)` | every value **fully matches** the regex (e.g. a 9–10 digit id rejects letters / 11+ chars) | `violates pattern '\d{9,10}' (e.g. 'ABC', '12')` |
 | `Length(minimum=, maximum=)` | string length within the inclusive `[min, max]`; either bound optional | `length not in [2, 4] (e.g. 'x', 'toolong')` |
+| `Range(minimum=, maximum=)` | numeric **value** within the inclusive `[min, max]`; either bound optional | `value not in [0, 100] (e.g. '-5', '150')` |
 | `Unique()` | no duplicate values in the column | `has duplicate value(s): 'dup'` |
 | `OneOf(*allowed)` | membership in an allowed set (value-set / encoding) | `has value(s) outside {'closed', 'open'}: 'pending'` |
 
@@ -256,10 +263,10 @@ Three shared properties:
 
 - **Value rules check present values only.** Null values are handled by the
   field's nullability marker: allowed for `Nullable()`/plain fields, rejected by
-  `NonNull()`. A nullable `Pattern`, `Length`, `Unique`, or `OneOf` field can
-  therefore be missing without creating a value-rule breach.
+  `NonNull()`. A nullable `Pattern`, `Length`, `Range`, `Unique`, or `OneOf`
+  field can therefore be missing without creating a value-rule breach.
 - **Configuration errors fail where the schema is composed**, not mid-run: a
-  malformed `Pattern` regex, a `Length` with `min > max`, or an empty `OneOf`
+  malformed `Pattern` regex, a `Length`/`Range` with `min > max`, or an empty `OneOf`
   raises when the rule is constructed — mirroring the validator's
   unsupported-dtype guard.
 - **Breaches are sampled, not dumped.** A message lists up to five offending
