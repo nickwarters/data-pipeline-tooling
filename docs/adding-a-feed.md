@@ -23,11 +23,20 @@ of the suite, mirroring the source layout) — wired together and ready to run:
 pipelines/orders/
   __init__.py
   schema.py            # @dataclass OrdersRow — the column/dtype contract
-  pipeline.py          # CSV -> raw via the facades; gates on the schema's columns
+  pipeline.py          # builder(reader, writer, run_log=None) composes it; run()/main wire the real ones
   sample_data/orders.csv
 tests/pipelines/
-  test_orders.py       # given source rows -> expected landed rows
+  test_orders.py       # drives builder() with sample rows + a recording writer
 ```
+
+`pipeline.py` factors the composition into a single `builder(reader, writer,
+run_log=None) -> Pipeline` that returns the composed (not-yet-run) pipeline.
+`run()` wires the real `CsvReader` and the subject's layer Writer and calls
+`builder(...).run()`; `main()` is the thin CLI entry over `run()`. The generated
+`test_orders.py` calls the **same** `builder` with sample rows (`given_rows`) and
+a `RecordingWriter`, so the first test exercises the real pipeline rather than a
+hand-rebuilt copy of it — a second test still runs the full `run()` filesystem
+path against the bundled sample.
 
 The feed name must be a lowercase Python identifier (it becomes the package
 name); `--force` overwrites an existing feed's files. The generated code imports
