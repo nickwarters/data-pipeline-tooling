@@ -25,9 +25,9 @@ If it failed under `orchestrate`, or you're picking up someone else's run, read
 it back from the run store ([operator-cli.md](operator-cli.md)):
 
 ```sh
-python -m framework status /data --case-type cases     # latest run per pipeline
-python -m framework runs   /data --pipeline cases/ingest --status error
-python -m framework log    /data cases --run-id 5f8ff8c7   # the failing run's steps
+python -m framework status /data                       # latest run per pipeline
+python -m framework runs   /data --pipeline ingest --status error
+python -m framework log    /data ingest --run-id 5f8ff8c7   # the failing run's steps
 ```
 
 `log` prints one line per step and ends with a summary, so you can see **which
@@ -46,7 +46,7 @@ The expected failures are self-describing. Map the message to a cause:
 | `… expected date but found object` | a dtype the coercer couldn't repair | the source values for that column |
 | `column '…' violates pattern …` / `outside {…}` / `has duplicate value(s)` | a **value rule** failed on real data | the offending rows (the message samples up to five) |
 | `column '…' contains null value(s)` | a `NonNull()` field arrived empty | the source / upstream join |
-| `upstream cases/ingest is stale: …` | a declared upstream hasn't run recently enough | run the upstream, or relax the window |
+| `upstream ingest is stale: …` | a declared upstream hasn't run recently enough | run the upstream, or relax the window |
 
 A genuine bug (not a `PipelineError`) keeps its traceback — that's a code defect
 to fix, not an operator-resolvable data problem.
@@ -85,18 +85,17 @@ run's rows rather than duplicating them — `Refresh()` truncates and reloads,
 Because the failed run rolled back, there's nothing to clean up first.
 
 Re-run the same business day — the logical run id defaults to
-`case_type/pipeline:run_date`, so this is already idempotent:
+`<pipeline>:run_date`, so this is already idempotent:
 
 ```sh
-python -m framework run cases/ingest /data --app pipelines.demo_source_to_selection --run-date 2026-05-29
+python -m framework run pipelines/ingest /data --run-date 2026-05-29
 ```
 
 Re-run a **correction batch** under a stable id, independent of the calendar
 date, when you're reprocessing a fix rather than re-running a day:
 
 ```sh
-python -m framework run cases/ingest /data --app pipelines.demo_source_to_selection \
-    --logical-run-id 2026-05-correction
+python -m framework run pipelines/ingest /data --logical-run-id 2026-05-correction
 ```
 
 Running it twice replaces the batch's rows both times; the row count stays stable
@@ -106,8 +105,8 @@ instead of doubling. Each execution remains individually traceable by its own
 ## 5. Confirm — green status, clean log
 
 ```sh
-python -m framework status /data --pipeline cases/ingest   # latest run now `ok`
-python -m framework log    /data cases --run-id <new-id>   # 0 failed, 0 warned
+python -m framework status /data --pipeline ingest   # latest run now `ok`
+python -m framework log    /data ingest --run-id <new-id>   # 0 failed, 0 warned
 ```
 
 A downstream that was **blocked** by the failure (its upstream was stale) clears

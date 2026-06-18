@@ -449,9 +449,10 @@ strategy = AccumulateByRun.from_context(context)
   case-review selection trace (why each Case was/wasn't chosen) as a sibling table.
 - The SelectionPool reaches the review platform as a **Deliverable** (a later
   slice); the returned **Review Outcomes** come back via **Sync**, not here.
-- Run domain Pipelines through the thin runner when freshness matters:
-  `python -m framework run cases/selection /tmp/demo --run-date 2026-05-29`
-  checks recent successful `cases/ingest` history before Selection executes.
+- Run pipelines through the framework when freshness matters:
+  `python -m framework run pipelines/selection /tmp/demo --run-date 2026-05-29`
+  checks recent successful `ingest` history (its declared `UPSTREAMS`) before
+  Selection executes.
 
 ### Assemble silver into gold outputs
 
@@ -483,21 +484,23 @@ of writing a wrapper script. It is a thin shell over the runner and the
 [`operator-cli.md`](operator-cli.md).
 
 ```sh
-python -m framework run cases/ingest /data --app pipelines.demo_source_to_selection --run-date 2026-05-29
-python -m framework status /data --case-type cases
-python -m framework runs /data --pipeline cases/ingest --limit 5
-python -m framework log /data cases --run-id 5f8ff8c7
+python -m framework run pipelines/ingest /data --run-date 2026-05-29
+python -m framework status /data --pipeline ingest
+python -m framework runs /data --pipeline ingest --limit 5
+python -m framework log /data ingest --run-id 5f8ff8c7
 ```
 
-Pass `run --logical-run-id <id>` to re-drive a business run: a re-run under the
-same logical id replaces that run's accumulated rows instead of duplicating them
-(it defaults to `case_type/pipeline:run_date`). Each command reports a clear
-one-line error and a non-zero exit on the expected
-failures (unknown pipeline, stale upstream, validation failure, missing run
-history) rather than a traceback. `run` and `orchestrate` take a required `--app`
-naming the application's pipeline registry module (here
-`pipelines.demo_source_to_selection`), which the framework imports at runtime —
-so the dependency stays one-way and the framework carries no application name.
+`run` addresses a pipeline by **its location on disk**: `pipelines/ingest` maps
+to the module `pipelines.ingest.pipeline`, imported at runtime, whose
+`run(context)` callable the framework executes after checking its declared
+`UPSTREAMS` — so the dependency stays one-way and the framework carries no
+application name. Pass `run --logical-run-id <id>` to re-drive a business run: a
+re-run under the same logical id replaces that run's accumulated rows instead of
+duplicating them (it defaults to `<pipeline>:run_date`). Each command reports a
+clear one-line error and a non-zero exit on the expected failures (unknown
+pipeline path, stale upstream, validation failure, missing run history) rather
+than a traceback. Only `orchestrate` takes a required `--app` naming an
+application's registry module (`build_runner()` / `build_pipeline_sets()`).
 
 ### Test a pipeline — given source rows, expect output rows
 

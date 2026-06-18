@@ -30,18 +30,25 @@ tests/pipelines/
   test_orders.py       # drives builder() with sample rows + a recording writer
 ```
 
-`pipeline.py` factors the composition into a single `builder(reader, writer,
-run_log=None) -> Pipeline` that returns the composed (not-yet-run) pipeline.
-`run()` wires the real `CsvReader` and the subject's layer Writer and calls
-`builder(...).run()`; `main()` is the thin CLI entry over `run()` — it catches the
+`pipeline.py` follows the framework's canonical pipeline contract: it exposes a
+`run(context: RunContext) -> Dataset` callable (and an `UPSTREAMS` tuple of
+freshness requirements — empty for a source feed). The framework addresses the
+pipeline by its path — `python -m framework run pipelines/orders` imports
+`pipelines.orders.pipeline` and executes `run(context)`. Composition is factored
+into a single `builder(reader, writer, run_log=None) -> Pipeline` that returns the
+composed (not-yet-run) pipeline; `run()` wires the real `CsvReader` and the
+subject's layer Writer (deriving its `AccumulateByRun` strategy from the
+`RunContext`, so re-drives under the same logical run id replace rather than
+duplicate) and calls `builder(...).run()`. `main()` is the thin entry for running
+the module directly — it builds a default `RunContext`, then catches the
 `PipelineError` family and prints `framework.core.format_failure(exc)` to
 `stderr` with a non-zero exit, so an expected fail-fast abort (a failed check)
 reads as a clear message rather than an unhandled traceback (a genuine bug is not
-a `PipelineError` and keeps its trace). The generated
-`test_orders.py` calls the **same** `builder` with sample rows (`given_rows`) and
-a `RecordingWriter`, so the first test exercises the real pipeline rather than a
-hand-rebuilt copy of it — a second test still runs the full `run()` filesystem
-path against the bundled sample.
+a `PipelineError` and keeps its trace). The generated `test_orders.py` calls the
+**same** `builder` with sample rows (`given_rows`) and a `RecordingWriter`, so the
+first test exercises the real pipeline rather than a hand-rebuilt copy of it — a
+second test still runs the full `run(context)` filesystem path against the bundled
+sample.
 
 The feed name must be a lowercase Python identifier (it becomes the package
 name); `--force` overwrites an existing feed's files. The generated code imports
@@ -50,7 +57,8 @@ the pipeline uses **relative** intra-package imports, and the relocated test
 imports the feed absolutely (`from pipelines.orders.pipeline import …`):
 
 ```sh
-python -m pipelines.orders.pipeline /data        # land the bundled sample into raw
+python -m framework run pipelines/orders /data   # run via the framework (freshness + run log)
+python -m pipelines.orders.pipeline /data        # or directly: land the bundled sample into raw
 python -m pytest tests/pipelines/test_orders.py  # the generated test passes as-is
 ```
 
