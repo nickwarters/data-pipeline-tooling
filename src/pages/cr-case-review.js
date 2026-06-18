@@ -4,6 +4,7 @@ import { signal, computed } from '../lib/signal.js';
 import { evaluate } from '../evaluators/applicability-evaluator.js';
 import { computeSectionProgress } from '../evaluators/section-progress.js';
 import { materializeRemediationActions } from '../evaluators/failure-evaluator.js';
+import { captureValue, validateCaptureGroups, findCaptureField } from '../evaluators/issue-capture.js';
 import { evaluateAccess, resolveRoles, showInSummary, SECTIONS, SUMMARY_SECTIONS } from '../services/section-access.js';
 import '../components/cr-question-list.js';
 import '../components/cr-section-progress.js';
@@ -115,6 +116,9 @@ export class CRCaseReview extends CRElement {
     const caseTypeModule = await import(`../../case-types/${caseRow.caseType}.js`);
     /** @type {import('../sharepoint-client.js').CaseTypeConfig} */
     const config = caseTypeModule.default;
+    // Load-time guard: Issue Capture Field keys must be unique across groups
+    // (ADR-0020) since they double as storage keys and showWhen references.
+    validateCaptureGroups(config.captureGroups);
     const catalogue = config.questions.filter(q => !q.deprecated);
 
     const answersSignal = signal(/** @type {Record<string, Answer>} */ ({ ...caseRow.answers }));
@@ -159,7 +163,7 @@ export class CRCaseReview extends CRElement {
       ? await this._resolveSourceCase(caseRow.sourceCaseId, caseRow.id, client, saveQueue, currentUserId, capabilities)
       : null;
 
-    this._buildLayout({ caseRow, catalogue, computeOutcome: config.computeOutcome, attributeFailures: config.attributeFailures, remediationFields: config.remediationFields ?? [], client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, roles, summarySections, sourceCase });
+    this._buildLayout({ caseRow, catalogue, computeOutcome: config.computeOutcome, attributeFailures: config.attributeFailures, remediationFields: config.remediationFields ?? [], captureGroups: config.captureGroups ?? [], client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, roles, summarySections, sourceCase });
 
     // Render with cached display names first, then upgrade to the authoritative
     // directory names once they resolve (ADR-0013, #97).
@@ -268,6 +272,7 @@ export class CRCaseReview extends CRElement {
    * @param {(answers: Record<string, Answer>) => import('../sharepoint-client.js').OutcomeResult} opts.computeOutcome
    * @param {boolean} [opts.attributeFailures]
    * @param {import('../sharepoint-client.js').RemediationField[]} [opts.remediationFields]
+   * @param {import('../sharepoint-client.js').CaptureGroup[]} [opts.captureGroups]
    * @param {SharePointClient} opts.client
    * @param {SaveQueue} opts.saveQueue
    * @param {{ get: () => Record<string, Answer>, set: (v: Record<string, Answer>) => void }} opts.answersSignal
@@ -279,7 +284,7 @@ export class CRCaseReview extends CRElement {
    * @param {import('../services/section-access.js').Section[]} [opts.summarySections]
    * @param {SourceCaseOpts | null} [opts.sourceCase]
    */
-  _buildLayout({ caseRow, catalogue, computeOutcome, attributeFailures, remediationFields = [], client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, roles = [], summarySections = [], sourceCase = null }) {
+  _buildLayout({ caseRow, catalogue, computeOutcome, attributeFailures, remediationFields = [], captureGroups = [], client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, roles = [], summarySections = [], sourceCase = null }) {
 
     const searchStr = typeof location !== 'undefined' ? (/** @type {any} */ (location).search ?? '') : '';
     const panelMode = new URLSearchParams(searchStr).get('conversation') ?? 'popover';
@@ -395,6 +400,24 @@ export class CRCaseReview extends CRElement {
     remediationSection.responsibleParty = caseRow.responsibleParty
       ? { loginName: caseRow.responsibleParty, displayName: caseRow.responsibleParty }
       : null;
+    // Unified Issue Capture (ADR-0020): the same Assigned-Reviewer/In-progress
+    // guard as attribution gates whether capture controls are editable. The
+    // captureGroups config and a cr-capture handler are wired alongside.
+    remediationSection.captureGroups = captureGroups;
+    remediationSection.canCapture = canAttribute;
+    remediationSection.addEventListener('cr-capture', (ev) => {
+      if (!canAttribute) return;
+      const { questionId, fieldKey, value } =
+        /** @type {CustomEvent<{ questionId: string, fieldKey: string, value: string }>} */ (ev).detail;
+      const current = answersSignal.get();
+      const existing = current[questionId];
+      if (!existing) return;
+      const field = findCaptureField(captureGroups, fieldKey);
+      if (!field) return;
+      const newAnswers = { ...current, [questionId]: captureValue(existing, field, value) };
+      answersSignal.set(newAnswers);
+      saveQueue.enqueue(caseRow.id, 'answers', newAnswers);
+    });
     remediationSection.addEventListener('cr-attribute', (ev) => {
       if (!canAttribute) return;
       const { questionId, attributedParty } =
@@ -422,6 +445,7 @@ export class CRCaseReview extends CRElement {
     summaryEl.caseRow = caseRow;
     summaryEl.catalogue = catalogue;
     summaryEl.summarySections = summarySections;
+    summaryEl.captureGroups = captureGroups;
 
     // viewState combines applicability + answers + allAnswered so the subscribe fires once per state change.
     const viewState = computed(() => ({

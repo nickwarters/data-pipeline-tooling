@@ -77,6 +77,33 @@ test('hello-review: every select remediationField carries a non-empty options[]'
   }
 });
 
+// --- Issue Capture groups (ADR-0020) ---
+
+test('hello-review: declares captureGroups exercising all four string field types', () => {
+  const types = new Set(
+    (config.captureGroups ?? []).flatMap(g => g.fields.map(f => f.type))
+  );
+  for (const t of ['text', 'textarea', 'select', 'radio']) {
+    assert.ok(types.has(/** @type {any} */ (t)), `expected a ${t} capture field`);
+  }
+});
+
+test('hello-review: capture field keys are unique across groups', () => {
+  const keys = (config.captureGroups ?? []).flatMap(g => g.fields.map(f => f.key));
+  assert.equal(new Set(keys).size, keys.length, 'no duplicate capture field keys');
+});
+
+test('hello-review: every select/radio capture field carries a non-empty options[]', () => {
+  for (const g of config.captureGroups ?? []) {
+    for (const f of g.fields) {
+      if (f.type === 'select' || f.type === 'radio') {
+        assert.ok(Array.isArray(f.options) && f.options.length > 0,
+          `${f.key} (${f.type}) should have options[]`);
+      }
+    }
+  }
+});
+
 // --- Section config (ADR-0016) ---
 
 test('hello-review: sections is a per-Section config object enabling all seven Sections', () => {

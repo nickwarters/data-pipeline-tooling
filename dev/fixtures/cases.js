@@ -81,6 +81,14 @@ export const cases = [
         value: 'No',
         justification: 'Agent jumped straight to resolution without confirming the issue.',
         attributedParty: { loginName: 'agent.c', displayName: 'Agent C (Casey Doyle)' },
+        // Unified Issue Capture (ADR-0020): values captured against this failed
+        // Answer, keyed by CaptureField.key, demonstrating the four string types.
+        capture: {
+          rootCause: 'Skipped the needs-identification step',
+          whatHappened: 'Agent moved to a billing fix before confirming the caller’s actual issue.',
+          severity: 'Med',
+          repeatIssue: 'No',
+        },
       },
       'q-channel': { value: 'Phone' },
       'q-products': { value: ['Billing'] },

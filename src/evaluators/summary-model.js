@@ -7,7 +7,7 @@ import { isFailure } from './failure-evaluator.js';
 
 /**
  * @typedef {{ category: string, pass: number, fail: number }} CategoryCount
- * @typedef {{ category: string | undefined, text: string, answer: string, actions: string[] }} SummaryFailure
+ * @typedef {{ id: string, category: string | undefined, text: string, answer: string, actions: string[] }} SummaryFailure
  * @typedef {{ categoryCounts: CategoryCount[], remediationActionCount: number, failures: SummaryFailure[] }} SummaryModel
  */
 
@@ -55,6 +55,7 @@ export function buildSummaryModel(catalogue, answers) {
     // A failed question always has an Answer (isFailure is false without one).
     const v = answers[q.id].value;
     return {
+      id: q.id,
       category: q.category,
       text: q.text,
       answer: Array.isArray(v) ? v.join(', ') : v,

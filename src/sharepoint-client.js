@@ -13,7 +13,14 @@
  * `attributedParty` it lives only while the Answer is a failure: stripped when
  * the Answer stops failing, and frozen once the Case is Completed.
  *
- * @typedef {{ value: string | string[], justification?: string, remediationActions?: Array<{id: string, text: string, completed: boolean}>, attributedParty?: { loginName: string, displayName: string }, remediationDetails?: Record<string, string> }} Answer
+ * The optional `capture` is the unified **Issue Capture** map (ADR-0020): every
+ * value captured against a *failed* Answer, keyed by `CaptureField.key`. It
+ * supersedes `attributedParty` + `remediationDetails`, widening the value type to
+ * also carry a `person` `{loginName,displayName}` or an `actions` array. It
+ * shares the same lifecycle — stripped when the Answer stops failing, frozen once
+ * the Case is Completed.
+ *
+ * @typedef {{ value: string | string[], justification?: string, remediationActions?: Array<{id: string, text: string, completed: boolean}>, attributedParty?: { loginName: string, displayName: string }, remediationDetails?: Record<string, string>, capture?: Record<string, string | { loginName: string, displayName: string } | Array<{id: string, text: string, completed: boolean}>> }} Answer
  */
 
 /**
@@ -22,6 +29,28 @@
  * against `options` at capture time.
  *
  * @typedef {{ key: string, label: string, type: 'text' | 'select', options?: string[], required?: boolean }} RemediationField
+ */
+
+/**
+ * One **Issue Capture Field** declared by a Case Type (ADR-0020): a typed input
+ * captured against a *failed* Answer. The closed type set is
+ * `text | textarea | select | radio | person | actions`; this slice exercises
+ * only the four string types. `options` lists the choices for `select`/`radio`
+ * (validated at capture time). `required` participates in the completion gate
+ * only while the field is visible. `role` is an optional cross-Case-Type
+ * reporting tag (not yet built). `showWhen` conditions on a sibling field on the
+ * same Answer (not yet built).
+ *
+ * @typedef {{ key: string, label: string, type: 'text' | 'textarea' | 'select' | 'radio' | 'person' | 'actions', options?: string[], required?: boolean, role?: string, showWhen?: Record<string, unknown> }} CaptureField
+ */
+
+/**
+ * One **Issue Capture Group** declared by a Case Type (ADR-0020): an ordered,
+ * collapsible presentation grouping of `CaptureField`s. Groups are presentation
+ * only — they are not part of storage, so an Owner can move a field between
+ * groups without migrating data. `collapsed` is the default collapse state.
+ *
+ * @typedef {{ key: string, label: string, collapsed?: boolean, fields: CaptureField[] }} CaptureGroup
  */
 
 /**
@@ -187,7 +216,8 @@
  *   sections?: Partial<Record<'details'|'questions'|'conversation'|'notes'|'remediation'|'summary'|'appeal', SectionConfig>>,
  *   slaHours?: number,
  *   attributeFailures?: boolean,
- *   remediationFields?: RemediationField[]
+ *   remediationFields?: RemediationField[],
+ *   captureGroups?: CaptureGroup[]
  * }} CaseTypeConfig
  */
 

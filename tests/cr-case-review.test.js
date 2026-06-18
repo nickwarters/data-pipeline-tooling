@@ -1352,6 +1352,105 @@ test('CRCaseReview: cr-attribute is ignored when the referenced Answer is missin
   assert.equal(enqueued.length, 0, 'no persistence when there is no Answer to attribute');
 });
 
+// ===== Issue Capture persistence (cr-capture, ADR-0020) =====
+
+test('CRCaseReview: passes the Case Type captureGroups to the remediation section, editable for the Assigned Reviewer', async () => {
+  const failRow = { ...BASE_ROW, assignedReviewer: 'u1', answers: { 'q-needs': { value: 'No' } } };
+  const client = makeClient({ caseRow: failRow });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  el.currentUserId = 'u1';
+  await el.connectedCallback();
+
+  const remediation = remediationOf(el);
+  assert.ok(remediation.captureGroups.length > 0, 'captureGroups forwarded from config');
+  assert.equal(remediation.canCapture, true, 'Assigned Reviewer on In-progress case may capture');
+});
+
+test('CRCaseReview: a cr-capture event records the value into Answer.capture and persists', async () => {
+  const failRow = { ...BASE_ROW, assignedReviewer: 'u1', answers: { 'q-needs': { value: 'No' } } };
+  const client = makeClient({ caseRow: failRow });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  /** @type {any[]} */
+  const enqueued = [];
+  saveQueue.enqueue = (...args) => { enqueued.push(args); };
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  el.currentUserId = 'u1';
+  await el.connectedCallback();
+
+  const remediation = remediationOf(el);
+  remediation._listeners['cr-capture'][0]({
+    detail: { questionId: 'q-needs', fieldKey: 'rootCause', value: 'Agent rushed' },
+  });
+
+  assert.equal(enqueued.length, 1);
+  assert.equal(enqueued[0][1], 'answers');
+  assert.deepEqual(enqueued[0][2]['q-needs'].capture, { rootCause: 'Agent rushed' });
+});
+
+test('CRCaseReview: a cr-capture for an unknown field key is ignored', async () => {
+  const failRow = { ...BASE_ROW, assignedReviewer: 'u1', answers: { 'q-needs': { value: 'No' } } };
+  const client = makeClient({ caseRow: failRow });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  /** @type {any[]} */
+  const enqueued = [];
+  saveQueue.enqueue = (...args) => { enqueued.push(args); };
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  el.currentUserId = 'u1';
+  await el.connectedCallback();
+
+  const remediation = remediationOf(el);
+  remediation._listeners['cr-capture'][0]({
+    detail: { questionId: 'q-needs', fieldKey: 'ghost', value: 'x' },
+  });
+  remediation._listeners['cr-capture'][0]({
+    detail: { questionId: 'q-missing', fieldKey: 'rootCause', value: 'x' },
+  });
+
+  assert.equal(enqueued.length, 0, 'no persistence for an unknown field or missing Answer');
+});
+
+test('CRCaseReview: capture is frozen (ignored) on a Completed case', async () => {
+  const completedRow = {
+    ...BASE_ROW,
+    status: /** @type {'Completed'} */ ('Completed'),
+    assignedReviewer: 'u1',
+    answers: { 'q-needs': { value: 'No' } },
+  };
+  const client = makeClient({ caseRow: completedRow });
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  saveQueue.loadCase(completedRow);
+  /** @type {any[]} */
+  const enqueued = [];
+  saveQueue.enqueue = (...args) => { enqueued.push(args); };
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  el.currentUserId = 'u1';
+  await el.connectedCallback();
+
+  const remediation = remediationOf(el);
+  assert.equal(remediation.canCapture, false, 'capture is frozen at completion');
+  remediation._listeners['cr-capture'][0]({
+    detail: { questionId: 'q-needs', fieldKey: 'rootCause', value: 'x' },
+  });
+  assert.equal(enqueued.length, 0, 'no persistence when capture is frozen');
+});
+
 test('CRCaseReview: attribution is frozen (read-only) on a Completed case', async () => {
   const completedRow = {
     ...BASE_ROW,

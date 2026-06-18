@@ -44,6 +44,22 @@ function findByClass(el, cls) {
 }
 
 /**
+ * Depth-first collect of all descendants whose className equals `cls`.
+ * @param {any} el
+ * @param {string} cls
+ * @returns {any[]}
+ */
+function findAllByClass(el, cls) {
+  /** @type {any[]} */
+  const out = [];
+  for (const c of el._children ?? []) {
+    if (c.className === cls) out.push(c);
+    out.push(...findAllByClass(c, cls));
+  }
+  return out;
+}
+
+/**
  * Flattens a subtree's text into one string for content assertions.
  * @param {any} el
  * @returns {string}
@@ -246,6 +262,43 @@ test('CRSummary: renders a remediation block with the action count and each fail
   assert.ok(/Remediation Actions?:?\s*1/i.test(text), 'shows the remediation action count (1)');
   assert.ok(text.includes('Greeted?') && text.includes('Needs found?'), 'lists both failed questions');
   assert.ok(text.includes('Retrain.'), 'lists the failed Answer’s action');
+});
+
+/** @type {any} */
+const SUMMARY_CAPTURE_GROUPS = [
+  { key: 'cause', label: 'Cause', collapsed: false, fields: [
+    { key: 'rootCause', label: 'Root cause', type: 'text' },
+  ]},
+];
+
+test('CRSummary: renders read-only capture groups for a failed Answer that has captured values', () => {
+  const el = new CRSummary();
+  el.caseRow = makeCase();
+  el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
+  el.captureGroups = SUMMARY_CAPTURE_GROUPS;
+  el.summarySections = ['remediation'];
+  el.connectedCallback();
+  el.update(
+    (/** @type {any} */ a) => makeComputeOutcome(a),
+    { 'q-open': { value: 'No', capture: { rootCause: 'Rushed' } }, 'q-needs': { value: 'No' } },
+    true
+  );
+
+  const caps = findAllByClass(/** @type {any} */ (el), 'cr-summary-capture');
+  assert.equal(caps.length, 1, 'only the failed Answer with captured values renders a capture block');
+  assert.equal(caps[0]._updateArgs.a3, false, 'capture is rendered read-only in the Summary');
+  assert.deepEqual(caps[0]._updateArgs.a2, { rootCause: 'Rushed' });
+  assert.equal(caps[0]._updateArgs.a1, SUMMARY_CAPTURE_GROUPS);
+});
+
+test('CRSummary: renders no capture block when the Case Type declares no captureGroups', () => {
+  const el = new CRSummary();
+  el.caseRow = makeCase();
+  el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
+  el.summarySections = ['remediation'];
+  el.connectedCallback();
+  el.update((/** @type {any} */ a) => makeComputeOutcome(a), { 'q-open': { value: 'No', capture: { rootCause: 'x' } } }, true);
+  assert.equal(findAllByClass(/** @type {any} */ (el), 'cr-summary-capture').length, 0);
 });
 
 test('CRSummary: a failed Answer without a category renders just the question text', () => {

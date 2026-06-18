@@ -24,10 +24,11 @@ export function isFailure(question, answer) {
  * failure (ADR-0013). When the Answer remains a failure and the question has
  * remediationActions defined, returns a fresh Answer with `remediationActions`
  * populated as { id, text, completed: false } items. When the Answer is no
- * longer a failure, any stale `remediationActions`, `attributedParty`, and
- * `remediationDetails` are stripped, so passing answers never carry leftover
- * failure metadata. The `attributedParty` and `remediationDetails` are kept on a
- * still-failing Answer even when the question defines no remediationActions.
+ * longer a failure, any stale `remediationActions`, `attributedParty`,
+ * `remediationDetails`, and `capture` (ADR-0020) are stripped, so passing answers
+ * never carry leftover failure metadata. The `attributedParty`,
+ * `remediationDetails`, and `capture` are kept on a still-failing Answer even when
+ * the question defines no remediationActions.
  *
  * @param {QuestionDefinition} question
  * @param {Answer} answer
@@ -48,6 +49,13 @@ export function materializeRemediationActions(question, answer) {
   // only survive while the Answer is a failure.
   if (!failing && result.remediationDetails) {
     const { remediationDetails: _dropDetails, ...rest } = result;
+    result = rest;
+  }
+
+  // Issue Capture (ADR-0020) shares the same lifecycle: the unified capture map
+  // only survives while the Answer is a failure.
+  if (!failing && result.capture) {
+    const { capture: _dropCapture, ...rest } = result;
     result = rest;
   }
 

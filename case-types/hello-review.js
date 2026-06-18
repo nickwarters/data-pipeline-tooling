@@ -20,10 +20,34 @@ const config = {
     appeal: {},
   },
   // Configurable per-failure capture fields (ADR-0017). One shared set applies
-  // to every failed Answer; captured inline as Answer.remediationDetails.
+  // to every failed Answer; captured inline as Answer.remediationDetails. Legacy:
+  // superseded by captureGroups below (ADR-0020) but kept while both coexist.
   remediationFields: [
     { key: 'rootCause', label: 'Root cause', type: 'text', required: true },
     { key: 'severity', label: 'Severity', type: 'select', options: ['Low', 'Med', 'High'] },
+  ],
+  // Unified Issue Capture engine (ADR-0020): everything captured against a failed
+  // Answer, as ordered, collapsible groups of typed fields. This slice exercises
+  // the four string field types; person/actions arrive in their own slices.
+  captureGroups: [
+    {
+      key: 'cause',
+      label: 'Cause',
+      collapsed: false,
+      fields: [
+        { key: 'rootCause', label: 'Root cause', type: 'text', required: true },
+        { key: 'whatHappened', label: 'What happened', type: 'textarea' },
+      ],
+    },
+    {
+      key: 'grading',
+      label: 'Grading',
+      collapsed: true,
+      fields: [
+        { key: 'severity', label: 'Severity', type: 'select', options: ['Low', 'Med', 'High'] },
+        { key: 'repeatIssue', label: 'Repeat issue?', type: 'radio', options: ['Yes', 'No'] },
+      ],
+    },
   ],
   questions: [
     {

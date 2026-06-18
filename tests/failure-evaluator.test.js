@@ -175,3 +175,21 @@ test('materializeRemediationActions: strips remediationDetails alongside attribu
   assert.equal(out.attributedParty, undefined);
   assert.equal(out.remediationDetails, undefined);
 });
+
+// ===== Issue Capture stripping (ADR-0020, shares ADR-0013 lifecycle) =====
+
+test('materializeRemediationActions: strips capture when answer becomes passing', () => {
+  const stale = {
+    value: 'Yes',
+    capture: { rootCause: 'Rushed', severity: 'High' },
+  };
+  const out = materializeRemediationActions(Q_FAIL_NO, stale);
+  assert.equal(out.capture, undefined);
+  assert.equal(out.value, 'Yes');
+});
+
+test('materializeRemediationActions: retains capture on a still-failing answer', () => {
+  const ans = { value: 'No', capture: { rootCause: 'Rushed' } };
+  const out = materializeRemediationActions(Q_FAIL_NO, ans);
+  assert.deepEqual(out.capture, { rootCause: 'Rushed' });
+});

@@ -67,8 +67,8 @@ test('buildSummaryModel: failures list each applicable failed Answer with its ac
   });
   const model = buildSummaryModel(catalogue, answers);
   assert.deepEqual(model.failures, [
-    { category: 'Opening', text: 'Greeted?', answer: 'No', actions: [] },
-    { category: 'Discovery', text: 'Resolved?', answer: 'No', actions: ['Escalate.', 'Follow up.'] },
+    { id: 'q-open', category: 'Opening', text: 'Greeted?', answer: 'No', actions: [] },
+    { id: 'q-resolve', category: 'Discovery', text: 'Resolved?', answer: 'No', actions: ['Escalate.', 'Follow up.'] },
   ]);
 });
 
@@ -79,6 +79,6 @@ test('buildSummaryModel: failure with a multi-choice value joins selections for 
   ];
   const model = buildSummaryModel(cat, { 'q-prod': { value: ['A', 'B'] } });
   assert.deepEqual(model.failures, [
-    { category: undefined, text: 'Defects?', answer: 'A, B', actions: ['Fix B.'] },
+    { id: 'q-prod', category: undefined, text: 'Defects?', answer: 'A, B', actions: ['Fix B.'] },
   ]);
 });

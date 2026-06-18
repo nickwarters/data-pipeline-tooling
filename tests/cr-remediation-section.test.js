@@ -20,6 +20,10 @@ class StubEl {
   replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
   appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
   append(/** @type {StubEl[]} */ ...cs) { this._children.push(...cs); }
+  // Stand-in for a real cr-capture-groups: records the args the section forwards.
+  update(/** @type {any} */ groups, /** @type {any} */ capture, /** @type {any} */ canCapture) {
+    /** @type {any} */ (this)._updateArgs = { groups, capture, canCapture };
+  }
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
   }
@@ -537,4 +541,81 @@ test('CRRemediationSection: read-only viewer omits fields with no captured value
 
   const values = findAllByClass(el, 'cr-remediation-detail-value').map(v => v.textContent);
   assert.deepEqual(values, ['Root cause: Rushed'], 'only captured fields are shown read-only');
+});
+
+// ===== Issue Capture engine integration (ADR-0020) =====
+
+/** @type {import('../src/sharepoint-client.js').CaptureGroup[]} */
+const CAPTURE_GROUPS = [
+  { key: 'cause', label: 'Cause', collapsed: false, fields: [
+    { key: 'rootCause', label: 'Root cause', type: 'text' },
+  ]},
+];
+
+test('CRRemediationSection: renders a cr-capture-groups per failed answer when captureGroups declared', () => {
+  const el = new CRRemediationSection();
+  el.catalogue = CATALOGUE;
+  el.answers = { 'q-welcome': { value: 'No' } };
+  el.captureGroups = CAPTURE_GROUPS;
+  el.canCapture = true;
+  el.connectedCallback();
+  const cg = findByTag(el, 'cr-capture-groups');
+  assert.ok(cg);
+  assert.equal(cg.groups, CAPTURE_GROUPS);
+  assert.deepEqual(cg.capture, {});
+  assert.equal(cg.canCapture, true);
+});
+
+test('CRRemediationSection: no cr-capture-groups when no captureGroups declared', () => {
+  const el = new CRRemediationSection();
+  el.catalogue = CATALOGUE;
+  el.answers = { 'q-welcome': { value: 'No' } };
+  el.captureGroups = [];
+  el.connectedCallback();
+  assert.equal(findByTag(el, 'cr-capture-groups'), null);
+});
+
+test('CRRemediationSection: passes the failed Answer capture into cr-capture-groups', () => {
+  const el = new CRRemediationSection();
+  el.catalogue = CATALOGUE;
+  el.answers = { 'q-welcome': { value: 'No', capture: { rootCause: 'Rushed' } } };
+  el.captureGroups = CAPTURE_GROUPS;
+  el.canCapture = true;
+  el.connectedCallback();
+  const cg = findByTag(el, 'cr-capture-groups');
+  assert.deepEqual(cg.capture, { rootCause: 'Rushed' });
+});
+
+test('CRRemediationSection: re-dispatches child cr-capture enriched with the question id', () => {
+  const el = new CRRemediationSection();
+  el.catalogue = CATALOGUE;
+  el.answers = { 'q-welcome': { value: 'No' } };
+  el.captureGroups = CAPTURE_GROUPS;
+  el.canCapture = true;
+  el.connectedCallback();
+  /** @type {any[]} */
+  const events = [];
+  el.addEventListener('cr-capture', (/** @type {any} */ e) => events.push(e));
+  const cg = findByTag(el, 'cr-capture-groups');
+  cg._fire('cr-capture', {
+    type: 'cr-capture',
+    detail: { fieldKey: 'rootCause', value: 'Rushed' },
+    stopPropagation() {},
+  });
+  assert.equal(events.length, 1);
+  assert.deepEqual(events[0].detail, { questionId: 'q-welcome', fieldKey: 'rootCause', value: 'Rushed' });
+  assert.equal(events[0].bubbles, true);
+});
+
+test('CRRemediationSection: reuses the cr-capture-groups instance across re-renders', () => {
+  const el = new CRRemediationSection();
+  el.catalogue = CATALOGUE;
+  el.captureGroups = CAPTURE_GROUPS;
+  el.canCapture = true;
+  el.answers = { 'q-welcome': { value: 'No' } };
+  el.connectedCallback();
+  const first = findByTag(el, 'cr-capture-groups');
+  el.update(CATALOGUE, { 'q-welcome': { value: 'No', capture: { rootCause: 'x' } } }, false);
+  const second = findByTag(el, 'cr-capture-groups');
+  assert.equal(first, second, 'same instance reused so ephemeral collapse survives');
 });

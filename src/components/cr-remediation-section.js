@@ -3,6 +3,7 @@ import { CRElement } from './cr-element.js';
 import { evaluate } from '../evaluators/applicability-evaluator.js';
 import { isFailure } from '../evaluators/failure-evaluator.js';
 import './cr-attribute-menu.js';
+import './cr-capture-groups.js';
 
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
@@ -46,6 +47,25 @@ export class CRRemediationSection extends CRElement {
      * @type {boolean}
      */
     this.canCaptureDetails = false;
+    /**
+     * The Case Type's unified **Issue Capture Group**s (ADR-0020). Empty when the
+     * Case Type declares none. Supersedes `remediationFields`; both may coexist.
+     * @type {import('../sharepoint-client.js').CaptureGroup[]}
+     */
+    this.captureGroups = [];
+    /**
+     * Whether the viewer may capture Issue Capture values. Mirrors `canAttribute`:
+     * Assigned Reviewer only, on an In-progress Case (frozen at completion).
+     * @type {boolean}
+     */
+    this.canCapture = false;
+    /**
+     * Per-failed-Answer `cr-capture-groups` instances, keyed by question id and
+     * reused across re-renders so each group's ephemeral collapse state survives
+     * an autosave-triggered re-render (ADR-0020).
+     * @type {Map<string, import('./cr-capture-groups.js').CRCaptureGroups>}
+     */
+    this._captureEls = new Map();
   }
 
   connectedCallback() {
@@ -122,6 +142,10 @@ export class CRRemediationSection extends CRElement {
 
     if (this.remediationFields?.length) {
       this._renderDetails(li, q);
+    }
+
+    if (this.captureGroups?.length) {
+      this._renderCapture(li, q);
     }
 
     if (q.remediationActions?.length) {
@@ -249,6 +273,53 @@ export class CRRemediationSection extends CRElement {
     input.type = 'text';
     input.value = current;
     return input;
+  }
+
+  /**
+   * Renders the unified **Issue Capture Group**s for a failed item (ADR-0020)
+   * via the `cr-capture-groups` component. The instance is reused per question id
+   * so each group's ephemeral collapse state survives autosave re-renders. The
+   * component's bubbling `cr-capture` (field key + value) is caught here and
+   * re-dispatched as a `cr-capture` carrying the question id; persistence is the
+   * page's responsibility so the answers signal stays the single source of truth.
+   *
+   * @param {HTMLElement} li
+   * @param {QuestionDefinition} q
+   */
+  _renderCapture(li, q) {
+    let cg = this._captureEls.get(q.id);
+    if (!cg) {
+      cg = /** @type {import('./cr-capture-groups.js').CRCaptureGroups} */ (
+        document.createElement('cr-capture-groups')
+      );
+      cg.addEventListener('cr-capture', (ev) => {
+        /** @type {any} */ (ev).stopPropagation?.();
+        const { fieldKey, value } =
+          /** @type {CustomEvent<{ fieldKey: string, value: string }>} */ (ev).detail;
+        this._dispatchCapture(q.id, fieldKey, value);
+      });
+      this._captureEls.set(q.id, cg);
+    }
+    const capture = this.answers[q.id]?.capture ?? {};
+    cg.groups = this.captureGroups;
+    cg.capture = capture;
+    cg.canCapture = this.canCapture;
+    cg.update?.(this.captureGroups, capture, this.canCapture);
+    li.appendChild(/** @type {any} */ (cg));
+  }
+
+  /**
+   * @param {string} questionId
+   * @param {string} fieldKey
+   * @param {string} value
+   */
+  _dispatchCapture(questionId, fieldKey, value) {
+    this.dispatchEvent(
+      new CustomEvent('cr-capture', {
+        detail: { questionId, fieldKey, value },
+        bubbles: true,
+      })
+    );
   }
 
   /**

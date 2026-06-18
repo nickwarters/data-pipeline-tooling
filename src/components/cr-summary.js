@@ -4,6 +4,7 @@ import './cr-outcome.js';
 import { caseDetailFields } from './cr-case-details.js';
 import { buildSummaryModel } from '../evaluators/summary-model.js';
 import { currentOutcome, buildOverrideRows } from '../evaluators/effective-answers.js';
+import './cr-capture-groups.js';
 
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../sharepoint-client.js').OutcomeResult} OutcomeResult */
@@ -44,6 +45,13 @@ export class CRSummary extends CRElement {
      * @type {Section[]}
      */
     this.summarySections = [];
+    /**
+     * The Case Type's unified **Issue Capture Group**s (ADR-0020), rendered
+     * read-only (expanded, populated-only) under each failed Answer. Empty when
+     * the Case Type declares none.
+     * @type {import('../sharepoint-client.js').CaptureGroup[]}
+     */
+    this.captureGroups = [];
   }
 
   connectedCallback() {
@@ -254,7 +262,34 @@ export class CRSummary extends CRElement {
       }
       li.appendChild(actions);
     }
+
+    this._renderCapture(li, failure.id);
     return li;
+  }
+
+  /**
+   * Renders the failed Answer's unified Issue Capture (ADR-0020) read-only:
+   * `cr-capture-groups` with `canCapture: false` shows every populated field
+   * expanded. Skipped when the Case Type declares no groups, or the Answer has no
+   * captured values, so the Summary stays clean.
+   *
+   * @param {HTMLElement} li
+   * @param {string} questionId
+   */
+  _renderCapture(li, questionId) {
+    if (!this.captureGroups?.length) return;
+    const capture = this.answers[questionId]?.capture;
+    if (!capture || Object.keys(capture).length === 0) return;
+
+    const cg = /** @type {import('./cr-capture-groups.js').CRCaptureGroups} */ (
+      document.createElement('cr-capture-groups')
+    );
+    cg.className = 'cr-summary-capture';
+    cg.groups = this.captureGroups;
+    cg.capture = capture;
+    cg.canCapture = false;
+    cg.update(this.captureGroups, capture, false);
+    li.appendChild(/** @type {any} */ (cg));
   }
 
   /**
