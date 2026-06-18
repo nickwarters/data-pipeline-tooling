@@ -4,12 +4,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent.parent
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def _run(*args):
     return subprocess.run(
-        [sys.executable, "-m", "pipelines.run", *args],
+        [sys.executable, "-m", "framework", "run", *args,
+         "--app", "pipelines.demo_source_to_selection"],
         capture_output=True,
         text=True,
         cwd=ROOT,

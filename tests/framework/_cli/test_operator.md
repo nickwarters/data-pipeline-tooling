@@ -1,5 +1,5 @@
 ```python
-"""Operator CLI (`python -m pipelines.cli`).
+"""Operator CLI (`python -m framework`).
 
 Drives the CLI as a subprocess so the tests exercise the same entry point an
 operator does: argument parsing, dispatch, exit codes, and console output. Every
@@ -12,12 +12,19 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent.parent
+ROOT = Path(__file__).resolve().parents[3]
+
+# The demo application supplies the pipeline registry the run/orchestrate
+# commands resolve via the required --app option.
+APP = "pipelines.demo_source_to_selection"
 
 
 def _cli(*args):
+    # run/orchestrate need the application module; the other commands don't take it.
+    if args and args[0] in ("run", "orchestrate"):
+        args = (*args, "--app", APP)
     return subprocess.run(
-        [sys.executable, "-m", "pipelines.cli", *args],
+        [sys.executable, "-m", "framework", *args],
         capture_output=True,
         text=True,
         cwd=ROOT,
@@ -143,7 +150,7 @@ def test_orchestrate_once_runs_demo_set_and_writes_both_registries(tmp_path):
 
 
 def test_format_record_includes_zero_row_metrics():
-    from pipelines.cli import _format_record
+    from framework._cli.operator import _format_record
 
     line = _format_record(
         {
@@ -214,18 +221,23 @@ def test_run_stale_upstream_reports_clear_error(tmp_path):
 def test_run_validation_failure_reports_clear_error(tmp_path, monkeypatch, capsys):
     # A pipeline that fails a data check raises ValidationError; the operator
     # should see the message and a non-zero exit, not an unhandled traceback.
+    from types import SimpleNamespace
+
+    from framework._cli import operator
     from framework.run import PipelineRunner
     from framework.validate import ValidationError
-    from pipelines import cli
 
     def boom(_context):
         raise ValidationError("row count 0 below required minimum 1")
 
     runner = PipelineRunner()
     runner.register("cases", "ingest", boom)
-    monkeypatch.setattr(cli, "build_runner", lambda: runner)
+    # Substitute a fake application registry for the resolved --app module.
+    monkeypatch.setattr(
+        operator, "_resolve_app", lambda name: SimpleNamespace(build_runner=lambda: runner)
+    )
 
-    code = cli.main(["run", "cases", "ingest", str(tmp_path)])
+    code = operator.main(["run", "cases", "ingest", str(tmp_path), "--app", "fake.app"])
 
     assert code == 1
     assert "below required minimum" in capsys.readouterr().err

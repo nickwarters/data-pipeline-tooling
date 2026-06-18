@@ -1,5 +1,5 @@
 ```python
-"""Template feed package rendered by ``pipelines.scaffold``.
+"""Template feed package rendered by ``python -m framework scaffold``.
 
 This placeholder feed is called ``myfeed``; the scaffold substitutes that token
 (and its PascalCase class form ``Myfeed``) for the real feed name when it renders

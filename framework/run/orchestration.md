@@ -13,6 +13,7 @@ from typing import Generic, TypeVar
 
 from framework._internal.connection import connect
 from framework.core.dataset import Dataset
+from framework.core.errors import PipelineError
 from framework.run.builder import Pipeline
 from framework.run.run_context import RunContext
 from framework.run.runner import FreshnessError, FreshnessRequirement, PipelineRunner
@@ -25,7 +26,7 @@ BuildPipeline = Callable[[Item, RunContext], Pipeline]
 LogicalRunId = Callable[[Item, int, RunContext], str]
 
 
-class ForEachPipelineError(RuntimeError):
+class ForEachPipelineError(PipelineError):
     """Raised when one item in a for-each orchestration fails."""
 
 
