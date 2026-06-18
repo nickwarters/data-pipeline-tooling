@@ -7,7 +7,7 @@ stays local SQLite + JSONL, with no external services.
 
 Run from the repository root so the import-only ``framework`` package resolves::
 
-    python -m framework run cases ingest /data --run-date 2026-05-29
+    python -m framework run cases/ingest /data --run-date 2026-05-29
     python -m framework status /data --case-type cases
     python -m framework runs /data --pipeline cases/ingest --limit 5
     python -m framework log /data cases --run-id <execution-id>
@@ -84,10 +84,18 @@ def _format_run(record: dict) -> str:
 
 def _run(args: argparse.Namespace) -> int:
     runner = _resolve_app(args.app).build_runner()
+    subject, _, name = args.pipeline.partition("/")
+    if not name:
+        print(
+            f"pipeline {args.pipeline!r} must be a '<subject>/<name>' label, "
+            "e.g. cases/ingest",
+            file=sys.stderr,
+        )
+        return 1
     try:
         runner.run(
-            args.case_type,
-            args.pipeline,
+            subject,
+            name,
             Path(args.base_dir),
             run_date=args.run_date,
             logical_run_id=args.logical_run_id,
@@ -219,14 +227,13 @@ def _status(args: argparse.Namespace) -> int:
 def register(sub) -> None:
     """Add the operator commands to the unified ``python -m framework`` CLI."""
     run = sub.add_parser("run", help="run a registered pipeline")
-    run.add_argument("case_type")
-    run.add_argument("pipeline")
+    run.add_argument("pipeline", help="the pipeline label to run, e.g. cases/ingest")
     run.add_argument("base_dir")
     run.add_argument("--run-date", type=_date, default=dt.date.today())
     run.add_argument(
         "--logical-run-id",
         help="re-drive this business run: a re-run with the same id replaces its "
-        "rows (default: case_type/pipeline:run_date)",
+        "rows (default: <pipeline>:<run-date>)",
     )
     run.add_argument("--freshness-days", type=int, default=0)
     run.add_argument(

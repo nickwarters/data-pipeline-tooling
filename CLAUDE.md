@@ -68,7 +68,7 @@ python3 -m venv .venv
 .venv/bin/python -m framework scaffold orders            # scaffold a feed -> pipelines/orders/ + tests/pipelines/test_orders.py (#97)
 .venv/bin/python -m framework scaffold orders --from-feed-file sample.csv  # seed schema/sample/test from a real CSV header
 .venv/bin/python -m framework scaffold --case-type claims # scaffold a Case Type ingest feed (source->raw->silver, identity declared; #155)
-.venv/bin/python -m framework run cases ingest /tmp/demo --app pipelines.demo_source_to_selection  # operator CLI: run/orchestrate/status/runs/log (see docs/operator-cli.md)
+.venv/bin/python -m framework run cases/ingest /tmp/demo --app pipelines.demo_source_to_selection  # operator CLI: run/orchestrate/status/runs/log (see docs/operator-cli.md)
 ```
 
 Run pipelines as **modules from the repo root** (`python -m pipelines.<name>`)

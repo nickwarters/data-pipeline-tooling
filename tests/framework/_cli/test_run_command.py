@@ -36,7 +36,7 @@ def _record_run(log_path: Path, *, timestamp: str) -> None:
 
 
 def test_pipeline_run_cli_ingest_succeeds(tmp_path):
-    result = _run("cases", "ingest", str(tmp_path), "--run-date", "2026-05-29")
+    result = _run("cases/ingest", str(tmp_path), "--run-date", "2026-05-29")
 
     assert result.returncode == 0
     assert (tmp_path / "cases" / "raw.db").exists()
@@ -44,10 +44,10 @@ def test_pipeline_run_cli_ingest_succeeds(tmp_path):
 
 
 def test_pipeline_run_cli_selection_succeeds_after_ingest_history(tmp_path):
-    ingest = _run("cases", "ingest", str(tmp_path), "--run-date", "2026-05-29")
+    ingest = _run("cases/ingest", str(tmp_path), "--run-date", "2026-05-29")
     assert ingest.returncode == 0
 
-    selection = _run("cases", "selection", str(tmp_path), "--run-date", "2026-05-29")
+    selection = _run("cases/selection", str(tmp_path), "--run-date", "2026-05-29")
 
     assert selection.returncode == 0
     assert "SelectionPool" in selection.stdout
@@ -59,7 +59,7 @@ def test_pipeline_run_cli_selection_fails_when_ingest_history_is_stale(tmp_path)
         timestamp="2026-05-27T00:00:00+00:00",
     )
 
-    result = _run("cases", "selection", str(tmp_path), "--run-date", "2026-05-29")
+    result = _run("cases/selection", str(tmp_path), "--run-date", "2026-05-29")
 
     assert result.returncode != 0
     assert "upstream cases/ingest is stale" in result.stderr

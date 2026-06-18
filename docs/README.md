@@ -450,7 +450,7 @@ strategy = AccumulateByRun.from_context(context)
 - The SelectionPool reaches the review platform as a **Deliverable** (a later
   slice); the returned **Review Outcomes** come back via **Sync**, not here.
 - Run domain Pipelines through the thin runner when freshness matters:
-  `python -m framework run cases selection /tmp/demo --run-date 2026-05-29`
+  `python -m framework run cases/selection /tmp/demo --run-date 2026-05-29`
   checks recent successful `cases/ingest` history before Selection executes.
 
 ### Assemble silver into gold outputs
@@ -483,7 +483,7 @@ of writing a wrapper script. It is a thin shell over the runner and the
 [`operator-cli.md`](operator-cli.md).
 
 ```sh
-python -m framework run cases ingest /data --app pipelines.demo_source_to_selection --run-date 2026-05-29
+python -m framework run cases/ingest /data --app pipelines.demo_source_to_selection --run-date 2026-05-29
 python -m framework status /data --case-type cases
 python -m framework runs /data --pipeline cases/ingest --limit 5
 python -m framework log /data cases --run-id 5f8ff8c7
