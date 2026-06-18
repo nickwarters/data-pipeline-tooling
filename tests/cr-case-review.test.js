@@ -111,7 +111,7 @@ const detailsOf = (/** @type {any} */ el) => panelOf(el, 'details');
 
 // ===== TABBED LAYOUT (ADR-0014, #106) =====
 
-test('CRCaseReview: renders a cr-tabs with Details · Questions · Notes · Issues · Summary in order', async () => {
+test('CRCaseReview: renders a cr-tabs with Details · Review · Issues · Summary · Notes in order', async () => {
   const el = new CRCaseReview();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
@@ -121,13 +121,13 @@ test('CRCaseReview: renders a cr-tabs with Details · Questions · Notes · Issu
   const tabs = tabsOf(el).tabs;
   assert.deepEqual(
     tabs.map((/** @type {any} */ t) => t.id),
-    ['details', 'questions', 'notes', 'remediation', 'summary', 'appeal'],
-    'tab order is Details · Questions · Notes · Issues · Summary · Appeal (Issues keeps the remediation id)'
+    ['details', 'questions', 'remediation', 'summary', 'notes', 'appeal'],
+    'tab order is Details · Review · Issues · Summary · Notes · Appeal (Review keeps the questions id, Issues the remediation id)'
   );
   assert.deepEqual(
     tabs.map((/** @type {any} */ t) => t.label),
-    ['Details', 'Questions', 'Notes', 'Issues', 'Summary', 'Appeal'],
-    'the Remediation Section surfaces under the UI label "Issues"'
+    ['Details', 'Review', 'Issues', 'Summary', 'Notes', 'Appeal'],
+    'the Questions Section surfaces under the UI label "Review"; Remediation under "Issues"'
   );
   // For the Assigned Reviewer on an In-progress case every Section is visible —
   // the Appeal Section is read-only (not hidden) for reviewers.

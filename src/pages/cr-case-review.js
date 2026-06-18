@@ -534,16 +534,19 @@ export class CRCaseReview extends CRElement {
     // `hidden` (ADR-0011) renders no tab. Conversation is deliberately NOT a tab —
     // it stays a floating overlay so a Reviewer can read it alongside the
     // Questions. Tab order is the Section order with Details first.
-    // Tab row is Details · Questions · Notes · Issues · Summary (ADR-0016). The
-    // Remediation Section surfaces under the UI label "Issues" while keeping its
-    // Section id `remediation`; the Outcome tab is gone, absorbed into Summary.
+    // Defined-subset tab row is Case Details · Review · Issues · Summary · Notes
+    // (ADR-0014/0016, #146). "Review" is a UI label for the Questions Section
+    // (domain terms Question Definition / Answer / Questions Section unchanged);
+    // "Issues" surfaces the Remediation Section while keeping its id `remediation`.
+    // The Outcome tab is gone, absorbed into Summary. Remediation and Amend Outcome
+    // (the full seven-tab bar) arrive with #144/#145; Appeal trails until then.
     /** @type {import('../components/cr-tabs.js').Tab[]} */
     const tabs = [
       { id: 'details', label: 'Details', hidden: access.details === 'hidden' },
-      { id: 'questions', label: 'Questions', hidden: access.questions === 'hidden' },
-      { id: 'notes', label: 'Notes', hidden: access.notes === 'hidden' },
+      { id: 'questions', label: 'Review', hidden: access.questions === 'hidden' },
       { id: 'remediation', label: 'Issues', hidden: access.remediation === 'hidden' },
       { id: 'summary', label: 'Summary', hidden: access.summary === 'hidden' },
+      { id: 'notes', label: 'Notes', hidden: access.notes === 'hidden' },
       { id: 'appeal', label: 'Appeal', hidden: access.appeal === 'hidden' },
     ];
     /** @type {Record<string, Node>} */
