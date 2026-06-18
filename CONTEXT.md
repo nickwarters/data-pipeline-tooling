@@ -95,8 +95,12 @@ The final Pipeline: it reads across all upstream Pipelines, builds the cross-Pip
 _Avoid_: analytics, BI, warehouse
 
 **Schema** (of a Case Type):
-The declared expected columns, types, and field-level nullability/value rules for a Case Type — the single, named replacement for today's scattered, implicit "assume field X exists" checks. A validation contract first (enforced at silver & gold), and the optional basis for typed objects. Currently a dataclass; Pydantic later.
+The declared expected columns, types, and field-level nullability/**value rules** for a Case Type — the single, named replacement for today's scattered, implicit "assume field X exists" checks. A validation contract first (enforced at silver & gold), and the optional basis for typed objects. Currently a dataclass; Pydantic later.
 _Avoid_: model, shape, structure (informal)
+
+**Value rule** / **Row check**:
+The two axes of a **Schema**'s content contract. A **value rule** is *vertical* — one column across many rows (format, length, range, membership, uniqueness), declared on the field via `Annotated`. A **row check** is *horizontal* — one row across many fields, validating the relationship *between* a row's fields (`opened <= closed`; "if status is closed then closed_date is present"). A row check is a plain function over a row returning a breach phrase or `None`, paired with the **footprint** of columns it spans (so a column already failing its dtype check suppresses the check rather than crashing it); declared as `RowCheck`s via the `@row_checks(...)` class decorator above the schema. Both feed the same two consumers — abort (collected into one `SchemaValidator` message) or quarantine (a `failed_rule` reason). Unlike value rules, a row check runs over **every** row including nulls — presence may be the very thing it tests — so the author handles nulls explicitly.
+_Avoid_: cross-field rule (informal), constraint
 
 **Schema Drift**:
 A **Feed**'s landed column set changing run-over-run — an owner-controlled source (SharePoint list, SAS export) silently adding or dropping a column between snapshots. Detected at the **raw** boundary by diffing the incoming columns against the prior run's landed columns, and surfaced as a **warning** that does not stop the run (raw stays a faithful mirror of the source — ADR-0008). Names-only and run-over-run; a type change on a surviving column is a **Schema Breach**'s concern, not drift.

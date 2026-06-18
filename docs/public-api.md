@@ -141,8 +141,9 @@ they sit on their own facade. Composed onto a `Pipeline` as pre/post validators.
 | `Validator`, `ValidationError` | The check seam and the error it raises. |
 | `ColumnValidator`, `RowCountValidator`, `VolumeAnomalyValidator`, `UniqueValidator`, `SchemaDriftValidator` | The concrete structural / volume / uniqueness / drift checks. |
 | `RunHistory`, `PriorColumns` | History inputs the run-aware checks read. |
-| `SchemaValidator` | The declared-schema check: a Case Type dataclass's columns + dtypes + nullability + value rules, enforced at silver (and optionally gold). |
+| `SchemaValidator` | The declared-schema check: a Case Type dataclass's columns + dtypes + nullability + value rules + row checks, enforced at silver (and optionally gold). |
 | `ValueRule`, `Nullable`, `NonNull`, `Pattern`, `Length`, `Range`, `Unique`, `OneOf` | The declared-schema value-level contract (`Annotated` field rules) the schema check runs. |
+| `RowCheck`, `row_checks` | The declared-schema **row check** contract: cross-field checks over the relationship between a row's fields, declared via the `@row_checks(...)` class decorator (the horizontal sibling to the value rules). |
 
 ### `framework.run` — composing, executing, observing
 
@@ -196,13 +197,14 @@ without notice:
   …) — the **stubbed remote-client seam** behind `SasReader` / `SharePointReader`
   / `SharePointWriter` (ADR-0004/0005). An advanced extension point, documented in
   [adding-a-feed.md](adding-a-feed.md); not part of the day-to-day surface.
-- `framework.transform.quarantine` (`SchemaValueRulePartitioner`, …) — the value-rule
-  quarantine partitioner; wired by the schema/quarantine flow.
-- `framework._internal.schema` (the `ValueRule` protocol, the Python↔pandas type
-  mapping, and the dataclass-annotation reading) — the shared core both schema
-  adapters (`validate.SchemaValidator`, `transform.SchemaCoercion`) derive from,
-  so they stay consistent without depending on each other. The public `ValueRule`
-  name surfaces via `framework.validate`; the rest is private.
+- `framework.transform.quarantine` (`SchemaValueRulePartitioner`, …) — the
+  value-rule / row-check quarantine partitioner; wired by the schema/quarantine flow.
+- `framework._internal.schema` (the `ValueRule` protocol, the `RowCheck` carrier +
+  `row_checks` decorator, the Python↔pandas type mapping, and the
+  dataclass-annotation reading) — the shared core both schema adapters
+  (`validate.SchemaValidator`, `transform.SchemaCoercion`) derive from, so they
+  stay consistent without depending on each other. The public `ValueRule` /
+  `RowCheck` / `row_checks` names surface via `framework.validate`; the rest is private.
 - Names prefixed `_` anywhere (`_NullRunLog`, `_RegisteredPipeline`, …), and the
   run-log/runner internals not listed in a facade (`StepMetrics`,
   `FreshnessGuard`, `pipeline_label`).

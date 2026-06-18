@@ -144,7 +144,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 > — `framework.core` (`Dataset` + the medallion `Layer` constants), `framework.io`
 > (sources/sinks/stores), `framework.transform` (the reshaping processors +
 > `SchemaCoercion`), `framework.validate` (the `validate(dataset)` checks + the
-> declared-schema contract: `SchemaValidator` and the value rules),
+> declared-schema contract: `SchemaValidator`, the value rules, and the row checks),
 > `framework.run` (the `Pipeline` builder, orchestration, runner, observability),
 > `framework.recipes` (higher-level medallion builders),
 > and `framework.shared` (cross-cutting utilities — retry, `WorkingDayCalendar`)
@@ -163,7 +163,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`RetryPolicy` / `RetryingReader` / `RetryingWriter`** | Targeted retry for **transient I/O-edge failures** (remote access, SharePoint/SAS fetch, SQLite busy). An allowlist of exception types is retried; schema-validation and configuration errors abort immediately. Scoped to the `read()`/`write()` seam, never around validation. → [retry.md](retry.md) |
 | **`Store` / `StoreCatalog`** | `Store(subject_dir)` binds one subject to Writer/Reader creation over `<subject>/{raw,silver,gold}.db`; `StoreCatalog(root).store(subject)` mints those stores from shared root/configuration. Holds no business logic and makes no load decision. ([ADR-0001](adr/0001-sqlite-medallion-store-on-network-share.md)) |
 | **`Validator`** | `validate(dataset) -> None`, **raises** on breach. `ColumnValidator`, `RowCountValidator` (engine-agnostic), `VolumeAnomalyValidator` (trips when a run's volume deviates from its recent-history baseline — catches truncated source exports, #54), `SchemaDriftValidator` (warns at the raw boundary when a feed's columns drift from the prior run's landed set — catches owner-controlled source schema change, #51). Severity (`error`/`warn`) is set where it's attached. |
-| **`Schema` / `SchemaValidator`** | A Case Type **dataclass** whose annotations *are* the column, dtype, nullability, and value-rule contract; the validator is the dataclass→validator adapter, enforced at silver (and optionally gold). Nullability/value rules extend the same dataclass via `Annotated`. → [schema-enforcement.md](schema-enforcement.md) ([ADR-0008](adr/0008-graduated-schema-enforcement.md)) |
+| **`Schema` / `SchemaValidator`** | A Case Type **dataclass** whose annotations *are* the column, dtype, nullability, and value-rule contract; the validator is the dataclass→validator adapter, enforced at silver (and optionally gold). Nullability/value rules extend the same dataclass via `Annotated`; cross-field **row checks** attach via the `@row_checks(...)` class decorator. → [schema-enforcement.md](schema-enforcement.md) ([ADR-0008](adr/0008-graduated-schema-enforcement.md)) |
 | **`Processor`** | `process(dataset) -> Dataset`, run mid-pipeline via `.with_processor()`. `SchemaCoercion` (repair storage-lossy types); the Selection transforms `Filter` / `Score` / `VectorizedFilter` / `VectorizedDerive` / `Sort` / `Rename` / `Stamp`, the per-group `TopNPerGroup` / `SamplePerGroup`, the explicit-dependency cross-feed `JoinWith` / `AntiJoinWith`; the column-shaping `Parse` / `SplitColumn` / `JoinColumns`; and the Ingest / fan-out transforms `SelectColumns` / `DropColumns` / `Unpivot` / `DeriveKey` / `LatestPerKey`. → [processors.md](processors.md) |
 | **`Stage`** | A position-sensitive step inside one class-level `Pipeline` run: current `Dataset` in, next `Dataset` out. Compose with `.add_stage(...)` when validation, processing, or explicit checkpoint writes must appear at an exact point. Built-ins: `ValidationStage`, `ProcessingStage`, `CheckpointStage`. |
 | **`Pipeline`** (builder) | The deferred fluent builder: `Pipeline(name, reader).add_stage(…).write_to(writer)`. It builds one ordered plan; call `.describe()` to inspect the planned reader/stages/governance/writer without executing, then `.run(context=…)` to execute that plan fail-fast and atomic with RunLog observability. ([ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md)) |
@@ -195,7 +195,9 @@ walkthrough (with the runnable demo) is [`selection.md`](selection.md); the step
 **1. Declare the schema** — an ordinary dataclass; its annotations *are* the
 column + type contract (enforced at silver, and optionally gold). Add explicit
 nullability and value-level rules with `typing.Annotated` (`Nullable`, `NonNull`,
-`Pattern`, `Length`, `Range`, `Unique`, `OneOf`).
+`Pattern`, `Length`, `Range`, `Unique`, `OneOf`), and cross-field **row checks**
+over the relationship between a row's fields with the `@row_checks(...)` class
+decorator (`RowCheck`).
 
 ```python
 from dataclasses import dataclass
