@@ -6,6 +6,7 @@ from dataclasses import fields
 
 from framework.core import RAW
 from framework.io import StoreCatalog
+from framework.run import RunContext
 from framework.testing import RecordingWriter, given_rows, read_rows, rows_of
 
 from .pipeline import FEED_NAME, builder, run
@@ -27,7 +28,7 @@ def test_source_rows_become_output_rows():
 
 
 def test_bundled_sample_feed_lands_in_raw(tmp_path):
-    dataset = run(tmp_path)
+    dataset = run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
 
     store = StoreCatalog(tmp_path).store(FEED_NAME)
     landed = read_rows(store, RAW, FEED_NAME)

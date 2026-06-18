@@ -6,28 +6,38 @@ types and no case-review assumptions. Swap ``CsvReader`` for another Reader
 (``ExcelReader``, ``GlobCsvReader``, ``SqliteReader``, ...) to ingest the same
 feed from a different source; the rest of the pipeline is unchanged.
 
-Run it as a module from the repo root so the import-only ``framework`` package
-resolves on ``sys.path``::
+Address it by its location on disk -- the framework imports
+``pipelines.myfeed.pipeline`` and runs its ``run(context)`` callable::
+
+    python -m framework run pipelines/myfeed [BASE_DIR]
+
+or run the module directly with a default run context::
 
     python -m pipelines.myfeed.pipeline [BASE_DIR]
+
+Both run from the repo root so the import-only ``framework`` package resolves on
+``sys.path``.
 """
 
 from __future__ import annotations
 
-import os
 import sys
 from dataclasses import fields
 from pathlib import Path
 
 from framework.core import RAW, Dataset, PipelineError, format_failure
-from framework.io import CsvReader, Reader, Refresh, StoreCatalog, Writer
-from framework.run import Pipeline, RunLog
+from framework.io import AccumulateByRun, CsvReader, Reader, StoreCatalog, Writer
+from framework.run import Pipeline, RunContext, RunLog
 from framework.validate import ColumnValidator
 
 from .schema import MyfeedRow
 
 FEED_NAME = "myfeed"
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "myfeed.csv"
+
+# Pipelines this feed depends on being fresh before it runs (a tuple of
+# ``framework.run.FreshnessRequirement``). A source feed has none.
+UPSTREAMS = ()
 
 
 def builder(
@@ -51,30 +61,33 @@ def builder(
     )
 
 
-def run(
-    base_dir: str | os.PathLike[str],
-    csv_path: str | os.PathLike[str] = SAMPLE_CSV,
-) -> Dataset:
-    """Land the CSV feed into the subject's ``raw.db`` under ``base_dir``.
+def run(context: RunContext) -> Dataset:
+    """Land the CSV feed into the subject's ``raw.db`` under the run context.
 
-    Wires the real Reader/Writer for the bundled CSV source and runs the
-    pipeline composed by ``builder``.
+    Wires the real Reader/Writer for the bundled CSV source and runs the pipeline
+    composed by ``builder``. The accumulation strategy is derived from the
+    ``RunContext``, so a re-run under the same logical run id (``--logical-run-id``)
+    replaces that business run's rows rather than duplicating them.
     """
-    store = StoreCatalog(base_dir).store(FEED_NAME)
+    store = StoreCatalog(context.base_dir).store(FEED_NAME)
     return builder(
-        CsvReader(csv_path),
-        store.writer(RAW, FEED_NAME, Refresh()),
+        CsvReader(SAMPLE_CSV),
+        store.writer(RAW, FEED_NAME, AccumulateByRun.from_context(context)),
+        context.run_log,
     ).run()
 
 
 def main(argv: list[str]) -> int:
     base_dir = Path(argv[1]) if len(argv) > 1 else Path.cwd() / "data"
-    # The pipeline is fail-fast: a Validator breach aborts before anything lands
-    # and raises a PipelineError. Catch the family and present it cleanly so an
-    # expected data failure reads as a clear message, not an unhandled traceback;
-    # a genuine bug is *not* a PipelineError and keeps its stack trace.
+    # Direct invocation builds a default run context and runs the same handler the
+    # framework would. The pipeline is fail-fast: a Validator breach aborts before
+    # anything lands and raises a PipelineError. Catch the family and present it
+    # cleanly so an expected data failure reads as a clear message, not an
+    # unhandled traceback; a genuine bug is *not* a PipelineError and keeps its
+    # stack trace.
+    context = RunContext(base_dir=base_dir, pipeline=FEED_NAME)
     try:
-        dataset = run(base_dir)
+        dataset = run(context)
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1

@@ -41,9 +41,15 @@ class FreshnessRequirement:
     max_age_days: int = 0
 
 
-def pipeline_label(case_type: str, pipeline: str) -> str:
-    """Return the stable registry label for a domain Pipeline."""
-    return f"{case_type}/{pipeline}"
+def pipeline_label(case_type: str | None, pipeline: str) -> str:
+    """Return the stable registry label for a domain Pipeline.
+
+    Subject-qualified (``case_type/pipeline``) when a medallion subject is given;
+    the bare pipeline name when it is not (the path-addressed ``run`` case). This
+    mirrors :attr:`RunContext.label` so an upstream resolves to the same identity
+    its run recorded under.
+    """
+    return f"{case_type}/{pipeline}" if case_type else pipeline
 
 
 class FreshnessGuard:
@@ -105,6 +111,91 @@ class FreshnessGuard:
 Handler = Callable[[RunContext], object]
 
 
+def run_pipeline(
+    handler: Handler,
+    name: str,
+    base_dir: str | Path,
+    *,
+    subject: str | None = None,
+    upstreams: tuple[FreshnessRequirement, ...] = (),
+    run_date: dt.date | None = None,
+    logical_run_id: str | None = None,
+    freshness_days: int = 0,
+    freshness_guard: FreshnessGuard | None = None,
+) -> object:
+    """Execute one pipeline handler with freshness checks and run recording.
+
+    The execution core shared by ``PipelineRunner`` (which addresses pipelines by
+    a registered ``(case_type, name)`` key) and the path-addressed ``run``
+    command (which imports a ``pipelines/<name>/pipeline.py`` module and runs its
+    ``run`` callable directly). ``name`` is the run-history identity; ``subject``
+    is the optional medallion subject — when given, the label is ``subject/name``
+    and the run log partitions under ``_runs/<subject>.log``; when ``None`` (the
+    path-addressed case) both fall back to ``name``.
+
+    The shared ``RunRegistry`` is caught up from *every* ``_runs/*.log`` before
+    freshness runs, so a declared upstream's history is visible no matter which
+    log file partitioned it. ``ingest`` is incremental and idempotent, so the
+    sweep is cheap and safe to repeat.
+    """
+    guard = freshness_guard or FreshnessGuard()
+    root = Path(base_dir)
+    runs_dir = root / "_runs"
+    run_log_path = runs_dir / f"{subject or name}.log"
+    registry_path = root / "_registry" / "runs.db"
+    run_log = RunLog(run_log_path)
+    run_registry = RunRegistry(registry_path)
+    if runs_dir.exists():
+        for log_file in sorted(runs_dir.glob("*.log")):
+            run_registry.ingest(log_file)
+
+    context = RunContext(
+        base_dir=root,
+        case_type=subject,
+        pipeline=name,
+        run_date=run_date or dt.date.today(),
+        execution_id=uuid.uuid4().hex,
+        logical_run_id=logical_run_id,
+        run_log=run_log,
+        run_registry=run_registry,
+        freshness_days=freshness_days,
+    )
+
+    started = time.perf_counter()
+    try:
+        for requirement in upstreams:
+            guard.check(context, requirement)
+        result = handler(context)
+    except Exception as exc:
+        if not context.run_summary_recorded:
+            run_log.record(
+                context.run_id,
+                context.label,
+                "run",
+                "error",
+                duration=time.perf_counter() - started,
+                errors=[str(exc)],
+            )
+            context.mark_run_summary_recorded()
+        run_registry.ingest(run_log_path)
+        raise
+
+    rows = len(result) if isinstance(result, Dataset) else None
+    if not context.run_summary_recorded:
+        run_log.record(
+            context.run_id,
+            context.label,
+            "run",
+            "ok",
+            rows_in=rows,
+            rows_out=rows,
+            duration=time.perf_counter() - started,
+        )
+        context.mark_run_summary_recorded()
+    run_registry.ingest(run_log_path)
+    return result
+
+
 @dataclass(frozen=True)
 class _RegisteredPipeline:
     handler: Handler
@@ -146,60 +237,17 @@ class PipelineRunner:
             raise UnknownPipelineError(
                 f"unknown pipeline {pipeline!r} for case type {case_type!r}"
             )
-
-        root = Path(base_dir)
-        run_log_path = root / "_runs" / f"{case_type}.log"
-        registry_path = root / "_registry" / "runs.db"
-        run_log = RunLog(run_log_path)
-        run_registry = RunRegistry(registry_path)
-        if run_log_path.exists():
-            run_registry.ingest(run_log_path)
-
-        context = RunContext(
-            base_dir=root,
-            case_type=case_type,
-            pipeline=pipeline,
-            run_date=run_date or dt.date.today(),
-            execution_id=uuid.uuid4().hex,
+        return run_pipeline(
+            registered.handler,
+            pipeline,
+            base_dir,
+            subject=case_type,
+            upstreams=(*registered.freshness, *freshness),
+            run_date=run_date,
             logical_run_id=logical_run_id,
-            run_log=run_log,
-            run_registry=run_registry,
             freshness_days=freshness_days,
+            freshness_guard=self._freshness_guard,
         )
-
-        started = time.perf_counter()
-        try:
-            for requirement in (*registered.freshness, *freshness):
-                self._freshness_guard.check(context, requirement)
-            result = registered.handler(context)
-        except Exception as exc:
-            if not context.run_summary_recorded:
-                run_log.record(
-                    context.run_id,
-                    context.label,
-                    "run",
-                    "error",
-                    duration=time.perf_counter() - started,
-                    errors=[str(exc)],
-                )
-                context.mark_run_summary_recorded()
-            run_registry.ingest(run_log_path)
-            raise
-
-        rows = len(result) if isinstance(result, Dataset) else None
-        if not context.run_summary_recorded:
-            run_log.record(
-                context.run_id,
-                context.label,
-                "run",
-                "ok",
-                rows_in=rows,
-                rows_out=rows,
-                duration=time.perf_counter() - started,
-            )
-            context.mark_run_summary_recorded()
-        run_registry.ingest(run_log_path)
-        return result
 
 
 def _timestamp(value: str) -> dt.datetime:

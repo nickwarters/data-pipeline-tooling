@@ -7,18 +7,21 @@ stays local SQLite + JSONL, with no external services.
 
 Run from the repository root so the import-only ``framework`` package resolves::
 
-    python -m framework run cases/ingest /data --run-date 2026-05-29
+    python -m framework run pipelines/orders /data --run-date 2026-05-29
     python -m framework status /data --case-type cases
     python -m framework runs /data --pipeline cases/ingest --limit 5
     python -m framework log /data cases --run-id <execution-id>
 
-The framework knows the run/orchestrate machinery but not *which* pipelines an
-application defines: the ``run`` and ``orchestrate`` commands take a required
-``--app`` naming an application module that exposes ``build_runner()`` and
-``build_pipeline_sets()`` (e.g. ``--app pipelines.demo_source_to_selection``).
-This keeps the dependency one-way -- the framework imports the app *by name at
-runtime*, never statically -- so ``pipelines/`` depends on ``framework``, not the
-reverse, and the framework carries no application name of its own.
+``run`` addresses a pipeline by *its location on disk*: ``pipelines/orders`` maps
+to the module ``pipelines.orders.pipeline``, imported at runtime, whose
+``run(context)`` callable the framework executes (reading an optional
+``UPSTREAMS`` tuple for freshness). The dependency stays one-way -- the framework
+imports the pipeline *by path at runtime*, never statically -- so ``pipelines/``
+depends on ``framework``, not the reverse.
+
+``orchestrate`` still knows the scheduled machinery but not *which* pipelines an
+application schedules, so it takes a required ``--app`` naming a module that
+exposes ``build_runner()`` and ``build_pipeline_sets()``.
 """
 
 from __future__ import annotations
@@ -31,7 +34,7 @@ import sys
 from pathlib import Path
 
 from framework.core import PipelineError, format_failure
-from framework.run import Orchestrator, RunRegistry
+from framework.run import Orchestrator, RunRegistry, run_pipeline
 from framework.shared import WorkingDayCalendar
 
 # Mirrors the layout PipelineRunner writes: a per-base run registry and the
@@ -82,21 +85,44 @@ def _format_run(record: dict) -> str:
     return "  ".join(parts)
 
 
-def _run(args: argparse.Namespace) -> int:
-    runner = _resolve_app(args.app).build_runner()
-    subject, _, name = args.pipeline.partition("/")
-    if not name:
+def _load_pipeline_module(pipeline: str):
+    """Import the ``pipeline.py`` for a ``pipelines/<name>`` path, or report why not.
+
+    The pipeline's address *is* its location on disk: ``pipelines/orders`` maps to
+    the module ``pipelines.orders.pipeline``, which must expose a ``run(context)``
+    callable (and may declare an ``UPSTREAMS`` tuple of freshness requirements).
+    Returns the module, or ``None`` after printing a clear operator message.
+    """
+    module_path = pipeline.strip("/").replace("/", ".") + ".pipeline"
+    try:
+        module = importlib.import_module(module_path)
+    except ImportError:
         print(
-            f"pipeline {args.pipeline!r} must be a '<subject>/<name>' label, "
-            "e.g. cases/ingest",
+            f"no pipeline at {pipeline!r}: cannot import {module_path!r} "
+            "(expected pipelines/<name>/pipeline.py, run from the repo root)",
             file=sys.stderr,
         )
+        return None
+    if not callable(getattr(module, "run", None)):
+        print(
+            f"pipeline {pipeline!r} ({module_path}) defines no run(context) callable",
+            file=sys.stderr,
+        )
+        return None
+    return module
+
+
+def _run(args: argparse.Namespace) -> int:
+    module = _load_pipeline_module(args.pipeline)
+    if module is None:
         return 1
+    name = args.pipeline.strip("/").split("/")[-1]
     try:
-        runner.run(
-            subject,
+        run_pipeline(
+            module.run,
             name,
             Path(args.base_dir),
+            upstreams=tuple(getattr(module, "UPSTREAMS", ())),
             run_date=args.run_date,
             logical_run_id=args.logical_run_id,
             freshness_days=args.freshness_days,
@@ -226,8 +252,11 @@ def _status(args: argparse.Namespace) -> int:
 
 def register(sub) -> None:
     """Add the operator commands to the unified ``python -m framework`` CLI."""
-    run = sub.add_parser("run", help="run a registered pipeline")
-    run.add_argument("pipeline", help="the pipeline label to run, e.g. cases/ingest")
+    run = sub.add_parser("run", help="run a pipeline by its pipelines/ path")
+    run.add_argument(
+        "pipeline",
+        help="the pipeline's location under pipelines/, e.g. pipelines/orders",
+    )
     run.add_argument("base_dir")
     run.add_argument("--run-date", type=_date, default=dt.date.today())
     run.add_argument(
@@ -236,12 +265,6 @@ def register(sub) -> None:
         "rows (default: <pipeline>:<run-date>)",
     )
     run.add_argument("--freshness-days", type=int, default=0)
-    run.add_argument(
-        "--app",
-        required=True,
-        help="application module exposing build_runner()/build_pipeline_sets(), "
-        "e.g. pipelines.demo_source_to_selection",
-    )
     run.set_defaults(func=_run)
 
     orchestrate = sub.add_parser("orchestrate", help="run scheduled due work")
@@ -265,8 +288,7 @@ def register(sub) -> None:
     orchestrate.add_argument(
         "--app",
         required=True,
-        help="application module exposing build_runner()/build_pipeline_sets(), "
-        "e.g. pipelines.demo_source_to_selection",
+        help="application module exposing build_runner()/build_pipeline_sets()",
     )
     orchestrate.set_defaults(func=_orchestrate)
 

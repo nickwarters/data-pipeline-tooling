@@ -246,20 +246,22 @@ def test_pipeline_quarantine_uses_run_context_identity(tmp_path):
 
 
 def test_pipeline_quarantine_is_idempotent_on_rerun(tmp_path):
-    # Re-running the same pipeline should replace the prior run's rejects,
-    # not accumulate duplicates (delete-by-run_id + append).
+    # Quarantine rejects are scoped by logical run id (delete-by-run_id + append):
+    # re-running under the *same* logical run id replaces that run's rejects
+    # rather than duplicating them, while a *different* id keeps its own alongside.
     import sqlite3
 
     from framework.io.readers import CsvReader
     from framework.io.writers import QuarantineWriter, SqliteTruncateReloadWriter
     from framework.run.builder import Pipeline
+    from framework.run.run_context import RunContext
 
     csv_file = tmp_path / "feed.csv"
     csv_file.write_text("case_ref,status\nBAD,open\n")
 
     reject_db = tmp_path / "rejects.db"
 
-    def run():
+    def run(logical_run_id: str):
         p = (
             Pipeline("feed", CsvReader(csv_file))
             .quarantine(
@@ -268,19 +270,19 @@ def test_pipeline_quarantine_is_idempotent_on_rerun(tmp_path):
             )
             .write_to(SqliteTruncateReloadWriter(tmp_path / "main.db", "feed"))
         )
-        p.run()
-        return p.run_id
+        p.run(RunContext(pipeline="feed", logical_run_id=logical_run_id))
 
-    run_id_1 = run()
-    run_id_2 = run()
+    run("run-A")
+    run("run-A")  # same logical run id: replaces, not duplicates
+    run("run-B")  # different logical run id: coexists
 
     con = sqlite3.connect(reject_db)
     rows = con.execute("SELECT run_id FROM rejects").fetchall()
     con.close()
 
-    # Different run_ids keep separate rejects rather than duplicating a rerun.
+    # The re-run replaced run-A's reject; run-B's sits alongside it.
     assert len(rows) == 2
-    assert {r[0] for r in rows} == {run_id_1, run_id_2}
+    assert {r[0] for r in rows} == {"run-A", "run-B"}
 
 
 def test_structural_breach_aborts_even_with_quarantine_configured(tmp_path):

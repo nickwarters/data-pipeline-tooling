@@ -535,10 +535,19 @@ Handlers receive a `RunContext` carrying `base_dir`, `case_type`, `pipeline`,
 `run_date`, `load_date`, `execution_id`, `logical_run_id`, the runner-level
 `RunLog`, the `RunRegistry`, and `freshness_days`. `execution_id` is the concrete
 attempt recorded in RunLog/RunRegistry; `logical_run_id` is the idempotency key a
-re-driven business run reuses for accumulated rows. The runner records stable
-domain labels in history as `<case_type>/<pipeline>` (`cases/ingest`,
-`cases/selection`) and stores its metadata under `<base_dir>/_runs/` and
+re-driven business run reuses for accumulated rows. A run's history label is
+`<case_type>/<pipeline>` when registered with a subject (the registry /
+`orchestrate` path) or the bare `<pipeline>` name when run by path (see below);
+metadata is stored under `<base_dir>/_runs/<label-stem>.log` and
 `<base_dir>/_registry/`.
+
+`run_pipeline` (`framework.run`) is the execution core `PipelineRunner.run`
+delegates to, and the path-addressed `run` command calls directly: given a
+handler, a pipeline `name`, an optional `subject`, and an `upstreams` tuple, it
+builds the `RunContext`, catches the shared `RunRegistry` up from every
+`_runs/*.log` (so an upstream's history is visible regardless of which log
+partitioned it), runs the freshness checks, dispatches the handler, and records
+the run summary.
 
 `FreshnessRequirement` declares the upstream domain Pipeline a downstream run
 needs. The default policy is same-business-date freshness (`max_age_days=0`):
@@ -549,11 +558,13 @@ the handler and writes a `freshness` record with a warning. Stale history aborts
 before the handler executes and writes both a `freshness` error and an errored
 domain `run` summary.
 
-The current CLI entry point builds the demo registry and dispatches one Pipeline:
+The CLI `run` command addresses a pipeline by its location on disk, importing
+`pipelines.<name>.pipeline` and running its `run(context)` callable through
+`run_pipeline`:
 
 ```sh
-python -m framework run cases/ingest /tmp/demo --run-date 2026-05-29
-python -m framework run cases/selection /tmp/demo --run-date 2026-05-29
+python -m framework run pipelines/ingest /tmp/demo --run-date 2026-05-29
+python -m framework run pipelines/selection /tmp/demo --run-date 2026-05-29
 ```
 
 ### `Orchestrator` — scheduled PipelineSets

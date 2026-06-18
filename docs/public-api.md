@@ -81,10 +81,10 @@ Three non-facade packages sit beside them:
   surface: `scaffold` (generate a feed) and `operator` (the `run` /
   `orchestrate` / `runs` / `status` / `log` commands), dispatched by
   `framework/__main__.py`. Run as a tool, never imported by application code.
-  The `run` / `orchestrate` commands resolve an application module by name (a
-  required `--app`, e.g. `pipelines.demo_source_to_selection`) at runtime, so the
-  framework still never statically depends on `pipelines/` and carries no
-  application name of its own.
+  `run` resolves a pipeline by its path (`pipelines/<name>` -> the module
+  `pipelines.<name>.pipeline`) at runtime; `orchestrate` resolves an application
+  registry module by name (a required `--app`). Either way the framework never
+  statically depends on `pipelines/` and carries no application name of its own.
 - `framework/testing/` — the test-only support surface (below).
 
 These sub-package paths are the *internal layout*; only the facade names
@@ -153,7 +153,7 @@ they sit on their own facade. Composed onto a `Pipeline` as pre/post validators.
 | `ValidationStage`, `ProcessingStage`, `CheckpointStage` | Built-in ordered stage types for validation, processing, and explicit checkpoint side effects inside one class-level `Pipeline` run, composed via `.add_stage(...)`. Each is a spec that compiles to the internal step plan `.run()` executes — there is no public custom-`Stage` contract; the dataset→dataset transform extension point is the `Processor` (`framework.transform`). |
 | `ForEach`, `ForEachOutcome`, `ForEachPipelineError` | Independent per-item runs. |
 | `PipelineSet`, `ScheduledPipeline`, `Weekdays`, `SpecificWeekdays`, `DayOfMonth`, `NthWorkingDayOfMonth`, `LastWorkingDayOfMonth`, `ManualOnly`, `Orchestrator` | Scheduled orchestration above `PipelineRunner`: evaluate due work for a run date, isolate failures by scheduled item/PipelineSet, and record decisions in `_orchestration/runs.db`. |
-| `PipelineRunner`, `RunContext`, `FreshnessRequirement`, `FreshnessError`, `UnknownPipelineError` | Thin domain runner + the freshness guard. |
+| `run_pipeline`, `PipelineRunner`, `RunContext`, `FreshnessRequirement`, `FreshnessError`, `UnknownPipelineError` | The `run_pipeline` execution core (used by the path-addressed `run` command) + the thin domain runner and freshness guard. |
 | `RunLog`, `RunRegistry` | The structured-observability seam and its query store. |
 
 ### `framework.recipes` — composed medallion recipes
