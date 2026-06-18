@@ -6,28 +6,22 @@ from dataclasses import fields
 
 from framework.core import RAW
 from framework.io import StoreCatalog
-from framework.run import Pipeline
 from framework.testing import RecordingWriter, given_rows, read_rows, rows_of
-from framework.validate import ColumnValidator
 
-from .pipeline import FEED_NAME, run
+from .pipeline import FEED_NAME, builder, run
 from .schema import MyfeedRow
 
 
 def test_source_rows_become_output_rows():
-    # Mirror run()'s validator without touching the filesystem.
+    # Drive the *actual* pipeline (builder) with sample rows and a recording
+    # writer -- no filesystem, no rebuild of the composition under test.
     source = [
         {"record_id": "R001", "label": "alpha", "amount": 100},
         {"record_id": "R002", "label": "beta", "amount": 250},
     ]
     writer = RecordingWriter()
 
-    (
-        Pipeline(FEED_NAME, given_rows(source))
-        .with_validator(ColumnValidator([f.name for f in fields(MyfeedRow)]))
-        .write_to(writer)
-        .run()
-    )
+    builder(given_rows(source), writer).run()
 
     assert rows_of(writer) == source
 

@@ -18,16 +18,17 @@ from pathlib import Path
 from typing import Callable
 
 from framework.core.dataset import Dataset
+from framework.core.errors import PipelineError
 from framework.run.run_context import RunContext
 from framework.run.run_log import RunLog
 from framework.run.run_registry import RunRegistry
 
 
-class UnknownPipelineError(ValueError):
+class UnknownPipelineError(PipelineError):
     """Raised when no domain Pipeline is registered for the requested key."""
 
 
-class FreshnessError(RuntimeError):
+class FreshnessError(PipelineError):
     """Raised when a declared upstream has history, but it is stale."""
 
 

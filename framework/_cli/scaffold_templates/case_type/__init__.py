@@ -1,6 +1,6 @@
-"""Case Type ingest template rendered by ``pipelines.scaffold --case-type``.
+"""Case Type ingest template rendered by ``python -m framework scaffold --case-type``.
 
-The case-review-flavoured sibling of ``pipelines/_scaffold_template/``: a worked
+The case-review-flavoured sibling of the generic feed template: a worked
 starting point for a feed whose rows are Cases. Where the generic template is
 source -> raw and deliberately case-review-agnostic, this one declares the Case
 Type's identity contract and refines the feed through source -> raw -> silver.

@@ -21,7 +21,7 @@ import os
 import sys
 from pathlib import Path
 
-from framework.core import RAW, SILVER, Dataset
+from framework.core import RAW, SILVER, Dataset, PipelineError, format_failure
 from framework.io import AccumulateByRun, CsvReader, StoreCatalog
 from framework.recipes import raw_to_silver
 from framework.run import Pipeline
@@ -76,7 +76,14 @@ def run(
 
 def main(argv: list[str]) -> int:
     base_dir = Path(argv[1]) if len(argv) > 1 else Path.cwd() / "data"
-    silver = run(base_dir)
+    # Fail-fast: a Validator breach aborts the refine and raises a PipelineError.
+    # Present the family cleanly so an expected data failure reads as a clear
+    # message, not an unhandled traceback; a genuine bug keeps its stack trace.
+    try:
+        silver = run(base_dir)
+    except PipelineError as exc:
+        print(format_failure(exc), file=sys.stderr)
+        return 1
     print(
         f"Refined {len(silver)} rows source -> raw -> silver for Case Type "
         f"'{CASE_TYPE.name}' under {Path(base_dir) / FEED_NAME} "

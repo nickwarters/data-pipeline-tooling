@@ -18,16 +18,19 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `framework/transform` (reshaping, incl. `SchemaCoercion`), `framework/validate`
   (the `validate(dataset)` checks + the declared-schema contract —
   `SchemaValidator` and the value rules), `framework/run`, and `framework/shared`
-  (cross-cutting utilities — `retry`, `calendar`); plus two non-facade packages —
-  the private `framework/_internal` (`connection`, `describe`, `schema`:
-  cross-cutting helpers with no public name) and the test-only
+  (cross-cutting utilities — `retry`, `calendar`); plus three non-facade
+  packages — the private `framework/_internal` (`connection`, `describe`,
+  `schema`: cross-cutting helpers with no public name), the private
+  `framework/_cli` (the `python -m framework` entry point — `scaffold` plus the
+  operator commands; see below), and the test-only
   `framework/testing`), `case_review/` (the case-review *application* — domain
   types like `CaseType`/`CasePool` and its gold helpers, which live outside the
   framework), `pipelines/` (scripts), `tests/` (pytest), `docs/` (architecture,
   ADRs).
 - **Test layout:** `tests/` mirrors the source shape — `tests/framework/`
   (itself split into `core/`, `io/`, `transform/`, `validate/`, `run/`,
-  `shared/`, `_internal/`, `testing/` to mirror the framework sub-packages; an
+  `shared/`, `_internal/`, `_cli/`, `testing/` to mirror the framework
+  sub-packages; an
   implementation file covered by several test files gets a `test_<impl>/`
   package, e.g. `tests/framework/io/test_readers/`), `tests/case_review/`,
   `tests/pipelines/`, plus `tests/integration/` for tests that span trees (e.g.
@@ -62,19 +65,34 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt   # pandas + pytest
 .venv/bin/python -m pytest                       # run the suite
 .venv/bin/python -m pipelines.demo_csv_to_raw /tmp/demo   # run the demo (module form, from repo root)
-.venv/bin/python -m pipelines.scaffold orders            # scaffold a feed -> pipelines/orders/ + tests/pipelines/test_orders.py (#97)
-.venv/bin/python -m pipelines.scaffold --case-type claims # scaffold a Case Type ingest feed (source->raw->silver, identity declared; #155)
+.venv/bin/python -m framework scaffold orders            # scaffold a feed -> pipelines/orders/ + tests/pipelines/test_orders.py (#97)
+.venv/bin/python -m framework scaffold orders --from-feed-file sample.csv  # seed schema/sample/test from a real CSV header
+.venv/bin/python -m framework scaffold --case-type claims # scaffold a Case Type ingest feed (source->raw->silver, identity declared; #155)
+.venv/bin/python -m framework run cases ingest /tmp/demo --app pipelines.demo_source_to_selection  # operator CLI: run/orchestrate/status/runs/log (see docs/operator-cli.md)
 ```
 
 Run pipelines as **modules from the repo root** (`python -m pipelines.<name>`)
-so the import-only `framework` package resolves on `sys.path`.
+so the import-only `framework` package resolves on `sys.path`. The framework
+itself is also runnable — `python -m framework <command>` (entry point in
+`framework/_cli`) is the single surface for authoring (`scaffold`) and operating
+(`run`/`orchestrate`/`status`/`runs`/`log`) pipelines. The `run`/`orchestrate`
+commands take a required `--app` naming the application's pipeline registry
+module (here `pipelines.demo_source_to_selection`), imported at runtime so the
+framework never statically depends on `pipelines/`.
 
-Scaffold a new feed with `python -m pipelines.scaffold <feed>`: it renders the
+Scaffold a new feed with `python -m framework scaffold <feed>`: it renders the
 feed code as a `pipelines/<feed>/` subpackage (schema, pipeline, sample fixture)
 and its test as `tests/pipelines/test_<feed>.py`, from the template under
-`pipelines/_scaffold_template/`, ready to run and customise. Add `--case-type`
+`framework/_cli/scaffold_templates/feed/`, ready to run and customise. Pass
+`--from-feed-file <path>` to seed the scaffold from a real sample CSV: the header
+becomes the schema's fields (canonicalised to identifiers, dtypes inferred from
+the first rows, capped at 40 columns), the file's contents replace the bundled
+sample, and the test's sample rows are taken from it; when a header name isn't a
+clean identifier (spaces/punctuation/capitals) the source names are emitted as a
+`RAW_FEED_COLUMNS` constant the ColumnValidator gates on (raw stays faithful;
+schema carries the canonical shape). Add `--case-type`
 for the Case Type ingest variant (#155): a case-review-flavoured slice from
-`pipelines/_scaffold_template_case_type/` that additionally declares the Case
+`framework/_cli/scaffold_templates/case_type/` that additionally declares the Case
 Type's identity contract (`case_type.py`) and refines source → raw → silver,
 **stopping at silver** — how silver is assembled into gold is per-Case-Type and
 an open decision (snapshot-vs-join — #163), so it's left as a commented seam. See

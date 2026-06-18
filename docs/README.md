@@ -169,6 +169,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`Pipeline`** (builder) | The deferred fluent builder: `Pipeline(name, reader).add_stage(…).write_to(writer)`. It builds one ordered plan; call `.describe()` to inspect the planned reader/stages/governance/writer without executing, then `.run(context=…)` to execute that plan fail-fast and atomic with RunLog observability. ([ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md)) |
 | **`ForEach`** | Runnable orchestration for independent repeated runs: pass items plus `pipeline_builder(item, context)`, then call `.run(context)`. It creates a fresh builder and per-item `RunContext` for each item. Default behavior fails fast on the first failed item; `continue_on_error=True` returns per-item success/failure outcomes and continues. Use when files must remain separate logical runs. |
 | **`Orchestrator` / `PipelineSet` / `ScheduledPipeline`** | Scheduled due-work orchestration above `PipelineRunner`. Python definitions own sets, dependencies, and default schedules; YAML can override enablement, schedule timing, and freshness windows. A single pass or bounded loop runs due items for one run date, marks failed items terminal, blocks their downstream dependants, and lets independent items and other sets continue. |
+| **`PipelineError` / `format_failure`** | The base of the expected fail-fast failure family (`ValidationError`, `FreshnessError`, `UnknownPipelineError`, `CoercionError`, `ForEachPipelineError` all subclass it) and the pure formatter that renders a caught one as a short, traceback-free block for `stderr`. At a run boundary — the operator CLI, a scaffolded `main()` — `except PipelineError` + `format_failure(exc)` turns a deliberate abort into a clear message; a genuine bug is not a `PipelineError` and keeps its trace. |
 | **`RunLog` / `RunRegistry`** | `RunLog` emits one JSON record per step (+ a run summary) to a `.log` file — the observability seam. `RunRegistry` ingests that JSONL into a queryable run-history store. → [run-log-format.md](run-log-format.md) ([ADR-0007](adr/0007-fail-fast-atomic-runs-jsonl-observability.md)) |
 | **`RunContext` / `PipelineRunner` / `FreshnessRequirement`** | The thin domain runner: register handlers by `(case_type, pipeline)`, receive a context carrying execution/logical identity, dates, RunLog, and RunRegistry, and block stale downstream runs by querying recent successful upstream history. → [core-primitives.md](core-primitives.md) |
 | **`CaseType` / `Variation`** | Case-review application/domain objects in `case_review.case_type`, not framework primitives: a Case Type bundles its `schema`, its identity contract (`natural_key` + a `namespace` derived from `name`, ADR-0009), and its `variations`, imported directly (no global CaseType config registry). A Variation overrides only what differs — most often the `question_bank_id`. → [selection.md](selection.md) |
@@ -261,7 +262,7 @@ To skip the boilerplate for a fresh CSV feed, **scaffold** one — feed code as 
 under `tests/pipelines/`, ready to run — and then customise it (#97):
 
 ```sh
-python -m pipelines.scaffold orders              # -> pipelines/orders/ + tests/pipelines/test_orders.py
+python -m framework scaffold orders              # -> pipelines/orders/ + tests/pipelines/test_orders.py
 python -m pipelines.orders.pipeline /data        # land the bundled sample into raw
 python -m pytest tests/pipelines/test_orders.py  # the generated test passes as-is
 ```
@@ -272,7 +273,7 @@ silver (stopping at silver — gold assembly is the author's call, #163); see
 [`adding-a-feed.md`](adding-a-feed.md):
 
 ```sh
-python -m pipelines.scaffold --case-type claims  # + case_type.py; source -> raw -> silver
+python -m framework scaffold --case-type claims  # + case_type.py; source -> raw -> silver
 ```
 
 ```python
@@ -447,7 +448,7 @@ strategy = AccumulateByRun.from_context(context)
 - The SelectionPool reaches the review platform as a **Deliverable** (a later
   slice); the returned **Review Outcomes** come back via **Sync**, not here.
 - Run domain Pipelines through the thin runner when freshness matters:
-  `python -m pipelines.cli run cases selection /tmp/demo --run-date 2026-05-29`
+  `python -m framework run cases selection /tmp/demo --run-date 2026-05-29`
   checks recent successful `cases/ingest` history before Selection executes.
 
 ### Assemble silver into gold outputs
@@ -474,16 +475,16 @@ rows without touching prior loads.
 ### Operate pipelines from the CLI — run, status, runs, log
 
 For the everyday operator tasks — running a pipeline, checking its status,
-listing recent runs, inspecting a run log — use `python -m pipelines.cli` instead
+listing recent runs, inspecting a run log — use `python -m framework` instead
 of writing a wrapper script. It is a thin shell over the runner and the
 `RunRegistry` / `RunLog` seam; full reference with example output is
 [`operator-cli.md`](operator-cli.md).
 
 ```sh
-python -m pipelines.cli run cases ingest /data --run-date 2026-05-29
-python -m pipelines.cli status /data --case-type cases
-python -m pipelines.cli runs /data --pipeline cases/ingest --limit 5
-python -m pipelines.cli log /data cases --run-id 5f8ff8c7
+python -m framework run cases ingest /data --app pipelines.demo_source_to_selection --run-date 2026-05-29
+python -m framework status /data --case-type cases
+python -m framework runs /data --pipeline cases/ingest --limit 5
+python -m framework log /data cases --run-id 5f8ff8c7
 ```
 
 Pass `run --logical-run-id <id>` to re-drive a business run: a re-run under the
@@ -491,8 +492,10 @@ same logical id replaces that run's accumulated rows instead of duplicating them
 (it defaults to `case_type/pipeline:run_date`). Each command reports a clear
 one-line error and a non-zero exit on the expected
 failures (unknown pipeline, stale upstream, validation failure, missing run
-history) rather than a traceback. `python -m pipelines.run …` remains as the
-historical `run`-only shortcut.
+history) rather than a traceback. `run` and `orchestrate` take a required `--app`
+naming the application's pipeline registry module (here
+`pipelines.demo_source_to_selection`), which the framework imports at runtime —
+so the dependency stays one-way and the framework carries no application name.
 
 ### Test a pipeline — given source rows, expect output rows
 
@@ -535,6 +538,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`run-log-format.md`](run-log-format.md) | The JSONL record schema and the run registry. |
 | [`retry.md`](retry.md) | Targeted retry at the reader/writer edges — `RetryPolicy`, where to use it and where not. |
 | [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `status` / `runs` / `log`) with example commands and output. |
+| [`resolving-a-failed-run.md`](resolving-a-failed-run.md) | The operator loop from a failed run — investigate (`status`/`log`), diagnose, resolve, and re-drive idempotently. |
 | [`escape-hatch-store.md`](escape-hatch-store.md) | Iterating against a flat scratch db (and a pre-baked SQL query) outside the medallion layer pattern, and migrating back. |
 | [`testing-helpers.md`](testing-helpers.md) | `framework.testing` — the test-only helpers for testing concrete pipelines (`given_rows`, `RecordingWriter`, `read_rows`, `RecordingRunLog`, `read_run_log`). |
 | [`adr/`](adr/) | Every architectural decision (the *why*). |

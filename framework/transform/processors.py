@@ -36,11 +36,12 @@ from typing import (
 )
 
 from framework._internal.describe import render
+from framework.core.errors import PipelineError
 from framework.core.protocols import DatasetSupplier, Processor
 from framework.core.dataset import Dataset
 
 
-class CoercionError(Exception):
+class CoercionError(PipelineError):
     """Raised by a Processor when it cannot cast a value to its declared type."""
 
 

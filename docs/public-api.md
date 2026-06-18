@@ -70,13 +70,21 @@ the implementation modules living alongside it:
   don't belong to a task facade: `retry` (`RetryPolicy` & friends) and
   `calendar` (`WorkingDayCalendar`).
 
-Two non-facade packages sit beside them:
+Three non-facade packages sit beside them:
 
 - `framework/_internal/` — cross-cutting helpers with **no** public name:
   `connection` (`connect`), `describe` (`render` / `redact_url`), and `schema`
   (the shared `ValueRule` protocol + the Python↔pandas type mapping and
   annotation reading both schema adapters derive from). The leading underscore
   marks it private; nothing outside the framework imports from here.
+- `framework/_cli/` — the `python -m framework` **entry point**, not an import
+  surface: `scaffold` (generate a feed) and `operator` (the `run` /
+  `orchestrate` / `runs` / `status` / `log` commands), dispatched by
+  `framework/__main__.py`. Run as a tool, never imported by application code.
+  The `run` / `orchestrate` commands resolve an application module by name (a
+  required `--app`, e.g. `pipelines.demo_source_to_selection`) at runtime, so the
+  framework still never statically depends on `pipelines/` and carries no
+  application name of its own.
 - `framework/testing/` — the test-only support surface (below).
 
 These sub-package paths are the *internal layout*; only the facade names
@@ -100,6 +108,8 @@ lands. They sit below the task facades; everything else builds on them.
 | `Dataset` | The opaque bulk tabular carrier (pandas behind the seam) that flows through every Reader, Processor, Validator, and Writer. |
 | `Layer`, `RAW`, `SILVER`, `GOLD` | The medallion layer constants. |
 | `Reader`, `Writer`, `Processor`, `Validator`, `Severity` | Shared protocols used by framework internals and available for advanced typing. Concrete implementations still live on their task facades. |
+| `PipelineError` | The base of the expected, fail-fast failure family — `ValidationError`, `FreshnessError`, `UnknownPipelineError`, `CoercionError`, `ForEachPipelineError` all subclass it. Catch it at a run boundary to handle any deliberate abort with one `except`; a genuine bug is not a `PipelineError` and keeps its traceback. |
+| `format_failure` | Renders a caught `PipelineError` as a short, traceback-free ASCII block for `stderr` (the failure kind + its message). A pure formatter — it never catches, suppresses, or exits, so the caller keeps control flow. |
 
 ### `framework.io` — sources, sinks, stores
 

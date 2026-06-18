@@ -1,6 +1,7 @@
 """Tests for the scaffold's ``--case-type`` variant — a cross-tree concern.
 
-The generic scaffold is framework-only and tested under ``tests/pipelines/``. The
+The generic scaffold is framework-only and tested under
+``tests/framework/_cli/``. The
 ``--case-type`` variant is different in kind: it renders a case-review-flavoured
 slice that declares a Case Type's identity contract and reaches the real
 ``case_review`` package, so its tests span the framework/application boundary and
@@ -21,7 +22,7 @@ import sys
 from framework.core import RAW, SILVER
 from framework.io import StoreCatalog
 from framework.testing import read_rows
-from pipelines import scaffold
+from framework._cli import scaffold
 
 
 def test_case_type_variant_lays_down_the_feed_with_its_case_type(tmp_path):

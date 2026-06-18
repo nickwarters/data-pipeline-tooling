@@ -135,6 +135,17 @@ A line across which a guarantee changes, and therefore the natural place to
 columns + dtypes validated *before* data lands — ADR-0008); gold is the **grain
 boundary** (one-row-per-Case enforced — ADR-0009).
 
+**Expected failure / `PipelineError`**:
+A *deliberate, fail-fast abort* of a pipeline run — the data or environment broke
+a declared expectation, so the run stops on purpose. The distinction we reason
+with: an **expected failure** is something an operator should read and act on (a
+**Schema Breach**, a stale upstream, an uncoercible value, an unknown pipeline),
+versus a **bug** — a defect in our own code that should never have shipped.
+_Here_: every expected failure subclasses `PipelineError`, so a run boundary
+(the operator CLI, a scaffolded `main()`) catches the whole family with one
+`except` and presents it via `format_failure` — kind + message, no stack trace;
+a bug is *not* a `PipelineError`, so it keeps its traceback and gets noticed.
+
 **Port / Adapter**:
 A **port** is the abstract contract a collaborator must satisfy (in Python, a
 `Protocol` — `Reader`, `Writer`, `Validator`); an **adapter** is a concrete

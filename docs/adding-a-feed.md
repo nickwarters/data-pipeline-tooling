@@ -11,11 +11,12 @@ For a fresh CSV feed, generate a runnable starting point instead of writing the
 files by hand (#97):
 
 ```sh
-python -m pipelines.scaffold orders            # -> pipelines/orders/ + tests/pipelines/test_orders.py
-python -m pipelines.scaffold orders --force    # overwrite if it exists
+python -m framework scaffold orders            # -> pipelines/orders/ + tests/pipelines/test_orders.py
+python -m framework scaffold orders --force    # overwrite if it exists
+python -m framework scaffold orders --from-feed-file sample.csv  # seed from a real CSV
 ```
 
-This renders, from the template under `pipelines/_scaffold_template/`, the feed
+This renders, from the template under `framework/_cli/scaffold_templates/feed/`, the feed
 **code** as a subpackage and its **test** under `tests/pipelines/` (with the rest
 of the suite, mirroring the source layout) — wired together and ready to run:
 
@@ -23,11 +24,24 @@ of the suite, mirroring the source layout) — wired together and ready to run:
 pipelines/orders/
   __init__.py
   schema.py            # @dataclass OrdersRow — the column/dtype contract
-  pipeline.py          # CSV -> raw via the facades; gates on the schema's columns
+  pipeline.py          # builder(reader, writer, run_log=None) composes it; run()/main wire the real ones
   sample_data/orders.csv
 tests/pipelines/
-  test_orders.py       # given source rows -> expected landed rows
+  test_orders.py       # drives builder() with sample rows + a recording writer
 ```
+
+`pipeline.py` factors the composition into a single `builder(reader, writer,
+run_log=None) -> Pipeline` that returns the composed (not-yet-run) pipeline.
+`run()` wires the real `CsvReader` and the subject's layer Writer and calls
+`builder(...).run()`; `main()` is the thin CLI entry over `run()` — it catches the
+`PipelineError` family and prints `framework.core.format_failure(exc)` to
+`stderr` with a non-zero exit, so an expected fail-fast abort (a failed check)
+reads as a clear message rather than an unhandled traceback (a genuine bug is not
+a `PipelineError` and keeps its trace). The generated
+`test_orders.py` calls the **same** `builder` with sample rows (`given_rows`) and
+a `RecordingWriter`, so the first test exercises the real pipeline rather than a
+hand-rebuilt copy of it — a second test still runs the full `run()` filesystem
+path against the bundled sample.
 
 The feed name must be a lowercase Python identifier (it becomes the package
 name); `--force` overwrites an existing feed's files. The generated code imports
@@ -48,6 +62,34 @@ Then **customise**: edit `schema.py`'s fields to your source columns (and add
 landed feed raw → silver with the schema enforced, add a `raw_to_silver(store,
 "orders", OrdersRow)` run — see [`schema-enforcement.md`](schema-enforcement.md).
 
+#### Seed it from a real feed file: `--from-feed-file`
+
+Most of that customising is mechanical — retyping a source's column names into
+`schema.py`, the sample CSV, and the test. Hand the scaffold a sample export
+instead and it does that for you:
+
+```sh
+python -m framework scaffold orders --from-feed-file path/to/sample.csv
+```
+
+From the CSV's **header** it derives the schema's fields (one per column,
+canonicalised to identifiers, with dtypes **inferred** from the first rows —
+all-int → `int`, all-float → `float`, else `str`); the file's **contents**
+replace the bundled `sample_data/orders.csv`; and the first rows seed
+`test_orders.py`'s sample rows. The schema is capped at **40 columns** — past
+that the extra columns are dropped (with a loud warning and a note in `schema.py`
+recording how many) so the generated dataclass stays a usable starting point.
+
+When a header name **isn't already a clean identifier** (spaces, punctuation,
+capitals — e.g. `Case Number`), it can't be a dataclass field, so the scaffold
+emits the verbatim source names as a `RAW_FEED_COLUMNS` constant and gates the
+`ColumnValidator` on **those** rather than the schema's fields. This is the same
+raw-stays-faithful / silver-canonicalises split the next section describes: raw
+validates and keeps the source's own names; the generated `schema.py` already
+carries the canonical, identifier-named shape your silver `Rename` will produce.
+`--from-feed-file` is the generic source → raw scaffold only — it isn't supported
+with `--case-type` yet (a Case Type also needs a `natural_key` decision).
+
 ### When your feed *is* a Case Type: `--case-type`
 
 The generic scaffold above is deliberately source → raw and **case-review-agnostic**
@@ -56,10 +98,10 @@ with no Case identity). When the feed's rows *are* a Case Type, reach for the
 additive variant instead (#155):
 
 ```sh
-python -m pipelines.scaffold --case-type claims   # -> pipelines/claims/ + tests/pipelines/test_claims.py
+python -m framework scaffold --case-type claims   # -> pipelines/claims/ + tests/pipelines/test_claims.py
 ```
 
-It renders, from `pipelines/_scaffold_template_case_type/`, a case-review-flavoured
+It renders, from `framework/_cli/scaffold_templates/case_type/`, a case-review-flavoured
 slice that does two things the generic scaffold won't:
 
 ```
@@ -108,6 +150,11 @@ punctuation **cannot be declared as schema fields directly**. This is not a
 validation rule rejecting spaces — it's the declaration form: there is no way to
 write `Case Number: str`.
 
+(The `--from-feed-file` scaffold above handles this split for you when it sees
+non-identifier headers: it gates the raw validator on a `RAW_FEED_COLUMNS`
+constant of the verbatim source names and still declares the canonical schema for
+the silver step described here.)
+
 The fix is not a workaround — it's the canonicalisation that **raw → silver**
 exists to do. Raw stays faithful to the source (spaced names and all, so the
 landing zone is diagnosable and re-runnable); silver carries the **canonical,
@@ -155,6 +202,45 @@ obvious.
 
 The rest of this guide is the reference behind that scaffold: every Reader, and
 the stubbed remote (SAS / SharePoint) seams.
+
+## Wide feeds (hundreds of columns)
+
+Some sources are very wide — a few hundred columns, sometimes 600+. The framework
+handles these with the medallion split it already has, not a special mode: **raw
+stays faithfully wide; silver carries only the columns you actually model.** Three
+levers, from most to least important:
+
+1. **Don't declare all of them.** A schema is a dataclass and `SchemaValidator`
+   **ignores columns it doesn't declare** ("silver may carry more than the schema
+   names" — [schema-enforcement.md](schema-enforcement.md)). So you declare the
+   subset that Selection / Reporting consume — typically a few dozen — and let raw
+   keep the rest faithfully. Modelling 600 fields you never read is the mistake;
+   project to the ones that matter.
+
+2. **Project the silver write.** Narrow the wide raw down to the modelled subset
+   with `SelectColumns([...])` (or `DropColumns([...])`) on the raw → silver path,
+   so silver is a clean, enforced, *narrow* table and the wide landing stays in
+   raw for diagnosis. (`SelectColumns` / `DropColumns` are in
+   [processors.md](processors.md).)
+
+3. **Project at read for cost, not just shape.** `CsvReader(path, columns=[...])`
+   and `GlobCsvReader(directory, pattern, columns=[...])` pass through to pandas
+   `usecols`, so the unwanted columns are **never materialised in memory** in the
+   first place. Use this when you don't even need the full width in raw — at large
+   row counts, reading 30 of 600 columns is the difference that keeps the run
+   inside its memory envelope. (If raw must stay a faithful full-width mirror,
+   skip this and project only at step 2.)
+
+A genuinely wide feed that's *one Case table plus repeated Detail Tables* is a
+different shape again — fan it out into N single-table pipelines over the shared
+raw table rather than one mega-row ([ADR-0009](adr/0009-case-identity-and-gold-grain.md),
+`pipelines/demo_fan_out.py`).
+
+> **Scaffolding caps at 40 columns.** `scaffold --from-feed-file` deliberately
+> stops generating fields past 40 (with a loud warning) so the starting dataclass
+> stays usable — it is *not* sized for a 600-column feed. For a wide feed, scaffold
+> from a header trimmed to the columns you intend to model, or scaffold bare and
+> hand-declare that subset; the dropped width lives in raw regardless.
 
 ## 1. Pick a `Reader`
 
