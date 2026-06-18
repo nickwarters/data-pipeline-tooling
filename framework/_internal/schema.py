@@ -55,6 +55,71 @@ class ValueRule(Protocol):
         ...
 
 
+class RowCheck:
+    """A *horizontal* expectation over the relationship between a row's fields.
+
+    Where a :class:`ValueRule` is vertical — one column, a ``Series`` — a row
+    check is horizontal: one row, many fields (``opened <= closed``; "if status
+    is closed then closed_date is present"). It pairs a ``check`` function over a
+    single row (a pandas ``Series`` indexed by column) with the **footprint** of
+    columns it spans: the validator/partitioner skip the check when any spanned
+    column is missing or ill-typed, so a column that already failed its dtype
+    contract suppresses the check rather than crashing it. The function returns a
+    breach phrase when the row is bad, ``None`` when it is fine — the same
+    return-not-raise contract as ``ValueRule.check``, so a real bug (e.g. a
+    typo'd column) propagates as a crash instead of masquerading as a breach.
+
+    Unlike value rules, a row check runs over **every** row including nulls —
+    presence may be the very thing it tests — so the author guards nulls
+    explicitly. Declared on a schema via the :func:`row_checks` class decorator.
+    """
+
+    def __init__(
+        self,
+        columns: tuple[str, ...],
+        check: Callable[["pd.Series"], str | None],  # noqa: F821
+    ) -> None:
+        self.columns = tuple(columns)
+        self._check = check
+
+    def check(self, row: "pd.Series") -> str | None:  # noqa: F821
+        """Return a breach phrase if ``row`` breaks the check, else ``None``."""
+        return self._check(row)
+
+
+_ROW_CHECKS_ATTR = "__row_checks__"
+
+
+def row_checks(*checks: RowCheck) -> Callable[[type], type]:
+    """Class decorator declaring a schema's :class:`RowCheck` cross-field checks.
+
+    Sits *above* ``@dataclass`` so it decorates the already-built schema class,
+    stamping the checks onto it out of the field block (row checks belong to no
+    single field, so they are not annotations). Read back by
+    :func:`_declared_row_checks`.
+    """
+
+    def decorate(schema: type) -> type:
+        if not isinstance(schema, type):
+            raise TypeError(
+                "@row_checks decorates a schema class; apply it above @dataclass"
+            )
+        setattr(schema, _ROW_CHECKS_ATTR, tuple(checks))
+        return schema
+
+    return decorate
+
+
+def _declared_row_checks(schema: type) -> tuple[RowCheck, ...]:
+    """Return the :class:`RowCheck`s declared on a schema, or an empty tuple.
+
+    The horizontal companion of :func:`_declared_rules`: where that reads
+    per-field value rules off the annotations, this reads the cross-field checks
+    the :func:`row_checks` decorator stamped onto the class.
+    """
+    return getattr(schema, _ROW_CHECKS_ATTR, ())
+
+
 # Python declared type -> (predicate over a pandas dtype, human label). The
 # mapping is the seam between the dataclass contract and the concrete engine; it
 # lives here so the rest of the system keeps naming only Python types.

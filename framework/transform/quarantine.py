@@ -3,7 +3,8 @@
 The abort-vs-quarantine boundary:
 - Structural breaches (missing columns, wrong dtypes) still abort via
   ``SchemaValidator``.
-- Value-rule breaches (Pattern, Length, Unique, OneOf) → eligible for quarantine when
+- Value-rule breaches (Pattern, Length, Unique, OneOf) and row-check breaches
+  (cross-field, declared via ``@row_checks``) → eligible for quarantine when
   the pipeline is configured with ``.quarantine(partitioner, reject_writer)``.
 
 A ``RowValidator`` partitions a ``Dataset`` into ``(good, rejected)`` where the
@@ -18,7 +19,7 @@ from typing import Protocol, runtime_checkable
 
 import pandas as pd
 
-from framework._internal.schema import _declared_rules
+from framework._internal.schema import _declared_row_checks, _declared_rules
 from framework.core.dataset import Dataset
 
 
@@ -37,16 +38,19 @@ class RowValidator(Protocol):
 
 
 class SchemaValueRulePartitioner:
-    """Partition rows by value-level rules declared on a Case Type schema.
+    """Partition rows by the content rules declared on a Case Type schema.
 
-    Only ``ValueRule`` annotations (Pattern, Length, Unique, OneOf) are applied;
-    structural concerns (missing columns, wrong dtypes) are the ``SchemaValidator``'s
-    domain and still abort. A row that violates any value rule lands in rejected with
-    all its breach descriptions joined; a row that violates none lands in good.
+    Both ``ValueRule`` annotations (Pattern, Length, Unique, OneOf — *vertical*,
+    one column) and ``RowCheck``s (*horizontal*, the relationship between a row's
+    fields) are applied; structural concerns (missing columns, wrong dtypes) are
+    the ``SchemaValidator``'s domain and still abort. A row that violates any rule
+    or check lands in rejected with all its breach descriptions joined; a row that
+    violates none lands in good.
     """
 
     def __init__(self, schema: type) -> None:
         self._rules = _declared_rules(schema)
+        self._row_checks = _declared_row_checks(schema)
 
     def partition(self, dataset: Dataset) -> tuple[Dataset, Dataset]:
         frame = dataset.to_pandas()
@@ -62,6 +66,18 @@ class SchemaValueRulePartitioner:
                     row_reasons.setdefault(int(idx), []).append(
                         f"column {col!r} {_rule_label(rule, frame[col])}"
                     )
+
+        # Row checks are horizontal but quarantine like value rules: each
+        # breaching row's phrase joins the same per-row reasons. The footprint
+        # guard skips a check when a spanned column is absent (mirrors the
+        # value-rule guard above); the check sees every row, nulls included.
+        for rc in self._row_checks:
+            if any(col not in frame.columns for col in rc.columns):
+                continue
+            for idx, row in frame.iterrows():
+                phrase = rc.check(row)
+                if phrase is not None:
+                    row_reasons.setdefault(int(idx), []).append(phrase)
 
         bad_idx = set(row_reasons.keys())
         good_frame = frame[~frame.index.isin(bad_idx)].reset_index(drop=True)

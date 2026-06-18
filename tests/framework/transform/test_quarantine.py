@@ -16,13 +16,27 @@ import pytest
 
 from framework.core.dataset import Dataset
 from framework.transform.quarantine import SchemaValueRulePartitioner
-from framework.validate import Length, OneOf, Pattern, Unique
+from framework.validate import Length, OneOf, Pattern, RowCheck, Unique, row_checks
 
 
 @dataclass
 class RefCase:
     case_ref: Annotated[str, Pattern(r"\d{9,10}")]
     status: Annotated[str, OneOf("open", "closed")]
+
+
+def _amount_within_limit(row) -> str | None:
+    if pd.notna(row["amount"]) and pd.notna(row["limit"]):
+        if row["amount"] > row["limit"]:
+            return "amount exceeds limit"
+    return None
+
+
+@row_checks(RowCheck(("amount", "limit"), _amount_within_limit))
+@dataclass
+class ExposureCase:
+    amount: int
+    limit: int
 
 
 def _dataset(**cols) -> Dataset:
@@ -80,6 +94,31 @@ def test_partitioner_row_failing_multiple_rules_gets_all_reasons():
     reason = rejected.to_pandas()["failed_rule"].iloc[0]
     assert "case_ref" in reason
     assert "status" in reason
+
+
+def test_partitioner_routes_row_check_breaches_to_rejected():
+    # A row check is horizontal but quarantines like a value rule: the row whose
+    # amount exceeds its limit lands in rejected with the check's phrase; the
+    # conforming rows proceed.
+    ds = _dataset(
+        amount=pd.Series([10, 99, 30], dtype="int64"),
+        limit=pd.Series([100, 50, 100], dtype="int64"),
+    )
+    good, rejected = SchemaValueRulePartitioner(ExposureCase).partition(ds)
+
+    assert len(good) == 2
+    assert len(rejected) == 1
+    assert "amount exceeds limit" in rejected.to_pandas()["failed_rule"].iloc[0]
+
+
+def test_partitioner_skips_row_check_when_a_spanned_column_is_missing():
+    # The same footprint guard the validator applies: with 'limit' absent the
+    # check is skipped rather than crashing, so every row proceeds as good.
+    ds = _dataset(amount=pd.Series([10, 20], dtype="int64"))
+    good, rejected = SchemaValueRulePartitioner(ExposureCase).partition(ds)
+
+    assert len(good) == 2
+    assert len(rejected) == 0
 
 
 def test_pattern_violating_mask_returns_true_for_non_matching_rows():
