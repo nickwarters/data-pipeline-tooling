@@ -17,14 +17,17 @@ storage.
 This module holds reusable transforms: ``Filter`` and ``Score`` carry
 plain-Python row callables, ``VectorizedFilter`` and ``VectorizedDerive`` carry
 whole-frame callables for batch-friendly transforms, ``Sort`` and ``Rename``
-reshape the frame, ``JoinWith`` joins an explicit read-only dependency in
-Python, and ``AntiJoinWith`` excludes rows whose key is present in a read-only
-dependency.
+reshape the frame, ``Parse`` decodes a packed text column through a callable
+(``json.loads`` by default) and ``SplitColumn`` / ``JoinColumns`` are the
+inverse pair that fans one delimited column into several and recombines several
+into one, ``JoinWith`` joins an explicit read-only dependency in Python, and
+``AntiJoinWith`` excludes rows whose key is present in a read-only dependency.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import random
 import uuid
 from typing import (
@@ -218,6 +221,149 @@ class Rename:
 
     def describe(self) -> str:
         return render(self, mapping=self._mapping)
+
+
+ValueParser = Callable[[Any], Any]
+
+
+class Parse:
+    """Decode each value in one or more packed text columns through a callable.
+
+    ``columns`` is a column name (or a sequence of them) whose values are run
+    through ``parser``, replacing each value in place. ``parser`` defaults to
+    :func:`json.loads`, so a JSON-encoded text column becomes structured Python
+    values (a ``dict``/``list`` per row) ready for a downstream reshape — but it
+    is any ``value -> value`` callable, so the same processor decodes ISO
+    timestamps (``datetime.fromisoformat``), a custom record parser, etc.
+
+    Applied column-by-column behind the Dataset seam. Raises ``ValueError`` if
+    any named column is absent, consistent with the other column processors, so
+    a mis-typed column is caught at run time rather than silently skipped.
+    """
+
+    def __init__(
+        self, columns: str | Sequence[str], parser: ValueParser = json.loads
+    ) -> None:
+        self._columns = [columns] if isinstance(columns, str) else list(columns)
+        self._parser = parser
+
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas()
+        missing = [c for c in self._columns if c not in frame.columns]
+        if missing:
+            raise ValueError(
+                f"Parse: column(s) not found in dataset: {missing!r}. "
+                f"Available columns: {list(frame.columns)!r}"
+            )
+        for column in self._columns:
+            frame[column] = frame[column].map(self._parser)
+        return Dataset.from_pandas(frame)
+
+    def describe(self) -> str:
+        parser = getattr(self._parser, "__name__", repr(self._parser))
+        return render(self, columns=self._columns, parser=parser)
+
+
+class SplitColumn:
+    """Fan one delimited text column out into several columns.
+
+    ``column`` is the source column; ``into`` names the destination columns, in
+    order. Each value is split on ``sep`` (a literal string, ``","`` by default)
+    into at most ``len(into)`` parts — a row with fewer parts leaves the trailing
+    destination columns ``None``; any delimiters past the last destination stay
+    in the final column rather than being dropped. The source column is removed
+    once split (``drop=True`` default), unless it is itself named in ``into``
+    (an in-place overwrite).
+
+    The inverse of :class:`JoinColumns`. Raises ``ValueError`` if ``column`` is
+    absent.
+    """
+
+    def __init__(
+        self,
+        column: str,
+        into: Sequence[str],
+        *,
+        sep: str = ",",
+        drop: bool = True,
+    ) -> None:
+        self._column = column
+        self._into = list(into)
+        self._sep = sep
+        self._drop = drop
+
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas()
+        if self._column not in frame.columns:
+            raise ValueError(
+                f"SplitColumn: column not found in dataset: {self._column!r}. "
+                f"Available columns: {list(frame.columns)!r}"
+            )
+        # Cap the splits so extra delimiters stay in the final destination column
+        # rather than spilling into columns `into` never named.
+        parts = frame[self._column].astype("string").str.split(
+            self._sep, n=len(self._into) - 1, expand=True
+        )
+        for position, name in enumerate(self._into):
+            frame[name] = parts[position] if position in parts.columns else None
+        if self._drop and self._column not in self._into:
+            frame = frame.drop(columns=self._column)
+        return Dataset.from_pandas(frame)
+
+    def describe(self) -> str:
+        return render(
+            self, column=self._column, into=self._into, sep=self._sep, drop=self._drop
+        )
+
+
+class JoinColumns:
+    """Recombine several columns into one delimited text column.
+
+    ``columns`` is the source columns, in order; ``into`` the destination column
+    (new, or an overwrite). Each row's values are stringified and joined with
+    ``sep`` (``","`` by default). The source columns are kept by default
+    (``drop=False``) — joining typically adds a composite alongside its parts;
+    pass ``drop=True`` to consume them.
+
+    The inverse of :class:`SplitColumn`, and a plain-text sibling of
+    :class:`DeriveKey` (which hashes the joined key into a UUID). Raises
+    ``ValueError`` if any source column is absent.
+    """
+
+    def __init__(
+        self,
+        columns: Sequence[str],
+        into: str,
+        *,
+        sep: str = ",",
+        drop: bool = False,
+    ) -> None:
+        self._columns = list(columns)
+        self._into = into
+        self._sep = sep
+        self._drop = drop
+
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas()
+        missing = [c for c in self._columns if c not in frame.columns]
+        if missing:
+            raise ValueError(
+                f"JoinColumns: column(s) not found in dataset: {missing!r}. "
+                f"Available columns: {list(frame.columns)!r}"
+            )
+        joined = frame[self._columns[0]].astype("string")
+        for column in self._columns[1:]:
+            joined = joined.str.cat(frame[column].astype("string"), sep=self._sep)
+        if self._drop:
+            drop = [c for c in self._columns if c != self._into]
+            frame = frame.drop(columns=drop)
+        frame[self._into] = joined
+        return Dataset.from_pandas(frame)
+
+    def describe(self) -> str:
+        return render(
+            self, columns=self._columns, into=self._into, sep=self._sep, drop=self._drop
+        )
 
 
 _MergeHow = Literal["left", "right", "inner", "outer", "cross"]
