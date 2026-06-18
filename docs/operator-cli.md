@@ -40,17 +40,19 @@ directly and need no `--app`.) The examples below use the demo module.
 ## `run` — execute a registered pipeline
 
 ```sh
-python -m framework run <case_type> <pipeline> <base_dir> --app MODULE \
+python -m framework run <pipeline> <base_dir> --app MODULE \
     [--run-date YYYY-MM-DD] [--logical-run-id ID] [--freshness-days N]
 ```
 
-Runs the domain Pipeline registered for `(case_type, pipeline)`. `--run-date`
+Runs the domain Pipeline with the given `<pipeline>` label — the same
+`<subject>/<name>` identifier (e.g. `cases/ingest`) that `status`, `runs`, and
+`log --pipeline` use. `--run-date`
 sets the run date (defaults to today). `--freshness-days` relaxes the
 upstream-freshness window. Exit code is `0` on success, non-zero on a clear error
 (see below).
 
 ```console
-$ python -m framework run cases selection /data --app pipelines.demo_source_to_selection --run-date 2026-05-29
+$ python -m framework run cases/selection /data --app pipelines.demo_source_to_selection --run-date 2026-05-29
 available cases: 3 -> SelectionPool: 2 cases (Question Bank qb-100, logical run cases/selection:2026-05-29); trace: 3 considered, 1 excluded with a reason
 ```
 
@@ -68,8 +70,8 @@ example to reprocess a correction batch under a stable id independent of the
 calendar date:
 
 ```console
-$ python -m framework run cases selection /data --app pipelines.demo_source_to_selection --logical-run-id 2026-05-correction
-$ python -m framework run cases selection /data --app pipelines.demo_source_to_selection --logical-run-id 2026-05-correction
+$ python -m framework run cases/selection /data --app pipelines.demo_source_to_selection --logical-run-id 2026-05-correction
+$ python -m framework run cases/selection /data --app pipelines.demo_source_to_selection --logical-run-id 2026-05-correction
 ```
 
 The second invocation replaces the first run's rows in the SelectionPool (the

@@ -552,8 +552,8 @@ domain `run` summary.
 The current CLI entry point builds the demo registry and dispatches one Pipeline:
 
 ```sh
-python -m framework run cases ingest /tmp/demo --run-date 2026-05-29
-python -m framework run cases selection /tmp/demo --run-date 2026-05-29
+python -m framework run cases/ingest /tmp/demo --run-date 2026-05-29
+python -m framework run cases/selection /tmp/demo --run-date 2026-05-29
 ```
 
 ### `Orchestrator` — scheduled PipelineSets

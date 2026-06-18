@@ -31,7 +31,7 @@ def _cli(*args):
 
 
 def test_run_executes_a_registered_pipeline(tmp_path):
-    result = _cli("run", "cases", "ingest", str(tmp_path), "--run-date", "2026-05-29")
+    result = _cli("run", "cases/ingest", str(tmp_path), "--run-date", "2026-05-29")
 
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "cases" / "raw.db").exists()
@@ -44,7 +44,7 @@ def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
 
     assert (
         _cli(
-            "run", "cases", "ingest", str(tmp_path), "--run-date", "2026-05-29"
+            "run", "cases/ingest", str(tmp_path), "--run-date", "2026-05-29"
         ).returncode
         == 0
     )
@@ -52,8 +52,7 @@ def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
     def selection():
         return _cli(
             "run",
-            "cases",
-            "selection",
+            "cases/selection",
             str(tmp_path),
             "--run-date",
             "2026-05-29",
@@ -79,7 +78,7 @@ def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
 
 
 def test_run_unknown_pipeline_reports_clear_error(tmp_path):
-    result = _cli("run", "cases", "nope", str(tmp_path))
+    result = _cli("run", "cases/nope", str(tmp_path))
 
     assert result.returncode != 0
     assert "unknown pipeline 'nope'" in result.stderr
@@ -89,7 +88,7 @@ def test_run_unknown_pipeline_reports_clear_error(tmp_path):
 def test_runs_lists_recent_runs_from_the_registry(tmp_path):
     assert (
         _cli(
-            "run", "cases", "ingest", str(tmp_path), "--run-date", "2026-05-29"
+            "run", "cases/ingest", str(tmp_path), "--run-date", "2026-05-29"
         ).returncode
         == 0
     )
@@ -104,7 +103,7 @@ def test_runs_lists_recent_runs_from_the_registry(tmp_path):
 def test_status_shows_latest_run_for_a_case_type(tmp_path):
     assert (
         _cli(
-            "run", "cases", "ingest", str(tmp_path), "--run-date", "2026-05-29"
+            "run", "cases/ingest", str(tmp_path), "--run-date", "2026-05-29"
         ).returncode
         == 0
     )
@@ -119,7 +118,7 @@ def test_status_shows_latest_run_for_a_case_type(tmp_path):
 def test_log_summarizes_a_run_log_file(tmp_path):
     assert (
         _cli(
-            "run", "cases", "ingest", str(tmp_path), "--run-date", "2026-05-29"
+            "run", "cases/ingest", str(tmp_path), "--run-date", "2026-05-29"
         ).returncode
         == 0
     )
@@ -209,7 +208,7 @@ def test_run_stale_upstream_reports_clear_error(tmp_path):
     )
 
     result = _cli(
-        "run", "cases", "selection", str(tmp_path), "--run-date", "2026-05-29"
+        "run", "cases/selection", str(tmp_path), "--run-date", "2026-05-29"
     )
 
     assert result.returncode != 0
@@ -236,7 +235,7 @@ def test_run_validation_failure_reports_clear_error(tmp_path, monkeypatch, capsy
         operator, "_resolve_app", lambda name: SimpleNamespace(build_runner=lambda: runner)
     )
 
-    code = operator.main(["run", "cases", "ingest", str(tmp_path), "--app", "fake.app"])
+    code = operator.main(["run", "cases/ingest", str(tmp_path), "--app", "fake.app"])
 
     assert code == 1
     assert "below required minimum" in capsys.readouterr().err

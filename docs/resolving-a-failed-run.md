@@ -88,14 +88,14 @@ Re-run the same business day — the logical run id defaults to
 `case_type/pipeline:run_date`, so this is already idempotent:
 
 ```sh
-python -m framework run cases ingest /data --app pipelines.demo_source_to_selection --run-date 2026-05-29
+python -m framework run cases/ingest /data --app pipelines.demo_source_to_selection --run-date 2026-05-29
 ```
 
 Re-run a **correction batch** under a stable id, independent of the calendar
 date, when you're reprocessing a fix rather than re-running a day:
 
 ```sh
-python -m framework run cases ingest /data --app pipelines.demo_source_to_selection \
+python -m framework run cases/ingest /data --app pipelines.demo_source_to_selection \
     --logical-run-id 2026-05-correction
 ```
 

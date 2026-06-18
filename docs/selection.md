@@ -256,8 +256,8 @@ The same demo handlers are registered with the runner and can be dispatched one
 domain Pipeline at a time:
 
 ```sh
-python -m framework run cases ingest /tmp/demo --run-date 2026-05-29
-python -m framework run cases selection /tmp/demo --run-date 2026-05-29
+python -m framework run cases/ingest /tmp/demo --run-date 2026-05-29
+python -m framework run cases/selection /tmp/demo --run-date 2026-05-29
 ```
 
 The runner records domain summaries under stable labels (`cases/ingest`,
@@ -266,5 +266,5 @@ handlers derive their `AccumulateByRun` strategy from the `RunContext`
 (`AccumulateByRun.from_context(context)`), so each gold row is stamped with the
 run's logical run id (default `case_type/pipeline:run_date`) and `execution_id`.
 Re-driving a business run under the same id replaces its rows rather than
-duplicating them — over the CLI, `python -m framework run cases selection
+duplicating them — over the CLI, `python -m framework run cases/selection
 /tmp/demo --logical-run-id <id>` (see [operator-cli.md](operator-cli.md)).
