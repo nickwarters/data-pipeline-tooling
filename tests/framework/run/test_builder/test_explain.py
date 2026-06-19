@@ -44,16 +44,12 @@ def _trace(store: Store) -> pd.DataFrame:
 def test_case_dropped_by_filter_is_excluded_with_a_located_reason(tmp_path):
     store = Store(tmp_path)
     strategy = AccumulateByRun("run-1", "2026-05-29")
-    (
-        Pipeline("selection", DatasetReader(_available()))
-        .with_processor(Filter(lambda r: r["amount"] >= 100, name="high-value"))
-        .explain(
-            store.writer("gold", "selection_trace", strategy),
-            id_column="case_ref",
-        )
-        .write_to(store.writer("gold", "selection_pool", strategy))
-        .run()
-    )
+    p = Pipeline("selection")
+    r = p.read(DatasetReader(_available()), name="read")
+    f = p.transform(Filter(lambda r: r["amount"] >= 100, name="high-value"), r, name="high-value")
+    e = p.explain(store.writer("gold", "selection_trace", strategy), f, id_column="case_ref", name="explain")
+    w = p.write(store.writer("gold", "selection_pool", strategy), f, name="write")
+    p.run()
 
     trace = _trace(store)
     # c3 (amount 40) fell below the value gate: excluded, reason names the gate.
@@ -65,18 +61,14 @@ def test_case_dropped_by_filter_is_excluded_with_a_located_reason(tmp_path):
 def test_retained_case_is_selected_with_gates_passed_and_rank(tmp_path):
     store = Store(tmp_path)
     strategy = AccumulateByRun("run-1", "2026-05-29")
-    (
-        Pipeline("selection", DatasetReader(_available()))
-        .with_processor(Filter(lambda r: r["amount"] >= 100, name="high-value"))
-        .with_processor(Filter(lambda r: r["case_ref"] != "x", name="not-x"))
-        .with_processor(Sort("amount", ascending=False))  # rank highest-amount first
-        .explain(
-            store.writer("gold", "selection_trace", strategy),
-            id_column="case_ref",
-        )
-        .write_to(store.writer("gold", "selection_pool", strategy))
-        .run()
-    )
+    p = Pipeline("selection")
+    r = p.read(DatasetReader(_available()), name="read")
+    f1 = p.transform(Filter(lambda r: r["amount"] >= 100, name="high-value"), r, name="high-value")
+    f2 = p.transform(Filter(lambda r: r["case_ref"] != "x", name="not-x"), f1, name="not-x")
+    s = p.transform(Sort("amount", ascending=False), f2, name="sort")
+    e = p.explain(store.writer("gold", "selection_trace", strategy), s, id_column="case_ref", name="explain")
+    w = p.write(store.writer("gold", "selection_pool", strategy), s, name="write")
+    p.run()
 
     trace = _trace(store)
     # c1 (900) and c2 (150) clear both gates; c1 ranks first after the sort.
@@ -93,20 +85,13 @@ def test_retained_case_is_selected_with_gates_passed_and_rank(tmp_path):
 def test_score_is_retained_for_every_considered_case_including_excluded(tmp_path):
     store = Store(tmp_path)
     strategy = AccumulateByRun("run-1", "2026-05-29")
-    (
-        Pipeline("selection", DatasetReader(_available()))
-        # Score the whole population first, *then* drop the low scorers — so the
-        # excluded Case's score must survive its exclusion.
-        .with_processor(Score("priority", lambda r: r["amount"] * 2))
-        .with_processor(Filter(lambda r: r["amount"] >= 100, name="high-value"))
-        .explain(
-            store.writer("gold", "selection_trace", strategy),
-            id_column="case_ref",
-            score_column="priority",
-        )
-        .write_to(store.writer("gold", "selection_pool", strategy))
-        .run()
-    )
+    p = Pipeline("selection")
+    r = p.read(DatasetReader(_available()), name="read")
+    s = p.transform(Score("priority", lambda r: r["amount"] * 2), r, name="priority")
+    f = p.transform(Filter(lambda r: r["amount"] >= 100, name="high-value"), s, name="high-value")
+    e = p.explain(store.writer("gold", "selection_trace", strategy), f, id_column="case_ref", score_column="priority", name="explain")
+    w = p.write(store.writer("gold", "selection_pool", strategy), f, name="write")
+    p.run()
 
     trace = _trace(store)
     assert trace.loc["c1", "score"] == 1800  # selected, scored
@@ -117,16 +102,12 @@ def test_score_is_retained_for_every_considered_case_including_excluded(tmp_path
 def test_trace_lands_in_a_sibling_table_stamped_with_run_id(tmp_path):
     store = Store(tmp_path)
     strategy = AccumulateByRun("run-1", "2026-05-29")
-    (
-        Pipeline("selection", DatasetReader(_available()))
-        .with_processor(Filter(lambda r: r["amount"] >= 100, name="high-value"))
-        .explain(
-            store.writer("gold", "selection_trace", strategy),
-            id_column="case_ref",
-        )
-        .write_to(store.writer("gold", "selection_pool", strategy))
-        .run()
-    )
+    p = Pipeline("selection")
+    r = p.read(DatasetReader(_available()), name="read")
+    f = p.transform(Filter(lambda r: r["amount"] >= 100, name="high-value"), r, name="high-value")
+    e = p.explain(store.writer("gold", "selection_trace", strategy), f, id_column="case_ref", name="explain")
+    w = p.write(store.writer("gold", "selection_pool", strategy), f, name="write")
+    p.run()
 
     # The trace is its own table, a sibling of the SelectionPool, not mixed in.
     pool_refs = set(
@@ -161,18 +142,12 @@ def test_case_dropped_by_an_inner_join_is_explained_not_silently_absent(tmp_path
             pd.DataFrame({"case_ref": ["c1", "c2"], "adviser": ["a1", "a2"]})
         )
     )
-    (
-        Pipeline("selection", DatasetReader(_available()))
-        .with_processor(
-            JoinWith(advisers, on="case_ref", how="inner", name="adviser-hierarchy")
-        )
-        .explain(
-            store.writer("gold", "selection_trace", strategy),
-            id_column="case_ref",
-        )
-        .write_to(store.writer("gold", "selection_pool", strategy))
-        .run()
-    )
+    p = Pipeline("selection")
+    r = p.read(DatasetReader(_available()), name="read")
+    j = p.transform(JoinWith(advisers, on="case_ref", how="inner", name="adviser-hierarchy"), r, name="adviser-hierarchy")
+    e = p.explain(store.writer("gold", "selection_trace", strategy), j, id_column="case_ref", name="explain")
+    w = p.write(store.writer("gold", "selection_pool", strategy), j, name="write")
+    p.run()
 
     trace = _trace(store)
     assert trace.loc["c3", "verdict"] == "excluded"
@@ -184,18 +159,12 @@ def test_case_dropped_by_an_anti_join_is_explained_not_silently_absent(tmp_path)
     store = Store(tmp_path)
     strategy = AccumulateByRun("run-1", "2026-05-29")
     already_reviewed = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c2"]}))
-    (
-        Pipeline("selection", DatasetReader(_available()))
-        .with_processor(
-            AntiJoinWith(already_reviewed, on="case_ref", name="already-reviewed")
-        )
-        .explain(
-            store.writer("gold", "selection_trace", strategy),
-            id_column="case_ref",
-        )
-        .write_to(store.writer("gold", "selection_pool", strategy))
-        .run()
-    )
+    p = Pipeline("selection")
+    r = p.read(DatasetReader(_available()), name="read")
+    aj = p.transform(AntiJoinWith(already_reviewed, on="case_ref", name="already-reviewed"), r, name="already-reviewed")
+    e = p.explain(store.writer("gold", "selection_trace", strategy), aj, id_column="case_ref", name="explain")
+    w = p.write(store.writer("gold", "selection_pool", strategy), aj, name="write")
+    p.run()
 
     trace = _trace(store)
     assert trace.loc["c2", "verdict"] == "excluded"
@@ -207,16 +176,12 @@ def test_run_log_records_an_explain_step_with_governance_counts(tmp_path):
     store = Store(tmp_path)
     strategy = AccumulateByRun("run-1", "2026-05-29")
     log_path = tmp_path / "run.log"
-    (
-        Pipeline("selection", DatasetReader(_available()), run_log=RunLog(log_path))
-        .with_processor(Filter(lambda r: r["amount"] >= 100, name="high-value"))
-        .explain(
-            store.writer("gold", "selection_trace", strategy),
-            id_column="case_ref",
-        )
-        .write_to(store.writer("gold", "selection_pool", strategy))
-        .run()
-    )
+    p = Pipeline("selection", run_log=RunLog(log_path))
+    r = p.read(DatasetReader(_available()), name="read")
+    f = p.transform(Filter(lambda r: r["amount"] >= 100, name="high-value"), r, name="high-value")
+    e = p.explain(store.writer("gold", "selection_trace", strategy), f, id_column="case_ref", name="explain")
+    w = p.write(store.writer("gold", "selection_pool", strategy), f, name="write")
+    p.run()
 
     records = [json.loads(line) for line in log_path.read_text().splitlines()]
     explain = next(r for r in records if r["step"] == "explain")

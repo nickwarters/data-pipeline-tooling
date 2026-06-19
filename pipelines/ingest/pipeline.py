@@ -75,9 +75,10 @@ def run(context: RunContext):
     store = StoreCatalog(context.base_dir).store(CASES.name)
     strategy = AccumulateByRun.from_context(context)
 
-    Pipeline("cases", CsvReader(SAMPLE_CSV)).write_to(
-        store.writer(RAW, "cases", strategy)
-    ).run()
+    p = Pipeline("cases")
+    r = p.read(CsvReader(SAMPLE_CSV), name="read")
+    w = p.write(store.writer(RAW, "cases", strategy), r, name="write")
+    p.run()
     raw_to_silver(store, "cases", CASES.schema, strategy=strategy).run()
     return ingest_silver_to_gold(store, CASES).run()
 

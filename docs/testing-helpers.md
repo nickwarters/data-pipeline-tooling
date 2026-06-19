@@ -52,7 +52,7 @@ def test_high_value_filter_keeps_only_the_cases_at_or_above_100():
 
     (
         Pipeline("selection", reader)
-        .with_processor(Filter(lambda row: row["amount"] >= 100, name="high-value"))
+        .transform(Filter(lambda row: row["amount"] >= 100, name="high-value"))
         .write_to(writer)
         .run()
     )
@@ -98,7 +98,7 @@ def test_scored_rows_ignoring_the_run_stamp():
     writer = RecordingWriter()
     (
         Pipeline("cases", given_rows([{"case_id": "c1", "amount": 100}]))
-        .with_processor(Stamp("run_id", "run-123"))
+        .transform(Stamp("run_id", "run-123"))
         .write_to(writer)
         .run()
     )
@@ -132,7 +132,7 @@ def test_missing_required_column_aborts_and_is_recorded():
     writer = RecordingWriter()
     pipeline = (
         Pipeline("cases", given_rows([{"amount": 100}]), run_log=run_log)
-        .with_validator(ColumnValidator(["missing_col"]))
+        .validate(ColumnValidator(["missing_col"]))
         .write_to(writer)
     )
 

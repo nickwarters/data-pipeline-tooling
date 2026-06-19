@@ -43,7 +43,7 @@ class CapturingWriter:
 class PassThroughProcessor:
     """A Processor that returns the dataset unchanged (emits a `process` step)."""
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         return dataset
 
 
@@ -52,9 +52,11 @@ def _run_pipeline(log_path, name="cases", rows=2):
     reader = RecordingReader(
         Dataset.from_pandas(pd.DataFrame({"id": list(range(rows))}))
     )
-    pipeline = Pipeline(name, reader, run_log=RunLog(log_path))
-    pipeline.write_to(CapturingWriter()).run()
-    return pipeline.run_id
+    p = Pipeline(name, run_log=RunLog(log_path))
+    r = p.read(reader, name="read")
+    p.write(CapturingWriter(), r, name="write")
+    p.run()
+    return p.run_id
 
 
 def test_ingest_makes_a_runs_steps_queryable_by_run_id(tmp_path):
@@ -68,7 +70,7 @@ def test_ingest_makes_a_runs_steps_queryable_by_run_id(tmp_path):
 
     records = registry.records_for_run(run_id)
     steps = {r["step"] for r in records}
-    assert {"read", "pre-validate", "post-validate", "write", "run"} <= steps
+    assert {"read", "write", "run"} <= steps
     assert all(r["run_id"] == run_id for r in records)
 
 
@@ -109,14 +111,13 @@ def test_latest_run_per_pipeline_returns_the_most_recent_summary_each(tmp_path):
 def _run_failing_pipeline(log_path, name="cases"):
     """Drive a run that aborts at pre-validate (missing column); return run_id."""
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
-    pipeline = (
-        Pipeline(name, reader, run_log=RunLog(log_path))
-        .with_validator(ColumnValidator(["case_ref"]))
-        .write_to(CapturingWriter())
-    )
+    p = Pipeline(name, run_log=RunLog(log_path))
+    r = p.read(reader, name="read")
+    v = p.validate(ColumnValidator(["case_ref"]), r, name="pre-validate")
+    p.write(CapturingWriter(), v, name="write")
     with pytest.raises(ValidationError):
-        pipeline.run()
-    return pipeline.run_id
+        p.run()
+    return p.run_id
 
 
 def test_query_runs_returns_summaries_filterable_by_pipeline_and_status(tmp_path):
@@ -177,11 +178,10 @@ def test_runs_that_warned_surfaces_tolerated_warn_hits(tmp_path):
     clean = _run_pipeline(log_path, name="alpha")  # no warns
 
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
-    warned = (
-        Pipeline("beta", reader, run_log=RunLog(log_path))
-        .with_validator(ColumnValidator(["case_ref"]), severity="warn")
-        .write_to(CapturingWriter())
-    )
+    warned = Pipeline("beta", run_log=RunLog(log_path))
+    r = warned.read(reader, name="read")
+    v = warned.validate(ColumnValidator(["case_ref"]), r, name="pre-validate", severity="warn")
+    warned.write(CapturingWriter(), v, name="write")
     warned.run()
 
     registry = RunRegistry(tmp_path / "registry.db")
@@ -243,14 +243,12 @@ def test_volume_guardrail_trips_against_real_history_and_records_to_the_runlog(
     # Tonight's source export is truncated to 5 rows — far below the ~100 base.
     truncated_log = tmp_path / "tonight.log"
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [0, 1, 2, 3, 4]})))
-    pipeline = (
-        Pipeline("cases", reader, run_log=RunLog(truncated_log))
-        .with_validator(
-            VolumeAnomalyValidator(registry, pipeline="cases", tolerance=0.5),
-            severity="warn",
-        )
-        .write_to(CapturingWriter())
+    pipeline = Pipeline("cases", run_log=RunLog(truncated_log))
+    r = pipeline.read(reader, name="read")
+    v = pipeline.validate(
+        VolumeAnomalyValidator(registry, pipeline="cases", tolerance=0.5), r, name="volume-guardrail", severity="warn"
     )
+    pipeline.write(CapturingWriter(), v, name="write")
     pipeline.run()  # warn-severity: completes rather than aborting
 
     registry.ingest(truncated_log)
@@ -271,11 +269,11 @@ def test_volume_guardrail_aborts_the_run_at_error_severity(tmp_path):
 
     truncated_log = tmp_path / "tonight.log"
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [0, 1, 2]})))
-    pipeline = (
-        Pipeline("cases", reader, run_log=RunLog(truncated_log))
-        .with_validator(VolumeAnomalyValidator(registry, pipeline="cases"))
-        .write_to(CapturingWriter())
-    )
+    pipeline = Pipeline("cases", run_log=RunLog(truncated_log))
+    r = pipeline.read(reader, name="read")
+    v = pipeline.validate(VolumeAnomalyValidator(registry, pipeline="cases"), r, name="volume-guardrail")
+    pipeline.write(CapturingWriter(), v, name="write")
+    
     with pytest.raises(ValidationError, match="deviates"):
         pipeline.run()
 
@@ -290,12 +288,11 @@ def test_repeated_process_steps_are_kept_distinct_not_deduped(tmp_path):
     # them into one; the step ordinal keeps both, and re-ingest stays idempotent.
     log_path = tmp_path / "cases.log"
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1, 2]})))
-    pipeline = (
-        Pipeline("cases", reader, run_log=RunLog(log_path))
-        .with_processor(PassThroughProcessor())
-        .with_processor(PassThroughProcessor())
-        .write_to(CapturingWriter())
-    )
+    pipeline = Pipeline("cases", run_log=RunLog(log_path))
+    r = pipeline.read(reader, name="read")
+    t1 = pipeline.transform(PassThroughProcessor(), r, name="process")
+    t2 = pipeline.transform(PassThroughProcessor(), t1, name="process")
+    pipeline.write(CapturingWriter(), t2, name="write")
     pipeline.run()
 
     registry = RunRegistry(tmp_path / "registry.db")

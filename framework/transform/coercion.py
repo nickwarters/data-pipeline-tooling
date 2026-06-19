@@ -49,7 +49,7 @@ class SchemaCoercion:
         self._schema = schema
         self._expected = _declared_fields(schema)
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         for name, declared in self._expected:
             if name not in frame.columns:

@@ -208,7 +208,7 @@ class ProcessorStageStep(PipelineStep):
         with session.timed_step(self.name, rows_in=len(dataset)) as metrics:
             for processor in self.processors:
                 before = current
-                current = processor.process(current)
+                current = processor(current)
                 if session.trace is not None:
                     session.trace.observe(
                         getattr(processor, "trace_role", None),

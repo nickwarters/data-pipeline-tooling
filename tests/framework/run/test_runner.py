@@ -149,17 +149,15 @@ def test_runner_context_correlates_logs_registry_and_accumulated_rows(tmp_path):
     def handler(context):
         store = Store(context.base_dir / context.case_type)
         source = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c1", "c2"]}))
-        return (
-            Pipeline(context.label, DatasetReader(source))
-            .write_to(
-                store.writer(
-                    "gold",
-                    "selection_pool",
-                    AccumulateByRun.from_context(context),
-                )
-            )
-            .run(context=context)
+        p = Pipeline(context.label)
+        r = p.read(DatasetReader(source), name="read")
+        writer = store.writer(
+            "gold",
+            "selection_pool",
+            AccumulateByRun.from_context(context),
         )
+        p.write(writer, r, name="write")
+        return p.run(context=context)
 
     runner.register("cases", "selection", handler)
 
@@ -188,15 +186,13 @@ def test_runner_redrives_a_business_run_under_an_explicit_logical_run_id(tmp_pat
     def handler(context):
         store = Store(context.base_dir / context.case_type)
         source = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c1", "c2"]}))
-        return (
-            Pipeline(context.label, DatasetReader(source))
-            .write_to(
-                store.writer(
-                    "gold", "selection_pool", AccumulateByRun.from_context(context)
-                )
-            )
-            .run(context=context)
+        p = Pipeline(context.label)
+        r = p.read(DatasetReader(source), name="read")
+        writer = store.writer(
+            "gold", "selection_pool", AccumulateByRun.from_context(context)
         )
+        p.write(writer, r, name="write")
+        return p.run(context=context)
 
     runner.register("cases", "selection", handler)
 

@@ -32,11 +32,11 @@ A `Processor` is an engine-confined transform run mid-pipeline — it takes the
 bulk-tier `Dataset` and returns a transformed one:
 
 ```python
-class Processor(Protocol):
-    def process(self, dataset: Dataset) -> Dataset: ...
+# Transforms are now standard callables.
+# e.g. Callable[[Dataset], Dataset]
 ```
 
-It is attached with `.with_processor(...)` and runs as the builder's `process`
+It is attached with `.transform(...)` and runs as the builder's `process`
 step, in attach order, between the pre- and post-validators. Unlike the
 structural validators it is **engine-confined** — a transform needs the engine's
 vectorised operations, so it reaches the backing frame via
@@ -135,8 +135,8 @@ def priority_score(row: Mapping[str, Any]) -> int:
 
 pipeline = (
     pipeline
-    .with_processor(Score("priority_score", priority_score))
-    .with_processor(Filter(high_value_case, name="high-value"))
+    .transform(Score("priority_score", priority_score))
+    .transform(Filter(high_value_case, name="high-value"))
 )
 ```
 
@@ -202,10 +202,10 @@ from framework.transform import VectorizedDerive, VectorizedFilter
 
 pipeline = (
     pipeline
-    .with_processor(
+    .transform(
         VectorizedFilter(lambda df: df["score"] >= 10, name="score-threshold")
     )
-    .with_processor(VectorizedDerive("priority", lambda df: df["amount"] * 2))
+    .transform(VectorizedDerive("priority", lambda df: df["amount"] * 2))
 )
 ```
 
@@ -217,8 +217,8 @@ from framework.transform import Filter, Score
 
 pipeline = (
     pipeline
-    .with_processor(Filter(lambda row: row["score"] >= 10, name="score-threshold"))
-    .with_processor(Score("priority", lambda row: row["amount"] * 2))
+    .transform(Filter(lambda row: row["score"] >= 10, name="score-threshold"))
+    .transform(Score("priority", lambda row: row["amount"] * 2))
 )
 ```
 
@@ -459,9 +459,9 @@ def selection_value_case(row):
 
 selection_pool = (
     Pipeline("cases", cases.reader(SILVER, "cases"))
-    .with_processor(Filter(selection_value_case, name="selection-value"))
-    .with_processor(AntiJoinWith(already_reviewed, on="case_ref", name="already-reviewed"))
-    .with_processor(JoinWith(reference, on="adviser", name="adviser-reference"))
+    .transform(Filter(selection_value_case, name="selection-value"))
+    .transform(AntiJoinWith(already_reviewed, on="case_ref", name="already-reviewed"))
+    .transform(JoinWith(reference, on="adviser", name="adviser-reference"))
     .run()
 )
 ```
@@ -682,11 +682,11 @@ python -m pipelines.demo_fan_out /tmp/demo_fan_out
 # Cases pipeline: shared raw → project case columns → coerce/validate → silver
 (
     Pipeline("cases", store.reader("raw", SUBJECT))
-    .with_processor(Filter(lambda row: row["run_id"] == RUN_ID))
-    .with_processor(Rename({"case_ref_no": "case_ref"}))     # shared normalisation
-    .with_processor(SelectColumns(["case_ref", "adviser", "activity_date", "amount"]))
-    .with_processor(SchemaCoercion(CaseSchema))
-    .with_post_validator(SchemaValidator(CaseSchema))
+    .transform(Filter(lambda row: row["run_id"] == RUN_ID))
+    .transform(Rename({"case_ref_no": "case_ref"}))     # shared normalisation
+    .transform(SelectColumns(["case_ref", "adviser", "activity_date", "amount"]))
+    .transform(SchemaCoercion(CaseSchema))
+    .validate(SchemaValidator(CaseSchema))
     .write_to(store.writer("silver", "cases", AccumulateByRun(RUN_ID, RUN_ID)))
     .run()
 )

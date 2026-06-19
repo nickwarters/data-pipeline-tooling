@@ -64,22 +64,21 @@ def run(context: RunContext):
         as_of=context.run_date, activity_column="activity_date", within_working_days=5
     )
     variation = CASES.variation("v1")
-    selection_pool = (
-        Pipeline("selection", DatasetReader(available))
-        .with_processor(Score("priority_score", priority_score))
-        .with_processor(Filter(high_value_case, name="high-value"))
-        .with_processor(Sort("priority_score", ascending=False))
-        .with_processor(Stamp("question_bank_id", variation.question_bank_id))
-        # Land a per-Case trace of why each available Case was or wasn't selected
-        # in a sibling table, stamped by this run.
-        .explain(
-            store.writer(GOLD, "selection_trace", strategy),
-            id_column="case_ref",
-            score_column="priority_score",
-        )
-        .write_to(store.writer(GOLD, "selection_pool", strategy))
-        .run()
+    p = Pipeline("selection")
+    r = p.read(DatasetReader(available), name="read")
+    sc = p.transform(Score("priority_score", priority_score), r, name="score")
+    f = p.transform(Filter(high_value_case, name="high-value"), sc, name="filter")
+    so = p.transform(Sort("priority_score", ascending=False), f, name="sort")
+    st = p.transform(Stamp("question_bank_id", variation.question_bank_id), so, name="stamp")
+    e = p.explain(
+        store.writer(GOLD, "selection_trace", strategy),
+        st,
+        id_column="case_ref",
+        score_column="priority_score",
+        name="explain"
     )
+    w = p.write(store.writer(GOLD, "selection_pool", strategy), st, name="write")
+    selection_pool = p.run()
 
     trace = store.reader(GOLD, "selection_trace").read()
     excluded = sum(1 for v in trace.to_pandas()["verdict"] if v == "excluded")

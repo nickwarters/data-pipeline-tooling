@@ -56,9 +56,10 @@ def run(context: RunContext) -> Dataset:
     # id so re-drives replace the intended business run.
     strategy = AccumulateByRun.from_context(context)
 
-    Pipeline(FEED_NAME, CsvReader(SAMPLE_CSV)).write_to(
-        store.writer(RAW, FEED_NAME, strategy)
-    ).run()
+    p = Pipeline(FEED_NAME)
+    r = p.read(CsvReader(SAMPLE_CSV), name="read")
+    w = p.write(store.writer(RAW, FEED_NAME, strategy), r, name="write")
+    p.run()
 
     silver = raw_to_silver(store, FEED_NAME, CASE_TYPE.schema, strategy=strategy).run()
 

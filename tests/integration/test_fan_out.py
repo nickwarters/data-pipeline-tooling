@@ -136,25 +136,23 @@ def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path
 
     normalise = Rename({"case_ref_no": "case_ref"})
 
-    (
-        Pipeline("cases", store.reader("raw", "wide_cases"))
-        .with_processor(Filter(lambda row, rid=run_id: row["run_id"] == rid))
-        .with_processor(normalise)
-        .with_processor(SelectColumns(["case_ref", "amount"]))
-        .write_to(store.writer("silver", "cases", AccumulateByRun(run_id, run_id)))
-        .run()
-    )
+    p_cases = Pipeline("cases")
+    r_cases = p_cases.read(store.reader("raw", "wide_cases"), name="read")
+    f_cases = p_cases.transform(Filter(lambda row, rid=run_id: row["run_id"] == rid), r_cases, name="filter")
+    n_cases = p_cases.transform(normalise, f_cases, name="normalise")
+    s_cases = p_cases.transform(SelectColumns(["case_ref", "amount"]), n_cases, name="select")
+    w_cases = p_cases.write(store.writer("silver", "cases", AccumulateByRun(run_id, run_id)), s_cases, name="write")
+    p_cases.run()
 
     ingest_silver_to_gold(store, _WIDE_CASES, "cases").run()
 
-    (
-        Pipeline("products", store.reader("raw", "wide_cases"))
-        .with_processor(Filter(lambda row, rid=run_id: row["run_id"] == rid))
-        .with_processor(normalise)
-        .with_processor(SelectColumns(["case_ref"] + PRODUCT_COLS))
-        .write_to(store.writer("silver", "products", AccumulateByRun(run_id, run_id)))
-        .run()
-    )
+    p_products = Pipeline("products")
+    r_products = p_products.read(store.reader("raw", "wide_cases"), name="read")
+    f_products = p_products.transform(Filter(lambda row, rid=run_id: row["run_id"] == rid), r_products, name="filter")
+    n_products = p_products.transform(normalise, f_products, name="normalise")
+    s_products = p_products.transform(SelectColumns(["case_ref"] + PRODUCT_COLS), n_products, name="select")
+    w_products = p_products.write(store.writer("silver", "products", AccumulateByRun(run_id, run_id)), s_products, name="write")
+    p_products.run()
 
     detail_ingest_silver_to_gold(
         store,

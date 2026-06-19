@@ -36,15 +36,6 @@ class Writer(Protocol):
 
 
 @runtime_checkable
-class Processor(Protocol):
-    """An engine-confined transform of one feed's data, run mid-pipeline."""
-
-    def process(self, dataset: Dataset) -> Dataset:
-        """Return a transformed dataset; raise on a value it cannot transform."""
-        ...
-
-
-@runtime_checkable
 class Validator(Protocol):
     """A fail-fast expectation about one feed's data."""
 

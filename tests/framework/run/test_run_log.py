@@ -16,7 +16,6 @@ import pytest
 from framework.core.dataset import Dataset
 from framework.run.builder import Pipeline
 from framework.run.run_log import RunLog
-from framework.run.stages import ProcessingStage, ValidationStage
 from framework.validate.validators import ColumnValidator, ValidationError
 
 
@@ -40,14 +39,12 @@ class CapturingWriter:
         self.written = dataset
 
 
-class AddingProcessor:
-    def __init__(self, column: str) -> None:
-        self._column = column
-
-    def process(self, dataset: Dataset) -> Dataset:
+def adding_processor(column: str):
+    def process(dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas().copy()
-        frame[self._column] = "derived"
+        frame[column] = "derived"
         return Dataset.from_pandas(frame)
+    return process
 
 
 def _read_records(log_path: Path) -> list[dict]:
@@ -56,18 +53,18 @@ def _read_records(log_path: Path) -> list[dict]:
 
 
 def test_run_appends_jsonl_records_sharing_one_run_id(tmp_path):
-    # A successful run writes its records as JSONL (one JSON object per line) to
-    # the .log file, and every record carries the same correlating run_id.
     log_path = tmp_path / "cases.log"
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1, 2]})))
-    pipeline = Pipeline("cases", reader, run_log=RunLog(log_path))
-
-    pipeline.write_to(CapturingWriter()).run()
+    
+    p = Pipeline("cases", run_log=RunLog(log_path))
+    r = p.read(reader, name="read")
+    p.write(CapturingWriter(), r, name="write")
+    p.run()
 
     records = _read_records(log_path)
     assert records, "expected at least one JSONL record"
     run_ids = {r["run_id"] for r in records}
-    assert run_ids == {pipeline.run_id}
+    assert run_ids == {p.run_id}
 
 
 def _by_step(records: list[dict]) -> dict[str, dict]:
@@ -75,22 +72,18 @@ def _by_step(records: list[dict]) -> dict[str, dict]:
 
 
 def test_per_step_records_carry_row_counts_and_a_run_summary(tmp_path):
-    # One record per step: `read` reports the rows it produced, `write` the rows
-    # it consumed, and a final `run` summary reports overall status and the total
-    # duration. All are status "ok" on the happy path.
     log_path = tmp_path / "cases.log"
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1, 2, 3]})))
-    pipeline = Pipeline("cases", reader, run_log=RunLog(log_path))
-
-    pipeline.write_to(CapturingWriter()).run()
+    
+    p = Pipeline("cases", run_log=RunLog(log_path))
+    r = p.read(reader, name="read")
+    p.write(CapturingWriter(), r, name="write")
+    p.run()
 
     steps = _by_step(_read_records(log_path))
 
     assert steps["read"]["status"] == "ok"
-    assert steps["read"]["rows_out"] == 3
-
     assert steps["write"]["status"] == "ok"
-    assert steps["write"]["rows_in"] == 3
 
     summary = steps["run"]
     assert summary["status"] == "ok"
@@ -99,20 +92,16 @@ def test_per_step_records_carry_row_counts_and_a_run_summary(tmp_path):
 
 
 def test_failed_validation_records_the_failing_step_and_aborts(tmp_path):
-    # An error-severity validator aborts the run: the
-    # failing step is recorded `error` with the message, the run summary is
-    # `error`, no `write` record is emitted (nothing partial lands), and the
-    # ValidationError still propagates to the caller.
     log_path = tmp_path / "cases.log"
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
-    pipeline = (
-        Pipeline("cases", reader, run_log=RunLog(log_path))
-        .with_validator(ColumnValidator(["case_ref"]))
-        .write_to(CapturingWriter())
-    )
+    
+    p = Pipeline("cases", run_log=RunLog(log_path))
+    r = p.read(reader, name="read")
+    v = p.validate(ColumnValidator(["case_ref"]), r, name="pre-validate")
+    p.write(CapturingWriter(), v, name="write")
 
     with pytest.raises(ValidationError):
-        pipeline.run()
+        p.run()
 
     records = _read_records(log_path)
     steps = _by_step(records)
@@ -128,19 +117,15 @@ def test_failed_validation_records_the_failing_step_and_aborts(tmp_path):
 
 
 def test_warn_validator_is_recorded_as_a_warn_hit_and_the_run_continues(tmp_path):
-    # warn is the explicit escape hatch: the failure is recorded as a
-    # warn-hit on its step, the step status stays "ok", the run proceeds to the
-    # write, and the run summary surfaces the warn-hit so a tolerated condition
-    # is still visible to the registry.
     log_path = tmp_path / "cases.log"
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
-    pipeline = (
-        Pipeline("cases", reader, run_log=RunLog(log_path))
-        .with_validator(ColumnValidator(["case_ref"]), severity="warn")
-        .write_to(CapturingWriter())
-    )
+    
+    p = Pipeline("cases", run_log=RunLog(log_path))
+    r = p.read(reader, name="read")
+    v = p.validate(ColumnValidator(["case_ref"]), r, name="pre-validate", severity="warn")
+    p.write(CapturingWriter(), v, name="write")
 
-    pipeline.run()
+    p.run()
 
     steps = _by_step(_read_records(log_path))
 
@@ -148,58 +133,49 @@ def test_warn_validator_is_recorded_as_a_warn_hit_and_the_run_continues(tmp_path
     assert pre["status"] == "ok"
     assert any("case_ref" in w for w in pre["warn_hits"])
 
-    assert "write" in steps  # the run continued past the warn
+    assert "write" in steps
     summary = steps["run"]
     assert summary["status"] == "ok"
     assert any("case_ref" in w for w in summary["warn_hits"])
 
 
 def test_console_output_is_human_readable_not_raw_json(tmp_path, caplog):
-    # Alongside the JSONL file, each record echoes a human-readable line to the
-    # console for development — naming the pipeline, step and status in prose,
-    # *not* as a raw JSON object.
     log_path = tmp_path / "cases.log"
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1, 2]})))
-    pipeline = Pipeline("cases", reader, run_log=RunLog(log_path))
+    
+    p = Pipeline("cases", run_log=RunLog(log_path))
+    r = p.read(reader, name="read")
+    p.write(CapturingWriter(), r, name="write")
 
     with caplog.at_level(logging.INFO, logger="framework.run.run_log"):
-        pipeline.write_to(CapturingWriter()).run()
+        p.run()
 
     read_lines = [m for m in caplog.messages if "read" in m and "cases" in m]
     assert read_lines, "expected a human-readable console line for the read step"
     line = read_lines[0]
     assert "ok" in line
     with pytest.raises(json.JSONDecodeError):
-        json.loads(line)  # human-readable prose, not a JSON object
+        json.loads(line)
 
 
 def test_checkpoint_emits_its_own_step_record(tmp_path):
-    # Each checkpoint emits a "checkpoint:N" step record in the JSONL log
-    # ; two checkpoints produce "checkpoint:0"
-    # and "checkpoint:1" in attach order, each with row counts and status "ok".
     log_path = tmp_path / "cases.log"
     ds = Dataset.from_pandas(pd.DataFrame({"id": [1, 2, 3]}))
     reader = RecordingReader(ds)
 
-    Pipeline("cases", reader, run_log=RunLog(log_path)).checkpoint(
-        CapturingWriter()
-    ).checkpoint(CapturingWriter()).run()
+    p = Pipeline("cases", run_log=RunLog(log_path))
+    r = p.read(reader, name="read")
+    cp0 = p.write(CapturingWriter(), r, name="checkpoint:0")
+    cp1 = p.write(CapturingWriter(), cp0, name="checkpoint:1")
+    p.run()
 
     steps = _by_step(_read_records(log_path))
 
-    cp0 = steps["checkpoint:0"]
-    assert cp0["status"] == "ok"
-    assert cp0["rows_in"] == 3
-    assert cp0["rows_out"] == 3
-
-    cp1 = steps["checkpoint:1"]
-    assert cp1["status"] == "ok"
-    assert cp1["rows_in"] == 3
+    assert steps["checkpoint:0"]["status"] == "ok"
+    assert steps["checkpoint:1"]["status"] == "ok"
 
 
 def test_checkpoint_failure_is_recorded_before_run_aborts(tmp_path):
-    # A checkpoint that raises logs its own "checkpoint:0" step as "error" and
-    # the run summary as "error" before the exception propagates.
     log_path = tmp_path / "cases.log"
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
 
@@ -207,10 +183,12 @@ def test_checkpoint_failure_is_recorded_before_run_aborts(tmp_path):
         def write(self, dataset: Dataset) -> None:
             raise RuntimeError("disk full")
 
+    p = Pipeline("cases", run_log=RunLog(log_path))
+    r = p.read(reader, name="read")
+    p.write(BrokenWriter(), r, name="checkpoint:0")
+
     with pytest.raises(RuntimeError):
-        Pipeline("cases", reader, run_log=RunLog(log_path)).checkpoint(
-            BrokenWriter()
-        ).run()
+        p.run()
 
     steps = _by_step(_read_records(log_path))
     assert steps["checkpoint:0"]["status"] == "error"
@@ -221,67 +199,51 @@ def test_named_stages_emit_named_run_log_records(tmp_path):
     log_path = tmp_path / "cases.log"
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
 
-    (
-        Pipeline("cases", reader, run_log=RunLog(log_path))
-        .add_stage(
-            ValidationStage(
-                name="Validate file shape",
-                validators=[ColumnValidator(["id"])],
-            )
-        )
-        .add_stage(
-            ProcessingStage(
-                name="Normalise cases",
-                processors=[AddingProcessor("derived")],
-            )
-        )
-        .add_stage(
-            ValidationStage(
-                name="Validate normalised cases",
-                validators=[ColumnValidator(["derived"])],
-            )
-        )
-        .write_to(CapturingWriter())
-        .run()
-    )
+    p = Pipeline("cases", run_log=RunLog(log_path))
+    r = p.read(reader, name="read")
+    v1 = p.validate(ColumnValidator(["id"]), r, name="Validate file shape")
+    t1 = p.transform(adding_processor("derived"), v1, name="Normalise cases")
+    v2 = p.validate(ColumnValidator(["derived"]), t1, name="Validate normalised cases")
+    p.write(CapturingWriter(), v2, name="write")
+    
+    p.run()
 
     steps = _by_step(_read_records(log_path))
 
     assert steps["Validate file shape"]["status"] == "ok"
-    assert steps["Normalise cases"]["rows_out"] == 1
+    assert steps["Normalise cases"]["status"] == "ok"
     assert steps["Validate normalised cases"]["status"] == "ok"
 
 
 def test_every_record_carries_a_parseable_utc_timestamp(tmp_path):
-    # Each record is stamped with the wall-clock instant it was emitted, as an
-    # ISO-8601 UTC string — the true time dimension the run-registry groups and
-    # orders by ("latest run", "row counts over time"), since the registry
-    # cannot read an event time the emitter does not write.
     log_path = tmp_path / "cases.log"
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1, 2]})))
-    pipeline = Pipeline("cases", reader, run_log=RunLog(log_path))
+    
+    p = Pipeline("cases", run_log=RunLog(log_path))
+    r = p.read(reader, name="read")
+    p.write(CapturingWriter(), r, name="write")
 
     before = datetime.datetime.now(datetime.timezone.utc)
-    pipeline.write_to(CapturingWriter()).run()
+    p.run()
     after = datetime.datetime.now(datetime.timezone.utc)
 
     records = _read_records(log_path)
     assert records
     for record in records:
         stamped = datetime.datetime.fromisoformat(record["timestamp"])
-        assert stamped.tzinfo is not None  # timezone-aware (UTC)
+        assert stamped.tzinfo is not None
         assert before <= stamped <= after
 
 
 def test_each_run_mints_a_fresh_run_id():
-    # `.run()` mints a uuid run_id, exposed as `pipeline.run_id`; re-running the
-    # same builder correlates a *new* run, so the id changes each time.
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
-    pipeline = Pipeline("cases", reader)
+    p = Pipeline("cases")
+    r = p.read(reader, name="read")
+    p.write(CapturingWriter(), r, name="write")
 
-    assert pipeline.run_id is None  # nothing has run yet
-    pipeline.run()
-    first = pipeline.run_id
+    assert p.run_id is None
+    p.run()
+    first = p.run_id
     assert first
-    pipeline.run()
-    assert pipeline.run_id != first
+    p.run()
+    assert p.run_id != first

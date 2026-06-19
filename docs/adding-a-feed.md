@@ -218,10 +218,10 @@ store = StoreCatalog("/path/to/share").store("cases")
     # optional: gate the *source* columns in the source's own vocabulary, so a
     # missing/renamed source column fails as "missing 'Case Number'" rather than
     # surfacing later as a confusing "missing 'case_number'" after the rename.
-    .with_validator(ColumnValidator(["Case Number", "Adviser Name"]))
-    .with_processor(Rename({"Case Number": "case_number", "Adviser Name": "adviser_name"}))
-    .with_processor(SchemaCoercion(CasesRow))
-    .with_post_validator(SchemaValidator(CasesRow))
+    .validate(ColumnValidator(["Case Number", "Adviser Name"]))
+    .transform(Rename({"Case Number": "case_number", "Adviser Name": "adviser_name"}))
+    .transform(SchemaCoercion(CasesRow))
+    .validate(SchemaValidator(CasesRow))
     .write_to(store.writer(SILVER, "cases", Refresh()))
     .run()
 )
@@ -334,11 +334,11 @@ from framework.validate import ColumnValidator, SchemaDriftValidator
 store = StoreCatalog("/path/to/share").store("cases")
 landed = (
     Pipeline("cases", ExcelReader("feed.xlsx", sheet="cases"))
-    .with_validator(ColumnValidator(["case_id"]))   # optional: gate the input
+    .validate(ColumnValidator(["case_id"]))   # optional: gate the input
     # optional: warn (don't abort) when the source's columns drift from the
     # prior run's landed set — catches owner-controlled schema change at the
     # door (#51). First run has no prior, so it's a clean no-op.
-    .with_validator(
+    .validate(
         SchemaDriftValidator(store.columns_of(RAW, "cases")), severity="warn"
     )
     .write_to(store.writer(RAW, "cases", Refresh()))

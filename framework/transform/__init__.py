@@ -41,7 +41,6 @@ from framework.transform.processors import (
     JoinWith,
     LatestPerKey,
     Parse,
-    Processor,
     Rename,
     Sample,
     SamplePerGroup,
@@ -59,7 +58,6 @@ from framework.transform.processors import (
 
 __all__ = [
     # Processors
-    "Processor",
     "Filter",
     "Score",
     "VectorizedFilter",

@@ -93,7 +93,7 @@ def rows_of(source: Dataset | RecordingWriter | Reader) -> list[dict[str, Any]]:
 class RecordingWriter:
     """A :class:`~framework.io.writers.Writer` that captures writes in memory.
 
-    The expect-output-rows sink: compose it with ``.write_to(...)`` and the
+    The expect-output-rows sink: compose it with ``.write(writer, ...)`` and the
     pipeline hands it the final Dataset instead of persisting anywhere. Reach the
     captured rows through :func:`rows_of` (or :attr:`dataset` / :attr:`writes`
     for multi-write pipelines such as checkpoints).

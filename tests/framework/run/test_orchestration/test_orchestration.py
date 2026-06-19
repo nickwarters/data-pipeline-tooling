@@ -36,7 +36,10 @@ def test_for_each_executes_one_pipeline_per_item():
     writer = CapturingWriter()
 
     def build_pipeline(item: str, context) -> Pipeline:
-        return Pipeline(f"feed-{item}", RecordingReader(item)).write_to(writer)
+        p = Pipeline(f"feed-{item}")
+        r = p.read(RecordingReader(item), name="read")
+        p.write(writer, r, name="write")
+        return p
 
     results = ForEach(["a", "b"], build_pipeline).run()
 
@@ -51,9 +54,9 @@ def test_for_each_builds_a_fresh_pipeline_for_each_item():
     pipelines: list[Pipeline] = []
 
     def build_pipeline(item: str, context) -> Pipeline:
-        pipeline = Pipeline(f"feed-{item}", RecordingReader(item)).write_to(
-            CapturingWriter()
-        )
+        pipeline = Pipeline(f"feed-{item}")
+        r = pipeline.read(RecordingReader(item), name="read")
+        pipeline.write(CapturingWriter(), r, name="write")
         pipelines.append(pipeline)
         return pipeline
 
@@ -68,15 +71,18 @@ def test_for_each_stops_at_first_failed_item_and_names_it():
 
     def build_pipeline(item: str, context) -> Pipeline:
         if item == "bad":
-            return Pipeline(f"feed-{item}", BrokenReader())
+            p = Pipeline(f"feed-{item}")
+            p.read(BrokenReader(), name="read")
+            return p
 
         class RecordingWriter:
             def write(self, dataset: Dataset) -> None:
                 completed.append(item)
 
-        return Pipeline(f"feed-{item}", RecordingReader(item)).write_to(
-            RecordingWriter()
-        )
+        p = Pipeline(f"feed-{item}")
+        r = p.read(RecordingReader(item), name="read")
+        p.write(RecordingWriter(), r, name="write")
+        return p
 
     with pytest.raises(ForEachPipelineError, match="bad"):
         ForEach(["first", "bad", "never"], build_pipeline).run()
@@ -89,15 +95,18 @@ def test_for_each_best_effort_records_mixed_success_and_failure_outcomes():
 
     def build_pipeline(item: str, context) -> Pipeline:
         if item == "bad":
-            return Pipeline(f"feed-{item}", BrokenReader())
+            p = Pipeline(f"feed-{item}")
+            p.read(BrokenReader(), name="read")
+            return p
 
         class RecordingWriter:
             def write(self, dataset: Dataset) -> None:
                 completed.append(item)
 
-        return Pipeline(f"feed-{item}", RecordingReader(item)).write_to(
-            RecordingWriter()
-        )
+        p = Pipeline(f"feed-{item}")
+        r = p.read(RecordingReader(item), name="read")
+        p.write(RecordingWriter(), r, name="write")
+        return p
 
     outcomes = ForEach(
         ["first", "bad", "last"],
@@ -115,7 +124,9 @@ def test_for_each_best_effort_records_mixed_success_and_failure_outcomes():
 
 def test_for_each_best_effort_records_all_failure_outcomes_without_raising():
     def build_pipeline(item: str, context) -> Pipeline:
-        return Pipeline(f"feed-{item}", BrokenReader())
+        p = Pipeline(f"feed-{item}")
+        p.read(BrokenReader(), name="read")
+        return p
 
     outcomes = ForEach(
         ["bad-a", "bad-b"],
@@ -140,10 +151,13 @@ def test_for_each_best_effort_outcomes_include_summary_identity():
 
     def build_pipeline(item: str, context) -> Pipeline:
         if item == "bad":
-            return Pipeline(f"feed-{item}", BrokenReader())
-        return Pipeline(f"feed-{item}", RecordingReader(item)).write_to(
-            CapturingWriter()
-        )
+            p = Pipeline(f"feed-{item}")
+            p.read(BrokenReader(), name="read")
+            return p
+        p = Pipeline(f"feed-{item}")
+        r = p.read(RecordingReader(item), name="read")
+        p.write(CapturingWriter(), r, name="write")
+        return p
 
     outcomes = ForEach(
         ["good", "bad"],
@@ -172,9 +186,10 @@ def test_for_each_passes_per_item_context_with_derived_logical_run_id():
 
     def build_pipeline(item: str, context: RunContext) -> Pipeline:
         contexts.append(context)
-        return Pipeline(f"feed-{item}", RecordingReader(item)).write_to(
-            CapturingWriter()
-        )
+        p = Pipeline(f"feed-{item}")
+        r = p.read(RecordingReader(item), name="read")
+        p.write(CapturingWriter(), r, name="write")
+        return p
 
     ForEach(
         ["a", "b"],
@@ -201,7 +216,10 @@ def test_for_each_context_supports_per_item_accumulate_by_run_writes(tmp_path):
         writer = store.writer(
             "gold", "selection_pool", AccumulateByRun.from_context(context)
         )
-        return Pipeline(f"feed-{item}", RecordingReader(item)).write_to(writer)
+        p = Pipeline(f"feed-{item}")
+        r = p.read(RecordingReader(item), name="read")
+        p.write(writer, r, name="write")
+        return p
 
     ForEach(
         ["file-a", "file-b"],
