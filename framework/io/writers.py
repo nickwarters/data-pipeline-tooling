@@ -41,7 +41,7 @@ def _frame_for_strategy(
         if len(existing) > 0 and "run_id" in existing.columns:
             replaced = bool((existing["run_id"] == strategy.run_id).any())
             existing = existing[existing["run_id"] != strategy.run_id]
-        return pd.concat([existing, frame], ignore_index=True), replaced
+        return pd.DataFrame(pd.concat([existing, frame], ignore_index=True)), replaced
     raise TypeError(f"Unsupported load strategy: {type(strategy).__name__}")
 
 
@@ -66,6 +66,8 @@ class CsvWriter:
     After ``write()`` returns, ``replaced`` is ``True`` when prior rows for this
     run_id already existed in the file (a re-run), ``False`` for a fresh write.
     """
+
+    replaced: bool = False
 
     def __init__(
         self,
@@ -98,6 +100,8 @@ class ExcelWriter:
     After ``write()`` returns, ``replaced`` is ``True`` when prior rows for this
     run_id already existed in the file (a re-run), ``False`` for a fresh write.
     """
+
+    replaced: bool = False
 
     def __init__(
         self,
@@ -133,6 +137,8 @@ class JsonWriter:
     After ``write()`` returns, ``replaced`` is ``True`` when prior rows for this
     run_id already existed in the file (a re-run), ``False`` for a fresh write.
     """
+
+    replaced: bool = False
 
     def __init__(
         self,
@@ -402,6 +408,8 @@ class AccumulateByRunWriter:
     After ``write()`` returns, ``replaced`` is ``True`` when prior rows for this
     run_id already existed (a re-run), ``False`` for a fresh write.
     """
+
+    replaced: bool = False
 
     def __init__(
         self,
