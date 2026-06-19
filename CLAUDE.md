@@ -86,14 +86,19 @@ takes a required `--app` naming an application's registry module that exposes
 Scaffold a new feed with `python -m framework scaffold <feed>`: it renders the
 feed code as a `pipelines/<feed>/` subpackage (schema, pipeline, sample fixture)
 and its test as `tests/pipelines/test_<feed>.py`, from the template under
-`framework/_cli/scaffold_templates/feed/`, ready to run and customise. Pass
+`framework/_cli/scaffold_templates/feed/`, ready to run and customise. The
+generic feed refines source -> raw -> silver -> gold, one `*_builder` per hop
+(`raw_builder` lands faithfully; `silver_builder` renames via `RENAME` + coerces +
+validates the schema; `gold_builder` is a passthrough stub with a `TODO`), wired
+in order by `run(context, *, describe=False)` and an argparse `main`. Pass
 `--from-feed-file <path>` to seed the scaffold from a real sample CSV: the header
 becomes the schema's fields (canonicalised to identifiers, dtypes inferred from
 the first rows, capped at 40 columns), the file's contents replace the bundled
 sample, and the test's sample rows are taken from it; when a header name isn't a
 clean identifier (spaces/punctuation/capitals) the source names are emitted as a
-`RAW_FEED_COLUMNS` constant the ColumnValidator gates on (raw stays faithful;
-schema carries the canonical shape). Add `--case-type`
+`RAW_FEED_COLUMNS` constant the raw `ColumnValidator` gates on and the
+`silver_builder`'s `RENAME` map is populated to canonicalise them (raw stays
+faithful; silver renames to the schema's canonical shape). Add `--case-type`
 for the Case Type ingest variant (#155): a case-review-flavoured slice from
 `framework/_cli/scaffold_templates/case_type/` that additionally declares the Case
 Type's identity contract (`case_type.py`) and refines source → raw → silver,
