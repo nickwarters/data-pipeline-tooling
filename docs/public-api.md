@@ -81,10 +81,10 @@ Three non-facade packages sit beside them:
   surface: `scaffold` (generate a feed) and `operator` (the `run` /
   `orchestrate` / `runs` / `status` / `log` commands), dispatched by
   `framework/__main__.py`. Run as a tool, never imported by application code.
-  The `run` / `orchestrate` commands resolve an application module by name (a
-  required `--app`, e.g. `pipelines.demo_source_to_selection`) at runtime, so the
-  framework still never statically depends on `pipelines/` and carries no
-  application name of its own.
+  `run` resolves a pipeline by its path (`pipelines/<name>` -> the module
+  `pipelines.<name>.pipeline`) at runtime; `orchestrate` resolves an application
+  registry module by name (a required `--app`). Either way the framework never
+  statically depends on `pipelines/` and carries no application name of its own.
 - `framework/testing/` — the test-only support surface (below).
 
 These sub-package paths are the *internal layout*; only the facade names
@@ -127,7 +127,7 @@ Moving data across the boundary.
 | Names | What |
 |-------|------|
 | `Processor` | The `process(dataset) -> Dataset` seam. |
-| `Filter`, `Score`, `VectorizedFilter`, `VectorizedDerive`, `Stamp`, `Sort`, `Rename`, `JoinDependency`, `JoinWith`, `AntiJoinWith`, `LatestPerKey`, `SelectColumns`, `DropColumns`, `Unpivot`, `DeriveKey`, `TopNPerGroup`, `SamplePerGroup` | The concrete Selection / Ingest / fan-out transforms. |
+| `Filter`, `Score`, `VectorizedFilter`, `VectorizedDerive`, `Stamp`, `Sort`, `Rename`, `Parse`, `SplitColumn`, `JoinColumns`, `JoinDependency`, `JoinWith`, `AntiJoinWith`, `LatestPerKey`, `SelectColumns`, `DropColumns`, `Unpivot`, `DeriveKey`, `TopNPerGroup`, `SamplePerGroup` | The concrete Selection / Ingest / fan-out transforms. |
 | `SchemaCoercion` | The *coerce* half of the schema adapter: casts round-trip-lossy columns (`date` / `datetime` / `bool`) to the declared types — a reshape, so it lives here, not with the schema check. |
 | `CoercionError` | Raised by `SchemaCoercion` on an uncastable value. |
 
@@ -141,8 +141,9 @@ they sit on their own facade. Composed onto a `Pipeline` as pre/post validators.
 | `Validator`, `ValidationError` | The check seam and the error it raises. |
 | `ColumnValidator`, `RowCountValidator`, `VolumeAnomalyValidator`, `UniqueValidator`, `SchemaDriftValidator` | The concrete structural / volume / uniqueness / drift checks. |
 | `RunHistory`, `PriorColumns` | History inputs the run-aware checks read. |
-| `SchemaValidator` | The declared-schema check: a Case Type dataclass's columns + dtypes + nullability + value rules, enforced at silver (and optionally gold). |
+| `SchemaValidator` | The declared-schema check: a Case Type dataclass's columns + dtypes + nullability + value rules + row checks, enforced at silver (and optionally gold). |
 | `ValueRule`, `Nullable`, `NonNull`, `Pattern`, `Length`, `Range`, `Unique`, `OneOf` | The declared-schema value-level contract (`Annotated` field rules) the schema check runs. |
+| `RowCheck`, `row_checks` | The declared-schema **row check** contract: cross-field checks over the relationship between a row's fields, declared via the `@row_checks(...)` class decorator (the horizontal sibling to the value rules). |
 
 ### `framework.run` — composing, executing, observing
 
@@ -152,7 +153,7 @@ they sit on their own facade. Composed onto a `Pipeline` as pre/post validators.
 | `ValidationStage`, `ProcessingStage`, `CheckpointStage` | Built-in ordered stage types for validation, processing, and explicit checkpoint side effects inside one class-level `Pipeline` run, composed via `.add_stage(...)`. Each is a spec that compiles to the internal step plan `.run()` executes — there is no public custom-`Stage` contract; the dataset→dataset transform extension point is the `Processor` (`framework.transform`). |
 | `ForEach`, `ForEachOutcome`, `ForEachPipelineError` | Independent per-item runs. |
 | `PipelineSet`, `ScheduledPipeline`, `Weekdays`, `SpecificWeekdays`, `DayOfMonth`, `NthWorkingDayOfMonth`, `LastWorkingDayOfMonth`, `ManualOnly`, `Orchestrator` | Scheduled orchestration above `PipelineRunner`: evaluate due work for a run date, isolate failures by scheduled item/PipelineSet, and record decisions in `_orchestration/runs.db`. |
-| `PipelineRunner`, `RunContext`, `FreshnessRequirement`, `FreshnessError`, `UnknownPipelineError` | Thin domain runner + the freshness guard. |
+| `run_pipeline`, `PipelineRunner`, `RunContext`, `FreshnessRequirement`, `FreshnessError`, `UnknownPipelineError` | The `run_pipeline` execution core (used by the path-addressed `run` command) + the thin domain runner and freshness guard. |
 | `RunLog`, `RunRegistry` | The structured-observability seam and its query store. |
 
 ### `framework.recipes` — composed medallion recipes
@@ -196,13 +197,14 @@ without notice:
   …) — the **stubbed remote-client seam** behind `SasReader` / `SharePointReader`
   / `SharePointWriter` (ADR-0004/0005). An advanced extension point, documented in
   [adding-a-feed.md](adding-a-feed.md); not part of the day-to-day surface.
-- `framework.transform.quarantine` (`SchemaValueRulePartitioner`, …) — the value-rule
-  quarantine partitioner; wired by the schema/quarantine flow.
-- `framework._internal.schema` (the `ValueRule` protocol, the Python↔pandas type
-  mapping, and the dataclass-annotation reading) — the shared core both schema
-  adapters (`validate.SchemaValidator`, `transform.SchemaCoercion`) derive from,
-  so they stay consistent without depending on each other. The public `ValueRule`
-  name surfaces via `framework.validate`; the rest is private.
+- `framework.transform.quarantine` (`SchemaValueRulePartitioner`, …) — the
+  value-rule / row-check quarantine partitioner; wired by the schema/quarantine flow.
+- `framework._internal.schema` (the `ValueRule` protocol, the `RowCheck` carrier +
+  `row_checks` decorator, the Python↔pandas type mapping, and the
+  dataclass-annotation reading) — the shared core both schema adapters
+  (`validate.SchemaValidator`, `transform.SchemaCoercion`) derive from, so they
+  stay consistent without depending on each other. The public `ValueRule` /
+  `RowCheck` / `row_checks` names surface via `framework.validate`; the rest is private.
 - Names prefixed `_` anywhere (`_NullRunLog`, `_RegisteredPipeline`, …), and the
   run-log/runner internals not listed in a facade (`StepMetrics`,
   `FreshnessGuard`, `pipeline_label`).

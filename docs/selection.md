@@ -174,12 +174,12 @@ The SelectionPool reaches the review platform as a **Deliverable** (a later
 slice); the returned **Review Outcomes** come back through the **Sync** Pipeline,
 not here — they live in the Sync store, not the SelectionPool (CONTEXT.md).
 
-Selection is guarded by current Ingest history when it is run through the domain
-runner. `cases/selection` declares a freshness requirement on `cases/ingest`; the
-runner checks the latest successful upstream run in `RunRegistry` before calling
-the Selection handler. A stale Ingest aborts Selection before any SelectionPool
-write. A first run with no upstream history is allowed, but the runner records a
-`freshness` warn-hit so the missing baseline is visible.
+Selection is guarded by current Ingest history. The `selection` pipeline declares
+a freshness requirement on `ingest` (its `UPSTREAMS` tuple); before running its
+handler the framework checks the latest successful upstream run in `RunRegistry`
+(caught up from every `_runs/*.log`). A stale Ingest aborts Selection before any
+SelectionPool write. A first run with no upstream history is allowed, but a
+`freshness` warn-hit is recorded so the missing baseline is visible.
 
 ## Explainability — why each Case was (or wasn't) selected
 
@@ -235,36 +235,34 @@ separate concern, deferred to a follow-up.
 
 ## End to end — the runnable demo
 
-[`../pipelines/demo_source_to_selection.py`](../pipelines/demo_source_to_selection.py)
-runs the whole path for one Case Type. From the repo root:
+The whole path for one Case Type is two path-addressed pipelines:
+[`../pipelines/ingest/pipeline.py`](../pipelines/ingest/pipeline.py) (CSV feed ->
+`raw` -> `silver` (the CasePool) -> `gold`) and
+[`../pipelines/selection/pipeline.py`](../pipelines/selection/pipeline.py) (the
+available cases -> the `gold` SelectionPool). Run them in order from the repo
+root:
 
 ```sh
-python -m pipelines.demo_source_to_selection /tmp/demo
+python -m framework run pipelines/ingest /tmp/demo --run-date 2026-05-29
+python -m framework run pipelines/selection /tmp/demo --run-date 2026-05-29
 ```
 
-It lands the bundled feed into `raw`, refines it to `silver` (the CasePool),
-fetches the available cases, and runs Selection into `gold` — printing, e.g.:
+`selection` declares `ingest` as a freshness upstream (`UPSTREAMS`), so the
+framework checks for recent successful `ingest` history before Selection runs,
+then prints, e.g.:
 
 ```
-available cases: 3 -> SelectionPool: 2 cases (Question Bank qb-100, logical run cases/selection:2026-05-29)
+available cases: 3 -> SelectionPool: 2 cases (Question Bank qb-100, logical run selection:2026-05-29)
 ```
 
-The `as_of` date is fixed so the working-day window lines up with the sample feed
-and the run is deterministic.
-
-The same demo handlers are registered with the runner and can be dispatched one
-domain Pipeline at a time:
-
-```sh
-python -m framework run cases ingest /tmp/demo --run-date 2026-05-29
-python -m framework run cases selection /tmp/demo --run-date 2026-05-29
-```
-
-The runner records domain summaries under stable labels (`cases/ingest`,
-`cases/selection`) and writes the `freshness` guard record for Selection. The
-handlers derive their `AccumulateByRun` strategy from the `RunContext`
+Each pipeline records its run summary under its name (`ingest`, `selection`) and
+`selection` writes the `freshness` guard record. The handlers derive their
+`AccumulateByRun` strategy from the `RunContext`
 (`AccumulateByRun.from_context(context)`), so each gold row is stamped with the
-run's logical run id (default `case_type/pipeline:run_date`) and `execution_id`.
+run's logical run id (default `<pipeline>:run_date`) and `execution_id`.
 Re-driving a business run under the same id replaces its rows rather than
-duplicating them — over the CLI, `python -m framework run cases selection
-/tmp/demo --logical-run-id <id>` (see [operator-cli.md](operator-cli.md)).
+duplicating them — over the CLI, `python -m framework run pipelines/selection
+/tmp/demo --logical-run-id <id>` (see [operator-cli.md](operator-cli.md)). The
+`as_of` date is fixed so the working-day window lines up with the sample feed and
+the run is deterministic. Each pipeline can also be run directly with a default
+run context (`python -m pipelines.ingest.pipeline /tmp/demo`).

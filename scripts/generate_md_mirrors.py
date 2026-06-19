@@ -6,6 +6,11 @@ is the Python source wrapped in a fenced ``python`` code block. Running the
 script first removes any existing mirrors and then regenerates them, so it is
 safe to re-run after files are added, renamed, or deleted.
 
+Cleaning is driven by the *mirrors themselves*, not by the current set of ``.py``
+files: any Markdown file whose content has the generated mirror shape is pruned,
+including mirrors *orphaned* when their source was renamed, moved, or deleted.
+Hand-written Markdown (which does not match the mirror shape) is never touched.
+
 Usage (from the repo root)::
 
     python -m scripts.generate_md_mirrors          # clean + regenerate
@@ -34,14 +39,25 @@ EXCLUDED_DIRS = {
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+# The opening fence every generated mirror starts with. A Markdown file is
+# treated as a prunable mirror only when its content matches this shape (a
+# single fenced ``python`` block), so hand-written Markdown is left alone.
+_FENCE_OPEN = "```python\n"
+_FENCE_CLOSE = "```"
 
-def _is_excluded(path: Path) -> bool:
-    return any(part in EXCLUDED_DIRS for part in path.relative_to(REPO_ROOT).parts)
+
+def _is_excluded(path: Path, root: Path) -> bool:
+    return any(part in EXCLUDED_DIRS for part in path.relative_to(root).parts)
 
 
 def iter_python_files(root: Path) -> list[Path]:
     """Return every ``*.py`` file under *root*, skipping excluded directories."""
-    return sorted(p for p in root.rglob("*.py") if not _is_excluded(p))
+    return sorted(p for p in root.rglob("*.py") if not _is_excluded(p, root))
+
+
+def iter_markdown_files(root: Path) -> list[Path]:
+    """Return every ``*.md`` file under *root*, skipping excluded directories."""
+    return sorted(p for p in root.rglob("*.md") if not _is_excluded(p, root))
 
 
 def mirror_path(py_file: Path) -> Path:
@@ -49,12 +65,35 @@ def mirror_path(py_file: Path) -> Path:
     return py_file.with_suffix(".md")
 
 
+def _render_mirror(source: str) -> str:
+    """Wrap Python *source* in the fenced code block stored in a mirror."""
+    return f"{_FENCE_OPEN}{source}\n{_FENCE_CLOSE}\n"
+
+
+def is_generated_mirror(md_file: Path) -> bool:
+    """Whether *md_file* looks like a generated mirror (a single ``python`` block).
+
+    Used to distinguish prunable mirrors from hand-written Markdown so that only
+    files this script produced are ever deleted.
+    """
+    try:
+        text = md_file.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    return text.startswith(_FENCE_OPEN) and text.rstrip().endswith(_FENCE_CLOSE)
+
+
 def clean(root: Path) -> int:
-    """Delete the Markdown mirror sitting next to each Python file."""
+    """Delete every generated Markdown mirror under *root*.
+
+    Discovery is driven by the Markdown files themselves, so a mirror is removed
+    whether or not its ``.py`` source still exists — this prunes mirrors orphaned
+    by a renamed, moved, or deleted source. Markdown that does not match the
+    generated mirror shape is never touched.
+    """
     removed = 0
-    for py_file in iter_python_files(root):
-        md = mirror_path(py_file)
-        if md.exists():
+    for md in iter_markdown_files(root):
+        if is_generated_mirror(md):
             md.unlink()
             removed += 1
     return removed
@@ -65,8 +104,7 @@ def generate(root: Path) -> int:
     written = 0
     for py_file in iter_python_files(root):
         source = py_file.read_text(encoding="utf-8")
-        body = f"```python\n{source}\n```\n"
-        mirror_path(py_file).write_text(body, encoding="utf-8")
+        mirror_path(py_file).write_text(_render_mirror(source), encoding="utf-8")
         written += 1
     return written
 

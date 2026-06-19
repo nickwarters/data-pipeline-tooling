@@ -13,15 +13,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 
-# The demo application supplies the pipeline registry the run/orchestrate
-# commands resolve via the required --app option.
-APP = "pipelines.demo_source_to_selection"
-
 
 def _cli(*args):
-    # run/orchestrate need the application module; the other commands don't take it.
-    if args and args[0] in ("run", "orchestrate"):
-        args = (*args, "--app", APP)
     return subprocess.run(
         [sys.executable, "-m", "framework", *args],
         capture_output=True,
@@ -30,8 +23,8 @@ def _cli(*args):
     )
 
 
-def test_run_executes_a_registered_pipeline(tmp_path):
-    result = _cli("run", "cases", "ingest", str(tmp_path), "--run-date", "2026-05-29")
+def test_run_executes_a_pipeline_by_its_path(tmp_path):
+    result = _cli("run", "pipelines/ingest", str(tmp_path), "--run-date", "2026-05-29")
 
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "cases" / "raw.db").exists()
@@ -44,7 +37,7 @@ def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
 
     assert (
         _cli(
-            "run", "cases", "ingest", str(tmp_path), "--run-date", "2026-05-29"
+            "run", "pipelines/ingest", str(tmp_path), "--run-date", "2026-05-29"
         ).returncode
         == 0
     )
@@ -52,8 +45,7 @@ def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
     def selection():
         return _cli(
             "run",
-            "cases",
-            "selection",
+            "pipelines/selection",
             str(tmp_path),
             "--run-date",
             "2026-05-29",
@@ -79,17 +71,17 @@ def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
 
 
 def test_run_unknown_pipeline_reports_clear_error(tmp_path):
-    result = _cli("run", "cases", "nope", str(tmp_path))
+    result = _cli("run", "pipelines/nope", str(tmp_path))
 
     assert result.returncode != 0
-    assert "unknown pipeline 'nope'" in result.stderr
+    assert "no pipeline at 'pipelines/nope'" in result.stderr
     assert "Traceback" not in result.stderr
 
 
 def test_runs_lists_recent_runs_from_the_registry(tmp_path):
     assert (
         _cli(
-            "run", "cases", "ingest", str(tmp_path), "--run-date", "2026-05-29"
+            "run", "pipelines/ingest", str(tmp_path), "--run-date", "2026-05-29"
         ).returncode
         == 0
     )
@@ -97,55 +89,39 @@ def test_runs_lists_recent_runs_from_the_registry(tmp_path):
     result = _cli("runs", str(tmp_path))
 
     assert result.returncode == 0, result.stderr
-    assert "cases/ingest" in result.stdout
+    assert "ingest" in result.stdout
     assert "ok" in result.stdout
 
 
-def test_status_shows_latest_run_for_a_case_type(tmp_path):
+def test_status_shows_latest_run_per_pipeline(tmp_path):
     assert (
         _cli(
-            "run", "cases", "ingest", str(tmp_path), "--run-date", "2026-05-29"
+            "run", "pipelines/ingest", str(tmp_path), "--run-date", "2026-05-29"
         ).returncode
         == 0
     )
 
-    result = _cli("status", str(tmp_path), "--case-type", "cases")
+    result = _cli("status", str(tmp_path), "--pipeline", "ingest")
 
     assert result.returncode == 0, result.stderr
-    assert "cases/ingest" in result.stdout
+    assert "ingest" in result.stdout
     assert "ok" in result.stdout
 
 
 def test_log_summarizes_a_run_log_file(tmp_path):
     assert (
         _cli(
-            "run", "cases", "ingest", str(tmp_path), "--run-date", "2026-05-29"
+            "run", "pipelines/ingest", str(tmp_path), "--run-date", "2026-05-29"
         ).returncode
         == 0
     )
 
-    result = _cli("log", str(tmp_path), "cases")
+    result = _cli("log", str(tmp_path), "ingest")
 
     assert result.returncode == 0, result.stderr
-    assert "cases/ingest" in result.stdout
+    assert "ingest" in result.stdout
     assert "ok" in result.stdout
     assert "step records" in result.stdout
-
-
-def test_orchestrate_once_runs_demo_set_and_writes_both_registries(tmp_path):
-    result = _cli(
-        "orchestrate",
-        str(tmp_path),
-        "--run-date",
-        "2026-05-29",
-        "--once",
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert "cases/ingest  succeeded" in result.stdout
-    assert "cases/selection  succeeded" in result.stdout
-    assert (tmp_path / "_orchestration" / "runs.db").exists()
-    assert (tmp_path / "_registry" / "runs.db").exists()
 
 
 def test_format_record_includes_zero_row_metrics():
@@ -188,16 +164,18 @@ def test_log_without_a_log_file_reports_clear_error(tmp_path):
 
 
 def test_run_stale_upstream_reports_clear_error(tmp_path):
-    # Selection declares Ingest as a freshness upstream; with no recent Ingest
+    # Selection declares ingest as a freshness upstream; with only stale ingest
     # history the run must abort with a clear stale-upstream message, not a crash.
-    log = tmp_path / "_runs" / "cases.log"
+    # The shared registry catches up from every _runs/*.log, so a record in the
+    # upstream's own log is enough to drive the freshness verdict.
+    log = tmp_path / "_runs" / "ingest.log"
     log.parent.mkdir(parents=True, exist_ok=True)
     log.write_text(
         json.dumps(
             {
                 "timestamp": "2026-05-20T00:00:00+00:00",
                 "run_id": "old",
-                "pipeline": "cases/ingest",
+                "pipeline": "ingest",
                 "step": "run",
                 "status": "ok",
                 "errors": [],
@@ -209,34 +187,33 @@ def test_run_stale_upstream_reports_clear_error(tmp_path):
     )
 
     result = _cli(
-        "run", "cases", "selection", str(tmp_path), "--run-date", "2026-05-29"
+        "run", "pipelines/selection", str(tmp_path), "--run-date", "2026-05-29"
     )
 
     assert result.returncode != 0
-    assert "upstream cases/ingest is stale" in result.stderr
+    assert "upstream ingest is stale" in result.stderr
     assert "Traceback" not in result.stderr
 
 
 def test_run_validation_failure_reports_clear_error(tmp_path, monkeypatch, capsys):
-    # A pipeline that fails a data check raises ValidationError; the operator
-    # should see the message and a non-zero exit, not an unhandled traceback.
+    # A pipeline whose run(context) fails a data check raises ValidationError; the
+    # operator should present the message and a non-zero exit, not a traceback.
     from types import SimpleNamespace
 
     from framework._cli import operator
-    from framework.run import PipelineRunner
     from framework.validate import ValidationError
 
     def boom(_context):
         raise ValidationError("row count 0 below required minimum 1")
 
-    runner = PipelineRunner()
-    runner.register("cases", "ingest", boom)
-    # Substitute a fake application registry for the resolved --app module.
+    # Stand in for the imported pipelines/<name>/pipeline.py module.
     monkeypatch.setattr(
-        operator, "_resolve_app", lambda name: SimpleNamespace(build_runner=lambda: runner)
+        operator,
+        "_load_pipeline_module",
+        lambda pipeline: SimpleNamespace(run=boom, UPSTREAMS=()),
     )
 
-    code = operator.main(["run", "cases", "ingest", str(tmp_path), "--app", "fake.app"])
+    code = operator.main(["run", "pipelines/boom", str(tmp_path)])
 
     assert code == 1
     assert "below required minimum" in capsys.readouterr().err

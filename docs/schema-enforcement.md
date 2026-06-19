@@ -296,3 +296,89 @@ aborts fail-fast and atomically (ADR-0007) and nothing partial lands. `Unique`
 here is the field-annotation form of uniqueness; the one-row-per-Case *grain*
 on a (possibly composite) key stays the job of `UniqueValidator` at the gold
 boundary (#37, ADR-0009).
+
+## Row checks — relationships *between* a row's fields (#183)
+
+A value rule is **vertical**: one column across many rows, handed a `Series`. A
+**row check** is **horizontal**: one row across many fields — the relationship
+*between* them. `opened <= closed`; "if a case is closed it must carry a
+`closed_date`". This is a different shape, so it gets a different declaration:
+not a field annotation (it belongs to no single field) but a `@row_checks(...)`
+class decorator sitting **above** the dataclass, carrying `RowCheck`s:
+
+```python
+from dataclasses import dataclass
+from datetime import date
+
+import pandas as pd
+from framework.validate import RowCheck, row_checks
+
+
+def opened_before_closed(row) -> str | None:
+    # Author guards nulls explicitly — a row check sees every row (see below).
+    if pd.notna(row["opened"]) and pd.notna(row["closed"]) and row["opened"] > row["closed"]:
+        return "opened is after closed"
+    return None
+
+
+def closed_needs_a_date(row) -> str | None:
+    if row["status"] == "closed" and pd.isna(row["closed_date"]):
+        return "closed case is missing closed_date"
+    return None
+
+
+@row_checks(
+    RowCheck(("opened", "closed"), opened_before_closed),
+    RowCheck(("status", "closed_date"), closed_needs_a_date),
+)
+@dataclass
+class CaseB:
+    opened: date
+    closed: date
+    status: str
+    closed_date: date
+```
+
+A `RowCheck` pairs a **footprint** — the tuple of columns it spans — with a
+plain function over a single row (a pandas `Series` indexed by column). The
+function **returns a breach phrase or `None`**, the *same* return-not-raise
+contract as a value rule's `check`: a returned string is the breach; a real bug
+(a typo'd column name → `KeyError`) propagates as a crash instead of
+masquerading as a data breach. The framework ships only this mechanism — no
+prebuilt comparison/conditional rules, because *which* relationships matter is
+per-Case-Type domain logic, not framework vocabulary.
+
+Two properties match the value rules:
+
+- **Footprint guard.** A check is **skipped when any column it spans is missing
+  or ill-typed** — the dtype/missing breach is the prior problem to fix, and
+  running `opened <= closed` over an `opened` that arrived as text would crash
+  rather than report. This is the per-column guard value rules already get; the
+  footprint is what lets it apply per-check.
+- **One message, collected.** Every breaching row joins the validator's single
+  located message, distinct phrases reported with a row count:
+
+  ```
+  CaseB schema: opened is after closed (2 rows); closed case is missing closed_date (1 row)
+  ```
+
+One property **diverges** — and it's deliberate:
+
+> **Row checks run over *every* row, including nulls.** Value rules drop nulls
+> before testing ("nullability is a separate concern"). A row check must *not*,
+> because presence can be the very thing it tests (`closed_needs_a_date` above is
+> *about* a null). So the framework never pre-filters null rows for a row check —
+> the function sees the row exactly as it is, and **the author guards nulls
+> explicitly** (e.g. `pd.notna(...)` in an ordering check, or `pd.isna(...)` in a
+> presence check). Carrying over the value-rule reflex that "nulls are always
+> skipped" is the one thing that will surprise you here.
+
+### Where they bite
+
+Like value rules, row checks run on the same `SchemaValidator` seam, so they
+enforce at **both** the silver and gold boundaries with no builder change, and
+abort fail-fast before the writer runs. And like value rules they also feed
+**quarantine**: a `SchemaValueRulePartitioner` routes a row-check-breaching row
+to the reject table with its phrase in the `failed_rule` reason (the footprint
+guard skips a check whose column is absent there too), so a horizontal breach
+can be isolated row-by-row rather than aborting the run.

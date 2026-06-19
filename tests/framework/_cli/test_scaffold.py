@@ -18,6 +18,7 @@ import pytest
 
 from framework.core import RAW
 from framework.io import StoreCatalog
+from framework.run import RunContext
 from framework.testing import read_rows, rows_of
 from framework._cli import scaffold
 
@@ -91,7 +92,7 @@ def test_rendered_pipeline_runs_and_lands_its_sample_feed(tmp_path):
     try:
         pipeline = importlib.import_module("widgets.pipeline")
         importlib.reload(pipeline)  # in case a prior test imported "widgets"
-        dataset = pipeline.run(tmp_path / "data")
+        dataset = pipeline.run(RunContext(base_dir=tmp_path / "data", pipeline="widgets"))
     finally:
         sys.path.remove(str(repo / "pipelines"))
         for name in list(sys.modules):
@@ -101,7 +102,11 @@ def test_rendered_pipeline_runs_and_lands_its_sample_feed(tmp_path):
     store = StoreCatalog(tmp_path / "data").store("widgets")
     landed = read_rows(store, RAW, "widgets")
     assert len(landed) == len(dataset) > 0
-    assert landed == rows_of(dataset)
+    # raw accumulates under the run context, so landed rows carry the run's
+    # stamps (run_id / load_date / ...) on top of the source columns; the source
+    # columns themselves land faithfully.
+    source_columns = set(rows_of(dataset)[0])
+    assert [{c: row[c] for c in source_columns} for row in landed] == rows_of(dataset)
 
 
 def test_cli_creates_the_feed_and_reports_it(tmp_path, capsys, monkeypatch):
@@ -259,7 +264,7 @@ def test_rendered_feed_from_a_spaced_file_runs_and_its_test_passes(tmp_path):
     try:
         pipeline = importlib.import_module("widgets.pipeline")
         importlib.reload(pipeline)
-        dataset = pipeline.run(tmp_path / "data")
+        dataset = pipeline.run(RunContext(base_dir=tmp_path / "data", pipeline="widgets"))
     finally:
         sys.path.remove(str(repo / "pipelines"))
         for name in list(sys.modules):

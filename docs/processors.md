@@ -262,6 +262,64 @@ from framework.transform import Stamp
 Stamp("question_bank_id", variation.question_bank_id)
 ```
 
+## Column shaping — `Parse`, `SplitColumn`, `JoinColumns`
+
+Three small, general-purpose column transforms for feeds that arrive with packed
+or delimited columns — common when a source system serialises a structured value
+into one text field. They are ordinary `Processor`s (engine-confined, fail-fast)
+and, like `SelectColumns`/`DropColumns`, raise `ValueError` naming a missing
+column rather than silently skipping it.
+
+### `Parse` — decode a packed text column through a callable
+
+```python
+from framework.transform import Parse
+
+Parse("payload")                          # default parser: json.loads
+Parse(["payload", "meta"])                # several columns, same parser
+Parse("activity_date", parser=date.fromisoformat)
+```
+
+Runs every value in the named column(s) through `parser`, replacing each value in
+place. `parser` defaults to `json.loads`, so a JSON-encoded text column becomes
+structured Python values (a `dict`/`list` per row) ready for a downstream reshape
+— but it is any `value -> value` callable, so the same processor decodes ISO
+timestamps, a custom record parser, etc. `columns` is one name or a sequence of
+them.
+
+### `SplitColumn` — fan one delimited column into several
+
+```python
+from framework.transform import SplitColumn
+
+SplitColumn("full_name", ["first", "last"], sep=" ")
+SplitColumn("path", ["head", "rest"], sep="/")     # excess stays in `rest`
+```
+
+Splits the source `column` on `sep` (a literal string, `","` by default) into the
+columns named in `into`, in order. A row with fewer parts leaves the trailing
+destinations `None`; any delimiters past the last destination stay in the final
+column rather than spilling into columns `into` never named. The source column is
+removed once split (`drop=True` default) unless it is itself named in `into` (an
+in-place overwrite); pass `drop=False` to keep it.
+
+### `JoinColumns` — recombine several columns into one
+
+```python
+from framework.transform import JoinColumns
+
+JoinColumns(["first", "last"], "full_name", sep=" ")
+JoinColumns(["region", "adviser"], "group_key", drop=True)
+```
+
+The inverse of `SplitColumn`: stringifies each row's `columns` values and joins
+them with `sep` (`","` by default) into the `into` column (new, or an overwrite).
+The source columns are kept by default (`drop=False`) — joining typically adds a
+composite alongside its parts; pass `drop=True` to consume them. It is the
+plain-text sibling of `DeriveKey`, which hashes the joined natural key into a
+deterministic UUID; reach for `JoinColumns` when you want the readable composite
+itself, and `DeriveKey` when you want the stable `case_id`.
+
 ## `JoinWith` — explicit cross-feed dependency join
 
 A Case Type's Selection joins against other feeds — most commonly **Reference
