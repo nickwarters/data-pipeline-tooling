@@ -21,7 +21,8 @@ whole-frame callables for batch-friendly transforms, ``Sort`` and ``Rename``
 reshape the frame, ``Parse`` decodes a packed text column through a callable
 (``json.loads`` by default) and ``SplitColumn`` / ``JoinColumns`` are the
 inverse pair that fans one delimited column into several and recombines several
-into one, ``JoinWith`` joins an explicit read-only dependency in Python, and
+into one, ``Zfill`` left-pads text columns with leading zeros to a fixed width,
+``JoinWith`` joins an explicit read-only dependency in Python, and
 ``AntiJoinWith`` excludes rows whose key is present in a read-only dependency.
 """
 
@@ -315,6 +316,41 @@ class SplitColumn:
         return render(
             self, column=self._column, into=self._into, sep=self._sep, drop=self._drop
         )
+
+
+class Zfill:
+    """Pad each value in one or more columns with leading zeros to ``width``.
+
+    The fix for a feed that lost leading zeros when a fixed-width identifier
+    (account number, sort code, postcode) was read as an integer: each value is
+    cast to text and left-padded with ``"0"`` to ``width`` characters. Values
+    already at or beyond ``width`` pass through unchanged. Pandas' sign-aware
+    ``str.zfill`` keeps a leading sign at the front (``"-1"`` -> ``"-01"``), and
+    missing values stay missing.
+
+    A sibling of the other column-shaping transforms (``Parse`` / ``SplitColumn``
+    / ``JoinColumns``): engine-confined, fail-fast, and raises ``ValueError``
+    naming any absent column rather than silently skipping it.
+    """
+
+    def __init__(self, columns: str | Sequence[str], width: int) -> None:
+        self._columns = [columns] if isinstance(columns, str) else list(columns)
+        self._width = width
+
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas()
+        missing = [c for c in self._columns if c not in frame.columns]
+        if missing:
+            raise ValueError(
+                f"Zfill: column(s) not found in dataset: {missing!r}. "
+                f"Available columns: {list(frame.columns)!r}"
+            )
+        for column in self._columns:
+            frame[column] = frame[column].astype("string").str.zfill(self._width)
+        return Dataset.from_pandas(frame)
+
+    def describe(self) -> str:
+        return render(self, columns=self._columns, width=self._width)
 
 
 class JoinColumns:

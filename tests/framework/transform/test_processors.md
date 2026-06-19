@@ -42,6 +42,7 @@ from framework.transform.processors import (
     Unpivot,
     VectorizedDerive,
     VectorizedFilter,
+    Zfill,
 )
 
 
@@ -1288,5 +1289,62 @@ def test_parse_split_join_conform_to_the_processor_protocol():
     assert isinstance(Parse("a"), Processor)
     assert isinstance(SplitColumn("a", ["b", "c"]), Processor)
     assert isinstance(JoinColumns(["a", "b"], "c"), Processor)
+
+
+# --- Zfill -----------------------------------------------------------------
+
+
+def test_zfill_pads_values_with_leading_zeros_to_the_width():
+    # A source read an account number as an integer and lost its leading zeros;
+    # Zfill restores the fixed width by padding each value with leading zeros.
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"account": ["42", "7", "12345"]})
+    )
+
+    result = Zfill("account", 5).process(dataset).to_pandas()
+
+    assert list(result["account"]) == ["00042", "00007", "12345"]
+
+
+def test_zfill_pads_several_columns_and_leaves_the_rest_untouched():
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"sort_code": ["12", "9"], "branch": ["3", "44"], "name": ["a", "b"]})
+    )
+
+    result = Zfill(["sort_code", "branch"], 4).process(dataset).to_pandas()
+
+    assert list(result["sort_code"]) == ["0012", "0009"]
+    assert list(result["branch"]) == ["0003", "0044"]
+    assert list(result["name"]) == ["a", "b"]  # untouched
+
+
+def test_zfill_leaves_values_already_at_or_beyond_width_unchanged():
+    dataset = Dataset.from_pandas(pd.DataFrame({"code": ["12345", "123456"]}))
+
+    result = Zfill("code", 5).process(dataset).to_pandas()
+
+    assert list(result["code"]) == ["12345", "123456"]
+
+
+def test_zfill_raises_on_missing_column():
+    dataset = Dataset.from_pandas(pd.DataFrame({"a": ["1"]}))
+
+    with pytest.raises(ValueError, match="nope"):
+        Zfill(["a", "nope"], 3).process(dataset)
+
+
+def test_zfill_on_empty_feed_returns_empty_feed():
+    empty = Dataset.from_pandas(pd.DataFrame({"account": pd.Series([], dtype=object)}))
+
+    result = Zfill("account", 5).process(empty)
+
+    assert isinstance(result, Dataset)
+    assert len(result) == 0
+
+
+def test_zfill_conforms_to_the_processor_protocol():
+    from framework.transform.processors import Processor
+
+    assert isinstance(Zfill("a", 3), Processor)
 
 ```
