@@ -27,17 +27,21 @@ def _frame_for_strategy(
     dataset: Dataset,
     strategy: Refresh | AccumulateByRun | UpsertStrategy,
     read_existing: Callable[[], pd.DataFrame],
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, bool]:
+    """Return (frame_to_write, replaced) where replaced is True when prior rows
+    for this run_id already existed (a re-run), False for a fresh write."""
     frame = dataset.to_pandas()
     if isinstance(strategy, Refresh):
-        return frame
+        return frame, False
     if isinstance(strategy, AccumulateByRun):
         frame = _stamp_accumulate_frame(frame, strategy)
 
         existing = read_existing()
+        replaced = False
         if len(existing) > 0 and "run_id" in existing.columns:
+            replaced = bool((existing["run_id"] == strategy.run_id).any())
             existing = existing[existing["run_id"] != strategy.run_id]
-        return pd.concat([existing, frame], ignore_index=True)
+        return pd.concat([existing, frame], ignore_index=True), replaced
     raise TypeError(f"Unsupported load strategy: {type(strategy).__name__}")
 
 
@@ -58,6 +62,9 @@ class CsvWriter:
     Owns its target file and load strategy. ``Refresh`` overwrites the file with
     the current dataset; ``AccumulateByRun`` rewrites the file after replacing
     only that logical run's stamped rows.
+
+    After ``write()`` returns, ``replaced`` is ``True`` when prior rows for this
+    run_id already existed in the file (a re-run), ``False`` for a fresh write.
     """
 
     def __init__(
@@ -67,9 +74,12 @@ class CsvWriter:
     ) -> None:
         self._path = Path(path)
         self._strategy = strategy
+        self.replaced: bool = False
 
     def write(self, dataset: Dataset) -> None:
-        frame = _frame_for_strategy(dataset, self._strategy, self._read_existing)
+        frame, self.replaced = _frame_for_strategy(
+            dataset, self._strategy, self._read_existing
+        )
         self._path.parent.mkdir(parents=True, exist_ok=True)
         frame.to_csv(self._path, index=False, lineterminator="\n")
 
@@ -83,7 +93,11 @@ class CsvWriter:
 
 
 class ExcelWriter:
-    """A file Deliverable Writer for one Excel worksheet."""
+    """A file Deliverable Writer for one Excel worksheet.
+
+    After ``write()`` returns, ``replaced`` is ``True`` when prior rows for this
+    run_id already existed in the file (a re-run), ``False`` for a fresh write.
+    """
 
     def __init__(
         self,
@@ -94,9 +108,12 @@ class ExcelWriter:
         self._path = Path(path)
         self._strategy = strategy
         self._sheet = sheet
+        self.replaced: bool = False
 
     def write(self, dataset: Dataset) -> None:
-        frame = _frame_for_strategy(dataset, self._strategy, self._read_existing)
+        frame, self.replaced = _frame_for_strategy(
+            dataset, self._strategy, self._read_existing
+        )
         self._path.parent.mkdir(parents=True, exist_ok=True)
         with pd.ExcelWriter(self._path) as writer:
             frame.to_excel(writer, sheet_name=self._sheet, index=False)
@@ -111,7 +128,11 @@ class ExcelWriter:
 
 
 class JsonWriter:
-    """A file Deliverable Writer for JSON record arrays."""
+    """A file Deliverable Writer for JSON record arrays.
+
+    After ``write()`` returns, ``replaced`` is ``True`` when prior rows for this
+    run_id already existed in the file (a re-run), ``False`` for a fresh write.
+    """
 
     def __init__(
         self,
@@ -120,9 +141,12 @@ class JsonWriter:
     ) -> None:
         self._path = Path(path)
         self._strategy = strategy
+        self.replaced: bool = False
 
     def write(self, dataset: Dataset) -> None:
-        frame = _frame_for_strategy(dataset, self._strategy, self._read_existing)
+        frame, self.replaced = _frame_for_strategy(
+            dataset, self._strategy, self._read_existing
+        )
         self._path.parent.mkdir(parents=True, exist_ok=True)
         frame.to_json(
             self._path,
@@ -374,6 +398,9 @@ class AccumulateByRunWriter:
     ``logical_run_id`` / ``load_date`` plus ``execution_id`` when the strategy
     was derived from a RunContext. A re-driven logical run is idempotent via
     delete-by-run then insert.
+
+    After ``write()`` returns, ``replaced`` is ``True`` when prior rows for this
+    run_id already existed (a re-run), ``False`` for a fresh write.
     """
 
     def __init__(
@@ -391,6 +418,7 @@ class AccumulateByRunWriter:
         self._load_date = load_date
         self._execution_id = execution_id
         self._busy_timeout_ms = busy_timeout_ms
+        self.replaced: bool = False
 
     def write(self, dataset: Dataset) -> None:
         frame = dataset.to_pandas()
@@ -406,12 +434,13 @@ class AccumulateByRunWriter:
             # Idempotent re-run: clear this run's prior rows, then append, so a
             # re-driven day replaces only its own rows and never other runs'.
             try:
-                con.execute(
+                cursor = con.execute(
                     f"DELETE FROM {quote_identifier(self._table)} WHERE run_id = ?",
                     (self._run_id,),
                 )
+                self.replaced = cursor.rowcount > 0
             except sqlite3.OperationalError:
-                pass  # table does not exist yet — nothing to clear
+                self.replaced = False  # table does not exist yet — nothing to clear
             frame.to_sql(self._table, con, if_exists="append", index=False)
             con.commit()
         finally:

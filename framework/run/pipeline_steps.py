@@ -242,6 +242,10 @@ class CheckpointStep(PipelineStep):
         with session.timed_step(self.name, rows_in=len(dataset)) as metrics:
             self.writer.write(dataset)
             metrics.rows_out = len(dataset)
+            if getattr(self.writer, "replaced", False):
+                metrics.warn_hits.append(
+                    f"re-run: replaced {len(dataset)} prior rows"
+                )
             return dataset
 
 
@@ -293,6 +297,10 @@ class WriteStep(PipelineStep):
             self.writer.write(dataset)
             _drain_retry_attempts(self.writer, metrics)
             metrics.rows_out = len(dataset)
+            if getattr(self.writer, "replaced", False):
+                metrics.warn_hits.append(
+                    f"re-run: replaced {len(dataset)} prior rows"
+                )
             return dataset
 
 

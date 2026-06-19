@@ -199,3 +199,86 @@ def test_accumulate_by_run_writer_is_atomic_when_the_write_fails(tmp_path):
     survivors = SqliteReader(db, "selection_pool").read()
     assert len(survivors) == 2
     assert "surprise" not in survivors.columns
+
+
+def test_accumulate_by_run_writer_replaced_is_false_on_first_write(tmp_path):
+    # The replaced flag is False on the first write — no prior rows existed for
+    # this run_id, so this is a fresh write, not a re-run.
+    dataset = CsvReader(FIXTURE).read()
+    db = tmp_path / "gold.db"
+    writer = AccumulateByRunWriter(db, "selection_pool", "r1", "2026-05-29")
+
+    writer.write(dataset)
+
+    assert writer.replaced is False
+
+
+def test_accumulate_by_run_writer_replaced_is_true_on_rerun(tmp_path):
+    # The replaced flag is True when write() deletes prior rows for this run_id
+    # before inserting — this is a re-run, not a fresh write.
+    dataset = CsvReader(FIXTURE).read()
+    db = tmp_path / "gold.db"
+    writer = AccumulateByRunWriter(db, "selection_pool", "r1", "2026-05-29")
+
+    writer.write(dataset)  # first write — fresh
+    assert writer.replaced is False
+
+    writer.write(dataset)  # second write — re-run replaces prior rows
+    assert writer.replaced is True
+
+
+def test_csv_writer_accumulate_replaced_is_false_on_first_write(tmp_path):
+    # A file-based AccumulateByRun writer also reports replaced=False on the
+    # first write for a run_id (no prior rows existed for that run).
+    dataset = CsvReader(FIXTURE).read()
+    target = tmp_path / "cases.csv"
+    writer = CsvWriter(target, AccumulateByRun("r1", "2026-05-29"))
+
+    writer.write(dataset)
+
+    assert writer.replaced is False
+
+
+def test_csv_writer_accumulate_replaced_is_true_on_rerun(tmp_path):
+    # A file-based AccumulateByRun writer reports replaced=True when prior rows
+    # for this run_id already existed in the file — the re-run case.
+    dataset = CsvReader(FIXTURE).read()
+    target = tmp_path / "cases.csv"
+    writer = CsvWriter(target, AccumulateByRun("r1", "2026-05-29"))
+
+    writer.write(dataset)  # first write
+    assert writer.replaced is False
+
+    writer.write(dataset)  # re-run — replaces prior rows
+    assert writer.replaced is True
+
+
+def test_write_step_warns_on_rerun(tmp_path):
+    # When the writer signals replaced=True after write(), WriteStep adds a
+    # warn_hits note so the console/log distinguishes a re-run from a fresh write.
+    from framework.run.builder import Pipeline
+    from framework.run.run_log import RunLog
+    from framework.io.readers import CsvReader as _CsvReader
+    import json
+
+    dataset_path = FIXTURE
+    db = tmp_path / "gold.db"
+    log_path = tmp_path / "run.log"
+    run_log = RunLog(log_path)
+
+    strategy = AccumulateByRun("r1", "2026-05-29")
+    writer1 = AccumulateByRunWriter(db, "pool", "r1", "2026-05-29")
+    writer2 = AccumulateByRunWriter(db, "pool", "r1", "2026-05-29")
+
+    # First run — fresh write, no warn_hits for re-run
+    Pipeline("cases", _CsvReader(dataset_path), run_log).write_to(writer1).run()
+    records = [json.loads(line) for line in log_path.read_text().splitlines()]
+    write_records = [r for r in records if r["step"] == "write"]
+    assert write_records, "expected a write step record"
+    assert not any("re-run" in w for w in write_records[-1]["warn_hits"])
+
+    # Second run — re-run, warn_hits should mention re-run
+    Pipeline("cases", _CsvReader(dataset_path), run_log).write_to(writer2).run()
+    records = [json.loads(line) for line in log_path.read_text().splitlines()]
+    write_records = [r for r in records if r["step"] == "write"]
+    assert any("re-run" in w for w in write_records[-1]["warn_hits"])
