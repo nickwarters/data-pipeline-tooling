@@ -195,10 +195,16 @@ def main(argv: list[str]) -> int:
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1
-    print(
-        f"Refined {len(dataset)} rows source -> raw -> silver -> gold under "
-        f"{base_dir / FEED_NAME} (layers {RAW}, {SILVER}, {GOLD})."
-    )
+    if context.write_replaced:
+        print(
+            f"Re-run: replaced {len(dataset)} rows (idempotent re-run) under "
+            f"{base_dir / FEED_NAME} (layers {RAW}, {SILVER}, {GOLD})."
+        )
+    else:
+        print(
+            f"Refined {len(dataset)} rows source -> raw -> silver -> gold under "
+            f"{base_dir / FEED_NAME} (layers {RAW}, {SILVER}, {GOLD})."
+        )
     return 0
 
 

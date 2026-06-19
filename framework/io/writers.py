@@ -17,7 +17,7 @@ import pandas as pd
 
 from framework._internal.connection import connect
 from framework._internal.describe import redact_url, render
-from framework.core.protocols import Writer
+from framework.core.protocols import Writer, WriteOutcome
 from framework.core.dataset import Dataset
 from framework.io.remote import SharePointPusher, StubbedSharePointPusher
 from framework.io.sql import quote_identifier
@@ -27,17 +27,22 @@ def _frame_for_strategy(
     dataset: Dataset,
     strategy: Refresh | AccumulateByRun | UpsertStrategy,
     read_existing: Callable[[], pd.DataFrame],
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, bool]:
     frame = dataset.to_pandas()
     if isinstance(strategy, Refresh):
-        return frame
+        return frame, False
     if isinstance(strategy, AccumulateByRun):
         frame = _stamp_accumulate_frame(frame, strategy)
 
         existing = read_existing()
+        replaced = (
+            len(existing) > 0
+            and "run_id" in existing.columns
+            and bool((existing["run_id"] == strategy.run_id).any())
+        )
         if len(existing) > 0 and "run_id" in existing.columns:
             existing = existing[existing["run_id"] != strategy.run_id]
-        return pd.concat([existing, frame], ignore_index=True)
+        return pd.DataFrame(pd.concat([existing, frame], ignore_index=True)), replaced
     raise TypeError(f"Unsupported load strategy: {type(strategy).__name__}")
 
 
@@ -68,10 +73,11 @@ class CsvWriter:
         self._path = Path(path)
         self._strategy = strategy
 
-    def write(self, dataset: Dataset) -> None:
-        frame = _frame_for_strategy(dataset, self._strategy, self._read_existing)
+    def write(self, dataset: Dataset) -> WriteOutcome:
+        frame, replaced = _frame_for_strategy(dataset, self._strategy, self._read_existing)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         frame.to_csv(self._path, index=False, lineterminator="\n")
+        return WriteOutcome(rows_written=len(dataset.to_pandas()), replaced=replaced)
 
     def _read_existing(self) -> pd.DataFrame:
         if not self._path.exists():
@@ -95,11 +101,12 @@ class ExcelWriter:
         self._strategy = strategy
         self._sheet = sheet
 
-    def write(self, dataset: Dataset) -> None:
-        frame = _frame_for_strategy(dataset, self._strategy, self._read_existing)
+    def write(self, dataset: Dataset) -> WriteOutcome:
+        frame, replaced = _frame_for_strategy(dataset, self._strategy, self._read_existing)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         with pd.ExcelWriter(self._path) as writer:
             frame.to_excel(writer, sheet_name=self._sheet, index=False)
+        return WriteOutcome(rows_written=len(dataset.to_pandas()), replaced=replaced)
 
     def _read_existing(self) -> pd.DataFrame:
         if not self._path.exists():
@@ -121,8 +128,8 @@ class JsonWriter:
         self._path = Path(path)
         self._strategy = strategy
 
-    def write(self, dataset: Dataset) -> None:
-        frame = _frame_for_strategy(dataset, self._strategy, self._read_existing)
+    def write(self, dataset: Dataset) -> WriteOutcome:
+        frame, replaced = _frame_for_strategy(dataset, self._strategy, self._read_existing)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         frame.to_json(
             self._path,
@@ -131,6 +138,7 @@ class JsonWriter:
             indent=2,
             force_ascii=False,
         )
+        return WriteOutcome(rows_written=len(dataset.to_pandas()), replaced=replaced)
 
     def _read_existing(self) -> pd.DataFrame:
         if not self._path.exists():
@@ -159,11 +167,12 @@ class StdoutWriter:
         self._label = label
         self._stream = stream
 
-    def write(self, dataset: Dataset) -> None:
+    def write(self, dataset: Dataset) -> WriteOutcome:
         stream = self._stream if self._stream is not None else sys.stdout
         if self._label:
             print(self._label, file=stream)
         print(dataset.to_pandas().to_string(index=False), file=stream)
+        return WriteOutcome(rows_written=len(dataset.to_pandas()), replaced=False)
 
     def describe(self) -> str:
         return render(self, label=self._label)
@@ -187,7 +196,7 @@ class SharePointWriter:
         self._strategy = strategy
         self._pusher = pusher or StubbedSharePointPusher()
 
-    def write(self, dataset: Dataset) -> None:
+    def write(self, dataset: Dataset) -> WriteOutcome:
         if isinstance(self._strategy, AccumulateByRun):
             dataset = Dataset.from_pandas(
                 _stamp_accumulate_frame(dataset.to_pandas(), self._strategy)
@@ -199,6 +208,7 @@ class SharePointWriter:
             dataset,
             self._strategy,
         )
+        return WriteOutcome(rows_written=len(dataset.to_pandas()), replaced=False)
 
     def describe(self) -> str:
         # Strip any credentials embedded in the site URL and omit auth config
@@ -219,16 +229,16 @@ class SqliteTruncateReloadWriter:
         self._table = table
         self._busy_timeout_ms = busy_timeout_ms
 
-    def write(self, dataset: Dataset) -> None:
+    def write(self, dataset: Dataset) -> WriteOutcome:
+        frame = dataset.to_pandas()
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         con = connect(self._db_path, self._busy_timeout_ms)
         try:
-            dataset.to_pandas().to_sql(
-                self._table, con, if_exists="replace", index=False
-            )
+            frame.to_sql(self._table, con, if_exists="replace", index=False)
             con.commit()
         finally:
             con.close()
+        return WriteOutcome(rows_written=len(frame), replaced=False)
 
     def describe(self) -> str:
         return render(self, db_path=str(self._db_path), table=self._table)
@@ -258,24 +268,27 @@ class QuarantineWriter:
         self._table = table
         self._busy_timeout_ms = busy_timeout_ms
 
-    def write(self, dataset: Dataset) -> None:
+    def write(self, dataset: Dataset) -> WriteOutcome:
         frame = dataset.to_pandas()
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         con = connect(self._db_path, self._busy_timeout_ms)
+        rows_deleted = 0
         try:
             if "run_id" in frame.columns:
                 run_id = frame["run_id"].iloc[0]
                 try:
-                    con.execute(
+                    cursor = con.execute(
                         f"DELETE FROM {quote_identifier(self._table)} WHERE run_id = ?",
                         (run_id,),
                     )
+                    rows_deleted = cursor.rowcount
                 except sqlite3.OperationalError:
                     pass  # table does not exist yet
             frame.to_sql(self._table, con, if_exists="append", index=False)
             con.commit()
         finally:
             con.close()
+        return WriteOutcome(rows_written=len(frame), replaced=rows_deleted > 0)
 
     def describe(self) -> str:
         return render(self, db_path=str(self._db_path), table=self._table)
@@ -313,7 +326,7 @@ class SqliteUpsertWriter:
         # UpsertWriters target different tables in the same layer db.
         self._staging = f"_upsert_stage_{table}"
 
-    def write(self, dataset: Dataset) -> None:
+    def write(self, dataset: Dataset) -> WriteOutcome:
         frame = dataset.to_pandas()
         missing = [c for c in self._key_columns if c not in frame.columns]
         if missing:
@@ -355,6 +368,7 @@ class SqliteUpsertWriter:
             con.execute(f"DROP TABLE IF EXISTS {staging}")
         finally:
             con.close()
+        return WriteOutcome(rows_written=len(frame), replaced=False)
 
     def describe(self) -> str:
         return render(
@@ -392,7 +406,7 @@ class AccumulateByRunWriter:
         self._execution_id = execution_id
         self._busy_timeout_ms = busy_timeout_ms
 
-    def write(self, dataset: Dataset) -> None:
+    def write(self, dataset: Dataset) -> WriteOutcome:
         frame = dataset.to_pandas()
         frame["run_id"] = self._run_id
         frame["logical_run_id"] = self._run_id
@@ -402,20 +416,23 @@ class AccumulateByRunWriter:
 
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         con = connect(self._db_path, self._busy_timeout_ms)
+        rows_deleted = 0
         try:
             # Idempotent re-run: clear this run's prior rows, then append, so a
             # re-driven day replaces only its own rows and never other runs'.
             try:
-                con.execute(
+                cursor = con.execute(
                     f"DELETE FROM {quote_identifier(self._table)} WHERE run_id = ?",
                     (self._run_id,),
                 )
+                rows_deleted = cursor.rowcount
             except sqlite3.OperationalError:
                 pass  # table does not exist yet — nothing to clear
             frame.to_sql(self._table, con, if_exists="append", index=False)
             con.commit()
         finally:
             con.close()
+        return WriteOutcome(rows_written=len(dataset.to_pandas()), replaced=rows_deleted > 0)
 
     def describe(self) -> str:
         return render(self, db_path=str(self._db_path), table=self._table)

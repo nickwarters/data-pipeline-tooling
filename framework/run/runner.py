@@ -189,6 +189,7 @@ def run_pipeline(
             "ok",
             rows_in=rows,
             rows_out=rows,
+            replaced=context.write_replaced,
             duration=time.perf_counter() - started,
         )
         context.mark_run_summary_recorded()

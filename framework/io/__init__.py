@@ -44,6 +44,7 @@ from framework.io.writers import (
     StdoutWriter,
     Writer,
 )
+from framework.core.protocols import WriteOutcome
 
 __all__ = [
     "Reader",
@@ -71,4 +72,5 @@ __all__ = [
     "AccumulateByRun",
     "UpsertStrategy",
     "SqliteUpsertWriter",
+    "WriteOutcome",
 ]

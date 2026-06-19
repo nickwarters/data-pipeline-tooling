@@ -79,6 +79,8 @@ def _format_run(record: dict) -> str:
     ]
     if record.get("rows_out") is not None:
         parts.append(f"rows_out={record['rows_out']}")
+    if record.get("replaced") is True:
+        parts.append("replaced")
     if record.get("warn_hits"):
         parts.append(f"warn={'; '.join(record['warn_hits'])}")
     parts.append(f"[run {(record.get('run_id') or '')[:8]}]")
@@ -190,6 +192,8 @@ def _format_record(record: dict) -> str:
         value = record.get(field)
         if value is not None:
             parts.append(f"{field}={value}")
+    if record.get("replaced") is True:
+        parts.append("replaced")
     if record.get("duration") is not None:
         parts.append(f"{record['duration']:.3f}s")
     if record.get("errors"):

@@ -199,3 +199,51 @@ def test_accumulate_by_run_writer_is_atomic_when_the_write_fails(tmp_path):
     survivors = SqliteReader(db, "selection_pool").read()
     assert len(survivors) == 2
     assert "surprise" not in survivors.columns
+
+
+def test_accumulate_by_run_writer_returns_fresh_outcome_on_first_write(tmp_path):
+    # The first write for a run_id has no prior rows to replace — the outcome
+    # must report replaced=False so the run log reads as a fresh load.
+    from framework.core.protocols import WriteOutcome
+
+    dataset = Dataset.from_pandas(pd.DataFrame({"id": [1, 2]}))
+    db = tmp_path / "gold.db"
+
+    outcome = AccumulateByRunWriter(db, "pool", "r1", "2026-05-29").write(dataset)
+
+    assert isinstance(outcome, WriteOutcome)
+    assert outcome.rows_written == 2
+    assert outcome.replaced is False
+
+
+def test_accumulate_by_run_writer_returns_replaced_outcome_on_re_run(tmp_path):
+    # A second write under the same run_id deletes the first batch then
+    # re-inserts — the outcome must report replaced=True.
+    from framework.core.protocols import WriteOutcome
+
+    dataset = Dataset.from_pandas(pd.DataFrame({"id": [1, 2]}))
+    db = tmp_path / "gold.db"
+    writer = AccumulateByRunWriter(db, "pool", "r1", "2026-05-29")
+
+    writer.write(dataset)
+    outcome = writer.write(dataset)
+
+    assert isinstance(outcome, WriteOutcome)
+    assert outcome.replaced is True
+
+
+def test_csv_writer_accumulate_returns_fresh_then_replaced_outcome(tmp_path):
+    # CsvWriter with AccumulateByRun must surface the same replaced flag.
+    from framework.core.protocols import WriteOutcome
+
+    dataset = Dataset.from_pandas(pd.DataFrame({"id": [1, 2]}))
+    target = tmp_path / "out.csv"
+    writer = CsvWriter(target, AccumulateByRun("r1", "2026-05-29"))
+
+    first = writer.write(dataset)
+    second = writer.write(dataset)
+
+    assert isinstance(first, WriteOutcome)
+    assert first.replaced is False
+    assert isinstance(second, WriteOutcome)
+    assert second.replaced is True

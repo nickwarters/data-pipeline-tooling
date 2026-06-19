@@ -136,6 +136,7 @@ def test_runner_registers_and_runs_handler_by_case_type_and_pipeline(tmp_path):
 
     result = runner.run("cases", "ingest", tmp_path, run_date=dt.date(2026, 5, 29))
 
+    assert isinstance(result, Dataset)
     assert len(result) == 2
     assert seen == [("cases", "ingest", "cases/ingest")]
     registry = RunRegistry(tmp_path / "_registry" / "runs.db")
@@ -214,6 +215,39 @@ def test_runner_redrives_a_business_run_under_an_explicit_logical_run_id(tmp_pat
     assert set(landed["logical_run_id"]) == {"REDRIVE-7"}
     # Each execution stays individually traceable.
     assert len(set(landed["execution_id"])) == 1  # the latest execution's rows
+
+
+def test_second_run_under_same_logical_run_id_records_replaced_in_log(tmp_path):
+    # Running a pipeline twice under the same logical_run_id must report
+    # replaced=True in the run-level log record for the second execution so an
+    # operator can distinguish a fresh load from an idempotent re-run.
+    runner = PipelineRunner()
+
+    def handler(context):
+        store = Store(context.base_dir / context.case_type)
+        source = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c1", "c2"]}))
+        return (
+            Pipeline(context.label, DatasetReader(source))
+            .write_to(
+                store.writer(
+                    "gold", "pool", AccumulateByRun.from_context(context)
+                )
+            )
+            .run(context=context)
+        )
+
+    runner.register("cases", "ingest", handler)
+
+    runner.run("cases", "ingest", tmp_path, logical_run_id="LR-1")
+    runner.run("cases", "ingest", tmp_path, logical_run_id="LR-1")
+
+    log_path = tmp_path / "_runs" / "cases.log"
+    records = [json.loads(line) for line in log_path.read_text().splitlines()]
+    run_records = [r for r in records if r.get("step") == "run"]
+    assert len(run_records) == 2
+    # First run: not replaced; second run: replaced.
+    assert run_records[0].get("replaced") is False
+    assert run_records[1].get("replaced") is True
 
 
 def test_runner_unknown_pipeline_raises_clear_error(tmp_path):

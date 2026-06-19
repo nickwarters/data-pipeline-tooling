@@ -188,8 +188,16 @@ a Writer takes it out (ADR-0003 amendment).
 
 ```python
 class Writer(Protocol):
-    def write(self, dataset: Dataset) -> None: ...
+    def write(self, dataset: Dataset) -> WriteOutcome: ...
 ```
+
+`write()` returns a `WriteOutcome(rows_written: int, replaced: bool)`. `replaced`
+is `True` when an accumulate writer detected prior rows for the same logical run
+id and deleted them before re-inserting (idempotent re-run); `False` for a fresh
+insert or any non-accumulate writer. The pipeline steps thread this back to the
+`RunLog` (step record + console line) and to `RunContext.write_replaced` so the
+run-level summary and the scaffolded feed's final print can distinguish a fresh
+load from an idempotent re-run (#203).
 
 A Writer owns **both** its target location (a layer db file + table, or a file
 Deliverable path) **and** its load strategy (ADR-0006). Swapping the Writer is
@@ -212,8 +220,9 @@ Deliverables and SQLite tables:
   `logical_run_id`, `load_date`, and optional `execution_id`. The legacy `run_id`
   column is the logical/idempotency key; `execution_id` is the trace key that
   matches RunLog/RunRegistry when the strategy is derived from a `RunContext`.
-  A re-driven run is idempotent via *delete-by-run then insert*. Wired by the
-  `silver_to_gold` builder (#8; [gold-accumulation doc](gold-accumulation.md)).
+  A re-driven run is idempotent via *delete-by-run then insert*; the returned
+  `WriteOutcome.replaced` is `True` when prior rows were found and replaced.
+  Wired by the `silver_to_gold` builder (#8; [gold-accumulation doc](gold-accumulation.md)).
 - `SqliteUpsertWriter(db_path, table, key_columns)` — **update-or-insert** by a
   declared key set (#136): for each incoming row whose key already exists in the
   target the row is replaced; new keys are inserted; target rows whose key is

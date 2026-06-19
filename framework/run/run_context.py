@@ -45,6 +45,7 @@ class RunContext:
         self.run_registry = run_registry
         self.freshness_days = freshness_days
         self._run_summary_recorded = False
+        self._write_replaced = False
 
     @property
     def run_id(self) -> str:
@@ -66,6 +67,15 @@ class RunContext:
     def mark_run_summary_recorded(self) -> None:
         """Mark that the run-level summary has been emitted."""
         self._run_summary_recorded = True
+
+    @property
+    def write_replaced(self) -> bool:
+        """True if any write step detected an idempotent replace for this run."""
+        return self._write_replaced
+
+    def mark_write_replaced(self) -> None:
+        """Signal that a write step replaced prior rows for this logical run id."""
+        self._write_replaced = True
 
     def _default_logical_run_id(self) -> str:
         if self.pipeline:

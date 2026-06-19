@@ -248,6 +248,7 @@ class Pipeline:
             "ok",
             rows_in=len(dataset),
             rows_out=len(dataset),
+            replaced=context.write_replaced,
             duration=time.perf_counter() - started,
             warn_hits=session.warn_hits,
         )

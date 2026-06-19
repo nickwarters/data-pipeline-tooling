@@ -30,6 +30,9 @@ class StepMetrics:
     The builder sets whichever of ``rows_in`` / ``rows_out`` / ``rows_quarantined``
     a step produces and appends to ``warn_hits``; the :class:`RunLog` reads them
     back when the step closes. Keeps the timed-block body free of bookkeeping.
+    ``replaced`` is set to ``True`` by write steps whose writer detected that
+    prior rows for the same logical run id were deleted and re-inserted
+    (idempotent re-run); ``False`` for a fresh insert; ``None`` for non-write steps.
     """
 
     def __init__(self) -> None:
@@ -37,6 +40,7 @@ class StepMetrics:
         self.rows_out: int | None = None
         self.rows_quarantined: int | None = None
         self.rows_excluded: int | None = None
+        self.replaced: bool | None = None
         self.warn_hits: list[str] = []
 
 
@@ -74,6 +78,7 @@ class RunLog:
                 rows_out=metrics.rows_out,
                 rows_quarantined=metrics.rows_quarantined,
                 rows_excluded=metrics.rows_excluded,
+                replaced=metrics.replaced,
                 duration=time.perf_counter() - started,
                 errors=[str(exc)],
                 warn_hits=metrics.warn_hits,
@@ -88,6 +93,7 @@ class RunLog:
             rows_out=metrics.rows_out,
             rows_quarantined=metrics.rows_quarantined,
             rows_excluded=metrics.rows_excluded,
+            replaced=metrics.replaced,
             duration=time.perf_counter() - started,
             warn_hits=metrics.warn_hits,
         )
@@ -103,6 +109,7 @@ class RunLog:
         rows_out: int | None = None,
         rows_quarantined: int | None = None,
         rows_excluded: int | None = None,
+        replaced: bool | None = None,
         duration: float | None = None,
         errors: list[str] | None = None,
         warn_hits: list[str] | None = None,
@@ -119,6 +126,7 @@ class RunLog:
             "rows_out": rows_out,
             "rows_quarantined": rows_quarantined,
             "rows_excluded": rows_excluded,
+            "replaced": replaced,
             "duration": duration,
             "errors": errors or [],
             "warn_hits": warn_hits or [],
@@ -140,6 +148,8 @@ class RunLog:
             parts.append(f"quarantined={record['rows_quarantined']}")
         if record.get("rows_excluded"):
             parts.append(f"excluded={record['rows_excluded']}")
+        if record.get("replaced") is True:
+            parts.append("replaced")
         if record["duration"] is not None:
             parts.append(f"{record['duration']:.3f}s")
         if record["errors"]:
@@ -164,7 +174,7 @@ class _NullRunLog(RunLog):
         metrics.rows_in = rows_in
         yield metrics
 
-    def record(self, *args, **kwargs) -> None:
+    def record(self, *args, **kwargs) -> None:  # noqa: ANN002 ANN003 - catch-all null sink
         pass
 
 

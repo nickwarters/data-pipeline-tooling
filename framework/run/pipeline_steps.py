@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from framework._internal.describe import component_summary
-from framework.core.protocols import Severity, Validator
+from framework.core.protocols import Severity, Validator, WriteOutcome
 from framework.core.dataset import Dataset
 from framework.run.execution import PipelineExecution
 from framework.run.run_log import StepMetrics
@@ -240,8 +240,11 @@ class CheckpointStep(PipelineStep):
     def execute(self, dataset: Dataset | None, session: PipelineExecution) -> Dataset:
         assert dataset is not None
         with session.timed_step(self.name, rows_in=len(dataset)) as metrics:
-            self.writer.write(dataset)
-            metrics.rows_out = len(dataset)
+            outcome = _coerce_outcome(self.writer.write(dataset), dataset)
+            metrics.rows_out = outcome.rows_written
+            metrics.replaced = outcome.replaced
+            if outcome.replaced:
+                session.context.mark_write_replaced()
             return dataset
 
 
@@ -290,10 +293,25 @@ class WriteStep(PipelineStep):
     def execute(self, dataset: Dataset | None, session: PipelineExecution) -> Dataset:
         assert dataset is not None
         with session.timed_step(self.name, rows_in=len(dataset)) as metrics:
-            self.writer.write(dataset)
+            outcome = _coerce_outcome(self.writer.write(dataset), dataset)
             _drain_retry_attempts(self.writer, metrics)
-            metrics.rows_out = len(dataset)
+            metrics.rows_out = outcome.rows_written
+            metrics.replaced = outcome.replaced
+            if outcome.replaced:
+                session.context.mark_write_replaced()
             return dataset
+
+
+def _coerce_outcome(result: WriteOutcome | None, dataset: Dataset) -> WriteOutcome:
+    """Normalise a writer's return value to a ``WriteOutcome``.
+
+    Writers that pre-date this protocol change return ``None``; treat them as a
+    fresh insert of the dataset's row count so existing mock writers in tests
+    don't require updating.
+    """
+    if result is None:
+        return WriteOutcome(rows_written=len(dataset), replaced=False)
+    return result
 
 
 def _drain_retry_attempts(component: object, metrics: StepMetrics) -> None:
