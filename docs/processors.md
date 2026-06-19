@@ -5,7 +5,8 @@ They fall into two workload families:
 
 - **Selection narrowing** (#9, #62, #166) — `Filter`, `Score`,
   `VectorizedFilter`, `VectorizedDerive`, `Sort`, `Rename`, `Stamp`, the
-  per-group `TopNPerGroup` / `SamplePerGroup`, `JoinWith`, and `AntiJoinWith`,
+  ungrouped `Sample` and per-group `TopNPerGroup` / `SamplePerGroup`, `JoinWith`,
+  and `AntiJoinWith`,
   the cross-feed join/exclusion gates that consume explicit read-only
   dependencies. The Selection Pipeline reads the **CasePool**, narrows and ranks
   it, joins in Reference Data, filters exclusion lists, and emits the
@@ -426,15 +427,16 @@ full Selection flow — `CaseType`/`Variation` + `CasePool` → `SelectionPool`,
 stamping the Variation's `question_bank_id` onto the chosen Cases. See
 [`selection.md`](selection.md).
 
-## Per-group narrowing — `TopNPerGroup` and `SamplePerGroup`
+## Narrowing — `TopNPerGroup`, `SamplePerGroup`, and `Sample`
 
 Real selection rules reduce each *group* of Cases to at most *N* — "the single
-highest-scoring available Case per Adviser", or "sample 5 Cases per region". Two
-sibling processors do this (#62; CONTEXT.md **Sampling**). They are separate,
-intention-revealing names — not one `mode=` class — in the house style that
-keeps `Filter` and `Score` apart, and share a private group-and-cut helper.
-`key` is one or more group columns (`str | Sequence[str]`, mirroring
-`LatestPerKey`): one adviser, or Adviser × region.
+highest-scoring available Case per Adviser", or "sample 5 Cases per region" — or
+take a flat sample off the whole pool. Three processors do this (#62; CONTEXT.md
+**Sampling**). They are separate, intention-revealing names — not one `mode=`
+class — in the house style that keeps `Filter` and `Score` apart, and share a
+private draw/cut helper. For the per-group pair, `key` is one or more group
+columns (`str | Sequence[str]`, mirroring `LatestPerKey`): one adviser, or
+Adviser × region; `Sample` takes no key and samples the feed as a whole.
 
 ### `TopNPerGroup` — ranked
 
@@ -473,9 +475,33 @@ draw is **invariant to incoming row order** and each group is independent: same
 set in + same seed ⇒ same sample out. As-of replay (#53) reconstructs the past
 input and re-feeds the same seed to reproduce a past draw.
 
-For both: a group with fewer than `n` rows passes through whole (no error), and
-an empty feed in yields an empty feed out (consistent with `Filter`). The
-aggregate considered/kept/dropped counts land on the run's `process` step
+### `Sample` — ungrouped seeded random, pure
+
+```python
+from framework.transform import Sample
+
+Sample(n=100, seed=7)          # 100 Cases drawn from the whole feed, reproducibly
+Sample(fraction=0.1, seed=7)   # 10% of the feed, scaling with the population
+```
+
+The **ungrouped** counterpart of `SamplePerGroup`: it samples the feed as a
+single population rather than per group. It shares the same draw and the same
+guarantees — a pure function of (input dataset, `seed`), ordered by `order`
+(default `"case_id"`) before the draw, so it is **invariant to incoming row
+order**: same set in + same seed ⇒ same sample out. Reach for it when there is no
+grouping key — "100 Cases off the whole pool" — and for `SamplePerGroup` when the
+quota is per group.
+
+Size it **either** by an absolute count `n` **or** by a `fraction` of the feed
+(`0 < fraction <= 1`, a proportion not a percent — `0.1` is 10%); exactly one is
+required (passing both, or neither, is a `ValueError`). A `fraction` resolves to
+`round(fraction * len)` rows against the run's **actual** population, so it scales
+with the (already upstream-narrowed) feed — "10% of whatever's available
+tonight" — where a fixed `n` does not.
+
+For all three: a group/feed with fewer than `n` rows passes through whole (no
+error), and an empty feed in yields an empty feed out (consistent with `Filter`).
+The aggregate considered/kept/dropped counts land on the run's `process` step
 (`rows_in`/`rows_out`). Exposing the *per-row* dropped reason ("ranked Kth of M",
 "not drawn") at the cut point for the explainability trace (#53) is a follow-on.
 

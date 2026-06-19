@@ -4,8 +4,9 @@ status: accepted
 
 # Reproducible sampling: a pure function with a fixed seed, variation supplied by upstream
 
-The **random** per-group selector (`SamplePerGroup`, the seeded form of
-**Sampling** in CONTEXT.md; see #62) is a **pure function** of its input
+The **random** selectors (`SamplePerGroup` and its ungrouped counterpart
+`Sample`, the seeded form of **Sampling** in CONTEXT.md; see #62) are a **pure
+function** of their input
 `Dataset` and a **fixed, configured seed** — *not* a seed derived from the
 `run_id` or the wall clock. The same input state plus the same seed always yields
 the same SelectionPool. The run-to-run *variation* in who gets sampled is
@@ -58,5 +59,7 @@ population changes each run (shrunk by select-once #60 and the history gates #63
 - Reproducibility of a sampled run is only as good as the reproducibility of its
   **input** — it rests on the as-of reconstruction of accumulated silver/history
   (#53) being faithful. The sampler adds no nondeterminism of its own.
-- `SamplePerGroup` therefore needs no access to `run_id`, the clock, or any run
-  context — it is testable as a plain pure function.
+- `SamplePerGroup` and `Sample` therefore need no access to `run_id`, the clock,
+  or any run context — they are testable as plain pure functions. They share the
+  same seeded, order-invariant draw; `Sample` derives the draw straight from the
+  configured seed, `SamplePerGroup` from a per-group seed hashed off it.

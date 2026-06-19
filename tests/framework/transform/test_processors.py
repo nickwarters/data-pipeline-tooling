@@ -30,6 +30,7 @@ from framework.transform.processors import (
     LatestPerKey,
     Parse,
     Rename,
+    Sample,
     SamplePerGroup,
     Score,
     SelectColumns,
@@ -988,6 +989,120 @@ def test_per_group_processors_conform_to_the_processor_protocol():
 
     assert isinstance(TopNPerGroup(key="adviser", by="score", n=1), Processor)
     assert isinstance(SamplePerGroup(key="adviser", n=1, seed=0), Processor)
+
+
+# --- Sample ----------------------------------------------------------------
+
+
+def test_sample_keeps_at_most_n_from_the_whole_feed():
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"case_id": [f"c{i}" for i in range(10)]})
+    )
+    kept = Sample(n=3, seed=7).process(dataset).to_pandas()
+
+    assert len(kept) == 3
+
+
+def test_sample_is_reproducible_for_the_same_input_and_seed():
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"case_id": [f"c{i}" for i in range(10)]})
+    )
+    first = Sample(n=3, seed=7).process(dataset).to_pandas()
+    second = Sample(n=3, seed=7).process(dataset).to_pandas()
+
+    assert list(first["case_id"]) == list(second["case_id"])
+
+
+def test_sample_is_invariant_to_incoming_row_order():
+    # Same set of Cases, two different row orders, same seed -> same sample,
+    # because the feed is canonicalised by `order` before the draw.
+    forward = pd.DataFrame({"case_id": [f"c{i}" for i in range(6)]})
+    shuffled = forward.iloc[[4, 0, 2, 5, 1, 3]].reset_index(drop=True)
+
+    a = Sample(n=3, seed=7).process(Dataset.from_pandas(forward)).to_pandas()
+    b = Sample(n=3, seed=7).process(Dataset.from_pandas(shuffled)).to_pandas()
+
+    assert list(a["case_id"]) == list(b["case_id"])
+
+
+def test_sample_passes_a_feed_smaller_than_n_through_whole():
+    dataset = Dataset.from_pandas(pd.DataFrame({"case_id": ["c1", "c2", "c3"]}))
+    kept = Sample(n=5, seed=1).process(dataset).to_pandas()
+
+    assert set(kept["case_id"]) == {"c1", "c2", "c3"}
+
+
+def test_sample_empty_in_empty_out():
+    empty = Dataset.from_pandas(pd.DataFrame({"case_id": []}))
+
+    assert len(Sample(n=2, seed=1).process(empty)) == 0
+
+
+def test_sample_different_seeds_can_draw_different_samples():
+    # A large feed makes a collision between two seeds vanishingly unlikely, so
+    # the seed demonstrably governs the draw (it is not ignored).
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"case_id": [f"c{i}" for i in range(20)]})
+    )
+    one = Sample(n=5, seed=1).process(dataset).to_pandas()
+    two = Sample(n=5, seed=2).process(dataset).to_pandas()
+
+    assert set(one["case_id"]) != set(two["case_id"])
+
+
+def test_sample_draws_a_fraction_of_the_feed():
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"case_id": [f"c{i}" for i in range(10)]})
+    )
+    kept = Sample(fraction=0.3, seed=7).process(dataset).to_pandas()
+
+    assert len(kept) == 3  # round(0.3 * 10)
+
+
+def test_sample_fraction_resolves_against_the_run_population():
+    # The same fraction scales with the (upstream-narrowed) population.
+    big = Dataset.from_pandas(pd.DataFrame({"case_id": [f"c{i}" for i in range(20)]}))
+    small = Dataset.from_pandas(pd.DataFrame({"case_id": [f"c{i}" for i in range(4)]}))
+
+    assert len(Sample(fraction=0.5, seed=7).process(big).to_pandas()) == 10
+    assert len(Sample(fraction=0.5, seed=7).process(small).to_pandas()) == 2
+
+
+def test_sample_fraction_is_reproducible_for_the_same_input_and_seed():
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"case_id": [f"c{i}" for i in range(10)]})
+    )
+    first = Sample(fraction=0.4, seed=7).process(dataset).to_pandas()
+    second = Sample(fraction=0.4, seed=7).process(dataset).to_pandas()
+
+    assert list(first["case_id"]) == list(second["case_id"])
+
+
+def test_sample_fraction_of_one_keeps_the_whole_feed():
+    dataset = Dataset.from_pandas(pd.DataFrame({"case_id": ["c1", "c2", "c3"]}))
+    kept = Sample(fraction=1.0, seed=1).process(dataset).to_pandas()
+
+    assert set(kept["case_id"]) == {"c1", "c2", "c3"}
+
+
+def test_sample_requires_exactly_one_of_n_or_fraction():
+    with pytest.raises(ValueError, match="exactly one of `n` or `fraction`"):
+        Sample()
+    with pytest.raises(ValueError, match="exactly one of `n` or `fraction`"):
+        Sample(n=5, fraction=0.5)
+
+
+def test_sample_rejects_a_fraction_outside_the_unit_interval():
+    with pytest.raises(ValueError, match="must be in"):
+        Sample(fraction=0)
+    with pytest.raises(ValueError, match="must be in"):
+        Sample(fraction=1.5)
+
+
+def test_sample_conforms_to_the_processor_protocol():
+    from framework.transform.processors import Processor
+
+    assert isinstance(Sample(n=1, seed=0), Processor)
 
 
 # --- Parse -----------------------------------------------------------------
