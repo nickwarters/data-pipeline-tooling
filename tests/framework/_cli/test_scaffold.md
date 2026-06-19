@@ -172,6 +172,20 @@ def test_feed_file_seeds_schema_fields_and_infers_dtypes(tmp_path):
     assert "rate: float" in schema
 
 
+def test_feed_file_infers_float_for_an_integer_column_with_blanks(tmp_path):
+    # An integer column with a blank is nullable; pandas promotes it to float64
+    # on read-back, so inferring `int` would fail the silver dtype gate. It must
+    # infer `float` to match the type the storage round-trip yields.
+    feed = _write_feed(
+        tmp_path / "orders.csv",
+        "order_id,total\nO1,100\nO2,\nO3,250\n",
+    )
+    scaffold.render("orders", tmp_path, feed_file=feed)
+
+    schema = (tmp_path / "pipelines" / "orders" / "schema.py").read_text("utf-8")
+    assert "total: float" in schema
+
+
 def test_feed_file_contents_replace_the_bundled_sample(tmp_path):
     body = "order_id,customer,total\nO1,Acme,100\nO2,Globex,250\n"
     feed = _write_feed(tmp_path / "orders.csv", body)
