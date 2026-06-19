@@ -178,6 +178,9 @@ class Pipeline:
                 QuarantineStep(self._quarantine_validator, self._quarantine_writer)
             )
         if self._explain_writer is not None:
+            assert self._explain_id_column is not None, (
+                "id_column must be set when explain writer is configured"
+            )
             steps.append(
                 TraceStartStep(
                     id_column=self._explain_id_column,

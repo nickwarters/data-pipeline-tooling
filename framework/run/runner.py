@@ -58,6 +58,9 @@ class FreshnessGuard:
     def check(self, context: RunContext, requirement: FreshnessRequirement) -> None:
         upstream_case_type = requirement.upstream_case_type or context.case_type
         upstream = pipeline_label(upstream_case_type, requirement.upstream_pipeline)
+        assert context.run_registry is not None, (
+            "run_registry is required for freshness checks"
+        )
         successful = [
             r
             for r in context.run_registry.query_runs(pipeline=upstream, status="ok")

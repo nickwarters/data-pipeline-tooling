@@ -8,11 +8,14 @@ from __future__ import annotations
 
 from copy import copy
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from framework._internal.describe import component_summary
-from framework.core.protocols import Severity, Validator, WriteOutcome
+from framework.core.protocols import Processor, Reader, Severity, Validator, Writer, WriteOutcome
 from framework.core.dataset import Dataset
+
+if TYPE_CHECKING:
+    from framework.transform.quarantine import RowValidator
 from framework.run.execution import PipelineExecution
 from framework.run.run_log import StepMetrics
 from framework.run.trace import RowTrace
@@ -57,9 +60,9 @@ class PipelineStep:
 
 @dataclass(frozen=True)
 class ReadStep(PipelineStep):
-    reader: object = None
+    reader: Reader = None  # type: ignore[assignment]
 
-    def __init__(self, reader: object) -> None:
+    def __init__(self, reader: Reader) -> None:
         object.__setattr__(self, "name", "read")
         object.__setattr__(self, "kind", "read")
         object.__setattr__(self, "order", -1)
@@ -81,7 +84,7 @@ class ReadStep(PipelineStep):
 
 @dataclass(frozen=True)
 class ValidatorStep(PipelineStep):
-    validators: list[tuple[Validator, Severity]] = None
+    validators: list[tuple[Validator, Severity]] = None  # type: ignore[assignment]
 
     def __init__(
         self,
@@ -119,10 +122,10 @@ class ValidatorStep(PipelineStep):
 
 @dataclass(frozen=True)
 class QuarantineStep(PipelineStep):
-    row_validator: object = None
-    reject_writer: object = None
+    row_validator: RowValidator = None  # type: ignore[assignment]
+    reject_writer: Writer | None = None
 
-    def __init__(self, row_validator: object, reject_writer: object) -> None:
+    def __init__(self, row_validator: RowValidator, reject_writer: Writer | None) -> None:
         object.__setattr__(self, "name", "quarantine")
         object.__setattr__(self, "kind", "quarantine")
         object.__setattr__(self, "order", -1)
@@ -186,9 +189,9 @@ class TraceStartStep(PipelineStep):
 
 @dataclass(frozen=True)
 class ProcessorStageStep(PipelineStep):
-    processors: list[object] = None
+    processors: list[Processor] = None  # type: ignore[assignment]
 
-    def __init__(self, *, name: str, processors: list[object]) -> None:
+    def __init__(self, *, name: str, processors: list[Processor]) -> None:
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "kind", "processor")
         object.__setattr__(self, "order", -1)
@@ -222,9 +225,9 @@ class ProcessorStageStep(PipelineStep):
 
 @dataclass(frozen=True)
 class CheckpointStep(PipelineStep):
-    writer: object = None
+    writer: Writer = None  # type: ignore[assignment]
 
-    def __init__(self, *, name: str, writer: object) -> None:
+    def __init__(self, *, name: str, writer: Writer) -> None:
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "kind", "checkpoint")
         object.__setattr__(self, "order", -1)
@@ -250,9 +253,9 @@ class CheckpointStep(PipelineStep):
 
 @dataclass(frozen=True)
 class ExplainWriteStep(PipelineStep):
-    writer: object = None
+    writer: Writer = None  # type: ignore[assignment]
 
-    def __init__(self, writer: object) -> None:
+    def __init__(self, writer: Writer) -> None:
         object.__setattr__(self, "name", "explain")
         object.__setattr__(self, "kind", "explain")
         object.__setattr__(self, "order", -1)
@@ -276,9 +279,9 @@ class ExplainWriteStep(PipelineStep):
 
 @dataclass(frozen=True)
 class WriteStep(PipelineStep):
-    writer: object = None
+    writer: Writer = None  # type: ignore[assignment]
 
-    def __init__(self, writer: object) -> None:
+    def __init__(self, writer: Writer) -> None:
         object.__setattr__(self, "name", "write")
         object.__setattr__(self, "kind", "write")
         object.__setattr__(self, "order", -1)

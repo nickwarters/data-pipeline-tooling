@@ -133,6 +133,7 @@ def run(context: RunContext, *, describe: bool = False) -> Dataset:
     duplicating them. Pass ``describe=True`` to print each pipeline's plan before
     it runs.
     """
+    assert context.base_dir is not None, "base_dir is required to run this feed"
     store = StoreCatalog(context.base_dir).store(FEED_NAME)
     strategy = AccumulateByRun.from_context(context)
 
