@@ -46,7 +46,9 @@ pipelines/orders` imports `pipelines.orders.pipeline` and executes
   the declared schema (`SchemaValidator`); a `TODO` marks where further silver
   processors go.
 - **`gold_builder`** is a passthrough to start — reads silver, writes gold — with
-  a `TODO` to build the assembly (it's per-feed and an open decision, #163).
+  a `TODO` to build the assembly (it's per-feed and an open decision, #163). When
+  that assembly is a join onto other data (a hierarchy, another feed's gold), see
+  [Enriching gold with other data sources](#enriching-gold-with-other-data-sources).
 
 `run()` wires the real `CsvReader` and the subject's layer Writers (deriving the
 raw/silver `AccumulateByRun` strategy from the `RunContext`, so re-drives under
@@ -170,6 +172,137 @@ Add the gold step reading the **same** `CASE_TYPE` so any Detail Table's
 Reach for the **generic** `scaffold <feed>` when the feed has no Case identity
 (Reference Data, an outbound staging table); reach for `--case-type` when the
 feed yields Cases.
+
+## Enriching gold with other data sources
+
+A feed often needs data from **another subject** — a shared hierarchy to stamp a
+reporting line, another feed's gold to enrich a Case. The `Pipeline` builder is
+single-spine by design (`Reader -> Dataset -> Stage* -> Writer`), so a second
+source never becomes a second Reader: it enters *inside the stages* as a
+read-only **`JoinWith`** dependency (the cross-feed join — [processors.md](processors.md)).
+This is purely additive on the scaffold the generic feed already gives you — no
+template change — and it lands on the three surfaces the scaffold already has.
+
+**The join belongs in `gold_builder`.** Silver is the feed's *own* schema
+boundary — its declared columns, faithful and validated; pulling another source
+in there would muddy that contract. Enrichment is a gold concern, which is why
+the scaffold nominates `gold_builder` as the assembly seam. The gold passthrough
+*becomes* the join.
+
+### 1. The builder takes the dependency as a parameter
+
+The one move that matters: the other source enters `gold_builder` as an
+**argument**, not a reader hard-coded inside it.
+
+```python
+from framework.transform import JoinWith   # Rename too, if key names must agree
+
+def gold_builder(
+    reader: Reader,
+    writer: Writer,
+    hierarchy,                 # JoinDependency | Reader | Dataset — read-only
+    run_log: RunLog | None = None,
+) -> Pipeline:
+    return (
+        Pipeline(FEED_NAME, reader, run_log)
+        # .with_processor(Rename({...}))   # if the join keys must agree first
+        .with_processor(JoinWith(hierarchy, on="org_unit", how="left"))
+        .write_to(writer)
+    )
+```
+
+Passing the dependency in (rather than constructing
+`StoreCatalog(...).store("hierarchy").reader(...)` inside the builder) keeps two
+properties the scaffold relies on:
+
+- **The single-spine invariant stays honest.** The spine is still the one
+  Reader; the other source is explicitly a *read-only dependency* — exactly the
+  role `JoinWith` exists for (`other` is "never another pipeline run hidden
+  inside `process()`").
+- **The builder test stays a unit test.** It passes sample feed rows *and a small
+  in-memory hierarchy `Dataset`* and asserts the joined columns — no second
+  medallion, no disk:
+
+  ```python
+  def test_gold_enriches_with_hierarchy():
+      recorder = RecordingWriter()
+      gold_builder(
+          DatasetReader(sample_feed_rows),
+          recorder,
+          Dataset.from_pandas(sample_hierarchy),   # dependency as a materialized Dataset
+      ).run()
+      assert "reporting_line" in recorder.dataset.columns
+  ```
+
+Two sources (a hierarchy *and* another feed's gold) is just two parameters and
+two `JoinWith` steps in sequence — keep them explicit per source so the plan
+reads top-to-bottom.
+
+### 2. `run` owns the cross-subject wiring
+
+`run` already owns `StoreCatalog(context.base_dir)`, so it's the natural place to
+turn the abstract dependency into a real reader on a **sibling subject's**
+medallion:
+
+```python
+def run(context: RunContext, *, describe: bool = False) -> Dataset:
+    catalog = StoreCatalog(context.base_dir)
+    store = catalog.store(FEED_NAME)
+    hierarchy = catalog.store("hierarchy")          # same root, sibling subject
+    ...
+    return execute(
+        gold_builder(
+            store.reader(SILVER, FEED_NAME),
+            store.writer(GOLD, FEED_NAME, UpsertStrategy(["case_id"])),  # currency lever ↓
+            JoinDependency("hierarchy", hierarchy.reader(GOLD, "hierarchy")),
+            context.run_log,
+        )
+    )
+```
+
+This keeps the dependency arrow **one-way**: the pipeline reaches the other
+subject *by location* through the shared catalog; the framework never depends on
+`pipelines/`. Wrapping the reader in `JoinDependency("hierarchy", …)` is what
+surfaces the join in `.describe()` and the RunLog as `dependency:hierarchy` — free
+observability for an explainability trace.
+
+### 3. The Writer strategy carries currency; `UPSTREAMS` carries freshness
+
+The join always reads the dependency's **current** gold; *retention* of what was
+read is decided entirely by the Writer strategy on the enriched output (the
+snapshot-vs-join resolution, #163):
+
+- **`UpsertStrategy([key])`** — keep the enriched view **current**: one row per
+  Case, the reporting line refreshed as the hierarchy moves. The reporting shape.
+- **`AccumulateByRun.from_context(context)`** — **freeze** what was read into an
+  immutable per-run record (e.g. the SelectionPool stamped at decision time). The
+  audit/deliverable shape.
+
+The builder neither knows nor cares which — that's the point of the seam. If the
+enriched output discards history (upsert), the dependency's *own* silver retains
+the change-over-time record as the longstop, and any decision that must be
+reconstructable should have frozen what it used via `AccumulateByRun`.
+
+`main` needs no change. The only module-level addition is declaring the
+dependency for freshness, if you gate on it:
+
+```python
+UPSTREAMS = (FreshnessRequirement(upstream_pipeline="hierarchy"),)
+```
+
+For a stable, slowly-changing reference (always present) you'd typically leave
+`UPSTREAMS = ()` and rely on last-known-good; this seam is where "needs the
+upstream feed fresh *today*" is expressed when the dependency is another *active*
+feed rather than stable reference data.
+
+### When to split a hop instead
+
+Stay in `gold_builder` while the assembly is readable — "one builder per
+medallion hop" is the convention, and the join *is* the silver → gold transition.
+When the assembly genuinely outgrows one function (several joins plus derives),
+factor a distinct enrichment hop with its own `*_builder`, wired in order by
+`run` like the others. Reach for that only when a single `gold_builder` stops
+being scannable.
 
 ## When source column names aren't identifiers (spaces, punctuation)
 
