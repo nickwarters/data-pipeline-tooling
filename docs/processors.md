@@ -263,11 +263,12 @@ from framework.transform import Stamp
 Stamp("question_bank_id", variation.question_bank_id)
 ```
 
-## Column shaping — `Parse`, `SplitColumn`, `JoinColumns`, `Zfill`
+## Column shaping — `Parse`, `SplitColumn`, `JoinColumns`, `Zfill`, `IntegerText`
 
 Small, general-purpose column transforms for feeds that arrive with packed
 or delimited columns — common when a source system serialises a structured value
-into one text field, or drops the leading zeros of a fixed-width identifier. They
+into one text field, drops the leading zeros of a fixed-width identifier, or
+widens an integer column to float across a blank cell. They
 are ordinary `Processor`s (engine-confined, fail-fast) and, like
 `SelectColumns`/`DropColumns`, raise `ValueError` naming a missing column rather
 than silently skipping it.
@@ -337,6 +338,39 @@ sort code, postcode) lost its leading zeros when a source read it as an integer.
 Each value is cast to text first; values already at or beyond `width` pass
 through unchanged, a leading sign stays at the front (`"-1"` → `"-01"`), and
 missing values stay missing. `columns` is one name or a sequence of them.
+
+### `IntegerText` — restore clean integer text to a column widened to float
+
+```python
+from framework.transform import IntegerText
+
+IntegerText("account")                    # one column
+IntegerText(["member_id", "claim_ref"])   # several columns
+```
+
+The fix for the most common storage round-trip surprise. A column of whole
+numbers (an account number, claim reference, member id) that has **any blank
+cell** can't be held as `int64` — pandas promotes the whole column to `float64`
+on read-back — so `1234567890` returns as the float `1234567890.0` and
+stringifies to `"1234567890.0"` rather than the `"1234567890"` you want.
+`IntegerText` casts each named column through pandas' nullable `Int64` (which
+drops the `.0` and keeps blanks as missing) and then to `string`, so every value
+lands as its integer text and missing values stay missing.
+
+A value that is **not** whole (a genuine fractional float) is an error, not a
+silent truncation — the column wasn't the integer it was declared to be, so the
+processor raises rather than rounding. Reach for `Zfill` next when the integer is
+also fixed-width and lost its leading zeros (`IntegerText` then `Zfill` turns
+`1234567890.0` into `"00001234567890"`). `columns` is one name or a sequence of
+them.
+
+> **Note — prevention vs. repair.** When you control the schema, the cleaner fix
+> is to *declare* the column's storage type so it round-trips faithfully (see
+> [`schema-enforcement.md`](schema-enforcement.md); a scaffold seeded from a
+> sample CSV already infers `float` for an otherwise-integer column that carries
+> a blank). `IntegerText` is the in-pipeline repair for the feeds where the float
+> has already happened and you need the integer text downstream — e.g. before a
+> `JoinColumns` composite key or an exported deliverable.
 
 ## `JoinWith` — explicit cross-feed dependency join
 
