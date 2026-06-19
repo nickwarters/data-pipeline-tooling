@@ -21,7 +21,8 @@ reshape the frame, ``Parse`` decodes a packed text column through a callable
 (``json.loads`` by default) and ``SplitColumn`` / ``JoinColumns`` are the
 inverse pair that fans one delimited column into several and recombines several
 into one, ``Zfill`` left-pads text columns with leading zeros to a fixed width,
-``JoinWith`` joins an explicit read-only dependency in Python, and
+``IntegerText`` renders a whole-number column widened to float as clean integer
+text, ``JoinWith`` joins an explicit read-only dependency in Python, and
 ``AntiJoinWith`` excludes rows whose key is present in a read-only dependency.
 """
 
@@ -350,6 +351,54 @@ class Zfill:
 
     def describe(self) -> str:
         return render(self, columns=self._columns, width=self._width)
+
+
+class IntegerText:
+    """Render whole-number columns as clean integer text, dropping the ``.0``.
+
+    The fix for the most common storage round-trip surprise: a column of whole
+    numbers (an account number, claim reference, member id) that has any blank
+    cell cannot be held as ``int64`` -- pandas promotes the whole column to
+    ``float64`` on read-back -- so ``1234567890`` comes back as the float
+    ``1234567890.0`` and stringifies to ``"1234567890.0"`` rather than the
+    ``"1234567890"`` you want. ``IntegerText`` casts each named column through
+    pandas' nullable ``Int64`` (which truncates the ``.0`` and keeps blanks as
+    missing) and then to ``string``, so every value lands as its integer text and
+    missing values stay missing.
+
+    A sibling of the other column-shaping transforms (``Parse`` / ``SplitColumn``
+    / ``JoinColumns`` / ``Zfill``): engine-confined, fail-fast, and raises
+    ``ValueError`` naming any absent column rather than silently skipping it. A
+    value that is not whole (a genuine fractional float) is an error, not a
+    silent truncation -- the column was not the integer it was declared to be.
+    Reach for ``Zfill`` next when the integer is also fixed-width and lost its
+    leading zeros.
+    """
+
+    def __init__(self, columns: str | Sequence[str]) -> None:
+        self._columns = [columns] if isinstance(columns, str) else list(columns)
+
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas()
+        missing = [c for c in self._columns if c not in frame.columns]
+        if missing:
+            raise ValueError(
+                f"IntegerText: column(s) not found in dataset: {missing!r}. "
+                f"Available columns: {list(frame.columns)!r}"
+            )
+        for column in self._columns:
+            try:
+                whole = frame[column].astype("Int64")
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"IntegerText: column {column!r} holds non-integer values; "
+                    f"only whole-number columns can be rendered as integer text."
+                ) from exc
+            frame[column] = whole.astype("string")
+        return Dataset.from_pandas(frame)
+
+    def describe(self) -> str:
+        return render(self, columns=self._columns)
 
 
 class JoinColumns:
