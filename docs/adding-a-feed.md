@@ -24,31 +24,45 @@ of the suite, mirroring the source layout) — wired together and ready to run:
 pipelines/orders/
   __init__.py
   schema.py            # @dataclass OrdersRow — the column/dtype contract
-  pipeline.py          # builder(reader, writer, run_log=None) composes it; run()/main wire the real ones
+  pipeline.py          # raw_/silver_/gold_builder compose each hop; run()/main wire the real ones
   sample_data/orders.csv
 tests/pipelines/
-  test_orders.py       # drives builder() with sample rows + a recording writer
+  test_orders.py       # drives raw_builder() with sample rows + a recording writer
 ```
 
 `pipeline.py` follows the framework's canonical pipeline contract: it exposes a
-`run(context: RunContext) -> Dataset` callable (and an `UPSTREAMS` tuple of
-freshness requirements — empty for a source feed). The framework addresses the
-pipeline by its path — `python -m framework run pipelines/orders` imports
-`pipelines.orders.pipeline` and executes `run(context)`. Composition is factored
-into a single `builder(reader, writer, run_log=None) -> Pipeline` that returns the
-composed (not-yet-run) pipeline; `run()` wires the real `CsvReader` and the
-subject's layer Writer (deriving its `AccumulateByRun` strategy from the
-`RunContext`, so re-drives under the same logical run id replace rather than
-duplicate) and calls `builder(...).run()`. `main()` is the thin entry for running
-the module directly — it builds a default `RunContext`, then catches the
+`run(context: RunContext, *, describe: bool = False) -> Dataset` callable (and an
+`UPSTREAMS` tuple of freshness requirements — empty for a source feed). The
+framework addresses the pipeline by its path — `python -m framework run
+pipelines/orders` imports `pipelines.orders.pipeline` and executes
+`run(context)`. Each medallion hop is factored into its own
+`*_builder(reader, writer, run_log=None) -> Pipeline` returning the composed
+(not-yet-run) pipeline — the *one* definition of what that hop does:
+
+- **`raw_builder`** gates the source with a `ColumnValidator` and lands a
+  faithful copy.
+- **`silver_builder`** renames source columns to the schema's vocabulary
+  (`RENAME`), coerces the dtypes storage loses (`SchemaCoercion`), and validates
+  the declared schema (`SchemaValidator`); a `TODO` marks where further silver
+  processors go.
+- **`gold_builder`** is a passthrough to start — reads silver, writes gold — with
+  a `TODO` to build the assembly (it's per-feed and an open decision, #163).
+
+`run()` wires the real `CsvReader` and the subject's layer Writers (deriving the
+raw/silver `AccumulateByRun` strategy from the `RunContext`, so re-drives under
+the same logical run id replace rather than duplicate), then runs the three hops
+in order and returns the gold `Dataset`. Pass `describe=True` (CLI `--describe`)
+to print each pipeline's plan before it runs. `main()` is the thin entry for
+running the module directly — it parses args with `argparse` (an optional
+`base_dir` and `--describe`), builds a default `RunContext`, then catches the
 `PipelineError` family and prints `framework.core.format_failure(exc)` to
 `stderr` with a non-zero exit, so an expected fail-fast abort (a failed check)
 reads as a clear message rather than an unhandled traceback (a genuine bug is not
-a `PipelineError` and keeps its trace). The generated `test_orders.py` calls the
-**same** `builder` with sample rows (`given_rows`) and a `RecordingWriter`, so the
-first test exercises the real pipeline rather than a hand-rebuilt copy of it — a
-second test still runs the full `run(context)` filesystem path against the bundled
-sample.
+a `PipelineError` and keeps its trace). The generated `test_orders.py` calls
+`raw_builder` directly with sample rows (`given_rows`) and a `RecordingWriter`, so
+the first test exercises the real hop rather than a hand-rebuilt copy of it — a
+second test runs the full `run(context)` filesystem path against the bundled
+sample and asserts it refines through to gold.
 
 The feed name must be a lowercase Python identifier (it becomes the package
 name); `--force` overwrites an existing feed's files. The generated code imports
@@ -58,17 +72,20 @@ imports the feed absolutely (`from pipelines.orders.pipeline import …`):
 
 ```sh
 python -m framework run pipelines/orders /data   # run via the framework (freshness + run log)
-python -m pipelines.orders.pipeline /data        # or directly: land the bundled sample into raw
+python -m pipelines.orders.pipeline /data        # or directly: refine the bundled sample to gold
+python -m pipelines.orders.pipeline /data --describe  # print each hop's plan, then run it
 python -m pytest tests/pipelines/test_orders.py  # the generated test passes as-is
 ```
 
 Then **customise**: edit `schema.py`'s fields to your source columns (and add
 `Annotated` value rules as needed — see
 [schema-enforcement.md](schema-enforcement.md)), replace the sample CSV, swap
-`CsvReader` for another Reader (next section) if the source isn't a CSV, and grow
-`test_<feed>.py` to assert the rows and any processors you add. To refine the
-landed feed raw → silver with the schema enforced, add a `raw_to_silver(store,
-"orders", OrdersRow)` run — see [`schema-enforcement.md`](schema-enforcement.md).
+`CsvReader` for another Reader (next section) if the source isn't a CSV, fill in
+the `silver_builder` `RENAME`/processor `TODO` and build out the `gold_builder`
+assembly, and grow `test_<feed>.py` to assert the rows and processors you add. The
+silver hop already enforces the schema (`SchemaCoercion` + `SchemaValidator` — see
+[`schema-enforcement.md`](schema-enforcement.md)); the gold hop is a passthrough
+until you shape it.
 
 #### Seed it from a real feed file: `--from-feed-file`
 
@@ -90,20 +107,23 @@ recording how many) so the generated dataclass stays a usable starting point.
 
 When a header name **isn't already a clean identifier** (spaces, punctuation,
 capitals — e.g. `Case Number`), it can't be a dataclass field, so the scaffold
-emits the verbatim source names as a `RAW_FEED_COLUMNS` constant and gates the
-`ColumnValidator` on **those** rather than the schema's fields. This is the same
-raw-stays-faithful / silver-canonicalises split the next section describes: raw
-validates and keeps the source's own names; the generated `schema.py` already
-carries the canonical, identifier-named shape your silver `Rename` will produce.
-`--from-feed-file` is the generic source → raw scaffold only — it isn't supported
-with `--case-type` yet (a Case Type also needs a `natural_key` decision).
+emits the verbatim source names as a `RAW_FEED_COLUMNS` constant and gates the raw
+hop's `ColumnValidator` on **those** rather than the schema's fields. It also fills
+in the `silver_builder`'s `RENAME` map from each source name to its canonical
+field, so the generated feed already does the raw-stays-faithful /
+silver-canonicalises split end-to-end: raw validates and keeps the source's own
+names; silver renames them to the schema's identifier-named shape before coercing
+and validating. (The clean-identifier case leaves `RENAME` empty — an identity
+no-op.) `--from-feed-file` is the generic scaffold only — it isn't supported with
+`--case-type` yet (a Case Type also needs a `natural_key` decision).
 
 ### When your feed *is* a Case Type: `--case-type`
 
-The generic scaffold above is deliberately source → raw and **case-review-agnostic**
-— a Feed isn't necessarily a Case Type (Reference Data feeds are ordinary Feeds
-with no Case identity). When the feed's rows *are* a Case Type, reach for the
-additive variant instead (#155):
+The generic scaffold above refines source → raw → silver → gold but is
+**case-review-agnostic** — silver enforces only the declared schema and gold is a
+plain passthrough; there's no Case identity (a Feed isn't necessarily a Case Type
+— Reference Data feeds are ordinary Feeds with no Case identity). When the feed's
+rows *are* a Case Type, reach for the additive variant instead (#155):
 
 ```sh
 python -m framework scaffold --case-type claims   # -> pipelines/claims/ + tests/pipelines/test_claims.py
@@ -160,8 +180,10 @@ write `Case Number: str`.
 
 (The `--from-feed-file` scaffold above handles this split for you when it sees
 non-identifier headers: it gates the raw validator on a `RAW_FEED_COLUMNS`
-constant of the verbatim source names and still declares the canonical schema for
-the silver step described here.)
+constant of the verbatim source names, declares the canonical schema, and fills
+in the `silver_builder`'s `RENAME` map so the generated feed performs the silver
+step described here. The rest of this section is the manual form of what it
+generates — useful when you're writing or adjusting the silver hop by hand.)
 
 The fix is not a workaround — it's the canonicalisation that **raw → silver**
 exists to do. Raw stays faithful to the source (spaced names and all, so the
