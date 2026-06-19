@@ -99,7 +99,10 @@ python -m framework scaffold orders --from-feed-file path/to/sample.csv
 
 From the CSV's **header** it derives the schema's fields (one per column,
 canonicalised to identifiers, with dtypes **inferred** from the first rows —
-all-int → `int`, all-float → `float`, else `str`); the file's **contents**
+all-int → `int`, all-float → `float`, else `str`; an otherwise-integer column
+with any **blank** infers `float`, because a nullable integer round-trips through
+storage as `float64` and a declared `int` would then fail the silver dtype gate);
+the file's **contents**
 replace the bundled `sample_data/orders.csv`; and the first rows seed
 `test_orders.py`'s sample rows. The schema is capped at **40 columns** — past
 that the extra columns are dropped (with a loud warning and a note in `schema.py`

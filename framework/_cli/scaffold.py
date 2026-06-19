@@ -145,13 +145,21 @@ def _is_float(value: str) -> bool:
 
 
 def _infer_type(values: list[str]) -> str:
-    """Infer a field dtype from a column's sample values (blanks ignored)."""
-    seen = [v for v in values if v != ""]
-    if not seen:
+    """Infer a field dtype from a column's sample values.
+
+    A blank cell means the column is nullable. pandas can't hold a nullable
+    integer as ``int64`` -- a null promotes the column to ``float64`` on
+    read-back -- so an otherwise-integer column with any blank infers ``float``
+    to match the type the storage round-trip actually yields (otherwise the
+    declared ``int`` would fail the silver dtype gate against the float column).
+    """
+    non_blank = [v for v in values if v != ""]
+    if not non_blank:
         return "str"
-    if all(_is_int(v) for v in seen):
-        return "int"
-    if all(_is_float(v) for v in seen):
+    has_blank = len(non_blank) < len(values)
+    if all(_is_int(v) for v in non_blank):
+        return "float" if has_blank else "int"
+    if all(_is_float(v) for v in non_blank):
         return "float"
     return "str"
 
