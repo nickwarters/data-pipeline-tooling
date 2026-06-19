@@ -26,17 +26,22 @@ def raw_to_silver(
 ) -> Pipeline:
     """Compose the raw->silver pipeline for one subject's ``table``."""
     effective_strategy = strategy if strategy is not None else Refresh()
-    pipeline = Pipeline(name or table, store.reader(RAW, table), run_log)
+    p = Pipeline(name or table, run_log=run_log)
+    r = p.read(store.reader(RAW, table), name="read")
+    
+    current = r
     if isinstance(effective_strategy, AccumulateByRun):
         run_id = effective_strategy.run_id
-        pipeline = pipeline.with_processor(
-            Filter(lambda row, _rid=run_id: row["run_id"] == _rid)
+        current = p.transform(
+            Filter(lambda row, _rid=run_id: row["run_id"] == _rid),
+            current,
+            name="filter-by-run-id"
         )
-    return (
-        pipeline.with_processor(SchemaCoercion(schema))
-        .with_post_validator(SchemaValidator(schema))
-        .write_to(store.writer(SILVER, table, effective_strategy))
-    )
+        
+    coerced = p.transform(SchemaCoercion(schema), current, name="coerce")
+    validated = p.validate(SchemaValidator(schema), coerced, name="post-validate")
+    p.write(store.writer(SILVER, table, effective_strategy), validated, name="write")
+    return p
 
 
 def silver_to_gold(
@@ -50,12 +55,15 @@ def silver_to_gold(
     run_log: RunLog | None = None,
 ) -> Pipeline:
     """Compose the deferred silver->gold accumulating pipeline."""
-    pipeline = Pipeline(name or table, store.reader(SILVER, table), run_log)
+    p = Pipeline(name or table, run_log=run_log)
+    r = p.read(store.reader(SILVER, table), name="read")
+    
+    current = r
     if schema is not None:
-        pipeline.with_post_validator(SchemaValidator(schema))
-    return pipeline.write_to(
-        store.writer(GOLD, table, AccumulateByRun(run_id, load_date))
-    )
+        current = p.validate(SchemaValidator(schema), current, name="post-validate")
+        
+    p.write(store.writer(GOLD, table, AccumulateByRun(run_id, load_date)), current, name="write")
+    return p
 
 
 def current_silver_to_gold(
@@ -70,17 +78,18 @@ def current_silver_to_gold(
     run_log: RunLog | None = None,
 ) -> Pipeline:
     """Compose a history-upstream/current-gold reduction for one subject table."""
-    return (
-        Pipeline(name or table, store.reader(SILVER, table), run_log)
-        .with_processor(
-            DeriveKey(
-                into=entity_id_column, namespace=namespace, natural_key=natural_key
-            )
-        )
-        .with_processor(LatestPerKey(key=entity_id_column, by=by))
-        .with_post_validator(UniqueValidator(entity_id_column))
-        .write_to(store.writer(GOLD, table, Refresh()))
+    p = Pipeline(name or table, run_log=run_log)
+    r = p.read(store.reader(SILVER, table), name="read")
+    
+    keyed = p.transform(
+        DeriveKey(into=entity_id_column, namespace=namespace, natural_key=natural_key),
+        r,
+        name="derive-key"
     )
+    latest = p.transform(LatestPerKey(key=entity_id_column, by=by), keyed, name="latest-per-key")
+    validated = p.validate(UniqueValidator(entity_id_column), latest, name="unique-validate")
+    p.write(store.writer(GOLD, table, Refresh()), validated, name="write")
+    return p
 
 
 def detail_current_silver_to_gold(
@@ -95,13 +104,14 @@ def detail_current_silver_to_gold(
     run_log: RunLog | None = None,
 ) -> Pipeline:
     """Compose a current-gold reduction for a detail table."""
-    return (
-        Pipeline(name or table, store.reader(SILVER, table), run_log)
-        .with_processor(
-            DeriveKey(
-                into=entity_id_column, namespace=namespace, natural_key=natural_key
-            )
-        )
-        .with_processor(unpivot)
-        .write_to(store.writer(GOLD, table, Refresh()))
+    p = Pipeline(name or table, run_log=run_log)
+    r = p.read(store.reader(SILVER, table), name="read")
+    
+    keyed = p.transform(
+        DeriveKey(into=entity_id_column, namespace=namespace, natural_key=natural_key),
+        r,
+        name="derive-key"
     )
+    unpivoted = p.transform(unpivot, keyed, name="unpivot")
+    p.write(store.writer(GOLD, table, Refresh()), unpivoted, name="write")
+    return p

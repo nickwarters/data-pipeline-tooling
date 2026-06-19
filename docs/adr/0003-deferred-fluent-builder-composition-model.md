@@ -95,3 +95,23 @@ So the `Stage` model is consolidated onto the one step plan:
   `.describe()` maps over the ordered plan and collects non-`None` entries — flat,
   plan-ordered, no `none` placeholders. Adding a step kind requires no change to
   the builder.
+
+## Amendment (2026-06-19): deferred DAG composition model
+
+The fluent builder pattern (`.with_processor()`, `.write_to()`) has been completely replaced by an explicit **Directed Acyclic Graph (DAG)** composition model.
+
+Pipelines are now constructed by explicitly declaring the topological dependencies between nodes. Every operation is a distinct step that returns a node, and that node is passed into the subsequent operations:
+
+```python
+r = p.read(CsvReader("feed.csv"), name="read")
+pre = p.validate(ColumnValidator(["case_ref"]), r, name="pre_val")
+t1 = p.transform(Score("score", scorer), pre, name="score")
+post = p.validate(RowCountValidator(minimum=1), t1, name="post_val")
+p.write(writer, post, name="write")
+p.run()
+```
+
+- **Topological Sorting:** `p.run()` executes the nodes in topological order based on their declared dependencies, rather than relying on the order of chained method calls.
+- **Support for Multi-Input / Fan-Out:** The DAG natively supports branching (fanning out one source into multiple paths) and complex multi-input steps (like joins) without hacking the linear fluent chain or requiring special `JoinDependency` objects. 
+- **Legacy `Processor` Deprecation:** The explicit `Processor` protocol abstraction has been removed. Transforms (`p.transform()`) now accept any standard Python callable (e.g., `Dataset -> Dataset`). Built-in utility classes (`Score`, `Filter`, `JoinWith`) now implement `__call__` so they act seamlessly as callables within the DAG.
+- **Lineage and Execution Tracking:** `PipelineExecution` tracks dependencies automatically via `__self__` properties on bound methods and traces the exact execution order, keeping all of the robustness of the prior engine while exposing a much cleaner API.

@@ -108,18 +108,17 @@ def test_sharepoint_reader_composes_in_the_pipeline_builder(fixture_csv, tmp_pat
     # A SharePointReader is a Reader: it drops into the deferred builder and
     # feeds a raw landing exactly like any other source (Reader-Protocol
     # conformance, observed end-to-end rather than via isinstance).
-    landed = (
-        Pipeline(
-            "advisers",
-            SharePointReader(
-                "https://contoso.sharepoint.com",
-                "Advisers",
-                fetcher=LocalCsvFetcher(fixture_csv),
-            ),
-        )
-        .write_to(SqliteTruncateReloadWriter(tmp_path / "raw.db", "advisers"))
-        .run()
+    p = Pipeline("advisers")
+    r = p.read(
+        SharePointReader(
+            "https://contoso.sharepoint.com",
+            "Advisers",
+            fetcher=LocalCsvFetcher(fixture_csv),
+        ),
+        name="read"
     )
+    w = p.write(SqliteTruncateReloadWriter(tmp_path / "raw.db", "advisers"), r, name="write")
+    landed = p.run()
 
     assert landed.columns == ["adviser_id", "name"]
     assert len(landed) == 3
@@ -153,22 +152,27 @@ def test_sharepoint_writer_composes_in_the_pipeline_builder(fixture_csv):
     auth = {"client_id": "abc", "secret": "xyz"}
     strategy = AccumulateByRun("r1", "2026-05-29")
 
-    Pipeline(
-        "advisers",
+    p = Pipeline("advisers")
+    r = p.read(
         SharePointReader(
             "https://contoso.sharepoint.com",
             "Advisers",
             fetcher=LocalCsvFetcher(fixture_csv),
         ),
-    ).write_to(
+        name="read"
+    )
+    w = p.write(
         SharePointWriter(
             "https://contoso.sharepoint.com/sites/cases",
             "Advisers",
             auth,
             strategy,
             pusher=pusher,
-        )
-    ).run()
+        ),
+        r,
+        name="write"
+    )
+    p.run()
 
     [(site, list_name, pushed_auth, dataset, pushed_strategy)] = pusher.calls
     assert site == "https://contoso.sharepoint.com/sites/cases"
@@ -248,9 +252,10 @@ def test_selection_pool_is_delivered_to_a_per_case_type_list(tmp_path):
     site = "http://sharepoint.corp.local/sites/cases"
     list_name = f"Selection - {case_type}"  # one list per Case Type
 
-    Pipeline("selection-deliverable", SqliteReader(gold_db, "selection_pool")).write_to(
-        SharePointWriter(site, list_name, strategy=Refresh(), pusher=backend)
-    ).run()
+    p = Pipeline("selection-deliverable")
+    r = p.read(SqliteReader(gold_db, "selection_pool"), name="read")
+    w = p.write(SharePointWriter(site, list_name, strategy=Refresh(), pusher=backend), r, name="write")
+    p.run()
 
     delivered = SharePointReader(site, list_name, fetcher=backend).read()
     frame = delivered.to_pandas()

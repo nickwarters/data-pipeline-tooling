@@ -67,11 +67,10 @@ def test_csv_writer_round_trips_through_the_matching_reader(tmp_path):
     source = CsvReader(FIXTURE).read()
     target = tmp_path / "deliverables" / "cases.csv"
 
-    landed = (
-        Pipeline("cases", CsvReader(FIXTURE))
-        .write_to(CsvWriter(target, Refresh()))
-        .run()
-    )
+    p = Pipeline("cases")
+    r = p.read(CsvReader(FIXTURE), name="read")
+    w = p.write(CsvWriter(target, Refresh()), r, name="write")
+    landed = p.run()
 
     round_tripped = CsvReader(target).read()
     assert landed.columns == source.columns
@@ -86,9 +85,10 @@ def test_excel_writer_round_trips_through_the_matching_reader(tmp_path):
     source = CsvReader(FIXTURE).read()
     target = tmp_path / "deliverables" / "cases.xlsx"
 
-    Pipeline("cases", CsvReader(FIXTURE)).write_to(
-        ExcelWriter(target, Refresh(), sheet="cases")
-    ).run()
+    p = Pipeline("cases")
+    r = p.read(CsvReader(FIXTURE), name="read")
+    w = p.write(ExcelWriter(target, Refresh(), sheet="cases"), r, name="write")
+    p.run()
 
     round_tripped = ExcelReader(target, sheet="cases").read()
     assert round_tripped.columns == source.columns
@@ -101,7 +101,10 @@ def test_json_writer_emits_file_deliverable_records(tmp_path):
     source = CsvReader(FIXTURE).read()
     target = tmp_path / "deliverables" / "cases.json"
 
-    Pipeline("cases", CsvReader(FIXTURE)).write_to(JsonWriter(target, Refresh())).run()
+    p = Pipeline("cases")
+    r = p.read(CsvReader(FIXTURE), name="read")
+    w = p.write(JsonWriter(target, Refresh()), r, name="write")
+    p.run()
 
     records = json.loads(target.read_text(encoding="utf-8"))
     assert len(records) == len(source)

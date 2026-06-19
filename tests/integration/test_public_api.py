@@ -91,11 +91,10 @@ def test_an_author_can_ingest_a_feed_through_the_io_and_run_facades(tmp_path):
     from framework.run import Pipeline
 
     store = Store(tmp_path / "cases")
-    (
-        Pipeline("cases", CsvReader(FIXTURE))
-        .write_to(store.writer(RAW, "cases", Refresh()))
-        .run()
-    )
+    p = Pipeline("cases")
+    r = p.read(CsvReader(FIXTURE), name="read")
+    w = p.write(store.writer(RAW, "cases", Refresh()), r, name="write")
+    p.run()
 
     landed = store.reader(RAW, "cases").read()
     assert len(landed) == 3
@@ -114,7 +113,10 @@ def test_file_deliverable_writers_are_available_through_the_io_facade(tmp_path):
     from framework.run import Pipeline
 
     target = tmp_path / "deliverables" / "cases.csv"
-    Pipeline("cases", CsvReader(FIXTURE)).write_to(CsvWriter(target, Refresh())).run()
+    p = Pipeline("cases")
+    r = p.read(CsvReader(FIXTURE), name="read")
+    w = p.write(CsvWriter(target, Refresh()), r, name="write")
+    p.run()
 
     assert target.exists()
     assert ExcelWriter is not None
@@ -132,21 +134,15 @@ def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_p
     from framework.validate import ColumnValidator
 
     store = Store(tmp_path / "cases")
-    landed = (
-        Pipeline("cases", CsvReader(FIXTURE))
-        .with_validator(ColumnValidator(["amount"]))
-        .with_processor(Score("priority", lambda row: row["amount"] * 2))
-        .with_processor(VectorizedDerive("priority_x2", lambda df: df["priority"] * 2))
-        .with_processor(Filter(lambda row: row["amount"] >= 1000, name="high-value"))
-        .with_processor(
-            VectorizedFilter(
-                lambda df: df["priority_x2"] >= 4000,
-                name="high-priority",
-            )
-        )
-        .write_to(store.writer(RAW, "cases", Refresh()))
-        .run()
-    )
+    p = Pipeline("cases")
+    r = p.read(CsvReader(FIXTURE), name="read")
+    v = p.validate(ColumnValidator(["amount"]), r, name="validate")
+    s = p.transform(Score("priority", lambda row: row["amount"] * 2), v, name="score")
+    vd = p.transform(VectorizedDerive("priority_x2", lambda df: df["priority"] * 2), s, name="derive")
+    f = p.transform(Filter(lambda row: row["amount"] >= 1000, name="high-value"), vd, name="filter")
+    vf = p.transform(VectorizedFilter(lambda df: df["priority_x2"] >= 4000, name="high-priority"), f, name="vector-filter")
+    w = p.write(store.writer(RAW, "cases", Refresh()), vf, name="write")
+    landed = p.run()
 
     # The Filter dropped the sub-1000 Case; Score added its column.
     assert len(landed) == 2
@@ -157,34 +153,18 @@ def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_p
 def test_an_author_can_compose_ordered_stages_through_the_run_facade(tmp_path):
     from framework.core import RAW
     from framework.io import CsvReader, Refresh, Store
-    from framework.run import Pipeline, ProcessingStage, ValidationStage
+    from framework.run import Pipeline
     from framework.transform import Score
     from framework.validate import ColumnValidator
 
     store = Store(tmp_path / "cases")
-    landed = (
-        Pipeline("cases", CsvReader(FIXTURE))
-        .add_stage(
-            ValidationStage(
-                name="Validate source shape",
-                validators=[ColumnValidator(["amount"])],
-            )
-        )
-        .add_stage(
-            ProcessingStage(
-                name="Score cases",
-                processors=[Score("priority", lambda row: row["amount"] * 2)],
-            )
-        )
-        .add_stage(
-            ValidationStage(
-                name="Validate scored cases",
-                validators=[ColumnValidator(["priority"])],
-            )
-        )
-        .write_to(store.writer(RAW, "cases", Refresh()))
-        .run()
-    )
+    p = Pipeline("cases")
+    r = p.read(CsvReader(FIXTURE), name="read")
+    v1 = p.validate(ColumnValidator(["amount"]), r, name="validate-source")
+    s = p.transform(Score("priority", lambda row: row["amount"] * 2), v1, name="score")
+    v2 = p.validate(ColumnValidator(["priority"]), s, name="validate-scored")
+    w = p.write(store.writer(RAW, "cases", Refresh()), v2, name="write")
+    landed = p.run()
 
     assert len(landed) == 3
     assert "priority" in landed.columns

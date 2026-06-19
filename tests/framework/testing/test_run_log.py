@@ -23,12 +23,11 @@ def test_recording_run_log_captures_warn_hits_in_memory():
     run_log = RecordingRunLog()
     writer = RecordingWriter()
 
-    (
-        Pipeline("cases", given_rows([{"amount": 100}]), run_log=run_log)
-        .with_validator(ColumnValidator(["missing_col"]), severity="warn")
-        .write_to(writer)
-        .run()
-    )
+    p = Pipeline("cases", run_log=run_log)
+    r = p.read(given_rows([{"amount": 100}]), name="read")
+    v = p.validate(ColumnValidator(["missing_col"]), r, severity="warn", name="validator")
+    w = p.write(writer, v, name="write")
+    p.run()
 
     assert any("missing_col" in w for w in run_log.warn_hits)
     # The run still completed: a final ok run summary is recorded.
@@ -44,14 +43,13 @@ def test_recording_run_log_captures_a_validation_failure():
 
     run_log = RecordingRunLog()
     writer = RecordingWriter()
-    pipeline = (
-        Pipeline("cases", given_rows([{"amount": 100}]), run_log=run_log)
-        .with_validator(ColumnValidator(["missing_col"]))
-        .write_to(writer)
-    )
+    p = Pipeline("cases", run_log=run_log)
+    r = p.read(given_rows([{"amount": 100}]), name="read")
+    v = p.validate(ColumnValidator(["missing_col"]), r, name="validator")
+    w = p.write(writer, v, name="write")
 
     with pytest.raises(ValidationError):
-        pipeline.run()
+        p.run()
 
     assert any("missing_col" in e for e in run_log.errors)
     # Fail-fast: nothing reached the writer.
@@ -65,17 +63,14 @@ def test_read_run_log_parses_an_on_disk_jsonl_file(tmp_path):
 
     log_path = tmp_path / "runs.log"
     writer = RecordingWriter()
-    (
-        Pipeline("cases", given_rows([{"amount": 100}]), run_log=RunLog(log_path))
-        .write_to(writer)
-        .run()
-    )
+    p = Pipeline("cases", run_log=RunLog(log_path))
+    r = p.read(given_rows([{"amount": 100}]), name="read")
+    w = p.write(writer, r, name="write")
+    p.run()
 
     records = read_run_log(log_path)
     assert [r["step"] for r in records] == [
         "read",
-        "pre-validate",
-        "post-validate",
         "write",
         "run",
     ]

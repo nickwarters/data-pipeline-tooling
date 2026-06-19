@@ -42,7 +42,7 @@ from typing import (
 
 from framework._internal.describe import render
 from framework.core.errors import PipelineError
-from framework.core.protocols import DatasetSupplier, Processor
+from framework.core.protocols import DatasetSupplier
 from framework.core.dataset import Dataset
 
 
@@ -76,7 +76,7 @@ class Filter:
         self._predicate = predicate
         self.trace_name = name or "filter"
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         kept = frame.loc[frame.apply(lambda row: self._predicate(row), axis=1)]
         return Dataset.from_pandas(kept)
@@ -103,7 +103,7 @@ class Score:
         self._scorer = scorer
         self.trace_name = column
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         frame[self._column] = frame.apply(lambda row: self._scorer(row), axis=1)
         return Dataset.from_pandas(frame)
@@ -126,7 +126,7 @@ class VectorizedFilter:
         self._predicate = predicate
         self.trace_name = name or "vectorized-filter"
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         mask = self._predicate(frame)
         if len(mask) != len(frame):
@@ -148,7 +148,7 @@ class VectorizedDerive:
         self._derive = derive
         self.trace_name = column
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         frame[self._column] = self._derive(frame)
         return Dataset.from_pandas(frame)
@@ -170,7 +170,7 @@ class Stamp:
         self._column = column
         self._value = value
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         frame[self._column] = self._value
         return Dataset.from_pandas(frame)
@@ -195,7 +195,7 @@ class Sort:
         self._by = by
         self._ascending = ascending
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         ordered = frame.sort_values(by=self._by, ascending=self._ascending).reset_index(
             drop=True
@@ -217,7 +217,7 @@ class Rename:
     def __init__(self, mapping: Mapping[str, str]) -> None:
         self._mapping = dict(mapping)
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         return Dataset.from_pandas(frame.rename(columns=self._mapping))
 
@@ -249,7 +249,7 @@ class Parse:
         self._columns = [columns] if isinstance(columns, str) else list(columns)
         self._parser = parser
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         missing = [c for c in self._columns if c not in frame.columns]
         if missing:
@@ -294,7 +294,7 @@ class SplitColumn:
         self._sep = sep
         self._drop = drop
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         if self._column not in frame.columns:
             raise ValueError(
@@ -337,7 +337,7 @@ class Zfill:
         self._columns = [columns] if isinstance(columns, str) else list(columns)
         self._width = width
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         missing = [c for c in self._columns if c not in frame.columns]
         if missing:
@@ -378,7 +378,7 @@ class IntegerText:
     def __init__(self, columns: str | Sequence[str]) -> None:
         self._columns = [columns] if isinstance(columns, str) else list(columns)
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         missing = [c for c in self._columns if c not in frame.columns]
         if missing:
@@ -428,7 +428,7 @@ class JoinColumns:
         self._sep = sep
         self._drop = drop
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         missing = [c for c in self._columns if c not in frame.columns]
         if missing:
@@ -534,7 +534,7 @@ class JoinWith:
     def dependencies(self) -> list[JoinDependency]:
         return [self._other]
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         other_frame = self._other.dataset().to_pandas()
         merged = frame.merge(other_frame, on=self._on, how=self._how)  # type: ignore[arg-type]
@@ -575,7 +575,7 @@ class AntiJoinWith:
     def dependencies(self) -> list[JoinDependency]:
         return [self._other]
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         other_frame = self._other.dataset().to_pandas()
         missing_left = [column for column in self._on if column not in frame.columns]
@@ -617,7 +617,7 @@ class LatestPerKey:
         self._key = [key] if isinstance(key, str) else list(key)
         self._by = by
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         missing = [c for c in self._key + [self._by] if c not in frame.columns]
         if missing:
@@ -652,7 +652,7 @@ class SelectColumns:
     def __init__(self, columns: Sequence[str]) -> None:
         self._columns = list(columns)
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         missing = [c for c in self._columns if c not in frame.columns]
         if missing:
@@ -683,7 +683,7 @@ class DropColumns:
     def __init__(self, columns: Sequence[str]) -> None:
         self._columns = list(columns)
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         missing = [c for c in self._columns if c not in frame.columns]
         if missing:
@@ -723,7 +723,7 @@ class Unpivot:
         self._value_name = value_name
         self._drop_empty = drop_empty
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         melted = frame.melt(
             id_vars=self._id_vars,
@@ -775,7 +775,7 @@ class DeriveKey:
         self._namespace = namespace
         self._natural_key = list(natural_key)
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         frame[self._into] = frame.apply(
             lambda row: str(
@@ -860,7 +860,7 @@ class TopNPerGroup:
         )
         return ordered.head(self._n)
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         return Dataset.from_pandas(_cut_per_group(frame, self._key, self._select))
 
@@ -944,7 +944,7 @@ class SamplePerGroup:
         # to incoming row/group order.
         return _draw_sample(group, self._n, self._group_seed(group_key), self._order)
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         return Dataset.from_pandas(_cut_per_group(frame, self._key, self._select))
 
@@ -1004,7 +1004,7 @@ class Sample:
         assert self._fraction is not None  # one of the two is always set
         return round(self._fraction * population)
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         if len(frame) == 0:
             return dataset

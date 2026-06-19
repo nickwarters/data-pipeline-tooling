@@ -82,11 +82,10 @@ def test_sas_reader_composes_in_the_pipeline_builder(landing, tmp_path):
     # A SasReader is a Reader: it drops into the deferred builder and feeds a
     # raw landing exactly like any other source (Reader-Protocol conformance,
     # observed end-to-end rather than via isinstance).
-    landed = (
-        Pipeline("cases", SasReader("run_cases.sas", "*.csv", landing))
-        .write_to(SqliteTruncateReloadWriter(tmp_path / "raw.db", "cases"))
-        .run()
-    )
+    p = Pipeline("cases")
+    r = p.read(SasReader("run_cases.sas", "*.csv", landing), name="read")
+    w = p.write(SqliteTruncateReloadWriter(tmp_path / "raw.db", "cases"), r, name="write")
+    landed = p.run()
 
     assert landed.columns == ["case_id", "advisor"]
     assert len(landed) == 3

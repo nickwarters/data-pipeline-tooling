@@ -141,10 +141,10 @@ def priority_score(row: Mapping[str, Any]) -> int:
 variation = CASES.variation("v1")
 (
     Pipeline("selection", DatasetReader(available))
-    .with_processor(Score("priority_score", priority_score))
-    .with_processor(Filter(high_value_case, name="high-value"))
-    .with_processor(Sort("priority_score", ascending=False))    # rank top-first
-    .with_processor(Stamp("question_bank_id", variation.question_bank_id))
+    .transform(Score("priority_score", priority_score))
+    .transform(Filter(high_value_case, name="high-value"))
+    .transform(Sort("priority_score", ascending=False))    # rank top-first
+    .transform(Stamp("question_bank_id", variation.question_bank_id))
     .write_to(store.writer(GOLD, "selection_pool", AccumulateByRun(run_id, load_date)))
     .run()
 )
@@ -195,10 +195,10 @@ reason, never silently drop* shape, pointed at
 ```python
 (
     Pipeline("selection", DatasetReader(available))
-    .with_processor(Score("priority_score", priority_score))
-    .with_processor(Filter(high_value_case, name="high-value"))
-    .with_processor(Sort("priority_score", ascending=False))
-    .with_processor(Stamp("question_bank_id", variation.question_bank_id))
+    .transform(Score("priority_score", priority_score))
+    .transform(Filter(high_value_case, name="high-value"))
+    .transform(Sort("priority_score", ascending=False))
+    .transform(Stamp("question_bank_id", variation.question_bank_id))
     .explain(                                   # land a per-Case trace alongside
         store.writer(GOLD, "selection_trace", AccumulateByRun(run_id, load_date)),
         id_column="case_ref",

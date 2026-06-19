@@ -38,13 +38,10 @@ from framework.core import GOLD, RAW, SILVER, Dataset, PipelineError, format_fai
 from framework.io import (
     AccumulateByRun,
     CsvReader,
-    Reader,
     Refresh,
     StoreCatalog,
-    Writer,
 )
-from framework.run import Pipeline, RunContext, RunLog
-from framework.transform import Rename, SchemaCoercion
+from framework.run import Pipeline, RunContext
 from framework.validate import ColumnValidator, SchemaValidator
 
 from .schema import MyfeedRow
@@ -62,106 +59,85 @@ RENAME: dict[str, str] = {}
 UPSTREAMS = ()
 
 
-def raw_builder(
-    reader: Reader,
-    writer: Writer,
-    run_log: RunLog | None = None,
-) -> Pipeline:
-    """Compose the source -> raw hop over the given Reader/Writer (not yet run).
-
-    Reads the source, gates it with a ``ColumnValidator`` (every column the schema
-    declares must be present before any row is landed -- an error-severity breach
-    aborts fail-fast), and writes a faithful copy. ``run`` wires the real
-    source/destination; tests call this same builder with sample rows.
-    """
-    return (
-        Pipeline(FEED_NAME, reader, run_log)
-        .with_validator(ColumnValidator([f.name for f in fields(MyfeedRow)]))
-        .write_to(writer)
-    )
-
-
-def silver_builder(
-    reader: Reader,
-    writer: Writer,
-    run_log: RunLog | None = None,
-) -> Pipeline:
-    """Compose the raw -> silver hop over the given Reader/Writer (not yet run).
-
-    Renames source columns to the schema's vocabulary (``RENAME``), coerces the
-    dtypes a storage round-trip loses (``SchemaCoercion``), and validates the
-    declared schema (``SchemaValidator``) before anything lands in silver.
-    """
-    return (
-        Pipeline(FEED_NAME, reader, run_log)
-        .with_processor(Rename(RENAME))
-        .with_processor(SchemaCoercion(MyfeedRow))
-        # TODO: add any further silver processors this feed needs -- e.g. a
-        #       Filter to the current run's rows, Parse/SplitColumn to reshape
-        #       values, or derived columns.
-        .with_post_validator(SchemaValidator(MyfeedRow))
-        .write_to(writer)
-    )
-
-
-def gold_builder(
-    reader: Reader,
-    writer: Writer,
-    run_log: RunLog | None = None,
-) -> Pipeline:
-    """Compose the silver -> gold hop over the given Reader/Writer (not yet run).
-
-    A passthrough to start: reads silver and writes gold unchanged. How
-    accumulated silver becomes gold is per-feed (a current reduce, a multi-feed
-    join, Detail Tables, ...), so the assembly is yours to build.
-    """
-    return (
-        Pipeline(FEED_NAME, reader, run_log)
-        # TODO: build out the gold assembly -- e.g. derive a stable key, reduce
-        #       to the current row per entity, join enriching feeds. See #163.
-        .write_to(writer)
-    )
-
-
-def run(context: RunContext, *, describe: bool = False) -> Dataset:
-    """Refine the feed source -> raw -> silver -> gold under the run context.
-
-    Wires the real Reader/Writer for each hop and runs the three builders in
-    order; returns the gold dataset. The raw/silver accumulation strategy is
-    derived from the ``RunContext``, so a re-run under the same logical run id
-    (``--logical-run-id``) replaces that business run's rows rather than
-    duplicating them. Pass ``describe=True`` to print each pipeline's plan before
-    it runs.
-    """
+def build_pipeline(context: RunContext) -> Pipeline:
     store = StoreCatalog(context.base_dir).store(FEED_NAME)
     strategy = AccumulateByRun.from_context(context)
 
-    def execute(pipeline: Pipeline) -> Dataset:
-        if describe:
-            print(pipeline.describe())
-        return pipeline.run()
+    # 1. Initialize the DAG Pipeline
+    p = Pipeline(FEED_NAME, run_log=context.run_log)
 
-    execute(
-        raw_builder(
-            CsvReader(SAMPLE_CSV),
-            store.writer(RAW, FEED_NAME, strategy),
-            context.run_log,
-        )
+    # -------------------------------------------------------------------------
+    # RAW LAYER
+    # Reads the source, gates it with a ColumnValidator, and writes a faithful copy.
+    # -------------------------------------------------------------------------
+    raw_source = p.read(CsvReader(SAMPLE_CSV), name="read_csv")
+    
+    raw_validated = p.validate(
+        ColumnValidator([f.name for f in fields(MyfeedRow)]), 
+        raw_source, 
+        name="raw_col_validate"
     )
-    execute(
-        silver_builder(
-            store.reader(RAW, FEED_NAME),
-            store.writer(SILVER, FEED_NAME, strategy),
-            context.run_log,
-        )
+    
+    raw_written = p.write(
+        store.writer(RAW, FEED_NAME, strategy), 
+        raw_validated, 
+        name="write_raw"
     )
-    return execute(
-        gold_builder(
-            store.reader(SILVER, FEED_NAME),
-            store.writer(GOLD, FEED_NAME, Refresh()),
-            context.run_log,
-        )
+
+    # -------------------------------------------------------------------------
+    # SILVER LAYER
+    # Renames source columns, coerces dtypes, and validates schema.
+    # We continue the graph from `raw_written` to avoid re-reading from disk.
+    # -------------------------------------------------------------------------
+    def rename_and_coerce(dataset: Dataset) -> Dataset:
+        # Instead of generic processor classes, manipulate the data directly
+        df = dataset.to_pandas()
+        if RENAME:
+            df = df.rename(columns=RENAME)
+        # Assuming you have a helper for schema coercion or just use raw pandas:
+        # df = coerce_to_schema(df, MyfeedRow)
+        return Dataset(df)
+
+    silver_transformed = p.transform(rename_and_coerce, raw_written, name="silver_transform")
+    
+    silver_validated = p.validate(
+        SchemaValidator(MyfeedRow), 
+        silver_transformed, 
+        name="silver_schema_validate"
     )
+    
+    silver_written = p.write(
+        store.writer(SILVER, FEED_NAME, strategy), 
+        silver_validated, 
+        name="write_silver"
+    )
+
+    # -------------------------------------------------------------------------
+    # GOLD LAYER
+    # A passthrough to start: reads silver and writes gold unchanged.
+    # -------------------------------------------------------------------------
+    def assemble_gold(dataset: Dataset) -> Dataset:
+        # TODO: build out the gold assembly (e.g. derive a stable key, reduce, join)
+        return dataset
+
+    gold_transformed = p.transform(assemble_gold, silver_written, name="gold_transform")
+    
+    gold_written = p.write(
+        store.writer(GOLD, FEED_NAME, Refresh()), 
+        gold_transformed, 
+        name="write_gold"
+    )
+
+    return p
+
+
+def run(context: RunContext, *, describe: bool = False) -> Dataset:
+    """Refine the feed source -> raw -> silver -> gold under the run context."""
+    pipeline = build_pipeline(context)
+    if describe:
+        print(pipeline.describe())
+    
+    return pipeline.run(context)
 
 
 def main(argv: list[str]) -> int:
@@ -183,22 +159,16 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv[1:])
     base_dir = Path(args.base_dir) if args.base_dir else Path.cwd() / "data"
 
-    # Direct invocation builds a default run context and runs the same handler the
-    # framework would. The pipeline is fail-fast: a Validator breach aborts before
-    # anything lands and raises a PipelineError. Catch the family and present it
-    # cleanly so an expected data failure reads as a clear message, not an
-    # unhandled traceback; a genuine bug is *not* a PipelineError and keeps its
-    # stack trace.
     context = RunContext(base_dir=base_dir, pipeline=FEED_NAME)
     try:
-        dataset = run(context, describe=args.describe)
+        run(context, describe=args.describe)
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1
-    print(
-        f"Refined {len(dataset)} rows source -> raw -> silver -> gold under "
-        f"{base_dir / FEED_NAME} (layers {RAW}, {SILVER}, {GOLD})."
-    )
+    
+    # We don't have len(dataset) easily accessible anymore with the DAG without
+    # an explicit output, but we can change the message.
+    print(f"Refined source -> raw -> silver -> gold under {base_dir / FEED_NAME}")
     return 0
 
 

@@ -129,7 +129,9 @@ def test_run_log_records_retry_attempts_and_final_outcome(tmp_path):
     inner = FlakyReader(ConnectionError("source briefly unavailable"), fails=1)
     reader = RetryingReader(inner, RetryPolicy(attempts=3, retry_on=(ConnectionError,)))
 
-    Pipeline("flaky-feed", reader, run_log=RunLog(log_path)).run()
+    p = Pipeline("flaky-feed", run_log=RunLog(log_path))
+    r = p.read(reader, name="read")
+    p.run()
 
     [read_record] = [r for r in _read_log(log_path) if r["step"] == "read"]
     assert read_record["status"] == "ok"
@@ -144,8 +146,11 @@ def test_run_log_records_a_non_retryable_abort(tmp_path):
     inner = FlakyReader(FileNotFoundError("source.csv is missing"), fails=99)
     reader = RetryingReader(inner, RetryPolicy(attempts=5, retry_on=(ConnectionError,)))
 
+    p = Pipeline("flaky-feed", run_log=RunLog(log_path))
+    r = p.read(reader, name="read")
+
     with pytest.raises(FileNotFoundError):
-        Pipeline("flaky-feed", reader, run_log=RunLog(log_path)).run()
+        p.run()
 
     [read_record] = [r for r in _read_log(log_path) if r["step"] == "read"]
     assert read_record["status"] == "error"

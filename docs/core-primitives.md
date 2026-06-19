@@ -70,7 +70,7 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > `Store.write`/`read` is retired. The shared `connect` factory now lives in
 > `framework._internal.connection` (the seam that keeps `store` and `writers` cycle-free).
 > **Validators** now
-> attach to the builder (`.with_validator()` / `.with_post_validator()`) and
+> attach to the builder (`.validate()` / `.validate()`) and
 > `.run()` is fail-fast and atomic. **Structured JSONL observability** has
 > landed: a `RunLog` composed onto the builder emits one JSON record per step
 > plus a run summary to a `.log` file (and human-readable lines to the console)
@@ -381,14 +381,14 @@ recipe for compatibility with existing pipeline code.
 A `Processor` transforms the dataset between the read and the post-validators:
 
 ```python
-class Processor(Protocol):
-    def process(self, dataset: Dataset) -> Dataset: ...
+# Transforms are now standard callables.
+# e.g. Callable[[Dataset], Dataset]
 ```
 
 Unlike the structural validators it is **engine-confined** — a transform needs
 the engine's vectorised operations, so it reaches the frame via
 `to_pandas()`/`from_pandas()` exactly as a Reader/Writer does (ADR-0002). It is
-attached with `.with_processor(...)` and runs as the builder's `process` step. A
+attached with `.transform(...)` and runs as the builder's `process` step. A
 processor has **no severity**: a transform either applies or it can't, so a
 failure is always fail-fast (ADR-0007) — it raises and the run aborts.
 
@@ -694,20 +694,18 @@ run/logical identity, or should fail independently. Use a multi-file Reader
 instead when many files together are one logical Feed snapshot that should be
 read, validated, and written as a single `Dataset` under one logical run id.
 
-### `Pipeline` — the deferred fluent builder
+### `Pipeline` — the deferred DAG builder
 A `Pipeline` describes a feed's path and runs **nothing** until `.run()`
 (ADR-0003):
 
 ```python
-(
-    Pipeline("cases", CsvReader(path))
-    .with_validator(ColumnValidator(["case_ref"]))        # pre: gate the input
-    .with_processor(NormaliseCases())                     # transform
-    .checkpoint(audit_writer)                             # mid-run snapshot
-    .with_post_validator(RowCountValidator(minimum=1))     # post: gate the output
-    .write_to(writer)
-    .run()
-)
+p = Pipeline("cases")
+r = p.read(CsvReader(path), name="read")
+v1 = p.validate(ColumnValidator(["case_ref"]), r, name="pre_val") # gate the input
+t1 = p.transform(NormaliseCases(), v1, name="transform")         # transform
+v2 = p.validate(RowCountValidator(minimum=1), t1, name="post_val") # gate the output
+p.write(writer, v2, name="write")
+p.run()
 ```
 
 For position-sensitive checks and transforms, compose explicit ordered stages:
@@ -751,9 +749,9 @@ the dataset→dataset transform extension point is the `Processor`. This is not 
 domain Pipeline, medallion layer, DAG, or multi-writer terminus; the invariant
 remains: `Reader -> Dataset -> Stage* -> Writer`.
 
-`.with_validator(v, severity="error")` attaches a **pre**-validator (checks the
-input); `.with_post_validator(v, severity="error")` attaches a **post**-validator
-(checks the output that is about to be written). `.with_processor(p)` and
+`.validate(v, severity="error")` attaches a **pre**-validator (checks the
+input); `.validate(v, severity="error")` attaches a **post**-validator
+(checks the output that is about to be written). `.transform(p)` and
 `.checkpoint(writer)` remain compatibility helpers over the ordered stage chain.
 `.write_to(writer)` composes in the destination Writer. All deferred — nothing
 runs until `.run()`.
@@ -776,8 +774,8 @@ attributes, so a value stored under any name cannot leak into the plan:
 ```python
 pipeline = (
     Pipeline("cases", CsvReader(path))
-    .with_validator(ColumnValidator(["case_ref"]))
-    .with_processor(NormaliseCases())
+    .validate(ColumnValidator(["case_ref"]))
+    .transform(NormaliseCases())
     .write_to(writer)
 )
 
@@ -807,7 +805,7 @@ id as `pipeline.run_id`, times each planned step, and drives the composed
 objects are internal: they expose stable name/kind/order, the wrapped component
 where applicable, and read-only/side-effect metadata for future plan-validation
 and dry-run work, but pipeline scripts still use only the builder methods. The
-`process` step (`.with_processor()`) landed in #23; lineage checkpoints
+`process` step (`.transform()`) landed in #23; lineage checkpoints
 (`.checkpoint(writer)`) landed in #49; public ordered stages landed in #122.
 
 ### `WorkingDayCalendar` — working-day arithmetic (pure utility)

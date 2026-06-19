@@ -15,7 +15,7 @@ class AddOpenContactCounts:
     def __init__(self, contacts_reader) -> None:
         self._contacts = contacts_reader
 
-    def process(self, dataset):
+    def __call__(self, dataset):
         cases = dataset.to_pandas()
         contacts = self._contacts.read().to_pandas()
         counts = (
@@ -34,7 +34,7 @@ class AddOpenContactCounts:
 class AdviserSummary:
     """Aggregate selected case rows to one reporting row per adviser."""
 
-    def process(self, dataset):
+    def __call__(self, dataset):
         frame = dataset.to_pandas()
         selected = frame.loc[frame.apply(high_risk_or_vulnerable, axis=1)]
         summary = (

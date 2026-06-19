@@ -293,9 +293,10 @@ def _render_pipeline(text: str, feed: str, spec: _FeedSpec) -> str:
     cls = _pascal(feed) + "Row"
     anchor = f'SAMPLE_CSV = Path(__file__).parent / "sample_data" / "{feed}.csv"\n'
     text = text.replace(anchor, anchor + "\n" + _raw_columns_literal(spec))
+    # Replace ColumnValidator initialization to use RAW_FEED_COLUMNS
     text = text.replace(
-        f".with_validator(ColumnValidator([f.name for f in fields({cls})]))",
-        ".with_validator(ColumnValidator(RAW_FEED_COLUMNS))",
+        f"ColumnValidator([f.name for f in fields({cls})])",
+        "ColumnValidator(RAW_FEED_COLUMNS)",
     )
     text = text.replace("RENAME: dict[str, str] = {}\n", _rename_literal(spec))
     text = text.replace("from dataclasses import fields\n", "")
@@ -326,9 +327,9 @@ def _render_test(text: str, feed: str, spec: _FeedSpec) -> str:
         # still checks the schema fields -- silver renames to them -- so the
         # ``fields``/schema imports stay.
         text = text.replace(
-            f"from pipelines.{feed}.pipeline import FEED_NAME, raw_builder, run",
+            f"from pipelines.{feed}.pipeline import FEED_NAME, run",
             f"from pipelines.{feed}.pipeline import "
-            f"FEED_NAME, RAW_FEED_COLUMNS, raw_builder, run",
+            f"FEED_NAME, RAW_FEED_COLUMNS, run",
         )
         text = text.replace(
             f"{{f.name for f in fields({cls})}}.issubset(landed[0].keys())",
