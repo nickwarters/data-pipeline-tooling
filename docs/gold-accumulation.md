@@ -57,6 +57,13 @@ insert fails, the delete rolls back, so a failed re-run never half-wipes prior
 rows. The result: re-running a given load is safe and deterministic, while the
 historical record of prior loads is preserved.
 
+Because a re-run replaces only its own prior rows, the **net-new** rows it
+persists is zero. The writer exposes this after `write()` as `rows_written`
+(`N` on a fresh write, `0` when the delete-by-run matched prior rows), and the
+write step reports it as the run log's `rows_out` — so a re-run reads as `0`,
+matching the unchanged table state rather than a misleading fresh load of N. See
+[`run-log-format.md`](run-log-format.md).
+
 ## `run_id` is *not* the run-log's execution id
 
 The run-log (ADR-0007) mints a **fresh uuid `run_id` per `.run()`** to correlate

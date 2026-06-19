@@ -27,17 +27,24 @@ def _frame_for_strategy(
     dataset: Dataset,
     strategy: Refresh | AccumulateByRun | UpsertStrategy,
     read_existing: Callable[[], pd.DataFrame],
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, int]:
+    """Return ``(frame_to_write, rows_written)`` where ``rows_written`` is the
+    net-new row count this write persists: the full frame for ``Refresh``, and
+    for ``AccumulateByRun`` the incoming rows on a fresh write but ``0`` on a
+    re-run (the run's prior rows are replaced, so nothing new lands)."""
     frame = dataset.to_pandas()
     if isinstance(strategy, Refresh):
-        return frame
+        return frame, len(frame)
     if isinstance(strategy, AccumulateByRun):
-        frame = _stamp_accumulate_frame(frame, strategy)
+        stamped = _stamp_accumulate_frame(frame, strategy)
 
         existing = read_existing()
+        replaced = False
         if len(existing) > 0 and "run_id" in existing.columns:
+            replaced = bool((existing["run_id"] == strategy.run_id).any())
             existing = existing[existing["run_id"] != strategy.run_id]
-        return pd.concat([existing, frame], ignore_index=True)
+        combined = pd.concat([existing, stamped], ignore_index=True)
+        return combined, 0 if replaced else len(stamped)
     raise TypeError(f"Unsupported load strategy: {type(strategy).__name__}")
 
 
@@ -57,7 +64,9 @@ class CsvWriter:
 
     Owns its target file and load strategy. ``Refresh`` overwrites the file with
     the current dataset; ``AccumulateByRun`` rewrites the file after replacing
-    only that logical run's stamped rows.
+    only that logical run's stamped rows. After ``write()`` returns,
+    ``rows_written`` is the net-new row count persisted — ``0`` on an idempotent
+    re-run that only replaced its own prior rows.
     """
 
     def __init__(
@@ -67,9 +76,12 @@ class CsvWriter:
     ) -> None:
         self._path = Path(path)
         self._strategy = strategy
+        self.rows_written: int = 0
 
     def write(self, dataset: Dataset) -> None:
-        frame = _frame_for_strategy(dataset, self._strategy, self._read_existing)
+        frame, self.rows_written = _frame_for_strategy(
+            dataset, self._strategy, self._read_existing
+        )
         self._path.parent.mkdir(parents=True, exist_ok=True)
         frame.to_csv(self._path, index=False, lineterminator="\n")
 
@@ -83,7 +95,11 @@ class CsvWriter:
 
 
 class ExcelWriter:
-    """A file Deliverable Writer for one Excel worksheet."""
+    """A file Deliverable Writer for one Excel worksheet.
+
+    After ``write()`` returns, ``rows_written`` is the net-new row count
+    persisted — ``0`` on an idempotent ``AccumulateByRun`` re-run.
+    """
 
     def __init__(
         self,
@@ -94,9 +110,12 @@ class ExcelWriter:
         self._path = Path(path)
         self._strategy = strategy
         self._sheet = sheet
+        self.rows_written: int = 0
 
     def write(self, dataset: Dataset) -> None:
-        frame = _frame_for_strategy(dataset, self._strategy, self._read_existing)
+        frame, self.rows_written = _frame_for_strategy(
+            dataset, self._strategy, self._read_existing
+        )
         self._path.parent.mkdir(parents=True, exist_ok=True)
         with pd.ExcelWriter(self._path) as writer:
             frame.to_excel(writer, sheet_name=self._sheet, index=False)
@@ -111,7 +130,11 @@ class ExcelWriter:
 
 
 class JsonWriter:
-    """A file Deliverable Writer for JSON record arrays."""
+    """A file Deliverable Writer for JSON record arrays.
+
+    After ``write()`` returns, ``rows_written`` is the net-new row count
+    persisted — ``0`` on an idempotent ``AccumulateByRun`` re-run.
+    """
 
     def __init__(
         self,
@@ -120,9 +143,12 @@ class JsonWriter:
     ) -> None:
         self._path = Path(path)
         self._strategy = strategy
+        self.rows_written: int = 0
 
     def write(self, dataset: Dataset) -> None:
-        frame = _frame_for_strategy(dataset, self._strategy, self._read_existing)
+        frame, self.rows_written = _frame_for_strategy(
+            dataset, self._strategy, self._read_existing
+        )
         self._path.parent.mkdir(parents=True, exist_ok=True)
         frame.to_json(
             self._path,
@@ -373,7 +399,10 @@ class AccumulateByRunWriter:
     survive across runs. Each row is stamped with the logical ``run_id`` /
     ``logical_run_id`` / ``load_date`` plus ``execution_id`` when the strategy
     was derived from a RunContext. A re-driven logical run is idempotent via
-    delete-by-run then insert.
+    delete-by-run then insert. After ``write()`` returns, ``rows_written`` is the
+    net-new row count persisted — ``0`` on a re-run (the run's prior rows are
+    deleted then re-inserted, so the table state is unchanged), ``N`` on a fresh
+    write.
     """
 
     def __init__(
@@ -391,6 +420,7 @@ class AccumulateByRunWriter:
         self._load_date = load_date
         self._execution_id = execution_id
         self._busy_timeout_ms = busy_timeout_ms
+        self.rows_written: int = 0
 
     def write(self, dataset: Dataset) -> None:
         frame = dataset.to_pandas()
@@ -405,15 +435,20 @@ class AccumulateByRunWriter:
         try:
             # Idempotent re-run: clear this run's prior rows, then append, so a
             # re-driven day replaces only its own rows and never other runs'.
+            # A non-zero DELETE rowcount means this run_id already existed, so
+            # the re-insert lands no net-new rows.
+            replaced = False
             try:
-                con.execute(
+                cursor = con.execute(
                     f"DELETE FROM {quote_identifier(self._table)} WHERE run_id = ?",
                     (self._run_id,),
                 )
+                replaced = cursor.rowcount > 0
             except sqlite3.OperationalError:
                 pass  # table does not exist yet — nothing to clear
             frame.to_sql(self._table, con, if_exists="append", index=False)
             con.commit()
+            self.rows_written = 0 if replaced else len(frame)
         finally:
             con.close()
 

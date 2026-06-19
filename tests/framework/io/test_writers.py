@@ -199,3 +199,42 @@ def test_accumulate_by_run_writer_is_atomic_when_the_write_fails(tmp_path):
     survivors = SqliteReader(db, "selection_pool").read()
     assert len(survivors) == 2
     assert "surprise" not in survivors.columns
+
+
+def test_accumulate_by_run_writer_reports_rows_written_on_fresh_write(tmp_path):
+    # A fresh write of a logical run lands N net-new rows, so rows_written is N —
+    # nothing existed for this run_id before.
+    dataset = CsvReader(FIXTURE).read()
+    db = tmp_path / "gold.db"
+    writer = AccumulateByRunWriter(db, "selection_pool", "r1", "2026-05-29")
+
+    writer.write(dataset)
+
+    assert writer.rows_written == len(dataset)
+
+
+def test_accumulate_by_run_writer_reports_zero_rows_written_on_rerun(tmp_path):
+    # A re-driven logical run deletes its prior rows then re-inserts the same
+    # rows: the net new data persisted is zero, so rows_written is 0, not N.
+    dataset = CsvReader(FIXTURE).read()
+    db = tmp_path / "gold.db"
+    writer = AccumulateByRunWriter(db, "selection_pool", "r1", "2026-05-29")
+
+    writer.write(dataset)  # fresh
+    writer.write(dataset)  # re-run under the same run_id
+
+    assert writer.rows_written == 0
+
+
+def test_csv_writer_accumulate_reports_zero_rows_written_on_rerun(tmp_path):
+    # A file-based AccumulateByRun writer reports the same net-new count: N on
+    # the first write for a run_id, 0 when the file already held that run's rows.
+    dataset = CsvReader(FIXTURE).read()
+    target = tmp_path / "cases.csv"
+    writer = CsvWriter(target, AccumulateByRun("r1", "2026-05-29"))
+
+    writer.write(dataset)
+    assert writer.rows_written == len(dataset)
+
+    writer.write(dataset)
+    assert writer.rows_written == 0

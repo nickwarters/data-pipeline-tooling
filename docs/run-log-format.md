@@ -63,7 +63,7 @@ leads each line; the examples below elide it for width but it is always present:
 | `step`      | string              | `read`, `pre-validate`, `quarantine`, `process`, `explain`, `post-validate`, `write`, `freshness`, or `run` (the summary). |
 | `status`    | `"ok"` \| `"error"` | Step/run outcome. |
 | `rows_in`   | int \| null         | Rows the step consumed (`null` where N/A, e.g. `read`). |
-| `rows_out`  | int \| null         | Rows the step produced. |
+| `rows_out`  | int \| null         | Rows the step produced — for `write`, the rows actually persisted (`0` on an idempotent accumulate re-run that only replaced its own prior rows). |
 | `rows_quarantined` | int \| null  | Rows routed aside on a `quarantine` step (value-rule breaches — ADR-0007 amd 01); `null` elsewhere. |
 | `rows_excluded` | int \| null     | Cases a gate excluded on an `explain` step (Selection explainability — ADR-0007 amd 02); `null` elsewhere. |
 | `duration`  | float \| null       | Wall-clock seconds for the step/run. |
@@ -77,7 +77,12 @@ One record per step, in execution order, then a final `run` summary:
 1. `read` — `rows_out` is the rows the Reader produced.
 2. `pre-validate` — input validators; `warn_hits` lists any tolerated failures.
 3. `post-validate` — output validators (the home of ADR-0008 schema checks).
-4. `write` — present only when a Writer is composed; `rows_in` is the rows handed to it.
+4. `write` — present only when a Writer is composed; `rows_in` is the rows handed
+   to it, and `rows_out` is the rows it actually **persisted**. For an accumulate
+   writer (`AccumulateByRunWriter` and the file `AccumulateByRun` path) re-driven
+   under the same logical run id, the delete-by-run then insert replaces the
+   run's own prior rows, so the net-new count is `0` — the log reports `0`, not a
+   fresh load of N, matching the unchanged table state.
 5. `run` — the **summary**: overall `status`, total `duration`, and the
    run's aggregated `warn_hits`.
 

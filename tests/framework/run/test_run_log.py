@@ -273,6 +273,31 @@ def test_every_record_carries_a_parseable_utc_timestamp(tmp_path):
         assert before <= stamped <= after
 
 
+def test_write_step_reports_zero_rows_out_on_idempotent_rerun(tmp_path):
+    # An accumulate writer re-driven under the same logical run_id deletes its
+    # prior rows then re-inserts the same rows — net new data is zero. The write
+    # step must report rows_out == 0 on the re-run, not a fresh load of N, so the
+    # log matches reality.
+    from framework.io.writers import AccumulateByRunWriter
+
+    log_path = tmp_path / "cases.log"
+    db = tmp_path / "gold.db"
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1, 2, 3]})))
+
+    Pipeline("cases", reader, run_log=RunLog(log_path)).write_to(
+        AccumulateByRunWriter(db, "selection_pool", "r1", "2026-05-29")
+    ).run()
+    first_write = _by_step(_read_records(log_path))["write"]
+    assert first_write["rows_out"] == 3  # fresh load of all rows
+
+    Pipeline("cases", reader, run_log=RunLog(log_path)).write_to(
+        AccumulateByRunWriter(db, "selection_pool", "r1", "2026-05-29")
+    ).run()
+    # The log now holds both runs' write records; the last is the re-run.
+    rerun_write = [r for r in _read_records(log_path) if r["step"] == "write"][-1]
+    assert rerun_write["rows_out"] == 0  # idempotent re-run added no net new rows
+
+
 def test_each_run_mints_a_fresh_run_id():
     # `.run()` mints a uuid run_id, exposed as `pipeline.run_id`; re-running the
     # same builder correlates a *new* run, so the id changes each time.

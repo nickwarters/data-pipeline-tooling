@@ -241,7 +241,7 @@ class CheckpointStep(PipelineStep):
         assert dataset is not None
         with session.timed_step(self.name, rows_in=len(dataset)) as metrics:
             self.writer.write(dataset)
-            metrics.rows_out = len(dataset)
+            metrics.rows_out = getattr(self.writer, "rows_written", len(dataset))
             return dataset
 
 
@@ -292,7 +292,11 @@ class WriteStep(PipelineStep):
         with session.timed_step(self.name, rows_in=len(dataset)) as metrics:
             self.writer.write(dataset)
             _drain_retry_attempts(self.writer, metrics)
-            metrics.rows_out = len(dataset)
+            # Report what the writer actually persisted, not what it was handed:
+            # an accumulate writer re-run under the same run_id replaces its own
+            # prior rows, so its net-new count is 0. Writers that don't expose
+            # `rows_written` fall back to the rows handed over.
+            metrics.rows_out = getattr(self.writer, "rows_written", len(dataset))
             return dataset
 
 
