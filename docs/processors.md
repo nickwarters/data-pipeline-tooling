@@ -263,13 +263,14 @@ from framework.transform import Stamp
 Stamp("question_bank_id", variation.question_bank_id)
 ```
 
-## Column shaping — `Parse`, `SplitColumn`, `JoinColumns`
+## Column shaping — `Parse`, `SplitColumn`, `JoinColumns`, `Zfill`
 
-Three small, general-purpose column transforms for feeds that arrive with packed
+Small, general-purpose column transforms for feeds that arrive with packed
 or delimited columns — common when a source system serialises a structured value
-into one text field. They are ordinary `Processor`s (engine-confined, fail-fast)
-and, like `SelectColumns`/`DropColumns`, raise `ValueError` naming a missing
-column rather than silently skipping it.
+into one text field, or drops the leading zeros of a fixed-width identifier. They
+are ordinary `Processor`s (engine-confined, fail-fast) and, like
+`SelectColumns`/`DropColumns`, raise `ValueError` naming a missing column rather
+than silently skipping it.
 
 ### `Parse` — decode a packed text column through a callable
 
@@ -320,6 +321,22 @@ composite alongside its parts; pass `drop=True` to consume them. It is the
 plain-text sibling of `DeriveKey`, which hashes the joined natural key into a
 deterministic UUID; reach for `JoinColumns` when you want the readable composite
 itself, and `DeriveKey` when you want the stable `case_id`.
+
+### `Zfill` — restore leading zeros to a fixed-width column
+
+```python
+from framework.transform import Zfill
+
+Zfill("account", 8)                       # one column to width 8
+Zfill(["sort_code", "branch"], 4)         # several columns, same width
+```
+
+Left-pads each value in the named column(s) with leading zeros to `width`
+characters — the fix for a feed whose fixed-width identifier (account number,
+sort code, postcode) lost its leading zeros when a source read it as an integer.
+Each value is cast to text first; values already at or beyond `width` pass
+through unchanged, a leading sign stays at the front (`"-1"` → `"-01"`), and
+missing values stay missing. `columns` is one name or a sequence of them.
 
 ## `JoinWith` — explicit cross-feed dependency join
 
