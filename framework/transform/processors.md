@@ -797,6 +797,22 @@ class TopNPerGroup:
 _DEFAULT_SAMPLE_SEED = 0
 
 
+def _draw_sample(frame, n: int, seed: int, order: str):
+    """Draw at most ``n`` rows from ``frame`` reproducibly under ``seed``.
+
+    The shared draw behind :class:`Sample` and each group of
+    :class:`SamplePerGroup`: order the frame by ``order`` so the result is
+    invariant to incoming row order, then take a seeded sample. A frame at or
+    below ``n`` passes through whole.
+    """
+    ordered = frame.sort_values(by=order, kind="stable")
+    if len(ordered) <= n:
+        return ordered
+    rng = random.Random(seed)
+    chosen = sorted(rng.sample(range(len(ordered)), k=n))
+    return ordered.iloc[chosen]
+
+
 class SamplePerGroup:
     """Draw at most ``n`` rows per group by a seeded, reproducible sample.
 
@@ -840,14 +856,9 @@ class SamplePerGroup:
         return int(digest, 16)
 
     def _select(self, group_key: Any, group):
-        # Canonicalise the group by `order` so the draw is invariant to incoming
-        # row order; a group at or below n passes through whole.
-        ordered = group.sort_values(by=self._order, kind="stable")
-        if len(ordered) <= self._n:
-            return ordered
-        rng = random.Random(self._group_seed(group_key))
-        chosen = sorted(rng.sample(range(len(ordered)), k=self._n))
-        return ordered.iloc[chosen]
+        # Each group is drawn off its own derived seed so the result is invariant
+        # to incoming row/group order.
+        return _draw_sample(group, self._n, self._group_seed(group_key), self._order)
 
     def process(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
@@ -856,6 +867,73 @@ class SamplePerGroup:
     def describe(self) -> str:
         return render(
             self, key=self._key, n=self._n, seed=self._seed, order=self._order
+        )
+
+
+class Sample:
+    """Draw a seeded, reproducible sample from the whole feed.
+
+    The ungrouped counterpart of :class:`SamplePerGroup`: a **pure function** of
+    (input dataset, seed) that samples the feed as a single population rather than
+    per group. ``seed`` is a fixed, configurable constant (*not* ``run_id`` or the
+    clock); ``order`` puts the feed into a canonical order before the draw, so the
+    same set in with the same seed yields the same sample out, invariant to
+    incoming row order.
+
+    The size is given **either** as an absolute count ``n`` **or** as a
+    ``fraction`` of the feed (``0 < fraction <= 1``, a proportion not a percent —
+    ``0.1`` is 10%); exactly one is required. A ``fraction`` resolves to
+    ``round(fraction * len)`` rows at run time, so it scales with the (already
+    upstream-narrowed) population.
+
+    A feed at or below the resolved size passes through whole; an empty feed in
+    yields an empty feed out (consistent with :class:`Filter`).
+    """
+
+    trace_role = "sample"
+    trace_name = "sample"
+
+    def __init__(
+        self,
+        n: int | None = None,
+        seed: int = _DEFAULT_SAMPLE_SEED,
+        order: str = "case_id",
+        *,
+        fraction: float | None = None,
+    ) -> None:
+        if (n is None) == (fraction is None):
+            raise ValueError("Sample requires exactly one of `n` or `fraction`")
+        if fraction is not None and not 0 < fraction <= 1:
+            raise ValueError(
+                f"Sample `fraction` must be in (0, 1], got {fraction!r}"
+            )
+        self._n = n
+        self._fraction = fraction
+        self._seed = seed
+        self._order = order
+
+    def _size(self, population: int) -> int:
+        # An absolute `n` is taken as given; a `fraction` resolves against the
+        # run's actual population so the sample scales with it.
+        if self._n is not None:
+            return self._n
+        assert self._fraction is not None  # one of the two is always set
+        return round(self._fraction * population)
+
+    def process(self, dataset: Dataset) -> Dataset:
+        frame = dataset.to_pandas()
+        if len(frame) == 0:
+            return dataset
+        sampled = _draw_sample(frame, self._size(len(frame)), self._seed, self._order)
+        return Dataset.from_pandas(sampled.reset_index(drop=True))
+
+    def describe(self) -> str:
+        return render(
+            self,
+            n=self._n,
+            fraction=self._fraction,
+            seed=self._seed,
+            order=self._order,
         )
 
 ```

@@ -5,7 +5,8 @@ The stable import surface for everything that reshapes or gates a
 :class:`~framework.core.dataset.Dataset` between the read and the write: the
 ``Processor`` seam and its concrete transforms (the Selection ``Filter`` /
 ``Score`` / ``VectorizedFilter`` / ``VectorizedDerive`` / ``Sort`` /
-``Rename`` / ``Stamp``, the per-group ``TopNPerGroup`` / ``SamplePerGroup``,
+``Rename`` / ``Stamp``, the ungrouped ``Sample`` and per-group
+``TopNPerGroup`` / ``SamplePerGroup``,
 the lazy ``JoinWith`` / ``AntiJoinWith``, the Ingest / fan-out
 ``SelectColumns`` / ``DropColumns`` / ``Unpivot`` / ``DeriveKey`` /
 ``LatestPerKey``)
@@ -40,6 +41,7 @@ from framework.transform.processors import (
     Parse,
     Processor,
     Rename,
+    Sample,
     SamplePerGroup,
     Score,
     SelectColumns,
@@ -74,6 +76,7 @@ __all__ = [
     "Unpivot",
     "DeriveKey",
     "TopNPerGroup",
+    "Sample",
     "SamplePerGroup",
     "CoercionError",
     # The coerce half of the schema adapter
