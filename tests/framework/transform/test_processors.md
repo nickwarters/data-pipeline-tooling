@@ -39,6 +39,7 @@ from framework.transform.processors import (
     SplitColumn,
     Stamp,
     TopNPerGroup,
+    IntegerText,
     Unpivot,
     VectorizedDerive,
     VectorizedFilter,
@@ -1346,5 +1347,74 @@ def test_zfill_conforms_to_the_processor_protocol():
     from framework.transform.processors import Processor
 
     assert isinstance(Zfill("a", 3), Processor)
+
+
+# --- IntegerText -----------------------------------------------------------
+
+
+def test_integer_text_renders_a_float_widened_column_as_clean_integer_text():
+    # A nullable integer column comes back from storage as float64, so the whole
+    # numbers carry a trailing ".0"; IntegerText restores the integer text.
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"account": [1234567890.0, 7.0, None]})
+    )
+
+    result = IntegerText("account").process(dataset).to_pandas()
+
+    assert list(result["account"]) == ["1234567890", "7", pd.NA]
+    assert result["account"].isna().tolist() == [False, False, True]
+
+
+def test_integer_text_handles_several_columns_and_leaves_the_rest_untouched():
+    dataset = Dataset.from_pandas(
+        pd.DataFrame(
+            {"member_id": [1.0, None], "claim_ref": [42.0, 9.0], "name": ["a", "b"]}
+        )
+    )
+
+    result = IntegerText(["member_id", "claim_ref"]).process(dataset).to_pandas()
+
+    assert list(result["member_id"]) == ["1", pd.NA]
+    assert list(result["claim_ref"]) == ["42", "9"]
+    assert list(result["name"]) == ["a", "b"]  # untouched
+
+
+def test_integer_text_passes_an_already_integer_column_through():
+    dataset = Dataset.from_pandas(pd.DataFrame({"id": [10, 20, 30]}))
+
+    result = IntegerText("id").process(dataset).to_pandas()
+
+    assert list(result["id"]) == ["10", "20", "30"]
+
+
+def test_integer_text_raises_on_a_fractional_value():
+    # A genuinely fractional float is not the integer the column was declared to
+    # be: fail fast rather than silently truncate.
+    dataset = Dataset.from_pandas(pd.DataFrame({"amount": [1.5, 2.0]}))
+
+    with pytest.raises(ValueError, match="non-integer"):
+        IntegerText("amount").process(dataset)
+
+
+def test_integer_text_raises_on_missing_column():
+    dataset = Dataset.from_pandas(pd.DataFrame({"a": [1.0]}))
+
+    with pytest.raises(ValueError, match="nope"):
+        IntegerText(["a", "nope"]).process(dataset)
+
+
+def test_integer_text_on_empty_feed_returns_empty_feed():
+    empty = Dataset.from_pandas(pd.DataFrame({"account": pd.Series([], dtype="float64")}))
+
+    result = IntegerText("account").process(empty)
+
+    assert isinstance(result, Dataset)
+    assert len(result) == 0
+
+
+def test_integer_text_conforms_to_the_processor_protocol():
+    from framework.transform.processors import Processor
+
+    assert isinstance(IntegerText("a"), Processor)
 
 ```
