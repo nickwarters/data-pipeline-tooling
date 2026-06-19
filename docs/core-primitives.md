@@ -438,7 +438,11 @@ message naming the column. `raw_to_silver` composes it ahead of the
   (`n=1` ⇒ "the single highest available per Adviser"), carrying its own sort and
   a stable `tiebreak` so tied scores rank reproducibly; `SamplePerGroup` is
   **seeded random** — a pure function of (input, `seed`) that is invariant to
-  incoming row order (ADR-0010). `TopNPerGroup(key=K, by=B, n=1)` is the
+  incoming row order (ADR-0010). `Sample(n=None, seed=0, order="case_id", *, fraction=None)`
+  is the ungrouped counterpart of `SamplePerGroup` — same seeded, pure,
+  order-invariant draw, but over the whole feed rather than per group, sized by
+  an absolute `n` **or** a `fraction` of the population (exactly one).
+  `TopNPerGroup(key=K, by=B, n=1)` is the
   structural generalisation of the Ingest reduction `LatestPerKey(key=K, by=B)`,
   kept separate by domain (Selection narrowing vs current-state reduction).
 
