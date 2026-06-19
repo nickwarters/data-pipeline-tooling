@@ -69,6 +69,8 @@ class CsvWriter:
     re-run that only replaced its own prior rows.
     """
 
+    rows_written: int = 0
+
     def __init__(
         self,
         path: str | os.PathLike[str],
@@ -76,7 +78,7 @@ class CsvWriter:
     ) -> None:
         self._path = Path(path)
         self._strategy = strategy
-        self.rows_written: int = 0
+        self.rows_written = 0
 
     def write(self, dataset: Dataset) -> None:
         frame, self.rows_written = _frame_for_strategy(
@@ -101,6 +103,8 @@ class ExcelWriter:
     persisted — ``0`` on an idempotent ``AccumulateByRun`` re-run.
     """
 
+    rows_written: int = 0
+
     def __init__(
         self,
         path: str | os.PathLike[str],
@@ -110,7 +114,7 @@ class ExcelWriter:
         self._path = Path(path)
         self._strategy = strategy
         self._sheet = sheet
-        self.rows_written: int = 0
+        self.rows_written = 0
 
     def write(self, dataset: Dataset) -> None:
         frame, self.rows_written = _frame_for_strategy(
@@ -136,6 +140,8 @@ class JsonWriter:
     persisted — ``0`` on an idempotent ``AccumulateByRun`` re-run.
     """
 
+    rows_written: int = 0
+
     def __init__(
         self,
         path: str | os.PathLike[str],
@@ -143,7 +149,7 @@ class JsonWriter:
     ) -> None:
         self._path = Path(path)
         self._strategy = strategy
-        self.rows_written: int = 0
+        self.rows_written = 0
 
     def write(self, dataset: Dataset) -> None:
         frame, self.rows_written = _frame_for_strategy(
@@ -405,6 +411,8 @@ class AccumulateByRunWriter:
     write.
     """
 
+    rows_written: int = 0
+
     def __init__(
         self,
         db_path: str | os.PathLike[str],
@@ -420,7 +428,7 @@ class AccumulateByRunWriter:
         self._load_date = load_date
         self._execution_id = execution_id
         self._busy_timeout_ms = busy_timeout_ms
-        self.rows_written: int = 0
+        self.rows_written = 0
 
     def write(self, dataset: Dataset) -> None:
         frame = dataset.to_pandas()
