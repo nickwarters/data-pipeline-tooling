@@ -43,7 +43,7 @@ def _frame_for_strategy(
         if len(existing) > 0 and "run_id" in existing.columns:
             replaced = bool((existing["run_id"] == strategy.run_id).any())
             existing = existing[existing["run_id"] != strategy.run_id]
-        combined = pd.concat([existing, stamped], ignore_index=True)
+        combined = pd.DataFrame(pd.concat([existing, stamped], ignore_index=True))
         return combined, 0 if replaced else len(stamped)
     raise TypeError(f"Unsupported load strategy: {type(strategy).__name__}")
 
