@@ -2,21 +2,22 @@
 """Scaffold a new feed from a template.
 
 Renders the runnable template under ``framework/_cli/scaffold_templates/feed/``
-into a new feed: the feed *code* (schema, an ingest pipeline CSV -> raw via the
-public facades, and a sample fixture) as a subpackage ``pipelines/<feed>/``, and
-its *test* (given source rows -> expected landed rows) under ``tests/pipelines/``
-so it sits with the rest of the suite, mirroring the source layout. The template
-is the source of truth; this module only substitutes the feed name (and its
-PascalCase class form) into a fresh copy.
+into a new feed: the feed *code* (schema, an ingest pipeline that refines source
+-> raw -> silver -> gold via the public facades, and a sample fixture) as a
+subpackage ``pipelines/<feed>/``, and its *test* (given source rows -> expected
+landed rows) under ``tests/pipelines/`` so it sits with the rest of the suite,
+mirroring the source layout. The template is the source of truth; this module
+only substitutes the feed name (and its PascalCase class form) into a fresh copy.
 
 Pass ``--from-feed-file PATH`` to seed the scaffold from a real sample CSV: the
 header becomes the schema's fields (names canonicalised to identifiers, dtypes
 inferred from the first rows), the file's contents replace the bundled sample,
 and the test's sample rows are taken from it. When any header name isn't already
 a clean identifier (spaces, punctuation, capitals), the *source* column names are
-emitted as a ``RAW_FEED_COLUMNS`` constant and the ColumnValidator gates on those
-raw names rather than the schema's canonical fields -- raw stays faithful to the
-source, the schema carries the canonical shape silver will rename to.
+emitted as a ``RAW_FEED_COLUMNS`` constant and the raw hop's ColumnValidator gates
+on those raw names rather than the schema's canonical fields; the silver hop's
+``RENAME`` map is populated from each source name to its canonical field -- raw
+stays faithful to the source, silver renames to the schema's canonical shape.
 
 Run from the repository root so the import-only ``framework`` package resolves::
 
@@ -259,12 +260,28 @@ def _raw_columns_literal(spec: _FeedSpec) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _rename_literal(spec: _FeedSpec) -> str:
+    """Render the ``RENAME`` map: each source column whose name isn't its
+    canonical schema field, mapped to that field. silver renames raw's faithful
+    source names to this vocabulary before coercing/validating the schema."""
+    pairs = [
+        (column, name)
+        for column, name in zip(spec.columns, spec.names)
+        if column != name
+    ]
+    lines = ["RENAME: dict[str, str] = {"]
+    lines += [f'    "{_esc(column)}": "{name}",' for column, name in pairs]
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_pipeline(text: str, feed: str, spec: _FeedSpec) -> str:
-    """Gate the validator on the raw source columns when they aren't identifiers.
+    """Gate the raw validator on the source columns when they aren't identifiers.
 
     Only needed when ``needs_raw``: the source names can't be schema fields, so
-    emit them as ``RAW_FEED_COLUMNS`` and validate against those. The schema (and
-    its now-unused imports here) is left for the silver rename the feed will add.
+    emit them as ``RAW_FEED_COLUMNS`` and gate the raw hop on those. The schema
+    fields stay the silver target, and ``RENAME`` maps the faithful source names
+    to them, so the schema import is kept (silver coerces/validates against it).
     """
     cls = _pascal(feed) + "Row"
     anchor = f'SAMPLE_CSV = Path(__file__).parent / "sample_data" / "{feed}.csv"\n'
@@ -273,8 +290,8 @@ def _render_pipeline(text: str, feed: str, spec: _FeedSpec) -> str:
         f".with_validator(ColumnValidator([f.name for f in fields({cls})]))",
         ".with_validator(ColumnValidator(RAW_FEED_COLUMNS))",
     )
+    text = text.replace("RENAME: dict[str, str] = {}\n", _rename_literal(spec))
     text = text.replace("from dataclasses import fields\n", "")
-    text = text.replace(f"from .schema import {cls}\n", "")
     return text
 
 
@@ -297,13 +314,14 @@ def _render_test(text: str, feed: str, spec: _FeedSpec) -> str:
         r"(?ms)^    source = \[.*?\n    \]\n", lambda _: _source_literal(spec), text
     )
     if spec.needs_raw:
-        # The pipeline validates raw source names, and raw keeps them, so the
-        # landed-columns assertion checks RAW_FEED_COLUMNS, not the schema fields.
-        text = text.replace("from dataclasses import fields\n\n", "")
-        text = text.replace(f"from pipelines.{feed}.schema import {cls}\n", "")
+        # The raw hop validates the source names, and raw keeps them, so the
+        # *landed* (raw) assertion checks RAW_FEED_COLUMNS. The silver assertion
+        # still checks the schema fields -- silver renames to them -- so the
+        # ``fields``/schema imports stay.
         text = text.replace(
-            f"from pipelines.{feed}.pipeline import FEED_NAME, builder, run",
-            f"from pipelines.{feed}.pipeline import FEED_NAME, RAW_FEED_COLUMNS, builder, run",
+            f"from pipelines.{feed}.pipeline import FEED_NAME, raw_builder, run",
+            f"from pipelines.{feed}.pipeline import "
+            f"FEED_NAME, RAW_FEED_COLUMNS, raw_builder, run",
         )
         text = text.replace(
             f"{{f.name for f in fields({cls})}}.issubset(landed[0].keys())",
