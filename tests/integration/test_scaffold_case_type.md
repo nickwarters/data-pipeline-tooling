@@ -22,6 +22,7 @@ import sys
 
 from framework.core import RAW, SILVER
 from framework.io import StoreCatalog
+from framework.run import RunContext
 from framework.testing import read_rows
 from framework._cli import scaffold
 
@@ -95,7 +96,9 @@ def test_rendered_case_type_pipeline_runs_and_refines_to_silver(tmp_path):
     try:
         pipeline = importlib.import_module("widgets.pipeline")
         importlib.reload(pipeline)
-        silver = pipeline.run(tmp_path / "data")
+        silver = pipeline.run(
+            RunContext(base_dir=tmp_path / "data", pipeline="widgets")
+        )
     finally:
         sys.path.remove(str(repo / "pipelines"))
         for name in list(sys.modules):

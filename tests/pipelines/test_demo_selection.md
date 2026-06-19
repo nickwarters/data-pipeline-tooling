@@ -1,10 +1,19 @@
 ```python
 from pathlib import Path
 
+from framework._cli import operator
 from framework.core import GOLD
 from framework.io import Store
 from framework.testing import read_rows
-from pipelines.demo_source_to_selection import high_value_case, main, priority_score
+from pipelines.selection.pipeline import high_value_case, priority_score
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def _run(pipeline: str, base_dir: Path) -> int:
+    return operator.main(
+        ["run", pipeline, str(base_dir), "--run-date", "2026-05-29"]
+    )
 
 
 def test_demo_selection_rules_are_independently_testable():
@@ -17,10 +26,12 @@ def test_demo_selection_rules_are_independently_testable():
 
 
 def test_demo_runs_the_full_source_to_selection_path(tmp_path, capsys):
-    # The capstone demo runs one Case Type end to end — CSV feed -> raw ->
-    # silver (the CasePool), then Selection narrows the available cases into the
-    # gold SelectionPool — so a reader sees the whole  flow without wiring it.
-    main(str(tmp_path))
+    # The capstone demo is now two path-addressed pipelines: ingest (CSV -> raw
+    # -> silver -> the gold CasePool) then selection (the available cases ->
+    # the gold SelectionPool). Running them in order through the framework's
+    # `run` exercises the whole flow, freshness gate included.
+    assert _run("pipelines/ingest", tmp_path) == 0
+    assert _run("pipelines/selection", tmp_path) == 0
 
     # Ingest landed the medallion's raw + silver, and Selection wrote gold.
     cases_dir = tmp_path / "cases"
@@ -35,12 +46,10 @@ def test_demo_runs_the_full_source_to_selection_path(tmp_path, capsys):
     assert [r["case_ref"] for r in selection_pool] == ["c1", "c2"]
     assert [r["priority_score"] for r in selection_pool] == [1000, 240]
     assert {r["question_bank_id"] for r in selection_pool} == {"qb-100"}
-    # Stamped with the namespaced logical run id derived from the RunContext, and
-    # a per-execution execution_id for traceability.
-    assert {r["run_id"] for r in selection_pool} == {"cases/selection:2026-05-29"}
-    assert {r["logical_run_id"] for r in selection_pool} == {
-        "cases/selection:2026-05-29"
-    }
+    # Stamped with the pipeline-name logical run id derived from the RunContext,
+    # and a per-execution execution_id for traceability.
+    assert {r["run_id"] for r in selection_pool} == {"selection:2026-05-29"}
+    assert {r["logical_run_id"] for r in selection_pool} == {"selection:2026-05-29"}
     assert all(r["execution_id"] for r in selection_pool)
 
     # Selection explainability: a sibling trace landed alongside the pool,
@@ -48,7 +57,7 @@ def test_demo_runs_the_full_source_to_selection_path(tmp_path, capsys):
     trace = read_rows(store, GOLD, "selection_trace")
     by_ref = {r["case_ref"]: r for r in trace}
     assert set(by_ref) == {"c1", "c2", "c3"}  # all considered, not just survivors
-    assert {r["run_id"] for r in trace} == {"cases/selection:2026-05-29"}
+    assert {r["run_id"] for r in trace} == {"selection:2026-05-29"}
     assert by_ref["c1"]["verdict"] == "selected"
     assert by_ref["c1"]["score"] == 1000
     assert by_ref["c3"]["verdict"] == "excluded"  # below the high-value gate
@@ -60,19 +69,20 @@ def test_demo_runs_the_full_source_to_selection_path(tmp_path, capsys):
     assert "trace" in captured.out
 
 
-def test_demo_is_runnable_as_a_module(tmp_path):
-    # Belt-and-braces: the documented `python -m` invocation runs from the repo
-    # root, proving the import-only framework package resolves on sys.path.
+def test_demo_pipelines_are_runnable_as_modules(tmp_path):
+    # Belt-and-braces: each pipeline runs via the documented `python -m`
+    # invocation from the repo root, proving the import-only framework package
+    # and the cross-pipeline import (selection -> ingest) resolve on sys.path.
     import subprocess
     import sys
 
-    result = subprocess.run(
-        [sys.executable, "-m", "pipelines.demo_source_to_selection", str(tmp_path)],
-        capture_output=True,
-        text=True,
-        cwd=Path(__file__).resolve().parent.parent.parent,
-    )
-    assert result.returncode == 0
-    assert "SelectionPool" in result.stdout
+    for module in ("pipelines.ingest.pipeline", "pipelines.selection.pipeline"):
+        result = subprocess.run(
+            [sys.executable, "-m", module, str(tmp_path)],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+        assert result.returncode == 0, result.stderr
 
 ```

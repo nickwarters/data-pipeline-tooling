@@ -4,7 +4,8 @@
 A Case Type's **schema** is an ordinary dataclass whose annotations *are* the
 contract: each field is a column name and its declared Python type, optionally
 carrying ``Annotated`` value rules. ``SchemaValidator`` checks a ``Dataset``'s
-columns + dtypes + nullability + value rules at the **silver** boundary
+columns + dtypes + nullability + value rules + cross-field **row checks**
+(declared via the ``@row_checks`` class decorator) at the **silver** boundary
 (post-validator), reporting every breach at once in one located message before
 downstream logic touches the data.
 
@@ -24,12 +25,17 @@ only the dataset's engine-agnostic shape), it inspects column *dtypes* and
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import fields
-from typing import get_type_hints
+from typing import TYPE_CHECKING, get_type_hints
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 from framework._internal.schema import (
     _DTYPE_CHECKS,
     _declared_fields,
+    _declared_row_checks,
     _declared_rules,
     _unwrap,
 )
@@ -74,6 +80,7 @@ class SchemaValidator:
         self._schema = schema
         self._expected = _declared_fields(schema)
         self._rules = _declared_rules(schema)
+        self._row_checks = _declared_row_checks(schema)
         self._nullable = _declared_nullability(schema)
         # Fail at build time on a type the adapter cannot map to a dtype, so a
         # mis-declared schema surfaces where it is composed, not mid-run.
@@ -120,9 +127,43 @@ class SchemaValidator:
                 breach = rule.check(frame[name])
                 if breach is not None:
                     problems.append(f"column {name!r} {breach}")
+        # Row checks run last, over the relationship between a row's fields. A
+        # check is skipped when any column it spans is missing or ill-typed —
+        # the same per-column guard the value rules get, so a broken column
+        # suppresses the check rather than crashing it. Every breaching row's
+        # phrase is collected (deduplicated) into the one located message.
+        problems.extend(self._row_check_problems(frame, present, ill_typed))
         if problems:
             raise ValidationError(
                 f"{self._schema.__name__} schema: " + "; ".join(problems)
             )
+
+    def _row_check_problems(
+        self,
+        frame: "pd.DataFrame",  # noqa: F821
+        present: set[str],
+        ill_typed: set[str],
+    ) -> list[str]:
+        """Collect every breaching row's phrase across the declared row checks.
+
+        A check whose footprint includes a missing or ill-typed column is
+        skipped (its column is the prior problem to fix). For the rest, the
+        check runs over every row; distinct breach phrases are reported with the
+        number of rows that hit them, so one message names the full spread.
+        """
+        problems: list[str] = []
+        for rc in self._row_checks:
+            spanned = set(rc.columns)
+            if spanned - present or spanned & ill_typed:
+                continue
+            phrases = Counter(
+                phrase
+                for _, row in frame.iterrows()
+                if (phrase := rc.check(row)) is not None
+            )
+            for phrase, count in phrases.items():
+                rows = "row" if count == 1 else "rows"
+                problems.append(f"{phrase} ({count} {rows})")
+        return problems
 
 ```

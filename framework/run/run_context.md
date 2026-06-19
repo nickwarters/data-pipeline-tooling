@@ -69,8 +69,8 @@ class RunContext:
         self._run_summary_recorded = True
 
     def _default_logical_run_id(self) -> str:
-        if self.case_type and self.pipeline:
-            return f"{self.case_type}/{self.pipeline}:{self.run_date.isoformat()}"
+        if self.pipeline:
+            return f"{self.label}:{self.run_date.isoformat()}"
         return self.execution_id
 
 

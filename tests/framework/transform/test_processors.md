@@ -25,14 +25,17 @@ from framework.transform.processors import (
     DeriveKey,
     DropColumns,
     Filter,
+    JoinColumns,
     JoinDependency,
     JoinWith,
     LatestPerKey,
+    Parse,
     Rename,
     SamplePerGroup,
     Score,
     SelectColumns,
     Sort,
+    SplitColumn,
     Stamp,
     TopNPerGroup,
     Unpivot,
@@ -986,5 +989,189 @@ def test_per_group_processors_conform_to_the_processor_protocol():
 
     assert isinstance(TopNPerGroup(key="adviser", by="score", n=1), Processor)
     assert isinstance(SamplePerGroup(key="adviser", n=1, seed=0), Processor)
+
+
+# --- Parse -----------------------------------------------------------------
+
+
+def test_parse_decodes_a_json_column_into_structured_values():
+    # The default parser (json.loads) turns a packed JSON text column into the
+    # dict/list values a downstream reshape can read.
+    dataset = Dataset.from_pandas(
+        pd.DataFrame(
+            {
+                "case_ref": ["c1", "c2"],
+                "payload": ['{"score": 10}', '[1, 2, 3]'],
+            }
+        )
+    )
+
+    result = Parse("payload").process(dataset).to_pandas()
+
+    assert result.loc[0, "payload"] == {"score": 10}
+    assert result.loc[1, "payload"] == [1, 2, 3]
+
+
+def test_parse_applies_a_custom_parser_to_several_columns():
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"a": ["1", "2"], "b": ["3", "4"], "c": ["x", "y"]})
+    )
+
+    result = Parse(["a", "b"], parser=int).process(dataset).to_pandas()
+
+    assert list(result["a"]) == [1, 2]
+    assert list(result["b"]) == [3, 4]
+    assert list(result["c"]) == ["x", "y"]  # untouched
+
+
+def test_parse_raises_on_missing_column():
+    dataset = Dataset.from_pandas(pd.DataFrame({"a": ["1"]}))
+
+    with pytest.raises(ValueError, match="nope"):
+        Parse(["a", "nope"]).process(dataset)
+
+
+def test_parse_on_empty_feed_returns_empty_feed():
+    dataset = Dataset.from_pandas(pd.DataFrame({"payload": pd.Series([], dtype=object)}))
+
+    result = Parse("payload").process(dataset)
+
+    assert isinstance(result, Dataset)
+    assert len(result) == 0
+
+
+# --- SplitColumn -----------------------------------------------------------
+
+
+def test_split_column_fans_a_delimited_column_into_several():
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"case_ref": ["c1"], "full_name": ["Ada,Lovelace"]})
+    )
+
+    result = (
+        SplitColumn("full_name", ["first", "last"])
+        .process(dataset)
+        .to_pandas()
+    )
+
+    assert result.loc[0, "first"] == "Ada"
+    assert result.loc[0, "last"] == "Lovelace"
+    # source column dropped by default
+    assert "full_name" not in result.columns
+
+
+def test_split_column_keeps_trailing_delimiters_in_the_final_column():
+    # More parts than destinations: the excess stays in the last column rather
+    # than spilling into columns `into` never named.
+    dataset = Dataset.from_pandas(pd.DataFrame({"path": ["a/b/c/d"]}))
+
+    result = SplitColumn("path", ["head", "rest"], sep="/").process(dataset).to_pandas()
+
+    assert result.loc[0, "head"] == "a"
+    assert result.loc[0, "rest"] == "b/c/d"
+
+
+def test_split_column_pads_missing_parts_with_none():
+    dataset = Dataset.from_pandas(pd.DataFrame({"pair": ["only"]}))
+
+    result = SplitColumn("pair", ["first", "second"]).process(dataset).to_pandas()
+
+    assert result.loc[0, "first"] == "only"
+    assert result.loc[0, "second"] is None
+
+
+def test_split_column_can_overwrite_the_source_in_place():
+    dataset = Dataset.from_pandas(pd.DataFrame({"v": ["a,b"]}))
+
+    result = SplitColumn("v", ["v", "extra"]).process(dataset).to_pandas()
+
+    assert result.loc[0, "v"] == "a"
+    assert result.loc[0, "extra"] == "b"
+
+
+def test_split_column_can_keep_the_source():
+    dataset = Dataset.from_pandas(pd.DataFrame({"v": ["a,b"]}))
+
+    result = SplitColumn("v", ["x", "y"], drop=False).process(dataset).to_pandas()
+
+    assert "v" in result.columns
+
+
+def test_split_column_raises_on_missing_column():
+    dataset = Dataset.from_pandas(pd.DataFrame({"a": ["x"]}))
+
+    with pytest.raises(ValueError, match="nope"):
+        SplitColumn("nope", ["a", "b"]).process(dataset)
+
+
+def test_split_column_on_empty_feed_returns_empty_with_destination_columns():
+    dataset = Dataset.from_pandas(pd.DataFrame({"v": pd.Series([], dtype=object)}))
+
+    result = SplitColumn("v", ["x", "y"]).process(dataset).to_pandas()
+
+    assert len(result) == 0
+    assert {"x", "y"}.issubset(result.columns)
+
+
+# --- JoinColumns -----------------------------------------------------------
+
+
+def test_join_columns_recombines_several_columns_into_one():
+    dataset = Dataset.from_pandas(
+        pd.DataFrame({"first": ["Ada"], "last": ["Lovelace"]})
+    )
+
+    result = (
+        JoinColumns(["first", "last"], "full_name", sep=" ")
+        .process(dataset)
+        .to_pandas()
+    )
+
+    assert result.loc[0, "full_name"] == "Ada Lovelace"
+    # sources kept by default
+    assert {"first", "last"}.issubset(result.columns)
+
+
+def test_join_columns_is_the_inverse_of_split_column():
+    dataset = Dataset.from_pandas(pd.DataFrame({"full_name": ["Ada,Lovelace"]}))
+
+    split = SplitColumn("full_name", ["first", "last"]).process(dataset)
+    rejoined = JoinColumns(["first", "last"], "full_name").process(split).to_pandas()
+
+    assert rejoined.loc[0, "full_name"] == "Ada,Lovelace"
+
+
+def test_join_columns_stringifies_non_text_values():
+    dataset = Dataset.from_pandas(pd.DataFrame({"a": [1], "b": [2]}))
+
+    result = JoinColumns(["a", "b"], "key", sep="-").process(dataset).to_pandas()
+
+    assert result.loc[0, "key"] == "1-2"
+
+
+def test_join_columns_can_drop_the_sources():
+    dataset = Dataset.from_pandas(pd.DataFrame({"a": ["x"], "b": ["y"], "c": ["z"]}))
+
+    result = JoinColumns(["a", "b"], "key", drop=True).process(dataset).to_pandas()
+
+    assert "a" not in result.columns
+    assert "b" not in result.columns
+    assert "c" in result.columns  # untouched
+    assert result.loc[0, "key"] == "x,y"
+
+
+def test_join_columns_raises_on_missing_column():
+    dataset = Dataset.from_pandas(pd.DataFrame({"a": ["x"]}))
+
+    with pytest.raises(ValueError, match="nope"):
+        JoinColumns(["a", "nope"], "key").process(dataset)
+
+
+def test_parse_split_join_conform_to_the_processor_protocol():
+    from framework.transform.processors import Processor
+
+    assert isinstance(Parse("a"), Processor)
+    assert isinstance(SplitColumn("a", ["b", "c"]), Processor)
+    assert isinstance(JoinColumns(["a", "b"], "c"), Processor)
 
 ```

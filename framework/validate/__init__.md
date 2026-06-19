@@ -7,9 +7,11 @@ reshaping it. Two groups:
 - the ``validate(dataset)`` structural / volume / uniqueness checks
   (``ColumnValidator`` & friends) that raise :class:`ValidationError` on breach;
 - the **declared-schema contract**: ``SchemaValidator`` checks a dataset against
-  a Case Type dataclass (columns + dtypes + nullability + value rules), and the
-  value rules (``ValueRule`` / ``Nullable`` / ``NonNull`` / ``Pattern`` /
-  ``Length`` / ``Range`` / ``Unique`` / ``OneOf``) declared on its fields.
+  a Case Type dataclass (columns + dtypes + nullability + value rules + row
+  checks), the value rules (``ValueRule`` / ``Nullable`` / ``NonNull`` /
+  ``Pattern`` / ``Length`` / ``Range`` / ``Unique`` / ``OneOf``) declared on its
+  fields, and the cross-field ``RowCheck``s declared via the ``row_checks`` class
+  decorator.
 
 Compose them onto a ``framework.run`` ``Pipeline`` as pre/post validators. The
 *coerce* half of the schema adapter — ``SchemaCoercion`` — lives on
@@ -25,7 +27,7 @@ layout: re-exports here are the public contract, the submodule paths are not. Se
 ``docs/public-api.md``.
 """
 
-from framework._internal.schema import ValueRule
+from framework._internal.schema import RowCheck, ValueRule, row_checks
 from framework.validate.schema import SchemaValidator
 from framework.validate.validators import (
     ColumnValidator,
@@ -62,6 +64,8 @@ __all__ = [
     # Declared-schema contract + value rules
     "SchemaValidator",
     "ValueRule",
+    "RowCheck",
+    "row_checks",
     "Nullable",
     "NonNull",
     "Pattern",

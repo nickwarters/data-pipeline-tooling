@@ -7,6 +7,7 @@ from dataclasses import fields
 
 from framework.core import RAW, SILVER
 from framework.io import StoreCatalog
+from framework.run import RunContext
 from framework.testing import read_rows
 
 from .case_type import CASE_TYPE
@@ -22,7 +23,7 @@ def test_case_type_declares_its_identity_contract():
 
 
 def test_source_lands_in_raw_then_conforms_to_silver(tmp_path):
-    silver = run(tmp_path)
+    silver = run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
 
     store = StoreCatalog(tmp_path).store(FEED_NAME)
 

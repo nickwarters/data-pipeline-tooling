@@ -52,6 +52,7 @@ from framework.run.runner import (
     FreshnessRequirement,
     PipelineRunner,
     UnknownPipelineError,
+    run_pipeline,
 )
 from framework.run.stages import (
     CheckpointStage,
@@ -84,6 +85,7 @@ __all__ = [
     "OrchestrationPassResult",
     "OrchestrationStore",
     "PipelineRunner",
+    "run_pipeline",
     "RunContext",
     "FreshnessRequirement",
     "FreshnessError",

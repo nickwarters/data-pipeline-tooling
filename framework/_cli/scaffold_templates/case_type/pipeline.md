@@ -10,50 +10,54 @@ into gold — a single-feed current reduce, a multi-feed join enriching one Case
 Type, Detail Tables — is unique per Case Type, so the gold step is left to you.
 Its shape is sketched at the foot of ``run``.
 
-Run it as a module from the repo root so the import-only ``framework`` package
-resolves on ``sys.path``::
+Address it by its location on disk -- the framework imports
+``pipelines.myfeed.pipeline`` and runs its ``run(context)`` callable::
+
+    python -m framework run pipelines/myfeed [BASE_DIR]
+
+or run the module directly with a default run context::
 
     python -m pipelines.myfeed.pipeline [BASE_DIR]
+
+Both run from the repo root so the import-only ``framework`` package resolves on
+``sys.path``.
 """
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
 from framework.core import RAW, SILVER, Dataset, PipelineError, format_failure
 from framework.io import AccumulateByRun, CsvReader, StoreCatalog
 from framework.recipes import raw_to_silver
-from framework.run import Pipeline
+from framework.run import Pipeline, RunContext
 
 from .case_type import CASE_TYPE
 
 FEED_NAME = "myfeed"
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "myfeed.csv"
 
-# A fixed logical run id so the bundled sample is deterministic and idempotent
-# (re-running replaces the same run). A real feed derives this per run, e.g.
-# ``AccumulateByRun.from_context(context)`` under a ``PipelineRunner``.
-RUN_ID = "2026-01-01"
+# Pipelines this feed depends on being fresh before it runs (a tuple of
+# ``framework.run.FreshnessRequirement``). A source ingest has none.
+UPSTREAMS = ()
 
 
-def run(
-    base_dir: str | os.PathLike[str],
-    csv_path: str | os.PathLike[str] = SAMPLE_CSV,
-) -> Dataset:
-    """Refine the feed source -> raw -> silver under ``base_dir``; return silver.
+def run(context: RunContext) -> Dataset:
+    """Refine the feed source -> raw -> silver under the run context; return silver.
 
     raw accumulates a faithful copy of the source (the system of record); silver
     accumulates the schema-coerced, schema-validated record. Identity is declared
-    on the Case Type (``case_type.py``), ready for the gold step you add.
+    on the Case Type (``case_type.py``), ready for the gold step you add. The
+    accumulation strategy is derived from the ``RunContext``, so a re-run under the
+    same logical run id (``--logical-run-id``) replaces that business run's rows.
     """
-    store = StoreCatalog(base_dir).store(FEED_NAME)
+    store = StoreCatalog(context.base_dir).store(FEED_NAME)
     # Raw + silver accumulate the change-over-time record under one logical run
     # id so re-drives replace the intended business run.
-    strategy = AccumulateByRun(RUN_ID, RUN_ID)
+    strategy = AccumulateByRun.from_context(context)
 
-    Pipeline(FEED_NAME, CsvReader(csv_path)).write_to(
+    Pipeline(FEED_NAME, CsvReader(SAMPLE_CSV)).write_to(
         store.writer(RAW, FEED_NAME, strategy)
     ).run()
 
@@ -77,11 +81,13 @@ def run(
 
 def main(argv: list[str]) -> int:
     base_dir = Path(argv[1]) if len(argv) > 1 else Path.cwd() / "data"
-    # Fail-fast: a Validator breach aborts the refine and raises a PipelineError.
-    # Present the family cleanly so an expected data failure reads as a clear
-    # message, not an unhandled traceback; a genuine bug keeps its stack trace.
+    # Direct invocation builds a default run context and runs the same handler the
+    # framework would. Fail-fast: a Validator breach aborts the refine and raises
+    # a PipelineError. Present the family cleanly so an expected data failure reads
+    # as a clear message, not an unhandled traceback; a genuine bug keeps its trace.
+    context = RunContext(base_dir=base_dir, pipeline=FEED_NAME)
     try:
-        silver = run(base_dir)
+        silver = run(context)
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1
