@@ -749,7 +749,7 @@ test('HttpSharePointClient: searchPeople throws on a non-ok response', async () 
   ]);
   const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
 
-  await assert.rejects(() => client.searchPeople('x'), /searchPeople failed: 500/);
+  await assert.rejects(() => client.searchPeople('x'), /HTTP Error: 500/);
 });
 
 // --- resolveUsers ---

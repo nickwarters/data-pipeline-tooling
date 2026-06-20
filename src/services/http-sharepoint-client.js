@@ -49,12 +49,13 @@ export class HttpSharePointClient {
   /** @param {string} id @returns {Promise<CaseRow|null>} */
   async getCase(id) {
     const url = this._listItemUrl(this._caseListName, id);
-    const res = await this._read(url);
-    if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`getCase ${id} failed: ${res.status}`);
-    const body = /** @type {Record<string, unknown>} */ (await res.json());
-    const etag = res.headers.get('ETag') ?? '';
-    return rowFromItem(body, etag);
+    try {
+      const body = await this._read(url);
+      return rowFromItem(body, readEtag(body));
+    } catch (err) {
+      if (/** @type {any} */ (err).status === 404) return null;
+      throw err;
+    }
   }
 
   /**
@@ -66,26 +67,20 @@ export class HttpSharePointClient {
   async patchCase(id, fields, etag) {
     const url = this._listItemUrl(this._caseListName, id);
     const body = JSON.stringify(itemFromRow(fields));
-    const res = await this._write(url, 'PATCH', { 'If-Match': etag }, body);
-
-    if (res.status === 412) return { ok: false, status: 412 };
-    if (!res.ok) return { ok: false, status: res.status };
-
-    const newEtag = res.headers.get('ETag') ?? '';
-    /** @type {CaseRow|null} */
-    let row;
-    if (res.status === 204) {
-      row = await this.getCase(id);
-      if (!row) return { ok: false, status: 404 };
-    } else {
-      const json = /** @type {Record<string, unknown>} */ (await res.json());
-      row = rowFromItem(json, newEtag);
+    try {
+      const data = await this._write(url, 'PATCH', { 'If-Match': etag }, body);
+      if (data === null) {
+        const row = await this.getCase(id);
+        if (!row) return { ok: false, status: 404 };
+        return { ok: true, status: 204, data: row };
+      }
+      const newEtag = readEtag(data);
+      const row = rowFromItem(data, newEtag);
+      return { ok: true, status: 200, data: { ...row, etag: newEtag || row.etag } };
+    } catch (err) {
+      const status = /** @type {any} */ (err).status || 500;
+      return { ok: false, status };
     }
-    return {
-      ok: true,
-      status: res.status,
-      data: { ...row, etag: newEtag || row.etag },
-    };
   }
 
   /** @param {string[]} ids @returns {Promise<QuestionDefinition[]>} */
@@ -142,9 +137,7 @@ export class HttpSharePointClient {
 
   /** @returns {Promise<CurrentUser>} */
   async getCurrentUser() {
-    const res = await this._read(this._absolute('/_api/web/currentUser'));
-    if (!res.ok) throw new Error(`getCurrentUser failed: ${res.status}`);
-    const body = /** @type {Record<string, unknown>} */ (await res.json());
+    const body = await this._read(this._absolute('/_api/web/currentUser'));
     return {
       id: String(body?.Id ?? body?.LoginName ?? ''),
       displayName: String(body?.Title ?? body?.LoginName ?? ''),
@@ -180,10 +173,7 @@ export class HttpSharePointClient {
       },
     });
 
-    const res = await this._write(url, 'POST', {}, body);
-    if (!res.ok) throw new Error(`searchPeople failed: ${res.status}`);
-
-    const json = /** @type {Record<string, unknown>} */ (await res.json());
+    const json = await this._write(url, 'POST', {}, body);
     const raw =
       json?.value ??
       /** @type {any} */ (json?.d)?.ClientPeoplePickerSearchUser;
@@ -222,18 +212,44 @@ export class HttpSharePointClient {
     const url = this._absolute(
       `/_api/SP.UserProfiles.PeopleManager/GetPropertiesFor(accountName=@v)?@v='${encodeURIComponent(login)}'`
     );
-    const res = await this._read(url);
-    if (!res.ok) return null;
-    const body = /** @type {Record<string, unknown>} */ (await res.json());
-    const name = body?.DisplayName;
-    return typeof name === 'string' && name !== '' ? name : null;
+    try {
+      const body = await this._read(url);
+      const name = body?.DisplayName;
+      return typeof name === 'string' && name !== '' ? name : null;
+    } catch (err) {
+      return null;
+    }
   }
 
   // --- internals -----------------------------------------------------------
 
-  /** @param {string} url @returns {Promise<Response>} */
+  /**
+   * @param {string} url
+   * @param {RequestInit} [options]
+   * @returns {Promise<any>}
+   */
+  async _request(url, options) {
+    const res = await this._fetchWithThrottle(url, options);
+    if (!res.ok) {
+      const err = new Error(`HTTP Error: ${res.status}`);
+      // @ts-ignore
+      err.status = res.status;
+      throw err;
+    }
+    if (res.status === 204) return null;
+    const data = await res.json();
+    if (data && typeof data === 'object') {
+      const etag = res.headers.get('ETag');
+      if (etag && !data['odata.etag']) {
+        data['odata.etag'] = etag;
+      }
+    }
+    return data;
+  }
+
+  /** @param {string} url @returns {Promise<any>} */
   async _read(url) {
-    return this._fetchWithThrottle(url, {
+    return this._request(url, {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: ACCEPT_JSON },
@@ -251,9 +267,7 @@ export class HttpSharePointClient {
     /** @type {string | null} */
     let url = initialUrl;
     while (url) {
-      const res = await this._read(url);
-      if (!res.ok) throw new Error(`GET ${url} failed: ${res.status}`);
-      const body = /** @type {Record<string, unknown>} */ (await res.json());
+      const body = await this._read(url);
       const items = Array.isArray(body?.value)
         ? body.value
         : Array.isArray(/** @type {any} */ (body?.d)?.results)
@@ -275,15 +289,17 @@ export class HttpSharePointClient {
    * @param {string} method
    * @param {Record<string, string>} extraHeaders
    * @param {string|null} body
-   * @returns {Promise<Response>}
+   * @returns {Promise<any>}
    */
   async _write(url, method, extraHeaders, body) {
     const digest = await this._ensureDigest();
-    let res = await this._fetchWithThrottle(url, buildWriteInit(method, digest, extraHeaders, body));
-    if (res.status !== 403) return res;
-
-    const fresh = await this._refreshDigest();
-    return this._fetchWithThrottle(url, buildWriteInit(method, fresh, extraHeaders, body));
+    try {
+      return await this._request(url, buildWriteInit(method, digest, extraHeaders, body));
+    } catch (err) {
+      if (/** @type {any} */ (err).status !== 403) throw err;
+      const fresh = await this._refreshDigest();
+      return this._request(url, buildWriteInit(method, fresh, extraHeaders, body));
+    }
   }
 
   /** @returns {Promise<string>} */
@@ -294,13 +310,11 @@ export class HttpSharePointClient {
 
   /** @returns {Promise<string>} */
   async _refreshDigest() {
-    const res = await this._fetchWithThrottle(this._absolute('/_api/contextinfo'), {
+    const body = await this._request(this._absolute('/_api/contextinfo'), {
       method: 'POST',
       credentials: 'include',
       headers: { Accept: ACCEPT_JSON },
     });
-    if (!res.ok) throw new Error(`form digest fetch failed: ${res.status}`);
-    const body = /** @type {Record<string, unknown>} */ (await res.json());
     const flat = /** @type {string|undefined} */ (body?.FormDigestValue);
     const verbose = /** @type {string|undefined} */ (
       /** @type {any} */ (body?.d)?.GetContextWebInformation?.FormDigestValue
