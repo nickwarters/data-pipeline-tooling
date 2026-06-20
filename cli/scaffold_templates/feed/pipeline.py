@@ -159,9 +159,21 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv[1:])
     base_dir = Path(args.base_dir) if args.base_dir else Path.cwd() / "data"
 
-    context = RunContext(base_dir=base_dir, pipeline=FEED_NAME)
+    from framework.run.runner import PipelineRunner
+    
+    def handler(ctx: RunContext) -> Dataset:
+        return run(ctx, describe=args.describe)
+
+    runner = PipelineRunner()
+    runner.register(
+        case_type="",
+        pipeline=FEED_NAME,
+        handler=handler,
+        freshness=UPSTREAMS,
+    )
+
     try:
-        run(context, describe=args.describe)
+        runner.run("", FEED_NAME, base_dir=base_dir)
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1

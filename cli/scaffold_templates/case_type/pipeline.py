@@ -91,16 +91,22 @@ def run(context: RunContext) -> Dataset:
 
 def main(argv: list[str]) -> int:
     base_dir = Path(argv[1]) if len(argv) > 1 else Path.cwd() / "data"
-    # Direct invocation builds a default run context and runs the same handler the
-    # framework would. Fail-fast: a Validator breach aborts the refine and raises
-    # a PipelineError. Present the family cleanly so an expected data failure reads
-    # as a clear message, not an unhandled traceback; a genuine bug keeps its trace.
-    context = RunContext(base_dir=base_dir, pipeline=FEED_NAME)
+    
+    from framework.run.runner import PipelineRunner
+    runner = PipelineRunner()
+    runner.register(
+        case_type=CASE_TYPE.name,
+        pipeline=FEED_NAME,
+        handler=run,
+        freshness=UPSTREAMS,
+    )
+
     try:
-        silver = run(context)
+        silver = runner.run(CASE_TYPE.name, FEED_NAME, base_dir=base_dir)
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1
+    
     print(
         f"Refined {len(silver)} rows source -> raw -> silver for Case Type "
         f"'{CASE_TYPE.name}' under {Path(base_dir) / FEED_NAME} "
