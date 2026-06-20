@@ -42,13 +42,13 @@ class StubEl {
 (/** @type {any} */ (globalThis)).customElements = { define() {} };
 
 // ===== IMPORTS =====
-const { CRDashboardTable } = await import('../src/components/cr-dashboard-table.js');
+const { CRDataTable } = await import('../src/components/cr-data-table.js');
 
 // ===== HELPERS =====
 
 /** @returns {any} */
 function makeTable() {
-  const t = new CRDashboardTable();
+  const t = new CRDataTable();
   t.columns = [
     { key: 'name', label: 'Name', sortable: true, getValue: (/** @type {any} */ r) => r.name },
     { key: 'age', label: 'Age', getValue: (/** @type {any} */ r) => r.age },
@@ -77,25 +77,25 @@ function findAll(/** @type {any} */ root, /** @type {string} */ tag) {
 
 // ===== TESTS =====
 
-test('CRDashboardTable: renders a table with thead and tbody', () => {
+test('CRDataTable: renders a table with thead and tbody', () => {
   const t = makeTable();
   assert.equal(findAll(t, 'table').length, 1);
   assert.equal(findAll(t, 'thead').length, 1);
   assert.equal(findAll(t, 'tbody').length, 1);
 });
 
-test('CRDashboardTable: renders one th per column', () => {
+test('CRDataTable: renders one th per column', () => {
   const t = makeTable();
   assert.equal(findAll(t, 'th').length, 2);
 });
 
-test('CRDashboardTable: renders one tr per row in tbody', () => {
+test('CRDataTable: renders one tr per row in tbody', () => {
   const t = makeTable();
   const tbody = findAll(t, 'tbody')[0];
   assert.equal(tbody._children.length, 3);
 });
 
-test('CRDashboardTable: set sort(null) clears sort key', () => {
+test('CRDataTable: set sort(null) clears sort key', () => {
   const t = makeTable();
   // Set a sort first
   t.sort = { key: 'name', dir: 'asc' };
@@ -107,7 +107,7 @@ test('CRDashboardTable: set sort(null) clears sort key', () => {
   assert.deepEqual(names, ['Alice', 'Bob', 'Carol']);
 });
 
-test('CRDashboardTable: set sort with desc direction sorts descending', () => {
+test('CRDataTable: set sort with desc direction sorts descending', () => {
   const t = makeTable();
   t.sort = { key: 'name', dir: 'desc' };
   const tbody = findAll(t, 'tbody')[0];
@@ -115,7 +115,7 @@ test('CRDashboardTable: set sort with desc direction sorts descending', () => {
   assert.deepEqual(names, ['Carol', 'Bob', 'Alice']);
 });
 
-test('CRDashboardTable: set sort without dir defaults to asc', () => {
+test('CRDataTable: set sort without dir defaults to asc', () => {
   const t = makeTable();
   t.sort = { key: 'name' };
   const tbody = findAll(t, 'tbody')[0];
@@ -123,7 +123,7 @@ test('CRDashboardTable: set sort without dir defaults to asc', () => {
   assert.deepEqual(names, ['Alice', 'Bob', 'Carol']);
 });
 
-test('CRDashboardTable: clicking header sorts and second click reverses', () => {
+test('CRDataTable: clicking header sorts and second click reverses', () => {
   const t = makeTable();
   const headerBtns = findAll(t, 'button').filter(b => b.textContent === 'Name');
   assert.equal(headerBtns.length, 1);
@@ -139,15 +139,15 @@ test('CRDashboardTable: clicking header sorts and second click reverses', () => 
   assert.deepEqual(names2, ['Carol', 'Bob', 'Alice']);
 });
 
-test('CRDashboardTable: connectedCallback is idempotent (second call is no-op)', () => {
+test('CRDataTable: connectedCallback is idempotent (second call is no-op)', () => {
   const t = makeTable();
   const firstChild = (/** @type {any} */ (t))._children[0];
   t.connectedCallback();
   assert.equal((/** @type {any} */ (t))._children[0], firstChild, 'second connectedCallback must not rebuild');
 });
 
-test('CRDashboardTable: renderCell used when provided, else getValue', () => {
-  const t = new CRDashboardTable();
+test('CRDataTable: renderCell used when provided, else getValue', () => {
+  const t = new CRDataTable();
   t.columns = [
     {
       key: 'label',
@@ -174,8 +174,8 @@ test('CRDashboardTable: renderCell used when provided, else getValue', () => {
   assert.equal(cells[2].textContent, '—', 'null/undefined getValue shows em-dash');
 });
 
-test('CRDashboardTable: renderCell returning a non-string node appends it', () => {
-  const t = new CRDashboardTable();
+test('CRDataTable: renderCell returning a non-string node appends it', () => {
+  const t = new CRDataTable();
   t.columns = [{
     key: 'node',
     label: 'Node',
@@ -192,8 +192,8 @@ test('CRDashboardTable: renderCell returning a non-string node appends it', () =
   assert.equal(td._children[0].textContent, 'child');
 });
 
-test('CRDashboardTable: renderCell returning null does not append anything', () => {
-  const t = new CRDashboardTable();
+test('CRDataTable: renderCell returning null does not append anything', () => {
+  const t = new CRDataTable();
   t.columns = [{
     key: 'node',
     label: 'Node',
@@ -206,8 +206,8 @@ test('CRDashboardTable: renderCell returning null does not append anything', () 
   assert.equal(td._children.length, 0, 'null renderCell appends nothing');
 });
 
-test('CRDashboardTable: rowClass is applied', () => {
-  const t = new CRDashboardTable();
+test('CRDataTable: rowClass is applied', () => {
+  const t = new CRDataTable();
   t.columns = [{ key: 'n', label: 'N', getValue: (/** @type {any} */ r) => r.n }];
   t.rowClass = (/** @type {any} */ r) => r.flag ? 'flagged' : '';
   t.rows = [{ n: 1, flag: true }, { n: 2, flag: false }];
@@ -217,8 +217,8 @@ test('CRDashboardTable: rowClass is applied', () => {
   assert.equal(tbody._children[1].className, '');
 });
 
-test('CRDashboardTable: onRowActivate fires on Enter keydown', () => {
-  const t = new CRDashboardTable();
+test('CRDataTable: onRowActivate fires on Enter keydown', () => {
+  const t = new CRDataTable();
   t.columns = [{ key: 'n', label: 'N', getValue: (/** @type {any} */ r) => r.n }];
   /** @type {any[]} */
   const activated = [];
@@ -234,7 +234,7 @@ test('CRDashboardTable: onRowActivate fires on Enter keydown', () => {
 
 // --- _onKeydown grid navigation ---
 
-test('CRDashboardTable: _onKeydown ignores non-arrow keys', () => {
+test('CRDataTable: _onKeydown ignores non-arrow keys', () => {
   const t = makeTable();
   const table = findAll(t, 'table')[0];
   // Should not throw or change focus
@@ -243,7 +243,7 @@ test('CRDashboardTable: _onKeydown ignores non-arrow keys', () => {
   assert.equal((/** @type {any} */ (globalThis))._lastFocused, null);
 });
 
-test('CRDashboardTable: _onKeydown ArrowRight moves to next cell in row', () => {
+test('CRDataTable: _onKeydown ArrowRight moves to next cell in row', () => {
   const t = makeTable();
   const table = findAll(t, 'table')[0];
   const tbody = findAll(t, 'tbody')[0];
@@ -256,7 +256,7 @@ test('CRDashboardTable: _onKeydown ArrowRight moves to next cell in row', () => 
   assert.equal((/** @type {any} */ (globalThis))._lastFocused, cell1, 'ArrowRight should move to next cell');
 });
 
-test('CRDashboardTable: _onKeydown ArrowLeft moves to previous cell in row', () => {
+test('CRDataTable: _onKeydown ArrowLeft moves to previous cell in row', () => {
   const t = makeTable();
   const table = findAll(t, 'table')[0];
   const tbody = findAll(t, 'tbody')[0];
@@ -269,7 +269,7 @@ test('CRDashboardTable: _onKeydown ArrowLeft moves to previous cell in row', () 
   assert.equal((/** @type {any} */ (globalThis))._lastFocused, cell0, 'ArrowLeft should move to previous cell');
 });
 
-test('CRDashboardTable: _onKeydown ArrowDown moves to cell below', () => {
+test('CRDataTable: _onKeydown ArrowDown moves to cell below', () => {
   const t = makeTable();
   const table = findAll(t, 'table')[0];
   const tbody = findAll(t, 'tbody')[0];
@@ -283,7 +283,7 @@ test('CRDashboardTable: _onKeydown ArrowDown moves to cell below', () => {
   assert.equal((/** @type {any} */ (globalThis))._lastFocused, cell10, 'ArrowDown should move one row down');
 });
 
-test('CRDashboardTable: _onKeydown ArrowUp moves to cell above', () => {
+test('CRDataTable: _onKeydown ArrowUp moves to cell above', () => {
   const t = makeTable();
   const table = findAll(t, 'table')[0];
   const tbody = findAll(t, 'tbody')[0];
@@ -297,7 +297,7 @@ test('CRDashboardTable: _onKeydown ArrowUp moves to cell above', () => {
   assert.equal((/** @type {any} */ (globalThis))._lastFocused, cell00, 'ArrowUp should move one row up');
 });
 
-test('CRDashboardTable: _onKeydown ArrowRight at last cell in row does not move', () => {
+test('CRDataTable: _onKeydown ArrowRight at last cell in row does not move', () => {
   const t = makeTable();
   const table = findAll(t, 'table')[0];
   const tbody = findAll(t, 'tbody')[0];
@@ -309,7 +309,7 @@ test('CRDashboardTable: _onKeydown ArrowRight at last cell in row does not move'
   assert.equal((/** @type {any} */ (globalThis))._lastFocused, lastCell, 'ArrowRight at last cell must not move');
 });
 
-test('CRDashboardTable: _onKeydown ArrowLeft at first cell does not move', () => {
+test('CRDataTable: _onKeydown ArrowLeft at first cell does not move', () => {
   const t = makeTable();
   const table = findAll(t, 'table')[0];
   const tbody = findAll(t, 'tbody')[0];
@@ -320,7 +320,7 @@ test('CRDashboardTable: _onKeydown ArrowLeft at first cell does not move', () =>
   assert.equal((/** @type {any} */ (globalThis))._lastFocused, firstCell, 'ArrowLeft at first cell must not move');
 });
 
-test('CRDashboardTable: _onKeydown ArrowUp at first row does not move', () => {
+test('CRDataTable: _onKeydown ArrowUp at first row does not move', () => {
   const t = makeTable();
   const table = findAll(t, 'table')[0];
   const tbody = findAll(t, 'tbody')[0];
@@ -331,7 +331,7 @@ test('CRDashboardTable: _onKeydown ArrowUp at first row does not move', () => {
   assert.equal((/** @type {any} */ (globalThis))._lastFocused, firstCell, 'ArrowUp at first row must not move');
 });
 
-test('CRDashboardTable: _onKeydown ArrowDown at last row does not move', () => {
+test('CRDataTable: _onKeydown ArrowDown at last row does not move', () => {
   const t = makeTable();
   const table = findAll(t, 'table')[0];
   const tbody = findAll(t, 'tbody')[0];
@@ -343,7 +343,7 @@ test('CRDashboardTable: _onKeydown ArrowDown at last row does not move', () => {
   assert.equal((/** @type {any} */ (globalThis))._lastFocused, lastCell, 'ArrowDown at last row must not move');
 });
 
-test('CRDashboardTable: _onKeydown when no cell is focused does nothing', () => {
+test('CRDataTable: _onKeydown when no cell is focused does nothing', () => {
   const t = makeTable();
   const table = findAll(t, 'table')[0];
 
@@ -352,8 +352,8 @@ test('CRDashboardTable: _onKeydown when no cell is focused does nothing', () => 
   assert.equal((/** @type {any} */ (globalThis))._lastFocused, null, 'no focused cell — must be a no-op');
 });
 
-test('CRDashboardTable: _onKeydown with no columns is a no-op', () => {
-  const t = new CRDashboardTable();
+test('CRDataTable: _onKeydown with no columns is a no-op', () => {
+  const t = new CRDataTable();
   t.columns = [];
   t.rows = [];
   t.connectedCallback();
@@ -363,8 +363,8 @@ test('CRDashboardTable: _onKeydown with no columns is a no-op', () => {
   assert.equal((/** @type {any} */ (globalThis))._lastFocused, null);
 });
 
-test('CRDashboardTable: sort with null getValue col is unsortable', () => {
-  const t = new CRDashboardTable();
+test('CRDataTable: sort with null getValue col is unsortable', () => {
+  const t = new CRDataTable();
   // Column declared sortable but has no getValue
   t.columns = [{ key: 'x', label: 'X', sortable: true }];
   t.rows = [{ x: 3 }, { x: 1 }, { x: 2 }];
@@ -375,8 +375,8 @@ test('CRDashboardTable: sort with null getValue col is unsortable', () => {
   assert.equal(tbody._children.length, 3);
 });
 
-test('CRDashboardTable: sort comparator handles null values (nulls sort last)', () => {
-  const t = new CRDashboardTable();
+test('CRDataTable: sort comparator handles null values (nulls sort last)', () => {
+  const t = new CRDataTable();
   t.columns = [{ key: 'n', label: 'N', sortable: true, getValue: (/** @type {any} */ r) => r.n }];
   t.rows = [{ n: 5 }, { n: null }, { n: 2 }];
   t.sort = { key: 'n', dir: 'asc' };
@@ -387,8 +387,8 @@ test('CRDashboardTable: sort comparator handles null values (nulls sort last)', 
   assert.equal(vals[vals.length - 1], '—', 'null last');
 });
 
-test('CRDashboardTable: sort comparator where both values are null keeps order stable', () => {
-  const t = new CRDashboardTable();
+test('CRDataTable: sort comparator where both values are null keeps order stable', () => {
+  const t = new CRDataTable();
   t.columns = [{ key: 'n', label: 'N', sortable: true, getValue: (/** @type {any} */ r) => r.n ?? null }];
   t.rows = [{ n: null }, { n: null }];
   t.sort = { key: 'n', dir: 'asc' };
@@ -397,8 +397,8 @@ test('CRDashboardTable: sort comparator where both values are null keeps order s
   assert.equal(tbody._children.length, 2, 'both-null comparison returns 0');
 });
 
-test('CRDashboardTable: sort comparator returns 0 for equal non-null values (stable)', () => {
-  const t = new CRDashboardTable();
+test('CRDataTable: sort comparator returns 0 for equal non-null values (stable)', () => {
+  const t = new CRDataTable();
   t.columns = [{ key: 'n', label: 'N', sortable: true, getValue: (/** @type {any} */ r) => r.n }];
   t.rows = [{ n: 5, id: 'a' }, { n: 5, id: 'b' }];
   t.sort = { key: 'n', dir: 'asc' };
@@ -408,8 +408,8 @@ test('CRDashboardTable: sort comparator returns 0 for equal non-null values (sta
   assert.equal(tbody._children.length, 2, 'equal non-null values: both rows remain');
 });
 
-test('CRDashboardTable: set rowClass to null falls back to no-op class function', () => {
-  const t = new CRDashboardTable();
+test('CRDataTable: set rowClass to null falls back to no-op class function', () => {
+  const t = new CRDataTable();
   t.columns = [{ key: 'n', label: 'N', getValue: (/** @type {any} */ r) => r.n }];
   t.rowClass = /** @type {any} */ (null); // covers `fn || (() => '')` when fn is falsy
   t.rows = [{ n: 1 }];
@@ -419,8 +419,8 @@ test('CRDashboardTable: set rowClass to null falls back to no-op class function'
   assert.equal(tbody._children[0].className, '', 'null rowClass must leave className empty');
 });
 
-test('CRDashboardTable: row keydown with non-Enter key is a no-op when onRowActivate is set', () => {
-  const t = new CRDashboardTable();
+test('CRDataTable: row keydown with non-Enter key is a no-op when onRowActivate is set', () => {
+  const t = new CRDataTable();
   t.columns = [{ key: 'n', label: 'N', getValue: (/** @type {any} */ r) => r.n }];
   /** @type {any[]} */
   const activated = [];

@@ -2,10 +2,10 @@
 import { ReactiveElement } from './reactive-element.js';
 import { signal, computed } from '../lib/signal.js';
 import { h } from '../lib/html.js';
-import { CRDashboardTable } from './cr-dashboard-table.js';
+import { CRDataTable } from './cr-data-table.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
-/** @typedef {import('./cr-dashboard-table.js').ColumnDef<CaseRow>} CaseColumn */
+/** @typedef {import('./cr-data-table.js').ColumnDef<CaseRow>} CaseColumn */
 
 /**
  * Default column set: Reference (link), Case Type, Related Date, Due Date,
@@ -102,7 +102,7 @@ export class CRCaseTable extends ReactiveElement {
       });
     });
 
-    /** @type {CRDashboardTable | null} */
+    /** @type {CRDataTable | null} */
     this._inner = null;
     /** @type {HTMLElement | null} */
     this._toolbar = null;
@@ -137,7 +137,7 @@ export class CRCaseTable extends ReactiveElement {
     }
 
     if (!this._inner) {
-      this._inner = new CRDashboardTable();
+      this._inner = new CRDataTable();
     }
 
     const columns = this._customColumns ?? defaultColumns(id => this._openCase(id));

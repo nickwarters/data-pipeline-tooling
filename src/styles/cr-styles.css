@@ -309,7 +309,7 @@ cr-status-banner {
 
 /* ── Dashboard table primitive ───────────────────────────────────────────── */
 
-[data-cr-root] .cr-dashboard-table {
+[data-cr-root] .cr-data-table {
   width: 100%;
   border-collapse: collapse;
   margin: var(--cr-space-3) 0;
@@ -317,8 +317,8 @@ cr-status-banner {
   background: var(--cr-color-surface);
 }
 
-[data-cr-root] .cr-dashboard-table th,
-[data-cr-root] .cr-dashboard-table td {
+[data-cr-root] .cr-data-table th,
+[data-cr-root] .cr-data-table td {
   text-align: left;
   padding: var(--cr-space-2) var(--cr-space-3);
   border-bottom: 1px solid var(--cr-color-border);
@@ -326,7 +326,7 @@ cr-status-banner {
   font-variant-numeric: tabular-nums;
 }
 
-[data-cr-root] .cr-dashboard-table thead th {
+[data-cr-root] .cr-data-table thead th {
   background: var(--cr-color-surface-2);
   font-size: var(--cr-font-size-xs);
   font-weight: var(--cr-font-weight-semibold);
@@ -336,7 +336,7 @@ cr-status-banner {
   border-bottom: 2px solid var(--cr-color-border);
 }
 
-[data-cr-root] .cr-dashboard-table thead th button {
+[data-cr-root] .cr-data-table thead th button {
   background: none;
   border: 0;
   padding: 0;
@@ -348,22 +348,22 @@ cr-status-banner {
   text-transform: inherit;
 }
 
-[data-cr-root] .cr-dashboard-table thead th[aria-sort="ascending"] button::after {
+[data-cr-root] .cr-data-table thead th[aria-sort="ascending"] button::after {
   content: " ▲";
   color: var(--cr-color-accent);
 }
 
-[data-cr-root] .cr-dashboard-table thead th[aria-sort="descending"] button::after {
+[data-cr-root] .cr-data-table thead th[aria-sort="descending"] button::after {
   content: " ▼";
   color: var(--cr-color-accent);
 }
 
-[data-cr-root] .cr-dashboard-table tbody tr:hover td {
+[data-cr-root] .cr-data-table tbody tr:hover td {
   background: var(--cr-color-surface-2);
 }
 
-[data-cr-root] .cr-dashboard-table tbody tr:focus,
-[data-cr-root] .cr-dashboard-table tbody td:focus {
+[data-cr-root] .cr-data-table tbody tr:focus,
+[data-cr-root] .cr-data-table tbody td:focus {
   outline: var(--cr-focus-outline);
   outline-offset: -2px;
 }

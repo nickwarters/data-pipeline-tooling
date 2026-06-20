@@ -15,7 +15,7 @@ import { h } from '../lib/html.js';
  * }} ColumnDef
  */
 
-export class CRDashboardTable extends ReactiveElement {
+export class CRDataTable extends ReactiveElement {
   constructor() {
     super();
 
@@ -93,7 +93,7 @@ export class CRDashboardTable extends ReactiveElement {
 
     let tbody;
 
-    const table = h('table', { class: 'cr-dashboard-table', role: 'grid', onkeydown: (/** @type {any} */ e) => this._onKeydown(e) },
+    const table = h('table', { class: 'cr-data-table', role: 'grid', onkeydown: (/** @type {any} */ e) => this._onKeydown(e) },
       h('thead', {},
         h('tr', {},
           ...cols.map(col => {
@@ -110,7 +110,7 @@ export class CRDashboardTable extends ReactiveElement {
           })
         )
       ),
-      tbody = h('tbody', { class: 'cr-dashboard-table-body' },
+      tbody = h('tbody', { class: 'cr-data-table-body' },
         ...rows.map(row => {
           const cls = this._rowClass(row);
           /** @type {any} */
@@ -190,4 +190,4 @@ export class CRDashboardTable extends ReactiveElement {
   }
 }
 
-customElements.define('cr-dashboard-table', CRDashboardTable);
+customElements.define('cr-data-table', CRDataTable);

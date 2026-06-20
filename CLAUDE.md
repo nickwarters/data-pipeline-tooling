@@ -63,7 +63,7 @@ src/
     cr-case-tabs.js
     cr-compile-drawer.js
     cr-conversation.js
-    cr-dashboard-table.js
+    cr-data-table.js
     cr-case-table.js
     cr-notes.js
     cr-options-editor.js
