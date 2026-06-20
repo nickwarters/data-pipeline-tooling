@@ -3,7 +3,8 @@
 import pytest
 
 from framework.core import PipelineError, format_failure
-from framework.run import FreshnessError, ForEachPipelineError, UnknownPipelineError
+from framework.run import FreshnessError, UnknownPipelineError
+from tools.orchestration import ForEachPipelineError
 from framework.transform import CoercionError
 from framework.validate import ValidationError
 

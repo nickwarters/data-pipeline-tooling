@@ -7,7 +7,7 @@ nothing is wrong with the data or the configuration, the I/O just needs another
 go. A schema-validation breach or a missing-file/configuration error is the
 opposite: retrying it only delays the inevitable abort and hides the real fault.
 
-`framework.shared.retry` keeps that distinction explicit and **scoped to the I/O edge**.
+`tools.retry` keeps that distinction explicit and **scoped to the I/O edge**.
 It is deliberately *not* a blanket wrapper around a whole run — validation and
 business rules are never retried, because retry lives at the `read()` / `write()`
 seam, and those checks live in the pipeline's stages, not the seam.
@@ -17,7 +17,7 @@ seam, and those checks live in the pipeline's stages, not the seam.
 Import through the `framework.shared` facade (see [public-api.md](public-api.md)):
 
 ```python
-from framework.shared import RetryPolicy, RetryingReader, RetryingWriter
+from tools.retry import RetryPolicy, RetryingReader, RetryingWriter
 ```
 
 ### `RetryPolicy` — what counts as transient

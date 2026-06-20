@@ -9,12 +9,11 @@ Use the public facade modules:
 - ``framework.validate`` for the ``validate(dataset)`` checks and the
   declared-schema contract.
 - ``framework.run`` for Pipeline, orchestration, RunLog, and RunRegistry.
-- ``framework.shared`` for cross-cutting utilities (retry).
 
 (``tests.framework_testing`` is a separate test-only surface; ``framework._internal``
 is private layout.)
 """
 
-from framework import core, io, run, shared, transform, validate
+from framework import core, io, run, transform, validate
 
-__all__ = ["core", "io", "transform", "validate", "run", "shared"]
+__all__ = ["core", "io", "transform", "validate", "run"]

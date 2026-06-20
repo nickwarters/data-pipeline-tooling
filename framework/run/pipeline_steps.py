@@ -299,7 +299,7 @@ class WriteStep(PipelineStep):
 def _drain_retry_attempts(component: object, metrics: StepMetrics) -> None:
     """Surface a retrying reader/writer's attempts as this step's warn_hits.
 
-    A :class:`~framework.shared.retry.RetryingReader` / ``RetryingWriter`` collects a
+    A :class:`~tools.retry.RetryingReader` / ``RetryingWriter`` collects a
     human note per retried attempt on ``retry_attempts``; draining them onto the
     open step's metrics records the attempts on the same correlated read/write
     record whose status already carries the final outcome. Duck-typed so this

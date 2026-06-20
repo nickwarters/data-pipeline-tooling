@@ -16,7 +16,7 @@ import pytest
 from framework.core.dataset import Dataset
 from framework.run.builder import Pipeline
 from framework.run.run_log import RunLog
-from framework.shared.retry import RetryingReader, RetryingWriter, RetryPolicy
+from tools.retry import RetryingReader, RetryingWriter, RetryPolicy
 
 
 class FlakyReader:
@@ -176,10 +176,3 @@ def test_policy_wraps_a_bare_remote_client_call():
     assert calls["n"] == 2
 
 
-def test_retry_surface_is_public_through_the_shared_facade():
-    # Pipeline authors reach retry through the stable framework.shared facade,
-    # not the internal framework.shared.retry module.
-    from framework import shared
-
-    assert {"RetryPolicy", "RetryingReader", "RetryingWriter"} <= set(shared.__all__)
-    assert shared.RetryPolicy is RetryPolicy

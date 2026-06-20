@@ -21,7 +21,7 @@ from framework.transform import Filter, VectorizedFilter, SchemaCoercion
 from framework.validate import ColumnValidator, SchemaValidator, ValidationError
 from framework.run import Pipeline, PipelineRunner, RunContext
 from framework.recipes import raw_to_silver, silver_to_gold
-from framework.shared import RetryPolicy, WorkingDayCalendar
+from tools.retry import RetryPolicy, WorkingDayCalendar
 ```
 
 For interactive discovery, `import framework` exposes only those facade modules:
