@@ -2,6 +2,7 @@
 import { ReactiveElement } from './reactive-element.js';
 import { h } from '../lib/html.js';
 import { isFailure } from '../evaluators/failure-evaluator.js';
+import { buildCaptureControl } from '../lib/capture-engine.js';
 import './cr-override-editor.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
@@ -161,7 +162,13 @@ export class CRAppeal extends ReactiveElement {
 
   /** @returns {HTMLElement} */
   _renderForm() {
-    const rationale = /** @type {HTMLTextAreaElement} */ (/** @type {unknown} */ (h('textarea', { className: 'cr-appeal-rationale', 'aria-label': 'Appeal rationale' })));
+    const rationale = /** @type {HTMLTextAreaElement} */ (buildCaptureControl(
+      { key: 'rationale', type: 'textarea', label: 'Appeal rationale' },
+      '',
+      () => {},
+      'cr-appeal-rationale'
+    ));
+    rationale.setAttribute('aria-label', 'Appeal rationale');
     
     /** @type {HTMLInputElement[]} */
     const checkboxes = [];
@@ -234,7 +241,13 @@ export class CRAppeal extends ReactiveElement {
    * @returns {HTMLElement}
    */
   _renderResolveForm(appeal) {
-    const rationale = /** @type {HTMLTextAreaElement} */ (/** @type {unknown} */ (h('textarea', { className: 'cr-appeal-resolution-rationale', 'aria-label': 'Resolution rationale' })));
+    const rationale = /** @type {HTMLTextAreaElement} */ (buildCaptureControl(
+      { key: 'rationale', type: 'textarea', label: 'Resolution rationale' },
+      '',
+      () => {},
+      'cr-appeal-resolution-rationale'
+    ));
+    rationale.setAttribute('aria-label', 'Resolution rationale');
     const error = h('p', { className: 'cr-appeal-resolution-error', hidden: true }, 'A rationale is required to resolve an Appeal.');
 
     return h('section', { className: 'cr-appeal-resolve' },

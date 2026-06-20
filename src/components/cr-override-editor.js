@@ -4,6 +4,7 @@ import { h } from '../lib/html.js';
 import { isFailure, materializeRemediationActions } from '../evaluators/failure-evaluator.js';
 import { classifyTransition, validateOverride, buildOverride } from '../evaluators/override-author.js';
 import { effectiveAnswers } from '../evaluators/effective-answers.js';
+import { buildCaptureControl } from '../lib/capture-engine.js';
 import './cr-attribute-menu.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
@@ -180,12 +181,13 @@ export class CROverrideEditor extends ReactiveElement {
 
     const errorEl = h('ul', { class: 'cr-override-error', hidden: true });
     
-    const reasoningEl = /** @type {any} */ (h('textarea', {
-      class: 'cr-override-reasoning',
-      'aria-label': 'Override reasoning',
-      oninput: (/** @type {any} */ e) => { this._draft.reasoning = e.target.value; }
-    }));
-    reasoningEl.value = this._draft.reasoning;
+    const reasoningEl = buildCaptureControl(
+      { key: 'reasoning', type: 'textarea', label: 'Reasoning' },
+      this._draft.reasoning,
+      (value) => { this._draft.reasoning = value; },
+      'cr-override-reasoning'
+    );
+    reasoningEl.setAttribute('aria-label', 'Override reasoning');
 
     return h('section', { class: 'cr-override-form' },
       h('label', {}, 'Which Answer is being corrected?'),
@@ -206,13 +208,12 @@ export class CROverrideEditor extends ReactiveElement {
    * @param {QuestionDefinition} question
    */
   _renderValueControl(question) {
-    const select = /** @type {any} */ (h('select', {
-      class: 'cr-override-value-control',
-      onchange: (/** @type {any} */ e) => this._onValue(e.target.value)
-    },
-      ...optionsFor(question).map(opt => buildOption(opt, opt))
-    ));
-    select.value = /** @type {string} */ (this._draft.value);
+    const select = buildCaptureControl(
+      { key: 'value', type: 'select', label: 'Replacement value', options: optionsFor(question) },
+      /** @type {string} */ (this._draft.value),
+      (value) => this._onValue(value),
+      'cr-override-value-control'
+    );
 
     return [
       h('label', {}, 'Replacement value'),
@@ -244,24 +245,12 @@ export class CROverrideEditor extends ReactiveElement {
 
     const detailFields = this.remediationFields.map(field => {
       const current = this._draft.remediationDetails[field.key] ?? '';
-      let control;
-      if (field.type === 'select') {
-        control = /** @type {any} */ (h('select', {
-          class: `cr-override-detail-${field.key}`,
-          onchange: (/** @type {any} */ e) => this._onDetail(field.key, e.target.value)
-        },
-          buildOption('', '—'),
-          ...(field.options ?? []).map(opt => buildOption(opt, opt))
-        ));
-        control.value = current;
-      } else {
-        control = h('input', {
-          type: 'text',
-          class: `cr-override-detail-${field.key}`,
-          value: current,
-          onchange: (/** @type {any} */ e) => this._onDetail(field.key, e.target.value)
-        });
-      }
+      const control = buildCaptureControl(
+        field,
+        current,
+        (value) => this._onDetail(field.key, value),
+        `cr-override-detail-${field.key}`
+      );
 
       return h('div', { class: 'cr-override-detail-field' },
         h('label', {}, field.required ? `${field.label} (required)` : field.label),

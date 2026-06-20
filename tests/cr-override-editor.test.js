@@ -155,7 +155,11 @@ function author(el, { answerKey, value, reasoning }) {
   if (reasoning !== undefined) {
     const r = findByClass(el, 'cr-override-reasoning');
     r.value = reasoning;
-    r._listeners['input'][0]({ target: r });
+    if (r._listeners['input']) {
+      r._listeners['input'][0]({ target: r });
+    } else {
+      r._listeners['change'][0]({ target: r });
+    }
   }
   findByClass(el, 'cr-override-submit')._listeners['click'][0]();
 }
@@ -302,7 +306,7 @@ test('CROverrideEditor: a satisfied pass→fail Override saves the complete repl
   // Reasoning + submit.
   const r = findByClass(el, 'cr-override-reasoning');
   r.value = 'Reviewer missed it.';
-  r._listeners['input'][0]({ target: r });
+  (r._listeners['change'] || r._listeners['input'])[0]({ target: r });
   findByClass(el, 'cr-override-submit')._listeners['click'][0]();
 
   assert.equal(queue.enqueued.length, 1);
@@ -329,7 +333,7 @@ test('CROverrideEditor: a select-type Remediation Detail is captured and saved',
   detail._listeners['change'][0]({ target: detail });
   const r = findByClass(el, 'cr-override-reasoning');
   r.value = 'Missed.';
-  r._listeners['input'][0]({ target: r });
+  (r._listeners['change'] || r._listeners['input'])[0]({ target: r });
   findByClass(el, 'cr-override-submit')._listeners['click'][0]();
 
   assert.equal(queue.enqueued[0].value[0].remediationDetails.severity, 'High');
@@ -357,7 +361,7 @@ test('CROverrideEditor: switching a chosen failing value back to a pass clears c
   assert.equal(findByClass(el, 'cr-override-detail-rootCause'), null);
   const r = findByClass(el, 'cr-override-reasoning');
   r.value = 'Actually fine.';
-  r._listeners['input'][0]({ target: r });
+  (r._listeners['change'] || r._listeners['input'])[0]({ target: r });
   findByClass(el, 'cr-override-submit')._listeners['click'][0]();
 
   const saved = queue.enqueued[0].value[0];
@@ -383,7 +387,7 @@ test('CROverrideEditor: clearing a captured detail (blank value) drops it from t
   detail._listeners['change'][0]({ target: detail });
   const r = findByClass(el, 'cr-override-reasoning');
   r.value = 'Missed.';
-  r._listeners['input'][0]({ target: r });
+  (r._listeners['change'] || r._listeners['input'])[0]({ target: r });
   findByClass(el, 'cr-override-submit')._listeners['click'][0]();
 
   assert.equal(queue.enqueued[0].value[0].remediationDetails, undefined);
@@ -448,12 +452,12 @@ test('CROverrideEditor: a single-choice Question draws its declared options and 
   sel._listeners['change'][0]({ target: sel });
   const valEl = findByClass(el, 'cr-override-value-control');
   // Options come from the Question, not the yes-no-na tri-state.
-  assert.deepEqual(valEl._children.map((/** @type {any} */ o) => o.value), ['Phone', 'Email']);
+  assert.deepEqual(valEl._children.map((/** @type {any} */ o) => o.value), ['', 'Phone', 'Email']);
   valEl.value = 'Phone';
   valEl._listeners['change'][0]({ target: valEl });
   const r = findByClass(el, 'cr-override-reasoning');
   r.value = 'Was actually phone.';
-  r._listeners['input'][0]({ target: r });
+  (r._listeners['change'] || r._listeners['input'])[0]({ target: r });
   findByClass(el, 'cr-override-submit')._listeners['click'][0]();
   assert.equal(queue.enqueued[0].value[0].value, 'Phone');
 });
@@ -477,14 +481,14 @@ test('CROverrideEditor: a choice Question and a select detail with no declared o
   sel.value = 'sc2';
   sel._listeners['change'][0]({ target: sel });
   const valEl = findByClass(el, 'cr-override-value-control');
-  assert.deepEqual(valEl._children, [], 'no options to offer');
+  assert.deepEqual(valEl._children.map((/** @type {any} */ o) => o.value), [''], 'empty option is offered');
   valEl.value = 'Bad';
   valEl._listeners['change'][0]({ target: valEl });
   // The select detail with no options still renders (just the blank option).
   assert.ok(findByClass(el, 'cr-override-detail-cat'));
   const r = findByClass(el, 'cr-override-reasoning');
   r.value = 'Was bad.';
-  r._listeners['input'][0]({ target: r });
+  (r._listeners['change'] || r._listeners['input'])[0]({ target: r });
   findByClass(el, 'cr-override-submit')._listeners['click'][0]();
   assert.equal(queue.enqueued[0].value[0].value, 'Bad');
 });
