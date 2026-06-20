@@ -24,6 +24,10 @@ class StubEl {
     /** @type {Record<string, string>} */
     this.style = {};
     this.currentValue = undefined;
+    /** @type {any} */
+    this.question = undefined;
+    /** @type {any} */
+    this.access = undefined;
   }
   replaceChildren(/** @type {StubEl[]} */ ...cs) {
     this._children = cs;
@@ -254,6 +258,35 @@ test('CRQuestionList: update with same questions (no new) does not trigger focus
     /** @type {any} */ (globalThis)._lastFocused,
     null,
     'update with same question set must not steal focus'
+  );
+});
+
+test('CRQuestionList: update reuses existing cr-question DOM elements to prevent focus/scroll jumps', () => {
+  const list = new CRQuestionList();
+  /** @type {QuestionDefinition[]} */
+  const questions = [
+    { id: 'q1', text: 'Q1?', responseType: 'yes-no-na', deprecated: false },
+    { id: 'q2', text: 'Q2?', responseType: 'yes-no-na', deprecated: false },
+  ];
+  list.questions = questions;
+  list.answers = {};
+  list.connectedCallback();
+
+  const initialQ1 = list.questionElements[0];
+  const initialQ2 = list.questionElements[1];
+
+  // Update with an answer to q1, simulating user clicking a radio button
+  list.update(questions, { q1: { value: 'No' } });
+
+  assert.equal(
+    list.questionElements[0],
+    initialQ1,
+    'existing cr-question element for q1 should be reused'
+  );
+  assert.equal(
+    list.questionElements[1],
+    initialQ2,
+    'existing cr-question element for q2 should be reused'
   );
 });
 

@@ -55,21 +55,54 @@ export class CRQuestionList extends ReactiveElement {
   }
 
   _render() {
+    const oldElements = this.questionElements ? [...this.questionElements] : [];
     const els = this.render();
-    if (Array.isArray(els)) this.replaceChildren(...els);
-    else if (els) this.replaceChildren(els);
-    else this.replaceChildren();
+
+    let changed = oldElements.length !== els.length;
+    if (!changed) {
+      for (let i = 0; i < els.length; i++) {
+        if (oldElements[i] !== els[i]) {
+          changed = true;
+          break;
+        }
+      }
+    }
+
+    if (changed || els.length === 0) {
+      if (Array.isArray(els)) this.replaceChildren(...els);
+      else if (els) this.replaceChildren(els);
+      else this.replaceChildren();
+    }
   }
 
   render() {
+    const existingElements = new Map();
+    if (this.questionElements) {
+      for (const el of this.questionElements) {
+        if (el.question && el.question.id) {
+          existingElements.set(el.question.id, el);
+        }
+      }
+    }
+
     const elements = this.questions.map((q) => {
       const v = this.answers[q.id]?.value;
+      const currentValue = v ?? (q.responseType === 'multi-choice' ? [] : '');
+
+      const existing = existingElements.get(q.id);
+      if (existing) {
+        existing.question = q;
+        existing.access = this.access;
+        existing.currentValue = currentValue;
+        return existing;
+      }
+
       const el = /** @type {import('./cr-question.js').CRQuestion} */ (
         h('cr-question', {
           tabIndex: -1,
           question: q,
           access: this.access,
-          currentValue: v ?? (q.responseType === 'multi-choice' ? [] : ''),
+          currentValue,
         })
       );
       return el;
