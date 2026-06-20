@@ -119,10 +119,10 @@ test('cr-reviewer-team-report: renders a back link to #/reports', async () => {
 
 test('cr-reviewer-team-report: renders 4 KPI tiles with correct counts', async () => {
   const cases = [
-    makeCase({ id: 'c1', status: 'Completed', completedAt: new Date(2026, 4, 14).toISOString() }), // in 7d
-    makeCase({ id: 'c2', status: 'Completed', completedAt: new Date(2026, 3, 25).toISOString() }), // in 30d only
-    makeCase({ id: 'c3', status: 'In-progress', dueDate: new Date(2026, 4, 24).toISOString() }),  // outstanding
-    makeCase({ id: 'c4', status: 'In-progress', dueDate: new Date(2026, 4, 16).toISOString() }),  // overdue
+    makeCase({ id: 'c1', status: 'Completed', completedAt: new Date(Date.now() - 3 * 86400000).toISOString() }), // in 7d
+    makeCase({ id: 'c2', status: 'Completed', completedAt: new Date(Date.now() - 14 * 86400000).toISOString() }), // in 30d only
+    makeCase({ id: 'c3', status: 'In-progress', dueDate: new Date(Date.now() + 3 * 86400000).toISOString() }),  // outstanding
+    makeCase({ id: 'c4', status: 'In-progress', dueDate: new Date(Date.now() - 3 * 86400000).toISOString() }),  // overdue
   ];
   const el = new CRReviewerTeamReport();
   el.client = makeClient(cases);
@@ -138,8 +138,8 @@ test('cr-reviewer-team-report: renders 4 KPI tiles with correct counts', async (
 
 test('cr-reviewer-team-report: renders breakdown table rows per case type', async () => {
   const cases = [
-    makeCase({ id: 'c1', caseType: 'hello-review', status: 'Completed', completedAt: new Date(2026, 4, 14).toISOString() }),
-    makeCase({ id: 'c2', caseType: 'product-sale-review', status: 'In-progress', dueDate: new Date(2026, 4, 24).toISOString() }),
+    makeCase({ id: 'c1', caseType: 'hello-review', status: 'Completed', completedAt: new Date(Date.now() - 3 * 86400000).toISOString() }),
+    makeCase({ id: 'c2', caseType: 'product-sale-review', status: 'In-progress', dueDate: new Date(Date.now() + 3 * 86400000).toISOString() }),
   ];
   const el = new CRReviewerTeamReport();
   el.client = makeClient(cases);
@@ -155,7 +155,7 @@ test('cr-reviewer-team-report: renders breakdown table rows per case type', asyn
 
 test('cr-reviewer-team-report: drill-through links navigate to #/team-cases with query params', async () => {
   const cases = [
-    makeCase({ id: 'c1', caseType: 'hello-review', status: 'In-progress', dueDate: new Date(2026, 4, 24).toISOString() }),
+    makeCase({ id: 'c1', caseType: 'hello-review', status: 'In-progress', dueDate: new Date(Date.now() + 3 * 86400000).toISOString() }),
   ];
   const el = new CRReviewerTeamReport();
   el.client = makeClient(cases);

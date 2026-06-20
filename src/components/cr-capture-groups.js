@@ -1,6 +1,7 @@
 // @ts-check
 import { ReactiveElement } from './reactive-element.js';
 import { h } from '../lib/html.js';
+import { buildCaptureControl } from '../lib/capture-engine.js';
 
 /** @typedef {import('../sharepoint-client.js').CaptureGroup} CaptureGroup */
 /** @typedef {import('../sharepoint-client.js').CaptureField} CaptureField */
@@ -108,16 +109,9 @@ export class CRCaptureGroups extends ReactiveElement {
   _renderEditableField(field) {
     const current = this._currentString(field.key);
     
-    let control;
-    if (field.type === 'radio') {
-      control = this._renderRadio(field, current);
-    } else {
-      control = this._buildControl(field, current);
-      control.addEventListener('change', (/** @type {any} */ ev) => {
-        const target = /** @type {{ value: string }} */ (ev.target);
-        this._dispatch(field.key, target.value);
-      });
-    }
+    const control = buildCaptureControl(field, current, (value) => {
+      this._dispatch(field.key, value);
+    });
 
     return h('div', { className: 'cr-capture-field' },
       h('label', { className: 'cr-capture-label' }, field.label),
@@ -125,45 +119,7 @@ export class CRCaptureGroups extends ReactiveElement {
     );
   }
 
-  /**
-   * @param {CaptureField} field
-   * @param {string} current
-   * @returns {HTMLElement}
-   */
-  _buildControl(field, current) {
-    if (field.type === 'select') {
-      return h('select', { className: 'cr-capture-input', value: current },
-        h('option', { value: '' }, '—'),
-        ...(field.options ?? []).map(opt => h('option', { value: opt }, opt))
-      );
-    }
-    if (field.type === 'textarea') {
-      return h('textarea', { className: 'cr-capture-input', value: current });
-    }
-    return h('input', { className: 'cr-capture-input', type: 'text', value: current });
-  }
 
-  /**
-   * @param {CaptureField} field
-   * @param {string} current
-   * @returns {HTMLElement}
-   */
-  _renderRadio(field, current) {
-    return h('div', { className: 'cr-capture-radio-group' },
-      ...(field.options ?? []).map(opt => 
-        h('label', { className: 'cr-capture-radio' },
-          h('input', {
-            type: 'radio',
-            name: field.key,
-            value: opt,
-            checked: current === opt,
-            onchange: () => this._dispatch(field.key, opt)
-          }),
-          h('span', {}, opt)
-        )
-      )
-    );
-  }
 
   /**
    * @param {CaptureGroup} group

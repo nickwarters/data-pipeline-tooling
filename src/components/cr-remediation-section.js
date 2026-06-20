@@ -3,6 +3,7 @@ import { ReactiveElement } from './reactive-element.js';
 import { h } from '../lib/html.js';
 import { evaluate } from '../evaluators/applicability-evaluator.js';
 import { isFailure } from '../evaluators/failure-evaluator.js';
+import { buildCaptureControl } from '../lib/capture-engine.js';
 import './cr-attribute-menu.js';
 import './cr-capture-groups.js';
 
@@ -208,11 +209,9 @@ export class CRRemediationSection extends ReactiveElement {
         continue;
       }
 
-      const control = this._buildDetailControl(field, details[field.key] ?? '');
-      control.addEventListener('change', (/** @type {any} */ ev) => {
-        const target = /** @type {{ value: string }} */ (/** @type {any} */ (ev).target);
-        this._dispatchDetail(q.id, field.key, target.value);
-      });
+      const control = buildCaptureControl(field, details[field.key] ?? '', (value) => {
+        this._dispatchDetail(q.id, field.key, value);
+      }, 'cr-remediation-detail-input');
 
       const wrap = h('div', { class: 'cr-remediation-detail-field' },
         h('label', { class: 'cr-remediation-detail-label' }, field.label),
@@ -223,25 +222,7 @@ export class CRRemediationSection extends ReactiveElement {
     }
   }
 
-  /**
-   * @param {import('../sharepoint-client.js').RemediationField} field
-   * @param {string} current
-   * @returns {HTMLElement}
-   */
-  _buildDetailControl(field, current) {
-    if (field.type === 'select') {
-      const select = /** @type {any} */ (h('select', { class: 'cr-remediation-detail-input' },
-        h('option', { value: '' }, '—')
-      ));
-      for (const opt of field.options ?? []) {
-        select.appendChild(h('option', { value: opt }, opt));
-      }
-      select.value = current;
-      return select;
-    }
 
-    return /** @type {any} */ (h('input', { class: 'cr-remediation-detail-input', type: 'text', value: current }));
-  }
 
   /**
    * Renders the unified **Issue Capture Group**s for a failed item (ADR-0020)

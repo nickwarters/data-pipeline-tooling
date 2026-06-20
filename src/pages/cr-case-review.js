@@ -5,7 +5,8 @@ import { evaluate } from '../evaluators/applicability-evaluator.js';
 import { computeSectionProgress } from '../evaluators/section-progress.js';
 import { materializeRemediationActions } from '../evaluators/failure-evaluator.js';
 import { captureValue, validateCaptureGroups, findCaptureField } from '../evaluators/issue-capture.js';
-import { evaluateAccess, resolveRoles, showInSummary, SECTIONS, SUMMARY_SECTIONS } from '../services/section-access.js';
+import { showInSummary, SECTIONS, SUMMARY_SECTIONS } from '../services/section-access.js';
+import { CaseMachine } from '../lib/case-machine.js';
 import '../components/cr-question-list.js';
 import '../components/cr-section-progress.js';
 import '../components/cr-remediation-section.js';
@@ -137,10 +138,10 @@ export class CRCaseReview extends CRElement {
     const capabilities = this.capabilities || /** @type {import('../services/permissions.js').Capabilities} */ (
       { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false }
     );
-    const roles = resolveRoles(caseRow, currentUserId, capabilities);
-    /** @type {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} */
-    const access = /** @type {any} */ ({});
-    for (const s of SECTIONS) access[s] = evaluateAccess(s, roles, caseRow, config);
+
+    const machine = new CaseMachine(caseRow, { id: currentUserId }, capabilities, config);
+    const roles = machine.roles;
+    const access = machine.access;
 
     if (SECTIONS.every(s => access[s] === 'hidden')) {
       this._renderAccessDenied();
@@ -163,7 +164,7 @@ export class CRCaseReview extends CRElement {
       ? await this._resolveSourceCase(caseRow.sourceCaseId, caseRow.id, client, saveQueue, currentUserId, capabilities)
       : null;
 
-    this._buildLayout({ caseRow, catalogue, computeOutcome: config.computeOutcome, attributeFailures: config.attributeFailures, remediationFields: config.remediationFields ?? [], captureGroups: config.captureGroups ?? [], client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, roles, summarySections, sourceCase });
+    this._buildLayout({ caseRow, catalogue, computeOutcome: config.computeOutcome, attributeFailures: config.attributeFailures, remediationFields: config.remediationFields ?? [], captureGroups: config.captureGroups ?? [], client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, roles, summarySections, sourceCase, machine });
 
     // Render with cached display names first, then upgrade to the authoritative
     // directory names once they resolve (ADR-0013, #97).
@@ -238,8 +239,8 @@ export class CRCaseReview extends CRElement {
     const origConfig = mod.default;
     const origCatalogue = origConfig.questions.filter(q => !q.deprecated);
 
-    const roles = resolveRoles(original, currentUserId, capabilities);
-    const mode = evaluateAccess('questions', roles, original, origConfig);
+    const origMachine = new CaseMachine(original, { id: currentUserId }, capabilities, origConfig);
+    const mode = origMachine.access.questions;
     /** @type {'override' | 'read-only'} */
     const overrideAccess = mode === 'override' ? 'override' : 'read-only';
 
@@ -283,8 +284,9 @@ export class CRCaseReview extends CRElement {
    * @param {import('../services/section-access.js').Role[]} [opts.roles]
    * @param {import('../services/section-access.js').Section[]} [opts.summarySections]
    * @param {SourceCaseOpts | null} [opts.sourceCase]
+   * @param {CaseMachine} opts.machine
    */
-  _buildLayout({ caseRow, catalogue, computeOutcome, attributeFailures, remediationFields = [], captureGroups = [], client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, roles = [], summarySections = [], sourceCase = null }) {
+  _buildLayout({ caseRow, catalogue, computeOutcome, attributeFailures, remediationFields = [], captureGroups = [], client, saveQueue, answersSignal, applicableQuestions, allAnswered, currentUser, access, roles = [], summarySections = [], sourceCase = null, machine }) {
 
     const searchStr = typeof location !== 'undefined' ? (/** @type {any} */ (location).search ?? '') : '';
     const panelMode = new URLSearchParams(searchStr).get('conversation') ?? 'popover';
@@ -390,9 +392,8 @@ export class CRCaseReview extends CRElement {
     // Attribution is editable only for the Assigned Reviewer (remediation edit)
     // on an In-progress Case — frozen at completion per ADR-0013. The matrix
     // does not freeze on status, so the status guard lives here.
-    const canAttribute = attributeFailures === true
-      && access.remediation === 'edit'
-      && caseRow.status === 'In-progress';
+    const m = machine || { canAttribute: attributeFailures === true && access.remediation === 'edit' && caseRow.status === 'In-progress', canCapture: attributeFailures === true && access.remediation === 'edit' && caseRow.status === 'In-progress', canComplete: access.questions === 'edit' && caseRow.assignedReviewer === currentUser.id && caseRow.status === 'In-progress', canToggleConversation: access.conversation !== 'hidden' };
+    const canAttribute = m.canAttribute;
     remediationSection.canAttribute = canAttribute;
     // The Case's Responsible Party, offered as a one-click quick-pick in each
     // attribute menu. Stored as a bare account today, so displayName mirrors it
@@ -404,7 +405,7 @@ export class CRCaseReview extends CRElement {
     // guard as attribution gates whether capture controls are editable. The
     // captureGroups config and a cr-capture handler are wired alongside.
     remediationSection.captureGroups = captureGroups;
-    remediationSection.canCapture = canAttribute;
+    remediationSection.canCapture = m.canCapture;
     remediationSection.addEventListener('cr-capture', (ev) => {
       if (!canAttribute) return;
       const { questionId, fieldKey, value } =
@@ -470,9 +471,7 @@ export class CRCaseReview extends CRElement {
     completeBtn.textContent = 'Complete Case';
     completeBtn.hidden = true;
 
-    const canComplete = access.questions === 'edit'
-      && caseRow.assignedReviewer === (this.currentUserId || currentUser.id)
-      && caseRow.status === 'In-progress';
+    const canComplete = m.canComplete;
     this.subscribe(allAnswered, answered => {
       completeBtn.hidden = !(answered && canComplete);
     });
@@ -480,7 +479,8 @@ export class CRCaseReview extends CRElement {
     completeBtn.addEventListener('click', async () => {
       if (completeBtn.disabled) return;
       completeBtn.disabled = true;
-      await this._completeCase(caseRow.id, client, saveQueue, computeOutcome, answersSignal.get());
+      const patchFields = m.transitionToCompleted ? m.transitionToCompleted(computeOutcome, answersSignal.get()) : { status: 'Completed', completedAt: new Date().toISOString() };
+      await this._completeCase(caseRow.id, client, saveQueue, patchFields);
       completeBtn.disabled = false;
     });
 
@@ -497,7 +497,7 @@ export class CRCaseReview extends CRElement {
     /** @type {any} */ (conversationEl).hidden = true;
     this._conversationEl = /** @type {HTMLElement} */ (/** @type {unknown} */ (conversationEl));
 
-    const canToggle = access.conversation !== 'hidden';
+    const canToggle = m.canToggleConversation;
     if (canToggle) {
       const toggleBtn = document.createElement('button');
       toggleBtn.className = 'cr-conversation-toggle-btn';
@@ -656,45 +656,23 @@ export class CRCaseReview extends CRElement {
   /**
    * Patches the case status to Completed and navigates to the dashboard.
    *
-   * When the Case Type's `computeOutcome` and the current answers are supplied,
-   * a frozen outcome snapshot is stamped in the *same* ETag-guarded PATCH
-   * (ADR-0012): `outcomeAtCompletion` is the verdict computed over the answers at
-   * completion time, and `hadRemediation` is true iff any Answer carries one or
-   * more Remediation Actions. Because the snapshot is written once from these
-   * inputs, later edits to the answers, Question Definitions, or outcome function
-   * never change a Completed Case's stamped values.
-   *
    * @param {string} caseId
    * @param {SharePointClient} [clientArg]
    * @param {SaveQueue} [saveQueueArg]
-   * @param {(answers: Record<string, Answer>) => import('../sharepoint-client.js').OutcomeResult} [computeOutcome]
-   * @param {Record<string, Answer>} [answers]
+   * @param {Partial<CaseRow>} [patchFields]
    */
-  async _completeCase(caseId, clientArg, saveQueueArg, computeOutcome, answers) {
+  async _completeCase(caseId, clientArg, saveQueueArg, patchFields) {
     const client = clientArg ?? this.client;
     const saveQueue = saveQueueArg ?? this.saveQueue;
     if (!client || !saveQueue) return;
 
-    /** @type {Partial<CaseRow>} */
-    const fields = {
+    const finalFields = patchFields || {
       status: /** @type {'Completed'} */ ('Completed'),
       completedAt: new Date().toISOString(),
     };
-    if (computeOutcome && answers) {
-      fields.outcomeAtCompletion = computeOutcome(answers).verdict;
-      fields.hadRemediation = Object.values(answers).some(
-        a => (a.remediationActions?.length ?? 0) > 0
-      );
-      // The effective-outcome columns (ADR-0019) start life equal to the frozen
-      // snapshot; an Override has not yet been authored, so nothing is corrected.
-      // They re-stamp on every Override write; outcomeAtCompletion stays frozen.
-      fields.effectiveOutcome = fields.outcomeAtCompletion;
-      fields.effectiveHadRemediation = fields.hadRemediation;
-      fields.outcomeOverridden = false;
-    }
 
     const etag = saveQueue.getEtag(caseId);
-    const result = await client.patchCase(caseId, fields, etag);
+    const result = await client.patchCase(caseId, finalFields, etag);
     if (result.ok) {
       location.hash = '#/dashboard';
     }

@@ -1,6 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { CaseMachine } from '../src/lib/case-machine.js';
 
 // ===== MINIMAL DOM STUBS =====
 class StubEl {
@@ -541,7 +542,9 @@ test('CRCaseReview: _completeCase stamps the frozen outcome snapshot in the same
   /** @param {Record<string, any>} a */
   const computeOutcome = (a) => /** @type {any} */ ({ verdict: Object.values(a).some(x => x.value === 'No') ? 'fail' : 'pass' });
 
-  await el._completeCase('c1', el.client ?? undefined, el.saveQueue ?? undefined, computeOutcome, answers);
+  const machine = new CaseMachine(BASE_ROW, { id: 'test' }, { ownedCaseTypes: [] }, {});
+  const patchFields = machine.transitionToCompleted(computeOutcome, answers);
+  await el._completeCase('c1', el.client ?? undefined, el.saveQueue ?? undefined, patchFields);
 
   assert.equal(client.patches.length, 1, 'completion is a single PATCH (ADR-0008 ETag-guarded write)');
   const { fields } = client.patches[0];
@@ -564,7 +567,9 @@ test('CRCaseReview: _completeCase initialises the effective-outcome columns equa
   /** @param {Record<string, any>} a */
   const computeOutcome = (a) => /** @type {any} */ ({ verdict: Object.values(a).some(x => x.value === 'No') ? 'fail' : 'pass' });
 
-  await el._completeCase('c1', el.client ?? undefined, el.saveQueue ?? undefined, computeOutcome, answers);
+  const machine = new CaseMachine(BASE_ROW, { id: 'test' }, { ownedCaseTypes: [] }, {});
+  const patchFields = machine.transitionToCompleted(computeOutcome, answers);
+  await el._completeCase('c1', el.client ?? undefined, el.saveQueue ?? undefined, patchFields);
 
   const { fields } = client.patches[0];
   assert.equal(fields.effectiveOutcome, 'fail', 'effectiveOutcome initialises equal to outcomeAtCompletion');
@@ -584,7 +589,9 @@ test('CRCaseReview: hadRemediation=true is mutually exclusive with outcomeAtComp
   /** @param {Record<string, any>} a */
   const computeOutcome = (a) => /** @type {any} */ ({ verdict: Object.values(a).some(x => x.value === 'No') ? 'fail' : 'pass' });
 
-  await el._completeCase('c1', el.client ?? undefined, el.saveQueue ?? undefined, computeOutcome, answers);
+  const machine = new CaseMachine(BASE_ROW, { id: 'test' }, { ownedCaseTypes: [] }, {});
+  const patchFields = machine.transitionToCompleted(computeOutcome, answers);
+  await el._completeCase('c1', el.client ?? undefined, el.saveQueue ?? undefined, patchFields);
 
   const { fields } = client.patches[0];
   assert.equal(fields.outcomeAtCompletion, 'pass');
@@ -614,15 +621,15 @@ test('CRCaseReview: complete button feeds the live answers + computeOutcome into
 
   /** @type {any} */
   let captured = null;
-  el._completeCase = async (/** @type {any[]} */ ...args) => { captured = args; };
+  el._completeCase = async (caseId, client, saveQueue, patchFields) => { captured = patchFields; };
 
   completeBtnOf(el)._listeners['click'][0]();
   await Promise.resolve();
 
   assert.ok(captured, '_completeCase was invoked from the button');
-  assert.equal(typeof captured[3], 'function', 'the Case Type computeOutcome is passed through');
-  assert.equal(captured[3](captured[4]).verdict, 'fail', 'running it over the forwarded answers yields the live verdict');
-  assert.equal(captured[4]['q-needs'].value, 'No', 'the current answers snapshot is forwarded');
+  assert.equal(captured.status, 'Completed', 'sets status Completed');
+  assert.equal(captured.outcomeAtCompletion, 'fail', 'computed outcome is passed as patch field');
+  assert.equal(captured.hadRemediation, false, 'hadRemediation is computed and passed');
 });
 
 test('CRCaseReview: no inline cr-save-status paragraph in rendered children', async () => {
