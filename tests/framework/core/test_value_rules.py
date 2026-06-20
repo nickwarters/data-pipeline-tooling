@@ -16,7 +16,7 @@ import pandas as pd
 import pytest
 
 from framework.core.dataset import Dataset
-from framework.validate import (
+from framework.core import (
     Length,
     NonNull,
     Nullable,
@@ -26,7 +26,7 @@ from framework.validate import (
     SchemaValidator,
     Unique,
 )
-from framework.validate.validators import ValidationError
+from framework.core.validators import ValidationError
 
 
 @dataclass

@@ -19,7 +19,7 @@ from framework.io.readers import DatasetReader
 from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun
 from framework.run.builder import Pipeline
-from framework.run.run_log import RunLog
+from tools.observability.run_log import RunLog
 from framework.transform.processors import AntiJoinWith, Filter, JoinWith, Score, Sort
 
 

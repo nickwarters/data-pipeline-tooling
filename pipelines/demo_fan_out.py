@@ -35,7 +35,7 @@ from framework.core import GOLD, RAW, SILVER
 from framework.io import AccumulateByRun, CsvReader, StoreCatalog
 from framework.run import Pipeline
 from framework.transform import Filter, Rename, SchemaCoercion, SelectColumns, Unpivot
-from framework.validate import SchemaValidator
+from framework.core import SchemaValidator
 
 PRODUCT_COLS = [f"product_{i}" for i in range(1, 11)]
 

@@ -31,7 +31,7 @@ from framework.core import RAW, SILVER, Dataset, PipelineError, format_failure
 from framework.io import AccumulateByRun, CsvReader, StoreCatalog
 from framework.run import Pipeline, RunContext
 from framework.transform import Filter, SchemaCoercion
-from framework.validate import SchemaValidator
+from framework.core import SchemaValidator
 
 from .case_type import CASE_TYPE
 

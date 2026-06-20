@@ -124,7 +124,7 @@ records:
 ```python
 import pytest
 from framework.run import Pipeline
-from framework.validate import ColumnValidator, ValidationError
+from framework.core import ColumnValidator, ValidationError
 from tests.framework_testing import given_rows, RecordingWriter, RecordingRunLog
 
 def test_missing_required_column_aborts_and_is_recorded():

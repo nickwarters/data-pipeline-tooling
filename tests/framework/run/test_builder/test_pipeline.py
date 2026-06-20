@@ -5,13 +5,14 @@ import pandas as pd
 import pytest
 
 from framework.core.dataset import Dataset
-from framework.io.readers import CsvReader, SharePointReader
+from framework.io.readers import CsvReader
+from tools.integrations.remote import SharePointReader
 from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun
 from framework.io.writers import QuarantineWriter
 from framework.run.builder import Pipeline, ReadNode, TransformNode, ValidateNode, WriteNode
-from framework.run.run_log import RunLog
-from framework.validate.validators import (
+from tools.observability.run_log import RunLog
+from framework.core.validators import (
     ColumnValidator,
     RowCountValidator,
     ValidationError,

@@ -18,8 +18,8 @@ public contract, the submodule paths are not. See ``docs/public-api.md``.
 
 from framework.run.builder import Pipeline
 from framework.run.run_context import RunContext
-from framework.run.run_log import RunLog
-from framework.run.run_registry import RunRegistry
+from tools.observability.run_log import RunLog
+from tools.observability.run_registry import RunRegistry
 from framework.run.runner import (
     FreshnessError,
     FreshnessRequirement,
@@ -44,6 +44,4 @@ __all__ = [
     "FreshnessRequirement",
     "FreshnessError",
     "UnknownPipelineError",
-    "RunLog",
-    "RunRegistry",
 ]

@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from framework.run.run_log import RunLog
+from tools.observability.run_log import RunLog
 
 __all__ = [
     "RecordingRunLog",

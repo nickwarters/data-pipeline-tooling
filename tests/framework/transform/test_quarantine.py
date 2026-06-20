@@ -16,7 +16,7 @@ import pytest
 
 from framework.core.dataset import Dataset
 from framework.transform.quarantine import SchemaValueRulePartitioner
-from framework.validate import Length, OneOf, Pattern, RowCheck, Unique, row_checks
+from framework.core import Length, OneOf, Pattern, RowCheck, Unique, row_checks
 
 
 @dataclass
@@ -279,8 +279,8 @@ def test_structural_breach_aborts_even_with_quarantine_configured(tmp_path):
     from framework.io.readers import CsvReader
     from framework.io.writers import QuarantineWriter, SqliteTruncateReloadWriter
     from framework.run.builder import Pipeline
-    from framework.validate import SchemaValidator
-    from framework.validate.validators import ValidationError
+    from framework.core import SchemaValidator
+    from framework.core.validators import ValidationError
 
     csv_file = tmp_path / "feed.csv"
     # Missing "status" column — structural breach.
@@ -304,7 +304,7 @@ def test_run_log_quarantine_step_records_rows_quarantined(tmp_path):
     from framework.io.readers import CsvReader
     from framework.io.writers import QuarantineWriter, SqliteTruncateReloadWriter
     from framework.run.builder import Pipeline
-    from framework.run.run_log import RunLog
+    from tools.observability.run_log import RunLog
 
     csv_file = tmp_path / "feed.csv"
     csv_file.write_text("case_ref,status\nBAD,open\n123456789,closed\n")

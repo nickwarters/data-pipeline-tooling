@@ -15,7 +15,7 @@ import pytest
 
 from framework.core.dataset import Dataset
 from framework.run.builder import Pipeline
-from framework.run.run_log import RunLog
+from tools.observability.run_log import RunLog
 from tools.retry import RetryingReader, RetryingWriter, RetryPolicy
 
 

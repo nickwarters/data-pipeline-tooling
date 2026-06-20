@@ -14,7 +14,7 @@ from tests.framework_testing import (
     given_rows,
     read_run_log,
 )
-from framework.validate import ColumnValidator
+from framework.core import ColumnValidator
 
 
 def test_recording_run_log_captures_warn_hits_in_memory():
@@ -39,7 +39,7 @@ def test_recording_run_log_captures_a_validation_failure():
     # An error-severity breach aborts the run. The failing step and
     # the run summary are both recorded as errors before the exception raises, so
     # a test asserts the failure message through the captured records.
-    from framework.validate import ValidationError
+    from framework.core import ValidationError
 
     run_log = RecordingRunLog()
     writer = RecordingWriter()

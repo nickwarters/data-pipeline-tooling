@@ -4,7 +4,7 @@ Value-level expectations attached to a Case Type schema field via
 ``Annotated[type, Rule(...)]``: format (``Pattern``), length (``Length``),
 uniqueness (``Unique``), membership (``OneOf``), and the nullability markers
 (``Nullable`` / ``NonNull``). They are read off the dataclass annotations and run
-by :class:`~framework.validate.schema.SchemaValidator`, and the masks they
+by :class:`~framework.core.schema.SchemaValidator`, and the masks they
 produce drive the quarantine partitioner. Each satisfies the
 :class:`~framework._internal.schema.ValueRule` protocol structurally.
 
@@ -80,7 +80,7 @@ class Length:
 
     Either bound is optional — ``minimum`` guards against a truncated value,
     ``maximum`` against an overlong one; ``None`` leaves that side open (mirroring
-    :class:`~framework.validate.validators.RowCountValidator`'s inclusive bounds). A
+    :class:`~framework.core.validators.RowCountValidator`'s inclusive bounds). A
     contradictory pair (min > max) is a configuration error raised at
     construction. Null values are out of scope.
     """
@@ -128,7 +128,7 @@ class Range:
     negative, an amount with a known ceiling, a rate confined to ``[0, 1]``.
     Either bound is optional — ``minimum`` guards against an under-range value,
     ``maximum`` against an over-range one; ``None`` leaves that side open
-    (mirroring :class:`~framework.validate.validators.RowCountValidator`'s
+    (mirroring :class:`~framework.core.validators.RowCountValidator`'s
     inclusive bounds). A contradictory pair (min > max) is a configuration error
     raised at construction. Null values are out of scope.
 
@@ -179,7 +179,7 @@ class Unique:
     """Require a field's (non-null) values to be distinct — no duplicate keys.
 
     The field-annotation form of uniqueness, sitting beside the columns+dtypes
-    contract. It complements :class:`~framework.validate.validators.UniqueValidator`,
+    contract. It complements :class:`~framework.core.validators.UniqueValidator`,
     which enforces the one-row-per-Case *grain* on a (possibly composite) key at
     the gold boundary; this rule states the expectation declaratively on the
     schema field itself. Null values are out of scope, so repeated missing values

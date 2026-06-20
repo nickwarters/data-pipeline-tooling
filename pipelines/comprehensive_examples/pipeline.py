@@ -26,7 +26,7 @@ from framework.transform import (
     SelectColumns,
     Sort,
 )
-from framework.validate import ColumnValidator, SchemaValidator, UniqueValidator
+from framework.core import ColumnValidator, SchemaValidator, UniqueValidator
 
 from .processors import AddOpenContactCounts, AdviserSummary
 from .rules import high_risk_or_vulnerable, review_priority
