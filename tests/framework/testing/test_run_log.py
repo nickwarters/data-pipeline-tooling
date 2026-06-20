@@ -1,4 +1,4 @@
-"""The run-log helpers (``framework.testing.run_log``).
+"""The run-log helpers (``tests.framework_testing.run_log``).
 
 Capture a run's structured records in memory with :class:`RecordingRunLog`, or
 read an on-disk JSONL run-log back with :func:`read_run_log`, and assert on warn
@@ -8,7 +8,7 @@ hits / validation failures / step order without parsing files by hand.
 import pytest
 
 from framework.run import Pipeline
-from framework.testing import (
+from tests.framework_testing import (
     RecordingRunLog,
     RecordingWriter,
     given_rows,

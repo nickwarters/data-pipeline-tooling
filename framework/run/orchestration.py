@@ -16,7 +16,7 @@ from framework.core.errors import PipelineError
 from framework.run.builder import Pipeline
 from framework.run.run_context import RunContext
 from framework.run.runner import FreshnessError, FreshnessRequirement, PipelineRunner
-from framework.shared.calendar import WorkingDayCalendar
+from tools.calendar import WorkingDayCalendar
 
 Item = TypeVar("Item")
 

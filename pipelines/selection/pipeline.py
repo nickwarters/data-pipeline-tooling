@@ -11,7 +11,7 @@ per-Case verdict of why each available Case was or wasn't selected.
 
 It declares ``ingest`` as a freshness upstream, so::
 
-    python -m framework run pipelines/selection /tmp/demo --run-date 2026-05-29
+    python -m cli run pipelines/selection /tmp/demo --run-date 2026-05-29
 
 checks for recent successful ``ingest`` history before Selection runs.
 """
@@ -26,7 +26,7 @@ from case_review.case_pool import CasePool
 from framework.core import GOLD, PipelineError, format_failure
 from framework.io import AccumulateByRun, DatasetReader, StoreCatalog
 from framework.run import FreshnessRequirement, Pipeline, RunContext
-from framework.shared import WorkingDayCalendar
+from tools.calendar import WorkingDayCalendar
 from framework.transform import Filter, Score, Sort, Stamp
 
 from pipelines.ingest.pipeline import AS_OF, CASES

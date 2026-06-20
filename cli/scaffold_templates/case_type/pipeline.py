@@ -12,7 +12,7 @@ Its shape is sketched at the foot of ``run``.
 Address it by its location on disk -- the framework imports
 ``pipelines.myfeed.pipeline`` and runs its ``run(context)`` callable::
 
-    python -m framework run pipelines/myfeed [BASE_DIR]
+    python -m cli run pipelines/myfeed [BASE_DIR]
 
 or run the module directly with a default run context::
 
@@ -29,8 +29,9 @@ from pathlib import Path
 
 from framework.core import RAW, SILVER, Dataset, PipelineError, format_failure
 from framework.io import AccumulateByRun, CsvReader, StoreCatalog
-from framework.recipes import raw_to_silver
 from framework.run import Pipeline, RunContext
+from framework.transform import Filter, SchemaCoercion
+from framework.validate import SchemaValidator
 
 from .case_type import CASE_TYPE
 
@@ -61,7 +62,16 @@ def run(context: RunContext) -> Dataset:
     w = p.write(store.writer(RAW, FEED_NAME, strategy), r, name="write")
     p.run()
 
-    silver = raw_to_silver(store, FEED_NAME, CASE_TYPE.schema, strategy=strategy).run()
+    p_silver = Pipeline(FEED_NAME)
+    r_silver = p_silver.read(store.reader(RAW, FEED_NAME), name="read")
+    current = r_silver
+    if isinstance(strategy, AccumulateByRun):
+        run_id = strategy.run_id
+        current = p_silver.transform(Filter(lambda row, _rid=run_id: row["run_id"] == _rid), current, name="filter-by-run-id")
+    coerced = p_silver.transform(SchemaCoercion(CASE_TYPE.schema), current, name="coerce")
+    validated = p_silver.validate(SchemaValidator(CASE_TYPE.schema), coerced, name="post-validate")
+    p_silver.write(store.writer(SILVER, FEED_NAME, strategy), validated, name="write")
+    silver = p_silver.run()
 
     # --- gold is yours to assemble ------------------------------------------
     # How accumulated silver becomes gold is unique per Case Type, so the

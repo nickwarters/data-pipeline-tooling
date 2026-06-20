@@ -25,9 +25,9 @@ If it failed under `orchestrate`, or you're picking up someone else's run, read
 it back from the run store ([operator-cli.md](operator-cli.md)):
 
 ```sh
-python -m framework status /data                       # latest run per pipeline
-python -m framework runs   /data --pipeline ingest --status error
-python -m framework log    /data ingest --run-id 5f8ff8c7   # the failing run's steps
+python -m cli status /data                       # latest run per pipeline
+python -m cli runs   /data --pipeline ingest --status error
+python -m cli log    /data ingest --run-id 5f8ff8c7   # the failing run's steps
 ```
 
 `log` prints one line per step and ends with a summary, so you can see **which
@@ -88,14 +88,14 @@ Re-run the same business day — the logical run id defaults to
 `<pipeline>:run_date`, so this is already idempotent:
 
 ```sh
-python -m framework run pipelines/ingest /data --run-date 2026-05-29
+python -m cli run pipelines/ingest /data --run-date 2026-05-29
 ```
 
 Re-run a **correction batch** under a stable id, independent of the calendar
 date, when you're reprocessing a fix rather than re-running a day:
 
 ```sh
-python -m framework run pipelines/ingest /data --logical-run-id 2026-05-correction
+python -m cli run pipelines/ingest /data --logical-run-id 2026-05-correction
 ```
 
 Running it twice replaces the batch's rows both times; the row count stays stable
@@ -105,8 +105,8 @@ instead of doubling. Each execution remains individually traceable by its own
 ## 5. Confirm — green status, clean log
 
 ```sh
-python -m framework status /data --pipeline ingest   # latest run now `ok`
-python -m framework log    /data ingest --run-id <new-id>   # 0 failed, 0 warned
+python -m cli status /data --pipeline ingest   # latest run now `ok`
+python -m cli log    /data ingest --run-id <new-id>   # 0 failed, 0 warned
 ```
 
 A downstream that was **blocked** by the failure (its upstream was stale) clears

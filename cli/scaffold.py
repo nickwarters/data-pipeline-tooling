@@ -20,9 +20,9 @@ stays faithful to the source, silver renames to the schema's canonical shape.
 
 Run from the repository root so the import-only ``framework`` package resolves::
 
-    python -m framework scaffold orders
-    python -m framework scaffold orders --force    # overwrite if it exists
-    python -m framework scaffold orders --from-feed-file sample.csv
+    python -m cli scaffold orders
+    python -m cli scaffold orders --force    # overwrite if it exists
+    python -m cli scaffold orders --from-feed-file sample.csv
 
 The generated feed runs as a module from the repo root::
 
@@ -449,7 +449,7 @@ def _add_arguments(parser: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m framework scaffold",
+        prog="python -m cli scaffold",
         description=(
             "Scaffold a new feed (code in pipelines/, test in tests/pipelines/)."
         ),
@@ -459,7 +459,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def register(subparsers) -> None:
-    """Add the ``scaffold`` command to the unified ``python -m framework`` CLI."""
+    """Add the ``scaffold`` command to the unified ``python -m cli`` CLI."""
     parser = subparsers.add_parser(
         "scaffold",
         help="scaffold a new feed (code in pipelines/, test in tests/pipelines/)",

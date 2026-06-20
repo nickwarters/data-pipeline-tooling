@@ -1,7 +1,7 @@
 # The operator CLI — run, orchestrate, status, runs, log
 
 The framework is import-only, but it is also runnable as a tool:
-`python -m framework <command>` is the single entry point for both authoring
+`python -m cli <command>` is the single entry point for both authoring
 (`scaffold`, see [adding a feed](adding-a-feed.md)) and operating pipelines. The
 operator side is a small command surface for the everyday tasks that would
 otherwise need a hand-written wrapper script: **run** a
@@ -17,7 +17,7 @@ Run it as a module from the repository root so the import-only `framework`
 package resolves on `sys.path`:
 
 ```sh
-python -m framework <command> ...
+python -m cli <command> ...
 ```
 
 All commands take the **base directory** of the run store — the same path you
@@ -41,7 +41,7 @@ run store directly and need neither.)
 ## `run` — execute a pipeline by its path
 
 ```sh
-python -m framework run pipelines/<name> <base_dir> \
+python -m cli run pipelines/<name> <base_dir> \
     [--run-date YYYY-MM-DD] [--logical-run-id ID] [--freshness-days N]
 ```
 
@@ -52,7 +52,7 @@ identity is its directory name (`<name>`). `--run-date` sets the run date
 Exit code is `0` on success, non-zero on a clear error (see below).
 
 ```console
-$ python -m framework run pipelines/selection /data --run-date 2026-05-29
+$ python -m cli run pipelines/selection /data --run-date 2026-05-29
 available cases: 3 -> SelectionPool: 2 cases (Question Bank qb-100, logical run selection:2026-05-29); trace: 3 considered, 1 excluded with a reason
 ```
 
@@ -70,8 +70,8 @@ example to reprocess a correction batch under a stable id independent of the
 calendar date:
 
 ```console
-$ python -m framework run pipelines/selection /data --logical-run-id 2026-05-correction
-$ python -m framework run pipelines/selection /data --logical-run-id 2026-05-correction
+$ python -m cli run pipelines/selection /data --logical-run-id 2026-05-correction
+$ python -m cli run pipelines/selection /data --logical-run-id 2026-05-correction
 ```
 
 The second invocation replaces the first run's rows in the SelectionPool (the
@@ -81,7 +81,7 @@ stays stable instead of doubling.
 ## `orchestrate` — run scheduled due work
 
 ```sh
-python -m framework orchestrate <base_dir> --app MODULE \
+python -m cli orchestrate <base_dir> --app MODULE \
     [--run-date YYYY-MM-DD] [--once | --loop] [--poll-seconds N]
 ```
 
@@ -108,7 +108,7 @@ orchestrator invocation; its downstream dependants are marked `blocked`, while
 independent pipelines in the same set and all other `PipelineSet`s continue.
 
 ```console
-$ python -m framework orchestrate /data --app my_app.pipelines --run-date 2026-05-29 --once
+$ python -m cli orchestrate /data --app my_app.pipelines --run-date 2026-05-29 --once
 2026-05-29  cases  cases/ingest  succeeded
 2026-05-29  cases  cases/selection  succeeded
 ```
@@ -116,7 +116,7 @@ $ python -m framework orchestrate /data --app my_app.pipelines --run-date 2026-0
 ## `status` — the latest run per pipeline
 
 ```sh
-python -m framework status <base_dir> [--case-type cases] [--pipeline cases/ingest]
+python -m cli status <base_dir> [--case-type cases] [--pipeline cases/ingest]
 ```
 
 With no filter, prints the most recent run summary for **every** pipeline.
@@ -125,7 +125,7 @@ With no filter, prints the most recent run summary for **every** pipeline.
 orchestrate records under).
 
 ```console
-$ python -m framework status /data
+$ python -m cli status /data
 2026-06-10T09:39:30.627378+00:00  ingest  ok  rows_out=5  [run 5f8ff8c7]
 2026-06-10T09:39:30.882733+00:00  selection  ok  rows_out=2  [run fbde70de]
 ```
@@ -133,21 +133,21 @@ $ python -m framework status /data
 ## `runs` — recent run history
 
 ```sh
-python -m framework runs <base_dir> [--pipeline ingest] [--status ok] [--limit N]
+python -m cli runs <base_dir> [--pipeline ingest] [--status ok] [--limit N]
 ```
 
 Lists recent run summaries from the registry, oldest-to-newest, capped to the
 most recent `--limit` (default 10). `--pipeline` and `--status` narrow the list.
 
 ```console
-$ python -m framework runs /data --pipeline ingest --limit 5
+$ python -m cli runs /data --pipeline ingest --limit 5
 2026-06-10T09:39:30.627378+00:00  ingest  ok  rows_out=5  [run 5f8ff8c7]
 ```
 
 ## `log` — inspect a run log file
 
 ```sh
-python -m framework log <base_dir> <pipeline> [--run-id <execution-id-prefix>]
+python -m cli log <base_dir> <pipeline> [--run-id <execution-id-prefix>]
 ```
 
 Reads `<base>/_runs/<pipeline>.log` (path-addressed runs partition the log per
@@ -156,7 +156,7 @@ the runs in the file. `--run-id` filters to a single execution (a prefix of the
 execution id — the eight-character id shown by `status` / `runs` works).
 
 ```console
-$ python -m framework log /data selection
+$ python -m cli log /data selection
 run log: /data/_runs/selection.log
   selection  freshness: ok
   selection  run: ok  rows_in=2  rows_out=2  rows_quarantined=0  rows_excluded=0  0.008s

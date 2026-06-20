@@ -4,8 +4,7 @@ The stable import surface for putting the pieces together and running them: the
 deferred :class:`Pipeline` builder, ``ForEach`` orchestration, scheduled
 ``PipelineSet`` orchestration through ``Orchestrator``, the thin domain
 ``PipelineRunner`` with its ``RunContext`` / freshness guard, and the ``RunLog``
-/ ``RunRegistry`` observability types. Medallion recipe helpers are re-exported
-here for compatibility; their implementation home is ``framework.recipes``.
+/ ``RunRegistry`` observability types.
 
 Import from here rather than the underlying modules::
 
@@ -20,12 +19,6 @@ public contract, the submodule paths are not. See ``docs/public-api.md``.
 """
 
 from framework.run.builder import Pipeline
-from framework.recipes.medallion import (
-    current_silver_to_gold,
-    detail_current_silver_to_gold,
-    raw_to_silver,
-    silver_to_gold,
-)
 from framework.run.orchestration import (
     DayOfMonth,
     ForEach,
@@ -64,10 +57,6 @@ __all__ = [
     "ValidationStage",
     "ProcessingStage",
     "CheckpointStage",
-    "raw_to_silver",
-    "silver_to_gold",
-    "current_silver_to_gold",
-    "detail_current_silver_to_gold",
     "ForEach",
     "ForEachOutcome",
     "ForEachPipelineError",

@@ -7,7 +7,7 @@ from dataclasses import fields
 from framework.core import RAW, SILVER
 from framework.io import StoreCatalog
 from framework.run import RunContext
-from framework.testing import read_rows
+from tests.framework_testing import read_rows
 
 from .case_type import CASE_TYPE
 from .pipeline import FEED_NAME, run

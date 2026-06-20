@@ -16,7 +16,7 @@ rebuild of it.
 Address it by its location on disk -- the framework imports
 ``pipelines.myfeed.pipeline`` and runs its ``run(context)`` callable::
 
-    python -m framework run pipelines/myfeed [BASE_DIR]
+    python -m cli run pipelines/myfeed [BASE_DIR]
 
 or run the module directly with a default run context::
 

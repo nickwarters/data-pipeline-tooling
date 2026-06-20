@@ -36,7 +36,7 @@ framework.transform.Filter
 framework.validate.ColumnValidator
 framework.run.Pipeline
 framework.recipes.raw_to_silver
-framework.shared.WorkingDayCalendar
+tools.calendar.WorkingDayCalendar
 ```
 
 The package root is intentionally not a mega-facade: names such as `CsvReader`,
@@ -77,7 +77,7 @@ Three non-facade packages sit beside them:
   (the shared `ValueRule` protocol + the Python↔pandas type mapping and
   annotation reading both schema adapters derive from). The leading underscore
   marks it private; nothing outside the framework imports from here.
-- `framework/_cli/` — the `python -m framework` **entry point**, not an import
+- `framework/_cli/` — the `python -m cli` **entry point**, not an import
   surface: `scaffold` (generate a feed) and `operator` (the `run` /
   `orchestrate` / `runs` / `status` / `log` commands), dispatched by
   `framework/__main__.py`. Run as a tool, never imported by application code.
@@ -90,7 +90,7 @@ Three non-facade packages sit beside them:
 These sub-package paths are the *internal layout*; only the facade names
 (`framework.core` / `framework.io` / `framework.transform` / `framework.validate`
 / `framework.run` / `framework.recipes` / `framework.shared`) are the stable
-runtime import surface. `framework.testing` is the separate test-only surface,
+runtime import surface. `tests.framework_testing` is the separate test-only surface,
 and `framework._internal` is private.
 
 ## The facades
@@ -217,18 +217,18 @@ exception in examples is `framework.io.remote`, shown in
 [adding-a-feed.md](adding-a-feed.md) only to swap the stubbed remote fetcher or
 pusher — internal seams with no facade.
 
-## `framework.testing` — a test-only surface
+## `tests.framework_testing` — a test-only surface
 
-`framework.testing` (`given_rows`, `given_csv`, `rows_of`, `make_dataset`,
+`tests.framework_testing` (`given_rows`, `given_csv`, `rows_of`, `make_dataset`,
 `read_rows`, `without_columns`, `assert_rows_equal`, `RecordingWriter`,
 `RecordingRunLog`, `read_run_log` — split internally into the
-`framework.testing.rows` and `framework.testing.run_log` modules, both
+`tests.framework_testing.rows` and `tests.framework_testing.run_log` modules, both
 re-exported from the package) is a **test-support**
 surface for pipeline authors, documented in
 [testing-helpers.md](testing-helpers.md). It is *not* one of the five runtime
 facades and **application code must not import it at runtime** — only a module's
 tests do (the [boundary test](../tests/integration/test_public_api.py) holds both
-`pipelines/` and `case_review/` to the runtime facades, and `framework.testing`
+`pipelines/` and `case_review/` to the runtime facades, and `tests.framework_testing`
 is not among them). It is intentional
 public surface for tests, so unlike the internal modules below its names are
 stable, but it carries no runtime role.

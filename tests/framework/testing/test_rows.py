@@ -1,4 +1,4 @@
-"""The in-memory row helpers (``framework.testing.rows``).
+"""The in-memory row helpers (``tests.framework_testing.rows``).
 
 Exercised the way a pipeline author would: build a feed from in-memory rows or a
 CSV, run a real :class:`~framework.run.Pipeline`, and assert on the output rows
@@ -9,7 +9,7 @@ import pytest
 
 from framework.run import Pipeline
 from framework.core import Dataset
-from framework.testing import (
+from tests.framework_testing import (
     RecordingWriter,
     assert_rows_equal,
     given_csv,
