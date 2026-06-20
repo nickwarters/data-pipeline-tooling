@@ -157,5 +157,3 @@ class SqliteReader:
             table=self._table,
             columns=self._columns,
         )
-
-

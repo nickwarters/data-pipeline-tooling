@@ -1,0 +1,15 @@
+# Pre-commit hooks. Activate once per clone with `pre-commit install`
+# (after `pip install -r requirements-dev.txt`). Hooks run on staged files at
+# commit time; run across the whole tree with `pre-commit run --all-files`.
+#
+# ruff config (rules, line length, target version) is read from pyproject.toml,
+# so the hooks behave identically to a local `ruff` invocation. The pinned `rev`
+# tracks the ruff version in requirements-dev.txt; bump both together.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.16
+    hooks:
+      # Lint with autofix first (includes import sorting), then format.
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format

@@ -39,14 +39,22 @@ def ingest_silver_to_gold(
     table_name = table or case_type.name
     p = Pipeline(name or table_name, run_log=run_log)
     r = p.read(store.reader(SILVER, table_name), name="read")
-    
+
     keyed = p.transform(
-        DeriveKey(into=CASE_ID_COLUMN, namespace=case_type.namespace, natural_key=list(case_type.natural_key)),
+        DeriveKey(
+            into=CASE_ID_COLUMN,
+            namespace=case_type.namespace,
+            natural_key=list(case_type.natural_key),
+        ),
         r,
-        name="derive-key"
+        name="derive-key",
     )
-    latest = p.transform(LatestPerKey(key=CASE_ID_COLUMN, by="load_date"), keyed, name="latest-per-key")
-    validated = p.validate(UniqueValidator(CASE_ID_COLUMN), latest, name="unique-validate")
+    latest = p.transform(
+        LatestPerKey(key=CASE_ID_COLUMN, by="load_date"), keyed, name="latest-per-key"
+    )
+    validated = p.validate(
+        UniqueValidator(CASE_ID_COLUMN), latest, name="unique-validate"
+    )
     p.write(store.writer(GOLD, table_name, Refresh()), validated, name="write")
     return p
 
@@ -68,11 +76,15 @@ def detail_ingest_silver_to_gold(
     """
     p = Pipeline(name or table, run_log=run_log)
     r = p.read(store.reader(SILVER, table), name="read")
-    
+
     keyed = p.transform(
-        DeriveKey(into=CASE_ID_COLUMN, namespace=case_type.namespace, natural_key=list(case_type.natural_key)),
+        DeriveKey(
+            into=CASE_ID_COLUMN,
+            namespace=case_type.namespace,
+            natural_key=list(case_type.natural_key),
+        ),
         r,
-        name="derive-key"
+        name="derive-key",
     )
     unpivoted = p.transform(unpivot, keyed, name="unpivot")
     p.write(store.writer(GOLD, table, Refresh()), unpivoted, name="write")

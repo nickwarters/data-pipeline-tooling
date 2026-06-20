@@ -1,8 +1,8 @@
 """Public facade: the foundational data vocabulary.
 
-The nouns every pipeline names regardless of task — ``Dataset`` and the medallion 
+The nouns every pipeline names regardless of task — ``Dataset`` and the medallion
 ``Layer`` constants ``RAW`` / ``SILVER`` / ``GOLD``. Plus, the foundational data
-contracts: declaring and enforcing a feed's schema (``SchemaValidator``, value rules) 
+contracts: declaring and enforcing a feed's schema (``SchemaValidator``, value rules)
 and structural validations.
 
 Import from here rather than the underlying modules::

@@ -175,8 +175,13 @@ def test_pipeline_quarantine_routes_rejected_rows_to_reject_writer(tmp_path):
 
     p = Pipeline("test-feed")
     r = p.read(CsvReader(csv_file), name="read")
-    q = p.quarantine(SchemaValueRulePartitioner(RefCase), QuarantineWriter(reject_db, "rejects"), r, name="quarantine")
-    w = p.write(SqliteTruncateReloadWriter(main_db, "feed"), q, name="write")
+    q = p.quarantine(
+        SchemaValueRulePartitioner(RefCase),
+        QuarantineWriter(reject_db, "rejects"),
+        r,
+        name="quarantine",
+    )
+    p.write(SqliteTruncateReloadWriter(main_db, "feed"), q, name="write")
     p.run()
 
     con_main = sqlite3.connect(main_db)
@@ -217,8 +222,13 @@ def test_pipeline_quarantine_uses_run_context_identity(tmp_path):
     )
     p = Pipeline("feed")
     r = p.read(CsvReader(csv_file), name="read")
-    q = p.quarantine(SchemaValueRulePartitioner(RefCase), QuarantineWriter(tmp_path / "rejects.db", "rejects"), r, name="quarantine")
-    w = p.write(SqliteTruncateReloadWriter(tmp_path / "main.db", "feed"), q, name="write")
+    q = p.quarantine(
+        SchemaValueRulePartitioner(RefCase),
+        QuarantineWriter(tmp_path / "rejects.db", "rejects"),
+        r,
+        name="quarantine",
+    )
+    p.write(SqliteTruncateReloadWriter(tmp_path / "main.db", "feed"), q, name="write")
     p.run(context=context)
 
     con = sqlite3.connect(tmp_path / "rejects.db")
@@ -256,8 +266,15 @@ def test_pipeline_quarantine_is_idempotent_on_rerun(tmp_path):
     def run(logical_run_id: str):
         p = Pipeline("feed")
         r = p.read(CsvReader(csv_file), name="read")
-        q = p.quarantine(SchemaValueRulePartitioner(RefCase), QuarantineWriter(reject_db, "rejects"), r, name="quarantine")
-        w = p.write(SqliteTruncateReloadWriter(tmp_path / "main.db", "feed"), q, name="write")
+        q = p.quarantine(
+            SchemaValueRulePartitioner(RefCase),
+            QuarantineWriter(reject_db, "rejects"),
+            r,
+            name="quarantine",
+        )
+        p.write(
+            SqliteTruncateReloadWriter(tmp_path / "main.db", "feed"), q, name="write"
+        )
         p.run(RunContext(pipeline="feed", logical_run_id=logical_run_id))
 
     run("run-A")
@@ -289,8 +306,13 @@ def test_structural_breach_aborts_even_with_quarantine_configured(tmp_path):
     p = Pipeline("feed")
     r = p.read(CsvReader(csv_file), name="read")
     v = p.validate(SchemaValidator(RefCase), r, name="schema-validator")
-    q = p.quarantine(SchemaValueRulePartitioner(RefCase), QuarantineWriter(tmp_path / "rejects.db", "rejects"), v, name="quarantine")
-    w = p.write(SqliteTruncateReloadWriter(tmp_path / "main.db", "feed"), q, name="write")
+    q = p.quarantine(
+        SchemaValueRulePartitioner(RefCase),
+        QuarantineWriter(tmp_path / "rejects.db", "rejects"),
+        v,
+        name="quarantine",
+    )
+    p.write(SqliteTruncateReloadWriter(tmp_path / "main.db", "feed"), q, name="write")
 
     with pytest.raises(ValidationError):
         p.run()
@@ -312,8 +334,13 @@ def test_run_log_quarantine_step_records_rows_quarantined(tmp_path):
     log_file = tmp_path / "run.log"
     p = Pipeline("feed", run_log=RunLog(log_file))
     r = p.read(CsvReader(csv_file), name="read")
-    q = p.quarantine(SchemaValueRulePartitioner(RefCase), QuarantineWriter(tmp_path / "rejects.db", "rejects"), r, name="quarantine")
-    w = p.write(SqliteTruncateReloadWriter(tmp_path / "main.db", "feed"), q, name="write")
+    q = p.quarantine(
+        SchemaValueRulePartitioner(RefCase),
+        QuarantineWriter(tmp_path / "rejects.db", "rejects"),
+        r,
+        name="quarantine",
+    )
+    p.write(SqliteTruncateReloadWriter(tmp_path / "main.db", "feed"), q, name="write")
     p.run()
 
     records = [json.loads(line) for line in log_file.read_text().splitlines()]

@@ -169,7 +169,9 @@ class StdoutWriter:
     shown when several datasets land on the same console.
     """
 
-    def __init__(self, label: str | None = None, *, stream: TextIO | None = None) -> None:
+    def __init__(
+        self, label: str | None = None, *, stream: TextIO | None = None
+    ) -> None:
         self._label = label
         self._stream = stream
 

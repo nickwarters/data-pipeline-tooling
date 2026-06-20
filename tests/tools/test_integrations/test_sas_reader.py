@@ -84,7 +84,7 @@ def test_sas_reader_composes_in_the_pipeline_builder(landing, tmp_path):
     # observed end-to-end rather than via isinstance).
     p = Pipeline("cases")
     r = p.read(SasReader("run_cases.sas", "*.csv", landing), name="read")
-    w = p.write(SqliteTruncateReloadWriter(tmp_path / "raw.db", "cases"), r, name="write")
+    p.write(SqliteTruncateReloadWriter(tmp_path / "raw.db", "cases"), r, name="write")
     landed = p.run()
 
     assert landed.columns == ["case_id", "advisor"]

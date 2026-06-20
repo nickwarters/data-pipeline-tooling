@@ -10,9 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def _run(pipeline: str, base_dir: Path) -> int:
-    return operator.main(
-        ["run", pipeline, str(base_dir), "--run-date", "2026-05-29"]
-    )
+    return operator.main(["run", pipeline, str(base_dir), "--run-date", "2026-05-29"])
 
 
 def test_demo_selection_rules_are_independently_testable():
