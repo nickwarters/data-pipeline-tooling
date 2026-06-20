@@ -567,8 +567,8 @@ The CLI `run` command addresses a pipeline by its location on disk, importing
 `run_pipeline`:
 
 ```sh
-python -m framework run pipelines/ingest /tmp/demo --run-date 2026-05-29
-python -m framework run pipelines/selection /tmp/demo --run-date 2026-05-29
+python -m cli run pipelines/ingest /tmp/demo --run-date 2026-05-29
+python -m cli run pipelines/selection /tmp/demo --run-date 2026-05-29
 ```
 
 ### `Orchestrator` — scheduled PipelineSets

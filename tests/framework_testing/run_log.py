@@ -4,7 +4,7 @@ The observability side of the testing surface. :class:`RecordingRunLog` captures
 a run's records in memory (no file), and :func:`read_run_log` parses an on-disk
 JSONL run-log into the same record dicts — so a test asserts on validation
 failures, warn hits, and row counts the same way whether the run logged to memory
-or to disk. Re-exported from :mod:`framework.testing`.
+or to disk. Re-exported from :mod:`tests.framework_testing`.
 """
 
 from __future__ import annotations

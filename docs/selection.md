@@ -84,7 +84,7 @@ its silver), and a `WorkingDayCalendar` (the availability arithmetic — see
 ```python
 from case_review.case_pool import CasePool
 from framework.io import StoreCatalog
-from framework.shared import WorkingDayCalendar
+from tools.calendar import WorkingDayCalendar
 
 store = StoreCatalog("/share").store(CASES.name)
 pool = CasePool(CASES, store, WorkingDayCalendar())
@@ -243,8 +243,8 @@ available cases -> the `gold` SelectionPool). Run them in order from the repo
 root:
 
 ```sh
-python -m framework run pipelines/ingest /tmp/demo --run-date 2026-05-29
-python -m framework run pipelines/selection /tmp/demo --run-date 2026-05-29
+python -m cli run pipelines/ingest /tmp/demo --run-date 2026-05-29
+python -m cli run pipelines/selection /tmp/demo --run-date 2026-05-29
 ```
 
 `selection` declares `ingest` as a freshness upstream (`UPSTREAMS`), so the
@@ -261,7 +261,7 @@ Each pipeline records its run summary under its name (`ingest`, `selection`) and
 (`AccumulateByRun.from_context(context)`), so each gold row is stamped with the
 run's logical run id (default `<pipeline>:run_date`) and `execution_id`.
 Re-driving a business run under the same id replaces its rows rather than
-duplicating them — over the CLI, `python -m framework run pipelines/selection
+duplicating them — over the CLI, `python -m cli run pipelines/selection
 /tmp/demo --logical-run-id <id>` (see [operator-cli.md](operator-cli.md)). The
 `as_of` date is fixed so the working-day window lines up with the sample feed and
 the run is deterministic. Each pipeline can also be run directly with a default

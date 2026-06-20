@@ -13,13 +13,11 @@ from __future__ import annotations
 
 from case_review.case_type import CaseType
 from framework.io import Store
-from framework.run import (
-    Pipeline,
-    RunLog,
-    current_silver_to_gold,
-    detail_current_silver_to_gold,
-)
-from framework.transform import Unpivot
+from framework.core import GOLD, SILVER
+from framework.run import Pipeline, RunLog
+from framework.transform import DeriveKey, LatestPerKey, Unpivot
+from framework.validate import UniqueValidator
+from framework.io.strategy import Refresh
 
 # A Case is identified by its ``case_id`` everywhere downstream. The generic
 # reducer calls this its ``entity_id_column``; the case-review layer fixes it.
@@ -39,15 +37,19 @@ def ingest_silver_to_gold(
     Identity (``namespace`` / ``natural_key``) comes from ``case_type``; the
     silver/gold ``table`` defaults to the Case Type's ``name``.
     """
-    return current_silver_to_gold(
-        store,
-        table or case_type.name,
-        namespace=case_type.namespace,
-        natural_key=list(case_type.natural_key),
-        entity_id_column=CASE_ID_COLUMN,
-        name=name,
-        run_log=run_log,
+    table_name = table or case_type.name
+    p = Pipeline(name or table_name, run_log=run_log)
+    r = p.read(store.reader(SILVER, table_name), name="read")
+    
+    keyed = p.transform(
+        DeriveKey(into=CASE_ID_COLUMN, namespace=case_type.namespace, natural_key=list(case_type.natural_key)),
+        r,
+        name="derive-key"
     )
+    latest = p.transform(LatestPerKey(key=CASE_ID_COLUMN, by="load_date"), keyed, name="latest-per-key")
+    validated = p.validate(UniqueValidator(CASE_ID_COLUMN), latest, name="unique-validate")
+    p.write(store.writer(GOLD, table_name, Refresh()), validated, name="write")
+    return p
 
 
 def detail_ingest_silver_to_gold(
@@ -65,13 +67,14 @@ def detail_ingest_silver_to_gold(
     ``case_id`` derives identically. ``table`` is the Detail Table's own name
     (distinct from the Case table).
     """
-    return detail_current_silver_to_gold(
-        store,
-        table,
-        namespace=case_type.namespace,
-        natural_key=list(case_type.natural_key),
-        unpivot=unpivot,
-        entity_id_column=CASE_ID_COLUMN,
-        name=name,
-        run_log=run_log,
+    p = Pipeline(name or table, run_log=run_log)
+    r = p.read(store.reader(SILVER, table), name="read")
+    
+    keyed = p.transform(
+        DeriveKey(into=CASE_ID_COLUMN, namespace=case_type.namespace, natural_key=list(case_type.natural_key)),
+        r,
+        name="derive-key"
     )
+    unpivoted = p.transform(unpivot, keyed, name="unpivot")
+    p.write(store.writer(GOLD, table, Refresh()), unpivoted, name="write")
+    return p

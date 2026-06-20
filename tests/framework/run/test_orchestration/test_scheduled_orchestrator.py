@@ -18,7 +18,7 @@ from framework.run import (
     SpecificWeekdays,
     Weekdays,
 )
-from framework.shared import WorkingDayCalendar
+from tools.calendar import WorkingDayCalendar
 
 
 def _runner(calls: list[str], failing: set[str] | None = None) -> PipelineRunner:

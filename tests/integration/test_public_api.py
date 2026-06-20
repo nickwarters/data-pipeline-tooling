@@ -15,7 +15,7 @@ FIXTURE = Path(__file__).parent.parent / "fixtures" / "cases.csv"
 
 PIPELINES_DIR = Path(__file__).parent.parent.parent / "pipelines"
 CASE_REVIEW_DIR = Path(__file__).parent.parent.parent / "case_review"
-PUBLIC_FACADES = {"core", "io", "transform", "validate", "run", "recipes", "shared"}
+PUBLIC_FACADES = {"core", "io", "transform", "validate", "run", "shared"}
 
 
 def _framework_submodules_imported(source: str) -> set[str]:
@@ -39,7 +39,7 @@ def _facade_offenders(root: Path) -> dict[str, set[str]]:
     imports — bypassing the public facades. Empty means the tree is clean.
 
     Test modules are excluded: their tests legitimately import framework
-    internals (e.g. ``framework.testing``).
+    internals (e.g. ``tests.framework_testing``).
     """
     offenders: dict[str, set[str]] = {}
     for path in sorted(root.rglob("*.py")):
@@ -60,7 +60,6 @@ def test_package_root_exposes_only_public_facade_modules():
         "transform",
         "validate",
         "run",
-        "recipes",
         "shared",
     ]
     assert framework.core.Dataset is not None
@@ -68,8 +67,6 @@ def test_package_root_exposes_only_public_facade_modules():
     assert framework.transform.Filter is not None
     assert framework.validate.ColumnValidator is not None
     assert framework.run.Pipeline is not None
-    assert framework.recipes.raw_to_silver is not None
-    assert framework.shared.WorkingDayCalendar is not None
 
     unsupported_facade_names = {
         "CsvReader",
@@ -175,7 +172,7 @@ def test_internal_plumbing_stays_out_of_the_public_facades():
     # implementation detail (connection factory, layer-name helper, trace
     # mechanics, remote client seam, runner/run-log internals) — documented as
     # internal in docs/public-api.md and absent from every facade's __all__.
-    from framework import core, io, recipes, run, shared, transform, validate
+    from framework import core, io, run, shared, transform, validate
 
     internal = {
         "connect",  # framework._internal.connection — connection factory seam
@@ -187,7 +184,7 @@ def test_internal_plumbing_stays_out_of_the_public_facades():
         "StepMetrics",  # framework.run.run_log — internal timing record
         "pipeline_label",  # framework.run.runner — internal label helper
     }
-    for facade in (core, io, transform, validate, run, recipes, shared):
+    for facade in (core, io, transform, validate, run, shared):
         leaked = internal & set(facade.__all__)
         assert not leaked, f"{facade.__name__} leaks internal names: {leaked}"
         # __all__ is also honest: every advertised name resolves on the facade.
@@ -199,7 +196,7 @@ def test_demo_pipelines_import_framework_only_through_the_public_facades():
     # downstream scripts depend on the stable surface, not internal modules
     # by accident. Every framework import in pipelines/ must go through a facade —
     # including feed subpackages (pipelines/<feed>/, scaffolded by ). Test
-    # modules are excluded: their tests legitimately import framework.testing.
+    # modules are excluded: their tests legitimately import tests.framework_testing.
     assert not _facade_offenders(PIPELINES_DIR), (
         f"pipelines bypassing the public facades: {_facade_offenders(PIPELINES_DIR)}"
     )

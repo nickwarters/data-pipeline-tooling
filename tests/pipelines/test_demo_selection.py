@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from framework._cli import operator
+from cli import operator
 from framework.core import GOLD
 from framework.io import Store
-from framework.testing import read_rows
+from tests.framework_testing import read_rows
 from pipelines.selection.pipeline import high_value_case, priority_score
 
 ROOT = Path(__file__).resolve().parents[2]

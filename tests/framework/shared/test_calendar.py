@@ -1,6 +1,6 @@
 from datetime import date
 
-from framework.shared.calendar import WorkingDayCalendar
+from tools.calendar import WorkingDayCalendar
 
 
 def test_last_n_working_days_skips_weekends_most_recent_first():

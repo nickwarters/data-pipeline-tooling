@@ -1,4 +1,4 @@
-"""Case Type ingest template rendered by ``python -m framework scaffold --case-type``.
+"""Case Type ingest template rendered by ``python -m cli scaffold --case-type``.
 
 The case-review-flavoured sibling of the generic feed template: a worked
 starting point for a feed whose rows are Cases. Where the generic template is

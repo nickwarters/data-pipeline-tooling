@@ -7,10 +7,10 @@ stays local SQLite + JSONL, with no external services.
 
 Run from the repository root so the import-only ``framework`` package resolves::
 
-    python -m framework run pipelines/orders /data --run-date 2026-05-29
-    python -m framework status /data --case-type cases
-    python -m framework runs /data --pipeline cases/ingest --limit 5
-    python -m framework log /data cases --run-id <execution-id>
+    python -m cli run pipelines/orders /data --run-date 2026-05-29
+    python -m cli status /data --case-type cases
+    python -m cli runs /data --pipeline cases/ingest --limit 5
+    python -m cli log /data cases --run-id <execution-id>
 
 ``run`` addresses a pipeline by *its location on disk*: ``pipelines/orders`` maps
 to the module ``pipelines.orders.pipeline``, imported at runtime, whose
@@ -35,7 +35,7 @@ from pathlib import Path
 
 from framework.core import PipelineError, format_failure
 from framework.run import Orchestrator, RunRegistry, run_pipeline
-from framework.shared import WorkingDayCalendar
+from tools.calendar import WorkingDayCalendar
 
 # Mirrors the layout PipelineRunner writes: a per-base run registry and the
 # per-case-type JSONL run logs the runner emits alongside it.
@@ -251,7 +251,7 @@ def _status(args: argparse.Namespace) -> int:
 
 
 def register(sub) -> None:
-    """Add the operator commands to the unified ``python -m framework`` CLI."""
+    """Add the operator commands to the unified ``python -m cli`` CLI."""
     run = sub.add_parser("run", help="run a pipeline by its pipelines/ path")
     run.add_argument(
         "pipeline",
@@ -323,7 +323,7 @@ def register(sub) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="python -m framework")
+    parser = argparse.ArgumentParser(prog="python -m cli")
     register(parser.add_subparsers(dest="command", required=True))
     return parser
 

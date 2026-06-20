@@ -11,9 +11,9 @@ For a fresh CSV feed, generate a runnable starting point instead of writing the
 files by hand (#97):
 
 ```sh
-python -m framework scaffold orders            # -> pipelines/orders/ + tests/pipelines/test_orders.py
-python -m framework scaffold orders --force    # overwrite if it exists
-python -m framework scaffold orders --from-feed-file sample.csv  # seed from a real CSV
+python -m cli scaffold orders            # -> pipelines/orders/ + tests/pipelines/test_orders.py
+python -m cli scaffold orders --force    # overwrite if it exists
+python -m cli scaffold orders --from-feed-file sample.csv  # seed from a real CSV
 ```
 
 This renders, from the template under `framework/_cli/scaffold_templates/feed/`, the feed
@@ -33,7 +33,7 @@ tests/pipelines/
 `pipeline.py` follows the framework's canonical pipeline contract: it exposes a
 `run(context: RunContext, *, describe: bool = False) -> Dataset` callable (and an
 `UPSTREAMS` tuple of freshness requirements — empty for a source feed). The
-framework addresses the pipeline by its path — `python -m framework run
+framework addresses the pipeline by its path — `python -m cli run
 pipelines/orders` imports `pipelines.orders.pipeline` and executes
 `run(context)`. Each medallion hop is factored into its own
 `*_builder(reader, writer, run_log=None) -> Pipeline` returning the composed
@@ -71,7 +71,7 @@ the pipeline uses **relative** intra-package imports, and the relocated test
 imports the feed absolutely (`from pipelines.orders.pipeline import …`):
 
 ```sh
-python -m framework run pipelines/orders /data   # run via the framework (freshness + run log)
+python -m cli run pipelines/orders /data   # run via the framework (freshness + run log)
 python -m pipelines.orders.pipeline /data        # or directly: refine the bundled sample to gold
 python -m pipelines.orders.pipeline /data --describe  # print each hop's plan, then run it
 python -m pytest tests/pipelines/test_orders.py  # the generated test passes as-is
@@ -94,7 +94,7 @@ Most of that customising is mechanical — retyping a source's column names into
 instead and it does that for you:
 
 ```sh
-python -m framework scaffold orders --from-feed-file path/to/sample.csv
+python -m cli scaffold orders --from-feed-file path/to/sample.csv
 ```
 
 From the CSV's **header** it derives the schema's fields (one per column,
@@ -129,7 +129,7 @@ plain passthrough; there's no Case identity (a Feed isn't necessarily a Case Typ
 rows *are* a Case Type, reach for the additive variant instead (#155):
 
 ```sh
-python -m framework scaffold --case-type claims   # -> pipelines/claims/ + tests/pipelines/test_claims.py
+python -m cli scaffold --case-type claims   # -> pipelines/claims/ + tests/pipelines/test_claims.py
 ```
 
 It renders, from `framework/_cli/scaffold_templates/case_type/`, a case-review-flavoured

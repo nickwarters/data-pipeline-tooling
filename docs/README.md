@@ -240,7 +240,7 @@ See the *Add a new Feed* how-to.
 ```python
 from case_review.case_pool import CasePool
 from framework.io import StoreCatalog
-from framework.shared import WorkingDayCalendar
+from tools.calendar import WorkingDayCalendar
 
 store = StoreCatalog("/share").store(CASES.name)
 pool = CasePool(CASES, store, WorkingDayCalendar())
@@ -264,7 +264,7 @@ To skip the boilerplate for a fresh CSV feed, **scaffold** one — feed code as 
 under `tests/pipelines/`, ready to run — and then customise it (#97):
 
 ```sh
-python -m framework scaffold orders              # -> pipelines/orders/ + tests/pipelines/test_orders.py
+python -m cli scaffold orders              # -> pipelines/orders/ + tests/pipelines/test_orders.py
 python -m pipelines.orders.pipeline /data        # land the bundled sample into raw
 python -m pytest tests/pipelines/test_orders.py  # the generated test passes as-is
 ```
@@ -275,7 +275,7 @@ silver (stopping at silver — gold assembly is the author's call, #163); see
 [`adding-a-feed.md`](adding-a-feed.md):
 
 ```sh
-python -m framework scaffold --case-type claims  # + case_type.py; source -> raw -> silver
+python -m cli scaffold --case-type claims  # + case_type.py; source -> raw -> silver
 ```
 
 ```python
@@ -450,7 +450,7 @@ strategy = AccumulateByRun.from_context(context)
 - The SelectionPool reaches the review platform as a **Deliverable** (a later
   slice); the returned **Review Outcomes** come back via **Sync**, not here.
 - Run pipelines through the framework when freshness matters:
-  `python -m framework run pipelines/selection /tmp/demo --run-date 2026-05-29`
+  `python -m cli run pipelines/selection /tmp/demo --run-date 2026-05-29`
   checks recent successful `ingest` history (its declared `UPSTREAMS`) before
   Selection executes.
 
@@ -478,16 +478,16 @@ rows without touching prior loads.
 ### Operate pipelines from the CLI — run, status, runs, log
 
 For the everyday operator tasks — running a pipeline, checking its status,
-listing recent runs, inspecting a run log — use `python -m framework` instead
+listing recent runs, inspecting a run log — use `python -m cli` instead
 of writing a wrapper script. It is a thin shell over the runner and the
 `RunRegistry` / `RunLog` seam; full reference with example output is
 [`operator-cli.md`](operator-cli.md).
 
 ```sh
-python -m framework run pipelines/ingest /data --run-date 2026-05-29
-python -m framework status /data --pipeline ingest
-python -m framework runs /data --pipeline ingest --limit 5
-python -m framework log /data ingest --run-id 5f8ff8c7
+python -m cli run pipelines/ingest /data --run-date 2026-05-29
+python -m cli status /data --pipeline ingest
+python -m cli runs /data --pipeline ingest --limit 5
+python -m cli log /data ingest --run-id 5f8ff8c7
 ```
 
 `run` addresses a pipeline by **its location on disk**: `pipelines/ingest` maps
@@ -504,7 +504,7 @@ application's registry module (`build_runner()` / `build_pipeline_sets()`).
 
 ### Test a pipeline — given source rows, expect output rows
 
-To test a concrete pipeline script, reach for `framework.testing` rather than
+To test a concrete pipeline script, reach for `tests.framework_testing` rather than
 wiring temp directories and SQLite assertions by hand. `given_rows(...)` hands a
 pipeline an in-memory feed, `RecordingWriter()` captures what it wrote, and
 `rows_of(...)` reads it back as plain row dicts for a direct `==`:
@@ -512,7 +512,7 @@ pipeline an in-memory feed, `RecordingWriter()` captures what it wrote, and
 ```python
 from framework.run import Pipeline
 from framework.transform import Filter
-from framework.testing import given_rows, rows_of, RecordingWriter
+from tests.framework_testing import given_rows, rows_of, RecordingWriter
 
 reader = given_rows([{"amount": 100}, {"amount": 50}])
 writer = RecordingWriter()
@@ -545,7 +545,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `status` / `runs` / `log`) with example commands and output. |
 | [`resolving-a-failed-run.md`](resolving-a-failed-run.md) | The operator loop from a failed run — investigate (`status`/`log`), diagnose, resolve, and re-drive idempotently. |
 | [`escape-hatch-store.md`](escape-hatch-store.md) | Iterating against a flat scratch db (and a pre-baked SQL query) outside the medallion layer pattern, and migrating back. |
-| [`testing-helpers.md`](testing-helpers.md) | `framework.testing` — the test-only helpers for testing concrete pipelines (`given_rows`, `RecordingWriter`, `read_rows`, `RecordingRunLog`, `read_run_log`). |
+| [`testing-helpers.md`](testing-helpers.md) | `tests.framework_testing` — the test-only helpers for testing concrete pipelines (`given_rows`, `RecordingWriter`, `read_rows`, `RecordingRunLog`, `read_run_log`). |
 | [`adr/`](adr/) | Every architectural decision (the *why*). |
 | [`../CONTEXT.md`](../CONTEXT.md) | The domain language — the canonical glossary. |
 </content>
