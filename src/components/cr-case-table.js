@@ -1,6 +1,7 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { ReactiveElement } from './reactive-element.js';
 import { signal, computed } from '../lib/signal.js';
+import { h } from '../lib/html.js';
 import { CRDashboardTable } from './cr-dashboard-table.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
@@ -22,12 +23,7 @@ function defaultColumns(openCase) {
       label: 'Reference',
       sortable: true,
       getValue: r => r.title || r.id,
-      renderCell: r => {
-        const a = document.createElement('a');
-        a.href = `#/case/${r.id}`;
-        a.textContent = r.title || r.id;
-        return a;
-      },
+      renderCell: r => h('a', { href: `#/case/${r.id}` }, r.title || r.id),
     },
     {
       key: 'caseType',
@@ -62,20 +58,17 @@ function defaultColumns(openCase) {
     {
       key: 'actions',
       label: 'Actions',
-      renderCell: r => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'cr-case-open-btn';
-        btn.textContent = 'Open';
-        btn.setAttribute('aria-label', `Open ${r.title || r.id}`);
-        btn.addEventListener('click', () => openCase(r.id));
-        return btn;
-      },
+      renderCell: r => h('button', {
+        type: 'button',
+        className: 'cr-case-open-btn',
+        'aria-label': `Open ${r.title || r.id}`,
+        onclick: () => openCase(r.id)
+      }, 'Open'),
     },
   ];
 }
 
-export class CRCaseTable extends CRElement {
+export class CRCaseTable extends ReactiveElement {
   constructor() {
     super();
 
@@ -109,9 +102,10 @@ export class CRCaseTable extends CRElement {
       });
     });
 
-    this._mounted = false;
     /** @type {CRDashboardTable | null} */
     this._inner = null;
+    /** @type {HTMLElement | null} */
+    this._toolbar = null;
   }
 
   /** @param {CaseRow[]} cases */
@@ -131,65 +125,64 @@ export class CRCaseTable extends CRElement {
   set sort(s) { this._initialSort = s; }
 
   connectedCallback() {
-    if (this._mounted) return;
-    this._mounted = true;
+    super.connectedCallback();
+    if (this._inner) {
+      this._inner.connectedCallback();
+    }
+  }
 
-    /** @type {any[]} */
-    const children = [];
-    if (this._toolbarMode === 'default' && !this._customColumns) {
-      children.push(this._buildToolbar());
+  render() {
+    if (!this._toolbar) {
+      this._toolbar = this._buildToolbar();
     }
 
-    const inner = new CRDashboardTable();
-    this._inner = inner;
+    if (!this._inner) {
+      this._inner = new CRDashboardTable();
+    }
+
     const columns = this._customColumns ?? defaultColumns(id => this._openCase(id));
-    inner.columns = columns;
+    this._inner.columns = columns;
+
     if (this._customRowClass) {
-      inner.rowClass = this._customRowClass;
+      this._inner.rowClass = this._customRowClass;
     } else if (!this._customColumns) {
-      inner.rowClass = (/** @type {CaseRow} */ row) =>
+      this._inner.rowClass = (/** @type {CaseRow} */ row) =>
         row.overdue ? 'cr-case-row cr-case-row--overdue' : 'cr-case-row';
     }
-    inner.onRowActivate = (/** @type {CaseRow} */ row) => this._openCase(row.id);
-    if (this._initialSort) inner.sort = this._initialSort;
 
-    children.push(inner);
-    this.replaceChildren(...children);
-    inner.connectedCallback();
+    this._inner.onRowActivate = (/** @type {CaseRow} */ row) => this._openCase(row.id);
+    if (this._initialSort) this._inner.sort = this._initialSort;
+    
+    this._inner.rows = this._filtered.get();
 
-    this.subscribe(this._filtered, rows => {
-      if (this._inner) this._inner.rows = rows;
-    });
+    const children = [];
+    if (this._toolbarMode === 'default' && !this._customColumns) {
+      children.push(this._toolbar);
+    }
+    children.push(this._inner);
+    
+    return children;
   }
 
   _buildToolbar() {
-    const toolbar = document.createElement('div');
-    toolbar.className = 'cr-case-table-toolbar';
-
-    const filterInput = document.createElement('input');
-    filterInput.className = 'cr-case-table-filter';
-    filterInput.type = 'text';
-    filterInput.setAttribute('placeholder', 'Filter cases…');
-    filterInput.setAttribute('aria-label', 'Filter cases');
-    filterInput.addEventListener('input', (/** @type {any} */ e) => {
-      this._filterText.set(e.target?.value ?? '');
-    });
-
-    const statusSelect = document.createElement('select');
-    statusSelect.className = 'cr-case-table-status-filter';
-    statusSelect.setAttribute('aria-label', 'Filter by status');
-    for (const [val, label] of [['', 'All statuses'], ['In-progress', 'In Progress'], ['Completed', 'Completed']]) {
-      const opt = document.createElement('option');
-      opt.value = val;
-      opt.textContent = label;
-      statusSelect.appendChild(/** @type {any} */ (opt));
-    }
-    statusSelect.addEventListener('change', (/** @type {any} */ e) => {
-      this._statusFilter.set(e.target?.value ?? '');
-    });
-
-    toolbar.replaceChildren(/** @type {any} */ (filterInput), /** @type {any} */ (statusSelect));
-    return toolbar;
+    return h('div', { className: 'cr-case-table-toolbar' },
+      h('input', {
+        className: 'cr-case-table-filter',
+        type: 'text',
+        placeholder: 'Filter cases…',
+        'aria-label': 'Filter cases',
+        oninput: (/** @type {any} */ e) => this._filterText.set(e.target?.value ?? '')
+      }),
+      h('select', {
+        className: 'cr-case-table-status-filter',
+        'aria-label': 'Filter by status',
+        onchange: (/** @type {any} */ e) => this._statusFilter.set(e.target?.value ?? '')
+      },
+        h('option', { value: '' }, 'All statuses'),
+        h('option', { value: 'In-progress' }, 'In Progress'),
+        h('option', { value: 'Completed' }, 'Completed')
+      )
+    );
   }
 
   /** @param {string} caseId */

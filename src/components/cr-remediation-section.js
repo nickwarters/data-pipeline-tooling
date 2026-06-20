@@ -1,5 +1,6 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 import { evaluate } from '../evaluators/applicability-evaluator.js';
 import { isFailure } from '../evaluators/failure-evaluator.js';
 import './cr-attribute-menu.js';
@@ -10,7 +11,7 @@ import './cr-capture-groups.js';
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {{ loginName: string, displayName: string }} Party */
 
-export class CRRemediationSection extends CRElement {
+export class CRRemediationSection extends ReactiveElement {
   constructor() {
     super();
     /** @type {QuestionDefinition[]} */
@@ -68,10 +69,6 @@ export class CRRemediationSection extends CRElement {
     this._captureEls = new Map();
   }
 
-  connectedCallback() {
-    this._render();
-  }
-
   /**
    * @param {QuestionDefinition[]} catalogue
    * @param {Record<string, Answer>} answers
@@ -85,29 +82,31 @@ export class CRRemediationSection extends CRElement {
   }
 
   _render() {
+    const els = this.render();
+    if (Array.isArray(els)) this.replaceChildren(...els);
+    else if (els) this.replaceChildren(els);
+    else this.replaceChildren();
+  }
+
+  render() {
     const applicable = evaluate(this.catalogue, this.answers);
     const failed = this.catalogue.filter(q =>
       applicable.has(q.id)
       && isFailure(q, this.answers[q.id])
     );
 
-    const heading = document.createElement('h2');
-    heading.textContent = 'Failures';
+    const heading = h('h2', {}, 'Failures');
 
     if (failed.length === 0) {
-      const empty = document.createElement('p');
-      empty.className = 'cr-remediation-empty';
-      empty.textContent = 'No failures.';
-      this.replaceChildren(heading, empty);
-      return;
+      const empty = h('p', { class: 'cr-remediation-empty' }, 'No failures.');
+      return [heading, empty];
     }
 
-    const list = document.createElement('ul');
-    list.className = 'cr-remediation-list';
+    const list = h('ul', { class: 'cr-remediation-list' });
     for (const q of failed) {
       list.appendChild(this._renderItem(q));
     }
-    this.replaceChildren(heading, list);
+    return [heading, list];
   }
 
   /**
@@ -115,26 +114,17 @@ export class CRRemediationSection extends CRElement {
    * @returns {HTMLElement}
    */
   _renderItem(q) {
-    const li = document.createElement('li');
-    li.className = 'cr-remediation-item';
+    const li = h('li', { class: 'cr-remediation-item' });
 
     if (q.category) {
-      const cat = document.createElement('p');
-      cat.className = 'cr-remediation-category';
-      cat.textContent = q.category;
-      li.appendChild(cat);
+      li.appendChild(h('p', { class: 'cr-remediation-category' }, q.category));
     }
 
-    const qText = document.createElement('p');
-    qText.className = 'cr-remediation-question';
-    qText.textContent = q.text;
-    li.appendChild(qText);
+    li.appendChild(h('p', { class: 'cr-remediation-question' }, q.text));
 
-    const ans = document.createElement('p');
-    ans.className = 'cr-remediation-answer';
     const v = this.answers[q.id]?.value;
-    ans.textContent = `Answer: ${Array.isArray(v) ? v.join(', ') : v ?? ''}`;
-    li.appendChild(ans);
+    const ansText = `Answer: ${Array.isArray(v) ? v.join(', ') : v ?? ''}`;
+    li.appendChild(h('p', { class: 'cr-remediation-answer' }, ansText));
 
     if (this.attributeFailures) {
       this._renderAttribution(li, q);
@@ -149,12 +139,9 @@ export class CRRemediationSection extends CRElement {
     }
 
     if (q.remediationActions?.length) {
-      const actions = document.createElement('ul');
-      actions.className = 'cr-remediation-actions';
+      const actions = h('ul', { class: 'cr-remediation-actions' });
       for (const text of q.remediationActions) {
-        const item = document.createElement('li');
-        item.textContent = text;
-        actions.appendChild(item);
+        actions.appendChild(h('li', {}, text));
       }
       li.appendChild(actions);
     }
@@ -179,24 +166,22 @@ export class CRRemediationSection extends CRElement {
 
     if (!this.canAttribute) {
       if (attributedParty) {
-        const ap = document.createElement('p');
-        ap.className = 'cr-remediation-attributed-party';
-        ap.textContent = `Attributed to: ${attributedParty.displayName}`;
-        li.appendChild(ap);
+        li.appendChild(h('p', { class: 'cr-remediation-attributed-party' }, `Attributed to: ${attributedParty.displayName}`));
       }
       return;
     }
 
     const menu = /** @type {import('./cr-attribute-menu.js').CRAttributeMenu} */ (
-      document.createElement('cr-attribute-menu')
+      h('cr-attribute-menu', {
+        client: this.client,
+        responsibleParty: this.responsibleParty,
+        'oncr-attribute-change': (/** @type {any} */ ev) => {
+          const detail = /** @type {CustomEvent<{ attributedParty: Party | null }>} */ (ev).detail;
+          this._dispatchAttribute(q.id, detail.attributedParty);
+        }
+      })
     );
-    menu.client = this.client;
     menu.attributedParty = attributedParty ?? null;
-    menu.responsibleParty = this.responsibleParty;
-    menu.addEventListener('cr-attribute-change', (ev) => {
-      const detail = /** @type {CustomEvent<{ attributedParty: Party | null }>} */ (ev).detail;
-      this._dispatchAttribute(q.id, detail.attributedParty);
-    });
     li.appendChild(/** @type {any} */ (menu));
   }
 
@@ -219,27 +204,20 @@ export class CRRemediationSection extends CRElement {
       if (!this.canCaptureDetails) {
         const captured = details[field.key];
         if (captured === undefined || captured === '') continue;
-        const value = document.createElement('p');
-        value.className = 'cr-remediation-detail-value';
-        value.textContent = `${field.label}: ${captured}`;
-        li.appendChild(value);
+        li.appendChild(h('p', { class: 'cr-remediation-detail-value' }, `${field.label}: ${captured}`));
         continue;
       }
 
-      const wrap = document.createElement('div');
-      wrap.className = 'cr-remediation-detail-field';
-
-      const label = document.createElement('label');
-      label.className = 'cr-remediation-detail-label';
-      label.textContent = field.label;
-      wrap.appendChild(label);
-
       const control = this._buildDetailControl(field, details[field.key] ?? '');
-      control.addEventListener('change', (ev) => {
+      control.addEventListener('change', (/** @type {any} */ ev) => {
         const target = /** @type {{ value: string }} */ (/** @type {any} */ (ev).target);
         this._dispatchDetail(q.id, field.key, target.value);
       });
-      wrap.appendChild(control);
+
+      const wrap = h('div', { class: 'cr-remediation-detail-field' },
+        h('label', { class: 'cr-remediation-detail-label' }, field.label),
+        control
+      );
 
       li.appendChild(wrap);
     }
@@ -252,27 +230,17 @@ export class CRRemediationSection extends CRElement {
    */
   _buildDetailControl(field, current) {
     if (field.type === 'select') {
-      const select = /** @type {any} */ (document.createElement('select'));
-      select.className = 'cr-remediation-detail-input';
-      const blank = /** @type {any} */ (document.createElement('option'));
-      blank.value = '';
-      blank.textContent = '—';
-      select.appendChild(blank);
+      const select = /** @type {any} */ (h('select', { class: 'cr-remediation-detail-input' },
+        h('option', { value: '' }, '—')
+      ));
       for (const opt of field.options ?? []) {
-        const option = /** @type {any} */ (document.createElement('option'));
-        option.value = opt;
-        option.textContent = opt;
-        select.appendChild(option);
+        select.appendChild(h('option', { value: opt }, opt));
       }
       select.value = current;
       return select;
     }
 
-    const input = /** @type {any} */ (document.createElement('input'));
-    input.className = 'cr-remediation-detail-input';
-    input.type = 'text';
-    input.value = current;
-    return input;
+    return /** @type {any} */ (h('input', { class: 'cr-remediation-detail-input', type: 'text', value: current }));
   }
 
   /**
@@ -290,14 +258,15 @@ export class CRRemediationSection extends CRElement {
     let cg = this._captureEls.get(q.id);
     if (!cg) {
       cg = /** @type {import('./cr-capture-groups.js').CRCaptureGroups} */ (
-        document.createElement('cr-capture-groups')
+        h('cr-capture-groups', {
+          'oncr-capture': (/** @type {any} */ ev) => {
+            /** @type {any} */ (ev).stopPropagation?.();
+            const { fieldKey, value } =
+              /** @type {CustomEvent<{ fieldKey: string, value: string }>} */ (ev).detail;
+            this._dispatchCapture(q.id, fieldKey, value);
+          }
+        })
       );
-      cg.addEventListener('cr-capture', (ev) => {
-        /** @type {any} */ (ev).stopPropagation?.();
-        const { fieldKey, value } =
-          /** @type {CustomEvent<{ fieldKey: string, value: string }>} */ (ev).detail;
-        this._dispatchCapture(q.id, fieldKey, value);
-      });
       this._captureEls.set(q.id, cg);
     }
     const capture = this.answers[q.id]?.capture ?? {};

@@ -1,65 +1,72 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
-import { el } from '../question-bank/cr-bank-dom.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 import { activeSlug, commit } from '../question-bank/question-bank-store.js';
 
-export class CRQuestionCard extends CRElement {
+export class CRQuestionCard extends ReactiveElement {
   constructor() {
     super();
     /** @type {any} */ this.question = null;
     this.questionIndex = 0;
   }
-  connectedCallback() { this._render(); }
+
   _render() {
+    const content = this.render();
+    if (content !== undefined) {
+      if (Array.isArray(content)) this.replaceChildren(...content);
+      else this.replaceChildren(content);
+    } else {
+      this.replaceChildren();
+    }
+  }
+
+  render() {
     const q = this.question;
     if (!q) return;
     const i = this.questionIndex ?? 0;
 
-    const num = el('div', { class: 'card-num' },
-      el('div', { class: 'card-num-label' }, `№ ${String(i + 1).padStart(2, '0')}`),
-      el('input', {
+    const num = h('div', { class: 'card-num' },
+      h('div', { class: 'card-num-label' }, `№ ${String(i + 1).padStart(2, '0')}`),
+      h('input', {
         class: 'id-input', value: q.id,
         onchange: (/** @type {any} */ e) => commit(() => { q.id = e.target.value.trim() || q.id; }),
       }),
     );
 
-    const wording = /** @type {any} */ (document.createElement('cr-wording-editor'));
-    wording.question = q;
+    const wording = h('cr-wording-editor', { question: q });
 
-    const grid = el('div', { class: 'field-grid' });
-    grid.appendChild(this._field('Category', this._text(q.category || '', (/** @type {string} */ v) => commit(() => { q.category = v || undefined; }))));
-    grid.appendChild(this._field('Response Type', this._select(['yes-no-na','single-choice','multi-choice'], q.responseType, (/** @type {string} */ v) => {
-      commit(() => {
-        q.responseType = v;
-        if (v === 'yes-no-na') delete q.options;
-        else if (!q.options) q.options = ['Option A', 'Option B'];
-      });
-    })));
+    const grid = h('div', { class: 'field-grid' },
+      this._field('Category', this._text(q.category || '', (/** @type {string} */ v) => commit(() => { q.category = v || undefined; }))),
+      this._field('Response Type', this._select(['yes-no-na','single-choice','multi-choice'], q.responseType, (/** @type {string} */ v) => {
+        commit(() => {
+          q.responseType = v;
+          if (v === 'yes-no-na') delete q.options;
+          else if (!q.options) q.options = ['Option A', 'Option B'];
+        });
+      }))
+    );
     if (q.responseType === 'yes-no-na') {
       grid.appendChild(this._field('Failure Criteria', this._select(['—','Yes','No','N/A'], q.failureCriteria || '—', (/** @type {string} */ v) => {
         commit(() => { q.failureCriteria = v === '—' ? undefined : v; });
       })));
     }
 
-    const body = el('div', { class: 'card-body' }, wording, grid);
+    const bodyChildren = [wording, grid];
     if (q.responseType !== 'yes-no-na') {
-      const opts = /** @type {any} */ (document.createElement('cr-options-editor'));
-      opts.question = q;
-      body.appendChild(opts);
+      bodyChildren.push(h('cr-options-editor', { question: q }));
     }
-    const sw = /** @type {any} */ (document.createElement('cr-showwhen-editor'));
-    sw.question = q;
-    body.appendChild(sw);
+    bodyChildren.push(
+      h('cr-showwhen-editor', { question: q }),
+      h('cr-remediation-editor', { question: q })
+    );
 
-    const rem = /** @type {any} */ (document.createElement('cr-remediation-editor'));
-    rem.question = q;
-    body.appendChild(rem);
+    const body = h('div', { class: 'card-body' }, ...bodyChildren);
 
-    const actions = el('div', { class: 'card-actions' },
-      el('button', { class: 'icon-btn', title: q.deprecated ? 'Restore' : 'Mark deprecated',
+    const actions = h('div', { class: 'card-actions' },
+      h('button', { class: 'icon-btn', title: q.deprecated ? 'Restore' : 'Mark deprecated',
         onclick: () => commit(() => { q.deprecated = !q.deprecated; }) },
         q.deprecated ? '↩' : '⌀'),
-      el('button', { class: 'icon-btn', title: 'Duplicate',
+      h('button', { class: 'icon-btn', title: 'Duplicate',
         onclick: () => commit(types => {
           const b = types[activeSlug.get()];
           const idx = b.questions.indexOf(q);
@@ -67,7 +74,7 @@ export class CRQuestionCard extends CRElement {
           copy.id = q.id + '-copy';
           b.questions.splice(idx + 1, 0, copy);
         }) }, '⎘'),
-      el('button', { class: 'icon-btn danger', title: 'Remove draft',
+      h('button', { class: 'icon-btn danger', title: 'Remove draft',
         onclick: () => {
           const ok = (/** @type {any} */ (globalThis)).confirm?.(`Remove "${q.id}" from the draft? (Prefer "deprecate" to preserve history.)`);
           if (!ok) return;
@@ -78,27 +85,27 @@ export class CRQuestionCard extends CRElement {
         } }, '×'),
     );
 
-    const stripe = el('div', { class: 'card-stripe' });
+    const stripe = h('div', { class: 'card-stripe' });
     if (q.showWhen && !q.deprecated) stripe.style.cssText = 'background: var(--ochre);';
 
     this.className = 'card' + (q.deprecated ? ' deprecated' : '');
-    this.replaceChildren(stripe, el('div', { class: 'card-head' }, num, body, actions));
+    return [stripe, h('div', { class: 'card-head' }, num, body, actions)];
   }
   /** @param {string} label @param {any} control */
   _field(label, control) {
-    return el('div', { class: 'field' }, el('label', {}, label), control);
+    return h('div', { class: 'field' }, h('label', {}, label), control);
   }
   /** @param {string} value @param {(v: string) => void} onChange */
   _text(value, onChange) {
-    const i = /** @type {any} */ (el('input', { class: 'field-input', value }));
+    const i = /** @type {any} */ (h('input', { class: 'field-input', value }));
     i.addEventListener('change', (/** @type {any} */ e) => onChange(e.target.value));
     return i;
   }
   /** @param {string[]} options @param {string} value @param {(v: string) => void} onChange */
   _select(options, value, onChange) {
-    const s = /** @type {any} */ (el('select', { class: 'field-select' }));
+    const s = /** @type {any} */ (h('select', { class: 'field-select' }));
     options.forEach(o => {
-      const opt = /** @type {any} */ (el('option', { value: o }, o));
+      const opt = /** @type {any} */ (h('option', { value: o }, o));
       if (o === value) opt.selected = true;
       s.appendChild(opt);
     });

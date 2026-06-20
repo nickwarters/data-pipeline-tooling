@@ -129,12 +129,13 @@ test('CRDashboardTable: clicking header sorts and second click reverses', () => 
   assert.equal(headerBtns.length, 1);
 
   headerBtns[0]._listeners['click'][0]();
-  const tbody = findAll(t, 'tbody')[0];
-  const names1 = tbody._children.map((/** @type {any} */ tr) => tr._children[0].textContent);
+  const tbody1 = findAll(t, 'tbody')[0];
+  const names1 = tbody1._children.map((/** @type {any} */ tr) => tr._children[0].textContent);
   assert.deepEqual(names1, ['Alice', 'Bob', 'Carol']);
 
   headerBtns[0]._listeners['click'][0]();
-  const names2 = tbody._children.map((/** @type {any} */ tr) => tr._children[0].textContent);
+  const tbody2 = findAll(t, 'tbody')[0];
+  const names2 = tbody2._children.map((/** @type {any} */ tr) => tr._children[0].textContent);
   assert.deepEqual(names2, ['Carol', 'Bob', 'Alice']);
 });
 

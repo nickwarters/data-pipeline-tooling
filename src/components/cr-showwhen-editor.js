@@ -1,39 +1,52 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
-import { el, reactive } from '../question-bank/cr-bank-dom.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 import { countLeaves, ensureTree, treeDepth } from '../question-bank/question-bank-tree.js';
 
-export class CRShowwhenEditor extends CRElement {
+export class CRShowwhenEditor extends ReactiveElement {
   constructor() {
     super();
     /** @type {any} */
     this.question = null;
   }
-  connectedCallback() { reactive(this, () => this._render()); }
+
   _render() {
+    const content = this.render();
+    if (content !== undefined) {
+      if (Array.isArray(content)) {
+        this.replaceChildren(...content);
+      } else {
+        this.replaceChildren(content);
+      }
+    }
+  }
+
+  render() {
     const q = this.question;
-    if (!q) return;
+    if (!q) return undefined;
     const tree = ensureTree(q);
     const count = countLeaves(tree);
     const depth = treeDepth(tree);
     const desc = count === 0 ? '' : `${count} condition${count === 1 ? '' : 's'}${depth > 1 ? ` · ${depth} levels deep` : ''}`;
 
-    const wrap = el('div', { class: 'showwhen-block' },
-      el('div', { class: 'showwhen-header' },
-        el('span', {}, '◆ Show when'),
-        el('span', { class: 'showwhen-desc' }, desc),
+    const empty = tree.children.length === 0 
+      ? h('div', { className: 'showwhen-empty' }, '// always shown — add a condition to gate this question')
+      : null;
+
+    const grp = /** @type {any} */ (h('cr-showwhen-group', {
+      question: q,
+      group: tree,
+      isRoot: true
+    }));
+
+    return h('div', { className: 'showwhen-block' },
+      h('div', { className: 'showwhen-header' },
+        h('span', {}, '◆ Show when'),
+        h('span', { className: 'showwhen-desc' }, desc),
       ),
+      empty,
+      grp
     );
-    if (tree.children.length === 0) {
-      wrap.appendChild(el('div', { class: 'showwhen-empty' },
-        '// always shown — add a condition to gate this question'));
-    }
-    const grp = /** @type {any} */ (document.createElement('cr-showwhen-group'));
-    grp.question = q;
-    grp.group = tree;
-    grp.isRoot = true;
-    wrap.appendChild(grp);
-    this.replaceChildren(wrap);
   }
 }
 

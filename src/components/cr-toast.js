@@ -1,17 +1,26 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
-import { el, reactive } from '../question-bank/cr-bank-dom.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 import { toastMsg } from '../question-bank/question-bank-store.js';
 
-export class CRToast extends CRElement {
-  connectedCallback() { reactive(this, () => this._render()); }
+export class CRToast extends ReactiveElement {
   _render() {
+    const content = this.render();
+    if (content && typeof content === 'object' && 'appendChild' in content) {
+      this.replaceChildren(content);
+    } else if (Array.isArray(content)) {
+      this.replaceChildren(...content);
+    } else {
+      this.replaceChildren();
+    }
+  }
+
+  render() {
     const msg = toastMsg.get();
-    const t = el('div', { class: 'toast' + (msg ? ' show' : '') },
-      el('span', { class: 'dot' }),
-      el('span', {}, msg || ''),
+    return h('div', { className: 'toast' + (msg ? ' show' : '') },
+      h('span', { className: 'dot' }),
+      h('span', {}, msg || '')
     );
-    this.replaceChildren(t);
   }
 }
 

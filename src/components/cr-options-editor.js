@@ -1,35 +1,47 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
-import { el, reactive } from '../question-bank/cr-bank-dom.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 import { commit } from '../question-bank/question-bank-store.js';
 
-export class CROptionsEditor extends CRElement {
+export class CROptionsEditor extends ReactiveElement {
   constructor() {
     super();
     /** @type {any} */
     this.question = null;
   }
-  connectedCallback() { reactive(this, () => this._render()); }
+  
   _render() {
+    const content = this.render();
+    if (content !== undefined) {
+      if (Array.isArray(content)) {
+        this.replaceChildren(...content);
+      } else {
+        this.replaceChildren(content);
+      }
+    } else {
+      this.replaceChildren();
+    }
+  }
+
+  render() {
     const q = this.question;
-    if (!q) return;
-    const wrap = el('div', { style: 'margin-top:14px;' });
-    wrap.appendChild(el('label', { class: 'options-label' }, 'Options'));
-    const row = el('div', { class: 'tag-row' });
-    (q.options || []).forEach((/** @type {string} */ o, /** @type {number} */ idx) => {
-      row.appendChild(el('span', { class: 'tag' },
-        el('span', {}, o),
-        el('span', { class: 'tag-x',
-          onclick: () => commit(() => q.options.splice(idx, 1)) }, '×'),
-      ));
-    });
-    row.appendChild(el('button', { class: 'tag-add',
-      onclick: () => {
-        const v = (/** @type {any} */ (globalThis)).prompt?.('New option label:');
-        if (v && v.trim()) commit(() => { (q.options ||= []).push(v.trim()); });
-      } }, '+ option'));
-    wrap.appendChild(row);
-    this.replaceChildren(wrap);
+    if (!q) return undefined;
+    
+    return h('div', { style: 'margin-top:14px;' },
+      h('label', { class: 'options-label' }, 'Options'),
+      h('div', { class: 'tag-row' },
+        ...(q.options || []).map((/** @type {string} */ o, /** @type {number} */ idx) => 
+          h('span', { class: 'tag' },
+            h('span', {}, o),
+            h('span', { class: 'tag-x', onclick: () => commit(() => q.options.splice(idx, 1)) }, '×')
+          )
+        ),
+        h('button', { class: 'tag-add', onclick: () => {
+          const v = (/** @type {any} */ (globalThis)).prompt?.('New option label:');
+          if (v && v.trim()) commit(() => { (q.options ||= []).push(v.trim()); });
+        } }, '+ option')
+      )
+    );
   }
 }
 

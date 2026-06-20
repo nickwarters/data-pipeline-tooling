@@ -1,5 +1,6 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 import './cr-outcome.js';
 import { caseDetailFields } from './cr-case-details.js';
 import { buildSummaryModel } from '../evaluators/summary-model.js';
@@ -21,7 +22,7 @@ import './cr-capture-groups.js';
  *
  * Summary is never editable — only `read-only` or `hidden` (see section-access).
  */
-export class CRSummary extends CRElement {
+export class CRSummary extends ReactiveElement {
   constructor() {
     super();
     /** @type {((answers: Record<string, Answer>) => OutcomeResult) | null} */
@@ -54,10 +55,6 @@ export class CRSummary extends CRElement {
     this.captureGroups = [];
   }
 
-  connectedCallback() {
-    this._render();
-  }
-
   /**
    * @param {(answers: Record<string, Answer>) => OutcomeResult} computeOutcome
    * @param {Record<string, Answer>} answers
@@ -71,12 +68,18 @@ export class CRSummary extends CRElement {
   }
 
   _render() {
-    const heading = document.createElement('h2');
-    heading.textContent = 'Summary';
+    const content = this.render();
+    if (content !== undefined) {
+      if (Array.isArray(content)) this.replaceChildren(...content);
+      else this.replaceChildren(content);
+    } else {
+      this.replaceChildren();
+    }
+  }
 
-    const outcomeEl = /** @type {import('./cr-outcome.js').CROutcome} */ (
-      document.createElement('cr-outcome')
-    );
+  render() {
+    const heading = h('h2', {}, 'Summary');
+    const outcomeEl = /** @type {import('./cr-outcome.js').CROutcome} */ (h('cr-outcome'));
 
     const completed = this.caseRow?.status === 'Completed';
     const overrides = this.caseRow?.overrides ?? [];
@@ -103,25 +106,25 @@ export class CRSummary extends CRElement {
     }
 
     /** @type {Node[]} */
-    const children = [/** @type {any} */ (heading), /** @type {any} */ (outcomeEl)];
+    const children = [heading, outcomeEl];
 
     // Per-Answer original-vs-overridden detail sits directly under the Outcome
     // block so the derived Current Outcome is never shown without its provenance.
     if (completed && overrides.length) {
-      children.push(/** @type {any} */ (this._renderOverrides(overrides)));
+      children.push(this._renderOverrides(overrides));
     }
 
     // Summary blocks (key dates + per-Section) only make sense for a loaded Case;
     // the page always sets caseRow alongside summarySections.
     if (this.caseRow) {
-      children.push(/** @type {any} */ (this._renderKeyDates(this.caseRow)));
+      children.push(this._renderKeyDates(this.caseRow));
       for (const section of this.summarySections) {
         const block = this._renderSectionBlock(section, this.caseRow);
-        if (block) children.push(/** @type {any} */ (block));
+        if (block) children.push(block);
       }
     }
 
-    this.replaceChildren(...children);
+    return children;
   }
 
   /**
@@ -144,16 +147,10 @@ export class CRSummary extends CRElement {
       return this._renderRemediation();
     }
     if (section === 'notes') {
-      const block = document.createElement('section');
-      block.className = 'cr-summary-notes';
-      const h3 = document.createElement('h3');
-      h3.textContent = 'Notes';
-      const body = document.createElement('p');
-      // textContent, never innerHTML (framework hard rules).
-      body.textContent = caseRow.notes;
-      block.appendChild(h3);
-      block.appendChild(body);
-      return block;
+      return h('section', { class: 'cr-summary-notes' },
+        h('h3', {}, 'Notes'),
+        h('p', {}, caseRow.notes)
+      );
     }
     // Conversation/Summary are valid Sections but contribute no Summary block.
     return null;
@@ -169,40 +166,21 @@ export class CRSummary extends CRElement {
    * @returns {HTMLElement}
    */
   _renderOverrides(overrides) {
-    const section = document.createElement('section');
-    section.className = 'cr-summary-outcome-overrides';
-
-    const h3 = document.createElement('h3');
-    h3.textContent = 'Outcome corrections';
-    section.appendChild(h3);
-
-    if (this.caseRow?.outcomeAtCompletion) {
-      const original = document.createElement('p');
-      original.className = 'cr-summary-outcome-original';
-      original.textContent = `Outcome at completion: ${this.caseRow.outcomeAtCompletion}`;
-      section.appendChild(original);
-    }
-
-    const ul = document.createElement('ul');
-    for (const row of buildOverrideRows(this.catalogue, this.answers, overrides)) {
-      const li = document.createElement('li');
-
-      const q = document.createElement('p');
-      q.textContent = row.questionText;
-      li.appendChild(q);
-
-      const change = document.createElement('p');
-      change.textContent = `${row.originalValue} → ${row.overriddenValue} (${row.source})`;
-      li.appendChild(change);
-
-      const reason = document.createElement('p');
-      reason.textContent = `Reason: ${row.reasoning}`;
-      li.appendChild(reason);
-
-      ul.appendChild(li);
-    }
-    section.appendChild(ul);
-    return section;
+    return h('section', { class: 'cr-summary-outcome-overrides' },
+      h('h3', {}, 'Outcome corrections'),
+      this.caseRow?.outcomeAtCompletion 
+        ? h('p', { class: 'cr-summary-outcome-original' }, `Outcome at completion: ${this.caseRow.outcomeAtCompletion}`) 
+        : null,
+      h('ul', {},
+        ...buildOverrideRows(this.catalogue, this.answers, overrides).map(row => 
+          h('li', {},
+            h('p', {}, row.questionText),
+            h('p', {}, `${row.originalValue} → ${row.overriddenValue} (${row.source})`),
+            h('p', {}, `Reason: ${row.reasoning}`)
+          )
+        )
+      )
+    );
   }
 
   /**
@@ -213,29 +191,13 @@ export class CRSummary extends CRElement {
   _renderRemediation() {
     const { remediationActionCount, failures } = buildSummaryModel(this.catalogue, this.answers);
 
-    const section = document.createElement('section');
-    section.className = 'cr-summary-remediation';
-    const h3 = document.createElement('h3');
-    h3.textContent = 'Issues';
-    section.appendChild(h3);
-
-    const count = document.createElement('p');
-    count.textContent = `Remediation Actions: ${remediationActionCount}`;
-    section.appendChild(count);
-
-    if (failures.length === 0) {
-      const empty = document.createElement('p');
-      empty.textContent = 'No failures.';
-      section.appendChild(empty);
-      return section;
-    }
-
-    const ul = document.createElement('ul');
-    for (const failure of failures) {
-      ul.appendChild(this._renderFailure(failure));
-    }
-    section.appendChild(ul);
-    return section;
+    return h('section', { class: 'cr-summary-remediation' },
+      h('h3', {}, 'Issues'),
+      h('p', {}, `Remediation Actions: ${remediationActionCount}`),
+      failures.length === 0 
+        ? h('p', {}, 'No failures.')
+        : h('ul', {}, ...failures.map(failure => this._renderFailure(failure)))
+    );
   }
 
   /**
@@ -243,28 +205,12 @@ export class CRSummary extends CRElement {
    * @returns {HTMLElement}
    */
   _renderFailure(failure) {
-    const li = document.createElement('li');
-
-    const q = document.createElement('p');
-    q.textContent = failure.category ? `${failure.category}: ${failure.text}` : failure.text;
-    li.appendChild(q);
-
-    const ans = document.createElement('p');
-    ans.textContent = `Answer: ${failure.answer}`;
-    li.appendChild(ans);
-
-    if (failure.actions.length) {
-      const actions = document.createElement('ul');
-      for (const text of failure.actions) {
-        const item = document.createElement('li');
-        item.textContent = text;
-        actions.appendChild(item);
-      }
-      li.appendChild(actions);
-    }
-
-    this._renderCapture(li, failure.id);
-    return li;
+    return h('li', {},
+      h('p', {}, failure.category ? `${failure.category}: ${failure.text}` : failure.text),
+      h('p', {}, `Answer: ${failure.answer}`),
+      failure.actions.length ? h('ul', {}, ...failure.actions.map(text => h('li', {}, text))) : null,
+      this._renderCapture(failure.id)
+    );
   }
 
   /**
@@ -273,23 +219,22 @@ export class CRSummary extends CRElement {
    * expanded. Skipped when the Case Type declares no groups, or the Answer has no
    * captured values, so the Summary stays clean.
    *
-   * @param {HTMLElement} li
    * @param {string} questionId
+   * @returns {HTMLElement | null}
    */
-  _renderCapture(li, questionId) {
-    if (!this.captureGroups?.length) return;
+  _renderCapture(questionId) {
+    if (!this.captureGroups?.length) return null;
     const capture = this.answers[questionId]?.capture;
-    if (!capture || Object.keys(capture).length === 0) return;
+    if (!capture || Object.keys(capture).length === 0) return null;
 
-    const cg = /** @type {import('./cr-capture-groups.js').CRCaptureGroups} */ (
-      document.createElement('cr-capture-groups')
-    );
-    cg.className = 'cr-summary-capture';
+    const cg = /** @type {import('./cr-capture-groups.js').CRCaptureGroups} */ (h('cr-capture-groups', {
+      class: 'cr-summary-capture'
+    }));
     cg.groups = this.captureGroups;
     cg.capture = capture;
     cg.canCapture = false;
     cg.update(this.captureGroups, capture, false);
-    li.appendChild(/** @type {any} */ (cg));
+    return cg;
   }
 
   /**
@@ -299,21 +244,14 @@ export class CRSummary extends CRElement {
    */
   _renderCounts() {
     const { categoryCounts } = buildSummaryModel(this.catalogue, this.answers);
-
-    const section = document.createElement('section');
-    section.className = 'cr-summary-counts';
-    const h3 = document.createElement('h3');
-    h3.textContent = 'Questions';
-    section.appendChild(h3);
-
-    const ul = document.createElement('ul');
-    for (const { category, pass, fail } of categoryCounts) {
-      const li = document.createElement('li');
-      li.textContent = `${category}: ${pass} pass, ${fail} fail`;
-      ul.appendChild(li);
-    }
-    section.appendChild(ul);
-    return section;
+    return h('section', { class: 'cr-summary-counts' },
+      h('h3', {}, 'Questions'),
+      h('ul', {},
+        ...categoryCounts.map(({ category, pass, fail }) =>
+          h('li', {}, `${category}: ${pass} pass, ${fail} fail`)
+        )
+      )
+    );
   }
 
   /**
@@ -325,7 +263,6 @@ export class CRSummary extends CRElement {
    * @returns {HTMLElement}
    */
   _renderKeyDates(caseRow) {
-    /** @type {Array<{ label: string, value: string | null | undefined }>} */
     const dates = [
       { label: 'Created', value: caseRow.created },
       { label: 'Completed', value: caseRow.completedAt },
@@ -344,24 +281,15 @@ export class CRSummary extends CRElement {
    * @returns {HTMLElement}
    */
   _renderFieldBlock(className, title, rows) {
-    const section = document.createElement('section');
-    section.className = className;
-
-    const h3 = document.createElement('h3');
-    h3.textContent = title;
-    section.appendChild(h3);
-
-    const dl = document.createElement('dl');
-    for (const { label, display } of rows) {
-      const dt = document.createElement('dt');
-      dt.textContent = label;
-      const dd = document.createElement('dd');
-      dd.textContent = display;
-      dl.appendChild(dt);
-      dl.appendChild(dd);
-    }
-    section.appendChild(dl);
-    return section;
+    return h('section', { class: className },
+      h('h3', {}, title),
+      h('dl', {},
+        ...rows.flatMap(({ label, display }) => [
+          h('dt', {}, label),
+          h('dd', {}, display)
+        ])
+      )
+    );
   }
 }
 

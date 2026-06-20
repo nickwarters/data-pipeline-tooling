@@ -1,10 +1,11 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 
 /** @typedef {import('../evaluators/section-progress.js').SectionProgress} SectionProgress */
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 
-export class CRSectionProgress extends CRElement {
+export class CRSectionProgress extends ReactiveElement {
   constructor() {
     super();
     /** @type {SectionProgress[]} */
@@ -24,39 +25,37 @@ export class CRSectionProgress extends CRElement {
   }
 
   _render() {
+    this.replaceChildren(...this.render());
+  }
+
+  render() {
     const rows = this._sections.map(({ section, answered, total }) => {
-      const row = document.createElement('div');
-      row.className = answered === total && total > 0
+      const className = answered === total && total > 0
         ? 'cr-section-progress-row complete'
         : 'cr-section-progress-row';
 
-      const label = document.createElement('span');
-      label.className = 'cr-section-progress-label';
-      label.textContent = section;
-
-      const count = document.createElement('span');
-      count.className = 'cr-section-progress-count';
-      count.textContent = `${answered}/${total}`;
-
-      row.append(label, count);
-      row.addEventListener('click', () => {
-        this.dispatchEvent(new CustomEvent('cr-section-jump', {
-          detail: { section },
-          bubbles: true,
-        }));
-      });
-
-      return row;
+      return h('div', {
+        className,
+        onclick: () => {
+          this.dispatchEvent(new CustomEvent('cr-section-jump', {
+            detail: { section },
+            bubbles: true,
+          }));
+        }
+      },
+        h('span', { className: 'cr-section-progress-label' }, section),
+        h('span', { className: 'cr-section-progress-count' }, `${answered}/${total}`)
+      );
     });
 
-    const jumpBtn = document.createElement('button');
-    jumpBtn.className = 'cr-jump-unanswered-btn';
-    jumpBtn.textContent = 'Jump to next unanswered';
-    jumpBtn.addEventListener('click', () => {
-      this.dispatchEvent(new CustomEvent('cr-jump-unanswered', { bubbles: true }));
-    });
+    const jumpBtn = h('button', {
+      className: 'cr-jump-unanswered-btn',
+      onclick: () => {
+        this.dispatchEvent(new CustomEvent('cr-jump-unanswered', { bubbles: true }));
+      }
+    }, 'Jump to next unanswered');
 
-    this.replaceChildren(...rows, jumpBtn);
+    return [...rows, jumpBtn];
   }
 }
 

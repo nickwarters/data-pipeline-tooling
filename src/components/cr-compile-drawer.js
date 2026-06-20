@@ -1,60 +1,72 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
-import { el, reactive } from '../question-bank/cr-bank-dom.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 import { baseline, cases, currentBank, diffCounts, drawerOpen, showToast } from '../question-bank/question-bank-store.js';
 import { compileBank, hashStr, highlight } from '../question-bank/question-bank-compile.js';
 
-export class CRCompileDrawer extends CRElement {
-  connectedCallback() { reactive(this, () => this._render()); }
+export class CRCompileDrawer extends ReactiveElement {
   _render() {
+    const content = this.render();
+    if (content !== undefined) {
+      if (content && typeof content === 'object' && 'appendChild' in content) {
+        this.replaceChildren(/** @type {any} */ (content));
+      } else if (Array.isArray(content)) {
+        this.replaceChildren(...content);
+      } else {
+        this.replaceChildren();
+      }
+    }
+  }
+
+  render() {
     const open = drawerOpen.get();
     const bank = currentBank.get();
     const code = compileBank(bank);
     const d = diffCounts.get();
 
-    const backdrop = el('div', { class: 'drawer-backdrop' + (open ? ' open' : ''),
-      onclick: () => drawerOpen.set(false) });
-
-    const codeBlock = el('div', { class: 'code-block', html: highlight(code) });
-    const hashMeta = el('small', {}, 'hash: …');
-    hashStr(code).then(h => {
-      hashMeta.textContent = `sha256:${h} · ${code.length} chars · ${code.split('\n').length} lines`;
+    const hashMeta = h('small', {}, 'hash: …');
+    hashStr(code).then(hash => {
+      hashMeta.textContent = `sha256:${hash} · ${code.length} chars · ${code.split('\n').length} lines`;
     }).catch(() => { hashMeta.textContent = 'hash: unavailable'; });
 
-    const drawer = el('aside', { class: 'drawer' + (open ? ' open' : '') },
-      el('div', { class: 'drawer-head' },
-        el('div', {},
-          el('h3', { html: 'Compiled <em>config</em>.' }),
-          el('p', { html: 'Ready for review. This is the exact module body that will be PR’d into <code class="code-inline">case-types/</code>.' }),
+    return [
+      h('div', { 
+        class: 'drawer-backdrop' + (open ? ' open' : ''),
+        onclick: () => drawerOpen.set(false) 
+      }),
+      h('aside', { class: 'drawer' + (open ? ' open' : '') },
+        h('div', { class: 'drawer-head' },
+          h('div', {},
+            h('h3', { innerHTML: 'Compiled <em>config</em>.' }),
+            h('p', { innerHTML: 'Ready for review. This is the exact module body that will be PR’d into <code class="code-inline">case-types/</code>.' }),
+          ),
+          h('button', { class: 'drawer-close', onclick: () => drawerOpen.set(false) }, '×'),
         ),
-        el('button', { class: 'drawer-close', onclick: () => drawerOpen.set(false) }, '×'),
-      ),
-      el('div', { class: 'drawer-body' },
-        el('div', { class: 'diff-summary' },
-          el('div', { class: 'diff-card added',   html: `<div class="n">${d.added}</div><div class="l">Added</div>` }),
-          el('div', { class: 'diff-card changed', html: `<div class="n">${d.changed}</div><div class="l">Changed</div>` }),
-          el('div', { class: 'diff-card removed', html: `<div class="n">${d.deprecated}</div><div class="l">Deprecated</div>` }),
+        h('div', { class: 'drawer-body' },
+          h('div', { class: 'diff-summary' },
+            h('div', { class: 'diff-card added', innerHTML: `<div class="n">${d.added}</div><div class="l">Added</div>` }),
+            h('div', { class: 'diff-card changed', innerHTML: `<div class="n">${d.changed}</div><div class="l">Changed</div>` }),
+            h('div', { class: 'diff-card removed', innerHTML: `<div class="n">${d.deprecated}</div><div class="l">Deprecated</div>` }),
+          ),
+          h('div', { class: 'code-block', innerHTML: highlight(code) }),
         ),
-        codeBlock,
-      ),
-      el('div', { class: 'drawer-foot' },
-        hashMeta,
-        el('div', { class: 'drawer-foot-actions' },
-          el('button', { class: 'pill-btn', onclick: async () => {
-            const clip = (/** @type {any} */ (globalThis)).navigator?.clipboard;
-            if (clip?.writeText) await clip.writeText(code);
-            showToast('Config copied to clipboard');
-          } }, 'Copy'),
-          el('button', { class: 'pill-btn primary', onclick: () => {
-            baseline.set(structuredClone(cases.get()));
-            drawerOpen.set(false);
-            showToast('Submitted for review');
-          } }, 'Send for Review'),
+        h('div', { class: 'drawer-foot' },
+          hashMeta,
+          h('div', { class: 'drawer-foot-actions' },
+            h('button', { class: 'pill-btn', onclick: async () => {
+              const clip = (/** @type {any} */ (globalThis)).navigator?.clipboard;
+              if (clip?.writeText) await clip.writeText(code);
+              showToast('Config copied to clipboard');
+            } }, 'Copy'),
+            h('button', { class: 'pill-btn primary', onclick: () => {
+              baseline.set(structuredClone(cases.get()));
+              drawerOpen.set(false);
+              showToast('Submitted for review');
+            } }, 'Send for Review'),
+          ),
         ),
-      ),
-    );
-
-    this.replaceChildren(backdrop, drawer);
+      )
+    ];
   }
 }
 

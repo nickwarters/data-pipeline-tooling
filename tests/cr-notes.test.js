@@ -14,6 +14,7 @@ class StubEl {
     this.hidden = false;
     this.placeholder = '';
     this.value = '';
+    this.readOnly = false;
   }
   replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
   appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }

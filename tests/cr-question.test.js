@@ -136,7 +136,7 @@ test('CRQuestion: multi-choice change handler exercises both checked branches', 
   
   // Branch: checkbox.checked = true
   checkbox.checked = true;
-  checkbox._listeners['change'][0]();
+  checkbox._listeners['change'][0]({ target: checkbox });
   assert.deepEqual(events[0].detail.value, ['A']);
   
   // Branch: checkbox.checked = false
@@ -146,7 +146,7 @@ test('CRQuestion: multi-choice change handler exercises both checked branches', 
   const nextFieldset = (/** @type {any} */ (el))._children[0];
   const nextCheckbox = nextFieldset._children[1]._children[0];
   nextCheckbox.checked = false;
-  nextCheckbox._listeners['change'][0]();
+  nextCheckbox._listeners['change'][0]({ target: nextCheckbox });
   assert.deepEqual(events[1].detail.value, []);
 });
 

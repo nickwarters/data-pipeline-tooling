@@ -1,5 +1,6 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 
 /**
  * @typedef {object} Tab
@@ -29,7 +30,7 @@ let uid = 0;
  *   tabs.selected = 'one';
  *   tabs.addEventListener('cr-tab-change', e => console.log(e.detail.id));
  */
-export class CRTabs extends CRElement {
+export class CRTabs extends ReactiveElement {
   constructor() {
     super();
     /** @type {Tab[]} */
@@ -42,10 +43,6 @@ export class CRTabs extends CRElement {
     this._uid = `cr-tabs-${uid++}`;
     /** Set to the tab id that should receive focus on the next render. */
     this._focusId = '';
-  }
-
-  connectedCallback() {
-    this.render();
   }
 
   /** @returns {Tab[]} the visible (non-hidden) tabs, in declared order. */
@@ -75,7 +72,15 @@ export class CRTabs extends CRElement {
     this.selected = id;
     if (focus) this._focusId = id;
     this.dispatchEvent(new CustomEvent('cr-tab-change', { detail: { id }, bubbles: true }));
-    this.render();
+    // Force re-render and replace children manually because tabs/selected are not signals
+    if (this._renderDispose) {
+      const tree = this.render();
+      this.replaceChildren(...(Array.isArray(tree) ? tree : [tree]));
+      if (this._focusNode) {
+        this._focusNode.focus();
+        this._focusNode = null;
+      }
+    }
   }
 
   /**
@@ -97,51 +102,52 @@ export class CRTabs extends CRElement {
     const activeId = this._activeId();
     const visible = this._visible();
 
-    const tablist = document.createElement('div');
-    tablist.setAttribute('role', 'tablist');
-    tablist.className = 'cr-tabs-list';
-
     /** @type {HTMLElement[]} */
     const panelNodes = [];
     /** @type {HTMLElement | null} */
     let focusTarget = null;
 
-    for (const tab of visible) {
-      const isSelected = tab.id === activeId;
-      const tabId = `${this._uid}-tab-${tab.id}`;
-      const panelId = `${this._uid}-panel-${tab.id}`;
+    const tablist = h('div', { role: 'tablist', class: 'cr-tabs-list' },
+      ...visible.map(tab => {
+        const isSelected = tab.id === activeId;
+        const tabId = `${this._uid}-tab-${tab.id}`;
+        const panelId = `${this._uid}-panel-${tab.id}`;
 
-      const btn = document.createElement('button');
-      btn.className = 'cr-tabs-tab';
-      btn.textContent = tab.label;
-      btn.setAttribute('type', 'button');
-      btn.setAttribute('role', 'tab');
-      btn.setAttribute('id', tabId);
-      btn.setAttribute('aria-controls', panelId);
-      btn.setAttribute('aria-selected', String(isSelected));
-      btn.setAttribute('tabindex', isSelected ? '0' : '-1');
-      btn.addEventListener('click', () => this._select(tab.id));
-      btn.addEventListener('keydown', e => this._onKeydown(/** @type {KeyboardEvent} */ (e)));
-      tablist.appendChild(btn);
+        const btn = h('button', {
+          class: 'cr-tabs-tab',
+          type: 'button',
+          role: 'tab',
+          id: tabId,
+          'aria-controls': panelId,
+          'aria-selected': String(isSelected),
+          tabindex: isSelected ? '0' : '-1',
+          onclick: () => this._select(tab.id),
+          onkeydown: (/** @type {KeyboardEvent} */ e) => this._onKeydown(e)
+        }, tab.label);
 
-      const panel = document.createElement('div');
-      panel.className = 'cr-tabs-panel';
-      panel.setAttribute('role', 'tabpanel');
-      panel.setAttribute('id', panelId);
-      panel.setAttribute('aria-labelledby', tabId);
-      panel.hidden = !isSelected;
-      panel.setAttribute('tabindex', '0');
-      const content = this.panels[tab.id];
-      if (content) panel.appendChild(content);
-      panelNodes.push(panel);
+        const panel = h('div', {
+          class: 'cr-tabs-panel',
+          role: 'tabpanel',
+          id: panelId,
+          'aria-labelledby': tabId,
+          tabindex: '0'
+        });
+        panel.hidden = !isSelected;
+        
+        const content = this.panels[tab.id];
+        if (content) panel.appendChild(content);
+        panelNodes.push(panel);
 
-      if (this._focusId === tab.id) focusTarget = btn;
-    }
+        if (this._focusId === tab.id) focusTarget = btn;
 
-    this.replaceChildren(tablist, ...panelNodes);
+        return btn;
+      })
+    );
 
-    if (focusTarget) focusTarget.focus();
+    this._focusNode = focusTarget;
     this._focusId = '';
+
+    return [tablist, ...panelNodes];
   }
 }
 

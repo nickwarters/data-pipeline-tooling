@@ -1,10 +1,11 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 
-export class CRAllocation extends CRElement {
+export class CRAllocation extends ReactiveElement {
   constructor() {
     super();
     /** @type {SharePointClient | null} */
@@ -13,10 +14,12 @@ export class CRAllocation extends CRElement {
     this.currentUserId = '';
     /** @type {string[]} */
     this.eligibleCaseTypes = [];
+    /** @type {boolean} */
+    this.isEmpty = false;
   }
 
   connectedCallback() {
-    this._render();
+    super.connectedCallback();
   }
 
   disconnectedCallback() {
@@ -24,11 +27,26 @@ export class CRAllocation extends CRElement {
   }
 
   _render() {
-    const btn = document.createElement('button');
-    btn.textContent = 'Request next Case';
-    btn.className = 'cr-allocation-btn';
-    btn.addEventListener('click', () => this._requestNextCase());
-    this.replaceChildren(btn);
+    const content = this.render();
+    if (content) {
+      if (Array.isArray(content)) {
+        this.replaceChildren(...content);
+      } else {
+        this.replaceChildren(content);
+      }
+    } else {
+      this.replaceChildren();
+    }
+  }
+
+  render() {
+    if (this.isEmpty) {
+      return h('p', { className: 'cr-allocation-empty' }, 'No Cases available');
+    }
+    return h('button', {
+      className: 'cr-allocation-btn',
+      onClick: () => this._requestNextCase()
+    }, 'Request next Case');
   }
 
   /** @returns {Promise<void>} */
@@ -56,10 +74,8 @@ export class CRAllocation extends CRElement {
   }
 
   _renderEmpty() {
-    const p = document.createElement('p');
-    p.textContent = 'No Cases available';
-    p.className = 'cr-allocation-empty';
-    this.replaceChildren(p);
+    this.isEmpty = true;
+    this._render();
   }
 }
 

@@ -1,16 +1,11 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
 
-/**
- * Standalone, reusable people picker (ADR-0013). Type-ahead that queries the
- * directory through the `SharePointClient` (never `fetch` directly) and emits
- * the chosen bare account as a `cr-person-selected` event. Offers a free-text
- * raw-account fallback when the search returns nothing.
- */
-export class CRPeoplePicker extends CRElement {
+export class CRPeoplePicker extends ReactiveElement {
   constructor() {
     super();
     /** @type {SharePointClient | null} */
@@ -21,38 +16,66 @@ export class CRPeoplePicker extends CRElement {
     this.debounceMs = 200;
     /** @type {ReturnType<typeof setTimeout> | undefined} */
     this._timer = undefined;
-    // Set to the in-flight search promise so tests can await the debounced query.
     /** @type {Promise<void> | undefined} */
     this._searchPromise = undefined;
-    /** @type {HTMLInputElement} */
-    this._input = /** @type {any} */ (null);
-    /** @type {HTMLElement} */
-    this._results = /** @type {any} */ (null);
+    
+    // Internal state for rendering
+    this._people = [];
+    this._query = '';
+    this._inputValue = '';
   }
 
   connectedCallback() {
-    const inputEl = document.createElement('input');
-    inputEl.className = 'cr-people-picker-input';
-    inputEl.setAttribute('type', 'text');
-    inputEl.setAttribute('role', 'combobox');
-    inputEl.setAttribute('aria-label', 'Search people');
-    /** @type {any} */ (inputEl).placeholder = this.placeholder;
-    inputEl.addEventListener('input', (ev) => {
-      const value = /** @type {any} */ (ev).target?.value ?? '';
-      clearTimeout(this._timer);
-      this._timer = setTimeout(() => {
-        this._searchPromise = this._search(value);
-      }, this.debounceMs);
+    // ReactiveElement's connectedCallback will call render() inside an effect,
+    // but since we don't use signals here, we do an initial render manually.
+    super.connectedCallback();
+    this._render();
+  }
+
+  _render() {
+    const content = this.render();
+    if (content !== undefined) {
+      if (Array.isArray(content)) this.replaceChildren(...content);
+      else this.replaceChildren(content);
+    }
+  }
+
+  render() {
+    const items = this._people.map(p =>
+      this._option({ loginName: p.loginName, displayName: p.displayName }, `${p.displayName} — ${p.loginName}`)
+    );
+    if (this._people.length === 0 && this._query !== '') {
+      items.push(
+        this._option({ loginName: this._query, displayName: this._query }, `Use “${this._query}” as account`)
+      );
+    }
+
+    const inputEl = h('input', {
+      class: 'cr-people-picker-input',
+      type: 'text',
+      role: 'combobox',
+      'aria-label': 'Search people',
+      placeholder: this.placeholder,
+      value: this._inputValue,
+      oninput: (/** @type {any} */ ev) => {
+        const value = ev.target?.value ?? '';
+        this._inputValue = value;
+        clearTimeout(this._timer);
+        this._timer = setTimeout(() => {
+          this._searchPromise = this._search(value);
+        }, this.debounceMs);
+      }
     });
-
-    const resultsEl = document.createElement('ul');
-    resultsEl.className = 'cr-people-picker-results';
-    resultsEl.setAttribute('role', 'listbox');
-    /** @type {any} */ (resultsEl).hidden = true;
-
     this._input = inputEl;
+
+    const resultsEl = h('ul', {
+      class: 'cr-people-picker-results',
+      role: 'listbox',
+      hidden: items.length === 0
+    }, ...items);
     this._results = resultsEl;
-    this.replaceChildren(/** @type {any} */ (inputEl), /** @type {any} */ (resultsEl));
+
+    return [inputEl, resultsEl];
   }
 
   /**
@@ -61,8 +84,6 @@ export class CRPeoplePicker extends CRElement {
    */
   async _search(query) {
     const q = query.trim();
-    // Nothing to search yet: render empty (no free-text fallback until a real
-    // search actually comes back with no matches).
     if (q === '' || !this.client) {
       this._renderResults([], '');
       return;
@@ -76,17 +97,9 @@ export class CRPeoplePicker extends CRElement {
    * @param {string} query
    */
   _renderResults(people, query) {
-    const items = people.map(p =>
-      this._option({ loginName: p.loginName, displayName: p.displayName }, `${p.displayName} — ${p.loginName}`)
-    );
-    if (people.length === 0 && query !== '') {
-      // Free-text fallback (Option C): treat the typed text as a raw bare account.
-      items.push(
-        this._option({ loginName: query, displayName: query }, `Use “${query}” as account`)
-      );
-    }
-    /** @type {any} */ (this._results).hidden = items.length === 0;
-    this._results.replaceChildren(...items);
+    this._people = people;
+    this._query = query;
+    this._render();
   }
 
   /**
@@ -95,12 +108,11 @@ export class CRPeoplePicker extends CRElement {
    * @returns {HTMLElement}
    */
   _option(person, label) {
-    const li = document.createElement('li');
-    li.className = 'cr-people-picker-option';
-    li.textContent = label;
-    li.setAttribute('role', 'option');
-    li.addEventListener('click', () => this._select(person));
-    return /** @type {any} */ (li);
+    return h('li', {
+      class: 'cr-people-picker-option',
+      role: 'option',
+      onclick: () => this._select(person)
+    }, label);
   }
 
   /** @param {{ loginName: string, displayName: string }} person */
@@ -111,7 +123,7 @@ export class CRPeoplePicker extends CRElement {
         bubbles: true,
       })
     );
-    /** @type {any} */ (this._input).value = '';
+    this._inputValue = '';
     this._renderResults([], '');
   }
 

@@ -21,8 +21,7 @@ test('CRToast: shows when toastMsg is non-empty', () => {
   t.connectedCallback();
   const inner = /** @type {any} */ (t)._children[0];
   assert.equal(inner.className, 'toast show');
-  // The second span is the message text node holder
-  assert.equal(inner._children[1]._children[0].textContent, 'Hello');
+  assert.equal(inner._children[1].textContent, 'Hello');
   t.disconnectedCallback();
 });
 

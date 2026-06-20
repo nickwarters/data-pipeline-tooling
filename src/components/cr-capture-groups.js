@@ -1,5 +1,6 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 
 /** @typedef {import('../sharepoint-client.js').CaptureGroup} CaptureGroup */
 /** @typedef {import('../sharepoint-client.js').CaptureField} CaptureField */
@@ -19,7 +20,7 @@ import { CRElement } from './cr-element.js';
  * In read-only mode (`!canCapture`) only populated fields are shown, as static
  * `label: value` text, every group expanded — this is what the Summary renders.
  */
-export class CRCaptureGroups extends CRElement {
+export class CRCaptureGroups extends ReactiveElement {
   constructor() {
     super();
     /** @type {CaptureGroup[]} */
@@ -37,6 +38,7 @@ export class CRCaptureGroups extends CRElement {
   }
 
   connectedCallback() {
+    super.connectedCallback();
     this._render();
   }
 
@@ -53,15 +55,19 @@ export class CRCaptureGroups extends CRElement {
   }
 
   _render() {
-    /** @type {Node[]} */
+    const children = this.render() || [];
+    this.replaceChildren(...(Array.isArray(children) ? children : [children]));
+  }
+
+  render() {
     const children = [];
     for (const group of this.groups) {
       const section = this.canCapture
         ? this._renderEditableGroup(group)
         : this._renderReadOnlyGroup(group);
-      if (section) children.push(/** @type {any} */ (section));
+      if (section) children.push(section);
     }
-    this.replaceChildren(...children);
+    return children;
   }
 
   /**
@@ -80,27 +86,19 @@ export class CRCaptureGroups extends CRElement {
    * @returns {HTMLElement}
    */
   _renderEditableGroup(group) {
-    const section = document.createElement('section');
-    section.className = 'cr-capture-group';
-
     const collapsed = this._isCollapsed(group);
 
-    const header = document.createElement('button');
-    header.className = 'cr-capture-group-header';
-    header.textContent = group.label;
-    header.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    header.addEventListener('click', () => {
-      this._collapsed.set(group.key, !this._isCollapsed(group));
-      this._render();
-    });
-    section.appendChild(header);
-
-    if (!collapsed) {
-      for (const field of group.fields) {
-        section.appendChild(/** @type {any} */ (this._renderEditableField(field)));
-      }
-    }
-    return section;
+    return h('section', { className: 'cr-capture-group' },
+      h('button', {
+        className: 'cr-capture-group-header',
+        'aria-expanded': collapsed ? 'false' : 'true',
+        onclick: () => {
+          this._collapsed.set(group.key, !this._isCollapsed(group));
+          this._render();
+        }
+      }, group.label),
+      !collapsed ? group.fields.map(field => this._renderEditableField(field)) : null
+    );
   }
 
   /**
@@ -108,26 +106,23 @@ export class CRCaptureGroups extends CRElement {
    * @returns {HTMLElement}
    */
   _renderEditableField(field) {
-    const wrap = document.createElement('div');
-    wrap.className = 'cr-capture-field';
-
-    const label = document.createElement('label');
-    label.className = 'cr-capture-label';
-    label.textContent = field.label;
-    wrap.appendChild(label);
-
     const current = this._currentString(field.key);
+    
+    let control;
     if (field.type === 'radio') {
-      wrap.appendChild(/** @type {any} */ (this._renderRadio(field, current)));
+      control = this._renderRadio(field, current);
     } else {
-      const control = this._buildControl(field, current);
-      control.addEventListener('change', (ev) => {
-        const target = /** @type {{ value: string }} */ (/** @type {any} */ (ev).target);
+      control = this._buildControl(field, current);
+      control.addEventListener('change', (/** @type {any} */ ev) => {
+        const target = /** @type {{ value: string }} */ (ev.target);
         this._dispatch(field.key, target.value);
       });
-      wrap.appendChild(/** @type {any} */ (control));
     }
-    return wrap;
+
+    return h('div', { className: 'cr-capture-field' },
+      h('label', { className: 'cr-capture-label' }, field.label),
+      control
+    );
   }
 
   /**
@@ -137,32 +132,15 @@ export class CRCaptureGroups extends CRElement {
    */
   _buildControl(field, current) {
     if (field.type === 'select') {
-      const select = /** @type {any} */ (document.createElement('select'));
-      select.className = 'cr-capture-input';
-      const blank = /** @type {any} */ (document.createElement('option'));
-      blank.value = '';
-      blank.textContent = '—';
-      select.appendChild(blank);
-      for (const opt of field.options ?? []) {
-        const option = /** @type {any} */ (document.createElement('option'));
-        option.value = opt;
-        option.textContent = opt;
-        select.appendChild(option);
-      }
-      select.value = current;
-      return select;
+      return h('select', { className: 'cr-capture-input', value: current },
+        h('option', { value: '' }, '—'),
+        ...(field.options ?? []).map(opt => h('option', { value: opt }, opt))
+      );
     }
     if (field.type === 'textarea') {
-      const textarea = /** @type {any} */ (document.createElement('textarea'));
-      textarea.className = 'cr-capture-input';
-      textarea.value = current;
-      return textarea;
+      return h('textarea', { className: 'cr-capture-input', value: current });
     }
-    const input = /** @type {any} */ (document.createElement('input'));
-    input.className = 'cr-capture-input';
-    input.type = 'text';
-    input.value = current;
-    return input;
+    return h('input', { className: 'cr-capture-input', type: 'text', value: current });
   }
 
   /**
@@ -171,27 +149,20 @@ export class CRCaptureGroups extends CRElement {
    * @returns {HTMLElement}
    */
   _renderRadio(field, current) {
-    const group = document.createElement('div');
-    group.className = 'cr-capture-radio-group';
-    for (const opt of field.options ?? []) {
-      const optLabel = document.createElement('label');
-      optLabel.className = 'cr-capture-radio';
-
-      const input = /** @type {any} */ (document.createElement('input'));
-      input.type = 'radio';
-      input.name = field.key;
-      input.value = opt;
-      input.checked = current === opt;
-      input.addEventListener('change', () => this._dispatch(field.key, opt));
-
-      const span = document.createElement('span');
-      span.textContent = opt;
-
-      optLabel.appendChild(/** @type {any} */ (input));
-      optLabel.appendChild(/** @type {any} */ (span));
-      group.appendChild(optLabel);
-    }
-    return group;
+    return h('div', { className: 'cr-capture-radio-group' },
+      ...(field.options ?? []).map(opt => 
+        h('label', { className: 'cr-capture-radio' },
+          h('input', {
+            type: 'radio',
+            name: field.key,
+            value: opt,
+            checked: current === opt,
+            onchange: () => this._dispatch(field.key, opt)
+          }),
+          h('span', {}, opt)
+        )
+      )
+    );
   }
 
   /**
@@ -202,21 +173,12 @@ export class CRCaptureGroups extends CRElement {
     const populated = group.fields.filter(f => this._currentString(f.key) !== '');
     if (populated.length === 0) return null;
 
-    const section = document.createElement('section');
-    section.className = 'cr-capture-group';
-
-    const heading = document.createElement('p');
-    heading.className = 'cr-capture-group-heading';
-    heading.textContent = group.label;
-    section.appendChild(heading);
-
-    for (const field of populated) {
-      const value = document.createElement('p');
-      value.className = 'cr-capture-value';
-      value.textContent = `${field.label}: ${this._currentString(field.key)}`;
-      section.appendChild(value);
-    }
-    return section;
+    return h('section', { className: 'cr-capture-group' },
+      h('p', { className: 'cr-capture-group-heading' }, group.label),
+      ...populated.map(field => 
+        h('p', { className: 'cr-capture-value' }, `${field.label}: ${this._currentString(field.key)}`)
+      )
+    );
   }
 
   /**

@@ -1,5 +1,6 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 import { effectiveAnswers, currentOutcome } from '../evaluators/effective-answers.js';
 import './cr-outcome.js';
 import './cr-override-editor.js';
@@ -27,7 +28,7 @@ import './cr-override-editor.js';
  * to the original row's `overrides[]`, and its `override` capability is resolved
  * by the page against the linked original (passed in as `overrideAccess`).
  */
-export class CRSourceCase extends CRElement {
+export class CRSourceCase extends ReactiveElement {
   constructor() {
     super();
     /** The fetched original Completed Case (the write target), or null if missing. @type {CaseRow | null} */
@@ -52,57 +53,42 @@ export class CRSourceCase extends CRElement {
     this.sourceCaseId = '';
   }
 
-  connectedCallback() {
-    this._render();
+  _render() {
+    const content = this.render();
+    if (content !== undefined) {
+      if (Array.isArray(content)) this.replaceChildren(...content);
+      else this.replaceChildren(content);
+    } else {
+      this.replaceChildren();
+    }
   }
 
-  _render() {
-    const heading = document.createElement('h2');
-    heading.textContent = 'Source Case';
-
+  render() {
     if (!this.originalRow) {
-      const missing = document.createElement('p');
-      missing.className = 'cr-source-case-missing';
-      missing.textContent = 'The source Case is not available.';
-      this.replaceChildren(/** @type {any} */ (heading), /** @type {any} */ (missing));
-      return;
+      return [
+        h('h2', {}, 'Source Case'),
+        h('p', { class: 'cr-source-case-missing' }, 'The source Case is not available.')
+      ];
     }
 
     const row = this.originalRow;
     const overrides = row.overrides ?? [];
 
-    const title = document.createElement('p');
-    title.className = 'cr-source-case-title';
-    title.textContent = row.title;
-
-    const link = document.createElement('p');
-    link.className = 'cr-source-case-id';
-    link.textContent = `Source Case: ${row.id}`;
-
     // Current Outcome, re-derived from the Effective Answers (ADR-0018). The
     // source Case is Completed, so the verdict is always resolved.
     const effective = effectiveAnswers(row.answers, overrides);
     const result = currentOutcome(this.computeOutcome ?? (() => /** @type {OutcomeResult} */ ({ verdict: 'pass' })), row.answers, overrides);
-    const outcomeEl = /** @type {import('./cr-outcome.js').CROutcome} */ (document.createElement('cr-outcome'));
+    const outcomeEl = /** @type {import('./cr-outcome.js').CROutcome} */ (h('cr-outcome'));
     outcomeEl.update(() => result, {}, true);
 
     const answersList = this._renderEffectiveAnswers(effective, overrides);
-
-    /** @type {Node[]} */
-    const children = [
-      /** @type {any} */ (heading),
-      /** @type {any} */ (title),
-      /** @type {any} */ (link),
-      /** @type {any} */ (outcomeEl),
-      /** @type {any} */ (answersList),
-    ];
 
     // Embedded Override editor (ADR-0018): same element as the original Case
     // page, but the write targets the original row (caseId) while the QA Check is
     // the page's primary. `sourceCaseId` records that this was authored during a
     // formal QA Check.
     const editor = /** @type {import('./cr-override-editor.js').CROverrideEditor} */ (
-      document.createElement('cr-override-editor')
+      h('cr-override-editor')
     );
     editor.caseRow = row;
     editor.caseId = row.id;
@@ -116,9 +102,15 @@ export class CRSourceCase extends CRElement {
     editor.client = this.client;
     editor.source = 'qa';
     editor.sourceCaseId = this.sourceCaseId;
-    children.push(/** @type {any} */ (editor));
 
-    this.replaceChildren(...children);
+    return [
+      h('h2', {}, 'Source Case'),
+      h('p', { class: 'cr-source-case-title' }, row.title),
+      h('p', { class: 'cr-source-case-id' }, `Source Case: ${row.id}`),
+      outcomeEl,
+      answersList,
+      editor
+    ];
   }
 
   /**
@@ -131,17 +123,14 @@ export class CRSourceCase extends CRElement {
    */
   _renderEffectiveAnswers(effective, overrides) {
     const overridden = new Set(overrides.map(o => o.answerKey));
-    const list = document.createElement('ul');
-    list.className = 'cr-source-case-answers';
-    for (const q of this.catalogue) {
-      const li = document.createElement('li');
-      const value = formatValue(effective[q.id]?.value);
-      li.textContent = overridden.has(q.id)
-        ? `${q.text}: ${value} (overridden)`
-        : `${q.text}: ${value}`;
-      list.appendChild(li);
-    }
-    return list;
+    return h('ul', { class: 'cr-source-case-answers' },
+      ...this.catalogue.map(q => {
+        const value = formatValue(effective[q.id]?.value);
+        return h('li', {}, overridden.has(q.id)
+          ? `${q.text}: ${value} (overridden)`
+          : `${q.text}: ${value}`);
+      })
+    );
   }
 }
 

@@ -1,5 +1,6 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 
@@ -33,7 +34,7 @@ export function caseDetailFields(caseRow) {
  * reviewer, status, dates). The Case Type-specific detail fields and their
  * storage are explicitly out of scope and ship in a follow-on slice.
  */
-export class CRCaseDetails extends CRElement {
+export class CRCaseDetails extends ReactiveElement {
   constructor() {
     super();
     /** @type {CaseRow | null} */
@@ -43,37 +44,23 @@ export class CRCaseDetails extends CRElement {
   }
 
   connectedCallback() {
-    const caseRow = this.caseRow;
-    if (!caseRow) return;
-
     this.setAttribute('data-access', this.access);
+    super.connectedCallback();
+  }
 
-    const heading = document.createElement('h2');
-    heading.textContent = 'Case Details';
+  render() {
+    const caseRow = this.caseRow;
+    if (!caseRow) return [];
 
-    const dl = document.createElement('dl');
-    dl.className = 'cr-case-details-list';
-
-    for (const { field, label, display } of caseDetailFields(caseRow)) {
-      const dt = document.createElement('dt');
-      dt.className = 'cr-case-details-label';
-      dt.textContent = label;
-
-      const dd = document.createElement('dd');
-      dd.className = 'cr-case-details-value';
-      dd.setAttribute('data-field', field);
-      // No innerHTML: values are assigned as text so any markup is shown
-      // verbatim rather than parsed (ADR-0003 / hard rules).
-      dd.textContent = display;
-
-      dl.appendChild(dt);
-      dl.appendChild(dd);
-    }
-
-    this.replaceChildren(
-      /** @type {any} */ (heading),
-      /** @type {any} */ (dl)
-    );
+    return [
+      h('h2', {}, 'Case Details'),
+      h('dl', { className: 'cr-case-details-list' },
+        ...caseDetailFields(caseRow).flatMap(({ field, label, display }) => [
+          h('dt', { className: 'cr-case-details-label' }, label),
+          h('dd', { className: 'cr-case-details-value', 'data-field': field }, display)
+        ])
+      )
+    ];
   }
 }
 

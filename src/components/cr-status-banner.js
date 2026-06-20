@@ -1,5 +1,6 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 
 /** @typedef {import('../services/save-queue.js').SaveQueue} SaveQueue */
 /** @typedef {import('../services/save-queue.js').SaveStatus} SaveStatus */
@@ -11,7 +12,7 @@ import { CRElement } from './cr-element.js';
  *   reconnecting → gentle "Reconnecting…" indicator (auto-clears on saved)
  *   conflict     → persistent assertive banner with a Reload button
  */
-export class CRStatusBanner extends CRElement {
+export class CRStatusBanner extends ReactiveElement {
   constructor() {
     super();
     /** @type {SaveQueue | null} */
@@ -25,21 +26,35 @@ export class CRStatusBanner extends CRElement {
       right: 'var(--cr-space-4)',
       zIndex: '110',
     });
-    if (!this.saveQueue) return;
-    this.subscribe(this.saveQueue.status, status => this._render(status));
+    super.connectedCallback();
   }
 
-  /** @param {SaveStatus} status */
+  /**
+   * Preserved for test compatibility.
+   * @param {SaveStatus} [status] 
+   */
   _render(status) {
-    if (status === 'saved') {
+    const content = this.render();
+    if (content && typeof content === 'object' && 'appendChild' in content) {
+      this.replaceChildren(content);
+    } else if (Array.isArray(content)) {
+      this.replaceChildren(...content);
+    } else {
       this.replaceChildren();
-      return;
+    }
+  }
+
+  render() {
+    if (!this.saveQueue) return [];
+    const status = this.saveQueue.status.get();
+    
+    if (status === 'saved') {
+      return [];
     }
     if (status === 'conflict') {
-      this.replaceChildren(this._renderConflict());
-      return;
+      return this._renderConflict();
     }
-    this.replaceChildren(this._renderTransient(status));
+    return this._renderTransient(status);
   }
 
   /**
@@ -47,33 +62,26 @@ export class CRStatusBanner extends CRElement {
    * @returns {HTMLElement}
    */
   _renderTransient(status) {
-    const div = document.createElement('div');
-    div.className = `cr-banner cr-banner-${status}`;
-    div.setAttribute('role', 'status');
-    div.setAttribute('aria-live', 'polite');
-    div.textContent = status === 'saving' ? 'Saving…' : 'Reconnecting…';
-    return div;
+    return h('div', {
+      className: `cr-banner cr-banner-${status}`,
+      role: 'status',
+      'aria-live': 'polite'
+    }, status === 'saving' ? 'Saving…' : 'Reconnecting…');
   }
 
   /** @returns {HTMLElement} */
   _renderConflict() {
-    const banner = document.createElement('div');
-    banner.className = 'cr-banner cr-banner-conflict';
-    banner.setAttribute('role', 'alert');
-    banner.setAttribute('aria-live', 'assertive');
-
-    const text = document.createElement('p');
-    text.className = 'cr-banner-text';
-    text.textContent = 'This Case was edited in another tab. Reload to continue.';
-
-    const btn = document.createElement('button');
-    btn.className = 'cr-banner-reload';
-    btn.textContent = 'Reload';
-    btn.addEventListener('click', () => location.reload());
-
-    banner.appendChild(text);
-    banner.appendChild(btn);
-    return banner;
+    return h('div', {
+      className: 'cr-banner cr-banner-conflict',
+      role: 'alert',
+      'aria-live': 'assertive'
+    }, [
+      h('p', { className: 'cr-banner-text' }, 'This Case was edited in another tab. Reload to continue.'),
+      h('button', {
+        className: 'cr-banner-reload',
+        onClick: () => location.reload()
+      }, 'Reload')
+    ]);
   }
 }
 

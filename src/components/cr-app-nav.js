@@ -1,9 +1,10 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
 
-export class CRAppNav extends CRElement {
+export class CRAppNav extends ReactiveElement {
   constructor() {
     super();
     /** @type {Capabilities} */
@@ -14,7 +15,7 @@ export class CRAppNav extends CRElement {
   }
 
   connectedCallback() {
-    this._render();
+    super.connectedCallback();
     if (typeof window !== 'undefined' && window.addEventListener) {
       window.addEventListener('hashchange', this._onHashChange);
     }
@@ -28,30 +29,25 @@ export class CRAppNav extends CRElement {
   }
 
   _render() {
+    const content = this.render();
+    if (content !== undefined) {
+      if (Array.isArray(content)) this.replaceChildren(...content);
+      else this.replaceChildren(content);
+    } else {
+      this.replaceChildren();
+    }
+    // _updateActive is called within render now, or we can just call it here to be safe
+  }
+
+  render() {
     this._navItems = [];
 
-    const bar = document.createElement('div');
-    bar.className = 'cr-app-nav-bar';
+    const brand = h('a', { href: '#/dashboard', class: 'cr-app-nav-brand', 'aria-label': 'Case Review — home' },
+      h('span', { class: 'cr-app-nav-mark', 'aria-hidden': 'true' }, 'CR'),
+      h('span', { class: 'cr-app-nav-name' }, 'Case Review')
+    );
 
-    const brand = document.createElement('a');
-    brand.href = '#/dashboard';
-    brand.className = 'cr-app-nav-brand';
-    brand.setAttribute('aria-label', 'Case Review — home');
-
-    const mark = document.createElement('span');
-    mark.className = 'cr-app-nav-mark';
-    mark.textContent = 'CR';
-    mark.setAttribute('aria-hidden', 'true');
-
-    const name = document.createElement('span');
-    name.className = 'cr-app-nav-name';
-    name.textContent = 'Case Review';
-
-    brand.append(mark, name);
-
-    const itemsEl = document.createElement('div');
-    itemsEl.className = 'cr-app-nav-items';
-    itemsEl.setAttribute('role', 'list');
+    const itemsEl = h('div', { class: 'cr-app-nav-items', role: 'list' });
 
     const { isReviewer, ownedCaseTypes, isResponsibleParty, isReviewerManager } = this.capabilities;
     const isOwner = ownedCaseTypes.length > 0;
@@ -67,9 +63,17 @@ export class CRAppNav extends CRElement {
       itemsEl.appendChild(this._makeItem('Question Bank', '#/question-bank'));
     }
 
-    bar.append(brand, itemsEl);
-    this.replaceChildren(bar);
-    this._updateActive();
+    const bar = h('div', { class: 'cr-app-nav-bar' }, brand, itemsEl);
+    
+    // Update active classes immediately on the newly created elements
+    const hash = typeof location !== 'undefined' ? (location.hash || '#/') : '#/';
+    for (const { el, href } of this._navItems) {
+      const active = hash === href || (href !== '#/dashboard' && hash.startsWith(href));
+      el.className = active ? 'cr-app-nav-item cr-app-nav-item--active' : 'cr-app-nav-item';
+      el.setAttribute('aria-current', active ? 'page' : '');
+    }
+
+    return bar;
   }
 
   /**
@@ -78,11 +82,7 @@ export class CRAppNav extends CRElement {
    * @returns {any}
    */
   _makeItem(label, href) {
-    const a = document.createElement('a');
-    a.href = href;
-    a.className = 'cr-app-nav-item';
-    a.textContent = label;
-    a.setAttribute('role', 'listitem');
+    const a = h('a', { href, class: 'cr-app-nav-item', role: 'listitem' }, label);
     this._navItems.push({ el: a, href });
     return a;
   }

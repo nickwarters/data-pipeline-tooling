@@ -1,7 +1,7 @@
 // @ts-check
 import { signal } from '../lib/signal.js';
-import { CRElement } from './cr-element.js';
-import { el, reactive } from '../question-bank/cr-bank-dom.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 import {
   isOpen, query, filteredActions, openPalette, closePalette,
 } from '../services/command-palette-store.js';
@@ -10,7 +10,7 @@ import {
  * @typedef {import('../services/command-palette-store.js').PaletteAction} PaletteAction
  */
 
-export class CRCommandPalette extends CRElement {
+export class CRCommandPalette extends ReactiveElement {
   constructor() {
     super();
     this._selIdx = signal(-1);
@@ -21,8 +21,8 @@ export class CRCommandPalette extends CRElement {
   }
 
   connectedCallback() {
+    super.connectedCallback();
     document.addEventListener('keydown', this._onKeydown);
-    reactive(this, () => this._render());
   }
 
   disconnectedCallback() {
@@ -39,9 +39,21 @@ export class CRCommandPalette extends CRElement {
   }
 
   _render() {
-    if (!isOpen.get()) {
+    const content = this.render();
+    if (content !== undefined) {
+      if (Array.isArray(content)) {
+        this.replaceChildren(...content);
+      } else {
+        this.replaceChildren(content);
+      }
+    } else {
       this.replaceChildren();
-      return;
+    }
+  }
+
+  render() {
+    if (!isOpen.get()) {
+      return [];
     }
 
     const filtered = filteredActions.get();
@@ -108,8 +120,8 @@ export class CRCommandPalette extends CRElement {
       this._selIdx.set(-1);
     };
 
-    const inputEl = el('input', {
-      class: 'palette-input',
+    const inputEl = h('input', {
+      className: 'palette-input',
       type: 'text',
       placeholder: 'Type a command…',
       onkeydown: onInputKeydown,
@@ -118,9 +130,9 @@ export class CRCommandPalette extends CRElement {
 
     const listItems = (mode === 'awaiting-option' && pending?.options)
       ? pending.options.map((opt, i) =>
-          el('div', { class: 'palette-option' + (i === optIdx ? ' selected' : '') }, opt.label))
+          h('div', { className: 'palette-option' + (i === optIdx ? ' selected' : '') }, opt.label))
       : filtered.map((action, i) =>
-          el('div', { class: 'palette-item' + (i === selIdx ? ' selected' : '') }, action.label));
+          h('div', { className: 'palette-item' + (i === selIdx ? ' selected' : '') }, action.label));
 
     /** @type {any[]} */
     const extras = [];
@@ -139,17 +151,15 @@ export class CRCommandPalette extends CRElement {
           this._reset();
         }
       };
-      extras.push(el('input', {
-        class: 'palette-arg-input',
+      extras.push(h('input', {
+        className: 'palette-arg-input',
         type: 'text',
         placeholder,
         onkeydown: onArgKeydown,
       }));
     }
 
-    this.replaceChildren(
-      el('div', { class: 'palette-overlay' }, inputEl, ...listItems, ...extras)
-    );
+    return h('div', { className: 'palette-overlay' }, inputEl, ...listItems, ...extras);
   }
 
   /** @param {PaletteAction} action */

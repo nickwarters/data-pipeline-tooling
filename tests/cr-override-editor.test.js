@@ -15,6 +15,9 @@ class StubEl {
     this.value = '';
     this.checked = false;
     this.disabled = false;
+    this.attributedParty = null;
+    this.responsibleParty = null;
+    this.client = null;
   }
   replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
   appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }

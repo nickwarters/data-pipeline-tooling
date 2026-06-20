@@ -287,7 +287,8 @@ test('CRTabs: setting tabs after connect re-renders', () => {
   const el = makeTabs({ tabs: THREE, selected: 'a' });
   el.tabs = [{ id: 'x', label: 'Xray' }];
   el.selected = 'x';
-  el.render();
+  const tree = el.render();
+  el.replaceChildren(...(Array.isArray(tree) ? tree : [tree]));
   assert.deepEqual(tabButtons(el).map((/** @type {any} */ b) => b.textContent), ['Xray']);
 });
 

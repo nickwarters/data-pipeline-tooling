@@ -1,5 +1,6 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 import { isFailure, materializeRemediationActions } from '../evaluators/failure-evaluator.js';
 import { classifyTransition, validateOverride, buildOverride } from '../evaluators/override-author.js';
 import { effectiveAnswers } from '../evaluators/effective-answers.js';
@@ -36,7 +37,7 @@ import './cr-attribute-menu.js';
  * QA Check; `source` / `sourceCaseId` / `sourceAppealId` stamp provenance, but the
  * write always targets `caseId` (the original row).
  */
-export class CROverrideEditor extends CRElement {
+export class CROverrideEditor extends ReactiveElement {
   constructor() {
     super();
     /** @type {CaseRow | null} */
@@ -77,6 +78,7 @@ export class CROverrideEditor extends CRElement {
   }
 
   connectedCallback() {
+    super.connectedCallback();
     this._render();
   }
 
@@ -106,200 +108,171 @@ export class CROverrideEditor extends CRElement {
   }
 
   _render() {
-    const heading = document.createElement('h2');
-    heading.textContent = 'Answer Overrides';
+    const content = this.render();
+    if (content !== undefined) {
+      if (Array.isArray(content)) this.replaceChildren(...content);
+      else this.replaceChildren(content);
+    }
+  }
 
-    /** @type {Node[]} */
-    const children = [/** @type {any} */ (heading)];
+  render() {
+    const heading = h('h2', {}, 'Answer Overrides');
+
+    /** @type {any[]} */
+    const children = [heading];
 
     for (const o of this._overrides()) {
-      children.push(/** @type {any} */ (this._renderHistory(o)));
+      children.push(this._renderHistory(o));
     }
 
     if (this.access === 'override') {
       if (this._isSelfReview()) {
-        const warn = document.createElement('p');
-        warn.className = 'cr-override-self-review';
-        warn.textContent =
-          'You were the Assigned Reviewer on this Case. An Override must be authored by a different QA Reviewer.';
-        children.push(/** @type {any} */ (warn));
+        children.push(
+          h('p', { class: 'cr-override-self-review' },
+            'You were the Assigned Reviewer on this Case. An Override must be authored by a different QA Reviewer.'
+          )
+        );
       } else {
-        children.push(/** @type {any} */ (this._renderForm()));
+        children.push(this._renderForm());
       }
     } else if (this._overrides().length === 0) {
-      const empty = document.createElement('p');
-      empty.className = 'cr-override-empty';
-      empty.textContent = 'No Answer Overrides.';
-      children.push(/** @type {any} */ (empty));
+      children.push(
+        h('p', { class: 'cr-override-empty' }, 'No Answer Overrides.')
+      );
     }
 
-    this.replaceChildren(...children);
+    return children;
   }
 
   /**
    * @param {Override} o
-   * @returns {HTMLElement}
    */
   _renderHistory(o) {
-    const card = document.createElement('section');
-    card.className = 'cr-override-item';
-
     const question = this.catalogue.find((q) => q.id === o.answerKey);
-    const label = document.createElement('p');
-    label.className = 'cr-override-item-question';
-    label.textContent = question ? question.text : o.answerKey;
-    card.appendChild(label);
-
-    const value = document.createElement('p');
-    value.className = 'cr-override-item-value';
-    value.textContent = `Corrected to: ${formatValue(o.value)}`;
-    card.appendChild(value);
-
-    const reasoning = document.createElement('p');
-    reasoning.className = 'cr-override-item-reasoning';
-    reasoning.textContent = o.reasoning;
-    card.appendChild(reasoning);
-
-    return card;
+    return h('section', { class: 'cr-override-item' },
+      h('p', { class: 'cr-override-item-question' }, question ? question.text : o.answerKey),
+      h('p', { class: 'cr-override-item-value' }, `Corrected to: ${formatValue(o.value)}`),
+      h('p', { class: 'cr-override-item-reasoning' }, o.reasoning)
+    );
   }
 
-  /** @returns {HTMLElement} */
   _renderForm() {
-    const form = document.createElement('section');
-    form.className = 'cr-override-form';
-
-    // Question picker.
-    const qLabel = document.createElement('label');
-    qLabel.textContent = 'Which Answer is being corrected?';
-    form.appendChild(qLabel);
-
-    const qSelect = /** @type {any} */ (document.createElement('select'));
-    qSelect.className = 'cr-override-question';
-    qSelect.appendChild(buildOption('', '— choose a Question —'));
-    for (const q of this._targets()) {
-      qSelect.appendChild(buildOption(q.id, q.text));
-    }
+    const qSelect = /** @type {any} */ (h('select', {
+      class: 'cr-override-question',
+      onchange: (/** @type {any} */ e) => this._onQuestion(e.target.value)
+    },
+      buildOption('', '— choose a Question —'),
+      ...this._targets().map(q => buildOption(q.id, q.text))
+    ));
     qSelect.value = this._draft.answerKey;
-    qSelect.addEventListener('change', (/** @type {any} */ e) => this._onQuestion(e.target.value));
-    form.appendChild(qSelect);
 
     const question = this._question();
-    if (question) {
-      this._renderValueControl(form, question);
+    let valueControl = null;
+    let failureBlock = null;
 
-      // The failure sub-form only appears when the replacement value is itself a
-      // failure (pass→fail or fail→fail): that is when a complete replacement set
-      // of attribution / details is required.
+    if (question) {
+      valueControl = this._renderValueControl(question);
+
       if (isFailure(question, { value: this._draft.value })) {
-        this._renderFailureBlock(form, question);
+        failureBlock = this._renderFailureBlock(question);
       }
     }
 
-    // Reasoning — always required.
-    const rLabel = document.createElement('label');
-    rLabel.textContent = 'Reasoning';
-    form.appendChild(rLabel);
+    const errorEl = h('ul', { class: 'cr-override-error', hidden: true });
+    
+    const reasoningEl = /** @type {any} */ (h('textarea', {
+      class: 'cr-override-reasoning',
+      'aria-label': 'Override reasoning',
+      oninput: (/** @type {any} */ e) => { this._draft.reasoning = e.target.value; }
+    }));
+    reasoningEl.value = this._draft.reasoning;
 
-    const reasoning = /** @type {any} */ (document.createElement('textarea'));
-    reasoning.className = 'cr-override-reasoning';
-    reasoning.setAttribute('aria-label', 'Override reasoning');
-    reasoning.value = this._draft.reasoning;
-    reasoning.addEventListener('input', (/** @type {any} */ e) => { this._draft.reasoning = e.target.value; });
-    form.appendChild(reasoning);
-
-    const error = document.createElement('ul');
-    error.className = 'cr-override-error';
-    error.hidden = true;
-    form.appendChild(error);
-
-    const submit = document.createElement('button');
-    submit.className = 'cr-override-submit';
-    submit.textContent = 'Save Override';
-    submit.addEventListener('click', () => this._submit(error));
-    form.appendChild(submit);
-
-    return form;
+    return h('section', { class: 'cr-override-form' },
+      h('label', {}, 'Which Answer is being corrected?'),
+      qSelect,
+      valueControl,
+      failureBlock,
+      h('label', {}, 'Reasoning'),
+      reasoningEl,
+      errorEl,
+      h('button', {
+        class: 'cr-override-submit',
+        onclick: () => this._submit(/** @type {HTMLElement} */ (errorEl))
+      }, 'Save Override')
+    );
   }
 
   /**
-   * @param {HTMLElement} form
    * @param {QuestionDefinition} question
    */
-  _renderValueControl(form, question) {
-    const label = document.createElement('label');
-    label.textContent = 'Replacement value';
-    form.appendChild(label);
-
-    const select = /** @type {any} */ (document.createElement('select'));
-    select.className = 'cr-override-value-control';
-    for (const opt of optionsFor(question)) {
-      select.appendChild(buildOption(opt, opt));
-    }
+  _renderValueControl(question) {
+    const select = /** @type {any} */ (h('select', {
+      class: 'cr-override-value-control',
+      onchange: (/** @type {any} */ e) => this._onValue(e.target.value)
+    },
+      ...optionsFor(question).map(opt => buildOption(opt, opt))
+    ));
     select.value = /** @type {string} */ (this._draft.value);
-    select.addEventListener('change', (/** @type {any} */ e) => this._onValue(e.target.value));
-    form.appendChild(select);
+
+    return [
+      h('label', {}, 'Replacement value'),
+      select
+    ];
   }
 
   /**
    * The pass→fail / fail→fail capture surface: Attributed Party (when the Case
    * Type attributes failures) and the configurable Remediation Details.
-   * @param {HTMLElement} form
    * @param {QuestionDefinition} question
    */
-  _renderFailureBlock(form, question) {
-    const block = document.createElement('div');
-    block.className = 'cr-override-failure';
-
+  _renderFailureBlock(question) {
+    let attributeMenu = null;
     if (this.attributeFailures) {
-      const menu = /** @type {any} */ (document.createElement('cr-attribute-menu'));
-      menu.className = 'cr-override-attribute';
-      menu.client = this.client;
-      menu.attributedParty = this._draft.attributedParty;
-      menu.responsibleParty = this.caseRow?.responsibleParty
-        ? { loginName: this.caseRow.responsibleParty, displayName: this.caseRow.responsibleParty }
-        : null;
-      menu.addEventListener('cr-attribute-change', (/** @type {any} */ ev) => {
-        this._draft.attributedParty = ev.detail.attributedParty;
-        this._render();
+      attributeMenu = h('cr-attribute-menu', {
+        class: 'cr-override-attribute',
+        client: this.client,
+        attributedParty: this._draft.attributedParty,
+        responsibleParty: this.caseRow?.responsibleParty
+          ? { loginName: this.caseRow.responsibleParty, displayName: this.caseRow.responsibleParty }
+          : null,
+        'oncr-attribute-change': (/** @type {any} */ ev) => {
+          this._draft.attributedParty = ev.detail.attributedParty;
+          this._render();
+        }
       });
-      block.appendChild(menu);
     }
 
-    for (const field of this.remediationFields) {
-      const wrap = document.createElement('div');
-      wrap.className = 'cr-override-detail-field';
+    const detailFields = this.remediationFields.map(field => {
+      const current = this._draft.remediationDetails[field.key] ?? '';
+      let control;
+      if (field.type === 'select') {
+        control = /** @type {any} */ (h('select', {
+          class: `cr-override-detail-${field.key}`,
+          onchange: (/** @type {any} */ e) => this._onDetail(field.key, e.target.value)
+        },
+          buildOption('', '—'),
+          ...(field.options ?? []).map(opt => buildOption(opt, opt))
+        ));
+        control.value = current;
+      } else {
+        control = h('input', {
+          type: 'text',
+          class: `cr-override-detail-${field.key}`,
+          value: current,
+          onchange: (/** @type {any} */ e) => this._onDetail(field.key, e.target.value)
+        });
+      }
 
-      const label = document.createElement('label');
-      label.textContent = field.required ? `${field.label} (required)` : field.label;
-      wrap.appendChild(label);
+      return h('div', { class: 'cr-override-detail-field' },
+        h('label', {}, field.required ? `${field.label} (required)` : field.label),
+        control
+      );
+    });
 
-      const control = this._buildDetailControl(field);
-      control.className = `cr-override-detail-${field.key}`;
-      control.addEventListener('change', (/** @type {any} */ e) => this._onDetail(field.key, e.target.value));
-      wrap.appendChild(control);
-      block.appendChild(wrap);
-    }
-
-    form.appendChild(block);
-  }
-
-  /**
-   * @param {RemediationField} field
-   * @returns {any}
-   */
-  _buildDetailControl(field) {
-    const current = this._draft.remediationDetails[field.key] ?? '';
-    if (field.type === 'select') {
-      const select = /** @type {any} */ (document.createElement('select'));
-      select.appendChild(buildOption('', '—'));
-      for (const opt of field.options ?? []) select.appendChild(buildOption(opt, opt));
-      select.value = current;
-      return select;
-    }
-    const input = /** @type {any} */ (document.createElement('input'));
-    input.type = 'text';
-    input.value = current;
-    return input;
+    return h('div', { class: 'cr-override-failure' },
+      attributeMenu,
+      ...detailFields
+    );
   }
 
   /** @param {string} answerKey */
@@ -405,11 +378,7 @@ export class CROverrideEditor extends CRElement {
   _showErrors(errorEl, errors) {
     errorEl.hidden = false;
     /** @type {Node[]} */
-    const items = errors.map((e) => {
-      const li = document.createElement('li');
-      li.textContent = e;
-      return /** @type {any} */ (li);
-    });
+    const items = errors.map((e) => h('li', {}, e));
     errorEl.replaceChildren(...items);
   }
 }
@@ -440,9 +409,7 @@ function formatValue(value) {
  * @returns {any}
  */
 function buildOption(value, text) {
-  const option = /** @type {any} */ (document.createElement('option'));
-  option.value = value;
-  option.textContent = text;
+  const option = /** @type {any} */ (h('option', { value }, text));
   return option;
 }
 

@@ -1,10 +1,11 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../sharepoint-client.js').OutcomeResult} OutcomeResult */
 
-export class CROutcome extends CRElement {
+export class CROutcome extends ReactiveElement {
   constructor() {
     super();
     /** @type {((answers: Record<string, Answer>) => OutcomeResult) | null} */
@@ -13,10 +14,6 @@ export class CROutcome extends CRElement {
     this.answers = {};
     /** @type {boolean} */
     this.allAnswered = false;
-  }
-
-  connectedCallback() {
-    this._render();
   }
 
   /**
@@ -32,26 +29,36 @@ export class CROutcome extends CRElement {
   }
 
   _render() {
-    const heading = document.createElement('h2');
-    heading.textContent = 'Outcome';
+    const content = this.render();
+    if (content && typeof content === 'object' && 'appendChild' in content) {
+      this.replaceChildren(content);
+    } else if (Array.isArray(content)) {
+      this.replaceChildren(...content);
+    } else {
+      this.replaceChildren(); // empty
+    }
+  }
 
-    const verdict = document.createElement('p');
-
+  render() {
+    let className, textContent;
     if (!this.allAnswered || !this.computeOutcome) {
-      verdict.className = 'cr-outcome-indeterminate';
-      verdict.textContent = 'Awaiting answers…';
+      className = 'cr-outcome-indeterminate';
+      textContent = 'Awaiting answers…';
     } else {
       const result = this.computeOutcome(this.answers);
       if (result.verdict === 'pass') {
-        verdict.className = 'cr-outcome-pass';
-        verdict.textContent = 'Pass';
+        className = 'cr-outcome-pass';
+        textContent = 'Pass';
       } else {
-        verdict.className = 'cr-outcome-fail';
-        verdict.textContent = 'Fail';
+        className = 'cr-outcome-fail';
+        textContent = 'Fail';
       }
     }
 
-    this.replaceChildren(heading, verdict);
+    return [
+      h('h2', {}, 'Outcome'),
+      h('p', { className }, textContent)
+    ];
   }
 }
 

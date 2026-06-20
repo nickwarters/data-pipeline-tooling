@@ -1,5 +1,6 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 import './cr-people-picker.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
@@ -18,7 +19,7 @@ import './cr-people-picker.js';
  * answers signal stays the single source of truth — hence the event does not
  * bubble, leaving the host to re-dispatch with the relevant question id.
  */
-export class CRAttributeMenu extends CRElement {
+export class CRAttributeMenu extends ReactiveElement {
   constructor() {
     super();
     /** @type {SharePointClient | null} Backs the embedded people picker. */
@@ -42,7 +43,7 @@ export class CRAttributeMenu extends CRElement {
       document.addEventListener('keydown', this._onKeydown);
       document.addEventListener('mousedown', this._onPointerDown);
     }
-    this._render();
+    super.connectedCallback();
   }
 
   disconnectedCallback() {
@@ -89,74 +90,78 @@ export class CRAttributeMenu extends CRElement {
   }
 
   _render() {
-    /** @type {HTMLElement[]} */
+    const content = this.render();
+    if (content) {
+      if (Array.isArray(content)) {
+        this.replaceChildren(...content);
+      } else {
+        this.replaceChildren(content);
+      }
+    } else {
+      this.replaceChildren();
+    }
+  }
+
+  render() {
     const children = [];
 
     if (this.attributedParty) {
-      const chip = document.createElement('button');
-      chip.className = 'cr-attribute-chip';
-      chip.setAttribute('type', 'button');
-      chip.setAttribute('aria-haspopup', 'true');
-      chip.setAttribute('aria-expanded', String(this._open));
-      chip.textContent = this.attributedParty.displayName;
-      chip.addEventListener('click', () => this._toggle());
-      children.push(chip);
+      children.push(h('button', {
+        className: 'cr-attribute-chip',
+        type: 'button',
+        'aria-haspopup': 'true',
+        'aria-expanded': String(this._open),
+        onClick: () => this._toggle()
+      }, this.attributedParty.displayName));
 
-      const clear = document.createElement('button');
-      clear.className = 'cr-attribute-clear';
-      clear.setAttribute('type', 'button');
-      clear.setAttribute('aria-label', 'Clear attribution');
-      clear.textContent = '✕';
-      clear.addEventListener('click', () => this._select(null));
-      children.push(clear);
+      children.push(h('button', {
+        className: 'cr-attribute-clear',
+        type: 'button',
+        'aria-label': 'Clear attribution',
+        onClick: () => this._select(null)
+      }, '✕'));
     } else {
-      const trigger = document.createElement('button');
-      trigger.className = 'cr-attribute-trigger';
-      trigger.setAttribute('type', 'button');
-      trigger.setAttribute('aria-haspopup', 'true');
-      trigger.setAttribute('aria-expanded', String(this._open));
-      trigger.textContent = 'Attribute';
-      trigger.addEventListener('click', () => this._toggle());
-      children.push(trigger);
+      children.push(h('button', {
+        className: 'cr-attribute-trigger',
+        type: 'button',
+        'aria-haspopup': 'true',
+        'aria-expanded': String(this._open),
+        onClick: () => this._toggle()
+      }, 'Attribute'));
     }
 
     children.push(this._renderPopover());
-    this.replaceChildren(...children);
+    return children;
   }
 
   /** @returns {HTMLElement} */
   _renderPopover() {
-    const popover = document.createElement('div');
-    popover.className = 'cr-attribute-popover';
-    popover.setAttribute('role', 'dialog');
-    /** @type {any} */ (popover).hidden = !this._open;
-
-    const title = document.createElement('p');
-    title.className = 'cr-attribute-popover-title';
-    title.textContent = 'Attribute failure to';
-    popover.appendChild(title);
+    const children = [];
+    children.push(h('p', { className: 'cr-attribute-popover-title' }, 'Attribute failure to'));
 
     if (this.responsibleParty) {
       const rp = this.responsibleParty;
-      const quick = document.createElement('button');
-      quick.className = 'cr-attribute-responsible';
-      quick.setAttribute('type', 'button');
-      quick.textContent = `Responsible Party — ${rp.displayName}`;
-      quick.addEventListener('click', () => this._select(rp));
-      popover.appendChild(quick);
+      children.push(h('button', {
+        className: 'cr-attribute-responsible',
+        type: 'button',
+        onClick: () => this._select(rp)
+      }, `Responsible Party — ${rp.displayName}`));
     }
 
-    const picker = /** @type {import('./cr-people-picker.js').CRPeoplePicker} */ (
-      document.createElement('cr-people-picker')
-    );
-    picker.client = this.client;
-    picker.addEventListener('cr-person-selected', (ev) => {
+    const picker = h('cr-people-picker');
+    const p = /** @type {any} */ (picker);
+    p.client = this.client;
+    p.addEventListener('cr-person-selected', (ev) => {
       const detail = /** @type {CustomEvent<Party>} */ (ev).detail;
       this._select({ loginName: detail.loginName, displayName: detail.displayName });
     });
-    popover.appendChild(/** @type {any} */ (picker));
+    children.push(picker);
 
-    return popover;
+    return h('div', {
+      className: 'cr-attribute-popover',
+      role: 'dialog',
+      hidden: !this._open
+    }, children);
   }
 }
 

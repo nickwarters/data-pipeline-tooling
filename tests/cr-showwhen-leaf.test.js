@@ -67,7 +67,7 @@ test('CRShowwhenLeaf: in op renders comma-joined value', () => {
   e.connectedCallback();
   const row = /** @type {any} */ (e)._children[0];
   const valInput = row._children[2];
-  assert.equal(valInput.getAttribute('value'), 'A, B');
+  assert.equal(valInput.value, 'A, B');
 });
 
 test('CRShowwhenLeaf: changing qId select updates leaf.qId', () => {
@@ -196,5 +196,5 @@ test('CRShowwhenLeaf: leaf.value undefined falls through to empty string', () =>
   e.connectedCallback();
   const row = /** @type {any} */ (e)._children[0];
   const valInput = row._children[2];
-  assert.equal(valInput.getAttribute('value'), '');
+  assert.equal(valInput.value, '');
 });

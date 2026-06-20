@@ -1,5 +1,6 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 import { isFailure } from '../evaluators/failure-evaluator.js';
 import './cr-override-editor.js';
 
@@ -22,7 +23,7 @@ import './cr-override-editor.js';
  * the Section is not rendered at all. At most one Appeal may be open at a time;
  * once every Appeal is resolved a fresh one can be raised, with full history kept.
  */
-export class CRAppeal extends CRElement {
+export class CRAppeal extends ReactiveElement {
   constructor() {
     super();
     /** @type {CaseRow | null} */
@@ -74,7 +75,11 @@ export class CRAppeal extends CRElement {
   }
 
   connectedCallback() {
-    this._render();
+    super.connectedCallback();
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
   }
 
   /** @returns {Appeal[]} */
@@ -92,53 +97,47 @@ export class CRAppeal extends CRElement {
   }
 
   _render() {
-    const heading = document.createElement('h2');
-    heading.textContent = 'Appeal';
+    const content = this.render();
+    if (content) {
+      if (Array.isArray(content)) this.replaceChildren(...content);
+      else this.replaceChildren(content);
+    } else {
+      this.replaceChildren();
+    }
+  }
 
-    /** @type {Node[]} */
-    const children = [/** @type {any} */ (heading)];
+  render() {
+    const children = [];
+    children.push(h('h2', {}, 'Appeal'));
 
-    // History first — every Appeal already on the Case, readable by any role that
-    // can see the Section at all.
     for (const appeal of this._appeals()) {
-      children.push(/** @type {any} */ (this._renderAppeal(appeal)));
+      children.push(this._renderAppeal(appeal));
     }
 
     const openAppeal = this._openAppeal();
     if (this.access === 'edit' && this.canResolve) {
-      // QA Reviewer (issue #134): resolve the single open Appeal. With an agreed
-      // verdict the corrective Override editor is revealed below the form.
       if (openAppeal) {
-        children.push(/** @type {any} */ (this._renderResolveForm(openAppeal)));
+        children.push(this._renderResolveForm(openAppeal));
       } else if (this._appeals().length === 0) {
-        children.push(/** @type {any} */ (this._renderEmpty()));
+        children.push(this._renderEmpty());
       }
       if (this._authoringAppealId) {
-        children.push(/** @type {any} */ (this._buildOverrideEditor()));
+        children.push(this._buildOverrideEditor());
       }
     } else if (this.access === 'edit' && !openAppeal) {
-      // Appellant on a Completed Case with no open Appeal — offer the raise form.
-      children.push(/** @type {any} */ (this._renderForm()));
+      children.push(this._renderForm());
     } else if (this.access === 'edit' && openAppeal) {
-      // An Appeal is already in flight; block a second one until it resolves.
-      const note = document.createElement('p');
-      note.className = 'cr-appeal-open-note';
-      note.textContent = 'An Appeal is already open for this Case.';
-      children.push(/** @type {any} */ (note));
+      children.push(h('p', { className: 'cr-appeal-open-note' }, 'An Appeal is already open for this Case.'));
     } else if (this._appeals().length === 0) {
-      // Read-only viewers see a placeholder when there is nothing to show.
-      children.push(/** @type {any} */ (this._renderEmpty()));
+      children.push(this._renderEmpty());
     }
 
-    this.replaceChildren(...children);
+    return children;
   }
 
   /** @returns {HTMLElement} */
   _renderEmpty() {
-    const empty = document.createElement('p');
-    empty.className = 'cr-appeal-empty';
-    empty.textContent = 'No Appeal has been raised.';
-    return empty;
+    return h('p', { className: 'cr-appeal-empty' }, 'No Appeal has been raised.');
   }
 
   /**
@@ -146,86 +145,45 @@ export class CRAppeal extends CRElement {
    * @returns {HTMLElement}
    */
   _renderAppeal(appeal) {
-    const card = document.createElement('section');
-    card.className = 'cr-appeal-item';
-
-    const state = document.createElement('p');
-    state.className = 'cr-appeal-state';
-    state.textContent = `State: ${appeal.state}`;
-    card.appendChild(state);
-
-    const rationale = document.createElement('p');
-    rationale.className = 'cr-appeal-item-rationale';
-    // textContent, never innerHTML (framework hard rule).
-    rationale.textContent = appeal.rationale;
-    card.appendChild(rationale);
+    const children = [];
+    children.push(h('p', { className: 'cr-appeal-state' }, `State: ${appeal.state}`));
+    children.push(h('p', { className: 'cr-appeal-item-rationale' }, appeal.rationale));
 
     if (appeal.citedAnswerKeys?.length) {
-      const cited = document.createElement('p');
-      cited.className = 'cr-appeal-item-cited';
-      cited.textContent = `Disputed Answers: ${appeal.citedAnswerKeys.join(', ')}`;
-      card.appendChild(cited);
+      children.push(h('p', { className: 'cr-appeal-item-cited' }, `Disputed Answers: ${appeal.citedAnswerKeys.join(', ')}`));
     }
 
-    // Once resolved, show the QA Reviewer's verdict and rationale (issue #134).
     if (appeal.resolution) {
-      const resolution = document.createElement('p');
-      resolution.className = 'cr-appeal-resolution';
-      resolution.textContent = `Resolution: ${appeal.resolution.verdict} — ${appeal.resolution.rationale}`;
-      card.appendChild(resolution);
+      children.push(h('p', { className: 'cr-appeal-resolution' }, `Resolution: ${appeal.resolution.verdict} — ${appeal.resolution.rationale}`));
     }
-    return card;
+    return h('section', { className: 'cr-appeal-item' }, children);
   }
 
   /** @returns {HTMLElement} */
   _renderForm() {
-    const form = document.createElement('section');
-    form.className = 'cr-appeal-form';
-
-    const label = document.createElement('label');
-    label.textContent = 'Why are you appealing this outcome?';
-    form.appendChild(label);
-
-    const rationale = /** @type {HTMLTextAreaElement} */ (/** @type {unknown} */ (document.createElement('textarea')));
-    /** @type {any} */ (rationale).className = 'cr-appeal-rationale';
-    /** @type {any} */ (rationale).setAttribute('aria-label', 'Appeal rationale');
-    form.appendChild(/** @type {any} */ (rationale));
-
-    // Optional citations: the disputed *failed* Answers. Checking one records its
-    // Answer key on the Appeal; it never changes the Answer's value.
-    /** @type {any[]} */
+    const rationale = /** @type {HTMLTextAreaElement} */ (/** @type {unknown} */ (h('textarea', { className: 'cr-appeal-rationale', 'aria-label': 'Appeal rationale' })));
+    
+    /** @type {HTMLInputElement[]} */
     const checkboxes = [];
+    const citeWrappers = [];
     for (const q of this.catalogue.filter((q) => isFailure(q, this.answers[q.id]))) {
-      const wrapper = document.createElement('label');
-      wrapper.className = 'cr-appeal-cite';
-
-      const box = document.createElement('input');
-      box.setAttribute('type', 'checkbox');
-      /** @type {any} */ (box).value = q.id;
-      /** @type {any} */ (box).checked = false;
-
-      const text = document.createElement('span');
-      text.textContent = q.text;
-
-      wrapper.appendChild(box);
-      wrapper.appendChild(text);
-      form.appendChild(wrapper);
+      const box = /** @type {HTMLInputElement} */ (/** @type {unknown} */ (h('input', { type: 'checkbox', value: q.id, checked: false })));
       checkboxes.push(box);
+      citeWrappers.push(h('label', { className: 'cr-appeal-cite' }, box, h('span', {}, q.text)));
     }
 
-    const error = document.createElement('p');
-    error.className = 'cr-appeal-error';
-    error.hidden = true;
-    error.textContent = 'A rationale is required to raise an Appeal.';
-    form.appendChild(error);
+    const error = h('p', { className: 'cr-appeal-error', hidden: true }, 'A rationale is required to raise an Appeal.');
 
-    const submit = document.createElement('button');
-    submit.className = 'cr-appeal-submit';
-    submit.textContent = 'Raise Appeal';
-    submit.addEventListener('click', () => this._raise(rationale, checkboxes, error));
-    form.appendChild(submit);
-
-    return form;
+    return h('section', { className: 'cr-appeal-form' },
+      h('label', {}, 'Why are you appealing this outcome?'),
+      rationale,
+      ...citeWrappers,
+      error,
+      h('button', {
+        className: 'cr-appeal-submit',
+        onClick: () => this._raise(rationale, checkboxes, error)
+      }, 'Raise Appeal')
+    );
   }
 
   /**
@@ -276,37 +234,22 @@ export class CRAppeal extends CRElement {
    * @returns {HTMLElement}
    */
   _renderResolveForm(appeal) {
-    const form = document.createElement('section');
-    form.className = 'cr-appeal-resolve';
+    const rationale = /** @type {HTMLTextAreaElement} */ (/** @type {unknown} */ (h('textarea', { className: 'cr-appeal-resolution-rationale', 'aria-label': 'Resolution rationale' })));
+    const error = h('p', { className: 'cr-appeal-resolution-error', hidden: true }, 'A rationale is required to resolve an Appeal.');
 
-    const label = document.createElement('label');
-    label.textContent = 'How are you resolving this Appeal?';
-    form.appendChild(label);
-
-    const rationale = /** @type {any} */ (document.createElement('textarea'));
-    rationale.className = 'cr-appeal-resolution-rationale';
-    rationale.setAttribute('aria-label', 'Resolution rationale');
-    form.appendChild(rationale);
-
-    const error = document.createElement('p');
-    error.className = 'cr-appeal-resolution-error';
-    error.hidden = true;
-    error.textContent = 'A rationale is required to resolve an Appeal.';
-    form.appendChild(error);
-
-    const reject = document.createElement('button');
-    reject.className = 'cr-appeal-reject';
-    reject.textContent = 'Reject Appeal';
-    reject.addEventListener('click', () => this._resolve(appeal, 'rejected', rationale, error));
-    form.appendChild(reject);
-
-    const agree = document.createElement('button');
-    agree.className = 'cr-appeal-agree';
-    agree.textContent = 'Agree with Appeal';
-    agree.addEventListener('click', () => this._resolve(appeal, 'agreed', rationale, error));
-    form.appendChild(agree);
-
-    return form;
+    return h('section', { className: 'cr-appeal-resolve' },
+      h('label', {}, 'How are you resolving this Appeal?'),
+      rationale,
+      error,
+      h('button', {
+        className: 'cr-appeal-reject',
+        onClick: () => this._resolve(appeal, 'rejected', rationale, error)
+      }, 'Reject Appeal'),
+      h('button', {
+        className: 'cr-appeal-agree',
+        onClick: () => this._resolve(appeal, 'agreed', rationale, error)
+      }, 'Agree with Appeal')
+    );
   }
 
   /**
@@ -353,19 +296,20 @@ export class CRAppeal extends CRElement {
    * @returns {HTMLElement}
    */
   _buildOverrideEditor() {
-    const editor = /** @type {any} */ (document.createElement('cr-override-editor'));
-    editor.caseRow = this.caseRow;
-    editor.saveQueue = this.saveQueue;
-    editor.caseId = this.caseId;
-    editor.access = 'override';
-    editor.currentUser = this.currentUser;
-    editor.catalogue = this.catalogue;
-    editor.attributeFailures = this.attributeFailures;
-    editor.remediationFields = this.remediationFields;
-    editor.computeOutcome = this.computeOutcome;
-    editor.client = this.client;
-    editor.source = 'appeal';
-    editor.sourceAppealId = this._authoringAppealId;
+    const editor = h('cr-override-editor');
+    const ed = /** @type {any} */ (editor);
+    ed.caseRow = this.caseRow;
+    ed.saveQueue = this.saveQueue;
+    ed.caseId = this.caseId;
+    ed.access = 'override';
+    ed.currentUser = this.currentUser;
+    ed.catalogue = this.catalogue;
+    ed.attributeFailures = this.attributeFailures;
+    ed.remediationFields = this.remediationFields;
+    ed.computeOutcome = this.computeOutcome;
+    ed.client = this.client;
+    ed.source = 'appeal';
+    ed.sourceAppealId = this._authoringAppealId;
     return editor;
   }
 

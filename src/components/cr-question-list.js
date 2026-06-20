@@ -1,11 +1,12 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 import './cr-question.js';
 
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 
-export class CRQuestionList extends CRElement {
+export class CRQuestionList extends ReactiveElement {
   constructor() {
     super();
     /** @type {QuestionDefinition[]} */
@@ -24,10 +25,6 @@ export class CRQuestionList extends CRElement {
      * @type {import('./cr-question.js').CRQuestion[]}
      */
     this.questionElements = [];
-  }
-
-  connectedCallback() {
-    this._render();
   }
 
   /**
@@ -58,23 +55,28 @@ export class CRQuestionList extends CRElement {
   }
 
   _render() {
+    const els = this.render();
+    if (Array.isArray(els)) this.replaceChildren(...els);
+    else if (els) this.replaceChildren(els);
+    else this.replaceChildren();
+  }
+
+  render() {
     const elements = this.questions.map(q => {
-      const el = /** @type {import('./cr-question.js').CRQuestion} */ (
-        document.createElement('cr-question')
-      );
-      // tabindex on the host so the element can receive programmatic focus when
-      // it appears as a conditional follow-up. CRQuestion's own focus() forwards
-      // to the first input so screen-reader users land in the radio group.
-      /** @type {any} */ (el).tabIndex = -1;
-      el.question = q;
-      el.access = this.access;
       const v = this.answers[q.id]?.value;
-      el.currentValue = v ?? (q.responseType === 'multi-choice' ? [] : '');
+      const el = /** @type {import('./cr-question.js').CRQuestion} */ (
+        h('cr-question', {
+          tabIndex: -1,
+          question: q,
+          access: this.access,
+          currentValue: v ?? (q.responseType === 'multi-choice' ? [] : '')
+        })
+      );
       return el;
     });
-    this.replaceChildren(...elements);
     this.questionElements = elements;
     this._renderedIds = new Set(this.questions.map(q => q.id));
+    return elements;
   }
 }
 

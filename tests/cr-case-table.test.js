@@ -325,8 +325,11 @@ test('CRCaseTable: aria-sort reflects current sort column and direction', () => 
   assert.equal(statusTh.getAttribute('aria-sort'), 'none', 'inactive column should be none');
 
   // Click again: desc
-  for (const h of refBtn._listeners['click'] ?? []) h();
-  assert.equal(refTh.getAttribute('aria-sort'), 'descending', 'should be descending after second click');
+  const refBtn2 = findAll(el, 'button').find(b => b.textContent === 'Reference');
+  for (const h of refBtn2._listeners['click'] ?? []) h();
+  
+  const refTh2 = findAll(el, 'th').find(th => th.className === 'cr-col-reference');
+  assert.equal(refTh2.getAttribute('aria-sort'), 'descending', 'should be descending after second click');
 });
 
 test('CRCaseTable: dispatches cr-case-open event when Open button is clicked', () => {

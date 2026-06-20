@@ -67,8 +67,8 @@ test('CRStatusBanner: when status is saving, renders a polite live indicator wit
   const node = (/** @type {any} */ (el))._children[0];
   assert.ok(node, 'banner content should exist');
   assert.equal(node.textContent, 'Saving…');
-  assert.equal(node._attrs['role'], 'status');
-  assert.equal(node._attrs['aria-live'], 'polite');
+  assert.equal(node.role || node.getAttribute('role'), 'status');
+  assert.equal(node.getAttribute('aria-live'), 'polite');
 });
 
 test('CRStatusBanner: when status is reconnecting, renders gentler indicator', () => {
@@ -88,8 +88,8 @@ test('CRStatusBanner: when status is conflict, renders persistent assertive bann
 
   const banner = (/** @type {any} */ (el))._children[0];
   assert.equal(banner.className, 'cr-banner cr-banner-conflict');
-  assert.equal(banner._attrs['role'], 'alert');
-  assert.equal(banner._attrs['aria-live'], 'assertive');
+  assert.equal(banner.role || banner.getAttribute('role'), 'alert');
+  assert.equal(banner.getAttribute('aria-live'), 'assertive');
 
   const text = banner._children[0];
   assert.equal(text.textContent, 'This Case was edited in another tab. Reload to continue.');

@@ -1,6 +1,7 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { ReactiveElement } from './reactive-element.js';
 import { signal, computed } from '../lib/signal.js';
+import { h } from '../lib/html.js';
 
 /**
  * @template Row
@@ -14,7 +15,7 @@ import { signal, computed } from '../lib/signal.js';
  * }} ColumnDef
  */
 
-export class CRDashboardTable extends CRElement {
+export class CRDashboardTable extends ReactiveElement {
   constructor() {
     super();
 
@@ -54,8 +55,6 @@ export class CRDashboardTable extends CRElement {
     this._mounted = false;
     /** @type {any} */
     this._tbodyEl = null;
-    /** @type {Array<{ key: string, th: any }>} */
-    this._headerCols = [];
   }
 
   /** @param {Array<ColumnDef<any>>} cols */
@@ -83,93 +82,68 @@ export class CRDashboardTable extends CRElement {
   connectedCallback() {
     if (this._mounted) return;
     this._mounted = true;
-    this._buildLayout();
-    this.subscribe(this._sorted, rows => this._renderBody(rows));
-    this.subscribe(this._sortKey, () => this._updateAriaSort());
-    this.subscribe(this._sortDir, () => this._updateAriaSort());
+    super.connectedCallback();
   }
 
-  _buildLayout() {
-    const table = document.createElement('table');
-    table.className = 'cr-dashboard-table';
-    table.setAttribute('role', 'grid');
-    table.addEventListener('keydown', (/** @type {any} */ e) => this._onKeydown(e));
-
-    const thead = document.createElement('thead');
-    const headRow = document.createElement('tr');
-
-    this._headerCols = [];
-    for (const col of this._columns.get()) {
-      const th = document.createElement('th');
-      th.setAttribute('scope', 'col');
-      th.setAttribute('aria-sort', 'none');
-      th.className = `cr-col-${col.key}`;
-      if (col.sortable) {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.textContent = col.label;
-        btn.addEventListener('click', () => this._onHeaderClick(col.key));
-        th.appendChild(btn);
-      } else {
-        th.textContent = col.label;
-      }
-      headRow.appendChild(th);
-      this._headerCols.push({ key: col.key, th });
-    }
-    thead.appendChild(/** @type {any} */ (headRow));
-
-    const tbody = document.createElement('tbody');
-    tbody.className = 'cr-dashboard-table-body';
-    this._tbodyEl = tbody;
-
-    table.appendChild(/** @type {any} */ (thead));
-    table.appendChild(/** @type {any} */ (tbody));
-
-    this.replaceChildren(/** @type {any} */ (table));
-  }
-
-  /** @param {any[]} rows */
-  _renderBody(rows) {
-    if (!this._tbodyEl) return;
+  render() {
     const cols = this._columns.get();
-    const trs = rows.map(row => {
-      const tr = document.createElement('tr');
-      const cls = this._rowClass(row);
-      if (cls) tr.className = cls;
-      tr.setAttribute('tabindex', '0');
-      if (this._onRowActivate) {
-        const activate = this._onRowActivate;
-        tr.addEventListener('keydown', (/** @type {any} */ e) => {
-          if (e.key === 'Enter') activate(row);
-        });
-      }
-      for (const col of cols) {
-        const td = document.createElement('td');
-        if (col.renderCell) {
-          const content = col.renderCell(row);
-          if (typeof content === 'string') {
-            td.textContent = content;
-          } else if (content != null) {
-            td.appendChild(content);
-          }
-        } else if (col.getValue) {
-          const v = col.getValue(row);
-          td.textContent = v == null || v === '' ? '—' : String(v);
-        }
-        tr.appendChild(/** @type {any} */ (td));
-      }
-      return tr;
-    });
-    /** @type {any} */ (this._tbodyEl).replaceChildren(...trs);
-  }
+    const rows = this._sorted.get();
+    const sortKey = this._sortKey.get();
+    const sortDir = this._sortDir.get();
 
-  _updateAriaSort() {
-    const key = this._sortKey.get();
-    const dir = this._sortDir.get();
-    for (const { key: k, th } of this._headerCols) {
-      const v = k === key ? (dir === 'asc' ? 'ascending' : 'descending') : 'none';
-      th.setAttribute('aria-sort', v);
-    }
+    let tbody;
+
+    const table = h('table', { class: 'cr-dashboard-table', role: 'grid', onkeydown: (/** @type {any} */ e) => this._onKeydown(e) },
+      h('thead', {},
+        h('tr', {},
+          ...cols.map(col => {
+            const v = col.key === sortKey ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none';
+            const thProps = { scope: 'col', 'aria-sort': v, class: `cr-col-${col.key}` };
+            
+            if (col.sortable) {
+              return h('th', thProps, 
+                h('button', { type: 'button', onclick: () => this._onHeaderClick(col.key) }, col.label)
+              );
+            } else {
+              return h('th', thProps, col.label);
+            }
+          })
+        )
+      ),
+      tbody = h('tbody', { class: 'cr-dashboard-table-body' },
+        ...rows.map(row => {
+          const cls = this._rowClass(row);
+          /** @type {any} */
+          const trProps = { tabindex: '0' };
+          if (cls) trProps.class = cls;
+          if (this._onRowActivate) {
+            const activate = this._onRowActivate;
+            trProps.onkeydown = (/** @type {any} */ e) => {
+              if (e.key === 'Enter') activate(row);
+            };
+          }
+          
+          return h('tr', trProps,
+            ...cols.map(col => {
+              let content;
+              if (col.renderCell) {
+                const rc = col.renderCell(row);
+                content = rc == null ? [] : rc;
+              } else if (col.getValue) {
+                const v = col.getValue(row);
+                content = v == null || v === '' ? '—' : String(v);
+              } else {
+                content = '—';
+              }
+              return h('td', {}, content);
+            })
+          );
+        })
+      )
+    );
+
+    this._tbodyEl = tbody;
+    return table;
   }
 
   /** @param {string} key */

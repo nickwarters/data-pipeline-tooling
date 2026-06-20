@@ -1,5 +1,6 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
@@ -15,7 +16,7 @@ import { CRElement } from './cr-element.js';
  * }} OwnerSummary
  */
 
-export class CROwnerSummary extends CRElement {
+export class CROwnerSummary extends ReactiveElement {
   constructor() {
     super();
     /** @type {SharePointClient | null} */
@@ -27,6 +28,7 @@ export class CROwnerSummary extends CRElement {
   }
 
   async connectedCallback() {
+    super.connectedCallback();
     if (!this.client || !this.ownedCaseTypes.length) return;
     await this._refresh();
   }
@@ -56,26 +58,23 @@ export class CROwnerSummary extends CRElement {
       })
     );
 
-    this._renderSummaries(this._summaries);
+    this._render();
   }
 
-  /** @param {OwnerSummary[]} summaries */
-  _renderSummaries(summaries) {
-    const h2 = document.createElement('h2');
-    h2.className = 'cr-owner-summary-heading';
-    h2.textContent = 'Case Type Ownership Summary';
+  _render() {
+    const content = this.render();
+    if (content !== undefined) {
+      if (Array.isArray(content)) this.replaceChildren(...content);
+      else this.replaceChildren(content);
+    }
+  }
 
-    const cards = summaries.map(s => {
-      const card = document.createElement('div');
-      card.className = 'cr-owner-card';
+  render() {
+    if (!this.client || !this.ownedCaseTypes.length) return undefined;
 
-      const heading = document.createElement('h3');
-      heading.className = 'cr-owner-card-title';
-      heading.textContent = s.caseType;
+    const h2 = h('h2', { class: 'cr-owner-summary-heading' }, 'Case Type Ownership Summary');
 
-      const dl = document.createElement('dl');
-      dl.className = 'cr-owner-stats';
-
+    const cards = this._summaries.map(s => {
       /** @type {Array<{ label: string, value: number, className: string }>} */
       const stats = [
         { label: 'Outstanding', value: s.outstanding, className: 'cr-owner-outstanding' },
@@ -85,21 +84,18 @@ export class CROwnerSummary extends CRElement {
         { label: 'Completed (last 7 days)', value: s.completedLast7Days, className: 'cr-owner-completed-7d' },
       ];
 
-      for (const { label, value, className } of stats) {
-        const dt = document.createElement('dt');
-        dt.textContent = label;
-        const dd = document.createElement('dd');
-        dd.className = className;
-        dd.textContent = String(value);
-        dl.appendChild(dt);
-        dl.appendChild(dd);
-      }
-
-      card.replaceChildren(heading, dl);
-      return card;
+      return h('div', { class: 'cr-owner-card' },
+        h('h3', { class: 'cr-owner-card-title' }, s.caseType),
+        h('dl', { class: 'cr-owner-stats' },
+          ...stats.flatMap(({ label, value, className }) => [
+            h('dt', {}, label),
+            h('dd', { class: className }, String(value))
+          ])
+        )
+      );
     });
 
-    this.replaceChildren(h2, ...cards);
+    return [h2, ...cards];
   }
 }
 

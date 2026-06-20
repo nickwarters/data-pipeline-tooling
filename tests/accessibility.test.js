@@ -23,6 +23,7 @@ class StubEl {
     this._focused = false;
     /** @type {Record<string, string>} */
     this.style = {};
+    this.currentValue = undefined;
   }
   replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
   appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }

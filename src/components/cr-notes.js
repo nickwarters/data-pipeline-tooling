@@ -1,9 +1,10 @@
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { ReactiveElement } from './reactive-element.js';
+import { h } from '../lib/html.js';
 
 /** @typedef {import('../services/save-queue.js').SaveQueue} SaveQueue */
 
-export class CRNotes extends CRElement {
+export class CRNotes extends ReactiveElement {
   constructor() {
     super();
     /** @type {string} */
@@ -18,34 +19,24 @@ export class CRNotes extends CRElement {
     this.access = 'edit';
   }
 
-  connectedCallback() {
-    const heading = document.createElement('h2');
-    heading.textContent = 'Notes';
-
-    // The Notes Section holds two fixed, case-level free-text boxes (issue #122):
-    // the general note and the Case Justification. Both are plain-text fields on
-    // the Case row (ADR-0007) and autosave independently via the SaveQueue.
-    const note = this._buildBox({
-      label: 'Case notes',
-      className: 'cr-notes-input',
-      placeholder: 'Add notes…',
-      value: this.notes,
-      fieldName: 'notes',
-    });
-
-    const justification = this._buildBox({
-      label: 'Case Justification',
-      className: 'cr-case-justification-input',
-      placeholder: 'Add Case Justification…',
-      value: this.caseJustification,
-      fieldName: 'caseJustification',
-    });
-
-    this.replaceChildren(
-      /** @type {any} */ (heading),
-      ...note,
-      ...justification
-    );
+  render() {
+    return [
+      h('h2', {}, 'Notes'),
+      ...this._buildBox({
+        label: 'Case notes',
+        className: 'cr-notes-input',
+        placeholder: 'Add notes…',
+        value: this.notes,
+        fieldName: 'notes',
+      }),
+      ...this._buildBox({
+        label: 'Case Justification',
+        className: 'cr-case-justification-input',
+        placeholder: 'Add Case Justification…',
+        value: this.caseJustification,
+        fieldName: 'caseJustification',
+      }),
+    ];
   }
 
   /**
@@ -56,27 +47,25 @@ export class CRNotes extends CRElement {
    * @returns {Node[]}
    */
   _buildBox({ label, className, placeholder, value, fieldName }) {
-    const labelEl = document.createElement('label');
-    labelEl.textContent = label;
+    const isReadOnly = this.access === 'read-only';
 
-    const textarea = /** @type {HTMLTextAreaElement} */ (/** @type {unknown} */ (document.createElement('textarea')));
-    /** @type {any} */ (textarea).className = className;
-    /** @type {any} */ (textarea).placeholder = placeholder;
-    /** @type {any} */ (textarea).value = value;
-    /** @type {any} */ (textarea).setAttribute('aria-label', label);
-    if (this.access === 'read-only') {
-      /** @type {any} */ (textarea).readOnly = true;
-      /** @type {any} */ (textarea).setAttribute('readonly', 'readonly');
-    }
-
-    textarea.addEventListener('input', (ev) => {
-      if (this.access === 'read-only') return;
-      if (!this.saveQueue || !this.caseId) return;
-      const value = /** @type {any} */ (ev.target).value ?? '';
-      this.saveQueue.enqueue(this.caseId, fieldName, value);
-    });
-
-    return [/** @type {any} */ (labelEl), /** @type {any} */ (textarea)];
+    return [
+      h('label', {}, label),
+      h('textarea', {
+        className,
+        placeholder,
+        value,
+        'aria-label': label,
+        readOnly: isReadOnly ? true : undefined,
+        readonly: isReadOnly ? 'readonly' : undefined,
+        oninput: (ev) => {
+          if (this.access === 'read-only') return;
+          if (!this.saveQueue || !this.caseId) return;
+          const val = /** @type {any} */ (ev.target).value ?? '';
+          this.saveQueue.enqueue(this.caseId, fieldName, val);
+        }
+      })
+    ];
   }
 }
 

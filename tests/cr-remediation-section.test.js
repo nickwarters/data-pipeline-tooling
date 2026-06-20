@@ -16,6 +16,12 @@ class StubEl {
     this.className = '';
     /** @type {string} */
     this._tagName = '';
+
+    // Dummy properties so `k in el` is true in `h()`
+    this.value = undefined;
+    this.client = undefined;
+    this.attributedParty = undefined;
+    this.responsibleParty = undefined;
   }
   replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
   appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
