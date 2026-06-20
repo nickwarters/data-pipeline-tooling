@@ -164,9 +164,9 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`Store` / `StoreCatalog`** | `Store(subject_dir)` binds one subject to Writer/Reader creation over `<subject>/{raw,silver,gold}.db`; `StoreCatalog(root).store(subject)` mints those stores from shared root/configuration. Holds no business logic and makes no load decision. ([ADR-0001](adr/0001-sqlite-medallion-store-on-network-share.md)) |
 | **`Validator`** | `validate(dataset) -> None`, **raises** on breach. `ColumnValidator`, `RowCountValidator` (engine-agnostic), `VolumeAnomalyValidator` (trips when a run's volume deviates from its recent-history baseline — catches truncated source exports, #54), `SchemaDriftValidator` (warns at the raw boundary when a feed's columns drift from the prior run's landed set — catches owner-controlled source schema change, #51). Severity (`error`/`warn`) is set where it's attached. |
 | **`Schema` / `SchemaValidator`** | A Case Type **dataclass** whose annotations *are* the column, dtype, nullability, and value-rule contract; the validator is the dataclass→validator adapter, enforced at silver (and optionally gold). Nullability/value rules extend the same dataclass via `Annotated`; cross-field **row checks** attach via the `@row_checks(...)` class decorator. → [schema-enforcement.md](schema-enforcement.md) ([ADR-0008](adr/0008-graduated-schema-enforcement.md)) |
-| **`Processor`** | `process(dataset) -> Dataset`, run mid-pipeline via `.with_processor()`. `SchemaCoercion` (repair storage-lossy types); the Selection transforms `Filter` / `Score` / `VectorizedFilter` / `VectorizedDerive` / `Sort` / `Rename` / `Stamp`, the ungrouped `Sample` and per-group `TopNPerGroup` / `SamplePerGroup`, the explicit-dependency cross-feed `JoinWith` / `AntiJoinWith`; the column-shaping `Parse` / `SplitColumn` / `JoinColumns` / `Zfill` / `IntegerText`; and the Ingest / fan-out transforms `SelectColumns` / `DropColumns` / `Unpivot` / `DeriveKey` / `LatestPerKey`. → [processors.md](processors.md) |
-| **`Stage`** | A position-sensitive step inside one class-level `Pipeline` run: current `Dataset` in, next `Dataset` out. Compose with `.add_stage(...)` when validation, processing, or explicit checkpoint writes must appear at an exact point. Built-ins: `ValidationStage`, `ProcessingStage`, `CheckpointStage`. |
-| **`Pipeline`** (builder) | The deferred fluent builder: `Pipeline(name, reader).add_stage(…).write_to(writer)`. It builds one ordered plan; call `.describe()` to inspect the planned reader/stages/governance/writer without executing, then `.run(context=…)` to execute that plan fail-fast and atomic with RunLog observability. ([ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md)) |
+| **`Processor`** | `process(dataset) -> Dataset`, run mid-pipeline via `.transform()`. `SchemaCoercion` (repair storage-lossy types); the Selection transforms `Filter` / `Score` / `VectorizedFilter` / `VectorizedDerive` / `Sort` / `Rename` / `Stamp`, the ungrouped `Sample` and per-group `TopNPerGroup` / `SamplePerGroup`, the explicit-dependency cross-feed `JoinWith` / `AntiJoinWith`; the column-shaping `Parse` / `SplitColumn` / `JoinColumns` / `Zfill` / `IntegerText`; and the Ingest / fan-out transforms `SelectColumns` / `DropColumns` / `Unpivot` / `DeriveKey` / `LatestPerKey`. → [processors.md](processors.md) |
+| **`Stage`** | A position-sensitive step inside one class-level `Pipeline` run: current `Dataset` in, next `Dataset` out. Compose with `.add_node(...)` when validation, processing, or explicit checkpoint writes must appear at an exact point. Built-ins: `ValidationStage`, `ProcessingStage`, `CheckpointStage`. |
+| **`Pipeline`** (builder) | The deferred DAG builder: `Pipeline(name, reader).add_node(…).write(writer)`. It builds one ordered plan; call `.describe()` to inspect the planned reader/stages/governance/writer without executing, then `.run(context=…)` to execute that plan fail-fast and atomic with RunLog observability. ([ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md)) |
 | **`ForEach`** | Runnable orchestration for independent repeated runs: pass items plus `pipeline_builder(item, context)`, then call `.run(context)`. It creates a fresh builder and per-item `RunContext` for each item. Default behavior fails fast on the first failed item; `continue_on_error=True` returns per-item success/failure outcomes and continues. Use when files must remain separate logical runs. |
 | **`Orchestrator` / `PipelineSet` / `ScheduledPipeline`** | Scheduled due-work orchestration above `PipelineRunner`. Python definitions own sets, dependencies, and default schedules; YAML can override enablement, schedule timing, and freshness windows. A single pass or bounded loop runs due items for one run date, marks failed items terminal, blocks their downstream dependants, and lets independent items and other sets continue. |
 | **`PipelineError` / `format_failure`** | The base of the expected fail-fast failure family (`ValidationError`, `FreshnessError`, `UnknownPipelineError`, `CoercionError`, `ForEachPipelineError` all subclass it) and the pure formatter that renders a caught one as a short, traceback-free block for `stderr`. At a run boundary — the operator CLI, a scaffolded `main()` — `except PipelineError` + `format_failure(exc)` turns a deliberate abort into a clear message; a genuine bug is not a `PipelineError` and keeps its trace. |
@@ -240,7 +240,7 @@ See the *Add a new Feed* how-to.
 ```python
 from case_review.case_pool import CasePool
 from framework.io import StoreCatalog
-from framework.shared import WorkingDayCalendar
+from tools.calendar import WorkingDayCalendar
 
 store = StoreCatalog("/share").store(CASES.name)
 pool = CasePool(CASES, store, WorkingDayCalendar())
@@ -264,7 +264,7 @@ To skip the boilerplate for a fresh CSV feed, **scaffold** one — feed code as 
 under `tests/pipelines/`, ready to run — and then customise it (#97):
 
 ```sh
-python -m framework scaffold orders              # -> pipelines/orders/ + tests/pipelines/test_orders.py
+python -m cli scaffold orders              # -> pipelines/orders/ + tests/pipelines/test_orders.py
 python -m pipelines.orders.pipeline /data        # land the bundled sample into raw
 python -m pytest tests/pipelines/test_orders.py  # the generated test passes as-is
 ```
@@ -275,20 +275,20 @@ silver (stopping at silver — gold assembly is the author's call, #163); see
 [`adding-a-feed.md`](adding-a-feed.md):
 
 ```sh
-python -m framework scaffold --case-type claims  # + case_type.py; source -> raw -> silver
+python -m cli scaffold --case-type claims  # + case_type.py; source -> raw -> silver
 ```
 
 ```python
 from framework.core import RAW
 from framework.io import ExcelReader, Refresh, StoreCatalog
 from framework.run import Pipeline
-from framework.validate import ColumnValidator  # optional input gate
+from framework.core import ColumnValidator  # optional input gate
 
 store = StoreCatalog("/share").store("cases")       # the "cases" subject
 (
     Pipeline("cases", ExcelReader("feed.xlsx", sheet="cases"))
-    .with_validator(ColumnValidator(["case_ref"]))  # optional: gate the input
-    .write_to(store.writer(RAW, "cases", Refresh()))
+    .validate(ColumnValidator(["case_ref"]))  # optional: gate the input
+    .p.write(store.writer(RAW, "cases", Refresh()))
     .run()
 )
 ```
@@ -320,18 +320,18 @@ separate `schema.py`, `rules.py`, `processors.py`, `pipeline.py`, and
 ### Emit a file Deliverable
 
 Reporting can emit file-form Deliverables by swapping the destination Writer.
-The builder still sees only `write_to(writer).run()`; the file adapter owns the
+The builder still sees only `p.write(writer).run()`; the file adapter owns the
 path, format, and load strategy.
 
 ```python
 from framework.io import CsvReader, CsvWriter, JsonWriter, Refresh
 from framework.run import Pipeline
 
-Pipeline("report", CsvReader("report_rows.csv")).write_to(
+Pipeline("report", CsvReader("report_rows.csv")).p.write(
     CsvWriter("deliverables/report.csv", Refresh())
 ).run()
 
-Pipeline("report-json", CsvReader("report_rows.csv")).write_to(
+Pipeline("report-json", CsvReader("report_rows.csv")).p.write(
     JsonWriter("deliverables/report.json", Refresh())
 ).run()
 ```
@@ -406,19 +406,19 @@ strategy = AccumulateByRun.from_context(context)
 
 (
     Pipeline("selection", DatasetReader(available))
-    .with_processor(Score("priority_score", priority_score))
-    .with_processor(Filter(high_value_case, name="high-value"))
-    .with_processor(AntiJoinWith(already_reviewed, on="case_ref", name="already-reviewed"))
-    .with_processor(JoinWith(reference, on="adviser"))          # read-only dependency join
-    .with_processor(TopNPerGroup(key="adviser", by="priority_score", n=1))
-    .with_processor(Sort("priority_score", ascending=False))
-    .with_processor(Stamp("question_bank_id", variation.question_bank_id))
+    .transform(Score("priority_score", priority_score))
+    .transform(Filter(high_value_case, name="high-value"))
+    .transform(AntiJoinWith(already_reviewed, on="case_ref", name="already-reviewed"))
+    .transform(JoinWith(reference, on="adviser"))          # read-only dependency join
+    .transform(TopNPerGroup(key="adviser", by="priority_score", n=1))
+    .transform(Sort("priority_score", ascending=False))
+    .transform(Stamp("question_bank_id", variation.question_bank_id))
     .explain(                                                    # optional: RowTrace
         store.writer(GOLD, "selection_trace", strategy),
         id_column="case_ref",
         score_column="priority_score",
     )
-    .write_to(store.writer(GOLD, "selection_pool", strategy))
+    .p.write(store.writer(GOLD, "selection_pool", strategy))
     .run(context=context)
 )
 ```
@@ -450,7 +450,7 @@ strategy = AccumulateByRun.from_context(context)
 - The SelectionPool reaches the review platform as a **Deliverable** (a later
   slice); the returned **Review Outcomes** come back via **Sync**, not here.
 - Run pipelines through the framework when freshness matters:
-  `python -m framework run pipelines/selection /tmp/demo --run-date 2026-05-29`
+  `python -m cli run pipelines/selection /tmp/demo --run-date 2026-05-29`
   checks recent successful `ingest` history (its declared `UPSTREAMS`) before
   Selection executes.
 
@@ -478,16 +478,16 @@ rows without touching prior loads.
 ### Operate pipelines from the CLI — run, status, runs, log
 
 For the everyday operator tasks — running a pipeline, checking its status,
-listing recent runs, inspecting a run log — use `python -m framework` instead
+listing recent runs, inspecting a run log — use `python -m cli` instead
 of writing a wrapper script. It is a thin shell over the runner and the
 `RunRegistry` / `RunLog` seam; full reference with example output is
 [`operator-cli.md`](operator-cli.md).
 
 ```sh
-python -m framework run pipelines/ingest /data --run-date 2026-05-29
-python -m framework status /data --pipeline ingest
-python -m framework runs /data --pipeline ingest --limit 5
-python -m framework log /data ingest --run-id 5f8ff8c7
+python -m cli run pipelines/ingest /data --run-date 2026-05-29
+python -m cli status /data --pipeline ingest
+python -m cli runs /data --pipeline ingest --limit 5
+python -m cli log /data ingest --run-id 5f8ff8c7
 ```
 
 `run` addresses a pipeline by **its location on disk**: `pipelines/ingest` maps
@@ -504,7 +504,7 @@ application's registry module (`build_runner()` / `build_pipeline_sets()`).
 
 ### Test a pipeline — given source rows, expect output rows
 
-To test a concrete pipeline script, reach for `framework.testing` rather than
+To test a concrete pipeline script, reach for `tests.framework_testing` rather than
 wiring temp directories and SQLite assertions by hand. `given_rows(...)` hands a
 pipeline an in-memory feed, `RecordingWriter()` captures what it wrote, and
 `rows_of(...)` reads it back as plain row dicts for a direct `==`:
@@ -512,13 +512,13 @@ pipeline an in-memory feed, `RecordingWriter()` captures what it wrote, and
 ```python
 from framework.run import Pipeline
 from framework.transform import Filter
-from framework.testing import given_rows, rows_of, RecordingWriter
+from tests.framework_testing import given_rows, rows_of, RecordingWriter
 
 reader = given_rows([{"amount": 100}, {"amount": 50}])
 writer = RecordingWriter()
-Pipeline("selection", reader).with_processor(
+Pipeline("selection", reader).transform(
     Filter(lambda row: row["amount"] >= 100, name="high-value")
-).write_to(writer).run()
+).write(writer).run()
 assert rows_of(writer) == [{"amount": 100}]
 ```
 
@@ -545,7 +545,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `status` / `runs` / `log`) with example commands and output. |
 | [`resolving-a-failed-run.md`](resolving-a-failed-run.md) | The operator loop from a failed run — investigate (`status`/`log`), diagnose, resolve, and re-drive idempotently. |
 | [`escape-hatch-store.md`](escape-hatch-store.md) | Iterating against a flat scratch db (and a pre-baked SQL query) outside the medallion layer pattern, and migrating back. |
-| [`testing-helpers.md`](testing-helpers.md) | `framework.testing` — the test-only helpers for testing concrete pipelines (`given_rows`, `RecordingWriter`, `read_rows`, `RecordingRunLog`, `read_run_log`). |
+| [`testing-helpers.md`](testing-helpers.md) | `tests.framework_testing` — the test-only helpers for testing concrete pipelines (`given_rows`, `RecordingWriter`, `read_rows`, `RecordingRunLog`, `read_run_log`). |
 | [`adr/`](adr/) | Every architectural decision (the *why*). |
 | [`../CONTEXT.md`](../CONTEXT.md) | The domain language — the canonical glossary. |
 </content>

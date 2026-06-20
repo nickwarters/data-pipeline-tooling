@@ -21,7 +21,7 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   (cross-cutting utilities — `retry`, `calendar`); plus three non-facade
   packages — the private `framework/_internal` (`connection`, `describe`,
   `schema`: cross-cutting helpers with no public name), the private
-  `framework/_cli` (the `python -m framework` entry point — `scaffold` plus the
+  `framework/_cli` (the `python -m cli` entry point — `scaffold` plus the
   operator commands; see below), and the test-only
   `framework/testing`), `case_review/` (the case-review *application* — domain
   types like `CaseType`/`CasePool` and its gold helpers, which live outside the
@@ -65,25 +65,25 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt   # pandas + pytest
 .venv/bin/python -m pytest                       # run the suite
 .venv/bin/python -m pipelines.demo_csv_to_raw /tmp/demo   # run the demo (module form, from repo root)
-.venv/bin/python -m framework scaffold orders            # scaffold a feed -> pipelines/orders/ + tests/pipelines/test_orders.py (#97)
-.venv/bin/python -m framework scaffold orders --from-feed-file sample.csv  # seed schema/sample/test from a real CSV header
-.venv/bin/python -m framework scaffold --case-type claims # scaffold a Case Type ingest feed (source->raw->silver, identity declared; #155)
-.venv/bin/python -m framework run pipelines/ingest /tmp/demo            # operator CLI: run/orchestrate/status/runs/log (see docs/operator-cli.md)
+.venv/bin/python -m cli scaffold orders            # scaffold a feed -> pipelines/orders/ + tests/pipelines/test_orders.py (#97)
+.venv/bin/python -m cli scaffold orders --from-feed-file sample.csv  # seed schema/sample/test from a real CSV header
+.venv/bin/python -m cli scaffold --case-type claims # scaffold a Case Type ingest feed (source->raw->silver, identity declared; #155)
+.venv/bin/python -m cli run pipelines/ingest /tmp/demo            # operator CLI: run/orchestrate/status/runs/log (see docs/operator-cli.md)
 ```
 
 Run pipelines as **modules from the repo root** (`python -m pipelines.<name>`)
 so the import-only `framework` package resolves on `sys.path`. The framework
-itself is also runnable — `python -m framework <command>` (entry point in
+itself is also runnable — `python -m cli <command>` (entry point in
 `framework/_cli`) is the single surface for authoring (`scaffold`) and operating
 (`run`/`orchestrate`/`status`/`runs`/`log`) pipelines. `run` addresses a pipeline
-by **its location on disk** — `python -m framework run pipelines/<name>` imports
+by **its location on disk** — `python -m cli run pipelines/<name>` imports
 `pipelines.<name>.pipeline` and executes its `run(context)` callable (reading an
 optional `UPSTREAMS` freshness tuple), so the dependency stays one-way and the
 framework never statically depends on `pipelines/`. Only `orchestrate` still
 takes a required `--app` naming an application's registry module that exposes
 `build_runner()` / `build_pipeline_sets()`.
 
-Scaffold a new feed with `python -m framework scaffold <feed>`: it renders the
+Scaffold a new feed with `python -m cli scaffold <feed>`: it renders the
 feed code as a `pipelines/<feed>/` subpackage (schema, pipeline, sample fixture)
 and its test as `tests/pipelines/test_<feed>.py`, from the template under
 `framework/_cli/scaffold_templates/feed/`, ready to run and customise. The

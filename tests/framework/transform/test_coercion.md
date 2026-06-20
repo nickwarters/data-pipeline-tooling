@@ -19,7 +19,7 @@ import pytest
 from framework.core.dataset import Dataset
 from framework.transform import SchemaCoercion
 from framework.transform.processors import CoercionError
-from framework.validate import SchemaValidator
+from framework.core import SchemaValidator
 
 
 @dataclass
@@ -50,7 +50,7 @@ def test_coerces_a_declared_date_from_text_so_the_validator_passes():
     )
     dataset = Dataset.from_pandas(raw)
 
-    coerced = SchemaCoercion(DatedCase).process(dataset)
+    coerced = SchemaCoercion(DatedCase)(dataset)
 
     SchemaValidator(DatedCase).validate(coerced)  # does not raise
 
@@ -61,7 +61,7 @@ def test_coerces_a_declared_bool_from_true_false_text():
     raw = pd.DataFrame({"case_ref": ["c1", "c2"], "active": ["TRUE", "FALSE"]})
     dataset = Dataset.from_pandas(raw)
 
-    coerced = SchemaCoercion(FlaggedCase).process(dataset)
+    coerced = SchemaCoercion(FlaggedCase)(dataset)
 
     SchemaValidator(FlaggedCase).validate(coerced)  # does not raise
     assert list(coerced.to_pandas()["active"]) == [True, False]
@@ -81,7 +81,7 @@ def test_leaves_round_trip_safe_and_undeclared_columns_untouched():
     )
     dataset = Dataset.from_pandas(raw)
 
-    coerced = SchemaCoercion(MixedCase).process(dataset).to_pandas()
+    coerced = SchemaCoercion(MixedCase)(dataset).to_pandas()
 
     assert list(coerced["case_ref"]) == ["c1", "c2"]
     assert list(coerced["score"]) == [10, 20]
@@ -96,7 +96,7 @@ def test_unparseable_date_fails_fast_with_a_located_message():
     dataset = Dataset.from_pandas(raw)
 
     with pytest.raises(CoercionError, match="opened"):
-        SchemaCoercion(DatedCase).process(dataset)
+        SchemaCoercion(DatedCase)(dataset)
 
 
 def test_unrecognized_boolean_encoding_fails_fast_with_a_located_message():
@@ -106,7 +106,7 @@ def test_unrecognized_boolean_encoding_fails_fast_with_a_located_message():
     dataset = Dataset.from_pandas(raw)
 
     with pytest.raises(CoercionError, match="active.*maybe"):
-        SchemaCoercion(FlaggedCase).process(dataset)
+        SchemaCoercion(FlaggedCase)(dataset)
 
 
 def test_coerces_a_declared_bool_from_one_zero_encoding():
@@ -115,7 +115,7 @@ def test_coerces_a_declared_bool_from_one_zero_encoding():
     raw = pd.DataFrame({"case_ref": ["c1", "c2"], "active": [1, 0]})
     dataset = Dataset.from_pandas(raw)
 
-    coerced = SchemaCoercion(FlaggedCase).process(dataset)
+    coerced = SchemaCoercion(FlaggedCase)(dataset)
 
     SchemaValidator(FlaggedCase).validate(coerced)  # does not raise
     assert list(coerced.to_pandas()["active"]) == [True, False]

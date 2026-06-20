@@ -14,7 +14,7 @@ from datetime import date
 from case_review.case_type import CaseType
 from framework.core import Dataset
 from framework.io import Store
-from framework.shared import WorkingDayCalendar
+from tools.calendar import WorkingDayCalendar
 from framework.transform import Filter, SchemaCoercion
 
 
@@ -46,9 +46,9 @@ class CasePool:
         ``Store``.
         """
         dataset = self._store.reader("gold", self._case_type.name).read()
-        dataset = SchemaCoercion(self._case_type.schema).process(dataset)
+        dataset = SchemaCoercion(self._case_type.schema)(dataset)
 
         window = set(self._calendar.last_n_working_days(within_working_days, as_of))
-        return Filter(lambda row: row[activity_column].date() in window).process(
+        return Filter(lambda row: row[activity_column].date() in window)(
             dataset
         )

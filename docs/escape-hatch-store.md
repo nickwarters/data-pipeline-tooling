@@ -221,7 +221,7 @@ mechanical:
    They are not part of the public surface ([public-api.md](public-api.md)); a
    lingering escape hatch is the defect, not the migration.
 
-If you scaffold the real feed with `python -m framework scaffold <feed>`
+If you scaffold the real feed with `python -m cli scaffold <feed>`
 ([adding-a-feed.md](adding-a-feed.md)) you get the layer-pattern wiring for free,
 which is usually the cleanest end of a successful spike.
 </content>

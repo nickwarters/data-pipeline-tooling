@@ -1,13 +1,13 @@
 # Testing helpers for pipeline authors (#94)
 
-`framework.testing` is a small, **test-only** surface that makes a concrete
+`tests.framework_testing` is a small, **test-only** surface that makes a concrete
 pipeline script easy to test — without hand-wiring temp directories, SQLite
 round-trips, or JSONL parsing in every test. Pipeline code never imports it at
 runtime; your **tests** do:
 
 ```python
-from framework.testing import given_rows, rows_of, read_rows
-from framework.testing import RecordingWriter, RecordingRunLog, read_run_log
+from tests.framework_testing import given_rows, rows_of, read_rows
+from tests.framework_testing import RecordingWriter, RecordingRunLog, read_run_log
 ```
 
 It sits *beside* the production facades (`framework.core` / `framework.io` /
@@ -32,9 +32,9 @@ the helpers take and return plain Python **row dicts**, never a pandas frame.
 | `RecordingRunLog()` | A `RunLog` that captures records in memory. `.records`, `.records_for_step(step)`, `.warn_hits`, `.errors`. |
 | `read_run_log(path)` | Parse an on-disk JSONL run-log file into the same record dicts a `RecordingRunLog` captures. |
 
-The surface is split internally into `framework.testing.rows` (the row helpers
-above) and `framework.testing.run_log` (`RecordingRunLog` / `read_run_log`), both
-re-exported from `framework.testing` — import from the package, not the modules.
+The surface is split internally into `tests.framework_testing.rows` (the row helpers
+above) and `tests.framework_testing.run_log` (`RecordingRunLog` / `read_run_log`), both
+re-exported from `tests.framework_testing` — import from the package, not the modules.
 
 ## Given-source-rows / expect-output-rows
 
@@ -44,7 +44,7 @@ output rows. No filesystem touched.
 ```python
 from framework.run import Pipeline
 from framework.transform import Filter
-from framework.testing import given_rows, rows_of, RecordingWriter
+from tests.framework_testing import given_rows, rows_of, RecordingWriter
 
 def test_high_value_filter_keeps_only_the_cases_at_or_above_100():
     reader = given_rows([{"amount": 100}, {"amount": 50}, {"amount": 200}])
@@ -52,7 +52,7 @@ def test_high_value_filter_keeps_only_the_cases_at_or_above_100():
 
     (
         Pipeline("selection", reader)
-        .with_processor(Filter(lambda row: row["amount"] >= 100, name="high-value"))
+        .transform(Filter(lambda row: row["amount"] >= 100, name="high-value"))
         .write_to(writer)
         .run()
     )
@@ -68,7 +68,7 @@ through the Store's own Reader — the same seam a pipeline uses, not around it:
 ```python
 from framework.core import RAW
 from framework.io import Refresh, Store
-from framework.testing import given_rows, read_rows
+from tests.framework_testing import given_rows, read_rows
 from framework.run import Pipeline
 
 def test_landed_rows(tmp_path):
@@ -90,7 +90,7 @@ doesn't guarantee row order. `assert_rows_equal` takes anything `rows_of` accept
 multiset:
 
 ```python
-from framework.testing import assert_rows_equal, given_rows, RecordingWriter
+from tests.framework_testing import assert_rows_equal, given_rows, RecordingWriter
 from framework.transform import Stamp
 from framework.run import Pipeline
 
@@ -98,7 +98,7 @@ def test_scored_rows_ignoring_the_run_stamp():
     writer = RecordingWriter()
     (
         Pipeline("cases", given_rows([{"case_id": "c1", "amount": 100}]))
-        .with_processor(Stamp("run_id", "run-123"))
+        .transform(Stamp("run_id", "run-123"))
         .write_to(writer)
         .run()
     )
@@ -124,15 +124,15 @@ records:
 ```python
 import pytest
 from framework.run import Pipeline
-from framework.validate import ColumnValidator, ValidationError
-from framework.testing import given_rows, RecordingWriter, RecordingRunLog
+from framework.core import ColumnValidator, ValidationError
+from tests.framework_testing import given_rows, RecordingWriter, RecordingRunLog
 
 def test_missing_required_column_aborts_and_is_recorded():
     run_log = RecordingRunLog()
     writer = RecordingWriter()
     pipeline = (
         Pipeline("cases", given_rows([{"amount": 100}]), run_log=run_log)
-        .with_validator(ColumnValidator(["missing_col"]))
+        .validate(ColumnValidator(["missing_col"]))
         .write_to(writer)
     )
 

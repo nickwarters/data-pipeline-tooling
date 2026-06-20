@@ -10,8 +10,8 @@ from framework.io.readers import DatasetReader, SqliteReader
 from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun
 from framework.run.builder import Pipeline
-from framework.run.run_log import RunLog
-from framework.run.run_registry import RunRegistry
+from tools.observability.run_log import RunLog
+from tools.observability.run_registry import RunRegistry
 from framework.run.runner import (
     FreshnessError,
     FreshnessGuard,
@@ -56,7 +56,7 @@ def _context(tmp_path, *, run_date=dt.date(2026, 5, 29)) -> RunContext:
         registry.ingest(log_path)
     return RunContext(
         base_dir=tmp_path,
-        case_type="cases",
+        subject="cases",
         pipeline="selection",
         run_date=run_date,
         run_id="selection-run",
@@ -124,12 +124,12 @@ def test_freshness_guard_allows_and_warns_when_no_history_exists(tmp_path):
     assert "allowing first run" in freshness[-1]["warn_hits"][0]
 
 
-def test_runner_registers_and_runs_handler_by_case_type_and_pipeline(tmp_path):
+def test_runner_registers_and_runs_handler_by_subject_and_pipeline(tmp_path):
     runner = PipelineRunner()
     seen = []
 
     def handler(context):
-        seen.append((context.case_type, context.pipeline, context.label))
+        seen.append((context.subject, context.pipeline, context.label))
         return Dataset.from_pandas(pd.DataFrame({"id": [1, 2]}))
 
     runner.register("cases", "ingest", handler)
@@ -147,19 +147,17 @@ def test_runner_context_correlates_logs_registry_and_accumulated_rows(tmp_path):
     runner = PipelineRunner()
 
     def handler(context):
-        store = Store(context.base_dir / context.case_type)
+        store = Store(context.base_dir / context.subject)
         source = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c1", "c2"]}))
-        return (
-            Pipeline(context.label, DatasetReader(source))
-            .write_to(
-                store.writer(
-                    "gold",
-                    "selection_pool",
-                    AccumulateByRun.from_context(context),
-                )
-            )
-            .run(context=context)
+        p = Pipeline(context.label)
+        r = p.read(DatasetReader(source), name="read")
+        writer = store.writer(
+            "gold",
+            "selection_pool",
+            AccumulateByRun.from_context(context),
         )
+        p.write(writer, r, name="write")
+        return p.run(context=context)
 
     runner.register("cases", "selection", handler)
 
@@ -186,17 +184,15 @@ def test_runner_redrives_a_business_run_under_an_explicit_logical_run_id(tmp_pat
     runner = PipelineRunner()
 
     def handler(context):
-        store = Store(context.base_dir / context.case_type)
+        store = Store(context.base_dir / context.subject)
         source = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c1", "c2"]}))
-        return (
-            Pipeline(context.label, DatasetReader(source))
-            .write_to(
-                store.writer(
-                    "gold", "selection_pool", AccumulateByRun.from_context(context)
-                )
-            )
-            .run(context=context)
+        p = Pipeline(context.label)
+        r = p.read(DatasetReader(source), name="read")
+        writer = store.writer(
+            "gold", "selection_pool", AccumulateByRun.from_context(context)
         )
+        p.write(writer, r, name="write")
+        return p.run(context=context)
 
     runner.register("cases", "selection", handler)
 

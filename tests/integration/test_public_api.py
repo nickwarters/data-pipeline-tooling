@@ -15,7 +15,7 @@ FIXTURE = Path(__file__).parent.parent / "fixtures" / "cases.csv"
 
 PIPELINES_DIR = Path(__file__).parent.parent.parent / "pipelines"
 CASE_REVIEW_DIR = Path(__file__).parent.parent.parent / "case_review"
-PUBLIC_FACADES = {"core", "io", "transform", "validate", "run", "recipes", "shared"}
+PUBLIC_FACADES = {"core", "io", "transform", "validate", "run"}
 
 
 def _framework_submodules_imported(source: str) -> set[str]:
@@ -39,7 +39,7 @@ def _facade_offenders(root: Path) -> dict[str, set[str]]:
     imports — bypassing the public facades. Empty means the tree is clean.
 
     Test modules are excluded: their tests legitimately import framework
-    internals (e.g. ``framework.testing``).
+    internals (e.g. ``tests.framework_testing``).
     """
     offenders: dict[str, set[str]] = {}
     for path in sorted(root.rglob("*.py")):
@@ -60,16 +60,12 @@ def test_package_root_exposes_only_public_facade_modules():
         "transform",
         "validate",
         "run",
-        "recipes",
-        "shared",
     ]
     assert framework.core.Dataset is not None
     assert framework.io.CsvReader is not None
     assert framework.transform.Filter is not None
-    assert framework.validate.ColumnValidator is not None
+    assert framework.core.ColumnValidator is not None
     assert framework.run.Pipeline is not None
-    assert framework.recipes.raw_to_silver is not None
-    assert framework.shared.WorkingDayCalendar is not None
 
     unsupported_facade_names = {
         "CsvReader",
@@ -91,11 +87,10 @@ def test_an_author_can_ingest_a_feed_through_the_io_and_run_facades(tmp_path):
     from framework.run import Pipeline
 
     store = Store(tmp_path / "cases")
-    (
-        Pipeline("cases", CsvReader(FIXTURE))
-        .write_to(store.writer(RAW, "cases", Refresh()))
-        .run()
-    )
+    p = Pipeline("cases")
+    r = p.read(CsvReader(FIXTURE), name="read")
+    w = p.write(store.writer(RAW, "cases", Refresh()), r, name="write")
+    p.run()
 
     landed = store.reader(RAW, "cases").read()
     assert len(landed) == 3
@@ -109,17 +104,19 @@ def test_file_deliverable_writers_are_available_through_the_io_facade(tmp_path):
         ExcelWriter,
         JsonWriter,
         Refresh,
-        SharePointWriter,
-    )
+        )
     from framework.run import Pipeline
 
     target = tmp_path / "deliverables" / "cases.csv"
-    Pipeline("cases", CsvReader(FIXTURE)).write_to(CsvWriter(target, Refresh())).run()
+    p = Pipeline("cases")
+    r = p.read(CsvReader(FIXTURE), name="read")
+    w = p.write(CsvWriter(target, Refresh()), r, name="write")
+    p.run()
 
     assert target.exists()
     assert ExcelWriter is not None
     assert JsonWriter is not None
-    assert SharePointWriter is not None
+    
 
 
 def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_path):
@@ -129,24 +126,18 @@ def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_p
     from framework.io import CsvReader, Refresh, Store
     from framework.run import Pipeline
     from framework.transform import Filter, Score, VectorizedDerive, VectorizedFilter
-    from framework.validate import ColumnValidator
+    from framework.core import ColumnValidator
 
     store = Store(tmp_path / "cases")
-    landed = (
-        Pipeline("cases", CsvReader(FIXTURE))
-        .with_validator(ColumnValidator(["amount"]))
-        .with_processor(Score("priority", lambda row: row["amount"] * 2))
-        .with_processor(VectorizedDerive("priority_x2", lambda df: df["priority"] * 2))
-        .with_processor(Filter(lambda row: row["amount"] >= 1000, name="high-value"))
-        .with_processor(
-            VectorizedFilter(
-                lambda df: df["priority_x2"] >= 4000,
-                name="high-priority",
-            )
-        )
-        .write_to(store.writer(RAW, "cases", Refresh()))
-        .run()
-    )
+    p = Pipeline("cases")
+    r = p.read(CsvReader(FIXTURE), name="read")
+    v = p.validate(ColumnValidator(["amount"]), r, name="validate")
+    s = p.transform(Score("priority", lambda row: row["amount"] * 2), v, name="score")
+    vd = p.transform(VectorizedDerive("priority_x2", lambda df: df["priority"] * 2), s, name="derive")
+    f = p.transform(Filter(lambda row: row["amount"] >= 1000, name="high-value"), vd, name="filter")
+    vf = p.transform(VectorizedFilter(lambda df: df["priority_x2"] >= 4000, name="high-priority"), f, name="vector-filter")
+    w = p.write(store.writer(RAW, "cases", Refresh()), vf, name="write")
+    landed = p.run()
 
     # The Filter dropped the sub-1000 Case; Score added its column.
     assert len(landed) == 2
@@ -157,34 +148,18 @@ def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_p
 def test_an_author_can_compose_ordered_stages_through_the_run_facade(tmp_path):
     from framework.core import RAW
     from framework.io import CsvReader, Refresh, Store
-    from framework.run import Pipeline, ProcessingStage, ValidationStage
+    from framework.run import Pipeline
     from framework.transform import Score
-    from framework.validate import ColumnValidator
+    from framework.core import ColumnValidator
 
     store = Store(tmp_path / "cases")
-    landed = (
-        Pipeline("cases", CsvReader(FIXTURE))
-        .add_stage(
-            ValidationStage(
-                name="Validate source shape",
-                validators=[ColumnValidator(["amount"])],
-            )
-        )
-        .add_stage(
-            ProcessingStage(
-                name="Score cases",
-                processors=[Score("priority", lambda row: row["amount"] * 2)],
-            )
-        )
-        .add_stage(
-            ValidationStage(
-                name="Validate scored cases",
-                validators=[ColumnValidator(["priority"])],
-            )
-        )
-        .write_to(store.writer(RAW, "cases", Refresh()))
-        .run()
-    )
+    p = Pipeline("cases")
+    r = p.read(CsvReader(FIXTURE), name="read")
+    v1 = p.validate(ColumnValidator(["amount"]), r, name="validate-source")
+    s = p.transform(Score("priority", lambda row: row["amount"] * 2), v1, name="score")
+    v2 = p.validate(ColumnValidator(["priority"]), s, name="validate-scored")
+    w = p.write(store.writer(RAW, "cases", Refresh()), v2, name="write")
+    landed = p.run()
 
     assert len(landed) == 3
     assert "priority" in landed.columns
@@ -195,7 +170,7 @@ def test_internal_plumbing_stays_out_of_the_public_facades():
     # implementation detail (connection factory, layer-name helper, trace
     # mechanics, remote client seam, runner/run-log internals) — documented as
     # internal in docs/public-api.md and absent from every facade's __all__.
-    from framework import core, io, recipes, run, shared, transform, validate
+    from framework import core, io, run, transform
 
     internal = {
         "connect",  # framework._internal.connection — connection factory seam
@@ -207,7 +182,7 @@ def test_internal_plumbing_stays_out_of_the_public_facades():
         "StepMetrics",  # framework.run.run_log — internal timing record
         "pipeline_label",  # framework.run.runner — internal label helper
     }
-    for facade in (core, io, transform, validate, run, recipes, shared):
+    for facade in (core, io, transform, run):
         leaked = internal & set(facade.__all__)
         assert not leaked, f"{facade.__name__} leaks internal names: {leaked}"
         # __all__ is also honest: every advertised name resolves on the facade.
@@ -219,7 +194,7 @@ def test_demo_pipelines_import_framework_only_through_the_public_facades():
     # downstream scripts depend on the stable surface, not internal modules
     # by accident. Every framework import in pipelines/ must go through a facade —
     # including feed subpackages (pipelines/<feed>/, scaffolded by ). Test
-    # modules are excluded: their tests legitimately import framework.testing.
+    # modules are excluded: their tests legitimately import tests.framework_testing.
     assert not _facade_offenders(PIPELINES_DIR), (
         f"pipelines bypassing the public facades: {_facade_offenders(PIPELINES_DIR)}"
     )

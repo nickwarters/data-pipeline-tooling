@@ -3,7 +3,7 @@
 
 The builder-level :class:`framework.run.builder.Pipeline` still owns one tabular
 read/process/write path. This module is the thin orchestration layer above it:
-callers register domain Pipelines by ``(case_type, pipeline)``, then run one by
+callers register domain Pipelines by ``(subject, pipeline)``, then run one by
 name. The runner records domain-level run summaries to ``RunLog`` using stable
 labels such as ``cases/ingest`` so ``RunRegistry`` can answer whether an
 upstream Pipeline is recent enough before a downstream Pipeline starts.
@@ -21,8 +21,8 @@ from typing import Callable
 from framework.core.dataset import Dataset
 from framework.core.errors import PipelineError
 from framework.run.run_context import RunContext
-from framework.run.run_log import RunLog
-from framework.run.run_registry import RunRegistry
+from tools.observability.run_log import RunLog
+from tools.observability.run_registry import RunRegistry
 
 
 class UnknownPipelineError(PipelineError):
@@ -38,27 +38,27 @@ class FreshnessRequirement:
     """The upstream domain Pipeline a run requires to be current."""
 
     upstream_pipeline: str
-    upstream_case_type: str | None = None
+    upstream_subject: str | None = None
     max_age_days: int = 0
 
 
-def pipeline_label(case_type: str | None, pipeline: str) -> str:
+def pipeline_label(subject: str | None, pipeline: str) -> str:
     """Return the stable registry label for a domain Pipeline.
 
-    Subject-qualified (``case_type/pipeline``) when a medallion subject is given;
+    Subject-qualified (``subject/pipeline``) when a medallion subject is given;
     the bare pipeline name when it is not (the path-addressed ``run`` case). This
     mirrors :attr:`RunContext.label` so an upstream resolves to the same identity
     its run recorded under.
     """
-    return f"{case_type}/{pipeline}" if case_type else pipeline
+    return f"{subject}/{pipeline}" if subject else pipeline
 
 
 class FreshnessGuard:
     """Checks that a declared upstream has a recent successful run."""
 
     def check(self, context: RunContext, requirement: FreshnessRequirement) -> None:
-        upstream_case_type = requirement.upstream_case_type or context.case_type
-        upstream = pipeline_label(upstream_case_type, requirement.upstream_pipeline)
+        upstream_subject = requirement.upstream_subject or context.subject
+        upstream = pipeline_label(upstream_subject, requirement.upstream_pipeline)
         successful = [
             r
             for r in context.run_registry.query_runs(pipeline=upstream, status="ok")
@@ -127,7 +127,7 @@ def run_pipeline(
     """Execute one pipeline handler with freshness checks and run recording.
 
     The execution core shared by ``PipelineRunner`` (which addresses pipelines by
-    a registered ``(case_type, name)`` key) and the path-addressed ``run``
+    a registered ``(subject, name)`` key) and the path-addressed ``run``
     command (which imports a ``pipelines/<name>/pipeline.py`` module and runs its
     ``run`` callable directly). ``name`` is the run-history identity; ``subject``
     is the optional medallion subject — when given, the label is ``subject/name``
@@ -152,7 +152,7 @@ def run_pipeline(
 
     context = RunContext(
         base_dir=root,
-        case_type=subject,
+        subject=subject,
         pipeline=name,
         run_date=run_date or dt.date.today(),
         execution_id=uuid.uuid4().hex,
@@ -212,19 +212,19 @@ class PipelineRunner:
 
     def register(
         self,
-        case_type: str,
+        subject: str,
         pipeline: str,
         handler: Handler,
         *,
         freshness: tuple[FreshnessRequirement, ...] = (),
     ) -> None:
-        self._registered[(case_type, pipeline)] = _RegisteredPipeline(
+        self._registered[(subject, pipeline)] = _RegisteredPipeline(
             handler, freshness
         )
 
     def run(
         self,
-        case_type: str,
+        subject: str,
         pipeline: str,
         base_dir: str | Path,
         *,
@@ -233,16 +233,16 @@ class PipelineRunner:
         freshness_days: int = 0,
         freshness: tuple[FreshnessRequirement, ...] = (),
     ) -> object:
-        registered = self._registered.get((case_type, pipeline))
+        registered = self._registered.get((subject, pipeline))
         if registered is None:
             raise UnknownPipelineError(
-                f"unknown pipeline {pipeline!r} for case type {case_type!r}"
+                f"unknown pipeline {pipeline!r} for case type {subject!r}"
             )
         return run_pipeline(
             registered.handler,
             pipeline,
             base_dir,
-            subject=case_type,
+            subject=subject,
             upstreams=(*registered.freshness, *freshness),
             run_date=run_date,
             logical_run_id=logical_run_id,

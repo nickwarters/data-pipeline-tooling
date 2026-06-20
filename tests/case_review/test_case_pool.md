@@ -8,7 +8,7 @@ from case_review.case_type import CaseType, Variation
 from framework.core.dataset import Dataset
 from framework.io.store import Store
 from framework.io.strategy import Refresh
-from framework.shared.calendar import WorkingDayCalendar
+from tools.calendar import WorkingDayCalendar
 from tests._schema_fixtures import ActivityCase
 
 

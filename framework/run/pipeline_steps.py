@@ -14,7 +14,7 @@ from framework._internal.describe import component_summary
 from framework.core.protocols import Severity, Validator
 from framework.core.dataset import Dataset
 from framework.run.execution import PipelineExecution
-from framework.run.run_log import StepMetrics
+from tools.observability.run_log import StepMetrics
 from framework.run.trace import RowTrace
 
 StepKind = Literal[
@@ -208,7 +208,7 @@ class ProcessorStageStep(PipelineStep):
         with session.timed_step(self.name, rows_in=len(dataset)) as metrics:
             for processor in self.processors:
                 before = current
-                current = processor.process(current)
+                current = processor(current)
                 if session.trace is not None:
                     session.trace.observe(
                         getattr(processor, "trace_role", None),
@@ -299,7 +299,7 @@ class WriteStep(PipelineStep):
 def _drain_retry_attempts(component: object, metrics: StepMetrics) -> None:
     """Surface a retrying reader/writer's attempts as this step's warn_hits.
 
-    A :class:`~framework.shared.retry.RetryingReader` / ``RetryingWriter`` collects a
+    A :class:`~tools.retry.RetryingReader` / ``RetryingWriter`` collects a
     human note per retried attempt on ``retry_attempts``; draining them onto the
     open step's metrics records the attempts on the same correlated read/write
     record whose status already carries the final outcome. Duck-typed so this

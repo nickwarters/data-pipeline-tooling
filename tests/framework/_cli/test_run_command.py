@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 def _run(*args):
     return subprocess.run(
-        [sys.executable, "-m", "framework", "run", *args],
+        [sys.executable, "-m", "cli", "run", *args],
         capture_output=True,
         text=True,
         cwd=ROOT,

@@ -11,9 +11,9 @@ For a fresh CSV feed, generate a runnable starting point instead of writing the
 files by hand (#97):
 
 ```sh
-python -m framework scaffold orders            # -> pipelines/orders/ + tests/pipelines/test_orders.py
-python -m framework scaffold orders --force    # overwrite if it exists
-python -m framework scaffold orders --from-feed-file sample.csv  # seed from a real CSV
+python -m cli scaffold orders            # -> pipelines/orders/ + tests/pipelines/test_orders.py
+python -m cli scaffold orders --force    # overwrite if it exists
+python -m cli scaffold orders --from-feed-file sample.csv  # seed from a real CSV
 ```
 
 This renders, from the template under `framework/_cli/scaffold_templates/feed/`, the feed
@@ -33,7 +33,7 @@ tests/pipelines/
 `pipeline.py` follows the framework's canonical pipeline contract: it exposes a
 `run(context: RunContext, *, describe: bool = False) -> Dataset` callable (and an
 `UPSTREAMS` tuple of freshness requirements — empty for a source feed). The
-framework addresses the pipeline by its path — `python -m framework run
+framework addresses the pipeline by its path — `python -m cli run
 pipelines/orders` imports `pipelines.orders.pipeline` and executes
 `run(context)`. Each medallion hop is factored into its own
 `*_builder(reader, writer, run_log=None) -> Pipeline` returning the composed
@@ -71,7 +71,7 @@ the pipeline uses **relative** intra-package imports, and the relocated test
 imports the feed absolutely (`from pipelines.orders.pipeline import …`):
 
 ```sh
-python -m framework run pipelines/orders /data   # run via the framework (freshness + run log)
+python -m cli run pipelines/orders /data   # run via the framework (freshness + run log)
 python -m pipelines.orders.pipeline /data        # or directly: refine the bundled sample to gold
 python -m pipelines.orders.pipeline /data --describe  # print each hop's plan, then run it
 python -m pytest tests/pipelines/test_orders.py  # the generated test passes as-is
@@ -94,7 +94,7 @@ Most of that customising is mechanical — retyping a source's column names into
 instead and it does that for you:
 
 ```sh
-python -m framework scaffold orders --from-feed-file path/to/sample.csv
+python -m cli scaffold orders --from-feed-file path/to/sample.csv
 ```
 
 From the CSV's **header** it derives the schema's fields (one per column,
@@ -129,7 +129,7 @@ plain passthrough; there's no Case identity (a Feed isn't necessarily a Case Typ
 rows *are* a Case Type, reach for the additive variant instead (#155):
 
 ```sh
-python -m framework scaffold --case-type claims   # -> pipelines/claims/ + tests/pipelines/test_claims.py
+python -m cli scaffold --case-type claims   # -> pipelines/claims/ + tests/pipelines/test_claims.py
 ```
 
 It renders, from `framework/_cli/scaffold_templates/case_type/`, a case-review-flavoured
@@ -210,7 +210,7 @@ from framework.core import RAW, SILVER
 from framework.io import Refresh, StoreCatalog
 from framework.run import Pipeline
 from framework.transform import Rename, SchemaCoercion
-from framework.validate import ColumnValidator, SchemaValidator
+from framework.core import ColumnValidator, SchemaValidator
 
 store = StoreCatalog("/path/to/share").store("cases")
 (
@@ -218,10 +218,10 @@ store = StoreCatalog("/path/to/share").store("cases")
     # optional: gate the *source* columns in the source's own vocabulary, so a
     # missing/renamed source column fails as "missing 'Case Number'" rather than
     # surfacing later as a confusing "missing 'case_number'" after the rename.
-    .with_validator(ColumnValidator(["Case Number", "Adviser Name"]))
-    .with_processor(Rename({"Case Number": "case_number", "Adviser Name": "adviser_name"}))
-    .with_processor(SchemaCoercion(CasesRow))
-    .with_post_validator(SchemaValidator(CasesRow))
+    .validate(ColumnValidator(["Case Number", "Adviser Name"]))
+    .transform(Rename({"Case Number": "case_number", "Adviser Name": "adviser_name"}))
+    .transform(SchemaCoercion(CasesRow))
+    .validate(SchemaValidator(CasesRow))
     .write_to(store.writer(SILVER, "cases", Refresh()))
     .run()
 )
@@ -329,16 +329,16 @@ about medallion layers or load rules:
 from framework.core import RAW
 from framework.io import ExcelReader, Refresh, StoreCatalog
 from framework.run import Pipeline
-from framework.validate import ColumnValidator, SchemaDriftValidator
+from framework.core import ColumnValidator, SchemaDriftValidator
 
 store = StoreCatalog("/path/to/share").store("cases")
 landed = (
     Pipeline("cases", ExcelReader("feed.xlsx", sheet="cases"))
-    .with_validator(ColumnValidator(["case_id"]))   # optional: gate the input
+    .validate(ColumnValidator(["case_id"]))   # optional: gate the input
     # optional: warn (don't abort) when the source's columns drift from the
     # prior run's landed set — catches owner-controlled schema change at the
     # door (#51). First run has no prior, so it's a clean no-op.
-    .with_validator(
+    .validate(
         SchemaDriftValidator(store.columns_of(RAW, "cases")), severity="warn"
     )
     .write_to(store.writer(RAW, "cases", Refresh()))
@@ -400,7 +400,7 @@ fetch with an empty Dataset. Swap in a different `RemoteRunner` (keyword-only
 `runner=`) to add the real exec/transfer behind the same interface.
 
 ```python
-from framework.io import SasReader
+from tools.integrations.remote import SasReader
 
 # Reads cases.csv already landed in /data/landing/cases (stubbed transfer).
 reader = SasReader("run_cases.sas", "*.csv", "/data/landing/cases")
@@ -423,8 +423,8 @@ the `(site, list_name, auth)` config verbatim. Two fetchers ship:
   in-memory fake list backend — see `tests/framework/test_sharepoint_reader.py`.)
 
 ```python
-from framework.io import SharePointReader
-from framework.io.remote import LocalCsvFetcher  # internal seam: swappable fetcher
+from tools.integrations.remote import SharePointReader
+from tools.integrations.remote import LocalCsvFetcher  # internal seam: swappable fetcher
 
 # Offline: reads a local fixture in place of the SharePoint list.
 reader = SharePointReader(

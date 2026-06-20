@@ -2,7 +2,7 @@
 """SchemaCoercion: cast a dataset's round-trip-lossy columns to a schema's types.
 
 The *coerce* half of the schema adapter, and the write-side companion of
-:class:`~framework.validate.schema.SchemaValidator`: where the validator *checks*
+:class:`~framework.core.schema.SchemaValidator`: where the validator *checks*
 dtypes, this *repairs* the representation raw loses to storage, casting the
 round-trip-lossy declared types (``date`` / ``datetime`` / ``bool``) ahead of the
 validator. It lives in ``framework.transform`` because it reshapes a column's
@@ -39,7 +39,7 @@ class SchemaCoercion:
     """Cast a dataset's round-trip-lossy columns to a Case Type schema's types.
 
     The write-side companion of
-    :class:`~framework.validate.schema.SchemaValidator`: where the validator
+    :class:`~framework.core.schema.SchemaValidator`: where the validator
     *checks* dtypes, this *repairs* the representation raw loses to storage.
     Only the types that don't survive a SQLite round-trip are cast — ``date`` /
     ``datetime`` (which land as text); ``str`` / ``int`` / ``float`` survive
@@ -50,7 +50,7 @@ class SchemaCoercion:
         self._schema = schema
         self._expected = _declared_fields(schema)
 
-    def process(self, dataset: Dataset) -> Dataset:
+    def __call__(self, dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas()
         for name, declared in self._expected:
             if name not in frame.columns:

@@ -9,7 +9,7 @@ the CasePool the downstream ``selection`` pipeline reads.
 
 Address it by its location on disk::
 
-    python -m framework run pipelines/ingest /tmp/demo --run-date 2026-05-29
+    python -m cli run pipelines/ingest /tmp/demo --run-date 2026-05-29
 
 or run the module directly with a default run context::
 
@@ -25,9 +25,11 @@ from pathlib import Path
 
 from case_review.case_type import CaseType, Variation
 from case_review.gold import ingest_silver_to_gold
-from framework.core import RAW, PipelineError, format_failure
+from framework.core import RAW, SILVER, PipelineError, format_failure
 from framework.io import AccumulateByRun, CsvReader, StoreCatalog
-from framework.run import Pipeline, RunContext, raw_to_silver
+from framework.run import Pipeline, RunContext
+from framework.transform import Filter, SchemaCoercion
+from framework.core import SchemaValidator
 
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "activity_cases.csv"
 
@@ -75,10 +77,22 @@ def run(context: RunContext):
     store = StoreCatalog(context.base_dir).store(CASES.name)
     strategy = AccumulateByRun.from_context(context)
 
-    Pipeline("cases", CsvReader(SAMPLE_CSV)).write_to(
-        store.writer(RAW, "cases", strategy)
-    ).run()
-    raw_to_silver(store, "cases", CASES.schema, strategy=strategy).run()
+    p = Pipeline("cases")
+    r = p.read(CsvReader(SAMPLE_CSV), name="read")
+    w = p.write(store.writer(RAW, "cases", strategy), r, name="write")
+    p.run()
+    
+    p_silver = Pipeline("cases")
+    r_silver = p_silver.read(store.reader(RAW, "cases"), name="read")
+    current = r_silver
+    if isinstance(strategy, AccumulateByRun):
+        run_id = strategy.run_id
+        current = p_silver.transform(Filter(lambda row, _rid=run_id: row["run_id"] == _rid), current, name="filter-by-run-id")
+    coerced = p_silver.transform(SchemaCoercion(CASES.schema), current, name="coerce")
+    validated = p_silver.validate(SchemaValidator(CASES.schema), coerced, name="post-validate")
+    p_silver.write(store.writer(SILVER, "cases", strategy), validated, name="write")
+    p_silver.run()
+    
     return ingest_silver_to_gold(store, CASES).run()
 
 

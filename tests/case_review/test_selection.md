@@ -10,7 +10,7 @@ from framework.io.readers import DatasetReader
 from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun, Refresh
 from framework.run.builder import Pipeline
-from framework.shared.calendar import WorkingDayCalendar
+from tools.calendar import WorkingDayCalendar
 from framework.transform.processors import Filter, Sort, Stamp
 from tests._schema_fixtures import ActivityCase
 
@@ -67,18 +67,19 @@ def test_selection_narrows_the_casepool_into_a_stamped_selection_pool(tmp_path):
         within_working_days=3,
     )
 
-    (
-        Pipeline("selection", DatasetReader(available))
-        .with_processor(Filter(lambda row: row["amount"] >= 100))
-        .with_processor(Sort("amount", ascending=False))
-        .with_processor(Stamp("question_bank_id", variation.question_bank_id))
-        .write_to(
-            store.writer(
-                "gold", "selection_pool", AccumulateByRun("2026-05-29", "2026-05-29")
-            )
-        )
-        .run()
+    p = Pipeline("selection")
+    r = p.read(DatasetReader(available), name="read")
+    f = p.transform(Filter(lambda row: row["amount"] >= 100), r, name="filter")
+    s = p.transform(Sort("amount", ascending=False), f, name="sort")
+    st = p.transform(Stamp("question_bank_id", variation.question_bank_id), s, name="stamp")
+    w = p.write(
+        store.writer(
+            "gold", "selection_pool", AccumulateByRun("2026-05-29", "2026-05-29")
+        ),
+        st,
+        name="write"
     )
+    p.run()
 
     selection_pool = store.reader("gold", "selection_pool").read().to_pandas()
     # c4 excluded by availability, c2 by the amount filter; the survivors are

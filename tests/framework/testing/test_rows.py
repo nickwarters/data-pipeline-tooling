@@ -1,4 +1,4 @@
-"""The in-memory row helpers (``framework.testing.rows``).
+"""The in-memory row helpers (``tests.framework_testing.rows``).
 
 Exercised the way a pipeline author would: build a feed from in-memory rows or a
 CSV, run a real :class:`~framework.run.Pipeline`, and assert on the output rows
@@ -8,7 +8,8 @@ without wiring temp directories or SQLite by hand.
 import pytest
 
 from framework.run import Pipeline
-from framework.testing import (
+from framework.core import Dataset
+from tests.framework_testing import (
     RecordingWriter,
     assert_rows_equal,
     given_csv,
@@ -17,7 +18,6 @@ from framework.testing import (
     rows_of,
     without_columns,
 )
-from framework.transform import Filter, Stamp
 
 
 def test_given_rows_through_pipeline_into_recording_writer():
@@ -26,12 +26,15 @@ def test_given_rows_through_pipeline_into_recording_writer():
     reader = given_rows([{"amount": 100}, {"amount": 50}, {"amount": 200}])
     writer = RecordingWriter()
 
-    (
-        Pipeline("selection", reader)
-        .with_processor(Filter(lambda row: row["amount"] >= 100, name="high-value"))
-        .write_to(writer)
-        .run()
-    )
+    p = Pipeline("selection")
+    read = p.read(reader, name="read")
+    def filter_high_value(dataset: Dataset) -> Dataset:
+        df = dataset.to_pandas()
+        return Dataset(df[df["amount"] >= 100])
+        
+    filtered = p.transform(filter_high_value, read, name="filter")
+    p.write(writer, filtered, name="write")
+    p.run()
 
     assert rows_of(writer) == [{"amount": 100}, {"amount": 200}]
 
@@ -53,11 +56,10 @@ def test_read_rows_reads_a_landed_layer_table_back(tmp_path):
     from framework.io import Refresh, Store
 
     store = Store(tmp_path / "cases")
-    (
-        Pipeline("cases", given_rows([{"case_id": "c1", "amount": 100}]))
-        .write_to(store.writer(RAW, "cases", Refresh()))
-        .run()
-    )
+    p = Pipeline("cases")
+    read = p.read(given_rows([{"case_id": "c1", "amount": 100}]), name="read")
+    p.write(store.writer(RAW, "cases", Refresh()), read, name="write")
+    p.run()
 
     assert read_rows(store, RAW, "cases") == [{"case_id": "c1", "amount": 100}]
 
@@ -86,12 +88,16 @@ def test_assert_rows_equal_ignoring_stamp_columns_and_order():
 def test_assert_rows_equal_unwraps_a_recording_writer_and_ignores_a_stamp():
     # assert_rows_equal accepts anything rows_of does; here a stamped write.
     writer = RecordingWriter()
-    (
-        Pipeline("cases", given_rows([{"case_id": "c1", "amount": 100}]))
-        .with_processor(Stamp("run_id", "run-123"))
-        .write_to(writer)
-        .run()
-    )
+    p = Pipeline("cases")
+    read = p.read(given_rows([{"case_id": "c1", "amount": 100}]), name="read")
+    def stamp(dataset: Dataset) -> Dataset:
+        df = dataset.to_pandas()
+        df["run_id"] = "run-123"
+        return Dataset(df)
+        
+    stamped = p.transform(stamp, read, name="stamp")
+    p.write(writer, stamped, name="write")
+    p.run()
 
     assert_rows_equal(
         writer, [{"case_id": "c1", "amount": 100}], ignoring=["run_id"]

@@ -15,12 +15,6 @@ from framework._internal.connection import connect
 from framework._internal.describe import redact_url, render
 from framework.core.protocols import Reader
 from framework.core.dataset import Dataset
-from framework.io.remote import (
-    RemoteRunner,
-    SharePointFetcher,
-    StubbedRemoteRunner,
-    StubbedSharePointFetcher,
-)
 from framework.io.sql import quote_identifier
 
 class DatasetReader:
@@ -153,58 +147,5 @@ class SqliteReader:
         )
 
 
-class SasReader:
-    """Read a SAS feed by running it remotely and reading the landed output."""
-
-    def __init__(
-        self,
-        script: str,
-        copy_glob: str,
-        dest: str | os.PathLike[str],
-        *,
-        runner: RemoteRunner | None = None,
-    ) -> None:
-        self._script = script
-        self._copy_glob = copy_glob
-        self._dest = Path(dest)
-        self._runner = runner or StubbedRemoteRunner()
-
-    def read(self) -> Dataset:
-        self._runner.run_script(self._script)
-        self._runner.fetch(self._copy_glob, self._dest)
-        return GlobCsvReader(self._dest, self._copy_glob).read()
-
-    def describe(self) -> str:
-        return render(
-            self,
-            script=self._script,
-            copy_glob=self._copy_glob,
-            dest=str(self._dest),
-        )
-
-
-class SharePointReader:
-    """Read a SharePoint list into a Dataset through a swappable fetcher."""
-
-    def __init__(
-        self,
-        site: str,
-        list_name: str,
-        auth: object = None,
-        *,
-        fetcher: SharePointFetcher | None = None,
-    ) -> None:
-        self._site = site
-        self._list_name = list_name
-        self._auth = auth
-        self._fetcher = fetcher or StubbedSharePointFetcher()
-
-    def read(self) -> Dataset:
-        return self._fetcher.fetch(self._site, self._list_name, self._auth)
-
-    def describe(self) -> str:
-        # Render the site with any embedded credentials stripped and omit the
-        # auth config entirely — the plan never surfaces secrets.
-        return render(self, site=redact_url(self._site), list_name=self._list_name)
 
 ```

@@ -20,7 +20,6 @@ from framework._internal.connection import connect
 from framework._internal.describe import redact_url, render
 from framework.core.protocols import Writer
 from framework.core.dataset import Dataset
-from framework.io.remote import SharePointPusher, StubbedSharePointPusher
 from framework.io.sql import quote_identifier
 from framework.io.strategy import AccumulateByRun, Refresh, UpsertStrategy
 
@@ -168,43 +167,6 @@ class StdoutWriter:
 
     def describe(self) -> str:
         return render(self, label=self._label)
-
-
-class SharePointWriter:
-    """Emit a Dataset to a SharePoint list through a swappable pusher."""
-
-    def __init__(
-        self,
-        site: str,
-        list_name: str,
-        auth: object = None,
-        strategy: Refresh | AccumulateByRun = Refresh(),
-        *,
-        pusher: SharePointPusher | None = None,
-    ) -> None:
-        self._site = site
-        self._list_name = list_name
-        self._auth = auth
-        self._strategy = strategy
-        self._pusher = pusher or StubbedSharePointPusher()
-
-    def write(self, dataset: Dataset) -> None:
-        if isinstance(self._strategy, AccumulateByRun):
-            dataset = Dataset.from_pandas(
-                _stamp_accumulate_frame(dataset.to_pandas(), self._strategy)
-            )
-        self._pusher.push(
-            self._site,
-            self._list_name,
-            self._auth,
-            dataset,
-            self._strategy,
-        )
-
-    def describe(self) -> str:
-        # Strip any credentials embedded in the site URL and omit auth config
-        # entirely — the plan never surfaces secrets.
-        return render(self, site=redact_url(self._site), list_name=self._list_name)
 
 
 class SqliteTruncateReloadWriter:

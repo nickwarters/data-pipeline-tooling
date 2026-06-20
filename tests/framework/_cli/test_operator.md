@@ -1,5 +1,5 @@
 ```python
-"""Operator CLI (`python -m framework`).
+"""Operator CLI (`python -m cli`).
 
 Drives the CLI as a subprocess so the tests exercise the same entry point an
 operator does: argument parsing, dispatch, exit codes, and console output. Every
@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 def _cli(*args):
     return subprocess.run(
-        [sys.executable, "-m", "framework", *args],
+        [sys.executable, "-m", "cli", *args],
         capture_output=True,
         text=True,
         cwd=ROOT,
@@ -126,7 +126,7 @@ def test_log_summarizes_a_run_log_file(tmp_path):
 
 
 def test_format_record_includes_zero_row_metrics():
-    from framework._cli.operator import _format_record
+    from cli.operator import _format_record
 
     line = _format_record(
         {
@@ -201,8 +201,8 @@ def test_run_validation_failure_reports_clear_error(tmp_path, monkeypatch, capsy
     # operator should present the message and a non-zero exit, not a traceback.
     from types import SimpleNamespace
 
-    from framework._cli import operator
-    from framework.validate import ValidationError
+    from cli import operator
+    from framework.core import ValidationError
 
     def boom(_context):
         raise ValidationError("row count 0 below required minimum 1")

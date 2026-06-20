@@ -7,8 +7,7 @@ The stable import surface for everything that reshapes or gates a
 ``Score`` / ``VectorizedFilter`` / ``VectorizedDerive`` / ``Sort`` /
 ``Rename`` / ``Stamp``, the ungrouped ``Sample`` and per-group
 ``TopNPerGroup`` / ``SamplePerGroup``,
-the column-shaping ``Parse`` / ``SplitColumn`` / ``JoinColumns`` / ``Zfill`` /
-``IntegerText``,
+the column-shaping ``Parse`` / ``JoinColumns``,
 the lazy ``JoinWith`` / ``AntiJoinWith``, the Ingest / fan-out
 ``SelectColumns`` / ``DropColumns`` / ``Unpivot`` / ``DeriveKey`` /
 ``LatestPerKey``)
@@ -36,31 +35,22 @@ from framework.transform.processors import (
     DeriveKey,
     DropColumns,
     Filter,
-    IntegerText,
     JoinColumns,
     JoinDependency,
     JoinWith,
     LatestPerKey,
-    Parse,
-    Processor,
     Rename,
-    Sample,
-    SamplePerGroup,
     Score,
     SelectColumns,
     Sort,
-    SplitColumn,
     Stamp,
-    TopNPerGroup,
     Unpivot,
     VectorizedDerive,
     VectorizedFilter,
-    Zfill,
 )
 
 __all__ = [
     # Processors
-    "Processor",
     "Filter",
     "Score",
     "VectorizedFilter",
@@ -68,11 +58,7 @@ __all__ = [
     "Stamp",
     "Sort",
     "Rename",
-    "Parse",
-    "SplitColumn",
     "JoinColumns",
-    "Zfill",
-    "IntegerText",
     "JoinDependency",
     "JoinWith",
     "AntiJoinWith",
@@ -81,9 +67,6 @@ __all__ = [
     "DropColumns",
     "Unpivot",
     "DeriveKey",
-    "TopNPerGroup",
-    "Sample",
-    "SamplePerGroup",
     "CoercionError",
     # The coerce half of the schema adapter
     "SchemaCoercion",

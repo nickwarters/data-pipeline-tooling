@@ -35,7 +35,7 @@ from framework.core import GOLD, RAW, SILVER
 from framework.io import AccumulateByRun, CsvReader, StoreCatalog
 from framework.run import Pipeline
 from framework.transform import Filter, Rename, SchemaCoercion, SelectColumns, Unpivot
-from framework.validate import SchemaValidator
+from framework.core import SchemaValidator
 
 PRODUCT_COLS = [f"product_{i}" for i in range(1, 11)]
 
@@ -63,39 +63,34 @@ def main(target_dir: str) -> None:
     sample = Path(__file__).parent / "sample_data" / "wide_cases.csv"
     store = StoreCatalog(target_dir).store(SUBJECT)
 
-    Pipeline(SUBJECT, CsvReader(sample)).write_to(
-        store.writer(RAW, SUBJECT, AccumulateByRun(RUN_ID, RUN_ID))
-    ).run()
+    p = Pipeline(SUBJECT)
+    r = p.read(CsvReader(sample), name="read")
+    w = p.write(store.writer(RAW, SUBJECT, AccumulateByRun(RUN_ID, RUN_ID)), r, name="write")
+    p.run()
 
     # Shared normalisation: the feed uses `case_ref_no`; both pipelines rename
     # it to the canonical `case_ref` (defined once, reused below).
     normalise = Rename({"case_ref_no": "case_ref"})
 
-    (
-        Pipeline("cases", store.reader(RAW, SUBJECT))
-        .with_processor(Filter(lambda row, rid=RUN_ID: row["run_id"] == rid))
-        .with_processor(normalise)
-        .with_processor(
-            SelectColumns(["case_ref", "adviser", "activity_date", "amount"])
-        )
-        .with_processor(SchemaCoercion(CaseSchema))
-        .with_post_validator(SchemaValidator(CaseSchema))
-        .write_to(store.writer(SILVER, "cases", AccumulateByRun(RUN_ID, RUN_ID)))
-        .run()
-    )
+    p_cases = Pipeline("cases")
+    r_cases = p_cases.read(store.reader(RAW, SUBJECT), name="read")
+    f_cases = p_cases.transform(Filter(lambda row, rid=RUN_ID: row["run_id"] == rid), r_cases, name="filter")
+    n_cases = p_cases.transform(normalise, f_cases, name="normalise")
+    s_cases = p_cases.transform(SelectColumns(["case_ref", "adviser", "activity_date", "amount"]), n_cases, name="select")
+    c_cases = p_cases.transform(SchemaCoercion(CaseSchema), s_cases, name="coerce")
+    v_cases = p_cases.validate(SchemaValidator(CaseSchema), c_cases, name="validate")
+    w_cases = p_cases.write(store.writer(SILVER, "cases", AccumulateByRun(RUN_ID, RUN_ID)), v_cases, name="write")
+    p_cases.run()
 
     ingest_silver_to_gold(store, WIDE_CASES, "cases").run()
 
-    (
-        Pipeline("case_products", store.reader(RAW, SUBJECT))
-        .with_processor(Filter(lambda row, rid=RUN_ID: row["run_id"] == rid))
-        .with_processor(normalise)
-        .with_processor(SelectColumns(["case_ref"] + PRODUCT_COLS))
-        .write_to(
-            store.writer(SILVER, "case_products", AccumulateByRun(RUN_ID, RUN_ID))
-        )
-        .run()
-    )
+    p_prods = Pipeline("case_products")
+    r_prods = p_prods.read(store.reader(RAW, SUBJECT), name="read")
+    f_prods = p_prods.transform(Filter(lambda row, rid=RUN_ID: row["run_id"] == rid), r_prods, name="filter")
+    n_prods = p_prods.transform(normalise, f_prods, name="normalise")
+    s_prods = p_prods.transform(SelectColumns(["case_ref"] + PRODUCT_COLS), n_prods, name="select")
+    w_prods = p_prods.write(store.writer(SILVER, "case_products", AccumulateByRun(RUN_ID, RUN_ID)), s_prods, name="write")
+    p_prods.run()
 
     # The same Case Type is used here, so product rows carry case_ids that match
     # the Cases gold table without joining back to it.

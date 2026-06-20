@@ -23,8 +23,8 @@ import sys
 from framework.core import RAW, SILVER
 from framework.io import StoreCatalog
 from framework.run import RunContext
-from framework.testing import read_rows
-from framework._cli import scaffold
+from tests.framework_testing import read_rows
+from cli import scaffold
 
 
 def test_case_type_variant_lays_down_the_feed_with_its_case_type(tmp_path):
@@ -72,8 +72,8 @@ def test_case_type_variant_refines_to_silver_and_leaves_gold_a_commented_seam(tm
     )
 
     # The settled ingest spine is rendered live: source -> raw -> silver.
-    assert "raw_to_silver(" in pipeline
-    assert "from framework.recipes import raw_to_silver" in pipeline
+    assert "p_silver.read(" in pipeline
+    assert "p_silver.write(store.writer(SILVER" in pipeline
     assert "from framework.run import Pipeline" in pipeline
 
     # Gold is the author's seam, not a live call, so the scaffold makes no bet
