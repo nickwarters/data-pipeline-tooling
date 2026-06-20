@@ -91,9 +91,8 @@ export class CRRemediationSection extends ReactiveElement {
 
   render() {
     const applicable = evaluate(this.catalogue, this.answers);
-    const failed = this.catalogue.filter(q =>
-      applicable.has(q.id)
-      && isFailure(q, this.answers[q.id])
+    const failed = this.catalogue.filter(
+      (q) => applicable.has(q.id) && isFailure(q, this.answers[q.id])
     );
 
     const heading = h('h2', {}, 'Failures');
@@ -124,7 +123,7 @@ export class CRRemediationSection extends ReactiveElement {
     li.appendChild(h('p', { class: 'cr-remediation-question' }, q.text));
 
     const v = this.answers[q.id]?.value;
-    const ansText = `Answer: ${Array.isArray(v) ? v.join(', ') : v ?? ''}`;
+    const ansText = `Answer: ${Array.isArray(v) ? v.join(', ') : (v ?? '')}`;
     li.appendChild(h('p', { class: 'cr-remediation-answer' }, ansText));
 
     if (this.attributeFailures) {
@@ -167,21 +166,30 @@ export class CRRemediationSection extends ReactiveElement {
 
     if (!this.canAttribute) {
       if (attributedParty) {
-        li.appendChild(h('p', { class: 'cr-remediation-attributed-party' }, `Attributed to: ${attributedParty.displayName}`));
+        li.appendChild(
+          h(
+            'p',
+            { class: 'cr-remediation-attributed-party' },
+            `Attributed to: ${attributedParty.displayName}`
+          )
+        );
       }
       return;
     }
 
-    const menu = /** @type {import('./cr-attribute-menu.js').CRAttributeMenu} */ (
-      h('cr-attribute-menu', {
-        client: this.client,
-        responsibleParty: this.responsibleParty,
-        'oncr-attribute-change': (/** @type {any} */ ev) => {
-          const detail = /** @type {CustomEvent<{ attributedParty: Party | null }>} */ (ev).detail;
-          this._dispatchAttribute(q.id, detail.attributedParty);
-        }
-      })
-    );
+    const menu =
+      /** @type {import('./cr-attribute-menu.js').CRAttributeMenu} */ (
+        h('cr-attribute-menu', {
+          client: this.client,
+          responsibleParty: this.responsibleParty,
+          'oncr-attribute-change': (/** @type {any} */ ev) => {
+            const detail =
+              /** @type {CustomEvent<{ attributedParty: Party | null }>} */ (ev)
+                .detail;
+            this._dispatchAttribute(q.id, detail.attributedParty);
+          },
+        })
+      );
     menu.attributedParty = attributedParty ?? null;
     li.appendChild(/** @type {any} */ (menu));
   }
@@ -205,15 +213,28 @@ export class CRRemediationSection extends ReactiveElement {
       if (!this.canCaptureDetails) {
         const captured = details[field.key];
         if (captured === undefined || captured === '') continue;
-        li.appendChild(h('p', { class: 'cr-remediation-detail-value' }, `${field.label}: ${captured}`));
+        li.appendChild(
+          h(
+            'p',
+            { class: 'cr-remediation-detail-value' },
+            `${field.label}: ${captured}`
+          )
+        );
         continue;
       }
 
-      const control = buildCaptureControl(field, details[field.key] ?? '', (value) => {
-        this._dispatchDetail(q.id, field.key, value);
-      }, 'cr-remediation-detail-input');
+      const control = buildCaptureControl(
+        field,
+        details[field.key] ?? '',
+        (value) => {
+          this._dispatchDetail(q.id, field.key, value);
+        },
+        'cr-remediation-detail-input'
+      );
 
-      const wrap = h('div', { class: 'cr-remediation-detail-field' },
+      const wrap = h(
+        'div',
+        { class: 'cr-remediation-detail-field' },
         h('label', { class: 'cr-remediation-detail-label' }, field.label),
         control
       );
@@ -221,8 +242,6 @@ export class CRRemediationSection extends ReactiveElement {
       li.appendChild(wrap);
     }
   }
-
-
 
   /**
    * Renders the unified **Issue Capture Group**s for a failed item (ADR-0020)
@@ -243,9 +262,11 @@ export class CRRemediationSection extends ReactiveElement {
           'oncr-capture': (/** @type {any} */ ev) => {
             /** @type {any} */ (ev).stopPropagation?.();
             const { fieldKey, value } =
-              /** @type {CustomEvent<{ fieldKey: string, value: string }>} */ (ev).detail;
+              /** @type {CustomEvent<{ fieldKey: string, value: string }>} */ (
+                ev
+              ).detail;
             this._dispatchCapture(q.id, fieldKey, value);
-          }
+          },
         })
       );
       this._captureEls.set(q.id, cg);

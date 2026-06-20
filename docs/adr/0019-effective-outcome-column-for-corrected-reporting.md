@@ -10,7 +10,7 @@ Accepted (extends [ADR-0012])
 
 [ADR-0012] stamps a frozen `outcomeAtCompletion` (plus `hadRemediation`) on each
 Case row so management reports can `$filter`/aggregate server-side within a bounded
-query. Its freeze rationale was about *accidental drift* — a Question Definition or
+query. Its freeze rationale was about _accidental drift_ — a Question Definition or
 the outcome function changing under a finished Case should not retroactively move
 reported numbers.
 
@@ -18,10 +18,10 @@ reported numbers.
 corrections that change the **Current Outcome**. This is the opposite of drift, and
 it splits reporting intent in two:
 
-- **Reviewer-quality** reporting needs the *original* result. A wrongly-passed Case
+- **Reviewer-quality** reporting needs the _original_ result. A wrongly-passed Case
   is precisely the reviewer error QA exists to surface; "fixing" it retroactively
   erases the evidence.
-- **Responsible-Party / true-result** reporting needs the *corrected* result — the
+- **Responsible-Party / true-result** reporting needs the _corrected_ result — the
   agent's actual performance after the override, not the reviewer's mistaken read.
 
 One column cannot serve both honestly.

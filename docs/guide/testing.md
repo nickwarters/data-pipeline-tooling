@@ -54,23 +54,36 @@ A typical stub:
 ```js
 class StubEl {
   constructor() {
-    this._children  = [];
+    this._children = [];
     this._listeners = {};
     this.textContent = '';
-    this.className   = '';
-    this.value       = '';
+    this.className = '';
+    this.value = '';
   }
-  replaceChildren(...cs) { this._children = cs; }
-  appendChild(c)         { this._children.push(c); return c; }
-  append(...cs)          { this._children.push(...cs); }
-  addEventListener(t, h) { (this._listeners[t] ??= []).push(h); }
-  setAttribute(k, v)     { (this._attrs ??= {})[k] = v; }
+  replaceChildren(...cs) {
+    this._children = cs;
+  }
+  appendChild(c) {
+    this._children.push(c);
+    return c;
+  }
+  append(...cs) {
+    this._children.push(...cs);
+  }
+  addEventListener(t, h) {
+    (this._listeners[t] ??= []).push(h);
+  }
+  setAttribute(k, v) {
+    (this._attrs ??= {})[k] = v;
+  }
 }
 
-globalThis.HTMLElement    = StubEl;
-globalThis.document       = {
-  createElement(_tag) { return new StubEl(); },
-  addEventListener()  {},
+globalThis.HTMLElement = StubEl;
+globalThis.document = {
+  createElement(_tag) {
+    return new StubEl();
+  },
+  addEventListener() {},
 };
 globalThis.customElements = { define() {} };
 ```
@@ -87,13 +100,13 @@ const { CRMyWidget } = await import('../src/components/cr-my-widget.js');
 
 Test **external behaviour only** — what the component promises to callers, not how it delivers on that promise.
 
-| Good to test | Not worth testing |
-|---|---|
-| DOM structure after `connectedCallback` (children, text, classes) | Internal variable names or private methods |
-| What is enqueued to `SaveQueue` when an event fires | The fact that a `setTimeout` was called internally |
-| That a read-only component does NOT enqueue a save | Calling `effect` or `computed` directly |
-| Edge cases the component must handle without throwing | Implementation details that could change without breaking behaviour |
-| That `disconnectedCallback` cleans up subscriptions | The internal `_disposes` array length |
+| Good to test                                                      | Not worth testing                                                   |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------- |
+| DOM structure after `connectedCallback` (children, text, classes) | Internal variable names or private methods                          |
+| What is enqueued to `SaveQueue` when an event fires               | The fact that a `setTimeout` was called internally                  |
+| That a read-only component does NOT enqueue a save                | Calling `effect` or `computed` directly                             |
+| Edge cases the component must handle without throwing             | Implementation details that could change without breaking behaviour |
+| That `disconnectedCallback` cleans up subscriptions               | The internal `_disposes` array length                               |
 
 The principle: if you could rewrite the component's internals from scratch and all tests still pass, your tests are testing the right thing.
 
@@ -117,6 +130,7 @@ test('hello-review computeOutcome: any No answer → fail', () => {
 ```
 
 Standard checks for every Case Type:
+
 - Catalogue has the expected number of questions.
 - Every choice question has a non-empty `options[]`.
 - All `showWhen` references point to questions in the catalogue.
@@ -134,16 +148,30 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 // Stub document before importing the route
-globalThis.document       = { createElement(_tag) { return { /* … */ }; } };
+globalThis.document = {
+  createElement(_tag) {
+    return {
+      /* … */
+    };
+  },
+};
 globalThis.customElements = { define() {} };
 
 const { register } = await import('../src/routes/my-page.js');
 
 test('my-page mount: places cr-my-page in container', () => {
   /** @type {any[]} */ let placed = [];
-  const container = { replaceChildren(...els) { placed = els; } };
-  const router    = { register(_pat, handler) { handler.mount(container, { id: '42' }); } };
-  const context   = { client: {}, currentUser: { id: 'u1' } };
+  const container = {
+    replaceChildren(...els) {
+      placed = els;
+    },
+  };
+  const router = {
+    register(_pat, handler) {
+      handler.mount(container, { id: '42' });
+    },
+  };
+  const context = { client: {}, currentUser: { id: 'u1' } };
 
   register(/** @type {any} */ (router), /** @type {any} */ (context));
 

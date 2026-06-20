@@ -5,7 +5,8 @@ import { installDom } from './_bank-dom-stub.js';
 installDom();
 
 const { CRBankList } = await import('../src/question-bank/cr-bank-list.js');
-const { _resetStore, cases, activeSlug, filters } = await import('../src/question-bank/question-bank-store.js');
+const { _resetStore, cases, activeSlug, filters } =
+  await import('../src/question-bank/question-bank-store.js');
 
 test('CRBankList: renders dirty pill + question cards + add button', () => {
   _resetStore();
@@ -23,11 +24,24 @@ test('CRBankList: renders dirty pill + question cards + add button', () => {
 test('CRBankList: empty-state when no question passes filters', () => {
   _resetStore();
   // showDeprecated off + a slug whose questions are all deprecated
-  filters.set({ category: null, showDeprecated: false, conditionalOnly: false });
+  filters.set({
+    category: null,
+    showDeprecated: false,
+    conditionalOnly: false,
+  });
   cases.set({
     'hello-review': {
-      label: 'L', slug: 'hello-review', eligibleGroups: [],
-      questions: [/** @type {any} */ ({ id: 'd', text: 'd', responseType: 'yes-no-na', deprecated: true })],
+      label: 'L',
+      slug: 'hello-review',
+      eligibleGroups: [],
+      questions: [
+        /** @type {any} */ ({
+          id: 'd',
+          text: 'd',
+          responseType: 'yes-no-na',
+          deprecated: true,
+        }),
+      ],
     },
   });
   const e = new CRBankList();
@@ -40,7 +54,11 @@ test('CRBankList: empty-state when no question passes filters', () => {
 
 test('CRBankList: category filter hides non-matching questions', () => {
   _resetStore();
-  filters.set({ category: 'Opening', showDeprecated: true, conditionalOnly: false });
+  filters.set({
+    category: 'Opening',
+    showDeprecated: true,
+    conditionalOnly: false,
+  });
   const e = new CRBankList();
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
@@ -78,14 +96,14 @@ test('CRBankList: + Draft a new question appends a draft', () => {
 test('CRBankList: + Draft falls back to immediate scroll when no rAF', () => {
   _resetStore();
   activeSlug.set('hello-review');
-  const saved = (/** @type {any} */ (globalThis)).requestAnimationFrame;
-  (/** @type {any} */ (globalThis)).requestAnimationFrame = undefined;
+  const saved = /** @type {any} */ (globalThis).requestAnimationFrame;
+  /** @type {any} */ (globalThis).requestAnimationFrame = undefined;
   const e = new CRBankList();
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
   const addBtn = section._children[2];
-  addBtn._listeners.click[0]();   // exercises the else branch
-  (/** @type {any} */ (globalThis)).requestAnimationFrame = saved;
+  addBtn._listeners.click[0](); // exercises the else branch
+  /** @type {any} */ (globalThis).requestAnimationFrame = saved;
   e.disconnectedCallback();
 });
 

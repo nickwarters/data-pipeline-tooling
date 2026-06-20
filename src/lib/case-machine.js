@@ -1,5 +1,9 @@
 // @ts-check
-import { evaluateAccess, resolveRoles, SECTIONS } from '../services/section-access.js';
+import {
+  evaluateAccess,
+  resolveRoles,
+  SECTIONS,
+} from '../services/section-access.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
@@ -21,7 +25,7 @@ export class CaseMachine {
     this.config = config;
 
     this.roles = resolveRoles(caseRow, currentUser.id, capabilities);
-    
+
     /** @type {Record<import('../services/section-access.js').Section, import('../services/section-access.js').Mode>} */
     this.access = /** @type {any} */ ({});
     for (const s of SECTIONS) {
@@ -30,15 +34,19 @@ export class CaseMachine {
   }
 
   get canComplete() {
-    return this.access.questions === 'edit' 
-      && this.caseRow.assignedReviewer === this.currentUser.id 
-      && this.caseRow.status === 'In-progress';
+    return (
+      this.access.questions === 'edit' &&
+      this.caseRow.assignedReviewer === this.currentUser.id &&
+      this.caseRow.status === 'In-progress'
+    );
   }
 
   get canAttribute() {
-    return this.config.attributeFailures === true 
-      && this.access.remediation === 'edit' 
-      && this.caseRow.status === 'In-progress';
+    return (
+      this.config.attributeFailures === true &&
+      this.access.remediation === 'edit' &&
+      this.caseRow.status === 'In-progress'
+    );
   }
 
   get canCapture() {
@@ -63,7 +71,7 @@ export class CaseMachine {
     if (computeOutcome && answers) {
       fields.outcomeAtCompletion = computeOutcome(answers).verdict;
       fields.hadRemediation = Object.values(answers).some(
-        a => (a.remediationActions?.length ?? 0) > 0
+        (a) => (a.remediationActions?.length ?? 0) > 0
       );
       fields.effectiveOutcome = fields.outcomeAtCompletion;
       fields.effectiveHadRemediation = fields.hadRemediation;

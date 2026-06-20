@@ -16,9 +16,16 @@ class StubEl {
     this.value = '';
     this.readOnly = false;
   }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
-  appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
-  append(/** @type {StubEl[]} */ ...cs) { this._children.push(...cs); }
+  replaceChildren(/** @type {StubEl[]} */ ...cs) {
+    this._children = cs;
+  }
+  appendChild(/** @type {StubEl} */ c) {
+    this._children.push(c);
+    return c;
+  }
+  append(/** @type {StubEl[]} */ ...cs) {
+    this._children.push(...cs);
+  }
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
   }
@@ -28,14 +35,16 @@ class StubEl {
   }
 }
 
-(/** @type {any} */ (globalThis)).HTMLElement = StubEl;
-(/** @type {any} */ (globalThis)).document = {
+/** @type {any} */ (globalThis).HTMLElement = StubEl;
+/** @type {any} */ (globalThis).document = {
   /** @param {string} _tag @returns {StubEl} */
-  createElement(_tag) { return new StubEl(); },
+  createElement(_tag) {
+    return new StubEl();
+  },
   addEventListener() {},
   removeEventListener() {},
 };
-(/** @type {any} */ (globalThis)).customElements = { define() {} };
+/** @type {any} */ (globalThis).customElements = { define() {} };
 
 const { CRNotes } = await import('../src/components/cr-notes.js');
 
@@ -47,7 +56,11 @@ function makeQueue(caseId = 'case-1') {
   const enqueued = [];
   return {
     enqueued,
-    enqueue(/** @type {string} */ id, /** @type {string} */ field, /** @type {unknown} */ value) {
+    enqueue(
+      /** @type {string} */ id,
+      /** @type {string} */ field,
+      /** @type {unknown} */ value
+    ) {
       enqueued.push({ id, field, value });
     },
   };
@@ -82,7 +95,7 @@ test('CRNotes: renders h2 Notes heading', () => {
   el.caseId = 'case-1';
   el.connectedCallback();
 
-  const h2 = (/** @type {any} */ (el))._children[0];
+  const h2 = /** @type {any} */ (el)._children[0];
   assert.equal(h2.textContent, 'Notes');
 });
 
@@ -326,7 +339,7 @@ test('CRNotes: each box has a visible label element', () => {
   el.caseId = 'case-1';
   el.connectedCallback();
 
-  const labels = (/** @type {any} */ (el))._children
+  const labels = /** @type {any} */ (el)._children
     .map((/** @type {any} */ c) => c.textContent)
     .filter(Boolean);
   assert.ok(labels.includes('Case notes'));

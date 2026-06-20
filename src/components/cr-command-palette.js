@@ -3,7 +3,11 @@ import { signal } from '../lib/signal.js';
 import { ReactiveElement } from './reactive-element.js';
 import { h } from '../lib/html.js';
 import {
-  isOpen, query, filteredActions, openPalette, closePalette,
+  isOpen,
+  query,
+  filteredActions,
+  openPalette,
+  closePalette,
 } from '../services/command-palette-store.js';
 
 /**
@@ -14,7 +18,9 @@ export class CRCommandPalette extends ReactiveElement {
   constructor() {
     super();
     this._selIdx = signal(-1);
-    this._mode = signal(/** @type {'idle'|'awaiting-input'|'awaiting-option'} */ ('idle'));
+    this._mode = signal(
+      /** @type {'idle'|'awaiting-input'|'awaiting-option'} */ ('idle')
+    );
     this._pendingAction = signal(/** @type {PaletteAction|null} */ (null));
     this._optionIdx = signal(-1);
     this._onKeydown = this._handleGlobalKeydown.bind(this);
@@ -128,11 +134,24 @@ export class CRCommandPalette extends ReactiveElement {
       oninput: onInputChange,
     });
 
-    const listItems = (mode === 'awaiting-option' && pending?.options)
-      ? pending.options.map((opt, i) =>
-          h('div', { className: 'palette-option' + (i === optIdx ? ' selected' : '') }, opt.label))
-      : filtered.map((action, i) =>
-          h('div', { className: 'palette-item' + (i === selIdx ? ' selected' : '') }, action.label));
+    const listItems =
+      mode === 'awaiting-option' && pending?.options
+        ? pending.options.map((opt, i) =>
+            h(
+              'div',
+              {
+                className: 'palette-option' + (i === optIdx ? ' selected' : ''),
+              },
+              opt.label
+            )
+          )
+        : filtered.map((action, i) =>
+            h(
+              'div',
+              { className: 'palette-item' + (i === selIdx ? ' selected' : '') },
+              action.label
+            )
+          );
 
     /** @type {any[]} */
     const extras = [];
@@ -151,15 +170,23 @@ export class CRCommandPalette extends ReactiveElement {
           this._reset();
         }
       };
-      extras.push(h('input', {
-        className: 'palette-arg-input',
-        type: 'text',
-        placeholder,
-        onkeydown: onArgKeydown,
-      }));
+      extras.push(
+        h('input', {
+          className: 'palette-arg-input',
+          type: 'text',
+          placeholder,
+          onkeydown: onArgKeydown,
+        })
+      );
     }
 
-    return h('div', { className: 'palette-overlay' }, inputEl, ...listItems, ...extras);
+    return h(
+      'div',
+      { className: 'palette-overlay' },
+      inputEl,
+      ...listItems,
+      ...extras
+    );
   }
 
   /** @param {PaletteAction} action */

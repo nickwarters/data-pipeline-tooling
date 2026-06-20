@@ -8,4 +8,4 @@ The framework rejects Case Types whose `showWhen` graph contains cycles at load 
 
 The outcome function is typed via an `OutcomeFn` JSDoc typedef and receives `(answers, caseDetails)`. It returns a verdict + summary. Shared helpers live under `/case-types/shared/` to keep individual Case Type modules focused.
 
-The deliberate split: applicability is part of the catalogue's *structure* (the framework walks it to render), so it must stay inspectable; outcome is *business logic* that varies wildly per Case Type, doesn't need framework introspection, and benefits from full JS expressiveness.
+The deliberate split: applicability is part of the catalogue's _structure_ (the framework walks it to render), so it must stay inspectable; outcome is _business logic_ that varies wildly per Case Type, doesn't need framework introspection, and benefits from full JS expressiveness.

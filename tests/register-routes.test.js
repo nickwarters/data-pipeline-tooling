@@ -4,12 +4,12 @@ import assert from 'node:assert/strict';
 
 /** @type {Record<string, Function[]>} */
 const windowListeners = {};
-(/** @type {any} */ (globalThis)).window = {
+/** @type {any} */ (globalThis).window = {
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (windowListeners[t] ??= []).push(h);
   },
 };
-(/** @type {any} */ (globalThis)).location = { hash: '' };
+/** @type {any} */ (globalThis).location = { hash: '' };
 
 import { Router } from '../src/lib/router.js';
 import { registerRoutes } from '../src/setup/register-routes.js';
@@ -22,7 +22,12 @@ function makeContext() {
     currentUser: { id: 'u1' },
     capabilities: {},
     eligibleCaseTypes: [],
-    appEl: { classList: { add() {}, remove() {} }, setAttribute() {}, appendChild() {}, replaceChildren() {} },
+    appEl: {
+      classList: { add() {}, remove() {} },
+      setAttribute() {},
+      appendChild() {},
+      replaceChildren() {},
+    },
   });
 }
 
@@ -30,50 +35,78 @@ test('registerRoutes: registers #/ route', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});
   registerRoutes(router, makeContext());
-  assert.ok(router._routes.some(r => r.re.test('#/')), '#/ should be registered');
+  assert.ok(
+    router._routes.some((r) => r.re.test('#/')),
+    '#/ should be registered'
+  );
 });
 
 test('registerRoutes: registers #/dashboard route', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});
   registerRoutes(router, makeContext());
-  assert.ok(router._routes.some(r => r.re.test('#/dashboard')), '#/dashboard should be registered');
+  assert.ok(
+    router._routes.some((r) => r.re.test('#/dashboard')),
+    '#/dashboard should be registered'
+  );
 });
 
 test('registerRoutes: registers #/conversation/:id route', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});
   registerRoutes(router, makeContext());
-  assert.ok(router._routes.some(r => r.re.test('#/conversation/99')), '#/conversation/:id should be registered');
+  assert.ok(
+    router._routes.some((r) => r.re.test('#/conversation/99')),
+    '#/conversation/:id should be registered'
+  );
 });
 
 test('registerRoutes: registers #/question-bank route', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});
   registerRoutes(router, makeContext());
-  assert.ok(router._routes.some(r => r.re.test('#/question-bank')), '#/question-bank should be registered');
+  assert.ok(
+    router._routes.some((r) => r.re.test('#/question-bank')),
+    '#/question-bank should be registered'
+  );
 });
 
 test('registerRoutes: registers #/case/:id route', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});
   registerRoutes(router, makeContext());
-  assert.ok(router._routes.some(r => r.re.test('#/case/99')), '#/case/:id should be registered');
+  assert.ok(
+    router._routes.some((r) => r.re.test('#/case/99')),
+    '#/case/:id should be registered'
+  );
 });
 
 test('registerRoutes: #/ mount creates cr-home element (no redirect)', () => {
   const created = /** @type {string[]} */ ([]);
-  const origDoc = (/** @type {any} */ (globalThis)).document;
-  (/** @type {any} */ (globalThis)).document = {
-    createElement(/** @type {string} */ tag) { created.push(tag); return { setAttribute() {} }; },
-    createTreeWalker() { return { nextNode() { return null; } }; },
+  const origDoc = /** @type {any} */ (globalThis).document;
+  /** @type {any} */ (globalThis).document = {
+    createElement(/** @type {string} */ tag) {
+      created.push(tag);
+      return { setAttribute() {} };
+    },
+    createTreeWalker() {
+      return {
+        nextNode() {
+          return null;
+        },
+      };
+    },
   };
 
   const locations = /** @type {string[]} */ ([]);
   const origLocation = globalThis.location;
-  (/** @type {any} */ (globalThis)).location = {
-    get hash() { return ''; },
-    set hash(v) { locations.push(v); },
+  /** @type {any} */ (globalThis).location = {
+    get hash() {
+      return '';
+    },
+    set hash(v) {
+      locations.push(v);
+    },
   };
 
   try {
@@ -81,20 +114,32 @@ test('registerRoutes: #/ mount creates cr-home element (no redirect)', () => {
     router._container = /** @type {any} */ ({});
     registerRoutes(router, makeContext());
     router.navigate('#/');
-    assert.ok(created.includes('cr-home'), 'cr-home should be created on mount');
+    assert.ok(
+      created.includes('cr-home'),
+      'cr-home should be created on mount'
+    );
     assert.deepEqual(locations, [], 'should not redirect away from #/');
   } finally {
-    (/** @type {any} */ (globalThis)).document = origDoc;
-    (/** @type {any} */ (globalThis)).location = origLocation;
+    /** @type {any} */ (globalThis).document = origDoc;
+    /** @type {any} */ (globalThis).location = origLocation;
   }
 });
 
 test('registerRoutes: #/dashboard mount creates cr-dashboard element', () => {
   const created = /** @type {string[]} */ ([]);
   const origCreate = globalThis.document?.createElement;
-  (/** @type {any} */ (globalThis)).document = {
-    createElement(/** @type {string} */ tag) { created.push(tag); return { setAttribute() {} }; },
-    createTreeWalker() { return { nextNode() { return null; } }; },
+  /** @type {any} */ (globalThis).document = {
+    createElement(/** @type {string} */ tag) {
+      created.push(tag);
+      return { setAttribute() {} };
+    },
+    createTreeWalker() {
+      return {
+        nextNode() {
+          return null;
+        },
+      };
+    },
   };
 
   try {
@@ -103,12 +148,15 @@ test('registerRoutes: #/dashboard mount creates cr-dashboard element', () => {
     router._container = /** @type {any} */ (container);
     registerRoutes(router, makeContext());
     router.navigate('#/dashboard');
-    assert.ok(created.includes('cr-dashboard'), 'cr-dashboard should be created on mount');
+    assert.ok(
+      created.includes('cr-dashboard'),
+      'cr-dashboard should be created on mount'
+    );
   } finally {
     if (origCreate) {
-      (/** @type {any} */ (globalThis)).document = { createElement: origCreate };
+      /** @type {any} */ (globalThis).document = { createElement: origCreate };
     } else {
-      delete (/** @type {any} */ (globalThis)).document;
+      delete (/** @type {any} */ (globalThis).document);
     }
   }
 });
@@ -117,21 +165,41 @@ test('registerRoutes: #/question-bank mount adds cr-fullbleed to appEl', () => {
   const router = new Router();
   const container = { replaceChildren() {} };
   router._container = /** @type {any} */ (container);
-  const appEl = { classList: { added: /** @type {string[]} */ ([]), add(/** @type {string} */ c) { this.added.push(c); }, remove() {} }, setAttribute() {} };
+  const appEl = {
+    classList: {
+      added: /** @type {string[]} */ ([]),
+      add(/** @type {string} */ c) {
+        this.added.push(c);
+      },
+      remove() {},
+    },
+    setAttribute() {},
+  };
   const ctx = /** @type {any} */ ({ ...makeContext(), appEl });
 
   registerRoutes(router, ctx);
 
-  const origCreate = (/** @type {any} */ (globalThis)).document;
-  (/** @type {any} */ (globalThis)).document = {
-    createElement(/** @type {string} */ tag) { return { setAttribute() {} }; },
-    createTreeWalker() { return { nextNode() { return null; } }; },
+  const origCreate = /** @type {any} */ (globalThis).document;
+  /** @type {any} */ (globalThis).document = {
+    createElement(/** @type {string} */ tag) {
+      return { setAttribute() {} };
+    },
+    createTreeWalker() {
+      return {
+        nextNode() {
+          return null;
+        },
+      };
+    },
   };
   try {
     router.navigate('#/question-bank');
-    assert.ok(appEl.classList.added.includes('cr-fullbleed'), 'cr-fullbleed added on mount');
+    assert.ok(
+      appEl.classList.added.includes('cr-fullbleed'),
+      'cr-fullbleed added on mount'
+    );
   } finally {
-    (/** @type {any} */ (globalThis)).document = origCreate;
+    /** @type {any} */ (globalThis).document = origCreate;
   }
 });
 
@@ -139,15 +207,27 @@ test('registerRoutes: registers #/reports route', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});
   registerRoutes(router, makeContext());
-  assert.ok(router._routes.some(r => r.re.test('#/reports')), '#/reports should be registered');
+  assert.ok(
+    router._routes.some((r) => r.re.test('#/reports')),
+    '#/reports should be registered'
+  );
 });
 
 test('registerRoutes: #/reports mount creates cr-reports-index element', () => {
   const created = /** @type {string[]} */ ([]);
-  const origCreate = (/** @type {any} */ (globalThis)).document;
-  (/** @type {any} */ (globalThis)).document = {
-    createElement(/** @type {string} */ tag) { created.push(tag); return { setAttribute() {} }; },
-    createTreeWalker() { return { nextNode() { return null; } }; },
+  const origCreate = /** @type {any} */ (globalThis).document;
+  /** @type {any} */ (globalThis).document = {
+    createElement(/** @type {string} */ tag) {
+      created.push(tag);
+      return { setAttribute() {} };
+    },
+    createTreeWalker() {
+      return {
+        nextNode() {
+          return null;
+        },
+      };
+    },
   };
 
   try {
@@ -156,9 +236,12 @@ test('registerRoutes: #/reports mount creates cr-reports-index element', () => {
     router._container = /** @type {any} */ (container);
     registerRoutes(router, makeContext());
     router.navigate('#/reports');
-    assert.ok(created.includes('cr-reports-index'), 'cr-reports-index should be created on mount');
+    assert.ok(
+      created.includes('cr-reports-index'),
+      'cr-reports-index should be created on mount'
+    );
   } finally {
-    (/** @type {any} */ (globalThis)).document = origCreate;
+    /** @type {any} */ (globalThis).document = origCreate;
   }
 });
 
@@ -166,26 +249,47 @@ test('registerRoutes: registers #/reports/reviewer-team route', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});
   registerRoutes(router, makeContext());
-  assert.ok(router._routes.some(r => r.re.test('#/reports/reviewer-team')), '#/reports/reviewer-team should be registered');
+  assert.ok(
+    router._routes.some((r) => r.re.test('#/reports/reviewer-team')),
+    '#/reports/reviewer-team should be registered'
+  );
 });
 
 test('registerRoutes: #/reports/reviewer-team mount creates cr-reviewer-team-report element', () => {
   const created = /** @type {string[]} */ ([]);
-  const origCreate = (/** @type {any} */ (globalThis)).document;
-  (/** @type {any} */ (globalThis)).document = {
-    createElement(/** @type {string} */ tag) { created.push(tag); return { setAttribute() {} }; },
-    createTreeWalker() { return { nextNode() { return null; } }; },
+  const origCreate = /** @type {any} */ (globalThis).document;
+  /** @type {any} */ (globalThis).document = {
+    createElement(/** @type {string} */ tag) {
+      created.push(tag);
+      return { setAttribute() {} };
+    },
+    createTreeWalker() {
+      return {
+        nextNode() {
+          return null;
+        },
+      };
+    },
   };
 
   try {
     const router = new Router();
     const container = { replaceChildren() {} };
     router._container = /** @type {any} */ (container);
-    registerRoutes(router, /** @type {any} */ ({ ...makeContext(), capabilities: { isReviewerManager: true } }));
+    registerRoutes(
+      router,
+      /** @type {any} */ ({
+        ...makeContext(),
+        capabilities: { isReviewerManager: true },
+      })
+    );
     router.navigate('#/reports/reviewer-team');
-    assert.ok(created.includes('cr-reviewer-team-report'), 'cr-reviewer-team-report should be created on mount');
+    assert.ok(
+      created.includes('cr-reviewer-team-report'),
+      'cr-reviewer-team-report should be created on mount'
+    );
   } finally {
-    (/** @type {any} */ (globalThis)).document = origCreate;
+    /** @type {any} */ (globalThis).document = origCreate;
   }
 });
 
@@ -194,22 +298,41 @@ test('registerRoutes: #/question-bank unmount removes cr-fullbleed from appEl', 
   const container = { replaceChildren() {} };
   router._container = /** @type {any} */ (container);
   const removed = /** @type {string[]} */ ([]);
-  const appEl = { classList: { add() {}, remove(/** @type {string} */ c) { removed.push(c); } }, setAttribute() {} };
+  const appEl = {
+    classList: {
+      add() {},
+      remove(/** @type {string} */ c) {
+        removed.push(c);
+      },
+    },
+    setAttribute() {},
+  };
   const ctx = /** @type {any} */ ({ ...makeContext(), appEl });
 
   registerRoutes(router, ctx);
 
-  const origCreate = (/** @type {any} */ (globalThis)).document;
-  (/** @type {any} */ (globalThis)).document = {
-    createElement(/** @type {string} */ tag) { return { setAttribute() {} }; },
-    createTreeWalker() { return { nextNode() { return null; } }; },
+  const origCreate = /** @type {any} */ (globalThis).document;
+  /** @type {any} */ (globalThis).document = {
+    createElement(/** @type {string} */ tag) {
+      return { setAttribute() {} };
+    },
+    createTreeWalker() {
+      return {
+        nextNode() {
+          return null;
+        },
+      };
+    },
   };
   try {
     router.navigate('#/question-bank');
     router.navigate('#/dashboard');
-    assert.ok(removed.includes('cr-fullbleed'), 'cr-fullbleed removed on unmount');
+    assert.ok(
+      removed.includes('cr-fullbleed'),
+      'cr-fullbleed removed on unmount'
+    );
   } finally {
-    (/** @type {any} */ (globalThis)).document = origCreate;
+    /** @type {any} */ (globalThis).document = origCreate;
   }
 });
 
@@ -217,12 +340,18 @@ test('registerRoutes: registers #/team-cases route', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});
   registerRoutes(router, makeContext());
-  assert.ok(router._routes.some(r => r.re.test('#/team-cases')), '#/team-cases should be registered');
+  assert.ok(
+    router._routes.some((r) => r.re.test('#/team-cases')),
+    '#/team-cases should be registered'
+  );
 });
 
 test('registerRoutes: registers #/my-cases route', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});
   registerRoutes(router, makeContext());
-  assert.ok(router._routes.some(r => r.re.test('#/my-cases')), '#/my-cases should be registered');
+  assert.ok(
+    router._routes.some((r) => r.re.test('#/my-cases')),
+    '#/my-cases should be registered'
+  );
 });

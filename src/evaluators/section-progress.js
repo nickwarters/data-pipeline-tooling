@@ -18,7 +18,7 @@ import { evaluate } from './applicability-evaluator.js';
  * @returns {SectionProgress[]}
  */
 export function computeSectionProgress(catalogue, answers) {
-  const active = catalogue.filter(q => !q.deprecated);
+  const active = catalogue.filter((q) => !q.deprecated);
   const applicableIds = evaluate(active, answers);
 
   /** @type {Map<string, SectionProgress>} */

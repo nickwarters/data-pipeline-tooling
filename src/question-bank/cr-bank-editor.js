@@ -27,7 +27,10 @@ export class CRBankEditor extends ReactiveElement {
   connectedCallback() {
     super.connectedCallback();
     this._key = (/** @type {any} */ e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault?.(); drawerOpen.set(true); }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault?.();
+        drawerOpen.set(true);
+      }
       if (e.key === 'Escape') drawerOpen.set(false);
     };
     document.addEventListener('keydown', this._key);
@@ -38,19 +41,32 @@ export class CRBankEditor extends ReactiveElement {
   }
   render() {
     return [
-      h('header', { className: 'masthead' },
-        h('div', {},
-          h('div', { className: 'eyebrow', innerHTML: 'Case Type Owner <span class="dot"></span> Question Bank' }),
-          h('h1', { innerHTML: 'Question <em>Bank</em>' }),
+      h(
+        'header',
+        { className: 'masthead' },
+        h(
+          'div',
+          {},
+          h('div', {
+            className: 'eyebrow',
+            innerHTML:
+              'Case Type Owner <span class="dot"></span> Question Bank',
+          }),
+          h('h1', { innerHTML: 'Question <em>Bank</em>' })
         ),
-        h('div', { className: 'masthead-meta', innerHTML:
-          'Session: <strong>local · uncommitted</strong><br>' +
-          'Schema: <strong>questions.v3</strong>' }),
+        h('div', {
+          className: 'masthead-meta',
+          innerHTML:
+            'Session: <strong>local · uncommitted</strong><br>' +
+            'Schema: <strong>questions.v3</strong>',
+        })
       ),
       /** @type {any} */ (document.createElement('cr-case-tabs')),
-      h('main', { className: 'bank-main' },
+      h(
+        'main',
+        { className: 'bank-main' },
         /** @type {any} */ (document.createElement('cr-bank-rail')),
-        /** @type {any} */ (document.createElement('cr-bank-list')),
+        /** @type {any} */ (document.createElement('cr-bank-list'))
       ),
       /** @type {any} */ (document.createElement('cr-bank-dock')),
       /** @type {any} */ (document.createElement('cr-compile-drawer')),

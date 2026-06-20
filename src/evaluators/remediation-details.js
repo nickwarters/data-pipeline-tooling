@@ -13,8 +13,14 @@
  * @returns {Answer}
  */
 export function captureRemediationDetail(answer, field, value) {
-  if (field.type === 'select' && value !== '' && !(field.options ?? []).includes(value)) {
-    throw new Error(`Invalid value "${value}" for select Remediation Detail "${field.key}".`);
+  if (
+    field.type === 'select' &&
+    value !== '' &&
+    !(field.options ?? []).includes(value)
+  ) {
+    throw new Error(
+      `Invalid value "${value}" for select Remediation Detail "${field.key}".`
+    );
   }
   const details = { ...answer.remediationDetails };
   if (value === '') {

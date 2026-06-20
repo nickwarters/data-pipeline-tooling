@@ -51,9 +51,25 @@ const CASES = [
 
 /** @type {QuestionDefinition[]} */
 const QUESTION_DEFS = [
-  { id: 'q-welcome', text: 'Was the customer greeted professionally?', responseType: 'yes-no-na', deprecated: false },
-  { id: 'q-needs', text: "Were the customer's needs identified?", responseType: 'yes-no-na', deprecated: false },
-  { id: 'q-resolve', text: 'Was the issue resolved?', responseType: 'yes-no-na', showWhen: { questionId: 'q-needs', equals: 'Yes' }, deprecated: false },
+  {
+    id: 'q-welcome',
+    text: 'Was the customer greeted professionally?',
+    responseType: 'yes-no-na',
+    deprecated: false,
+  },
+  {
+    id: 'q-needs',
+    text: "Were the customer's needs identified?",
+    responseType: 'yes-no-na',
+    deprecated: false,
+  },
+  {
+    id: 'q-resolve',
+    text: 'Was the issue resolved?',
+    responseType: 'yes-no-na',
+    showWhen: { questionId: 'q-needs', equals: 'Yes' },
+    deprecated: false,
+  },
 ];
 
 const PERSONAS = {
@@ -91,7 +107,11 @@ test('MockSharePointClient: getCase returns null for an unknown id', async () =>
 
 test('MockSharePointClient: patchCase merges only the specified fields', async () => {
   const client = makeClient();
-  const result = await client.patchCase('case-1', { notes: 'test note' }, 'etag-1');
+  const result = await client.patchCase(
+    'case-1',
+    { notes: 'test note' },
+    'etag-1'
+  );
   assert.equal(result.ok, true);
   assert.equal(result.status, 200);
   assert.equal(result.data?.notes, 'test note');
@@ -144,7 +164,7 @@ test('MockSharePointClient: listCases with status filter returns only matching C
   const client = makeClient();
   const cases = await client.listCases({ status: 'In-progress' });
   assert.equal(cases.length, 2);
-  assert.ok(cases.every(c => c.status === 'In-progress'));
+  assert.ok(cases.every((c) => c.status === 'In-progress'));
 });
 
 test('MockSharePointClient: listCases with Completed filter returns only Completed Cases', async () => {
@@ -187,8 +207,8 @@ test('MockSharePointClient: getQuestionDefinitions returns matching definitions'
   const client = makeClient();
   const defs = await client.getQuestionDefinitions(['q-welcome', 'q-needs']);
   assert.equal(defs.length, 2);
-  assert.ok(defs.some(d => d.id === 'q-welcome'));
-  assert.ok(defs.some(d => d.id === 'q-needs'));
+  assert.ok(defs.some((d) => d.id === 'q-welcome'));
+  assert.ok(defs.some((d) => d.id === 'q-needs'));
 });
 
 test('MockSharePointClient: getQuestionDefinitions returns empty array for unknown ids', async () => {
@@ -216,7 +236,10 @@ test('MockSharePointClient: listCases filters by responsibleParty', async () => 
 
 test('MockSharePointClient: listCases filters by both caseType and responsibleParty', async () => {
   const client = makeClient();
-  const cases = await client.listCases({ caseType: 'hello-review', responsibleParty: 'user-3' });
+  const cases = await client.listCases({
+    caseType: 'hello-review',
+    responsibleParty: 'user-3',
+  });
   assert.equal(cases.length, 1);
   assert.equal(cases[0].id, 'case-2');
 });
@@ -234,7 +257,11 @@ test('MockSharePointClient: listCases filters by effectiveOutcome server-side (A
   });
 
   const failures = await client.listCases({ effectiveOutcome: 'fail' });
-  assert.deepEqual(failures.map(c => c.id).sort(), ['r-fail', 'r-fail2'], 'only corrected-to-fail Cases');
+  assert.deepEqual(
+    failures.map((c) => c.id).sort(),
+    ['r-fail', 'r-fail2'],
+    'only corrected-to-fail Cases'
+  );
 });
 
 test('MockSharePointClient: listCases filters by outcomeOverridden server-side (ADR-0019)', async () => {
@@ -249,20 +276,35 @@ test('MockSharePointClient: listCases filters by outcomeOverridden server-side (
   });
 
   const corrected = await client.listCases({ outcomeOverridden: true });
-  assert.deepEqual(corrected.map(c => c.id), ['corrected']);
+  assert.deepEqual(
+    corrected.map((c) => c.id),
+    ['corrected']
+  );
 });
 
 test('MockSharePointClient: getCurrentUserGroups returns empty array for unknown persona', async () => {
   const client = makeClient('unknown-persona'); // not in PERSONAS
   const groups = await client.getCurrentUserGroups();
-  assert.deepEqual(groups, [], 'unknown persona: personas[p] is undefined → ?. returns undefined → ?? [] returns []');
+  assert.deepEqual(
+    groups,
+    [],
+    'unknown persona: personas[p] is undefined → ?. returns undefined → ?? [] returns []'
+  );
 });
 
 test('MockSharePointClient: getCurrentUser falls back to persona string when persona not in map', async () => {
   const client = makeClient('unknown-persona');
   const user = await client.getCurrentUser();
-  assert.equal(user.id, 'unknown-persona', 'p?.userId ?? persona uses fallback when p is undefined');
-  assert.equal(user.displayName, 'unknown-persona', 'p?.displayName ?? persona uses fallback when p is undefined');
+  assert.equal(
+    user.id,
+    'unknown-persona',
+    'p?.userId ?? persona uses fallback when p is undefined'
+  );
+  assert.equal(
+    user.displayName,
+    'unknown-persona',
+    'p?.displayName ?? persona uses fallback when p is undefined'
+  );
 });
 
 // --- listCases overdue filter ---
@@ -271,24 +313,59 @@ test('MockSharePointClient: listCases with overdue:true returns only In-progress
   const PAST = '2020-01-01T00:00:00Z';
   const FUTURE = '2099-01-01T00:00:00Z';
   const overdueCase = /** @type {CaseRow} */ ({
-    id: 'od-1', caseType: 'hello-review', title: 'Overdue', status: 'In-progress',
-    assignedReviewer: '', responsibleParty: '', answers: {}, conversation: [], notes: '',
-    completedAt: null, dueDate: PAST, etag: 'etag-od1',
+    id: 'od-1',
+    caseType: 'hello-review',
+    title: 'Overdue',
+    status: 'In-progress',
+    assignedReviewer: '',
+    responsibleParty: '',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    dueDate: PAST,
+    etag: 'etag-od1',
   });
   const onTimeCase = /** @type {CaseRow} */ ({
-    id: 'od-2', caseType: 'hello-review', title: 'On Time', status: 'In-progress',
-    assignedReviewer: '', responsibleParty: '', answers: {}, conversation: [], notes: '',
-    completedAt: null, dueDate: FUTURE, etag: 'etag-od2',
+    id: 'od-2',
+    caseType: 'hello-review',
+    title: 'On Time',
+    status: 'In-progress',
+    assignedReviewer: '',
+    responsibleParty: '',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    dueDate: FUTURE,
+    etag: 'etag-od2',
   });
   const completedLateCase = /** @type {CaseRow} */ ({
-    id: 'od-3', caseType: 'hello-review', title: 'Completed Late', status: 'Completed',
-    assignedReviewer: '', responsibleParty: '', answers: {}, conversation: [], notes: '',
-    completedAt: '2021-01-01T00:00:00Z', dueDate: PAST, etag: 'etag-od3',
+    id: 'od-3',
+    caseType: 'hello-review',
+    title: 'Completed Late',
+    status: 'Completed',
+    assignedReviewer: '',
+    responsibleParty: '',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: '2021-01-01T00:00:00Z',
+    dueDate: PAST,
+    etag: 'etag-od3',
   });
   const noDueDateCase = /** @type {CaseRow} */ ({
-    id: 'od-4', caseType: 'hello-review', title: 'No Due Date', status: 'In-progress',
-    assignedReviewer: '', responsibleParty: '', answers: {}, conversation: [], notes: '',
-    completedAt: null, etag: 'etag-od4',
+    id: 'od-4',
+    caseType: 'hello-review',
+    title: 'No Due Date',
+    status: 'In-progress',
+    assignedReviewer: '',
+    responsibleParty: '',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    etag: 'etag-od4',
   });
 
   const client = new MockSharePointClient({
@@ -313,8 +390,16 @@ test('MockSharePointClient: listCases with overdue:false returns all cases (no o
 
 /** @type {Array<{ loginName: string, displayName: string, email?: string }>} */
 const PEOPLE = [
-  { loginName: 'jsmith', displayName: 'John Smith', email: 'jsmith@contoso.com' },
-  { loginName: 'asmith', displayName: 'Anna Smith', email: 'asmith@contoso.com' },
+  {
+    loginName: 'jsmith',
+    displayName: 'John Smith',
+    email: 'jsmith@contoso.com',
+  },
+  {
+    loginName: 'asmith',
+    displayName: 'Anna Smith',
+    email: 'asmith@contoso.com',
+  },
   { loginName: 'bjones', displayName: 'Bola Jones' },
 ];
 
@@ -331,10 +416,10 @@ function makePeopleClient(people = PEOPLE) {
 test('MockSharePointClient: searchPeople matches displayName substring (case-insensitive)', async () => {
   const client = makePeopleClient();
   const results = await client.searchPeople('smith');
-  assert.deepEqual(
-    results.map(r => r.loginName).sort(),
-    ['asmith', 'jsmith']
-  );
+  assert.deepEqual(results.map((r) => r.loginName).sort(), [
+    'asmith',
+    'jsmith',
+  ]);
 });
 
 test('MockSharePointClient: searchPeople matches loginName substring', async () => {
@@ -348,7 +433,11 @@ test('MockSharePointClient: searchPeople returns full PersonResult shape includi
   const client = makePeopleClient();
   const results = await client.searchPeople('john');
   assert.deepEqual(results, [
-    { loginName: 'jsmith', displayName: 'John Smith', email: 'jsmith@contoso.com' },
+    {
+      loginName: 'jsmith',
+      displayName: 'John Smith',
+      email: 'jsmith@contoso.com',
+    },
   ]);
 });
 
@@ -383,7 +472,9 @@ test('MockSharePointClient: resolveUsers returns null for an account not in the 
 
 test('MockSharePointClient: resolveUsers dedupes repeated accounts', async () => {
   const client = makePeopleClient();
-  assert.deepEqual(await client.resolveUsers(['jsmith', 'jsmith']), { jsmith: 'John Smith' });
+  assert.deepEqual(await client.resolveUsers(['jsmith', 'jsmith']), {
+    jsmith: 'John Smith',
+  });
 });
 
 test('MockSharePointClient: resolveUsers returns an empty map for an empty list', async () => {

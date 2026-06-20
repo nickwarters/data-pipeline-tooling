@@ -60,7 +60,9 @@ export function resolveCapabilities(userGroups, config = permissions) {
     .map(([slug]) => slug);
   const isResponsibleParty = userGroups.includes(config.responsibleParty);
   const isReviewerManager = userGroups.includes(config.reviewerManager);
-  const isResponsiblePartyManager = userGroups.includes(config.responsiblePartyManager);
+  const isResponsiblePartyManager = userGroups.includes(
+    config.responsiblePartyManager
+  );
   const isMaintainer = userGroups.includes(config.maintainer);
   const isQaReviewer = userGroups.includes(config.qaReviewer);
   const isVisitor =

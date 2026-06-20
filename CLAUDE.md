@@ -40,6 +40,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 **Every line of production code must be covered by a test.** No exceptions.
 
 Workflow for all new code:
+
 1. **Red** — write a failing test for the behaviour you are about to add.
 2. **Green** — write the minimum production code to make it pass.
 3. **Refactor** — clean up, keeping tests green.

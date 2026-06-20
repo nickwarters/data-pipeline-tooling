@@ -65,7 +65,11 @@ test('isOverdue: future dueDate → false', () => {
 // --- completed cases never overdue ---
 
 test('isOverdue: Completed case with past dueDate → false', () => {
-  const c = { ...baseCase(), status: /** @type {'Completed'} */ ('Completed'), dueDate: PAST.toISOString() };
+  const c = {
+    ...baseCase(),
+    status: /** @type {'Completed'} */ ('Completed'),
+    dueDate: PAST.toISOString(),
+  };
   assert.strictEqual(isOverdue(c, baseConfig(), NOW), false);
 });
 

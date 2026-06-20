@@ -62,20 +62,20 @@ export class CRQuestionList extends ReactiveElement {
   }
 
   render() {
-    const elements = this.questions.map(q => {
+    const elements = this.questions.map((q) => {
       const v = this.answers[q.id]?.value;
       const el = /** @type {import('./cr-question.js').CRQuestion} */ (
         h('cr-question', {
           tabIndex: -1,
           question: q,
           access: this.access,
-          currentValue: v ?? (q.responseType === 'multi-choice' ? [] : '')
+          currentValue: v ?? (q.responseType === 'multi-choice' ? [] : ''),
         })
       );
       return el;
     });
     this.questionElements = elements;
-    this._renderedIds = new Set(this.questions.map(q => q.id));
+    this._renderedIds = new Set(this.questions.map((q) => q.id));
     return elements;
   }
 }

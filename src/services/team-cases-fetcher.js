@@ -12,11 +12,18 @@
  * @param {string[]} eligibleCaseTypes
  * @returns {Promise<CaseRow[]>}
  */
-export async function fetchTeamCases(client, params, managerId, eligibleCaseTypes) {
+export async function fetchTeamCases(
+  client,
+  params,
+  managerId,
+  eligibleCaseTypes
+) {
   const targets = params.caseType ? [params.caseType] : eligibleCaseTypes;
 
   const results = await Promise.all(
-    targets.map(caseType => client.listCases({ caseType, assignedReviewerManager: managerId })),
+    targets.map((caseType) =>
+      client.listCases({ caseType, assignedReviewerManager: managerId })
+    )
   );
   return results.flat();
 }

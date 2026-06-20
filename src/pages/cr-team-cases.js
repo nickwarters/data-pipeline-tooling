@@ -33,7 +33,12 @@ export class CRTeamCases extends ReactiveElement {
   async _fetchData() {
     if (!this.client || !this.currentUser) return;
     const params = parseTeamCasesParams(this.queryString);
-    const cases = await fetchTeamCases(this.client, params, this.currentUser.id, this.eligibleCaseTypes);
+    const cases = await fetchTeamCases(
+      this.client,
+      params,
+      this.currentUser.id,
+      this.eligibleCaseTypes
+    );
     this._cases.set(cases);
   }
 
@@ -51,11 +56,7 @@ export class CRTeamCases extends ReactiveElement {
       return [h1, back, h('p', {}, 'No cases match the selected filters.')];
     }
 
-    return [
-      h1,
-      back,
-      h('cr-case-table', { cases: cases, toolbar: 'hidden' })
-    ];
+    return [h1, back, h('cr-case-table', { cases: cases, toolbar: 'hidden' })];
   }
 }
 

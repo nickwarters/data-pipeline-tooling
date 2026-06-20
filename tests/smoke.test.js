@@ -12,14 +12,22 @@ test('node test runner is wired up', () => {
 
 test('dev/index.html local stylesheet hrefs resolve to existing files', () => {
   const html = readFileSync(resolve(ROOT, 'dev/index.html'), 'utf8');
-  const localHrefs = [...html.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/g)]
-    .map(m => m[1])
-    .filter(href => !href.startsWith('http'));
+  const localHrefs = [
+    ...html.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/g),
+  ]
+    .map((m) => m[1])
+    .filter((href) => !href.startsWith('http'));
 
-  assert.ok(localHrefs.length > 0, 'expected at least one local stylesheet link');
+  assert.ok(
+    localHrefs.length > 0,
+    'expected at least one local stylesheet link'
+  );
 
   for (const href of localHrefs) {
     const abs = resolve(ROOT, 'dev', href);
-    assert.ok(existsSync(abs), `stylesheet not found: ${href} (resolved to ${abs})`);
+    assert.ok(
+      existsSync(abs),
+      `stylesheet not found: ${href} (resolved to ${abs})`
+    );
   }
 });

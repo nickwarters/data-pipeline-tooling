@@ -25,7 +25,13 @@
  */
 export function aggregateReviewerTeamData(cases, windows) {
   /** @type {AggregateResult} */
-  const result = { completedLast7d: 0, completedLast30d: 0, outstanding: 0, overdue: 0, byType: {} };
+  const result = {
+    completedLast7d: 0,
+    completedLast30d: 0,
+    outstanding: 0,
+    overdue: 0,
+    byType: {},
+  };
 
   // Derive "now" from the sevenDaysAgo window boundary (midnight 6 calendar days ago)
   // so that overdue comparisons are consistent with the same time reference used to
@@ -35,13 +41,21 @@ export function aggregateReviewerTeamData(cases, windows) {
     sevenDaysAgoDate.getFullYear(),
     sevenDaysAgoDate.getMonth(),
     sevenDaysAgoDate.getDate() + 6,
-    23, 59, 59, 999
+    23,
+    59,
+    59,
+    999
   );
 
   for (const c of cases) {
     const type = c.caseType;
     if (!result.byType[type]) {
-      result.byType[type] = { completedLast7d: 0, completedLast30d: 0, outstanding: 0, overdue: 0 };
+      result.byType[type] = {
+        completedLast7d: 0,
+        completedLast30d: 0,
+        outstanding: 0,
+        overdue: 0,
+      };
     }
     const bucket = result.byType[type];
 

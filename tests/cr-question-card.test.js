@@ -4,8 +4,10 @@ import assert from 'node:assert/strict';
 import { installDom } from './_bank-dom-stub.js';
 installDom();
 
-const { CRQuestionCard } = await import('../src/components/cr-question-card.js');
-const { _resetStore, cases, activeSlug } = await import('../src/question-bank/question-bank-store.js');
+const { CRQuestionCard } =
+  await import('../src/components/cr-question-card.js');
+const { _resetStore, cases, activeSlug } =
+  await import('../src/question-bank/question-bank-store.js');
 
 test('CRQuestionCard: no question → nothing renders', () => {
   const e = new CRQuestionCard();
@@ -86,7 +88,7 @@ test('CRQuestionCard: id-input commits trimmed value (falls back to old on empty
   idInput._listeners.change[0]({ target: { value: '  q-new  ' } });
   assert.equal(q.id, 'q-new');
   idInput._listeners.change[0]({ target: { value: '   ' } });
-  assert.equal(q.id, 'q-new');   // empty trim → fallback (oldId at that moment)
+  assert.equal(q.id, 'q-new'); // empty trim → fallback (oldId at that moment)
 });
 
 test('CRQuestionCard: category text commits to undefined when emptied', () => {
@@ -163,13 +165,13 @@ test('CRQuestionCard: delete removes after confirm; cancelled confirm is a no-op
   const delBtn = actions._children[2];
 
   // Cancelled
-  (/** @type {any} */ (globalThis)).confirm = () => false;
+  /** @type {any} */ (globalThis).confirm = () => false;
   const before = cases.get()['hello-review'].questions.length;
   delBtn._listeners.click[0]();
   assert.equal(cases.get()['hello-review'].questions.length, before);
 
   // Confirmed
-  (/** @type {any} */ (globalThis)).confirm = () => true;
+  /** @type {any} */ (globalThis).confirm = () => true;
   delBtn._listeners.click[0]();
   assert.equal(cases.get()['hello-review'].questions.length, before - 1);
 });
@@ -198,7 +200,7 @@ test('CRQuestionCard: deprecated adds "deprecated" class to the card', () => {
 
 test('CRQuestionCard: tolerates missing confirm() global', () => {
   _resetStore();
-  (/** @type {any} */ (globalThis)).confirm = undefined;
+  /** @type {any} */ (globalThis).confirm = undefined;
   const q = cases.get()['hello-review'].questions[0];
   const e = new CRQuestionCard();
   e.question = q;
@@ -206,5 +208,5 @@ test('CRQuestionCard: tolerates missing confirm() global', () => {
   e.connectedCallback();
   const actions = /** @type {any} */ (e)._children[1]._children[2];
   const delBtn = actions._children[2];
-  delBtn._listeners.click[0]();   // no throw; treated as cancel
+  delBtn._listeners.click[0](); // no throw; treated as cancel
 });

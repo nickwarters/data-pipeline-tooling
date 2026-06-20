@@ -3,9 +3,9 @@ import { CRElement } from './cr-element.js';
 import { effect } from '../lib/signal.js';
 
 /**
- * ReactiveElement is a base class that extends CRElement to provide automatic 
- * reactivity. Instead of manual `.subscribe()`, it calls a `render()` method 
- * inside an effect. Any signals read during `render()` will automatically trigger 
+ * ReactiveElement is a base class that extends CRElement to provide automatic
+ * reactivity. Instead of manual `.subscribe()`, it calls a `render()` method
+ * inside an effect. Any signals read during `render()` will automatically trigger
  * a re-render when they change.
  */
 export class ReactiveElement extends CRElement {
@@ -20,9 +20,13 @@ export class ReactiveElement extends CRElement {
     this._renderDispose = effect(() => {
       const content = this.render();
       if (content !== undefined) {
-        // Simple wipe and replace. For highly dynamic lists we'd want diffing, 
+        // Simple wipe and replace. For highly dynamic lists we'd want diffing,
         // but for forms replacing children is very fast.
-        if (content && typeof content === 'object' && 'appendChild' in content) {
+        if (
+          content &&
+          typeof content === 'object' &&
+          'appendChild' in content
+        ) {
           this.replaceChildren(content);
         } else if (Array.isArray(content)) {
           this.replaceChildren(...content);

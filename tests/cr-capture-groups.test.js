@@ -21,21 +21,32 @@ class StubEl {
     /** @type {string} */
     this._tagName = '';
   }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
-  appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
-  append(/** @type {StubEl[]} */ ...cs) { this._children.push(...cs); }
+  replaceChildren(/** @type {StubEl[]} */ ...cs) {
+    this._children = cs;
+  }
+  appendChild(/** @type {StubEl} */ c) {
+    this._children.push(c);
+    return c;
+  }
+  append(/** @type {StubEl[]} */ ...cs) {
+    this._children.push(...cs);
+  }
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
   }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) { this._attrs[k] = v; }
-  getAttribute(/** @type {string} */ k) { return this._attrs[k] ?? null; }
+  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
+    this._attrs[k] = v;
+  }
+  getAttribute(/** @type {string} */ k) {
+    return this._attrs[k] ?? null;
+  }
   dispatchEvent(/** @type {any} */ e) {
-    (this._listeners[e.type] ?? []).forEach(h => h(e));
+    (this._listeners[e.type] ?? []).forEach((h) => h(e));
     return true;
   }
   /** @param {string} ev @param {any} [payload] */
   _fire(ev, payload) {
-    (this._listeners[ev] ?? []).forEach(h => h(payload ?? { target: this }));
+    (this._listeners[ev] ?? []).forEach((h) => h(payload ?? { target: this }));
   }
 }
 
@@ -48,8 +59,8 @@ class StubCustomEvent {
   }
 }
 
-(/** @type {any} */ (globalThis)).HTMLElement = StubEl;
-(/** @type {any} */ (globalThis)).document = {
+/** @type {any} */ (globalThis).HTMLElement = StubEl;
+/** @type {any} */ (globalThis).document = {
   /** @param {string} tag @returns {StubEl} */
   createElement(tag) {
     const el = new StubEl();
@@ -57,25 +68,42 @@ class StubCustomEvent {
     return el;
   },
 };
-(/** @type {any} */ (globalThis)).customElements = { define() {} };
-(/** @type {any} */ (globalThis)).CustomEvent = StubCustomEvent;
+/** @type {any} */ (globalThis).customElements = { define() {} };
+/** @type {any} */ (globalThis).CustomEvent = StubCustomEvent;
 
-const { CRCaptureGroups } = await import('../src/components/cr-capture-groups.js');
+const { CRCaptureGroups } =
+  await import('../src/components/cr-capture-groups.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaptureGroup} CaptureGroup */
 
 /** @type {CaptureGroup[]} */
 const GROUPS = [
   {
-    key: 'cause', label: 'Cause', collapsed: false, fields: [
+    key: 'cause',
+    label: 'Cause',
+    collapsed: false,
+    fields: [
       { key: 'rootCause', label: 'Root cause', type: 'text' },
       { key: 'detail', label: 'Detail', type: 'textarea' },
     ],
   },
   {
-    key: 'grade', label: 'Grading', collapsed: true, fields: [
-      { key: 'severity', label: 'Severity', type: 'select', options: ['Low', 'Med', 'High'] },
-      { key: 'repeat', label: 'Repeat?', type: 'radio', options: ['Yes', 'No'] },
+    key: 'grade',
+    label: 'Grading',
+    collapsed: true,
+    fields: [
+      {
+        key: 'severity',
+        label: 'Severity',
+        type: 'select',
+        options: ['Low', 'Med', 'High'],
+      },
+      {
+        key: 'repeat',
+        label: 'Repeat?',
+        type: 'radio',
+        options: ['Yes', 'No'],
+      },
     ],
   },
 ];
@@ -124,7 +152,10 @@ test('CRCaptureGroups: editable mode renders a header per group', () => {
   const el = new CRCaptureGroups();
   el.update(GROUPS, {}, true);
   const headers = findAllByClass(el, 'cr-capture-group-header');
-  assert.deepEqual(headers.map(h => h.textContent), ['Cause', 'Grading']);
+  assert.deepEqual(
+    headers.map((h) => h.textContent),
+    ['Cause', 'Grading']
+  );
 });
 
 test('CRCaptureGroups: an expanded group renders its field controls; a collapsed group hides them', () => {
@@ -132,7 +163,9 @@ test('CRCaptureGroups: an expanded group renders its field controls; a collapsed
   el.update(GROUPS, {}, true);
   // GROUPS[0] (Cause) collapsed:false -> fields shown; GROUPS[1] (Grading) collapsed:true -> hidden.
   const fields = findAllByClass(el, 'cr-capture-field');
-  const labels = findAllByClass(el, 'cr-capture-label').map(l => l.textContent);
+  const labels = findAllByClass(el, 'cr-capture-label').map(
+    (l) => l.textContent
+  );
   assert.deepEqual(labels, ['Root cause', 'Detail']);
   assert.equal(fields.length, 2);
 });
@@ -142,7 +175,9 @@ test('CRCaptureGroups: clicking a collapsed group header expands it (ephemeral)'
   el.update(GROUPS, {}, true);
   const gradingHeader = findAllByClass(el, 'cr-capture-group-header')[1];
   gradingHeader._fire('click');
-  const labels = findAllByClass(el, 'cr-capture-label').map(l => l.textContent);
+  const labels = findAllByClass(el, 'cr-capture-label').map(
+    (l) => l.textContent
+  );
   assert.deepEqual(labels, ['Root cause', 'Detail', 'Severity', 'Repeat?']);
 });
 
@@ -151,7 +186,9 @@ test('CRCaptureGroups: clicking an expanded group header collapses it', () => {
   el.update(GROUPS, {}, true);
   const causeHeader = findAllByClass(el, 'cr-capture-group-header')[0];
   causeHeader._fire('click');
-  const labels = findAllByClass(el, 'cr-capture-label').map(l => l.textContent);
+  const labels = findAllByClass(el, 'cr-capture-label').map(
+    (l) => l.textContent
+  );
   // Cause now collapsed; Grading still collapsed -> no field labels at all.
   assert.deepEqual(labels, []);
 });
@@ -161,8 +198,13 @@ test('CRCaptureGroups: collapse state survives a re-render via update()', () => 
   el.update(GROUPS, {}, true);
   findAllByClass(el, 'cr-capture-group-header')[1]._fire('click'); // expand Grading
   el.update(GROUPS, { severity: 'High' }, true); // autosave-style re-render
-  const labels = findAllByClass(el, 'cr-capture-label').map(l => l.textContent);
-  assert.ok(labels.includes('Severity'), 'Grading stayed expanded after re-render');
+  const labels = findAllByClass(el, 'cr-capture-label').map(
+    (l) => l.textContent
+  );
+  assert.ok(
+    labels.includes('Severity'),
+    'Grading stayed expanded after re-render'
+  );
 });
 
 test('CRCaptureGroups: text and textarea controls reflect the current capture value', () => {
@@ -180,7 +222,7 @@ test('CRCaptureGroups: select renders a blank plus the options and reflects curr
   el.update(GROUPS, { severity: 'Med' }, true);
   findAllByClass(el, 'cr-capture-group-header')[1]._fire('click'); // expand Grading
   const select = findAllByTag(el, 'select')[0];
-  const opts = findAllByTag(select, 'option').map(o => o.value);
+  const opts = findAllByTag(select, 'option').map((o) => o.value);
   assert.deepEqual(opts, ['', 'Low', 'Med', 'High']);
   assert.equal(select.value, 'Med');
 });
@@ -189,9 +231,15 @@ test('CRCaptureGroups: radio renders one input per option with the current one c
   const el = new CRCaptureGroups();
   el.update(GROUPS, { repeat: 'No' }, true);
   findAllByClass(el, 'cr-capture-group-header')[1]._fire('click'); // expand Grading
-  const radios = findAllByTag(el, 'input').filter(i => i.type === 'radio');
-  assert.deepEqual(radios.map(r => r.value), ['Yes', 'No']);
-  assert.deepEqual(radios.map(r => r.checked), [false, true]);
+  const radios = findAllByTag(el, 'input').filter((i) => i.type === 'radio');
+  assert.deepEqual(
+    radios.map((r) => r.value),
+    ['Yes', 'No']
+  );
+  assert.deepEqual(
+    radios.map((r) => r.checked),
+    [false, true]
+  );
 });
 
 test('CRCaptureGroups: changing a text control dispatches a bubbling cr-capture', () => {
@@ -204,7 +252,10 @@ test('CRCaptureGroups: changing a text control dispatches a bubbling cr-capture'
   input.value = 'Agent rushed';
   input._fire('change', { target: input });
   assert.equal(events.length, 1);
-  assert.deepEqual(events[0].detail, { fieldKey: 'rootCause', value: 'Agent rushed' });
+  assert.deepEqual(events[0].detail, {
+    fieldKey: 'rootCause',
+    value: 'Agent rushed',
+  });
   assert.equal(events[0].bubbles, true);
 });
 
@@ -215,7 +266,9 @@ test('CRCaptureGroups: selecting a radio option dispatches cr-capture with that 
   /** @type {any[]} */
   const events = [];
   el.addEventListener('cr-capture', (/** @type {any} */ e) => events.push(e));
-  const yesRadio = findAllByTag(el, 'input').filter(i => i.type === 'radio')[0];
+  const yesRadio = findAllByTag(el, 'input').filter(
+    (i) => i.type === 'radio'
+  )[0];
   yesRadio._fire('change');
   assert.deepEqual(events[0].detail, { fieldKey: 'repeat', value: 'Yes' });
 });
@@ -223,16 +276,28 @@ test('CRCaptureGroups: selecting a radio option dispatches cr-capture with that 
 test('CRCaptureGroups: read-only mode shows only populated fields as static text, no inputs', () => {
   const el = new CRCaptureGroups();
   el.update(GROUPS, { rootCause: 'Rushed', severity: 'High' }, false);
-  assert.equal(findByClass(el, 'cr-capture-input'), null, 'no editable controls when read-only');
-  const values = findAllByClass(el, 'cr-capture-value').map(v => v.textContent);
+  assert.equal(
+    findByClass(el, 'cr-capture-input'),
+    null,
+    'no editable controls when read-only'
+  );
+  const values = findAllByClass(el, 'cr-capture-value').map(
+    (v) => v.textContent
+  );
   assert.deepEqual(values, ['Root cause: Rushed', 'Severity: High']);
 });
 
 test('CRCaptureGroups: read-only mode omits a group with no populated fields', () => {
   const el = new CRCaptureGroups();
   el.update(GROUPS, { rootCause: 'Rushed' }, false);
-  const headings = findAllByClass(el, 'cr-capture-group-heading').map(h => h.textContent);
-  assert.deepEqual(headings, ['Cause'], 'Grading group has no populated fields, so it is omitted');
+  const headings = findAllByClass(el, 'cr-capture-group-heading').map(
+    (h) => h.textContent
+  );
+  assert.deepEqual(
+    headings,
+    ['Cause'],
+    'Grading group has no populated fields, so it is omitted'
+  );
 });
 
 test('CRCaptureGroups: connectedCallback renders from properties', () => {
@@ -247,9 +312,14 @@ test('CRCaptureGroups: connectedCallback renders from properties', () => {
 test('CRCaptureGroups: a group without an explicit collapsed flag defaults to expanded', () => {
   const el = new CRCaptureGroups();
   /** @type {any} */
-  const groups = [{ key: 'g', label: 'G', fields: [{ key: 'a', label: 'A', type: 'text' }] }];
+  const groups = [
+    { key: 'g', label: 'G', fields: [{ key: 'a', label: 'A', type: 'text' }] },
+  ];
   el.update(groups, {}, true);
-  assert.deepEqual(findAllByClass(el, 'cr-capture-label').map(l => l.textContent), ['A']);
+  assert.deepEqual(
+    findAllByClass(el, 'cr-capture-label').map((l) => l.textContent),
+    ['A']
+  );
 });
 
 test('CRCaptureGroups: a non-string captured value renders as empty and is omitted read-only', () => {
@@ -267,16 +337,33 @@ test('CRCaptureGroups: a non-string captured value renders as empty and is omitt
 test('CRCaptureGroups: a select field declared without options still renders the blank option', () => {
   const el = new CRCaptureGroups();
   /** @type {any} */
-  const groups = [{ key: 'g', label: 'G', collapsed: false, fields: [{ key: 's', label: 'S', type: 'select' }] }];
+  const groups = [
+    {
+      key: 'g',
+      label: 'G',
+      collapsed: false,
+      fields: [{ key: 's', label: 'S', type: 'select' }],
+    },
+  ];
   el.update(groups, {}, true);
-  const opts = findAllByTag(el, 'option').map(o => o.value);
+  const opts = findAllByTag(el, 'option').map((o) => o.value);
   assert.deepEqual(opts, ['']);
 });
 
 test('CRCaptureGroups: a radio field declared without options renders no inputs', () => {
   const el = new CRCaptureGroups();
   /** @type {any} */
-  const groups = [{ key: 'g', label: 'G', collapsed: false, fields: [{ key: 'r', label: 'R', type: 'radio' }] }];
+  const groups = [
+    {
+      key: 'g',
+      label: 'G',
+      collapsed: false,
+      fields: [{ key: 'r', label: 'R', type: 'radio' }],
+    },
+  ];
   el.update(groups, {}, true);
-  assert.equal(findAllByTag(el, 'input').filter(i => i.type === 'radio').length, 0);
+  assert.equal(
+    findAllByTag(el, 'input').filter((i) => i.type === 'radio').length,
+    0
+  );
 });

@@ -23,9 +23,9 @@ import { isFailure } from './failure-evaluator.js';
  * @returns {SummaryModel}
  */
 export function buildSummaryModel(catalogue, answers) {
-  const active = catalogue.filter(q => !q.deprecated);
+  const active = catalogue.filter((q) => !q.deprecated);
   const applicableIds = evaluate(active, answers);
-  const applicable = active.filter(q => applicableIds.has(q.id));
+  const applicable = active.filter((q) => applicableIds.has(q.id));
 
   /** @type {Map<string, CategoryCount>} */
   const counts = new Map();
@@ -38,20 +38,21 @@ export function buildSummaryModel(catalogue, answers) {
     const answered = Array.isArray(v) ? v.length > 0 : !!v;
     if (!answered) continue;
     const category = q.category || 'General';
-    if (!counts.has(category)) counts.set(category, { category, pass: 0, fail: 0 });
+    if (!counts.has(category))
+      counts.set(category, { category, pass: 0, fail: 0 });
     const entry = /** @type {CategoryCount} */ (counts.get(category));
     if (isFailure(q, answer)) entry.fail += 1;
     else entry.pass += 1;
   }
 
-  const failedQuestions = applicable.filter(q => isFailure(q, answers[q.id]));
+  const failedQuestions = applicable.filter((q) => isFailure(q, answers[q.id]));
   const remediationActionCount = failedQuestions.reduce(
     (total, q) => total + (q.remediationActions?.length ?? 0),
     0
   );
 
   /** @type {SummaryFailure[]} */
-  const failures = failedQuestions.map(q => {
+  const failures = failedQuestions.map((q) => {
     // A failed question always has an Answer (isFailure is false without one).
     const v = answers[q.id].value;
     return {

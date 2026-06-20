@@ -10,10 +10,20 @@ const G = /** @type {any} */ (globalThis);
 
 test('cr-bank-editor: all 14 custom elements register', () => {
   const names = [
-    'cr-bank-editor', 'cr-case-tabs', 'cr-bank-rail', 'cr-bank-list',
-    'cr-question-card', 'cr-wording-editor', 'cr-options-editor',
-    'cr-showwhen-editor', 'cr-showwhen-group', 'cr-showwhen-leaf',
-    'cr-remediation-editor', 'cr-bank-dock', 'cr-compile-drawer', 'cr-toast',
+    'cr-bank-editor',
+    'cr-case-tabs',
+    'cr-bank-rail',
+    'cr-bank-list',
+    'cr-question-card',
+    'cr-wording-editor',
+    'cr-options-editor',
+    'cr-showwhen-editor',
+    'cr-showwhen-group',
+    'cr-showwhen-leaf',
+    'cr-remediation-editor',
+    'cr-bank-dock',
+    'cr-compile-drawer',
+    'cr-toast',
   ];
   for (const n of names) {
     assert.ok(G.customElements._registry[n], `${n} should be registered`);
@@ -25,16 +35,19 @@ test('cr-bank-editor: mounts shell and registers keydown handler', () => {
   const inst = new Cls();
   /** @type {any[]} */
   const keydownHandlers = [];
-  /** @type {any} */ (G.document).addEventListener = (/** @type {string} */ t, /** @type {Function} */ h) => {
+  /** @type {any} */ (G.document).addEventListener = (
+    /** @type {string} */ t,
+    /** @type {Function} */ h
+  ) => {
     if (t === 'keydown') keydownHandlers.push(h);
   };
   /** @type {any} */ (G.document).removeEventListener = () => {};
   inst.connectedCallback();
-  assert.ok(inst._children.length >= 4);  // masthead + tabs + main + dock + drawer + toast
+  assert.ok(inst._children.length >= 4); // masthead + tabs + main + dock + drawer + toast
   assert.equal(keydownHandlers.length, 1);
 
   // Simulate ⌘↵ — should open the drawer signal
-  const { drawerOpen } = G.__store ?? {};  // not exported globally; just exercise the handler
+  const { drawerOpen } = G.__store ?? {}; // not exported globally; just exercise the handler
   keydownHandlers[0]({ metaKey: true, key: 'Enter', preventDefault() {} });
   // Then Esc closes it
   keydownHandlers[0]({ key: 'Escape' });

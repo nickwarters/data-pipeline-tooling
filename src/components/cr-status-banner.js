@@ -31,7 +31,7 @@ export class CRStatusBanner extends ReactiveElement {
 
   /**
    * Preserved for test compatibility.
-   * @param {SaveStatus} [status] 
+   * @param {SaveStatus} [status]
    */
   _render(status) {
     const content = this.render();
@@ -47,7 +47,7 @@ export class CRStatusBanner extends ReactiveElement {
   render() {
     if (!this.saveQueue) return [];
     const status = this.saveQueue.status.get();
-    
+
     if (status === 'saved') {
       return [];
     }
@@ -62,26 +62,42 @@ export class CRStatusBanner extends ReactiveElement {
    * @returns {HTMLElement}
    */
   _renderTransient(status) {
-    return h('div', {
-      className: `cr-banner cr-banner-${status}`,
-      role: 'status',
-      'aria-live': 'polite'
-    }, status === 'saving' ? 'Saving…' : 'Reconnecting…');
+    return h(
+      'div',
+      {
+        className: `cr-banner cr-banner-${status}`,
+        role: 'status',
+        'aria-live': 'polite',
+      },
+      status === 'saving' ? 'Saving…' : 'Reconnecting…'
+    );
   }
 
   /** @returns {HTMLElement} */
   _renderConflict() {
-    return h('div', {
-      className: 'cr-banner cr-banner-conflict',
-      role: 'alert',
-      'aria-live': 'assertive'
-    }, [
-      h('p', { className: 'cr-banner-text' }, 'This Case was edited in another tab. Reload to continue.'),
-      h('button', {
-        className: 'cr-banner-reload',
-        onClick: () => location.reload()
-      }, 'Reload')
-    ]);
+    return h(
+      'div',
+      {
+        className: 'cr-banner cr-banner-conflict',
+        role: 'alert',
+        'aria-live': 'assertive',
+      },
+      [
+        h(
+          'p',
+          { className: 'cr-banner-text' },
+          'This Case was edited in another tab. Reload to continue.'
+        ),
+        h(
+          'button',
+          {
+            className: 'cr-banner-reload',
+            onClick: () => location.reload(),
+          },
+          'Reload'
+        ),
+      ]
+    );
   }
 }
 

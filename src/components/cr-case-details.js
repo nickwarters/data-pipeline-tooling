@@ -17,14 +17,18 @@ export function caseDetailFields(caseRow) {
   /** @type {Array<{ field: string, label: string, value: string | null | undefined }>} */
   const fields = [
     { field: 'title', label: 'Title', value: caseRow.title },
-    { field: 'assignedReviewer', label: 'Assigned Reviewer', value: caseRow.assignedReviewer },
+    {
+      field: 'assignedReviewer',
+      label: 'Assigned Reviewer',
+      value: caseRow.assignedReviewer,
+    },
     { field: 'status', label: 'Status', value: caseRow.status },
     { field: 'dueDate', label: 'Due date', value: caseRow.dueDate },
     { field: 'relatedDate', label: 'Related date', value: caseRow.relatedDate },
     { field: 'created', label: 'Created', value: caseRow.created },
     { field: 'completedAt', label: 'Completed', value: caseRow.completedAt },
   ];
-  return fields.map(f => ({ ...f, display: f.value ? f.value : '—' }));
+  return fields.map((f) => ({ ...f, display: f.value ? f.value : '—' }));
 }
 
 /**
@@ -54,12 +58,18 @@ export class CRCaseDetails extends ReactiveElement {
 
     return [
       h('h2', {}, 'Case Details'),
-      h('dl', { className: 'cr-case-details-list' },
+      h(
+        'dl',
+        { className: 'cr-case-details-list' },
         ...caseDetailFields(caseRow).flatMap(({ field, label, display }) => [
           h('dt', { className: 'cr-case-details-label' }, label),
-          h('dd', { className: 'cr-case-details-value', 'data-field': field }, display)
+          h(
+            'dd',
+            { className: 'cr-case-details-value', 'data-field': field },
+            display
+          ),
         ])
-      )
+      ),
     ];
   }
 }

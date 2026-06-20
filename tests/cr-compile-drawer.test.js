@@ -4,12 +4,12 @@ import assert from 'node:assert/strict';
 import { installDom } from './_bank-dom-stub.js';
 installDom();
 
-const { CRCompileDrawer } = await import('../src/components/cr-compile-drawer.js');
-const {
-  _resetStore, drawerOpen, baseline, cases, toastMsg, commit,
-} = await import('../src/question-bank/question-bank-store.js');
+const { CRCompileDrawer } =
+  await import('../src/components/cr-compile-drawer.js');
+const { _resetStore, drawerOpen, baseline, cases, toastMsg, commit } =
+  await import('../src/question-bank/question-bank-store.js');
 
-(/** @type {any} */ (globalThis)).setTimeout = () => 0;
+/** @type {any} */ (globalThis).setTimeout = () => 0;
 
 test('CRCompileDrawer: renders backdrop + drawer (closed by default)', () => {
   _resetStore();
@@ -63,8 +63,16 @@ test('CRCompileDrawer: Copy writes code to clipboard + shows toast', async () =>
   /** @type {any} */
   let written = null;
   try {
-    (/** @type {any} */ (globalThis)).navigator = { clipboard: { writeText: async (/** @type {string} */ s) => { written = s; } } };
-  } catch { /* read-only navigator on some runtimes */ }
+    /** @type {any} */ (globalThis).navigator = {
+      clipboard: {
+        writeText: async (/** @type {string} */ s) => {
+          written = s;
+        },
+      },
+    };
+  } catch {
+    /* read-only navigator on some runtimes */
+  }
   const e = new CRCompileDrawer();
   e.connectedCallback();
   const drawer = /** @type {any} */ (e)._children[1];
@@ -78,7 +86,9 @@ test('CRCompileDrawer: Copy writes code to clipboard + shows toast', async () =>
 test('CRCompileDrawer: Send for Review snapshots baseline + closes', () => {
   _resetStore();
   drawerOpen.set(true);
-  commit(t => { t['hello-review'].label = 'AFTER'; });
+  commit((t) => {
+    t['hello-review'].label = 'AFTER';
+  });
   const e = new CRCompileDrawer();
   e.connectedCallback();
   const drawer = /** @type {any} */ (e)._children[1];
@@ -93,8 +103,13 @@ test('CRCompileDrawer: Send for Review snapshots baseline + closes', () => {
 
 test('CRCompileDrawer: diff cards render added / changed / removed counts', () => {
   _resetStore();
-  commit(t => {
-    t['hello-review'].questions.push({ id: 'new', text: '', responseType: 'yes-no-na', deprecated: false });
+  commit((t) => {
+    t['hello-review'].questions.push({
+      id: 'new',
+      text: '',
+      responseType: 'yes-no-na',
+      deprecated: false,
+    });
   });
   drawerOpen.set(true);
   const e = new CRCompileDrawer();

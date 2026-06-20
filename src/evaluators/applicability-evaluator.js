@@ -43,14 +43,16 @@ export function allApplicableAnswered(catalogue, answers) {
  * @returns {boolean}
  */
 export function detectCycles(catalogue) {
-  const ids = new Set(catalogue.map(q => q.id));
+  const ids = new Set(catalogue.map((q) => q.id));
   /** @type {Map<string, Set<string>>} */
   const deps = new Map();
   for (const q of catalogue) {
     deps.set(q.id, extractRefs(q.showWhen));
   }
 
-  const WHITE = 0, GRAY = 1, BLACK = 2;
+  const WHITE = 0,
+    GRAY = 1,
+    BLACK = 2;
   /** @type {Map<string, number>} */
   const color = new Map();
   for (const id of ids) color.set(id, WHITE);
@@ -58,7 +60,7 @@ export function detectCycles(catalogue) {
   /** @param {string} id @returns {boolean} */
   function dfs(id) {
     color.set(id, GRAY);
-    for (const dep of (deps.get(id) ?? [])) {
+    for (const dep of deps.get(id) ?? []) {
       if (!ids.has(dep)) continue;
       const c = color.get(dep);
       if (c === GRAY) return true;
@@ -81,13 +83,18 @@ export function detectCycles(catalogue) {
  */
 function evalCondition(cond, answers) {
   if ('$and' in cond) {
-    return /** @type {Record<string, unknown>[]} */ (cond['$and']).every(c => evalCondition(c, answers));
+    return /** @type {Record<string, unknown>[]} */ (cond['$and']).every((c) =>
+      evalCondition(c, answers)
+    );
   }
   if ('$or' in cond) {
-    return /** @type {Record<string, unknown>[]} */ (cond['$or']).some(c => evalCondition(c, answers));
+    return /** @type {Record<string, unknown>[]} */ (cond['$or']).some((c) =>
+      evalCondition(c, answers)
+    );
   }
   for (const [qId, op] of Object.entries(cond)) {
-    if (!evalOp(/** @type {Record<string, unknown>} */ (op), answers[qId])) return false;
+    if (!evalOp(/** @type {Record<string, unknown>} */ (op), answers[qId]))
+      return false;
   }
   return true;
 }
@@ -101,7 +108,7 @@ function evalOp(op, answer) {
   const value = answer?.value ?? '';
   if ('in' in op) {
     const list = /** @type {string[]} */ (op['in']);
-    if (Array.isArray(value)) return value.some(v => list.includes(v));
+    if (Array.isArray(value)) return value.some((v) => list.includes(v));
     return list.includes(value);
   }
   if ('equals' in op) return value === op['equals'];

@@ -27,7 +27,7 @@ export const questionDefinitions = [
   },
   {
     id: 'q-resolve',
-    text: 'Was the issue resolved to the customer\'s satisfaction?',
+    text: "Was the issue resolved to the customer's satisfaction?",
     category: 'Resolution',
     responseType: 'yes-no-na',
     showWhen: { 'q-needs': { equals: 'Yes' } },

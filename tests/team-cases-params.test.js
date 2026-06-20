@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { parseTeamCasesParams } = await import('../src/services/team-cases-params.js');
+const { parseTeamCasesParams } =
+  await import('../src/services/team-cases-params.js');
 
 test('parseTeamCasesParams: returns all-null defaults for empty string', () => {
   const p = parseTeamCasesParams('');
@@ -23,11 +24,17 @@ test('parseTeamCasesParams: ignores unknown manager values', () => {
 });
 
 test('parseTeamCasesParams: parses ?role=reviewer-manager', () => {
-  assert.strictEqual(parseTeamCasesParams('?role=reviewer-manager').role, 'reviewer-manager');
+  assert.strictEqual(
+    parseTeamCasesParams('?role=reviewer-manager').role,
+    'reviewer-manager'
+  );
 });
 
 test('parseTeamCasesParams: parses ?role=responsible-party-manager', () => {
-  assert.strictEqual(parseTeamCasesParams('?role=responsible-party-manager').role, 'responsible-party-manager');
+  assert.strictEqual(
+    parseTeamCasesParams('?role=responsible-party-manager').role,
+    'responsible-party-manager'
+  );
 });
 
 test('parseTeamCasesParams: ignores unknown role values', () => {
@@ -35,7 +42,10 @@ test('parseTeamCasesParams: ignores unknown role values', () => {
 });
 
 test('parseTeamCasesParams: parses ?caseType=hello-review', () => {
-  assert.strictEqual(parseTeamCasesParams('?caseType=hello-review').caseType, 'hello-review');
+  assert.strictEqual(
+    parseTeamCasesParams('?caseType=hello-review').caseType,
+    'hello-review'
+  );
 });
 
 test('parseTeamCasesParams: parses ?status=overdue', () => {
@@ -43,11 +53,17 @@ test('parseTeamCasesParams: parses ?status=overdue', () => {
 });
 
 test('parseTeamCasesParams: parses ?status=outstanding', () => {
-  assert.strictEqual(parseTeamCasesParams('?status=outstanding').status, 'outstanding');
+  assert.strictEqual(
+    parseTeamCasesParams('?status=outstanding').status,
+    'outstanding'
+  );
 });
 
 test('parseTeamCasesParams: parses ?status=completed', () => {
-  assert.strictEqual(parseTeamCasesParams('?status=completed').status, 'completed');
+  assert.strictEqual(
+    parseTeamCasesParams('?status=completed').status,
+    'completed'
+  );
 });
 
 test('parseTeamCasesParams: ignores unknown status values', () => {
@@ -55,13 +71,17 @@ test('parseTeamCasesParams: ignores unknown status values', () => {
 });
 
 test('parseTeamCasesParams: parses ?completedSince and ?completedUntil', () => {
-  const p = parseTeamCasesParams('?completedSince=2026-01-01&completedUntil=2026-05-01');
+  const p = parseTeamCasesParams(
+    '?completedSince=2026-01-01&completedUntil=2026-05-01'
+  );
   assert.strictEqual(p.completedSince, '2026-01-01');
   assert.strictEqual(p.completedUntil, '2026-05-01');
 });
 
 test('parseTeamCasesParams: parses combined params', () => {
-  const p = parseTeamCasesParams('?manager=me&role=reviewer-manager&caseType=hello-review&status=completed&completedSince=2026-01-01&completedUntil=2026-05-18');
+  const p = parseTeamCasesParams(
+    '?manager=me&role=reviewer-manager&caseType=hello-review&status=completed&completedSince=2026-01-01&completedUntil=2026-05-18'
+  );
   assert.strictEqual(p.manager, 'me');
   assert.strictEqual(p.role, 'reviewer-manager');
   assert.strictEqual(p.caseType, 'hello-review');

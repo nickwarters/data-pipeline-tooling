@@ -348,13 +348,13 @@ cr-status-banner {
   text-transform: inherit;
 }
 
-[data-cr-root] .cr-data-table thead th[aria-sort="ascending"] button::after {
-  content: " ▲";
+[data-cr-root] .cr-data-table thead th[aria-sort='ascending'] button::after {
+  content: ' ▲';
   color: var(--cr-color-accent);
 }
 
-[data-cr-root] .cr-data-table thead th[aria-sort="descending"] button::after {
-  content: " ▼";
+[data-cr-root] .cr-data-table thead th[aria-sort='descending'] button::after {
+  content: ' ▼';
   color: var(--cr-color-accent);
 }
 
@@ -529,7 +529,8 @@ cr-attribute-menu {
   border: 1px dashed var(--cr-color-border);
   border-radius: var(--cr-radius-sm);
   cursor: pointer;
-  transition: border-color var(--cr-duration-fast) var(--cr-easing-standard),
+  transition:
+    border-color var(--cr-duration-fast) var(--cr-easing-standard),
     color var(--cr-duration-fast) var(--cr-easing-standard);
 }
 
@@ -747,7 +748,7 @@ cr-attribute-menu {
   background: var(--cr-color-border);
 }
 
-[data-cr-root] .cr-conversation-toggle-btn[aria-expanded="true"] {
+[data-cr-root] .cr-conversation-toggle-btn[aria-expanded='true'] {
   background: var(--cr-color-accent-muted);
   border-color: var(--cr-color-accent);
   color: var(--cr-color-accent);
@@ -756,7 +757,9 @@ cr-attribute-menu {
 /* ── Conversation panel — popover mode ───────────────────────────────────── */
 /* Floating panel; sits above the content on the right side of the viewport. */
 
-[data-cr-root] cr-case-review[data-conversation-mode="popover"] > cr-conversation:not([hidden]) {
+[data-cr-root]
+  cr-case-review[data-conversation-mode='popover']
+  > cr-conversation:not([hidden]) {
   position: fixed;
   top: var(--cr-space-5);
   right: var(--cr-space-4);
@@ -778,7 +781,9 @@ cr-attribute-menu {
    narrower viewports. A layout-restructuring pass (CSS grid on cr-case-review)
    can add true push behaviour if the sidebar wins the A/B. */
 
-[data-cr-root] cr-case-review[data-conversation-mode="sidebar"] > cr-conversation:not([hidden]) {
+[data-cr-root]
+  cr-case-review[data-conversation-mode='sidebar']
+  > cr-conversation:not([hidden]) {
   position: fixed;
   top: 0;
   right: 0;
@@ -802,8 +807,8 @@ cr-attribute-menu {
 }
 
 .cr-complete-btn:hover {
-  background: #00512F;
-  border-color: #00512F;
+  background: #00512f;
+  border-color: #00512f;
 }
 
 /* ── Section progress sidebar ────────────────────────────────────────────── */
@@ -999,7 +1004,7 @@ cr-attribute-menu {
 }
 
 [data-cr-root] .cr-app-nav-item--active,
-[data-cr-root] .cr-app-nav-item[aria-current="page"] {
+[data-cr-root] .cr-app-nav-item[aria-current='page'] {
   color: var(--cr-color-accent);
   border-bottom-color: var(--cr-color-accent);
   font-weight: var(--cr-font-weight-semibold);
@@ -1103,7 +1108,7 @@ cr-tabs {
   border-color: transparent;
 }
 
-[data-cr-root] .cr-tabs-tab[aria-selected="true"] {
+[data-cr-root] .cr-tabs-tab[aria-selected='true'] {
   color: var(--cr-color-accent);
   border-bottom-color: var(--cr-color-accent);
 }

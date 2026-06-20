@@ -24,7 +24,12 @@ const config = {
   // superseded by captureGroups below (ADR-0020) but kept while both coexist.
   remediationFields: [
     { key: 'rootCause', label: 'Root cause', type: 'text', required: true },
-    { key: 'severity', label: 'Severity', type: 'select', options: ['Low', 'Med', 'High'] },
+    {
+      key: 'severity',
+      label: 'Severity',
+      type: 'select',
+      options: ['Low', 'Med', 'High'],
+    },
   ],
   // Unified Issue Capture engine (ADR-0020): everything captured against a failed
   // Answer, as ordered, collapsible groups of typed fields. This slice exercises
@@ -44,8 +49,18 @@ const config = {
       label: 'Grading',
       collapsed: true,
       fields: [
-        { key: 'severity', label: 'Severity', type: 'select', options: ['Low', 'Med', 'High'] },
-        { key: 'repeatIssue', label: 'Repeat issue?', type: 'radio', options: ['Yes', 'No'] },
+        {
+          key: 'severity',
+          label: 'Severity',
+          type: 'select',
+          options: ['Low', 'Med', 'High'],
+        },
+        {
+          key: 'repeatIssue',
+          label: 'Repeat issue?',
+          type: 'radio',
+          options: ['Yes', 'No'],
+        },
       ],
     },
   ],
@@ -95,7 +110,7 @@ const config = {
 
   /** @param {Record<string, Answer>} answers */
   computeOutcome(answers) {
-    const hasNo = Object.values(answers).some(a => a.value === 'No');
+    const hasNo = Object.values(answers).some((a) => a.value === 'No');
     return { verdict: hasNo ? 'fail' : 'pass' };
   },
 };

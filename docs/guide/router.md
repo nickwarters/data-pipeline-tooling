@@ -5,14 +5,16 @@
 ```js
 // src/routes/my-page.js
 export function register(router, context) {
-  router.register('#/my-page/:id', {           // :id → dynamic segment
-    mount(container, { id }) {                 // called when hash matches
+  router.register('#/my-page/:id', {
+    // :id → dynamic segment
+    mount(container, { id }) {
+      // called when hash matches
       const el = document.createElement('cr-my-page');
       el.client = context.client;
       el.caseId = id;
       container.replaceChildren(el);
     },
-    unmount() {},                              // called before the next route mounts
+    unmount() {}, // called before the next route mounts
   });
 }
 ```
@@ -33,10 +35,10 @@ The `Router` class (`src/lib/router.js`) is a plain hash router. It listens for 
 
 Pattern segments starting with `:` become string keys in the `params` object:
 
-| Pattern | Hash | `params` |
-|---|---|---|
-| `#/dashboard` | `#/dashboard` | `{}` |
-| `#/case/:id` | `#/case/42` | `{ id: '42' }` |
+| Pattern       | Hash          | `params`       |
+| ------------- | ------------- | -------------- |
+| `#/dashboard` | `#/dashboard` | `{}`           |
+| `#/case/:id`  | `#/case/42`   | `{ id: '42' }` |
 
 The router is created once in `app.js` and passed (via `AppContext`) to every route registration function.
 
@@ -98,12 +100,13 @@ export function register(router, context) {
   router.register('#/my-cases', {
     mount(container) {
       // cr-case-table is a pre-existing component that renders a list of Cases.
-      const el = /** @type {import('../components/cr-case-table.js').CRCaseTable} */ (
-        document.createElement('cr-case-table')
-      );
-      el.client         = context.client;
-      el.currentUserId  = context.currentUser.id;
-      el.filter         = { assignedReviewer: context.currentUser.id };
+      const el =
+        /** @type {import('../components/cr-case-table.js').CRCaseTable} */ (
+          document.createElement('cr-case-table')
+        );
+      el.client = context.client;
+      el.currentUserId = context.currentUser.id;
+      el.filter = { assignedReviewer: context.currentUser.id };
       container.replaceChildren(el);
     },
     unmount() {},

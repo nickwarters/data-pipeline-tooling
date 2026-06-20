@@ -5,17 +5,18 @@
 ```js
 import { signal, computed, effect } from '../lib/signal.js';
 
-const count = signal(0);           // writable reactive value
-count.get();                       // → 0
-count.set(1);                      // notifies all subscribers
+const count = signal(0); // writable reactive value
+count.get(); // → 0
+count.set(1); // notifies all subscribers
 
-const doubled = computed(() => count.get() * 2);  // derived, lazy, cached
-doubled.get();                     // → 2
+const doubled = computed(() => count.get() * 2); // derived, lazy, cached
+doubled.get(); // → 2
 
-const dispose = effect(() => {     // runs now + on every dependency change
+const dispose = effect(() => {
+  // runs now + on every dependency change
   console.log(doubled.get());
 });
-dispose();                         // stop reacting
+dispose(); // stop reacting
 ```
 
 ---
@@ -34,9 +35,9 @@ Returns `{ get, set }`. Reading `.get()` inside an active `effect` or `computed`
 
 ```js
 const status = signal('idle');
-status.get();          // 'idle'
+status.get(); // 'idle'
 status.set('loading');
-status.get();          // 'loading'
+status.get(); // 'loading'
 ```
 
 ---
@@ -47,16 +48,17 @@ Returns `{ get }` (read-only). Evaluates `fn()` lazily — only on first `.get()
 
 ```js
 const firstName = signal('Alice');
-const lastName  = signal('Smith');
-const fullName  = computed(() => `${firstName.get()} ${lastName.get()}`);
+const lastName = signal('Smith');
+const fullName = computed(() => `${firstName.get()} ${lastName.get()}`);
 
-fullName.get();   // 'Alice Smith'  — fn() runs once
-fullName.get();   // 'Alice Smith'  — cached, fn() does NOT run again
+fullName.get(); // 'Alice Smith'  — fn() runs once
+fullName.get(); // 'Alice Smith'  — cached, fn() does NOT run again
 firstName.set('Bob');
-fullName.get();   // 'Bob Smith'    — cache invalidated, fn() runs again
+fullName.get(); // 'Bob Smith'    — cache invalidated, fn() runs again
 ```
 
 Use `computed` when you derive a value from other signals and want:
+
 - automatic caching (no stale results, no manual memoization)
 - automatic dependency tracking (no dependency arrays to maintain)
 
@@ -70,11 +72,11 @@ Runs `fn()` immediately, tracking which signals it reads. Re-runs `fn()` wheneve
 const label = signal('off');
 
 const dispose = effect(() => {
-  document.title = label.get();  // sets title now and on every change
+  document.title = label.get(); // sets title now and on every change
 });
 
-label.set('on');   // fn() runs again → document.title = 'on'
-dispose();         // stop; future label.set() calls are ignored
+label.set('on'); // fn() runs again → document.title = 'on'
+dispose(); // stop; future label.set() calls are ignored
 ```
 
 `CRElement.subscribe(sig, cb)` is a thin wrapper around `effect` that auto-disposes when the element disconnects from the DOM. Use `subscribe` inside components instead of calling `effect` directly.
@@ -91,14 +93,16 @@ import { signal } from '../lib/signal.js';
 
 export class CRCounter extends CRElement {
   connectedCallback() {
-    const count = signal(0);                   // local state
+    const count = signal(0); // local state
 
     const label = document.createElement('span');
-    const btn   = document.createElement('button');
+    const btn = document.createElement('button');
     btn.textContent = '+1';
 
     // Keep the label in sync — fires immediately, then on every change.
-    this.subscribe(count, n => { label.textContent = String(n); });
+    this.subscribe(count, (n) => {
+      label.textContent = String(n);
+    });
 
     btn.addEventListener('click', () => count.set(count.get() + 1));
 

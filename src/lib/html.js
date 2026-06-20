@@ -2,14 +2,14 @@
 
 /**
  * A lightweight hyperscript-style element builder to replace manual document.createElement.
- * @param {string} tag 
- * @param {Record<string, any>} [props] 
- * @param  {...(HTMLElement | string | Array<HTMLElement | string> | null | false)} children 
+ * @param {string} tag
+ * @param {Record<string, any>} [props]
+ * @param  {...(HTMLElement | string | Array<HTMLElement | string> | null | false)} children
  * @returns {HTMLElement}
  */
 export function h(tag, props = {}, ...children) {
   const el = document.createElement(tag);
-  
+
   for (const [k, v] of Object.entries(props)) {
     if (v == null) continue;
     if (k.startsWith('on') && typeof v === 'function') {
@@ -42,7 +42,10 @@ export function h(tag, props = {}, ...children) {
     }
   };
 
-  if (children.length === 1 && (typeof children[0] === 'string' || typeof children[0] === 'number')) {
+  if (
+    children.length === 1 &&
+    (typeof children[0] === 'string' || typeof children[0] === 'number')
+  ) {
     el.textContent = String(children[0]);
   } else {
     append(children);
@@ -52,8 +55,8 @@ export function h(tag, props = {}, ...children) {
 
 /**
  * Fragment primitive for returning multiple elements
- * @param {Record<string, any>} _props 
- * @param  {...(HTMLElement | string | Array<HTMLElement | string> | null | false)} children 
+ * @param {Record<string, any>} _props
+ * @param  {...(HTMLElement | string | Array<HTMLElement | string> | null | false)} children
  * @returns {DocumentFragment}
  */
 export function Fragment(_props, ...children) {

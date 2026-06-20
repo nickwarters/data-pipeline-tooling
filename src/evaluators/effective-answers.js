@@ -78,8 +78,8 @@ function formatValue(value) {
  * @returns {OverrideRow[]}
  */
 export function buildOverrideRows(catalogue, answers, overrides) {
-  return overrides.map(o => {
-    const question = catalogue.find(q => q.id === o.answerKey);
+  return overrides.map((o) => {
+    const question = catalogue.find((q) => q.id === o.answerKey);
     return {
       questionText: question ? question.text : o.answerKey,
       originalValue: formatValue(answers[o.answerKey]?.value),

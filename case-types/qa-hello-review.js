@@ -36,7 +36,9 @@ const config = {
       category: 'Process',
       responseType: 'yes-no-na',
       failureCriteria: 'No',
-      remediationActions: ['Re-brief the Reviewer on the documented review process.'],
+      remediationActions: [
+        'Re-brief the Reviewer on the documented review process.',
+      ],
       deprecated: false,
     },
     {
@@ -60,7 +62,11 @@ const config = {
       text: 'Why was the original Outcome wrong?',
       category: 'Outcome',
       responseType: 'single-choice',
-      options: ['Wrong answer recorded', 'Missing evidence', 'Misapplied policy'],
+      options: [
+        'Wrong answer recorded',
+        'Missing evidence',
+        'Misapplied policy',
+      ],
       showWhen: { 'qa-outcome-correct': { equals: 'No' } },
       deprecated: false,
     },
@@ -75,8 +81,11 @@ const config = {
    * @param {Record<string, Answer>} answers
    */
   computeOutcome(answers) {
-    if (answers['qa-outcome-correct']?.value === 'No') return { verdict: 'fail' };
-    const lapsed = answers['qa-process']?.value === 'No' || answers['qa-evidence']?.value === 'No';
+    if (answers['qa-outcome-correct']?.value === 'No')
+      return { verdict: 'fail' };
+    const lapsed =
+      answers['qa-process']?.value === 'No' ||
+      answers['qa-evidence']?.value === 'No';
     return { verdict: lapsed ? 'refer' : 'pass' };
   },
 };

@@ -13,15 +13,22 @@ class StubEl {
     this.className = '';
     this.href = '';
   }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
-  appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
-  append(/** @type {StubEl[]} */ ...cs) { this._children.push(...cs); }
+  replaceChildren(/** @type {StubEl[]} */ ...cs) {
+    this._children = cs;
+  }
+  appendChild(/** @type {StubEl} */ c) {
+    this._children.push(c);
+    return c;
+  }
+  append(/** @type {StubEl[]} */ ...cs) {
+    this._children.push(...cs);
+  }
   setAttribute() {}
   addEventListener() {}
 }
 
-(/** @type {any} */ (globalThis)).HTMLElement = StubEl;
-(/** @type {any} */ (globalThis)).document = {
+/** @type {any} */ (globalThis).HTMLElement = StubEl;
+/** @type {any} */ (globalThis).document = {
   /** @param {string} tag @returns {StubEl} */
   createElement(tag) {
     const el = new StubEl();
@@ -31,8 +38,8 @@ class StubEl {
   addEventListener() {},
   removeEventListener() {},
 };
-(/** @type {any} */ (globalThis)).customElements = { define() {} };
-(/** @type {any} */ (globalThis)).location = { hash: '' };
+/** @type {any} */ (globalThis).customElements = { define() {} };
+/** @type {any} */ (globalThis).location = { hash: '' };
 
 // ===== IMPORTS (after stubs) =====
 const { CRHome } = await import('../src/pages/cr-home.js');
@@ -50,7 +57,9 @@ const NONE = {
 };
 
 /** @param {Partial<typeof NONE>} over */
-function caps(over) { return { ...NONE, ...over }; }
+function caps(over) {
+  return { ...NONE, ...over };
+}
 
 /**
  * @param {any} root
@@ -71,7 +80,7 @@ function findAll(root, tagName) {
 
 /** @param {any} root @returns {string[]} */
 function sectionHeadings(root) {
-  return findAll(root, 'section').map(s => {
+  return findAll(root, 'section').map((s) => {
     const h = findAll(s, 'h2')[0];
     return h ? h.textContent : '';
   });

@@ -8,7 +8,16 @@ export class CRReportsIndex extends ReactiveElement {
   constructor() {
     super();
     /** @type {Capabilities} */
-    this.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
+    this.capabilities = {
+      isReviewer: false,
+      ownedCaseTypes: [],
+      isResponsibleParty: false,
+      isReviewerManager: false,
+      isResponsiblePartyManager: false,
+      isMaintainer: false,
+      isQaReviewer: false,
+      isVisitor: false,
+    };
   }
 
   render() {
@@ -17,15 +26,15 @@ export class CRReportsIndex extends ReactiveElement {
 
     if (this.capabilities.isReviewerManager) {
       children.push(
-        h('div', { className: 'cr-report-card' },
+        h(
+          'div',
+          { className: 'cr-report-card' },
           h('h2', {}, 'Reviewer Team Performance'),
           h('a', { href: '#/reports/reviewer-team' }, 'View report')
         )
       );
     } else {
-      children.push(
-        h('p', {}, "You don't have access to any reports")
-      );
+      children.push(h('p', {}, "You don't have access to any reports"));
     }
 
     return children;

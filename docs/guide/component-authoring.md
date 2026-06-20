@@ -9,13 +9,13 @@ import { CRElement } from './cr-element.js';
 export class CRMyWidget extends CRElement {
   constructor() {
     super();
-    this.label = '';          // public property — set by parent before connectedCallback
+    this.label = ''; // public property — set by parent before connectedCallback
   }
 
   connectedCallback() {
     const span = document.createElement('span');
     span.textContent = this.label;
-    this.replaceChildren(span);   // light DOM, NOT shadow DOM
+    this.replaceChildren(span); // light DOM, NOT shadow DOM
   }
 }
 
@@ -50,7 +50,7 @@ Pass data in by setting properties on the element before it is connected:
 
 ```js
 const el = document.createElement('cr-my-widget');
-el.label = 'Hello';           // set property …
+el.label = 'Hello'; // set property …
 container.replaceChildren(el); // … then connect
 ```
 
@@ -60,11 +60,11 @@ container.replaceChildren(el); // … then connect
 
 ## Lifecycle
 
-| Callback | When it fires | What to do |
-|---|---|---|
-| `constructor` | Element created | Declare properties with defaults only. Don't touch the DOM. |
-| `connectedCallback` | Element inserted into the document | Build DOM, subscribe to signals. |
-| `disconnectedCallback` | Element removed from the document | `CRElement` calls `dispose()` on every subscription automatically. Override only if you have additional teardown. |
+| Callback               | When it fires                      | What to do                                                                                                        |
+| ---------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `constructor`          | Element created                    | Declare properties with defaults only. Don't touch the DOM.                                                       |
+| `connectedCallback`    | Element inserted into the document | Build DOM, subscribe to signals.                                                                                  |
+| `disconnectedCallback` | Element removed from the document  | `CRElement` calls `dispose()` on every subscription automatically. Override only if you have additional teardown. |
 
 `CRElement.subscribe(sig, cb)` wraps `effect()` and registers the dispose function so that all reactive subscriptions are cleaned up in `disconnectedCallback` without manual tracking.
 
@@ -81,7 +81,7 @@ export class CRGreeting extends CRElement {
   constructor() {
     super();
     /** @type {{ get: () => string }} */
-    this.nameSignal = { get: () => '' };  // replaced by parent at mount time
+    this.nameSignal = { get: () => '' }; // replaced by parent at mount time
   }
 
   connectedCallback() {
@@ -89,7 +89,7 @@ export class CRGreeting extends CRElement {
 
     // subscribe keeps the DOM in sync with the signal.
     // It fires immediately and again whenever nameSignal changes.
-    this.subscribe(this.nameSignal, name => {
+    this.subscribe(this.nameSignal, (name) => {
       p.textContent = `Hello, ${name}!`;
     });
 

@@ -13,7 +13,21 @@
  * @returns {TimeWindows}
  */
 export function computeTimeWindows(now) {
-  const sevenDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0);
-  const thirtyDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29, 0, 0, 0);
+  const sevenDaysAgo = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() - 6,
+    0,
+    0,
+    0
+  );
+  const thirtyDaysAgo = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() - 29,
+    0,
+    0,
+    0
+  );
   return { sevenDaysAgo, thirtyDaysAgo };
 }

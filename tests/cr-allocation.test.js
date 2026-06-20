@@ -15,27 +15,36 @@ class StubEl {
     this.hidden = false;
     this.disabled = false;
   }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
-  appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
-  append(/** @type {StubEl[]} */ ...cs) { this._children.push(...cs); }
+  replaceChildren(/** @type {StubEl[]} */ ...cs) {
+    this._children = cs;
+  }
+  appendChild(/** @type {StubEl} */ c) {
+    this._children.push(c);
+    return c;
+  }
+  append(/** @type {StubEl[]} */ ...cs) {
+    this._children.push(...cs);
+  }
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
   }
   dispatchEvent(/** @type {any} */ e) {
-    (this._listeners[e.type] ?? []).forEach(h => h(e));
+    (this._listeners[e.type] ?? []).forEach((h) => h(e));
     return true;
   }
 }
 
-(/** @type {any} */ (globalThis)).HTMLElement = StubEl;
-(/** @type {any} */ (globalThis)).document = {
+/** @type {any} */ (globalThis).HTMLElement = StubEl;
+/** @type {any} */ (globalThis).document = {
   /** @param {string} _tag @returns {StubEl} */
-  createElement(_tag) { return new StubEl(); },
+  createElement(_tag) {
+    return new StubEl();
+  },
   addEventListener() {},
   removeEventListener() {},
 };
-(/** @type {any} */ (globalThis)).customElements = { define() {} };
-(/** @type {any} */ (globalThis)).location = { hash: '' };
+/** @type {any} */ (globalThis).customElements = { define() {} };
+/** @type {any} */ (globalThis).location = { hash: '' };
 
 class StubCustomEvent {
   /** @param {string} type @param {{ detail?: any, bubbles?: boolean }} [init] */
@@ -45,7 +54,7 @@ class StubCustomEvent {
     this.bubbles = init?.bubbles ?? false;
   }
 }
-(/** @type {any} */ (globalThis)).CustomEvent = StubCustomEvent;
+/** @type {any} */ (globalThis).CustomEvent = StubCustomEvent;
 
 // ===== IMPORTS (after stubs) =====
 const { CRAllocation } = await import('../src/components/cr-allocation.js');
@@ -60,20 +69,36 @@ function makeClient(allCases) {
   const patchCalls = [];
   return {
     patchCalls,
-    async listCases(/** @type {import('../src/sharepoint-client.js').ListCasesFilter} */ filter) {
-      return allCases.filter(c => {
-        if (filter.status !== undefined && c.status !== filter.status) return false;
-        if (filter.assignedReviewer !== undefined && c.assignedReviewer !== filter.assignedReviewer) return false;
-        if (filter.caseType !== undefined && c.caseType !== filter.caseType) return false;
-        return true;
-      }).map(c => ({ ...c }));
+    async listCases(
+      /** @type {import('../src/sharepoint-client.js').ListCasesFilter} */ filter
+    ) {
+      return allCases
+        .filter((c) => {
+          if (filter.status !== undefined && c.status !== filter.status)
+            return false;
+          if (
+            filter.assignedReviewer !== undefined &&
+            c.assignedReviewer !== filter.assignedReviewer
+          )
+            return false;
+          if (filter.caseType !== undefined && c.caseType !== filter.caseType)
+            return false;
+          return true;
+        })
+        .map((c) => ({ ...c }));
     },
-    async patchCase(/** @type {string} */ id, /** @type {Partial<CaseRow>} */ fields, /** @type {string} */ etag) {
+    async patchCase(
+      /** @type {string} */ id,
+      /** @type {Partial<CaseRow>} */ fields,
+      /** @type {string} */ etag
+    ) {
       patchCalls.push({ id, fields, etag });
-      const c = allCases.find(c => c.id === id);
+      const c = allCases.find((c) => c.id === id);
       if (!c) return { ok: false, status: 404 };
       if (c.etag !== etag) return { ok: false, status: 412 };
-      c.assignedReviewer = /** @type {string} */ (fields.assignedReviewer ?? c.assignedReviewer);
+      c.assignedReviewer = /** @type {string} */ (
+        fields.assignedReviewer ?? c.assignedReviewer
+      );
       const newEtag = etag + '-patched';
       c.etag = newEtag;
       return { ok: true, status: 200, data: { ...c, etag: newEtag } };
@@ -116,7 +141,7 @@ test('CRAllocation: connectedCallback renders "Request next Case" button', async
   el.currentUserId = 'user-reviewer';
   el.eligibleCaseTypes = ['hello-review'];
   el.connectedCallback();
-  const btn = (/** @type {any} */ (el))._children[0];
+  const btn = /** @type {any} */ (el)._children[0];
   assert.ok(btn, 'should have a child element');
   assert.equal(btn.textContent, 'Request next Case');
 });
@@ -126,7 +151,6 @@ test('CRAllocation: disconnectedCallback is callable', () => {
   el.disconnectedCallback();
   // Should not throw
 });
-
 
 test('CRAllocation: _requestNextCase assigns the oldest unassigned case and dispatches cr-allocated', async () => {
   const older = unassignedCase('c-older', '2026-01-01T00:00:00Z');
@@ -142,13 +166,23 @@ test('CRAllocation: _requestNextCase assigns the oldest unassigned case and disp
   const dispatched = [];
   el.addEventListener('cr-allocated', (e) => dispatched.push(e));
 
-  (/** @type {any} */ (globalThis)).location.hash = '';
+  /** @type {any} */ (globalThis).location.hash = '';
   await el._requestNextCase();
 
   assert.equal(client.patchCalls.length, 1, 'should patch exactly once');
-  assert.equal(client.patchCalls[0].id, 'c-older', 'should assign the oldest case first');
-  assert.deepEqual(client.patchCalls[0].fields, { assignedReviewer: 'user-reviewer' });
-  assert.equal((/** @type {any} */ (globalThis)).location.hash, '', 'should not navigate away');
+  assert.equal(
+    client.patchCalls[0].id,
+    'c-older',
+    'should assign the oldest case first'
+  );
+  assert.deepEqual(client.patchCalls[0].fields, {
+    assignedReviewer: 'user-reviewer',
+  });
+  assert.equal(
+    /** @type {any} */ (globalThis).location.hash,
+    '',
+    'should not navigate away'
+  );
   assert.equal(dispatched.length, 1, 'should dispatch cr-allocated');
   assert.equal(dispatched[0].detail.caseId, 'c-older');
 });
@@ -161,8 +195,14 @@ test('CRAllocation: _requestNextCase retries with next case on 412 and dispatche
   let callCount = 0;
   const client = {
     patchCalls: /** @type {{ id: string }[]} */ ([]),
-    async listCases() { return [{ ...first }, { ...second }]; },
-    async patchCase(/** @type {string} */ id, /** @type {any} */ fields, /** @type {string} */ etag) {
+    async listCases() {
+      return [{ ...first }, { ...second }];
+    },
+    async patchCase(
+      /** @type {string} */ id,
+      /** @type {any} */ fields,
+      /** @type {string} */ etag
+    ) {
       client.patchCalls.push({ id });
       callCount++;
       if (callCount === 1) return { ok: false, status: 412 };
@@ -179,14 +219,30 @@ test('CRAllocation: _requestNextCase retries with next case on 412 and dispatche
   const dispatched = [];
   el.addEventListener('cr-allocated', (e) => dispatched.push(e));
 
-  (/** @type {any} */ (globalThis)).location.hash = '';
+  /** @type {any} */ (globalThis).location.hash = '';
   await el._requestNextCase();
 
   assert.equal(client.patchCalls.length, 2, 'should attempt two patches');
-  assert.equal(client.patchCalls[0].id, 'c-first', 'first attempt is oldest case');
-  assert.equal(client.patchCalls[1].id, 'c-second', 'second attempt is next case');
-  assert.equal((/** @type {any} */ (globalThis)).location.hash, '', 'should not navigate away');
-  assert.equal(dispatched.length, 1, 'should dispatch cr-allocated once for the winner');
+  assert.equal(
+    client.patchCalls[0].id,
+    'c-first',
+    'first attempt is oldest case'
+  );
+  assert.equal(
+    client.patchCalls[1].id,
+    'c-second',
+    'second attempt is next case'
+  );
+  assert.equal(
+    /** @type {any} */ (globalThis).location.hash,
+    '',
+    'should not navigate away'
+  );
+  assert.equal(
+    dispatched.length,
+    1,
+    'should dispatch cr-allocated once for the winner'
+  );
   assert.equal(dispatched[0].detail.caseId, 'c-second');
 });
 
@@ -199,7 +255,7 @@ test('CRAllocation: _requestNextCase shows "No Cases available" when no unassign
 
   await el._requestNextCase();
 
-  const msg = (/** @type {any} */ (el))._children[0];
+  const msg = /** @type {any} */ (el)._children[0];
   assert.ok(msg, 'should have a child element');
   assert.equal(msg.textContent, 'No Cases available');
 });
@@ -209,8 +265,12 @@ test('CRAllocation: _requestNextCase shows "No Cases available" when all retries
   const second = unassignedCase('c-second', '2026-06-01T00:00:00Z');
 
   const client = {
-    async listCases() { return [{ ...first }, { ...second }]; },
-    async patchCase() { return { ok: false, status: 412 }; },
+    async listCases() {
+      return [{ ...first }, { ...second }];
+    },
+    async patchCase() {
+      return { ok: false, status: 412 };
+    },
   };
 
   const el = new CRAllocation();
@@ -220,7 +280,7 @@ test('CRAllocation: _requestNextCase shows "No Cases available" when all retries
 
   await el._requestNextCase();
 
-  const msg = (/** @type {any} */ (el))._children[0];
+  const msg = /** @type {any} */ (el)._children[0];
   assert.equal(msg.textContent, 'No Cases available');
 });
 
@@ -237,10 +297,14 @@ test('CRAllocation: _requestNextCase only considers eligible case types', async 
   el.currentUserId = 'user-reviewer';
   el.eligibleCaseTypes = ['hello-review']; // only hello-review eligible
 
-  (/** @type {any} */ (globalThis)).location.hash = '';
+  /** @type {any} */ (globalThis).location.hash = '';
   await el._requestNextCase();
 
-  assert.equal(client.patchCalls.length, 1, 'should only patch the eligible case');
+  assert.equal(
+    client.patchCalls.length,
+    1,
+    'should only patch the eligible case'
+  );
   assert.equal(client.patchCalls[0].id, 'c-eligible');
 });
 
@@ -272,12 +336,20 @@ test('CRAllocation: _requestNextCase does not navigate and dispatches cr-allocat
   const dispatched = [];
   el.addEventListener('cr-allocated', (e) => dispatched.push(e));
 
-  (/** @type {any} */ (globalThis)).location.hash = '';
+  /** @type {any} */ (globalThis).location.hash = '';
   await el._requestNextCase();
 
-  assert.equal((/** @type {any} */ (globalThis)).location.hash, '', 'should NOT navigate away from dashboard');
+  assert.equal(
+    /** @type {any} */ (globalThis).location.hash,
+    '',
+    'should NOT navigate away from dashboard'
+  );
   assert.equal(dispatched.length, 1, 'should dispatch cr-allocated event once');
-  assert.equal(dispatched[0].detail.caseId, 'c-nav', 'event detail should carry the allocated case id');
+  assert.equal(
+    dispatched[0].detail.caseId,
+    'c-nav',
+    'event detail should carry the allocated case id'
+  );
 });
 
 test('CRAllocation: _getUnassignedCases returns empty array when client is null', async () => {
@@ -354,7 +426,7 @@ test('CRAllocation: _getUnassignedCases sorting handles smaller date', async () 
 test('CRAllocation: _renderEmpty shows "No Cases available"', () => {
   const el = new CRAllocation();
   el._renderEmpty();
-  const msg = (/** @type {any} */ (el))._children[0];
+  const msg = /** @type {any} */ (el)._children[0];
   assert.equal(msg.textContent, 'No Cases available');
 });
 
@@ -372,7 +444,11 @@ test('CRAllocation: _getUnassignedCases handles null created via ?? fallback', a
   const result = await el._getUnassignedCases();
   // null created sorts as '' which is less than '2026-...', so c1 comes first
   assert.equal(result.length, 2, 'both cases should be returned');
-  assert.equal(result[0].id, 'c-no-created', 'null created falls back to empty string → sorts first');
+  assert.equal(
+    result[0].id,
+    'c-no-created',
+    'null created falls back to empty string → sorts first'
+  );
 });
 
 test('CRAllocation: button click triggers _requestNextCase', async () => {
@@ -389,13 +465,9 @@ test('CRAllocation: button click triggers _requestNextCase', async () => {
   const dispatched = [];
   el.addEventListener('cr-allocated', (e) => dispatched.push(e));
 
-  const btn = (/** @type {any} */ (el))._children[0];
+  const btn = /** @type {any} */ (el)._children[0];
   await btn._listeners['click'][0]();
 
   assert.equal(dispatched.length, 1, 'button click must trigger allocation');
   assert.equal(dispatched[0].detail.caseId, 'c-btn');
 });
-
-
-
-

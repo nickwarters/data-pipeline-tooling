@@ -23,24 +23,37 @@ class StubEl {
     this.attributedParty = undefined;
     this.responsibleParty = undefined;
   }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
-  appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
-  append(/** @type {StubEl[]} */ ...cs) { this._children.push(...cs); }
+  replaceChildren(/** @type {StubEl[]} */ ...cs) {
+    this._children = cs;
+  }
+  appendChild(/** @type {StubEl} */ c) {
+    this._children.push(c);
+    return c;
+  }
+  append(/** @type {StubEl[]} */ ...cs) {
+    this._children.push(...cs);
+  }
   // Stand-in for a real cr-capture-groups: records the args the section forwards.
-  update(/** @type {any} */ groups, /** @type {any} */ capture, /** @type {any} */ canCapture) {
+  update(
+    /** @type {any} */ groups,
+    /** @type {any} */ capture,
+    /** @type {any} */ canCapture
+  ) {
     /** @type {any} */ (this)._updateArgs = { groups, capture, canCapture };
   }
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
   }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) { this._attrs[k] = v; }
+  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
+    this._attrs[k] = v;
+  }
   dispatchEvent(/** @type {any} */ e) {
-    (this._listeners[e.type] ?? []).forEach(h => h(e));
+    (this._listeners[e.type] ?? []).forEach((h) => h(e));
     return true;
   }
   /** @param {string} ev fire a listener as if the user triggered it */
   _fire(/** @type {string} */ ev, /** @type {any} */ payload) {
-    (this._listeners[ev] ?? []).forEach(h => h(payload));
+    (this._listeners[ev] ?? []).forEach((h) => h(payload));
   }
 }
 
@@ -53,8 +66,8 @@ class StubCustomEvent {
   }
 }
 
-(/** @type {any} */ (globalThis)).HTMLElement = StubEl;
-(/** @type {any} */ (globalThis)).document = {
+/** @type {any} */ (globalThis).HTMLElement = StubEl;
+/** @type {any} */ (globalThis).document = {
   /** @param {string} tag @returns {StubEl} */
   createElement(tag) {
     const el = new StubEl();
@@ -62,11 +75,12 @@ class StubCustomEvent {
     return el;
   },
 };
-(/** @type {any} */ (globalThis)).customElements = { define() {} };
-(/** @type {any} */ (globalThis)).CustomEvent = StubCustomEvent;
+/** @type {any} */ (globalThis).customElements = { define() {} };
+/** @type {any} */ (globalThis).CustomEvent = StubCustomEvent;
 
 // ===== IMPORTS (after stubs) =====
-const { CRRemediationSection } = await import('../src/components/cr-remediation-section.js');
+const { CRRemediationSection } =
+  await import('../src/components/cr-remediation-section.js');
 
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
@@ -175,7 +189,13 @@ test('CRRemediationSection: only passing answers renders empty state', () => {
 test('CRRemediationSection: lists a failed answer that has no remediationActions', () => {
   /** @type {QuestionDefinition[]} */
   const cat = [
-    { id: 'q1', text: 'No actions defined?', responseType: 'yes-no-na', failureCriteria: 'No', deprecated: false },
+    {
+      id: 'q1',
+      text: 'No actions defined?',
+      responseType: 'yes-no-na',
+      failureCriteria: 'No',
+      deprecated: false,
+    },
   ];
   const el = new CRRemediationSection();
   el.catalogue = cat;
@@ -183,7 +203,11 @@ test('CRRemediationSection: lists a failed answer that has no remediationActions
   el.connectedCallback();
 
   const items = findAllByClass(el, 'cr-remediation-item');
-  assert.equal(items.length, 1, 'a failure with zero remediation actions is still listed');
+  assert.equal(
+    items.length,
+    1,
+    'a failure with zero remediation actions is still listed'
+  );
   const qText = findByClass(items[0], 'cr-remediation-question');
   assert.equal(qText.textContent, 'No actions defined?');
 });
@@ -283,7 +307,13 @@ test('CRRemediationSection: multi-choice answer renders array as comma-joined', 
 test('CRRemediationSection: failed question without remediationActions renders no actions list', () => {
   /** @type {QuestionDefinition[]} */
   const cat = [
-    { id: 'q1', text: 'Q1', responseType: 'yes-no-na', failureCriteria: 'No', deprecated: false },
+    {
+      id: 'q1',
+      text: 'Q1',
+      responseType: 'yes-no-na',
+      failureCriteria: 'No',
+      deprecated: false,
+    },
   ];
   const el = new CRRemediationSection();
   el.catalogue = cat;
@@ -298,10 +328,25 @@ test('CRRemediationSection: failed question without remediationActions renders n
 test('CRRemediationSection: renders Attributed Party displayName read-only when attributeFailures is on', () => {
   /** @type {QuestionDefinition[]} */
   const cat = [
-    { id: 'q1', text: 'Greeted?', responseType: 'yes-no-na', failureCriteria: 'No', deprecated: false },
+    {
+      id: 'q1',
+      text: 'Greeted?',
+      responseType: 'yes-no-na',
+      failureCriteria: 'No',
+      deprecated: false,
+    },
   ];
   const el = new CRRemediationSection();
-  el.update(cat, { q1: { value: 'No', attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' } } }, true);
+  el.update(
+    cat,
+    {
+      q1: {
+        value: 'No',
+        attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
+      },
+    },
+    true
+  );
 
   const ap = findByClass(el, 'cr-remediation-attributed-party');
   assert.ok(ap, 'attributed party surface is rendered');
@@ -311,10 +356,25 @@ test('CRRemediationSection: renders Attributed Party displayName read-only when 
 test('CRRemediationSection: does not render Attributed Party when attributeFailures is off', () => {
   /** @type {QuestionDefinition[]} */
   const cat = [
-    { id: 'q1', text: 'Greeted?', responseType: 'yes-no-na', failureCriteria: 'No', deprecated: false },
+    {
+      id: 'q1',
+      text: 'Greeted?',
+      responseType: 'yes-no-na',
+      failureCriteria: 'No',
+      deprecated: false,
+    },
   ];
   const el = new CRRemediationSection();
-  el.update(cat, { q1: { value: 'No', attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' } } }, false);
+  el.update(
+    cat,
+    {
+      q1: {
+        value: 'No',
+        attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
+      },
+    },
+    false
+  );
 
   assert.equal(findByClass(el, 'cr-remediation-attributed-party'), null);
 });
@@ -322,7 +382,13 @@ test('CRRemediationSection: does not render Attributed Party when attributeFailu
 test('CRRemediationSection: no Attributed Party surface when failure has none, even with attributeFailures on', () => {
   /** @type {QuestionDefinition[]} */
   const cat = [
-    { id: 'q1', text: 'Greeted?', responseType: 'yes-no-na', failureCriteria: 'No', deprecated: false },
+    {
+      id: 'q1',
+      text: 'Greeted?',
+      responseType: 'yes-no-na',
+      failureCriteria: 'No',
+      deprecated: false,
+    },
   ];
   const el = new CRRemediationSection();
   el.update(cat, { q1: { value: 'No' } }, true);
@@ -360,28 +426,62 @@ test('CRRemediationSection: _renderItem with null remediationActions renders no 
   el.answers = { 'q-null-actions': { value: 'No' } };
   const item = /** @type {any} */ (el)._renderItem(q);
   const actionsList = findByClass(item, 'cr-remediation-actions');
-  assert.equal(actionsList, null, 'null remediationActions → no actions list rendered');
+  assert.equal(
+    actionsList,
+    null,
+    'null remediationActions → no actions list rendered'
+  );
 });
 
 // ===== Attributed Party: editable picker (canAttribute) =====
 
 /** @type {QuestionDefinition[]} */
 const FAIL_CAT = [
-  { id: 'q1', text: 'Greeted?', responseType: 'yes-no-na', failureCriteria: 'No', deprecated: false },
+  {
+    id: 'q1',
+    text: 'Greeted?',
+    responseType: 'yes-no-na',
+    failureCriteria: 'No',
+    deprecated: false,
+  },
 ];
 
 test('CRRemediationSection: read-only viewer (canAttribute off) shows display name, no attribute menu', () => {
   const el = new CRRemediationSection();
-  el.client = /** @type {any} */ ({ async searchPeople() { return []; } });
+  el.client = /** @type {any} */ ({
+    async searchPeople() {
+      return [];
+    },
+  });
   el.canAttribute = false;
-  el.update(FAIL_CAT, { q1: { value: 'No', attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' } } }, true);
+  el.update(
+    FAIL_CAT,
+    {
+      q1: {
+        value: 'No',
+        attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
+      },
+    },
+    true
+  );
 
-  assert.ok(findByClass(el, 'cr-remediation-attributed-party'), 'displayName still shown read-only');
-  assert.equal(findByTag(el, 'cr-attribute-menu'), null, 'no editable menu when not editable');
+  assert.ok(
+    findByClass(el, 'cr-remediation-attributed-party'),
+    'displayName still shown read-only'
+  );
+  assert.equal(
+    findByTag(el, 'cr-attribute-menu'),
+    null,
+    'no editable menu when not editable'
+  );
 });
 
 test('CRRemediationSection: editable failure renders an attribute menu wired with client and responsibleParty', () => {
-  const client = /** @type {any} */ ({ async searchPeople() { return []; } });
+  const client = /** @type {any} */ ({
+    async searchPeople() {
+      return [];
+    },
+  });
   const el = new CRRemediationSection();
   el.client = client;
   el.responsibleParty = { loginName: 'rparty', displayName: 'rparty' };
@@ -391,35 +491,71 @@ test('CRRemediationSection: editable failure renders an attribute menu wired wit
   const menu = findByTag(el, 'cr-attribute-menu');
   assert.ok(menu, 'attribute menu rendered for an editable failure');
   assert.equal(menu.client, client, 'menu receives the SharePointClient');
-  assert.equal(menu.attributedParty, null, 'unattributed failure passes null to the menu');
-  assert.deepEqual(menu.responsibleParty, { loginName: 'rparty', displayName: 'rparty' }, 'menu receives the Responsible Party quick-pick');
+  assert.equal(
+    menu.attributedParty,
+    null,
+    'unattributed failure passes null to the menu'
+  );
+  assert.deepEqual(
+    menu.responsibleParty,
+    { loginName: 'rparty', displayName: 'rparty' },
+    'menu receives the Responsible Party quick-pick'
+  );
   // The standalone read-only line is replaced by the menu's own chip.
   assert.equal(findByClass(el, 'cr-remediation-attributed-party'), null);
 });
 
 test('CRRemediationSection: editable failure with an attribution passes the party to the menu', () => {
   const el = new CRRemediationSection();
-  el.client = /** @type {any} */ ({ async searchPeople() { return []; } });
+  el.client = /** @type {any} */ ({
+    async searchPeople() {
+      return [];
+    },
+  });
   el.canAttribute = true;
-  el.update(FAIL_CAT, { q1: { value: 'No', attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' } } }, true);
+  el.update(
+    FAIL_CAT,
+    {
+      q1: {
+        value: 'No',
+        attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
+      },
+    },
+    true
+  );
 
   const menu = findByTag(el, 'cr-attribute-menu');
   assert.ok(menu, 'menu rendered');
-  assert.deepEqual(menu.attributedParty, { loginName: 'jsmith', displayName: 'Jane Smith' });
+  assert.deepEqual(menu.attributedParty, {
+    loginName: 'jsmith',
+    displayName: 'Jane Smith',
+  });
 });
 
 test('CRRemediationSection: editable surface is suppressed when attributeFailures is off', () => {
   const el = new CRRemediationSection();
-  el.client = /** @type {any} */ ({ async searchPeople() { return []; } });
+  el.client = /** @type {any} */ ({
+    async searchPeople() {
+      return [];
+    },
+  });
   el.canAttribute = true;
   el.update(FAIL_CAT, { q1: { value: 'No' } }, false);
 
-  assert.equal(findByTag(el, 'cr-attribute-menu'), null, 'menu only appears when attributeFailures is on');
+  assert.equal(
+    findByTag(el, 'cr-attribute-menu'),
+    null,
+    'menu only appears when attributeFailures is on'
+  );
 });
 
 test('CRRemediationSection: menu cr-attribute-change re-dispatches as bubbling cr-attribute with the question id', () => {
   const el = new CRRemediationSection();
-  el.client = /** @type {any} */ ({ async searchPeople() { return []; } });
+  el.client = /** @type {any} */ ({
+    async searchPeople() {
+      return [];
+    },
+  });
   el.canAttribute = true;
   el.update(FAIL_CAT, { q1: { value: 'No' } }, true);
 
@@ -428,7 +564,11 @@ test('CRRemediationSection: menu cr-attribute-change re-dispatches as bubbling c
   el.addEventListener('cr-attribute', (/** @type {any} */ e) => events.push(e));
 
   const menu = findByTag(el, 'cr-attribute-menu');
-  menu._fire('cr-attribute-change', { detail: { attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' } } });
+  menu._fire('cr-attribute-change', {
+    detail: {
+      attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
+    },
+  });
 
   assert.equal(events.length, 1);
   assert.equal(events[0].bubbles, true);
@@ -440,18 +580,36 @@ test('CRRemediationSection: menu cr-attribute-change re-dispatches as bubbling c
 
 test('CRRemediationSection: a null cr-attribute-change re-dispatches cr-attribute clearing the party', () => {
   const el = new CRRemediationSection();
-  el.client = /** @type {any} */ ({ async searchPeople() { return []; } });
+  el.client = /** @type {any} */ ({
+    async searchPeople() {
+      return [];
+    },
+  });
   el.canAttribute = true;
-  el.update(FAIL_CAT, { q1: { value: 'No', attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' } } }, true);
+  el.update(
+    FAIL_CAT,
+    {
+      q1: {
+        value: 'No',
+        attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
+      },
+    },
+    true
+  );
 
   /** @type {any[]} */
   const events = [];
   el.addEventListener('cr-attribute', (/** @type {any} */ e) => events.push(e));
 
-  findByTag(el, 'cr-attribute-menu')._fire('cr-attribute-change', { detail: { attributedParty: null } });
+  findByTag(el, 'cr-attribute-menu')._fire('cr-attribute-change', {
+    detail: { attributedParty: null },
+  });
 
   assert.equal(events.length, 1);
-  assert.deepEqual(events[0].detail, { questionId: 'q1', attributedParty: null });
+  assert.deepEqual(events[0].detail, {
+    questionId: 'q1',
+    attributedParty: null,
+  });
 });
 
 // ===== Remediation Details capture surface (ADR-0017) =====
@@ -459,7 +617,12 @@ test('CRRemediationSection: a null cr-attribute-change re-dispatches cr-attribut
 /** @type {import('../src/sharepoint-client.js').RemediationField[]} */
 const DETAIL_FIELDS = [
   { key: 'rootCause', label: 'Root cause', type: 'text' },
-  { key: 'severity', label: 'Severity', type: 'select', options: ['Low', 'Med', 'High'] },
+  {
+    key: 'severity',
+    label: 'Severity',
+    type: 'select',
+    options: ['Low', 'Med', 'High'],
+  },
 ];
 
 test('CRRemediationSection: no Remediation Details surface when the Case Type declares no fields', () => {
@@ -479,7 +642,9 @@ test('CRRemediationSection: editable failure renders a labelled input per Remedi
 
   const fields = findAllByClass(el, 'cr-remediation-detail-field');
   assert.equal(fields.length, 2, 'one row per declared field');
-  const labels = findAllByClass(el, 'cr-remediation-detail-label').map(l => l.textContent);
+  const labels = findAllByClass(el, 'cr-remediation-detail-label').map(
+    (l) => l.textContent
+  );
   assert.deepEqual(labels, ['Root cause', 'Severity']);
 
   const inputs = findAllByClass(el, 'cr-remediation-detail-input');
@@ -502,7 +667,16 @@ test('CRRemediationSection: editable input pre-fills the captured value', () => 
   const el = new CRRemediationSection();
   el.remediationFields = DETAIL_FIELDS;
   el.canCaptureDetails = true;
-  el.update(FAIL_CAT, { q1: { value: 'No', remediationDetails: { rootCause: 'Rushed', severity: 'High' } } }, false);
+  el.update(
+    FAIL_CAT,
+    {
+      q1: {
+        value: 'No',
+        remediationDetails: { rootCause: 'Rushed', severity: 'High' },
+      },
+    },
+    false
+  );
 
   const inputs = findAllByClass(el, 'cr-remediation-detail-input');
   assert.equal(inputs[0].value, 'Rushed');
@@ -517,7 +691,9 @@ test('CRRemediationSection: changing a Remediation Detail dispatches a bubbling 
 
   /** @type {any[]} */
   const events = [];
-  el.addEventListener('cr-remediation-detail', (/** @type {any} */ e) => events.push(e));
+  el.addEventListener('cr-remediation-detail', (/** @type {any} */ e) =>
+    events.push(e)
+  );
 
   const input = findAllByClass(el, 'cr-remediation-detail-input')[0];
   input.value = 'Agent rushed the call';
@@ -525,17 +701,36 @@ test('CRRemediationSection: changing a Remediation Detail dispatches a bubbling 
 
   assert.equal(events.length, 1);
   assert.equal(events[0].bubbles, true);
-  assert.deepEqual(events[0].detail, { questionId: 'q1', key: 'rootCause', value: 'Agent rushed the call' });
+  assert.deepEqual(events[0].detail, {
+    questionId: 'q1',
+    key: 'rootCause',
+    value: 'Agent rushed the call',
+  });
 });
 
 test('CRRemediationSection: read-only viewer sees captured values as text with no inputs', () => {
   const el = new CRRemediationSection();
   el.remediationFields = DETAIL_FIELDS;
   el.canCaptureDetails = false;
-  el.update(FAIL_CAT, { q1: { value: 'No', remediationDetails: { rootCause: 'Rushed', severity: 'High' } } }, false);
+  el.update(
+    FAIL_CAT,
+    {
+      q1: {
+        value: 'No',
+        remediationDetails: { rootCause: 'Rushed', severity: 'High' },
+      },
+    },
+    false
+  );
 
-  assert.equal(findByClass(el, 'cr-remediation-detail-input'), null, 'no editable inputs when frozen');
-  const values = findAllByClass(el, 'cr-remediation-detail-value').map(v => v.textContent);
+  assert.equal(
+    findByClass(el, 'cr-remediation-detail-input'),
+    null,
+    'no editable inputs when frozen'
+  );
+  const values = findAllByClass(el, 'cr-remediation-detail-value').map(
+    (v) => v.textContent
+  );
   assert.deepEqual(values, ['Root cause: Rushed', 'Severity: High']);
 });
 
@@ -543,19 +738,32 @@ test('CRRemediationSection: read-only viewer omits fields with no captured value
   const el = new CRRemediationSection();
   el.remediationFields = DETAIL_FIELDS;
   el.canCaptureDetails = false;
-  el.update(FAIL_CAT, { q1: { value: 'No', remediationDetails: { rootCause: 'Rushed' } } }, false);
+  el.update(
+    FAIL_CAT,
+    { q1: { value: 'No', remediationDetails: { rootCause: 'Rushed' } } },
+    false
+  );
 
-  const values = findAllByClass(el, 'cr-remediation-detail-value').map(v => v.textContent);
-  assert.deepEqual(values, ['Root cause: Rushed'], 'only captured fields are shown read-only');
+  const values = findAllByClass(el, 'cr-remediation-detail-value').map(
+    (v) => v.textContent
+  );
+  assert.deepEqual(
+    values,
+    ['Root cause: Rushed'],
+    'only captured fields are shown read-only'
+  );
 });
 
 // ===== Issue Capture engine integration (ADR-0020) =====
 
 /** @type {import('../src/sharepoint-client.js').CaptureGroup[]} */
 const CAPTURE_GROUPS = [
-  { key: 'cause', label: 'Cause', collapsed: false, fields: [
-    { key: 'rootCause', label: 'Root cause', type: 'text' },
-  ]},
+  {
+    key: 'cause',
+    label: 'Cause',
+    collapsed: false,
+    fields: [{ key: 'rootCause', label: 'Root cause', type: 'text' }],
+  },
 ];
 
 test('CRRemediationSection: renders a cr-capture-groups per failed answer when captureGroups declared', () => {
@@ -584,7 +792,9 @@ test('CRRemediationSection: no cr-capture-groups when no captureGroups declared'
 test('CRRemediationSection: passes the failed Answer capture into cr-capture-groups', () => {
   const el = new CRRemediationSection();
   el.catalogue = CATALOGUE;
-  el.answers = { 'q-welcome': { value: 'No', capture: { rootCause: 'Rushed' } } };
+  el.answers = {
+    'q-welcome': { value: 'No', capture: { rootCause: 'Rushed' } },
+  };
   el.captureGroups = CAPTURE_GROUPS;
   el.canCapture = true;
   el.connectedCallback();
@@ -609,7 +819,11 @@ test('CRRemediationSection: re-dispatches child cr-capture enriched with the que
     stopPropagation() {},
   });
   assert.equal(events.length, 1);
-  assert.deepEqual(events[0].detail, { questionId: 'q-welcome', fieldKey: 'rootCause', value: 'Rushed' });
+  assert.deepEqual(events[0].detail, {
+    questionId: 'q-welcome',
+    fieldKey: 'rootCause',
+    value: 'Rushed',
+  });
   assert.equal(events[0].bubbles, true);
 });
 
@@ -621,7 +835,15 @@ test('CRRemediationSection: reuses the cr-capture-groups instance across re-rend
   el.answers = { 'q-welcome': { value: 'No' } };
   el.connectedCallback();
   const first = findByTag(el, 'cr-capture-groups');
-  el.update(CATALOGUE, { 'q-welcome': { value: 'No', capture: { rootCause: 'x' } } }, false);
+  el.update(
+    CATALOGUE,
+    { 'q-welcome': { value: 'No', capture: { rootCause: 'x' } } },
+    false
+  );
   const second = findByTag(el, 'cr-capture-groups');
-  assert.equal(first, second, 'same instance reused so ephemeral collapse survives');
+  assert.equal(
+    first,
+    second,
+    'same instance reused so ephemeral collapse survives'
+  );
 });

@@ -1,6 +1,7 @@
 # Plan: Fix Question Bank Editor layout regression at `#/question-bank`
 
 ## Symptoms
+
 - Page is squashed in from the sides (a narrow column with empty gutters left/right).
 - Nested elements visually pop out of their parent containers.
 - Standalone `docs/question-bank-editor.html` looked correct before commit `20bedb2` extracted it to `#/question-bank`.
@@ -11,7 +12,7 @@ The editor is now mounted inside `#app`, which has `data-cr-root` set (set both 
 
 ```css
 [data-cr-root] {
-  max-width: var(--cr-content-max-width);  /* 64rem */
+  max-width: var(--cr-content-max-width); /* 64rem */
   margin: 0 auto;
   padding: var(--cr-space-5) var(--cr-space-4);
 }
@@ -49,7 +50,7 @@ Alternatively, use `[data-cr-root]:has(cr-bank-editor)` — works in Edge Chromi
 
 ### Step 3 — audit `<button>` usage inside the editor's components
 
-Search `src/cr-bank-*.js`, `src/cr-question-card.js`, `src/cr-wording-editor.js`, `src/cr-options-editor.js`, `src/cr-showwhen-*.js`, `src/cr-remediation-editor.js`, `src/cr-compile-drawer.js`, `src/cr-case-tabs.js`, `src/cr-toast.js` for `el('button', ...)` calls that don't carry a class with explicit `background`/`color` (e.g. `.pill-btn`, `.icon-btn`, `.mini-btn`, `.case-tab`, `.drawer-close`, `.dock-btn`, `.tag-add`, `.add-card`). Any bare `<button>` will pick up the blue framework button styling and look wrong. Either give it a class or add a `cr-bank-editor button { all: revert; }`-style reset at the top of `cr-question-bank-editor.css` *before* the component rules.
+Search `src/cr-bank-*.js`, `src/cr-question-card.js`, `src/cr-wording-editor.js`, `src/cr-options-editor.js`, `src/cr-showwhen-*.js`, `src/cr-remediation-editor.js`, `src/cr-compile-drawer.js`, `src/cr-case-tabs.js`, `src/cr-toast.js` for `el('button', ...)` calls that don't carry a class with explicit `background`/`color` (e.g. `.pill-btn`, `.icon-btn`, `.mini-btn`, `.case-tab`, `.drawer-close`, `.dock-btn`, `.tag-add`, `.add-card`). Any bare `<button>` will pick up the blue framework button styling and look wrong. Either give it a class or add a `cr-bank-editor button { all: revert; }`-style reset at the top of `cr-question-bank-editor.css` _before_ the component rules.
 
 ### Step 4 — verify visually
 

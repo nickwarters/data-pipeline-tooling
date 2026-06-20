@@ -32,7 +32,11 @@ export class CRReviewerTeamReport extends ReactiveElement {
 
   async _fetchData() {
     if (!this.client || !this.currentUser) return;
-    const cases = await fetchReviewerTeamCases(this.client, this.currentUser.id, this.eligibleCaseTypes);
+    const cases = await fetchReviewerTeamCases(
+      this.client,
+      this.currentUser.id,
+      this.eligibleCaseTypes
+    );
     const windows = computeTimeWindows(new Date());
     this._windows.set(windows);
     this._data.set(aggregateReviewerTeamData(cases, windows));
@@ -53,7 +57,7 @@ export class CRReviewerTeamReport extends ReactiveElement {
       h1,
       back,
       this._renderKpiSection(data, windows),
-      this._renderBreakdownSection(data, windows)
+      this._renderBreakdownSection(data, windows),
     ];
   }
 
@@ -67,17 +71,39 @@ export class CRReviewerTeamReport extends ReactiveElement {
     const today = new Date().toISOString().slice(0, 10);
 
     const tiles = [
-      { label: 'Completed (last 7 days)', value: data.completedLast7d, href: `#/team-cases?manager=me&role=reviewer-manager&status=completed&completedSince=${since7}&completedUntil=${today}` },
-      { label: 'Completed (last 30 days)', value: data.completedLast30d, href: `#/team-cases?manager=me&role=reviewer-manager&status=completed&completedSince=${since30}&completedUntil=${today}` },
-      { label: 'Outstanding', value: data.outstanding, href: `#/team-cases?manager=me&role=reviewer-manager&status=outstanding` },
-      { label: 'Overdue', value: data.overdue, href: `#/team-cases?manager=me&role=reviewer-manager&status=overdue` },
+      {
+        label: 'Completed (last 7 days)',
+        value: data.completedLast7d,
+        href: `#/team-cases?manager=me&role=reviewer-manager&status=completed&completedSince=${since7}&completedUntil=${today}`,
+      },
+      {
+        label: 'Completed (last 30 days)',
+        value: data.completedLast30d,
+        href: `#/team-cases?manager=me&role=reviewer-manager&status=completed&completedSince=${since30}&completedUntil=${today}`,
+      },
+      {
+        label: 'Outstanding',
+        value: data.outstanding,
+        href: `#/team-cases?manager=me&role=reviewer-manager&status=outstanding`,
+      },
+      {
+        label: 'Overdue',
+        value: data.overdue,
+        href: `#/team-cases?manager=me&role=reviewer-manager&status=overdue`,
+      },
     ];
 
-    return h('div', { className: 'cr-kpi-section' },
-      ...tiles.map(t => h('div', { className: 'cr-kpi-tile' },
-        h('a', { href: t.href }, String(t.value)),
-        h('span', {}, t.label)
-      ))
+    return h(
+      'div',
+      { className: 'cr-kpi-section' },
+      ...tiles.map((t) =>
+        h(
+          'div',
+          { className: 'cr-kpi-tile' },
+          h('a', { href: t.href }, String(t.value)),
+          h('span', {}, t.label)
+        )
+      )
     );
   }
 
@@ -90,18 +116,34 @@ export class CRReviewerTeamReport extends ReactiveElement {
     const since30 = windows.thirtyDaysAgo.toISOString().slice(0, 10);
     const today = new Date().toISOString().slice(0, 10);
 
-    return h('div', { className: 'cr-breakdown-section' },
+    return h(
+      'div',
+      { className: 'cr-breakdown-section' },
       ...Object.entries(data.byType).map(([caseType, counts]) => {
         const cells = [
-          { value: counts.completedLast7d, href: `#/team-cases?manager=me&role=reviewer-manager&caseType=${caseType}&status=completed&completedSince=${since7}&completedUntil=${today}` },
-          { value: counts.completedLast30d, href: `#/team-cases?manager=me&role=reviewer-manager&caseType=${caseType}&status=completed&completedSince=${since30}&completedUntil=${today}` },
-          { value: counts.outstanding, href: `#/team-cases?manager=me&role=reviewer-manager&caseType=${caseType}&status=outstanding` },
-          { value: counts.overdue, href: `#/team-cases?manager=me&role=reviewer-manager&caseType=${caseType}&status=overdue` },
+          {
+            value: counts.completedLast7d,
+            href: `#/team-cases?manager=me&role=reviewer-manager&caseType=${caseType}&status=completed&completedSince=${since7}&completedUntil=${today}`,
+          },
+          {
+            value: counts.completedLast30d,
+            href: `#/team-cases?manager=me&role=reviewer-manager&caseType=${caseType}&status=completed&completedSince=${since30}&completedUntil=${today}`,
+          },
+          {
+            value: counts.outstanding,
+            href: `#/team-cases?manager=me&role=reviewer-manager&caseType=${caseType}&status=outstanding`,
+          },
+          {
+            value: counts.overdue,
+            href: `#/team-cases?manager=me&role=reviewer-manager&caseType=${caseType}&status=overdue`,
+          },
         ];
 
-        return h('div', { className: 'cr-breakdown-row' },
+        return h(
+          'div',
+          { className: 'cr-breakdown-row' },
           h('span', {}, caseType),
-          ...cells.map(c => h('a', { href: c.href }, String(c.value)))
+          ...cells.map((c) => h('a', { href: c.href }, String(c.value)))
         );
       })
     );

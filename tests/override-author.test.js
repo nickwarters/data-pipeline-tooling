@@ -1,7 +1,11 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyTransition, validateOverride, buildOverride } from '../src/evaluators/override-author.js';
+import {
+  classifyTransition,
+  validateOverride,
+  buildOverride,
+} from '../src/evaluators/override-author.js';
 
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
@@ -29,27 +33,46 @@ test('validateOverride: empty reasoning is rejected', () => {
 
 test('validateOverride: a non-empty reasoning with no failure-status change is valid', () => {
   const errors = validateOverride(
-    { answerKey: 'q1', value: 'N/A', reasoning: 'Question was not applicable.' },
+    {
+      answerKey: 'q1',
+      value: 'N/A',
+      reasoning: 'Question was not applicable.',
+    },
     { question: makeQuestion(), originalAnswer: { value: 'Yes' } }
   );
   assert.deepEqual(errors, []);
 });
 
 test('classifyTransition: pass→fail when the value newly meets the failure criteria', () => {
-  assert.equal(classifyTransition(makeQuestion(), { value: 'Yes' }, 'No'), 'pass→fail');
+  assert.equal(
+    classifyTransition(makeQuestion(), { value: 'Yes' }, 'No'),
+    'pass→fail'
+  );
 });
 
 test('classifyTransition: fail→pass when the value stops meeting the failure criteria', () => {
-  assert.equal(classifyTransition(makeQuestion(), { value: 'No' }, 'Yes'), 'fail→pass');
+  assert.equal(
+    classifyTransition(makeQuestion(), { value: 'No' }, 'Yes'),
+    'fail→pass'
+  );
 });
 
 test('classifyTransition: fail→fail when still failing (multi-choice swap)', () => {
-  const q = makeQuestion({ responseType: 'multi-choice', failureCriteria: 'Late' });
-  assert.equal(classifyTransition(q, { value: ['Late'] }, ['Late', 'Other']), 'fail→fail');
+  const q = makeQuestion({
+    responseType: 'multi-choice',
+    failureCriteria: 'Late',
+  });
+  assert.equal(
+    classifyTransition(q, { value: ['Late'] }, ['Late', 'Other']),
+    'fail→fail'
+  );
 });
 
 test('classifyTransition: pass→pass when neither value fails', () => {
-  assert.equal(classifyTransition(makeQuestion(), { value: 'Yes' }, 'N/A'), 'pass→pass');
+  assert.equal(
+    classifyTransition(makeQuestion(), { value: 'Yes' }, 'N/A'),
+    'pass→pass'
+  );
 });
 
 test('validateOverride: pass→fail with no required details and no attribution is valid', () => {
@@ -67,7 +90,9 @@ test('validateOverride: pass→fail missing a required Remediation Detail is rej
     {
       question: makeQuestion(),
       originalAnswer: { value: 'Yes' },
-      remediationFields: [{ key: 'rootCause', label: 'Root cause', type: 'text', required: true }],
+      remediationFields: [
+        { key: 'rootCause', label: 'Root cause', type: 'text', required: true },
+      ],
     }
   );
   assert.ok(errors.some((e) => e.includes('Root cause')));
@@ -84,7 +109,9 @@ test('validateOverride: pass→fail with the required detail supplied is valid',
     {
       question: makeQuestion(),
       originalAnswer: { value: 'Yes' },
-      remediationFields: [{ key: 'rootCause', label: 'Root cause', type: 'text', required: true }],
+      remediationFields: [
+        { key: 'rootCause', label: 'Root cause', type: 'text', required: true },
+      ],
     }
   );
   assert.deepEqual(errors, []);
@@ -93,7 +120,11 @@ test('validateOverride: pass→fail with the required detail supplied is valid',
 test('validateOverride: pass→fail without an Attributed Party is rejected when attributeFailures', () => {
   const errors = validateOverride(
     { answerKey: 'q1', value: 'No', reasoning: 'Reviewer missed it.' },
-    { question: makeQuestion(), originalAnswer: { value: 'Yes' }, attributeFailures: true }
+    {
+      question: makeQuestion(),
+      originalAnswer: { value: 'Yes' },
+      attributeFailures: true,
+    }
   );
   assert.ok(errors.some((e) => e.includes('Attributed Party')));
 });
@@ -106,7 +137,11 @@ test('validateOverride: pass→fail with an Attributed Party is valid when attri
       reasoning: 'Reviewer missed it.',
       attributedParty: { loginName: 'jdoe', displayName: 'J Doe' },
     },
-    { question: makeQuestion(), originalAnswer: { value: 'Yes' }, attributeFailures: true }
+    {
+      question: makeQuestion(),
+      originalAnswer: { value: 'Yes' },
+      attributeFailures: true,
+    }
   );
   assert.deepEqual(errors, []);
 });
@@ -118,7 +153,9 @@ test('validateOverride: a fail→pass Override is not gated even when attributeF
       question: makeQuestion(),
       originalAnswer: { value: 'No' },
       attributeFailures: true,
-      remediationFields: [{ key: 'rootCause', label: 'Root cause', type: 'text', required: true }],
+      remediationFields: [
+        { key: 'rootCause', label: 'Root cause', type: 'text', required: true },
+      ],
     }
   );
   assert.deepEqual(errors, []);
@@ -147,7 +184,12 @@ test('buildOverride: throws when the draft fails validation', () => {
     () =>
       buildOverride(
         { answerKey: 'q1', value: 'No', reasoning: '' },
-        { question: makeQuestion(), originalAnswer: { value: 'Yes' }, author: 'qa1', at: '2026-06-11T00:00:00Z' }
+        {
+          question: makeQuestion(),
+          originalAnswer: { value: 'Yes' },
+          author: 'qa1',
+          at: '2026-06-11T00:00:00Z',
+        }
       ),
     /Reasoning is required/
   );
@@ -160,7 +202,9 @@ test('buildOverride: stamps source qa, author, at and carries the replacement se
       value: 'No',
       reasoning: 'Reviewer missed it.',
       attributedParty: { loginName: 'jdoe', displayName: 'J Doe' },
-      remediationActions: [{ id: 'q1-ra-0', text: 'Re-record', completed: false }],
+      remediationActions: [
+        { id: 'q1-ra-0', text: 'Re-record', completed: false },
+      ],
       remediationDetails: { rootCause: 'Training gap' },
     },
     {
@@ -177,7 +221,10 @@ test('buildOverride: stamps source qa, author, at and carries the replacement se
   assert.equal(override.answerKey, 'q1');
   assert.equal(override.value, 'No');
   assert.equal(override.reasoning, 'Reviewer missed it.');
-  assert.deepEqual(override.attributedParty, { loginName: 'jdoe', displayName: 'J Doe' });
+  assert.deepEqual(override.attributedParty, {
+    loginName: 'jdoe',
+    displayName: 'J Doe',
+  });
   assert.equal(override.remediationDetails?.rootCause, 'Training gap');
   // An ad-hoc QA correction carries no sourceCaseId.
   assert.equal(override.sourceCaseId, undefined);

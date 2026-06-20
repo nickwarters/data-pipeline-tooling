@@ -12,7 +12,7 @@ The case review page presents its **Section**s as tabs instead of one long scrol
 
 ## Two deliberate exclusions
 
-- **Conversation is not a tab.** It stays a floating overlay toggled from the persistent chrome (`Alt+C`). Tabs are mutually exclusive, but the core review loop needs the **Conversation** readable *alongside* the Questions — a Reviewer reads what the Responsible Party said while answering. Making it a tab would force read-then-switch and lose that context. The persistent chrome therefore holds the save-status banner, the Conversation toggle, and the "Complete Case" button (a Case-level action reachable from any tab) — none of which belong inside a single tab panel.
+- **Conversation is not a tab.** It stays a floating overlay toggled from the persistent chrome (`Alt+C`). Tabs are mutually exclusive, but the core review loop needs the **Conversation** readable _alongside_ the Questions — a Reviewer reads what the Responsible Party said while answering. Making it a tab would force read-then-switch and lose that context. The persistent chrome therefore holds the save-status banner, the Conversation toggle, and the "Complete Case" button (a Case-level action reachable from any tab) — none of which belong inside a single tab panel.
 - **The active tab is not in the URL.** Tab state is an in-component `signal`. Per ADR-0002 the router remounts the whole route on every `hashchange`, which would refetch the Case and discard the in-memory answers signal and any un-flushed auto-save (ADR-0008) on each tab click. In-component state sidesteps that; the cost is no deep-linking to a tab and Back exits the Case rather than cycling tabs — acceptable for a Reviewer working one Case top-to-bottom.
 
 ## Visibility
@@ -27,4 +27,4 @@ A Section that resolves to `hidden` for the viewer (ADR-0011) renders **no tab**
 
 ## Scope
 
-The **Case Details** data model — where the type-specific field *values* live (likely a `details` JSON blob on the Case row per ADR-0007) and how each **Case Type** *declares* its fields (per ADR-0004) — is explicitly **out of scope** here. This slice ships the tab shell; Details renders today's header content (title, reviewer, status, dates) until the data model lands in a follow-on slice.
+The **Case Details** data model — where the type-specific field _values_ live (likely a `details` JSON blob on the Case row per ADR-0007) and how each **Case Type** _declares_ its fields (per ADR-0004) — is explicitly **out of scope** here. This slice ships the tab shell; Details renders today's header content (title, reviewer, status, dates) until the data model lands in a follow-on slice.

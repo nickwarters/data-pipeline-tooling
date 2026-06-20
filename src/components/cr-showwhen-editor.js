@@ -1,7 +1,11 @@
 // @ts-check
 import { ReactiveElement } from './reactive-element.js';
 import { h } from '../lib/html.js';
-import { countLeaves, ensureTree, treeDepth } from '../question-bank/question-bank-tree.js';
+import {
+  countLeaves,
+  ensureTree,
+  treeDepth,
+} from '../question-bank/question-bank-tree.js';
 
 export class CRShowwhenEditor extends ReactiveElement {
   constructor() {
@@ -27,22 +31,36 @@ export class CRShowwhenEditor extends ReactiveElement {
     const tree = ensureTree(q);
     const count = countLeaves(tree);
     const depth = treeDepth(tree);
-    const desc = count === 0 ? '' : `${count} condition${count === 1 ? '' : 's'}${depth > 1 ? ` · ${depth} levels deep` : ''}`;
+    const desc =
+      count === 0
+        ? ''
+        : `${count} condition${count === 1 ? '' : 's'}${depth > 1 ? ` · ${depth} levels deep` : ''}`;
 
-    const empty = tree.children.length === 0 
-      ? h('div', { className: 'showwhen-empty' }, '// always shown — add a condition to gate this question')
-      : null;
+    const empty =
+      tree.children.length === 0
+        ? h(
+            'div',
+            { className: 'showwhen-empty' },
+            '// always shown — add a condition to gate this question'
+          )
+        : null;
 
-    const grp = /** @type {any} */ (h('cr-showwhen-group', {
-      question: q,
-      group: tree,
-      isRoot: true
-    }));
+    const grp = /** @type {any} */ (
+      h('cr-showwhen-group', {
+        question: q,
+        group: tree,
+        isRoot: true,
+      })
+    );
 
-    return h('div', { className: 'showwhen-block' },
-      h('div', { className: 'showwhen-header' },
+    return h(
+      'div',
+      { className: 'showwhen-block' },
+      h(
+        'div',
+        { className: 'showwhen-header' },
         h('span', {}, '◆ Show when'),
-        h('span', { className: 'showwhen-desc' }, desc),
+        h('span', { className: 'showwhen-desc' }, desc)
       ),
       empty,
       grp

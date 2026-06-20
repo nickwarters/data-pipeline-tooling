@@ -27,11 +27,14 @@ function makeFetch(responses) {
       const h = init.headers;
       if (h) {
         if (h instanceof Headers) {
-          h.forEach((v, k) => { headers[k.toLowerCase()] = v; });
+          h.forEach((v, k) => {
+            headers[k.toLowerCase()] = v;
+          });
         } else if (Array.isArray(h)) {
           for (const [k, v] of h) headers[k.toLowerCase()] = String(v);
         } else {
-          for (const k of Object.keys(h)) headers[k.toLowerCase()] = String(/** @type {any} */ (h)[k]);
+          for (const k of Object.keys(h))
+            headers[k.toLowerCase()] = String(/** @type {any} */ (h)[k]);
         }
       }
       const body = init.body == null ? null : String(init.body);
@@ -58,7 +61,9 @@ function makeSleep() {
   const delays = [];
   return {
     delays,
-    async sleep(ms) { delays.push(ms); },
+    async sleep(ms) {
+      delays.push(ms);
+    },
   };
 }
 
@@ -80,30 +85,45 @@ const WEB_URL = 'https://sp.example.com/sites/casereview';
 test('HttpSharePointClient: form digest is fetched lazily and reused across writes', async () => {
   const { fetch, calls } = makeFetch([
     {
-      when: c => c.url.endsWith('/_api/contextinfo'),
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
       respond: () => digestResponse('digest-1'),
     },
     {
-      when: c => c.method === 'PATCH',
-      respond: () => new Response(null, { status: 204, headers: { ETag: '"new-etag"' } }),
+      when: (c) => c.method === 'PATCH',
+      respond: () =>
+        new Response(null, { status: 204, headers: { ETag: '"new-etag"' } }),
     },
     {
-      when: c => c.method === 'GET',
-      respond: () => new Response(JSON.stringify({
-        Id: 'case-1', Title: 'X', Status: 'In-progress', AssignedReviewerId: 'u1',
-        ResponsiblePartyId: 'u2', Answers: '{}', Conversation: '[]', Notes: '', CompletedAt: null,
-        CaseType: 'hello-review',
-      }), { status: 200, headers: { ETag: '"new-etag"' } }),
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'X',
+            Status: 'In-progress',
+            AssignedReviewerId: 'u1',
+            ResponsiblePartyId: 'u2',
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: '',
+            CompletedAt: null,
+            CaseType: 'hello-review',
+          }),
+          { status: 200, headers: { ETag: '"new-etag"' } }
+        ),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   await client.patchCase('case-1', { notes: 'first' }, '"old-etag"');
   await client.patchCase('case-1', { notes: 'second' }, '"new-etag"');
 
-  const digestCalls = calls.filter(c => c.url.endsWith('/_api/contextinfo'));
+  const digestCalls = calls.filter((c) => c.url.endsWith('/_api/contextinfo'));
   assert.equal(digestCalls.length, 1, 'digest should be fetched only once');
-  const patchCalls = calls.filter(c => c.method === 'PATCH');
+  const patchCalls = calls.filter((c) => c.method === 'PATCH');
   assert.equal(patchCalls.length, 2);
   assert.equal(patchCalls[0].headers['x-requestdigest'], 'digest-1');
   assert.equal(patchCalls[1].headers['x-requestdigest'], 'digest-1');
@@ -114,57 +134,81 @@ test('HttpSharePointClient: 403 on write triggers digest refresh and one retry',
   let patchCount = 0;
   const { fetch, calls } = makeFetch([
     {
-      when: c => c.url.endsWith('/_api/contextinfo'),
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
       respond: () => {
         digestCount++;
         return digestResponse(digestCount === 1 ? 'digest-A' : 'digest-B');
       },
     },
     {
-      when: c => c.method === 'PATCH',
+      when: (c) => c.method === 'PATCH',
       respond: () => {
         patchCount++;
         if (patchCount === 1) return new Response('forbidden', { status: 403 });
-        return new Response(null, { status: 204, headers: { ETag: '"after-refresh"' } });
+        return new Response(null, {
+          status: 204,
+          headers: { ETag: '"after-refresh"' },
+        });
       },
     },
     {
-      when: c => c.method === 'GET',
-      respond: () => new Response(JSON.stringify({
-        Id: 'case-1', Title: 'X', Status: 'In-progress', AssignedReviewerId: 'u1',
-        ResponsiblePartyId: 'u2', Answers: '{}', Conversation: '[]', Notes: 'done', CompletedAt: null,
-        CaseType: 'hello-review',
-      }), { status: 200, headers: { ETag: '"after-refresh"' } }),
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'X',
+            Status: 'In-progress',
+            AssignedReviewerId: 'u1',
+            ResponsiblePartyId: 'u2',
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: 'done',
+            CompletedAt: null,
+            CaseType: 'hello-review',
+          }),
+          { status: 200, headers: { ETag: '"after-refresh"' } }
+        ),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   const result = await client.patchCase('case-1', { notes: 'done' }, '"e1"');
 
   assert.equal(result.ok, true);
   assert.equal(digestCount, 2, 'digest fetched twice (initial + refresh)');
-  const patches = calls.filter(c => c.method === 'PATCH');
+  const patches = calls.filter((c) => c.method === 'PATCH');
   assert.equal(patches.length, 2);
   assert.equal(patches[0].headers['x-requestdigest'], 'digest-A');
-  assert.equal(patches[1].headers['x-requestdigest'], 'digest-B', 'retry uses refreshed digest');
+  assert.equal(
+    patches[1].headers['x-requestdigest'],
+    'digest-B',
+    'retry uses refreshed digest'
+  );
 });
 
 test('HttpSharePointClient: 403 retry that also fails is surfaced (no infinite loop)', async () => {
   let digestCount = 0;
   const { fetch } = makeFetch([
     {
-      when: c => c.url.endsWith('/_api/contextinfo'),
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
       respond: () => {
         digestCount++;
         return digestResponse('d-' + digestCount);
       },
     },
     {
-      when: c => c.method === 'PATCH',
+      when: (c) => c.method === 'PATCH',
       respond: () => new Response('forbidden', { status: 403 }),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   const result = await client.patchCase('case-1', { notes: 'x' }, '"e1"');
 
@@ -177,46 +221,82 @@ test('HttpSharePointClient: 403 retry that also fails is surfaced (no infinite l
 
 test('HttpSharePointClient: PATCH sends If-Match header with the supplied ETag', async () => {
   const { fetch, calls } = makeFetch([
-    { when: c => c.url.endsWith('/_api/contextinfo'), respond: () => digestResponse('d') },
     {
-      when: c => c.method === 'PATCH',
-      respond: () => new Response(null, { status: 204, headers: { ETag: '"v2"' } }),
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () => digestResponse('d'),
     },
     {
-      when: c => c.method === 'GET',
-      respond: () => new Response(JSON.stringify({
-        Id: 'case-1', Title: 'T', Status: 'In-progress', AssignedReviewerId: 'u1',
-        ResponsiblePartyId: 'u2', Answers: '{}', Conversation: '[]', Notes: 'n', CompletedAt: null,
-        CaseType: 'hello-review',
-      }), { status: 200, headers: { ETag: '"v2"' } }),
+      when: (c) => c.method === 'PATCH',
+      respond: () =>
+        new Response(null, { status: 204, headers: { ETag: '"v2"' } }),
+    },
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'T',
+            Status: 'In-progress',
+            AssignedReviewerId: 'u1',
+            ResponsiblePartyId: 'u2',
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: 'n',
+            CompletedAt: null,
+            CaseType: 'hello-review',
+          }),
+          { status: 200, headers: { ETag: '"v2"' } }
+        ),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   await client.patchCase('case-1', { notes: 'n' }, '"v1"');
 
-  const patch = calls.find(c => c.method === 'PATCH');
+  const patch = calls.find((c) => c.method === 'PATCH');
   assert.ok(patch, 'PATCH was issued');
   assert.equal(patch.headers['if-match'], '"v1"');
 });
 
 test('HttpSharePointClient: patchCase result.data.etag reflects the new ETag from the response', async () => {
   const { fetch } = makeFetch([
-    { when: c => c.url.endsWith('/_api/contextinfo'), respond: () => digestResponse('d') },
     {
-      when: c => c.method === 'PATCH',
-      respond: () => new Response(null, { status: 204, headers: { ETag: '"server-new"' } }),
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () => digestResponse('d'),
     },
     {
-      when: c => c.method === 'GET',
-      respond: () => new Response(JSON.stringify({
-        Id: 'case-1', Title: 'T', Status: 'In-progress', AssignedReviewerId: 'u1',
-        ResponsiblePartyId: 'u2', Answers: '{}', Conversation: '[]', Notes: 'n', CompletedAt: null,
-        CaseType: 'hello-review',
-      }), { status: 200, headers: { ETag: '"server-new"' } }),
+      when: (c) => c.method === 'PATCH',
+      respond: () =>
+        new Response(null, { status: 204, headers: { ETag: '"server-new"' } }),
+    },
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'T',
+            Status: 'In-progress',
+            AssignedReviewerId: 'u1',
+            ResponsiblePartyId: 'u2',
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: 'n',
+            CompletedAt: null,
+            CaseType: 'hello-review',
+          }),
+          { status: 200, headers: { ETag: '"server-new"' } }
+        ),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   const result = await client.patchCase('case-1', { notes: 'n' }, '"v1"');
 
@@ -228,15 +308,21 @@ test('HttpSharePointClient: 412 on PATCH returns {ok:false, status:412} without 
   let digestCount = 0;
   const { fetch } = makeFetch([
     {
-      when: c => c.url.endsWith('/_api/contextinfo'),
-      respond: () => { digestCount++; return digestResponse('d'); },
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () => {
+        digestCount++;
+        return digestResponse('d');
+      },
     },
     {
-      when: c => c.method === 'PATCH',
+      when: (c) => c.method === 'PATCH',
       respond: () => new Response('precondition failed', { status: 412 }),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   const result = await client.patchCase('case-1', { notes: 'n' }, '"stale"');
 
@@ -251,27 +337,44 @@ test('HttpSharePointClient: 429 with Retry-After waits the indicated seconds bef
   let getCount = 0;
   const { fetch, calls } = makeFetch([
     {
-      when: c => c.method === 'GET',
+      when: (c) => c.method === 'GET',
       respond: () => {
         getCount++;
         if (getCount === 1) {
-          return new Response('throttled', { status: 429, headers: { 'Retry-After': '3' } });
+          return new Response('throttled', {
+            status: 429,
+            headers: { 'Retry-After': '3' },
+          });
         }
-        return new Response(JSON.stringify({
-          Id: 'case-1', Title: 'OK', Status: 'In-progress', AssignedReviewerId: 'u1',
-          ResponsiblePartyId: 'u2', Answers: '{}', Conversation: '[]', Notes: '', CompletedAt: null,
-          CaseType: 'hello-review',
-        }), { status: 200, headers: { ETag: '"ok"' } });
+        return new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'OK',
+            Status: 'In-progress',
+            AssignedReviewerId: 'u1',
+            ResponsiblePartyId: 'u2',
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: '',
+            CompletedAt: null,
+            CaseType: 'hello-review',
+          }),
+          { status: 200, headers: { ETag: '"ok"' } }
+        );
       },
     },
   ]);
   const { sleep, delays } = makeSleep();
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch, sleep });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+    sleep,
+  });
 
   const row = await client.getCase('case-1');
 
   assert.equal(row?.id, 'case-1');
-  assert.equal(calls.filter(c => c.method === 'GET').length, 2);
+  assert.equal(calls.filter((c) => c.method === 'GET').length, 2);
   assert.deepEqual(delays, [3000]);
 });
 
@@ -279,20 +382,34 @@ test('HttpSharePointClient: 429 without Retry-After falls back to a default dela
   let getCount = 0;
   const { fetch } = makeFetch([
     {
-      when: c => c.method === 'GET',
+      when: (c) => c.method === 'GET',
       respond: () => {
         getCount++;
         if (getCount === 1) return new Response('throttled', { status: 429 });
-        return new Response(JSON.stringify({
-          Id: 'case-1', Title: 'OK', Status: 'In-progress', AssignedReviewerId: 'u1',
-          ResponsiblePartyId: 'u2', Answers: '{}', Conversation: '[]', Notes: '', CompletedAt: null,
-          CaseType: 'hello-review',
-        }), { status: 200, headers: { ETag: '"ok"' } });
+        return new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'OK',
+            Status: 'In-progress',
+            AssignedReviewerId: 'u1',
+            ResponsiblePartyId: 'u2',
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: '',
+            CompletedAt: null,
+            CaseType: 'hello-review',
+          }),
+          { status: 200, headers: { ETag: '"ok"' } }
+        );
       },
     },
   ]);
   const { sleep, delays } = makeSleep();
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch, sleep });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+    sleep,
+  });
 
   await client.getCase('case-1');
 
@@ -304,50 +421,86 @@ test('HttpSharePointClient: 429 with garbage Retry-After string falls back to de
   let getCount = 0;
   const { fetch } = makeFetch([
     {
-      when: c => c.method === 'GET',
+      when: (c) => c.method === 'GET',
       respond: () => {
         getCount++;
         if (getCount === 1) {
           // Non-numeric, non-date Retry-After → parseRetryAfter returns DEFAULT_THROTTLE_MS (line 286)
-          return new Response('throttled', { status: 429, headers: { 'Retry-After': 'not-a-number-or-date' } });
+          return new Response('throttled', {
+            status: 429,
+            headers: { 'Retry-After': 'not-a-number-or-date' },
+          });
         }
-        return new Response(JSON.stringify({
-          Id: 'case-1', Title: 'OK', Status: 'In-progress', AssignedReviewerId: 'u1',
-          ResponsiblePartyId: 'u2', Answers: '{}', Conversation: '[]', Notes: '', CompletedAt: null,
-          CaseType: 'hello-review',
-        }), { status: 200, headers: { ETag: '"ok"' } });
+        return new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'OK',
+            Status: 'In-progress',
+            AssignedReviewerId: 'u1',
+            ResponsiblePartyId: 'u2',
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: '',
+            CompletedAt: null,
+            CaseType: 'hello-review',
+          }),
+          { status: 200, headers: { ETag: '"ok"' } }
+        );
       },
     },
   ]);
   const { sleep, delays } = makeSleep();
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch, sleep });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+    sleep,
+  });
 
   await client.getCase('case-1');
 
   assert.equal(delays.length, 1);
-  assert.ok(delays[0] >= 1000, 'garbage Retry-After should fall back to default delay (≥ 1s)');
+  assert.ok(
+    delays[0] >= 1000,
+    'garbage Retry-After should fall back to default delay (≥ 1s)'
+  );
 });
 
 test('HttpSharePointClient: getCase returns fallback empty objects when Answers/Conversation are invalid JSON', async () => {
   const { fetch } = makeFetch([
     {
-      when: c => c.method === 'GET',
-      respond: () => new Response(JSON.stringify({
-        Id: 'case-bad', Title: 'Bad JSON', Status: 'In-progress', CaseType: 'hello-review',
-        AssignedReviewerId: 'u1', ResponsiblePartyId: 'u2',
-        Answers: 'not valid json {{{',
-        Conversation: 'also invalid',
-        Notes: '', CompletedAt: null,
-      }), { status: 200, headers: { ETag: '"v1"' } }),
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-bad',
+            Title: 'Bad JSON',
+            Status: 'In-progress',
+            CaseType: 'hello-review',
+            AssignedReviewerId: 'u1',
+            ResponsiblePartyId: 'u2',
+            Answers: 'not valid json {{{',
+            Conversation: 'also invalid',
+            Notes: '',
+            CompletedAt: null,
+          }),
+          { status: 200, headers: { ETag: '"v1"' } }
+        ),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   const row = await client.getCase('case-bad');
 
   // parseJsonField catch block returns fallback for invalid JSON (lines 349-350)
   assert.deepEqual(row?.answers, {}, 'invalid Answers JSON falls back to {}');
-  assert.deepEqual(row?.conversation, [], 'invalid Conversation JSON falls back to []');
+  assert.deepEqual(
+    row?.conversation,
+    [],
+    'invalid Conversation JSON falls back to []'
+  );
 });
 
 // --- pagination ---
@@ -356,57 +509,115 @@ test('HttpSharePointClient: listCases follows odata.nextLink across pages and co
   const page2Url = `${WEB_URL}/_api/web/lists/getbytitle('Cases-HelloReview')/items?$skiptoken=PAGE2`;
   const { fetch, calls } = makeFetch([
     {
-      when: c => c.method === 'GET' && c.url.includes('$skiptoken=PAGE2'),
-      respond: () => new Response(JSON.stringify({
-        value: [
-          { Id: 'case-3', Title: 'Three', Status: 'In-progress', AssignedReviewerId: 'u1', ResponsiblePartyId: 'u2', Answers: '{}', Conversation: '[]', Notes: '', CompletedAt: null, CaseType: 'hello-review' },
-        ],
-      }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+      when: (c) => c.method === 'GET' && c.url.includes('$skiptoken=PAGE2'),
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                Id: 'case-3',
+                Title: 'Three',
+                Status: 'In-progress',
+                AssignedReviewerId: 'u1',
+                ResponsiblePartyId: 'u2',
+                Answers: '{}',
+                Conversation: '[]',
+                Notes: '',
+                CompletedAt: null,
+                CaseType: 'hello-review',
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        ),
     },
     {
-      when: c => c.method === 'GET' && c.url.includes("getbytitle('Cases-HelloReview')"),
-      respond: () => new Response(JSON.stringify({
-        value: [
-          { Id: 'case-1', Title: 'One', Status: 'In-progress', AssignedReviewerId: 'u1', ResponsiblePartyId: 'u2', Answers: '{}', Conversation: '[]', Notes: '', CompletedAt: null, CaseType: 'hello-review' },
-          { Id: 'case-2', Title: 'Two', Status: 'In-progress', AssignedReviewerId: 'u1', ResponsiblePartyId: 'u2', Answers: '{}', Conversation: '[]', Notes: '', CompletedAt: null, CaseType: 'hello-review' },
-        ],
-        'odata.nextLink': page2Url,
-      }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+      when: (c) =>
+        c.method === 'GET' && c.url.includes("getbytitle('Cases-HelloReview')"),
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                Id: 'case-1',
+                Title: 'One',
+                Status: 'In-progress',
+                AssignedReviewerId: 'u1',
+                ResponsiblePartyId: 'u2',
+                Answers: '{}',
+                Conversation: '[]',
+                Notes: '',
+                CompletedAt: null,
+                CaseType: 'hello-review',
+              },
+              {
+                Id: 'case-2',
+                Title: 'Two',
+                Status: 'In-progress',
+                AssignedReviewerId: 'u1',
+                ResponsiblePartyId: 'u2',
+                Answers: '{}',
+                Conversation: '[]',
+                Notes: '',
+                CompletedAt: null,
+                CaseType: 'hello-review',
+              },
+            ],
+            'odata.nextLink': page2Url,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        ),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   const cases = await client.listCases({});
 
   assert.equal(cases.length, 3);
-  assert.deepEqual(cases.map(c => c.id), ['case-1', 'case-2', 'case-3']);
-  assert.equal(calls.filter(c => c.method === 'GET').length, 2);
+  assert.deepEqual(
+    cases.map((c) => c.id),
+    ['case-1', 'case-2', 'case-3']
+  );
+  assert.equal(calls.filter((c) => c.method === 'GET').length, 2);
 });
 
 test('HttpSharePointClient: listCases applies status and assignedReviewer filters via $filter', async () => {
   const { fetch, calls } = makeFetch([
     {
-      when: c => c.method === 'GET',
-      respond: () => new Response(JSON.stringify({ value: [] }), { status: 200 }),
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [] }), { status: 200 }),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   await client.listCases({ status: 'In-progress', assignedReviewer: 'user-1' });
 
   assert.equal(calls.length, 1);
   const url = decodeURIComponent(calls[0].url);
   assert.ok(url.includes("Status eq 'In-progress'"), 'should filter on Status');
-  assert.ok(url.includes("user-1"), 'should filter on assigned reviewer id');
+  assert.ok(url.includes('user-1'), 'should filter on assigned reviewer id');
 });
 
 // --- getCase / getCurrentUser ---
 
 test('HttpSharePointClient: getCase returns null on 404', async () => {
   const { fetch } = makeFetch([
-    { when: c => c.method === 'GET', respond: () => new Response('not found', { status: 404 }) },
+    {
+      when: (c) => c.method === 'GET',
+      respond: () => new Response('not found', { status: 404 }),
+    },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   const row = await client.getCase('case-missing');
   assert.equal(row, null);
@@ -415,17 +626,31 @@ test('HttpSharePointClient: getCase returns null on 404', async () => {
 test('HttpSharePointClient: getCase parses Answers/Conversation JSON blobs and captures ETag', async () => {
   const { fetch } = makeFetch([
     {
-      when: c => c.method === 'GET',
-      respond: () => new Response(JSON.stringify({
-        Id: 'case-1', Title: 'Hello', Status: 'In-progress', CaseType: 'hello-review',
-        AssignedReviewerId: 'user-1', ResponsiblePartyId: 'user-2',
-        Answers: JSON.stringify({ 'q-welcome': { value: 'Yes' } }),
-        Conversation: JSON.stringify([{ author: 'user-1', timestamp: 't', body: 'hi' }]),
-        Notes: 'note', CompletedAt: null,
-      }), { status: 200, headers: { ETag: '"v7"' } }),
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'Hello',
+            Status: 'In-progress',
+            CaseType: 'hello-review',
+            AssignedReviewerId: 'user-1',
+            ResponsiblePartyId: 'user-2',
+            Answers: JSON.stringify({ 'q-welcome': { value: 'Yes' } }),
+            Conversation: JSON.stringify([
+              { author: 'user-1', timestamp: 't', body: 'hi' },
+            ]),
+            Notes: 'note',
+            CompletedAt: null,
+          }),
+          { status: 200, headers: { ETag: '"v7"' } }
+        ),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   const row = await client.getCase('case-1');
 
@@ -439,13 +664,22 @@ test('HttpSharePointClient: getCase parses Answers/Conversation JSON blobs and c
 test('HttpSharePointClient: getCurrentUser returns id and displayName', async () => {
   const { fetch } = makeFetch([
     {
-      when: c => c.method === 'GET',
-      respond: () => new Response(JSON.stringify({
-        Id: 42, Title: 'Alice Reviewer', LoginName: 'i:0#.w|domain\\alice',
-      }), { status: 200 }),
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 42,
+            Title: 'Alice Reviewer',
+            LoginName: 'i:0#.w|domain\\alice',
+          }),
+          { status: 200 }
+        ),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   const u = await client.getCurrentUser();
   assert.equal(u.id, '42');
@@ -455,16 +689,23 @@ test('HttpSharePointClient: getCurrentUser returns id and displayName', async ()
 test('HttpSharePointClient: getCurrentUserGroups returns group titles', async () => {
   const { fetch } = makeFetch([
     {
-      when: c => c.method === 'GET',
-      respond: () => new Response(JSON.stringify({
-        value: [
-          { Id: 1, Title: 'Reviewers' },
-          { Id: 2, Title: 'CaseTypeOwners' },
-        ],
-      }), { status: 200 }),
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            value: [
+              { Id: 1, Title: 'Reviewers' },
+              { Id: 2, Title: 'CaseTypeOwners' },
+            ],
+          }),
+          { status: 200 }
+        ),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   const groups = await client.getCurrentUserGroups();
   assert.deepEqual(groups, ['Reviewers', 'CaseTypeOwners']);
@@ -474,24 +715,35 @@ test('HttpSharePointClient: getCurrentUserGroups returns group titles', async ()
 
 test('HttpSharePointClient: patchCase handles 200 response with JSON body (no separate getCase)', async () => {
   const patchBody = {
-    Id: 'case-1', Title: 'Updated', Status: 'In-progress', AssignedReviewerId: 'u1',
-    ResponsiblePartyId: 'u2', Answers: '{}', Conversation: '[]', Notes: 'n',
-    CompletedAt: null, CaseType: 'hello-review',
+    Id: 'case-1',
+    Title: 'Updated',
+    Status: 'In-progress',
+    AssignedReviewerId: 'u1',
+    ResponsiblePartyId: 'u2',
+    Answers: '{}',
+    Conversation: '[]',
+    Notes: 'n',
+    CompletedAt: null,
+    CaseType: 'hello-review',
   };
   const { fetch } = makeFetch([
     {
-      when: c => c.url.endsWith('/_api/contextinfo'),
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
       respond: () => digestResponse('digest-x'),
     },
     {
-      when: c => c.method === 'PATCH',
-      respond: () => new Response(JSON.stringify(patchBody), {
-        status: 200,
-        headers: { ETag: '"v2"', 'Content-Type': 'application/json' },
-      }),
+      when: (c) => c.method === 'PATCH',
+      respond: () =>
+        new Response(JSON.stringify(patchBody), {
+          status: 200,
+          headers: { ETag: '"v2"', 'Content-Type': 'application/json' },
+        }),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   const result = await client.patchCase('case-1', { notes: 'n' }, '"v1"');
   assert.equal(result.ok, true);
@@ -504,42 +756,81 @@ test('HttpSharePointClient: patchCase handles 200 response with JSON body (no se
 test('HttpSharePointClient: getQuestionDefinitions with non-empty ids sends $filter and parses items', async () => {
   const { fetch, calls } = makeFetch([
     {
-      when: c => c.method === 'GET',
-      respond: () => new Response(JSON.stringify({
-        value: [
-          { QuestionId: 'q-1', QuestionText: 'Was greeting professional?', ResponseType: 'yes-no-na', Deprecated: false },
-          { QuestionId: 'q-2', QuestionText: 'Were needs met?', ResponseType: 'yes-no-na', Deprecated: false },
-        ],
-      }), { status: 200 }),
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                QuestionId: 'q-1',
+                QuestionText: 'Was greeting professional?',
+                ResponseType: 'yes-no-na',
+                Deprecated: false,
+              },
+              {
+                QuestionId: 'q-2',
+                QuestionText: 'Were needs met?',
+                ResponseType: 'yes-no-na',
+                Deprecated: false,
+              },
+            ],
+          }),
+          { status: 200 }
+        ),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   const defs = await client.getQuestionDefinitions(['q-1', 'q-2']);
   assert.equal(defs.length, 2);
-  assert.ok(defs.some(d => d.id === 'q-1'));
-  assert.ok(defs.some(d => d.id === 'q-2'));
+  assert.ok(defs.some((d) => d.id === 'q-1'));
+  assert.ok(defs.some((d) => d.id === 'q-2'));
   const url = decodeURIComponent(calls[0].url);
-  assert.ok(url.includes("QuestionId eq 'q-1'"), 'URL should have filter for q-1');
+  assert.ok(
+    url.includes("QuestionId eq 'q-1'"),
+    'URL should have filter for q-1'
+  );
 });
 
 test('HttpSharePointClient: getQuestionDefinitions with single-choice and multi-choice response types', async () => {
   const { fetch } = makeFetch([
     {
-      when: c => c.method === 'GET',
-      respond: () => new Response(JSON.stringify({
-        value: [
-          { QuestionId: 'q-sc', QuestionText: 'Choose one', ResponseType: 'single-choice', Options: '["A","B"]', Deprecated: false },
-          { QuestionId: 'q-mc', QuestionText: 'Choose many', ResponseType: 'multi-choice', Options: '["X","Y"]', Deprecated: false },
-        ],
-      }), { status: 200 }),
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                QuestionId: 'q-sc',
+                QuestionText: 'Choose one',
+                ResponseType: 'single-choice',
+                Options: '["A","B"]',
+                Deprecated: false,
+              },
+              {
+                QuestionId: 'q-mc',
+                QuestionText: 'Choose many',
+                ResponseType: 'multi-choice',
+                Options: '["X","Y"]',
+                Deprecated: false,
+              },
+            ],
+          }),
+          { status: 200 }
+        ),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   const defs = await client.getQuestionDefinitions(['q-sc', 'q-mc']);
-  const sc = defs.find(d => d.id === 'q-sc');
-  const mc = defs.find(d => d.id === 'q-mc');
+  const sc = defs.find((d) => d.id === 'q-sc');
+  const mc = defs.find((d) => d.id === 'q-mc');
   assert.equal(sc?.responseType, 'single-choice');
   assert.deepEqual(sc?.options, ['A', 'B']);
   assert.equal(mc?.responseType, 'multi-choice');
@@ -551,17 +842,35 @@ test('HttpSharePointClient: getQuestionDefinitions with single-choice and multi-
 test('HttpSharePointClient: _getAllPages handles legacy d.results OData format', async () => {
   const { fetch } = makeFetch([
     {
-      when: c => c.method === 'GET',
-      respond: () => new Response(JSON.stringify({
-        d: {
-          results: [
-            { Id: 'case-1', Title: 'One', Status: 'In-progress', AssignedReviewerId: 'u1', ResponsiblePartyId: 'u2', Answers: '{}', Conversation: '[]', Notes: '', CompletedAt: null, CaseType: 'hello-review' },
-          ],
-        },
-      }), { status: 200 }),
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            d: {
+              results: [
+                {
+                  Id: 'case-1',
+                  Title: 'One',
+                  Status: 'In-progress',
+                  AssignedReviewerId: 'u1',
+                  ResponsiblePartyId: 'u2',
+                  Answers: '{}',
+                  Conversation: '[]',
+                  Notes: '',
+                  CompletedAt: null,
+                  CaseType: 'hello-review',
+                },
+              ],
+            },
+          }),
+          { status: 200 }
+        ),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   const cases = await client.listCases({});
   assert.equal(cases.length, 1, 'should parse d.results format');
@@ -578,22 +887,39 @@ test('HttpSharePointClient: 429 with HTTP-date Retry-After waits until that time
   let getCount = 0;
   const { fetch } = makeFetch([
     {
-      when: c => c.method === 'GET',
+      when: (c) => c.method === 'GET',
       respond: () => {
         getCount++;
         if (getCount === 1) {
-          return new Response('throttled', { status: 429, headers: { 'Retry-After': httpDate } });
+          return new Response('throttled', {
+            status: 429,
+            headers: { 'Retry-After': httpDate },
+          });
         }
-        return new Response(JSON.stringify({
-          Id: 'case-1', Title: 'OK', Status: 'In-progress', AssignedReviewerId: 'u1',
-          ResponsiblePartyId: 'u2', Answers: '{}', Conversation: '[]', Notes: '', CompletedAt: null,
-          CaseType: 'hello-review',
-        }), { status: 200, headers: { ETag: '"ok"' } });
+        return new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'OK',
+            Status: 'In-progress',
+            AssignedReviewerId: 'u1',
+            ResponsiblePartyId: 'u2',
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: '',
+            CompletedAt: null,
+            CaseType: 'hello-review',
+          }),
+          { status: 200, headers: { ETag: '"ok"' } }
+        );
       },
     },
   ]);
   const { sleep, delays } = makeSleep();
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch, sleep });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+    sleep,
+  });
 
   await client.getCase('case-1');
 
@@ -622,121 +948,203 @@ test('HttpSharePointClient: assignable to SharePointClient interface', () => {
 test('HttpSharePointClient: listCases with overdue:true adds DueDate lt and Status eq In-progress OData conditions', async () => {
   const { fetch, calls } = makeFetch([
     {
-      when: c => c.method === 'GET',
-      respond: () => new Response(JSON.stringify({ value: [] }), { status: 200 }),
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [] }), { status: 200 }),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   await client.listCases({ overdue: true });
 
   assert.equal(calls.length, 1);
   const url = decodeURIComponent(calls[0].url);
   assert.ok(url.includes('DueDate lt '), 'should include DueDate lt condition');
-  assert.ok(url.includes("Status eq 'In-progress'"), 'should restrict to In-progress cases');
+  assert.ok(
+    url.includes("Status eq 'In-progress'"),
+    'should restrict to In-progress cases'
+  );
 });
 
 test('HttpSharePointClient: listCases without overdue filter omits DueDate condition', async () => {
   const { fetch, calls } = makeFetch([
     {
-      when: c => c.method === 'GET',
-      respond: () => new Response(JSON.stringify({ value: [] }), { status: 200 }),
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [] }), { status: 200 }),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   await client.listCases({});
 
   const url = decodeURIComponent(calls[0].url);
-  assert.ok(!url.includes('DueDate'), 'should not include DueDate when overdue filter not set');
+  assert.ok(
+    !url.includes('DueDate'),
+    'should not include DueDate when overdue filter not set'
+  );
 });
 
 test('HttpSharePointClient: listCases with effectiveOutcome filters server-side on EffectiveOutcome (ADR-0019)', async () => {
   const { fetch, calls } = makeFetch([
-    { when: c => c.method === 'GET', respond: () => new Response(JSON.stringify({ value: [] }), { status: 200 }) },
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [] }), { status: 200 }),
+    },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   await client.listCases({ effectiveOutcome: 'fail' });
 
   const url = decodeURIComponent(calls[0].url);
-  assert.ok(url.includes("EffectiveOutcome eq 'fail'"), 'bounded server-side filter on the corrected result');
+  assert.ok(
+    url.includes("EffectiveOutcome eq 'fail'"),
+    'bounded server-side filter on the corrected result'
+  );
 });
 
 test('HttpSharePointClient: listCases with outcomeOverridden filters on the OutcomeOverridden flag (ADR-0019)', async () => {
   const { fetch, calls } = makeFetch([
-    { when: c => c.method === 'GET', respond: () => new Response(JSON.stringify({ value: [] }), { status: 200 }) },
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [] }), { status: 200 }),
+    },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   await client.listCases({ outcomeOverridden: true });
 
   const url = decodeURIComponent(calls[0].url);
-  assert.ok(url.includes('OutcomeOverridden eq 1'), 'corrected-Case segment uses the indexed boolean column');
+  assert.ok(
+    url.includes('OutcomeOverridden eq 1'),
+    'corrected-Case segment uses the indexed boolean column'
+  );
 });
 
 // --- searchPeople ---
 
 test('HttpSharePointClient: searchPeople POSTs to the people-picker endpoint, queries the directory, and returns bare accounts', async () => {
   const entities = [
-    { Key: 'i:0#.w|CONTOSO\\jsmith', DisplayText: 'John Smith', EntityData: { Email: 'jsmith@contoso.com' } },
+    {
+      Key: 'i:0#.w|CONTOSO\\jsmith',
+      DisplayText: 'John Smith',
+      EntityData: { Email: 'jsmith@contoso.com' },
+    },
     { Key: 'i:0#.w|CONTOSO\\bjones', DisplayText: 'Bola Jones' },
     { Key: 'i:0#.w|CONTOSO\\noname' },
   ];
   const { fetch, calls } = makeFetch([
-    { when: c => c.url.endsWith('/_api/contextinfo'), respond: () => digestResponse('d1') },
     {
-      when: c => c.method === 'POST',
-      respond: () => new Response(JSON.stringify({ value: JSON.stringify(entities) }), {
-        status: 200, headers: { 'Content-Type': 'application/json' },
-      }),
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () => digestResponse('d1'),
+    },
+    {
+      when: (c) => c.method === 'POST',
+      respond: () =>
+        new Response(JSON.stringify({ value: JSON.stringify(entities) }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   const results = await client.searchPeople('smith');
 
   assert.deepEqual(results, [
-    { loginName: 'jsmith', displayName: 'John Smith', email: 'jsmith@contoso.com' },
+    {
+      loginName: 'jsmith',
+      displayName: 'John Smith',
+      email: 'jsmith@contoso.com',
+    },
     { loginName: 'bjones', displayName: 'Bola Jones' },
     { loginName: 'noname', displayName: 'noname' },
   ]);
-  const post = calls.find(c => c.method === 'POST' && c.url.includes('clientPeoplePickerSearchUser'));
+  const post = calls.find(
+    (c) => c.method === 'POST' && c.url.includes('clientPeoplePickerSearchUser')
+  );
   assert.ok(post, 'POSTs to clientPeoplePickerSearchUser');
   const sent = JSON.parse(/** @type {string} */ (post?.body));
   assert.equal(sent.queryParams.QueryString, 'smith');
-  assert.equal(sent.queryParams.PrincipalSource, 15, 'queries all sources incl. the directory');
+  assert.equal(
+    sent.queryParams.PrincipalSource,
+    15,
+    'queries all sources incl. the directory'
+  );
   assert.equal(sent.queryParams.PrincipalType, 1, 'users only');
 });
 
 test('HttpSharePointClient: searchPeople reads the verbose d.ClientPeoplePickerSearchUser envelope', async () => {
   const entities = [{ Key: 'CONTOSO\\asmith', DisplayText: 'Anna Smith' }];
   const { fetch } = makeFetch([
-    { when: c => c.url.endsWith('/_api/contextinfo'), respond: () => digestResponse('d1') },
     {
-      when: c => c.method === 'POST',
-      respond: () => new Response(JSON.stringify({ d: { ClientPeoplePickerSearchUser: JSON.stringify(entities) } }), { status: 200 }),
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () => digestResponse('d1'),
+    },
+    {
+      when: (c) => c.method === 'POST',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            d: { ClientPeoplePickerSearchUser: JSON.stringify(entities) },
+          }),
+          { status: 200 }
+        ),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   const results = await client.searchPeople('anna');
-  assert.deepEqual(results, [{ loginName: 'asmith', displayName: 'Anna Smith' }]);
+  assert.deepEqual(results, [
+    { loginName: 'asmith', displayName: 'Anna Smith' },
+  ]);
 });
 
 test('HttpSharePointClient: searchPeople returns [] when the response carries no recognised payload', async () => {
   const { fetch } = makeFetch([
-    { when: c => c.url.endsWith('/_api/contextinfo'), respond: () => digestResponse('d1') },
-    { when: c => c.method === 'POST', respond: () => new Response(JSON.stringify({}), { status: 200 }) },
+    {
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () => digestResponse('d1'),
+    },
+    {
+      when: (c) => c.method === 'POST',
+      respond: () => new Response(JSON.stringify({}), { status: 200 }),
+    },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   assert.deepEqual(await client.searchPeople('x'), []);
 });
 
 test('HttpSharePointClient: searchPeople short-circuits a blank query without calling fetch', async () => {
   const { fetch, calls } = makeFetch([]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   assert.deepEqual(await client.searchPeople('   '), []);
   assert.equal(calls.length, 0);
@@ -744,10 +1152,19 @@ test('HttpSharePointClient: searchPeople short-circuits a blank query without ca
 
 test('HttpSharePointClient: searchPeople throws on a non-ok response', async () => {
   const { fetch } = makeFetch([
-    { when: c => c.url.endsWith('/_api/contextinfo'), respond: () => digestResponse('d1') },
-    { when: c => c.method === 'POST', respond: () => new Response('err', { status: 500 }) },
+    {
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () => digestResponse('d1'),
+    },
+    {
+      when: (c) => c.method === 'POST',
+      respond: () => new Response('err', { status: 500 }),
+    },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   await assert.rejects(() => client.searchPeople('x'), /HTTP Error: 500/);
 });
@@ -764,16 +1181,27 @@ function profileResponse(displayName) {
 
 test('HttpSharePointClient: resolveUsers resolves display names via GetPropertiesFor, reattaching the claims prefix and domain', async () => {
   const { fetch, calls } = makeFetch([
-    { when: c => c.url.includes('GetPropertiesFor') && c.url.includes('jsmith'), respond: () => profileResponse('John Smith') },
-    { when: c => c.url.includes('GetPropertiesFor') && c.url.includes('bjones'), respond: () => profileResponse('Bola Jones') },
+    {
+      when: (c) =>
+        c.url.includes('GetPropertiesFor') && c.url.includes('jsmith'),
+      respond: () => profileResponse('John Smith'),
+    },
+    {
+      when: (c) =>
+        c.url.includes('GetPropertiesFor') && c.url.includes('bjones'),
+      respond: () => profileResponse('Bola Jones'),
+    },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   const resolved = await client.resolveUsers(['jsmith', 'bjones']);
   assert.deepEqual(resolved, { jsmith: 'John Smith', bjones: 'Bola Jones' });
 
   // The stored bare account is expanded to a full claims login at the boundary.
-  const jcall = calls.find(c => c.url.includes('jsmith'));
+  const jcall = calls.find((c) => c.url.includes('jsmith'));
   assert.ok(jcall, 'a profile read was made for jsmith');
   assert.equal(jcall?.method, 'GET');
   assert.ok(jcall?.url.includes('CONTOSO'), 'reattaches the AD domain');
@@ -781,36 +1209,61 @@ test('HttpSharePointClient: resolveUsers resolves display names via GetPropertie
 
 test('HttpSharePointClient: resolveUsers dedupes repeated accounts into a single read', async () => {
   const { fetch, calls } = makeFetch([
-    { when: c => c.url.includes('GetPropertiesFor'), respond: () => profileResponse('John Smith') },
+    {
+      when: (c) => c.url.includes('GetPropertiesFor'),
+      respond: () => profileResponse('John Smith'),
+    },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   const resolved = await client.resolveUsers(['jsmith', 'jsmith', 'jsmith']);
   assert.deepEqual(resolved, { jsmith: 'John Smith' });
-  assert.equal(calls.filter(c => c.url.includes('GetPropertiesFor')).length, 1, 'one read per unique account');
+  assert.equal(
+    calls.filter((c) => c.url.includes('GetPropertiesFor')).length,
+    1,
+    'one read per unique account'
+  );
 });
 
 test('HttpSharePointClient: resolveUsers maps to null when the profile has no DisplayName', async () => {
   const { fetch } = makeFetch([
-    { when: c => c.url.includes('GetPropertiesFor'), respond: () => profileResponse('') },
+    {
+      when: (c) => c.url.includes('GetPropertiesFor'),
+      respond: () => profileResponse(''),
+    },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   assert.deepEqual(await client.resolveUsers(['ghost']), { ghost: null });
 });
 
 test('HttpSharePointClient: resolveUsers maps to null when the profile read fails', async () => {
   const { fetch } = makeFetch([
-    { when: c => c.url.includes('GetPropertiesFor'), respond: () => new Response('nope', { status: 500 }) },
+    {
+      when: (c) => c.url.includes('GetPropertiesFor'),
+      respond: () => new Response('nope', { status: 500 }),
+    },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   assert.deepEqual(await client.resolveUsers(['ghost']), { ghost: null });
 });
 
 test('HttpSharePointClient: resolveUsers returns an empty map without any read for an empty list', async () => {
   const { fetch, calls } = makeFetch([]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   assert.deepEqual(await client.resolveUsers([]), {});
   assert.equal(calls.length, 0);

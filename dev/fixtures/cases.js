@@ -2,7 +2,11 @@
 /** @typedef {import('../../src/sharepoint-client.js').CaseRow} CaseRow */
 
 const _now = new Date();
-const _todayStart = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate());
+const _todayStart = new Date(
+  _now.getFullYear(),
+  _now.getMonth(),
+  _now.getDate()
+);
 const _threeDaysAgo = new Date(_todayStart.getTime() - 3 * 24 * 60 * 60 * 1000);
 const _twoMonthsAgo = new Date(_todayStart);
 _twoMonthsAgo.setMonth(_twoMonthsAgo.getMonth() - 2);
@@ -11,7 +15,9 @@ const _nextWeek = new Date(_todayStart.getTime() + 7 * 24 * 60 * 60 * 1000);
 
 // Reviewer Manager report: cases assigned to user-rm (morgan manager)
 const _fiveDaysAgo = new Date(_todayStart.getTime() - 5 * 24 * 60 * 60 * 1000);
-const _twentyDaysAgo = new Date(_todayStart.getTime() - 20 * 24 * 60 * 60 * 1000);
+const _twentyDaysAgo = new Date(
+  _todayStart.getTime() - 20 * 24 * 60 * 60 * 1000
+);
 
 /**
  * hello-review Cases:
@@ -60,8 +66,16 @@ export const cases = [
       'q-welcome': { value: 'Yes' },
     },
     conversation: [
-      { author: 'user-reviewer', timestamp: '2026-05-07T09:00:00Z', body: 'Please confirm the greeting script used.' },
-      { author: 'user-agent-b', timestamp: '2026-05-07T09:15:00Z', body: 'Standard greeting was used per policy.' },
+      {
+        author: 'user-reviewer',
+        timestamp: '2026-05-07T09:00:00Z',
+        body: 'Please confirm the greeting script used.',
+      },
+      {
+        author: 'user-agent-b',
+        timestamp: '2026-05-07T09:15:00Z',
+        body: 'Standard greeting was used per policy.',
+      },
     ],
     notes: '',
     completedAt: null,
@@ -79,13 +93,18 @@ export const cases = [
       'q-welcome': { value: 'Yes' },
       'q-needs': {
         value: 'No',
-        justification: 'Agent jumped straight to resolution without confirming the issue.',
-        attributedParty: { loginName: 'agent.c', displayName: 'Agent C (Casey Doyle)' },
+        justification:
+          'Agent jumped straight to resolution without confirming the issue.',
+        attributedParty: {
+          loginName: 'agent.c',
+          displayName: 'Agent C (Casey Doyle)',
+        },
         // Unified Issue Capture (ADR-0020): values captured against this failed
         // Answer, keyed by CaptureField.key, demonstrating the four string types.
         capture: {
           rootCause: 'Skipped the needs-identification step',
-          whatHappened: 'Agent moved to a billing fix before confirming the caller’s actual issue.',
+          whatHappened:
+            'Agent moved to a billing fix before confirming the caller’s actual issue.',
           severity: 'Med',
           repeatIssue: 'No',
         },
@@ -95,7 +114,8 @@ export const cases = [
     },
     conversation: [],
     notes: 'All applicable questions answered — ready to complete.',
-    caseJustification: 'Reviewed against the Q2 contact-handling policy; resolution path was acceptable despite the missed needs check.',
+    caseJustification:
+      'Reviewed against the Q2 contact-handling policy; resolution path was acceptable despite the missed needs check.',
     completedAt: null,
     created: '2026-05-03T08:00:00Z',
     etag: 'etag-c3-v1',
@@ -199,7 +219,11 @@ export const cases = [
         value: 'No',
         justification: 'Needs improvement',
         remediationActions: [
-          { id: 'ra-10-1', text: 'Ensure agent identifies customer needs before proceeding', completed: false },
+          {
+            id: 'ra-10-1',
+            text: 'Ensure agent identifies customer needs before proceeding',
+            completed: false,
+          },
         ],
       },
     },
@@ -221,7 +245,11 @@ export const cases = [
       'q-welcome': {
         value: 'No',
         remediationActions: [
-          { id: 'ra-11-1', text: 'Review greeting standards and apply correct opening', completed: false },
+          {
+            id: 'ra-11-1',
+            text: 'Review greeting standards and apply correct opening',
+            completed: false,
+          },
         ],
       },
     },
@@ -241,9 +269,21 @@ export const cases = [
     responsibleParty: 'user-rp',
     answers: {},
     conversation: [
-      { author: 'user-reviewer', timestamp: '2026-05-07T09:00:00Z', body: 'Please clarify the greeting used.' },
-      { author: 'user-rp', timestamp: '2026-05-07T09:30:00Z', body: 'Standard greeting was used.' },
-      { author: 'user-reviewer', timestamp: '2026-05-07T10:00:00Z', body: 'Can you provide the exact wording?' },
+      {
+        author: 'user-reviewer',
+        timestamp: '2026-05-07T09:00:00Z',
+        body: 'Please clarify the greeting used.',
+      },
+      {
+        author: 'user-rp',
+        timestamp: '2026-05-07T09:30:00Z',
+        body: 'Standard greeting was used.',
+      },
+      {
+        author: 'user-reviewer',
+        timestamp: '2026-05-07T10:00:00Z',
+        body: 'Can you provide the exact wording?',
+      },
     ],
     notes: '',
     completedAt: null,
@@ -259,7 +299,11 @@ export const cases = [
     responsibleParty: 'user-rp',
     answers: {},
     conversation: [
-      { author: 'user-reviewer', timestamp: '2026-05-08T09:00:00Z', body: 'Please respond to review queries.' },
+      {
+        author: 'user-reviewer',
+        timestamp: '2026-05-08T09:00:00Z',
+        body: 'Please respond to review queries.',
+      },
     ],
     notes: '',
     completedAt: null,
@@ -292,11 +336,18 @@ export const cases = [
         answerKey: 'q-welcome',
         value: 'No',
         remediationActions: [
-          { id: 'ov-14-1', text: 'Coach agent on opening greeting standards.', completed: false },
+          {
+            id: 'ov-14-1',
+            text: 'Coach agent on opening greeting standards.',
+            completed: false,
+          },
         ],
         attributedParty: { loginName: 'agent-rp', displayName: 'Agent RP' },
-        remediationDetails: { rootCause: 'Greeting omitted on the call recording' },
-        reasoning: 'On review the recording shows no greeting was given; original Answer was wrong.',
+        remediationDetails: {
+          rootCause: 'Greeting omitted on the call recording',
+        },
+        reasoning:
+          'On review the recording shows no greeting was given; original Answer was wrong.',
       },
     ],
     conversation: [],
@@ -415,10 +466,18 @@ export const cases = [
     answers: {
       'q-cv-identity': { value: 'Yes' },
       'q-cv-method': { value: 'Knowledge-based' },
-      'q-ps-needs': { value: 'No', justification: 'Agent proceeded directly to recommendation without assessing needs.' },
+      'q-ps-needs': {
+        value: 'No',
+        justification:
+          'Agent proceeded directly to recommendation without assessing needs.',
+      },
     },
     conversation: [
-      { author: 'user-reviewer', timestamp: '2026-05-11T09:00:00Z', body: 'Please clarify why needs assessment was skipped.' },
+      {
+        author: 'user-reviewer',
+        timestamp: '2026-05-11T09:00:00Z',
+        body: 'Please clarify why needs assessment was skipped.',
+      },
     ],
     notes: '',
     completedAt: null,

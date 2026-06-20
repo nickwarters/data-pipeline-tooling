@@ -62,7 +62,13 @@ export function validateOverride(draft, context) {
 
   // Only a pass→fail Override re-applies the completion gate: it newly attributes
   // a failure, so it must satisfy the same checks the Case did (ADR-0018).
-  if (classifyTransition(context.question, context.originalAnswer, draft.value) === 'pass→fail') {
+  if (
+    classifyTransition(
+      context.question,
+      context.originalAnswer,
+      draft.value
+    ) === 'pass→fail'
+  ) {
     if (context.attributeFailures && !draft.attributedParty) {
       errors.push('An Attributed Party is required for the failure.');
     }
@@ -70,7 +76,9 @@ export function validateOverride(draft, context) {
       if (!field.required) continue;
       const captured = draft.remediationDetails?.[field.key];
       if (captured === undefined || captured === '') {
-        errors.push(`Remediation Detail "${field.label}" is required for the failure.`);
+        errors.push(
+          `Remediation Detail "${field.label}" is required for the failure.`
+        );
       }
     }
   }
@@ -102,8 +110,10 @@ export function buildOverride(draft, context) {
   };
   if (context.sourceCaseId) override.sourceCaseId = context.sourceCaseId;
   if (context.sourceAppealId) override.sourceAppealId = context.sourceAppealId;
-  if (draft.remediationActions) override.remediationActions = draft.remediationActions;
+  if (draft.remediationActions)
+    override.remediationActions = draft.remediationActions;
   if (draft.attributedParty) override.attributedParty = draft.attributedParty;
-  if (draft.remediationDetails) override.remediationDetails = draft.remediationDetails;
+  if (draft.remediationDetails)
+    override.remediationDetails = draft.remediationDetails;
   return override;
 }

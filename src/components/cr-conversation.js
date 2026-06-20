@@ -28,7 +28,10 @@ export class CRConversation extends ReactiveElement {
 
   connectedCallback() {
     super.connectedCallback();
-    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    if (
+      typeof document !== 'undefined' &&
+      typeof document.addEventListener === 'function'
+    ) {
       this._visibilityHandler = () => {
         if (!document.hidden) this._refresh();
       };
@@ -38,7 +41,11 @@ export class CRConversation extends ReactiveElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    if (this._visibilityHandler && typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+    if (
+      this._visibilityHandler &&
+      typeof document !== 'undefined' &&
+      typeof document.removeEventListener === 'function'
+    ) {
       document.removeEventListener('visibilitychange', this._visibilityHandler);
       this._visibilityHandler = null;
     }
@@ -47,7 +54,9 @@ export class CRConversation extends ReactiveElement {
   /**
    * @param {Message[]} messages
    */
-  set messages(messages) { this.update(messages); }
+  set messages(messages) {
+    this.update(messages);
+  }
   update(messages) {
     this._messages = messages;
     this._render();
@@ -70,11 +79,17 @@ export class CRConversation extends ReactiveElement {
     const children = [h('h2', {}, 'Conversation')];
 
     if (this._messages.length === 0) {
-      children.push(h('p', { class: 'cr-conversation-empty' }, 'No messages yet.'));
+      children.push(
+        h('p', { class: 'cr-conversation-empty' }, 'No messages yet.')
+      );
     } else {
-      children.push(h('ul', { class: 'cr-conversation-list' },
-        ...this._messages.map(msg => this._renderMessage(msg))
-      ));
+      children.push(
+        h(
+          'ul',
+          { class: 'cr-conversation-list' },
+          ...this._messages.map((msg) => this._renderMessage(msg))
+        )
+      );
     }
 
     if (this.access === 'edit') {
@@ -87,23 +102,41 @@ export class CRConversation extends ReactiveElement {
    * @param {Message} msg
    */
   _renderMessage(msg) {
-    return h('li', { class: 'cr-conversation-message' },
+    return h(
+      'li',
+      { class: 'cr-conversation-message' },
       h('p', { class: 'cr-message-author' }, msg.author),
-      h('p', { class: 'cr-message-timestamp' }, new Date(msg.timestamp).toLocaleString()),
+      h(
+        'p',
+        { class: 'cr-message-timestamp' },
+        new Date(msg.timestamp).toLocaleString()
+      ),
       h('p', { class: 'cr-message-body' }, msg.body)
     );
   }
 
   _renderCompose() {
     let textarea;
-    return h('div', { class: 'cr-conversation-compose' },
-      textarea = h('textarea', { class: 'cr-conversation-input', 'aria-label': 'Message to Responsible Party' }),
-      h('button', { class: 'cr-conversation-send', onclick: async () => {
-        const body = (/** @type {any} */ (textarea).value ?? '').trim();
-        if (!body) return;
-        /** @type {any} */ (textarea).value = '';
-        await this._sendMessage(body);
-      } }, 'Send')
+    return h(
+      'div',
+      { class: 'cr-conversation-compose' },
+      (textarea = h('textarea', {
+        class: 'cr-conversation-input',
+        'aria-label': 'Message to Responsible Party',
+      })),
+      h(
+        'button',
+        {
+          class: 'cr-conversation-send',
+          onclick: async () => {
+            const body = /** @type {any} */ (textarea.value ?? '').trim();
+            if (!body) return;
+            /** @type {any} */ (textarea).value = '';
+            await this._sendMessage(body);
+          },
+        },
+        'Send'
+      )
     );
   }
 
@@ -111,7 +144,8 @@ export class CRConversation extends ReactiveElement {
    * @param {string} body
    */
   async _sendMessage(body) {
-    if (!this.client || !this.saveQueue || !this.caseId || !this.currentUser) return;
+    if (!this.client || !this.saveQueue || !this.caseId || !this.currentUser)
+      return;
 
     /** @type {Message} */
     const msg = {

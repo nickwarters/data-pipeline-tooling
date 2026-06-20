@@ -11,14 +11,26 @@
 export async function createSharePointClient(params) {
   if (params.get('mock') === '1') {
     const persona = params.get('asUser') ?? 'reviewer';
-    const [{ MockSharePointClient }, { cases }, { questionDefinitions }, { personas }, { people }] = await Promise.all([
+    const [
+      { MockSharePointClient },
+      { cases },
+      { questionDefinitions },
+      { personas },
+      { people },
+    ] = await Promise.all([
       import('./mock-sharepoint-client.js'),
       import('../../dev/fixtures/cases.js'),
       import('../../dev/fixtures/question-definitions.js'),
       import('../../dev/fixtures/personas.js'),
       import('../../dev/fixtures/people.js'),
     ]);
-    return new MockSharePointClient({ cases, questionDefinitions, personas, persona, people });
+    return new MockSharePointClient({
+      cases,
+      questionDefinitions,
+      personas,
+      persona,
+      people,
+    });
   }
 
   const { HttpSharePointClient } = await import('./http-sharepoint-client.js');

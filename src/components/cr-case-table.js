@@ -22,48 +22,53 @@ function defaultColumns(openCase) {
       key: 'reference',
       label: 'Reference',
       sortable: true,
-      getValue: r => r.title || r.id,
-      renderCell: r => h('a', { href: `#/case/${r.id}` }, r.title || r.id),
+      getValue: (r) => r.title || r.id,
+      renderCell: (r) => h('a', { href: `#/case/${r.id}` }, r.title || r.id),
     },
     {
       key: 'caseType',
       label: 'Case Type',
       sortable: true,
-      getValue: r => r.caseType,
+      getValue: (r) => r.caseType,
     },
     {
       key: 'relatedDate',
       label: 'Related Date',
       sortable: true,
-      getValue: r => /** @type {any} */ (r).relatedDate || '',
+      getValue: (r) => /** @type {any} */ (r).relatedDate || '',
     },
     {
       key: 'dueDate',
       label: 'Due Date',
       sortable: true,
-      getValue: r => r.dueDate || '',
+      getValue: (r) => r.dueDate || '',
     },
     {
       key: 'status',
       label: 'Status',
       sortable: true,
-      getValue: r => r.status,
+      getValue: (r) => r.status,
     },
     {
       key: 'assigned',
       label: 'Assigned',
       sortable: true,
-      getValue: r => r.created || '',
+      getValue: (r) => r.created || '',
     },
     {
       key: 'actions',
       label: 'Actions',
-      renderCell: r => h('button', {
-        type: 'button',
-        className: 'cr-case-open-btn',
-        'aria-label': `Open ${r.title || r.id}`,
-        onclick: () => openCase(r.id)
-      }, 'Open'),
+      renderCell: (r) =>
+        h(
+          'button',
+          {
+            type: 'button',
+            className: 'cr-case-open-btn',
+            'aria-label': `Open ${r.title || r.id}`,
+            onclick: () => openCase(r.id),
+          },
+          'Open'
+        ),
     },
   ];
 }
@@ -91,7 +96,7 @@ export class CRCaseTable extends ReactiveElement {
       if (this._customColumns) return cases;
       const text = this._filterText.get().toLowerCase();
       const status = this._statusFilter.get();
-      return cases.filter(c => {
+      return cases.filter((c) => {
         if (status && c.status !== status) return false;
         if (!text) return true;
         return (
@@ -109,20 +114,32 @@ export class CRCaseTable extends ReactiveElement {
   }
 
   /** @param {CaseRow[]} cases */
-  set cases(cases) { this._casesSignal.set(cases); }
-  get cases() { return this._casesSignal.get(); }
+  set cases(cases) {
+    this._casesSignal.set(cases);
+  }
+  get cases() {
+    return this._casesSignal.get();
+  }
 
   /** @param {CaseColumn[]} cols */
-  set columns(cols) { this._customColumns = cols; }
+  set columns(cols) {
+    this._customColumns = cols;
+  }
 
   /** @param {(row: CaseRow) => string} fn */
-  set rowClass(fn) { this._customRowClass = fn; }
+  set rowClass(fn) {
+    this._customRowClass = fn;
+  }
 
   /** @param {'default' | 'hidden'} mode */
-  set toolbar(mode) { this._toolbarMode = mode; }
+  set toolbar(mode) {
+    this._toolbarMode = mode;
+  }
 
   /** @param {{ key: string, dir?: 'asc' | 'desc' } | null} s */
-  set sort(s) { this._initialSort = s; }
+  set sort(s) {
+    this._initialSort = s;
+  }
 
   connectedCallback() {
     super.connectedCallback();
@@ -140,7 +157,8 @@ export class CRCaseTable extends ReactiveElement {
       this._inner = new CRDataTable();
     }
 
-    const columns = this._customColumns ?? defaultColumns(id => this._openCase(id));
+    const columns =
+      this._customColumns ?? defaultColumns((id) => this._openCase(id));
     this._inner.columns = columns;
 
     if (this._customRowClass) {
@@ -150,9 +168,10 @@ export class CRCaseTable extends ReactiveElement {
         row.overdue ? 'cr-case-row cr-case-row--overdue' : 'cr-case-row';
     }
 
-    this._inner.onRowActivate = (/** @type {CaseRow} */ row) => this._openCase(row.id);
+    this._inner.onRowActivate = (/** @type {CaseRow} */ row) =>
+      this._openCase(row.id);
     if (this._initialSort) this._inner.sort = this._initialSort;
-    
+
     this._inner.rows = this._filtered.get();
 
     const children = [];
@@ -160,24 +179,30 @@ export class CRCaseTable extends ReactiveElement {
       children.push(this._toolbar);
     }
     children.push(this._inner);
-    
+
     return children;
   }
 
   _buildToolbar() {
-    return h('div', { className: 'cr-case-table-toolbar' },
+    return h(
+      'div',
+      { className: 'cr-case-table-toolbar' },
       h('input', {
         className: 'cr-case-table-filter',
         type: 'text',
         placeholder: 'Filter cases…',
         'aria-label': 'Filter cases',
-        oninput: (/** @type {any} */ e) => this._filterText.set(e.target?.value ?? '')
+        oninput: (/** @type {any} */ e) =>
+          this._filterText.set(e.target?.value ?? ''),
       }),
-      h('select', {
-        className: 'cr-case-table-status-filter',
-        'aria-label': 'Filter by status',
-        onchange: (/** @type {any} */ e) => this._statusFilter.set(e.target?.value ?? '')
-      },
+      h(
+        'select',
+        {
+          className: 'cr-case-table-status-filter',
+          'aria-label': 'Filter by status',
+          onchange: (/** @type {any} */ e) =>
+            this._statusFilter.set(e.target?.value ?? ''),
+        },
         h('option', { value: '' }, 'All statuses'),
         h('option', { value: 'In-progress' }, 'In Progress'),
         h('option', { value: 'Completed' }, 'Completed')
@@ -187,7 +212,9 @@ export class CRCaseTable extends ReactiveElement {
 
   /** @param {string} caseId */
   _openCase(caseId) {
-    this.dispatchEvent(new CustomEvent('cr-case-open', { detail: { caseId }, bubbles: true }));
+    this.dispatchEvent(
+      new CustomEvent('cr-case-open', { detail: { caseId }, bubbles: true })
+    );
   }
 }
 

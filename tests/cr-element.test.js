@@ -5,7 +5,7 @@ import { signal } from '../src/lib/signal.js';
 
 // Provide a minimal HTMLElement stub before cr-element.js is evaluated.
 // Cast through any to satisfy tsc (DOM lib types HTMLElement as non-writable on globalThis).
-(/** @type {any} */ (globalThis)).HTMLElement = class {
+/** @type {any} */ (globalThis).HTMLElement = class {
   disconnectedCallback() {}
 };
 

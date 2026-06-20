@@ -26,7 +26,8 @@ export function parseShowWhen(cond) {
   if (!cond) return { type: 'group', op: 'and', children: [] };
   const node = parseNode(cond);
   // Top-level must always be a group so the UI has somewhere to add to.
-  if (node.type === 'leaf') return { type: 'group', op: 'and', children: [node] };
+  if (node.type === 'leaf')
+    return { type: 'group', op: 'and', children: [node] };
   return node;
 }
 
@@ -45,7 +46,9 @@ export function parseNode(cond) {
   }
   const keys = Object.keys(cond || {});
   if (keys.length === 0) return { type: 'group', op: 'and', children: [] };
-  const leaves = keys.map(qId => leafFromOp(qId, /** @type {any} */ (cond[qId])));
+  const leaves = keys.map((qId) =>
+    leafFromOp(qId, /** @type {any} */ (cond[qId]))
+  );
   return { type: 'group', op: 'and', children: leaves };
 }
 
@@ -55,8 +58,9 @@ export function parseNode(cond) {
  * @returns {LeafNode}
  */
 export function leafFromOp(qId, op) {
-  if (op && 'answered' in op) return { type: 'leaf', qId, op: 'answered', value: true };
-  if (op && 'in' in op)        return { type: 'leaf', qId, op: 'in',       value: op['in'] };
+  if (op && 'answered' in op)
+    return { type: 'leaf', qId, op: 'answered', value: true };
+  if (op && 'in' in op) return { type: 'leaf', qId, op: 'in', value: op['in'] };
   return { type: 'leaf', qId, op: 'equals', value: op?.['equals'] ?? '' };
 }
 
@@ -69,7 +73,10 @@ export function leafToOp(leaf) {
   if (leaf.op === 'in') {
     const arr = Array.isArray(leaf.value)
       ? leaf.value
-      : String(leaf.value || '').split(',').map(s => s.trim()).filter(Boolean);
+      : String(leaf.value || '')
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
     return { in: arr };
   }
   return { equals: leaf.value ?? '' };
@@ -88,10 +95,12 @@ export function serializeTree(node) {
   if (kids.length === 0) return null;
   if (kids.length === 1) return kids[0];
   if (node.op === 'and') {
-    const allLeaves = node.children.every(c => c.type === 'leaf');
-    const ids = /** @type {LeafNode[]} */ (/** @type {unknown} */ (node.children)).map(c => c.qId);
+    const allLeaves = node.children.every((c) => c.type === 'leaf');
+    const ids = /** @type {LeafNode[]} */ (
+      /** @type {unknown} */ (node.children)
+    ).map((c) => c.qId);
     if (allLeaves && new Set(ids).size === ids.length) {
-      return Object.fromEntries(kids.map(k => Object.entries(k)[0]));
+      return Object.fromEntries(kids.map((k) => Object.entries(k)[0]));
     }
     return { $and: kids };
   }
@@ -108,8 +117,11 @@ export function serializeTree(node) {
 export function removeNode(root, target) {
   if (root.type !== 'group') return false;
   const i = root.children.indexOf(target);
-  if (i >= 0) { root.children.splice(i, 1); return true; }
-  return root.children.some(c => c.type === 'group' && removeNode(c, target));
+  if (i >= 0) {
+    root.children.splice(i, 1);
+    return true;
+  }
+  return root.children.some((c) => c.type === 'group' && removeNode(c, target));
 }
 
 /**
@@ -147,7 +159,10 @@ const treeCache = new WeakMap();
  */
 export function ensureTree(q) {
   let t = treeCache.get(q);
-  if (!t) { t = parseShowWhen(q.showWhen); treeCache.set(q, t); }
+  if (!t) {
+    t = parseShowWhen(q.showWhen);
+    treeCache.set(q, t);
+  }
   return t;
 }
 

@@ -1,1800 +1,2834 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Case Review — Design System</title>
-
-  <!-- Production: replace with self-hosted @font-face in site assets library -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-
-  <!-- Design tokens + framework styles -->
-  <link rel="stylesheet" href="../src/styles/cr-styles.css">
-
-  <style>
-    /* ── Styleguide shell (sg- namespace) ───────────────────────────────── */
-
-    *, *::before, *::after { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      font-family: "Barlow", system-ui, "Segoe UI", sans-serif;
-      background: var(--cr-color-bg, #F3F3F4);
-      color: var(--cr-color-on-surface, #0E0E0F);
-    }
-
-    /* Scoped [data-cr-root] wrapper for the whole page */
-    #sg-root {
-      min-height: 100vh;
-    }
-
-    /* Skip link */
-    .sg-skip {
-      position: absolute;
-      top: -999px;
-      left: 0;
-      z-index: 9999;
-      padding: 8px 16px;
-      background: var(--cr-color-accent);
-      color: #fff;
-      font-weight: 600;
-      font-size: 14px;
-      border-radius: 0 0 4px 0;
-      text-decoration: none;
-    }
-    .sg-skip:focus { top: 0; }
-
-    /* Header */
-    .sg-header {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      height: var(--cr-nav-height, 3.5rem);
-      background: var(--cr-color-surface);
-      border-bottom: 1px solid var(--cr-color-border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 var(--cr-space-5);
-      box-shadow: var(--cr-shadow-sm);
-    }
-
-    .sg-brand {
-      display: flex;
-      align-items: center;
-      gap: var(--cr-space-3);
-    }
-
-    .sg-brand-mark {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 2rem;
-      height: 2rem;
-      background: var(--cr-color-accent);
-      color: #fff;
-      font-family: "Barlow Condensed", sans-serif;
-      font-size: 0.9rem;
-      font-weight: 800;
-      letter-spacing: 0.04em;
-      border-radius: 3px;
-      flex-shrink: 0;
-    }
-
-    .sg-brand-name {
-      font-family: "Barlow Condensed", sans-serif;
-      font-size: 1.15rem;
-      font-weight: 700;
-      letter-spacing: -0.01em;
-      color: var(--cr-color-on-surface);
-    }
-
-    .sg-brand-sep {
-      color: var(--cr-color-border-strong);
-      font-weight: 300;
-    }
-
-    .sg-brand-sub {
-      font-family: "Barlow Condensed", sans-serif;
-      font-size: 1rem;
-      font-weight: 600;
-      color: var(--cr-color-text-muted);
-      letter-spacing: 0.02em;
-    }
-
-    .sg-header-controls {
-      display: flex;
-      align-items: center;
-      gap: var(--cr-space-3);
-    }
-
-    .sg-version {
-      font-family: "JetBrains Mono", monospace;
-      font-size: 0.7rem;
-      color: var(--cr-color-text-subtle);
-      background: var(--cr-color-surface-2);
-      padding: 2px 7px;
-      border-radius: 3px;
-    }
-
-    .sg-theme-btn {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-family: "Barlow", sans-serif;
-      font-size: 0.8125rem;
-      font-weight: 500;
-      color: var(--cr-color-text-muted);
-      background: transparent;
-      border: 1px solid var(--cr-color-border);
-      border-radius: 4px;
-      padding: 5px 10px;
-      cursor: pointer;
-      transition:
-        background 100ms ease,
-        color 100ms ease;
-    }
-
-    .sg-theme-btn:hover {
-      background: var(--cr-color-surface-2);
-      color: var(--cr-color-on-surface);
-    }
-
-    .sg-theme-btn:focus-visible {
-      outline: 2px solid var(--cr-color-accent);
-      outline-offset: 2px;
-    }
-
-    /* Layout grid */
-    .sg-layout {
-      display: grid;
-      grid-template-columns: var(--cr-sidebar-width, 15rem) 1fr;
-      min-height: calc(100vh - var(--cr-nav-height, 3.5rem));
-      align-items: start;
-    }
-
-    /* Sidebar nav */
-    .sg-nav {
-      position: sticky;
-      top: var(--cr-nav-height, 3.5rem);
-      height: calc(100vh - var(--cr-nav-height, 3.5rem));
-      overflow-y: auto;
-      background: var(--cr-color-surface);
-      border-right: 1px solid var(--cr-color-border);
-      padding: var(--cr-space-4) 0;
-    }
-
-    .sg-nav-section {
-      padding: var(--cr-space-2) var(--cr-space-4) var(--cr-space-1);
-      font-size: 0.65rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.10em;
-      color: var(--cr-color-text-subtle);
-    }
-
-    .sg-nav-list {
-      list-style: none;
-      margin: 0 0 var(--cr-space-3);
-      padding: 0;
-    }
-
-    .sg-nav-link {
-      display: block;
-      padding: var(--cr-space-2) var(--cr-space-5);
-      font-size: 0.875rem;
-      font-weight: 500;
-      color: var(--cr-color-text-muted);
-      text-decoration: none;
-      border-left: 3px solid transparent;
-      transition:
-        color 100ms ease,
-        background 100ms ease,
-        border-color 100ms ease;
-    }
-
-    .sg-nav-link:hover {
-      color: var(--cr-color-on-surface);
-      background: var(--cr-color-surface-2);
-    }
-
-    .sg-nav-link.active,
-    .sg-nav-link:focus-visible {
-      color: var(--cr-color-accent);
-      background: var(--cr-color-accent-muted);
-      border-left-color: var(--cr-color-accent);
-      outline: none;
-    }
-
-    /* Main content */
-    .sg-main {
-      padding: var(--cr-space-6) var(--cr-space-8);
-      max-width: 960px;
-    }
-
-    /* Section */
-    .sg-section {
-      margin-bottom: var(--cr-space-10);
-      scroll-margin-top: calc(var(--cr-nav-height, 3.5rem) + var(--cr-space-4));
-    }
-
-    .sg-section-header {
-      display: flex;
-      align-items: baseline;
-      gap: var(--cr-space-3);
-      margin-bottom: var(--cr-space-5);
-      padding-bottom: var(--cr-space-3);
-      border-bottom: 2px solid var(--cr-color-border);
-    }
-
-    .sg-section-title {
-      font-family: "Barlow Condensed", sans-serif;
-      font-size: 1.75rem;
-      font-weight: 700;
-      letter-spacing: -0.01em;
-      margin: 0;
-      color: var(--cr-color-on-surface);
-    }
-
-    .sg-section-id {
-      font-family: "JetBrains Mono", monospace;
-      font-size: 0.7rem;
-      color: var(--cr-color-text-subtle);
-    }
-
-    .sg-subsection {
-      margin-bottom: var(--cr-space-6);
-    }
-
-    .sg-subsection-title {
-      font-size: 0.75rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--cr-color-text-muted);
-      margin: 0 0 var(--cr-space-3);
-    }
-
-    /* Demo container */
-    .sg-demo {
-      background: var(--cr-color-surface);
-      border: 1px solid var(--cr-color-border);
-      border-radius: 6px;
-      padding: var(--cr-space-5);
-      margin-bottom: var(--cr-space-3);
-    }
-
-    .sg-demo-dark {
-      background: #0C0C0D;
-      border-color: #2C2C33;
-    }
-
-    .sg-demo + .sg-token-label {
-      font-family: "JetBrains Mono", monospace;
-      font-size: 0.7rem;
-      color: var(--cr-color-text-subtle);
-    }
-
-    /* Row / stack layout helpers */
-    .sg-row {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: var(--cr-space-3);
-    }
-
-    .sg-col {
-      display: flex;
-      flex-direction: column;
-      gap: var(--cr-space-3);
-    }
-
-    .sg-label {
-      font-size: 0.7rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--cr-color-text-subtle);
-      margin-bottom: var(--cr-space-1);
-    }
-
-    /* ── Color swatches ─────────────────────────────────────────────────── */
-
-    .sg-swatch-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
-      gap: var(--cr-space-3);
-    }
-
-    .sg-swatch {
-      border-radius: 4px;
-      overflow: hidden;
-      border: 1px solid var(--cr-color-border);
-    }
-
-    .sg-swatch-color {
-      height: 3.5rem;
-    }
-
-    .sg-swatch-info {
-      padding: 8px 10px;
-      background: var(--cr-color-surface);
-    }
-
-    .sg-swatch-name {
-      font-family: "JetBrains Mono", monospace;
-      font-size: 0.65rem;
-      color: var(--cr-color-text-muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .sg-swatch-hex {
-      font-family: "JetBrains Mono", monospace;
-      font-size: 0.7rem;
-      font-weight: 500;
-      color: var(--cr-color-on-surface);
-      margin-top: 2px;
-    }
-
-    /* ── Type scale ─────────────────────────────────────────────────────── */
-
-    .sg-type-row {
-      display: grid;
-      grid-template-columns: 5rem 3.5rem 1fr;
-      gap: var(--cr-space-3);
-      align-items: baseline;
-      padding: var(--cr-space-2) 0;
-      border-bottom: 1px solid var(--cr-color-border);
-    }
-
-    .sg-type-row:last-child { border-bottom: none; }
-
-    .sg-type-meta {
-      font-family: "JetBrains Mono", monospace;
-      font-size: 0.65rem;
-      color: var(--cr-color-text-subtle);
-    }
-
-    /* ── Spacing bars ───────────────────────────────────────────────────── */
-
-    .sg-space-row {
-      display: flex;
-      align-items: center;
-      gap: var(--cr-space-4);
-      padding: var(--cr-space-1) 0;
-    }
-
-    .sg-space-bar {
-      background: var(--cr-color-accent-muted);
-      border-left: 2px solid var(--cr-color-accent);
-      height: 1.25rem;
-      flex-shrink: 0;
-    }
-
-    .sg-space-meta {
-      font-family: "JetBrains Mono", monospace;
-      font-size: 0.65rem;
-      color: var(--cr-color-text-subtle);
-      width: 6rem;
-    }
-
-    /* ── Radius demos ───────────────────────────────────────────────────── */
-
-    .sg-radius-grid {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--cr-space-5);
-      align-items: flex-end;
-    }
-
-    .sg-radius-item {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: var(--cr-space-2);
-    }
-
-    .sg-radius-box {
-      width: 3.5rem;
-      height: 3.5rem;
-      background: var(--cr-color-accent-muted);
-      border: 2px solid var(--cr-color-accent);
-    }
-
-    /* ── Motion tokens ──────────────────────────────────────────────────── */
-
-    .sg-motion-row {
-      display: flex;
-      align-items: center;
-      gap: var(--cr-space-4);
-      padding: var(--cr-space-2) 0;
-      border-bottom: 1px solid var(--cr-color-border);
-    }
-
-    .sg-motion-dot {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: var(--cr-color-accent);
-      opacity: 0.3;
-    }
-
-    .sg-motion-row:hover .sg-motion-dot {
-      opacity: 1;
-    }
-
-    /* ── Table in demo container ────────────────────────────────────────── */
-
-    .sg-table-wrap {
-      border-radius: 4px;
-      overflow: hidden;
-      border: 1px solid var(--cr-color-border);
-    }
-
-    /* ── KPI demo grid ──────────────────────────────────────────────────── */
-
-    .sg-kpi-demo {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: var(--cr-space-3);
-    }
-
-    @media (max-width: 700px) {
-      .sg-layout { grid-template-columns: 1fr; }
-      .sg-nav { display: none; }
-      .sg-main { padding: var(--cr-space-4); }
-      .sg-kpi-demo { grid-template-columns: repeat(2, 1fr); }
-    }
-
-    /* ── Nav demo ───────────────────────────────────────────────────────── */
-
-    .sg-nav-demo {
-      display: flex;
-      align-items: center;
-      gap: 0;
-      background: var(--cr-color-surface);
-      border: 1px solid var(--cr-color-border);
-      border-radius: 4px;
-      padding: 0 var(--cr-space-4);
-      height: 3.5rem;
-    }
-
-    .sg-nav-demo-brand {
-      display: flex;
-      align-items: center;
-      gap: var(--cr-space-2);
-      font-family: "Barlow Condensed", sans-serif;
-      font-size: 1.1rem;
-      font-weight: 700;
-      margin-right: var(--cr-space-6);
-    }
-
-    .sg-nav-demo-mark {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 1.75rem;
-      height: 1.75rem;
-      background: var(--cr-color-accent);
-      color: #fff;
-      font-size: 0.8rem;
-      font-weight: 800;
-      border-radius: 3px;
-    }
-
-    .sg-nav-demo-items {
-      display: flex;
-      align-items: stretch;
-      gap: 0;
-      height: 100%;
-    }
-
-    .sg-nav-demo-item {
-      display: flex;
-      align-items: center;
-      padding: 0 var(--cr-space-4);
-      font-size: 0.875rem;
-      font-weight: 500;
-      color: var(--cr-color-text-muted);
-      text-decoration: none;
-      border-bottom: 3px solid transparent;
-      transition: color 100ms, border-color 100ms;
-    }
-
-    .sg-nav-demo-item:hover {
-      color: var(--cr-color-on-surface);
-    }
-
-    .sg-nav-demo-item.active {
-      color: var(--cr-color-accent);
-      border-bottom-color: var(--cr-color-accent);
-      font-weight: 600;
-    }
-
-    /* ── Form control tweaks for demos ──────────────────────────────────── */
-
-    .sg-input {
-      font-family: "Barlow", system-ui, sans-serif;
-      font-size: 0.9375rem;
-      color: var(--cr-color-on-surface);
-      background: var(--cr-color-surface);
-      border: 1px solid var(--cr-color-border);
-      border-radius: 4px;
-      padding: 9px 12px;
-      width: 100%;
-      transition: border-color 100ms ease, box-shadow 100ms ease;
-    }
-
-    .sg-input:focus {
-      outline: none;
-      border-color: var(--cr-color-accent);
-      box-shadow: 0 0 0 3px rgba(219,0,17,0.20);
-    }
-
-    .sg-input::placeholder { color: var(--cr-color-text-subtle); }
-
-    .sg-input-error {
-      border-color: var(--cr-color-danger);
-    }
-
-    .sg-input-error:focus {
-      box-shadow: 0 0 0 3px rgba(219,0,17,0.20);
-    }
-
-    .sg-input[disabled] {
-      background: var(--cr-color-surface-2);
-      color: var(--cr-color-text-subtle);
-      cursor: not-allowed;
-    }
-
-    .sg-label-text {
-      display: block;
-      font-size: 0.8125rem;
-      font-weight: 600;
-      color: var(--cr-color-on-surface);
-      margin-bottom: 5px;
-    }
-
-    .sg-help-text {
-      font-size: 0.75rem;
-      color: var(--cr-color-text-muted);
-      margin-top: 4px;
-    }
-
-    .sg-error-text {
-      font-size: 0.75rem;
-      color: var(--cr-color-danger);
-      margin-top: 4px;
-    }
-
-    .sg-form-field {
-      display: flex;
-      flex-direction: column;
-      max-width: 22rem;
-    }
-
-    .sg-checkbox-row,
-    .sg-radio-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 0.9375rem;
-      cursor: pointer;
-      padding: 3px 0;
-    }
-
-    .sg-checkbox-row input,
-    .sg-radio-row input {
-      width: 16px;
-      height: 16px;
-      accent-color: var(--cr-color-accent);
-      cursor: pointer;
-    }
-
-    select.sg-input {
-      appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235C5C65' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 12px center;
-      padding-right: 32px;
-    }
-
-    /* ── Toast demos ─────────────────────────────────────────────────────── */
-
-    .sg-toast {
-      display: flex;
-      align-items: flex-start;
-      gap: var(--cr-space-3);
-      padding: var(--cr-space-3) var(--cr-space-4);
-      border-radius: 5px;
-      border: 1px solid transparent;
-      font-size: 0.875rem;
-      font-weight: 500;
-      max-width: 26rem;
-      box-shadow: var(--cr-shadow-md);
-    }
-
-    .sg-toast-success {
-      background: var(--cr-color-success-bg);
-      border-color: var(--cr-color-success);
-      color: var(--cr-color-success);
-    }
-
-    .sg-toast-danger {
-      background: var(--cr-color-danger-bg);
-      border-color: var(--cr-color-danger);
-      color: var(--cr-color-danger);
-    }
-
-    .sg-toast-warning {
-      background: var(--cr-color-warning-bg);
-      border-color: var(--cr-color-warning);
-      color: var(--cr-color-warning);
-    }
-
-    .sg-toast-info {
-      background: var(--cr-color-info-bg);
-      border-color: var(--cr-color-info);
-      color: var(--cr-color-info);
-    }
-
-    .sg-toast-icon {
-      font-size: 1rem;
-      flex-shrink: 0;
-      margin-top: 1px;
-    }
-
-    /* ── Two-tone question card mock ─────────────────────────────────────── */
-
-    .sg-question-card {
-      border: 1px solid var(--cr-color-border);
-      border-radius: 4px;
-      overflow: hidden;
-    }
-
-    .sg-question-header {
-      background: var(--cr-color-surface-2);
-      padding: var(--cr-space-3) var(--cr-space-4);
-      border-bottom: 1px solid var(--cr-color-border);
-    }
-
-    .sg-question-id {
-      font-family: "JetBrains Mono", monospace;
-      font-size: 0.65rem;
-      color: var(--cr-color-text-subtle);
-    }
-
-    .sg-question-text {
-      font-weight: 600;
-      font-size: 0.9375rem;
-      color: var(--cr-color-on-surface);
-      margin: var(--cr-space-1) 0 0;
-    }
-
-    .sg-question-body {
-      padding: var(--cr-space-3) var(--cr-space-4);
-      background: var(--cr-color-surface);
-      display: flex;
-      flex-direction: column;
-      gap: var(--cr-space-2);
-    }
-
-    /* ── Overview hero ───────────────────────────────────────────────────── */
-
-    .sg-overview-hero {
-      background: var(--cr-color-on-surface);
-      color: var(--cr-color-bg);
-      border-radius: 6px;
-      padding: var(--cr-space-6) var(--cr-space-7);
-      margin-bottom: var(--cr-space-6);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .sg-overview-hero::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      right: 0;
-      width: 8px;
-      height: 100%;
-      background: var(--cr-color-accent);
-    }
-
-    .sg-overview-tagline {
-      font-family: "Barlow Condensed", sans-serif;
-      font-size: 2rem;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      line-height: 1.15;
-      margin: 0 0 var(--cr-space-4);
-    }
-
-    .sg-overview-tagline em {
-      color: var(--cr-color-accent);
-      font-style: normal;
-    }
-
-    .sg-overview-desc {
-      font-size: 0.9375rem;
-      line-height: 1.65;
-      max-width: 38rem;
-      opacity: 0.82;
-      margin: 0;
-    }
-
-    .sg-pill-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--cr-space-2);
-      margin-top: var(--cr-space-4);
-    }
-
-    .sg-pill {
-      font-family: "JetBrains Mono", monospace;
-      font-size: 0.7rem;
-      font-weight: 500;
-      padding: 3px 10px;
-      border-radius: 3px;
-      background: rgba(255,255,255,0.10);
-      border: 1px solid rgba(255,255,255,0.18);
-      color: rgba(255,255,255,0.80);
-      letter-spacing: 0.02em;
-    }
-
-    /* ── Divider ─────────────────────────────────────────────────────────── */
-    .sg-divider {
-      border: none;
-      border-top: 1px solid var(--cr-color-border);
-      margin: var(--cr-space-5) 0;
-    }
-
-    /* ── Code snippet ────────────────────────────────────────────────────── */
-    .sg-code {
-      font-family: "JetBrains Mono", monospace;
-      font-size: 0.75rem;
-      background: var(--cr-color-surface-2);
-      border: 1px solid var(--cr-color-border);
-      border-radius: 3px;
-      padding: var(--cr-space-1) var(--cr-space-2);
-      color: var(--cr-color-text-muted);
-    }
-  </style>
-</head>
-<body>
-  <a href="#sg-main" class="sg-skip">Skip to content</a>
-
-  <div id="sg-root" data-cr-root class="cr-fullbleed">
-
-    <!-- Header ─────────────────────────────────────────────────────────── -->
-    <header class="sg-header">
-      <div class="sg-brand">
-        <span class="sg-brand-mark">CR</span>
-        <span class="sg-brand-name">Case Review</span>
-        <span class="sg-brand-sep">/</span>
-        <span class="sg-brand-sub">Design System</span>
-      </div>
-      <div class="sg-header-controls">
-        <span class="sg-version">v1.0</span>
-        <button class="sg-theme-btn" id="themeToggle" aria-label="Toggle dark mode" aria-pressed="false">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-            <circle cx="7" cy="7" r="3" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M7 1v1M7 12v1M1 7h1M12 7h1M2.9 2.9l.7.7M10.4 10.4l.7.7M2.9 11.1l.7-.7M10.4 3.6l.7-.7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          <span id="themeLabel">Light</span>
-        </button>
-      </div>
-    </header>
-
-    <div class="sg-layout">
-
-      <!-- Sidebar nav ───────────────────────────────────────────────────── -->
-      <nav class="sg-nav" aria-label="Design system navigation">
-        <div class="sg-nav-section">Foundation</div>
-        <ul class="sg-nav-list" role="list">
-          <li><a href="#overview"    class="sg-nav-link" data-section="overview">Overview</a></li>
-          <li><a href="#colors"      class="sg-nav-link" data-section="colors">Colors</a></li>
-          <li><a href="#typography"  class="sg-nav-link" data-section="typography">Typography</a></li>
-          <li><a href="#spacing"     class="sg-nav-link" data-section="spacing">Spacing & Sizing</a></li>
-          <li><a href="#motion"      class="sg-nav-link" data-section="motion">Motion</a></li>
-        </ul>
-        <div class="sg-nav-section">Components</div>
-        <ul class="sg-nav-list" role="list">
-          <li><a href="#buttons"     class="sg-nav-link" data-section="buttons">Buttons</a></li>
-          <li><a href="#forms"       class="sg-nav-link" data-section="forms">Form Controls</a></li>
-          <li><a href="#badges"      class="sg-nav-link" data-section="badges">Status & Badges</a></li>
-          <li><a href="#tables"      class="sg-nav-link" data-section="tables">Data Tables</a></li>
-          <li><a href="#kpi"         class="sg-nav-link" data-section="kpi">KPI Tiles</a></li>
-          <li><a href="#tabs"        class="sg-nav-link" data-section="tabs">Tabs</a></li>
-        </ul>
-        <div class="sg-nav-section">Patterns</div>
-        <ul class="sg-nav-list" role="list">
-          <li><a href="#navigation"  class="sg-nav-link" data-section="navigation">Navigation</a></li>
-          <li><a href="#notifications" class="sg-nav-link" data-section="notifications">Notifications</a></li>
-          <li><a href="#questions"   class="sg-nav-link" data-section="questions">Case Review</a></li>
-          <li><a href="#people"      class="sg-nav-link" data-section="people">People Picker</a></li>
-        </ul>
-      </nav>
-
-      <!-- Main content ─────────────────────────────────────────────────── -->
-      <main id="sg-main" class="sg-main" tabindex="-1">
-
-        <!-- ══ Overview ════════════════════════════════════════════════════ -->
-        <section id="overview" class="sg-section">
-          <div class="sg-section-header">
-            <h1 class="sg-section-title">Overview</h1>
-            <span class="sg-section-id">#overview</span>
-          </div>
-
-          <div class="sg-overview-hero">
-            <p class="sg-overview-tagline">Utilitarian<br><em>Precision.</em></p>
-            <p class="sg-overview-desc">
-              A compliance and quality-assurance tool for financial services teams.
-              Dense, data-forward, every pixel justified. Not enterprise software boring —
-              purposefully sharp. Use this document as the decision test: if a proposed
-              element feels decorative without function, it doesn't belong.
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Case Review — Design System</title>
+
+    <!-- Production: replace with self-hosted @font-face in site assets library -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Design tokens + framework styles -->
+    <link rel="stylesheet" href="../src/styles/cr-styles.css" />
+
+    <style>
+      /* ── Styleguide shell (sg- namespace) ───────────────────────────────── */
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: 'Barlow', system-ui, 'Segoe UI', sans-serif;
+        background: var(--cr-color-bg, #f3f3f4);
+        color: var(--cr-color-on-surface, #0e0e0f);
+      }
+
+      /* Scoped [data-cr-root] wrapper for the whole page */
+      #sg-root {
+        min-height: 100vh;
+      }
+
+      /* Skip link */
+      .sg-skip {
+        position: absolute;
+        top: -999px;
+        left: 0;
+        z-index: 9999;
+        padding: 8px 16px;
+        background: var(--cr-color-accent);
+        color: #fff;
+        font-weight: 600;
+        font-size: 14px;
+        border-radius: 0 0 4px 0;
+        text-decoration: none;
+      }
+      .sg-skip:focus {
+        top: 0;
+      }
+
+      /* Header */
+      .sg-header {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        height: var(--cr-nav-height, 3.5rem);
+        background: var(--cr-color-surface);
+        border-bottom: 1px solid var(--cr-color-border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 var(--cr-space-5);
+        box-shadow: var(--cr-shadow-sm);
+      }
+
+      .sg-brand {
+        display: flex;
+        align-items: center;
+        gap: var(--cr-space-3);
+      }
+
+      .sg-brand-mark {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 2rem;
+        height: 2rem;
+        background: var(--cr-color-accent);
+        color: #fff;
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 0.9rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        border-radius: 3px;
+        flex-shrink: 0;
+      }
+
+      .sg-brand-name {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 1.15rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        color: var(--cr-color-on-surface);
+      }
+
+      .sg-brand-sep {
+        color: var(--cr-color-border-strong);
+        font-weight: 300;
+      }
+
+      .sg-brand-sub {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--cr-color-text-muted);
+        letter-spacing: 0.02em;
+      }
+
+      .sg-header-controls {
+        display: flex;
+        align-items: center;
+        gap: var(--cr-space-3);
+      }
+
+      .sg-version {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem;
+        color: var(--cr-color-text-subtle);
+        background: var(--cr-color-surface-2);
+        padding: 2px 7px;
+        border-radius: 3px;
+      }
+
+      .sg-theme-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: 'Barlow', sans-serif;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--cr-color-text-muted);
+        background: transparent;
+        border: 1px solid var(--cr-color-border);
+        border-radius: 4px;
+        padding: 5px 10px;
+        cursor: pointer;
+        transition:
+          background 100ms ease,
+          color 100ms ease;
+      }
+
+      .sg-theme-btn:hover {
+        background: var(--cr-color-surface-2);
+        color: var(--cr-color-on-surface);
+      }
+
+      .sg-theme-btn:focus-visible {
+        outline: 2px solid var(--cr-color-accent);
+        outline-offset: 2px;
+      }
+
+      /* Layout grid */
+      .sg-layout {
+        display: grid;
+        grid-template-columns: var(--cr-sidebar-width, 15rem) 1fr;
+        min-height: calc(100vh - var(--cr-nav-height, 3.5rem));
+        align-items: start;
+      }
+
+      /* Sidebar nav */
+      .sg-nav {
+        position: sticky;
+        top: var(--cr-nav-height, 3.5rem);
+        height: calc(100vh - var(--cr-nav-height, 3.5rem));
+        overflow-y: auto;
+        background: var(--cr-color-surface);
+        border-right: 1px solid var(--cr-color-border);
+        padding: var(--cr-space-4) 0;
+      }
+
+      .sg-nav-section {
+        padding: var(--cr-space-2) var(--cr-space-4) var(--cr-space-1);
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--cr-color-text-subtle);
+      }
+
+      .sg-nav-list {
+        list-style: none;
+        margin: 0 0 var(--cr-space-3);
+        padding: 0;
+      }
+
+      .sg-nav-link {
+        display: block;
+        padding: var(--cr-space-2) var(--cr-space-5);
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--cr-color-text-muted);
+        text-decoration: none;
+        border-left: 3px solid transparent;
+        transition:
+          color 100ms ease,
+          background 100ms ease,
+          border-color 100ms ease;
+      }
+
+      .sg-nav-link:hover {
+        color: var(--cr-color-on-surface);
+        background: var(--cr-color-surface-2);
+      }
+
+      .sg-nav-link.active,
+      .sg-nav-link:focus-visible {
+        color: var(--cr-color-accent);
+        background: var(--cr-color-accent-muted);
+        border-left-color: var(--cr-color-accent);
+        outline: none;
+      }
+
+      /* Main content */
+      .sg-main {
+        padding: var(--cr-space-6) var(--cr-space-8);
+        max-width: 960px;
+      }
+
+      /* Section */
+      .sg-section {
+        margin-bottom: var(--cr-space-10);
+        scroll-margin-top: calc(
+          var(--cr-nav-height, 3.5rem) + var(--cr-space-4)
+        );
+      }
+
+      .sg-section-header {
+        display: flex;
+        align-items: baseline;
+        gap: var(--cr-space-3);
+        margin-bottom: var(--cr-space-5);
+        padding-bottom: var(--cr-space-3);
+        border-bottom: 2px solid var(--cr-color-border);
+      }
+
+      .sg-section-title {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 1.75rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        margin: 0;
+        color: var(--cr-color-on-surface);
+      }
+
+      .sg-section-id {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem;
+        color: var(--cr-color-text-subtle);
+      }
+
+      .sg-subsection {
+        margin-bottom: var(--cr-space-6);
+      }
+
+      .sg-subsection-title {
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--cr-color-text-muted);
+        margin: 0 0 var(--cr-space-3);
+      }
+
+      /* Demo container */
+      .sg-demo {
+        background: var(--cr-color-surface);
+        border: 1px solid var(--cr-color-border);
+        border-radius: 6px;
+        padding: var(--cr-space-5);
+        margin-bottom: var(--cr-space-3);
+      }
+
+      .sg-demo-dark {
+        background: #0c0c0d;
+        border-color: #2c2c33;
+      }
+
+      .sg-demo + .sg-token-label {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem;
+        color: var(--cr-color-text-subtle);
+      }
+
+      /* Row / stack layout helpers */
+      .sg-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--cr-space-3);
+      }
+
+      .sg-col {
+        display: flex;
+        flex-direction: column;
+        gap: var(--cr-space-3);
+      }
+
+      .sg-label {
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--cr-color-text-subtle);
+        margin-bottom: var(--cr-space-1);
+      }
+
+      /* ── Color swatches ─────────────────────────────────────────────────── */
+
+      .sg-swatch-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+        gap: var(--cr-space-3);
+      }
+
+      .sg-swatch {
+        border-radius: 4px;
+        overflow: hidden;
+        border: 1px solid var(--cr-color-border);
+      }
+
+      .sg-swatch-color {
+        height: 3.5rem;
+      }
+
+      .sg-swatch-info {
+        padding: 8px 10px;
+        background: var(--cr-color-surface);
+      }
+
+      .sg-swatch-name {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.65rem;
+        color: var(--cr-color-text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .sg-swatch-hex {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem;
+        font-weight: 500;
+        color: var(--cr-color-on-surface);
+        margin-top: 2px;
+      }
+
+      /* ── Type scale ─────────────────────────────────────────────────────── */
+
+      .sg-type-row {
+        display: grid;
+        grid-template-columns: 5rem 3.5rem 1fr;
+        gap: var(--cr-space-3);
+        align-items: baseline;
+        padding: var(--cr-space-2) 0;
+        border-bottom: 1px solid var(--cr-color-border);
+      }
+
+      .sg-type-row:last-child {
+        border-bottom: none;
+      }
+
+      .sg-type-meta {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.65rem;
+        color: var(--cr-color-text-subtle);
+      }
+
+      /* ── Spacing bars ───────────────────────────────────────────────────── */
+
+      .sg-space-row {
+        display: flex;
+        align-items: center;
+        gap: var(--cr-space-4);
+        padding: var(--cr-space-1) 0;
+      }
+
+      .sg-space-bar {
+        background: var(--cr-color-accent-muted);
+        border-left: 2px solid var(--cr-color-accent);
+        height: 1.25rem;
+        flex-shrink: 0;
+      }
+
+      .sg-space-meta {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.65rem;
+        color: var(--cr-color-text-subtle);
+        width: 6rem;
+      }
+
+      /* ── Radius demos ───────────────────────────────────────────────────── */
+
+      .sg-radius-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--cr-space-5);
+        align-items: flex-end;
+      }
+
+      .sg-radius-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--cr-space-2);
+      }
+
+      .sg-radius-box {
+        width: 3.5rem;
+        height: 3.5rem;
+        background: var(--cr-color-accent-muted);
+        border: 2px solid var(--cr-color-accent);
+      }
+
+      /* ── Motion tokens ──────────────────────────────────────────────────── */
+
+      .sg-motion-row {
+        display: flex;
+        align-items: center;
+        gap: var(--cr-space-4);
+        padding: var(--cr-space-2) 0;
+        border-bottom: 1px solid var(--cr-color-border);
+      }
+
+      .sg-motion-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--cr-color-accent);
+        opacity: 0.3;
+      }
+
+      .sg-motion-row:hover .sg-motion-dot {
+        opacity: 1;
+      }
+
+      /* ── Table in demo container ────────────────────────────────────────── */
+
+      .sg-table-wrap {
+        border-radius: 4px;
+        overflow: hidden;
+        border: 1px solid var(--cr-color-border);
+      }
+
+      /* ── KPI demo grid ──────────────────────────────────────────────────── */
+
+      .sg-kpi-demo {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: var(--cr-space-3);
+      }
+
+      @media (max-width: 700px) {
+        .sg-layout {
+          grid-template-columns: 1fr;
+        }
+        .sg-nav {
+          display: none;
+        }
+        .sg-main {
+          padding: var(--cr-space-4);
+        }
+        .sg-kpi-demo {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
+      /* ── Nav demo ───────────────────────────────────────────────────────── */
+
+      .sg-nav-demo {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        background: var(--cr-color-surface);
+        border: 1px solid var(--cr-color-border);
+        border-radius: 4px;
+        padding: 0 var(--cr-space-4);
+        height: 3.5rem;
+      }
+
+      .sg-nav-demo-brand {
+        display: flex;
+        align-items: center;
+        gap: var(--cr-space-2);
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin-right: var(--cr-space-6);
+      }
+
+      .sg-nav-demo-mark {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.75rem;
+        height: 1.75rem;
+        background: var(--cr-color-accent);
+        color: #fff;
+        font-size: 0.8rem;
+        font-weight: 800;
+        border-radius: 3px;
+      }
+
+      .sg-nav-demo-items {
+        display: flex;
+        align-items: stretch;
+        gap: 0;
+        height: 100%;
+      }
+
+      .sg-nav-demo-item {
+        display: flex;
+        align-items: center;
+        padding: 0 var(--cr-space-4);
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--cr-color-text-muted);
+        text-decoration: none;
+        border-bottom: 3px solid transparent;
+        transition:
+          color 100ms,
+          border-color 100ms;
+      }
+
+      .sg-nav-demo-item:hover {
+        color: var(--cr-color-on-surface);
+      }
+
+      .sg-nav-demo-item.active {
+        color: var(--cr-color-accent);
+        border-bottom-color: var(--cr-color-accent);
+        font-weight: 600;
+      }
+
+      /* ── Form control tweaks for demos ──────────────────────────────────── */
+
+      .sg-input {
+        font-family: 'Barlow', system-ui, sans-serif;
+        font-size: 0.9375rem;
+        color: var(--cr-color-on-surface);
+        background: var(--cr-color-surface);
+        border: 1px solid var(--cr-color-border);
+        border-radius: 4px;
+        padding: 9px 12px;
+        width: 100%;
+        transition:
+          border-color 100ms ease,
+          box-shadow 100ms ease;
+      }
+
+      .sg-input:focus {
+        outline: none;
+        border-color: var(--cr-color-accent);
+        box-shadow: 0 0 0 3px rgba(219, 0, 17, 0.2);
+      }
+
+      .sg-input::placeholder {
+        color: var(--cr-color-text-subtle);
+      }
+
+      .sg-input-error {
+        border-color: var(--cr-color-danger);
+      }
+
+      .sg-input-error:focus {
+        box-shadow: 0 0 0 3px rgba(219, 0, 17, 0.2);
+      }
+
+      .sg-input[disabled] {
+        background: var(--cr-color-surface-2);
+        color: var(--cr-color-text-subtle);
+        cursor: not-allowed;
+      }
+
+      .sg-label-text {
+        display: block;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: var(--cr-color-on-surface);
+        margin-bottom: 5px;
+      }
+
+      .sg-help-text {
+        font-size: 0.75rem;
+        color: var(--cr-color-text-muted);
+        margin-top: 4px;
+      }
+
+      .sg-error-text {
+        font-size: 0.75rem;
+        color: var(--cr-color-danger);
+        margin-top: 4px;
+      }
+
+      .sg-form-field {
+        display: flex;
+        flex-direction: column;
+        max-width: 22rem;
+      }
+
+      .sg-checkbox-row,
+      .sg-radio-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.9375rem;
+        cursor: pointer;
+        padding: 3px 0;
+      }
+
+      .sg-checkbox-row input,
+      .sg-radio-row input {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--cr-color-accent);
+        cursor: pointer;
+      }
+
+      select.sg-input {
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235C5C65' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        padding-right: 32px;
+      }
+
+      /* ── Toast demos ─────────────────────────────────────────────────────── */
+
+      .sg-toast {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--cr-space-3);
+        padding: var(--cr-space-3) var(--cr-space-4);
+        border-radius: 5px;
+        border: 1px solid transparent;
+        font-size: 0.875rem;
+        font-weight: 500;
+        max-width: 26rem;
+        box-shadow: var(--cr-shadow-md);
+      }
+
+      .sg-toast-success {
+        background: var(--cr-color-success-bg);
+        border-color: var(--cr-color-success);
+        color: var(--cr-color-success);
+      }
+
+      .sg-toast-danger {
+        background: var(--cr-color-danger-bg);
+        border-color: var(--cr-color-danger);
+        color: var(--cr-color-danger);
+      }
+
+      .sg-toast-warning {
+        background: var(--cr-color-warning-bg);
+        border-color: var(--cr-color-warning);
+        color: var(--cr-color-warning);
+      }
+
+      .sg-toast-info {
+        background: var(--cr-color-info-bg);
+        border-color: var(--cr-color-info);
+        color: var(--cr-color-info);
+      }
+
+      .sg-toast-icon {
+        font-size: 1rem;
+        flex-shrink: 0;
+        margin-top: 1px;
+      }
+
+      /* ── Two-tone question card mock ─────────────────────────────────────── */
+
+      .sg-question-card {
+        border: 1px solid var(--cr-color-border);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+
+      .sg-question-header {
+        background: var(--cr-color-surface-2);
+        padding: var(--cr-space-3) var(--cr-space-4);
+        border-bottom: 1px solid var(--cr-color-border);
+      }
+
+      .sg-question-id {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.65rem;
+        color: var(--cr-color-text-subtle);
+      }
+
+      .sg-question-text {
+        font-weight: 600;
+        font-size: 0.9375rem;
+        color: var(--cr-color-on-surface);
+        margin: var(--cr-space-1) 0 0;
+      }
+
+      .sg-question-body {
+        padding: var(--cr-space-3) var(--cr-space-4);
+        background: var(--cr-color-surface);
+        display: flex;
+        flex-direction: column;
+        gap: var(--cr-space-2);
+      }
+
+      /* ── Overview hero ───────────────────────────────────────────────────── */
+
+      .sg-overview-hero {
+        background: var(--cr-color-on-surface);
+        color: var(--cr-color-bg);
+        border-radius: 6px;
+        padding: var(--cr-space-6) var(--cr-space-7);
+        margin-bottom: var(--cr-space-6);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .sg-overview-hero::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 8px;
+        height: 100%;
+        background: var(--cr-color-accent);
+      }
+
+      .sg-overview-tagline {
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: 2rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+        margin: 0 0 var(--cr-space-4);
+      }
+
+      .sg-overview-tagline em {
+        color: var(--cr-color-accent);
+        font-style: normal;
+      }
+
+      .sg-overview-desc {
+        font-size: 0.9375rem;
+        line-height: 1.65;
+        max-width: 38rem;
+        opacity: 0.82;
+        margin: 0;
+      }
+
+      .sg-pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--cr-space-2);
+        margin-top: var(--cr-space-4);
+      }
+
+      .sg-pill {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem;
+        font-weight: 500;
+        padding: 3px 10px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        color: rgba(255, 255, 255, 0.8);
+        letter-spacing: 0.02em;
+      }
+
+      /* ── Divider ─────────────────────────────────────────────────────────── */
+      .sg-divider {
+        border: none;
+        border-top: 1px solid var(--cr-color-border);
+        margin: var(--cr-space-5) 0;
+      }
+
+      /* ── Code snippet ────────────────────────────────────────────────────── */
+      .sg-code {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.75rem;
+        background: var(--cr-color-surface-2);
+        border: 1px solid var(--cr-color-border);
+        border-radius: 3px;
+        padding: var(--cr-space-1) var(--cr-space-2);
+        color: var(--cr-color-text-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <a href="#sg-main" class="sg-skip">Skip to content</a>
+
+    <div id="sg-root" data-cr-root class="cr-fullbleed">
+      <!-- Header ─────────────────────────────────────────────────────────── -->
+      <header class="sg-header">
+        <div class="sg-brand">
+          <span class="sg-brand-mark">CR</span>
+          <span class="sg-brand-name">Case Review</span>
+          <span class="sg-brand-sep">/</span>
+          <span class="sg-brand-sub">Design System</span>
+        </div>
+        <div class="sg-header-controls">
+          <span class="sg-version">v1.0</span>
+          <button
+            class="sg-theme-btn"
+            id="themeToggle"
+            aria-label="Toggle dark mode"
+            aria-pressed="false"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+              fill="none"
+              aria-hidden="true"
+            >
+              <circle
+                cx="7"
+                cy="7"
+                r="3"
+                stroke="currentColor"
+                stroke-width="1.5"
+              />
+              <path
+                d="M7 1v1M7 12v1M1 7h1M12 7h1M2.9 2.9l.7.7M10.4 10.4l.7.7M2.9 11.1l.7-.7M10.4 3.6l.7-.7"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+              />
+            </svg>
+            <span id="themeLabel">Light</span>
+          </button>
+        </div>
+      </header>
+
+      <div class="sg-layout">
+        <!-- Sidebar nav ───────────────────────────────────────────────────── -->
+        <nav class="sg-nav" aria-label="Design system navigation">
+          <div class="sg-nav-section">Foundation</div>
+          <ul class="sg-nav-list" role="list">
+            <li>
+              <a href="#overview" class="sg-nav-link" data-section="overview"
+                >Overview</a
+              >
+            </li>
+            <li>
+              <a href="#colors" class="sg-nav-link" data-section="colors"
+                >Colors</a
+              >
+            </li>
+            <li>
+              <a
+                href="#typography"
+                class="sg-nav-link"
+                data-section="typography"
+                >Typography</a
+              >
+            </li>
+            <li>
+              <a href="#spacing" class="sg-nav-link" data-section="spacing"
+                >Spacing & Sizing</a
+              >
+            </li>
+            <li>
+              <a href="#motion" class="sg-nav-link" data-section="motion"
+                >Motion</a
+              >
+            </li>
+          </ul>
+          <div class="sg-nav-section">Components</div>
+          <ul class="sg-nav-list" role="list">
+            <li>
+              <a href="#buttons" class="sg-nav-link" data-section="buttons"
+                >Buttons</a
+              >
+            </li>
+            <li>
+              <a href="#forms" class="sg-nav-link" data-section="forms"
+                >Form Controls</a
+              >
+            </li>
+            <li>
+              <a href="#badges" class="sg-nav-link" data-section="badges"
+                >Status & Badges</a
+              >
+            </li>
+            <li>
+              <a href="#tables" class="sg-nav-link" data-section="tables"
+                >Data Tables</a
+              >
+            </li>
+            <li>
+              <a href="#kpi" class="sg-nav-link" data-section="kpi"
+                >KPI Tiles</a
+              >
+            </li>
+            <li>
+              <a href="#tabs" class="sg-nav-link" data-section="tabs">Tabs</a>
+            </li>
+          </ul>
+          <div class="sg-nav-section">Patterns</div>
+          <ul class="sg-nav-list" role="list">
+            <li>
+              <a
+                href="#navigation"
+                class="sg-nav-link"
+                data-section="navigation"
+                >Navigation</a
+              >
+            </li>
+            <li>
+              <a
+                href="#notifications"
+                class="sg-nav-link"
+                data-section="notifications"
+                >Notifications</a
+              >
+            </li>
+            <li>
+              <a href="#questions" class="sg-nav-link" data-section="questions"
+                >Case Review</a
+              >
+            </li>
+            <li>
+              <a href="#people" class="sg-nav-link" data-section="people"
+                >People Picker</a
+              >
+            </li>
+          </ul>
+        </nav>
+
+        <!-- Main content ─────────────────────────────────────────────────── -->
+        <main id="sg-main" class="sg-main" tabindex="-1">
+          <!-- ══ Overview ════════════════════════════════════════════════════ -->
+          <section id="overview" class="sg-section">
+            <div class="sg-section-header">
+              <h1 class="sg-section-title">Overview</h1>
+              <span class="sg-section-id">#overview</span>
+            </div>
+
+            <div class="sg-overview-hero">
+              <p class="sg-overview-tagline">
+                Utilitarian<br /><em>Precision.</em>
+              </p>
+              <p class="sg-overview-desc">
+                A compliance and quality-assurance tool for financial services
+                teams. Dense, data-forward, every pixel justified. Not
+                enterprise software boring — purposefully sharp. Use this
+                document as the decision test: if a proposed element feels
+                decorative without function, it doesn't belong.
+              </p>
+              <div class="sg-pill-row">
+                <span class="sg-pill">Non-corporate</span>
+                <span class="sg-pill">Functional</span>
+                <span class="sg-pill">Bold</span>
+                <span class="sg-pill">Fintech</span>
+                <span class="sg-pill">WCAG AA</span>
+                <span class="sg-pill">Keyboard-first</span>
+                <span class="sg-pill">Dark-mode system</span>
+              </div>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">Design principles</p>
+              <div class="sg-demo">
+                <div
+                  style="
+                    display: grid;
+                    grid-template-columns: 1fr 1fr 1fr;
+                    gap: var(--cr-space-5);
+                  "
+                >
+                  <div>
+                    <p
+                      style="
+                        font-family: 'Barlow Condensed', sans-serif;
+                        font-size: 1.1rem;
+                        font-weight: 700;
+                        margin: 0 0 6px;
+                        letter-spacing: -0.01em;
+                      "
+                    >
+                      Information first
+                    </p>
+                    <p
+                      style="
+                        font-size: 0.875rem;
+                        color: var(--cr-color-text-muted);
+                        margin: 0;
+                        line-height: 1.55;
+                      "
+                    >
+                      Data is the hero. Chrome is the villain. Every visual
+                      element must earn its place by making information clearer.
+                    </p>
+                  </div>
+                  <div>
+                    <p
+                      style="
+                        font-family: 'Barlow Condensed', sans-serif;
+                        font-size: 1.1rem;
+                        font-weight: 700;
+                        margin: 0 0 6px;
+                        letter-spacing: -0.01em;
+                      "
+                    >
+                      Deliberate contrast
+                    </p>
+                    <p
+                      style="
+                        font-size: 0.875rem;
+                        color: var(--cr-color-text-muted);
+                        margin: 0;
+                        line-height: 1.55;
+                      "
+                    >
+                      One accent color. Signal red. Used only when something
+                      genuinely demands attention — a failure, an overdue case,
+                      a primary action.
+                    </p>
+                  </div>
+                  <div>
+                    <p
+                      style="
+                        font-family: 'Barlow Condensed', sans-serif;
+                        font-size: 1.1rem;
+                        font-weight: 700;
+                        margin: 0 0 6px;
+                        letter-spacing: -0.01em;
+                      "
+                    >
+                      Keyboard parity
+                    </p>
+                    <p
+                      style="
+                        font-size: 0.875rem;
+                        color: var(--cr-color-text-muted);
+                        margin: 0;
+                        line-height: 1.55;
+                      "
+                    >
+                      Every workflow achievable with keyboard alone. Tab order
+                      is logical. Focus rings are unmistakable. Arrow-key
+                      navigation in lists and tables.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">Typefaces</p>
+              <div
+                class="sg-demo"
+                style="
+                  display: grid;
+                  grid-template-columns: 1fr 1fr 1fr;
+                  gap: var(--cr-space-4);
+                "
+              >
+                <div>
+                  <p class="sg-label">Display / Headings</p>
+                  <p
+                    style="
+                      font-family: 'Barlow Condensed', sans-serif;
+                      font-size: 2rem;
+                      font-weight: 800;
+                      line-height: 1;
+                      margin: 0 0 4px;
+                      letter-spacing: -0.02em;
+                    "
+                  >
+                    Barlow<br />Condensed
+                  </p>
+                  <p class="sg-code">--cr-font-display</p>
+                  <p
+                    style="
+                      font-size: 0.8rem;
+                      color: var(--cr-color-text-muted);
+                      margin: 8px 0 0;
+                    "
+                  >
+                    H1, H2, KPI values, big numbers. Self-host from Google
+                    Fonts.
+                  </p>
+                </div>
+                <div>
+                  <p class="sg-label">Body / UI</p>
+                  <p
+                    style="
+                      font-family: 'Barlow', sans-serif;
+                      font-size: 1.4rem;
+                      font-weight: 500;
+                      line-height: 1.2;
+                      margin: 0 0 4px;
+                    "
+                  >
+                    Barlow Regular<br /><em
+                      style="font-style: italic; opacity: 0.7"
+                      >Italic available</em
+                    >
+                  </p>
+                  <p class="sg-code">--cr-font-body</p>
+                  <p
+                    style="
+                      font-size: 0.8rem;
+                      color: var(--cr-color-text-muted);
+                      margin: 8px 0 0;
+                    "
+                  >
+                    H3–H4, labels, paragraphs, buttons, tables. Same family as
+                    display.
+                  </p>
+                </div>
+                <div>
+                  <p class="sg-label">Monospace</p>
+                  <p
+                    style="
+                      font-family: 'JetBrains Mono', monospace;
+                      font-size: 1.1rem;
+                      font-weight: 400;
+                      line-height: 1.3;
+                      margin: 0 0 4px;
+                    "
+                  >
+                    JetBrains<br />Mono 0Oo1Il
+                  </p>
+                  <p class="sg-code">--cr-font-mono</p>
+                  <p
+                    style="
+                      font-size: 0.8rem;
+                      color: var(--cr-color-text-muted);
+                      margin: 8px 0 0;
+                    "
+                  >
+                    Case IDs, version numbers, token names, code blocks.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ══ Colors ══════════════════════════════════════════════════════ -->
+          <section id="colors" class="sg-section">
+            <div class="sg-section-header">
+              <h2 class="sg-section-title">Colors</h2>
+              <span class="sg-section-id">#colors</span>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">Accent</p>
+              <div class="sg-swatch-grid">
+                <div class="sg-swatch">
+                  <div
+                    class="sg-swatch-color"
+                    style="background: #db0011"
+                  ></div>
+                  <div class="sg-swatch-info">
+                    <div class="sg-swatch-name">--cr-color-accent</div>
+                    <div class="sg-swatch-hex">#DB0011 · 5.3:1 ✓</div>
+                  </div>
+                </div>
+                <div class="sg-swatch">
+                  <div
+                    class="sg-swatch-color"
+                    style="background: #b8000e"
+                  ></div>
+                  <div class="sg-swatch-info">
+                    <div class="sg-swatch-name">--cr-color-accent-hover</div>
+                    <div class="sg-swatch-hex">#B8000E</div>
+                  </div>
+                </div>
+                <div class="sg-swatch">
+                  <div
+                    class="sg-swatch-color"
+                    style="
+                      background: rgba(219, 0, 17, 0.09);
+                      border: 1px dashed #dcdce0;
+                      margin: 1px;
+                      width: calc(100% - 2px);
+                      height: calc(3.5rem - 2px);
+                    "
+                  ></div>
+                  <div class="sg-swatch-info">
+                    <div class="sg-swatch-name">--cr-color-accent-muted</div>
+                    <div class="sg-swatch-hex">rgba(219,0,17,.09)</div>
+                  </div>
+                </div>
+                <div class="sg-swatch" style="background: #0c0c0d">
+                  <div
+                    class="sg-swatch-color"
+                    style="background: #ff2233"
+                  ></div>
+                  <div
+                    class="sg-swatch-info"
+                    style="background: #17171a; border-top: 1px solid #2c2c33"
+                  >
+                    <div class="sg-swatch-name" style="color: #888892">
+                      --cr-color-accent (dark)
+                    </div>
+                    <div class="sg-swatch-hex" style="color: #eaeaec">
+                      #FF2233 · dark mode
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">Surfaces — Light mode</p>
+              <div class="sg-swatch-grid">
+                <div class="sg-swatch">
+                  <div
+                    class="sg-swatch-color"
+                    style="
+                      background: #f3f3f4;
+                      border-bottom: 1px solid #dcdce0;
+                    "
+                  ></div>
+                  <div class="sg-swatch-info">
+                    <div class="sg-swatch-name">--cr-color-bg</div>
+                    <div class="sg-swatch-hex">#F3F3F4</div>
+                  </div>
+                </div>
+                <div class="sg-swatch">
+                  <div
+                    class="sg-swatch-color"
+                    style="
+                      background: #ffffff;
+                      border-bottom: 1px solid #dcdce0;
+                    "
+                  ></div>
+                  <div class="sg-swatch-info">
+                    <div class="sg-swatch-name">--cr-color-surface</div>
+                    <div class="sg-swatch-hex">#FFFFFF</div>
+                  </div>
+                </div>
+                <div class="sg-swatch">
+                  <div
+                    class="sg-swatch-color"
+                    style="background: #e9e9eb"
+                  ></div>
+                  <div class="sg-swatch-info">
+                    <div class="sg-swatch-name">--cr-color-surface-2</div>
+                    <div class="sg-swatch-hex">#E9E9EB</div>
+                  </div>
+                </div>
+                <div class="sg-swatch">
+                  <div
+                    class="sg-swatch-color"
+                    style="background: #dcdce0"
+                  ></div>
+                  <div class="sg-swatch-info">
+                    <div class="sg-swatch-name">--cr-color-border</div>
+                    <div class="sg-swatch-hex">#DCDCE0</div>
+                  </div>
+                </div>
+                <div class="sg-swatch">
+                  <div
+                    class="sg-swatch-color"
+                    style="background: #b2b2b8"
+                  ></div>
+                  <div class="sg-swatch-info">
+                    <div class="sg-swatch-name">--cr-color-border-strong</div>
+                    <div class="sg-swatch-hex">#B2B2B8</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">Text — Light mode</p>
+              <div class="sg-swatch-grid">
+                <div class="sg-swatch">
+                  <div
+                    class="sg-swatch-color"
+                    style="background: #0e0e0f"
+                  ></div>
+                  <div class="sg-swatch-info">
+                    <div class="sg-swatch-name">--cr-color-on-surface</div>
+                    <div class="sg-swatch-hex">#0E0E0F · &gt;15:1 ✓</div>
+                  </div>
+                </div>
+                <div class="sg-swatch">
+                  <div
+                    class="sg-swatch-color"
+                    style="background: #5c5c65"
+                  ></div>
+                  <div class="sg-swatch-info">
+                    <div class="sg-swatch-name">--cr-color-text-muted</div>
+                    <div class="sg-swatch-hex">#5C5C65 · 6.1:1 ✓</div>
+                  </div>
+                </div>
+                <div class="sg-swatch">
+                  <div
+                    class="sg-swatch-color"
+                    style="background: #8c8c95"
+                  ></div>
+                  <div class="sg-swatch-info">
+                    <div class="sg-swatch-name">--cr-color-text-subtle</div>
+                    <div class="sg-swatch-hex">#8C8C95 · large only</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">Semantic</p>
+              <div class="sg-swatch-grid">
+                <div class="sg-swatch">
+                  <div
+                    class="sg-swatch-color"
+                    style="background: #006742"
+                  ></div>
+                  <div class="sg-swatch-info">
+                    <div class="sg-swatch-name">--cr-color-success</div>
+                    <div class="sg-swatch-hex">#006742 · 5.9:1 ✓</div>
+                  </div>
+                </div>
+                <div class="sg-swatch">
+                  <div
+                    class="sg-swatch-color"
+                    style="background: #9b5d00"
+                  ></div>
+                  <div class="sg-swatch-info">
+                    <div class="sg-swatch-name">--cr-color-warning</div>
+                    <div class="sg-swatch-hex">#9B5D00 · 4.9:1 ✓</div>
+                  </div>
+                </div>
+                <div class="sg-swatch">
+                  <div
+                    class="sg-swatch-color"
+                    style="background: #db0011"
+                  ></div>
+                  <div class="sg-swatch-info">
+                    <div class="sg-swatch-name">--cr-color-danger</div>
+                    <div class="sg-swatch-hex">#DB0011 · 5.3:1 ✓</div>
+                  </div>
+                </div>
+                <div class="sg-swatch">
+                  <div
+                    class="sg-swatch-color"
+                    style="background: #004cb5"
+                  ></div>
+                  <div class="sg-swatch-info">
+                    <div class="sg-swatch-name">--cr-color-info</div>
+                    <div class="sg-swatch-hex">#004CB5 · 7.2:1 ✓</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ══ Typography ═══════════════════════════════════════════════════ -->
+          <section id="typography" class="sg-section">
+            <div class="sg-section-header">
+              <h2 class="sg-section-title">Typography</h2>
+              <span class="sg-section-id">#typography</span>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">Type scale</p>
+              <div class="sg-demo">
+                <div class="sg-type-row">
+                  <span class="sg-type-meta">3xl · 48px</span>
+                  <span class="sg-type-meta">800</span>
+                  <span
+                    style="
+                      font-family: 'Barlow Condensed', sans-serif;
+                      font-size: 3rem;
+                      font-weight: 800;
+                      line-height: 1;
+                      letter-spacing: -0.025em;
+                    "
+                    >Case 00421</span
+                  >
+                </div>
+                <div class="sg-type-row">
+                  <span class="sg-type-meta">2xl · 36px</span>
+                  <span class="sg-type-meta">700</span>
+                  <span
+                    style="
+                      font-family: 'Barlow Condensed', sans-serif;
+                      font-size: 2.25rem;
+                      font-weight: 700;
+                      line-height: 1.1;
+                      letter-spacing: -0.02em;
+                    "
+                    >Dashboard</span
+                  >
+                </div>
+                <div class="sg-type-row">
+                  <span class="sg-type-meta">xl · 28px</span>
+                  <span class="sg-type-meta">700</span>
+                  <span
+                    style="
+                      font-family: 'Barlow Condensed', sans-serif;
+                      font-size: 1.75rem;
+                      font-weight: 700;
+                      line-height: 1.2;
+                      letter-spacing: -0.015em;
+                    "
+                    >Call Centre Review</span
+                  >
+                </div>
+                <div class="sg-type-row">
+                  <span class="sg-type-meta">lg · 22px</span>
+                  <span class="sg-type-meta">700</span>
+                  <span
+                    style="
+                      font-family: 'Barlow Condensed', sans-serif;
+                      font-size: 1.375rem;
+                      font-weight: 700;
+                      letter-spacing: -0.01em;
+                    "
+                    >Remediation Actions</span
+                  >
+                </div>
+                <div class="sg-type-row">
+                  <span class="sg-type-meta">md · 18px</span>
+                  <span class="sg-type-meta">500</span>
+                  <span style="font-size: 1.125rem; font-weight: 500"
+                    >Section heading in body weight</span
+                  >
+                </div>
+                <div class="sg-type-row">
+                  <span class="sg-type-meta">base · 16px</span>
+                  <span class="sg-type-meta">400</span>
+                  <span style="font-size: 1rem"
+                    >Body text — the agent on this call correctly verified the
+                    caller's identity before proceeding.</span
+                  >
+                </div>
+                <div class="sg-type-row">
+                  <span class="sg-type-meta">sm · 14px</span>
+                  <span class="sg-type-meta">400</span>
+                  <span style="font-size: 0.875rem"
+                    >Table content, form labels, secondary information and
+                    metadata.</span
+                  >
+                </div>
+                <div class="sg-type-row">
+                  <span class="sg-type-meta">xs · 12px</span>
+                  <span class="sg-type-meta">600</span>
+                  <span
+                    style="
+                      font-size: 0.75rem;
+                      font-weight: 600;
+                      text-transform: uppercase;
+                      letter-spacing: 0.06em;
+                      color: var(--cr-color-text-muted);
+                    "
+                    >Column header · badge label</span
+                  >
+                </div>
+                <div class="sg-type-row">
+                  <span class="sg-type-meta">mono</span>
+                  <span class="sg-type-meta">400</span>
+                  <span
+                    style="
+                      font-family: 'JetBrains Mono', monospace;
+                      font-size: 0.875rem;
+                    "
+                    >CASE-2024-00421 · --cr-color-accent · v1.0.0</span
+                  >
+                </div>
+              </div>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">Heading hierarchy</p>
+              <div class="sg-demo">
+                <h1
+                  style="
+                    font-family: 'Barlow Condensed', sans-serif;
+                    font-size: 1.75rem;
+                    font-weight: 700;
+                    margin: 0 0 4px;
+                    letter-spacing: -0.015em;
+                  "
+                >
+                  H1 — Page title (Barlow Condensed 700, 28px)
+                </h1>
+                <h2
+                  style="
+                    font-family: 'Barlow Condensed', sans-serif;
+                    font-size: 1.375rem;
+                    font-weight: 700;
+                    margin: 16px 0 4px;
+                    letter-spacing: -0.01em;
+                  "
+                >
+                  H2 — Section heading (Barlow Condensed 700, 22px)
+                </h2>
+                <h3
+                  style="font-size: 1rem; font-weight: 600; margin: 12px 0 4px"
+                >
+                  H3 — Sub-section (Barlow 600, 16px)
+                </h3>
+                <h4
+                  style="
+                    font-size: 0.75rem;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    letter-spacing: 0.08em;
+                    color: var(--cr-color-text-muted);
+                    margin: 10px 0 4px;
+                  "
+                >
+                  H4 — Label heading (Barlow 700 uppercase, 12px)
+                </h4>
+                <p
+                  style="
+                    font-size: 0.9375rem;
+                    color: var(--cr-color-text-muted);
+                    margin: 4px 0 0;
+                  "
+                >
+                  Body paragraph — supporting detail follows the heading.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <!-- ══ Spacing & Sizing ════════════════════════════════════════════ -->
+          <section id="spacing" class="sg-section">
+            <div class="sg-section-header">
+              <h2 class="sg-section-title">Spacing &amp; Sizing</h2>
+              <span class="sg-section-id">#spacing</span>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">4pt spacing scale</p>
+              <div class="sg-demo">
+                <div class="sg-space-row">
+                  <div style="width: 8rem">
+                    <span class="sg-type-meta">--cr-space-0-5</span>
+                  </div>
+                  <div class="sg-space-bar" style="width: 2px"></div>
+                  <span class="sg-type-meta">2px</span>
+                </div>
+                <div class="sg-space-row">
+                  <div style="width: 8rem">
+                    <span class="sg-type-meta">--cr-space-1</span>
+                  </div>
+                  <div class="sg-space-bar" style="width: 4px"></div>
+                  <span class="sg-type-meta">4px</span>
+                </div>
+                <div class="sg-space-row">
+                  <div style="width: 8rem">
+                    <span class="sg-type-meta">--cr-space-2</span>
+                  </div>
+                  <div class="sg-space-bar" style="width: 8px"></div>
+                  <span class="sg-type-meta">8px</span>
+                </div>
+                <div class="sg-space-row">
+                  <div style="width: 8rem">
+                    <span class="sg-type-meta">--cr-space-3</span>
+                  </div>
+                  <div class="sg-space-bar" style="width: 12px"></div>
+                  <span class="sg-type-meta">12px</span>
+                </div>
+                <div class="sg-space-row">
+                  <div style="width: 8rem">
+                    <span class="sg-type-meta">--cr-space-4</span>
+                  </div>
+                  <div class="sg-space-bar" style="width: 16px"></div>
+                  <span class="sg-type-meta">16px</span>
+                </div>
+                <div class="sg-space-row">
+                  <div style="width: 8rem">
+                    <span class="sg-type-meta">--cr-space-5</span>
+                  </div>
+                  <div class="sg-space-bar" style="width: 24px"></div>
+                  <span class="sg-type-meta">24px</span>
+                </div>
+                <div class="sg-space-row">
+                  <div style="width: 8rem">
+                    <span class="sg-type-meta">--cr-space-6</span>
+                  </div>
+                  <div class="sg-space-bar" style="width: 32px"></div>
+                  <span class="sg-type-meta">32px</span>
+                </div>
+                <div class="sg-space-row">
+                  <div style="width: 8rem">
+                    <span class="sg-type-meta">--cr-space-7</span>
+                  </div>
+                  <div class="sg-space-bar" style="width: 40px"></div>
+                  <span class="sg-type-meta">40px</span>
+                </div>
+                <div class="sg-space-row">
+                  <div style="width: 8rem">
+                    <span class="sg-type-meta">--cr-space-8</span>
+                  </div>
+                  <div class="sg-space-bar" style="width: 48px"></div>
+                  <span class="sg-type-meta">48px</span>
+                </div>
+                <div class="sg-space-row">
+                  <div style="width: 8rem">
+                    <span class="sg-type-meta">--cr-space-10</span>
+                  </div>
+                  <div class="sg-space-bar" style="width: 64px"></div>
+                  <span class="sg-type-meta">64px</span>
+                </div>
+                <div class="sg-space-row">
+                  <div style="width: 8rem">
+                    <span class="sg-type-meta">--cr-space-12</span>
+                  </div>
+                  <div class="sg-space-bar" style="width: 96px"></div>
+                  <span class="sg-type-meta">96px</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">Border radius</p>
+              <div class="sg-demo">
+                <div class="sg-radius-grid">
+                  <div class="sg-radius-item">
+                    <div class="sg-radius-box" style="border-radius: 0"></div>
+                    <span class="sg-type-meta">none · 0</span>
+                  </div>
+                  <div class="sg-radius-item">
+                    <div class="sg-radius-box" style="border-radius: 2px"></div>
+                    <span class="sg-type-meta">sm · 2px</span>
+                  </div>
+                  <div class="sg-radius-item">
+                    <div class="sg-radius-box" style="border-radius: 4px"></div>
+                    <span class="sg-type-meta">md · 4px</span>
+                  </div>
+                  <div class="sg-radius-item">
+                    <div class="sg-radius-box" style="border-radius: 8px"></div>
+                    <span class="sg-type-meta">lg · 8px</span>
+                  </div>
+                  <div class="sg-radius-item">
+                    <div
+                      class="sg-radius-box"
+                      style="border-radius: 9999px; width: 5.5rem"
+                    ></div>
+                    <span class="sg-type-meta">pill</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ══ Motion ═══════════════════════════════════════════════════════ -->
+          <section id="motion" class="sg-section">
+            <div class="sg-section-header">
+              <h2 class="sg-section-title">Motion</h2>
+              <span class="sg-section-id">#motion</span>
+            </div>
+            <div class="sg-demo">
+              <div class="sg-motion-row">
+                <div style="width: 7rem">
+                  <span class="sg-type-meta">--cr-duration-fast</span>
+                </div>
+                <div style="width: 3rem">
+                  <span
+                    class="sg-type-meta"
+                    style="color: var(--cr-color-on-surface); font-weight: 600"
+                    >100ms</span
+                  >
+                </div>
+                <span
+                  style="font-size: 0.875rem; color: var(--cr-color-text-muted)"
+                  >Hover states, button presses, focus ring appearance</span
+                >
+                <div
+                  class="sg-motion-dot"
+                  style="transition: opacity 100ms ease"
+                ></div>
+              </div>
+              <div class="sg-motion-row">
+                <div style="width: 7rem">
+                  <span class="sg-type-meta">--cr-duration-base</span>
+                </div>
+                <div style="width: 3rem">
+                  <span
+                    class="sg-type-meta"
+                    style="color: var(--cr-color-on-surface); font-weight: 600"
+                    >200ms</span
+                  >
+                </div>
+                <span
+                  style="font-size: 0.875rem; color: var(--cr-color-text-muted)"
+                  >Drawer open/close, modal entrance, toast slide-in</span
+                >
+                <div
+                  class="sg-motion-dot"
+                  style="transition: opacity 200ms ease"
+                ></div>
+              </div>
+              <div class="sg-motion-row">
+                <div style="width: 7rem">
+                  <span class="sg-type-meta">--cr-duration-slow</span>
+                </div>
+                <div style="width: 3rem">
+                  <span
+                    class="sg-type-meta"
+                    style="color: var(--cr-color-on-surface); font-weight: 600"
+                    >350ms</span
+                  >
+                </div>
+                <span
+                  style="font-size: 0.875rem; color: var(--cr-color-text-muted)"
+                  >Page transitions, skeleton-to-content reveal</span
+                >
+                <div
+                  class="sg-motion-dot"
+                  style="transition: opacity 350ms ease"
+                ></div>
+              </div>
+            </div>
+            <p
+              style="
+                font-size: 0.8125rem;
+                color: var(--cr-color-text-muted);
+                margin: var(--cr-space-3) 0 0;
+              "
+            >
+              All transitions respect
+              <code class="sg-code">prefers-reduced-motion: reduce</code>
+              — durations collapse to 1ms. Never animate layout-affecting
+              properties (width, height, top, left) — prefer transform and
+              opacity only.
             </p>
-            <div class="sg-pill-row">
-              <span class="sg-pill">Non-corporate</span>
-              <span class="sg-pill">Functional</span>
-              <span class="sg-pill">Bold</span>
-              <span class="sg-pill">Fintech</span>
-              <span class="sg-pill">WCAG AA</span>
-              <span class="sg-pill">Keyboard-first</span>
-              <span class="sg-pill">Dark-mode system</span>
-            </div>
-          </div>
+          </section>
 
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">Design principles</p>
-            <div class="sg-demo">
-              <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:var(--cr-space-5);">
+          <!-- ══ Buttons ══════════════════════════════════════════════════════ -->
+          <section id="buttons" class="sg-section">
+            <div class="sg-section-header">
+              <h2 class="sg-section-title">Buttons</h2>
+              <span class="sg-section-id">#buttons</span>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">Variants</p>
+              <div class="sg-demo">
+                <div class="sg-row">
+                  <button>Primary</button>
+                  <button class="cr-btn-secondary">Secondary</button>
+                  <button class="cr-btn-ghost">Ghost</button>
+                  <button class="cr-btn-danger">Danger</button>
+                  <button class="cr-complete-btn">Complete Case</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">Sizes</p>
+              <div class="sg-demo">
+                <div class="sg-row" style="align-items: center">
+                  <button class="cr-btn-sm">Small</button>
+                  <button>Base (default)</button>
+                  <button class="cr-btn-lg">Large</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">States</p>
+              <div class="sg-demo">
+                <div class="sg-row">
+                  <div class="sg-col" style="gap: 6px; align-items: flex-start">
+                    <span class="sg-label">Default</span>
+                    <button>Save</button>
+                  </div>
+                  <div class="sg-col" style="gap: 6px; align-items: flex-start">
+                    <span class="sg-label">Hover (hover me)</span>
+                    <button
+                      style="
+                        background: var(--cr-color-accent-hover);
+                        border-color: var(--cr-color-accent-hover);
+                      "
+                    >
+                      Save
+                    </button>
+                  </div>
+                  <div class="sg-col" style="gap: 6px; align-items: flex-start">
+                    <span class="sg-label">Focus</span>
+                    <button
+                      style="outline: none; box-shadow: var(--cr-focus-ring)"
+                    >
+                      Save
+                    </button>
+                  </div>
+                  <div class="sg-col" style="gap: 6px; align-items: flex-start">
+                    <span class="sg-label">Disabled</span>
+                    <button disabled>Save</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">Dark mode</p>
+              <div
+                class="sg-demo sg-demo-dark"
+                data-cr-root
+                data-cr-theme="dark"
+                style="border-radius: 6px"
+              >
+                <div class="sg-row">
+                  <button>Primary</button>
+                  <button class="cr-btn-secondary">Secondary</button>
+                  <button class="cr-btn-ghost">Ghost</button>
+                  <button class="cr-btn-danger">Danger</button>
+                  <button disabled>Disabled</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ══ Form Controls ════════════════════════════════════════════════ -->
+          <section id="forms" class="sg-section">
+            <div class="sg-section-header">
+              <h2 class="sg-section-title">Form Controls</h2>
+              <span class="sg-section-id">#forms</span>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">Text input states</p>
+              <div
+                class="sg-demo"
+                style="
+                  display: grid;
+                  grid-template-columns: 1fr 1fr;
+                  gap: var(--cr-space-4);
+                "
+              >
+                <div class="sg-form-field" style="max-width: none">
+                  <label class="sg-label-text">Default</label>
+                  <input
+                    class="sg-input"
+                    type="text"
+                    placeholder="Enter case reference…"
+                  />
+                </div>
+                <div class="sg-form-field" style="max-width: none">
+                  <label class="sg-label-text">Focused (click me)</label>
+                  <input
+                    class="sg-input"
+                    type="text"
+                    placeholder="Click to focus…"
+                  />
+                </div>
+                <div class="sg-form-field" style="max-width: none">
+                  <label class="sg-label-text">Error state</label>
+                  <input
+                    class="sg-input sg-input-error"
+                    type="text"
+                    value="Invalid reference"
+                    aria-invalid="true"
+                  />
+                  <span class="sg-error-text"
+                    >Case reference not found in this period.</span
+                  >
+                </div>
+                <div class="sg-form-field" style="max-width: none">
+                  <label class="sg-label-text" style="opacity: 0.5"
+                    >Disabled</label
+                  >
+                  <input
+                    class="sg-input"
+                    type="text"
+                    value="CASE-2024-00421"
+                    disabled
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">Select</p>
+              <div
+                class="sg-demo"
+                style="
+                  display: grid;
+                  grid-template-columns: 1fr 1fr;
+                  gap: var(--cr-space-4);
+                "
+              >
+                <div class="sg-form-field" style="max-width: none">
+                  <label class="sg-label-text">Reviewer</label>
+                  <select class="sg-input">
+                    <option>Sarah Chen</option>
+                    <option>David Park</option>
+                    <option>Priya Sharma</option>
+                  </select>
+                </div>
+                <div class="sg-form-field" style="max-width: none">
+                  <label class="sg-label-text" style="opacity: 0.5"
+                    >Disabled</label
+                  >
+                  <select class="sg-input" disabled>
+                    <option>Sarah Chen</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">Textarea</p>
+              <div class="sg-demo">
+                <div class="sg-form-field" style="max-width: none">
+                  <label class="sg-label-text">Justification</label>
+                  <textarea
+                    class="sg-input"
+                    rows="3"
+                    placeholder="Add a justification for this answer…"
+                  ></textarea>
+                  <span class="sg-help-text"
+                    >Required when the answer is Fail or N/A.</span
+                  >
+                </div>
+              </div>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">Checkbox &amp; Radio</p>
+              <div
+                class="sg-demo"
+                style="
+                  display: grid;
+                  grid-template-columns: 1fr 1fr;
+                  gap: var(--cr-space-5);
+                "
+              >
                 <div>
-                  <p style="font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;margin:0 0 6px;letter-spacing:-0.01em;">Information first</p>
-                  <p style="font-size:0.875rem;color:var(--cr-color-text-muted);margin:0;line-height:1.55;">Data is the hero. Chrome is the villain. Every visual element must earn its place by making information clearer.</p>
+                  <p class="sg-label">Checkboxes</p>
+                  <label class="sg-checkbox-row"
+                    ><input type="checkbox" checked /> Include archived
+                    cases</label
+                  >
+                  <label class="sg-checkbox-row"
+                    ><input type="checkbox" /> Notify on completion</label
+                  >
+                  <label class="sg-checkbox-row"
+                    ><input type="checkbox" disabled /> Admin override
+                    (disabled)</label
+                  >
                 </div>
                 <div>
-                  <p style="font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;margin:0 0 6px;letter-spacing:-0.01em;">Deliberate contrast</p>
-                  <p style="font-size:0.875rem;color:var(--cr-color-text-muted);margin:0;line-height:1.55;">One accent color. Signal red. Used only when something genuinely demands attention — a failure, an overdue case, a primary action.</p>
-                </div>
-                <div>
-                  <p style="font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;margin:0 0 6px;letter-spacing:-0.01em;">Keyboard parity</p>
-                  <p style="font-size:0.875rem;color:var(--cr-color-text-muted);margin:0;line-height:1.55;">Every workflow achievable with keyboard alone. Tab order is logical. Focus rings are unmistakable. Arrow-key navigation in lists and tables.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">Typefaces</p>
-            <div class="sg-demo" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--cr-space-4);">
-              <div>
-                <p class="sg-label">Display / Headings</p>
-                <p style="font-family:'Barlow Condensed',sans-serif;font-size:2rem;font-weight:800;line-height:1;margin:0 0 4px;letter-spacing:-0.02em;">Barlow<br>Condensed</p>
-                <p class="sg-code">--cr-font-display</p>
-                <p style="font-size:0.8rem;color:var(--cr-color-text-muted);margin:8px 0 0;">H1, H2, KPI values, big numbers. Self-host from Google Fonts.</p>
-              </div>
-              <div>
-                <p class="sg-label">Body / UI</p>
-                <p style="font-family:'Barlow',sans-serif;font-size:1.4rem;font-weight:500;line-height:1.2;margin:0 0 4px;">Barlow Regular<br><em style="font-style:italic;opacity:0.7;">Italic available</em></p>
-                <p class="sg-code">--cr-font-body</p>
-                <p style="font-size:0.8rem;color:var(--cr-color-text-muted);margin:8px 0 0;">H3–H4, labels, paragraphs, buttons, tables. Same family as display.</p>
-              </div>
-              <div>
-                <p class="sg-label">Monospace</p>
-                <p style="font-family:'JetBrains Mono',monospace;font-size:1.1rem;font-weight:400;line-height:1.3;margin:0 0 4px;">JetBrains<br>Mono 0Oo1Il</p>
-                <p class="sg-code">--cr-font-mono</p>
-                <p style="font-size:0.8rem;color:var(--cr-color-text-muted);margin:8px 0 0;">Case IDs, version numbers, token names, code blocks.</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- ══ Colors ══════════════════════════════════════════════════════ -->
-        <section id="colors" class="sg-section">
-          <div class="sg-section-header">
-            <h2 class="sg-section-title">Colors</h2>
-            <span class="sg-section-id">#colors</span>
-          </div>
-
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">Accent</p>
-            <div class="sg-swatch-grid">
-              <div class="sg-swatch">
-                <div class="sg-swatch-color" style="background:#DB0011;"></div>
-                <div class="sg-swatch-info">
-                  <div class="sg-swatch-name">--cr-color-accent</div>
-                  <div class="sg-swatch-hex">#DB0011 · 5.3:1 ✓</div>
-                </div>
-              </div>
-              <div class="sg-swatch">
-                <div class="sg-swatch-color" style="background:#B8000E;"></div>
-                <div class="sg-swatch-info">
-                  <div class="sg-swatch-name">--cr-color-accent-hover</div>
-                  <div class="sg-swatch-hex">#B8000E</div>
-                </div>
-              </div>
-              <div class="sg-swatch">
-                <div class="sg-swatch-color" style="background:rgba(219,0,17,0.09);border:1px dashed #DCDCE0;margin:1px;width:calc(100% - 2px);height:calc(3.5rem - 2px);"></div>
-                <div class="sg-swatch-info">
-                  <div class="sg-swatch-name">--cr-color-accent-muted</div>
-                  <div class="sg-swatch-hex">rgba(219,0,17,.09)</div>
-                </div>
-              </div>
-              <div class="sg-swatch" style="background:#0C0C0D;">
-                <div class="sg-swatch-color" style="background:#FF2233;"></div>
-                <div class="sg-swatch-info" style="background:#17171A;border-top:1px solid #2C2C33;">
-                  <div class="sg-swatch-name" style="color:#888892;">--cr-color-accent (dark)</div>
-                  <div class="sg-swatch-hex" style="color:#EAEAEC;">#FF2233 · dark mode</div>
+                  <p class="sg-label">Radio — Answer options</p>
+                  <label class="sg-radio-row"
+                    ><input type="radio" name="ans" value="pass" checked />
+                    Pass</label
+                  >
+                  <label class="sg-radio-row"
+                    ><input type="radio" name="ans" value="fail" /> Fail</label
+                  >
+                  <label class="sg-radio-row"
+                    ><input type="radio" name="ans" value="na" /> N/A</label
+                  >
                 </div>
               </div>
             </div>
-          </div>
+          </section>
 
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">Surfaces — Light mode</p>
-            <div class="sg-swatch-grid">
-              <div class="sg-swatch">
-                <div class="sg-swatch-color" style="background:#F3F3F4;border-bottom:1px solid #DCDCE0;"></div>
-                <div class="sg-swatch-info"><div class="sg-swatch-name">--cr-color-bg</div><div class="sg-swatch-hex">#F3F3F4</div></div>
-              </div>
-              <div class="sg-swatch">
-                <div class="sg-swatch-color" style="background:#FFFFFF;border-bottom:1px solid #DCDCE0;"></div>
-                <div class="sg-swatch-info"><div class="sg-swatch-name">--cr-color-surface</div><div class="sg-swatch-hex">#FFFFFF</div></div>
-              </div>
-              <div class="sg-swatch">
-                <div class="sg-swatch-color" style="background:#E9E9EB;"></div>
-                <div class="sg-swatch-info"><div class="sg-swatch-name">--cr-color-surface-2</div><div class="sg-swatch-hex">#E9E9EB</div></div>
-              </div>
-              <div class="sg-swatch">
-                <div class="sg-swatch-color" style="background:#DCDCE0;"></div>
-                <div class="sg-swatch-info"><div class="sg-swatch-name">--cr-color-border</div><div class="sg-swatch-hex">#DCDCE0</div></div>
-              </div>
-              <div class="sg-swatch">
-                <div class="sg-swatch-color" style="background:#B2B2B8;"></div>
-                <div class="sg-swatch-info"><div class="sg-swatch-name">--cr-color-border-strong</div><div class="sg-swatch-hex">#B2B2B8</div></div>
-              </div>
+          <!-- ══ Status & Badges ═════════════════════════════════════════════ -->
+          <section id="badges" class="sg-section">
+            <div class="sg-section-header">
+              <h2 class="sg-section-title">Status &amp; Badges</h2>
+              <span class="sg-section-id">#badges</span>
             </div>
-          </div>
 
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">Text — Light mode</p>
-            <div class="sg-swatch-grid">
-              <div class="sg-swatch">
-                <div class="sg-swatch-color" style="background:#0E0E0F;"></div>
-                <div class="sg-swatch-info"><div class="sg-swatch-name">--cr-color-on-surface</div><div class="sg-swatch-hex">#0E0E0F · &gt;15:1 ✓</div></div>
-              </div>
-              <div class="sg-swatch">
-                <div class="sg-swatch-color" style="background:#5C5C65;"></div>
-                <div class="sg-swatch-info"><div class="sg-swatch-name">--cr-color-text-muted</div><div class="sg-swatch-hex">#5C5C65 · 6.1:1 ✓</div></div>
-              </div>
-              <div class="sg-swatch">
-                <div class="sg-swatch-color" style="background:#8C8C95;"></div>
-                <div class="sg-swatch-info"><div class="sg-swatch-name">--cr-color-text-subtle</div><div class="sg-swatch-hex">#8C8C95 · large only</div></div>
-              </div>
-            </div>
-          </div>
-
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">Semantic</p>
-            <div class="sg-swatch-grid">
-              <div class="sg-swatch">
-                <div class="sg-swatch-color" style="background:#006742;"></div>
-                <div class="sg-swatch-info"><div class="sg-swatch-name">--cr-color-success</div><div class="sg-swatch-hex">#006742 · 5.9:1 ✓</div></div>
-              </div>
-              <div class="sg-swatch">
-                <div class="sg-swatch-color" style="background:#9B5D00;"></div>
-                <div class="sg-swatch-info"><div class="sg-swatch-name">--cr-color-warning</div><div class="sg-swatch-hex">#9B5D00 · 4.9:1 ✓</div></div>
-              </div>
-              <div class="sg-swatch">
-                <div class="sg-swatch-color" style="background:#DB0011;"></div>
-                <div class="sg-swatch-info"><div class="sg-swatch-name">--cr-color-danger</div><div class="sg-swatch-hex">#DB0011 · 5.3:1 ✓</div></div>
-              </div>
-              <div class="sg-swatch">
-                <div class="sg-swatch-color" style="background:#004CB5;"></div>
-                <div class="sg-swatch-info"><div class="sg-swatch-name">--cr-color-info</div><div class="sg-swatch-hex">#004CB5 · 7.2:1 ✓</div></div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- ══ Typography ═══════════════════════════════════════════════════ -->
-        <section id="typography" class="sg-section">
-          <div class="sg-section-header">
-            <h2 class="sg-section-title">Typography</h2>
-            <span class="sg-section-id">#typography</span>
-          </div>
-
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">Type scale</p>
             <div class="sg-demo">
-              <div class="sg-type-row">
-                <span class="sg-type-meta">3xl · 48px</span>
-                <span class="sg-type-meta">800</span>
-                <span style="font-family:'Barlow Condensed',sans-serif;font-size:3rem;font-weight:800;line-height:1;letter-spacing:-0.025em;">Case 00421</span>
-              </div>
-              <div class="sg-type-row">
-                <span class="sg-type-meta">2xl · 36px</span>
-                <span class="sg-type-meta">700</span>
-                <span style="font-family:'Barlow Condensed',sans-serif;font-size:2.25rem;font-weight:700;line-height:1.1;letter-spacing:-0.02em;">Dashboard</span>
-              </div>
-              <div class="sg-type-row">
-                <span class="sg-type-meta">xl · 28px</span>
-                <span class="sg-type-meta">700</span>
-                <span style="font-family:'Barlow Condensed',sans-serif;font-size:1.75rem;font-weight:700;line-height:1.2;letter-spacing:-0.015em;">Call Centre Review</span>
-              </div>
-              <div class="sg-type-row">
-                <span class="sg-type-meta">lg · 22px</span>
-                <span class="sg-type-meta">700</span>
-                <span style="font-family:'Barlow Condensed',sans-serif;font-size:1.375rem;font-weight:700;letter-spacing:-0.01em;">Remediation Actions</span>
-              </div>
-              <div class="sg-type-row">
-                <span class="sg-type-meta">md · 18px</span>
-                <span class="sg-type-meta">500</span>
-                <span style="font-size:1.125rem;font-weight:500;">Section heading in body weight</span>
-              </div>
-              <div class="sg-type-row">
-                <span class="sg-type-meta">base · 16px</span>
-                <span class="sg-type-meta">400</span>
-                <span style="font-size:1rem;">Body text — the agent on this call correctly verified the caller's identity before proceeding.</span>
-              </div>
-              <div class="sg-type-row">
-                <span class="sg-type-meta">sm · 14px</span>
-                <span class="sg-type-meta">400</span>
-                <span style="font-size:0.875rem;">Table content, form labels, secondary information and metadata.</span>
-              </div>
-              <div class="sg-type-row">
-                <span class="sg-type-meta">xs · 12px</span>
-                <span class="sg-type-meta">600</span>
-                <span style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--cr-color-text-muted);">Column header · badge label</span>
-              </div>
-              <div class="sg-type-row">
-                <span class="sg-type-meta">mono</span>
-                <span class="sg-type-meta">400</span>
-                <span style="font-family:'JetBrains Mono',monospace;font-size:0.875rem;">CASE-2024-00421 · --cr-color-accent · v1.0.0</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">Heading hierarchy</p>
-            <div class="sg-demo">
-              <h1 style="font-family:'Barlow Condensed',sans-serif;font-size:1.75rem;font-weight:700;margin:0 0 4px;letter-spacing:-0.015em;">H1 — Page title (Barlow Condensed 700, 28px)</h1>
-              <h2 style="font-family:'Barlow Condensed',sans-serif;font-size:1.375rem;font-weight:700;margin:16px 0 4px;letter-spacing:-0.01em;">H2 — Section heading (Barlow Condensed 700, 22px)</h2>
-              <h3 style="font-size:1rem;font-weight:600;margin:12px 0 4px;">H3 — Sub-section (Barlow 600, 16px)</h3>
-              <h4 style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--cr-color-text-muted);margin:10px 0 4px;">H4 — Label heading (Barlow 700 uppercase, 12px)</h4>
-              <p style="font-size:0.9375rem;color:var(--cr-color-text-muted);margin:4px 0 0;">Body paragraph — supporting detail follows the heading.</p>
-            </div>
-          </div>
-        </section>
-
-        <!-- ══ Spacing & Sizing ════════════════════════════════════════════ -->
-        <section id="spacing" class="sg-section">
-          <div class="sg-section-header">
-            <h2 class="sg-section-title">Spacing &amp; Sizing</h2>
-            <span class="sg-section-id">#spacing</span>
-          </div>
-
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">4pt spacing scale</p>
-            <div class="sg-demo">
-              <div class="sg-space-row"><div style="width:8rem;"><span class="sg-type-meta">--cr-space-0-5</span></div><div class="sg-space-bar" style="width:2px;"></div><span class="sg-type-meta">2px</span></div>
-              <div class="sg-space-row"><div style="width:8rem;"><span class="sg-type-meta">--cr-space-1</span></div><div class="sg-space-bar" style="width:4px;"></div><span class="sg-type-meta">4px</span></div>
-              <div class="sg-space-row"><div style="width:8rem;"><span class="sg-type-meta">--cr-space-2</span></div><div class="sg-space-bar" style="width:8px;"></div><span class="sg-type-meta">8px</span></div>
-              <div class="sg-space-row"><div style="width:8rem;"><span class="sg-type-meta">--cr-space-3</span></div><div class="sg-space-bar" style="width:12px;"></div><span class="sg-type-meta">12px</span></div>
-              <div class="sg-space-row"><div style="width:8rem;"><span class="sg-type-meta">--cr-space-4</span></div><div class="sg-space-bar" style="width:16px;"></div><span class="sg-type-meta">16px</span></div>
-              <div class="sg-space-row"><div style="width:8rem;"><span class="sg-type-meta">--cr-space-5</span></div><div class="sg-space-bar" style="width:24px;"></div><span class="sg-type-meta">24px</span></div>
-              <div class="sg-space-row"><div style="width:8rem;"><span class="sg-type-meta">--cr-space-6</span></div><div class="sg-space-bar" style="width:32px;"></div><span class="sg-type-meta">32px</span></div>
-              <div class="sg-space-row"><div style="width:8rem;"><span class="sg-type-meta">--cr-space-7</span></div><div class="sg-space-bar" style="width:40px;"></div><span class="sg-type-meta">40px</span></div>
-              <div class="sg-space-row"><div style="width:8rem;"><span class="sg-type-meta">--cr-space-8</span></div><div class="sg-space-bar" style="width:48px;"></div><span class="sg-type-meta">48px</span></div>
-              <div class="sg-space-row"><div style="width:8rem;"><span class="sg-type-meta">--cr-space-10</span></div><div class="sg-space-bar" style="width:64px;"></div><span class="sg-type-meta">64px</span></div>
-              <div class="sg-space-row"><div style="width:8rem;"><span class="sg-type-meta">--cr-space-12</span></div><div class="sg-space-bar" style="width:96px;"></div><span class="sg-type-meta">96px</span></div>
-            </div>
-          </div>
-
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">Border radius</p>
-            <div class="sg-demo">
-              <div class="sg-radius-grid">
-                <div class="sg-radius-item">
-                  <div class="sg-radius-box" style="border-radius:0;"></div>
-                  <span class="sg-type-meta">none · 0</span>
+              <div class="sg-row" style="margin-bottom: var(--cr-space-4)">
+                <div class="sg-col" style="gap: 6px; align-items: flex-start">
+                  <span class="sg-label">Open</span>
+                  <span class="cr-badge cr-badge-open">Open</span>
                 </div>
-                <div class="sg-radius-item">
-                  <div class="sg-radius-box" style="border-radius:2px;"></div>
-                  <span class="sg-type-meta">sm · 2px</span>
+                <div class="sg-col" style="gap: 6px; align-items: flex-start">
+                  <span class="sg-label">In Progress</span>
+                  <span class="cr-badge cr-badge-in-progress">In Progress</span>
                 </div>
-                <div class="sg-radius-item">
-                  <div class="sg-radius-box" style="border-radius:4px;"></div>
-                  <span class="sg-type-meta">md · 4px</span>
+                <div class="sg-col" style="gap: 6px; align-items: flex-start">
+                  <span class="sg-label">Complete</span>
+                  <span class="cr-badge cr-badge-complete">Complete</span>
                 </div>
-                <div class="sg-radius-item">
-                  <div class="sg-radius-box" style="border-radius:8px;"></div>
-                  <span class="sg-type-meta">lg · 8px</span>
-                </div>
-                <div class="sg-radius-item">
-                  <div class="sg-radius-box" style="border-radius:9999px;width:5.5rem;"></div>
-                  <span class="sg-type-meta">pill</span>
+                <div class="sg-col" style="gap: 6px; align-items: flex-start">
+                  <span class="sg-label">Overdue</span>
+                  <span class="cr-badge cr-badge-overdue">Overdue</span>
                 </div>
               </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- ══ Motion ═══════════════════════════════════════════════════════ -->
-        <section id="motion" class="sg-section">
-          <div class="sg-section-header">
-            <h2 class="sg-section-title">Motion</h2>
-            <span class="sg-section-id">#motion</span>
-          </div>
-          <div class="sg-demo">
-            <div class="sg-motion-row">
-              <div style="width:7rem;"><span class="sg-type-meta">--cr-duration-fast</span></div>
-              <div style="width:3rem;"><span class="sg-type-meta" style="color:var(--cr-color-on-surface);font-weight:600;">100ms</span></div>
-              <span style="font-size:0.875rem;color:var(--cr-color-text-muted);">Hover states, button presses, focus ring appearance</span>
-              <div class="sg-motion-dot" style="transition:opacity 100ms ease;"></div>
-            </div>
-            <div class="sg-motion-row">
-              <div style="width:7rem;"><span class="sg-type-meta">--cr-duration-base</span></div>
-              <div style="width:3rem;"><span class="sg-type-meta" style="color:var(--cr-color-on-surface);font-weight:600;">200ms</span></div>
-              <span style="font-size:0.875rem;color:var(--cr-color-text-muted);">Drawer open/close, modal entrance, toast slide-in</span>
-              <div class="sg-motion-dot" style="transition:opacity 200ms ease;"></div>
-            </div>
-            <div class="sg-motion-row">
-              <div style="width:7rem;"><span class="sg-type-meta">--cr-duration-slow</span></div>
-              <div style="width:3rem;"><span class="sg-type-meta" style="color:var(--cr-color-on-surface);font-weight:600;">350ms</span></div>
-              <span style="font-size:0.875rem;color:var(--cr-color-text-muted);">Page transitions, skeleton-to-content reveal</span>
-              <div class="sg-motion-dot" style="transition:opacity 350ms ease;"></div>
-            </div>
-          </div>
-          <p style="font-size:0.8125rem;color:var(--cr-color-text-muted);margin:var(--cr-space-3) 0 0;">
-            All transitions respect <code class="sg-code">prefers-reduced-motion: reduce</code>
-            — durations collapse to 1ms. Never animate layout-affecting properties (width, height, top, left) — prefer transform and opacity only.
-          </p>
-        </section>
-
-        <!-- ══ Buttons ══════════════════════════════════════════════════════ -->
-        <section id="buttons" class="sg-section">
-          <div class="sg-section-header">
-            <h2 class="sg-section-title">Buttons</h2>
-            <span class="sg-section-id">#buttons</span>
-          </div>
-
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">Variants</p>
-            <div class="sg-demo">
-              <div class="sg-row">
-                <button>Primary</button>
-                <button class="cr-btn-secondary">Secondary</button>
-                <button class="cr-btn-ghost">Ghost</button>
-                <button class="cr-btn-danger">Danger</button>
-                <button class="cr-complete-btn">Complete Case</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">Sizes</p>
-            <div class="sg-demo">
-              <div class="sg-row" style="align-items:center;">
-                <button class="cr-btn-sm">Small</button>
-                <button>Base (default)</button>
-                <button class="cr-btn-lg">Large</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">States</p>
-            <div class="sg-demo">
-              <div class="sg-row">
-                <div class="sg-col" style="gap:6px;align-items:flex-start;">
-                  <span class="sg-label">Default</span>
-                  <button>Save</button>
-                </div>
-                <div class="sg-col" style="gap:6px;align-items:flex-start;">
-                  <span class="sg-label">Hover (hover me)</span>
-                  <button style="background:var(--cr-color-accent-hover);border-color:var(--cr-color-accent-hover);">Save</button>
-                </div>
-                <div class="sg-col" style="gap:6px;align-items:flex-start;">
-                  <span class="sg-label">Focus</span>
-                  <button style="outline:none;box-shadow:var(--cr-focus-ring);">Save</button>
-                </div>
-                <div class="sg-col" style="gap:6px;align-items:flex-start;">
-                  <span class="sg-label">Disabled</span>
-                  <button disabled>Save</button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">Dark mode</p>
-            <div class="sg-demo sg-demo-dark" data-cr-root data-cr-theme="dark" style="border-radius:6px;">
-              <div class="sg-row">
-                <button>Primary</button>
-                <button class="cr-btn-secondary">Secondary</button>
-                <button class="cr-btn-ghost">Ghost</button>
-                <button class="cr-btn-danger">Danger</button>
-                <button disabled>Disabled</button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- ══ Form Controls ════════════════════════════════════════════════ -->
-        <section id="forms" class="sg-section">
-          <div class="sg-section-header">
-            <h2 class="sg-section-title">Form Controls</h2>
-            <span class="sg-section-id">#forms</span>
-          </div>
-
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">Text input states</p>
-            <div class="sg-demo" style="display:grid;grid-template-columns:1fr 1fr;gap:var(--cr-space-4);">
-              <div class="sg-form-field" style="max-width:none;">
-                <label class="sg-label-text">Default</label>
-                <input class="sg-input" type="text" placeholder="Enter case reference…">
-              </div>
-              <div class="sg-form-field" style="max-width:none;">
-                <label class="sg-label-text">Focused (click me)</label>
-                <input class="sg-input" type="text" placeholder="Click to focus…">
-              </div>
-              <div class="sg-form-field" style="max-width:none;">
-                <label class="sg-label-text">Error state</label>
-                <input class="sg-input sg-input-error" type="text" value="Invalid reference" aria-invalid="true">
-                <span class="sg-error-text">Case reference not found in this period.</span>
-              </div>
-              <div class="sg-form-field" style="max-width:none;">
-                <label class="sg-label-text" style="opacity:0.5;">Disabled</label>
-                <input class="sg-input" type="text" value="CASE-2024-00421" disabled>
-              </div>
-            </div>
-          </div>
-
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">Select</p>
-            <div class="sg-demo" style="display:grid;grid-template-columns:1fr 1fr;gap:var(--cr-space-4);">
-              <div class="sg-form-field" style="max-width:none;">
-                <label class="sg-label-text">Reviewer</label>
-                <select class="sg-input">
-                  <option>Sarah Chen</option>
-                  <option>David Park</option>
-                  <option>Priya Sharma</option>
-                </select>
-              </div>
-              <div class="sg-form-field" style="max-width:none;">
-                <label class="sg-label-text" style="opacity:0.5;">Disabled</label>
-                <select class="sg-input" disabled>
-                  <option>Sarah Chen</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">Textarea</p>
-            <div class="sg-demo">
-              <div class="sg-form-field" style="max-width:none;">
-                <label class="sg-label-text">Justification</label>
-                <textarea class="sg-input" rows="3" placeholder="Add a justification for this answer…"></textarea>
-                <span class="sg-help-text">Required when the answer is Fail or N/A.</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">Checkbox &amp; Radio</p>
-            <div class="sg-demo" style="display:grid;grid-template-columns:1fr 1fr;gap:var(--cr-space-5);">
-              <div>
-                <p class="sg-label">Checkboxes</p>
-                <label class="sg-checkbox-row"><input type="checkbox" checked> Include archived cases</label>
-                <label class="sg-checkbox-row"><input type="checkbox"> Notify on completion</label>
-                <label class="sg-checkbox-row"><input type="checkbox" disabled> Admin override (disabled)</label>
-              </div>
-              <div>
-                <p class="sg-label">Radio — Answer options</p>
-                <label class="sg-radio-row"><input type="radio" name="ans" value="pass" checked> Pass</label>
-                <label class="sg-radio-row"><input type="radio" name="ans" value="fail"> Fail</label>
-                <label class="sg-radio-row"><input type="radio" name="ans" value="na"> N/A</label>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- ══ Status & Badges ═════════════════════════════════════════════ -->
-        <section id="badges" class="sg-section">
-          <div class="sg-section-header">
-            <h2 class="sg-section-title">Status &amp; Badges</h2>
-            <span class="sg-section-id">#badges</span>
-          </div>
-
-          <div class="sg-demo">
-            <div class="sg-row" style="margin-bottom:var(--cr-space-4);">
-              <div class="sg-col" style="gap:6px;align-items:flex-start;">
-                <span class="sg-label">Open</span>
-                <span class="cr-badge cr-badge-open">Open</span>
-              </div>
-              <div class="sg-col" style="gap:6px;align-items:flex-start;">
-                <span class="sg-label">In Progress</span>
-                <span class="cr-badge cr-badge-in-progress">In Progress</span>
-              </div>
-              <div class="sg-col" style="gap:6px;align-items:flex-start;">
-                <span class="sg-label">Complete</span>
-                <span class="cr-badge cr-badge-complete">Complete</span>
-              </div>
-              <div class="sg-col" style="gap:6px;align-items:flex-start;">
-                <span class="sg-label">Overdue</span>
+              <hr class="sg-divider" />
+              <p class="sg-label">In context (table row inline usage)</p>
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: var(--cr-space-4);
+                  background: var(--cr-color-surface-2);
+                  padding: var(--cr-space-3) var(--cr-space-4);
+                  border-radius: 4px;
+                  border: 1px solid var(--cr-color-border);
+                "
+              >
+                <span
+                  style="
+                    font-family: 'JetBrains Mono', monospace;
+                    font-size: 0.8rem;
+                    color: var(--cr-color-text-muted);
+                  "
+                  >CASE-2024-00421</span
+                >
+                <span style="font-size: 0.9rem; font-weight: 500; flex: 1"
+                  >Call Centre Quality Review — Sarah Chen</span
+                >
                 <span class="cr-badge cr-badge-overdue">Overdue</span>
               </div>
             </div>
-            <hr class="sg-divider">
-            <p class="sg-label">In context (table row inline usage)</p>
-            <div style="display:flex;align-items:center;gap:var(--cr-space-4);background:var(--cr-color-surface-2);padding:var(--cr-space-3) var(--cr-space-4);border-radius:4px;border:1px solid var(--cr-color-border);">
-              <span style="font-family:'JetBrains Mono',monospace;font-size:0.8rem;color:var(--cr-color-text-muted);">CASE-2024-00421</span>
-              <span style="font-size:0.9rem;font-weight:500;flex:1;">Call Centre Quality Review — Sarah Chen</span>
-              <span class="cr-badge cr-badge-overdue">Overdue</span>
-            </div>
-          </div>
 
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">Outcome display</p>
-            <div class="sg-demo">
-              <div class="sg-row">
-                <div class="sg-col" style="gap:4px;">
-                  <span class="sg-label">Pass</span>
-                  <span class="cr-outcome-pass">● Pass</span>
-                </div>
-                <div class="sg-col" style="gap:4px;">
-                  <span class="sg-label">Fail</span>
-                  <span class="cr-outcome-fail">● Fail</span>
-                </div>
-                <div class="sg-col" style="gap:4px;">
-                  <span class="sg-label">Indeterminate</span>
-                  <span class="cr-outcome-indeterminate">— Not yet determined</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- ══ Data Tables ══════════════════════════════════════════════════ -->
-        <section id="tables" class="sg-section">
-          <div class="sg-section-header">
-            <h2 class="sg-section-title">Data Tables</h2>
-            <span class="sg-section-id">#tables</span>
-          </div>
-
-          <div class="sg-demo" style="padding:0;overflow:hidden;">
-            <table class="cr-data-table">
-              <thead>
-                <tr>
-                  <th><button>Case ID</button></th>
-                  <th aria-sort="ascending"><button>Case Type ▲</button></th>
-                  <th><button>Assigned Reviewer</button></th>
-                  <th><button>Status</button></th>
-                  <th><button>Due Date</button></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr tabindex="0">
-                  <td><span style="font-family:'JetBrains Mono',monospace;font-size:0.8rem;">CASE-2024-00419</span></td>
-                  <td>Call Centre Review</td>
-                  <td>Sarah Chen</td>
-                  <td><span class="cr-badge cr-badge-in-progress">In Progress</span></td>
-                  <td style="font-variant-numeric:tabular-nums;">18 May 2026</td>
-                </tr>
-                <tr class="cr-overdue" tabindex="0">
-                  <td><span style="font-family:'JetBrains Mono',monospace;font-size:0.8rem;">CASE-2024-00421</span></td>
-                  <td>Call Centre Review</td>
-                  <td>David Park</td>
-                  <td><span class="cr-badge cr-badge-overdue">Overdue</span></td>
-                  <td style="font-variant-numeric:tabular-nums;color:var(--cr-color-danger);font-weight:600;">12 May 2026</td>
-                </tr>
-                <tr tabindex="0">
-                  <td><span style="font-family:'JetBrains Mono',monospace;font-size:0.8rem;">CASE-2024-00418</span></td>
-                  <td>Complaint Handling</td>
-                  <td>Priya Sharma</td>
-                  <td><span class="cr-badge cr-badge-complete">Complete</span></td>
-                  <td style="font-variant-numeric:tabular-nums;">20 May 2026</td>
-                </tr>
-                <tr tabindex="0">
-                  <td><span style="font-family:'JetBrains Mono',monospace;font-size:0.8rem;">CASE-2024-00422</span></td>
-                  <td>Complaint Handling</td>
-                  <td>—</td>
-                  <td><span class="cr-badge cr-badge-open">Open</span></td>
-                  <td style="font-variant-numeric:tabular-nums;">25 May 2026</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <p style="font-size:0.8125rem;color:var(--cr-color-text-muted);margin-top:var(--cr-space-3);">
-            Overdue rows get a left 3px <span style="color:var(--cr-color-danger);font-weight:600;">danger</span> border and danger-bg tint. Table rows are focusable with keyboard (<code class="sg-code">tabindex="0"</code>). Column header sort buttons inherit the header's uppercase/tracking style.
-          </p>
-        </section>
-
-        <!-- ══ KPI Tiles ════════════════════════════════════════════════════ -->
-        <section id="kpi" class="sg-section">
-          <div class="sg-section-header">
-            <h2 class="sg-section-title">KPI Tiles</h2>
-            <span class="sg-section-id">#kpi</span>
-          </div>
-
-          <div class="sg-kpi-demo">
-            <div class="cr-kpi-tile">
-              <p class="cr-kpi-label">Open Cases</p>
-              <p class="cr-kpi-value">14</p>
-              <p class="cr-kpi-delta">— 3 from last week</p>
-            </div>
-            <div class="cr-kpi-tile cr-kpi-tile-danger">
-              <p class="cr-kpi-label">Overdue</p>
-              <p class="cr-kpi-value">3</p>
-              <p class="cr-kpi-delta cr-kpi-delta-down">+2 from last week</p>
-            </div>
-            <div class="cr-kpi-tile">
-              <p class="cr-kpi-label">Completed (30d)</p>
-              <p class="cr-kpi-value">89<span style="font-size:1.5rem;font-weight:600;">%</span></p>
-              <p class="cr-kpi-delta cr-kpi-delta-up">+4% vs prior period</p>
-            </div>
-            <div class="cr-kpi-tile">
-              <p class="cr-kpi-label">Assigned to Me</p>
-              <p class="cr-kpi-value">12</p>
-              <p class="cr-kpi-delta" style="color:var(--cr-color-text-muted);">4 due this week</p>
-            </div>
-          </div>
-
-          <div class="sg-kpi-demo" style="margin-top:var(--cr-space-3);">
-            <div data-cr-root data-cr-theme="dark" class="cr-kpi-tile" style="background:var(--cr-color-surface);border-color:var(--cr-color-border);">
-              <p class="cr-kpi-label">Open Cases</p>
-              <p class="cr-kpi-value">14</p>
-              <p class="cr-kpi-delta">Dark mode</p>
-            </div>
-            <div data-cr-root data-cr-theme="dark" class="cr-kpi-tile cr-kpi-tile-danger" style="background:var(--cr-color-surface);border-color:var(--cr-color-border);">
-              <p class="cr-kpi-label">Overdue</p>
-              <p class="cr-kpi-value">3</p>
-              <p class="cr-kpi-delta cr-kpi-delta-down">Dark mode</p>
-            </div>
-          </div>
-        </section>
-
-        <!-- ══ Navigation ═══════════════════════════════════════════════════ -->
-        <section id="navigation" class="sg-section">
-          <div class="sg-section-header">
-            <h2 class="sg-section-title">Navigation</h2>
-            <span class="sg-section-id">#navigation</span>
-          </div>
-
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">App nav bar — light mode</p>
-            <div class="sg-demo" style="padding:0;">
-              <nav class="sg-nav-demo" aria-label="Application navigation demo">
-                <div class="sg-nav-demo-brand">
-                  <div class="sg-nav-demo-mark">CR</div>
-                  Case Review
-                </div>
-                <div class="sg-nav-demo-items" role="list">
-                  <a href="#navigation" class="sg-nav-demo-item">Dashboard</a>
-                  <a href="#navigation" class="sg-nav-demo-item active" aria-current="page">Cases</a>
-                  <a href="#navigation" class="sg-nav-demo-item">Reports</a>
-                  <a href="#navigation" class="sg-nav-demo-item">Question Bank</a>
-                </div>
-              </nav>
-            </div>
-          </div>
-
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">App nav bar — dark mode</p>
-            <div class="sg-demo" style="padding:0;background:#17171A;border-color:#2C2C33;border-radius:6px;overflow:hidden;">
-              <nav style="display:flex;align-items:center;gap:0;background:#17171A;border-bottom:1px solid #2C2C33;padding:0 24px;height:3.5rem;" aria-label="Dark nav demo">
-                <div style="display:flex;align-items:center;gap:8px;font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;color:#EAEAEC;margin-right:32px;">
-                  <div style="width:1.75rem;height:1.75rem;background:#FF2233;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.8rem;font-weight:800;border-radius:3px;">CR</div>
-                  Case Review
-                </div>
-                <div style="display:flex;align-items:stretch;height:100%;">
-                  <a href="#navigation" style="display:flex;align-items:center;padding:0 16px;font-size:0.875rem;font-weight:500;color:#888892;text-decoration:none;border-bottom:3px solid transparent;">Dashboard</a>
-                  <a href="#navigation" style="display:flex;align-items:center;padding:0 16px;font-size:0.875rem;font-weight:600;color:#FF2233;text-decoration:none;border-bottom:3px solid #FF2233;">Cases</a>
-                  <a href="#navigation" style="display:flex;align-items:center;padding:0 16px;font-size:0.875rem;font-weight:500;color:#888892;text-decoration:none;border-bottom:3px solid transparent;">Reports</a>
-                  <a href="#navigation" style="display:flex;align-items:center;padding:0 16px;font-size:0.875rem;font-weight:500;color:#888892;text-decoration:none;border-bottom:3px solid transparent;">Question Bank</a>
-                </div>
-              </nav>
-            </div>
-          </div>
-
-          <p style="font-size:0.8125rem;color:var(--cr-color-text-muted);margin-top:var(--cr-space-3);">
-            Active nav item: 3px bottom border in <span style="color:var(--cr-color-accent);font-weight:600;">--cr-color-accent</span>, font-weight 600. Keyboard: Tab between items, Enter/Space to activate.
-            Screen readers: <code class="sg-code">aria-current="page"</code> on the active link.
-          </p>
-        </section>
-
-        <!-- ══ Notifications ════════════════════════════════════════════════ -->
-        <section id="notifications" class="sg-section">
-          <div class="sg-section-header">
-            <h2 class="sg-section-title">Notifications</h2>
-            <span class="sg-section-id">#notifications</span>
-          </div>
-
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">Toast / inline alert</p>
-            <div class="sg-demo">
-              <div class="sg-col" style="gap:var(--cr-space-3);">
-                <div class="sg-toast sg-toast-success" role="status">
-                  <span class="sg-toast-icon">✓</span>
-                  <span>Case CASE-2024-00419 marked complete.</span>
-                </div>
-                <div class="sg-toast sg-toast-danger" role="alert">
-                  <span class="sg-toast-icon">✕</span>
-                  <span>Save conflict detected. Another reviewer has modified this case.</span>
-                </div>
-                <div class="sg-toast sg-toast-warning" role="status">
-                  <span class="sg-toast-icon">⚠</span>
-                  <span>Connection interrupted. Changes will auto-save when restored.</span>
-                </div>
-                <div class="sg-toast sg-toast-info" role="status">
-                  <span class="sg-toast-icon">i</span>
-                  <span>This Question Definition was updated by the Case Type Owner on 14 May.</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">Banner — conflict &amp; reconnecting</p>
-            <div class="sg-demo">
-              <div class="sg-col" style="gap:var(--cr-space-3);">
-                <div class="cr-banner cr-banner-conflict" role="alert">
-                  <p class="cr-banner-text">Save conflict — this case was modified by David Park. Reload to see the latest version before continuing.</p>
-                  <button class="cr-banner-reload">Reload</button>
-                </div>
-                <div class="cr-banner cr-banner-reconnecting" role="status">
-                  Reconnecting to SharePoint… your changes will be saved automatically.
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- ══ Case Review Pattern ══════════════════════════════════════════ -->
-        <section id="questions" class="sg-section">
-          <div class="sg-section-header">
-            <h2 class="sg-section-title">Case Review</h2>
-            <span class="sg-section-id">#questions</span>
-          </div>
-
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">Question card — unanswered</p>
-            <div class="sg-demo" style="padding:0;">
-              <div class="sg-question-card">
-                <div class="sg-question-header">
-                  <div class="sg-question-id">QD-0042 · Section 3 — Identity Verification</div>
-                  <div class="sg-question-text">Did the agent verify the caller's identity using two independent factors before accessing account information?</div>
-                </div>
-                <div class="sg-question-body">
-                  <label class="sg-radio-row"><input type="radio" name="qd42" value="pass"> Pass</label>
-                  <label class="sg-radio-row"><input type="radio" name="qd42" value="fail"> Fail</label>
-                  <label class="sg-radio-row"><input type="radio" name="qd42" value="na"> N/A</label>
-                  <div style="margin-top:var(--cr-space-2);">
-                    <label class="sg-label-text" style="font-size:0.75rem;">Justification (required if Fail / N/A)</label>
-                    <textarea class="sg-input" rows="2" placeholder="Add a justification…" style="margin-top:4px;font-size:0.875rem;min-height:4rem;"></textarea>
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">Outcome display</p>
+              <div class="sg-demo">
+                <div class="sg-row">
+                  <div class="sg-col" style="gap: 4px">
+                    <span class="sg-label">Pass</span>
+                    <span class="cr-outcome-pass">● Pass</span>
+                  </div>
+                  <div class="sg-col" style="gap: 4px">
+                    <span class="sg-label">Fail</span>
+                    <span class="cr-outcome-fail">● Fail</span>
+                  </div>
+                  <div class="sg-col" style="gap: 4px">
+                    <span class="sg-label">Indeterminate</span>
+                    <span class="cr-outcome-indeterminate"
+                      >— Not yet determined</span
+                    >
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          </section>
 
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">Question card — failed with remediation</p>
-            <div class="sg-demo" style="padding:0;">
-              <div class="sg-question-card">
-                <div class="sg-question-header">
-                  <div class="sg-question-id">QD-0044 · Section 3 — Identity Verification</div>
-                  <div class="sg-question-text">Was the caller's account flagged for a recent suspicious activity alert prior to this call?</div>
-                </div>
-                <div class="sg-question-body">
-                  <label class="sg-radio-row"><input type="radio" name="qd44" value="pass"> Pass</label>
-                  <label class="sg-radio-row"><input type="radio" name="qd44" value="fail" checked> Fail</label>
-                  <label class="sg-radio-row"><input type="radio" name="qd44" value="na"> N/A</label>
-                  <div style="margin-top:var(--cr-space-2);">
-                    <label class="sg-label-text" style="font-size:0.75rem;">Justification</label>
-                    <textarea class="sg-input" rows="2" style="margin-top:4px;font-size:0.875rem;min-height:4rem;">Agent did not check the fraud alert flag before discussing account balance.</textarea>
+          <!-- ══ Data Tables ══════════════════════════════════════════════════ -->
+          <section id="tables" class="sg-section">
+            <div class="sg-section-header">
+              <h2 class="sg-section-title">Data Tables</h2>
+              <span class="sg-section-id">#tables</span>
+            </div>
+
+            <div class="sg-demo" style="padding: 0; overflow: hidden">
+              <table class="cr-data-table">
+                <thead>
+                  <tr>
+                    <th><button>Case ID</button></th>
+                    <th aria-sort="ascending"><button>Case Type ▲</button></th>
+                    <th><button>Assigned Reviewer</button></th>
+                    <th><button>Status</button></th>
+                    <th><button>Due Date</button></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr tabindex="0">
+                    <td>
+                      <span
+                        style="
+                          font-family: 'JetBrains Mono', monospace;
+                          font-size: 0.8rem;
+                        "
+                        >CASE-2024-00419</span
+                      >
+                    </td>
+                    <td>Call Centre Review</td>
+                    <td>Sarah Chen</td>
+                    <td>
+                      <span class="cr-badge cr-badge-in-progress"
+                        >In Progress</span
+                      >
+                    </td>
+                    <td style="font-variant-numeric: tabular-nums">
+                      18 May 2026
+                    </td>
+                  </tr>
+                  <tr class="cr-overdue" tabindex="0">
+                    <td>
+                      <span
+                        style="
+                          font-family: 'JetBrains Mono', monospace;
+                          font-size: 0.8rem;
+                        "
+                        >CASE-2024-00421</span
+                      >
+                    </td>
+                    <td>Call Centre Review</td>
+                    <td>David Park</td>
+                    <td>
+                      <span class="cr-badge cr-badge-overdue">Overdue</span>
+                    </td>
+                    <td
+                      style="
+                        font-variant-numeric: tabular-nums;
+                        color: var(--cr-color-danger);
+                        font-weight: 600;
+                      "
+                    >
+                      12 May 2026
+                    </td>
+                  </tr>
+                  <tr tabindex="0">
+                    <td>
+                      <span
+                        style="
+                          font-family: 'JetBrains Mono', monospace;
+                          font-size: 0.8rem;
+                        "
+                        >CASE-2024-00418</span
+                      >
+                    </td>
+                    <td>Complaint Handling</td>
+                    <td>Priya Sharma</td>
+                    <td>
+                      <span class="cr-badge cr-badge-complete">Complete</span>
+                    </td>
+                    <td style="font-variant-numeric: tabular-nums">
+                      20 May 2026
+                    </td>
+                  </tr>
+                  <tr tabindex="0">
+                    <td>
+                      <span
+                        style="
+                          font-family: 'JetBrains Mono', monospace;
+                          font-size: 0.8rem;
+                        "
+                        >CASE-2024-00422</span
+                      >
+                    </td>
+                    <td>Complaint Handling</td>
+                    <td>—</td>
+                    <td><span class="cr-badge cr-badge-open">Open</span></td>
+                    <td style="font-variant-numeric: tabular-nums">
+                      25 May 2026
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <p
+              style="
+                font-size: 0.8125rem;
+                color: var(--cr-color-text-muted);
+                margin-top: var(--cr-space-3);
+              "
+            >
+              Overdue rows get a left 3px
+              <span style="color: var(--cr-color-danger); font-weight: 600"
+                >danger</span
+              >
+              border and danger-bg tint. Table rows are focusable with keyboard
+              (<code class="sg-code">tabindex="0"</code>). Column header sort
+              buttons inherit the header's uppercase/tracking style.
+            </p>
+          </section>
+
+          <!-- ══ KPI Tiles ════════════════════════════════════════════════════ -->
+          <section id="kpi" class="sg-section">
+            <div class="sg-section-header">
+              <h2 class="sg-section-title">KPI Tiles</h2>
+              <span class="sg-section-id">#kpi</span>
+            </div>
+
+            <div class="sg-kpi-demo">
+              <div class="cr-kpi-tile">
+                <p class="cr-kpi-label">Open Cases</p>
+                <p class="cr-kpi-value">14</p>
+                <p class="cr-kpi-delta">— 3 from last week</p>
+              </div>
+              <div class="cr-kpi-tile cr-kpi-tile-danger">
+                <p class="cr-kpi-label">Overdue</p>
+                <p class="cr-kpi-value">3</p>
+                <p class="cr-kpi-delta cr-kpi-delta-down">+2 from last week</p>
+              </div>
+              <div class="cr-kpi-tile">
+                <p class="cr-kpi-label">Completed (30d)</p>
+                <p class="cr-kpi-value">
+                  89<span style="font-size: 1.5rem; font-weight: 600">%</span>
+                </p>
+                <p class="cr-kpi-delta cr-kpi-delta-up">+4% vs prior period</p>
+              </div>
+              <div class="cr-kpi-tile">
+                <p class="cr-kpi-label">Assigned to Me</p>
+                <p class="cr-kpi-value">12</p>
+                <p
+                  class="cr-kpi-delta"
+                  style="color: var(--cr-color-text-muted)"
+                >
+                  4 due this week
+                </p>
+              </div>
+            </div>
+
+            <div class="sg-kpi-demo" style="margin-top: var(--cr-space-3)">
+              <div
+                data-cr-root
+                data-cr-theme="dark"
+                class="cr-kpi-tile"
+                style="
+                  background: var(--cr-color-surface);
+                  border-color: var(--cr-color-border);
+                "
+              >
+                <p class="cr-kpi-label">Open Cases</p>
+                <p class="cr-kpi-value">14</p>
+                <p class="cr-kpi-delta">Dark mode</p>
+              </div>
+              <div
+                data-cr-root
+                data-cr-theme="dark"
+                class="cr-kpi-tile cr-kpi-tile-danger"
+                style="
+                  background: var(--cr-color-surface);
+                  border-color: var(--cr-color-border);
+                "
+              >
+                <p class="cr-kpi-label">Overdue</p>
+                <p class="cr-kpi-value">3</p>
+                <p class="cr-kpi-delta cr-kpi-delta-down">Dark mode</p>
+              </div>
+            </div>
+          </section>
+
+          <!-- ══ Navigation ═══════════════════════════════════════════════════ -->
+          <section id="navigation" class="sg-section">
+            <div class="sg-section-header">
+              <h2 class="sg-section-title">Navigation</h2>
+              <span class="sg-section-id">#navigation</span>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">App nav bar — light mode</p>
+              <div class="sg-demo" style="padding: 0">
+                <nav
+                  class="sg-nav-demo"
+                  aria-label="Application navigation demo"
+                >
+                  <div class="sg-nav-demo-brand">
+                    <div class="sg-nav-demo-mark">CR</div>
+                    Case Review
                   </div>
-                  <div class="cr-remediation-panel" style="margin-top:var(--cr-space-3);">
-                    <details open>
-                      <summary>Remediation Actions (1)</summary>
-                      <div style="margin-top:var(--cr-space-3);">
-                        <div class="cr-remediation-item">
-                          <p class="cr-remediation-category">Fraud Prevention</p>
-                          <p class="cr-remediation-question">Fraud alert check missed prior to account discussion.</p>
-                          <p class="cr-remediation-answer">Answer: Fail — agent skipped fraud flag review</p>
-                          <ul class="cr-remediation-actions">
-                            <li>Agent to complete fraud-awareness refresher by end of month.</li>
-                          </ul>
+                  <div class="sg-nav-demo-items" role="list">
+                    <a href="#navigation" class="sg-nav-demo-item">Dashboard</a>
+                    <a
+                      href="#navigation"
+                      class="sg-nav-demo-item active"
+                      aria-current="page"
+                      >Cases</a
+                    >
+                    <a href="#navigation" class="sg-nav-demo-item">Reports</a>
+                    <a href="#navigation" class="sg-nav-demo-item"
+                      >Question Bank</a
+                    >
+                  </div>
+                </nav>
+              </div>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">App nav bar — dark mode</p>
+              <div
+                class="sg-demo"
+                style="
+                  padding: 0;
+                  background: #17171a;
+                  border-color: #2c2c33;
+                  border-radius: 6px;
+                  overflow: hidden;
+                "
+              >
+                <nav
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 0;
+                    background: #17171a;
+                    border-bottom: 1px solid #2c2c33;
+                    padding: 0 24px;
+                    height: 3.5rem;
+                  "
+                  aria-label="Dark nav demo"
+                >
+                  <div
+                    style="
+                      display: flex;
+                      align-items: center;
+                      gap: 8px;
+                      font-family: 'Barlow Condensed', sans-serif;
+                      font-size: 1.1rem;
+                      font-weight: 700;
+                      color: #eaeaec;
+                      margin-right: 32px;
+                    "
+                  >
+                    <div
+                      style="
+                        width: 1.75rem;
+                        height: 1.75rem;
+                        background: #ff2233;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        color: #fff;
+                        font-size: 0.8rem;
+                        font-weight: 800;
+                        border-radius: 3px;
+                      "
+                    >
+                      CR
+                    </div>
+                    Case Review
+                  </div>
+                  <div
+                    style="display: flex; align-items: stretch; height: 100%"
+                  >
+                    <a
+                      href="#navigation"
+                      style="
+                        display: flex;
+                        align-items: center;
+                        padding: 0 16px;
+                        font-size: 0.875rem;
+                        font-weight: 500;
+                        color: #888892;
+                        text-decoration: none;
+                        border-bottom: 3px solid transparent;
+                      "
+                      >Dashboard</a
+                    >
+                    <a
+                      href="#navigation"
+                      style="
+                        display: flex;
+                        align-items: center;
+                        padding: 0 16px;
+                        font-size: 0.875rem;
+                        font-weight: 600;
+                        color: #ff2233;
+                        text-decoration: none;
+                        border-bottom: 3px solid #ff2233;
+                      "
+                      >Cases</a
+                    >
+                    <a
+                      href="#navigation"
+                      style="
+                        display: flex;
+                        align-items: center;
+                        padding: 0 16px;
+                        font-size: 0.875rem;
+                        font-weight: 500;
+                        color: #888892;
+                        text-decoration: none;
+                        border-bottom: 3px solid transparent;
+                      "
+                      >Reports</a
+                    >
+                    <a
+                      href="#navigation"
+                      style="
+                        display: flex;
+                        align-items: center;
+                        padding: 0 16px;
+                        font-size: 0.875rem;
+                        font-weight: 500;
+                        color: #888892;
+                        text-decoration: none;
+                        border-bottom: 3px solid transparent;
+                      "
+                      >Question Bank</a
+                    >
+                  </div>
+                </nav>
+              </div>
+            </div>
+
+            <p
+              style="
+                font-size: 0.8125rem;
+                color: var(--cr-color-text-muted);
+                margin-top: var(--cr-space-3);
+              "
+            >
+              Active nav item: 3px bottom border in
+              <span style="color: var(--cr-color-accent); font-weight: 600"
+                >--cr-color-accent</span
+              >, font-weight 600. Keyboard: Tab between items, Enter/Space to
+              activate. Screen readers:
+              <code class="sg-code">aria-current="page"</code> on the active
+              link.
+            </p>
+          </section>
+
+          <!-- ══ Notifications ════════════════════════════════════════════════ -->
+          <section id="notifications" class="sg-section">
+            <div class="sg-section-header">
+              <h2 class="sg-section-title">Notifications</h2>
+              <span class="sg-section-id">#notifications</span>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">Toast / inline alert</p>
+              <div class="sg-demo">
+                <div class="sg-col" style="gap: var(--cr-space-3)">
+                  <div class="sg-toast sg-toast-success" role="status">
+                    <span class="sg-toast-icon">✓</span>
+                    <span>Case CASE-2024-00419 marked complete.</span>
+                  </div>
+                  <div class="sg-toast sg-toast-danger" role="alert">
+                    <span class="sg-toast-icon">✕</span>
+                    <span
+                      >Save conflict detected. Another reviewer has modified
+                      this case.</span
+                    >
+                  </div>
+                  <div class="sg-toast sg-toast-warning" role="status">
+                    <span class="sg-toast-icon">⚠</span>
+                    <span
+                      >Connection interrupted. Changes will auto-save when
+                      restored.</span
+                    >
+                  </div>
+                  <div class="sg-toast sg-toast-info" role="status">
+                    <span class="sg-toast-icon">i</span>
+                    <span
+                      >This Question Definition was updated by the Case Type
+                      Owner on 14 May.</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">
+                Banner — conflict &amp; reconnecting
+              </p>
+              <div class="sg-demo">
+                <div class="sg-col" style="gap: var(--cr-space-3)">
+                  <div class="cr-banner cr-banner-conflict" role="alert">
+                    <p class="cr-banner-text">
+                      Save conflict — this case was modified by David Park.
+                      Reload to see the latest version before continuing.
+                    </p>
+                    <button class="cr-banner-reload">Reload</button>
+                  </div>
+                  <div class="cr-banner cr-banner-reconnecting" role="status">
+                    Reconnecting to SharePoint… your changes will be saved
+                    automatically.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ══ Case Review Pattern ══════════════════════════════════════════ -->
+          <section id="questions" class="sg-section">
+            <div class="sg-section-header">
+              <h2 class="sg-section-title">Case Review</h2>
+              <span class="sg-section-id">#questions</span>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">Question card — unanswered</p>
+              <div class="sg-demo" style="padding: 0">
+                <div class="sg-question-card">
+                  <div class="sg-question-header">
+                    <div class="sg-question-id">
+                      QD-0042 · Section 3 — Identity Verification
+                    </div>
+                    <div class="sg-question-text">
+                      Did the agent verify the caller's identity using two
+                      independent factors before accessing account information?
+                    </div>
+                  </div>
+                  <div class="sg-question-body">
+                    <label class="sg-radio-row"
+                      ><input type="radio" name="qd42" value="pass" />
+                      Pass</label
+                    >
+                    <label class="sg-radio-row"
+                      ><input type="radio" name="qd42" value="fail" />
+                      Fail</label
+                    >
+                    <label class="sg-radio-row"
+                      ><input type="radio" name="qd42" value="na" /> N/A</label
+                    >
+                    <div style="margin-top: var(--cr-space-2)">
+                      <label class="sg-label-text" style="font-size: 0.75rem"
+                        >Justification (required if Fail / N/A)</label
+                      >
+                      <textarea
+                        class="sg-input"
+                        rows="2"
+                        placeholder="Add a justification…"
+                        style="
+                          margin-top: 4px;
+                          font-size: 0.875rem;
+                          min-height: 4rem;
+                        "
+                      ></textarea>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">
+                Question card — failed with remediation
+              </p>
+              <div class="sg-demo" style="padding: 0">
+                <div class="sg-question-card">
+                  <div class="sg-question-header">
+                    <div class="sg-question-id">
+                      QD-0044 · Section 3 — Identity Verification
+                    </div>
+                    <div class="sg-question-text">
+                      Was the caller's account flagged for a recent suspicious
+                      activity alert prior to this call?
+                    </div>
+                  </div>
+                  <div class="sg-question-body">
+                    <label class="sg-radio-row"
+                      ><input type="radio" name="qd44" value="pass" />
+                      Pass</label
+                    >
+                    <label class="sg-radio-row"
+                      ><input type="radio" name="qd44" value="fail" checked />
+                      Fail</label
+                    >
+                    <label class="sg-radio-row"
+                      ><input type="radio" name="qd44" value="na" /> N/A</label
+                    >
+                    <div style="margin-top: var(--cr-space-2)">
+                      <label class="sg-label-text" style="font-size: 0.75rem"
+                        >Justification</label
+                      >
+                      <textarea
+                        class="sg-input"
+                        rows="2"
+                        style="
+                          margin-top: 4px;
+                          font-size: 0.875rem;
+                          min-height: 4rem;
+                        "
+                      >
+Agent did not check the fraud alert flag before discussing account balance.</textarea
+                      >
+                    </div>
+                    <div
+                      class="cr-remediation-panel"
+                      style="margin-top: var(--cr-space-3)"
+                    >
+                      <details open>
+                        <summary>Remediation Actions (1)</summary>
+                        <div style="margin-top: var(--cr-space-3)">
+                          <div class="cr-remediation-item">
+                            <p class="cr-remediation-category">
+                              Fraud Prevention
+                            </p>
+                            <p class="cr-remediation-question">
+                              Fraud alert check missed prior to account
+                              discussion.
+                            </p>
+                            <p class="cr-remediation-answer">
+                              Answer: Fail — agent skipped fraud flag review
+                            </p>
+                            <ul class="cr-remediation-actions">
+                              <li>
+                                Agent to complete fraud-awareness refresher by
+                                end of month.
+                              </li>
+                            </ul>
+                          </div>
                         </div>
-                      </div>
-                    </details>
+                      </details>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        <!-- ══ People picker ═══════════════════════════════════════════════ -->
-        <section id="people" class="sg-section">
-          <div class="sg-section-header">
-            <h2 class="sg-section-title">People Picker</h2>
-            <span class="sg-section-id">#people</span>
-          </div>
+          <!-- ══ People picker ═══════════════════════════════════════════════ -->
+          <section id="people" class="sg-section">
+            <div class="sg-section-header">
+              <h2 class="sg-section-title">People Picker</h2>
+              <span class="sg-section-id">#people</span>
+            </div>
 
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">cr-people-picker — live type-ahead (mock directory)</p>
-            <p style="font-size:0.875rem;color:var(--cr-color-text-muted);max-width:46ch;margin:0 0 var(--cr-space-3);line-height:1.55;">
-              Type a name (try <code>smith</code>, <code>jones</code>, or <code>wei</code>) to search the
-              mock directory. Selecting a result emits <code>cr-person-selected</code> with the bare
-              account name. With no matches, a free-text fallback offers the typed text as a raw account.
-            </p>
-            <div class="sg-demo" style="overflow:visible;">
-              <div style="max-width:24rem;">
-                <cr-people-picker id="sg-people-picker"></cr-people-picker>
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">
+                cr-people-picker — live type-ahead (mock directory)
+              </p>
+              <p
+                style="
+                  font-size: 0.875rem;
+                  color: var(--cr-color-text-muted);
+                  max-width: 46ch;
+                  margin: 0 0 var(--cr-space-3);
+                  line-height: 1.55;
+                "
+              >
+                Type a name (try <code>smith</code>, <code>jones</code>, or
+                <code>wei</code>) to search the mock directory. Selecting a
+                result emits <code>cr-person-selected</code> with the bare
+                account name. With no matches, a free-text fallback offers the
+                typed text as a raw account.
+              </p>
+              <div class="sg-demo" style="overflow: visible">
+                <div style="max-width: 24rem">
+                  <cr-people-picker id="sg-people-picker"></cr-people-picker>
+                </div>
+                <p
+                  id="sg-people-selected"
+                  style="
+                    margin-top: var(--cr-space-3);
+                    font-family: var(--cr-font-mono);
+                    font-size: 0.8125rem;
+                    color: var(--cr-color-text-muted);
+                  "
+                >
+                  No selection yet.
+                </p>
               </div>
-              <p id="sg-people-selected" style="margin-top:var(--cr-space-3);font-family:var(--cr-font-mono);font-size:0.8125rem;color:var(--cr-color-text-muted);">
-                No selection yet.
-              </p>
             </div>
-          </div>
-        </section>
+          </section>
 
-        <section id="tabs" class="sg-section">
-          <div class="sg-section-header">
-            <h2 class="sg-section-title">Tabs</h2>
-            <span class="sg-section-id">#tabs</span>
-          </div>
-
-          <div class="sg-subsection">
-            <p class="sg-subsection-title">cr-tabs — generic, domain-free tab navigation</p>
-            <p style="font-size:0.875rem;color:var(--cr-color-text-muted);max-width:52ch;margin:0 0 var(--cr-space-3);line-height:1.55;">
-              A reusable tablist primitive driven by a <code>{ id, label, hidden }</code> list and a
-              selected id. It renders ARIA <code>tablist</code>/<code>tab</code>/<code>tabpanel</code>
-              roles, shows only the active panel, owns left/right arrow-key navigation between visible
-              tabs, and emits <code>cr-tab-change</code> with the newly-selected id. It holds no domain
-              knowledge — the consumer supplies tab metadata and panel content nodes.
-            </p>
-            <div class="sg-demo" style="overflow:visible;">
-              <cr-tabs id="sg-tabs"></cr-tabs>
-              <p id="sg-tabs-event" style="margin-top:var(--cr-space-3);font-family:var(--cr-font-mono);font-size:0.8125rem;color:var(--cr-color-text-muted);">
-                No tab change yet — click a tab or use ← / → keys.
-              </p>
+          <section id="tabs" class="sg-section">
+            <div class="sg-section-header">
+              <h2 class="sg-section-title">Tabs</h2>
+              <span class="sg-section-id">#tabs</span>
             </div>
-          </div>
-        </section>
 
-      </main>
-    </div><!-- .sg-layout -->
-  </div><!-- #sg-root -->
+            <div class="sg-subsection">
+              <p class="sg-subsection-title">
+                cr-tabs — generic, domain-free tab navigation
+              </p>
+              <p
+                style="
+                  font-size: 0.875rem;
+                  color: var(--cr-color-text-muted);
+                  max-width: 52ch;
+                  margin: 0 0 var(--cr-space-3);
+                  line-height: 1.55;
+                "
+              >
+                A reusable tablist primitive driven by a
+                <code>{ id, label, hidden }</code> list and a selected id. It
+                renders ARIA <code>tablist</code>/<code>tab</code>/<code
+                  >tabpanel</code
+                >
+                roles, shows only the active panel, owns left/right arrow-key
+                navigation between visible tabs, and emits
+                <code>cr-tab-change</code> with the newly-selected id. It holds
+                no domain knowledge — the consumer supplies tab metadata and
+                panel content nodes.
+              </p>
+              <div class="sg-demo" style="overflow: visible">
+                <cr-tabs id="sg-tabs"></cr-tabs>
+                <p
+                  id="sg-tabs-event"
+                  style="
+                    margin-top: var(--cr-space-3);
+                    font-family: var(--cr-font-mono);
+                    font-size: 0.8125rem;
+                    color: var(--cr-color-text-muted);
+                  "
+                >
+                  No tab change yet — click a tab or use ← / → keys.
+                </p>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+      <!-- .sg-layout -->
+    </div>
+    <!-- #sg-root -->
 
-  <script>
-    // ── Theme toggle ──────────────────────────────────────────────────────
-    const root = document.getElementById('sg-root');
-    const btn  = document.getElementById('themeToggle');
-    const lbl  = document.getElementById('themeLabel');
-    let forced = null; // null = system, 'light', 'dark'
+    <script>
+      // ── Theme toggle ──────────────────────────────────────────────────────
+      const root = document.getElementById('sg-root');
+      const btn = document.getElementById('themeToggle');
+      const lbl = document.getElementById('themeLabel');
+      let forced = null; // null = system, 'light', 'dark'
 
-    function applyTheme() {
-      if (forced === 'dark') {
-        root.dataset.crTheme = 'dark';
-        btn.setAttribute('aria-pressed', 'true');
-        lbl.textContent = 'Dark';
-      } else if (forced === 'light') {
-        root.dataset.crTheme = 'light';
-        btn.setAttribute('aria-pressed', 'false');
-        lbl.textContent = 'Light';
-      } else {
-        delete root.dataset.crTheme;
-        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        btn.setAttribute('aria-pressed', isDark ? 'true' : 'false');
-        lbl.textContent = isDark ? 'Dark (sys)' : 'Light (sys)';
-      }
-    }
-
-    btn.addEventListener('click', () => {
-      const isDark = root.dataset.crTheme === 'dark' ||
-        (!root.dataset.crTheme && window.matchMedia('(prefers-color-scheme: dark)').matches);
-      forced = isDark ? 'light' : 'dark';
-      applyTheme();
-    });
-
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-      if (!forced) applyTheme();
-    });
-
-    applyTheme();
-
-    // ── Sidebar: arrow-key navigation ────────────────────────────────────
-    const navLinks = Array.from(document.querySelectorAll('.sg-nav-link'));
-
-    navLinks.forEach((link, i) => {
-      link.addEventListener('keydown', e => {
-        let target = null;
-        if (e.key === 'ArrowDown') target = navLinks[i + 1];
-        if (e.key === 'ArrowUp')   target = navLinks[i - 1];
-        if (target) { e.preventDefault(); target.focus(); }
-      });
-    });
-
-    // ── Active section highlighting on scroll ────────────────────────────
-    const sections = Array.from(document.querySelectorAll('.sg-section'));
-    const navHeight = parseFloat(getComputedStyle(root).getPropertyValue('--cr-nav-height') || '56');
-
-    const obs = new IntersectionObserver(entries => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          navLinks.forEach(l => l.classList.remove('active'));
-          const active = document.querySelector(`.sg-nav-link[href="#${entry.target.id}"]`);
-          if (active) active.classList.add('active');
+      function applyTheme() {
+        if (forced === 'dark') {
+          root.dataset.crTheme = 'dark';
+          btn.setAttribute('aria-pressed', 'true');
+          lbl.textContent = 'Dark';
+        } else if (forced === 'light') {
+          root.dataset.crTheme = 'light';
+          btn.setAttribute('aria-pressed', 'false');
+          lbl.textContent = 'Light';
+        } else {
+          delete root.dataset.crTheme;
+          const isDark = window.matchMedia(
+            '(prefers-color-scheme: dark)'
+          ).matches;
+          btn.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+          lbl.textContent = isDark ? 'Dark (sys)' : 'Light (sys)';
         }
+      }
+
+      btn.addEventListener('click', () => {
+        const isDark =
+          root.dataset.crTheme === 'dark' ||
+          (!root.dataset.crTheme &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches);
+        forced = isDark ? 'light' : 'dark';
+        applyTheme();
       });
-    }, { rootMargin: `-${navHeight + 8}px 0px -60% 0px`, threshold: 0 });
 
-    sections.forEach(s => obs.observe(s));
-  </script>
+      window
+        .matchMedia('(prefers-color-scheme: dark)')
+        .addEventListener('change', () => {
+          if (!forced) applyTheme();
+        });
 
-  <!-- ── Live cr-people-picker demo (mock directory, no fetch) ───────────── -->
-  <script type="module">
-    import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js';
-    import { people } from './fixtures/people.js';
-    import { CRPeoplePicker } from '../src/components/cr-people-picker.js';
+      applyTheme();
 
-    const client = new MockSharePointClient({
-      cases: [], questionDefinitions: [], personas: {}, people,
-    });
+      // ── Sidebar: arrow-key navigation ────────────────────────────────────
+      const navLinks = Array.from(document.querySelectorAll('.sg-nav-link'));
 
-    const picker = document.getElementById('sg-people-picker');
-    picker.client = client;
-    // Snappier than the production default for an interactive demo.
-    picker.debounceMs = 120;
-
-    const out = document.getElementById('sg-people-selected');
-    picker.addEventListener('cr-person-selected', (e) => {
-      out.textContent = `selected → { loginName: "${e.detail.loginName}", displayName: "${e.detail.displayName}" }`;
-    });
-
-    // ── cr-tabs demo ──────────────────────────────────────────────────────
-    import('../src/components/cr-tabs.js').then(() => {
-      const tabs = document.getElementById('sg-tabs');
-
-      const panel = (text) => {
-        const p = document.createElement('p');
-        p.style.margin = '0';
-        p.style.color = 'var(--cr-color-on-surface)';
-        p.style.lineHeight = '1.55';
-        p.textContent = text;
-        return p;
-      };
-
-      tabs.tabs = [
-        { id: 'overview', label: 'Overview' },
-        { id: 'details', label: 'Details' },
-        { id: 'archived', label: 'Archived', hidden: true },
-        { id: 'activity', label: 'Activity' },
-      ];
-      tabs.panels = {
-        overview: panel('The Overview panel. Note the "Archived" tab is hidden, so it renders no button and no panel.'),
-        details: panel('The Details panel. Arrow keys move between visible tabs and wrap at the ends.'),
-        archived: panel('You should never see this — the tab is hidden.'),
-        activity: panel('The Activity panel.'),
-      };
-      tabs.selected = 'overview';
-      tabs.render();
-
-      const evtOut = document.getElementById('sg-tabs-event');
-      tabs.addEventListener('cr-tab-change', (e) => {
-        evtOut.textContent = `cr-tab-change → { id: "${e.detail.id}" }`;
+      navLinks.forEach((link, i) => {
+        link.addEventListener('keydown', (e) => {
+          let target = null;
+          if (e.key === 'ArrowDown') target = navLinks[i + 1];
+          if (e.key === 'ArrowUp') target = navLinks[i - 1];
+          if (target) {
+            e.preventDefault();
+            target.focus();
+          }
+        });
       });
-    });
-  </script>
-</body>
+
+      // ── Active section highlighting on scroll ────────────────────────────
+      const sections = Array.from(document.querySelectorAll('.sg-section'));
+      const navHeight = parseFloat(
+        getComputedStyle(root).getPropertyValue('--cr-nav-height') || '56'
+      );
+
+      const obs = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              navLinks.forEach((l) => l.classList.remove('active'));
+              const active = document.querySelector(
+                `.sg-nav-link[href="#${entry.target.id}"]`
+              );
+              if (active) active.classList.add('active');
+            }
+          });
+        },
+        { rootMargin: `-${navHeight + 8}px 0px -60% 0px`, threshold: 0 }
+      );
+
+      sections.forEach((s) => obs.observe(s));
+    </script>
+
+    <!-- ── Live cr-people-picker demo (mock directory, no fetch) ───────────── -->
+    <script type="module">
+      import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js';
+      import { people } from './fixtures/people.js';
+      import { CRPeoplePicker } from '../src/components/cr-people-picker.js';
+
+      const client = new MockSharePointClient({
+        cases: [],
+        questionDefinitions: [],
+        personas: {},
+        people,
+      });
+
+      const picker = document.getElementById('sg-people-picker');
+      picker.client = client;
+      // Snappier than the production default for an interactive demo.
+      picker.debounceMs = 120;
+
+      const out = document.getElementById('sg-people-selected');
+      picker.addEventListener('cr-person-selected', (e) => {
+        out.textContent = `selected → { loginName: "${e.detail.loginName}", displayName: "${e.detail.displayName}" }`;
+      });
+
+      // ── cr-tabs demo ──────────────────────────────────────────────────────
+      import('../src/components/cr-tabs.js').then(() => {
+        const tabs = document.getElementById('sg-tabs');
+
+        const panel = (text) => {
+          const p = document.createElement('p');
+          p.style.margin = '0';
+          p.style.color = 'var(--cr-color-on-surface)';
+          p.style.lineHeight = '1.55';
+          p.textContent = text;
+          return p;
+        };
+
+        tabs.tabs = [
+          { id: 'overview', label: 'Overview' },
+          { id: 'details', label: 'Details' },
+          { id: 'archived', label: 'Archived', hidden: true },
+          { id: 'activity', label: 'Activity' },
+        ];
+        tabs.panels = {
+          overview: panel(
+            'The Overview panel. Note the "Archived" tab is hidden, so it renders no button and no panel.'
+          ),
+          details: panel(
+            'The Details panel. Arrow keys move between visible tabs and wrap at the ends.'
+          ),
+          archived: panel('You should never see this — the tab is hidden.'),
+          activity: panel('The Activity panel.'),
+        };
+        tabs.selected = 'overview';
+        tabs.render();
+
+        const evtOut = document.getElementById('sg-tabs-event');
+        tabs.addEventListener('cr-tab-change', (e) => {
+          evtOut.textContent = `cr-tab-change → { id: "${e.detail.id}" }`;
+        });
+      });
+    </script>
+  </body>
 </html>

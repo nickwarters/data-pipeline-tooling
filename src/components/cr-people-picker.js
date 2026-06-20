@@ -18,7 +18,7 @@ export class CRPeoplePicker extends ReactiveElement {
     this._timer = undefined;
     /** @type {Promise<void> | undefined} */
     this._searchPromise = undefined;
-    
+
     // Internal state for rendering
     this._people = [];
     this._query = '';
@@ -41,12 +41,18 @@ export class CRPeoplePicker extends ReactiveElement {
   }
 
   render() {
-    const items = this._people.map(p =>
-      this._option({ loginName: p.loginName, displayName: p.displayName }, `${p.displayName} — ${p.loginName}`)
+    const items = this._people.map((p) =>
+      this._option(
+        { loginName: p.loginName, displayName: p.displayName },
+        `${p.displayName} — ${p.loginName}`
+      )
     );
     if (this._people.length === 0 && this._query !== '') {
       items.push(
-        this._option({ loginName: this._query, displayName: this._query }, `Use “${this._query}” as account`)
+        this._option(
+          { loginName: this._query, displayName: this._query },
+          `Use “${this._query}” as account`
+        )
       );
     }
 
@@ -64,15 +70,19 @@ export class CRPeoplePicker extends ReactiveElement {
         this._timer = setTimeout(() => {
           this._searchPromise = this._search(value);
         }, this.debounceMs);
-      }
+      },
     });
     this._input = inputEl;
 
-    const resultsEl = h('ul', {
-      class: 'cr-people-picker-results',
-      role: 'listbox',
-      hidden: items.length === 0
-    }, ...items);
+    const resultsEl = h(
+      'ul',
+      {
+        class: 'cr-people-picker-results',
+        role: 'listbox',
+        hidden: items.length === 0,
+      },
+      ...items
+    );
     this._results = resultsEl;
 
     return [inputEl, resultsEl];
@@ -108,18 +118,25 @@ export class CRPeoplePicker extends ReactiveElement {
    * @returns {HTMLElement}
    */
   _option(person, label) {
-    return h('li', {
-      class: 'cr-people-picker-option',
-      role: 'option',
-      onclick: () => this._select(person)
-    }, label);
+    return h(
+      'li',
+      {
+        class: 'cr-people-picker-option',
+        role: 'option',
+        onclick: () => this._select(person),
+      },
+      label
+    );
   }
 
   /** @param {{ loginName: string, displayName: string }} person */
   _select(person) {
     this.dispatchEvent(
       new CustomEvent('cr-person-selected', {
-        detail: { loginName: person.loginName, displayName: person.displayName },
+        detail: {
+          loginName: person.loginName,
+          displayName: person.displayName,
+        },
         bubbles: true,
       })
     );

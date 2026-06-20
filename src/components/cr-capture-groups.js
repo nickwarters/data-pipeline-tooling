@@ -89,16 +89,24 @@ export class CRCaptureGroups extends ReactiveElement {
   _renderEditableGroup(group) {
     const collapsed = this._isCollapsed(group);
 
-    return h('section', { className: 'cr-capture-group' },
-      h('button', {
-        className: 'cr-capture-group-header',
-        'aria-expanded': collapsed ? 'false' : 'true',
-        onclick: () => {
-          this._collapsed.set(group.key, !this._isCollapsed(group));
-          this._render();
-        }
-      }, group.label),
-      !collapsed ? group.fields.map(field => this._renderEditableField(field)) : null
+    return h(
+      'section',
+      { className: 'cr-capture-group' },
+      h(
+        'button',
+        {
+          className: 'cr-capture-group-header',
+          'aria-expanded': collapsed ? 'false' : 'true',
+          onclick: () => {
+            this._collapsed.set(group.key, !this._isCollapsed(group));
+            this._render();
+          },
+        },
+        group.label
+      ),
+      !collapsed
+        ? group.fields.map((field) => this._renderEditableField(field))
+        : null
     );
   }
 
@@ -108,31 +116,39 @@ export class CRCaptureGroups extends ReactiveElement {
    */
   _renderEditableField(field) {
     const current = this._currentString(field.key);
-    
+
     const control = buildCaptureControl(field, current, (value) => {
       this._dispatch(field.key, value);
     });
 
-    return h('div', { className: 'cr-capture-field' },
+    return h(
+      'div',
+      { className: 'cr-capture-field' },
       h('label', { className: 'cr-capture-label' }, field.label),
       control
     );
   }
-
-
 
   /**
    * @param {CaptureGroup} group
    * @returns {HTMLElement | null}
    */
   _renderReadOnlyGroup(group) {
-    const populated = group.fields.filter(f => this._currentString(f.key) !== '');
+    const populated = group.fields.filter(
+      (f) => this._currentString(f.key) !== ''
+    );
     if (populated.length === 0) return null;
 
-    return h('section', { className: 'cr-capture-group' },
+    return h(
+      'section',
+      { className: 'cr-capture-group' },
       h('p', { className: 'cr-capture-group-heading' }, group.label),
-      ...populated.map(field => 
-        h('p', { className: 'cr-capture-value' }, `${field.label}: ${this._currentString(field.key)}`)
+      ...populated.map((field) =>
+        h(
+          'p',
+          { className: 'cr-capture-value' },
+          `${field.label}: ${this._currentString(field.key)}`
+        )
       )
     );
   }

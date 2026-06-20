@@ -14,7 +14,15 @@
 /** @typedef {import('./permissions.js').Capabilities} Capabilities */
 
 /** @type {Section[]} */
-export const SECTIONS = ['details', 'questions', 'conversation', 'notes', 'remediation', 'summary', 'appeal'];
+export const SECTIONS = [
+  'details',
+  'questions',
+  'conversation',
+  'notes',
+  'remediation',
+  'summary',
+  'appeal',
+];
 
 /**
  * The Sections that can contribute a block to the read-only Summary Section
@@ -22,7 +30,12 @@ export const SECTIONS = ['details', 'questions', 'conversation', 'notes', 'remed
  * and Summary itself never appear as Summary blocks.
  * @type {Section[]}
  */
-export const SUMMARY_SECTIONS = ['details', 'questions', 'remediation', 'notes'];
+export const SUMMARY_SECTIONS = [
+  'details',
+  'questions',
+  'remediation',
+  'notes',
+];
 
 /**
  * Whether a Section contributes a block to the Summary Section (ADR-0016).
@@ -110,8 +123,10 @@ const MATRIX = {
   summary: {
     assignedReviewer: 'read-only',
     otherReviewer: 'read-only',
-    responsibleParty: (c) => (c.status === 'Completed' ? 'read-only' : 'hidden'),
-    responsiblePartyManager: (c) => (c.status === 'Completed' ? 'read-only' : 'hidden'),
+    responsibleParty: (c) =>
+      c.status === 'Completed' ? 'read-only' : 'hidden',
+    responsiblePartyManager: (c) =>
+      c.status === 'Completed' ? 'read-only' : 'hidden',
     caseTypeOwner: 'read-only',
     qaReviewer: 'read-only',
     none: 'hidden',
@@ -126,7 +141,8 @@ const MATRIX = {
     assignedReviewer: 'read-only',
     otherReviewer: 'read-only',
     responsibleParty: (c) => (c.status === 'Completed' ? 'edit' : 'hidden'),
-    responsiblePartyManager: (c) => (c.status === 'Completed' ? 'edit' : 'hidden'),
+    responsiblePartyManager: (c) =>
+      c.status === 'Completed' ? 'edit' : 'hidden',
     caseTypeOwner: 'read-only',
     qaReviewer: (c) => (c.status === 'Completed' ? 'edit' : 'read-only'),
     none: 'hidden',

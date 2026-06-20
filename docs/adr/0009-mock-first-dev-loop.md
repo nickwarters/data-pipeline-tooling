@@ -7,9 +7,10 @@ All SharePoint REST access is funneled through a single `SharePointClient` inter
 
 Selection is at boot via URL param: `?mock=1` triggers a dynamic `import()` of the mock client and seeds it; absent the param, the real client loads. The mock client is **not** in the production critical path (gated dynamic import). The `?mock=1` flag is a dev affordance only — not a security boundary; the mock client never touches real data.
 
-Local dev: serve the repo with any static HTTP server (`python3 -m http.server` is the suggested default — no Node required to *run* the framework). Open `dev/index.html?mock=1`. Persona switching for permission testing via `?asUser=reviewer | owner | admin`.
+Local dev: serve the repo with any static HTTP server (`python3 -m http.server` is the suggested default — no Node required to _run_ the framework). Open `dev/index.html?mock=1`. Persona switching for permission testing via `?asUser=reviewer | owner | admin`.
 
 **Tooling stack** (Node-based, dev-time only — does not affect runtime):
+
 - `tsc --noEmit --checkJs --allowJs` for type checking (CI gate).
 - `prettier` for formatting.
 - `node --test` for unit tests of pure-JS primitives (signals, applicability evaluator, outcome helpers, save queue, mock client). **No DOM testing layer in v1** — manual browser testing covers component-level behaviour until a regression justifies adding `happy-dom`.

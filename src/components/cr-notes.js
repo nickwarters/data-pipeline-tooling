@@ -63,8 +63,8 @@ export class CRNotes extends ReactiveElement {
           if (!this.saveQueue || !this.caseId) return;
           const val = /** @type {any} */ (ev.target).value ?? '';
           this.saveQueue.enqueue(this.caseId, fieldName, val);
-        }
-      })
+        },
+      }),
     ];
   }
 }

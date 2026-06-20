@@ -3,7 +3,9 @@ import { effect } from '../lib/signal.js';
 
 // Resolved at module-evaluation time, so tests can stub globalThis.HTMLElement
 // via a dynamic import() after setting the stub (see tests/cr-element.test.js).
-const Base = /** @type {typeof HTMLElement} */ (/** @type {unknown} */ (globalThis.HTMLElement));
+const Base = /** @type {typeof HTMLElement} */ (
+  /** @type {unknown} */ (globalThis.HTMLElement)
+);
 
 export class CRElement extends Base {
   constructor() {

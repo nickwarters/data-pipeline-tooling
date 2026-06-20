@@ -19,9 +19,16 @@ class StubEl {
     /** @type {string} */
     this._tagName = '';
   }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
-  appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
-  append(/** @type {StubEl[]} */ ...cs) { this._children.push(...cs); }
+  replaceChildren(/** @type {StubEl[]} */ ...cs) {
+    this._children = cs;
+  }
+  appendChild(/** @type {StubEl} */ c) {
+    this._children.push(c);
+    return c;
+  }
+  append(/** @type {StubEl[]} */ ...cs) {
+    this._children.push(...cs);
+  }
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
   }
@@ -34,8 +41,8 @@ class StubEl {
 /** @type {Record<string, Function[]>} */
 const docListeners = {};
 
-(/** @type {any} */ (globalThis)).HTMLElement = StubEl;
-(/** @type {any} */ (globalThis)).document = {
+/** @type {any} */ (globalThis).HTMLElement = StubEl;
+/** @type {any} */ (globalThis).document = {
   /** @param {string} tag @returns {StubEl} */
   createElement(tag) {
     const el = new StubEl();
@@ -46,11 +53,12 @@ const docListeners = {};
     (docListeners[t] ??= []).push(h);
   },
   removeEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    if (docListeners[t]) docListeners[t] = docListeners[t].filter(fn => fn !== h);
+    if (docListeners[t])
+      docListeners[t] = docListeners[t].filter((fn) => fn !== h);
   },
   hidden: false,
 };
-(/** @type {any} */ (globalThis)).customElements = { define() {} };
+/** @type {any} */ (globalThis).customElements = { define() {} };
 
 // ===== IMPORTS (after stubs) =====
 const { CRConversation } = await import('../src/components/cr-conversation.js');
@@ -63,8 +71,16 @@ const { CRConversation } = await import('../src/components/cr-conversation.js');
 
 /** @type {Message[]} */
 const TWO_MESSAGES = [
-  { author: 'Alex Reviewer', timestamp: '2026-05-07T09:00:00Z', body: 'Please confirm the greeting.' },
-  { author: 'Bob Agent', timestamp: '2026-05-07T09:15:00Z', body: 'Standard greeting was used.' },
+  {
+    author: 'Alex Reviewer',
+    timestamp: '2026-05-07T09:00:00Z',
+    body: 'Please confirm the greeting.',
+  },
+  {
+    author: 'Bob Agent',
+    timestamp: '2026-05-07T09:15:00Z',
+    body: 'Standard greeting was used.',
+  },
 ];
 
 /** @type {CurrentUser} */
@@ -127,15 +143,22 @@ function makeStubSaveQueue(etag = 'etag-c2-v1') {
   const loadedCases = [];
   return {
     loadedCases,
-    getEtag(/** @type {string} */ _id) { return etag; },
-    loadCase(/** @type {CaseRow} */ row) { loadedCases.push(row); },
+    getEtag(/** @type {string} */ _id) {
+      return etag;
+    },
+    loadCase(/** @type {CaseRow} */ row) {
+      loadedCases.push(row);
+    },
   };
 }
 
 /**
  * @param {{ conversation?: Message[], etag?: string }} [opts]
  */
-function makeStubClient({ conversation = TWO_MESSAGES.slice(), etag = 'etag-new' } = {}) {
+function makeStubClient({
+  conversation = TWO_MESSAGES.slice(),
+  etag = 'etag-new',
+} = {}) {
   /** @type {{ id: string, fields: any, etag: string }[]} */
   const patchCalls = [];
   return {
@@ -143,7 +166,11 @@ function makeStubClient({ conversation = TWO_MESSAGES.slice(), etag = 'etag-new'
     async getCase(/** @type {string} */ _id) {
       return /** @type {CaseRow} */ ({ ...BASE_CASE, conversation, etag });
     },
-    async patchCase(/** @type {string} */ id, /** @type {any} */ fields, /** @type {string} */ e) {
+    async patchCase(
+      /** @type {string} */ id,
+      /** @type {any} */ fields,
+      /** @type {string} */ e
+    ) {
       patchCalls.push({ id, fields, etag: e });
       return { ok: true, status: 200, data: { ...BASE_CASE, ...fields, etag } };
     },
@@ -231,8 +258,15 @@ test('CRConversation: send appends new message and patches only conversation fie
 
   assert.equal(client.patchCalls.length, 1);
   assert.equal(client.patchCalls[0].id, 'case-2');
-  assert.ok('conversation' in client.patchCalls[0].fields, 'conversation field should be patched');
-  assert.equal(Object.keys(client.patchCalls[0].fields).length, 1, 'exactly one field patched');
+  assert.ok(
+    'conversation' in client.patchCalls[0].fields,
+    'conversation field should be patched'
+  );
+  assert.equal(
+    Object.keys(client.patchCalls[0].fields).length,
+    1,
+    'exactly one field patched'
+  );
 });
 
 test('CRConversation: send with empty body does not patch', async () => {
@@ -259,7 +293,9 @@ test('CRConversation: after successful send, saveQueue.loadCase is called with u
   el._messages = [];
   el.caseId = 'case-2';
   el.currentUser = CURRENT_USER;
-  el.client = /** @type {any} */ (makeStubClient({ conversation: [], etag: 'etag-after-patch' }));
+  el.client = /** @type {any} */ (
+    makeStubClient({ conversation: [], etag: 'etag-after-patch' })
+  );
   el.saveQueue = /** @type {any} */ (saveQueue);
   el.connectedCallback();
 
@@ -269,14 +305,22 @@ test('CRConversation: after successful send, saveQueue.loadCase is called with u
   textarea.value = 'Test message';
   await btn._listeners['click'][0]();
 
-  assert.equal(saveQueue.loadedCases.length, 1, 'saveQueue.loadCase should be called once');
+  assert.equal(
+    saveQueue.loadedCases.length,
+    1,
+    'saveQueue.loadCase should be called once'
+  );
   assert.equal(saveQueue.loadedCases[0].etag, 'etag-after-patch');
 });
 
 test('CRConversation: _refresh fetches and updates messages', async () => {
   /** @type {Message[]} */
   const freshMessages = [
-    { author: 'Bob Agent', timestamp: '2026-05-07T10:00:00Z', body: 'New reply!' },
+    {
+      author: 'Bob Agent',
+      timestamp: '2026-05-07T10:00:00Z',
+      body: 'New reply!',
+    },
   ];
   const client = makeStubClient({ conversation: freshMessages });
 
@@ -355,15 +399,31 @@ test('CRConversation: disconnectedCallback removes the visibilitychange listener
 
   const before = (docListeners['visibilitychange'] ?? []).length;
   el.connectedCallback();
-  assert.equal((docListeners['visibilitychange'] ?? []).length, before + 1, 'listener should be added on connect');
+  assert.equal(
+    (docListeners['visibilitychange'] ?? []).length,
+    before + 1,
+    'listener should be added on connect'
+  );
 
   el.disconnectedCallback();
-  assert.equal((docListeners['visibilitychange'] ?? []).length, before, 'listener should be removed on disconnect');
-  assert.equal((/** @type {any} */ (el))._visibilityHandler, null, '_visibilityHandler should be nulled');
+  assert.equal(
+    (docListeners['visibilitychange'] ?? []).length,
+    before,
+    'listener should be removed on disconnect'
+  );
+  assert.equal(
+    /** @type {any} */ (el)._visibilityHandler,
+    null,
+    '_visibilityHandler should be nulled'
+  );
 });
 
 test('CRConversation: visibilitychange fires _refresh when document is not hidden', async () => {
-  const client = makeStubClient({ conversation: [{ author: 'Alex', timestamp: '2026-05-07T09:00:00Z', body: 'Hello' }] });
+  const client = makeStubClient({
+    conversation: [
+      { author: 'Alex', timestamp: '2026-05-07T09:00:00Z', body: 'Hello' },
+    ],
+  });
   const el = new CRConversation();
   el._messages = [];
   el.caseId = 'case-1';
@@ -372,24 +432,36 @@ test('CRConversation: visibilitychange fires _refresh when document is not hidde
   el.saveQueue = /** @type {any} */ (makeStubSaveQueue());
   el.connectedCallback();
 
-  assert.equal(findAllByClass(el, 'cr-conversation-message').length, 0, 'no messages before refresh');
+  assert.equal(
+    findAllByClass(el, 'cr-conversation-message').length,
+    0,
+    'no messages before refresh'
+  );
 
   // Simulate tab becoming visible
-  (/** @type {any} */ (globalThis)).document.hidden = false;
+  /** @type {any} */ (globalThis).document.hidden = false;
   const handlers = docListeners['visibilitychange'] ?? [];
   for (const h of handlers) h();
 
   // _refresh is async; wait for it
-  await new Promise(resolve => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
 
-  assert.equal(findAllByClass(el, 'cr-conversation-message').length, 1, 'refresh should load messages');
+  assert.equal(
+    findAllByClass(el, 'cr-conversation-message').length,
+    1,
+    'refresh should load messages'
+  );
 });
 
 test('CRConversation: _refresh does nothing when getCase returns null', async () => {
   const client = {
     patchCalls: /** @type {any[]} */ ([]),
-    async getCase() { return null; },
-    async patchCase() { return { ok: false, status: 404 }; },
+    async getCase() {
+      return null;
+    },
+    async patchCase() {
+      return { ok: false, status: 404 };
+    },
   };
   const el = new CRConversation();
   el._messages = [TWO_MESSAGES[0]];
@@ -400,15 +472,24 @@ test('CRConversation: _refresh does nothing when getCase returns null', async ()
 
   const before = findAllByClass(el, 'cr-conversation-message').length;
   await el._refresh();
-  assert.equal(findAllByClass(el, 'cr-conversation-message').length, before,
-    '_refresh with null case must not change messages');
+  assert.equal(
+    findAllByClass(el, 'cr-conversation-message').length,
+    before,
+    '_refresh with null case must not change messages'
+  );
 });
 
 test('CRConversation: _sendMessage with no result.data does not call saveQueue.loadCase', async () => {
   const client = {
     patchCalls: /** @type {any[]} */ ([]),
-    async getCase() { return null; },
-    async patchCase(/** @type {string} */ id, /** @type {any} */ fields, /** @type {string} */ etag) {
+    async getCase() {
+      return null;
+    },
+    async patchCase(
+      /** @type {string} */ id,
+      /** @type {any} */ fields,
+      /** @type {string} */ etag
+    ) {
       this.patchCalls.push({ id, fields, etag });
       return { ok: true, status: 200 }; // no data field
     },
@@ -423,12 +504,19 @@ test('CRConversation: _sendMessage with no result.data does not call saveQueue.l
   el.connectedCallback();
 
   await el._sendMessage('Hello!');
-  assert.equal(saveQueue.loadedCases.length, 0,
-    'saveQueue.loadCase must not be called when result has no data');
+  assert.equal(
+    saveQueue.loadedCases.length,
+    0,
+    'saveQueue.loadCase must not be called when result has no data'
+  );
 });
 
 test('CRConversation: visibilitychange does NOT call _refresh when document is hidden', async () => {
-  const client = makeStubClient({ conversation: [{ author: 'Alex', timestamp: '2026-05-07T09:00:00Z', body: 'Hello' }] });
+  const client = makeStubClient({
+    conversation: [
+      { author: 'Alex', timestamp: '2026-05-07T09:00:00Z', body: 'Hello' },
+    ],
+  });
   const el = new CRConversation();
   el._messages = [];
   el.caseId = 'case-1';
@@ -438,16 +526,19 @@ test('CRConversation: visibilitychange does NOT call _refresh when document is h
   el.connectedCallback();
 
   // Simulate tab still hidden
-  (/** @type {any} */ (globalThis)).document.hidden = true;
+  /** @type {any} */ (globalThis).document.hidden = true;
   const handlers = docListeners['visibilitychange'] ?? [];
   for (const h of handlers) h();
 
-  await new Promise(resolve => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
   // Messages should NOT be updated since document is hidden
-  assert.equal(findAllByClass(el, 'cr-conversation-message').length, 0,
-    '_refresh must not be called when document is still hidden');
+  assert.equal(
+    findAllByClass(el, 'cr-conversation-message').length,
+    0,
+    '_refresh must not be called when document is still hidden'
+  );
   // Reset for other tests
-  (/** @type {any} */ (globalThis)).document.hidden = false;
+  /** @type {any} */ (globalThis).document.hidden = false;
 });
 
 test('CRConversation: send click with null textarea value treats body as empty (no patch)', async () => {
@@ -466,5 +557,9 @@ test('CRConversation: send click with null textarea value treats body as empty (
   // Simulate environment where .value is null (covers the `?? ''` branch)
   /** @type {any} */ (textarea).value = null;
   await btn._listeners['click'][0]();
-  assert.equal(client.patchCalls.length, 0, 'null textarea value must be treated as empty body');
+  assert.equal(
+    client.patchCalls.length,
+    0,
+    'null textarea value must be treated as empty body'
+  );
 });

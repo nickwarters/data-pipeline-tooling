@@ -10,11 +10,22 @@ import { captureRemediationDetail } from '../src/evaluators/remediation-details.
 const TEXT_FIELD = { key: 'rootCause', label: 'Root cause', type: 'text' };
 
 /** @type {RemediationField} */
-const SELECT_FIELD = { key: 'severity', label: 'Severity', type: 'select', options: ['Low', 'Med', 'High'] };
+const SELECT_FIELD = {
+  key: 'severity',
+  label: 'Severity',
+  type: 'select',
+  options: ['Low', 'Med', 'High'],
+};
 
 test('captureRemediationDetail: records a text value against the Answer', () => {
-  const out = captureRemediationDetail({ value: 'No' }, TEXT_FIELD, 'Agent rushed the call');
-  assert.deepEqual(out.remediationDetails, { rootCause: 'Agent rushed the call' });
+  const out = captureRemediationDetail(
+    { value: 'No' },
+    TEXT_FIELD,
+    'Agent rushed the call'
+  );
+  assert.deepEqual(out.remediationDetails, {
+    rootCause: 'Agent rushed the call',
+  });
   assert.equal(out.value, 'No', 'the rest of the Answer is preserved');
 });
 
@@ -37,12 +48,18 @@ test('captureRemediationDetail: merges with existing details rather than replaci
     SELECT_FIELD,
     'High'
   );
-  assert.deepEqual(out.remediationDetails, { rootCause: 'Rushed', severity: 'High' });
+  assert.deepEqual(out.remediationDetails, {
+    rootCause: 'Rushed',
+    severity: 'High',
+  });
 });
 
 test('captureRemediationDetail: clearing a value removes its key', () => {
   const out = captureRemediationDetail(
-    { value: 'No', remediationDetails: { rootCause: 'Rushed', severity: 'High' } },
+    {
+      value: 'No',
+      remediationDetails: { rootCause: 'Rushed', severity: 'High' },
+    },
     TEXT_FIELD,
     ''
   );

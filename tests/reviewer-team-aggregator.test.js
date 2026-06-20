@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { aggregateReviewerTeamData } = await import('../src/evaluators/reviewer-team-aggregator.js');
+const { aggregateReviewerTeamData } =
+  await import('../src/evaluators/reviewer-team-aggregator.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 
@@ -36,7 +37,11 @@ function makeCase(overrides) {
 
 test('aggregateReviewerTeamData: case completed within 7-day window counts in completedLast7d', () => {
   const cases = [
-    makeCase({ id: 'c1', status: 'Completed', completedAt: new Date(2026, 4, 14, 10, 0, 0).toISOString() }), // May 14, within 7d
+    makeCase({
+      id: 'c1',
+      status: 'Completed',
+      completedAt: new Date(2026, 4, 14, 10, 0, 0).toISOString(),
+    }), // May 14, within 7d
   ];
   const result = aggregateReviewerTeamData(cases, WINDOWS);
   assert.equal(result.completedLast7d, 1);
@@ -44,7 +49,11 @@ test('aggregateReviewerTeamData: case completed within 7-day window counts in co
 
 test('aggregateReviewerTeamData: case completed within 30-day but outside 7-day window counts in completedLast30d', () => {
   const cases = [
-    makeCase({ id: 'c2', status: 'Completed', completedAt: new Date(2026, 3, 25, 10, 0, 0).toISOString() }), // Apr 25, in 30d not 7d
+    makeCase({
+      id: 'c2',
+      status: 'Completed',
+      completedAt: new Date(2026, 3, 25, 10, 0, 0).toISOString(),
+    }), // Apr 25, in 30d not 7d
   ];
   const result = aggregateReviewerTeamData(cases, WINDOWS);
   assert.equal(result.completedLast30d, 1);
@@ -73,13 +82,26 @@ test('aggregateReviewerTeamData: in-progress case past dueDate counts as overdue
 
 test('aggregateReviewerTeamData: byType groups counts per caseType slug', () => {
   const cases = [
-    makeCase({ id: 'c5', caseType: 'hello-review', status: 'Completed', completedAt: new Date(2026, 4, 14).toISOString() }),
-    makeCase({ id: 'c6', caseType: 'product-sale-review', status: 'In-progress', dueDate: new Date(2026, 4, 24).toISOString() }),
+    makeCase({
+      id: 'c5',
+      caseType: 'hello-review',
+      status: 'Completed',
+      completedAt: new Date(2026, 4, 14).toISOString(),
+    }),
+    makeCase({
+      id: 'c6',
+      caseType: 'product-sale-review',
+      status: 'In-progress',
+      dueDate: new Date(2026, 4, 24).toISOString(),
+    }),
   ];
   const result = aggregateReviewerTeamData(cases, WINDOWS);
   assert.ok(result.byType['hello-review'], 'should have hello-review entry');
   assert.equal(result.byType['hello-review'].completedLast7d, 1);
-  assert.ok(result.byType['product-sale-review'], 'should have product-sale-review entry');
+  assert.ok(
+    result.byType['product-sale-review'],
+    'should have product-sale-review entry'
+  );
   assert.equal(result.byType['product-sale-review'].outstanding, 1);
 });
 

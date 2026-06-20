@@ -26,18 +26,29 @@ class StubEl {
     this._attrs = {};
     this.cases = null;
   }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
-  appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
-  append(/** @type {StubEl[]} */ ...cs) { this._children.push(...cs); }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) { this._attrs[k] = v; }
-  getAttribute(/** @type {string} */ k) { return this._attrs[k] ?? null; }
+  replaceChildren(/** @type {StubEl[]} */ ...cs) {
+    this._children = cs;
+  }
+  appendChild(/** @type {StubEl} */ c) {
+    this._children.push(c);
+    return c;
+  }
+  append(/** @type {StubEl[]} */ ...cs) {
+    this._children.push(...cs);
+  }
+  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
+    this._attrs[k] = v;
+  }
+  getAttribute(/** @type {string} */ k) {
+    return this._attrs[k] ?? null;
+  }
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
   }
 }
 
-(/** @type {any} */ (globalThis)).HTMLElement = StubEl;
-(/** @type {any} */ (globalThis)).document = {
+/** @type {any} */ (globalThis).HTMLElement = StubEl;
+/** @type {any} */ (globalThis).document = {
   /** @param {string} tag @returns {StubEl} */
   createElement(tag) {
     const el = new StubEl();
@@ -47,8 +58,8 @@ class StubEl {
   addEventListener() {},
   removeEventListener() {},
 };
-(/** @type {any} */ (globalThis)).customElements = { define() {} };
-(/** @type {any} */ (globalThis)).location = { hash: '' };
+/** @type {any} */ (globalThis).customElements = { define() {} };
+/** @type {any} */ (globalThis).location = { hash: '' };
 
 // ===== IMPORTS (after stubs) =====
 const { CRDashboard } = await import('../src/pages/cr-dashboard.js');
@@ -56,7 +67,9 @@ const { CRDashboard } = await import('../src/pages/cr-dashboard.js');
 // ===== HELPERS =====
 function makeClient() {
   return {
-    async listCases() { return []; },
+    async listCases() {
+      return [];
+    },
   };
 }
 
@@ -80,7 +93,7 @@ function findAll(root, tagName) {
 
 /** @param {any} root */
 function hasOutstandingCasesHeading(root) {
-  return findAll(root, 'h1').some(h => h.textContent === 'Outstanding Cases');
+  return findAll(root, 'h1').some((h) => h.textContent === 'Outstanding Cases');
 }
 
 // ===== TESTS =====
@@ -89,49 +102,121 @@ test('CRDashboard: reviewer capability — outstanding Cases heading and allocat
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeClient());
   el.currentUserId = 'user-reviewer';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
+  el.capabilities = {
+    isReviewer: true,
+    ownedCaseTypes: [],
+    isResponsibleParty: false,
+    isReviewerManager: false,
+    isResponsiblePartyManager: false,
+    isMaintainer: false,
+    isQaReviewer: false,
+    isVisitor: false,
+  };
   el.eligibleCaseTypes = ['hello-review'];
 
   await el.connectedCallback();
 
-  assert.equal(hasOutstandingCasesHeading(el), true, 'should render Outstanding Cases heading');
-  assert.equal(findAll(el, 'cr-allocation').length, 1, 'should render allocation button');
-  assert.equal(findAll(el, 'cr-owner-summary').length, 0, 'should NOT render owner summary');
+  assert.equal(
+    hasOutstandingCasesHeading(el),
+    true,
+    'should render Outstanding Cases heading'
+  );
+  assert.equal(
+    findAll(el, 'cr-allocation').length,
+    1,
+    'should render allocation button'
+  );
+  assert.equal(
+    findAll(el, 'cr-owner-summary').length,
+    0,
+    'should NOT render owner summary'
+  );
 });
 
 test('CRDashboard: owner-only capability — owner summary visible, no outstanding Cases, no allocation', async () => {
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeClient());
   el.currentUserId = 'user-owner';
-  el.capabilities = { isReviewer: false, ownedCaseTypes: ["hello-review"], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
+  el.capabilities = {
+    isReviewer: false,
+    ownedCaseTypes: ['hello-review'],
+    isResponsibleParty: false,
+    isReviewerManager: false,
+    isResponsiblePartyManager: false,
+    isMaintainer: false,
+    isQaReviewer: false,
+    isVisitor: false,
+  };
   el.eligibleCaseTypes = [];
 
   await el.connectedCallback();
 
-  assert.equal(hasOutstandingCasesHeading(el), false, 'should NOT render Outstanding Cases heading');
-  assert.equal(findAll(el, 'cr-allocation').length, 0, 'should NOT render allocation button');
-  assert.equal(findAll(el, 'cr-owner-summary').length, 1, 'should render owner summary');
+  assert.equal(
+    hasOutstandingCasesHeading(el),
+    false,
+    'should NOT render Outstanding Cases heading'
+  );
+  assert.equal(
+    findAll(el, 'cr-allocation').length,
+    0,
+    'should NOT render allocation button'
+  );
+  assert.equal(
+    findAll(el, 'cr-owner-summary').length,
+    1,
+    'should render owner summary'
+  );
 });
 
 test('CRDashboard: admin capability — both reviewer and owner sections visible', async () => {
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeClient());
   el.currentUserId = 'user-admin';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: ["hello-review"], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
+  el.capabilities = {
+    isReviewer: true,
+    ownedCaseTypes: ['hello-review'],
+    isResponsibleParty: false,
+    isReviewerManager: false,
+    isResponsiblePartyManager: false,
+    isMaintainer: false,
+    isQaReviewer: false,
+    isVisitor: false,
+  };
   el.eligibleCaseTypes = ['hello-review'];
 
   await el.connectedCallback();
 
-  assert.equal(hasOutstandingCasesHeading(el), true, 'should render Outstanding Cases heading');
-  assert.equal(findAll(el, 'cr-allocation').length, 1, 'should render allocation button');
-  assert.equal(findAll(el, 'cr-owner-summary').length, 1, 'should render owner summary');
+  assert.equal(
+    hasOutstandingCasesHeading(el),
+    true,
+    'should render Outstanding Cases heading'
+  );
+  assert.equal(
+    findAll(el, 'cr-allocation').length,
+    1,
+    'should render allocation button'
+  );
+  assert.equal(
+    findAll(el, 'cr-owner-summary').length,
+    1,
+    'should render owner summary'
+  );
 });
 
 test('CRDashboard: reviewer with no ownedCaseTypes never renders owner section (no error)', async () => {
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeClient());
   el.currentUserId = 'user-reviewer';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
+  el.capabilities = {
+    isReviewer: true,
+    ownedCaseTypes: [],
+    isResponsibleParty: false,
+    isReviewerManager: false,
+    isResponsiblePartyManager: false,
+    isMaintainer: false,
+    isQaReviewer: false,
+    isVisitor: false,
+  };
   el.eligibleCaseTypes = ['hello-review'];
 
   // Must not throw.
@@ -144,52 +229,112 @@ test('CRDashboard: connectedCallback does nothing when client is null', async ()
   const el = new CRDashboard();
   el.client = null;
   await el.connectedCallback();
-  assert.equal((/** @type {any} */ (el))._children.length, 0);
+  assert.equal(/** @type {any} */ (el)._children.length, 0);
 });
 
 test('CRDashboard: RP-only capability — cr-responsible-party-dashboard rendered, reviewer sections absent', async () => {
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeClient());
   el.currentUserId = 'user-rp';
-  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
+  el.capabilities = {
+    isReviewer: false,
+    ownedCaseTypes: [],
+    isResponsibleParty: true,
+    isReviewerManager: false,
+    isResponsiblePartyManager: false,
+    isMaintainer: false,
+    isQaReviewer: false,
+    isVisitor: false,
+  };
 
   await el.connectedCallback();
 
-  assert.equal(findAll(el, 'cr-responsible-party-dashboard').length, 1, 'should render RP section');
-  assert.equal(hasOutstandingCasesHeading(el), false, 'should NOT render reviewer heading');
-  assert.equal(findAll(el, 'cr-allocation').length, 0, 'should NOT render allocation button');
-  assert.equal(findAll(el, 'cr-owner-summary').length, 0, 'should NOT render owner summary');
+  assert.equal(
+    findAll(el, 'cr-responsible-party-dashboard').length,
+    1,
+    'should render RP section'
+  );
+  assert.equal(
+    hasOutstandingCasesHeading(el),
+    false,
+    'should NOT render reviewer heading'
+  );
+  assert.equal(
+    findAll(el, 'cr-allocation').length,
+    0,
+    'should NOT render allocation button'
+  );
+  assert.equal(
+    findAll(el, 'cr-owner-summary').length,
+    0,
+    'should NOT render owner summary'
+  );
 });
 
 test('CRDashboard: reviewer + RP capability — both reviewer and RP sections visible', async () => {
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeClient());
   el.currentUserId = 'user-reviewer-rp';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
+  el.capabilities = {
+    isReviewer: true,
+    ownedCaseTypes: [],
+    isResponsibleParty: true,
+    isReviewerManager: false,
+    isResponsiblePartyManager: false,
+    isMaintainer: false,
+    isQaReviewer: false,
+    isVisitor: false,
+  };
   el.eligibleCaseTypes = ['hello-review'];
 
   await el.connectedCallback();
 
-  assert.equal(hasOutstandingCasesHeading(el), true, 'should render reviewer heading');
-  assert.equal(findAll(el, 'cr-allocation').length, 1, 'should render allocation button');
-  assert.equal(findAll(el, 'cr-responsible-party-dashboard').length, 1, 'should render RP section');
+  assert.equal(
+    hasOutstandingCasesHeading(el),
+    true,
+    'should render reviewer heading'
+  );
+  assert.equal(
+    findAll(el, 'cr-allocation').length,
+    1,
+    'should render allocation button'
+  );
+  assert.equal(
+    findAll(el, 'cr-responsible-party-dashboard').length,
+    1,
+    'should render RP section'
+  );
 });
 
 test('CRDashboard: cr-open-conversation from RP section navigates to conversation hash', async () => {
-  (/** @type {any} */ (globalThis)).location.hash = '';
+  /** @type {any} */ (globalThis).location.hash = '';
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeClient());
   el.currentUserId = 'user-rp';
-  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
+  el.capabilities = {
+    isReviewer: false,
+    ownedCaseTypes: [],
+    isResponsibleParty: true,
+    isReviewerManager: false,
+    isResponsiblePartyManager: false,
+    isMaintainer: false,
+    isQaReviewer: false,
+    isVisitor: false,
+  };
 
   await el.connectedCallback();
 
   const rpEl = findAll(el, 'cr-responsible-party-dashboard')[0];
   assert.ok(rpEl, 'RP element should exist');
-  const handler = (/** @type {any} */ (rpEl))._listeners['cr-open-conversation']?.[0];
+  const handler = /** @type {any} */ (rpEl)._listeners[
+    'cr-open-conversation'
+  ]?.[0];
   assert.ok(handler, 'should have cr-open-conversation listener');
   handler({ detail: { caseId: 'c-42' } });
-  assert.equal((/** @type {any} */ (globalThis)).location.hash, '#/conversation/c-42');
+  assert.equal(
+    /** @type {any} */ (globalThis).location.hash,
+    '#/conversation/c-42'
+  );
 });
 
 test('CRDashboard: RP section gets client and currentUserId set', async () => {
@@ -197,14 +342,31 @@ test('CRDashboard: RP section gets client and currentUserId set', async () => {
   const el = new CRDashboard();
   el.client = /** @type {any} */ (client);
   el.currentUserId = 'user-rp';
-  el.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: true, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
+  el.capabilities = {
+    isReviewer: false,
+    ownedCaseTypes: [],
+    isResponsibleParty: true,
+    isReviewerManager: false,
+    isResponsiblePartyManager: false,
+    isMaintainer: false,
+    isQaReviewer: false,
+    isVisitor: false,
+  };
 
   await el.connectedCallback();
 
   const rpEl = findAll(el, 'cr-responsible-party-dashboard')[0];
   assert.ok(rpEl, 'RP element should exist');
-  assert.equal((/** @type {any} */ (rpEl)).client, client, 'client should be passed through');
-  assert.equal((/** @type {any} */ (rpEl)).currentUserId, 'user-rp', 'currentUserId should be passed through');
+  assert.equal(
+    /** @type {any} */ (rpEl).client,
+    client,
+    'client should be passed through'
+  );
+  assert.equal(
+    /** @type {any} */ (rpEl).currentUserId,
+    'user-rp',
+    'currentUserId should be passed through'
+  );
 });
 
 test('CRDashboard: cr-allocation element listens for cr-allocated and re-fetches cases on allocation', async () => {
@@ -219,7 +381,16 @@ test('CRDashboard: cr-allocation element listens for cr-allocated and re-fetches
   const el = new CRDashboard();
   el.client = /** @type {any} */ (client);
   el.currentUserId = 'user-reviewer';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
+  el.capabilities = {
+    isReviewer: true,
+    ownedCaseTypes: [],
+    isResponsibleParty: false,
+    isReviewerManager: false,
+    isResponsiblePartyManager: false,
+    isMaintainer: false,
+    isQaReviewer: false,
+    isVisitor: false,
+  };
   el.eligibleCaseTypes = ['hello-review'];
 
   await el.connectedCallback();
@@ -230,32 +401,47 @@ test('CRDashboard: cr-allocation element listens for cr-allocated and re-fetches
   assert.equal(allocationEls.length, 1, 'should have allocation element');
 
   const allocEvent = { type: 'cr-allocated', detail: { caseId: 'c-new' } };
-  for (const h of (/** @type {any} */ (allocationEls[0]))._listeners['cr-allocated'] ?? []) {
+  for (const h of /** @type {any} */ (allocationEls[0])._listeners[
+    'cr-allocated'
+  ] ?? []) {
     await h(allocEvent);
   }
 
-  assert.ok(fetchCount > initialFetchCount, 'should re-fetch cases after cr-allocated event');
+  assert.ok(
+    fetchCount > initialFetchCount,
+    'should re-fetch cases after cr-allocated event'
+  );
 });
 
 test('CRDashboard: cr-case-open event on case table navigates to #/case/{id}', async () => {
   const el = new CRDashboard();
   el.client = /** @type {any} */ (makeClient());
   el.currentUserId = 'user-reviewer';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
+  el.capabilities = {
+    isReviewer: true,
+    ownedCaseTypes: [],
+    isResponsibleParty: false,
+    isReviewerManager: false,
+    isResponsiblePartyManager: false,
+    isMaintainer: false,
+    isQaReviewer: false,
+    isVisitor: false,
+  };
   el.eligibleCaseTypes = [];
 
-  (/** @type {any} */ (globalThis)).location.hash = '';
+  /** @type {any} */ (globalThis).location.hash = '';
   await el.connectedCallback();
 
   const caseTable = findAll(el, 'cr-case-table')[0];
   assert.ok(caseTable, 'should have a case table');
 
   const event = { type: 'cr-case-open', detail: { caseId: 'case-42' } };
-  for (const h of (/** @type {any} */ (caseTable))._listeners['cr-case-open'] ?? []) {
+  for (const h of /** @type {any} */ (caseTable)._listeners['cr-case-open'] ??
+    []) {
     h(event);
   }
 
-  assert.equal((/** @type {any} */ (globalThis)).location.hash, '#/case/case-42');
+  assert.equal(/** @type {any} */ (globalThis).location.hash, '#/case/case-42');
 });
 
 // --- overdue flag ---
@@ -266,39 +452,92 @@ test('CRDashboard: stamps overdue:true on rows whose dueDate is in the past', as
   /** @type {import('../src/sharepoint-client.js').CaseRow[]} */
   const fetchedCases = [
     {
-      id: 'od-past', caseType: 'hello-review', title: 'Overdue', status: 'In-progress',
-      assignedReviewer: 'u1', responsibleParty: '', answers: {}, conversation: [],
-      notes: '', completedAt: null, dueDate: PAST, etag: 'e1',
+      id: 'od-past',
+      caseType: 'hello-review',
+      title: 'Overdue',
+      status: 'In-progress',
+      assignedReviewer: 'u1',
+      responsibleParty: '',
+      answers: {},
+      conversation: [],
+      notes: '',
+      completedAt: null,
+      dueDate: PAST,
+      etag: 'e1',
     },
     {
-      id: 'od-future', caseType: 'hello-review', title: 'On Time', status: 'In-progress',
-      assignedReviewer: 'u1', responsibleParty: '', answers: {}, conversation: [],
-      notes: '', completedAt: null, dueDate: FUTURE, etag: 'e2',
+      id: 'od-future',
+      caseType: 'hello-review',
+      title: 'On Time',
+      status: 'In-progress',
+      assignedReviewer: 'u1',
+      responsibleParty: '',
+      answers: {},
+      conversation: [],
+      notes: '',
+      completedAt: null,
+      dueDate: FUTURE,
+      etag: 'e2',
     },
     {
-      id: 'od-none', caseType: 'hello-review', title: 'No Due Date', status: 'In-progress',
-      assignedReviewer: 'u1', responsibleParty: '', answers: {}, conversation: [],
-      notes: '', completedAt: null, etag: 'e3',
+      id: 'od-none',
+      caseType: 'hello-review',
+      title: 'No Due Date',
+      status: 'In-progress',
+      assignedReviewer: 'u1',
+      responsibleParty: '',
+      answers: {},
+      conversation: [],
+      notes: '',
+      completedAt: null,
+      etag: 'e3',
     },
   ];
 
-  const client = { async listCases() { return fetchedCases; } };
+  const client = {
+    async listCases() {
+      return fetchedCases;
+    },
+  };
   const el = new CRDashboard();
   el.client = /** @type {any} */ (client);
   el.currentUserId = 'u1';
-  el.capabilities = { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
+  el.capabilities = {
+    isReviewer: true,
+    ownedCaseTypes: [],
+    isResponsibleParty: false,
+    isReviewerManager: false,
+    isResponsiblePartyManager: false,
+    isMaintainer: false,
+    isQaReviewer: false,
+    isVisitor: false,
+  };
   el.eligibleCaseTypes = [];
   await el.connectedCallback();
 
   const caseTable = /** @type {any} */ (findAll(el, 'cr-case-table')[0]);
-  const rows = /** @type {import('../src/sharepoint-client.js').CaseRow[]} */ (caseTable.cases);
+  const rows = /** @type {import('../src/sharepoint-client.js').CaseRow[]} */ (
+    caseTable.cases
+  );
   assert.ok(Array.isArray(rows), 'case table should have cases set');
 
-  const pastRow = rows.find(r => r.id === 'od-past');
-  const futureRow = rows.find(r => r.id === 'od-future');
-  const noneRow = rows.find(r => r.id === 'od-none');
+  const pastRow = rows.find((r) => r.id === 'od-past');
+  const futureRow = rows.find((r) => r.id === 'od-future');
+  const noneRow = rows.find((r) => r.id === 'od-none');
 
-  assert.strictEqual(pastRow?.overdue, true, 'past dueDate row should be flagged overdue');
-  assert.strictEqual(futureRow?.overdue, false, 'future dueDate row should not be overdue');
-  assert.strictEqual(noneRow?.overdue, false, 'no-dueDate row should not be overdue');
+  assert.strictEqual(
+    pastRow?.overdue,
+    true,
+    'past dueDate row should be flagged overdue'
+  );
+  assert.strictEqual(
+    futureRow?.overdue,
+    false,
+    'future dueDate row should not be overdue'
+  );
+  assert.strictEqual(
+    noneRow?.overdue,
+    false,
+    'no-dueDate row should not be overdue'
+  );
 });

@@ -18,21 +18,32 @@ class StubEl {
     /** @type {string} */
     this._tagName = '';
   }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
-  appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
-  append(/** @type {StubEl[]} */ ...cs) { this._children.push(...cs); }
+  replaceChildren(/** @type {StubEl[]} */ ...cs) {
+    this._children = cs;
+  }
+  appendChild(/** @type {StubEl} */ c) {
+    this._children.push(c);
+    return c;
+  }
+  append(/** @type {StubEl[]} */ ...cs) {
+    this._children.push(...cs);
+  }
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
   }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) { this._attrs[k] = v; }
-  getAttribute(/** @type {string} */ k) { return this._attrs[k] ?? null; }
+  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
+    this._attrs[k] = v;
+  }
+  getAttribute(/** @type {string} */ k) {
+    return this._attrs[k] ?? null;
+  }
   dispatchEvent(/** @type {any} */ e) {
-    (this._listeners[e.type] ?? []).forEach(h => h(e));
+    (this._listeners[e.type] ?? []).forEach((h) => h(e));
     return true;
   }
   /** @param {string} ev fire a listener as if the user triggered it */
   _fire(/** @type {string} */ ev, /** @type {any} */ payload) {
-    (this._listeners[ev] ?? []).forEach(h => h(payload));
+    (this._listeners[ev] ?? []).forEach((h) => h(payload));
   }
 }
 
@@ -48,8 +59,8 @@ class StubCustomEvent {
 /** @type {Record<string, Function[]>} */
 const docListeners = {};
 
-(/** @type {any} */ (globalThis)).HTMLElement = StubEl;
-(/** @type {any} */ (globalThis)).document = {
+/** @type {any} */ (globalThis).HTMLElement = StubEl;
+/** @type {any} */ (globalThis).document = {
   /** @param {string} tag @returns {StubEl} */
   createElement(tag) {
     const el = new StubEl();
@@ -60,17 +71,18 @@ const docListeners = {};
     (docListeners[t] ??= []).push(h);
   },
   removeEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    docListeners[t] = (docListeners[t] ?? []).filter(fn => fn !== h);
+    docListeners[t] = (docListeners[t] ?? []).filter((fn) => fn !== h);
   },
   _fire(/** @type {string} */ t, /** @type {any} */ ev) {
-    (docListeners[t] ?? []).forEach(h => h(ev));
+    (docListeners[t] ?? []).forEach((h) => h(ev));
   },
 };
-(/** @type {any} */ (globalThis)).customElements = { define() {} };
-(/** @type {any} */ (globalThis)).CustomEvent = StubCustomEvent;
+/** @type {any} */ (globalThis).customElements = { define() {} };
+/** @type {any} */ (globalThis).CustomEvent = StubCustomEvent;
 
 // ===== IMPORTS (after stubs) =====
-const { CRAttributeMenu } = await import('../src/components/cr-attribute-menu.js');
+const { CRAttributeMenu } =
+  await import('../src/components/cr-attribute-menu.js');
 
 // ===== HELPERS =====
 
@@ -116,9 +128,21 @@ test('CRAttributeMenu: unset renders an Attribute trigger, no chip or clear, pop
   el.connectedCallback();
 
   assert.ok(findByClass(el, 'cr-attribute-trigger'), 'trigger button rendered');
-  assert.equal(findByClass(el, 'cr-attribute-chip'), null, 'no chip when unset');
-  assert.equal(findByClass(el, 'cr-attribute-clear'), null, 'no clear when unset');
-  assert.equal(findByClass(el, 'cr-attribute-popover').hidden, true, 'popover starts hidden');
+  assert.equal(
+    findByClass(el, 'cr-attribute-chip'),
+    null,
+    'no chip when unset'
+  );
+  assert.equal(
+    findByClass(el, 'cr-attribute-clear'),
+    null,
+    'no clear when unset'
+  );
+  assert.equal(
+    findByClass(el, 'cr-attribute-popover').hidden,
+    true,
+    'popover starts hidden'
+  );
 });
 
 test('CRAttributeMenu: when set, renders a chip with the displayName and a clear button', () => {
@@ -129,8 +153,15 @@ test('CRAttributeMenu: when set, renders a chip with the displayName and a clear
   const chip = findByClass(el, 'cr-attribute-chip');
   assert.ok(chip, 'chip rendered when attributed');
   assert.equal(chip.textContent, 'Jane Smith');
-  assert.ok(findByClass(el, 'cr-attribute-clear'), 'clear button rendered when attributed');
-  assert.equal(findByClass(el, 'cr-attribute-trigger'), null, 'plain trigger replaced by chip');
+  assert.ok(
+    findByClass(el, 'cr-attribute-clear'),
+    'clear button rendered when attributed'
+  );
+  assert.equal(
+    findByClass(el, 'cr-attribute-trigger'),
+    null,
+    'plain trigger replaced by chip'
+  );
 });
 
 test('CRAttributeMenu: clicking the chip opens the popover so the person can be changed', () => {
@@ -140,8 +171,15 @@ test('CRAttributeMenu: clicking the chip opens the popover so the person can be 
 
   findByClass(el, 'cr-attribute-chip')._fire('click');
 
-  assert.equal(findByClass(el, 'cr-attribute-popover').hidden, false, 'chip click opens the popover');
-  assert.equal(findByClass(el, 'cr-attribute-chip').getAttribute('aria-expanded'), 'true');
+  assert.equal(
+    findByClass(el, 'cr-attribute-popover').hidden,
+    false,
+    'chip click opens the popover'
+  );
+  assert.equal(
+    findByClass(el, 'cr-attribute-chip').getAttribute('aria-expanded'),
+    'true'
+  );
 });
 
 test('CRAttributeMenu: clicking the trigger opens the popover and reflects aria-expanded', () => {
@@ -152,8 +190,15 @@ test('CRAttributeMenu: clicking the trigger opens the popover and reflects aria-
   assert.equal(trigger.getAttribute('aria-expanded'), 'false');
   trigger._fire('click');
 
-  assert.equal(findByClass(el, 'cr-attribute-popover').hidden, false, 'popover shown after click');
-  assert.equal(findByClass(el, 'cr-attribute-trigger').getAttribute('aria-expanded'), 'true');
+  assert.equal(
+    findByClass(el, 'cr-attribute-popover').hidden,
+    false,
+    'popover shown after click'
+  );
+  assert.equal(
+    findByClass(el, 'cr-attribute-trigger').getAttribute('aria-expanded'),
+    'true'
+  );
 });
 
 test('CRAttributeMenu: clicking the trigger again closes the popover', () => {
@@ -163,7 +208,11 @@ test('CRAttributeMenu: clicking the trigger again closes the popover', () => {
   findByClass(el, 'cr-attribute-trigger')._fire('click');
   findByClass(el, 'cr-attribute-trigger')._fire('click');
 
-  assert.equal(findByClass(el, 'cr-attribute-popover').hidden, true, 'popover hidden after second click');
+  assert.equal(
+    findByClass(el, 'cr-attribute-popover').hidden,
+    true,
+    'popover hidden after second click'
+  );
 });
 
 test('CRAttributeMenu: shows a Responsible Party quick-pick when responsibleParty is set', () => {
@@ -192,18 +241,32 @@ test('CRAttributeMenu: choosing the Responsible Party emits cr-attribute-change 
 
   /** @type {any[]} */
   const events = [];
-  el.addEventListener('cr-attribute-change', (/** @type {any} */ e) => events.push(e));
+  el.addEventListener('cr-attribute-change', (/** @type {any} */ e) =>
+    events.push(e)
+  );
 
   findByClass(el, 'cr-attribute-responsible')._fire('click');
 
   assert.equal(events.length, 1);
-  assert.equal(events[0].bubbles, false, 'event does not bubble; parent re-dispatches with questionId');
+  assert.equal(
+    events[0].bubbles,
+    false,
+    'event does not bubble; parent re-dispatches with questionId'
+  );
   assert.deepEqual(events[0].detail, { attributedParty: RESPONSIBLE });
-  assert.equal(findByClass(el, 'cr-attribute-popover').hidden, true, 'popover closes after choosing');
+  assert.equal(
+    findByClass(el, 'cr-attribute-popover').hidden,
+    true,
+    'popover closes after choosing'
+  );
 });
 
 test('CRAttributeMenu: embeds a people picker wired to the client', () => {
-  const client = /** @type {any} */ ({ async searchPeople() { return []; } });
+  const client = /** @type {any} */ ({
+    async searchPeople() {
+      return [];
+    },
+  });
   const el = new CRAttributeMenu();
   el.client = client;
   el.connectedCallback();
@@ -215,15 +278,23 @@ test('CRAttributeMenu: embeds a people picker wired to the client', () => {
 
 test('CRAttributeMenu: selecting someone via search emits cr-attribute-change with that person', () => {
   const el = new CRAttributeMenu();
-  el.client = /** @type {any} */ ({ async searchPeople() { return []; } });
+  el.client = /** @type {any} */ ({
+    async searchPeople() {
+      return [];
+    },
+  });
   el.connectedCallback();
   findByClass(el, 'cr-attribute-trigger')._fire('click');
 
   /** @type {any[]} */
   const events = [];
-  el.addEventListener('cr-attribute-change', (/** @type {any} */ e) => events.push(e));
+  el.addEventListener('cr-attribute-change', (/** @type {any} */ e) =>
+    events.push(e)
+  );
 
-  findByTag(el, 'cr-people-picker')._fire('cr-person-selected', { detail: PERSON });
+  findByTag(el, 'cr-people-picker')._fire('cr-person-selected', {
+    detail: PERSON,
+  });
 
   assert.equal(events.length, 1);
   assert.deepEqual(events[0].detail, { attributedParty: PERSON });
@@ -236,7 +307,9 @@ test('CRAttributeMenu: clicking clear emits cr-attribute-change with a null part
 
   /** @type {any[]} */
   const events = [];
-  el.addEventListener('cr-attribute-change', (/** @type {any} */ e) => events.push(e));
+  el.addEventListener('cr-attribute-change', (/** @type {any} */ e) =>
+    events.push(e)
+  );
 
   findByClass(el, 'cr-attribute-clear')._fire('click');
 
@@ -252,7 +325,11 @@ test('CRAttributeMenu: Escape closes the popover when open', () => {
 
   /** @type {any} */ (globalThis).document._fire('keydown', keyEvent('Escape'));
 
-  assert.equal(findByClass(el, 'cr-attribute-popover').hidden, true, 'Escape closes the popover');
+  assert.equal(
+    findByClass(el, 'cr-attribute-popover').hidden,
+    true,
+    'Escape closes the popover'
+  );
 });
 
 test('CRAttributeMenu: Escape is a no-op when the popover is closed', () => {
@@ -270,7 +347,11 @@ test('CRAttributeMenu: non-Escape keys are ignored', () => {
   findByClass(el, 'cr-attribute-trigger')._fire('click');
 
   /** @type {any} */ (globalThis).document._fire('keydown', keyEvent('Enter'));
-  assert.equal(findByClass(el, 'cr-attribute-popover').hidden, false, 'popover stays open for other keys');
+  assert.equal(
+    findByClass(el, 'cr-attribute-popover').hidden,
+    false,
+    'popover stays open for other keys'
+  );
 });
 
 test('CRAttributeMenu: an outside pointerdown closes an open popover', () => {
@@ -280,7 +361,11 @@ test('CRAttributeMenu: an outside pointerdown closes an open popover', () => {
   findByClass(el, 'cr-attribute-trigger')._fire('click');
 
   /** @type {any} */ (globalThis).document._fire('mousedown', { target: {} });
-  assert.equal(findByClass(el, 'cr-attribute-popover').hidden, true, 'outside click closes');
+  assert.equal(
+    findByClass(el, 'cr-attribute-popover').hidden,
+    true,
+    'outside click closes'
+  );
 });
 
 test('CRAttributeMenu: a pointerdown inside the menu leaves it open', () => {
@@ -290,7 +375,11 @@ test('CRAttributeMenu: a pointerdown inside the menu leaves it open', () => {
   findByClass(el, 'cr-attribute-trigger')._fire('click');
 
   /** @type {any} */ (globalThis).document._fire('mousedown', { target: {} });
-  assert.equal(findByClass(el, 'cr-attribute-popover').hidden, false, 'inside click keeps it open');
+  assert.equal(
+    findByClass(el, 'cr-attribute-popover').hidden,
+    false,
+    'inside click keeps it open'
+  );
 });
 
 test('CRAttributeMenu: a pointerdown while closed is ignored', () => {
@@ -313,5 +402,9 @@ test('CRAttributeMenu: disconnectedCallback removes its document listeners', () 
   /** @type {any} */ (globalThis).document._fire('keydown', keyEvent('Escape'));
   /** @type {any} */ (globalThis).document._fire('mousedown', { target: {} });
   // popover ref is stale but its hidden state should not have been flipped closed
-  assert.equal(findByClass(el, 'cr-attribute-popover').hidden, false, 'listeners detached');
+  assert.equal(
+    findByClass(el, 'cr-attribute-popover').hidden,
+    false,
+    'listeners detached'
+  );
 });

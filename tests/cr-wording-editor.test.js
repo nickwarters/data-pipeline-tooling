@@ -4,8 +4,10 @@ import assert from 'node:assert/strict';
 import { installDom } from './_bank-dom-stub.js';
 installDom();
 
-const { CRWordingEditor } = await import('../src/components/cr-wording-editor.js');
-const { _resetStore, cases, activeSlug, commit } = await import('../src/question-bank/question-bank-store.js');
+const { CRWordingEditor } =
+  await import('../src/components/cr-wording-editor.js');
+const { _resetStore, cases, activeSlug, commit } =
+  await import('../src/question-bank/question-bank-store.js');
 
 test('CRWordingEditor: no question → renders nothing', () => {
   const e = new CRWordingEditor();
@@ -26,13 +28,18 @@ test('CRWordingEditor: renders edit mark, textarea, status pill, char count', ()
   const txt = wrap._children[1];
   assert.equal(txt.value, q.text);
   const foot = wrap._children[2];
-  assert.ok(foot._children[0].innerHTML.includes('Unchanged') || foot._children[0].textContent.includes('Unchanged'));
+  assert.ok(
+    foot._children[0].innerHTML.includes('Unchanged') ||
+      foot._children[0].textContent.includes('Unchanged')
+  );
 });
 
 test('CRWordingEditor: shows "Edited" when text diverges from baseline', () => {
   _resetStore();
   // Mutate the question text after baseline snapshot
-  commit(t => { t['hello-review'].questions[0].text = 'CHANGED'; });
+  commit((t) => {
+    t['hello-review'].questions[0].text = 'CHANGED';
+  });
   const q = cases.get()['hello-review'].questions[0];
   const e = new CRWordingEditor();
   e.question = q;
@@ -45,7 +52,12 @@ test('CRWordingEditor: shows "Edited" when text diverges from baseline', () => {
 test('CRWordingEditor: shows "New draft" when no baseline match', () => {
   _resetStore();
   /** @type {any} */
-  const q = { id: 'q-never-baseline', text: 'New', responseType: 'yes-no-na', deprecated: false };
+  const q = {
+    id: 'q-never-baseline',
+    text: 'New',
+    responseType: 'yes-no-na',
+    deprecated: false,
+  };
   activeSlug.set('hello-review');
   const e = new CRWordingEditor();
   e.question = q;
@@ -58,7 +70,12 @@ test('CRWordingEditor: shows "New draft" when no baseline match', () => {
 test('CRWordingEditor: char count warns over 180', () => {
   _resetStore();
   /** @type {any} */
-  const q = { id: 'q-long', text: 'x'.repeat(200), responseType: 'yes-no-na', deprecated: false };
+  const q = {
+    id: 'q-long',
+    text: 'x'.repeat(200),
+    responseType: 'yes-no-na',
+    deprecated: false,
+  };
   const e = new CRWordingEditor();
   e.question = q;
   e.connectedCallback();
@@ -71,7 +88,12 @@ test('CRWordingEditor: char count warns over 180', () => {
 test('CRWordingEditor: deprecated question adds deprecated-text class', () => {
   _resetStore();
   /** @type {any} */
-  const q = { id: 'q-d', text: 'old', responseType: 'yes-no-na', deprecated: true };
+  const q = {
+    id: 'q-d',
+    text: 'old',
+    responseType: 'yes-no-na',
+    deprecated: true,
+  };
   const e = new CRWordingEditor();
   e.question = q;
   e.connectedCallback();
@@ -100,7 +122,9 @@ test('CRWordingEditor: focus/blur toggle "focused" class; input commits text', (
 test('CRWordingEditor: long baseline text gets ellipsis', () => {
   _resetStore();
   const long = 'A'.repeat(100);
-  commit(t => { t['hello-review'].questions[0].text = long; });
+  commit((t) => {
+    t['hello-review'].questions[0].text = long;
+  });
   // Now baseline still has the original short text, current has long — wait,
   // we want the *opposite*: baseline is long, current is different.
   // Easier: directly test the ellipsis branch with a hand-rolled question.

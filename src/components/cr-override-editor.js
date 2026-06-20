@@ -1,8 +1,15 @@
 // @ts-check
 import { ReactiveElement } from './reactive-element.js';
 import { h } from '../lib/html.js';
-import { isFailure, materializeRemediationActions } from '../evaluators/failure-evaluator.js';
-import { classifyTransition, validateOverride, buildOverride } from '../evaluators/override-author.js';
+import {
+  isFailure,
+  materializeRemediationActions,
+} from '../evaluators/failure-evaluator.js';
+import {
+  classifyTransition,
+  validateOverride,
+  buildOverride,
+} from '../evaluators/override-author.js';
 import { effectiveAnswers } from '../evaluators/effective-answers.js';
 import { buildCaptureControl } from '../lib/capture-engine.js';
 import './cr-attribute-menu.js';
@@ -85,7 +92,13 @@ export class CROverrideEditor extends ReactiveElement {
 
   /** @returns {{ answerKey: string, value: string | string[], reasoning: string, attributedParty: Party | null, remediationDetails: Record<string, string> }} */
   _emptyDraft() {
-    return { answerKey: '', value: '', reasoning: '', attributedParty: null, remediationDetails: {} };
+    return {
+      answerKey: '',
+      value: '',
+      reasoning: '',
+      attributedParty: null,
+      remediationDetails: {},
+    };
   }
 
   /** @returns {Override[]} */
@@ -105,7 +118,10 @@ export class CROverrideEditor extends ReactiveElement {
 
   /** Whether the current user is the original Assigned Reviewer (self-review). @returns {boolean} */
   _isSelfReview() {
-    return !!this.currentUser && this.currentUser.id === this.caseRow?.assignedReviewer;
+    return (
+      !!this.currentUser &&
+      this.currentUser.id === this.caseRow?.assignedReviewer
+    );
   }
 
   _render() {
@@ -129,7 +145,9 @@ export class CROverrideEditor extends ReactiveElement {
     if (this.access === 'override') {
       if (this._isSelfReview()) {
         children.push(
-          h('p', { class: 'cr-override-self-review' },
+          h(
+            'p',
+            { class: 'cr-override-self-review' },
             'You were the Assigned Reviewer on this Case. An Override must be authored by a different QA Reviewer.'
           )
         );
@@ -150,21 +168,35 @@ export class CROverrideEditor extends ReactiveElement {
    */
   _renderHistory(o) {
     const question = this.catalogue.find((q) => q.id === o.answerKey);
-    return h('section', { class: 'cr-override-item' },
-      h('p', { class: 'cr-override-item-question' }, question ? question.text : o.answerKey),
-      h('p', { class: 'cr-override-item-value' }, `Corrected to: ${formatValue(o.value)}`),
+    return h(
+      'section',
+      { class: 'cr-override-item' },
+      h(
+        'p',
+        { class: 'cr-override-item-question' },
+        question ? question.text : o.answerKey
+      ),
+      h(
+        'p',
+        { class: 'cr-override-item-value' },
+        `Corrected to: ${formatValue(o.value)}`
+      ),
       h('p', { class: 'cr-override-item-reasoning' }, o.reasoning)
     );
   }
 
   _renderForm() {
-    const qSelect = /** @type {any} */ (h('select', {
-      class: 'cr-override-question',
-      onchange: (/** @type {any} */ e) => this._onQuestion(e.target.value)
-    },
-      buildOption('', '— choose a Question —'),
-      ...this._targets().map(q => buildOption(q.id, q.text))
-    ));
+    const qSelect = /** @type {any} */ (
+      h(
+        'select',
+        {
+          class: 'cr-override-question',
+          onchange: (/** @type {any} */ e) => this._onQuestion(e.target.value),
+        },
+        buildOption('', '— choose a Question —'),
+        ...this._targets().map((q) => buildOption(q.id, q.text))
+      )
+    );
     qSelect.value = this._draft.answerKey;
 
     const question = this._question();
@@ -180,16 +212,20 @@ export class CROverrideEditor extends ReactiveElement {
     }
 
     const errorEl = h('ul', { class: 'cr-override-error', hidden: true });
-    
+
     const reasoningEl = buildCaptureControl(
       { key: 'reasoning', type: 'textarea', label: 'Reasoning' },
       this._draft.reasoning,
-      (value) => { this._draft.reasoning = value; },
+      (value) => {
+        this._draft.reasoning = value;
+      },
       'cr-override-reasoning'
     );
     reasoningEl.setAttribute('aria-label', 'Override reasoning');
 
-    return h('section', { class: 'cr-override-form' },
+    return h(
+      'section',
+      { class: 'cr-override-form' },
       h('label', {}, 'Which Answer is being corrected?'),
       qSelect,
       valueControl,
@@ -197,10 +233,14 @@ export class CROverrideEditor extends ReactiveElement {
       h('label', {}, 'Reasoning'),
       reasoningEl,
       errorEl,
-      h('button', {
-        class: 'cr-override-submit',
-        onclick: () => this._submit(/** @type {HTMLElement} */ (errorEl))
-      }, 'Save Override')
+      h(
+        'button',
+        {
+          class: 'cr-override-submit',
+          onclick: () => this._submit(/** @type {HTMLElement} */ (errorEl)),
+        },
+        'Save Override'
+      )
     );
   }
 
@@ -209,16 +249,18 @@ export class CROverrideEditor extends ReactiveElement {
    */
   _renderValueControl(question) {
     const select = buildCaptureControl(
-      { key: 'value', type: 'select', label: 'Replacement value', options: optionsFor(question) },
+      {
+        key: 'value',
+        type: 'select',
+        label: 'Replacement value',
+        options: optionsFor(question),
+      },
       /** @type {string} */ (this._draft.value),
       (value) => this._onValue(value),
       'cr-override-value-control'
     );
 
-    return [
-      h('label', {}, 'Replacement value'),
-      select
-    ];
+    return [h('label', {}, 'Replacement value'), select];
   }
 
   /**
@@ -234,16 +276,19 @@ export class CROverrideEditor extends ReactiveElement {
         client: this.client,
         attributedParty: this._draft.attributedParty,
         responsibleParty: this.caseRow?.responsibleParty
-          ? { loginName: this.caseRow.responsibleParty, displayName: this.caseRow.responsibleParty }
+          ? {
+              loginName: this.caseRow.responsibleParty,
+              displayName: this.caseRow.responsibleParty,
+            }
           : null,
         'oncr-attribute-change': (/** @type {any} */ ev) => {
           this._draft.attributedParty = ev.detail.attributedParty;
           this._render();
-        }
+        },
       });
     }
 
-    const detailFields = this.remediationFields.map(field => {
+    const detailFields = this.remediationFields.map((field) => {
       const current = this._draft.remediationDetails[field.key] ?? '';
       const control = buildCaptureControl(
         field,
@@ -252,13 +297,21 @@ export class CROverrideEditor extends ReactiveElement {
         `cr-override-detail-${field.key}`
       );
 
-      return h('div', { class: 'cr-override-detail-field' },
-        h('label', {}, field.required ? `${field.label} (required)` : field.label),
+      return h(
+        'div',
+        { class: 'cr-override-detail-field' },
+        h(
+          'label',
+          {},
+          field.required ? `${field.label} (required)` : field.label
+        ),
         control
       );
     });
 
-    return h('div', { class: 'cr-override-failure' },
+    return h(
+      'div',
+      { class: 'cr-override-failure' },
       attributeMenu,
       ...detailFields
     );
@@ -267,7 +320,12 @@ export class CROverrideEditor extends ReactiveElement {
   /** @param {string} answerKey */
   _onQuestion(answerKey) {
     const original = this.caseRow?.answers[answerKey]?.value ?? '';
-    this._draft = { ...this._emptyDraft(), answerKey, value: original, reasoning: this._draft.reasoning };
+    this._draft = {
+      ...this._emptyDraft(),
+      answerKey,
+      value: original,
+      reasoning: this._draft.reasoning,
+    };
     this._render();
   }
 
@@ -304,11 +362,14 @@ export class CROverrideEditor extends ReactiveElement {
       reasoning: this._draft.reasoning,
     };
     if (failing) {
-      if (this._draft.attributedParty) draft.attributedParty = this._draft.attributedParty;
+      if (this._draft.attributedParty)
+        draft.attributedParty = this._draft.attributedParty;
       if (Object.keys(this._draft.remediationDetails).length) {
         draft.remediationDetails = { ...this._draft.remediationDetails };
       }
-      const actions = materializeRemediationActions(question, { value: this._draft.value }).remediationActions;
+      const actions = materializeRemediationActions(question, {
+        value: this._draft.value,
+      }).remediationActions;
       if (actions) draft.remediationActions = actions;
     }
 
@@ -345,7 +406,8 @@ export class CROverrideEditor extends ReactiveElement {
       // Answers and flag the Case as overridden. One atomic ETag-guarded PATCH
       // (ADR-0008) so overrides[] and the columns can never desync — including on
       // the cross-row write path, since `caseId` is the original row throughout.
-      const compute = this.computeOutcome ?? (() => /** @type {any} */ ({ verdict: 'pass' }));
+      const compute =
+        this.computeOutcome ?? (() => /** @type {any} */ ({ verdict: 'pass' }));
       const effective = effectiveAnswers(this.caseRow.answers, next);
       this.saveQueue?.enqueueFields(this.caseId, {
         overrides: next,

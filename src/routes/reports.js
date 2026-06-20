@@ -7,9 +7,10 @@
 export function register(router, context) {
   router.register('#/reports', {
     mount(container) {
-      const el = /** @type {import('../pages/cr-reports-index.js').CRReportsIndex} */ (
-        document.createElement('cr-reports-index')
-      );
+      const el =
+        /** @type {import('../pages/cr-reports-index.js').CRReportsIndex} */ (
+          document.createElement('cr-reports-index')
+        );
       el.capabilities = context.capabilities;
       container.replaceChildren(el);
     },
@@ -22,9 +23,10 @@ export function register(router, context) {
         location.hash = '#/reports';
         return;
       }
-      const el = /** @type {import('../pages/cr-reviewer-team-report.js').CRReviewerTeamReport} */ (
-        document.createElement('cr-reviewer-team-report')
-      );
+      const el =
+        /** @type {import('../pages/cr-reviewer-team-report.js').CRReviewerTeamReport} */ (
+          document.createElement('cr-reviewer-team-report')
+        );
       el.client = context.client;
       el.currentUser = context.currentUser;
       el.eligibleCaseTypes = context.eligibleCaseTypes;

@@ -1,1206 +1,2425 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SaveQueue — Interactive Explorer</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg:        #080b10;
-      --surface:   #0e1520;
-      --border:    #1e2d45;
-      --signal:    #f59e0b;
-      --signal-glow: rgba(245,158,11,0.22);
-      --computed:  #22d3ee;
-      --computed-glow: rgba(34,211,238,0.18);
-      --effect:    #a78bfa;
-      --effect-glow: rgba(167,139,250,0.18);
-      --text:      #c8d6e8;
-      --muted:     #4a6080;
-      --saved:     #4ade80;
-      --saving:    #f59e0b;
-      --reconnecting: #fb923c;
-      --conflict:  #f87171;
-    }
-
-    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'JetBrains Mono', monospace; overflow-x: hidden; }
-
-    body::before {
-      content: ''; position: fixed; inset: 0;
-      background-image: radial-gradient(circle, #1a2a3f 1px, transparent 1px);
-      background-size: 28px 28px; opacity: 0.4; pointer-events: none; z-index: 0;
-    }
-
-    header { position: relative; z-index: 10; padding: 40px 48px 24px; border-bottom: 1px solid var(--border); }
-
-    header h1 {
-      font-family: 'Bebas Neue', sans-serif;
-      font-size: clamp(2.5rem, 6vw, 5rem);
-      letter-spacing: 0.06em; line-height: 1;
-      background: linear-gradient(135deg, #f59e0b 0%, #22d3ee 55%, #a78bfa 100%);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    }
-
-    header p { margin-top: 8px; font-size: 0.78rem; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
-
-    .legend { display: flex; gap: 24px; margin-top: 20px; flex-wrap: wrap; }
-    .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-    .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-
-    main { position: relative; z-index: 1; display: flex; flex-direction: column; }
-
-    .scene { position: relative; padding: 48px; border-bottom: 1px solid var(--border); }
-    .scene-label { font-family: 'Bebas Neue', sans-serif; font-size: 0.85rem; letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase; margin-bottom: 6px; }
-    .scene-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem; letter-spacing: 0.05em; color: var(--text); margin-bottom: 28px; }
-    .scene-intro { font-size: 0.75rem; line-height: 1.75; color: var(--muted); margin-bottom: 32px; max-width: 700px; }
-    .scene-intro code { background: var(--bg); border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; font-size: 0.85em; }
-
-    /* ── CONCEPT CARDS ──────────────────────────────────────── */
-    .concepts { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; padding: 48px; border-bottom: 1px solid var(--border); }
-
-    .concept-card { background: var(--surface); border-radius: 8px; padding: 28px; position: relative; overflow: hidden; }
-    .concept-card::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px; }
-    .c-debounce::after { background: var(--signal); }
-    .c-etag::after     { background: var(--computed); }
-    .c-status::after   { background: var(--effect); }
-
-    .concept-icon { font-size: 1.6rem; margin-bottom: 12px; display: block; }
-    .concept-name { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; letter-spacing: 0.05em; margin-bottom: 8px; }
-    .c-debounce .concept-name { color: var(--signal); }
-    .c-etag     .concept-name { color: var(--computed); }
-    .c-status   .concept-name { color: var(--effect); }
-    .concept-desc { font-size: 0.75rem; line-height: 1.7; color: var(--muted); margin-bottom: 16px; }
-    .concept-api  { font-size: 0.7rem; color: var(--text); background: var(--bg); border-radius: 4px; padding: 10px 12px; border: 1px solid var(--border); line-height: 1.75; }
-
-    .kw  { color: var(--signal); }
-    .fn  { color: var(--computed); }
-    .cmt { color: #3d5470; font-style: italic; }
-    .str { color: #86efac; }
-
-    /* ── DEBOUNCE DEMO ──────────────────────────────────────── */
-    .demo-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-
-    .demo-label { display: block; font-size: 0.6rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
-
-    .demo-textarea {
-      width: 100%; height: 100px;
-      background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
-      color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
-      padding: 12px; resize: vertical; outline: none; transition: border-color 0.15s;
-    }
-    .demo-textarea:focus { border-color: var(--signal); }
-    .demo-textarea::placeholder { color: var(--muted); }
-
-    .timer-section { margin-top: 14px; }
-    .timer-label-row { font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; display: flex; justify-content: space-between; }
-    .timer-track { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
-    .timer-fill  { height: 100%; width: 0%; border-radius: 2px; background: var(--signal); }
-
-    .patch-indicator {
-      margin-top: 10px; height: 26px; display: flex; align-items: center; gap: 6px;
-      font-size: 0.72rem; opacity: 0; transition: opacity 0.2s;
-    }
-    .patch-indicator.visible { opacity: 1; }
-    .patch-arrow { animation: slide-right 0.4s ease; }
-    @keyframes slide-right { from { transform: translateX(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
-
-    .demo-status-row { margin-top: 10px; display: flex; align-items: center; gap: 10px; font-size: 0.65rem; color: var(--muted); }
-
-    .status-badge {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 4px 11px; border-radius: 20px; font-size: 0.67rem; font-weight: 700; border: 1px solid;
-      transition: all 0.3s;
-    }
-    .status-badge.saved        { color: var(--saved);        border-color: rgba(74,222,128,0.4);  background: rgba(74,222,128,0.08); }
-    .status-badge.saving       { color: var(--saving);       border-color: rgba(245,158,11,0.4);  background: rgba(245,158,11,0.08); animation: badge-pulse 1s ease infinite; }
-    .status-badge.reconnecting { color: var(--reconnecting); border-color: rgba(251,146,60,0.4);  background: rgba(251,146,60,0.08); }
-    .status-badge.conflict     { color: var(--conflict);     border-color: rgba(248,113,113,0.4); background: rgba(248,113,113,0.08); }
-
-    @keyframes badge-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
-
-    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-
-    .event-log {
-      background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
-      padding: 10px 12px; height: 165px; overflow-y: auto;
-      display: flex; flex-direction: column; gap: 4px;
-    }
-    .event-log::-webkit-scrollbar { width: 3px; }
-    .event-log::-webkit-scrollbar-thumb { background: var(--border); }
-
-    .log-entry { font-size: 0.67rem; display: flex; gap: 10px; align-items: baseline; animation: fade-up 0.2s ease; }
-    @keyframes fade-up { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; } }
-    .log-time { color: var(--muted); flex-shrink: 0; }
-    .log-kind { flex-shrink: 0; font-weight: 700; }
-    .log-kind.k-enqueue { color: var(--signal); }
-    .log-kind.k-reset   { color: var(--muted); }
-    .log-kind.k-patch   { color: var(--computed); }
-    .log-kind.k-ok      { color: var(--saved); }
-    .log-msg { color: var(--text); }
-
-    /* ── WALKTHROUGH ────────────────────────────────────────── */
-    .wt-tabs { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
-    .wt-tab {
-      background: transparent; border: 1px solid var(--border); border-radius: 4px;
-      color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 0.67rem;
-      padding: 7px 13px; cursor: pointer; transition: all 0.15s;
-    }
-    .wt-tab:hover  { border-color: var(--text); color: var(--text); }
-    .wt-tab.active { border-color: var(--computed); color: var(--computed); background: rgba(34,211,238,0.07); }
-
-    .wt-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-    .wt-panel  { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
-    .wt-panel-label { font-size: 0.6rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
-
-    /* Code */
-    .wt-code-line {
-      font-size: 0.71rem; line-height: 1.8; padding: 0 8px;
-      border-radius: 3px; white-space: pre; display: block;
-      color: var(--muted); border-left: 2px solid transparent;
-      transition: background 0.2s, color 0.2s, opacity 0.2s;
-    }
-    .wt-code-line.hl  { background: rgba(34,211,238,0.09); color: var(--text); border-left-color: var(--computed); padding-left: 6px; }
-    .wt-code-line.dim { opacity: 0.17; }
-
-    /* Sequence diagram */
-    .seq-actors { display: grid; grid-template-columns: 1fr 1fr 1fr; margin-bottom: 0; }
-    .seq-actor  { display: flex; flex-direction: column; align-items: center; padding-bottom: 6px; }
-
-    .seq-actor-badge {
-      font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
-      padding: 4px 8px; border-radius: 4px; border: 1px solid; text-align: center;
-    }
-
-    .seq-actor.component  .seq-actor-badge { color: var(--signal);  border-color: rgba(245,158,11,0.4);  background: rgba(245,158,11,0.08); }
-    .seq-actor.savequeue  .seq-actor-badge { color: var(--computed); border-color: rgba(34,211,238,0.4);  background: rgba(34,211,238,0.08); }
-    .seq-actor.sharepoint .seq-actor-badge { color: var(--effect);  border-color: rgba(167,139,250,0.4); background: rgba(167,139,250,0.08); }
-
-    .seq-diagram-body { position: relative; min-height: 180px; }
-
-    .seq-lifelines {
-      position: absolute; inset: 0;
-      display: grid; grid-template-columns: 1fr 1fr 1fr;
-      pointer-events: none;
-    }
-
-    .seq-lifeline { display: flex; justify-content: center; }
-    .seq-lifeline::before { content: ''; width: 1px; height: 100%; border-left: 1px dashed var(--border); }
-
-    .seq-messages { position: relative; z-index: 1; display: flex; flex-direction: column; }
-
-    .seq-msg {
-      display: grid; grid-template-columns: 1fr 1fr 1fr; min-height: 34px; align-items: center;
-      opacity: 0; animation: seq-in 0.3s ease forwards;
-    }
-    @keyframes seq-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; } }
-    .seq-msg.faded { opacity: 0.28; animation: none; }
-
-    .seq-cell { display: flex; align-items: center; padding: 3px 2px; }
-
-    .seq-arrow { display: flex; align-items: center; width: 100%; font-size: 0.6rem; gap: 4px; }
-    .seq-arrow-line { flex: 1; height: 1.5px; position: relative; }
-    .seq-arrow-line::after { content: ''; position: absolute; top: -4px; border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
-    .seq-arrow.right .seq-arrow-line::after { right: -1px; border-left: 6px solid; }
-    .seq-arrow.left  .seq-arrow-line::after { left:  -1px; border-right: 6px solid; border-left: none; }
-
-    .seq-arrow.to-queue    .seq-arrow-line             { background: var(--signal); }
-    .seq-arrow.to-queue    .seq-arrow-line::after       { border-left-color: var(--signal); }
-    .seq-arrow.to-server   .seq-arrow-line             { background: var(--computed); }
-    .seq-arrow.to-server   .seq-arrow-line::after       { border-left-color: var(--computed); }
-    .seq-arrow.from-server .seq-arrow-line             { background: var(--effect); }
-    .seq-arrow.from-server .seq-arrow-line::after       { border-right-color: var(--effect); }
-    .seq-arrow.err-arrow   .seq-arrow-line             { background: var(--conflict); }
-    .seq-arrow.err-arrow   .seq-arrow-line::after       { border-right-color: var(--conflict); }
-
-    .seq-label-chip {
-      font-size: 0.58rem; white-space: nowrap; font-weight: 600;
-      padding: 2px 5px; border-radius: 3px; background: var(--bg); border: 1px solid var(--border);
-    }
-    .seq-arrow.to-queue    .seq-label-chip { color: var(--signal);  border-color: rgba(245,158,11,0.3); }
-    .seq-arrow.to-server   .seq-label-chip { color: var(--computed); border-color: rgba(34,211,238,0.3); }
-    .seq-arrow.from-server .seq-label-chip { color: var(--effect);  border-color: rgba(167,139,250,0.3); }
-    .seq-arrow.err-arrow   .seq-label-chip { color: var(--conflict); border-color: rgba(248,113,113,0.3); }
-
-    .seq-note { grid-column: 1 / 4; display: flex; justify-content: center; padding: 3px 0; }
-    .seq-note-inner {
-      font-size: 0.6rem; padding: 3px 10px; border-radius: 3px;
-      border: 1px dashed var(--border); color: var(--muted);
-    }
-    .seq-note-inner.n-queue    { color: var(--computed); border-color: rgba(34,211,238,0.3);  background: rgba(34,211,238,0.04); }
-    .seq-note-inner.n-ok       { color: var(--saved);   border-color: rgba(74,222,128,0.3);   background: rgba(74,222,128,0.04); }
-    .seq-note-inner.n-warn     { color: var(--reconnecting); border-color: rgba(251,146,60,0.3); background: rgba(251,146,60,0.04); }
-    .seq-note-inner.n-conflict { color: var(--conflict); border-color: rgba(248,113,113,0.3); background: rgba(248,113,113,0.04); }
-
-    /* State box */
-    .state-box { margin-top: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 13px; }
-    .state-box-label { font-size: 0.55rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
-    .state-row { display: flex; gap: 8px; margin-top: 3px; font-size: 0.67rem; align-items: center; }
-    .state-key { color: var(--muted); flex-shrink: 0; }
-    .state-val { color: var(--text); font-weight: 600; transition: color 0.3s; }
-    .v-saving       { color: var(--saving);       animation: badge-pulse 1s ease infinite; }
-    .v-saved        { color: var(--saved); }
-    .v-reconnecting { color: var(--reconnecting); }
-    .v-conflict     { color: var(--conflict); }
-
-    /* Explain + nav */
-    .wt-explain {
-      background: var(--surface); border: 1px solid var(--border);
-      border-left: 3px solid var(--computed); border-radius: 8px;
-      padding: 16px 20px; margin-bottom: 20px; min-height: 70px; transition: border-left-color 0.3s;
-    }
-    .wt-step-title { font-size: 0.75rem; font-weight: 700; color: var(--computed); margin-bottom: 6px; transition: color 0.3s; }
-    .wt-step-desc  { font-size: 0.72rem; line-height: 1.75; color: var(--muted); }
-
-    .wt-nav { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .wt-btn {
-      background: transparent; border: 1px solid var(--border); border-radius: 4px;
-      color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
-      padding: 7px 14px; cursor: pointer; transition: all 0.15s;
-    }
-    .wt-btn:hover:not(:disabled) { border-color: var(--computed); color: var(--computed); }
-    .wt-btn:disabled { opacity: 0.3; cursor: default; }
-    .wt-play-btn.playing { border-color: var(--effect); color: var(--effect); }
-    .wt-progress { flex: 1; height: 2px; background: var(--border); border-radius: 1px; overflow: hidden; min-width: 40px; }
-    .wt-prog-fill { height: 100%; background: var(--computed); border-radius: 1px; transition: width 0.3s; }
-    .wt-counter { font-size: 0.65rem; color: var(--muted); white-space: nowrap; }
-
-    footer { padding: 32px 48px; text-align: center; font-size: 0.65rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); }
-
-    /* ── QUEUE ANATOMY (Scene 02) ───────────────────────────── */
-    .queue-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
-    .queue-btn {
-      background: transparent; border: 1px solid var(--border); border-radius: 4px;
-      color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
-      padding: 8px 14px; cursor: pointer; transition: all 0.15s;
-    }
-    .queue-btn:hover { border-color: var(--signal); color: var(--signal); }
-    .queue-btn.reset:hover { border-color: var(--muted); color: var(--text); }
-
-    .queue-stage {
-      display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 16px;
-      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-      padding: 18px; min-height: 320px; position: relative; overflow: hidden;
-    }
-
-    .queue-lane { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-    .lane-label {
-      font-size: 0.58rem; letter-spacing: 0.18em; text-transform: uppercase;
-      color: var(--muted); border-bottom: 1px dashed var(--border); padding-bottom: 6px;
-    }
-
-    .etag-box {
-      display: flex; align-items: center; gap: 8px;
-      padding: 7px 10px; border-radius: 5px;
-      background: var(--bg); border: 1px solid var(--border);
-      transition: background 0.4s, border-color 0.4s, box-shadow 0.4s;
-    }
-    .etag-box.flash {
-      background: rgba(34,211,238,0.12);
-      border-color: rgba(34,211,238,0.6);
-      box-shadow: 0 0 0 1px rgba(34,211,238,0.25), 0 0 18px -6px var(--computed-glow);
-    }
-    .etag-label {
-      font-size: 0.58rem; letter-spacing: 0.18em; text-transform: uppercase;
-      color: var(--muted); flex-shrink: 0;
-    }
-    .etag-value { font-size: 0.72rem; color: var(--computed); font-weight: 700; }
-    .etag-arrow { color: var(--muted); font-size: 0.62rem; margin: 0 2px; }
-    .etag-old { color: var(--muted); text-decoration: line-through; font-weight: 400; }
-
-    .slot { display: flex; flex-direction: column; gap: 4px; }
-    .slot-label { font-size: 0.62rem; color: var(--muted); font-weight: 600; letter-spacing: 0.08em; }
-
-    .slot-block {
-      position: relative; min-height: 56px; padding: 8px 10px; border-radius: 5px;
-      font-size: 0.7rem; line-height: 1.4; overflow: hidden;
-      border: 1px solid var(--border); background: var(--bg); color: var(--muted);
-      transition: opacity 0.2s;
-    }
-    .slot-block.empty { font-style: italic; color: var(--muted); opacity: 0.5; min-height: 36px; padding: 8px 10px; display: flex; align-items: center; }
-
-    .slot-block.active {
-      background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.5); color: var(--text);
-      box-shadow: 0 0 0 1px rgba(245,158,11,0.18), 0 4px 14px -6px var(--signal-glow);
-      animation: block-pop 0.22s ease;
-    }
-    @keyframes block-pop { from { transform: scale(0.94); opacity: 0; } to { transform: none; opacity: 1; } }
-
-    .block-row { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
-    .block-field { color: var(--signal); font-weight: 700; font-size: 0.68rem; }
-    .block-revision { color: var(--muted); font-size: 0.58rem; }
-    .block-value { color: var(--text); font-size: 0.68rem; margin-top: 3px; word-break: break-all; }
-
-    .block-timer-track { margin-top: 7px; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
-    .block-timer-fill  { height: 100%; width: 0%; background: var(--signal); border-radius: 2px; }
-
-    .flight-zone, .server-zone {
-      flex: 1; min-height: 220px; padding: 6px;
-      display: flex; flex-direction: column; gap: 6px;
-      border: 1px dashed var(--border); border-radius: 5px;
-    }
-
-    .flight-block {
-      padding: 7px 10px; border-radius: 5px; font-size: 0.66rem;
-      background: rgba(34,211,238,0.08); border: 1px solid rgba(34,211,238,0.5); color: var(--text);
-      animation: fly-across 0.9s cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
-    }
-    @keyframes fly-across {
-      from { transform: translateX(-130%); opacity: 0; }
-      30%  { opacity: 1; }
-      to   { transform: none; opacity: 1; }
-    }
-    .flight-block .block-field { color: var(--computed); }
-    .flight-meta { color: var(--muted); font-size: 0.58rem; margin-top: 3px; font-style: italic; }
-
-    .server-block {
-      padding: 7px 10px; border-radius: 5px; font-size: 0.66rem;
-      background: rgba(74,222,128,0.07); border: 1px solid rgba(74,222,128,0.4); color: var(--text);
-      animation: land 0.3s ease forwards;
-    }
-    @keyframes land { from { transform: translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
-    .server-block .block-field { color: var(--saved); }
-    .server-meta { color: var(--muted); font-size: 0.58rem; margin-top: 3px; }
-
-    .queue-counter {
-      display: flex; gap: 18px; margin-top: 14px; padding: 10px 14px;
-      background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
-      font-size: 0.66rem; color: var(--muted); flex-wrap: wrap;
-    }
-    .queue-counter strong { color: var(--text); font-weight: 700; }
-    .queue-counter .qc-num { color: var(--signal); font-weight: 700; font-size: 0.85rem; margin-right: 4px; }
-    .qc-savings { color: var(--saved); }
-
-    @media (max-width: 860px) {
-      .scene { padding: 24px; }
-      .concepts { padding: 24px; }
-      .demo-layout, .wt-layout { grid-template-columns: 1fr; }
-      .queue-stage { grid-template-columns: 1fr; }
-    }
-  </style>
-</head>
-<body>
-
-<header>
-  <h1>SaveQueue</h1>
-  <p>Debounce · ETag · Retry · Conflict Detection — src/save-queue.js</p>
-  <div class="legend">
-    <div class="legend-item"><div class="legend-dot" style="background:var(--signal)"></div>Component (cr-question)</div>
-    <div class="legend-item"><div class="legend-dot" style="background:var(--computed)"></div>SaveQueue</div>
-    <div class="legend-item"><div class="legend-dot" style="background:var(--effect)"></div>SharePoint Server</div>
-  </div>
-</header>
-
-<main>
-
-  <!-- ══ CONCEPT CARDS ══════════════════════════════════════════ -->
-  <section class="concepts">
-    <div class="concept-card c-debounce">
-      <span class="concept-icon">⏱</span>
-      <div class="concept-name">Debounce</div>
-      <p class="concept-desc">
-        Every field edit resets a 1500ms timer. Only the final value in a burst
-        triggers a network call — rapid typing never sends intermediate states.
-        Each field has its own independent timer slot in <code>state.pending</code>.
-      </p>
-      <div class="concept-api">
-        <span class="kw">enqueue</span>(id, <span class="str">'Answers'</span>, v1);<br>
-        <span class="cmt">// type again → clearTimeout, new timer</span><br>
-        <span class="kw">enqueue</span>(id, <span class="str">'Answers'</span>, v2);<br>
-        <span class="cmt">// 1500ms later → one PATCH, last value</span>
-      </div>
-    </div>
-    <div class="concept-card c-etag">
-      <span class="concept-icon">🏷</span>
-      <div class="concept-name">ETag</div>
-      <p class="concept-desc">
-        Every fetch captures the row's ETag. Every PATCH sends <code>If-Match: &lt;etag&gt;</code>.
-        If the server's row has moved on (another tab saved first),
-        it returns 412 — triggering either a silent merge or a conflict banner.
-      </p>
-      <div class="concept-api">
-        <span class="cmt">// request</span><br>
-        <span class="kw">If-Match</span>: <span class="str">"etag-abc"</span><br>
-        <span class="cmt">// 200 OK → store new ETag</span><br>
-        <span class="cmt">// 412    → run conflict resolution</span>
-      </div>
-    </div>
-    <div class="concept-card c-status">
-      <span class="concept-icon">◎</span>
-      <div class="concept-name">Status Signal</div>
-      <p class="concept-desc">
-        A <code>signal()</code> inside SaveQueue drives the save indicator.
-        Four states: <em>saved</em> → <em>saving</em> → <em>reconnecting</em>
-        on network error, or <em>conflict</em> when another reviewer's
-        Answer changes can't be safely merged.
-      </p>
-      <div class="concept-api">
-        <span class="kw">this</span>._statusSignal.<span class="fn">set</span>(<span class="str">'saving'</span>);<br>
-        <span class="kw">this</span>._statusSignal.<span class="fn">set</span>(<span class="str">'saved'</span>);<br>
-        <span class="kw">this</span>._statusSignal.<span class="fn">set</span>(<span class="str">'reconnecting'</span>);<br>
-        <span class="kw">this</span>._statusSignal.<span class="fn">set</span>(<span class="str">'conflict'</span>);
-      </div>
-    </div>
-  </section>
-
-  <!-- ══ DEBOUNCE DEMO ══════════════════════════════════════════ -->
-  <section class="scene">
-    <div class="scene-label">Scene 01</div>
-    <div class="scene-title">The Debounce — Live Demo</div>
-    <p class="scene-intro">
-      Type in the field below. The timer bar resets with every keystroke —
-      each new character calls <code>clearTimeout(existing.timerId)</code>
-      and starts a fresh 1500ms countdown. Stop typing and watch the bar
-      complete, then the PATCH fires.
-    </p>
-
-    <div class="demo-layout">
-      <div>
-        <label class="demo-label">Answer field — type here</label>
-        <textarea class="demo-textarea" id="demo-ta" placeholder="Start typing to see the debounce timer…"></textarea>
-
-        <div class="timer-section">
-          <div class="timer-label-row">
-            <span>Debounce timer (1500ms)</span>
-            <span id="timer-ms">—</span>
-          </div>
-          <div class="timer-track">
-            <div class="timer-fill" id="timer-fill"></div>
-          </div>
-          <div class="patch-indicator" id="patch-ind">
-            <strong style="color:var(--computed)">PATCH</strong>
-            <span class="patch-arrow" style="color:var(--muted)"> ──────→ </span>
-            <span style="color:var(--effect)">SharePoint</span>
-            <span style="color:var(--muted);margin-left:6px;font-size:0.65rem">If-Match: "etag-…"</span>
-          </div>
-        </div>
-
-        <div class="demo-status-row">
-          <span>status:</span>
-          <span class="status-badge saved" id="demo-badge">
-            <span class="status-dot"></span> saved
-          </span>
-        </div>
-      </div>
-
-      <div>
-        <label class="demo-label">Event log</label>
-        <div class="event-log" id="event-log"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ══ QUEUE ANATOMY ══════════════════════════════════════════ -->
-  <section class="scene">
-    <div class="scene-label">Scene 02</div>
-    <div class="scene-title">The Queue — Block by Block</div>
-    <p class="scene-intro">
-      "Queue" is a slight misnomer. <code>state.pending</code> is a map keyed by
-      <strong>field name</strong> — at most one pending block per field. A second edit
-      to the same field <em>replaces</em> the existing block and resets its timer; it never
-      stacks a second one. Each field's timer runs independently, so three fields edited
-      together produce three parallel timers and three independent PATCHes.
-    </p>
-    <p class="scene-intro">
-      Watch the <strong>ETag</strong> in the CLIENT lane: every successful PATCH
-      returns a fresh ETag, which replaces <code>state.etag</code> and becomes the
-      <code>If-Match</code> header on the <em>next</em> PATCH. This is what makes
-      concurrent edits safe — if anyone else writes between our reads, our ETag goes
-      stale and SharePoint rejects the write with 412.
-    </p>
-
-    <div class="queue-controls">
-      <button class="queue-btn" data-edit="q1">✏ Edit Q1 answer</button>
-      <button class="queue-btn" data-edit="q2">✏ Edit Q2 answer</button>
-      <button class="queue-btn" data-edit="conv">✏ Append Conversation</button>
-      <button class="queue-btn" data-edit="burst">⚡ Burst: edit Q1 ×4</button>
-      <button class="queue-btn reset" data-edit="reset">↻ Reset</button>
-    </div>
-
-    <div class="queue-stage">
-      <div class="queue-lane lane-pending">
-        <div class="lane-label">CLIENT — state.pending (per-field slots)</div>
-        <div class="etag-box">
-          <span class="etag-label">state.etag</span>
-          <span class="etag-value" id="client-etag">"etag-001"</span>
-        </div>
-        <div class="slot" data-slot="q1">
-          <div class="slot-label">Answers.q1</div>
-          <div class="slot-block empty" id="slot-q1">— empty —</div>
-        </div>
-        <div class="slot" data-slot="q2">
-          <div class="slot-label">Answers.q2</div>
-          <div class="slot-block empty" id="slot-q2">— empty —</div>
-        </div>
-        <div class="slot" data-slot="conv">
-          <div class="slot-label">Conversation</div>
-          <div class="slot-block empty" id="slot-conv">— empty —</div>
-        </div>
-      </div>
-
-      <div class="queue-lane">
-        <div class="lane-label">IN FLIGHT — PATCH /cases/1</div>
-        <div class="flight-zone" id="flight-zone"></div>
-      </div>
-
-      <div class="queue-lane">
-        <div class="lane-label">SHAREPOINT — committed</div>
-        <div class="server-zone" id="server-zone"></div>
-      </div>
-    </div>
-
-    <div class="queue-counter">
-      <div><span class="qc-num" id="qc-clicks">0</span><strong>user edits</strong></div>
-      <div><span class="qc-num" id="qc-patches">0</span><strong>PATCH requests sent</strong></div>
-      <div class="qc-savings" id="qc-savings"></div>
-    </div>
-  </section>
-
-  <!-- ══ WALKTHROUGH ════════════════════════════════════════════ -->
-  <section class="scene">
-    <div class="scene-label">Under The Hood</div>
-    <div class="scene-title">Network Scenarios — Step by Step</div>
-    <p class="scene-intro">
-      Step through four network outcomes. The sequence diagram shows messages
-      between actors appearing in order; prior steps fade but stay visible.
-      The state box tracks SaveQueue's internal variables at each moment.
-    </p>
-
-    <div class="wt-tabs">
-      <button class="wt-tab active" data-wt="happy">① Happy Path</button>
-      <button class="wt-tab" data-wt="retry">② Network Retry</button>
-      <button class="wt-tab" data-wt="merge">③ 412 — Safe Merge</button>
-      <button class="wt-tab" data-wt="conflict">④ 412 — Conflict</button>
-    </div>
-
-    <div class="wt-layout">
-      <div class="wt-panel">
-        <div class="wt-panel-label">Source — save-queue.js</div>
-        <div id="wt-code"></div>
-      </div>
-
-      <div class="wt-panel">
-        <div class="wt-panel-label">Sequence</div>
-
-        <div class="seq-actors">
-          <div class="seq-actor component"><div class="seq-actor-badge">cr-question</div></div>
-          <div class="seq-actor savequeue"><div class="seq-actor-badge">SaveQueue</div></div>
-          <div class="seq-actor sharepoint"><div class="seq-actor-badge">SharePoint</div></div>
-        </div>
-
-        <div class="seq-diagram-body">
-          <div class="seq-lifelines">
-            <div class="seq-lifeline"></div>
-            <div class="seq-lifeline"></div>
-            <div class="seq-lifeline"></div>
-          </div>
-          <div class="seq-messages" id="seq-msgs"></div>
-        </div>
-
-        <div class="state-box">
-          <div class="state-box-label">SaveQueue internal state</div>
-          <div class="state-row"><span class="state-key">etag:</span><span class="state-val" id="st-etag">"etag-abc"</span></div>
-          <div class="state-row"><span class="state-key">pending.Answers:</span><span class="state-val" id="st-pending">none</span></div>
-          <div class="state-row"><span class="state-key">baselineAnswers:</span><span class="state-val" id="st-baseline">{ q1: "Yes" }</span></div>
-          <div class="state-row"><span class="state-key">status:</span><span class="state-val v-saved" id="st-status">saved</span></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="wt-explain" id="wt-explain">
-      <div class="wt-step-title" id="wt-title"></div>
-      <div class="wt-step-desc"  id="wt-desc"></div>
-    </div>
-
-    <div class="wt-nav">
-      <button class="wt-btn" id="wt-prev">← Prev</button>
-      <div class="wt-progress"><div class="wt-prog-fill" id="wt-prog"></div></div>
-      <span class="wt-counter" id="wt-counter">1 / 1</span>
-      <button class="wt-btn" id="wt-next">Next →</button>
-      <button class="wt-btn wt-play-btn" id="wt-play">▶ Play</button>
-    </div>
-  </section>
-
-</main>
-
-<footer>
-  SaveQueue — debounce · ETag · retry · conflict — src/save-queue.js — Case Review Frontend Framework
-</footer>
-
-<script>
-/* ══ DEBOUNCE DEMO ════════════════════════════════════════════════ */
-(function () {
-  var DEBOUNCE = 1500;
-  var timer = null, rafId = null, startTime = null, patchTimer = null, enqCount = 0;
-  var fill    = document.getElementById('timer-fill');
-  var msEl    = document.getElementById('timer-ms');
-  var patchEl = document.getElementById('patch-ind');
-  var badge   = document.getElementById('demo-badge');
-  var log     = document.getElementById('event-log');
-
-  var STATUS_LABELS = { saved: 'saved', saving: 'saving…', reconnecting: 'reconnecting…', conflict: 'conflict' };
-
-  function setStatus(s) {
-    badge.className = 'status-badge ' + s;
-    badge.innerHTML = '<span class="status-dot"></span> ' + STATUS_LABELS[s];
-  }
-
-  function addLog(kind, cls, msg) {
-    var d = new Date();
-    var ts = [d.getHours(), d.getMinutes(), d.getSeconds()].map(function(n){ return String(n).padStart(2,'0'); }).join(':') +
-             '.' + String(d.getMilliseconds()).padStart(3,'0');
-    var el = document.createElement('div');
-    el.className = 'log-entry';
-    el.innerHTML = '<span class="log-time">' + ts + '</span><span class="log-kind ' + cls + '">' + kind + '</span><span class="log-msg">' + msg + '</span>';
-    log.prepend(el);
-    while (log.children.length > 30) log.removeChild(log.lastChild);
-  }
-
-  function stopAnim() {
-    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
-    fill.style.transition = 'none';
-    fill.style.width = '0%';
-    msEl.textContent = '—';
-  }
-
-  function startAnim() {
-    startTime = performance.now();
-    fill.style.transition = 'none'; fill.style.width = '0%';
-    requestAnimationFrame(function () {
-      fill.style.transition = 'width ' + DEBOUNCE + 'ms linear';
-      fill.style.width = '100%';
-    });
-    (function tick() {
-      var rem = Math.max(0, DEBOUNCE - (performance.now() - startTime));
-      msEl.textContent = Math.round(rem) + 'ms';
-      if (rem > 0) rafId = requestAnimationFrame(tick);
-    })();
-  }
-
-  function firePatch() {
-    stopAnim(); setStatus('saving');
-    addLog('PATCH', 'log-kind k-patch', 'PATCH /cases/1  If-Match: "etag-…"');
-    patchEl.classList.add('visible');
-    if (patchTimer) clearTimeout(patchTimer);
-    patchTimer = setTimeout(function () {
-      patchEl.classList.remove('visible');
-      setStatus('saved');
-      addLog('200 OK', 'log-kind k-ok', 'saved ✓  new ETag stored');
-    }, 1000);
-  }
-
-  document.getElementById('demo-ta').addEventListener('input', function () {
-    enqCount++;
-    var isReset = timer !== null;
-    if (timer) clearTimeout(timer);
-    if (isReset) {
-      addLog('reset', 'log-kind k-reset', 'clearTimeout — timer restarted');
-      stopAnim();
-    } else {
-      addLog('enqueue', 'log-kind k-enqueue', 'enqueue("Answers", v' + enqCount + ')  timer started');
-    }
-    setStatus('saving'); startAnim();
-    timer = setTimeout(function () { timer = null; firePatch(); }, DEBOUNCE);
-  });
-})();
-
-/* ══ QUEUE ANATOMY (Scene 02) ═════════════════════════════════════ */
-(function () {
-  var DEBOUNCE = 1500;
-
-  /** @type {Record<string, { timerId: any, rafId: any, revision: number, value: string, startTime: number }>} */
-  var pending = {};
-  var revisionCounters = { q1: 0, q2: 0, conv: 0 };
-  var clicks = 0, patches = 0;
-  var etagCounter = 1;
-  function fmtEtag(n) { return '"etag-' + String(n).padStart(3, '0') + '"'; }
-  var currentEtag = fmtEtag(etagCounter);
-
-  var SAMPLE = {
-    q1:   ['Yes',  'No',   'N/A',  'Yes — with caveat',  'Partially'],
-    q2:   ['Low',  'High', 'Medium', 'Critical',          'Unknown'],
-    conv: ['Asked for more info…', 'Following up.', 'Reviewer noted concern.', 'Closed out.'],
-  };
-  var FIELD_LABEL = { q1: 'Answers.q1', q2: 'Answers.q2', conv: 'Conversation' };
-
-  function $(id) { return document.getElementById(id); }
-
-  function updateCounters() {
-    $('qc-clicks').textContent = clicks;
-    $('qc-patches').textContent = patches;
-    if (clicks > 0 && patches > 0 && clicks > patches) {
-      var saved = clicks - patches;
-      $('qc-savings').textContent = '↓ ' + saved + ' redundant PATCH' + (saved === 1 ? '' : 'es') + ' coalesced by debounce';
-    } else {
-      $('qc-savings').textContent = '';
-    }
-  }
-
-  function renderBlock(field) {
-    var slot = $('slot-' + field);
-    var p = pending[field];
-    if (!p) {
-      slot.className = 'slot-block empty';
-      slot.innerHTML = '— empty —';
-      return;
-    }
-    slot.className = 'slot-block active';
-    slot.innerHTML =
-      '<div class="block-row">' +
-        '<span class="block-field">' + FIELD_LABEL[field] + '</span>' +
-        '<span class="block-revision">rev ' + p.revision + '</span>' +
-      '</div>' +
-      '<div class="block-value">"' + p.value + '"</div>' +
-      '<div class="block-timer-track"><div class="block-timer-fill" id="fill-' + field + '"></div></div>';
-
-    var fill = $('fill-' + field);
-    fill.style.transition = 'none'; fill.style.width = '0%';
-    requestAnimationFrame(function () {
-      fill.style.transition = 'width ' + DEBOUNCE + 'ms linear';
-      fill.style.width = '100%';
-    });
-  }
-
-  function flushField(field) {
-    var p = pending[field];
-    if (!p) return;
-    delete pending[field];
-    renderBlock(field);
-
-    patches++;
-    updateCounters();
-
-    var sentEtag = currentEtag;
-
-    var flight = document.createElement('div');
-    flight.className = 'flight-block';
-    flight.innerHTML =
-      '<div class="block-row">' +
-        '<span class="block-field">PATCH ' + FIELD_LABEL[field] + '</span>' +
-        '<span class="block-revision">rev ' + p.revision + '</span>' +
-      '</div>' +
-      '<div class="block-value">"' + p.value + '"</div>' +
-      '<div class="flight-meta">If-Match: ' + sentEtag + '</div>';
-    $('flight-zone').appendChild(flight);
-
-    setTimeout(function () {
-      flight.remove();
-
-      etagCounter++;
-      var newEtag = fmtEtag(etagCounter);
-
-      var landed = document.createElement('div');
-      landed.className = 'server-block';
-      landed.innerHTML =
-        '<div class="block-row">' +
-          '<span class="block-field">✓ ' + FIELD_LABEL[field] + '</span>' +
-          '<span class="block-revision">200 OK</span>' +
-        '</div>' +
-        '<div class="block-value">"' + p.value + '"</div>' +
-        '<div class="server-meta">ETag: <span class="etag-old">' + sentEtag + '</span> ' +
-          '<span class="etag-arrow">→</span> <strong style="color:var(--computed)">' + newEtag + '</strong></div>';
-      var zone = $('server-zone');
-      zone.appendChild(landed);
-      while (zone.children.length > 6) zone.removeChild(zone.firstChild);
-
-      currentEtag = newEtag;
-      var box = document.querySelector('.etag-box');
-      $('client-etag').textContent = newEtag;
-      box.classList.add('flash');
-      setTimeout(function () { box.classList.remove('flash'); }, 600);
-    }, 900);
-  }
-
-  function enqueue(field, value) {
-    clicks++;
-    revisionCounters[field]++;
-    var existing = pending[field];
-    if (existing) clearTimeout(existing.timerId);
-
-    var revision = revisionCounters[field];
-    pending[field] = {
-      revision: revision,
-      value: value,
-      startTime: performance.now(),
-      timerId: setTimeout(function () { flushField(field); }, DEBOUNCE),
-      rafId: null,
-    };
-    renderBlock(field);
-    updateCounters();
-  }
-
-  function pickValue(field) {
-    var arr = SAMPLE[field];
-    return arr[revisionCounters[field] % arr.length];
-  }
-
-  document.querySelectorAll('.queue-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var action = btn.dataset.edit;
-      if (action === 'reset') {
-        Object.keys(pending).forEach(function (f) { clearTimeout(pending[f].timerId); });
-        pending = {};
-        revisionCounters = { q1: 0, q2: 0, conv: 0 };
-        clicks = 0; patches = 0;
-        etagCounter = 1;
-        currentEtag = fmtEtag(etagCounter);
-        $('client-etag').textContent = currentEtag;
-        ['q1', 'q2', 'conv'].forEach(renderBlock);
-        $('flight-zone').innerHTML = '';
-        $('server-zone').innerHTML = '';
-        updateCounters();
-        return;
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SaveQueue — Interactive Explorer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@300;400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
       }
-      if (action === 'burst') {
-        for (var i = 0; i < 4; i++) {
-          (function (n) {
-            setTimeout(function () { enqueue('q1', pickValue('q1')); }, n * 200);
-          })(i);
+
+      :root {
+        --bg: #080b10;
+        --surface: #0e1520;
+        --border: #1e2d45;
+        --signal: #f59e0b;
+        --signal-glow: rgba(245, 158, 11, 0.22);
+        --computed: #22d3ee;
+        --computed-glow: rgba(34, 211, 238, 0.18);
+        --effect: #a78bfa;
+        --effect-glow: rgba(167, 139, 250, 0.18);
+        --text: #c8d6e8;
+        --muted: #4a6080;
+        --saved: #4ade80;
+        --saving: #f59e0b;
+        --reconnecting: #fb923c;
+        --conflict: #f87171;
+      }
+
+      html,
+      body {
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font-family: 'JetBrains Mono', monospace;
+        overflow-x: hidden;
+      }
+
+      body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background-image: radial-gradient(circle, #1a2a3f 1px, transparent 1px);
+        background-size: 28px 28px;
+        opacity: 0.4;
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      header {
+        position: relative;
+        z-index: 10;
+        padding: 40px 48px 24px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      header h1 {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: clamp(2.5rem, 6vw, 5rem);
+        letter-spacing: 0.06em;
+        line-height: 1;
+        background: linear-gradient(
+          135deg,
+          #f59e0b 0%,
+          #22d3ee 55%,
+          #a78bfa 100%
+        );
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      header p {
+        margin-top: 8px;
+        font-size: 0.78rem;
+        color: var(--muted);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .legend {
+        display: flex;
+        gap: 24px;
+        margin-top: 20px;
+        flex-wrap: wrap;
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.7rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+
+      main {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .scene {
+        position: relative;
+        padding: 48px;
+        border-bottom: 1px solid var(--border);
+      }
+      .scene-label {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 0.85rem;
+        letter-spacing: 0.2em;
+        color: var(--muted);
+        text-transform: uppercase;
+        margin-bottom: 6px;
+      }
+      .scene-title {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1.8rem;
+        letter-spacing: 0.05em;
+        color: var(--text);
+        margin-bottom: 28px;
+      }
+      .scene-intro {
+        font-size: 0.75rem;
+        line-height: 1.75;
+        color: var(--muted);
+        margin-bottom: 32px;
+        max-width: 700px;
+      }
+      .scene-intro code {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        padding: 1px 5px;
+        font-size: 0.85em;
+      }
+
+      /* ── CONCEPT CARDS ──────────────────────────────────────── */
+      .concepts {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 20px;
+        padding: 48px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .concept-card {
+        background: var(--surface);
+        border-radius: 8px;
+        padding: 28px;
+        position: relative;
+        overflow: hidden;
+      }
+      .concept-card::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+      }
+      .c-debounce::after {
+        background: var(--signal);
+      }
+      .c-etag::after {
+        background: var(--computed);
+      }
+      .c-status::after {
+        background: var(--effect);
+      }
+
+      .concept-icon {
+        font-size: 1.6rem;
+        margin-bottom: 12px;
+        display: block;
+      }
+      .concept-name {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 1.6rem;
+        letter-spacing: 0.05em;
+        margin-bottom: 8px;
+      }
+      .c-debounce .concept-name {
+        color: var(--signal);
+      }
+      .c-etag .concept-name {
+        color: var(--computed);
+      }
+      .c-status .concept-name {
+        color: var(--effect);
+      }
+      .concept-desc {
+        font-size: 0.75rem;
+        line-height: 1.7;
+        color: var(--muted);
+        margin-bottom: 16px;
+      }
+      .concept-api {
+        font-size: 0.7rem;
+        color: var(--text);
+        background: var(--bg);
+        border-radius: 4px;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        line-height: 1.75;
+      }
+
+      .kw {
+        color: var(--signal);
+      }
+      .fn {
+        color: var(--computed);
+      }
+      .cmt {
+        color: #3d5470;
+        font-style: italic;
+      }
+      .str {
+        color: #86efac;
+      }
+
+      /* ── DEBOUNCE DEMO ──────────────────────────────────────── */
+      .demo-layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+      }
+
+      .demo-label {
+        display: block;
+        font-size: 0.6rem;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+
+      .demo-textarea {
+        width: 100%;
+        height: 100px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.8rem;
+        padding: 12px;
+        resize: vertical;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+      .demo-textarea:focus {
+        border-color: var(--signal);
+      }
+      .demo-textarea::placeholder {
+        color: var(--muted);
+      }
+
+      .timer-section {
+        margin-top: 14px;
+      }
+      .timer-label-row {
+        font-size: 0.6rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 6px;
+        display: flex;
+        justify-content: space-between;
+      }
+      .timer-track {
+        height: 4px;
+        background: var(--border);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      .timer-fill {
+        height: 100%;
+        width: 0%;
+        border-radius: 2px;
+        background: var(--signal);
+      }
+
+      .patch-indicator {
+        margin-top: 10px;
+        height: 26px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.72rem;
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+      .patch-indicator.visible {
+        opacity: 1;
+      }
+      .patch-arrow {
+        animation: slide-right 0.4s ease;
+      }
+      @keyframes slide-right {
+        from {
+          transform: translateX(-8px);
+          opacity: 0;
         }
-        return;
+        to {
+          transform: none;
+          opacity: 1;
+        }
       }
-      enqueue(action, pickValue(action));
-    });
-  });
-})();
 
-/* ══ WALKTHROUGH ══════════════════════════════════════════════════ */
-(function () {
-
-  var CODE = [
-    'enqueue(caseId, fieldName, value) {',         /* 0 */
-    '  const existing = state.pending[fieldName];', /* 1 */
-    '  if (existing) clearTimeout(existing.timerId);  // reset', /* 2 */
-    '',                                              /* 3 */
-    '  state.pending[fieldName] = {',               /* 4 */
-    '    value,',                                   /* 5 */
-    '    timerId: setTimeout(() => {',              /* 6 */
-    '      delete state.pending[fieldName];',       /* 7 */
-    '      this._flush(caseId, fieldName, value, 0);', /* 8 */
-    '    }, this._debounceMs),  // 1500ms',         /* 9 */
-    '  };',                                         /* 10 */
-    '  this._statusSignal.set(\'saving\');',        /* 11 */
-    '}',                                            /* 12 */
-    '',                                             /* 13 */
-    'async _flush(caseId, fieldName, value, retryIdx) {', /* 14 */
-    '  let result;',                                /* 15 */
-    '  try {',                                      /* 16 */
-    '    result = await this._client.patchCase(',   /* 17 */
-    '      caseId,',                                /* 18 */
-    '      { [fieldName]: value },',               /* 19 */
-    '      state.etag          // → If-Match header', /* 20 */
-    '    );',                                       /* 21 */
-    '  } catch { result = { ok: false, status: 0 }; }', /* 22 */
-    '',                                             /* 23 */
-    '  if (result.ok) {',                           /* 24 */
-    '    state.etag = result.data.etag;   // ← new ETag stored', /* 25 */
-    '    this._statusSignal.set(\'saved\');',       /* 26 */
-    '    return;',                                  /* 27 */
-    '  }',                                          /* 28 */
-    '  if (result.status === 412) {',               /* 29 */
-    '    await this._handle412(...);',              /* 30 */
-    '    return;',                                  /* 31 */
-    '  }',                                          /* 32 */
-    '  // Network error → exponential backoff',     /* 33 */
-    '  const delay = this._backoffSchedule[retryIdx];', /* 34 */
-    '  this._statusSignal.set(\'reconnecting\');',  /* 35 */
-    '  setTimeout(() => this._flush(..., retryIdx + 1), delay);', /* 36 */
-    '}',                                            /* 37 */
-    '',                                             /* 38 */
-    'async _handle412(caseId, fieldName, value, retryIdx) {', /* 39 */
-    '  const fresh = await this._client.getCase(caseId);', /* 40 */
-    '',                                             /* 41 */
-    '  if (JSON.stringify(fresh.answers)',           /* 42 */
-    '      !== JSON.stringify(state.baselineAnswers)) {', /* 43 */
-    '    this._statusSignal.set(\'conflict\');   // ← Answers changed → warn', /* 44 */
-    '    return;',                                  /* 45 */
-    '  }',                                          /* 46 */
-    '  // Only non-Answer fields changed — safe to merge silently', /* 47 */
-    '  state.etag = fresh.etag;',                   /* 48 */
-    '  state.baselineAnswers = { ...fresh.answers };', /* 49 */
-    '  await this._flush(caseId, fieldName, value, retryIdx);', /* 50 */
-    '}',                                            /* 51 */
-  ];
-
-  /* message helpers */
-  function ar(dir, col, cls, label) { return { t:'arrow', dir:dir, col:col, cls:cls, label:label }; }
-  function nt(text, cls)            { return { t:'note',  text:text, cls:cls }; }
-
-  var SCENARIOS = {
-    happy: [
-      {
-        title: '① enqueue() — timer started, status: saving',
-        desc:  'The component calls enqueue("Answers", v). No existing timer for this field, so state.pending["Answers"] is set with a new 1500ms timer. statusSignal becomes "saving". Nothing has been sent to the server.',
-        hl: [0,1,2,4,5,6,7,8,9,10,11],
-        msgs: [ar('right',0,'to-queue','enqueue("Answers", v1)'), nt('timer T1 started (1500ms)  •  status: saving','n-queue')],
-        state: { etag:'"etag-abc"', pending:'T1 active', baseline:'{ q1: "Yes" }', status:'saving' },
-      },
-      {
-        title: '② Second edit — timer reset',
-        desc:  'Before T1 fires, the user types again. clearTimeout(T1) cancels the first flush. A new timer T2 is set. The value in pending is updated. Still no PATCH sent.',
-        hl: [1,2,4,5,6,7,8,9,10],
-        msgs: [ar('right',0,'to-queue','enqueue("Answers", v2)'), nt('clearTimeout(T1)  →  T2 started','n-queue')],
-        state: { etag:'"etag-abc"', pending:'T2 active', baseline:'{ q1: "Yes" }', status:'saving' },
-      },
-      {
-        title: '③ Timer fires — _flush() called',
-        desc:  '1500ms pass with no further edits. The setTimeout callback runs: delete state.pending["Answers"] (field slot cleared), then _flush(caseId, "Answers", v2, 0) is called.',
-        hl: [7,8,14,15,16],
-        msgs: [nt('T2 fires after 1500ms → _flush(retryIdx=0)','n-queue')],
-        state: { etag:'"etag-abc"', pending:'none', baseline:'{ q1: "Yes" }', status:'saving' },
-      },
-      {
-        title: '④ PATCH sent with If-Match',
-        desc:  'patchCase() sends PATCH /cases/1 with the body {Answers: v2} and If-Match: "etag-abc". The server compares this ETag against its stored ETag. If they match, the write is accepted.',
-        hl: [17,18,19,20,21],
-        msgs: [ar('right',1,'to-server','PATCH /cases/1  If-Match: "etag-abc"')],
-        state: { etag:'"etag-abc"', pending:'none', baseline:'{ q1: "Yes" }', status:'saving' },
-      },
-      {
-        title: '⑤ 200 OK — new ETag stored, status: saved',
-        desc:  'Server accepts the write, returns 200 with a new ETag. SaveQueue stores the updated ETag (required for the next PATCH). statusSignal set to "saved".',
-        hl: [24,25,26,27],
-        msgs: [ar('left',1,'from-server','200 OK  ETag: "etag-xyz"'), nt('state.etag = "etag-xyz"  •  status: saved ✓','n-ok')],
-        state: { etag:'"etag-xyz"', pending:'none', baseline:'{ q1: "Yes" }', status:'saved' },
-      },
-    ],
-
-    retry: [
-      {
-        title: '① enqueue → timer fires → PATCH sent',
-        desc:  'Standard path up to the network call: enqueue is called, 1500ms pass, _flush sends the PATCH.',
-        hl: [0,11,17,18,19,20,21],
-        msgs: [ar('right',0,'to-queue','enqueue("Answers", v)'), nt('timer fires → _flush()','n-queue'), ar('right',1,'to-server','PATCH /cases/1  If-Match: "etag-abc"')],
-        state: { etag:'"etag-abc"', pending:'none', baseline:'{ q1: "Yes" }', status:'saving' },
-      },
-      {
-        title: '② Network error — status: 0',
-        desc:  'The fetch throws (network down, DNS failure, timeout). The catch block sets result = { ok: false, status: 0 }. Neither the result.ok nor the 412 branch is taken.',
-        hl: [22,33,34,35,36],
-        msgs: [ar('left',1,'err-arrow','✕ network error (status: 0)'), nt('status: reconnecting  •  retry in 1000ms (backoff[0])','n-warn')],
-        state: { etag:'"etag-abc"', pending:'none', baseline:'{ q1: "Yes" }', status:'reconnecting' },
-      },
-      {
-        title: '③ Retry — retryIdx = 1',
-        desc:  'After the 1s delay, _flush is called again with retryIdx = 1. If this also fails: next delay = backoffSchedule[1] = 2000ms, then 4000ms, 8000ms, etc., capped at 30s.',
-        hl: [14,17,18,19,20,21],
-        msgs: [nt('1000ms elapsed → _flush(retryIdx=1)','n-queue'), ar('right',1,'to-server','PATCH /cases/1  If-Match: "etag-abc"  (retry)')],
-        state: { etag:'"etag-abc"', pending:'none', baseline:'{ q1: "Yes" }', status:'reconnecting' },
-      },
-      {
-        title: '④ 200 OK — saved',
-        desc:  'Network recovers. Server accepts the PATCH (ETag still matches — nobody else wrote during the outage). New ETag stored, status: saved.',
-        hl: [24,25,26,27],
-        msgs: [ar('left',1,'from-server','200 OK  ETag: "etag-xyz"'), nt('state.etag = "etag-xyz"  •  status: saved ✓','n-ok')],
-        state: { etag:'"etag-xyz"', pending:'none', baseline:'{ q1: "Yes" }', status:'saved' },
-      },
-    ],
-
-    merge: [
-      {
-        title: '① PATCH sent — another tab has already saved',
-        desc:  'Our tab sends a PATCH with the ETag from when the case was loaded. While our debounce timer was running, another tab saved a Conversation message — updating the server\'s ETag without touching the Answers field.',
-        hl: [17,18,19,20,21],
-        msgs: [ar('right',0,'to-queue','enqueue("Answers", v)'), nt('timer fires → _flush()','n-queue'), ar('right',1,'to-server','PATCH /cases/1  If-Match: "etag-abc"')],
-        state: { etag:'"etag-abc"', pending:'none', baseline:'{ q1: "Yes" }', status:'saving' },
-      },
-      {
-        title: '② 412 Precondition Failed — _handle412 called',
-        desc:  'The server\'s ETag no longer matches our If-Match. It returns 412. _flush() sees result.status === 412 and calls _handle412().',
-        hl: [29,30,31,39],
-        msgs: [ar('left',1,'err-arrow','412 Precondition Failed'), nt('→ _handle412() called','n-warn')],
-        state: { etag:'"etag-abc"', pending:'none', baseline:'{ q1: "Yes" }', status:'saving' },
-      },
-      {
-        title: '③ getCase — re-fetch the current row',
-        desc:  '_handle412 calls getCase() to retrieve the fresh row. This gives us the new ETag and whatever the other tab saved, so we can inspect whether the conflict is real.',
-        hl: [39,40],
-        msgs: [ar('right',1,'to-server','GET /cases/1'), ar('left',1,'from-server','200 OK  ETag: "etag-xyz"  Answers: same')],
-        state: { etag:'"etag-abc"', pending:'none', baseline:'{ q1: "Yes" }', status:'saving' },
-      },
-      {
-        title: '④ Answers match — safe to merge silently',
-        desc:  'JSON.stringify(fresh.answers) === JSON.stringify(state.baselineAnswers). The other tab only changed the Conversation field, not Answers. Our pending Answers change is still safe. ETag and baseline updated.',
-        hl: [42,43,46,47,48,49,50],
-        msgs: [nt('fresh.answers === baselineAnswers  ✓  safe to merge','n-ok'), nt('state.etag = "etag-xyz"  •  baselineAnswers updated','n-queue')],
-        state: { etag:'"etag-xyz"', pending:'none', baseline:'{ q1: "Yes" }', status:'saving' },
-      },
-      {
-        title: '⑤ Retry PATCH with fresh ETag — saved',
-        desc:  '_flush() is called again with the fresh ETag. PATCH goes out with If-Match: "etag-xyz". Server accepts it. The user saw nothing — the whole 412 cycle was transparent.',
-        hl: [17,18,19,20,21,24,25,26],
-        msgs: [ar('right',1,'to-server','PATCH /cases/1  If-Match: "etag-xyz"  (retry)'), ar('left',1,'from-server','200 OK  ETag: "etag-def"'), nt('status: saved ✓  — silent merge complete','n-ok')],
-        state: { etag:'"etag-def"', pending:'none', baseline:'{ q1: "Yes" }', status:'saved' },
-      },
-    ],
-
-    conflict: [
-      {
-        title: '① PATCH sent — real conflict brewing',
-        desc:  'Our tab sends the PATCH. While our debounce timer was counting down (1500ms), a second reviewer in another tab also changed the Answers field and saved successfully — updating both the ETag and the Answers blob on the server.',
-        hl: [17,18,19,20,21],
-        msgs: [ar('right',0,'to-queue','enqueue("Answers", v)'), nt('timer fires → _flush()','n-queue'), ar('right',1,'to-server','PATCH /cases/1  If-Match: "etag-abc"')],
-        state: { etag:'"etag-abc"', pending:'none', baseline:'{ q1: "Yes" }', status:'saving' },
-      },
-      {
-        title: '② 412 — _handle412 called',
-        desc:  'Server ETag has moved. 412 returned. _handle412() starts.',
-        hl: [29,30,39],
-        msgs: [ar('left',1,'err-arrow','412 Precondition Failed'), nt('→ _handle412() called','n-warn')],
-        state: { etag:'"etag-abc"', pending:'none', baseline:'{ q1: "Yes" }', status:'saving' },
-      },
-      {
-        title: '③ getCase — re-fetch to inspect the damage',
-        desc:  '_handle412 fetches the fresh row to see what the other reviewer changed.',
-        hl: [39,40],
-        msgs: [ar('right',1,'to-server','GET /cases/1'), ar('left',1,'from-server','200 OK  ETag: "etag-xyz"  Answers: { q1: "No" }')],
-        state: { etag:'"etag-abc"', pending:'none', baseline:'{ q1: "Yes" }', status:'saving' },
-      },
-      {
-        title: '④ Answers CHANGED — conflict, do not auto-overwrite',
-        desc:  'JSON.stringify(fresh.answers) !== JSON.stringify(state.baselineAnswers). Remote q1 is "No" but our baseline had "Yes". Auto-merging would silently destroy a human decision. Status: conflict. SaveQueue stops.',
-        hl: [42,43,44,45],
-        msgs: [nt('fresh.answers ≠ baselineAnswers  ✗  CONFLICT','n-conflict'), nt('status: conflict  —  no retry, no overwrite','n-conflict')],
-        state: { etag:'"etag-abc"', pending:'none', baseline:'{ q1: "Yes" }', status:'conflict' },
-      },
-      {
-        title: '⑤ Conflict banner — user must decide',
-        desc:  'An effect watching the status signal surfaces a non-disruptive banner: "Case was edited elsewhere — reload to see the latest." The user\'s pending text stays in the textarea but is not saved. They can compare and decide.',
-        hl: [44,45],
-        msgs: [],
-        state: { etag:'"etag-abc"', pending:'none', baseline:'{ q1: "Yes" }', status:'conflict' },
-        banner: true,
-      },
-    ],
-  };
-
-  /* ── renderer ──────────────────────────────────────────────── */
-  var currentWT   = 'happy';
-  var currentStep = 0;
-  var playTimer   = null;
-
-  function renderCode(hl) {
-    var el = document.getElementById('wt-code');
-    el.innerHTML = '';
-    CODE.forEach(function (line, i) {
-      var span = document.createElement('span');
-      span.className = 'wt-code-line';
-      span.textContent = line || ' ';
-      if (hl.indexOf(i) !== -1)   span.classList.add('hl');
-      else if (hl.length > 0)     span.classList.add('dim');
-      el.appendChild(span);
-    });
-  }
-
-  function arrowHtml(msg) {
-    var isRight = msg.dir === 'right';
-    var chip  = '<span class="seq-label-chip">' + msg.label + '</span>';
-    var track = '<span class="seq-arrow-line"></span>';
-    var inner = isRight
-      ? '<div class="seq-arrow right ' + msg.cls + '">' + chip + track + '</div>'
-      : '<div class="seq-arrow left  ' + msg.cls + '">' + track + chip + '</div>';
-
-    if (msg.col === 0) {
-      return '<div class="seq-cell" style="grid-column:1/3">' + inner + '</div><div class="seq-cell"></div>';
-    }
-    return '<div class="seq-cell"></div><div class="seq-cell" style="grid-column:2/4">' + inner + '</div>';
-  }
-
-  function renderSeq(steps, upTo) {
-    var container = document.getElementById('seq-msgs');
-    container.innerHTML = '';
-
-    var allMsgs = [];
-    for (var s = 0; s <= upTo; s++) {
-      (steps[s].msgs || []).forEach(function (m) { allMsgs.push({ m: m, si: s }); });
-    }
-
-    allMsgs.forEach(function (item) {
-      var row = document.createElement('div');
-      row.className = 'seq-msg' + (item.si < upTo ? ' faded' : '');
-      if (item.m.t === 'note') {
-        row.innerHTML = '<div class="seq-note"><div class="seq-note-inner ' + item.m.cls + '">' + item.m.text + '</div></div>';
-      } else {
-        row.innerHTML = arrowHtml(item.m);
+      .demo-status-row {
+        margin-top: 10px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.65rem;
+        color: var(--muted);
       }
-      container.appendChild(row);
-    });
 
-    if (steps[upTo].banner) {
-      var b = document.createElement('div');
-      b.style.cssText = 'margin-top:8px;padding:9px 13px;border:1px solid rgba(248,113,113,0.4);border-radius:6px;background:rgba(248,113,113,0.06);font-size:0.67rem;color:#f87171;animation:seq-in 0.3s ease forwards;opacity:0';
-      b.textContent = '⚠  Case was edited elsewhere — reload to see the latest.';
-      container.appendChild(b);
-    }
-  }
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 11px;
+        border-radius: 20px;
+        font-size: 0.67rem;
+        font-weight: 700;
+        border: 1px solid;
+        transition: all 0.3s;
+      }
+      .status-badge.saved {
+        color: var(--saved);
+        border-color: rgba(74, 222, 128, 0.4);
+        background: rgba(74, 222, 128, 0.08);
+      }
+      .status-badge.saving {
+        color: var(--saving);
+        border-color: rgba(245, 158, 11, 0.4);
+        background: rgba(245, 158, 11, 0.08);
+        animation: badge-pulse 1s ease infinite;
+      }
+      .status-badge.reconnecting {
+        color: var(--reconnecting);
+        border-color: rgba(251, 146, 60, 0.4);
+        background: rgba(251, 146, 60, 0.08);
+      }
+      .status-badge.conflict {
+        color: var(--conflict);
+        border-color: rgba(248, 113, 113, 0.4);
+        background: rgba(248, 113, 113, 0.08);
+      }
 
-  function renderState(s) {
-    document.getElementById('st-etag').textContent    = s.etag;
-    document.getElementById('st-pending').textContent = s.pending;
-    document.getElementById('st-baseline').textContent = s.baseline;
-    var el = document.getElementById('st-status');
-    el.textContent = s.status; el.className = 'state-val v-' + s.status;
-  }
+      @keyframes badge-pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.55;
+        }
+      }
 
-  function render() {
-    var steps = SCENARIOS[currentWT];
-    var step  = steps[currentStep];
+      .status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+      }
 
-    renderCode(step.hl);
-    renderSeq(steps, currentStep);
-    renderState(step.state);
+      .event-log {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px 12px;
+        height: 165px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .event-log::-webkit-scrollbar {
+        width: 3px;
+      }
+      .event-log::-webkit-scrollbar-thumb {
+        background: var(--border);
+      }
 
-    document.getElementById('wt-title').textContent    = step.title;
-    document.getElementById('wt-desc').textContent     = step.desc;
-    document.getElementById('wt-counter').textContent  = (currentStep + 1) + ' / ' + steps.length;
-    document.getElementById('wt-prog').style.width     = ((currentStep + 1) / steps.length * 100) + '%';
-    document.getElementById('wt-prev').disabled = currentStep === 0;
-    document.getElementById('wt-next').disabled = currentStep === steps.length - 1;
+      .log-entry {
+        font-size: 0.67rem;
+        display: flex;
+        gap: 10px;
+        align-items: baseline;
+        animation: fade-up 0.2s ease;
+      }
+      @keyframes fade-up {
+        from {
+          opacity: 0;
+          transform: translateY(3px);
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      .log-time {
+        color: var(--muted);
+        flex-shrink: 0;
+      }
+      .log-kind {
+        flex-shrink: 0;
+        font-weight: 700;
+      }
+      .log-kind.k-enqueue {
+        color: var(--signal);
+      }
+      .log-kind.k-reset {
+        color: var(--muted);
+      }
+      .log-kind.k-patch {
+        color: var(--computed);
+      }
+      .log-kind.k-ok {
+        color: var(--saved);
+      }
+      .log-msg {
+        color: var(--text);
+      }
 
-    var accent = { happy: 'var(--saved)', retry: 'var(--reconnecting)', merge: 'var(--computed)', conflict: 'var(--conflict)' };
-    document.getElementById('wt-explain').style.borderLeftColor = accent[currentWT];
-    document.getElementById('wt-title').style.color             = accent[currentWT];
-  }
+      /* ── WALKTHROUGH ────────────────────────────────────────── */
+      .wt-tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+      }
+      .wt-tab {
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--muted);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.67rem;
+        padding: 7px 13px;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .wt-tab:hover {
+        border-color: var(--text);
+        color: var(--text);
+      }
+      .wt-tab.active {
+        border-color: var(--computed);
+        color: var(--computed);
+        background: rgba(34, 211, 238, 0.07);
+      }
 
-  document.getElementById('wt-prev').addEventListener('click', function () {
-    if (currentStep > 0) { currentStep--; render(); }
-  });
+      .wt-layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-bottom: 20px;
+      }
+      .wt-panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 20px;
+      }
+      .wt-panel-label {
+        font-size: 0.6rem;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 12px;
+      }
 
-  document.getElementById('wt-next').addEventListener('click', function () {
-    var max = SCENARIOS[currentWT].length - 1;
-    if (currentStep < max) { currentStep++; render(); }
-  });
+      /* Code */
+      .wt-code-line {
+        font-size: 0.71rem;
+        line-height: 1.8;
+        padding: 0 8px;
+        border-radius: 3px;
+        white-space: pre;
+        display: block;
+        color: var(--muted);
+        border-left: 2px solid transparent;
+        transition:
+          background 0.2s,
+          color 0.2s,
+          opacity 0.2s;
+      }
+      .wt-code-line.hl {
+        background: rgba(34, 211, 238, 0.09);
+        color: var(--text);
+        border-left-color: var(--computed);
+        padding-left: 6px;
+      }
+      .wt-code-line.dim {
+        opacity: 0.17;
+      }
 
-  document.getElementById('wt-play').addEventListener('click', function () {
-    var btn = this;
-    if (playTimer) {
-      clearInterval(playTimer); playTimer = null;
-      btn.textContent = '▶ Play'; btn.classList.remove('playing');
-    } else {
-      btn.textContent = '⏸ Pause'; btn.classList.add('playing');
-      playTimer = setInterval(function () {
-        var max = SCENARIOS[currentWT].length - 1;
-        if (currentStep < max) { currentStep++; render(); }
-        else { clearInterval(playTimer); playTimer = null; btn.textContent = '▶ Play'; btn.classList.remove('playing'); }
-      }, 2100);
-    }
-  });
+      /* Sequence diagram */
+      .seq-actors {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        margin-bottom: 0;
+      }
+      .seq-actor {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding-bottom: 6px;
+      }
 
-  document.querySelectorAll('.wt-tab').forEach(function (tab) {
-    tab.addEventListener('click', function () {
-      document.querySelectorAll('.wt-tab').forEach(function (t) { t.classList.remove('active'); });
-      tab.classList.add('active');
-      currentWT = tab.dataset.wt; currentStep = 0;
-      if (playTimer) { clearInterval(playTimer); playTimer = null; document.getElementById('wt-play').textContent = '▶ Play'; document.getElementById('wt-play').classList.remove('playing'); }
-      render();
-    });
-  });
+      .seq-actor-badge {
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 4px 8px;
+        border-radius: 4px;
+        border: 1px solid;
+        text-align: center;
+      }
 
-  render();
-})();
-</script>
-</body>
+      .seq-actor.component .seq-actor-badge {
+        color: var(--signal);
+        border-color: rgba(245, 158, 11, 0.4);
+        background: rgba(245, 158, 11, 0.08);
+      }
+      .seq-actor.savequeue .seq-actor-badge {
+        color: var(--computed);
+        border-color: rgba(34, 211, 238, 0.4);
+        background: rgba(34, 211, 238, 0.08);
+      }
+      .seq-actor.sharepoint .seq-actor-badge {
+        color: var(--effect);
+        border-color: rgba(167, 139, 250, 0.4);
+        background: rgba(167, 139, 250, 0.08);
+      }
+
+      .seq-diagram-body {
+        position: relative;
+        min-height: 180px;
+      }
+
+      .seq-lifelines {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        pointer-events: none;
+      }
+
+      .seq-lifeline {
+        display: flex;
+        justify-content: center;
+      }
+      .seq-lifeline::before {
+        content: '';
+        width: 1px;
+        height: 100%;
+        border-left: 1px dashed var(--border);
+      }
+
+      .seq-messages {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .seq-msg {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        min-height: 34px;
+        align-items: center;
+        opacity: 0;
+        animation: seq-in 0.3s ease forwards;
+      }
+      @keyframes seq-in {
+        from {
+          opacity: 0;
+          transform: translateY(-3px);
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      .seq-msg.faded {
+        opacity: 0.28;
+        animation: none;
+      }
+
+      .seq-cell {
+        display: flex;
+        align-items: center;
+        padding: 3px 2px;
+      }
+
+      .seq-arrow {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        font-size: 0.6rem;
+        gap: 4px;
+      }
+      .seq-arrow-line {
+        flex: 1;
+        height: 1.5px;
+        position: relative;
+      }
+      .seq-arrow-line::after {
+        content: '';
+        position: absolute;
+        top: -4px;
+        border-top: 5px solid transparent;
+        border-bottom: 5px solid transparent;
+      }
+      .seq-arrow.right .seq-arrow-line::after {
+        right: -1px;
+        border-left: 6px solid;
+      }
+      .seq-arrow.left .seq-arrow-line::after {
+        left: -1px;
+        border-right: 6px solid;
+        border-left: none;
+      }
+
+      .seq-arrow.to-queue .seq-arrow-line {
+        background: var(--signal);
+      }
+      .seq-arrow.to-queue .seq-arrow-line::after {
+        border-left-color: var(--signal);
+      }
+      .seq-arrow.to-server .seq-arrow-line {
+        background: var(--computed);
+      }
+      .seq-arrow.to-server .seq-arrow-line::after {
+        border-left-color: var(--computed);
+      }
+      .seq-arrow.from-server .seq-arrow-line {
+        background: var(--effect);
+      }
+      .seq-arrow.from-server .seq-arrow-line::after {
+        border-right-color: var(--effect);
+      }
+      .seq-arrow.err-arrow .seq-arrow-line {
+        background: var(--conflict);
+      }
+      .seq-arrow.err-arrow .seq-arrow-line::after {
+        border-right-color: var(--conflict);
+      }
+
+      .seq-label-chip {
+        font-size: 0.58rem;
+        white-space: nowrap;
+        font-weight: 600;
+        padding: 2px 5px;
+        border-radius: 3px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+      }
+      .seq-arrow.to-queue .seq-label-chip {
+        color: var(--signal);
+        border-color: rgba(245, 158, 11, 0.3);
+      }
+      .seq-arrow.to-server .seq-label-chip {
+        color: var(--computed);
+        border-color: rgba(34, 211, 238, 0.3);
+      }
+      .seq-arrow.from-server .seq-label-chip {
+        color: var(--effect);
+        border-color: rgba(167, 139, 250, 0.3);
+      }
+      .seq-arrow.err-arrow .seq-label-chip {
+        color: var(--conflict);
+        border-color: rgba(248, 113, 113, 0.3);
+      }
+
+      .seq-note {
+        grid-column: 1 / 4;
+        display: flex;
+        justify-content: center;
+        padding: 3px 0;
+      }
+      .seq-note-inner {
+        font-size: 0.6rem;
+        padding: 3px 10px;
+        border-radius: 3px;
+        border: 1px dashed var(--border);
+        color: var(--muted);
+      }
+      .seq-note-inner.n-queue {
+        color: var(--computed);
+        border-color: rgba(34, 211, 238, 0.3);
+        background: rgba(34, 211, 238, 0.04);
+      }
+      .seq-note-inner.n-ok {
+        color: var(--saved);
+        border-color: rgba(74, 222, 128, 0.3);
+        background: rgba(74, 222, 128, 0.04);
+      }
+      .seq-note-inner.n-warn {
+        color: var(--reconnecting);
+        border-color: rgba(251, 146, 60, 0.3);
+        background: rgba(251, 146, 60, 0.04);
+      }
+      .seq-note-inner.n-conflict {
+        color: var(--conflict);
+        border-color: rgba(248, 113, 113, 0.3);
+        background: rgba(248, 113, 113, 0.04);
+      }
+
+      /* State box */
+      .state-box {
+        margin-top: 12px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px 13px;
+      }
+      .state-box-label {
+        font-size: 0.55rem;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 7px;
+      }
+      .state-row {
+        display: flex;
+        gap: 8px;
+        margin-top: 3px;
+        font-size: 0.67rem;
+        align-items: center;
+      }
+      .state-key {
+        color: var(--muted);
+        flex-shrink: 0;
+      }
+      .state-val {
+        color: var(--text);
+        font-weight: 600;
+        transition: color 0.3s;
+      }
+      .v-saving {
+        color: var(--saving);
+        animation: badge-pulse 1s ease infinite;
+      }
+      .v-saved {
+        color: var(--saved);
+      }
+      .v-reconnecting {
+        color: var(--reconnecting);
+      }
+      .v-conflict {
+        color: var(--conflict);
+      }
+
+      /* Explain + nav */
+      .wt-explain {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--computed);
+        border-radius: 8px;
+        padding: 16px 20px;
+        margin-bottom: 20px;
+        min-height: 70px;
+        transition: border-left-color 0.3s;
+      }
+      .wt-step-title {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: var(--computed);
+        margin-bottom: 6px;
+        transition: color 0.3s;
+      }
+      .wt-step-desc {
+        font-size: 0.72rem;
+        line-height: 1.75;
+        color: var(--muted);
+      }
+
+      .wt-nav {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .wt-btn {
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--text);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem;
+        padding: 7px 14px;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .wt-btn:hover:not(:disabled) {
+        border-color: var(--computed);
+        color: var(--computed);
+      }
+      .wt-btn:disabled {
+        opacity: 0.3;
+        cursor: default;
+      }
+      .wt-play-btn.playing {
+        border-color: var(--effect);
+        color: var(--effect);
+      }
+      .wt-progress {
+        flex: 1;
+        height: 2px;
+        background: var(--border);
+        border-radius: 1px;
+        overflow: hidden;
+        min-width: 40px;
+      }
+      .wt-prog-fill {
+        height: 100%;
+        background: var(--computed);
+        border-radius: 1px;
+        transition: width 0.3s;
+      }
+      .wt-counter {
+        font-size: 0.65rem;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+
+      footer {
+        padding: 32px 48px;
+        text-align: center;
+        font-size: 0.65rem;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      /* ── QUEUE ANATOMY (Scene 02) ───────────────────────────── */
+      .queue-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 22px;
+      }
+      .queue-btn {
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--text);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.72rem;
+        padding: 8px 14px;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .queue-btn:hover {
+        border-color: var(--signal);
+        color: var(--signal);
+      }
+      .queue-btn.reset:hover {
+        border-color: var(--muted);
+        color: var(--text);
+      }
+
+      .queue-stage {
+        display: grid;
+        grid-template-columns: 1.1fr 1fr 1fr;
+        gap: 16px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 18px;
+        min-height: 320px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .queue-lane {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-width: 0;
+      }
+      .lane-label {
+        font-size: 0.58rem;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--muted);
+        border-bottom: 1px dashed var(--border);
+        padding-bottom: 6px;
+      }
+
+      .etag-box {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 10px;
+        border-radius: 5px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        transition:
+          background 0.4s,
+          border-color 0.4s,
+          box-shadow 0.4s;
+      }
+      .etag-box.flash {
+        background: rgba(34, 211, 238, 0.12);
+        border-color: rgba(34, 211, 238, 0.6);
+        box-shadow:
+          0 0 0 1px rgba(34, 211, 238, 0.25),
+          0 0 18px -6px var(--computed-glow);
+      }
+      .etag-label {
+        font-size: 0.58rem;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--muted);
+        flex-shrink: 0;
+      }
+      .etag-value {
+        font-size: 0.72rem;
+        color: var(--computed);
+        font-weight: 700;
+      }
+      .etag-arrow {
+        color: var(--muted);
+        font-size: 0.62rem;
+        margin: 0 2px;
+      }
+      .etag-old {
+        color: var(--muted);
+        text-decoration: line-through;
+        font-weight: 400;
+      }
+
+      .slot {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .slot-label {
+        font-size: 0.62rem;
+        color: var(--muted);
+        font-weight: 600;
+        letter-spacing: 0.08em;
+      }
+
+      .slot-block {
+        position: relative;
+        min-height: 56px;
+        padding: 8px 10px;
+        border-radius: 5px;
+        font-size: 0.7rem;
+        line-height: 1.4;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--muted);
+        transition: opacity 0.2s;
+      }
+      .slot-block.empty {
+        font-style: italic;
+        color: var(--muted);
+        opacity: 0.5;
+        min-height: 36px;
+        padding: 8px 10px;
+        display: flex;
+        align-items: center;
+      }
+
+      .slot-block.active {
+        background: rgba(245, 158, 11, 0.08);
+        border-color: rgba(245, 158, 11, 0.5);
+        color: var(--text);
+        box-shadow:
+          0 0 0 1px rgba(245, 158, 11, 0.18),
+          0 4px 14px -6px var(--signal-glow);
+        animation: block-pop 0.22s ease;
+      }
+      @keyframes block-pop {
+        from {
+          transform: scale(0.94);
+          opacity: 0;
+        }
+        to {
+          transform: none;
+          opacity: 1;
+        }
+      }
+
+      .block-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        align-items: baseline;
+      }
+      .block-field {
+        color: var(--signal);
+        font-weight: 700;
+        font-size: 0.68rem;
+      }
+      .block-revision {
+        color: var(--muted);
+        font-size: 0.58rem;
+      }
+      .block-value {
+        color: var(--text);
+        font-size: 0.68rem;
+        margin-top: 3px;
+        word-break: break-all;
+      }
+
+      .block-timer-track {
+        margin-top: 7px;
+        height: 3px;
+        background: var(--border);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      .block-timer-fill {
+        height: 100%;
+        width: 0%;
+        background: var(--signal);
+        border-radius: 2px;
+      }
+
+      .flight-zone,
+      .server-zone {
+        flex: 1;
+        min-height: 220px;
+        padding: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        border: 1px dashed var(--border);
+        border-radius: 5px;
+      }
+
+      .flight-block {
+        padding: 7px 10px;
+        border-radius: 5px;
+        font-size: 0.66rem;
+        background: rgba(34, 211, 238, 0.08);
+        border: 1px solid rgba(34, 211, 238, 0.5);
+        color: var(--text);
+        animation: fly-across 0.9s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+      }
+      @keyframes fly-across {
+        from {
+          transform: translateX(-130%);
+          opacity: 0;
+        }
+        30% {
+          opacity: 1;
+        }
+        to {
+          transform: none;
+          opacity: 1;
+        }
+      }
+      .flight-block .block-field {
+        color: var(--computed);
+      }
+      .flight-meta {
+        color: var(--muted);
+        font-size: 0.58rem;
+        margin-top: 3px;
+        font-style: italic;
+      }
+
+      .server-block {
+        padding: 7px 10px;
+        border-radius: 5px;
+        font-size: 0.66rem;
+        background: rgba(74, 222, 128, 0.07);
+        border: 1px solid rgba(74, 222, 128, 0.4);
+        color: var(--text);
+        animation: land 0.3s ease forwards;
+      }
+      @keyframes land {
+        from {
+          transform: translateY(-8px);
+          opacity: 0;
+        }
+        to {
+          transform: none;
+          opacity: 1;
+        }
+      }
+      .server-block .block-field {
+        color: var(--saved);
+      }
+      .server-meta {
+        color: var(--muted);
+        font-size: 0.58rem;
+        margin-top: 3px;
+      }
+
+      .queue-counter {
+        display: flex;
+        gap: 18px;
+        margin-top: 14px;
+        padding: 10px 14px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font-size: 0.66rem;
+        color: var(--muted);
+        flex-wrap: wrap;
+      }
+      .queue-counter strong {
+        color: var(--text);
+        font-weight: 700;
+      }
+      .queue-counter .qc-num {
+        color: var(--signal);
+        font-weight: 700;
+        font-size: 0.85rem;
+        margin-right: 4px;
+      }
+      .qc-savings {
+        color: var(--saved);
+      }
+
+      @media (max-width: 860px) {
+        .scene {
+          padding: 24px;
+        }
+        .concepts {
+          padding: 24px;
+        }
+        .demo-layout,
+        .wt-layout {
+          grid-template-columns: 1fr;
+        }
+        .queue-stage {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>SaveQueue</h1>
+      <p>Debounce · ETag · Retry · Conflict Detection — src/save-queue.js</p>
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-dot" style="background: var(--signal)"></div>
+          Component (cr-question)
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background: var(--computed)"></div>
+          SaveQueue
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background: var(--effect)"></div>
+          SharePoint Server
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <!-- ══ CONCEPT CARDS ══════════════════════════════════════════ -->
+      <section class="concepts">
+        <div class="concept-card c-debounce">
+          <span class="concept-icon">⏱</span>
+          <div class="concept-name">Debounce</div>
+          <p class="concept-desc">
+            Every field edit resets a 1500ms timer. Only the final value in a
+            burst triggers a network call — rapid typing never sends
+            intermediate states. Each field has its own independent timer slot
+            in <code>state.pending</code>.
+          </p>
+          <div class="concept-api">
+            <span class="kw">enqueue</span>(id,
+            <span class="str">'Answers'</span>, v1);<br />
+            <span class="cmt">// type again → clearTimeout, new timer</span
+            ><br />
+            <span class="kw">enqueue</span>(id,
+            <span class="str">'Answers'</span>, v2);<br />
+            <span class="cmt">// 1500ms later → one PATCH, last value</span>
+          </div>
+        </div>
+        <div class="concept-card c-etag">
+          <span class="concept-icon">🏷</span>
+          <div class="concept-name">ETag</div>
+          <p class="concept-desc">
+            Every fetch captures the row's ETag. Every PATCH sends
+            <code>If-Match: &lt;etag&gt;</code>. If the server's row has moved
+            on (another tab saved first), it returns 412 — triggering either a
+            silent merge or a conflict banner.
+          </p>
+          <div class="concept-api">
+            <span class="cmt">// request</span><br />
+            <span class="kw">If-Match</span>: <span class="str">"etag-abc"</span
+            ><br />
+            <span class="cmt">// 200 OK → store new ETag</span><br />
+            <span class="cmt">// 412 → run conflict resolution</span>
+          </div>
+        </div>
+        <div class="concept-card c-status">
+          <span class="concept-icon">◎</span>
+          <div class="concept-name">Status Signal</div>
+          <p class="concept-desc">
+            A <code>signal()</code> inside SaveQueue drives the save indicator.
+            Four states: <em>saved</em> → <em>saving</em> →
+            <em>reconnecting</em> on network error, or <em>conflict</em> when
+            another reviewer's Answer changes can't be safely merged.
+          </p>
+          <div class="concept-api">
+            <span class="kw">this</span>._statusSignal.<span class="fn"
+              >set</span
+            >(<span class="str">'saving'</span>);<br />
+            <span class="kw">this</span>._statusSignal.<span class="fn"
+              >set</span
+            >(<span class="str">'saved'</span>);<br />
+            <span class="kw">this</span>._statusSignal.<span class="fn"
+              >set</span
+            >(<span class="str">'reconnecting'</span>);<br />
+            <span class="kw">this</span>._statusSignal.<span class="fn"
+              >set</span
+            >(<span class="str">'conflict'</span>);
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ DEBOUNCE DEMO ══════════════════════════════════════════ -->
+      <section class="scene">
+        <div class="scene-label">Scene 01</div>
+        <div class="scene-title">The Debounce — Live Demo</div>
+        <p class="scene-intro">
+          Type in the field below. The timer bar resets with every keystroke —
+          each new character calls <code>clearTimeout(existing.timerId)</code>
+          and starts a fresh 1500ms countdown. Stop typing and watch the bar
+          complete, then the PATCH fires.
+        </p>
+
+        <div class="demo-layout">
+          <div>
+            <label class="demo-label">Answer field — type here</label>
+            <textarea
+              class="demo-textarea"
+              id="demo-ta"
+              placeholder="Start typing to see the debounce timer…"
+            ></textarea>
+
+            <div class="timer-section">
+              <div class="timer-label-row">
+                <span>Debounce timer (1500ms)</span>
+                <span id="timer-ms">—</span>
+              </div>
+              <div class="timer-track">
+                <div class="timer-fill" id="timer-fill"></div>
+              </div>
+              <div class="patch-indicator" id="patch-ind">
+                <strong style="color: var(--computed)">PATCH</strong>
+                <span class="patch-arrow" style="color: var(--muted)">
+                  ──────→
+                </span>
+                <span style="color: var(--effect)">SharePoint</span>
+                <span
+                  style="
+                    color: var(--muted);
+                    margin-left: 6px;
+                    font-size: 0.65rem;
+                  "
+                  >If-Match: "etag-…"</span
+                >
+              </div>
+            </div>
+
+            <div class="demo-status-row">
+              <span>status:</span>
+              <span class="status-badge saved" id="demo-badge">
+                <span class="status-dot"></span> saved
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <label class="demo-label">Event log</label>
+            <div class="event-log" id="event-log"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ QUEUE ANATOMY ══════════════════════════════════════════ -->
+      <section class="scene">
+        <div class="scene-label">Scene 02</div>
+        <div class="scene-title">The Queue — Block by Block</div>
+        <p class="scene-intro">
+          "Queue" is a slight misnomer. <code>state.pending</code> is a map
+          keyed by <strong>field name</strong> — at most one pending block per
+          field. A second edit to the same field <em>replaces</em> the existing
+          block and resets its timer; it never stacks a second one. Each field's
+          timer runs independently, so three fields edited together produce
+          three parallel timers and three independent PATCHes.
+        </p>
+        <p class="scene-intro">
+          Watch the <strong>ETag</strong> in the CLIENT lane: every successful
+          PATCH returns a fresh ETag, which replaces <code>state.etag</code> and
+          becomes the <code>If-Match</code> header on the <em>next</em> PATCH.
+          This is what makes concurrent edits safe — if anyone else writes
+          between our reads, our ETag goes stale and SharePoint rejects the
+          write with 412.
+        </p>
+
+        <div class="queue-controls">
+          <button class="queue-btn" data-edit="q1">✏ Edit Q1 answer</button>
+          <button class="queue-btn" data-edit="q2">✏ Edit Q2 answer</button>
+          <button class="queue-btn" data-edit="conv">
+            ✏ Append Conversation
+          </button>
+          <button class="queue-btn" data-edit="burst">
+            ⚡ Burst: edit Q1 ×4
+          </button>
+          <button class="queue-btn reset" data-edit="reset">↻ Reset</button>
+        </div>
+
+        <div class="queue-stage">
+          <div class="queue-lane lane-pending">
+            <div class="lane-label">
+              CLIENT — state.pending (per-field slots)
+            </div>
+            <div class="etag-box">
+              <span class="etag-label">state.etag</span>
+              <span class="etag-value" id="client-etag">"etag-001"</span>
+            </div>
+            <div class="slot" data-slot="q1">
+              <div class="slot-label">Answers.q1</div>
+              <div class="slot-block empty" id="slot-q1">— empty —</div>
+            </div>
+            <div class="slot" data-slot="q2">
+              <div class="slot-label">Answers.q2</div>
+              <div class="slot-block empty" id="slot-q2">— empty —</div>
+            </div>
+            <div class="slot" data-slot="conv">
+              <div class="slot-label">Conversation</div>
+              <div class="slot-block empty" id="slot-conv">— empty —</div>
+            </div>
+          </div>
+
+          <div class="queue-lane">
+            <div class="lane-label">IN FLIGHT — PATCH /cases/1</div>
+            <div class="flight-zone" id="flight-zone"></div>
+          </div>
+
+          <div class="queue-lane">
+            <div class="lane-label">SHAREPOINT — committed</div>
+            <div class="server-zone" id="server-zone"></div>
+          </div>
+        </div>
+
+        <div class="queue-counter">
+          <div>
+            <span class="qc-num" id="qc-clicks">0</span
+            ><strong>user edits</strong>
+          </div>
+          <div>
+            <span class="qc-num" id="qc-patches">0</span
+            ><strong>PATCH requests sent</strong>
+          </div>
+          <div class="qc-savings" id="qc-savings"></div>
+        </div>
+      </section>
+
+      <!-- ══ WALKTHROUGH ════════════════════════════════════════════ -->
+      <section class="scene">
+        <div class="scene-label">Under The Hood</div>
+        <div class="scene-title">Network Scenarios — Step by Step</div>
+        <p class="scene-intro">
+          Step through four network outcomes. The sequence diagram shows
+          messages between actors appearing in order; prior steps fade but stay
+          visible. The state box tracks SaveQueue's internal variables at each
+          moment.
+        </p>
+
+        <div class="wt-tabs">
+          <button class="wt-tab active" data-wt="happy">① Happy Path</button>
+          <button class="wt-tab" data-wt="retry">② Network Retry</button>
+          <button class="wt-tab" data-wt="merge">③ 412 — Safe Merge</button>
+          <button class="wt-tab" data-wt="conflict">④ 412 — Conflict</button>
+        </div>
+
+        <div class="wt-layout">
+          <div class="wt-panel">
+            <div class="wt-panel-label">Source — save-queue.js</div>
+            <div id="wt-code"></div>
+          </div>
+
+          <div class="wt-panel">
+            <div class="wt-panel-label">Sequence</div>
+
+            <div class="seq-actors">
+              <div class="seq-actor component">
+                <div class="seq-actor-badge">cr-question</div>
+              </div>
+              <div class="seq-actor savequeue">
+                <div class="seq-actor-badge">SaveQueue</div>
+              </div>
+              <div class="seq-actor sharepoint">
+                <div class="seq-actor-badge">SharePoint</div>
+              </div>
+            </div>
+
+            <div class="seq-diagram-body">
+              <div class="seq-lifelines">
+                <div class="seq-lifeline"></div>
+                <div class="seq-lifeline"></div>
+                <div class="seq-lifeline"></div>
+              </div>
+              <div class="seq-messages" id="seq-msgs"></div>
+            </div>
+
+            <div class="state-box">
+              <div class="state-box-label">SaveQueue internal state</div>
+              <div class="state-row">
+                <span class="state-key">etag:</span
+                ><span class="state-val" id="st-etag">"etag-abc"</span>
+              </div>
+              <div class="state-row">
+                <span class="state-key">pending.Answers:</span
+                ><span class="state-val" id="st-pending">none</span>
+              </div>
+              <div class="state-row">
+                <span class="state-key">baselineAnswers:</span
+                ><span class="state-val" id="st-baseline">{ q1: "Yes" }</span>
+              </div>
+              <div class="state-row">
+                <span class="state-key">status:</span
+                ><span class="state-val v-saved" id="st-status">saved</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="wt-explain" id="wt-explain">
+          <div class="wt-step-title" id="wt-title"></div>
+          <div class="wt-step-desc" id="wt-desc"></div>
+        </div>
+
+        <div class="wt-nav">
+          <button class="wt-btn" id="wt-prev">← Prev</button>
+          <div class="wt-progress">
+            <div class="wt-prog-fill" id="wt-prog"></div>
+          </div>
+          <span class="wt-counter" id="wt-counter">1 / 1</span>
+          <button class="wt-btn" id="wt-next">Next →</button>
+          <button class="wt-btn wt-play-btn" id="wt-play">▶ Play</button>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      SaveQueue — debounce · ETag · retry · conflict — src/save-queue.js — Case
+      Review Frontend Framework
+    </footer>
+
+    <script>
+      /* ══ DEBOUNCE DEMO ════════════════════════════════════════════════ */
+      (function () {
+        var DEBOUNCE = 1500;
+        var timer = null,
+          rafId = null,
+          startTime = null,
+          patchTimer = null,
+          enqCount = 0;
+        var fill = document.getElementById('timer-fill');
+        var msEl = document.getElementById('timer-ms');
+        var patchEl = document.getElementById('patch-ind');
+        var badge = document.getElementById('demo-badge');
+        var log = document.getElementById('event-log');
+
+        var STATUS_LABELS = {
+          saved: 'saved',
+          saving: 'saving…',
+          reconnecting: 'reconnecting…',
+          conflict: 'conflict',
+        };
+
+        function setStatus(s) {
+          badge.className = 'status-badge ' + s;
+          badge.innerHTML =
+            '<span class="status-dot"></span> ' + STATUS_LABELS[s];
+        }
+
+        function addLog(kind, cls, msg) {
+          var d = new Date();
+          var ts =
+            [d.getHours(), d.getMinutes(), d.getSeconds()]
+              .map(function (n) {
+                return String(n).padStart(2, '0');
+              })
+              .join(':') +
+            '.' +
+            String(d.getMilliseconds()).padStart(3, '0');
+          var el = document.createElement('div');
+          el.className = 'log-entry';
+          el.innerHTML =
+            '<span class="log-time">' +
+            ts +
+            '</span><span class="log-kind ' +
+            cls +
+            '">' +
+            kind +
+            '</span><span class="log-msg">' +
+            msg +
+            '</span>';
+          log.prepend(el);
+          while (log.children.length > 30) log.removeChild(log.lastChild);
+        }
+
+        function stopAnim() {
+          if (rafId) {
+            cancelAnimationFrame(rafId);
+            rafId = null;
+          }
+          fill.style.transition = 'none';
+          fill.style.width = '0%';
+          msEl.textContent = '—';
+        }
+
+        function startAnim() {
+          startTime = performance.now();
+          fill.style.transition = 'none';
+          fill.style.width = '0%';
+          requestAnimationFrame(function () {
+            fill.style.transition = 'width ' + DEBOUNCE + 'ms linear';
+            fill.style.width = '100%';
+          });
+          (function tick() {
+            var rem = Math.max(0, DEBOUNCE - (performance.now() - startTime));
+            msEl.textContent = Math.round(rem) + 'ms';
+            if (rem > 0) rafId = requestAnimationFrame(tick);
+          })();
+        }
+
+        function firePatch() {
+          stopAnim();
+          setStatus('saving');
+          addLog(
+            'PATCH',
+            'log-kind k-patch',
+            'PATCH /cases/1  If-Match: "etag-…"'
+          );
+          patchEl.classList.add('visible');
+          if (patchTimer) clearTimeout(patchTimer);
+          patchTimer = setTimeout(function () {
+            patchEl.classList.remove('visible');
+            setStatus('saved');
+            addLog('200 OK', 'log-kind k-ok', 'saved ✓  new ETag stored');
+          }, 1000);
+        }
+
+        document
+          .getElementById('demo-ta')
+          .addEventListener('input', function () {
+            enqCount++;
+            var isReset = timer !== null;
+            if (timer) clearTimeout(timer);
+            if (isReset) {
+              addLog(
+                'reset',
+                'log-kind k-reset',
+                'clearTimeout — timer restarted'
+              );
+              stopAnim();
+            } else {
+              addLog(
+                'enqueue',
+                'log-kind k-enqueue',
+                'enqueue("Answers", v' + enqCount + ')  timer started'
+              );
+            }
+            setStatus('saving');
+            startAnim();
+            timer = setTimeout(function () {
+              timer = null;
+              firePatch();
+            }, DEBOUNCE);
+          });
+      })();
+
+      /* ══ QUEUE ANATOMY (Scene 02) ═════════════════════════════════════ */
+      (function () {
+        var DEBOUNCE = 1500;
+
+        /** @type {Record<string, { timerId: any, rafId: any, revision: number, value: string, startTime: number }>} */
+        var pending = {};
+        var revisionCounters = { q1: 0, q2: 0, conv: 0 };
+        var clicks = 0,
+          patches = 0;
+        var etagCounter = 1;
+        function fmtEtag(n) {
+          return '"etag-' + String(n).padStart(3, '0') + '"';
+        }
+        var currentEtag = fmtEtag(etagCounter);
+
+        var SAMPLE = {
+          q1: ['Yes', 'No', 'N/A', 'Yes — with caveat', 'Partially'],
+          q2: ['Low', 'High', 'Medium', 'Critical', 'Unknown'],
+          conv: [
+            'Asked for more info…',
+            'Following up.',
+            'Reviewer noted concern.',
+            'Closed out.',
+          ],
+        };
+        var FIELD_LABEL = {
+          q1: 'Answers.q1',
+          q2: 'Answers.q2',
+          conv: 'Conversation',
+        };
+
+        function $(id) {
+          return document.getElementById(id);
+        }
+
+        function updateCounters() {
+          $('qc-clicks').textContent = clicks;
+          $('qc-patches').textContent = patches;
+          if (clicks > 0 && patches > 0 && clicks > patches) {
+            var saved = clicks - patches;
+            $('qc-savings').textContent =
+              '↓ ' +
+              saved +
+              ' redundant PATCH' +
+              (saved === 1 ? '' : 'es') +
+              ' coalesced by debounce';
+          } else {
+            $('qc-savings').textContent = '';
+          }
+        }
+
+        function renderBlock(field) {
+          var slot = $('slot-' + field);
+          var p = pending[field];
+          if (!p) {
+            slot.className = 'slot-block empty';
+            slot.innerHTML = '— empty —';
+            return;
+          }
+          slot.className = 'slot-block active';
+          slot.innerHTML =
+            '<div class="block-row">' +
+            '<span class="block-field">' +
+            FIELD_LABEL[field] +
+            '</span>' +
+            '<span class="block-revision">rev ' +
+            p.revision +
+            '</span>' +
+            '</div>' +
+            '<div class="block-value">"' +
+            p.value +
+            '"</div>' +
+            '<div class="block-timer-track"><div class="block-timer-fill" id="fill-' +
+            field +
+            '"></div></div>';
+
+          var fill = $('fill-' + field);
+          fill.style.transition = 'none';
+          fill.style.width = '0%';
+          requestAnimationFrame(function () {
+            fill.style.transition = 'width ' + DEBOUNCE + 'ms linear';
+            fill.style.width = '100%';
+          });
+        }
+
+        function flushField(field) {
+          var p = pending[field];
+          if (!p) return;
+          delete pending[field];
+          renderBlock(field);
+
+          patches++;
+          updateCounters();
+
+          var sentEtag = currentEtag;
+
+          var flight = document.createElement('div');
+          flight.className = 'flight-block';
+          flight.innerHTML =
+            '<div class="block-row">' +
+            '<span class="block-field">PATCH ' +
+            FIELD_LABEL[field] +
+            '</span>' +
+            '<span class="block-revision">rev ' +
+            p.revision +
+            '</span>' +
+            '</div>' +
+            '<div class="block-value">"' +
+            p.value +
+            '"</div>' +
+            '<div class="flight-meta">If-Match: ' +
+            sentEtag +
+            '</div>';
+          $('flight-zone').appendChild(flight);
+
+          setTimeout(function () {
+            flight.remove();
+
+            etagCounter++;
+            var newEtag = fmtEtag(etagCounter);
+
+            var landed = document.createElement('div');
+            landed.className = 'server-block';
+            landed.innerHTML =
+              '<div class="block-row">' +
+              '<span class="block-field">✓ ' +
+              FIELD_LABEL[field] +
+              '</span>' +
+              '<span class="block-revision">200 OK</span>' +
+              '</div>' +
+              '<div class="block-value">"' +
+              p.value +
+              '"</div>' +
+              '<div class="server-meta">ETag: <span class="etag-old">' +
+              sentEtag +
+              '</span> ' +
+              '<span class="etag-arrow">→</span> <strong style="color:var(--computed)">' +
+              newEtag +
+              '</strong></div>';
+            var zone = $('server-zone');
+            zone.appendChild(landed);
+            while (zone.children.length > 6) zone.removeChild(zone.firstChild);
+
+            currentEtag = newEtag;
+            var box = document.querySelector('.etag-box');
+            $('client-etag').textContent = newEtag;
+            box.classList.add('flash');
+            setTimeout(function () {
+              box.classList.remove('flash');
+            }, 600);
+          }, 900);
+        }
+
+        function enqueue(field, value) {
+          clicks++;
+          revisionCounters[field]++;
+          var existing = pending[field];
+          if (existing) clearTimeout(existing.timerId);
+
+          var revision = revisionCounters[field];
+          pending[field] = {
+            revision: revision,
+            value: value,
+            startTime: performance.now(),
+            timerId: setTimeout(function () {
+              flushField(field);
+            }, DEBOUNCE),
+            rafId: null,
+          };
+          renderBlock(field);
+          updateCounters();
+        }
+
+        function pickValue(field) {
+          var arr = SAMPLE[field];
+          return arr[revisionCounters[field] % arr.length];
+        }
+
+        document.querySelectorAll('.queue-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var action = btn.dataset.edit;
+            if (action === 'reset') {
+              Object.keys(pending).forEach(function (f) {
+                clearTimeout(pending[f].timerId);
+              });
+              pending = {};
+              revisionCounters = { q1: 0, q2: 0, conv: 0 };
+              clicks = 0;
+              patches = 0;
+              etagCounter = 1;
+              currentEtag = fmtEtag(etagCounter);
+              $('client-etag').textContent = currentEtag;
+              ['q1', 'q2', 'conv'].forEach(renderBlock);
+              $('flight-zone').innerHTML = '';
+              $('server-zone').innerHTML = '';
+              updateCounters();
+              return;
+            }
+            if (action === 'burst') {
+              for (var i = 0; i < 4; i++) {
+                (function (n) {
+                  setTimeout(function () {
+                    enqueue('q1', pickValue('q1'));
+                  }, n * 200);
+                })(i);
+              }
+              return;
+            }
+            enqueue(action, pickValue(action));
+          });
+        });
+      })();
+
+      /* ══ WALKTHROUGH ══════════════════════════════════════════════════ */
+      (function () {
+        var CODE = [
+          'enqueue(caseId, fieldName, value) {' /* 0 */,
+          '  const existing = state.pending[fieldName];' /* 1 */,
+          '  if (existing) clearTimeout(existing.timerId);  // reset' /* 2 */,
+          '' /* 3 */,
+          '  state.pending[fieldName] = {' /* 4 */,
+          '    value,' /* 5 */,
+          '    timerId: setTimeout(() => {' /* 6 */,
+          '      delete state.pending[fieldName];' /* 7 */,
+          '      this._flush(caseId, fieldName, value, 0);' /* 8 */,
+          '    }, this._debounceMs),  // 1500ms' /* 9 */,
+          '  };' /* 10 */,
+          "  this._statusSignal.set('saving');" /* 11 */,
+          '}' /* 12 */,
+          '' /* 13 */,
+          'async _flush(caseId, fieldName, value, retryIdx) {' /* 14 */,
+          '  let result;' /* 15 */,
+          '  try {' /* 16 */,
+          '    result = await this._client.patchCase(' /* 17 */,
+          '      caseId,' /* 18 */,
+          '      { [fieldName]: value },' /* 19 */,
+          '      state.etag          // → If-Match header' /* 20 */,
+          '    );' /* 21 */,
+          '  } catch { result = { ok: false, status: 0 }; }' /* 22 */,
+          '' /* 23 */,
+          '  if (result.ok) {' /* 24 */,
+          '    state.etag = result.data.etag;   // ← new ETag stored' /* 25 */,
+          "    this._statusSignal.set('saved');" /* 26 */,
+          '    return;' /* 27 */,
+          '  }' /* 28 */,
+          '  if (result.status === 412) {' /* 29 */,
+          '    await this._handle412(...);' /* 30 */,
+          '    return;' /* 31 */,
+          '  }' /* 32 */,
+          '  // Network error → exponential backoff' /* 33 */,
+          '  const delay = this._backoffSchedule[retryIdx];' /* 34 */,
+          "  this._statusSignal.set('reconnecting');" /* 35 */,
+          '  setTimeout(() => this._flush(..., retryIdx + 1), delay);' /* 36 */,
+          '}' /* 37 */,
+          '' /* 38 */,
+          'async _handle412(caseId, fieldName, value, retryIdx) {' /* 39 */,
+          '  const fresh = await this._client.getCase(caseId);' /* 40 */,
+          '' /* 41 */,
+          '  if (JSON.stringify(fresh.answers)' /* 42 */,
+          '      !== JSON.stringify(state.baselineAnswers)) {' /* 43 */,
+          "    this._statusSignal.set('conflict');   // ← Answers changed → warn" /* 44 */,
+          '    return;' /* 45 */,
+          '  }' /* 46 */,
+          '  // Only non-Answer fields changed — safe to merge silently' /* 47 */,
+          '  state.etag = fresh.etag;' /* 48 */,
+          '  state.baselineAnswers = { ...fresh.answers };' /* 49 */,
+          '  await this._flush(caseId, fieldName, value, retryIdx);' /* 50 */,
+          '}' /* 51 */,
+        ];
+
+        /* message helpers */
+        function ar(dir, col, cls, label) {
+          return { t: 'arrow', dir: dir, col: col, cls: cls, label: label };
+        }
+        function nt(text, cls) {
+          return { t: 'note', text: text, cls: cls };
+        }
+
+        var SCENARIOS = {
+          happy: [
+            {
+              title: '① enqueue() — timer started, status: saving',
+              desc: 'The component calls enqueue("Answers", v). No existing timer for this field, so state.pending["Answers"] is set with a new 1500ms timer. statusSignal becomes "saving". Nothing has been sent to the server.',
+              hl: [0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11],
+              msgs: [
+                ar('right', 0, 'to-queue', 'enqueue("Answers", v1)'),
+                nt('timer T1 started (1500ms)  •  status: saving', 'n-queue'),
+              ],
+              state: {
+                etag: '"etag-abc"',
+                pending: 'T1 active',
+                baseline: '{ q1: "Yes" }',
+                status: 'saving',
+              },
+            },
+            {
+              title: '② Second edit — timer reset',
+              desc: 'Before T1 fires, the user types again. clearTimeout(T1) cancels the first flush. A new timer T2 is set. The value in pending is updated. Still no PATCH sent.',
+              hl: [1, 2, 4, 5, 6, 7, 8, 9, 10],
+              msgs: [
+                ar('right', 0, 'to-queue', 'enqueue("Answers", v2)'),
+                nt('clearTimeout(T1)  →  T2 started', 'n-queue'),
+              ],
+              state: {
+                etag: '"etag-abc"',
+                pending: 'T2 active',
+                baseline: '{ q1: "Yes" }',
+                status: 'saving',
+              },
+            },
+            {
+              title: '③ Timer fires — _flush() called',
+              desc: '1500ms pass with no further edits. The setTimeout callback runs: delete state.pending["Answers"] (field slot cleared), then _flush(caseId, "Answers", v2, 0) is called.',
+              hl: [7, 8, 14, 15, 16],
+              msgs: [
+                nt('T2 fires after 1500ms → _flush(retryIdx=0)', 'n-queue'),
+              ],
+              state: {
+                etag: '"etag-abc"',
+                pending: 'none',
+                baseline: '{ q1: "Yes" }',
+                status: 'saving',
+              },
+            },
+            {
+              title: '④ PATCH sent with If-Match',
+              desc: 'patchCase() sends PATCH /cases/1 with the body {Answers: v2} and If-Match: "etag-abc". The server compares this ETag against its stored ETag. If they match, the write is accepted.',
+              hl: [17, 18, 19, 20, 21],
+              msgs: [
+                ar(
+                  'right',
+                  1,
+                  'to-server',
+                  'PATCH /cases/1  If-Match: "etag-abc"'
+                ),
+              ],
+              state: {
+                etag: '"etag-abc"',
+                pending: 'none',
+                baseline: '{ q1: "Yes" }',
+                status: 'saving',
+              },
+            },
+            {
+              title: '⑤ 200 OK — new ETag stored, status: saved',
+              desc: 'Server accepts the write, returns 200 with a new ETag. SaveQueue stores the updated ETag (required for the next PATCH). statusSignal set to "saved".',
+              hl: [24, 25, 26, 27],
+              msgs: [
+                ar('left', 1, 'from-server', '200 OK  ETag: "etag-xyz"'),
+                nt('state.etag = "etag-xyz"  •  status: saved ✓', 'n-ok'),
+              ],
+              state: {
+                etag: '"etag-xyz"',
+                pending: 'none',
+                baseline: '{ q1: "Yes" }',
+                status: 'saved',
+              },
+            },
+          ],
+
+          retry: [
+            {
+              title: '① enqueue → timer fires → PATCH sent',
+              desc: 'Standard path up to the network call: enqueue is called, 1500ms pass, _flush sends the PATCH.',
+              hl: [0, 11, 17, 18, 19, 20, 21],
+              msgs: [
+                ar('right', 0, 'to-queue', 'enqueue("Answers", v)'),
+                nt('timer fires → _flush()', 'n-queue'),
+                ar(
+                  'right',
+                  1,
+                  'to-server',
+                  'PATCH /cases/1  If-Match: "etag-abc"'
+                ),
+              ],
+              state: {
+                etag: '"etag-abc"',
+                pending: 'none',
+                baseline: '{ q1: "Yes" }',
+                status: 'saving',
+              },
+            },
+            {
+              title: '② Network error — status: 0',
+              desc: 'The fetch throws (network down, DNS failure, timeout). The catch block sets result = { ok: false, status: 0 }. Neither the result.ok nor the 412 branch is taken.',
+              hl: [22, 33, 34, 35, 36],
+              msgs: [
+                ar('left', 1, 'err-arrow', '✕ network error (status: 0)'),
+                nt(
+                  'status: reconnecting  •  retry in 1000ms (backoff[0])',
+                  'n-warn'
+                ),
+              ],
+              state: {
+                etag: '"etag-abc"',
+                pending: 'none',
+                baseline: '{ q1: "Yes" }',
+                status: 'reconnecting',
+              },
+            },
+            {
+              title: '③ Retry — retryIdx = 1',
+              desc: 'After the 1s delay, _flush is called again with retryIdx = 1. If this also fails: next delay = backoffSchedule[1] = 2000ms, then 4000ms, 8000ms, etc., capped at 30s.',
+              hl: [14, 17, 18, 19, 20, 21],
+              msgs: [
+                nt('1000ms elapsed → _flush(retryIdx=1)', 'n-queue'),
+                ar(
+                  'right',
+                  1,
+                  'to-server',
+                  'PATCH /cases/1  If-Match: "etag-abc"  (retry)'
+                ),
+              ],
+              state: {
+                etag: '"etag-abc"',
+                pending: 'none',
+                baseline: '{ q1: "Yes" }',
+                status: 'reconnecting',
+              },
+            },
+            {
+              title: '④ 200 OK — saved',
+              desc: 'Network recovers. Server accepts the PATCH (ETag still matches — nobody else wrote during the outage). New ETag stored, status: saved.',
+              hl: [24, 25, 26, 27],
+              msgs: [
+                ar('left', 1, 'from-server', '200 OK  ETag: "etag-xyz"'),
+                nt('state.etag = "etag-xyz"  •  status: saved ✓', 'n-ok'),
+              ],
+              state: {
+                etag: '"etag-xyz"',
+                pending: 'none',
+                baseline: '{ q1: "Yes" }',
+                status: 'saved',
+              },
+            },
+          ],
+
+          merge: [
+            {
+              title: '① PATCH sent — another tab has already saved',
+              desc: "Our tab sends a PATCH with the ETag from when the case was loaded. While our debounce timer was running, another tab saved a Conversation message — updating the server's ETag without touching the Answers field.",
+              hl: [17, 18, 19, 20, 21],
+              msgs: [
+                ar('right', 0, 'to-queue', 'enqueue("Answers", v)'),
+                nt('timer fires → _flush()', 'n-queue'),
+                ar(
+                  'right',
+                  1,
+                  'to-server',
+                  'PATCH /cases/1  If-Match: "etag-abc"'
+                ),
+              ],
+              state: {
+                etag: '"etag-abc"',
+                pending: 'none',
+                baseline: '{ q1: "Yes" }',
+                status: 'saving',
+              },
+            },
+            {
+              title: '② 412 Precondition Failed — _handle412 called',
+              desc: "The server's ETag no longer matches our If-Match. It returns 412. _flush() sees result.status === 412 and calls _handle412().",
+              hl: [29, 30, 31, 39],
+              msgs: [
+                ar('left', 1, 'err-arrow', '412 Precondition Failed'),
+                nt('→ _handle412() called', 'n-warn'),
+              ],
+              state: {
+                etag: '"etag-abc"',
+                pending: 'none',
+                baseline: '{ q1: "Yes" }',
+                status: 'saving',
+              },
+            },
+            {
+              title: '③ getCase — re-fetch the current row',
+              desc: '_handle412 calls getCase() to retrieve the fresh row. This gives us the new ETag and whatever the other tab saved, so we can inspect whether the conflict is real.',
+              hl: [39, 40],
+              msgs: [
+                ar('right', 1, 'to-server', 'GET /cases/1'),
+                ar(
+                  'left',
+                  1,
+                  'from-server',
+                  '200 OK  ETag: "etag-xyz"  Answers: same'
+                ),
+              ],
+              state: {
+                etag: '"etag-abc"',
+                pending: 'none',
+                baseline: '{ q1: "Yes" }',
+                status: 'saving',
+              },
+            },
+            {
+              title: '④ Answers match — safe to merge silently',
+              desc: 'JSON.stringify(fresh.answers) === JSON.stringify(state.baselineAnswers). The other tab only changed the Conversation field, not Answers. Our pending Answers change is still safe. ETag and baseline updated.',
+              hl: [42, 43, 46, 47, 48, 49, 50],
+              msgs: [
+                nt(
+                  'fresh.answers === baselineAnswers  ✓  safe to merge',
+                  'n-ok'
+                ),
+                nt(
+                  'state.etag = "etag-xyz"  •  baselineAnswers updated',
+                  'n-queue'
+                ),
+              ],
+              state: {
+                etag: '"etag-xyz"',
+                pending: 'none',
+                baseline: '{ q1: "Yes" }',
+                status: 'saving',
+              },
+            },
+            {
+              title: '⑤ Retry PATCH with fresh ETag — saved',
+              desc: '_flush() is called again with the fresh ETag. PATCH goes out with If-Match: "etag-xyz". Server accepts it. The user saw nothing — the whole 412 cycle was transparent.',
+              hl: [17, 18, 19, 20, 21, 24, 25, 26],
+              msgs: [
+                ar(
+                  'right',
+                  1,
+                  'to-server',
+                  'PATCH /cases/1  If-Match: "etag-xyz"  (retry)'
+                ),
+                ar('left', 1, 'from-server', '200 OK  ETag: "etag-def"'),
+                nt('status: saved ✓  — silent merge complete', 'n-ok'),
+              ],
+              state: {
+                etag: '"etag-def"',
+                pending: 'none',
+                baseline: '{ q1: "Yes" }',
+                status: 'saved',
+              },
+            },
+          ],
+
+          conflict: [
+            {
+              title: '① PATCH sent — real conflict brewing',
+              desc: 'Our tab sends the PATCH. While our debounce timer was counting down (1500ms), a second reviewer in another tab also changed the Answers field and saved successfully — updating both the ETag and the Answers blob on the server.',
+              hl: [17, 18, 19, 20, 21],
+              msgs: [
+                ar('right', 0, 'to-queue', 'enqueue("Answers", v)'),
+                nt('timer fires → _flush()', 'n-queue'),
+                ar(
+                  'right',
+                  1,
+                  'to-server',
+                  'PATCH /cases/1  If-Match: "etag-abc"'
+                ),
+              ],
+              state: {
+                etag: '"etag-abc"',
+                pending: 'none',
+                baseline: '{ q1: "Yes" }',
+                status: 'saving',
+              },
+            },
+            {
+              title: '② 412 — _handle412 called',
+              desc: 'Server ETag has moved. 412 returned. _handle412() starts.',
+              hl: [29, 30, 39],
+              msgs: [
+                ar('left', 1, 'err-arrow', '412 Precondition Failed'),
+                nt('→ _handle412() called', 'n-warn'),
+              ],
+              state: {
+                etag: '"etag-abc"',
+                pending: 'none',
+                baseline: '{ q1: "Yes" }',
+                status: 'saving',
+              },
+            },
+            {
+              title: '③ getCase — re-fetch to inspect the damage',
+              desc: '_handle412 fetches the fresh row to see what the other reviewer changed.',
+              hl: [39, 40],
+              msgs: [
+                ar('right', 1, 'to-server', 'GET /cases/1'),
+                ar(
+                  'left',
+                  1,
+                  'from-server',
+                  '200 OK  ETag: "etag-xyz"  Answers: { q1: "No" }'
+                ),
+              ],
+              state: {
+                etag: '"etag-abc"',
+                pending: 'none',
+                baseline: '{ q1: "Yes" }',
+                status: 'saving',
+              },
+            },
+            {
+              title: '④ Answers CHANGED — conflict, do not auto-overwrite',
+              desc: 'JSON.stringify(fresh.answers) !== JSON.stringify(state.baselineAnswers). Remote q1 is "No" but our baseline had "Yes". Auto-merging would silently destroy a human decision. Status: conflict. SaveQueue stops.',
+              hl: [42, 43, 44, 45],
+              msgs: [
+                nt(
+                  'fresh.answers ≠ baselineAnswers  ✗  CONFLICT',
+                  'n-conflict'
+                ),
+                nt('status: conflict  —  no retry, no overwrite', 'n-conflict'),
+              ],
+              state: {
+                etag: '"etag-abc"',
+                pending: 'none',
+                baseline: '{ q1: "Yes" }',
+                status: 'conflict',
+              },
+            },
+            {
+              title: '⑤ Conflict banner — user must decide',
+              desc: 'An effect watching the status signal surfaces a non-disruptive banner: "Case was edited elsewhere — reload to see the latest." The user\'s pending text stays in the textarea but is not saved. They can compare and decide.',
+              hl: [44, 45],
+              msgs: [],
+              state: {
+                etag: '"etag-abc"',
+                pending: 'none',
+                baseline: '{ q1: "Yes" }',
+                status: 'conflict',
+              },
+              banner: true,
+            },
+          ],
+        };
+
+        /* ── renderer ──────────────────────────────────────────────── */
+        var currentWT = 'happy';
+        var currentStep = 0;
+        var playTimer = null;
+
+        function renderCode(hl) {
+          var el = document.getElementById('wt-code');
+          el.innerHTML = '';
+          CODE.forEach(function (line, i) {
+            var span = document.createElement('span');
+            span.className = 'wt-code-line';
+            span.textContent = line || ' ';
+            if (hl.indexOf(i) !== -1) span.classList.add('hl');
+            else if (hl.length > 0) span.classList.add('dim');
+            el.appendChild(span);
+          });
+        }
+
+        function arrowHtml(msg) {
+          var isRight = msg.dir === 'right';
+          var chip = '<span class="seq-label-chip">' + msg.label + '</span>';
+          var track = '<span class="seq-arrow-line"></span>';
+          var inner = isRight
+            ? '<div class="seq-arrow right ' +
+              msg.cls +
+              '">' +
+              chip +
+              track +
+              '</div>'
+            : '<div class="seq-arrow left  ' +
+              msg.cls +
+              '">' +
+              track +
+              chip +
+              '</div>';
+
+          if (msg.col === 0) {
+            return (
+              '<div class="seq-cell" style="grid-column:1/3">' +
+              inner +
+              '</div><div class="seq-cell"></div>'
+            );
+          }
+          return (
+            '<div class="seq-cell"></div><div class="seq-cell" style="grid-column:2/4">' +
+            inner +
+            '</div>'
+          );
+        }
+
+        function renderSeq(steps, upTo) {
+          var container = document.getElementById('seq-msgs');
+          container.innerHTML = '';
+
+          var allMsgs = [];
+          for (var s = 0; s <= upTo; s++) {
+            (steps[s].msgs || []).forEach(function (m) {
+              allMsgs.push({ m: m, si: s });
+            });
+          }
+
+          allMsgs.forEach(function (item) {
+            var row = document.createElement('div');
+            row.className = 'seq-msg' + (item.si < upTo ? ' faded' : '');
+            if (item.m.t === 'note') {
+              row.innerHTML =
+                '<div class="seq-note"><div class="seq-note-inner ' +
+                item.m.cls +
+                '">' +
+                item.m.text +
+                '</div></div>';
+            } else {
+              row.innerHTML = arrowHtml(item.m);
+            }
+            container.appendChild(row);
+          });
+
+          if (steps[upTo].banner) {
+            var b = document.createElement('div');
+            b.style.cssText =
+              'margin-top:8px;padding:9px 13px;border:1px solid rgba(248,113,113,0.4);border-radius:6px;background:rgba(248,113,113,0.06);font-size:0.67rem;color:#f87171;animation:seq-in 0.3s ease forwards;opacity:0';
+            b.textContent =
+              '⚠  Case was edited elsewhere — reload to see the latest.';
+            container.appendChild(b);
+          }
+        }
+
+        function renderState(s) {
+          document.getElementById('st-etag').textContent = s.etag;
+          document.getElementById('st-pending').textContent = s.pending;
+          document.getElementById('st-baseline').textContent = s.baseline;
+          var el = document.getElementById('st-status');
+          el.textContent = s.status;
+          el.className = 'state-val v-' + s.status;
+        }
+
+        function render() {
+          var steps = SCENARIOS[currentWT];
+          var step = steps[currentStep];
+
+          renderCode(step.hl);
+          renderSeq(steps, currentStep);
+          renderState(step.state);
+
+          document.getElementById('wt-title').textContent = step.title;
+          document.getElementById('wt-desc').textContent = step.desc;
+          document.getElementById('wt-counter').textContent =
+            currentStep + 1 + ' / ' + steps.length;
+          document.getElementById('wt-prog').style.width =
+            ((currentStep + 1) / steps.length) * 100 + '%';
+          document.getElementById('wt-prev').disabled = currentStep === 0;
+          document.getElementById('wt-next').disabled =
+            currentStep === steps.length - 1;
+
+          var accent = {
+            happy: 'var(--saved)',
+            retry: 'var(--reconnecting)',
+            merge: 'var(--computed)',
+            conflict: 'var(--conflict)',
+          };
+          document.getElementById('wt-explain').style.borderLeftColor =
+            accent[currentWT];
+          document.getElementById('wt-title').style.color = accent[currentWT];
+        }
+
+        document
+          .getElementById('wt-prev')
+          .addEventListener('click', function () {
+            if (currentStep > 0) {
+              currentStep--;
+              render();
+            }
+          });
+
+        document
+          .getElementById('wt-next')
+          .addEventListener('click', function () {
+            var max = SCENARIOS[currentWT].length - 1;
+            if (currentStep < max) {
+              currentStep++;
+              render();
+            }
+          });
+
+        document
+          .getElementById('wt-play')
+          .addEventListener('click', function () {
+            var btn = this;
+            if (playTimer) {
+              clearInterval(playTimer);
+              playTimer = null;
+              btn.textContent = '▶ Play';
+              btn.classList.remove('playing');
+            } else {
+              btn.textContent = '⏸ Pause';
+              btn.classList.add('playing');
+              playTimer = setInterval(function () {
+                var max = SCENARIOS[currentWT].length - 1;
+                if (currentStep < max) {
+                  currentStep++;
+                  render();
+                } else {
+                  clearInterval(playTimer);
+                  playTimer = null;
+                  btn.textContent = '▶ Play';
+                  btn.classList.remove('playing');
+                }
+              }, 2100);
+            }
+          });
+
+        document.querySelectorAll('.wt-tab').forEach(function (tab) {
+          tab.addEventListener('click', function () {
+            document.querySelectorAll('.wt-tab').forEach(function (t) {
+              t.classList.remove('active');
+            });
+            tab.classList.add('active');
+            currentWT = tab.dataset.wt;
+            currentStep = 0;
+            if (playTimer) {
+              clearInterval(playTimer);
+              playTimer = null;
+              document.getElementById('wt-play').textContent = '▶ Play';
+              document.getElementById('wt-play').classList.remove('playing');
+            }
+            render();
+          });
+        });
+
+        render();
+      })();
+    </script>
+  </body>
 </html>

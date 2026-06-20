@@ -20,7 +20,16 @@ export class CRDashboard extends ReactiveElement {
     /** @type {string} */
     this.currentUserId = '';
     /** @type {Capabilities} */
-    this.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
+    this.capabilities = {
+      isReviewer: false,
+      ownedCaseTypes: [],
+      isResponsibleParty: false,
+      isReviewerManager: false,
+      isResponsiblePartyManager: false,
+      isMaintainer: false,
+      isQaReviewer: false,
+      isVisitor: false,
+    };
     /** @type {string[]} */
     this.eligibleCaseTypes = [];
 
@@ -40,7 +49,7 @@ export class CRDashboard extends ReactiveElement {
         status: 'In-progress',
         assignedReviewer: this.currentUserId,
       });
-      this._cases.set(raw.map(c => ({ ...c, overdue: isOverdue(c) })));
+      this._cases.set(raw.map((c) => ({ ...c, overdue: isOverdue(c) })));
     }
   }
 
@@ -50,36 +59,44 @@ export class CRDashboard extends ReactiveElement {
     if (this.capabilities.isReviewer) {
       children.push(h('h1', {}, 'Outstanding Cases'));
 
-      children.push(h('cr-case-table', {
-        cases: this._cases.get(),
-        'oncr-case-open': (/** @type {any} */ e) => {
-          location.hash = `#/case/${e.detail.caseId}`;
-        }
-      }));
+      children.push(
+        h('cr-case-table', {
+          cases: this._cases.get(),
+          'oncr-case-open': (/** @type {any} */ e) => {
+            location.hash = `#/case/${e.detail.caseId}`;
+          },
+        })
+      );
 
-      children.push(h('cr-allocation', {
-        client: this.client,
-        currentUserId: this.currentUserId,
-        eligibleCaseTypes: this.eligibleCaseTypes,
-        'oncr-allocated': () => this._fetchData()
-      }));
+      children.push(
+        h('cr-allocation', {
+          client: this.client,
+          currentUserId: this.currentUserId,
+          eligibleCaseTypes: this.eligibleCaseTypes,
+          'oncr-allocated': () => this._fetchData(),
+        })
+      );
     }
 
     if (this.capabilities.ownedCaseTypes.length > 0) {
-      children.push(h('cr-owner-summary', {
-        client: this.client,
-        ownedCaseTypes: this.capabilities.ownedCaseTypes
-      }));
+      children.push(
+        h('cr-owner-summary', {
+          client: this.client,
+          ownedCaseTypes: this.capabilities.ownedCaseTypes,
+        })
+      );
     }
 
     if (this.capabilities.isResponsibleParty) {
-      children.push(h('cr-responsible-party-dashboard', {
-        client: this.client,
-        currentUserId: this.currentUserId,
-        'oncr-open-conversation': (/** @type {any} */ e) => {
-          location.hash = `#/conversation/${e.detail.caseId}`;
-        }
-      }));
+      children.push(
+        h('cr-responsible-party-dashboard', {
+          client: this.client,
+          currentUserId: this.currentUserId,
+          'oncr-open-conversation': (/** @type {any} */ e) => {
+            location.hash = `#/conversation/${e.detail.caseId}`;
+          },
+        })
+      );
     }
 
     return children;

@@ -14,7 +14,9 @@ const config = {
       category: 'Customer Verification',
       responseType: 'yes-no-na',
       failureCriteria: 'No',
-      remediationActions: ['Re-verify customer identity using an approved verification method before continuing.'],
+      remediationActions: [
+        'Re-verify customer identity using an approved verification method before continuing.',
+      ],
       deprecated: false,
     },
     {
@@ -39,7 +41,9 @@ const config = {
       category: 'Product Suitability',
       responseType: 'yes-no-na',
       failureCriteria: 'No',
-      remediationActions: ['Complete a full needs assessment before recommending any product.'],
+      remediationActions: [
+        'Complete a full needs assessment before recommending any product.',
+      ],
       deprecated: false,
     },
     {
@@ -57,7 +61,9 @@ const config = {
       responseType: 'yes-no-na',
       showWhen: { 'q-ps-needs': { equals: 'Yes' } },
       failureCriteria: 'No',
-      remediationActions: ['Review suitability criteria and document why the selected product meets customer needs.'],
+      remediationActions: [
+        'Review suitability criteria and document why the selected product meets customer needs.',
+      ],
       deprecated: false,
     },
     {
@@ -75,7 +81,9 @@ const config = {
       category: 'Compliance',
       responseType: 'yes-no-na',
       failureCriteria: 'No',
-      remediationActions: ['Deliver missing disclosures and record customer acknowledgement.'],
+      remediationActions: [
+        'Deliver missing disclosures and record customer acknowledgement.',
+      ],
       deprecated: false,
     },
     {
@@ -102,7 +110,8 @@ const config = {
     let failures = 0;
     for (const q of questions) {
       const answer = answers[q.id];
-      if (answer && q.failureCriteria && answer.value === q.failureCriteria) failures++;
+      if (answer && q.failureCriteria && answer.value === q.failureCriteria)
+        failures++;
     }
     if (failures === 0) return { verdict: 'pass' };
     if (failures === 1) return { verdict: 'refer' };

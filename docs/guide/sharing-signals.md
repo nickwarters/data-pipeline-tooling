@@ -30,11 +30,11 @@ This is the framework's substitute for a global store or prop-drilling through a
 
 ## When to share vs. keep local
 
-| Situation | Approach |
-|---|---|
-| A value is only relevant to one component | Create the signal inside `connectedCallback` — it's local state |
-| Two sibling components need to read and/or write the same value | Create the signal in their common ancestor and pass it to both |
-| A child needs to write back to a parent | Pass the writable signal down; the child calls `.set()` |
+| Situation                                                       | Approach                                                        |
+| --------------------------------------------------------------- | --------------------------------------------------------------- |
+| A value is only relevant to one component                       | Create the signal inside `connectedCallback` — it's local state |
+| Two sibling components need to read and/or write the same value | Create the signal in their common ancestor and pass it to both  |
+| A child needs to write back to a parent                         | Pass the writable signal down; the child calls `.set()`         |
 
 ---
 
@@ -52,18 +52,20 @@ export function register(router, context) {
     mount(container, { id }) {
       // The answers signal is owned by this route handler.
       // Both components below read and/or write it.
-      const answers = signal(/** @type {Record<string, import('../sharepoint-client.js').Answer>} */ ({}));
+      const answers = signal(
+        /** @type {Record<string, import('../sharepoint-client.js').Answer>} */ ({})
+      );
 
       // Load the case and seed the signal once the data arrives.
-      context.client.getCase(id).then(row => {
+      context.client.getCase(id).then((row) => {
         if (row) answers.set(row.answers ?? {});
       });
 
       // cr-question-list: displays questions, writes answers back via the signal.
       const questionList = document.createElement('cr-question-list');
       questionList.answersSignal = answers;
-      questionList.saveQueue    = context.saveQueue;
-      questionList.caseId       = id;
+      questionList.saveQueue = context.saveQueue;
+      questionList.caseId = id;
 
       // cr-outcome: recomputes the verdict whenever answers change.
       const outcome = document.createElement('cr-outcome');

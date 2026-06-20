@@ -4,7 +4,7 @@
 > on the Answer; it is one **Issue Capture Field** of type `person` (optionally tagged
 > `role: 'attributedParty'`), declared in `captureGroups` and stored in `Answer.capture`.
 > The `{loginName, displayName}` shape, User-Profile resolution, and strip/freeze lifecycle
-> described below are unchanged — only the declaration and storage *site* moved.
+> described below are unchanged — only the declaration and storage _site_ moved.
 
 Date: 2026-06-04
 
@@ -18,11 +18,11 @@ Management asked to record, against an individual failure, the single person
 responsible for it — distinct from the case-level **Responsible Party**, since
 multiple people may have had a hand in a Case but one specific failure may belong
 to one specific person. This is the **Attributed Party** (see CONTEXT.md):
-zero-or-one per *failed* **Answer**, settable only by the **Assigned Reviewer**,
+zero-or-one per _failed_ **Answer**, settable only by the **Assigned Reviewer**,
 only when the **Case Type** enables `attributeFailures`, frozen at completion,
 and stripped when the Answer is no longer a failure.
 
-The requirement is that an Attributed Party be *reliably lookup-able* against the
+The requirement is that an Attributed Party be _reliably lookup-able_ against the
 SharePoint API. A free-typed name or email cannot be resolved back to a directory
 user; an account identifier can. There is also a real scenario where the
 attributed person is in the directory (AD) but has **not** yet been added to this
@@ -70,7 +70,7 @@ The Attributed Party is pure metadata: it never feeds `computeOutcome`.
   column per Case Type list plus `EnsureUser` (a write side-effect that would
   silently add directory users to the site).
 - **Store the full claims login string** (`i:0#.w|domain\jsmith`) — rejected as
-  the *stored* form: redundant constant data on every attribution and noisier to
+  the _stored_ form: redundant constant data on every attribution and noisier to
   read. The constants are reconstructed at the API boundary instead.
 - **Resolve via the people-picker search** keyed on the stored account —
   rejected in favour of `GetPropertiesFor`, which is a clean User Profile read

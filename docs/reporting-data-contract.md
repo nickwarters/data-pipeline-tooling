@@ -4,7 +4,7 @@ How an **external reporting process** (e.g. Python) turns **Case** data into
 question-level reports — "top failed **Question Definitions** across all Cases
 modified yesterday," and similar.
 
-This is a *consumer* guide. The reporting code itself is out of scope; this
+This is a _consumer_ guide. The reporting code itself is out of scope; this
 document specifies the **format** it reads and the **algorithm** it must apply.
 The decision behind it is [ADR-0015](./adr/0015-data-only-case-type-export-for-reporting.md).
 
@@ -17,7 +17,7 @@ The decision behind it is [ADR-0015](./adr/0015-data-only-case-type-export-for-r
 - For a **case-level verdict** (pass / refer / fail), read the
   `outcomeAtCompletion` column on the Case row. **Do not** try to recompute it.
 
-## What you do *not* need
+## What you do _not_ need
 
 - **The compiled `case-types/{slug}.js` module.** It contains `computeOutcome`, a
   JS function you cannot parse. Ignore it. Read the `.json` sibling instead.
@@ -39,17 +39,19 @@ the same NTLM/Kerberos auth as everything else.
   "label": "Complaint Review",
   "generatedAt": "2026-06-05T09:30:00Z",
   "hash": "sha256:1a2b3c4d5e6f",
-  "questions": [ /* … */ ]
+  "questions": [
+    /* … */
+  ]
 }
 ```
 
-| Field         | Meaning                                                            |
-|---------------|-------------------------------------------------------------------|
-| `slug`        | Join key — matches the `caseType` field on a Case row.            |
-| `label`       | Human-readable Case Type name.                                    |
-| `generatedAt` | ISO-8601 timestamp the export was compiled.                       |
-| `hash`        | Identity of this export (same digest the compile drawer shows).  |
-| `questions`   | The Case Type's **Question Bank**, as data (below).              |
+| Field         | Meaning                                                         |
+| ------------- | --------------------------------------------------------------- |
+| `slug`        | Join key — matches the `caseType` field on a Case row.          |
+| `label`       | Human-readable Case Type name.                                  |
+| `generatedAt` | ISO-8601 timestamp the export was compiled.                     |
+| `hash`        | Identity of this export (same digest the compile drawer shows). |
+| `questions`   | The Case Type's **Question Bank**, as data (below).             |
 
 ### Per-question fields
 
@@ -60,27 +62,35 @@ the same NTLM/Kerberos auth as everything else.
   "category": "Analysis",
   "responseType": "yes-no-na",
   "options": null,
-  "showWhen": { "$and": [ { "q-acknowledged": { "equals": "Yes" } },
-                          { "$or": [ { "q-severity": { "equals": "High" } },
-                                     { "q-severity": { "equals": "Regulatory" } } ] } ] },
+  "showWhen": {
+    "$and": [
+      { "q-acknowledged": { "equals": "Yes" } },
+      {
+        "$or": [
+          { "q-severity": { "equals": "High" } },
+          { "q-severity": { "equals": "Regulatory" } }
+        ]
+      }
+    ]
+  },
   "failureCriteria": "No",
   "deprecated": false
 }
 ```
 
-| Field             | Type                                          | Use in reporting                                                                 |
-|-------------------|-----------------------------------------------|----------------------------------------------------------------------------------|
-| `id`              | string                                        | Key into the Case row's `answers` map.                                          |
-| `text`            | string                                        | Display label for the report.                                                   |
-| `category`        | string \| absent                              | Group / roll up (e.g. failure rate per section).                                |
-| `responseType`    | `yes-no-na` \| `single-choice` \| `multi-choice` | **Selects the failure test** (scalar equality vs array-includes).            |
-| `options`         | string[] \| absent                            | Valid choices; useful for labelling, not required for failure.                  |
-| `showWhen`        | object \| absent                              | Applicability rule. Only needed for *denominators* (see below); not for counting failures. |
-| `failureCriteria` | string \| absent                              | The value that marks a failure. **Absent ⇒ the question cannot fail.**          |
-| `deprecated`      | boolean                                       | Question retired from the bank; may still appear on older Cases — label or exclude as your report requires. |
+| Field             | Type                                             | Use in reporting                                                                                            |
+| ----------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `id`              | string                                           | Key into the Case row's `answers` map.                                                                      |
+| `text`            | string                                           | Display label for the report.                                                                               |
+| `category`        | string \| absent                                 | Group / roll up (e.g. failure rate per section).                                                            |
+| `responseType`    | `yes-no-na` \| `single-choice` \| `multi-choice` | **Selects the failure test** (scalar equality vs array-includes).                                           |
+| `options`         | string[] \| absent                               | Valid choices; useful for labelling, not required for failure.                                              |
+| `showWhen`        | object \| absent                                 | Applicability rule. Only needed for _denominators_ (see below); not for counting failures.                  |
+| `failureCriteria` | string \| absent                                 | The value that marks a failure. **Absent ⇒ the question cannot fail.**                                      |
+| `deprecated`      | boolean                                          | Question retired from the bank; may still appear on older Cases — label or exclude as your report requires. |
 
 Intentionally **absent**: `computeOutcome` (code), `remediationActions` /
-`allowFreeFormRemediation` (authoring templates — the remediation actually *taken*
+`allowFreeFormRemediation` (authoring templates — the remediation actually _taken_
 lives on the Answer, below), and Case-Type config (`eligibleGroups`, `slaHours`,
 `attributeFailures`).
 
@@ -89,27 +99,28 @@ lives on the Answer, below), and Case-Type config (`eligibleGroups`, `slaHours`,
 Read Case rows from the per-Case-Type SharePoint list (one list per Case Type). The
 reporting-relevant fields:
 
-| Field                 | Type                          | Notes                                                              |
-|-----------------------|-------------------------------|-------------------------------------------------------------------|
-| `id`                  | string                        | Case identifier.                                                  |
-| `caseType`            | string                        | Slug — join to `{caseType}.json`.                                 |
-| `status`              | `In-progress` \| `Completed`  | Most reports filter to `Completed`.                              |
-| `answers`             | object (JSON blob)            | `{ [questionId]: Answer }`. See shape below.                     |
-| `completedAt`         | ISO-8601 \| null              | Use for date-range filters ("modified yesterday").              |
-| `outcomeAtCompletion` | string \| null                | **Frozen reviewer verdict** (ADR-0012). Use this, never recompute. |
-| `hadRemediation`      | boolean                       | Frozen at completion: any Answer carried a Remediation Action. |
-| `effectiveOutcome`    | string \| null                | **Corrected case verdict** (ADR-0019). Re-stamped on every Answer Override; equals `outcomeAtCompletion` when no Override exists. |
-| `effectiveHadRemediation` | boolean                   | The Effective-Answers counterpart of `hadRemediation`, re-derived alongside `effectiveOutcome`. |
-| `outcomeOverridden`   | boolean                       | `true` once an Answer Override has been authored — flags/segments corrected Cases. |
+| Field                     | Type                         | Notes                                                                                                                             |
+| ------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                      | string                       | Case identifier.                                                                                                                  |
+| `caseType`                | string                       | Slug — join to `{caseType}.json`.                                                                                                 |
+| `status`                  | `In-progress` \| `Completed` | Most reports filter to `Completed`.                                                                                               |
+| `answers`                 | object (JSON blob)           | `{ [questionId]: Answer }`. See shape below.                                                                                      |
+| `completedAt`             | ISO-8601 \| null             | Use for date-range filters ("modified yesterday").                                                                                |
+| `outcomeAtCompletion`     | string \| null               | **Frozen reviewer verdict** (ADR-0012). Use this, never recompute.                                                                |
+| `hadRemediation`          | boolean                      | Frozen at completion: any Answer carried a Remediation Action.                                                                    |
+| `effectiveOutcome`        | string \| null               | **Corrected case verdict** (ADR-0019). Re-stamped on every Answer Override; equals `outcomeAtCompletion` when no Override exists. |
+| `effectiveHadRemediation` | boolean                      | The Effective-Answers counterpart of `hadRemediation`, re-derived alongside `effectiveOutcome`.                                   |
+| `outcomeOverridden`       | boolean                      | `true` once an Answer Override has been authored — flags/segments corrected Cases.                                                |
 
 > **Which verdict column to read (ADR-0019).** Two frozen-vs-corrected columns
 > serve two report audiences from the same row, and one column cannot serve both
 > honestly:
-> - **Reviewer-quality** reports (was the *reviewer* right?) read
+>
+> - **Reviewer-quality** reports (was the _reviewer_ right?) read
 >   `outcomeAtCompletion` — the reviewer's original record. A wrongly-passed Case
 >   is the very error QA exists to surface; "fixing" it retroactively erases the
 >   evidence.
-> - **Responsible-Party / true-result** reports (how did the *agent* actually do?)
+> - **Responsible-Party / true-result** reports (how did the _agent_ actually do?)
 >   read `effectiveOutcome` — the corrected result after any Answer Override.
 > - `outcomeOverridden` lets either report flag or filter the corrected subset.
 >
@@ -120,6 +131,7 @@ reporting-relevant fields:
 > **Provisioning (Maintainers).** On top of ADR-0012's two columns, every
 > per-Case-Type list now needs three more (ADR-0019), added when the Case Type
 > list is provisioned:
+>
 > - `EffectiveOutcome` — Single line of text, **indexed**.
 > - `EffectiveHadRemediation` — Yes/No.
 > - `OutcomeOverridden` — Yes/No, **indexed**.
@@ -136,8 +148,8 @@ reporting-relevant fields:
 > in the same ETag-guarded PATCH as `status` / `completedAt`. The snapshot is
 > frozen — later edits to the Question Bank, the outcome function, or the answers
 > do not change a Completed Case's stamped values. Read these columns straight off
-> the row; **never recompute the verdict** (see "What you do *not* need"). Rows
-> completed *before* this landed may still have the columns absent/null; treat
+> the row; **never recompute the verdict** (see "What you do _not_ need"). Rows
+> completed _before_ this landed may still have the columns absent/null; treat
 > those as un-snapshotted rather than recomputing.
 
 ### The `Answer` shape
@@ -148,7 +160,9 @@ Each entry in `answers`, keyed by question `id`:
 {
   "value": "No",
   "justification": "No RCA was recorded in the case file.",
-  "remediationActions": [ { "id": "q-rootcause-ra-0", "text": "Open RCA ticket.", "completed": false } ],
+  "remediationActions": [
+    { "id": "q-rootcause-ra-0", "text": "Open RCA ticket.", "completed": false }
+  ],
   "attributedParty": { "loginName": "jsmith", "displayName": "J. Smith" }
 }
 ```
@@ -181,7 +195,7 @@ def is_failure(question, answer):
 
 > **The branch on `responseType` is implicit in `value`'s type**, but keep
 > `responseType` in mind: a `multi-choice` value is always a list (failure =
-> *includes*), scalar types are strings (failure = *equals*). Do not equality-test
+> _includes_), scalar types are strings (failure = _equals_). Do not equality-test
 > a list.
 
 ### Worked example — "top failed questions"
@@ -200,24 +214,24 @@ for case in cases_modified_yesterday:           # filter on completedAt
 
 ## Caveats — read these
 
-1. **Latest-export semantics (v1).** You always read the *current*
+1. **Latest-export semantics (v1).** You always read the _current_
    `{slug}.json`. The **Question Bank** is live-edited, so if `failureCriteria`
    changes after a Case completes, your per-question failure counts for that
-   *historical* Case will be derived against **today's** criteria, not the
+   _historical_ Case will be derived against **today's** criteria, not the
    criteria in force when it was reviewed. For recent/operational reports
    ("yesterday") this is virtually always fine. For long-range retrospective
    trend reports, be aware the baseline can shift under you. (If true point-in-time
    stability is ever needed, ADR-0015 notes the path: a per-question failure
    snapshot at completion — not built yet.)
 
-2. **Case verdicts are different — and stable.** The *case-level* pass/refer/fail
+2. **Case verdicts are different — and stable.** The _case-level_ pass/refer/fail
    is **not** re-derived from answers. Read `outcomeAtCompletion` straight off the
    row; it is frozen at completion (ADR-0012) and immune to later bank edits.
    Never recompute it. The completion path stamps it in the same PATCH as
    `status` + `completedAt`, so it is present on every Case completed after
    ADR-0012 landed (older rows may carry a null — treat those as un-snapshotted).
 
-3. **Applicability (`showWhen`).** Counting *failures* needs no `showWhen` — a
+3. **Applicability (`showWhen`).** Counting _failures_ needs no `showWhen` — a
    failed answer was, by definition, shown and answered. You only need `showWhen`
    for **denominators** ("of the Cases where `q-rootcause` was applicable, what %
    failed?"). To compute applicability, evaluate `showWhen` against the Case's

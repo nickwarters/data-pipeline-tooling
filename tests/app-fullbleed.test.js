@@ -5,12 +5,12 @@ import assert from 'node:assert/strict';
 // Minimal DOM stubs so Router can run without a browser.
 /** @type {Record<string, Function[]>} */
 const windowListeners = {};
-(/** @type {any} */ (globalThis)).window = {
+/** @type {any} */ (globalThis).window = {
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (windowListeners[t] ??= []).push(h);
   },
 };
-(/** @type {any} */ (globalThis)).location = { hash: '' };
+/** @type {any} */ (globalThis).location = { hash: '' };
 
 import { Router } from '../src/lib/router.js';
 
@@ -25,12 +25,19 @@ test('app: cr-fullbleed is added to appEl when #/question-bank mounts', () => {
   router._container = container;
 
   router.register('#/question-bank', {
-    mount() { appEl.classList.add('cr-fullbleed'); },
-    unmount() { appEl.classList.delete('cr-fullbleed'); },
+    mount() {
+      appEl.classList.add('cr-fullbleed');
+    },
+    unmount() {
+      appEl.classList.delete('cr-fullbleed');
+    },
   });
 
   router.navigate('#/question-bank');
-  assert.ok(appEl.classList.has('cr-fullbleed'), 'cr-fullbleed should be present on mount');
+  assert.ok(
+    appEl.classList.has('cr-fullbleed'),
+    'cr-fullbleed should be present on mount'
+  );
 });
 
 test('app: cr-fullbleed is removed from appEl when navigating away from #/question-bank', () => {
@@ -40,8 +47,12 @@ test('app: cr-fullbleed is removed from appEl when navigating away from #/questi
   router._container = container;
 
   router.register('#/question-bank', {
-    mount() { appEl.classList.add('cr-fullbleed'); },
-    unmount() { appEl.classList.delete('cr-fullbleed'); },
+    mount() {
+      appEl.classList.add('cr-fullbleed');
+    },
+    unmount() {
+      appEl.classList.delete('cr-fullbleed');
+    },
   });
   router.register('#/dashboard', {
     mount() {},
@@ -52,7 +63,10 @@ test('app: cr-fullbleed is removed from appEl when navigating away from #/questi
   assert.ok(appEl.classList.has('cr-fullbleed'));
 
   router.navigate('#/dashboard');
-  assert.ok(!appEl.classList.has('cr-fullbleed'), 'cr-fullbleed should be removed on unmount');
+  assert.ok(
+    !appEl.classList.has('cr-fullbleed'),
+    'cr-fullbleed should be removed on unmount'
+  );
 });
 
 test('app: other routes do not add cr-fullbleed to appEl', () => {
@@ -67,5 +81,8 @@ test('app: other routes do not add cr-fullbleed to appEl', () => {
   });
 
   router.navigate('#/dashboard');
-  assert.ok(!appEl.classList.has('cr-fullbleed'), 'cr-fullbleed should not be present for other routes');
+  assert.ok(
+    !appEl.classList.has('cr-fullbleed'),
+    'cr-fullbleed should not be present for other routes'
+  );
 });

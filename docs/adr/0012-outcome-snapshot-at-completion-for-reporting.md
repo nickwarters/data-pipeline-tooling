@@ -10,7 +10,7 @@ Accepted
 
 Management reporting (the `#/reports` feature group) needs to aggregate Cases by
 their **Outcome** — e.g. "how many of my team's Cases passed in the last 12
-months?". Per [ADR-0006] and CONTEXT.md, Outcome is a *computed* property of a
+months?". Per [ADR-0006] and CONTEXT.md, Outcome is a _computed_ property of a
 Case, derived by running the Case Type's outcome function over the Case's
 Answers. It is not stored as a column on the Case row.
 
@@ -64,7 +64,7 @@ to its live computed form.
 **Negative**
 
 - Mild conflict with [ADR-0006]'s "outcome is code, not data" framing — partly
-  resolved by treating the snapshot as a *historical record* distinct from the
+  resolved by treating the snapshot as a _historical record_ distinct from the
   live Outcome, but readers will need to understand both exist.
 - Provisioning every Case Type list now requires two extra indexed columns;
   Maintainers must include them when adding a Case Type.

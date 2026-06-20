@@ -7,9 +7,10 @@
 export function register(router, context) {
   router.register('#/case/:id', {
     mount(container, params) {
-      const el = /** @type {import('../pages/cr-case-review.js').CRCaseReview} */ (
-        document.createElement('cr-case-review')
-      );
+      const el =
+        /** @type {import('../pages/cr-case-review.js').CRCaseReview} */ (
+          document.createElement('cr-case-review')
+        );
       el.client = context.client;
       el.saveQueue = context.saveQueue;
       el.caseId = params.id;

@@ -128,7 +128,13 @@ export class CRAppeal extends ReactiveElement {
     } else if (this.access === 'edit' && !openAppeal) {
       children.push(this._renderForm());
     } else if (this.access === 'edit' && openAppeal) {
-      children.push(h('p', { className: 'cr-appeal-open-note' }, 'An Appeal is already open for this Case.'));
+      children.push(
+        h(
+          'p',
+          { className: 'cr-appeal-open-note' },
+          'An Appeal is already open for this Case.'
+        )
+      );
     } else if (this._appeals().length === 0) {
       children.push(this._renderEmpty());
     }
@@ -138,7 +144,11 @@ export class CRAppeal extends ReactiveElement {
 
   /** @returns {HTMLElement} */
   _renderEmpty() {
-    return h('p', { className: 'cr-appeal-empty' }, 'No Appeal has been raised.');
+    return h(
+      'p',
+      { className: 'cr-appeal-empty' },
+      'No Appeal has been raised.'
+    );
   }
 
   /**
@@ -147,49 +157,85 @@ export class CRAppeal extends ReactiveElement {
    */
   _renderAppeal(appeal) {
     const children = [];
-    children.push(h('p', { className: 'cr-appeal-state' }, `State: ${appeal.state}`));
-    children.push(h('p', { className: 'cr-appeal-item-rationale' }, appeal.rationale));
+    children.push(
+      h('p', { className: 'cr-appeal-state' }, `State: ${appeal.state}`)
+    );
+    children.push(
+      h('p', { className: 'cr-appeal-item-rationale' }, appeal.rationale)
+    );
 
     if (appeal.citedAnswerKeys?.length) {
-      children.push(h('p', { className: 'cr-appeal-item-cited' }, `Disputed Answers: ${appeal.citedAnswerKeys.join(', ')}`));
+      children.push(
+        h(
+          'p',
+          { className: 'cr-appeal-item-cited' },
+          `Disputed Answers: ${appeal.citedAnswerKeys.join(', ')}`
+        )
+      );
     }
 
     if (appeal.resolution) {
-      children.push(h('p', { className: 'cr-appeal-resolution' }, `Resolution: ${appeal.resolution.verdict} — ${appeal.resolution.rationale}`));
+      children.push(
+        h(
+          'p',
+          { className: 'cr-appeal-resolution' },
+          `Resolution: ${appeal.resolution.verdict} — ${appeal.resolution.rationale}`
+        )
+      );
     }
     return h('section', { className: 'cr-appeal-item' }, children);
   }
 
   /** @returns {HTMLElement} */
   _renderForm() {
-    const rationale = /** @type {HTMLTextAreaElement} */ (buildCaptureControl(
-      { key: 'rationale', type: 'textarea', label: 'Appeal rationale' },
-      '',
-      () => {},
-      'cr-appeal-rationale'
-    ));
+    const rationale = /** @type {HTMLTextAreaElement} */ (
+      buildCaptureControl(
+        { key: 'rationale', type: 'textarea', label: 'Appeal rationale' },
+        '',
+        () => {},
+        'cr-appeal-rationale'
+      )
+    );
     rationale.setAttribute('aria-label', 'Appeal rationale');
-    
+
     /** @type {HTMLInputElement[]} */
     const checkboxes = [];
     const citeWrappers = [];
-    for (const q of this.catalogue.filter((q) => isFailure(q, this.answers[q.id]))) {
-      const box = /** @type {HTMLInputElement} */ (/** @type {unknown} */ (h('input', { type: 'checkbox', value: q.id, checked: false })));
+    for (const q of this.catalogue.filter((q) =>
+      isFailure(q, this.answers[q.id])
+    )) {
+      const box = /** @type {HTMLInputElement} */ (
+        /** @type {unknown} */ (
+          h('input', { type: 'checkbox', value: q.id, checked: false })
+        )
+      );
       checkboxes.push(box);
-      citeWrappers.push(h('label', { className: 'cr-appeal-cite' }, box, h('span', {}, q.text)));
+      citeWrappers.push(
+        h('label', { className: 'cr-appeal-cite' }, box, h('span', {}, q.text))
+      );
     }
 
-    const error = h('p', { className: 'cr-appeal-error', hidden: true }, 'A rationale is required to raise an Appeal.');
+    const error = h(
+      'p',
+      { className: 'cr-appeal-error', hidden: true },
+      'A rationale is required to raise an Appeal.'
+    );
 
-    return h('section', { className: 'cr-appeal-form' },
+    return h(
+      'section',
+      { className: 'cr-appeal-form' },
       h('label', {}, 'Why are you appealing this outcome?'),
       rationale,
       ...citeWrappers,
       error,
-      h('button', {
-        className: 'cr-appeal-submit',
-        onClick: () => this._raise(rationale, checkboxes, error)
-      }, 'Raise Appeal')
+      h(
+        'button',
+        {
+          className: 'cr-appeal-submit',
+          onClick: () => this._raise(rationale, checkboxes, error),
+        },
+        'Raise Appeal'
+      )
     );
   }
 
@@ -241,27 +287,43 @@ export class CRAppeal extends ReactiveElement {
    * @returns {HTMLElement}
    */
   _renderResolveForm(appeal) {
-    const rationale = /** @type {HTMLTextAreaElement} */ (buildCaptureControl(
-      { key: 'rationale', type: 'textarea', label: 'Resolution rationale' },
-      '',
-      () => {},
-      'cr-appeal-resolution-rationale'
-    ));
+    const rationale = /** @type {HTMLTextAreaElement} */ (
+      buildCaptureControl(
+        { key: 'rationale', type: 'textarea', label: 'Resolution rationale' },
+        '',
+        () => {},
+        'cr-appeal-resolution-rationale'
+      )
+    );
     rationale.setAttribute('aria-label', 'Resolution rationale');
-    const error = h('p', { className: 'cr-appeal-resolution-error', hidden: true }, 'A rationale is required to resolve an Appeal.');
+    const error = h(
+      'p',
+      { className: 'cr-appeal-resolution-error', hidden: true },
+      'A rationale is required to resolve an Appeal.'
+    );
 
-    return h('section', { className: 'cr-appeal-resolve' },
+    return h(
+      'section',
+      { className: 'cr-appeal-resolve' },
       h('label', {}, 'How are you resolving this Appeal?'),
       rationale,
       error,
-      h('button', {
-        className: 'cr-appeal-reject',
-        onClick: () => this._resolve(appeal, 'rejected', rationale, error)
-      }, 'Reject Appeal'),
-      h('button', {
-        className: 'cr-appeal-agree',
-        onClick: () => this._resolve(appeal, 'agreed', rationale, error)
-      }, 'Agree with Appeal')
+      h(
+        'button',
+        {
+          className: 'cr-appeal-reject',
+          onClick: () => this._resolve(appeal, 'rejected', rationale, error),
+        },
+        'Reject Appeal'
+      ),
+      h(
+        'button',
+        {
+          className: 'cr-appeal-agree',
+          onClick: () => this._resolve(appeal, 'agreed', rationale, error),
+        },
+        'Agree with Appeal'
+      )
     );
   }
 

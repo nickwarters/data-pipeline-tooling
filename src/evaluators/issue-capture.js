@@ -16,7 +16,9 @@ export function validateCaptureGroups(groups) {
   for (const group of groups ?? []) {
     for (const field of group.fields) {
       if (seen.has(field.key)) {
-        throw new Error(`Duplicate Issue Capture Field key "${field.key}" across capture groups.`);
+        throw new Error(
+          `Duplicate Issue Capture Field key "${field.key}" across capture groups.`
+        );
       }
       seen.add(field.key);
     }
@@ -53,11 +55,13 @@ export function findCaptureField(groups, key) {
  */
 export function captureValue(answer, field, value) {
   if (
-    (field.type === 'select' || field.type === 'radio')
-    && value !== ''
-    && !(field.options ?? []).includes(value)
+    (field.type === 'select' || field.type === 'radio') &&
+    value !== '' &&
+    !(field.options ?? []).includes(value)
   ) {
-    throw new Error(`Invalid value "${value}" for ${field.type} Issue Capture Field "${field.key}".`);
+    throw new Error(
+      `Invalid value "${value}" for ${field.type} Issue Capture Field "${field.key}".`
+    );
   }
   const capture = { ...answer.capture };
   if (value === '') {

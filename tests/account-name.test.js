@@ -1,7 +1,12 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { toBareAccount, toClaimsLogin, CLAIMS_PREFIX, AD_DOMAIN } from '../src/services/account-name.js';
+import {
+  toBareAccount,
+  toClaimsLogin,
+  CLAIMS_PREFIX,
+  AD_DOMAIN,
+} from '../src/services/account-name.js';
 
 test('toBareAccount: strips the claims prefix and AD domain to a bare account', () => {
   assert.equal(toBareAccount('i:0#.w|CONTOSO\\jsmith'), 'jsmith');

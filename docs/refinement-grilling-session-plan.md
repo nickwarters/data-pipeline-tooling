@@ -10,7 +10,7 @@ per-Case-Type, grouped/collapsible field sets.
 
 > How to use this doc: each item is a decision we must land or a question we must
 > answer. Walk it top-to-bottom in the grill. **Bold** items are the high-stakes
-> ones where the new request *contradicts* something already documented (CONTEXT.md
+> ones where the new request _contradicts_ something already documented (CONTEXT.md
 > or an ADR) — resolve those first, because the rest depends on them.
 
 ---
@@ -21,17 +21,17 @@ per-Case-Type, grouped/collapsible field sets.
       can sanity-check every decision against the actual pain.)
 - [ ] Who are the personas in the room for the demo (Reviewer, Case Type Owner,
       Responsible Party, QA Reviewer)? Whose feedback is driving which change?
-- [ ] What's MVP for the *next* demo vs. what's "later"? (We don't have to land the
+- [ ] What's MVP for the _next_ demo vs. what's "later"? (We don't have to land the
       whole flexible-capture engine at once.)
 
 ---
 
-## 1. Tab structure & naming  ⚠️ contradicts current docs
+## 1. Tab structure & naming ⚠️ contradicts current docs
 
 The request says the tabs become: **Case Details · Review · Issues · Remediation · Summary**.
 Today (CONTEXT.md "Section", ADR-0014, ADR-0016) the tabs are:
 **Details · Questions · Notes · Issues · Summary**, with Conversation as a floating
-overlay and Remediation surfacing *as* the "Issues" tab.
+overlay and Remediation surfacing _as_ the "Issues" tab.
 
 So three things move at once. Pin each down:
 
@@ -40,18 +40,18 @@ So three things move at once. Pin each down:
 - [ ] **Where do Notes go?** The current Notes Section holds the **Case Justification**
       and the general note (CONTEXT.md). The new tab list drops "Notes". Did we
       intend to remove the Notes tab, fold it into another tab, or keep it and just
-      not mention it? Case Justification must live *somewhere*.
+      not mention it? Case Justification must live _somewhere_.
 - [ ] **"Review" vs "Questions" — same thing renamed, or different scope?** The
       request says Review = "question responses only, not selection of
-      actions/remediation". That *is* today's Questions tab. Is "Review" purely a
+      actions/remediation". That _is_ today's Questions tab. Is "Review" purely a
       rename of Questions?
 - [ ] **Terminology collision on the word "Review".** CONTEXT.md explicitly lists
-      "Review" as an *avoid* term for **Case** ("review is the activity, not the
+      "Review" as an _avoid_ term for **Case** ("review is the activity, not the
       thing"). Now a tab is literally labelled "Review". Are we OK overloading it as
       a UI label only (domain concept stays "Questions"/"Answers"), or pick a
       different label (e.g. "Questions", "Assessment")?
-- [ ] **Issues vs Remediation — what is each tab FOR?**  *(Single most important
-      question in this doc.)* Today they're the same Section. The request now lists
+- [ ] **Issues vs Remediation — what is each tab FOR?** _(Single most important
+      question in this doc.)_ Today they're the same Section. The request now lists
       them as two separate tabs, AND says Issues does the action selection + extra
       data capture. So:
   - [ ] What does the **Issues** tab contain? (Stated: all failed questions; select
@@ -60,7 +60,7 @@ So three things move at once. Pin each down:
   - [ ] What does the **Remediation** tab then contain that Issues doesn't? Options to
         decide between:
         (a) Remediation = a rolled-up, read-only view of all chosen actions across
-        the case; (b) Remediation = where the configurable extra-data *groups* live
+        the case; (b) Remediation = where the configurable extra-data _groups_ live
         (and Issues stays attribution + action only); (c) something else.
   - [ ] Does this split mean the domain concept "Remediation Action" now lives under
         the **Issues** tab while the **Remediation** tab is something new? That inverts
@@ -80,7 +80,7 @@ So three things move at once. Pin each down:
 
 ---
 
-## 2. Flexible extra-data capture  ⚠️ extends/contradicts ADR-0017
+## 2. Flexible extra-data capture ⚠️ extends/contradicts ADR-0017
 
 The request: each Case Type has a configurable set of extra data to capture "for each
 question"; flexible; **groups of fields**; each group a **collapsed section** that
@@ -90,17 +90,17 @@ etc.); all captured data **attached to the question data**. We already have
 
 ### 2a. Scope: which questions, and where declared
 
-- [ ] **"For each question" — all Answers, or only *failed* Answers?** ADR-0017's
-      capture (Remediation Details) is per *failed* Answer only, and lives in the
+- [ ] **"For each question" — all Answers, or only _failed_ Answers?** ADR-0017's
+      capture (Remediation Details) is per _failed_ Answer only, and lives in the
       Issues Section. The request phrase "extra data capture for each question" is
       ambiguous. Decide: capture on every Answer, or only failures?
 - [ ] **Declared per Case Type, not per Question Definition — confirm.** ADR-0017
-      deliberately declares fields per *Case Type*, not per Question Definition,
+      deliberately declares fields per _Case Type_, not per Question Definition,
       because Question Definitions are shared cross-Case-Type (a per-question field
       would leak into every Case Type using that question). The request says
       "configurable ... by case type" (good) but also "for each question" and
       "attached to the question data" (sounds per-question). Reconcile: declared once
-      per Case Type, *captured* per Answer? Or genuinely per-Question-Definition now
+      per Case Type, _captured_ per Answer? Or genuinely per-Question-Definition now
       (and accept the cross-Case-Type leakage / override ADR-0017)?
 - [ ] If per-question variation IS wanted, how? (e.g. fields target specific question
       ids / categories / response types via a `showWhen`-style selector?)
@@ -108,13 +108,13 @@ etc.); all captured data **attached to the question data**. We already have
 ### 2b. The grouping / collapsible model (new)
 
 - [ ] **Data shape for groups.** Sketch the declaration. Straw man:
-      ```js
-      captureGroups: [
-        { key, label, collapsed: true, showWhen?, fields: [
-          { key, label, type, options?, required?, showWhen? }
-        ]}
-      ]
-      ```
+      `js
+  captureGroups: [
+    { key, label, collapsed: true, showWhen?, fields: [
+      { key, label, type, options?, required?, showWhen? }
+    ]}
+  ]
+  `
       Confirm the shape, and what replaces today's flat `remediationFields`.
 - [ ] **What do we name this concept?** (Domain term needed for CONTEXT.md.) Today:
       "Remediation Detail" (a single field). New container = "Capture Group"? "Detail
@@ -130,7 +130,7 @@ etc.); all captured data **attached to the question data**. We already have
       also: text, checkbox/multi-select, number, date, yes/no. Lock the exact list —
       each type is rendering + validation + storage work.
 - [ ] **Storage shape (ADR-0007 / ADR-0017).** Today `Answer.remediationDetails:
-      Record<string,string>` — string-keyed strings. Multi-select / checkbox groups
+  Record<string,string>` — string-keyed strings. Multi-select / checkbox groups
       need arrays; numbers/dates may want typing. Do we keep `Record<string,string>`
       (serialise everything to string) or widen to `Record<string, string|string[]>`?
 - [ ] **One blob or extend Answers?** ADR-0017 stored inline on the Answer to avoid a
@@ -144,8 +144,8 @@ etc.); all captured data **attached to the question data**. We already have
 
 ### 2d. Lifecycle & reporting
 
-- [ ] **Lifecycle (mirror ADR-0013/0017?).** Today Remediation Details are *stripped*
-      when an Answer stops being a failure, and *frozen* at completion. If capture now
+- [ ] **Lifecycle (mirror ADR-0013/0017?).** Today Remediation Details are _stripped_
+      when an Answer stops being a failure, and _frozen_ at completion. If capture now
       spans all Answers (not just failures), the "strip when not a failure" rule
       breaks. Define the lifecycle for the new model.
 - [ ] **Answer Overrides (ADR-0018).** An Override carries a complete replacement set
@@ -158,11 +158,11 @@ etc.); all captured data **attached to the question data**. We already have
 
 ---
 
-## 3. Summary tab  ⚠️ mostly confirmation, one new bit
+## 3. Summary tab ⚠️ mostly confirmation, one new bit
 
 Request: Summary stays a read-only rollup — # successful, # failed, # not-applicable,
 the Case Details, every failed question with its issues + captured data, and the
-Outcome. Plus a *refined* QA override section. This largely matches CONTEXT.md
+Outcome. Plus a _refined_ QA override section. This largely matches CONTEXT.md
 "Summary" + ADR-0016; confirm and pin the deltas.
 
 - [ ] **Count definitions.** Precisely define each count:
@@ -178,14 +178,14 @@ Outcome. Plus a *refined* QA override section. This largely matches CONTEXT.md
 - [ ] **Derivation timing (ADR-0012/0016).** Hybrid: live while In-progress, frozen
       `outcomeAtCompletion` once Completed; counts/failed-list recompute from frozen
       Answers. Unchanged? Confirm.
-- [ ] **Outcome block** stays a block *within* Summary (not its own tab) — confirm.
+- [ ] **Outcome block** stays a block _within_ Summary (not its own tab) — confirm.
 - [ ] **QA override section — what's the "refinement"?** This is the new bit. Against
       ADR-0018 (Answer Override) / ADR-0019 (effectiveOutcome) / CONTEXT.md
       (Answer Override, Effective Answers, Current Outcome), specify exactly what
       changes:
-  - [ ] What does the refined QA override section *show* (original vs overridden per
+  - [ ] What does the refined QA override section _show_ (original vs overridden per
         Answer, Current Outcome, who/when/source)?
-  - [ ] What can be *done* from it, and by whom (QA Reviewer only, per CONTEXT.md)?
+  - [ ] What can be _done_ from it, and by whom (QA Reviewer only, per CONTEXT.md)?
   - [ ] Is it embedded here in Summary, or still authored on the original Case page /
         in the QA Check (ADR-0018's cross-row ETag-guarded write)?
   - [ ] Does it now surface the new captured field groups in the override replacement
@@ -242,7 +242,7 @@ If we only get through five things in the grill, these are them:
   it; same-row write), BUT the workshop wants the override to operate at the **Case level**
   rather than per-question/per-**Answer**. ⚠️ This **directly contradicts ADR-0018 and
   CONTEXT.md**, which deliberately made overrides per-**Answer** with the **Outcome
-  *derived*, never directly edited** (CONTEXT avoid-lists "Outcome Override"). A case-level
+  _derived_, never directly edited** (CONTEXT avoid-lists "Outcome Override"). A case-level
   override implies editing the verdict directly. Must grill: does **Current Outcome** still
   re-derive via `computeOutcome`, or become a stored hand-set verdict? What happens to the
   per-Answer **replacement sets** (actions / attribution / **Issue Capture Field**s)? How do
@@ -271,5 +271,5 @@ If we only get through five things in the grill, these are them:
       editor) — do Owners author capture groups too, or Maintainers only?
 - [ ] Validation UX: where do required-but-empty errors surface (Issues drawer vs
       completion gate)?
-</content>
-</invoke>
+      </content>
+      </invoke>

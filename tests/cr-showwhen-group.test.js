@@ -4,11 +4,15 @@ import assert from 'node:assert/strict';
 import { installDom } from './_bank-dom-stub.js';
 installDom();
 
-const { CRShowwhenGroup } = await import('../src/components/cr-showwhen-group.js');
-const { _resetStore, cases } = await import('../src/question-bank/question-bank-store.js');
+const { CRShowwhenGroup } =
+  await import('../src/components/cr-showwhen-group.js');
+const { _resetStore, cases } =
+  await import('../src/question-bank/question-bank-store.js');
 
 /** @returns {{ type: string, op: string, children: any[] }} */
-function mkGroup(over = {}) { return { type: 'group', op: 'and', children: [], ...over }; }
+function mkGroup(over = {}) {
+  return { type: 'group', op: 'and', children: [], ...over };
+}
 
 test('CRShowwhenGroup: missing question/group → no children', () => {
   const e = new CRShowwhenGroup();
@@ -21,7 +25,9 @@ test('CRShowwhenGroup: empty AND group renders head + empty children container',
   const q = cases.get()['hello-review'].questions[2];
   const g = mkGroup();
   const e = new CRShowwhenGroup();
-  e.question = q; e.group = g; e.isRoot = true;
+  e.question = q;
+  e.group = g;
+  e.isRoot = true;
   e.connectedCallback();
   assert.equal(/** @type {any} */ (e)._children.length, 2);
   assert.ok(e.className.includes('op-and'));
@@ -30,18 +36,33 @@ test('CRShowwhenGroup: empty AND group renders head + empty children container',
 test('CRShowwhenGroup: + condition appends a leaf, alerts when no other questions', () => {
   _resetStore();
   /** @type {any} */
-  const lonely = { id: 'q-only', text: '', responseType: 'yes-no-na', deprecated: false };
+  const lonely = {
+    id: 'q-only',
+    text: '',
+    responseType: 'yes-no-na',
+    deprecated: false,
+  };
   // Force currentBank to have only this question by mutating state
-  cases.set({ 'hello-review': { label: 'L', slug: 'hello-review', eligibleGroups: [], questions: [lonely] } });
+  cases.set({
+    'hello-review': {
+      label: 'L',
+      slug: 'hello-review',
+      eligibleGroups: [],
+      questions: [lonely],
+    },
+  });
   const g = mkGroup();
   const e = new CRShowwhenGroup();
-  e.question = lonely; e.group = g; e.isRoot = true;
+  e.question = lonely;
+  e.group = g;
+  e.isRoot = true;
   e.connectedCallback();
   const head = /** @type {any} */ (e)._children[0];
   const actions = head._children[1];
   /** @type {any[]} */
   const alerts = [];
-  (/** @type {any} */ (globalThis)).alert = (/** @type {string} */ m) => alerts.push(m);
+  /** @type {any} */ (globalThis).alert = (/** @type {string} */ m) =>
+    alerts.push(m);
   const addCondBtn = actions._children[0];
   addCondBtn._listeners.click[0]();
   assert.equal(alerts.length, 1);
@@ -54,7 +75,9 @@ test('CRShowwhenGroup: + condition appends a leaf when others exist', () => {
   const q = bank.questions[2];
   const g = mkGroup();
   const e = new CRShowwhenGroup();
-  e.question = q; e.group = g; e.isRoot = true;
+  e.question = q;
+  e.group = g;
+  e.isRoot = true;
   e.connectedCallback();
   const head = /** @type {any} */ (e)._children[0];
   const actions = head._children[1];
@@ -68,7 +91,9 @@ test('CRShowwhenGroup: + group adds a flipped-op sub-group', () => {
   const q = cases.get()['hello-review'].questions[2];
   const g = mkGroup({ op: 'and' });
   const e = new CRShowwhenGroup();
-  e.question = q; e.group = g; e.isRoot = true;
+  e.question = q;
+  e.group = g;
+  e.isRoot = true;
   e.connectedCallback();
   const head = /** @type {any} */ (e)._children[0];
   const actions = head._children[1];
@@ -82,7 +107,9 @@ test('CRShowwhenGroup: op toggle flips AND ↔ OR', () => {
   const q = cases.get()['hello-review'].questions[2];
   const g = mkGroup();
   const e = new CRShowwhenGroup();
-  e.question = q; e.group = g; e.isRoot = true;
+  e.question = q;
+  e.group = g;
+  e.isRoot = true;
   e.connectedCallback();
   const head = /** @type {any} */ (e)._children[0];
   const toggle = head._children[0];
@@ -95,7 +122,9 @@ test('CRShowwhenGroup: non-root shows × group button', () => {
   const q = cases.get()['hello-review'].questions[2];
   const g = mkGroup();
   const e = new CRShowwhenGroup();
-  e.question = q; e.group = g; e.isRoot = false;
+  e.question = q;
+  e.group = g;
+  e.isRoot = false;
   e.connectedCallback();
   const head = /** @type {any} */ (e)._children[0];
   const actions = head._children[1];
@@ -108,12 +137,17 @@ test('CRShowwhenGroup: × group on non-root removes self from parent tree', asyn
   // Use complaint-review's q-rootcause which already has a nested tree.
   const storeMod = await import('../src/question-bank/question-bank-store.js');
   const q = storeMod.cases.get()['complaint-review'].questions[2];
-  const { ensureTree } = await import('../src/question-bank/question-bank-tree.js');
+  const { ensureTree } =
+    await import('../src/question-bank/question-bank-tree.js');
   const root = ensureTree(q);
-  const innerOr = /** @type {any} */ (root.children.find(c => c.type === 'group' && c.op === 'or'));
+  const innerOr = /** @type {any} */ (
+    root.children.find((c) => c.type === 'group' && c.op === 'or')
+  );
   const before = root.children.length;
   const e = new CRShowwhenGroup();
-  e.question = q; e.group = innerOr; e.isRoot = false;
+  e.question = q;
+  e.group = innerOr;
+  e.isRoot = false;
   e.connectedCallback();
   const head = /** @type {any} */ (e)._children[0];
   const actions = head._children[1];
@@ -133,7 +167,9 @@ test('CRShowwhenGroup: renders conjunctions between children + leaf/group mix', 
     ],
   });
   const e = new CRShowwhenGroup();
-  e.question = q; e.group = g; e.isRoot = true;
+  e.question = q;
+  e.group = g;
+  e.isRoot = true;
   e.connectedCallback();
   const childrenContainer = /** @type {any} */ (e)._children[1];
   // child0 (leaf), conjunction, child1 (group)

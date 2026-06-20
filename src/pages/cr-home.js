@@ -30,11 +30,16 @@ export class CRHome extends ReactiveElement {
       sections.push(this._roleSection('Reviewer', '#/dashboard'));
     }
     if (caps.isReviewerManager) {
-      sections.push(this._roleSection('Reviewer Manager', '#/reports/reviewer-team'));
+      sections.push(
+        this._roleSection('Reviewer Manager', '#/reports/reviewer-team')
+      );
     }
     if (caps.isResponsiblePartyManager) {
       sections.push(
-        this._roleSection('Responsible Party Manager', '#/reports/responsible-party-team')
+        this._roleSection(
+          'Responsible Party Manager',
+          '#/reports/responsible-party-team'
+        )
       );
     }
     if (caps.isResponsibleParty) {
@@ -59,7 +64,9 @@ export class CRHome extends ReactiveElement {
    * @returns {import('../lib/html.js').VNode}
    */
   _roleSection(roleName, href) {
-    return h('section', { className: 'cr-home__role' },
+    return h(
+      'section',
+      { className: 'cr-home__role' },
       h('h2', {}, roleName),
       h('a', { href }, roleName)
     );
@@ -67,12 +74,16 @@ export class CRHome extends ReactiveElement {
 
   /** @returns {import('../lib/html.js').VNode} */
   _visitorSection() {
-    return h('section', { className: 'cr-home__role' },
+    return h(
+      'section',
+      { className: 'cr-home__role' },
       h('h2', {}, 'Visitor'),
-      h('p', {},
+      h(
+        'p',
+        {},
         "You're signed in, but your account isn't enrolled in any Case Review ",
         "role yet. Access is managed by your team — once you're enrolled, your ",
-        "tools will appear here."
+        'tools will appear here.'
       )
     );
   }

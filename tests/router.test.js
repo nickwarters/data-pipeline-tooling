@@ -4,19 +4,20 @@ import assert from 'node:assert/strict';
 
 /** @type {Record<string, Function[]>} */
 const windowListeners = {};
-(/** @type {any} */ (globalThis)).window = {
+/** @type {any} */ (globalThis).window = {
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (windowListeners[t] ??= []).push(h);
   },
 };
-(/** @type {any} */ (globalThis)).location = { hash: '' };
+/** @type {any} */ (globalThis).location = { hash: '' };
 
 import { Router } from '../src/lib/router.js';
 
 test('Router: mount is called when navigating to a registered static hash', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});
-  const calls = /** @type {Array<{el: unknown, params: Record<string, string>}>} */ ([]);
+  const calls =
+    /** @type {Array<{el: unknown, params: Record<string, string>}>} */ ([]);
 
   router.register('#/dashboard', {
     mount: (el, params) => calls.push({ el, params }),
@@ -36,7 +37,9 @@ test('Router: named param is extracted from hash pattern', () => {
   let captured = null;
 
   router.register('#/case/:id', {
-    mount: (_, params) => { captured = params; },
+    mount: (_, params) => {
+      captured = params;
+    },
     unmount: () => {},
   });
 
@@ -51,7 +54,9 @@ test('Router: multiple named params are extracted', () => {
   let captured = null;
 
   router.register('#/org/:org/case/:id', {
-    mount: (_, params) => { captured = params; },
+    mount: (_, params) => {
+      captured = params;
+    },
     unmount: () => {},
   });
 
@@ -76,7 +81,11 @@ test('Router: navigating away calls unmount before the next mount', () => {
 
   router.navigate('#/dashboard');
   router.navigate('#/case/42');
-  assert.deepEqual(log, ['mount:dashboard', 'unmount:dashboard', 'mount:case:42']);
+  assert.deepEqual(log, [
+    'mount:dashboard',
+    'unmount:dashboard',
+    'mount:case:42',
+  ]);
 });
 
 test('Router: navigating to an unregistered hash is a no-op', () => {
@@ -113,11 +122,14 @@ test('Router: init sets container, registers hashchange listener, and navigates 
     unmount: () => log.push('unmount:root'),
   });
 
-  (/** @type {any} */ (globalThis)).location.hash = '#/';
+  /** @type {any} */ (globalThis).location.hash = '#/';
   router.init(container);
 
   assert.equal(router._container, container);
-  assert.ok(windowListeners['hashchange']?.length > 0, 'hashchange listener should be registered');
+  assert.ok(
+    windowListeners['hashchange']?.length > 0,
+    'hashchange listener should be registered'
+  );
   assert.deepEqual(log, ['mount:root']);
 });
 
@@ -132,7 +144,7 @@ test('Router: init with empty hash navigates to #/', () => {
     unmount: () => {},
   });
 
-  (/** @type {any} */ (globalThis)).location.hash = '';
+  /** @type {any} */ (globalThis).location.hash = '';
   router.init(container);
 
   assert.deepEqual(log, ['mount:root']);
@@ -141,7 +153,8 @@ test('Router: init with empty hash navigates to #/', () => {
 test('Router: route matches hash that has query params appended', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});
-  const calls = /** @type {Array<{el: unknown, params: Record<string, string>}>} */ ([]);
+  const calls =
+    /** @type {Array<{el: unknown, params: Record<string, string>}>} */ ([]);
 
   router.register('#/team-cases', {
     mount: (el, params) => calls.push({ el, params }),
@@ -163,11 +176,11 @@ test('Router: hashchange event triggers navigation', () => {
     unmount: () => log.push('unmount:dashboard'),
   });
 
-  (/** @type {any} */ (globalThis)).location.hash = '';
+  /** @type {any} */ (globalThis).location.hash = '';
   router.init(container);
 
-  (/** @type {any} */ (globalThis)).location.hash = '#/dashboard';
-  (windowListeners['hashchange'] ?? []).forEach(fn => fn());
+  /** @type {any} */ (globalThis).location.hash = '#/dashboard';
+  (windowListeners['hashchange'] ?? []).forEach((fn) => fn());
 
   assert.ok(log.includes('mount:dashboard'));
 });

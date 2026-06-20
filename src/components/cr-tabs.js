@@ -47,7 +47,7 @@ export class CRTabs extends ReactiveElement {
 
   /** @returns {Tab[]} the visible (non-hidden) tabs, in declared order. */
   _visible() {
-    return this.tabs.filter(t => !t.hidden);
+    return this.tabs.filter((t) => !t.hidden);
   }
 
   /**
@@ -57,7 +57,7 @@ export class CRTabs extends ReactiveElement {
    */
   _activeId() {
     const visible = this._visible();
-    if (visible.some(t => t.id === this.selected)) return this.selected;
+    if (visible.some((t) => t.id === this.selected)) return this.selected;
     return visible.length ? visible[0].id : '';
   }
 
@@ -71,7 +71,9 @@ export class CRTabs extends ReactiveElement {
     if (id === this._activeId()) return;
     this.selected = id;
     if (focus) this._focusId = id;
-    this.dispatchEvent(new CustomEvent('cr-tab-change', { detail: { id }, bubbles: true }));
+    this.dispatchEvent(
+      new CustomEvent('cr-tab-change', { detail: { id }, bubbles: true })
+    );
     // Force re-render and replace children manually because tabs/selected are not signals
     if (this._renderDispose) {
       const tree = this.render();
@@ -93,7 +95,7 @@ export class CRTabs extends ReactiveElement {
     const visible = this._visible();
     if (visible.length === 0) return;
     e.preventDefault();
-    const current = visible.findIndex(t => t.id === this._activeId());
+    const current = visible.findIndex((t) => t.id === this._activeId());
     const next = (current + step + visible.length) % visible.length;
     this._select(visible[next].id, true);
   }
@@ -107,33 +109,39 @@ export class CRTabs extends ReactiveElement {
     /** @type {HTMLElement | null} */
     let focusTarget = null;
 
-    const tablist = h('div', { role: 'tablist', class: 'cr-tabs-list' },
-      ...visible.map(tab => {
+    const tablist = h(
+      'div',
+      { role: 'tablist', class: 'cr-tabs-list' },
+      ...visible.map((tab) => {
         const isSelected = tab.id === activeId;
         const tabId = `${this._uid}-tab-${tab.id}`;
         const panelId = `${this._uid}-panel-${tab.id}`;
 
-        const btn = h('button', {
-          class: 'cr-tabs-tab',
-          type: 'button',
-          role: 'tab',
-          id: tabId,
-          'aria-controls': panelId,
-          'aria-selected': String(isSelected),
-          tabindex: isSelected ? '0' : '-1',
-          onclick: () => this._select(tab.id),
-          onkeydown: (/** @type {KeyboardEvent} */ e) => this._onKeydown(e)
-        }, tab.label);
+        const btn = h(
+          'button',
+          {
+            class: 'cr-tabs-tab',
+            type: 'button',
+            role: 'tab',
+            id: tabId,
+            'aria-controls': panelId,
+            'aria-selected': String(isSelected),
+            tabindex: isSelected ? '0' : '-1',
+            onclick: () => this._select(tab.id),
+            onkeydown: (/** @type {KeyboardEvent} */ e) => this._onKeydown(e),
+          },
+          tab.label
+        );
 
         const panel = h('div', {
           class: 'cr-tabs-panel',
           role: 'tabpanel',
           id: panelId,
           'aria-labelledby': tabId,
-          tabindex: '0'
+          tabindex: '0',
         });
         panel.hidden = !isSelected;
-        
+
         const content = this.panels[tab.id];
         if (content) panel.appendChild(content);
         panelNodes.push(panel);

@@ -5,7 +5,8 @@ import { installDom } from './_bank-dom-stub.js';
 installDom();
 
 const { CRBankDock } = await import('../src/question-bank/cr-bank-dock.js');
-const { _resetStore, drawerOpen, commit } = await import('../src/question-bank/question-bank-store.js');
+const { _resetStore, drawerOpen, commit } =
+  await import('../src/question-bank/question-bank-store.js');
 
 test('CRBankDock: shows active / deprecated / conditional / pending stats', () => {
   _resetStore();
@@ -25,10 +26,20 @@ test('CRBankDock: 0 changes → "0 changes"; >1 → plural', () => {
   let pendingStat = dock._children[0]._children[3];
   assert.ok(pendingStat.innerHTML.includes('0 changes'));
 
-  commit(t => {
+  commit((t) => {
     const b = t['hello-review'];
-    b.questions.push({ id: 'a', text: '', responseType: 'yes-no-na', deprecated: false });
-    b.questions.push({ id: 'b', text: '', responseType: 'yes-no-na', deprecated: false });
+    b.questions.push({
+      id: 'a',
+      text: '',
+      responseType: 'yes-no-na',
+      deprecated: false,
+    });
+    b.questions.push({
+      id: 'b',
+      text: '',
+      responseType: 'yes-no-na',
+      deprecated: false,
+    });
   });
   dock = /** @type {any} */ (e)._children[0];
   pendingStat = dock._children[0]._children[3];
@@ -53,7 +64,9 @@ test('CRBankDock: Preview + Submit buttons open the drawer', () => {
 
 test('CRBankDock: pluralises "change" with singular form on 1', () => {
   _resetStore();
-  commit(t => { t['hello-review'].questions[0].text = 'edited just once'; });
+  commit((t) => {
+    t['hello-review'].questions[0].text = 'edited just once';
+  });
   const e = new CRBankDock();
   e.connectedCallback();
   const dock = /** @type {any} */ (e)._children[0];

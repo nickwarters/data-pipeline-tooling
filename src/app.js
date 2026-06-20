@@ -2,8 +2,11 @@
 
 /** @returns {Promise<void>} */
 async function boot() {
-  const { createSharePointClient } = await import('./services/create-sharepoint-client.js');
-  const client = await createSharePointClient(new URLSearchParams(location.search));
+  const { createSharePointClient } =
+    await import('./services/create-sharepoint-client.js');
+  const client = await createSharePointClient(
+    new URLSearchParams(location.search)
+  );
 
   const { Router } = await import('./lib/router.js');
   const { SaveQueue } = await import('./services/save-queue.js');
@@ -19,7 +22,8 @@ async function boot() {
   ]);
   const capabilities = resolveCapabilities(userGroups);
 
-  const { resolveEligibleCaseTypes } = await import('./setup/resolve-eligible-case-types.js');
+  const { resolveEligibleCaseTypes } =
+    await import('./setup/resolve-eligible-case-types.js');
   const eligibleCaseTypes = await resolveEligibleCaseTypes(userGroups);
 
   const appEl = /** @type {Element} */ (document.getElementById('app'));
@@ -36,9 +40,16 @@ async function boot() {
   appEl.appendChild(routerContainer);
 
   const { registerRoutes } = await import('./setup/register-routes.js');
-  registerRoutes(router, { client, saveQueue, currentUser, capabilities, eligibleCaseTypes, appEl });
+  registerRoutes(router, {
+    client,
+    saveQueue,
+    currentUser,
+    capabilities,
+    eligibleCaseTypes,
+    appEl,
+  });
 
   router.init(routerContainer);
 }
 
-boot().catch(err => console.error('[RALPH] Boot error:', err));
+boot().catch((err) => console.error('[RALPH] Boot error:', err));

@@ -41,7 +41,9 @@ export class Router {
       if (m) {
         /** @type {Record<string, string>} */
         const params = {};
-        route.keys.forEach((key, i) => { params[key] = m[i + 1]; });
+        route.keys.forEach((key, i) => {
+          params[key] = m[i + 1];
+        });
         return { handler: route.handler, params };
       }
     }
@@ -55,7 +57,10 @@ export class Router {
 
     if (this._current) this._current.handler.unmount();
     this._current = matched;
-    matched.handler.mount(/** @type {Element} */ (this._container), matched.params);
+    matched.handler.mount(
+      /** @type {Element} */ (this._container),
+      matched.params
+    );
   }
 
   /** @param {Element} container */

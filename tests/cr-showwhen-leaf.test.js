@@ -4,12 +4,18 @@ import assert from 'node:assert/strict';
 import { installDom } from './_bank-dom-stub.js';
 installDom();
 
-const { CRShowwhenLeaf } = await import('../src/components/cr-showwhen-leaf.js');
-const { _resetStore, cases } = await import('../src/question-bank/question-bank-store.js');
+const { CRShowwhenLeaf } =
+  await import('../src/components/cr-showwhen-leaf.js');
+const { _resetStore, cases } =
+  await import('../src/question-bank/question-bank-store.js');
 
 function mkLeaf(over = {}) {
   return {
-    type: 'leaf', qId: 'q-welcome', op: 'equals', value: 'Yes', ...over,
+    type: 'leaf',
+    qId: 'q-welcome',
+    op: 'equals',
+    value: 'Yes',
+    ...over,
   };
 }
 
@@ -27,7 +33,7 @@ test('CRShowwhenLeaf: equals op renders qId select, op select, and value input',
   const leaf = mkLeaf();
   parent.children.push(leaf);
   const e = new CRShowwhenLeaf();
-  e.question = others[1];           // makes others = q[0], q[2..]
+  e.question = others[1]; // makes others = q[0], q[2..]
   e.parent = parent;
   e.leaf = leaf;
   e.connectedCallback();
@@ -58,7 +64,7 @@ test('CRShowwhenLeaf: in op renders comma-joined value', () => {
   const others = cases.get()['hello-review'].questions;
   /** @type {any} */
   const parent = { children: [] };
-  const leaf = mkLeaf({ op: 'in', value: ['A','B'] });
+  const leaf = mkLeaf({ op: 'in', value: ['A', 'B'] });
   parent.children.push(leaf);
   const e = new CRShowwhenLeaf();
   e.question = others[1];
@@ -150,13 +156,15 @@ test('CRShowwhenLeaf: typed value commits — split for in, plain for equals', (
   let row = /** @type {any} */ (e)._children[0];
   let val = row._children[2];
   val._listeners.change[0]({ target: { value: 'X, Y, ,Z' } });
-  assert.deepEqual(leaf.value, ['X','Y','Z']);
+  assert.deepEqual(leaf.value, ['X', 'Y', 'Z']);
 
   // Switch to equals
   const leaf2 = mkLeaf();
   parent.children = [leaf2];
   const e2 = new CRShowwhenLeaf();
-  e2.question = others[1]; e2.parent = parent; e2.leaf = leaf2;
+  e2.question = others[1];
+  e2.parent = parent;
+  e2.leaf = leaf2;
   e2.connectedCallback();
   row = /** @type {any} */ (e2)._children[0];
   val = row._children[2];

@@ -20,12 +20,14 @@ export const actions = signal(/** @type {PaletteAction[]} */ ([]));
 export const isOpen = signal(false);
 export const query = signal('');
 
-export const filteredActions = computed(() => filterActions(query.get(), actions.get()));
+export const filteredActions = computed(() =>
+  filterActions(query.get(), actions.get())
+);
 
 /** @param {PaletteAction} action */
 export function register(action) {
   const current = actions.get();
-  const idx = current.findIndex(a => a.id === action.id);
+  const idx = current.findIndex((a) => a.id === action.id);
   if (idx >= 0) {
     const next = [...current];
     next[idx] = action;
@@ -37,11 +39,15 @@ export function register(action) {
 
 /** @param {string} id */
 export function deregister(id) {
-  actions.set(actions.get().filter(a => a.id !== id));
+  actions.set(actions.get().filter((a) => a.id !== id));
 }
 
-export function openPalette() { isOpen.set(true); }
-export function closePalette() { isOpen.set(false); }
+export function openPalette() {
+  isOpen.set(true);
+}
+export function closePalette() {
+  isOpen.set(false);
+}
 
 /**
  * @param {string} q
@@ -51,8 +57,9 @@ export function closePalette() { isOpen.set(false); }
 export function filterActions(q, list) {
   if (!q) return list;
   const lower = q.toLowerCase();
-  return list.filter(a =>
-    a.label.toLowerCase().includes(lower) ||
-    a.keywords.some(k => k.toLowerCase().includes(lower))
+  return list.filter(
+    (a) =>
+      a.label.toLowerCase().includes(lower) ||
+      a.keywords.some((k) => k.toLowerCase().includes(lower))
   );
 }

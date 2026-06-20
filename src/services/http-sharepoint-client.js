@@ -35,11 +35,12 @@ export class HttpSharePointClient {
     // List names are placeholders until the SharePoint list schema is decided
     // (deferred per docs/PLAN.md slice 2). Constructor opts let deployers override.
     this._caseListName = opts.caseListName ?? 'Cases-HelloReview';
-    this._qDefListName = opts.questionDefinitionsListName ?? 'QuestionDefinitions';
+    this._qDefListName =
+      opts.questionDefinitionsListName ?? 'QuestionDefinitions';
     /** @type {FetchImpl} */
     this._fetch =
       opts.fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
-    this._sleep = opts.sleep ?? (ms => new Promise(r => setTimeout(r, ms)));
+    this._sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
     /** @type {string | null} */
     this._formDigest = null;
   }
@@ -76,7 +77,11 @@ export class HttpSharePointClient {
       }
       const newEtag = readEtag(data);
       const row = rowFromItem(data, newEtag);
-      return { ok: true, status: 200, data: { ...row, etag: newEtag || row.etag } };
+      return {
+        ok: true,
+        status: 200,
+        data: { ...row, etag: newEtag || row.etag },
+      };
     } catch (err) {
       const status = /** @type {any} */ (err).status || 500;
       return { ok: false, status };
@@ -86,7 +91,9 @@ export class HttpSharePointClient {
   /** @param {string[]} ids @returns {Promise<QuestionDefinition[]>} */
   async getQuestionDefinitions(ids) {
     if (ids.length === 0) return [];
-    const filter = ids.map(id => `QuestionId eq '${escapeOData(id)}'`).join(' or ');
+    const filter = ids
+      .map((id) => `QuestionId eq '${escapeOData(id)}'`)
+      .join(' or ');
     const url =
       this._listItemsUrl(this._qDefListName) +
       `?$filter=${encodeURIComponent(filter)}`;
@@ -100,7 +107,9 @@ export class HttpSharePointClient {
     const conds = [];
     if (filter.status) conds.push(`Status eq '${escapeOData(filter.status)}'`);
     if (filter.assignedReviewer) {
-      conds.push(`AssignedReviewerId eq '${escapeOData(filter.assignedReviewer)}'`);
+      conds.push(
+        `AssignedReviewerId eq '${escapeOData(filter.assignedReviewer)}'`
+      );
     }
     if (filter.overdue === true) {
       conds.push(`DueDate lt '${new Date().toISOString()}'`);
@@ -110,15 +119,18 @@ export class HttpSharePointClient {
     // column is indexed, so the RP-team / true-result reports stay one $filter
     // per Case Type with no full-row fetch.
     if (filter.effectiveOutcome) {
-      conds.push(`EffectiveOutcome eq '${escapeOData(filter.effectiveOutcome)}'`);
+      conds.push(
+        `EffectiveOutcome eq '${escapeOData(filter.effectiveOutcome)}'`
+      );
     }
     if (filter.outcomeOverridden !== undefined) {
       conds.push(`OutcomeOverridden eq ${filter.outcomeOverridden ? 1 : 0}`);
     }
     let url = this._listItemsUrl(this._caseListName);
-    if (conds.length) url += `?$filter=${encodeURIComponent(conds.join(' and '))}`;
+    if (conds.length)
+      url += `?$filter=${encodeURIComponent(conds.join(' and '))}`;
     const items = await this._getAllPages(url);
-    return items.map(raw => {
+    return items.map((raw) => {
       const item = /** @type {Record<string, unknown>} */ (raw);
       return rowFromItem(item, readEtag(item));
     });
@@ -129,7 +141,7 @@ export class HttpSharePointClient {
     const items = await this._getAllPages(
       this._absolute('/_api/web/currentUser/groups')
     );
-    return items.map(g => {
+    return items.map((g) => {
       const rec = /** @type {Record<string, unknown>} */ (g);
       return String(rec?.Title ?? rec?.LoginName ?? '');
     });
@@ -163,7 +175,9 @@ export class HttpSharePointClient {
     );
     const body = JSON.stringify({
       queryParams: {
-        __metadata: { type: 'SP.UI.ApplicationPages.ClientPeoplePickerQueryParameters' },
+        __metadata: {
+          type: 'SP.UI.ApplicationPages.ClientPeoplePickerQueryParameters',
+        },
         AllowEmailAddresses: true,
         AllowMultipleEntities: false,
         MaximumEntitySuggestions: 50,
@@ -175,8 +189,7 @@ export class HttpSharePointClient {
 
     const json = await this._write(url, 'POST', {}, body);
     const raw =
-      json?.value ??
-      /** @type {any} */ (json?.d)?.ClientPeoplePickerSearchUser;
+      json?.value ?? /** @type {any} */ (json?.d)?.ClientPeoplePickerSearchUser;
     const entities = typeof raw === 'string' ? JSON.parse(raw) : [];
     return entities.map(personFromEntity);
   }
@@ -195,7 +208,7 @@ export class HttpSharePointClient {
   async resolveUsers(accountNames) {
     const unique = [...new Set(accountNames)];
     const entries = await Promise.all(
-      unique.map(async account => {
+      unique.map(async (account) => {
         const displayName = await this._resolveOneUser(account);
         return /** @type {[string, string | null]} */ ([account, displayName]);
       })
@@ -294,11 +307,17 @@ export class HttpSharePointClient {
   async _write(url, method, extraHeaders, body) {
     const digest = await this._ensureDigest();
     try {
-      return await this._request(url, buildWriteInit(method, digest, extraHeaders, body));
+      return await this._request(
+        url,
+        buildWriteInit(method, digest, extraHeaders, body)
+      );
     } catch (err) {
       if (/** @type {any} */ (err).status !== 403) throw err;
       const fresh = await this._refreshDigest();
-      return this._request(url, buildWriteInit(method, fresh, extraHeaders, body));
+      return this._request(
+        url,
+        buildWriteInit(method, fresh, extraHeaders, body)
+      );
     }
   }
 
@@ -320,7 +339,8 @@ export class HttpSharePointClient {
       /** @type {any} */ (body?.d)?.GetContextWebInformation?.FormDigestValue
     );
     const digest = flat ?? verbose;
-    if (!digest) throw new Error('FormDigestValue missing from contextinfo response');
+    if (!digest)
+      throw new Error('FormDigestValue missing from contextinfo response');
     this._formDigest = digest;
     return digest;
   }
@@ -357,7 +377,9 @@ export class HttpSharePointClient {
   /** @param {string} pathOrUrl */
   _absolute(pathOrUrl) {
     if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
-    return this._webUrl + (pathOrUrl.startsWith('/') ? pathOrUrl : '/' + pathOrUrl);
+    return (
+      this._webUrl + (pathOrUrl.startsWith('/') ? pathOrUrl : '/' + pathOrUrl)
+    );
   }
 }
 
@@ -429,13 +451,20 @@ function rowFromItem(item, etag) {
     id: String(item?.Id ?? ''),
     caseType: String(item?.CaseType ?? ''),
     title: String(item?.Title ?? ''),
-    status: /** @type {'In-progress' | 'Completed'} */ (item?.Status ?? 'In-progress'),
+    status: /** @type {'In-progress' | 'Completed'} */ (
+      item?.Status ?? 'In-progress'
+    ),
     assignedReviewer: String(item?.AssignedReviewerId ?? ''),
     responsibleParty: String(item?.ResponsiblePartyId ?? ''),
-    answers: /** @type {Record<string, Answer>} */ (parseJsonField(item?.Answers, {})),
-    conversation: /** @type {Message[]} */ (parseJsonField(item?.Conversation, [])),
+    answers: /** @type {Record<string, Answer>} */ (
+      parseJsonField(item?.Answers, {})
+    ),
+    conversation: /** @type {Message[]} */ (
+      parseJsonField(item?.Conversation, [])
+    ),
     notes: String(item?.Notes ?? ''),
-    completedAt: typeof item?.CompletedAt === 'string' ? item.CompletedAt : null,
+    completedAt:
+      typeof item?.CompletedAt === 'string' ? item.CompletedAt : null,
     etag,
   };
 }
@@ -451,10 +480,14 @@ function itemFromRow(fields) {
   if (fields.status !== undefined) out.Status = fields.status;
   if (fields.notes !== undefined) out.Notes = fields.notes;
   if (fields.completedAt !== undefined) out.CompletedAt = fields.completedAt;
-  if (fields.assignedReviewer !== undefined) out.AssignedReviewerId = fields.assignedReviewer;
-  if (fields.responsibleParty !== undefined) out.ResponsiblePartyId = fields.responsibleParty;
-  if (fields.answers !== undefined) out.Answers = JSON.stringify(fields.answers);
-  if (fields.conversation !== undefined) out.Conversation = JSON.stringify(fields.conversation);
+  if (fields.assignedReviewer !== undefined)
+    out.AssignedReviewerId = fields.assignedReviewer;
+  if (fields.responsibleParty !== undefined)
+    out.ResponsiblePartyId = fields.responsibleParty;
+  if (fields.answers !== undefined)
+    out.Answers = JSON.stringify(fields.answers);
+  if (fields.conversation !== undefined)
+    out.Conversation = JSON.stringify(fields.conversation);
   return out;
 }
 
@@ -479,7 +512,8 @@ function parseJsonField(raw, fallback) {
 function qDefFromItem(raw) {
   const item = /** @type {Record<string, unknown>} */ (raw);
   const responseType =
-    item?.ResponseType === 'single-choice' || item?.ResponseType === 'multi-choice'
+    item?.ResponseType === 'single-choice' ||
+    item?.ResponseType === 'multi-choice'
       ? item.ResponseType
       : 'yes-no-na';
   const opts = parseJsonField(item?.Options, undefined);
@@ -488,12 +522,18 @@ function qDefFromItem(raw) {
   return {
     id: String(item?.QuestionId ?? item?.Id ?? ''),
     text: String(item?.QuestionText ?? item?.Title ?? ''),
-    responseType: /** @type {'yes-no-na'|'single-choice'|'multi-choice'} */ (responseType),
+    responseType: /** @type {'yes-no-na'|'single-choice'|'multi-choice'} */ (
+      responseType
+    ),
     options: Array.isArray(opts) ? /** @type {string[]} */ (opts) : undefined,
-    showWhen: showWhen && typeof showWhen === 'object'
-      ? /** @type {Record<string, unknown>} */ (showWhen)
-      : undefined,
-    failureCriteria: typeof item?.FailureCriteria === 'string' ? item.FailureCriteria : undefined,
+    showWhen:
+      showWhen && typeof showWhen === 'object'
+        ? /** @type {Record<string, unknown>} */ (showWhen)
+        : undefined,
+    failureCriteria:
+      typeof item?.FailureCriteria === 'string'
+        ? item.FailureCriteria
+        : undefined,
     remediationActions: Array.isArray(remediation)
       ? /** @type {string[]} */ (remediation)
       : undefined,

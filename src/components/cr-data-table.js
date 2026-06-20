@@ -37,7 +37,7 @@ export class CRDataTable extends ReactiveElement {
       const dir = this._sortDir.get();
       const cols = this._columns.get();
       if (!key) return rows;
-      const col = cols.find(c => c.key === key);
+      const col = cols.find((c) => c.key === key);
       if (!col || !col.getValue) return rows;
       const get = col.getValue;
       const out = [...rows].sort((a, b) => {
@@ -58,16 +58,24 @@ export class CRDataTable extends ReactiveElement {
   }
 
   /** @param {Array<ColumnDef<any>>} cols */
-  set columns(cols) { this._columns.set(cols); }
+  set columns(cols) {
+    this._columns.set(cols);
+  }
 
   /** @param {any[]} rows */
-  set rows(rows) { this._rowsIn.set(rows); }
+  set rows(rows) {
+    this._rowsIn.set(rows);
+  }
 
   /** @param {(row: any) => string} fn */
-  set rowClass(fn) { this._rowClass = fn || (() => ''); }
+  set rowClass(fn) {
+    this._rowClass = fn || (() => '');
+  }
 
   /** @param {(row: any) => void} fn */
-  set onRowActivate(fn) { this._onRowActivate = fn; }
+  set onRowActivate(fn) {
+    this._onRowActivate = fn;
+  }
 
   /** @param {{ key: string, dir?: 'asc' | 'desc' } | null} s */
   set sort(s) {
@@ -93,16 +101,44 @@ export class CRDataTable extends ReactiveElement {
 
     let tbody;
 
-    const table = h('table', { class: 'cr-data-table', role: 'grid', onkeydown: (/** @type {any} */ e) => this._onKeydown(e) },
-      h('thead', {},
-        h('tr', {},
-          ...cols.map(col => {
-            const v = col.key === sortKey ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none';
-            const thProps = { scope: 'col', 'aria-sort': v, class: `cr-col-${col.key}` };
-            
+    const table = h(
+      'table',
+      {
+        class: 'cr-data-table',
+        role: 'grid',
+        onkeydown: (/** @type {any} */ e) => this._onKeydown(e),
+      },
+      h(
+        'thead',
+        {},
+        h(
+          'tr',
+          {},
+          ...cols.map((col) => {
+            const v =
+              col.key === sortKey
+                ? sortDir === 'asc'
+                  ? 'ascending'
+                  : 'descending'
+                : 'none';
+            const thProps = {
+              scope: 'col',
+              'aria-sort': v,
+              class: `cr-col-${col.key}`,
+            };
+
             if (col.sortable) {
-              return h('th', thProps, 
-                h('button', { type: 'button', onclick: () => this._onHeaderClick(col.key) }, col.label)
+              return h(
+                'th',
+                thProps,
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    onclick: () => this._onHeaderClick(col.key),
+                  },
+                  col.label
+                )
               );
             } else {
               return h('th', thProps, col.label);
@@ -110,8 +146,10 @@ export class CRDataTable extends ReactiveElement {
           })
         )
       ),
-      tbody = h('tbody', { class: 'cr-data-table-body' },
-        ...rows.map(row => {
+      (tbody = h(
+        'tbody',
+        { class: 'cr-data-table-body' },
+        ...rows.map((row) => {
           const cls = this._rowClass(row);
           /** @type {any} */
           const trProps = { tabindex: '0' };
@@ -122,9 +160,11 @@ export class CRDataTable extends ReactiveElement {
               if (e.key === 'Enter') activate(row);
             };
           }
-          
-          return h('tr', trProps,
-            ...cols.map(col => {
+
+          return h(
+            'tr',
+            trProps,
+            ...cols.map((col) => {
               let content;
               if (col.renderCell) {
                 const rc = col.renderCell(row);
@@ -139,7 +179,7 @@ export class CRDataTable extends ReactiveElement {
             })
           );
         })
-      )
+      ))
     );
 
     this._tbodyEl = tbody;
@@ -158,16 +198,20 @@ export class CRDataTable extends ReactiveElement {
 
   /** @param {any} e */
   _onKeydown(e) {
-    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key))
+      return;
     if (!this._tbodyEl) return;
     const colCount = this._columns.get().length;
     if (colCount === 0) return;
 
     /** @type {any[]} */
     const cells = [];
-    const rows = /** @type {any[]} */ (/** @type {any} */ (this._tbodyEl)._children || []);
+    const rows = /** @type {any[]} */ (
+      /** @type {any} */ (this._tbodyEl)._children || []
+    );
     for (const row of rows) {
-      for (const cell of (/** @type {any} */ (row))._children || []) cells.push(cell);
+      for (const cell of /** @type {any} */ (row)._children || [])
+        cells.push(cell);
     }
 
     const focused = /** @type {any} */ (globalThis)._lastFocused;
@@ -180,7 +224,8 @@ export class CRDataTable extends ReactiveElement {
 
     if (e.key === 'ArrowRight' && colIdx < colCount - 1) nextIdx = idx + 1;
     else if (e.key === 'ArrowLeft' && colIdx > 0) nextIdx = idx - 1;
-    else if (e.key === 'ArrowDown' && rowIdx < rows.length - 1) nextIdx = idx + colCount;
+    else if (e.key === 'ArrowDown' && rowIdx < rows.length - 1)
+      nextIdx = idx + colCount;
     else if (e.key === 'ArrowUp' && rowIdx > 0) nextIdx = idx - colCount;
 
     if (nextIdx !== idx && cells[nextIdx]) {

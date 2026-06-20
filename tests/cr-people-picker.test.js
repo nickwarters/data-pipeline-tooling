@@ -17,31 +17,42 @@ class StubEl {
     this.value = '';
     this.hidden = false;
   }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
-  appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
-  append(/** @type {StubEl[]} */ ...cs) { this._children.push(...cs); }
+  replaceChildren(/** @type {StubEl[]} */ ...cs) {
+    this._children = cs;
+  }
+  appendChild(/** @type {StubEl} */ c) {
+    this._children.push(c);
+    return c;
+  }
+  append(/** @type {StubEl[]} */ ...cs) {
+    this._children.push(...cs);
+  }
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
   }
   dispatchEvent(/** @type {any} */ e) {
-    (this._listeners[e.type] ?? []).forEach(h => h(e));
+    (this._listeners[e.type] ?? []).forEach((h) => h(e));
     return true;
   }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) { this._attrs[k] = v; }
+  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
+    this._attrs[k] = v;
+  }
   /** @param {string} ev fire a listener as if the user triggered it */
   _fire(/** @type {string} */ ev, /** @type {any} */ payload) {
-    (this._listeners[ev] ?? []).forEach(h => h(payload));
+    (this._listeners[ev] ?? []).forEach((h) => h(payload));
   }
 }
 
-(/** @type {any} */ (globalThis)).HTMLElement = StubEl;
-(/** @type {any} */ (globalThis)).document = {
+/** @type {any} */ (globalThis).HTMLElement = StubEl;
+/** @type {any} */ (globalThis).document = {
   /** @param {string} _tag @returns {StubEl} */
-  createElement(_tag) { return new StubEl(); },
+  createElement(_tag) {
+    return new StubEl();
+  },
   addEventListener() {},
   removeEventListener() {},
 };
-(/** @type {any} */ (globalThis)).customElements = { define() {} };
+/** @type {any} */ (globalThis).customElements = { define() {} };
 
 class StubCustomEvent {
   /** @param {string} type @param {{ detail?: any, bubbles?: boolean }} [init] */
@@ -51,10 +62,11 @@ class StubCustomEvent {
     this.bubbles = init?.bubbles ?? false;
   }
 }
-(/** @type {any} */ (globalThis)).CustomEvent = StubCustomEvent;
+/** @type {any} */ (globalThis).CustomEvent = StubCustomEvent;
 
 // ===== IMPORTS (after stubs) =====
-const { CRPeoplePicker } = await import('../src/components/cr-people-picker.js');
+const { CRPeoplePicker } =
+  await import('../src/components/cr-people-picker.js');
 
 /**
  * Build a fake client whose searchPeople resolves to `results` and records queries.
@@ -66,7 +78,10 @@ function makeClient(results) {
   return {
     queries,
     /** @param {string} q */
-    async searchPeople(q) { queries.push(q); return results; },
+    async searchPeople(q) {
+      queries.push(q);
+      return results;
+    },
   };
 }
 
@@ -110,7 +125,9 @@ test('CRPeoplePicker: search renders one option per person with "Display — acc
 });
 
 test('CRPeoplePicker: clicking an option emits cr-person-selected with the bare account and clears the field', async () => {
-  const client = makeClient([{ loginName: 'jsmith', displayName: 'John Smith' }]);
+  const client = makeClient([
+    { loginName: 'jsmith', displayName: 'John Smith' },
+  ]);
   const el = mount(client);
   /** @type {any[]} */
   const events = [];
@@ -120,7 +137,10 @@ test('CRPeoplePicker: clicking an option emits cr-person-selected with the bare 
   results(el)._children[0]._fire('click');
 
   assert.equal(events.length, 1);
-  assert.deepEqual(events[0].detail, { loginName: 'jsmith', displayName: 'John Smith' });
+  assert.deepEqual(events[0].detail, {
+    loginName: 'jsmith',
+    displayName: 'John Smith',
+  });
   assert.equal(events[0].bubbles, true);
   assert.equal(input(el).value, '');
   assert.equal(results(el).hidden, true);
@@ -141,11 +161,16 @@ test('CRPeoplePicker: free-text fallback offers the typed text as a raw account 
   assert.equal(opts[0].textContent, 'Use “contractor1” as account');
 
   opts[0]._fire('click');
-  assert.deepEqual(events[0].detail, { loginName: 'contractor1', displayName: 'contractor1' });
+  assert.deepEqual(events[0].detail, {
+    loginName: 'contractor1',
+    displayName: 'contractor1',
+  });
 });
 
 test('CRPeoplePicker: a blank query clears the list without querying the client', async () => {
-  const client = makeClient([{ loginName: 'jsmith', displayName: 'John Smith' }]);
+  const client = makeClient([
+    { loginName: 'jsmith', displayName: 'John Smith' },
+  ]);
   const el = mount(client);
   await el._search('   ');
 
@@ -162,12 +187,14 @@ test('CRPeoplePicker: with no client a non-empty query renders no options', asyn
 });
 
 test('CRPeoplePicker: typing debounces and routes the query through client.searchPeople', async () => {
-  const client = makeClient([{ loginName: 'jsmith', displayName: 'John Smith' }]);
+  const client = makeClient([
+    { loginName: 'jsmith', displayName: 'John Smith' },
+  ]);
   const el = mount(client);
   el.debounceMs = 0;
 
   input(el)._fire('input', { target: { value: 'jo' } });
-  await new Promise(r => setTimeout(r));
+  await new Promise((r) => setTimeout(r));
   await el._searchPromise;
 
   assert.deepEqual(client.queries, ['jo']);
@@ -181,7 +208,7 @@ test('CRPeoplePicker: typing resets the debounce timer so only the latest query 
 
   input(el)._fire('input', { target: { value: 'jo' } });
   input(el)._fire('input', { target: { value: 'john' } });
-  await new Promise(r => setTimeout(r, 10));
+  await new Promise((r) => setTimeout(r, 10));
   await el._searchPromise;
 
   assert.deepEqual(client.queries, ['john']);
@@ -193,10 +220,14 @@ test('CRPeoplePicker: input with a null target value is treated as empty string'
   el.debounceMs = 0;
 
   input(el)._fire('input', { target: { value: null } });
-  await new Promise(r => setTimeout(r));
+  await new Promise((r) => setTimeout(r));
   await el._searchPromise;
 
-  assert.equal(client.queries.length, 0, 'empty query short-circuits before the client call');
+  assert.equal(
+    client.queries.length,
+    0,
+    'empty query short-circuits before the client call'
+  );
 });
 
 test('CRPeoplePicker: honours a custom placeholder', () => {
@@ -207,13 +238,19 @@ test('CRPeoplePicker: honours a custom placeholder', () => {
 });
 
 test('CRPeoplePicker: disconnectedCallback clears the pending debounce timer', async () => {
-  const client = makeClient([{ loginName: 'jsmith', displayName: 'John Smith' }]);
+  const client = makeClient([
+    { loginName: 'jsmith', displayName: 'John Smith' },
+  ]);
   const el = mount(client);
   el.debounceMs = 5;
 
   input(el)._fire('input', { target: { value: 'jo' } });
   el.disconnectedCallback();
-  await new Promise(r => setTimeout(r, 10));
+  await new Promise((r) => setTimeout(r, 10));
 
-  assert.equal(client.queries.length, 0, 'cancelled timer never reaches the client');
+  assert.equal(
+    client.queries.length,
+    0,
+    'cancelled timer never reaches the client'
+  );
 });

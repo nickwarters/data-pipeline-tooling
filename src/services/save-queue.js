@@ -21,7 +21,13 @@ export class SaveQueue {
    * @param {SharePointClient} client
    * @param {{ debounceMs?: number, backoffSchedule?: number[] }} [opts]
    */
-  constructor(client, { debounceMs = 1500, backoffSchedule = [1000, 2000, 4000, 8000, 16000, 30000] } = {}) {
+  constructor(
+    client,
+    {
+      debounceMs = 1500,
+      backoffSchedule = [1000, 2000, 4000, 8000, 16000, 30000],
+    } = {}
+  ) {
     this._client = client;
     this._debounceMs = debounceMs;
     this._backoffSchedule = backoffSchedule;
@@ -132,7 +138,9 @@ export class SaveQueue {
     if (result.ok) {
       if (result.data) {
         state.etag = result.data.etag;
-        state.baselineAnswers = result.data.answers ? { ...result.data.answers } : state.baselineAnswers;
+        state.baselineAnswers = result.data.answers
+          ? { ...result.data.answers }
+          : state.baselineAnswers;
       }
       this._statusSignal.set('saved');
       return;
@@ -143,7 +151,10 @@ export class SaveQueue {
       return;
     }
 
-    const delay = this._backoffSchedule[Math.min(retryIdx, this._backoffSchedule.length - 1)];
+    const delay =
+      this._backoffSchedule[
+        Math.min(retryIdx, this._backoffSchedule.length - 1)
+      ];
     this._statusSignal.set('reconnecting');
     setTimeout(() => this._flush(caseId, fields, retryIdx + 1), delay);
   }

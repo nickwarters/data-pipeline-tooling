@@ -25,15 +25,20 @@ export function parseTeamCasesParams(search) {
   return {
     manager: managerRaw === 'me' ? 'me' : null,
     role:
-      roleRaw === 'reviewer-manager' ? 'reviewer-manager'
-      : roleRaw === 'responsible-party-manager' ? 'responsible-party-manager'
-      : null,
+      roleRaw === 'reviewer-manager'
+        ? 'reviewer-manager'
+        : roleRaw === 'responsible-party-manager'
+          ? 'responsible-party-manager'
+          : null,
     caseType: p.get('caseType'),
     status:
-      statusRaw === 'overdue' ? 'overdue'
-      : statusRaw === 'outstanding' ? 'outstanding'
-      : statusRaw === 'completed' ? 'completed'
-      : null,
+      statusRaw === 'overdue'
+        ? 'overdue'
+        : statusRaw === 'outstanding'
+          ? 'outstanding'
+          : statusRaw === 'completed'
+            ? 'completed'
+            : null,
     completedSince: p.get('completedSince'),
     completedUntil: p.get('completedUntil'),
   };

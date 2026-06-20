@@ -11,14 +11,14 @@ Accepted
 A Completed Case's Outcome sometimes needs to change after the fact — a **QA
 Reviewer** finds the original **Assigned Reviewer** answered a question wrong
 ("check the checker"), or an **Appeal** by the **Responsible Party** is upheld.
-The strong domain consensus is that *the original result must remain*: we record
+The strong domain consensus is that _the original result must remain_: we record
 **why** it changed, not silently rewrite history.
 
-This collides with several existing decisions. Per [ADR-0006], Outcome is *code,
-not data* — derived by `computeOutcome` over the Case's Answers. Per [ADR-0012],
-`outcomeAtCompletion` is a *frozen snapshot* and the Answers themselves are frozen
+This collides with several existing decisions. Per [ADR-0006], Outcome is _code,
+not data_ — derived by `computeOutcome` over the Case's Answers. Per [ADR-0012],
+`outcomeAtCompletion` is a _frozen snapshot_ and the Answers themselves are frozen
 at completion. Per [ADR-0007], a Case stores `answers` as one JSON blob on the row
-with field-level PATCH. Per [ADR-0013], a *failed* Answer's **Attributed Party**
+with field-level PATCH. Per [ADR-0013], a _failed_ Answer's **Attributed Party**
 (and per [ADR-0017] its required **Remediation Details**) participate in the
 completion gate and are stripped when the Answer is no longer a failure.
 
@@ -30,14 +30,14 @@ and therefore changes which **Remediation Actions** apply.
 ## Decision
 
 Corrections are modelled as **Answer Overrides**: a post-completion, per-Answer
-layer that *displaces* the original without mutating it.
+layer that _displaces_ the original without mutating it.
 
 - **Additive storage.** Overrides live in a new `overrides[]` JSON-blob field on
   the **original Case row**, written by field-level PATCH ([ADR-0008] SaveQueue,
   ETag-guarded). The frozen fields (`answers`, `outcomeAtCompletion`,
-  `completedAt`, `hadRemediation`) are never touched — "immutable" means *those
-  fields*; adding a new field is additive. "Read-only original" ([ADR-0006],
-  CONTEXT QA Check) is narrowed to "the original *Answers* are read-only."
+  `completedAt`, `hadRemediation`) are never touched — "immutable" means _those
+  fields_; adding a new field is additive. "Read-only original" ([ADR-0006],
+  CONTEXT QA Check) is narrowed to "the original _Answers_ are read-only."
 
 - **Answer-level only; Outcome stays derived.** There is no verdict-level
   override. An Override replaces a specific Answer's value and, where it changes
@@ -55,8 +55,8 @@ layer that *displaces* the original without mutating it.
   [ADR-0013] attribution when `attributeFailures`) for the Answers it touches.
 
 - **Provenance and authority.** Each Override carries `{ source: 'qa' | 'appeal',
-  sourceCaseId? / sourceAppealId?, author, at, answerKey, value,
-  remediationActions?, attributedParty?, remediationDetails?, reasoning }`.
+sourceCaseId? / sourceAppealId?, author, at, answerKey, value,
+remediationActions?, attributedParty?, remediationDetails?, reasoning }`.
   Reasoning is mandatory. Authoring is restricted to the **QA Reviewers** group
   (UX-gated per [ADR-0010]; the real boundary is list ACLs). Overrides work **with
   or without** a QA Check — an Appeal-sourced or direct QA override needs no
@@ -66,13 +66,13 @@ layer that *displaces* the original without mutating it.
 - **One record, one authority, two surfaces.** The Override is a single record in
   `overrides[]` on the original row, governed by the original's `override` Mode
   cell ([ADR-0011], a function-valued cell returning `override` for `qaReviewer`
-  when `status === 'Completed'`). The *authoring editor* is one reusable element
+  when `status === 'Completed'`). The _authoring editor_ is one reusable element
   mounted in two hosts: the **original Case page**, and — as a convenience — a
   **QA Check** (`qa-{slug}`) that targets it, so a QA Reviewer need not navigate
   away mid-QA. Storage location and authority do **not** move with the surface:
   the QA Check embeds the editor but the write still targets the original row.
   Two consequences follow: (1) from the QA Check the write is **cross-row** —
-  it carries the *original's* ETag and reload-retries on conflict ([ADR-0008]),
+  it carries the _original's_ ETag and reload-retries on conflict ([ADR-0008]),
   even though the QA Check row is the page's primary; (2) the QA Check page
   resolves the `override` capability against the **linked original** row, not its
   own. Authoring on the original page remains fully independent, so Appeal-sourced

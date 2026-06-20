@@ -34,7 +34,9 @@ export class CRQuestion extends ReactiveElement {
   }
 
   focus() {
-    const input = /** @type {HTMLElement | null} */ (this.querySelector('input'));
+    const input = /** @type {HTMLElement | null} */ (
+      this.querySelector('input')
+    );
     if (input) input.focus();
   }
 
@@ -43,18 +45,20 @@ export class CRQuestion extends ReactiveElement {
     if (!q) return;
 
     return [
-      h('fieldset', {
-        class: 'cr-question',
-        id: `cr-q-${q.id}`,
-        role: q.responseType === 'multi-choice' ? 'group' : 'radiogroup',
-        'aria-required': 'true'
-      },
+      h(
+        'fieldset',
+        {
+          class: 'cr-question',
+          id: `cr-q-${q.id}`,
+          role: q.responseType === 'multi-choice' ? 'group' : 'radiogroup',
+          'aria-required': 'true',
+        },
         h('legend', {}, q.text),
-        q.responseType === 'multi-choice' 
-          ? this._renderMultiChoice(q) 
+        q.responseType === 'multi-choice'
+          ? this._renderMultiChoice(q)
           : this._renderSingleChoice(q)
       ),
-      this._renderRemediationPanel(q)
+      this._renderRemediationPanel(q),
     ].filter(Boolean);
   }
 
@@ -66,10 +70,14 @@ export class CRQuestion extends ReactiveElement {
     const answer = { value: this.currentValue };
     if (!isFailure(q, answer)) return null;
 
-    return h('details', { class: 'cr-remediation-panel', open: true },
+    return h(
+      'details',
+      { class: 'cr-remediation-panel', open: true },
       h('summary', {}, 'Actions required'),
-      h('ul', {},
-        q.remediationActions.map(text => h('li', {}, text))
+      h(
+        'ul',
+        {},
+        q.remediationActions.map((text) => h('li', {}, text))
       )
     );
   }
@@ -78,11 +86,15 @@ export class CRQuestion extends ReactiveElement {
    * @param {QuestionDefinition} q
    */
   _renderSingleChoice(q) {
-    const options = q.responseType === 'yes-no-na' ? YES_NO_NA : (q.options ?? []);
-    const current = typeof this.currentValue === 'string' ? this.currentValue : '';
-    
-    return options.map(opt => 
-      h('label', {}, 
+    const options =
+      q.responseType === 'yes-no-na' ? YES_NO_NA : (q.options ?? []);
+    const current =
+      typeof this.currentValue === 'string' ? this.currentValue : '';
+
+    return options.map((opt) =>
+      h(
+        'label',
+        {},
         h('input', {
           type: 'radio',
           name: `cr-q-${q.id}`,
@@ -91,11 +103,13 @@ export class CRQuestion extends ReactiveElement {
           disabled: this.access === 'read-only',
           onchange: () => {
             if (this.access === 'read-only') return;
-            this.dispatchEvent(new CustomEvent('cr-answer', {
-              detail: { questionId: q.id, value: opt },
-              bubbles: true
-            }));
-          }
+            this.dispatchEvent(
+              new CustomEvent('cr-answer', {
+                detail: { questionId: q.id, value: opt },
+                bubbles: true,
+              })
+            );
+          },
         }),
         h('span', {}, ` ${opt}`)
       )
@@ -107,10 +121,14 @@ export class CRQuestion extends ReactiveElement {
    */
   _renderMultiChoice(q) {
     const options = q.options ?? [];
-    const selected = new Set(Array.isArray(this.currentValue) ? this.currentValue : []);
+    const selected = new Set(
+      Array.isArray(this.currentValue) ? this.currentValue : []
+    );
 
-    return options.map(opt =>
-      h('label', {},
+    return options.map((opt) =>
+      h(
+        'label',
+        {},
         h('input', {
           type: 'checkbox',
           name: `cr-q-${q.id}`,
@@ -122,12 +140,14 @@ export class CRQuestion extends ReactiveElement {
             const next = new Set(selected);
             if (e.target.checked) next.add(opt);
             else next.delete(opt);
-            const value = options.filter(o => next.has(o));
-            this.dispatchEvent(new CustomEvent('cr-answer', {
-              detail: { questionId: q.id, value },
-              bubbles: true
-            }));
-          }
+            const value = options.filter((o) => next.has(o));
+            this.dispatchEvent(
+              new CustomEvent('cr-answer', {
+                detail: { questionId: q.id, value },
+                bubbles: true,
+              })
+            );
+          },
         }),
         h('span', {}, ` ${opt}`)
       )

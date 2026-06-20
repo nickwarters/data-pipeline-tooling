@@ -2,7 +2,7 @@
 
 > **Supersedes ADR-0017** (configurable Remediation Details). **Amends ADR-0013** (Attributed Party) — attribution is no longer a dedicated Answer property; it is one **Issue Capture Field** of type `person`.
 
-A **Case Type** declares everything captured against a *failed* **Answer** (an **Issue**) as one model: an ordered list of **Issue Capture Group**s, each holding ordered, typed **Issue Capture Field**s. This replaces the three previously separate concerns on a failed Answer — **Attributed Party** (ADR-0013), **Remediation Actions**, and flat Remediation Details (ADR-0017) — with a single engine. The driver is **consolidation**: Case Type Owners workshopped a shared structure to stop Case Types diverging, and channelled all per-Case-Type variation into this one well-defined slot.
+A **Case Type** declares everything captured against a _failed_ **Answer** (an **Issue**) as one model: an ordered list of **Issue Capture Group**s, each holding ordered, typed **Issue Capture Field**s. This replaces the three previously separate concerns on a failed Answer — **Attributed Party** (ADR-0013), **Remediation Actions**, and flat Remediation Details (ADR-0017) — with a single engine. The driver is **consolidation**: Case Type Owners workshopped a shared structure to stop Case Types diverging, and channelled all per-Case-Type variation into this one well-defined slot.
 
 ## Why one engine, not three special cases
 
@@ -21,7 +21,7 @@ captureGroups: [
 - **Closed field-type set:** `text | textarea | select | radio | person | actions`. No `number` / `date` / extra multi-select — nothing workshopped needs them, and each drags in its own validation/storage. `select` covers Yes/No. `person` renders the people picker; `actions` renders the existing remediation multi-select/free-text widget unchanged.
 - **Field keys are unique within a Case Type** (so `showWhen` references and storage keys are unambiguous).
 - **Groups are presentation only** — label, default `collapsed` state, field order. Grouping is **not** part of storage, so an Owner can move a field between groups without migrating data.
-- **`showWhen` is intra-group:** a field may condition on a *sibling* field's value on the same Answer (e.g. reveal the `person` field only when `originatorType === 'Distribution'`; reveal `actions` only when `remediationRequired === 'Yes'`). Conditioning a group on the *parent question* is deliberately **out of scope** for now.
+- **`showWhen` is intra-group:** a field may condition on a _sibling_ field's value on the same Answer (e.g. reveal the `person` field only when `originatorType === 'Distribution'`; reveal `actions` only when `remediationRequired === 'Yes'`). Conditioning a group on the _parent question_ is deliberately **out of scope** for now.
 - **`role`** is an optional semantic tag (`attributedParty`, `remediationOwner`) letting cross-Case-Type reporting find a field regardless of its per-Case-Type key. **Not yet built** — reporting is not on the agenda; safe to add later as pure config.
 
 ## Storage (ADR-0007, inline on the Answer)
@@ -29,7 +29,10 @@ captureGroups: [
 Values are stored flat by field key in `Answer.capture`:
 
 ```ts
-capture: Record<string, string | { loginName: string; displayName: string } | Action[]>
+capture: Record<
+  string,
+  string | { loginName: string; displayName: string } | Action[]
+>;
 ```
 
 This widens ADR-0017's `Record<string,string>` (forced by `person` and `actions`). It is a JSON-shape change inside the existing Answers blob — **no new SharePoint column**, ADR-0007's "everything on the row" is untouched. The dedicated `attributedParty` / `remediationDetails` Answer properties are removed; their data lives in `capture`.

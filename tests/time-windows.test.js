@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { computeTimeWindows } = await import('../src/evaluators/time-windows.js');
+const { computeTimeWindows } =
+  await import('../src/evaluators/time-windows.js');
 
 test('computeTimeWindows: sevenDaysAgo is midnight of 6 calendar days ago', () => {
   const now = new Date(2026, 4, 17, 15, 30, 0); // May 17 2026, 3:30pm local

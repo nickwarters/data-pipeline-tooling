@@ -17,7 +17,7 @@ const config = {
 
   /** @param {Record<string, Answer>} answers */
   computeOutcome(answers) {
-    const hasNo = Object.values(answers).some(a => a.value === 'No');
+    const hasNo = Object.values(answers).some((a) => a.value === 'No');
     return { verdict: hasNo ? 'fail' : 'pass' };
   },
 };

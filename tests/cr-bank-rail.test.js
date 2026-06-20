@@ -5,7 +5,8 @@ import { installDom } from './_bank-dom-stub.js';
 installDom();
 
 const { CRBankRail } = await import('../src/question-bank/cr-bank-rail.js');
-const { _resetStore, filters, cases } = await import('../src/question-bank/question-bank-store.js');
+const { _resetStore, filters, cases } =
+  await import('../src/question-bank/question-bank-store.js');
 
 test('CRBankRail: renders 4 sections: stat, categories, view, legend', () => {
   _resetStore();
@@ -18,7 +19,11 @@ test('CRBankRail: renders 4 sections: stat, categories, view, legend', () => {
 
 test('CRBankRail: clicking the "All" chip resets category', () => {
   _resetStore();
-  filters.set({ category: 'Opening', showDeprecated: true, conditionalOnly: false });
+  filters.set({
+    category: 'Opening',
+    showDeprecated: true,
+    conditionalOnly: false,
+  });
   const e = new CRBankRail();
   e.connectedCallback();
   const aside = /** @type {any} */ (e)._children[0];
@@ -48,8 +53,17 @@ test('CRBankRail: uncategorised questions get an "Uncategorised" chip', () => {
   _resetStore();
   cases.set({
     'hello-review': {
-      label: 'L', slug: 'hello-review', eligibleGroups: [],
-      questions: [/** @type {any} */ ({ id: 'q', text: '', responseType: 'yes-no-na', deprecated: false })],
+      label: 'L',
+      slug: 'hello-review',
+      eligibleGroups: [],
+      questions: [
+        /** @type {any} */ ({
+          id: 'q',
+          text: '',
+          responseType: 'yes-no-na',
+          deprecated: false,
+        }),
+      ],
     },
   });
   const e = new CRBankRail();

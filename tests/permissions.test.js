@@ -1,7 +1,10 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveCapabilities, permissions } from '../src/services/permissions.js';
+import {
+  resolveCapabilities,
+  permissions,
+} from '../src/services/permissions.js';
 
 /** @type {import('../src/services/permissions.js').PermissionsConfig} */
 const sampleConfig = {
@@ -29,7 +32,10 @@ test('resolveCapabilities: no QA-Reviewers group → isQaReviewer=false', () => 
 });
 
 test('resolveCapabilities: QA-Reviewers → isVisitor=false', () => {
-  assert.equal(resolveCapabilities(['QA-Reviewers'], sampleConfig).isVisitor, false);
+  assert.equal(
+    resolveCapabilities(['QA-Reviewers'], sampleConfig).isVisitor,
+    false
+  );
 });
 
 test('resolveCapabilities: empty groups → not reviewer, no owned types', () => {
@@ -45,7 +51,10 @@ test('resolveCapabilities: reviewer group → isReviewer=true, no owned types', 
 });
 
 test('resolveCapabilities: owner group only → isReviewer=false, owned slug returned', () => {
-  const caps = resolveCapabilities(['CaseTypeOwners-HelloReview'], sampleConfig);
+  const caps = resolveCapabilities(
+    ['CaseTypeOwners-HelloReview'],
+    sampleConfig
+  );
   assert.equal(caps.isReviewer, false);
   assert.deepEqual(caps.ownedCaseTypes, ['hello-review']);
 });
@@ -68,7 +77,10 @@ test('resolveCapabilities: multiple ownership groups → all owned slugs returne
 });
 
 test('resolveCapabilities: unknown group is silently ignored', () => {
-  const caps = resolveCapabilities(['SomeOtherGroup', 'Reviewers'], sampleConfig);
+  const caps = resolveCapabilities(
+    ['SomeOtherGroup', 'Reviewers'],
+    sampleConfig
+  );
   assert.equal(caps.isReviewer, true);
   assert.deepEqual(caps.ownedCaseTypes, []);
 });
@@ -136,25 +148,43 @@ test('resolveCapabilities: empty groups → isVisitor=true (derived)', () => {
 });
 
 test('resolveCapabilities: Reviewers → isVisitor=false', () => {
-  assert.equal(resolveCapabilities(['Reviewers'], sampleConfig).isVisitor, false);
+  assert.equal(
+    resolveCapabilities(['Reviewers'], sampleConfig).isVisitor,
+    false
+  );
 });
 
 test('resolveCapabilities: Reviewer-Managers → isVisitor=false', () => {
-  assert.equal(resolveCapabilities(['Reviewer-Managers'], sampleConfig).isVisitor, false);
+  assert.equal(
+    resolveCapabilities(['Reviewer-Managers'], sampleConfig).isVisitor,
+    false
+  );
 });
 
 test('resolveCapabilities: ResponsibleParty-Managers → isVisitor=false', () => {
-  assert.equal(resolveCapabilities(['ResponsibleParty-Managers'], sampleConfig).isVisitor, false);
+  assert.equal(
+    resolveCapabilities(['ResponsibleParty-Managers'], sampleConfig).isVisitor,
+    false
+  );
 });
 
 test('resolveCapabilities: CR-Maintainers → isVisitor=false', () => {
-  assert.equal(resolveCapabilities(['CR-Maintainers'], sampleConfig).isVisitor, false);
+  assert.equal(
+    resolveCapabilities(['CR-Maintainers'], sampleConfig).isVisitor,
+    false
+  );
 });
 
 test('resolveCapabilities: CR-ResponsibleParty → isVisitor=false', () => {
-  assert.equal(resolveCapabilities(['CR-ResponsibleParty'], sampleConfig).isVisitor, false);
+  assert.equal(
+    resolveCapabilities(['CR-ResponsibleParty'], sampleConfig).isVisitor,
+    false
+  );
 });
 
 test('resolveCapabilities: owner of a Case Type → isVisitor=false', () => {
-  assert.equal(resolveCapabilities(['CaseTypeOwners-HelloReview'], sampleConfig).isVisitor, false);
+  assert.equal(
+    resolveCapabilities(['CaseTypeOwners-HelloReview'], sampleConfig).isVisitor,
+    false
+  );
 });

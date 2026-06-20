@@ -2,14 +2,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { isFailure, materializeRemediationActions } from '../src/evaluators/failure-evaluator.js';
+import {
+  isFailure,
+  materializeRemediationActions,
+} from '../src/evaluators/failure-evaluator.js';
 
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 
 /** @type {QuestionDefinition} */
 const Q_FAIL_NO = {
   id: 'q-needs',
-  text: 'Were the customer\'s needs identified?',
+  text: "Were the customer's needs identified?",
   responseType: 'yes-no-na',
   failureCriteria: 'No',
   remediationActions: ['Retrain agent.', 'Update script.'],
@@ -78,7 +81,10 @@ test('materializeRemediationActions: hydrates actions on failed answer', () => {
 });
 
 test('materializeRemediationActions: preserves justification on failed answer', () => {
-  const out = materializeRemediationActions(Q_FAIL_NO, { value: 'No', justification: 'Skipped' });
+  const out = materializeRemediationActions(Q_FAIL_NO, {
+    value: 'No',
+    justification: 'Skipped',
+  });
   assert.equal(out.value, 'No');
   assert.equal(out.justification, 'Skipped');
   assert.equal(out.remediationActions?.length, 2);
@@ -96,7 +102,13 @@ test('materializeRemediationActions: strips remediationActions when answer becom
 
 test('materializeRemediationActions: returns answer unchanged when question has no remediationActions defined', () => {
   /** @type {QuestionDefinition} */
-  const q = { id: 'q-x', text: 'q', responseType: 'yes-no-na', failureCriteria: 'No', deprecated: false };
+  const q = {
+    id: 'q-x',
+    text: 'q',
+    responseType: 'yes-no-na',
+    failureCriteria: 'No',
+    deprecated: false,
+  };
   const ans = { value: 'No' };
   const out = materializeRemediationActions(q, ans);
   assert.equal(out.remediationActions, undefined);
@@ -131,15 +143,30 @@ test('materializeRemediationActions: retains attributedParty on a still-failing 
     attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
   };
   const out = materializeRemediationActions(Q_FAIL_NO, ans);
-  assert.deepEqual(out.attributedParty, { loginName: 'jsmith', displayName: 'Jane Smith' });
+  assert.deepEqual(out.attributedParty, {
+    loginName: 'jsmith',
+    displayName: 'Jane Smith',
+  });
 });
 
 test('materializeRemediationActions: retains attributedParty on a still-failing answer with no remediationActions defined', () => {
   /** @type {QuestionDefinition} */
-  const q = { id: 'q-x', text: 'q', responseType: 'yes-no-na', failureCriteria: 'No', deprecated: false };
-  const ans = { value: 'No', attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' } };
+  const q = {
+    id: 'q-x',
+    text: 'q',
+    responseType: 'yes-no-na',
+    failureCriteria: 'No',
+    deprecated: false,
+  };
+  const ans = {
+    value: 'No',
+    attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
+  };
   const out = materializeRemediationActions(q, ans);
-  assert.deepEqual(out.attributedParty, { loginName: 'jsmith', displayName: 'Jane Smith' });
+  assert.deepEqual(out.attributedParty, {
+    loginName: 'jsmith',
+    displayName: 'Jane Smith',
+  });
 });
 
 // ===== Remediation Details stripping (ADR-0017, shares ADR-0013 lifecycle) =====
@@ -165,7 +192,13 @@ test('materializeRemediationActions: retains remediationDetails on a still-faili
 
 test('materializeRemediationActions: strips remediationDetails alongside attributedParty when passing with no remediationActions defined', () => {
   /** @type {QuestionDefinition} */
-  const q = { id: 'q-x', text: 'q', responseType: 'yes-no-na', failureCriteria: 'No', deprecated: false };
+  const q = {
+    id: 'q-x',
+    text: 'q',
+    responseType: 'yes-no-na',
+    failureCriteria: 'No',
+    deprecated: false,
+  };
   const stale = {
     value: 'Yes',
     attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },

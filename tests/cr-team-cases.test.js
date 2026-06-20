@@ -19,37 +19,58 @@ class StubEl {
     this.client = null;
     this.currentUser = null;
     this.eligibleCaseTypes = [];
-    this.queryString = "";
-    this.currentUserId = "";
+    this.queryString = '';
+    this.currentUserId = '';
   }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
-  appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
+  replaceChildren(/** @type {StubEl[]} */ ...cs) {
+    this._children = cs;
+  }
+  appendChild(/** @type {StubEl} */ c) {
+    this._children.push(c);
+    return c;
+  }
   addEventListener() {}
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) { this._attrs[k] = v; }
-  getAttribute(/** @type {string} */ k) { return this._attrs[k] ?? null; }
+  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
+    this._attrs[k] = v;
+  }
+  getAttribute(/** @type {string} */ k) {
+    return this._attrs[k] ?? null;
+  }
   connectedCallback() {}
 }
 
-(/** @type {any} */ (globalThis)).HTMLElement = StubEl;
-(/** @type {any} */ (globalThis)).customElements = { define() {}, get() { return undefined; } };
+/** @type {any} */ (globalThis).HTMLElement = StubEl;
+/** @type {any} */ (globalThis).customElements = {
+  define() {},
+  get() {
+    return undefined;
+  },
+};
 
 /** @type {string[]} */
 const createdTags = [];
-(/** @type {any} */ (globalThis)).document = {
+/** @type {any} */ (globalThis).document = {
   createElement(/** @type {string} */ tag) {
     const el = new StubEl();
     el.tagName = tag.toUpperCase();
     createdTags.push(tag);
     return el;
   },
-  createTreeWalker() { return { nextNode() { return null; } }; },
+  createTreeWalker() {
+    return {
+      nextNode() {
+        return null;
+      },
+    };
+  },
 };
 
 const { CRTeamCases } = await import('../src/pages/cr-team-cases.js');
 
 /** @param {any} node @param {string} text @returns {boolean} */
 function hasText(node, text) {
-  if (typeof node.textContent === 'string' && node.textContent === text) return true;
+  if (typeof node.textContent === 'string' && node.textContent === text)
+    return true;
   for (const c of node._children ?? []) {
     if (hasText(c, text)) return true;
   }
@@ -69,14 +90,26 @@ function findTag(node, tag) {
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @param {string} id @param {string} caseType @returns {CaseRow} */
 const row = (id, caseType) => ({
-  id, caseType, title: `Case ${id}`, status: 'In-progress',
-  assignedReviewer: 'r', responsibleParty: 'rp',
-  answers: {}, conversation: [], notes: '', completedAt: null, etag: 'e',
+  id,
+  caseType,
+  title: `Case ${id}`,
+  status: 'In-progress',
+  assignedReviewer: 'r',
+  responsibleParty: 'rp',
+  answers: {},
+  conversation: [],
+  notes: '',
+  completedAt: null,
+  etag: 'e',
 });
 
 test('cr-team-cases: renders heading', async () => {
   const el = new CRTeamCases();
-  el.client = /** @type {any} */ ({ async listCases() { return []; } });
+  el.client = /** @type {any} */ ({
+    async listCases() {
+      return [];
+    },
+  });
   el.currentUser = { id: 'u1', displayName: 'U' };
   el.eligibleCaseTypes = ['hello-review'];
   el.queryString = '?manager=me&role=reviewer-manager';
@@ -87,20 +120,34 @@ test('cr-team-cases: renders heading', async () => {
 
 test('cr-team-cases: renders empty state when no cases returned', async () => {
   const el = new CRTeamCases();
-  el.client = /** @type {any} */ ({ async listCases() { return []; } });
+  el.client = /** @type {any} */ ({
+    async listCases() {
+      return [];
+    },
+  });
   el.currentUser = { id: 'u1', displayName: 'U' };
   el.eligibleCaseTypes = ['hello-review'];
   el.queryString = '?manager=me&role=reviewer-manager';
 
   await el.connectedCallback();
-  assert.ok(hasText(el, 'No cases match the selected filters.'), 'should render empty-state message');
-  assert.ok(!findTag(el, 'cr-case-table'), 'should not render cr-case-table when empty');
+  assert.ok(
+    hasText(el, 'No cases match the selected filters.'),
+    'should render empty-state message'
+  );
+  assert.ok(
+    !findTag(el, 'cr-case-table'),
+    'should not render cr-case-table when empty'
+  );
 });
 
 test('cr-team-cases: renders cr-case-table with cases when results returned', async () => {
   const cases = [row('c1', 'hello-review'), row('c2', 'hello-review')];
   const el = new CRTeamCases();
-  el.client = /** @type {any} */ ({ async listCases() { return cases; } });
+  el.client = /** @type {any} */ ({
+    async listCases() {
+      return cases;
+    },
+  });
   el.currentUser = { id: 'u1', displayName: 'U' };
   el.eligibleCaseTypes = ['hello-review'];
   el.queryString = '?manager=me&role=reviewer-manager';
@@ -117,7 +164,10 @@ test('cr-team-cases: passes query-string params to fetcher (caseType scoping)', 
   const calls = [];
   const el = new CRTeamCases();
   el.client = /** @type {any} */ ({
-    async listCases(/** @type {any} */ f) { calls.push(f); return [row('c1', 'hello-review')]; },
+    async listCases(/** @type {any} */ f) {
+      calls.push(f);
+      return [row('c1', 'hello-review')];
+    },
   });
   el.currentUser = { id: 'u1', displayName: 'U' };
   el.eligibleCaseTypes = ['hello-review', 'product-sale-review'];
@@ -130,7 +180,11 @@ test('cr-team-cases: passes query-string params to fetcher (caseType scoping)', 
 
 test('cr-team-cases: renders back link to #/reports', async () => {
   const el = new CRTeamCases();
-  el.client = /** @type {any} */ ({ async listCases() { return []; } });
+  el.client = /** @type {any} */ ({
+    async listCases() {
+      return [];
+    },
+  });
   el.currentUser = { id: 'u1', displayName: 'U' };
   el.eligibleCaseTypes = [];
   el.queryString = '';
@@ -150,5 +204,8 @@ test('cr-team-cases: renders heading and back link without fetching when client 
 
   await el.connectedCallback();
   assert.ok(hasText(el, 'Team Cases'), 'should still render heading');
-  assert.ok(!findTag(el, 'cr-case-table'), 'should not render table when no client');
+  assert.ok(
+    !findTag(el, 'cr-case-table'),
+    'should not render table when no client'
+  );
 });

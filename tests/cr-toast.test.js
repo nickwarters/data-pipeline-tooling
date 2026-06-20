@@ -5,7 +5,8 @@ import { installDom } from './_bank-dom-stub.js';
 installDom();
 
 const { CRToast } = await import('../src/components/cr-toast.js');
-const { toastMsg } = await import('../src/question-bank/question-bank-store.js');
+const { toastMsg } =
+  await import('../src/question-bank/question-bank-store.js');
 
 test('CRToast: hidden by default (no msg → no "show" class)', () => {
   toastMsg.set('');

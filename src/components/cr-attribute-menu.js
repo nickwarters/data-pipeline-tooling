@@ -39,7 +39,10 @@ export class CRAttributeMenu extends ReactiveElement {
   connectedCallback() {
     this._onKeydown = (e) => this._handleKeydown(e);
     this._onPointerDown = (e) => this._handlePointerDown(e);
-    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    if (
+      typeof document !== 'undefined' &&
+      typeof document.addEventListener === 'function'
+    ) {
       document.addEventListener('keydown', this._onKeydown);
       document.addEventListener('mousedown', this._onPointerDown);
     }
@@ -47,9 +50,14 @@ export class CRAttributeMenu extends ReactiveElement {
   }
 
   disconnectedCallback() {
-    if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
-      if (this._onKeydown) document.removeEventListener('keydown', this._onKeydown);
-      if (this._onPointerDown) document.removeEventListener('mousedown', this._onPointerDown);
+    if (
+      typeof document !== 'undefined' &&
+      typeof document.removeEventListener === 'function'
+    ) {
+      if (this._onKeydown)
+        document.removeEventListener('keydown', this._onKeydown);
+      if (this._onPointerDown)
+        document.removeEventListener('mousedown', this._onPointerDown);
     }
     this._onKeydown = null;
     this._onPointerDown = null;
@@ -84,7 +92,9 @@ export class CRAttributeMenu extends ReactiveElement {
   _select(party) {
     this._open = false;
     this.dispatchEvent(
-      new CustomEvent('cr-attribute-change', { detail: { attributedParty: party } })
+      new CustomEvent('cr-attribute-change', {
+        detail: { attributedParty: party },
+      })
     );
     this._render();
   }
@@ -106,28 +116,46 @@ export class CRAttributeMenu extends ReactiveElement {
     const children = [];
 
     if (this.attributedParty) {
-      children.push(h('button', {
-        className: 'cr-attribute-chip',
-        type: 'button',
-        'aria-haspopup': 'true',
-        'aria-expanded': String(this._open),
-        onClick: () => this._toggle()
-      }, this.attributedParty.displayName));
+      children.push(
+        h(
+          'button',
+          {
+            className: 'cr-attribute-chip',
+            type: 'button',
+            'aria-haspopup': 'true',
+            'aria-expanded': String(this._open),
+            onClick: () => this._toggle(),
+          },
+          this.attributedParty.displayName
+        )
+      );
 
-      children.push(h('button', {
-        className: 'cr-attribute-clear',
-        type: 'button',
-        'aria-label': 'Clear attribution',
-        onClick: () => this._select(null)
-      }, '✕'));
+      children.push(
+        h(
+          'button',
+          {
+            className: 'cr-attribute-clear',
+            type: 'button',
+            'aria-label': 'Clear attribution',
+            onClick: () => this._select(null),
+          },
+          '✕'
+        )
+      );
     } else {
-      children.push(h('button', {
-        className: 'cr-attribute-trigger',
-        type: 'button',
-        'aria-haspopup': 'true',
-        'aria-expanded': String(this._open),
-        onClick: () => this._toggle()
-      }, 'Attribute'));
+      children.push(
+        h(
+          'button',
+          {
+            className: 'cr-attribute-trigger',
+            type: 'button',
+            'aria-haspopup': 'true',
+            'aria-expanded': String(this._open),
+            onClick: () => this._toggle(),
+          },
+          'Attribute'
+        )
+      );
     }
 
     children.push(this._renderPopover());
@@ -137,15 +165,27 @@ export class CRAttributeMenu extends ReactiveElement {
   /** @returns {HTMLElement} */
   _renderPopover() {
     const children = [];
-    children.push(h('p', { className: 'cr-attribute-popover-title' }, 'Attribute failure to'));
+    children.push(
+      h(
+        'p',
+        { className: 'cr-attribute-popover-title' },
+        'Attribute failure to'
+      )
+    );
 
     if (this.responsibleParty) {
       const rp = this.responsibleParty;
-      children.push(h('button', {
-        className: 'cr-attribute-responsible',
-        type: 'button',
-        onClick: () => this._select(rp)
-      }, `Responsible Party — ${rp.displayName}`));
+      children.push(
+        h(
+          'button',
+          {
+            className: 'cr-attribute-responsible',
+            type: 'button',
+            onClick: () => this._select(rp),
+          },
+          `Responsible Party — ${rp.displayName}`
+        )
+      );
     }
 
     const picker = h('cr-people-picker');
@@ -153,15 +193,22 @@ export class CRAttributeMenu extends ReactiveElement {
     p.client = this.client;
     p.addEventListener('cr-person-selected', (ev) => {
       const detail = /** @type {CustomEvent<Party>} */ (ev).detail;
-      this._select({ loginName: detail.loginName, displayName: detail.displayName });
+      this._select({
+        loginName: detail.loginName,
+        displayName: detail.displayName,
+      });
     });
     children.push(picker);
 
-    return h('div', {
-      className: 'cr-attribute-popover',
-      role: 'dialog',
-      hidden: !this._open
-    }, children);
+    return h(
+      'div',
+      {
+        className: 'cr-attribute-popover',
+        role: 'dialog',
+        hidden: !this._open,
+      },
+      children
+    );
   }
 }
 

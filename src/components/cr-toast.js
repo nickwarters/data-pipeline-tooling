@@ -17,7 +17,9 @@ export class CRToast extends ReactiveElement {
 
   render() {
     const msg = toastMsg.get();
-    return h('div', { className: 'toast' + (msg ? ' show' : '') },
+    return h(
+      'div',
+      { className: 'toast' + (msg ? ' show' : '') },
       h('span', { className: 'dot' }),
       h('span', {}, msg || '')
     );

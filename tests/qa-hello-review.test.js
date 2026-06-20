@@ -16,21 +16,32 @@ function answers(values) {
 // --- catalogue shape (a tracer of the qa-{slug} extension point) ---
 
 test('qa-hello-review: catalogue has at least 2 QA-specific Question Definitions', () => {
-  assert.ok(config.questions.length >= 2, `got ${config.questions.length} questions`);
+  assert.ok(
+    config.questions.length >= 2,
+    `got ${config.questions.length} questions`
+  );
 });
 
 test('qa-hello-review: every choice question has a non-empty options[]', () => {
   for (const q of config.questions) {
-    if (q.responseType === 'single-choice' || q.responseType === 'multi-choice') {
-      assert.ok(Array.isArray(q.options) && q.options.length > 0, `${q.id} needs options[]`);
+    if (
+      q.responseType === 'single-choice' ||
+      q.responseType === 'multi-choice'
+    ) {
+      assert.ok(
+        Array.isArray(q.options) && q.options.length > 0,
+        `${q.id} needs options[]`
+      );
     }
   }
 });
 
 test('qa-hello-review: showWhen rules reference questions in the catalogue', () => {
-  const ids = new Set(config.questions.map(q => q.id));
-  for (const q of config.questions.filter(q => q.showWhen != null)) {
-    for (const ref of Object.keys(/** @type {Record<string, unknown>} */ (q.showWhen))) {
+  const ids = new Set(config.questions.map((q) => q.id));
+  for (const q of config.questions.filter((q) => q.showWhen != null)) {
+    for (const ref of Object.keys(
+      /** @type {Record<string, unknown>} */ (q.showWhen)
+    )) {
       assert.ok(ids.has(ref), `${q.id}.showWhen references unknown ${ref}`);
     }
   }
@@ -39,27 +50,43 @@ test('qa-hello-review: showWhen rules reference questions in the catalogue', () 
 // --- outcome (QA Answers only; never the source Case's Answers) ---
 
 test('qa-hello-review: a clean QA review passes', () => {
-  const result = config.computeOutcome(answers({
-    'qa-process': 'Yes', 'qa-evidence': 'Yes', 'qa-outcome-correct': 'Yes',
-  }));
+  const result = config.computeOutcome(
+    answers({
+      'qa-process': 'Yes',
+      'qa-evidence': 'Yes',
+      'qa-outcome-correct': 'Yes',
+    })
+  );
   assert.equal(result.verdict, 'pass');
 });
 
 test('qa-hello-review: an incorrect original Outcome fails the QA Check', () => {
-  const result = config.computeOutcome(answers({
-    'qa-process': 'Yes', 'qa-evidence': 'Yes', 'qa-outcome-correct': 'No',
-  }));
+  const result = config.computeOutcome(
+    answers({
+      'qa-process': 'Yes',
+      'qa-evidence': 'Yes',
+      'qa-outcome-correct': 'No',
+    })
+  );
   assert.equal(result.verdict, 'fail');
 });
 
 test('qa-hello-review: a process/evidence lapse with a correct outcome is referred', () => {
-  const result = config.computeOutcome(answers({
-    'qa-process': 'No', 'qa-evidence': 'Yes', 'qa-outcome-correct': 'Yes',
-  }));
+  const result = config.computeOutcome(
+    answers({
+      'qa-process': 'No',
+      'qa-evidence': 'Yes',
+      'qa-outcome-correct': 'Yes',
+    })
+  );
   assert.equal(result.verdict, 'refer');
 
-  const evidence = config.computeOutcome(answers({
-    'qa-process': 'Yes', 'qa-evidence': 'No', 'qa-outcome-correct': 'Yes',
-  }));
+  const evidence = config.computeOutcome(
+    answers({
+      'qa-process': 'Yes',
+      'qa-evidence': 'No',
+      'qa-outcome-correct': 'Yes',
+    })
+  );
   assert.equal(evidence.verdict, 'refer');
 });

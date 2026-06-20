@@ -4,7 +4,10 @@ import { h } from '../lib/html.js';
 import './cr-outcome.js';
 import { caseDetailFields } from './cr-case-details.js';
 import { buildSummaryModel } from '../evaluators/summary-model.js';
-import { currentOutcome, buildOverrideRows } from '../evaluators/effective-answers.js';
+import {
+  currentOutcome,
+  buildOverrideRows,
+} from '../evaluators/effective-answers.js';
 import './cr-capture-groups.js';
 
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
@@ -79,7 +82,9 @@ export class CRSummary extends ReactiveElement {
 
   render() {
     const heading = h('h2', {}, 'Summary');
-    const outcomeEl = /** @type {import('./cr-outcome.js').CROutcome} */ (h('cr-outcome'));
+    const outcomeEl = /** @type {import('./cr-outcome.js').CROutcome} */ (
+      h('cr-outcome')
+    );
 
     const completed = this.caseRow?.status === 'Completed';
     const overrides = this.caseRow?.overrides ?? [];
@@ -88,13 +93,19 @@ export class CRSummary extends ReactiveElement {
       // Post-completion Answer Overrides exist (ADR-0018): the Outcome block shows
       // the Current Outcome, re-derived by running computeOutcome over the
       // Effective Answers rather than reading the frozen snapshot.
-      const result = currentOutcome(this.computeOutcome, this.answers, overrides);
+      const result = currentOutcome(
+        this.computeOutcome,
+        this.answers,
+        overrides
+      );
       outcomeEl.update(() => result, {}, true);
     } else if (frozen) {
       // Read the frozen snapshot for a Completed Case (ADR-0012): the verdict is
       // whatever the system concluded at completion, not a recomputation.
       /** @type {OutcomeResult} */
-      const result = { verdict: /** @type {OutcomeResult['verdict']} */ (frozen) };
+      const result = {
+        verdict: /** @type {OutcomeResult['verdict']} */ (frozen),
+      };
       outcomeEl.update(() => result, {}, true);
     } else if (this.computeOutcome) {
       // Live derivation from the current Answers while In-progress (ADR-0016).
@@ -102,7 +113,11 @@ export class CRSummary extends ReactiveElement {
     } else {
       // Nothing to derive yet — render the Outcome block in its indeterminate
       // state until update() supplies the live state.
-      outcomeEl.update(() => /** @type {OutcomeResult} */ ({ verdict: 'pass' }), {}, false);
+      outcomeEl.update(
+        () => /** @type {OutcomeResult} */ ({ verdict: 'pass' }),
+        {},
+        false
+      );
     }
 
     /** @type {Node[]} */
@@ -137,8 +152,14 @@ export class CRSummary extends ReactiveElement {
    */
   _renderSectionBlock(section, caseRow) {
     if (section === 'details') {
-      return this._renderFieldBlock('cr-summary-details', 'Case Details',
-        caseDetailFields(caseRow).map(f => ({ label: f.label, display: f.display })));
+      return this._renderFieldBlock(
+        'cr-summary-details',
+        'Case Details',
+        caseDetailFields(caseRow).map((f) => ({
+          label: f.label,
+          display: f.display,
+        }))
+      );
     }
     if (section === 'questions') {
       return this._renderCounts();
@@ -147,7 +168,9 @@ export class CRSummary extends ReactiveElement {
       return this._renderRemediation();
     }
     if (section === 'notes') {
-      return h('section', { class: 'cr-summary-notes' },
+      return h(
+        'section',
+        { class: 'cr-summary-notes' },
         h('h3', {}, 'Notes'),
         h('p', {}, caseRow.notes)
       );
@@ -166,18 +189,33 @@ export class CRSummary extends ReactiveElement {
    * @returns {HTMLElement}
    */
   _renderOverrides(overrides) {
-    return h('section', { class: 'cr-summary-outcome-overrides' },
+    return h(
+      'section',
+      { class: 'cr-summary-outcome-overrides' },
       h('h3', {}, 'Outcome corrections'),
-      this.caseRow?.outcomeAtCompletion 
-        ? h('p', { class: 'cr-summary-outcome-original' }, `Outcome at completion: ${this.caseRow.outcomeAtCompletion}`) 
-        : null,
-      h('ul', {},
-        ...buildOverrideRows(this.catalogue, this.answers, overrides).map(row => 
-          h('li', {},
-            h('p', {}, row.questionText),
-            h('p', {}, `${row.originalValue} → ${row.overriddenValue} (${row.source})`),
-            h('p', {}, `Reason: ${row.reasoning}`)
+      this.caseRow?.outcomeAtCompletion
+        ? h(
+            'p',
+            { class: 'cr-summary-outcome-original' },
+            `Outcome at completion: ${this.caseRow.outcomeAtCompletion}`
           )
+        : null,
+      h(
+        'ul',
+        {},
+        ...buildOverrideRows(this.catalogue, this.answers, overrides).map(
+          (row) =>
+            h(
+              'li',
+              {},
+              h('p', {}, row.questionText),
+              h(
+                'p',
+                {},
+                `${row.originalValue} → ${row.overriddenValue} (${row.source})`
+              ),
+              h('p', {}, `Reason: ${row.reasoning}`)
+            )
         )
       )
     );
@@ -189,14 +227,23 @@ export class CRSummary extends ReactiveElement {
    * @returns {HTMLElement}
    */
   _renderRemediation() {
-    const { remediationActionCount, failures } = buildSummaryModel(this.catalogue, this.answers);
+    const { remediationActionCount, failures } = buildSummaryModel(
+      this.catalogue,
+      this.answers
+    );
 
-    return h('section', { class: 'cr-summary-remediation' },
+    return h(
+      'section',
+      { class: 'cr-summary-remediation' },
       h('h3', {}, 'Issues'),
       h('p', {}, `Remediation Actions: ${remediationActionCount}`),
-      failures.length === 0 
+      failures.length === 0
         ? h('p', {}, 'No failures.')
-        : h('ul', {}, ...failures.map(failure => this._renderFailure(failure)))
+        : h(
+            'ul',
+            {},
+            ...failures.map((failure) => this._renderFailure(failure))
+          )
     );
   }
 
@@ -205,10 +252,18 @@ export class CRSummary extends ReactiveElement {
    * @returns {HTMLElement}
    */
   _renderFailure(failure) {
-    return h('li', {},
-      h('p', {}, failure.category ? `${failure.category}: ${failure.text}` : failure.text),
+    return h(
+      'li',
+      {},
+      h(
+        'p',
+        {},
+        failure.category ? `${failure.category}: ${failure.text}` : failure.text
+      ),
       h('p', {}, `Answer: ${failure.answer}`),
-      failure.actions.length ? h('ul', {}, ...failure.actions.map(text => h('li', {}, text))) : null,
+      failure.actions.length
+        ? h('ul', {}, ...failure.actions.map((text) => h('li', {}, text)))
+        : null,
       this._renderCapture(failure.id)
     );
   }
@@ -227,9 +282,11 @@ export class CRSummary extends ReactiveElement {
     const capture = this.answers[questionId]?.capture;
     if (!capture || Object.keys(capture).length === 0) return null;
 
-    const cg = /** @type {import('./cr-capture-groups.js').CRCaptureGroups} */ (h('cr-capture-groups', {
-      class: 'cr-summary-capture'
-    }));
+    const cg = /** @type {import('./cr-capture-groups.js').CRCaptureGroups} */ (
+      h('cr-capture-groups', {
+        class: 'cr-summary-capture',
+      })
+    );
     cg.groups = this.captureGroups;
     cg.capture = capture;
     cg.canCapture = false;
@@ -244,9 +301,13 @@ export class CRSummary extends ReactiveElement {
    */
   _renderCounts() {
     const { categoryCounts } = buildSummaryModel(this.catalogue, this.answers);
-    return h('section', { class: 'cr-summary-counts' },
+    return h(
+      'section',
+      { class: 'cr-summary-counts' },
       h('h3', {}, 'Questions'),
-      h('ul', {},
+      h(
+        'ul',
+        {},
         ...categoryCounts.map(({ category, pass, fail }) =>
           h('li', {}, `${category}: ${pass} pass, ${fail} fail`)
         )
@@ -267,8 +328,11 @@ export class CRSummary extends ReactiveElement {
       { label: 'Created', value: caseRow.created },
       { label: 'Completed', value: caseRow.completedAt },
     ];
-    return this._renderFieldBlock('cr-summary-key-dates', 'Key dates',
-      dates.map(d => ({ label: d.label, display: d.value ? d.value : '—' })));
+    return this._renderFieldBlock(
+      'cr-summary-key-dates',
+      'Key dates',
+      dates.map((d) => ({ label: d.label, display: d.value ? d.value : '—' }))
+    );
   }
 
   /**
@@ -281,12 +345,16 @@ export class CRSummary extends ReactiveElement {
    * @returns {HTMLElement}
    */
   _renderFieldBlock(className, title, rows) {
-    return h('section', { class: className },
+    return h(
+      'section',
+      { class: className },
       h('h3', {}, title),
-      h('dl', {},
+      h(
+        'dl',
+        {},
         ...rows.flatMap(({ label, display }) => [
           h('dt', {}, label),
-          h('dd', {}, display)
+          h('dd', {}, display),
         ])
       )
     );

@@ -42,12 +42,20 @@ export class CRConversationView extends ReactiveElement {
     if (!caseRow) return [];
 
     return [
-      h('header', { className: 'cr-conversation-view-header' },
-        h('button', {
-          type: 'button',
-          className: 'cr-back-btn',
-          onclick: () => { location.hash = '#/my-reviews'; }
-        }, '← My Reviews'),
+      h(
+        'header',
+        { className: 'cr-conversation-view-header' },
+        h(
+          'button',
+          {
+            type: 'button',
+            className: 'cr-back-btn',
+            onclick: () => {
+              location.hash = '#/my-reviews';
+            },
+          },
+          '← My Reviews'
+        ),
         h('h1', {}, caseRow.title || caseRow.id)
       ),
       h('cr-conversation', {
@@ -55,8 +63,8 @@ export class CRConversationView extends ReactiveElement {
         saveQueue: this.saveQueue,
         caseId: this.caseId,
         currentUser: this.currentUser,
-        messages: caseRow.conversation
-      })
+        messages: caseRow.conversation,
+      }),
     ];
   }
 }

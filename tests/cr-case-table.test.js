@@ -21,16 +21,27 @@ class StubEl {
     this.type = '';
     this.value = '';
   }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
-  appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
-  append(/** @type {StubEl[]} */ ...cs) { this._children.push(...cs); }
+  replaceChildren(/** @type {StubEl[]} */ ...cs) {
+    this._children = cs;
+  }
+  appendChild(/** @type {StubEl} */ c) {
+    this._children.push(c);
+    return c;
+  }
+  append(/** @type {StubEl[]} */ ...cs) {
+    this._children.push(...cs);
+  }
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
   }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) { this._attrs[k] = v; }
-  getAttribute(/** @type {string} */ k) { return this._attrs[k] ?? null; }
+  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
+    this._attrs[k] = v;
+  }
+  getAttribute(/** @type {string} */ k) {
+    return this._attrs[k] ?? null;
+  }
   dispatchEvent(/** @type {any} */ e) {
-    (this._listeners[e.type] ?? []).forEach(h => h(e));
+    (this._listeners[e.type] ?? []).forEach((h) => h(e));
     return true;
   }
   focus() {}
@@ -45,8 +56,8 @@ class StubCustomEvent {
   }
 }
 
-(/** @type {any} */ (globalThis)).HTMLElement = StubEl;
-(/** @type {any} */ (globalThis)).document = {
+/** @type {any} */ (globalThis).HTMLElement = StubEl;
+/** @type {any} */ (globalThis).document = {
   /** @param {string} tag @returns {StubEl} */
   createElement(tag) {
     const el = new StubEl();
@@ -56,9 +67,9 @@ class StubCustomEvent {
   addEventListener() {},
   removeEventListener() {},
 };
-(/** @type {any} */ (globalThis)).customElements = { define() {} };
-(/** @type {any} */ (globalThis)).location = { hash: '' };
-(/** @type {any} */ (globalThis)).CustomEvent = StubCustomEvent;
+/** @type {any} */ (globalThis).customElements = { define() {} };
+/** @type {any} */ (globalThis).location = { hash: '' };
+/** @type {any} */ (globalThis).CustomEvent = StubCustomEvent;
 
 // ===== IMPORTS (after stubs) =====
 const { CRCaseTable } = await import('../src/components/cr-case-table.js');
@@ -85,7 +96,9 @@ function findAll(root, tag) {
 }
 
 /** @param {any} root @param {string} tag @returns {StubEl | undefined} */
-function findFirst(root, tag) { return findAll(root, tag)[0]; }
+function findFirst(root, tag) {
+  return findAll(root, tag)[0];
+}
 
 /** @returns {CaseRow} */
 function makeCase(overrides = {}) {
@@ -121,8 +134,10 @@ test('CRCaseTable: renders header row with expected column labels', () => {
   const el = new CRCaseTable();
   el.cases = [];
   el.connectedCallback();
-  const buttons = findAll(el, 'button').filter(b => b.className !== 'cr-case-open-btn');
-  const labels = buttons.map(b => b.textContent);
+  const buttons = findAll(el, 'button').filter(
+    (b) => b.className !== 'cr-case-open-btn'
+  );
+  const labels = buttons.map((b) => b.textContent);
   assert.ok(labels.includes('Reference'), 'should have Reference column');
   assert.ok(labels.includes('Case Type'), 'should have Case Type column');
   assert.ok(labels.includes('Due Date'), 'should have Due Date column');
@@ -137,7 +152,7 @@ test('CRCaseTable: renders one row per case', () => {
     makeCase({ id: 'c3', title: 'Case C' }),
   ];
   el.connectedCallback();
-  const rows = findAll(el, 'tr').filter(r => r.className === 'cr-case-row');
+  const rows = findAll(el, 'tr').filter((r) => r.className === 'cr-case-row');
   assert.equal(rows.length, 3, 'should render three case rows');
 });
 
@@ -147,7 +162,11 @@ test('CRCaseTable: row contains a link to the case', () => {
   el.connectedCallback();
   const links = findAll(el, 'a');
   assert.equal(links.length, 1, 'should render one link');
-  assert.equal(links[0].href, '#/case/case-42', 'link should point to case route');
+  assert.equal(
+    links[0].href,
+    '#/case/case-42',
+    'link should point to case route'
+  );
 });
 
 test('CRCaseTable: free-text filter hides non-matching rows', () => {
@@ -166,7 +185,7 @@ test('CRCaseTable: free-text filter hides non-matching rows', () => {
     h({ target: filterInput });
   }
 
-  const rows = findAll(el, 'tr').filter(r => r.className === 'cr-case-row');
+  const rows = findAll(el, 'tr').filter((r) => r.className === 'cr-case-row');
   assert.equal(rows.length, 1, 'only the matching row should be visible');
   assert.equal(findAll(rows[0], 'a')[0]?.href, '#/case/c1');
 });
@@ -185,7 +204,7 @@ test('CRCaseTable: free-text filter matches case type', () => {
     h({ target: filterInput });
   }
 
-  const rows = findAll(el, 'tr').filter(r => r.className === 'cr-case-row');
+  const rows = findAll(el, 'tr').filter((r) => r.className === 'cr-case-row');
   assert.equal(rows.length, 1, 'should match by case type');
   assert.equal(findAll(rows[0], 'a')[0]?.href, '#/case/c2');
 });
@@ -206,7 +225,7 @@ test('CRCaseTable: status filter shows only matching rows', () => {
     h({ target: statusSelect });
   }
 
-  const rows = findAll(el, 'tr').filter(r => r.className === 'cr-case-row');
+  const rows = findAll(el, 'tr').filter((r) => r.className === 'cr-case-row');
   assert.equal(rows.length, 1, 'only completed cases should be visible');
   assert.equal(findAll(rows[0], 'a')[0]?.href, '#/case/c2');
 });
@@ -231,8 +250,12 @@ test('CRCaseTable: status filter cleared shows all rows', () => {
     h({ target: statusSelect });
   }
 
-  const rows = findAll(el, 'tr').filter(r => r.className === 'cr-case-row');
-  assert.equal(rows.length, 2, 'all rows should be visible after clearing filter');
+  const rows = findAll(el, 'tr').filter((r) => r.className === 'cr-case-row');
+  assert.equal(
+    rows.length,
+    2,
+    'all rows should be visible after clearing filter'
+  );
 });
 
 test('CRCaseTable: sorting by Reference column sorts rows alphabetically', () => {
@@ -245,13 +268,19 @@ test('CRCaseTable: sorting by Reference column sorts rows alphabetically', () =>
   el.connectedCallback();
 
   // Click the Reference sort button
-  const headerBtns = findAll(el, 'button').filter(b => b.textContent === 'Reference');
+  const headerBtns = findAll(el, 'button').filter(
+    (b) => b.textContent === 'Reference'
+  );
   assert.equal(headerBtns.length, 1, 'should have Reference sort button');
   for (const h of headerBtns[0]._listeners['click'] ?? []) h();
 
-  const rows = findAll(el, 'tr').filter(r => r.className === 'cr-case-row');
-  const links = rows.map(r => findAll(r, 'a')[0]?.textContent);
-  assert.deepEqual(links, ['Alpha Case', 'Mango Case', 'Zebra Case'], 'rows should be sorted asc by reference');
+  const rows = findAll(el, 'tr').filter((r) => r.className === 'cr-case-row');
+  const links = rows.map((r) => findAll(r, 'a')[0]?.textContent);
+  assert.deepEqual(
+    links,
+    ['Alpha Case', 'Mango Case', 'Zebra Case'],
+    'rows should be sorted asc by reference'
+  );
 });
 
 test('CRCaseTable: second click on same column reverses sort direction', () => {
@@ -262,7 +291,9 @@ test('CRCaseTable: second click on same column reverses sort direction', () => {
   ];
   el.connectedCallback();
 
-  const refBtn = findAll(el, 'button').find(b => b.textContent === 'Reference');
+  const refBtn = findAll(el, 'button').find(
+    (b) => b.textContent === 'Reference'
+  );
   assert.ok(refBtn);
 
   // First click: asc
@@ -270,33 +301,55 @@ test('CRCaseTable: second click on same column reverses sort direction', () => {
   // Second click: desc
   for (const h of refBtn._listeners['click'] ?? []) h();
 
-  const rows = findAll(el, 'tr').filter(r => r.className === 'cr-case-row');
-  const links = rows.map(r => findAll(r, 'a')[0]?.textContent);
-  assert.deepEqual(links, ['Zebra Case', 'Alpha Case'], 'rows should be sorted desc after second click');
+  const rows = findAll(el, 'tr').filter((r) => r.className === 'cr-case-row');
+  const links = rows.map((r) => findAll(r, 'a')[0]?.textContent);
+  assert.deepEqual(
+    links,
+    ['Zebra Case', 'Alpha Case'],
+    'rows should be sorted desc after second click'
+  );
 });
 
 test('CRCaseTable: clicking a different column resets sort to asc', () => {
   const el = new CRCaseTable();
   el.cases = [
-    makeCase({ id: 'c1', title: 'B Case', status: 'In-progress', caseType: 'zzz-review' }),
-    makeCase({ id: 'c2', title: 'A Case', status: 'Completed', caseType: 'aaa-review' }),
+    makeCase({
+      id: 'c1',
+      title: 'B Case',
+      status: 'In-progress',
+      caseType: 'zzz-review',
+    }),
+    makeCase({
+      id: 'c2',
+      title: 'A Case',
+      status: 'Completed',
+      caseType: 'aaa-review',
+    }),
   ];
   el.connectedCallback();
 
   // Sort by Reference descending
-  const refBtn = findAll(el, 'button').find(b => b.textContent === 'Reference');
+  const refBtn = findAll(el, 'button').find(
+    (b) => b.textContent === 'Reference'
+  );
   assert.ok(refBtn);
   for (const h of refBtn._listeners['click'] ?? []) h(); // asc
   for (const h of refBtn._listeners['click'] ?? []) h(); // desc
 
   // Switch to Case Type sort
-  const typeBtn = findAll(el, 'button').find(b => b.textContent === 'Case Type');
+  const typeBtn = findAll(el, 'button').find(
+    (b) => b.textContent === 'Case Type'
+  );
   assert.ok(typeBtn);
   for (const h of typeBtn._listeners['click'] ?? []) h();
 
-  const rows = findAll(el, 'tr').filter(r => r.className === 'cr-case-row');
-  const links = rows.map(r => findAll(r, 'a')[0]?.textContent);
-  assert.deepEqual(links, ['A Case', 'B Case'], 'switching columns should reset to asc');
+  const rows = findAll(el, 'tr').filter((r) => r.className === 'cr-case-row');
+  const links = rows.map((r) => findAll(r, 'a')[0]?.textContent);
+  assert.deepEqual(
+    links,
+    ['A Case', 'B Case'],
+    'switching columns should reset to asc'
+  );
 });
 
 test('CRCaseTable: aria-sort reflects current sort column and direction', () => {
@@ -309,27 +362,45 @@ test('CRCaseTable: aria-sort reflects current sort column and direction', () => 
   assert.ok(theadRow, 'should have thead row');
 
   // Click Reference to sort asc
-  const refBtn = findAll(el, 'button').find(b => b.textContent === 'Reference');
+  const refBtn = findAll(el, 'button').find(
+    (b) => b.textContent === 'Reference'
+  );
   assert.ok(refBtn);
   for (const h of refBtn._listeners['click'] ?? []) h();
 
   // Find the Reference th (first th with cr-col-reference class)
   const allTh = findAll(el, 'th');
-  const refTh = allTh.find(th => th.className === 'cr-col-reference');
+  const refTh = allTh.find((th) => th.className === 'cr-col-reference');
   assert.ok(refTh, 'should find Reference th');
-  assert.equal(refTh.getAttribute('aria-sort'), 'ascending', 'active column should be ascending');
+  assert.equal(
+    refTh.getAttribute('aria-sort'),
+    'ascending',
+    'active column should be ascending'
+  );
 
   // Other columns should be none
-  const statusTh = allTh.find(th => th.className === 'cr-col-status');
+  const statusTh = allTh.find((th) => th.className === 'cr-col-status');
   assert.ok(statusTh);
-  assert.equal(statusTh.getAttribute('aria-sort'), 'none', 'inactive column should be none');
+  assert.equal(
+    statusTh.getAttribute('aria-sort'),
+    'none',
+    'inactive column should be none'
+  );
 
   // Click again: desc
-  const refBtn2 = findAll(el, 'button').find(b => b.textContent === 'Reference');
+  const refBtn2 = findAll(el, 'button').find(
+    (b) => b.textContent === 'Reference'
+  );
   for (const h of refBtn2._listeners['click'] ?? []) h();
-  
-  const refTh2 = findAll(el, 'th').find(th => th.className === 'cr-col-reference');
-  assert.equal(refTh2.getAttribute('aria-sort'), 'descending', 'should be descending after second click');
+
+  const refTh2 = findAll(el, 'th').find(
+    (th) => th.className === 'cr-col-reference'
+  );
+  assert.equal(
+    refTh2.getAttribute('aria-sort'),
+    'descending',
+    'should be descending after second click'
+  );
 });
 
 test('CRCaseTable: dispatches cr-case-open event when Open button is clicked', () => {
@@ -339,9 +410,11 @@ test('CRCaseTable: dispatches cr-case-open event when Open button is clicked', (
 
   /** @type {any[]} */
   const dispatched = [];
-  el.addEventListener('cr-case-open', e => dispatched.push(e));
+  el.addEventListener('cr-case-open', (e) => dispatched.push(e));
 
-  const openBtns = findAll(el, 'button').filter(b => b.className === 'cr-case-open-btn');
+  const openBtns = findAll(el, 'button').filter(
+    (b) => b.className === 'cr-case-open-btn'
+  );
   assert.equal(openBtns.length, 1, 'should have one Open button');
   for (const h of openBtns[0]._listeners['click'] ?? []) h();
 
@@ -356,9 +429,9 @@ test('CRCaseTable: dispatches cr-case-open when Enter pressed on a row', () => {
 
   /** @type {any[]} */
   const dispatched = [];
-  el.addEventListener('cr-case-open', e => dispatched.push(e));
+  el.addEventListener('cr-case-open', (e) => dispatched.push(e));
 
-  const rows = findAll(el, 'tr').filter(r => r.className === 'cr-case-row');
+  const rows = findAll(el, 'tr').filter((r) => r.className === 'cr-case-row');
   assert.equal(rows.length, 1);
   for (const h of rows[0]._listeners['keydown'] ?? []) {
     h({ key: 'Enter' });
@@ -373,12 +446,12 @@ test('CRCaseTable: setting cases after connectedCallback re-renders rows', () =>
   el.cases = [];
   el.connectedCallback();
 
-  let rows = findAll(el, 'tr').filter(r => r.className === 'cr-case-row');
+  let rows = findAll(el, 'tr').filter((r) => r.className === 'cr-case-row');
   assert.equal(rows.length, 0, 'initially empty');
 
   el.cases = [makeCase({ id: 'c1' }), makeCase({ id: 'c2' })];
 
-  rows = findAll(el, 'tr').filter(r => r.className === 'cr-case-row');
+  rows = findAll(el, 'tr').filter((r) => r.className === 'cr-case-row');
   assert.equal(rows.length, 2, 'should re-render when cases are updated');
 });
 
@@ -388,7 +461,11 @@ test('CRCaseTable: filter input has aria-label', () => {
   el.connectedCallback();
   const input = findFirst(el, 'input');
   assert.ok(input, 'should have input');
-  assert.equal(input.getAttribute('aria-label'), 'Filter cases', 'filter input needs aria-label');
+  assert.equal(
+    input.getAttribute('aria-label'),
+    'Filter cases',
+    'filter input needs aria-label'
+  );
 });
 
 test('CRCaseTable: status select has aria-label', () => {
@@ -397,14 +474,26 @@ test('CRCaseTable: status select has aria-label', () => {
   el.connectedCallback();
   const select = findFirst(el, 'select');
   assert.ok(select, 'should have select');
-  assert.equal(select.getAttribute('aria-label'), 'Filter by status', 'select needs aria-label');
+  assert.equal(
+    select.getAttribute('aria-label'),
+    'Filter by status',
+    'select needs aria-label'
+  );
 });
 
 test('CRCaseTable: custom columns override defaults', () => {
   const el = new CRCaseTable();
   /** @type {any} */ (el).columns = [
-    { key: 'reference', label: 'Ref', getValue: (/** @type {any} */ r) => r.title },
-    { key: 'caseType', label: 'Type', getValue: (/** @type {any} */ r) => r.caseType },
+    {
+      key: 'reference',
+      label: 'Ref',
+      getValue: (/** @type {any} */ r) => r.title,
+    },
+    {
+      key: 'caseType',
+      label: 'Type',
+      getValue: (/** @type {any} */ r) => r.caseType,
+    },
   ];
   el.cases = [makeCase({ id: 'c1', title: 'My Case', caseType: 'audit' })];
   el.connectedCallback();
@@ -418,15 +507,22 @@ test('CRCaseTable: custom columns override defaults', () => {
 test('CRCaseTable: rowClass is applied to data rows', () => {
   const el = new CRCaseTable();
   /** @type {any} */ (el).columns = [
-    { key: 'reference', label: 'Ref', getValue: (/** @type {any} */ r) => r.title },
+    {
+      key: 'reference',
+      label: 'Ref',
+      getValue: (/** @type {any} */ r) => r.title,
+    },
   ];
-  /** @type {any} */ (el).rowClass = (/** @type {any} */ r) => r.id === 'flag' ? 'cr-flagged' : '';
+  /** @type {any} */ (el).rowClass = (/** @type {any} */ r) =>
+    r.id === 'flag' ? 'cr-flagged' : '';
   el.cases = [
     makeCase({ id: 'flag', title: 'Flagged' }),
     makeCase({ id: 'ok', title: 'Normal' }),
   ];
   el.connectedCallback();
-  const dataRows = findAll(el, 'tr').filter(r => r._children[0]?.tagName === 'TD');
+  const dataRows = findAll(el, 'tr').filter(
+    (r) => r._children[0]?.tagName === 'TD'
+  );
   assert.equal(dataRows.length, 2);
   assert.equal(dataRows[0].className, 'cr-flagged');
   assert.equal(dataRows[1].className, '');
@@ -436,18 +532,35 @@ test('CRCaseTable: hidden toolbar omits filter input and status select', () => {
   const el = new CRCaseTable();
   /** @type {any} */ (el).toolbar = 'hidden';
   /** @type {any} */ (el).columns = [
-    { key: 'reference', label: 'Ref', getValue: (/** @type {any} */ r) => r.title },
+    {
+      key: 'reference',
+      label: 'Ref',
+      getValue: (/** @type {any} */ r) => r.title,
+    },
   ];
   el.cases = [makeCase()];
   el.connectedCallback();
-  assert.equal(findFirst(el, 'input'), undefined, 'no filter input when hidden');
-  assert.equal(findFirst(el, 'select'), undefined, 'no status select when hidden');
+  assert.equal(
+    findFirst(el, 'input'),
+    undefined,
+    'no filter input when hidden'
+  );
+  assert.equal(
+    findFirst(el, 'select'),
+    undefined,
+    'no status select when hidden'
+  );
 });
 
 test('CRCaseTable: initial sort prop drives default order', () => {
   const el = new CRCaseTable();
   /** @type {any} */ (el).columns = [
-    { key: 'reference', label: 'Ref', sortable: true, getValue: (/** @type {any} */ r) => r.title },
+    {
+      key: 'reference',
+      label: 'Ref',
+      sortable: true,
+      getValue: (/** @type {any} */ r) => r.title,
+    },
   ];
   /** @type {any} */ (el).sort = { key: 'reference', dir: 'desc' };
   el.cases = [
@@ -456,8 +569,10 @@ test('CRCaseTable: initial sort prop drives default order', () => {
     makeCase({ id: 'c', title: 'Gamma' }),
   ];
   el.connectedCallback();
-  const dataRows = findAll(el, 'tr').filter(r => r._children[0]?.tagName === 'TD');
-  const titles = dataRows.map(r => r._children[0].textContent);
+  const dataRows = findAll(el, 'tr').filter(
+    (r) => r._children[0]?.tagName === 'TD'
+  );
+  const titles = dataRows.map((r) => r._children[0].textContent);
   assert.deepEqual(titles, ['Gamma', 'Beta', 'Alpha']);
 });
 
@@ -465,14 +580,19 @@ test('CRCaseTable: case with empty title falls back to id in Open button aria-la
   const el = new CRCaseTable();
   el.cases = [makeCase({ id: 'case-no-title', title: '' })];
   el.connectedCallback();
-  const openBtn = findAll(el, 'button').find(b => b.className === 'cr-case-open-btn');
+  const openBtn = findAll(el, 'button').find(
+    (b) => b.className === 'cr-case-open-btn'
+  );
   assert.ok(openBtn, 'should have open button');
   assert.equal(openBtn._attrs['aria-label'], 'Open case-no-title');
 });
 
 test('CRCaseTable: filter input event with null target falls back to empty string', () => {
   const el = new CRCaseTable();
-  el.cases = [makeCase({ id: 'c1', title: 'Alpha' }), makeCase({ id: 'c2', title: 'Beta' })];
+  el.cases = [
+    makeCase({ id: 'c1', title: 'Alpha' }),
+    makeCase({ id: 'c2', title: 'Beta' }),
+  ];
   el.connectedCallback();
 
   const filterInput = /** @type {any} */ (findFirst(el, 'input'));
@@ -481,13 +601,16 @@ test('CRCaseTable: filter input event with null target falls back to empty strin
     h({ target: null });
   }
   // Empty string filter shows all rows
-  const rows = findAll(el, 'tr').filter(r => r.className === 'cr-case-row');
+  const rows = findAll(el, 'tr').filter((r) => r.className === 'cr-case-row');
   assert.equal(rows.length, 2);
 });
 
 test('CRCaseTable: status filter event with null target falls back to empty string', () => {
   const el = new CRCaseTable();
-  el.cases = [makeCase({ id: 'c1', status: 'In-progress' }), makeCase({ id: 'c2', status: 'Completed' })];
+  el.cases = [
+    makeCase({ id: 'c1', status: 'In-progress' }),
+    makeCase({ id: 'c2', status: 'Completed' }),
+  ];
   el.connectedCallback();
 
   const statusSelect = /** @type {any} */ (findFirst(el, 'select'));
@@ -496,7 +619,7 @@ test('CRCaseTable: status filter event with null target falls back to empty stri
     h({ target: null });
   }
   // Empty string filter shows all rows
-  const rows = findAll(el, 'tr').filter(r => r.className === 'cr-case-row');
+  const rows = findAll(el, 'tr').filter((r) => r.className === 'cr-case-row');
   assert.equal(rows.length, 2);
 });
 
@@ -514,7 +637,7 @@ test('CRCaseTable: free-text filter matches by status field', () => {
     h({ target: filterInput });
   }
 
-  const rows = findAll(el, 'tr').filter(r => r.className === 'cr-case-row');
+  const rows = findAll(el, 'tr').filter((r) => r.className === 'cr-case-row');
   assert.equal(rows.length, 1, 'should match one row by status');
   assert.equal(findAll(rows[0], 'a')[0]?.href, '#/case/c2');
 });
@@ -531,9 +654,19 @@ test('CRCaseTable: default rowClass adds cr-case-row--overdue for overdue rows',
   el.connectedCallback();
 
   const rows = findAll(el, 'tr');
-  const overdueRow = rows.find(r => r.className.includes('cr-case-row--overdue'));
+  const overdueRow = rows.find((r) =>
+    r.className.includes('cr-case-row--overdue')
+  );
   assert.ok(overdueRow, 'should have a row with cr-case-row--overdue class');
 
-  const nonOverdueRows = rows.filter(r => !r.className.includes('cr-case-row--overdue') && r.className.includes('cr-case-row'));
-  assert.equal(nonOverdueRows.length, 2, 'non-overdue rows should not have the overdue class');
+  const nonOverdueRows = rows.filter(
+    (r) =>
+      !r.className.includes('cr-case-row--overdue') &&
+      r.className.includes('cr-case-row')
+  );
+  assert.equal(
+    nonOverdueRows.length,
+    2,
+    'non-overdue rows should not have the overdue class'
+  );
 });

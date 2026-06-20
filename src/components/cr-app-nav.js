@@ -8,7 +8,16 @@ export class CRAppNav extends ReactiveElement {
   constructor() {
     super();
     /** @type {Capabilities} */
-    this.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
+    this.capabilities = {
+      isReviewer: false,
+      ownedCaseTypes: [],
+      isResponsibleParty: false,
+      isReviewerManager: false,
+      isResponsiblePartyManager: false,
+      isMaintainer: false,
+      isQaReviewer: false,
+      isVisitor: false,
+    };
     /** @type {Array<{el: any, href: string}>} */
     this._navItems = [];
     this._onHashChange = () => this._updateActive();
@@ -42,16 +51,28 @@ export class CRAppNav extends ReactiveElement {
   render() {
     this._navItems = [];
 
-    const brand = h('a', { href: '#/dashboard', class: 'cr-app-nav-brand', 'aria-label': 'Case Review — home' },
+    const brand = h(
+      'a',
+      {
+        href: '#/dashboard',
+        class: 'cr-app-nav-brand',
+        'aria-label': 'Case Review — home',
+      },
       h('span', { class: 'cr-app-nav-mark', 'aria-hidden': 'true' }, 'CR'),
       h('span', { class: 'cr-app-nav-name' }, 'Case Review')
     );
 
     const itemsEl = h('div', { class: 'cr-app-nav-items', role: 'list' });
 
-    const { isReviewer, ownedCaseTypes, isResponsibleParty, isReviewerManager } = this.capabilities;
+    const {
+      isReviewer,
+      ownedCaseTypes,
+      isResponsibleParty,
+      isReviewerManager,
+    } = this.capabilities;
     const isOwner = ownedCaseTypes.length > 0;
-    const hasAnyRole = isReviewer || isResponsibleParty || isReviewerManager || isOwner;
+    const hasAnyRole =
+      isReviewer || isResponsibleParty || isReviewerManager || isOwner;
 
     if (hasAnyRole) {
       itemsEl.appendChild(this._makeItem('Dashboard', '#/dashboard'));
@@ -64,12 +85,15 @@ export class CRAppNav extends ReactiveElement {
     }
 
     const bar = h('div', { class: 'cr-app-nav-bar' }, brand, itemsEl);
-    
+
     // Update active classes immediately on the newly created elements
-    const hash = typeof location !== 'undefined' ? (location.hash || '#/') : '#/';
+    const hash = typeof location !== 'undefined' ? location.hash || '#/' : '#/';
     for (const { el, href } of this._navItems) {
-      const active = hash === href || (href !== '#/dashboard' && hash.startsWith(href));
-      el.className = active ? 'cr-app-nav-item cr-app-nav-item--active' : 'cr-app-nav-item';
+      const active =
+        hash === href || (href !== '#/dashboard' && hash.startsWith(href));
+      el.className = active
+        ? 'cr-app-nav-item cr-app-nav-item--active'
+        : 'cr-app-nav-item';
       el.setAttribute('aria-current', active ? 'page' : '');
     }
 
@@ -82,16 +106,23 @@ export class CRAppNav extends ReactiveElement {
    * @returns {any}
    */
   _makeItem(label, href) {
-    const a = h('a', { href, class: 'cr-app-nav-item', role: 'listitem' }, label);
+    const a = h(
+      'a',
+      { href, class: 'cr-app-nav-item', role: 'listitem' },
+      label
+    );
     this._navItems.push({ el: a, href });
     return a;
   }
 
   _updateActive() {
-    const hash = typeof location !== 'undefined' ? (location.hash || '#/') : '#/';
+    const hash = typeof location !== 'undefined' ? location.hash || '#/' : '#/';
     for (const { el, href } of this._navItems) {
-      const active = hash === href || (href !== '#/dashboard' && hash.startsWith(href));
-      el.className = active ? 'cr-app-nav-item cr-app-nav-item--active' : 'cr-app-nav-item';
+      const active =
+        hash === href || (href !== '#/dashboard' && hash.startsWith(href));
+      el.className = active
+        ? 'cr-app-nav-item cr-app-nav-item--active'
+        : 'cr-app-nav-item';
       el.setAttribute('aria-current', active ? 'page' : '');
     }
   }

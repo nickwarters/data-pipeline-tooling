@@ -4,11 +4,11 @@
 
 ```js
 // Receive saveQueue as a property; never construct one inside a component.
-this.saveQueue.enqueue(caseId, 'answers', updatedAnswers);  // debounced PATCH
-this.saveQueue.enqueue(caseId, 'notes',   newNotes);
+this.saveQueue.enqueue(caseId, 'answers', updatedAnswers); // debounced PATCH
+this.saveQueue.enqueue(caseId, 'notes', newNotes);
 
 // Show save status in the UI:
-this.subscribe(this.saveQueue.status, s => {
+this.subscribe(this.saveQueue.status, (s) => {
   // s is 'saved' | 'saving' | 'reconnecting' | 'conflict'
   statusEl.textContent = s;
 });
@@ -81,17 +81,17 @@ import { CRElement } from './cr-element.js';
 export class CRNotes extends CRElement {
   constructor() {
     super();
-    this.notes     = '';
+    this.notes = '';
     /** @type {SaveQueue | null} */
     this.saveQueue = null;
-    this.caseId    = '';
+    this.caseId = '';
   }
 
   connectedCallback() {
     const textarea = document.createElement('textarea');
     textarea.value = this.notes;
 
-    textarea.addEventListener('input', ev => {
+    textarea.addEventListener('input', (ev) => {
       if (!this.saveQueue || !this.caseId) return;
       const value = /** @type {HTMLTextAreaElement} */ (ev.target).value ?? '';
       // Enqueue the save — SaveQueue handles debounce, ETag, and retry.

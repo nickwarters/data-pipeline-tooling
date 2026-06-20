@@ -13,9 +13,16 @@ class StubEl {
     this.className = '';
     this.hidden = false;
   }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
-  appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
-  append(/** @type {StubEl[]} */ ...cs) { this._children.push(...cs); }
+  replaceChildren(/** @type {StubEl[]} */ ...cs) {
+    this._children = cs;
+  }
+  appendChild(/** @type {StubEl} */ c) {
+    this._children.push(c);
+    return c;
+  }
+  append(/** @type {StubEl[]} */ ...cs) {
+    this._children.push(...cs);
+  }
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
   }
@@ -25,14 +32,17 @@ class StubEl {
   }
 }
 
-(/** @type {any} */ (globalThis)).HTMLElement = StubEl;
-(/** @type {any} */ (globalThis)).document = {
+/** @type {any} */ (globalThis).HTMLElement = StubEl;
+/** @type {any} */ (globalThis).document = {
   /** @param {string} _tag @returns {StubEl} */
-  createElement(_tag) { return new StubEl(); },
+  createElement(_tag) {
+    return new StubEl();
+  },
 };
-(/** @type {any} */ (globalThis)).customElements = { define() {} };
+/** @type {any} */ (globalThis).customElements = { define() {} };
 
-const { CRCaseDetails, caseDetailFields } = await import('../src/components/cr-case-details.js');
+const { CRCaseDetails, caseDetailFields } =
+  await import('../src/components/cr-case-details.js');
 
 /** @returns {import('../src/sharepoint-client.js').CaseRow} */
 function makeCase(overrides = {}) {
@@ -74,7 +84,9 @@ function allText(el) {
 function fieldMap(el) {
   /** @type {Record<string, string>} */
   const map = {};
-  const dl = el._children.find((/** @type {any} */ c) => c._children.some((/** @type {any} */ g) => g._attrs?.['data-field']));
+  const dl = el._children.find((/** @type {any} */ c) =>
+    c._children.some((/** @type {any} */ g) => g._attrs?.['data-field'])
+  );
   const target = dl ?? el;
   for (const child of target._children) {
     const field = child._attrs?.['data-field'];
@@ -84,11 +96,22 @@ function fieldMap(el) {
 }
 
 test('caseDetailFields: returns the labelled Case Details fields in order with em-dash fallback', () => {
-  const fields = caseDetailFields(makeCase({ title: 'T', dueDate: null, completedAt: '2026-06-05' }));
-  assert.deepEqual(fields.map(f => f.field), [
-    'title', 'assignedReviewer', 'status', 'dueDate', 'relatedDate', 'created', 'completedAt',
-  ]);
-  const byField = Object.fromEntries(fields.map(f => [f.field, f.display]));
+  const fields = caseDetailFields(
+    makeCase({ title: 'T', dueDate: null, completedAt: '2026-06-05' })
+  );
+  assert.deepEqual(
+    fields.map((f) => f.field),
+    [
+      'title',
+      'assignedReviewer',
+      'status',
+      'dueDate',
+      'relatedDate',
+      'created',
+      'completedAt',
+    ]
+  );
+  const byField = Object.fromEntries(fields.map((f) => [f.field, f.display]));
   assert.equal(byField.title, 'T');
   assert.equal(byField.dueDate, '—');
   assert.equal(byField.completedAt, '2026-06-05');
@@ -103,7 +126,7 @@ test('CRCaseDetails: renders Case Details heading', () => {
   const el = new CRCaseDetails();
   el.caseRow = makeCase();
   el.connectedCallback();
-  const heading = (/** @type {any} */ (el))._children[0];
+  const heading = /** @type {any} */ (el)._children[0];
   assert.equal(heading.textContent, 'Case Details');
 });
 
@@ -111,7 +134,7 @@ test('CRCaseDetails: does nothing when caseRow is null', () => {
   const el = new CRCaseDetails();
   el.caseRow = null;
   el.connectedCallback();
-  assert.equal((/** @type {any} */ (el))._children.length, 0);
+  assert.equal(/** @type {any} */ (el)._children.length, 0);
 });
 
 test('CRCaseDetails: renders title from the Case row', () => {
@@ -175,7 +198,7 @@ test('CRCaseDetails: read-only access sets a read-only marker and no form contro
   el.caseRow = makeCase();
   el.access = 'read-only';
   el.connectedCallback();
-  assert.equal((/** @type {any} */ (el))._attrs?.['data-access'], 'read-only');
+  assert.equal(/** @type {any} */ (el)._attrs?.['data-access'], 'read-only');
   // Placeholder is read-only: it must not produce any input/textarea/button.
   function noControls(/** @type {any} */ node) {
     for (const c of node._children) {

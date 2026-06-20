@@ -17,29 +17,48 @@ class StubEl {
     /** @type {Record<string, string>} */
     this.style = {};
   }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
-  appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
-  append(/** @type {StubEl[]} */ ...cs) { this._children.push(...cs); }
+  replaceChildren(/** @type {StubEl[]} */ ...cs) {
+    this._children = cs;
+  }
+  appendChild(/** @type {StubEl} */ c) {
+    this._children.push(c);
+    return c;
+  }
+  append(/** @type {StubEl[]} */ ...cs) {
+    this._children.push(...cs);
+  }
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
   }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) { this._attrs[k] = v; }
-  getAttribute(/** @type {string} */ k) { return this._attrs[k] ?? null; }
+  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
+    this._attrs[k] = v;
+  }
+  getAttribute(/** @type {string} */ k) {
+    return this._attrs[k] ?? null;
+  }
 }
 
-(/** @type {any} */ (globalThis)).HTMLElement = StubEl;
-(/** @type {any} */ (globalThis)).document = {
+/** @type {any} */ (globalThis).HTMLElement = StubEl;
+/** @type {any} */ (globalThis).document = {
   /** @param {string} _tag @returns {StubEl} */
-  createElement(_tag) { return new StubEl(); },
+  createElement(_tag) {
+    return new StubEl();
+  },
   addEventListener() {},
   removeEventListener() {},
 };
-(/** @type {any} */ (globalThis)).customElements = { define() {} };
-(/** @type {any} */ (globalThis)).location = { hash: '', reload() { reloadCalls++; } };
+/** @type {any} */ (globalThis).customElements = { define() {} };
+/** @type {any} */ (globalThis).location = {
+  hash: '',
+  reload() {
+    reloadCalls++;
+  },
+};
 let reloadCalls = 0;
 
 const { signal } = await import('../src/lib/signal.js');
-const { CRStatusBanner } = await import('../src/components/cr-status-banner.js');
+const { CRStatusBanner } =
+  await import('../src/components/cr-status-banner.js');
 
 /**
  * @param {'saved'|'saving'|'reconnecting'|'conflict'} initial
@@ -48,7 +67,9 @@ function makeQueue(initial = 'saved') {
   const s = signal(initial);
   return {
     status: s,
-    set(/** @type {'saved'|'saving'|'reconnecting'|'conflict'} */ v) { s.set(v); },
+    set(/** @type {'saved'|'saving'|'reconnecting'|'conflict'} */ v) {
+      s.set(v);
+    },
   };
 }
 
@@ -56,7 +77,7 @@ test('CRStatusBanner: when status is saved, renders no banner', () => {
   const el = new CRStatusBanner();
   el.saveQueue = /** @type {any} */ (makeQueue('saved'));
   el.connectedCallback();
-  assert.equal((/** @type {any} */ (el))._children.length, 0);
+  assert.equal(/** @type {any} */ (el)._children.length, 0);
 });
 
 test('CRStatusBanner: when status is saving, renders a polite live indicator with text Saving…', () => {
@@ -64,7 +85,7 @@ test('CRStatusBanner: when status is saving, renders a polite live indicator wit
   el.saveQueue = /** @type {any} */ (makeQueue('saving'));
   el.connectedCallback();
 
-  const node = (/** @type {any} */ (el))._children[0];
+  const node = /** @type {any} */ (el)._children[0];
   assert.ok(node, 'banner content should exist');
   assert.equal(node.textContent, 'Saving…');
   assert.equal(node.role || node.getAttribute('role'), 'status');
@@ -76,7 +97,7 @@ test('CRStatusBanner: when status is reconnecting, renders gentler indicator', (
   el.saveQueue = /** @type {any} */ (makeQueue('reconnecting'));
   el.connectedCallback();
 
-  const node = (/** @type {any} */ (el))._children[0];
+  const node = /** @type {any} */ (el)._children[0];
   assert.equal(node.textContent, 'Reconnecting…');
   assert.equal(node.className, 'cr-banner cr-banner-reconnecting');
 });
@@ -86,13 +107,16 @@ test('CRStatusBanner: when status is conflict, renders persistent assertive bann
   el.saveQueue = /** @type {any} */ (makeQueue('conflict'));
   el.connectedCallback();
 
-  const banner = (/** @type {any} */ (el))._children[0];
+  const banner = /** @type {any} */ (el)._children[0];
   assert.equal(banner.className, 'cr-banner cr-banner-conflict');
   assert.equal(banner.role || banner.getAttribute('role'), 'alert');
   assert.equal(banner.getAttribute('aria-live'), 'assertive');
 
   const text = banner._children[0];
-  assert.equal(text.textContent, 'This Case was edited in another tab. Reload to continue.');
+  assert.equal(
+    text.textContent,
+    'This Case was edited in another tab. Reload to continue.'
+  );
 
   const btn = banner._children[1];
   assert.equal(btn.textContent, 'Reload');
@@ -105,7 +129,7 @@ test('CRStatusBanner: clicking Reload invokes location.reload()', () => {
   el.saveQueue = /** @type {any} */ (makeQueue('conflict'));
   el.connectedCallback();
 
-  const banner = (/** @type {any} */ (el))._children[0];
+  const banner = /** @type {any} */ (el)._children[0];
   const btn = banner._children[1];
   btn._listeners['click'][0]();
   assert.equal(reloadCalls - before, 1);
@@ -116,11 +140,14 @@ test('CRStatusBanner: status change from reconnecting to saved auto-clears the i
   const el = new CRStatusBanner();
   el.saveQueue = /** @type {any} */ (queue);
   el.connectedCallback();
-  assert.equal((/** @type {any} */ (el))._children.length, 1);
+  assert.equal(/** @type {any} */ (el)._children.length, 1);
 
   queue.set('saved');
-  assert.equal((/** @type {any} */ (el))._children.length, 0,
-    'banner should auto-dismiss when save recovers');
+  assert.equal(
+    /** @type {any} */ (el)._children.length,
+    0,
+    'banner should auto-dismiss when save recovers'
+  );
 });
 
 test('CRStatusBanner: conflict banner remains rendered when status updated again to conflict', () => {
@@ -130,7 +157,7 @@ test('CRStatusBanner: conflict banner remains rendered when status updated again
   el.connectedCallback();
 
   queue.set('conflict');
-  const banner = (/** @type {any} */ (el))._children[0];
+  const banner = /** @type {any} */ (el)._children[0];
   assert.equal(banner.className, 'cr-banner cr-banner-conflict');
 });
 
@@ -138,7 +165,7 @@ test('CRStatusBanner: connectedCallback with null saveQueue is a no-op', () => {
   const el = new CRStatusBanner();
   el.saveQueue = null;
   assert.doesNotThrow(() => el.connectedCallback());
-  assert.equal((/** @type {any} */ (el))._children.length, 0);
+  assert.equal(/** @type {any} */ (el)._children.length, 0);
 });
 
 test('CRStatusBanner: connectedCallback positions host element as fixed so it never causes layout shift', () => {
@@ -146,5 +173,9 @@ test('CRStatusBanner: connectedCallback positions host element as fixed so it ne
   el.saveQueue = /** @type {any} */ (makeQueue('saved'));
   el.connectedCallback();
   const style = /** @type {any} */ (el).style;
-  assert.equal(style.position, 'fixed', 'host element must be removed from document flow');
+  assert.equal(
+    style.position,
+    'fixed',
+    'host element must be removed from document flow'
+  );
 });

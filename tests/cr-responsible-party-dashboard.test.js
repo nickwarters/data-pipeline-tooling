@@ -21,16 +21,30 @@ class StubEl {
     this.type = '';
     this.value = '';
   }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; cs.forEach(c => (/** @type {any} */ (c)).connectedCallback?.()); }
-  appendChild(/** @type {StubEl} */ c) { this._children.push(c); (/** @type {any} */ (c)).connectedCallback?.(); return c; }
-  append(/** @type {StubEl[]} */ ...cs) { this._children.push(...cs); cs.forEach(c => (/** @type {any} */ (c)).connectedCallback?.()); }
+  replaceChildren(/** @type {StubEl[]} */ ...cs) {
+    this._children = cs;
+    cs.forEach((c) => /** @type {any} */ (c).connectedCallback?.());
+  }
+  appendChild(/** @type {StubEl} */ c) {
+    this._children.push(c);
+    /** @type {any} */ (c).connectedCallback?.();
+    return c;
+  }
+  append(/** @type {StubEl[]} */ ...cs) {
+    this._children.push(...cs);
+    cs.forEach((c) => /** @type {any} */ (c).connectedCallback?.());
+  }
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
   }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) { this._attrs[k] = v; }
-  getAttribute(/** @type {string} */ k) { return this._attrs[k] ?? null; }
+  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
+    this._attrs[k] = v;
+  }
+  getAttribute(/** @type {string} */ k) {
+    return this._attrs[k] ?? null;
+  }
   dispatchEvent(/** @type {any} */ e) {
-    (this._listeners[e.type] ?? []).forEach(h => h(e));
+    (this._listeners[e.type] ?? []).forEach((h) => h(e));
     return true;
   }
 }
@@ -44,8 +58,8 @@ class StubCustomEvent {
   }
 }
 
-(/** @type {any} */ (globalThis)).HTMLElement = StubEl;
-(/** @type {any} */ (globalThis)).document = {
+/** @type {any} */ (globalThis).HTMLElement = StubEl;
+/** @type {any} */ (globalThis).document = {
   _registry: {},
   /** @param {string} tag @returns {StubEl} */
   createElement(tag) {
@@ -57,15 +71,17 @@ class StubCustomEvent {
   addEventListener() {},
   removeEventListener() {},
 };
-(/** @type {any} */ (globalThis)).customElements = {
+/** @type {any} */ (globalThis).customElements = {
   define(tag, ctor) {
-    (/** @type {any} */ (globalThis)).document._registry[tag.toLowerCase()] = ctor;
-  }
+    /** @type {any} */ (globalThis).document._registry[tag.toLowerCase()] =
+      ctor;
+  },
 };
-(/** @type {any} */ (globalThis)).CustomEvent = StubCustomEvent;
+/** @type {any} */ (globalThis).CustomEvent = StubCustomEvent;
 
 // ===== IMPORTS (after stubs) =====
-const { CRResponsiblePartyDashboard } = await import('../src/pages/cr-responsible-party-dashboard.js');
+const { CRResponsiblePartyDashboard } =
+  await import('../src/pages/cr-responsible-party-dashboard.js');
 const { CRCaseTable } = await import('../src/components/cr-case-table.js');
 
 /**
@@ -124,7 +140,9 @@ function findAll(root, tag) {
 }
 
 /** @param {any} root @param {string} tag @returns {StubEl | undefined} */
-function findFirst(root, tag) { return findAll(root, tag)[0]; }
+function findFirst(root, tag) {
+  return findAll(root, tag)[0];
+}
 
 const now = new Date();
 const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -155,7 +173,7 @@ function makeClient(rows, callLog) {
   return {
     async listCases(/** @type {ListCasesFilter} */ f) {
       callLog?.push(f);
-      return rows.map(c => ({ ...c }));
+      return rows.map((c) => ({ ...c }));
     },
   };
 }
@@ -167,7 +185,7 @@ test('CRResponsiblePartyDashboard: connectedCallback does nothing when client is
   el.client = null;
   el.currentUserId = 'user-rp';
   await el.connectedCallback();
-  assert.equal((/** @type {any} */ (el))._children.length, 0);
+  assert.equal(/** @type {any} */ (el)._children.length, 0);
 });
 
 test('CRResponsiblePartyDashboard: connectedCallback does nothing when currentUserId is empty', async () => {
@@ -175,7 +193,7 @@ test('CRResponsiblePartyDashboard: connectedCallback does nothing when currentUs
   el.client = /** @type {any} */ (makeClient([]));
   el.currentUserId = '';
   await el.connectedCallback();
-  assert.equal((/** @type {any} */ (el))._children.length, 0);
+  assert.equal(/** @type {any} */ (el)._children.length, 0);
 });
 
 test('CRResponsiblePartyDashboard: calls listCases with responsibleParty filter', async () => {
@@ -195,7 +213,7 @@ test('CRResponsiblePartyDashboard: renders 3 sections after connectedCallback', 
   el.currentUserId = 'user-rp';
   await el.connectedCallback();
   // outcome section + remediation section + messages section
-  assert.equal((/** @type {any} */ (el))._children.length, 3);
+  assert.equal(/** @type {any} */ (el)._children.length, 3);
 });
 
 // ===== Outcome summary tests =====
@@ -204,8 +222,18 @@ test('CRResponsiblePartyDashboard: outcome summary includes completed cases with
   const recentMonth = new Date(todayStart);
   recentMonth.setMonth(recentMonth.getMonth() - 2);
   const cases = [
-    makeCase({ id: 'c1', status: 'Completed', completedAt: recentMonth.toISOString(), outcome: 'Pass' }),
-    makeCase({ id: 'c2', status: 'Completed', completedAt: recentMonth.toISOString(), outcome: 'Fail' }),
+    makeCase({
+      id: 'c1',
+      status: 'Completed',
+      completedAt: recentMonth.toISOString(),
+      outcome: 'Pass',
+    }),
+    makeCase({
+      id: 'c2',
+      status: 'Completed',
+      completedAt: recentMonth.toISOString(),
+      outcome: 'Fail',
+    }),
   ];
   const el = new CRResponsiblePartyDashboard();
   el.client = /** @type {any} */ (makeClient(cases));
@@ -220,20 +248,39 @@ test('CRResponsiblePartyDashboard: outcome summary excludes completed cases olde
   const recent = new Date(todayStart);
   recent.setMonth(recent.getMonth() - 1);
   const cases = [
-    makeCase({ id: 'c1', status: 'Completed', completedAt: old.toISOString(), outcome: 'Pass' }),
-    makeCase({ id: 'c2', status: 'Completed', completedAt: recent.toISOString(), outcome: 'Pass' }),
+    makeCase({
+      id: 'c1',
+      status: 'Completed',
+      completedAt: old.toISOString(),
+      outcome: 'Pass',
+    }),
+    makeCase({
+      id: 'c2',
+      status: 'Completed',
+      completedAt: recent.toISOString(),
+      outcome: 'Pass',
+    }),
   ];
   const el = new CRResponsiblePartyDashboard();
   el.client = /** @type {any} */ (makeClient(cases));
   el.currentUserId = 'user-rp';
   await el.connectedCallback();
-  assert.equal(el._outcomeSummary.totalCompleted, 1, 'only the recent case counts');
+  assert.equal(
+    el._outcomeSummary.totalCompleted,
+    1,
+    'only the recent case counts'
+  );
 });
 
 test('CRResponsiblePartyDashboard: outcome summary excludes in-progress cases', async () => {
   const cases = [
     makeCase({ id: 'c1', status: 'In-progress', completedAt: null }),
-    makeCase({ id: 'c2', status: 'Completed', completedAt: todayStart.toISOString(), outcome: 'Pass' }),
+    makeCase({
+      id: 'c2',
+      status: 'Completed',
+      completedAt: todayStart.toISOString(),
+      outcome: 'Pass',
+    }),
   ];
   const el = new CRResponsiblePartyDashboard();
   el.client = /** @type {any} */ (makeClient(cases));
@@ -244,9 +291,24 @@ test('CRResponsiblePartyDashboard: outcome summary excludes in-progress cases', 
 
 test('CRResponsiblePartyDashboard: outcome summary groups by outcome type', async () => {
   const cases = [
-    makeCase({ id: 'c1', status: 'Completed', completedAt: todayStart.toISOString(), outcome: 'Pass' }),
-    makeCase({ id: 'c2', status: 'Completed', completedAt: todayStart.toISOString(), outcome: 'Pass' }),
-    makeCase({ id: 'c3', status: 'Completed', completedAt: todayStart.toISOString(), outcome: 'Fail' }),
+    makeCase({
+      id: 'c1',
+      status: 'Completed',
+      completedAt: todayStart.toISOString(),
+      outcome: 'Pass',
+    }),
+    makeCase({
+      id: 'c2',
+      status: 'Completed',
+      completedAt: todayStart.toISOString(),
+      outcome: 'Pass',
+    }),
+    makeCase({
+      id: 'c3',
+      status: 'Completed',
+      completedAt: todayStart.toISOString(),
+      outcome: 'Fail',
+    }),
   ];
   const el = new CRResponsiblePartyDashboard();
   el.client = /** @type {any} */ (makeClient(cases));
@@ -265,7 +327,9 @@ test('CRResponsiblePartyDashboard: _remediationCases includes cases with uncompl
       answers: {
         'q-needs': {
           value: 'No',
-          remediationActions: [{ id: 'ra-1', text: 'Fix the issue', completed: false }],
+          remediationActions: [
+            { id: 'ra-1', text: 'Fix the issue', completed: false },
+          ],
         },
       },
     }),
@@ -286,7 +350,9 @@ test('CRResponsiblePartyDashboard: _remediationCases excludes cases where all ac
       answers: {
         'q-needs': {
           value: 'No',
-          remediationActions: [{ id: 'ra-1', text: 'Fix the issue', completed: true }],
+          remediationActions: [
+            { id: 'ra-1', text: 'Fix the issue', completed: true },
+          ],
         },
       },
     }),
@@ -304,14 +370,24 @@ test('CRResponsiblePartyDashboard: remediation table renders row for each case w
       id: 'c1',
       title: 'Case One',
       answers: {
-        'q-1': { value: 'No', remediationActions: [{ id: 'ra-1', text: 'Action 1', completed: false }] },
+        'q-1': {
+          value: 'No',
+          remediationActions: [
+            { id: 'ra-1', text: 'Action 1', completed: false },
+          ],
+        },
       },
     }),
     makeCase({
       id: 'c2',
       title: 'Case Two',
       answers: {
-        'q-2': { value: 'No', remediationActions: [{ id: 'ra-2', text: 'Action 2', completed: false }] },
+        'q-2': {
+          value: 'No',
+          remediationActions: [
+            { id: 'ra-2', text: 'Action 2', completed: false },
+          ],
+        },
       },
     }),
   ];
@@ -319,38 +395,78 @@ test('CRResponsiblePartyDashboard: remediation table renders row for each case w
   el.client = /** @type {any} */ (makeClient(cases));
   el.currentUserId = 'user-rp';
   await el.connectedCallback();
-  const rows = findAll(el, 'tr').filter(r => r.className.includes('cr-remediation-row'));
+  const rows = findAll(el, 'tr').filter((r) =>
+    r.className.includes('cr-remediation-row')
+  );
   assert.equal(rows.length, 2);
 });
 
 test('CRResponsiblePartyDashboard: remediation row is flagged as overdue when dueDate is past', async () => {
-  const yesterday = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000).toISOString();
-  const tomorrow = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000).toISOString();
+  const yesterday = new Date(
+    todayStart.getTime() - 24 * 60 * 60 * 1000
+  ).toISOString();
+  const tomorrow = new Date(
+    todayStart.getTime() + 24 * 60 * 60 * 1000
+  ).toISOString();
   const cases = [
     makeCase({
       id: 'c1',
       dueDate: yesterday,
-      answers: { 'q-1': { value: 'No', remediationActions: [{ id: 'ra-1', text: 'Fix', completed: false }] } },
+      answers: {
+        'q-1': {
+          value: 'No',
+          remediationActions: [{ id: 'ra-1', text: 'Fix', completed: false }],
+        },
+      },
     }),
     makeCase({
       id: 'c2',
       dueDate: tomorrow,
-      answers: { 'q-2': { value: 'No', remediationActions: [{ id: 'ra-2', text: 'Fix', completed: false }] } },
+      answers: {
+        'q-2': {
+          value: 'No',
+          remediationActions: [{ id: 'ra-2', text: 'Fix', completed: false }],
+        },
+      },
     }),
   ];
   const el = new CRResponsiblePartyDashboard();
   el.client = /** @type {any} */ (makeClient(cases));
   el.currentUserId = 'user-rp';
   await el.connectedCallback();
-  const rows = findAll(el, 'tr').filter(r => r.className.includes('cr-remediation-row'));
-  const overdueRows = rows.filter(r => r.className.includes('cr-overdue'));
-  assert.equal(overdueRows.length, 1, 'only the past-due case gets overdue flag');
+  const rows = findAll(el, 'tr').filter((r) =>
+    r.className.includes('cr-remediation-row')
+  );
+  const overdueRows = rows.filter((r) => r.className.includes('cr-overdue'));
+  assert.equal(
+    overdueRows.length,
+    1,
+    'only the past-due case gets overdue flag'
+  );
 });
 
 test('CRResponsiblePartyDashboard: remediation table filterable by case type', async () => {
   const cases = [
-    makeCase({ id: 'c1', caseType: 'hello-review', answers: { 'q-1': { value: 'No', remediationActions: [{ id: 'ra-1', text: 'A', completed: false }] } } }),
-    makeCase({ id: 'c2', caseType: 'audit-review', answers: { 'q-2': { value: 'No', remediationActions: [{ id: 'ra-2', text: 'B', completed: false }] } } }),
+    makeCase({
+      id: 'c1',
+      caseType: 'hello-review',
+      answers: {
+        'q-1': {
+          value: 'No',
+          remediationActions: [{ id: 'ra-1', text: 'A', completed: false }],
+        },
+      },
+    }),
+    makeCase({
+      id: 'c2',
+      caseType: 'audit-review',
+      answers: {
+        'q-2': {
+          value: 'No',
+          remediationActions: [{ id: 'ra-2', text: 'B', completed: false }],
+        },
+      },
+    }),
   ];
   const el = new CRResponsiblePartyDashboard();
   el.client = /** @type {any} */ (makeClient(cases));
@@ -358,26 +474,54 @@ test('CRResponsiblePartyDashboard: remediation table filterable by case type', a
   await el.connectedCallback();
   // Apply case type filter
   el._setCaseTypeFilter('hello-review');
-  const rows = findAll(el, 'tr').filter(r => r.className.includes('cr-remediation-row'));
+  const rows = findAll(el, 'tr').filter((r) =>
+    r.className.includes('cr-remediation-row')
+  );
   assert.equal(rows.length, 1);
   // Case Type is the second cell in the remediation column set
-  const caseTypeCells = rows.map(r => r._children[1]?.textContent);
-  assert.ok(caseTypeCells.every(t => t === 'hello-review'));
+  const caseTypeCells = rows.map((r) => r._children[1]?.textContent);
+  assert.ok(caseTypeCells.every((t) => t === 'hello-review'));
 });
 
 test('CRResponsiblePartyDashboard: sort by due date ascending puts earliest due first', async () => {
-  const tomorrow = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000).toISOString();
-  const nextWeek = new Date(todayStart.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const tomorrow = new Date(
+    todayStart.getTime() + 24 * 60 * 60 * 1000
+  ).toISOString();
+  const nextWeek = new Date(
+    todayStart.getTime() + 7 * 24 * 60 * 60 * 1000
+  ).toISOString();
   const cases = [
-    makeCase({ id: 'c2', title: 'Case Two', dueDate: nextWeek, answers: { 'q-1': { value: 'No', remediationActions: [{ id: 'ra-2', text: 'B', completed: false }] } } }),
-    makeCase({ id: 'c1', title: 'Case One', dueDate: tomorrow, answers: { 'q-2': { value: 'No', remediationActions: [{ id: 'ra-1', text: 'A', completed: false }] } } }),
+    makeCase({
+      id: 'c2',
+      title: 'Case Two',
+      dueDate: nextWeek,
+      answers: {
+        'q-1': {
+          value: 'No',
+          remediationActions: [{ id: 'ra-2', text: 'B', completed: false }],
+        },
+      },
+    }),
+    makeCase({
+      id: 'c1',
+      title: 'Case One',
+      dueDate: tomorrow,
+      answers: {
+        'q-2': {
+          value: 'No',
+          remediationActions: [{ id: 'ra-1', text: 'A', completed: false }],
+        },
+      },
+    }),
   ];
   const el = new CRResponsiblePartyDashboard();
   el.client = /** @type {any} */ (makeClient(cases));
   el.currentUserId = 'user-rp';
   await el.connectedCallback();
   // Default sort is dueDate asc; Case One (tomorrow) should come before Case Two (nextWeek)
-  const rows = findAll(el, 'tr').filter(r => r.className.includes('cr-remediation-row'));
+  const rows = findAll(el, 'tr').filter((r) =>
+    r.className.includes('cr-remediation-row')
+  );
   assert.equal(rows[0]._children[0].textContent, 'Case One');
   assert.equal(rows[1]._children[0].textContent, 'Case Two');
 });
@@ -389,8 +533,16 @@ test('CRResponsiblePartyDashboard: _unreadCases includes cases with reviewer mes
     makeCase({
       id: 'c1',
       conversation: [
-        { author: 'user-rp', timestamp: '2026-05-07T09:00:00Z', body: 'My reply' },
-        { author: 'user-reviewer', timestamp: '2026-05-07T10:00:00Z', body: 'Follow up question' },
+        {
+          author: 'user-rp',
+          timestamp: '2026-05-07T09:00:00Z',
+          body: 'My reply',
+        },
+        {
+          author: 'user-reviewer',
+          timestamp: '2026-05-07T10:00:00Z',
+          body: 'Follow up question',
+        },
       ],
     }),
   ];
@@ -407,7 +559,11 @@ test('CRResponsiblePartyDashboard: _unreadCases includes cases with reviewer mes
     makeCase({
       id: 'c1',
       conversation: [
-        { author: 'user-reviewer', timestamp: '2026-05-07T09:00:00Z', body: 'Please clarify' },
+        {
+          author: 'user-reviewer',
+          timestamp: '2026-05-07T09:00:00Z',
+          body: 'Please clarify',
+        },
       ],
     }),
   ];
@@ -423,8 +579,16 @@ test('CRResponsiblePartyDashboard: _unreadCases excludes cases where RP replied 
     makeCase({
       id: 'c1',
       conversation: [
-        { author: 'user-reviewer', timestamp: '2026-05-07T09:00:00Z', body: 'Question' },
-        { author: 'user-rp', timestamp: '2026-05-07T10:00:00Z', body: 'Answer' },
+        {
+          author: 'user-reviewer',
+          timestamp: '2026-05-07T09:00:00Z',
+          body: 'Question',
+        },
+        {
+          author: 'user-rp',
+          timestamp: '2026-05-07T10:00:00Z',
+          body: 'Answer',
+        },
       ],
     }),
   ];
@@ -436,9 +600,7 @@ test('CRResponsiblePartyDashboard: _unreadCases excludes cases where RP replied 
 });
 
 test('CRResponsiblePartyDashboard: _unreadCases excludes cases with empty conversation', async () => {
-  const cases = [
-    makeCase({ id: 'c1', conversation: [] }),
-  ];
+  const cases = [makeCase({ id: 'c1', conversation: [] })];
   const el = new CRResponsiblePartyDashboard();
   el.client = /** @type {any} */ (makeClient(cases));
   el.currentUserId = 'user-rp';
@@ -451,12 +613,24 @@ test('CRResponsiblePartyDashboard: unread messages section uses cr-case-table wi
     makeCase({
       id: 'c1',
       title: 'Case One',
-      conversation: [{ author: 'user-reviewer', timestamp: '2026-05-07T09:00:00Z', body: 'Q' }],
+      conversation: [
+        {
+          author: 'user-reviewer',
+          timestamp: '2026-05-07T09:00:00Z',
+          body: 'Q',
+        },
+      ],
     }),
     makeCase({
       id: 'c2',
       title: 'Case Two',
-      conversation: [{ author: 'user-reviewer', timestamp: '2026-05-07T09:00:00Z', body: 'Q' }],
+      conversation: [
+        {
+          author: 'user-reviewer',
+          timestamp: '2026-05-07T09:00:00Z',
+          body: 'Q',
+        },
+      ],
     }),
     makeCase({ id: 'c3', title: 'Case Three', conversation: [] }),
   ];
@@ -465,17 +639,31 @@ test('CRResponsiblePartyDashboard: unread messages section uses cr-case-table wi
   el.currentUserId = 'user-rp';
   await el.connectedCallback();
   const allTables = findCaseTables(el);
-  assert.equal(allTables.length, 2, 'should have two cr-case-table instances (remediation + unread)');
+  assert.equal(
+    allTables.length,
+    2,
+    'should have two cr-case-table instances (remediation + unread)'
+  );
   const unreadTable = caseTableInSection(el, 'cr-rp-messages');
   assert.ok(unreadTable, 'unread section should contain a cr-case-table');
-  assert.equal(unreadTable.cases.length, 2, 'table should have the two unread cases');
+  assert.equal(
+    unreadTable.cases.length,
+    2,
+    'table should have the two unread cases'
+  );
 });
 
 test('CRResponsiblePartyDashboard: cr-case-open on unread table dispatches cr-open-conversation event', async () => {
   const cases = [
     makeCase({
       id: 'c1',
-      conversation: [{ author: 'user-reviewer', timestamp: '2026-05-07T09:00:00Z', body: 'Q' }],
+      conversation: [
+        {
+          author: 'user-reviewer',
+          timestamp: '2026-05-07T09:00:00Z',
+          body: 'Q',
+        },
+      ],
     }),
   ];
   const el = new CRResponsiblePartyDashboard();
@@ -485,7 +673,10 @@ test('CRResponsiblePartyDashboard: cr-case-open on unread table dispatches cr-op
 
   /** @type {any[]} */
   const fired = [];
-  /** @type {any} */ (el).addEventListener('cr-open-conversation', (/** @type {any} */ e) => fired.push(e));
+  /** @type {any} */ (el).addEventListener(
+    'cr-open-conversation',
+    (/** @type {any} */ e) => fired.push(e)
+  );
 
   const unreadTable = caseTableInSection(el, 'cr-rp-messages');
   assert.ok(unreadTable, 'unread section should contain a cr-case-table');
@@ -498,8 +689,26 @@ test('CRResponsiblePartyDashboard: cr-case-open on unread table dispatches cr-op
 
 test('CRResponsiblePartyDashboard: select change event calls _refreshRemediationCases via DOM event', async () => {
   const cases = [
-    makeCase({ id: 'c1', caseType: 'hello-review', answers: { 'q-1': { value: 'No', remediationActions: [{ id: 'ra-1', text: 'A', completed: false }] } } }),
-    makeCase({ id: 'c2', caseType: 'audit-review', answers: { 'q-2': { value: 'No', remediationActions: [{ id: 'ra-2', text: 'B', completed: false }] } } }),
+    makeCase({
+      id: 'c1',
+      caseType: 'hello-review',
+      answers: {
+        'q-1': {
+          value: 'No',
+          remediationActions: [{ id: 'ra-1', text: 'A', completed: false }],
+        },
+      },
+    }),
+    makeCase({
+      id: 'c2',
+      caseType: 'audit-review',
+      answers: {
+        'q-2': {
+          value: 'No',
+          remediationActions: [{ id: 'ra-2', text: 'B', completed: false }],
+        },
+      },
+    }),
   ];
   const el = new CRResponsiblePartyDashboard();
   el.client = /** @type {any} */ (makeClient(cases));
@@ -507,7 +716,11 @@ test('CRResponsiblePartyDashboard: select change event calls _refreshRemediation
   await el.connectedCallback();
 
   // Find the filter select by class name
-  const select = /** @type {any} */ (findAll(el, 'select').find(s => s.className === 'cr-rp-remediation-filter'));
+  const select = /** @type {any} */ (
+    findAll(el, 'select').find(
+      (s) => s.className === 'cr-rp-remediation-filter'
+    )
+  );
   assert.ok(select, 'remediation filter select should exist');
 
   // Fire the change event with a filter value
@@ -517,8 +730,14 @@ test('CRResponsiblePartyDashboard: select change event calls _refreshRemediation
   }
 
   // After filtering, only the hello-review case should appear in the remediation table
-  const rows = findAll(el, 'tr').filter(r => r.className.includes('cr-remediation-row'));
-  assert.equal(rows.length, 1, 'only matching case type should remain after change event');
+  const rows = findAll(el, 'tr').filter((r) =>
+    r.className.includes('cr-remediation-row')
+  );
+  assert.equal(
+    rows.length,
+    1,
+    'only matching case type should remain after change event'
+  );
   assert.equal(rows[0]._children[1]?.textContent, 'hello-review');
 });
 
@@ -526,7 +745,13 @@ test('CRResponsiblePartyDashboard: Open button click dispatches cr-case-open on 
   const cases = [
     makeCase({
       id: 'c1',
-      conversation: [{ author: 'user-reviewer', timestamp: '2026-05-07T09:00:00Z', body: 'Q' }],
+      conversation: [
+        {
+          author: 'user-reviewer',
+          timestamp: '2026-05-07T09:00:00Z',
+          body: 'Q',
+        },
+      ],
     }),
   ];
   const el = new CRResponsiblePartyDashboard();
@@ -536,12 +761,18 @@ test('CRResponsiblePartyDashboard: Open button click dispatches cr-case-open on 
 
   /** @type {any[]} */
   const fired = [];
-  el.addEventListener('cr-open-conversation', (/** @type {any} */ e) => fired.push(e));
+  el.addEventListener('cr-open-conversation', (/** @type {any} */ e) =>
+    fired.push(e)
+  );
 
   // Find the Open button in the messages section
-  const messagesSection = findAll(el, 'section').find(s => s.className === 'cr-rp-messages');
+  const messagesSection = findAll(el, 'section').find(
+    (s) => s.className === 'cr-rp-messages'
+  );
   assert.ok(messagesSection, 'messages section should exist');
-  const openBtn = findAll(messagesSection, 'button').find(b => b.className === 'cr-case-open-btn');
+  const openBtn = findAll(messagesSection, 'button').find(
+    (b) => b.className === 'cr-case-open-btn'
+  );
   assert.ok(openBtn, 'Open button should exist in messages table');
 
   // Click the open button — should dispatch cr-case-open which is handled by the table listener
@@ -555,8 +786,26 @@ test('CRResponsiblePartyDashboard: Open button click dispatches cr-case-open on 
 
 test('CRResponsiblePartyDashboard: _setCaseTypeFilter sets filter and re-renders', async () => {
   const cases = [
-    makeCase({ id: 'c1', caseType: 'hello-review', answers: { 'q-1': { value: 'No', remediationActions: [{ id: 'ra-1', text: 'A', completed: false }] } } }),
-    makeCase({ id: 'c2', caseType: 'other-review', answers: { 'q-2': { value: 'No', remediationActions: [{ id: 'ra-2', text: 'B', completed: false }] } } }),
+    makeCase({
+      id: 'c1',
+      caseType: 'hello-review',
+      answers: {
+        'q-1': {
+          value: 'No',
+          remediationActions: [{ id: 'ra-1', text: 'A', completed: false }],
+        },
+      },
+    }),
+    makeCase({
+      id: 'c2',
+      caseType: 'other-review',
+      answers: {
+        'q-2': {
+          value: 'No',
+          remediationActions: [{ id: 'ra-2', text: 'B', completed: false }],
+        },
+      },
+    }),
   ];
   const el = new CRResponsiblePartyDashboard();
   el.client = /** @type {any} */ (makeClient(cases));
@@ -569,27 +818,50 @@ test('CRResponsiblePartyDashboard: _setCaseTypeFilter sets filter and re-renders
   // After calling _setCaseTypeFilter, the filter should be applied on next render
   const remediationTable = caseTableInSection(el, 'cr-rp-remediation');
   assert.ok(remediationTable, 'remediation table must exist after re-render');
-  assert.equal(el._caseTypeFilter, 'hello-review', '_caseTypeFilter must be updated');
+  assert.equal(
+    el._caseTypeFilter,
+    'hello-review',
+    '_caseTypeFilter must be updated'
+  );
 });
 
 test('CRResponsiblePartyDashboard: select change with null e.target falls back to empty filter', async () => {
   const cases = [
-    makeCase({ id: 'c1', caseType: 'hello-review', answers: { 'q-1': { value: 'No', remediationActions: [{ id: 'ra-1', text: 'A', completed: false }] } } }),
+    makeCase({
+      id: 'c1',
+      caseType: 'hello-review',
+      answers: {
+        'q-1': {
+          value: 'No',
+          remediationActions: [{ id: 'ra-1', text: 'A', completed: false }],
+        },
+      },
+    }),
   ];
   const el = new CRResponsiblePartyDashboard();
   el.client = /** @type {any} */ (makeClient(cases));
   el.currentUserId = 'user-rp';
   await el.connectedCallback();
 
-  const select = /** @type {any} */ (findAll(el, 'select').find(s => s.className === 'cr-rp-remediation-filter'));
+  const select = /** @type {any} */ (
+    findAll(el, 'select').find(
+      (s) => s.className === 'cr-rp-remediation-filter'
+    )
+  );
   assert.ok(select, 'remediation filter select should exist');
   // Fire change with null target — covers `e.target?.value ?? ''` null branch
   for (const h of select._listeners['change'] ?? []) {
     h({ target: null });
   }
   // Empty filter: all cases shown
-  const rows = findAll(el, 'tr').filter(r => r.className.includes('cr-remediation-row'));
-  assert.equal(rows.length, 1, 'null target falls back to empty string → all remediation rows shown');
+  const rows = findAll(el, 'tr').filter((r) =>
+    r.className.includes('cr-remediation-row')
+  );
+  assert.equal(
+    rows.length,
+    1,
+    'null target falls back to empty string → all remediation rows shown'
+  );
 });
 
 test('CRResponsiblePartyDashboard: two completed cases in same month+outcome increments count (covers ?? 0 and !monthMap[month] false branch)', async () => {
@@ -598,8 +870,18 @@ test('CRResponsiblePartyDashboard: two completed cases in same month+outcome inc
   const iso = recentMonth.toISOString().slice(0, 10);
 
   const cases = [
-    makeCase({ id: 'c1', status: /** @type {'Completed'} */ ('Completed'), completedAt: `${iso}T10:00:00Z`, outcome: 'Pass' }),
-    makeCase({ id: 'c2', status: /** @type {'Completed'} */ ('Completed'), completedAt: `${iso}T11:00:00Z`, outcome: 'Pass' }),
+    makeCase({
+      id: 'c1',
+      status: /** @type {'Completed'} */ ('Completed'),
+      completedAt: `${iso}T10:00:00Z`,
+      outcome: 'Pass',
+    }),
+    makeCase({
+      id: 'c2',
+      status: /** @type {'Completed'} */ ('Completed'),
+      completedAt: `${iso}T11:00:00Z`,
+      outcome: 'Pass',
+    }),
   ];
   const el = new CRResponsiblePartyDashboard();
   el.client = /** @type {any} */ (makeClient(cases));
@@ -607,10 +889,18 @@ test('CRResponsiblePartyDashboard: two completed cases in same month+outcome inc
   await el.connectedCallback();
 
   assert.equal(el._outcomeSummary.totalCompleted, 2);
-  assert.equal(el._outcomeSummary.byOutcome['Pass'], 2, 'two cases with same outcome increment count');
+  assert.equal(
+    el._outcomeSummary.byOutcome['Pass'],
+    2,
+    'two cases with same outcome increment count'
+  );
   const month = iso.slice(0, 7);
-  const monthEntry = el._outcomeSummary.byMonth.find(m => m.month === month);
-  assert.equal(monthEntry?.counts['Pass'], 2, 'same outcome in same month accumulates count');
+  const monthEntry = el._outcomeSummary.byMonth.find((m) => m.month === month);
+  assert.equal(
+    monthEntry?.counts['Pass'],
+    2,
+    'same outcome in same month accumulates count'
+  );
 });
 
 test('CRResponsiblePartyDashboard: case with null outcome uses "Unknown" label', async () => {
@@ -619,12 +909,21 @@ test('CRResponsiblePartyDashboard: case with null outcome uses "Unknown" label',
   const iso = recentMonth.toISOString().slice(0, 10);
 
   const cases = [
-    makeCase({ id: 'c1', status: /** @type {'Completed'} */ ('Completed'), completedAt: `${iso}T10:00:00Z`, outcome: /** @type {any} */ (null) }),
+    makeCase({
+      id: 'c1',
+      status: /** @type {'Completed'} */ ('Completed'),
+      completedAt: `${iso}T10:00:00Z`,
+      outcome: /** @type {any} */ (null),
+    }),
   ];
   const el = new CRResponsiblePartyDashboard();
   el.client = /** @type {any} */ (makeClient(cases));
   el.currentUserId = 'user-rp';
   await el.connectedCallback();
 
-  assert.equal(el._outcomeSummary.byOutcome['Unknown'], 1, 'null outcome falls back to "Unknown" label');
+  assert.equal(
+    el._outcomeSummary.byOutcome['Unknown'],
+    1,
+    'null outcome falls back to "Unknown" label'
+  );
 });

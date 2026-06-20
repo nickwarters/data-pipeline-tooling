@@ -75,7 +75,9 @@ test('computed: chains multiple signals', () => {
 test('effect: runs immediately on creation', () => {
   const s = signal('hello');
   let last = null;
-  effect(() => { last = s.get(); });
+  effect(() => {
+    last = s.get();
+  });
   assert.equal(last, 'hello');
 });
 
@@ -110,7 +112,10 @@ test('effect: returns a dispose function', () => {
 test('effect: disposed effect does not re-subscribe on signal change', () => {
   const s = signal(0);
   let runCount = 0;
-  const dispose = effect(() => { runCount++; s.get(); });
+  const dispose = effect(() => {
+    runCount++;
+    s.get();
+  });
   dispose();
   s.set(1);
   assert.equal(runCount, 1); // only the initial run

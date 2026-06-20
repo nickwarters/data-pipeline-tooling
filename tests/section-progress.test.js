@@ -8,11 +8,20 @@ import { computeSectionProgress } from '../src/evaluators/section-progress.js';
 
 /** @param {string} id @param {string} [category] @param {Record<string, unknown>} [showWhen] @returns {QuestionDefinition} */
 function q(id, category, showWhen) {
-  return { id, text: id, responseType: 'yes-no-na', deprecated: false, category, ...(showWhen ? { showWhen } : {}) };
+  return {
+    id,
+    text: id,
+    responseType: 'yes-no-na',
+    deprecated: false,
+    category,
+    ...(showWhen ? { showWhen } : {}),
+  };
 }
 
 /** @param {string | string[]} value @returns {Answer} */
-function ans(value) { return { value }; }
+function ans(value) {
+  return { value };
+}
 
 // --- section grouping ---
 
@@ -27,7 +36,7 @@ test('computeSectionProgress: returns one entry per distinct category', () => {
 test('computeSectionProgress: questions without category are grouped as General', () => {
   const catalogue = [q('q1', undefined), q('q2', 'Opening')];
   const result = computeSectionProgress(catalogue, {});
-  const sections = result.map(r => r.section);
+  const sections = result.map((r) => r.section);
   assert.ok(sections.includes('General'));
   assert.ok(sections.includes('Opening'));
 });
@@ -35,7 +44,10 @@ test('computeSectionProgress: questions without category are grouped as General'
 test('computeSectionProgress: preserves category order (first-seen)', () => {
   const catalogue = [q('q1', 'C'), q('q2', 'A'), q('q3', 'B')];
   const result = computeSectionProgress(catalogue, {});
-  assert.deepEqual(result.map(r => r.section), ['C', 'A', 'B']);
+  assert.deepEqual(
+    result.map((r) => r.section),
+    ['C', 'A', 'B']
+  );
 });
 
 // --- total counts (applicable questions only) ---
@@ -120,7 +132,13 @@ test('computeSectionProgress: empty catalogue returns empty array', () => {
 
 test('computeSectionProgress: deprecated questions are excluded', () => {
   const catalogue = [
-    { id: 'q1', text: 'q1', responseType: /** @type {'yes-no-na'} */ ('yes-no-na'), deprecated: true, category: 'Opening' },
+    {
+      id: 'q1',
+      text: 'q1',
+      responseType: /** @type {'yes-no-na'} */ ('yes-no-na'),
+      deprecated: true,
+      category: 'Opening',
+    },
     q('q2', 'Opening'),
   ];
   const result = computeSectionProgress(catalogue, {});

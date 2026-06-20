@@ -2,8 +2,16 @@
 import { signal, computed } from './signal.js';
 import { evaluate } from '../evaluators/applicability-evaluator.js';
 import { materializeRemediationActions } from '../evaluators/failure-evaluator.js';
-import { captureValue, validateCaptureGroups, findCaptureField } from '../evaluators/issue-capture.js';
-import { showInSummary, SECTIONS, SUMMARY_SECTIONS } from '../services/section-access.js';
+import {
+  captureValue,
+  validateCaptureGroups,
+  findCaptureField,
+} from '../evaluators/issue-capture.js';
+import {
+  showInSummary,
+  SECTIONS,
+  SUMMARY_SECTIONS,
+} from '../services/section-access.js';
 import { CaseMachine } from './case-machine.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
@@ -44,15 +52,17 @@ export class CaseReviewViewModel {
     this.catalogueById = new Map();
 
     this.answersSignal = signal(/** @type {Record<string, Answer>} */ ({}));
-    
+
     this.applicableQuestions = computed(() => {
       const ids = evaluate(this.catalogue, this.answersSignal.get());
-      return this.catalogue.filter(q => ids.has(q.id));
+      return this.catalogue.filter((q) => ids.has(q.id));
     });
 
     this.allAnswered = computed(() => {
       const answers = this.answersSignal.get();
-      return this.applicableQuestions.get().every(q => !!answers[q.id]?.value);
+      return this.applicableQuestions
+        .get()
+        .every((q) => !!answers[q.id]?.value);
     });
 
     /** @type {CaseMachine | null} */
@@ -63,7 +73,7 @@ export class CaseReviewViewModel {
     this.access = /** @type {any} */ ({});
     /** @type {import('../services/section-access.js').Section[]} */
     this.summarySections = [];
-    
+
     /** @type {any} */
     this.sourceCase = null;
 
@@ -87,34 +97,57 @@ export class CaseReviewViewModel {
     this.currentUser = currentUser;
     saveQueue.loadCase(caseRow);
 
-    const caseTypeModule = await import(`../../case-types/${caseRow.caseType}.js`);
+    const caseTypeModule = await import(
+      `../../case-types/${caseRow.caseType}.js`
+    );
     this.config = caseTypeModule.default;
-    
+
     validateCaptureGroups(this.config.captureGroups);
-    this.catalogue = this.config.questions.filter(q => !q.deprecated);
-    this.catalogueById = new Map(this.catalogue.map(q => [q.id, q]));
+    this.catalogue = this.config.questions.filter((q) => !q.deprecated);
+    this.catalogueById = new Map(this.catalogue.map((q) => [q.id, q]));
 
     this.answersSignal.set({ ...caseRow.answers });
 
     const actualUserId = this.currentUserId || currentUser.id;
-    const caps = this.capabilities || { isReviewer: true, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
+    const caps = this.capabilities || {
+      isReviewer: true,
+      ownedCaseTypes: [],
+      isResponsibleParty: false,
+      isReviewerManager: false,
+      isResponsiblePartyManager: false,
+      isMaintainer: false,
+      isQaReviewer: false,
+      isVisitor: false,
+    };
 
-    this.machine = new CaseMachine(caseRow, { id: actualUserId }, caps, this.config);
+    this.machine = new CaseMachine(
+      caseRow,
+      { id: actualUserId },
+      caps,
+      this.config
+    );
     this.roles = this.machine.roles;
     this.access = this.machine.access;
 
-    if (SECTIONS.every(s => this.access[s] === 'hidden')) {
+    if (SECTIONS.every((s) => this.access[s] === 'hidden')) {
       this.accessDenied.set(true);
       this.loaded.set(true);
       return;
     }
 
     this.summarySections = SUMMARY_SECTIONS.filter(
-      s => this.access[s] !== 'hidden' && showInSummary(s, this.config)
+      (s) => this.access[s] !== 'hidden' && showInSummary(s, this.config)
     );
 
     this.sourceCase = caseRow.sourceCaseId
-      ? await this._resolveSourceCase(caseRow.sourceCaseId, caseRow.id, client, saveQueue, actualUserId, caps)
+      ? await this._resolveSourceCase(
+          caseRow.sourceCaseId,
+          caseRow.id,
+          client,
+          saveQueue,
+          actualUserId,
+          caps
+        )
       : null;
 
     const tabs = [
@@ -125,7 +158,7 @@ export class CaseReviewViewModel {
       { id: 'notes', hidden: this.access.notes === 'hidden' },
       { id: 'appeal', hidden: this.access.appeal === 'hidden' },
     ];
-    const firstVisible = tabs.find(t => !t.hidden);
+    const firstVisible = tabs.find((t) => !t.hidden);
     if (firstVisible) this.activeTab.set(firstVisible.id);
 
     this.loaded.set(true);
@@ -141,9 +174,11 @@ export class CaseReviewViewModel {
     if (this.access.questions !== 'edit') return;
     const q = this.catalogueById.get(questionId);
     const baseAnswer = { ...this.answersSignal.get()[questionId], value };
-    const nextAnswer = q ? materializeRemediationActions(q, baseAnswer) : baseAnswer;
+    const nextAnswer = q
+      ? materializeRemediationActions(q, baseAnswer)
+      : baseAnswer;
     const draft = { ...this.answersSignal.get(), [questionId]: nextAnswer };
-    
+
     const stillApplicable = evaluate(this.catalogue, draft);
     const newAnswers = /** @type {Record<string, Answer>} */ ({});
     for (const [id, answer] of Object.entries(draft)) {
@@ -151,7 +186,7 @@ export class CaseReviewViewModel {
         newAnswers[id] = answer;
       }
     }
-    
+
     this.answersSignal.set(newAnswers);
     this.saveQueue.enqueue(this.caseId, 'answers', newAnswers);
   }
@@ -164,7 +199,10 @@ export class CaseReviewViewModel {
     const captureGroups = this.config?.captureGroups || [];
     const field = findCaptureField(captureGroups, fieldKey);
     if (!field) return;
-    const newAnswers = { ...current, [questionId]: captureValue(existing, field, value) };
+    const newAnswers = {
+      ...current,
+      [questionId]: captureValue(existing, field, value),
+    };
     this.answersSignal.set(newAnswers);
     this.saveQueue.enqueue(this.caseId, 'answers', newAnswers);
   }
@@ -201,7 +239,10 @@ export class CaseReviewViewModel {
       const party = answer.attributedParty;
       const name = party ? resolved[party.loginName] : null;
       if (party && name && name !== party.displayName) {
-        next[id] = { ...answer, attributedParty: { ...party, displayName: name } };
+        next[id] = {
+          ...answer,
+          attributedParty: { ...party, displayName: name },
+        };
         changed = true;
       } else {
         next[id] = answer;
@@ -210,18 +251,38 @@ export class CaseReviewViewModel {
     if (changed) this.answersSignal.set(next);
   }
 
-  async _resolveSourceCase(sourceCaseId, qaCaseId, client, saveQueue, currentUserId, capabilities) {
+  async _resolveSourceCase(
+    sourceCaseId,
+    qaCaseId,
+    client,
+    saveQueue,
+    currentUserId,
+    capabilities
+  ) {
     const original = await client.getCase(sourceCaseId);
     if (!original) {
-      return { originalRow: null, catalogue: [], computeOutcome: null, attributeFailures: false, remediationFields: [], overrideAccess: 'read-only', sourceCaseId: qaCaseId };
+      return {
+        originalRow: null,
+        catalogue: [],
+        computeOutcome: null,
+        attributeFailures: false,
+        remediationFields: [],
+        overrideAccess: 'read-only',
+        sourceCaseId: qaCaseId,
+      };
     }
 
     saveQueue.loadCase(original);
     const mod = await import(`../../case-types/${original.caseType}.js`);
     const origConfig = mod.default;
-    const origCatalogue = origConfig.questions.filter(q => !q.deprecated);
+    const origCatalogue = origConfig.questions.filter((q) => !q.deprecated);
 
-    const origMachine = new CaseMachine(original, { id: currentUserId }, capabilities, origConfig);
+    const origMachine = new CaseMachine(
+      original,
+      { id: currentUserId },
+      capabilities,
+      origConfig
+    );
     const mode = origMachine.access.questions;
     const overrideAccess = mode === 'override' ? 'override' : 'read-only';
 

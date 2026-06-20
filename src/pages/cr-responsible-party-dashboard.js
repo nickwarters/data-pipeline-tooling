@@ -32,7 +32,9 @@ export class CRResponsiblePartyDashboard extends ReactiveElement {
   async connectedCallback() {
     super.connectedCallback();
     if (!this.client || !this.currentUserId) return;
-    const cases = await this.client.listCases({ responsibleParty: this.currentUserId });
+    const cases = await this.client.listCases({
+      responsibleParty: this.currentUserId,
+    });
     this._myCases.set(cases);
   }
 
@@ -42,10 +44,11 @@ export class CRResponsiblePartyDashboard extends ReactiveElement {
     twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
     const cutoff = twelveMonthsAgo.toISOString();
 
-    const recentCompleted = cases.filter(c =>
-      c.status === 'Completed' &&
-      c.completedAt != null &&
-      /** @type {string} */ (c.completedAt) >= cutoff
+    const recentCompleted = cases.filter(
+      (c) =>
+        c.status === 'Completed' &&
+        c.completedAt != null &&
+        /** @type {string} */ (c.completedAt) >= cutoff
     );
 
     /** @type {Record<string, number>} */
@@ -65,12 +68,12 @@ export class CRResponsiblePartyDashboard extends ReactiveElement {
       totalCompleted: recentCompleted.length,
       byOutcome,
       byMonth: Object.entries(monthMap)
-        .sort(([a], [b]) => a < b ? -1 : 1)
+        .sort(([a], [b]) => (a < b ? -1 : 1))
         .map(([month, counts]) => ({ month, counts })),
     };
 
-    const remediationCases = cases.filter(c => this._hasOpenActions(c));
-    const unreadCases = cases.filter(c => this._hasUnreadMessages(c));
+    const remediationCases = cases.filter((c) => this._hasOpenActions(c));
+    const unreadCases = cases.filter((c) => this._hasUnreadMessages(c));
 
     return { outcomeSummary, remediationCases, unreadCases };
   }
@@ -80,11 +83,18 @@ export class CRResponsiblePartyDashboard extends ReactiveElement {
     this._caseTypeFilterSignal.set(caseType);
   }
 
-  
-  get _outcomeSummary() { return this._computeDerived().outcomeSummary; }
-  get _remediationCases() { return this._computeDerived().remediationCases; }
-  get _unreadCases() { return this._computeDerived().unreadCases; }
-  get _caseTypeFilter() { return this._caseTypeFilterSignal.get(); }
+  get _outcomeSummary() {
+    return this._computeDerived().outcomeSummary;
+  }
+  get _remediationCases() {
+    return this._computeDerived().remediationCases;
+  }
+  get _unreadCases() {
+    return this._computeDerived().unreadCases;
+  }
+  get _caseTypeFilter() {
+    return this._caseTypeFilterSignal.get();
+  }
 
   render() {
     if (!this.client || !this.currentUserId) return [];
@@ -101,13 +111,21 @@ export class CRResponsiblePartyDashboard extends ReactiveElement {
   _buildOutcomeSummary(summary) {
     const statsChildren = [
       h('dt', {}, 'Completed Cases'),
-      h('dd', { className: 'cr-rp-outcome-total' }, String(summary.totalCompleted))
+      h(
+        'dd',
+        { className: 'cr-rp-outcome-total' },
+        String(summary.totalCompleted)
+      ),
     ];
 
     for (const [label, count] of Object.entries(summary.byOutcome)) {
       statsChildren.push(
         h('dt', {}, label),
-        h('dd', { className: `cr-rp-outcome-${label.toLowerCase()}` }, String(count))
+        h(
+          'dd',
+          { className: `cr-rp-outcome-${label.toLowerCase()}` },
+          String(count)
+        )
       );
     }
 
@@ -117,23 +135,29 @@ export class CRResponsiblePartyDashboard extends ReactiveElement {
     if (allOutcomes.length > 0) {
       const theadChildren = [
         h('th', { scope: 'col' }, 'Month'),
-        ...allOutcomes.map(label => h('th', { scope: 'col' }, label))
+        ...allOutcomes.map((label) => h('th', { scope: 'col' }, label)),
       ];
 
       const tbodyChildren = summary.byMonth.map(({ month, counts }) => {
-        return h('tr', {},
+        return h(
+          'tr',
+          {},
           h('td', {}, month),
-          ...allOutcomes.map(label => h('td', {}, String(counts[label] ?? 0)))
+          ...allOutcomes.map((label) => h('td', {}, String(counts[label] ?? 0)))
         );
       });
 
-      table = h('table', { className: 'cr-rp-outcome-table' },
+      table = h(
+        'table',
+        { className: 'cr-rp-outcome-table' },
         h('thead', {}, h('tr', {}, ...theadChildren)),
         h('tbody', {}, ...tbodyChildren)
       );
     }
 
-    return h('section', { className: 'cr-rp-outcome-summary' },
+    return h(
+      'section',
+      { className: 'cr-rp-outcome-summary' },
       h('h2', {}, 'Outcome Summary (last 12 months)'),
       h('dl', { className: 'cr-rp-outcome-stats' }, ...statsChildren),
       table ? table : ''
@@ -142,26 +166,35 @@ export class CRResponsiblePartyDashboard extends ReactiveElement {
 
   /** @param {CaseRow[]} remediationCases */
   _buildRemediationSection(remediationCases) {
-    const caseTypes = [...new Set(remediationCases.map(c => c.caseType))];
+    const caseTypes = [...new Set(remediationCases.map((c) => c.caseType))];
     const filter = this._caseTypeFilterSignal.get();
 
     const options = [
       h('option', { value: '' }, 'All Case Types'),
-      ...caseTypes.map(ct => h('option', { value: ct }, ct))
+      ...caseTypes.map((ct) => h('option', { value: ct }, ct)),
     ];
 
-    const filteredCases = filter ? remediationCases.filter(c => c.caseType === filter) : remediationCases;
+    const filteredCases = filter
+      ? remediationCases.filter((c) => c.caseType === filter)
+      : remediationCases;
 
     const now = new Date().toISOString();
 
-    return h('section', { className: 'cr-rp-remediation' },
+    return h(
+      'section',
+      { className: 'cr-rp-remediation' },
       h('h2', {}, 'Outstanding Remediation Actions'),
-      h('select', {
-        className: 'cr-rp-remediation-filter',
-        'aria-label': 'Filter by Case Type',
-        onchange: (/** @type {any} */ e) => this._setCaseTypeFilter(e.target?.value ?? ''),
-        value: filter
-      }, ...options),
+      h(
+        'select',
+        {
+          className: 'cr-rp-remediation-filter',
+          'aria-label': 'Filter by Case Type',
+          onchange: (/** @type {any} */ e) =>
+            this._setCaseTypeFilter(e.target?.value ?? ''),
+          value: filter,
+        },
+        ...options
+      ),
       h('cr-case-table', {
         toolbar: 'hidden',
         sort: { key: 'dueDate', dir: 'asc' },
@@ -188,21 +221,27 @@ export class CRResponsiblePartyDashboard extends ReactiveElement {
             key: 'action',
             label: 'Action required',
             getValue: (/** @type {CaseRow} */ r) =>
-              this._getOpenActions(r).map(ra => ra.text).join('; '),
+              this._getOpenActions(r)
+                .map((ra) => ra.text)
+                .join('; '),
           },
         ],
         rowClass: (/** @type {CaseRow} */ r) => {
           const overdue = !!r.dueDate && r.dueDate < now;
-          return overdue ? 'cr-remediation-row cr-overdue' : 'cr-remediation-row';
+          return overdue
+            ? 'cr-remediation-row cr-overdue'
+            : 'cr-remediation-row';
         },
-        cases: filteredCases
+        cases: filteredCases,
       })
     );
   }
 
   /** @param {CaseRow[]} unreadCases */
   _buildMessagesSection(unreadCases) {
-    return h('section', { className: 'cr-rp-messages' },
+    return h(
+      'section',
+      { className: 'cr-rp-messages' },
       h('h2', {}, 'Cases with Unread Messages'),
       h('cr-case-table', {
         toolbar: 'hidden',
@@ -212,7 +251,8 @@ export class CRResponsiblePartyDashboard extends ReactiveElement {
             key: 'reference',
             label: 'Reference',
             getValue: (/** @type {CaseRow} */ r) => r.title || r.id,
-            renderCell: (/** @type {CaseRow} */ r) => h('a', { href: `#/case/${r.id}` }, r.title || r.id)
+            renderCell: (/** @type {CaseRow} */ r) =>
+              h('a', { href: `#/case/${r.id}` }, r.title || r.id),
           },
           {
             key: 'caseType',
@@ -223,7 +263,8 @@ export class CRResponsiblePartyDashboard extends ReactiveElement {
             key: 'lastMessage',
             label: 'Last message',
             sortable: true,
-            getValue: (/** @type {CaseRow} */ r) => r.conversation.at(-1)?.timestamp ?? null,
+            getValue: (/** @type {CaseRow} */ r) =>
+              r.conversation.at(-1)?.timestamp ?? null,
             renderCell: (/** @type {CaseRow} */ r) => {
               const ts = r.conversation.at(-1)?.timestamp;
               return ts ? new Date(ts).toLocaleString() : '—';
@@ -233,26 +274,36 @@ export class CRResponsiblePartyDashboard extends ReactiveElement {
             key: 'actions',
             label: 'Actions',
             renderCell: (/** @type {CaseRow} */ r) => {
-              return h('button', {
-                type: 'button',
-                className: 'cr-case-open-btn',
-                'aria-label': `Open ${r.title || r.id}`,
-                onclick: () => {
-                  this.dispatchEvent(new CustomEvent('cr-open-conversation', {
-                    detail: { caseId: r.id }, bubbles: true, composed: true,
-                  }));
-                }
-              }, 'Open');
+              return h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'cr-case-open-btn',
+                  'aria-label': `Open ${r.title || r.id}`,
+                  onclick: () => {
+                    this.dispatchEvent(
+                      new CustomEvent('cr-open-conversation', {
+                        detail: { caseId: r.id },
+                        bubbles: true,
+                        composed: true,
+                      })
+                    );
+                  },
+                },
+                'Open'
+              );
             },
           },
         ],
         cases: unreadCases,
         'oncr-case-open': (/** @type {any} */ e) => {
-          this.dispatchEvent(new CustomEvent('cr-open-conversation', {
-            detail: { caseId: e.detail.caseId },
-            bubbles: true,
-          }));
-        }
+          this.dispatchEvent(
+            new CustomEvent('cr-open-conversation', {
+              detail: { caseId: e.detail.caseId },
+              bubbles: true,
+            })
+          );
+        },
       })
     );
   }
@@ -260,7 +311,7 @@ export class CRResponsiblePartyDashboard extends ReactiveElement {
   /** @param {CaseRow} c */
   _hasOpenActions(c) {
     for (const answer of Object.values(c.answers)) {
-      if (answer.remediationActions?.some(ra => !ra.completed)) return true;
+      if (answer.remediationActions?.some((ra) => !ra.completed)) return true;
     }
     return false;
   }
@@ -281,10 +332,20 @@ export class CRResponsiblePartyDashboard extends ReactiveElement {
   _hasUnreadMessages(c) {
     const msgs = c.conversation;
     if (!msgs.length) return false;
-    const rpMessages = msgs.filter(m => m.author === this.currentUserId);
-    const lastRpTime = rpMessages.length > 0 ? rpMessages[rpMessages.length - 1].timestamp : null;
-    return msgs.some(m => m.author !== this.currentUserId && (lastRpTime === null || m.timestamp > lastRpTime));
+    const rpMessages = msgs.filter((m) => m.author === this.currentUserId);
+    const lastRpTime =
+      rpMessages.length > 0
+        ? rpMessages[rpMessages.length - 1].timestamp
+        : null;
+    return msgs.some(
+      (m) =>
+        m.author !== this.currentUserId &&
+        (lastRpTime === null || m.timestamp > lastRpTime)
+    );
   }
 }
 
-customElements.define('cr-responsible-party-dashboard', CRResponsiblePartyDashboard);
+customElements.define(
+  'cr-responsible-party-dashboard',
+  CRResponsiblePartyDashboard
+);

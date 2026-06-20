@@ -7,9 +7,10 @@
 export function register(router, context) {
   router.register('#/conversation/:id', {
     mount(container, params) {
-      const el = /** @type {import('../pages/cr-conversation-view.js').CRConversationView} */ (
-        document.createElement('cr-conversation-view')
-      );
+      const el =
+        /** @type {import('../pages/cr-conversation-view.js').CRConversationView} */ (
+          document.createElement('cr-conversation-view')
+        );
       el.client = context.client;
       el.saveQueue = context.saveQueue;
       el.caseId = params.id;

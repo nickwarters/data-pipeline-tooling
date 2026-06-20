@@ -55,10 +55,7 @@ export class CROutcome extends ReactiveElement {
       }
     }
 
-    return [
-      h('h2', {}, 'Outcome'),
-      h('p', { className }, textContent)
-    ];
+    return [h('h2', {}, 'Outcome'), h('p', { className }, textContent)];
   }
 }
 
