@@ -1,44 +1,34 @@
 // @ts-check
-import { CRElement } from '../components/cr-element.js';
+import { ReactiveElement } from '../components/reactive-element.js';
+import { h } from '../lib/html.js';
 
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
 
-export class CRReportsIndex extends CRElement {
+export class CRReportsIndex extends ReactiveElement {
   constructor() {
     super();
     /** @type {Capabilities} */
     this.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
   }
 
-  connectedCallback() {
-    this._render();
-  }
-
-  _render() {
-    /** @type {Element[]} */
+  render() {
+    /** @type {import('../lib/html.js').VNode[]} */
     const children = [];
 
     if (this.capabilities.isReviewerManager) {
-      const card = document.createElement('div');
-      card.className = 'cr-report-card';
-
-      const title = document.createElement('h2');
-      title.textContent = 'Reviewer Team Performance';
-      card.appendChild(title);
-
-      const link = document.createElement('a');
-      link.href = '#/reports/reviewer-team';
-      link.textContent = 'View report';
-      card.appendChild(link);
-
-      children.push(card);
+      children.push(
+        h('div', { className: 'cr-report-card' },
+          h('h2', {}, 'Reviewer Team Performance'),
+          h('a', { href: '#/reports/reviewer-team' }, 'View report')
+        )
+      );
     } else {
-      const empty = document.createElement('p');
-      empty.textContent = "You don't have access to any reports";
-      children.push(empty);
+      children.push(
+        h('p', {}, "You don't have access to any reports")
+      );
     }
 
-    this.replaceChildren(...children);
+    return children;
   }
 }
 

@@ -1,16 +1,19 @@
 // @ts-check
-import { CRElement } from '../components/cr-element.js';
+import { ReactiveElement } from '../components/reactive-element.js';
+import { signal } from '../lib/signal.js';
+import { h } from '../lib/html.js';
 import '../components/cr-conversation.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
 /** @typedef {import('../services/save-queue.js').SaveQueue} SaveQueue */
+/** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 
 /**
  * Lightweight conversation-only view for the Responsible Party.
  * Shows only the Conversation thread — no Q&A, Notes, or Reviewer identity.
  */
-export class CRConversationView extends CRElement {
+export class CRConversationView extends ReactiveElement {
   constructor() {
     super();
     /** @type {SharePointClient | null} */
@@ -21,40 +24,40 @@ export class CRConversationView extends CRElement {
     this.caseId = '';
     /** @type {CurrentUser | null} */
     this.currentUser = null;
+
+    /** @type {import('../lib/signal.js').Signal<CaseRow | null>} */
+    this._caseRow = signal(null);
   }
 
   async connectedCallback() {
+    super.connectedCallback();
     if (!this.client || !this.caseId) return;
     const caseRow = await this.client.getCase(this.caseId);
     if (!caseRow) return;
+    this._caseRow.set(caseRow);
+  }
 
-    const header = document.createElement('header');
-    header.className = 'cr-conversation-view-header';
+  render() {
+    const caseRow = this._caseRow.get();
+    if (!caseRow) return [];
 
-    const h1 = document.createElement('h1');
-    h1.textContent = caseRow.title || caseRow.id;
-
-    const backBtn = document.createElement('button');
-    backBtn.type = 'button';
-    backBtn.className = 'cr-back-btn';
-    backBtn.textContent = '← My Reviews';
-    backBtn.addEventListener('click', () => { location.hash = '#/my-reviews'; });
-
-    header.replaceChildren(/** @type {any} */ (backBtn), /** @type {any} */ (h1));
-
-    const conversationEl = /** @type {import('../components/cr-conversation.js').CRConversation} */ (
-      document.createElement('cr-conversation')
-    );
-    conversationEl.client = this.client;
-    conversationEl.saveQueue = this.saveQueue;
-    conversationEl.caseId = this.caseId;
-    conversationEl.currentUser = this.currentUser;
-    conversationEl.update(caseRow.conversation);
-
-    this.replaceChildren(
-      /** @type {any} */ (header),
-      /** @type {any} */ (conversationEl),
-    );
+    return [
+      h('header', { className: 'cr-conversation-view-header' },
+        h('button', {
+          type: 'button',
+          className: 'cr-back-btn',
+          onclick: () => { location.hash = '#/my-reviews'; }
+        }, '← My Reviews'),
+        h('h1', {}, caseRow.title || caseRow.id)
+      ),
+      h('cr-conversation', {
+        client: this.client,
+        saveQueue: this.saveQueue,
+        caseId: this.caseId,
+        currentUser: this.currentUser,
+        messages: caseRow.conversation
+      })
+    ];
   }
 }
 

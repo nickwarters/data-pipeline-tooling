@@ -21,9 +21,9 @@ class StubEl {
     this.type = '';
     this.value = '';
   }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
-  appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
-  append(/** @type {StubEl[]} */ ...cs) { this._children.push(...cs); }
+  replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; cs.forEach(c => (/** @type {any} */ (c)).connectedCallback?.()); }
+  appendChild(/** @type {StubEl} */ c) { this._children.push(c); (/** @type {any} */ (c)).connectedCallback?.(); return c; }
+  append(/** @type {StubEl[]} */ ...cs) { this._children.push(...cs); cs.forEach(c => (/** @type {any} */ (c)).connectedCallback?.()); }
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
   }
@@ -46,16 +46,22 @@ class StubCustomEvent {
 
 (/** @type {any} */ (globalThis)).HTMLElement = StubEl;
 (/** @type {any} */ (globalThis)).document = {
+  _registry: {},
   /** @param {string} tag @returns {StubEl} */
   createElement(tag) {
-    const el = new StubEl();
+    const Ctor = this._registry[tag.toLowerCase()];
+    const el = Ctor ? new Ctor() : new StubEl();
     el.tagName = tag.toUpperCase();
     return el;
   },
   addEventListener() {},
   removeEventListener() {},
 };
-(/** @type {any} */ (globalThis)).customElements = { define() {} };
+(/** @type {any} */ (globalThis)).customElements = {
+  define(tag, ctor) {
+    (/** @type {any} */ (globalThis)).document._registry[tag.toLowerCase()] = ctor;
+  }
+};
 (/** @type {any} */ (globalThis)).CustomEvent = StubCustomEvent;
 
 // ===== IMPORTS (after stubs) =====
@@ -540,7 +546,7 @@ test('CRResponsiblePartyDashboard: Open button click dispatches cr-case-open on 
 
   // Click the open button — should dispatch cr-case-open which is handled by the table listener
   for (const h of openBtn._listeners['click'] ?? []) {
-    h();
+    h({ target: openBtn });
   }
 
   assert.equal(fired.length, 1, 'cr-open-conversation should be dispatched');

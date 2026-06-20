@@ -47,6 +47,7 @@ export class CRConversation extends ReactiveElement {
   /**
    * @param {Message[]} messages
    */
+  set messages(messages) { this.update(messages); }
   update(messages) {
     this._messages = messages;
     this._render();

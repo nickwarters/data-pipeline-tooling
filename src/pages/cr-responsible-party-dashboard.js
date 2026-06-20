@@ -1,5 +1,7 @@
 // @ts-check
-import { CRElement } from '../components/cr-element.js';
+import { ReactiveElement } from '../components/reactive-element.js';
+import { signal } from '../lib/signal.js';
+import { h } from '../lib/html.js';
 import { CRCaseTable } from '../components/cr-case-table.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
@@ -13,40 +15,34 @@ import { CRCaseTable } from '../components/cr-case-table.js';
  * }} OutcomeSummary
  */
 
-export class CRResponsiblePartyDashboard extends CRElement {
+export class CRResponsiblePartyDashboard extends ReactiveElement {
   constructor() {
     super();
     /** @type {SharePointClient | null} */
     this.client = null;
     /** @type {string} */
     this.currentUserId = '';
-    /** @type {CaseRow[]} */
-    this._myCases = [];
-    /** @type {OutcomeSummary} */
-    this._outcomeSummary = { totalCompleted: 0, byOutcome: {}, byMonth: [] };
-    /** @type {CaseRow[]} */
-    this._remediationCases = [];
-    /** @type {CaseRow[]} */
-    this._unreadCases = [];
-    /** @type {string} */
-    this._caseTypeFilter = '';
-    /** @type {CRCaseTable | null} */
-    this._remediationTable = null;
+
+    /** @type {import('../lib/signal.js').Signal<CaseRow[]>} */
+    this._myCases = signal([]);
+    /** @type {import('../lib/signal.js').Signal<string>} */
+    this._caseTypeFilterSignal = signal('');
   }
 
   async connectedCallback() {
+    super.connectedCallback();
     if (!this.client || !this.currentUserId) return;
-    this._myCases = await this.client.listCases({ responsibleParty: this.currentUserId });
-    this._computeDerived();
-    this._render();
+    const cases = await this.client.listCases({ responsibleParty: this.currentUserId });
+    this._myCases.set(cases);
   }
 
   _computeDerived() {
+    const cases = this._myCases.get();
     const twelveMonthsAgo = new Date();
     twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
     const cutoff = twelveMonthsAgo.toISOString();
 
-    const recentCompleted = this._myCases.filter(c =>
+    const recentCompleted = cases.filter(c =>
       c.status === 'Completed' &&
       c.completedAt != null &&
       /** @type {string} */ (c.completedAt) >= cutoff
@@ -65,7 +61,7 @@ export class CRResponsiblePartyDashboard extends CRElement {
       monthMap[month][label] = (monthMap[month][label] ?? 0) + 1;
     }
 
-    this._outcomeSummary = {
+    const outcomeSummary = {
       totalCompleted: recentCompleted.length,
       byOutcome,
       byMonth: Object.entries(monthMap)
@@ -73,256 +69,192 @@ export class CRResponsiblePartyDashboard extends CRElement {
         .map(([month, counts]) => ({ month, counts })),
     };
 
-    this._remediationCases = this._myCases.filter(c => this._hasOpenActions(c));
-    this._unreadCases = this._myCases.filter(c => this._hasUnreadMessages(c));
+    const remediationCases = cases.filter(c => this._hasOpenActions(c));
+    const unreadCases = cases.filter(c => this._hasUnreadMessages(c));
+
+    return { outcomeSummary, remediationCases, unreadCases };
   }
 
   /** @param {string} caseType */
   _setCaseTypeFilter(caseType) {
-    this._caseTypeFilter = caseType;
-    this._render();
+    this._caseTypeFilterSignal.set(caseType);
   }
 
-  _render() {
-    this.replaceChildren(
-      /** @type {any} */ (this._buildOutcomeSummary()),
-      /** @type {any} */ (this._buildRemediationSection()),
-      /** @type {any} */ (this._buildMessagesSection()),
-    );
+  
+  get _outcomeSummary() { return this._computeDerived().outcomeSummary; }
+  get _remediationCases() { return this._computeDerived().remediationCases; }
+  get _unreadCases() { return this._computeDerived().unreadCases; }
+  get _caseTypeFilter() { return this._caseTypeFilterSignal.get(); }
+
+  render() {
+    if (!this.client || !this.currentUserId) return [];
+    const derived = this._computeDerived();
+
+    return [
+      this._buildOutcomeSummary(derived.outcomeSummary),
+      this._buildRemediationSection(derived.remediationCases),
+      this._buildMessagesSection(derived.unreadCases),
+    ];
   }
 
-  _buildOutcomeSummary() {
-    const section = document.createElement('section');
-    section.className = 'cr-rp-outcome-summary';
+  /** @param {OutcomeSummary} summary */
+  _buildOutcomeSummary(summary) {
+    const statsChildren = [
+      h('dt', {}, 'Completed Cases'),
+      h('dd', { className: 'cr-rp-outcome-total' }, String(summary.totalCompleted))
+    ];
 
-    const h2 = document.createElement('h2');
-    h2.textContent = 'Outcome Summary (last 12 months)';
-
-    const stats = document.createElement('dl');
-    stats.className = 'cr-rp-outcome-stats';
-
-    const dtTotal = document.createElement('dt');
-    dtTotal.textContent = 'Completed Cases';
-    const ddTotal = document.createElement('dd');
-    ddTotal.className = 'cr-rp-outcome-total';
-    ddTotal.textContent = String(this._outcomeSummary.totalCompleted);
-    stats.appendChild(/** @type {any} */ (dtTotal));
-    stats.appendChild(/** @type {any} */ (ddTotal));
-
-    for (const [label, count] of Object.entries(this._outcomeSummary.byOutcome)) {
-      const dt = document.createElement('dt');
-      dt.textContent = label;
-      const dd = document.createElement('dd');
-      dd.className = `cr-rp-outcome-${label.toLowerCase()}`;
-      dd.textContent = String(count);
-      stats.appendChild(/** @type {any} */ (dt));
-      stats.appendChild(/** @type {any} */ (dd));
+    for (const [label, count] of Object.entries(summary.byOutcome)) {
+      statsChildren.push(
+        h('dt', {}, label),
+        h('dd', { className: `cr-rp-outcome-${label.toLowerCase()}` }, String(count))
+      );
     }
 
-    // Monthly breakdown table
-    const table = document.createElement('table');
-    table.className = 'cr-rp-outcome-table';
+    const allOutcomes = Object.keys(summary.byOutcome);
+    let table = null;
 
-    const allOutcomes = Object.keys(this._outcomeSummary.byOutcome);
     if (allOutcomes.length > 0) {
-      const thead = document.createElement('thead');
-      const headRow = document.createElement('tr');
-      const thMonth = document.createElement('th');
-      thMonth.setAttribute('scope', 'col');
-      thMonth.textContent = 'Month';
-      headRow.appendChild(/** @type {any} */ (thMonth));
-      for (const label of allOutcomes) {
-        const th = document.createElement('th');
-        th.setAttribute('scope', 'col');
-        th.textContent = label;
-        headRow.appendChild(/** @type {any} */ (th));
-      }
-      thead.appendChild(/** @type {any} */ (headRow));
-      table.appendChild(/** @type {any} */ (thead));
+      const theadChildren = [
+        h('th', { scope: 'col' }, 'Month'),
+        ...allOutcomes.map(label => h('th', { scope: 'col' }, label))
+      ];
 
-      const tbody = document.createElement('tbody');
-      for (const { month, counts } of this._outcomeSummary.byMonth) {
-        const tr = document.createElement('tr');
-        const tdMonth = document.createElement('td');
-        tdMonth.textContent = month;
-        tr.appendChild(/** @type {any} */ (tdMonth));
-        for (const label of allOutcomes) {
-          const td = document.createElement('td');
-          td.textContent = String(counts[label] ?? 0);
-          tr.appendChild(/** @type {any} */ (td));
-        }
-        tbody.appendChild(/** @type {any} */ (tr));
-      }
-      table.appendChild(/** @type {any} */ (tbody));
+      const tbodyChildren = summary.byMonth.map(({ month, counts }) => {
+        return h('tr', {},
+          h('td', {}, month),
+          ...allOutcomes.map(label => h('td', {}, String(counts[label] ?? 0)))
+        );
+      });
+
+      table = h('table', { className: 'cr-rp-outcome-table' },
+        h('thead', {}, h('tr', {}, ...theadChildren)),
+        h('tbody', {}, ...tbodyChildren)
+      );
     }
 
-    section.replaceChildren(
-      /** @type {any} */ (h2),
-      /** @type {any} */ (stats),
-      /** @type {any} */ (table),
+    return h('section', { className: 'cr-rp-outcome-summary' },
+      h('h2', {}, 'Outcome Summary (last 12 months)'),
+      h('dl', { className: 'cr-rp-outcome-stats' }, ...statsChildren),
+      table ? table : ''
     );
-    return section;
   }
 
-  _buildRemediationSection() {
-    const section = document.createElement('section');
-    section.className = 'cr-rp-remediation';
+  /** @param {CaseRow[]} remediationCases */
+  _buildRemediationSection(remediationCases) {
+    const caseTypes = [...new Set(remediationCases.map(c => c.caseType))];
+    const filter = this._caseTypeFilterSignal.get();
 
-    const h2 = document.createElement('h2');
-    h2.textContent = 'Outstanding Remediation Actions';
+    const options = [
+      h('option', { value: '' }, 'All Case Types'),
+      ...caseTypes.map(ct => h('option', { value: ct }, ct))
+    ];
 
-    // Case type filter (lives outside the cr-case-table — see ADR-0003)
-    const caseTypes = [...new Set(this._remediationCases.map(c => c.caseType))];
-    const select = document.createElement('select');
-    select.className = 'cr-rp-remediation-filter';
-    select.setAttribute('aria-label', 'Filter by Case Type');
+    const filteredCases = filter ? remediationCases.filter(c => c.caseType === filter) : remediationCases;
 
-    const defaultOpt = document.createElement('option');
-    defaultOpt.value = '';
-    defaultOpt.textContent = 'All Case Types';
-    select.appendChild(/** @type {any} */ (defaultOpt));
-    for (const ct of caseTypes) {
-      const opt = document.createElement('option');
-      opt.value = ct;
-      opt.textContent = ct;
-      select.appendChild(/** @type {any} */ (opt));
-    }
-    select.addEventListener('change', (/** @type {any} */ e) => {
-      this._caseTypeFilter = e.target?.value ?? '';
-      this._refreshRemediationCases();
-    });
-
-    const table = this._buildRemediationTable();
-    this._remediationTable = table;
-
-    section.replaceChildren(
-      /** @type {any} */ (h2),
-      /** @type {any} */ (select),
-      /** @type {any} */ (table),
-    );
-    return section;
-  }
-
-  _buildRemediationTable() {
     const now = new Date().toISOString();
-    const table = new CRCaseTable();
-    /** @type {any} */ (table).toolbar = 'hidden';
-    /** @type {any} */ (table).sort = { key: 'dueDate', dir: 'asc' };
-    /** @type {any} */ (table).columns = [
-      {
-        key: 'reference',
-        label: 'Reference',
-        getValue: (/** @type {CaseRow} */ r) => r.title || r.id,
-      },
-      {
-        key: 'caseType',
-        label: 'Case Type',
-        getValue: (/** @type {CaseRow} */ r) => r.caseType,
-      },
-      {
-        key: 'dueDate',
-        label: 'Due Date',
-        sortable: true,
-        getValue: (/** @type {CaseRow} */ r) => r.dueDate || null,
-        renderCell: (/** @type {CaseRow} */ r) =>
-          r.dueDate ? new Date(r.dueDate).toLocaleDateString() : '—',
-      },
-      {
-        key: 'action',
-        label: 'Action required',
-        getValue: (/** @type {CaseRow} */ r) =>
-          this._getOpenActions(r).map(ra => ra.text).join('; '),
-      },
-    ];
-    /** @type {any} */ (table).rowClass = (/** @type {CaseRow} */ r) => {
-      const overdue = !!r.dueDate && r.dueDate < now;
-      return overdue ? 'cr-remediation-row cr-overdue' : 'cr-remediation-row';
-    };
-    table.cases = this._filteredRemediationCases();
-    table.connectedCallback();
-    return table;
-  }
 
-  _filteredRemediationCases() {
-    if (!this._caseTypeFilter) return this._remediationCases;
-    return this._remediationCases.filter(c => c.caseType === this._caseTypeFilter);
-  }
-
-  _refreshRemediationCases() {
-    if (this._remediationTable) {
-      this._remediationTable.cases = this._filteredRemediationCases();
-    }
-  }
-
-  _buildMessagesSection() {
-    const section = document.createElement('section');
-    section.className = 'cr-rp-messages';
-
-    const h2 = document.createElement('h2');
-    h2.textContent = 'Cases with Unread Messages';
-
-    const table = new CRCaseTable();
-    /** @type {any} */ (table).toolbar = 'hidden';
-    /** @type {any} */ (table).sort = { key: 'lastMessage', dir: 'desc' };
-    /** @type {any} */ (table).columns = [
-      {
-        key: 'reference',
-        label: 'Reference',
-        getValue: (/** @type {CaseRow} */ r) => r.title || r.id,
-        renderCell: (/** @type {CaseRow} */ r) => {
-          const a = document.createElement('a');
-          a.href = `#/case/${r.id}`;
-          a.textContent = r.title || r.id;
-          return a;
+    return h('section', { className: 'cr-rp-remediation' },
+      h('h2', {}, 'Outstanding Remediation Actions'),
+      h('select', {
+        className: 'cr-rp-remediation-filter',
+        'aria-label': 'Filter by Case Type',
+        onchange: (/** @type {any} */ e) => this._setCaseTypeFilter(e.target?.value ?? ''),
+        value: filter
+      }, ...options),
+      h('cr-case-table', {
+        toolbar: 'hidden',
+        sort: { key: 'dueDate', dir: 'asc' },
+        columns: [
+          {
+            key: 'reference',
+            label: 'Reference',
+            getValue: (/** @type {CaseRow} */ r) => r.title || r.id,
+          },
+          {
+            key: 'caseType',
+            label: 'Case Type',
+            getValue: (/** @type {CaseRow} */ r) => r.caseType,
+          },
+          {
+            key: 'dueDate',
+            label: 'Due Date',
+            sortable: true,
+            getValue: (/** @type {CaseRow} */ r) => r.dueDate || null,
+            renderCell: (/** @type {CaseRow} */ r) =>
+              r.dueDate ? new Date(r.dueDate).toLocaleDateString() : '—',
+          },
+          {
+            key: 'action',
+            label: 'Action required',
+            getValue: (/** @type {CaseRow} */ r) =>
+              this._getOpenActions(r).map(ra => ra.text).join('; '),
+          },
+        ],
+        rowClass: (/** @type {CaseRow} */ r) => {
+          const overdue = !!r.dueDate && r.dueDate < now;
+          return overdue ? 'cr-remediation-row cr-overdue' : 'cr-remediation-row';
         },
-      },
-      {
-        key: 'caseType',
-        label: 'Case Type',
-        getValue: (/** @type {CaseRow} */ r) => r.caseType,
-      },
-      {
-        key: 'lastMessage',
-        label: 'Last message',
-        sortable: true,
-        getValue: (/** @type {CaseRow} */ r) => r.conversation.at(-1)?.timestamp ?? null,
-        renderCell: (/** @type {CaseRow} */ r) => {
-          const ts = r.conversation.at(-1)?.timestamp;
-          return ts ? new Date(ts).toLocaleString() : '—';
-        },
-      },
-      {
-        key: 'actions',
-        label: 'Actions',
-        renderCell: (/** @type {CaseRow} */ r) => {
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'cr-case-open-btn';
-          btn.textContent = 'Open';
-          btn.setAttribute('aria-label', `Open ${r.title || r.id}`);
-          btn.addEventListener('click', () => {
-            table.dispatchEvent(new CustomEvent('cr-case-open', {
-              detail: { caseId: r.id }, bubbles: true,
-            }));
-          });
-          return btn;
-        },
-      },
-    ];
-    table.cases = this._unreadCases;
-    table.addEventListener('cr-case-open', (/** @type {any} */ e) => {
-      this.dispatchEvent(new CustomEvent('cr-open-conversation', {
-        detail: { caseId: e.detail.caseId },
-        bubbles: true,
-      }));
-    });
-    table.connectedCallback();
-
-    section.replaceChildren(
-      /** @type {any} */ (h2),
-      /** @type {any} */ (table),
+        cases: filteredCases
+      })
     );
-    return section;
+  }
+
+  /** @param {CaseRow[]} unreadCases */
+  _buildMessagesSection(unreadCases) {
+    return h('section', { className: 'cr-rp-messages' },
+      h('h2', {}, 'Cases with Unread Messages'),
+      h('cr-case-table', {
+        toolbar: 'hidden',
+        sort: { key: 'lastMessage', dir: 'desc' },
+        columns: [
+          {
+            key: 'reference',
+            label: 'Reference',
+            getValue: (/** @type {CaseRow} */ r) => r.title || r.id,
+            renderCell: (/** @type {CaseRow} */ r) => h('a', { href: `#/case/${r.id}` }, r.title || r.id)
+          },
+          {
+            key: 'caseType',
+            label: 'Case Type',
+            getValue: (/** @type {CaseRow} */ r) => r.caseType,
+          },
+          {
+            key: 'lastMessage',
+            label: 'Last message',
+            sortable: true,
+            getValue: (/** @type {CaseRow} */ r) => r.conversation.at(-1)?.timestamp ?? null,
+            renderCell: (/** @type {CaseRow} */ r) => {
+              const ts = r.conversation.at(-1)?.timestamp;
+              return ts ? new Date(ts).toLocaleString() : '—';
+            },
+          },
+          {
+            key: 'actions',
+            label: 'Actions',
+            renderCell: (/** @type {CaseRow} */ r) => {
+              return h('button', {
+                type: 'button',
+                className: 'cr-case-open-btn',
+                'aria-label': `Open ${r.title || r.id}`,
+                onclick: () => {
+                  this.dispatchEvent(new CustomEvent('cr-open-conversation', {
+                    detail: { caseId: r.id }, bubbles: true, composed: true,
+                  }));
+                }
+              }, 'Open');
+            },
+          },
+        ],
+        cases: unreadCases,
+        'oncr-case-open': (/** @type {any} */ e) => {
+          this.dispatchEvent(new CustomEvent('cr-open-conversation', {
+            detail: { caseId: e.detail.caseId },
+            bubbles: true,
+          }));
+        }
+      })
+    );
   }
 
   /** @param {CaseRow} c */

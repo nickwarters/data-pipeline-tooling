@@ -1,5 +1,6 @@
 // @ts-check
-import { CRElement } from '../components/cr-element.js';
+import { ReactiveElement } from '../components/reactive-element.js';
+import { h } from '../lib/html.js';
 
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
 
@@ -9,25 +10,20 @@ import { CRElement } from '../components/cr-element.js';
  * Visitors (no role) get an explainer only; access is managed out-of-band by
  * their team, so there is no in-app access-request affordance.
  */
-export class CRHome extends CRElement {
+export class CRHome extends ReactiveElement {
   constructor() {
     super();
     /** @type {Capabilities | null} */
     this.capabilities = null;
   }
 
-  connectedCallback() {
-    this._render();
-  }
-
-  _render() {
+  render() {
     const caps = this.capabilities;
     if (!caps) {
-      this.replaceChildren();
-      return;
+      return [];
     }
 
-    /** @type {Element[]} */
+    /** @type {import('../lib/html.js').VNode[]} */
     const sections = [];
 
     if (caps.isReviewer) {
@@ -54,45 +50,31 @@ export class CRHome extends CRElement {
       sections.push(this._visitorSection());
     }
 
-    this.replaceChildren(...sections);
+    return sections;
   }
 
   /**
    * @param {string} roleName
    * @param {string} href
-   * @returns {HTMLElement}
+   * @returns {import('../lib/html.js').VNode}
    */
   _roleSection(roleName, href) {
-    const section = document.createElement('section');
-    section.className = 'cr-home__role';
-
-    const h2 = document.createElement('h2');
-    h2.textContent = roleName;
-
-    const a = document.createElement('a');
-    a.href = href;
-    a.textContent = roleName;
-
-    section.append(h2, a);
-    return section;
+    return h('section', { className: 'cr-home__role' },
+      h('h2', {}, roleName),
+      h('a', { href }, roleName)
+    );
   }
 
-  /** @returns {HTMLElement} */
+  /** @returns {import('../lib/html.js').VNode} */
   _visitorSection() {
-    const section = document.createElement('section');
-    section.className = 'cr-home__role';
-
-    const h2 = document.createElement('h2');
-    h2.textContent = 'Visitor';
-
-    const explainer = document.createElement('p');
-    explainer.textContent =
-      "You're signed in, but your account isn't enrolled in any Case Review " +
-      'role yet. Access is managed by your team — once you\'re enrolled, your ' +
-      'tools will appear here.';
-
-    section.append(h2, explainer);
-    return section;
+    return h('section', { className: 'cr-home__role' },
+      h('h2', {}, 'Visitor'),
+      h('p', {},
+        "You're signed in, but your account isn't enrolled in any Case Review ",
+        "role yet. Access is managed by your team — once you're enrolled, your ",
+        "tools will appear here."
+      )
+    );
   }
 }
 

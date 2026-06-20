@@ -51,7 +51,8 @@ const docListeners = {};
 (/** @type {any} */ (globalThis)).document = {
   /** @param {string} tag @returns {StubEl} */
   createElement(tag) {
-    const el = new StubEl();
+    const Ctor = (/** @type {any} */(globalThis)).document._registry?.[tag.toLowerCase()];
+    const el = Ctor ? new Ctor() : new StubEl();
     el._tagName = tag;
     return el;
   },
@@ -62,8 +63,13 @@ const docListeners = {};
     if (docListeners[t]) docListeners[t] = docListeners[t].filter(fn => fn !== h);
   },
   hidden: false,
+  _registry: {},
 };
-(/** @type {any} */ (globalThis)).customElements = { define() {} };
+(/** @type {any} */ (globalThis)).customElements = {
+  define(tag, ctor) {
+    (/** @type {any} */(globalThis)).document._registry[tag.toLowerCase()] = ctor;
+  }
+};
 (/** @type {any} */ (globalThis)).location = { hash: '' };
 
 // ===== IMPORTS (after stubs) =====
@@ -249,7 +255,7 @@ test('CRConversationView: cr-conversation element receives client, saveQueue, ca
   assert.equal(conversationEl.currentUser, CURRENT_USER, 'currentUser should be set on conversation element');
 });
 
-test('CRConversationView: cr-conversation.update is called with caseRow.conversation', async () => {
+test('CRConversationView: cr-conversation is passed messages from caseRow', async () => {
   const conversation = [
     { author: 'Alice', timestamp: '2026-05-01T10:00:00Z', body: 'Hello!' },
   ];
@@ -259,5 +265,5 @@ test('CRConversationView: cr-conversation.update is called with caseRow.conversa
   await el.connectedCallback();
 
   const conversationEl = childrenOf(el)[1];
-  assert.equal(conversationEl._updateArg, conversation, 'update should be called with caseRow.conversation');
+  assert.deepEqual(conversationEl._messages, conversation, 'messages should be set from caseRow.conversation');
 });
