@@ -1,6 +1,6 @@
 // @ts-check
-import { CRElement } from '../components/cr-element.js';
-import { el } from './cr-bank-dom.js';
+import { ReactiveElement } from '../components/reactive-element.js';
+import { h } from '../lib/html.js';
 import { drawerOpen } from './question-bank-store.js';
 
 // Side-effect imports: register all child custom elements.
@@ -18,33 +18,14 @@ import './cr-bank-dock.js';
 import '../components/cr-compile-drawer.js';
 import '../components/cr-toast.js';
 
-export class CRBankEditor extends CRElement {
+export class CRBankEditor extends ReactiveElement {
   constructor() {
     super();
     /** @type {((e: any) => void) | null} */
     this._key = null;
   }
   connectedCallback() {
-    this.replaceChildren(
-      el('header', { class: 'masthead' },
-        el('div', {},
-          el('div', { class: 'eyebrow', html: 'Case Type Owner <span class="dot"></span> Question Bank' }),
-          el('h1', { html: 'Question <em>Bank</em>' }),
-        ),
-        el('div', { class: 'masthead-meta', html:
-          'Session: <strong>local · uncommitted</strong><br>' +
-          'Schema: <strong>questions.v3</strong>' }),
-      ),
-      /** @type {any} */ (document.createElement('cr-case-tabs')),
-      el('main', { class: 'bank-main' },
-        /** @type {any} */ (document.createElement('cr-bank-rail')),
-        /** @type {any} */ (document.createElement('cr-bank-list')),
-      ),
-      /** @type {any} */ (document.createElement('cr-bank-dock')),
-      /** @type {any} */ (document.createElement('cr-compile-drawer')),
-      /** @type {any} */ (document.createElement('cr-toast')),
-    );
-
+    super.connectedCallback();
     this._key = (/** @type {any} */ e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault?.(); drawerOpen.set(true); }
       if (e.key === 'Escape') drawerOpen.set(false);
@@ -54,6 +35,27 @@ export class CRBankEditor extends CRElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     if (this._key) document.removeEventListener('keydown', this._key);
+  }
+  render() {
+    return [
+      h('header', { className: 'masthead' },
+        h('div', {},
+          h('div', { className: 'eyebrow', innerHTML: 'Case Type Owner <span class="dot"></span> Question Bank' }),
+          h('h1', { innerHTML: 'Question <em>Bank</em>' }),
+        ),
+        h('div', { className: 'masthead-meta', innerHTML:
+          'Session: <strong>local · uncommitted</strong><br>' +
+          'Schema: <strong>questions.v3</strong>' }),
+      ),
+      /** @type {any} */ (document.createElement('cr-case-tabs')),
+      h('main', { className: 'bank-main' },
+        /** @type {any} */ (document.createElement('cr-bank-rail')),
+        /** @type {any} */ (document.createElement('cr-bank-list')),
+      ),
+      /** @type {any} */ (document.createElement('cr-bank-dock')),
+      /** @type {any} */ (document.createElement('cr-compile-drawer')),
+      /** @type {any} */ (document.createElement('cr-toast')),
+    ];
   }
 }
 

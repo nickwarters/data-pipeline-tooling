@@ -1,11 +1,10 @@
 // @ts-check
-import { CRElement } from '../components/cr-element.js';
-import { el, reactive } from './cr-bank-dom.js';
+import { ReactiveElement } from '../components/reactive-element.js';
+import { h } from '../lib/html.js';
 import { currentBank, diffCounts, drawerOpen } from './question-bank-store.js';
 
-export class CRBankDock extends CRElement {
-  connectedCallback() { reactive(this, () => this._render()); }
-  _render() {
+export class CRBankDock extends ReactiveElement {
+  render() {
     const bank = currentBank.get();
     const all = bank.questions;
     const active = all.filter((/** @type {any} */ q) => !q.deprecated).length;
@@ -15,18 +14,18 @@ export class CRBankDock extends CRElement {
     const total = d.added + d.changed + d.deprecated;
     const pendingTxt = total === 0 ? '0 changes' : `${total} change${total > 1 ? 's' : ''}`;
 
-    this.replaceChildren(el('div', { class: 'dock' },
-      el('div', { class: 'dock-status' },
-        el('div', { class: 'dock-stat', html: `<span class="label">Active</span><strong>${active}</strong>` }),
-        el('div', { class: 'dock-stat', html: `<span class="label">Deprecated</span><strong>${dep}</strong>` }),
-        el('div', { class: 'dock-stat', html: `<span class="label">Conditional</span><strong>${cond}</strong>` }),
-        el('div', { class: 'dock-stat', html: `<span class="label">Pending</span><strong>${pendingTxt}</strong>` }),
+    return h('div', { className: 'dock' },
+      h('div', { className: 'dock-status' },
+        h('div', { className: 'dock-stat', innerHTML: `<span class="label">Active</span><strong>${active}</strong>` }),
+        h('div', { className: 'dock-stat', innerHTML: `<span class="label">Deprecated</span><strong>${dep}</strong>` }),
+        h('div', { className: 'dock-stat', innerHTML: `<span class="label">Conditional</span><strong>${cond}</strong>` }),
+        h('div', { className: 'dock-stat', innerHTML: `<span class="label">Pending</span><strong>${pendingTxt}</strong>` }),
       ),
-      el('div', { class: 'dock-actions' },
-        el('button', { class: 'dock-btn', onclick: () => drawerOpen.set(true) }, 'Preview Config'),
-        el('button', { class: 'dock-btn primary', onclick: () => drawerOpen.set(true) }, 'Submit for Review →'),
+      h('div', { className: 'dock-actions' },
+        h('button', { className: 'dock-btn', onClick: () => drawerOpen.set(true) }, 'Preview Config'),
+        h('button', { className: 'dock-btn primary', onClick: () => drawerOpen.set(true) }, 'Submit for Review →'),
       ),
-    ));
+    );
   }
 }
 
