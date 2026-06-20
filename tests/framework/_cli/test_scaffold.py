@@ -16,11 +16,11 @@ import sys
 
 import pytest
 
+from cli import scaffold
 from framework.core import RAW
 from framework.io import StoreCatalog
 from framework.run import RunContext
 from tests.framework_testing import read_rows, rows_of
-from cli import scaffold
 
 
 def test_render_lays_down_the_feed_code_and_its_test(tmp_path):

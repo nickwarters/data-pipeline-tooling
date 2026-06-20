@@ -11,11 +11,11 @@ from dataclasses import dataclass
 from typing import Literal
 
 from framework._internal.describe import component_summary
-from framework.core.protocols import Severity, Validator
 from framework.core.dataset import Dataset
+from framework.core.protocols import Severity, Validator
 from framework.run.execution import PipelineExecution
-from tools.observability.run_log import StepMetrics
 from framework.run.trace import RowTrace
+from tools.observability.run_log import StepMetrics
 
 StepKind = Literal[
     "read",

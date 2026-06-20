@@ -14,9 +14,9 @@ from typing import Annotated
 import pandas as pd
 import pytest
 
+from framework.core import Length, OneOf, Pattern, RowCheck, Unique, row_checks
 from framework.core.dataset import Dataset
 from framework.transform.quarantine import SchemaValueRulePartitioner
-from framework.core import Length, OneOf, Pattern, RowCheck, Unique, row_checks
 
 
 @dataclass
@@ -276,11 +276,11 @@ def test_pipeline_quarantine_is_idempotent_on_rerun(tmp_path):
 def test_structural_breach_aborts_even_with_quarantine_configured(tmp_path):
     # A SchemaValidator (structural: missing column) must still abort the run —
     # quarantine only applies to value-rule breaches, not schema shape.
+    from framework.core import SchemaValidator
+    from framework.core.validators import ValidationError
     from framework.io.readers import CsvReader
     from framework.io.writers import QuarantineWriter, SqliteTruncateReloadWriter
     from framework.run.builder import Pipeline
-    from framework.core import SchemaValidator
-    from framework.core.validators import ValidationError
 
     csv_file = tmp_path / "feed.csv"
     # Missing "status" column — structural breach.

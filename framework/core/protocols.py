@@ -45,3 +45,17 @@ class Validator(Protocol):
 
 
 DatasetSupplier = Callable[[], Dataset]
+
+# The processor seam: a transform run mid-pipeline. The builder wires a processor
+# to one or more upstream nodes (``Pipeline.transform(func, *inputs)``) and calls
+# it with their datasets positionally (``func(*datasets)``), so a processor takes
+# **one or more Datasets and returns exactly one** — a single-input reshape, or a
+# fan-in (e.g. an in-DAG join) over several branches. ``Callable[..., Dataset]``
+# captures the one fixed part of the contract (the single Dataset out); arity is
+# per processor. (An *external* read-only side input that isn't a DAG node is
+# pulled in via ``framework.transform.JoinDependency`` instead.)
+#
+# Defined here (not in ``framework.transform``) so ``framework.run`` can name the
+# type without importing the transform implementation — the boundary this module
+# exists to hold. ``framework.transform`` implements and re-exports it.
+Processor = Callable[..., Dataset]

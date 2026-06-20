@@ -27,11 +27,17 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from framework.core import RAW, SILVER, Dataset, PipelineError, format_failure
+from framework.core import (
+    RAW,
+    SILVER,
+    Dataset,
+    PipelineError,
+    SchemaValidator,
+    format_failure,
+)
 from framework.io import AccumulateByRun, CsvReader, StoreCatalog
 from framework.run import Pipeline, RunContext
 from framework.transform import Filter, SchemaCoercion
-from framework.core import SchemaValidator
 
 from .case_type import CASE_TYPE
 

@@ -25,11 +25,10 @@ from pathlib import Path
 
 from case_review.case_type import CaseType, Variation
 from case_review.gold import ingest_silver_to_gold
-from framework.core import RAW, SILVER, PipelineError, format_failure
+from framework.core import RAW, SILVER, PipelineError, SchemaValidator, format_failure
 from framework.io import AccumulateByRun, CsvReader, StoreCatalog
 from framework.run import Pipeline, RunContext
 from framework.transform import Filter, SchemaCoercion
-from framework.core import SchemaValidator
 
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "activity_cases.csv"
 

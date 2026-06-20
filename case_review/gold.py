@@ -12,12 +12,11 @@ link is structural, not two call sites that must be kept in step.
 from __future__ import annotations
 
 from case_review.case_type import CaseType
+from framework.core import GOLD, SILVER, UniqueValidator
 from framework.io import Store
-from framework.core import GOLD, SILVER
+from framework.io.strategy import Refresh
 from framework.run import Pipeline, RunLog
 from framework.transform import DeriveKey, LatestPerKey, Unpivot
-from framework.core import UniqueValidator
-from framework.io.strategy import Refresh
 
 # A Case is identified by its ``case_id`` everywhere downstream. The generic
 # reducer calls this its ``entity_id_column``; the case-review layer fixes it.

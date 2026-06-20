@@ -122,11 +122,10 @@ def test_file_deliverable_writers_are_available_through_the_io_facade(tmp_path):
 def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_path):
     # Selection-style narrowing: processors come from framework.transform and
     # the checks from framework.validate, composed onto the framework.run Pipeline.
-    from framework.core import RAW
+    from framework.core import RAW, ColumnValidator
     from framework.io import CsvReader, Refresh, Store
     from framework.run import Pipeline
     from framework.transform import Filter, Score, VectorizedDerive, VectorizedFilter
-    from framework.core import ColumnValidator
 
     store = Store(tmp_path / "cases")
     p = Pipeline("cases")
@@ -146,11 +145,10 @@ def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_p
 
 
 def test_an_author_can_compose_ordered_stages_through_the_run_facade(tmp_path):
-    from framework.core import RAW
+    from framework.core import RAW, ColumnValidator
     from framework.io import CsvReader, Refresh, Store
     from framework.run import Pipeline
     from framework.transform import Score
-    from framework.core import ColumnValidator
 
     store = Store(tmp_path / "cases")
     p = Pipeline("cases")

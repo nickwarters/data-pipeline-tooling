@@ -2,11 +2,10 @@
 
 import pytest
 
-from framework.core import PipelineError, format_failure
+from framework.core import PipelineError, ValidationError, format_failure
 from framework.run import FreshnessError, UnknownPipelineError
-from tools.orchestration import ForEachPipelineError
 from framework.transform import CoercionError
-from framework.core import ValidationError
+from tools.orchestration import ForEachPipelineError
 
 
 @pytest.mark.parametrize(

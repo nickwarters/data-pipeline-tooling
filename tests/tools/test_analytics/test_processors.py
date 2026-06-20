@@ -1,8 +1,9 @@
-import json
 import pandas as pd
 import pytest
+
 from framework.core.dataset import Dataset
-from tools.analytics.processors import Parse, TopNPerGroup, SamplePerGroup, Sample
+from tools.analytics.processors import Parse, Sample, SamplePerGroup, TopNPerGroup
+
 
 def test_sample_keeps_at_most_n_from_the_whole_feed():
     dataset = Dataset.from_pandas(pd.DataFrame({'case_id': [f'c{i}' for i in range(10)]}))

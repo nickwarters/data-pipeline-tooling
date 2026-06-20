@@ -2,15 +2,35 @@
 "Selection processors: filter, score, sort, rename, and cross-feed joins.\n\nThese are the engine-confined transforms the Selection workload composes between\na feed's read and its post-validators. ``Filter`` and ``Score`` carry\nplain-Python row callables so the business rule never names the engine;\n``JoinWith`` consumes an explicit read-only dependency so upstream execution is\nnot hidden inside ``process``.\n"
 import json
 import uuid as _uuid
+
 import pandas as pd
 import pytest
+
 from framework.core.dataset import Dataset
 from framework.io.store import Store
 from framework.io.strategy import Refresh
 from framework.run.builder import Pipeline
-from tools.observability.run_log import RunLog
 from framework.transform import AntiJoinWith as PublicAntiJoinWith
-from framework.transform.processors import AntiJoinWith, DeriveKey, DropColumns, Filter, JoinColumns, JoinDependency, JoinWith, LatestPerKey, Rename, Score, SelectColumns, Sort, Stamp, Unpivot, VectorizedDerive, VectorizedFilter
+from framework.transform.processors import (
+    AntiJoinWith,
+    DeriveKey,
+    DropColumns,
+    Filter,
+    JoinColumns,
+    JoinDependency,
+    JoinWith,
+    LatestPerKey,
+    Rename,
+    Score,
+    SelectColumns,
+    Sort,
+    Stamp,
+    Unpivot,
+    VectorizedDerive,
+    VectorizedFilter,
+)
+from tools.observability.run_log import RunLog
+
 
 class RecordingReader():
     'A Reader stand-in: returns a dataset and counts reads.'

@@ -7,8 +7,8 @@ without wiring temp directories or SQLite by hand.
 
 import pytest
 
-from framework.run import Pipeline
 from framework.core import Dataset
+from framework.run import Pipeline
 from tests.framework_testing import (
     RecordingWriter,
     assert_rows_equal,

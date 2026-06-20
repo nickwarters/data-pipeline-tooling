@@ -13,11 +13,11 @@ from typing import Protocol, runtime_checkable
 
 import pandas as pd
 
+from framework._internal.describe import redact_url, render
 from framework.core.dataset import Dataset
 from framework.io.readers import GlobCsvReader
 from framework.io.strategy import AccumulateByRun, Refresh
 from framework.io.writers import _stamp_accumulate_frame
-from framework._internal.describe import render, redact_url
 
 
 @runtime_checkable
