@@ -41,9 +41,9 @@ from typing import (
 )
 
 from framework._internal.describe import render
+from framework.core.dataset import Dataset
 from framework.core.errors import PipelineError
 from framework.core.protocols import DatasetSupplier
-from framework.core.dataset import Dataset
 
 
 class CoercionError(PipelineError):

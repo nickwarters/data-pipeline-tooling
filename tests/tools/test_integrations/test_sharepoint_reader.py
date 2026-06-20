@@ -5,15 +5,17 @@ import pytest
 
 from framework.core.dataset import Dataset
 from framework.io.readers import CsvReader, SqliteReader
-from tools.integrations.remote import SharePointReader
-from tools.integrations.remote import LocalCsvFetcher
 from framework.io.strategy import AccumulateByRun, Refresh
 from framework.io.writers import (
     AccumulateByRunWriter,
     SqliteTruncateReloadWriter,
 )
-from tools.integrations.remote import SharePointWriter
 from framework.run.builder import Pipeline
+from tools.integrations.remote import (
+    LocalCsvFetcher,
+    SharePointReader,
+    SharePointWriter,
+)
 
 
 class FakeListBackend:

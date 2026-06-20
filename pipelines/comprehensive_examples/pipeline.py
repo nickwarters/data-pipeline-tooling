@@ -14,7 +14,14 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from framework.core import GOLD, RAW, SILVER
+from framework.core import (
+    GOLD,
+    RAW,
+    SILVER,
+    ColumnValidator,
+    SchemaValidator,
+    UniqueValidator,
+)
 from framework.io import AccumulateByRun, CsvReader, Refresh, StoreCatalog
 from framework.run import Pipeline
 from framework.transform import (
@@ -26,7 +33,6 @@ from framework.transform import (
     SelectColumns,
     Sort,
 )
-from framework.core import ColumnValidator, SchemaValidator, UniqueValidator
 
 from .processors import AddOpenContactCounts, AdviserSummary
 from .rules import high_risk_or_vulnerable, review_priority

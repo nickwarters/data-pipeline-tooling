@@ -3,8 +3,8 @@ from pathlib import Path
 from cli import operator
 from framework.core import GOLD
 from framework.io import Store
-from tests.framework_testing import read_rows
 from pipelines.selection.pipeline import high_value_case, priority_score
+from tests.framework_testing import read_rows
 
 ROOT = Path(__file__).resolve().parents[2]
 

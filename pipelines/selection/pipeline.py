@@ -26,10 +26,9 @@ from case_review.case_pool import CasePool
 from framework.core import GOLD, PipelineError, format_failure
 from framework.io import AccumulateByRun, DatasetReader, StoreCatalog
 from framework.run import FreshnessRequirement, Pipeline, RunContext
-from tools.calendar import WorkingDayCalendar
 from framework.transform import Filter, Score, Sort, Stamp
-
 from pipelines.ingest.pipeline import AS_OF, CASES
+from tools.calendar import WorkingDayCalendar
 
 # Selection only runs once the CasePool is current.
 UPSTREAMS = (FreshnessRequirement(upstream_pipeline="ingest"),)

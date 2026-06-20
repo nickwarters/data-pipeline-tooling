@@ -12,6 +12,7 @@ from tests.framework_testing import read_rows
 from .pipeline import FEED_NAME, run
 from .schema import MyfeedRow
 
+
 def test_source_rows_process_correctly():
     source = [
         {"dummy": "row"},

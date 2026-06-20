@@ -10,14 +10,14 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Callable, Any
+from typing import Any, Callable
 
-from framework.core.protocols import Reader, Validator, Writer
 from framework.core.dataset import Dataset
+from framework.core.protocols import Processor, Reader, Validator, Writer
+from framework.core.validators import ValidationError
 from framework.run.execution import PipelineExecution
 from framework.run.run_context import RunContext
 from tools.observability.run_log import NULL_RUN_LOG, RunLog
-from framework.core import PipelineError
 
 log = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ class ReadNode(Node):
 
 
 class TransformNode(Node):
-    def __init__(self, name: str, func: Callable, inputs: list[Node]):
+    def __init__(self, name: str, func: Processor, inputs: list[Node]):
         super().__init__(name, "Transform", inputs)
         self.func = func
 
@@ -149,7 +149,6 @@ class ValidateNode(Node):
                 self.warn_hits.append(msg)
                 session.warn_hits.append(msg)
             else:
-                from framework.core.validators import ValidationError
                 if isinstance(exc, ValidationError):
                     raise ValidationError(f"{session.pipeline_name} {self.name} failed: {exc}") from exc
                 raise
@@ -243,7 +242,7 @@ class Pipeline:
         self._nodes.append(node)
         return node
 
-    def transform(self, func: Callable, *inputs: Node, name: str) -> Node:
+    def transform(self, func: Processor, *inputs: Node, name: str) -> Node:
         node = TransformNode(name, func, list(inputs))
         self._nodes.append(node)
         return node

@@ -2,7 +2,6 @@ import pandas as pd
 import pytest
 
 from framework.core.dataset import Dataset
-from framework.io.strategy import Refresh
 from framework.core.validators import (
     ColumnValidator,
     RowCountValidator,
@@ -11,6 +10,7 @@ from framework.core.validators import (
     ValidationError,
     VolumeAnomalyValidator,
 )
+from framework.io.strategy import Refresh
 
 
 def _dataset(**columns) -> Dataset:

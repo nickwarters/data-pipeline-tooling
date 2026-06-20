@@ -5,6 +5,7 @@ import pytest
 
 from framework.core.dataset import Dataset
 from framework.run import FreshnessRequirement, PipelineRunner
+from tools.calendar import WorkingDayCalendar
 from tools.orchestration import (
     DayOfMonth,
     LastWorkingDayOfMonth,
@@ -17,7 +18,6 @@ from tools.orchestration import (
     SpecificWeekdays,
     Weekdays,
 )
-from tools.calendar import WorkingDayCalendar
 
 
 def _runner(calls: list[str], failing: set[str] | None = None) -> PipelineRunner:

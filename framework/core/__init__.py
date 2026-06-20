@@ -13,12 +13,11 @@ The modules behind this facade are internal layout: re-exports here are the publ
 contract, the submodule paths are not. See ``docs/public-api.md``.
 """
 
-from framework.core.protocols import Reader, Severity, Validator, Writer
+from framework._internal.schema import RowCheck, ValueRule, row_checks
 from framework.core.dataset import Dataset
 from framework.core.errors import PipelineError, format_failure
 from framework.core.layers import GOLD, RAW, SILVER, Layer
-
-from framework._internal.schema import RowCheck, ValueRule, row_checks
+from framework.core.protocols import Processor, Reader, Severity, Validator, Writer
 from framework.core.schema import SchemaValidator
 from framework.core.validators import (
     ColumnValidator,
@@ -48,6 +47,7 @@ __all__ = [
     "GOLD",
     "Reader",
     "Writer",
+    "Processor",
     "Validator",
     "Severity",
     "PipelineError",

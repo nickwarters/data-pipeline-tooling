@@ -378,11 +378,14 @@ The implementation home is `framework.recipes`; `framework.run` re-exports the
 recipe for compatibility with existing pipeline code.
 
 ### `Processor` — an engine-confined transform, run mid-pipeline
-A `Processor` transforms the dataset between the read and the post-validators:
+A `Processor` transforms data between the read and the post-validators. The
+builder wires it to one or more upstream nodes and calls it with their datasets,
+so a processor takes **one or more `Dataset`s and returns exactly one** — a
+single-input reshape, or a fan-in (e.g. an in-DAG join) over several branches:
 
 ```python
-# Transforms are now standard callables.
-# e.g. Callable[[Dataset], Dataset]
+# Transforms are standard callables: one or more Datasets in, one Dataset out.
+# Processor = Callable[..., Dataset]
 ```
 
 Unlike the structural validators it is **engine-confined** — a transform needs

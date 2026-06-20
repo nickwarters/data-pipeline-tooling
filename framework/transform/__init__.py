@@ -28,6 +28,7 @@ public contract, the submodule paths are not.
 """
 
 from framework.transform.coercion import SchemaCoercion
+from framework.core.protocols import Processor
 from framework.transform.processors import (
     AntiJoinWith,
     CoercionError,
@@ -49,6 +50,8 @@ from framework.transform.processors import (
 )
 
 __all__ = [
+    # The processor seam (defined in framework.core.protocols, re-exported here)
+    "Processor",
     # Processors
     "Filter",
     "Score",

@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from tools.integrations.remote import SasReader
 from framework.io.writers import SqliteTruncateReloadWriter
 from framework.run.builder import Pipeline
+from tools.integrations.remote import SasReader
 
 
 @pytest.fixture

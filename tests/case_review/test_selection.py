@@ -9,9 +9,9 @@ from framework.io.readers import DatasetReader
 from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun, Refresh
 from framework.run.builder import Pipeline
-from tools.calendar import WorkingDayCalendar
 from framework.transform.processors import Filter, Sort, Stamp
 from tests._schema_fixtures import ActivityCase
+from tools.calendar import WorkingDayCalendar
 
 
 def _case_type() -> CaseType:

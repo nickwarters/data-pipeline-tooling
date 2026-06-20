@@ -16,11 +16,26 @@ from typing import TextIO
 import pandas as pd
 
 from framework._internal.connection import connect
-from framework._internal.describe import redact_url, render
-from framework.core.protocols import Writer
+from framework._internal.describe import render
 from framework.core.dataset import Dataset
+from framework.core.protocols import Writer
 from framework.io.sql import quote_identifier
 from framework.io.strategy import AccumulateByRun, Refresh, UpsertStrategy
+
+# ``Writer`` is imported only to be re-exported through ``framework.io``; listing
+# it in ``__all__`` marks it as intentional public surface so lint won't strip it.
+__all__ = [
+    "Writer",
+    "CsvWriter",
+    "ExcelWriter",
+    "JsonWriter",
+    "StdoutWriter",
+    "SqliteTruncateReloadWriter",
+    "QuarantineWriter",
+    "SqliteUpsertWriter",
+    "AccumulateByRunWriter",
+]
+
 
 def _frame_for_strategy(
     dataset: Dataset,

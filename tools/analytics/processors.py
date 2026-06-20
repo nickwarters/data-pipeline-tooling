@@ -1,9 +1,13 @@
-import random
 import hashlib
-from typing import Any, Sequence
-from framework._internal.describe import render
 import json
+import random
+from typing import Any, Callable, Sequence
+
+from framework._internal.describe import render
 from framework.core.dataset import Dataset
+
+ValueParser = Callable[[Any], Any]
+
 
 class Parse:
     """Decode each value in one or more packed text columns through a callable.

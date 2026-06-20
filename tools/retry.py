@@ -19,8 +19,8 @@ import time
 from collections.abc import Callable
 from typing import TypeVar
 
-from framework.core.protocols import Reader, Writer
 from framework.core.dataset import Dataset
+from framework.core.protocols import Reader, Writer
 
 log = logging.getLogger(__name__)
 

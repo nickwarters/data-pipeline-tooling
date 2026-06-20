@@ -7,6 +7,7 @@ hits / validation failures / step order without parsing files by hand.
 
 import pytest
 
+from framework.core import ColumnValidator
 from framework.run import Pipeline
 from tests.framework_testing import (
     RecordingRunLog,
@@ -14,7 +15,6 @@ from tests.framework_testing import (
     given_rows,
     read_run_log,
 )
-from framework.core import ColumnValidator
 
 
 def test_recording_run_log_captures_warn_hits_in_memory():
