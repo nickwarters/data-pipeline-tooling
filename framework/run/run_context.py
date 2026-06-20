@@ -30,12 +30,12 @@ class RunContext:
         run_log: RunLog | None = None,
         run_registry: RunRegistry | None = None,
         base_dir: str | Path | None = None,
-        case_type: str | None = None,
+        subject: str | None = None,
         pipeline: str | None = None,
         freshness_days: int = 0,
     ) -> None:
         self.base_dir = Path(base_dir) if base_dir is not None else None
-        self.case_type = case_type
+        self.subject = subject
         self.pipeline = pipeline
         self.run_date = run_date or dt.date.today()
         self.execution_id = execution_id or run_id or uuid.uuid4().hex
@@ -54,8 +54,8 @@ class RunContext:
     @property
     def label(self) -> str:
         """Stable run-history label for a domain Pipeline."""
-        if self.case_type and self.pipeline:
-            return f"{self.case_type}/{self.pipeline}"
+        if self.subject and self.pipeline:
+            return f"{self.subject}/{self.pipeline}"
         return self.pipeline or ""
 
     @property

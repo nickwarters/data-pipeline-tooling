@@ -210,7 +210,7 @@ def test_pipeline_quarantine_uses_run_context_identity(tmp_path):
     csv_file.write_text("case_ref,status\nBAD,open\n")
 
     context = RunContext(
-        case_type="cases",
+        subject="cases",
         pipeline="ingest",
         run_date=dt.date(2026, 5, 29),
         execution_id="exec-1",

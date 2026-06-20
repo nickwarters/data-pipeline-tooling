@@ -24,19 +24,19 @@ def _runner(calls: list[str], failing: set[str] | None = None) -> PipelineRunner
     runner = PipelineRunner()
     failing = failing or set()
 
-    def register(case_type: str, pipeline: str) -> None:
+    def register(subject: str, pipeline: str) -> None:
         def handler(_context):
-            label = f"{case_type}/{pipeline}"
+            label = f"{subject}/{pipeline}"
             calls.append(label)
             if label in failing:
                 raise RuntimeError(f"{label} failed")
             return Dataset.from_pandas(pd.DataFrame({"id": [1]}))
 
-        runner.register(case_type, pipeline, handler)
+        runner.register(subject, pipeline, handler)
 
-    for case_type in ("case-a", "case-b", "cases"):
+    for subject in ("case-a", "case-b", "cases"):
         for pipeline in ("feed-a", "feed-b", "feed-c", "ingest", "selection"):
-            register(case_type, pipeline)
+            register(subject, pipeline)
     return runner
 
 
@@ -108,7 +108,7 @@ def test_failed_upstream_blocks_dependant_but_not_independent_or_other_set(tmp_p
     result = orchestrator.run_due_once(tmp_path, run_date=dt.date(2026, 6, 12))
 
     statuses = {
-        f"{decision.case_type}/{decision.pipeline}": decision.status
+        f"{decision.subject}/{decision.pipeline}": decision.status
         for decision in result.decisions
     }
     assert calls == ["case-a/feed-a", "case-a/feed-b", "case-b/feed-a"]
@@ -163,11 +163,11 @@ def test_yaml_overrides_disable_schedule_and_freshness(tmp_path):
         """
 pipelines:
   - set: cases
-    case_type: cases
+    subject: cases
     pipeline: ingest
     enabled: false
   - set: cases
-    case_type: cases
+    subject: cases
     pipeline: selection
     schedule:
       type: specific_weekdays
@@ -209,7 +209,7 @@ def test_yaml_override_unknown_reference_fails_clearly(tmp_path):
         """
 pipelines:
   - set: missing
-    case_type: cases
+    subject: cases
     pipeline: ingest
     enabled: false
 """,
