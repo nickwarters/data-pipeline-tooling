@@ -11,7 +11,8 @@ Import from here rather than the underlying modules::
 
 The modules behind this facade (``framework.run.builder``,
 ``framework.run.stages``, ``framework.run.execution``,
-``framework.run.pipeline_steps``, ``framework.run.runner``, ``framework.run.run_context``, ``framework.run.run_log``,
+``framework.run.pipeline_steps``, ``framework.run.runner``,
+``framework.run.run_context``, ``framework.run.run_log``,
 ``framework.run.run_registry``) are internal layout: re-exports here are the
 public contract, the submodule paths are not. See ``docs/public-api.md``.
 """

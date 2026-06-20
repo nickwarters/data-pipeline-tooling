@@ -139,7 +139,6 @@ class SasReader:
         )
 
 
-
 class SharePointReader:
     """Read a SharePoint list into a Dataset through a swappable fetcher."""
 
@@ -200,5 +199,3 @@ class SharePointWriter:
         # Strip any credentials embedded in the site URL and omit auth config
         # entirely — the plan never surfaces secrets.
         return render(self, site=redact_url(self._site), list_name=self._list_name)
-
-

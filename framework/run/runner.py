@@ -217,9 +217,7 @@ class PipelineRunner:
         *,
         freshness: tuple[FreshnessRequirement, ...] = (),
     ) -> None:
-        self._registered[(subject, pipeline)] = _RegisteredPipeline(
-            handler, freshness
-        )
+        self._registered[(subject, pipeline)] = _RegisteredPipeline(handler, freshness)
 
     def run(
         self,

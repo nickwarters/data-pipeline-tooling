@@ -44,6 +44,7 @@ def adding_processor(column: str):
         frame = dataset.to_pandas().copy()
         frame[column] = "derived"
         return Dataset.from_pandas(frame)
+
     return process
 
 
@@ -55,7 +56,7 @@ def _read_records(log_path: Path) -> list[dict]:
 def test_run_appends_jsonl_records_sharing_one_run_id(tmp_path):
     log_path = tmp_path / "cases.log"
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1, 2]})))
-    
+
     p = Pipeline("cases", run_log=RunLog(log_path))
     r = p.read(reader, name="read")
     p.write(CapturingWriter(), r, name="write")
@@ -74,7 +75,7 @@ def _by_step(records: list[dict]) -> dict[str, dict]:
 def test_per_step_records_carry_row_counts_and_a_run_summary(tmp_path):
     log_path = tmp_path / "cases.log"
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1, 2, 3]})))
-    
+
     p = Pipeline("cases", run_log=RunLog(log_path))
     r = p.read(reader, name="read")
     p.write(CapturingWriter(), r, name="write")
@@ -94,7 +95,7 @@ def test_per_step_records_carry_row_counts_and_a_run_summary(tmp_path):
 def test_failed_validation_records_the_failing_step_and_aborts(tmp_path):
     log_path = tmp_path / "cases.log"
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
-    
+
     p = Pipeline("cases", run_log=RunLog(log_path))
     r = p.read(reader, name="read")
     v = p.validate(ColumnValidator(["case_ref"]), r, name="pre-validate")
@@ -119,10 +120,12 @@ def test_failed_validation_records_the_failing_step_and_aborts(tmp_path):
 def test_warn_validator_is_recorded_as_a_warn_hit_and_the_run_continues(tmp_path):
     log_path = tmp_path / "cases.log"
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
-    
+
     p = Pipeline("cases", run_log=RunLog(log_path))
     r = p.read(reader, name="read")
-    v = p.validate(ColumnValidator(["case_ref"]), r, name="pre-validate", severity="warn")
+    v = p.validate(
+        ColumnValidator(["case_ref"]), r, name="pre-validate", severity="warn"
+    )
     p.write(CapturingWriter(), v, name="write")
 
     p.run()
@@ -142,7 +145,7 @@ def test_warn_validator_is_recorded_as_a_warn_hit_and_the_run_continues(tmp_path
 def test_console_output_is_human_readable_not_raw_json(tmp_path, caplog):
     log_path = tmp_path / "cases.log"
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1, 2]})))
-    
+
     p = Pipeline("cases", run_log=RunLog(log_path))
     r = p.read(reader, name="read")
     p.write(CapturingWriter(), r, name="write")
@@ -166,7 +169,7 @@ def test_checkpoint_emits_its_own_step_record(tmp_path):
     p = Pipeline("cases", run_log=RunLog(log_path))
     r = p.read(reader, name="read")
     cp0 = p.write(CapturingWriter(), r, name="checkpoint:0")
-    cp1 = p.write(CapturingWriter(), cp0, name="checkpoint:1")
+    p.write(CapturingWriter(), cp0, name="checkpoint:1")
     p.run()
 
     steps = _by_step(_read_records(log_path))
@@ -205,7 +208,7 @@ def test_named_stages_emit_named_run_log_records(tmp_path):
     t1 = p.transform(adding_processor("derived"), v1, name="Normalise cases")
     v2 = p.validate(ColumnValidator(["derived"]), t1, name="Validate normalised cases")
     p.write(CapturingWriter(), v2, name="write")
-    
+
     p.run()
 
     steps = _by_step(_read_records(log_path))
@@ -218,7 +221,7 @@ def test_named_stages_emit_named_run_log_records(tmp_path):
 def test_every_record_carries_a_parseable_utc_timestamp(tmp_path):
     log_path = tmp_path / "cases.log"
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1, 2]})))
-    
+
     p = Pipeline("cases", run_log=RunLog(log_path))
     r = p.read(reader, name="read")
     p.write(CapturingWriter(), r, name="write")

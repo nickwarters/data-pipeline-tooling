@@ -158,9 +158,7 @@ def assert_rows_equal(
     a mismatch.
     """
     actual_rows = (
-        list(actual)
-        if isinstance(actual, list)
-        else rows_of(actual)  # type: ignore[arg-type]
+        list(actual) if isinstance(actual, list) else rows_of(actual)  # type: ignore[arg-type]
     )
     expected_rows = list(expected)
     if ignoring:
@@ -170,7 +168,5 @@ def assert_rows_equal(
         actual_rows = sorted(actual_rows, key=_row_sort_key)
         expected_rows = sorted(expected_rows, key=_row_sort_key)
     assert actual_rows == expected_rows, (
-        "rows differ:\n"
-        f"  actual:   {actual_rows}\n"
-        f"  expected: {expected_rows}"
+        f"rows differ:\n  actual:   {actual_rows}\n  expected: {expected_rows}"
     )

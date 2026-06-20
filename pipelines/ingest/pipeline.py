@@ -78,20 +78,26 @@ def run(context: RunContext):
 
     p = Pipeline("cases")
     r = p.read(CsvReader(SAMPLE_CSV), name="read")
-    w = p.write(store.writer(RAW, "cases", strategy), r, name="write")
+    p.write(store.writer(RAW, "cases", strategy), r, name="write")
     p.run()
-    
+
     p_silver = Pipeline("cases")
     r_silver = p_silver.read(store.reader(RAW, "cases"), name="read")
     current = r_silver
     if isinstance(strategy, AccumulateByRun):
         run_id = strategy.run_id
-        current = p_silver.transform(Filter(lambda row, _rid=run_id: row["run_id"] == _rid), current, name="filter-by-run-id")
+        current = p_silver.transform(
+            Filter(lambda row, _rid=run_id: row["run_id"] == _rid),
+            current,
+            name="filter-by-run-id",
+        )
     coerced = p_silver.transform(SchemaCoercion(CASES.schema), current, name="coerce")
-    validated = p_silver.validate(SchemaValidator(CASES.schema), coerced, name="post-validate")
+    validated = p_silver.validate(
+        SchemaValidator(CASES.schema), coerced, name="post-validate"
+    )
     p_silver.write(store.writer(SILVER, "cases", strategy), validated, name="write")
     p_silver.run()
-    
+
     return ingest_silver_to_gold(store, CASES).run()
 
 

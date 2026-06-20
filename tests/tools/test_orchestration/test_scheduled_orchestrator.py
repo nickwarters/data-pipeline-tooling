@@ -62,11 +62,16 @@ def test_downstream_waits_until_declared_upstreams_are_fresh(tmp_path):
             PipelineSet(
                 "cases",
                 (
-                    ScheduledPipeline("cases", "selection", Weekdays(), depends_on=(
-                        FreshnessRequirement("feed-a"),
-                        FreshnessRequirement("feed-b"),
-                        FreshnessRequirement("feed-c"),
-                    )),
+                    ScheduledPipeline(
+                        "cases",
+                        "selection",
+                        Weekdays(),
+                        depends_on=(
+                            FreshnessRequirement("feed-a"),
+                            FreshnessRequirement("feed-b"),
+                            FreshnessRequirement("feed-c"),
+                        ),
+                    ),
                 ),
             ),
         ),

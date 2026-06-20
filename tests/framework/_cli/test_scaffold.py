@@ -92,7 +92,9 @@ def test_rendered_pipeline_runs_and_lands_its_sample_feed(tmp_path):
     try:
         pipeline = importlib.import_module("widgets.pipeline")
         importlib.reload(pipeline)  # in case a prior test imported "widgets"
-        dataset = pipeline.run(RunContext(base_dir=tmp_path / "data", pipeline="widgets"))
+        dataset = pipeline.run(
+            RunContext(base_dir=tmp_path / "data", pipeline="widgets")
+        )
     finally:
         sys.path.remove(str(repo / "pipelines"))
         for name in list(sys.modules):
@@ -233,21 +235,29 @@ def test_non_identifier_columns_gate_the_validator_on_raw_names(tmp_path):
     assert "case_number: str" in schema
     assert "adviser_name: str" in schema
     # ...while the validator gates on the verbatim source names.
-    assert 'RAW_FEED_COLUMNS = [\n    "Case Number",\n    "Adviser Name",\n]' in pipeline
+    assert (
+        'RAW_FEED_COLUMNS = [\n    "Case Number",\n    "Adviser Name",\n]' in pipeline
+    )
     assert "ColumnValidator(RAW_FEED_COLUMNS)" in pipeline
     assert "fields(" not in pipeline  # schema-driven validator dropped
     # The relocated test follows: validator columns, not schema fields.
-    assert "from pipelines.cases.pipeline import FEED_NAME, RAW_FEED_COLUMNS" in test_text
+    assert (
+        "from pipelines.cases.pipeline import FEED_NAME, RAW_FEED_COLUMNS" in test_text
+    )
     assert "set(RAW_FEED_COLUMNS).issubset(landed[0].keys())" in test_text
 
 
-def test_feed_file_over_the_column_limit_truncates_with_a_note(tmp_path, monkeypatch, capsys):
+def test_feed_file_over_the_column_limit_truncates_with_a_note(
+    tmp_path, monkeypatch, capsys
+):
     monkeypatch.setattr(scaffold, "_MAX_FEED_COLUMNS", 3)
     feed = _write_feed(tmp_path / "wide.csv", "a,b,c,d,e\n1,2,3,4,5\n")
     scaffold.render("wide", tmp_path, feed_file=feed)
 
     schema = (tmp_path / "pipelines" / "wide" / "schema.py").read_text("utf-8")
-    fields = [line for line in schema.splitlines() if line.startswith("    ") and ": " in line]
+    fields = [
+        line for line in schema.splitlines() if line.startswith("    ") and ": " in line
+    ]
     assert len(fields) == 3  # kept the first three columns only
     assert "2 column(s) beyond the scaffold's limit of 3 were dropped" in schema
     assert "dropping the remaining 2" in capsys.readouterr().err
@@ -278,7 +288,9 @@ def test_rendered_feed_from_a_spaced_file_runs_and_its_test_passes(tmp_path):
     try:
         pipeline = importlib.import_module("widgets.pipeline")
         importlib.reload(pipeline)
-        dataset = pipeline.run(RunContext(base_dir=tmp_path / "data", pipeline="widgets"))
+        dataset = pipeline.run(
+            RunContext(base_dir=tmp_path / "data", pipeline="widgets")
+        )
     finally:
         sys.path.remove(str(repo / "pipelines"))
         for name in list(sys.modules):
@@ -289,4 +301,3 @@ def test_rendered_feed_from_a_spaced_file_runs_and_its_test_passes(tmp_path):
     landed = read_rows(store, RAW, "widgets")
     assert len(landed) == len(dataset) > 0
     assert {"Case Number", "Adviser Name"}.issubset(landed[0].keys())
-

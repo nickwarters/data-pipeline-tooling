@@ -180,7 +180,9 @@ def test_runs_that_warned_surfaces_tolerated_warn_hits(tmp_path):
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
     warned = Pipeline("beta", run_log=RunLog(log_path))
     r = warned.read(reader, name="read")
-    v = warned.validate(ColumnValidator(["case_ref"]), r, name="pre-validate", severity="warn")
+    v = warned.validate(
+        ColumnValidator(["case_ref"]), r, name="pre-validate", severity="warn"
+    )
     warned.write(CapturingWriter(), v, name="write")
     warned.run()
 
@@ -246,7 +248,10 @@ def test_volume_guardrail_trips_against_real_history_and_records_to_the_runlog(
     pipeline = Pipeline("cases", run_log=RunLog(truncated_log))
     r = pipeline.read(reader, name="read")
     v = pipeline.validate(
-        VolumeAnomalyValidator(registry, pipeline="cases", tolerance=0.5), r, name="volume-guardrail", severity="warn"
+        VolumeAnomalyValidator(registry, pipeline="cases", tolerance=0.5),
+        r,
+        name="volume-guardrail",
+        severity="warn",
     )
     pipeline.write(CapturingWriter(), v, name="write")
     pipeline.run()  # warn-severity: completes rather than aborting
@@ -271,9 +276,11 @@ def test_volume_guardrail_aborts_the_run_at_error_severity(tmp_path):
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [0, 1, 2]})))
     pipeline = Pipeline("cases", run_log=RunLog(truncated_log))
     r = pipeline.read(reader, name="read")
-    v = pipeline.validate(VolumeAnomalyValidator(registry, pipeline="cases"), r, name="volume-guardrail")
+    v = pipeline.validate(
+        VolumeAnomalyValidator(registry, pipeline="cases"), r, name="volume-guardrail"
+    )
     pipeline.write(CapturingWriter(), v, name="write")
-    
+
     with pytest.raises(ValidationError, match="deviates"):
         pipeline.run()
 
@@ -346,7 +353,8 @@ def test_incremental_ingest_second_call_returns_only_new_records(tmp_path):
     # Ordinals match between incremental and fresh ingest.
     for run_id in (run_id_a, run_id_b):
         inc_records = sorted(
-            registry.records_for_run(run_id), key=lambda r: (r["step"], r["step_ordinal"])
+            registry.records_for_run(run_id),
+            key=lambda r: (r["step"], r["step_ordinal"]),
         )
         fresh_records = sorted(
             fresh_registry.records_for_run(run_id),
@@ -404,9 +412,7 @@ def test_incremental_ingest_ordinals_continue_across_boundary(tmp_path):
 
     # All three records present with ordinals 0, 1, 2 — no gaps, no duplicates.
     process_records = [
-        r
-        for r in registry.records_for_run("straddle-run")
-        if r["step"] == "process"
+        r for r in registry.records_for_run("straddle-run") if r["step"] == "process"
     ]
     assert len(process_records) == 3
     assert {r["step_ordinal"] for r in process_records} == {0, 1, 2}

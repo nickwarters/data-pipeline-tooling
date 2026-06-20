@@ -27,8 +27,8 @@ The modules behind this facade are internal layout: re-exports here are the
 public contract, the submodule paths are not.
 """
 
-from framework.transform.coercion import SchemaCoercion
 from framework.core.protocols import Processor
+from framework.transform.coercion import SchemaCoercion
 from framework.transform.processors import (
     AntiJoinWith,
     CoercionError,

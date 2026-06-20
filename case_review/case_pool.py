@@ -49,6 +49,4 @@ class CasePool:
         dataset = SchemaCoercion(self._case_type.schema)(dataset)
 
         window = set(self._calendar.last_n_working_days(within_working_days, as_of))
-        return Filter(lambda row: row[activity_column].date() in window)(
-            dataset
-        )
+        return Filter(lambda row: row[activity_column].date() in window)(dataset)

@@ -47,7 +47,6 @@ class Parse:
         return render(self, columns=self._columns, parser=parser)
 
 
-
 class TopNPerGroup:
     """Reduce each group of rows to its top ``n`` by a ranking column.
 
@@ -130,7 +129,6 @@ def _draw_sample(frame, n: int, seed: int, order: str):
     return ordered.iloc[chosen]
 
 
-
 class SamplePerGroup:
     """Draw at most ``n`` rows per group by a seeded, reproducible sample.
 
@@ -188,7 +186,6 @@ class SamplePerGroup:
         )
 
 
-
 class Sample:
     """Draw a seeded, reproducible sample from the whole feed.
 
@@ -223,9 +220,7 @@ class Sample:
         if (n is None) == (fraction is None):
             raise ValueError("Sample requires exactly one of `n` or `fraction`")
         if fraction is not None and not 0 < fraction <= 1:
-            raise ValueError(
-                f"Sample `fraction` must be in (0, 1], got {fraction!r}"
-            )
+            raise ValueError(f"Sample `fraction` must be in (0, 1], got {fraction!r}")
         self._n = n
         self._fraction = fraction
         self._seed = seed
@@ -255,8 +250,10 @@ class Sample:
             order=self._order,
         )
 
+
 def _cut_per_group(frame, key, select):
     import pandas as pd
+
     if len(frame) == 0:
         return frame
     grouped = frame.groupby(key, sort=True, dropna=False)
