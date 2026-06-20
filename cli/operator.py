@@ -34,7 +34,8 @@ import sys
 from pathlib import Path
 
 from framework.core import PipelineError, format_failure
-from framework.run import Orchestrator, RunRegistry, run_pipeline
+from framework.run import RunRegistry, run_pipeline
+from tools.orchestration import Orchestrator
 from tools.calendar import WorkingDayCalendar
 
 # Mirrors the layout PipelineRunner writes: a per-base run registry and the

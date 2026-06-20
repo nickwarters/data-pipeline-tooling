@@ -6,8 +6,7 @@ The stable import surface for everything that reshapes or gates a
 ``Score`` / ``VectorizedFilter`` / ``VectorizedDerive`` / ``Sort`` /
 ``Rename`` / ``Stamp``, the ungrouped ``Sample`` and per-group
 ``TopNPerGroup`` / ``SamplePerGroup``,
-the column-shaping ``Parse`` / ``SplitColumn`` / ``JoinColumns`` / ``Zfill`` /
-``IntegerText``,
+the column-shaping ``Parse`` / ``JoinColumns``,
 the lazy ``JoinWith`` / ``AntiJoinWith``, the Ingest / fan-out
 ``SelectColumns`` / ``DropColumns`` / ``Unpivot`` / ``DeriveKey`` /
 ``LatestPerKey``)
@@ -35,7 +34,6 @@ from framework.transform.processors import (
     DeriveKey,
     DropColumns,
     Filter,
-    IntegerText,
     JoinColumns,
     JoinDependency,
     JoinWith,
@@ -47,13 +45,11 @@ from framework.transform.processors import (
     Score,
     SelectColumns,
     Sort,
-    SplitColumn,
     Stamp,
     TopNPerGroup,
     Unpivot,
     VectorizedDerive,
     VectorizedFilter,
-    Zfill,
 )
 
 __all__ = [
@@ -66,10 +62,7 @@ __all__ = [
     "Sort",
     "Rename",
     "Parse",
-    "SplitColumn",
     "JoinColumns",
-    "Zfill",
-    "IntegerText",
     "JoinDependency",
     "JoinWith",
     "AntiJoinWith",

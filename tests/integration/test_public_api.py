@@ -15,7 +15,7 @@ FIXTURE = Path(__file__).parent.parent / "fixtures" / "cases.csv"
 
 PIPELINES_DIR = Path(__file__).parent.parent.parent / "pipelines"
 CASE_REVIEW_DIR = Path(__file__).parent.parent.parent / "case_review"
-PUBLIC_FACADES = {"core", "io", "transform", "validate", "run", "shared"}
+PUBLIC_FACADES = {"core", "io", "transform", "validate", "run"}
 
 
 def _framework_submodules_imported(source: str) -> set[str]:
@@ -60,7 +60,6 @@ def test_package_root_exposes_only_public_facade_modules():
         "transform",
         "validate",
         "run",
-        "shared",
     ]
     assert framework.core.Dataset is not None
     assert framework.io.CsvReader is not None
@@ -172,7 +171,7 @@ def test_internal_plumbing_stays_out_of_the_public_facades():
     # implementation detail (connection factory, layer-name helper, trace
     # mechanics, remote client seam, runner/run-log internals) — documented as
     # internal in docs/public-api.md and absent from every facade's __all__.
-    from framework import core, io, run, shared, transform, validate
+    from framework import core, io, run, transform, validate
 
     internal = {
         "connect",  # framework._internal.connection — connection factory seam
@@ -184,7 +183,7 @@ def test_internal_plumbing_stays_out_of_the_public_facades():
         "StepMetrics",  # framework.run.run_log — internal timing record
         "pipeline_label",  # framework.run.runner — internal label helper
     }
-    for facade in (core, io, transform, validate, run, shared):
+    for facade in (core, io, transform, validate, run):
         leaked = internal & set(facade.__all__)
         assert not leaked, f"{facade.__name__} leaks internal names: {leaked}"
         # __all__ is also honest: every advertised name resolves on the facade.

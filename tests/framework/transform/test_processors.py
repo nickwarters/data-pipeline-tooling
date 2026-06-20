@@ -10,7 +10,7 @@ from framework.io.strategy import Refresh
 from framework.run.builder import Pipeline
 from framework.run.run_log import RunLog
 from framework.transform import AntiJoinWith as PublicAntiJoinWith
-from framework.transform.processors import AntiJoinWith, DeriveKey, DropColumns, Filter, JoinColumns, JoinDependency, JoinWith, LatestPerKey, Parse, Rename, Sample, SamplePerGroup, Score, SelectColumns, Sort, SplitColumn, Stamp, TopNPerGroup, IntegerText, Unpivot, VectorizedDerive, VectorizedFilter, Zfill
+from framework.transform.processors import AntiJoinWith, DeriveKey, DropColumns, Filter, JoinColumns, JoinDependency, JoinWith, LatestPerKey, Parse, Rename, Sample, SamplePerGroup, Score, SelectColumns, Sort, Stamp, TopNPerGroup, Unpivot, VectorizedDerive, VectorizedFilter
 
 class RecordingReader():
     'A Reader stand-in: returns a dataset and counts reads.'
@@ -486,58 +486,11 @@ def test_parse_on_empty_feed_returns_empty_feed():
     assert isinstance(result, Dataset)
     assert (len(result) == 0)
 
-def test_split_column_fans_a_delimited_column_into_several():
-    dataset = Dataset.from_pandas(pd.DataFrame({'case_ref': ['c1'], 'full_name': ['Ada,Lovelace']}))
-    result = SplitColumn('full_name', ['first', 'last'])(dataset).to_pandas()
-    assert (result.loc[(0, 'first')] == 'Ada')
-    assert (result.loc[(0, 'last')] == 'Lovelace')
-    assert ('full_name' not in result.columns)
-
-def test_split_column_keeps_trailing_delimiters_in_the_final_column():
-    dataset = Dataset.from_pandas(pd.DataFrame({'path': ['a/b/c/d']}))
-    result = SplitColumn('path', ['head', 'rest'], sep='/')(dataset).to_pandas()
-    assert (result.loc[(0, 'head')] == 'a')
-    assert (result.loc[(0, 'rest')] == 'b/c/d')
-
-def test_split_column_pads_missing_parts_with_none():
-    dataset = Dataset.from_pandas(pd.DataFrame({'pair': ['only']}))
-    result = SplitColumn('pair', ['first', 'second'])(dataset).to_pandas()
-    assert (result.loc[(0, 'first')] == 'only')
-    assert (result.loc[(0, 'second')] is None)
-
-def test_split_column_can_overwrite_the_source_in_place():
-    dataset = Dataset.from_pandas(pd.DataFrame({'v': ['a,b']}))
-    result = SplitColumn('v', ['v', 'extra'])(dataset).to_pandas()
-    assert (result.loc[(0, 'v')] == 'a')
-    assert (result.loc[(0, 'extra')] == 'b')
-
-def test_split_column_can_keep_the_source():
-    dataset = Dataset.from_pandas(pd.DataFrame({'v': ['a,b']}))
-    result = SplitColumn('v', ['x', 'y'], drop=False)(dataset).to_pandas()
-    assert ('v' in result.columns)
-
-def test_split_column_raises_on_missing_column():
-    dataset = Dataset.from_pandas(pd.DataFrame({'a': ['x']}))
-    with pytest.raises(ValueError, match='nope'):
-        SplitColumn('nope', ['a', 'b'])(dataset)
-
-def test_split_column_on_empty_feed_returns_empty_with_destination_columns():
-    dataset = Dataset.from_pandas(pd.DataFrame({'v': pd.Series([], dtype=object)}))
-    result = SplitColumn('v', ['x', 'y'])(dataset).to_pandas()
-    assert (len(result) == 0)
-    assert {'x', 'y'}.issubset(result.columns)
-
 def test_join_columns_recombines_several_columns_into_one():
     dataset = Dataset.from_pandas(pd.DataFrame({'first': ['Ada'], 'last': ['Lovelace']}))
     result = JoinColumns(['first', 'last'], 'full_name', sep=' ')(dataset).to_pandas()
     assert (result.loc[(0, 'full_name')] == 'Ada Lovelace')
     assert {'first', 'last'}.issubset(result.columns)
-
-def test_join_columns_is_the_inverse_of_split_column():
-    dataset = Dataset.from_pandas(pd.DataFrame({'full_name': ['Ada,Lovelace']}))
-    split = SplitColumn('full_name', ['first', 'last'])(dataset)
-    rejoined = JoinColumns(['first', 'last'], 'full_name')(split).to_pandas()
-    assert (rejoined.loc[(0, 'full_name')] == 'Ada,Lovelace')
 
 def test_join_columns_stringifies_non_text_values():
     dataset = Dataset.from_pandas(pd.DataFrame({'a': [1], 'b': [2]}))
@@ -557,64 +510,3 @@ def test_join_columns_raises_on_missing_column():
     with pytest.raises(ValueError, match='nope'):
         JoinColumns(['a', 'nope'], 'key')(dataset)
 
-def test_zfill_pads_values_with_leading_zeros_to_the_width():
-    dataset = Dataset.from_pandas(pd.DataFrame({'account': ['42', '7', '12345']}))
-    result = Zfill('account', 5)(dataset).to_pandas()
-    assert (list(result['account']) == ['00042', '00007', '12345'])
-
-def test_zfill_pads_several_columns_and_leaves_the_rest_untouched():
-    dataset = Dataset.from_pandas(pd.DataFrame({'sort_code': ['12', '9'], 'branch': ['3', '44'], 'name': ['a', 'b']}))
-    result = Zfill(['sort_code', 'branch'], 4)(dataset).to_pandas()
-    assert (list(result['sort_code']) == ['0012', '0009'])
-    assert (list(result['branch']) == ['0003', '0044'])
-    assert (list(result['name']) == ['a', 'b'])
-
-def test_zfill_leaves_values_already_at_or_beyond_width_unchanged():
-    dataset = Dataset.from_pandas(pd.DataFrame({'code': ['12345', '123456']}))
-    result = Zfill('code', 5)(dataset).to_pandas()
-    assert (list(result['code']) == ['12345', '123456'])
-
-def test_zfill_raises_on_missing_column():
-    dataset = Dataset.from_pandas(pd.DataFrame({'a': ['1']}))
-    with pytest.raises(ValueError, match='nope'):
-        Zfill(['a', 'nope'], 3)(dataset)
-
-def test_zfill_on_empty_feed_returns_empty_feed():
-    empty = Dataset.from_pandas(pd.DataFrame({'account': pd.Series([], dtype=object)}))
-    result = Zfill('account', 5)(empty)
-    assert isinstance(result, Dataset)
-    assert (len(result) == 0)
-
-def test_integer_text_renders_a_float_widened_column_as_clean_integer_text():
-    dataset = Dataset.from_pandas(pd.DataFrame({'account': [1234567890.0, 7.0, None]}))
-    result = IntegerText('account')(dataset).to_pandas()
-    assert (list(result['account']) == ['1234567890', '7', pd.NA])
-    assert (result['account'].isna().tolist() == [False, False, True])
-
-def test_integer_text_handles_several_columns_and_leaves_the_rest_untouched():
-    dataset = Dataset.from_pandas(pd.DataFrame({'member_id': [1.0, None], 'claim_ref': [42.0, 9.0], 'name': ['a', 'b']}))
-    result = IntegerText(['member_id', 'claim_ref'])(dataset).to_pandas()
-    assert (list(result['member_id']) == ['1', pd.NA])
-    assert (list(result['claim_ref']) == ['42', '9'])
-    assert (list(result['name']) == ['a', 'b'])
-
-def test_integer_text_passes_an_already_integer_column_through():
-    dataset = Dataset.from_pandas(pd.DataFrame({'id': [10, 20, 30]}))
-    result = IntegerText('id')(dataset).to_pandas()
-    assert (list(result['id']) == ['10', '20', '30'])
-
-def test_integer_text_raises_on_a_fractional_value():
-    dataset = Dataset.from_pandas(pd.DataFrame({'amount': [1.5, 2.0]}))
-    with pytest.raises(ValueError, match='non-integer'):
-        IntegerText('amount')(dataset)
-
-def test_integer_text_raises_on_missing_column():
-    dataset = Dataset.from_pandas(pd.DataFrame({'a': [1.0]}))
-    with pytest.raises(ValueError, match='nope'):
-        IntegerText(['a', 'nope'])(dataset)
-
-def test_integer_text_on_empty_feed_returns_empty_feed():
-    empty = Dataset.from_pandas(pd.DataFrame({'account': pd.Series([], dtype='float64')}))
-    result = IntegerText('account')(empty)
-    assert isinstance(result, Dataset)
-    assert (len(result) == 0)

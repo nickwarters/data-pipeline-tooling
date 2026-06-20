@@ -572,7 +572,7 @@ python -m cli run pipelines/selection /tmp/demo --run-date 2026-05-29
 ```
 
 ### `Orchestrator` — scheduled PipelineSets
-`Orchestrator` (`framework.run.orchestration`) sits above `PipelineRunner`. It is
+`Orchestrator` (`tools.orchestration`) sits above `PipelineRunner`. It is
 not a builder-level `Pipeline`; it decides which registered domain Pipelines are
 due for one run date, invokes them through the runner, and records scheduling
 decisions separately from execution history:
@@ -628,7 +628,7 @@ replace its schedule timing, or override freshness windows for operations
 without changing the registered pipeline code.
 
 ### `ForEach` — independent per-item builder runs
-`ForEach` (`framework.run.orchestration`) is the small runnable orchestration
+`ForEach` (`tools.orchestration`) is the small runnable orchestration
 primitive for repeated runs where each item must stay independent but use the
 same recipe. It sits outside the `Pipeline` builder so the builder keeps its
 single Reader/single `Dataset`/single Writer contract:
@@ -856,7 +856,7 @@ builder, narrowing the CasePool with the Selection processors and `Stamp` into
 the gold `SelectionPool`.
 
 ### `RetryPolicy` / `RetryingReader` / `RetryingWriter` — retry at the I/O edge
-`RetryPolicy(attempts, retry_on, backoff_seconds=…)` (`framework.shared.retry`) encodes
+`RetryPolicy(attempts, retry_on, backoff_seconds=…)` (`tools.retry`) encodes
 a retry decision as an **allowlist** of transient exception types; only those are
 retried, so schema-validation and configuration errors abort immediately.
 `RetryingReader(inner, policy)` / `RetryingWriter(inner, policy)` apply it at the
