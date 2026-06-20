@@ -199,7 +199,7 @@ class ManualOnly(Schedule):
 class ScheduledPipeline:
     """A scheduled reference to a registered domain Pipeline."""
 
-    case_type: str
+    subject: str
     pipeline: str
     schedule: Schedule
     depends_on: tuple[FreshnessRequirement, ...] = ()
@@ -207,13 +207,13 @@ class ScheduledPipeline:
 
     def __init__(
         self,
-        case_type: str,
+        subject: str,
         pipeline: str,
         schedule: Schedule,
         depends_on: Iterable[FreshnessRequirement] = (),
         enabled: bool = True,
     ) -> None:
-        object.__setattr__(self, "case_type", case_type)
+        object.__setattr__(self, "subject", subject)
         object.__setattr__(self, "pipeline", pipeline)
         object.__setattr__(self, "schedule", schedule)
         object.__setattr__(self, "depends_on", tuple(depends_on))
@@ -239,7 +239,7 @@ class OrchestrationDecision:
     orchestration_run_id: str
     item_key: str
     set_name: str
-    case_type: str
+    subject: str
     pipeline: str
     run_date: dt.date
     status: str
@@ -275,7 +275,7 @@ class OrchestrationStore:
                 orchestration_run_id TEXT NOT NULL,
                 item_key TEXT NOT NULL,
                 set_name TEXT NOT NULL,
-                case_type TEXT NOT NULL,
+                subject TEXT NOT NULL,
                 pipeline TEXT NOT NULL,
                 run_date TEXT NOT NULL,
                 status TEXT NOT NULL,
@@ -292,7 +292,7 @@ class OrchestrationStore:
             con.execute(
                 """
                 INSERT INTO orchestration_records (
-                    timestamp, orchestration_run_id, item_key, set_name, case_type,
+                    timestamp, orchestration_run_id, item_key, set_name, subject,
                     pipeline, run_date, status, reason, duration
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -301,7 +301,7 @@ class OrchestrationStore:
                     decision.orchestration_run_id,
                     decision.item_key,
                     decision.set_name,
-                    decision.case_type,
+                    decision.subject,
                     decision.pipeline,
                     decision.run_date.isoformat(),
                     decision.status,
@@ -318,7 +318,7 @@ class OrchestrationStore:
         try:
             cur = con.execute(
                 """
-                SELECT timestamp, orchestration_run_id, item_key, set_name, case_type,
+                SELECT timestamp, orchestration_run_id, item_key, set_name, subject,
                        pipeline, run_date, status, reason, duration
                 FROM orchestration_records
                 ORDER BY timestamp, rowid
@@ -385,10 +385,10 @@ class Orchestrator:
                 decisions.append(decision)
                 store.record(decision)
                 if decision.status == "failed":
-                    terminal[(item.case_type, item.pipeline)] = "failed"
-                    set_failed.add((item.case_type, item.pipeline))
+                    terminal[(item.subject, item.pipeline)] = "failed"
+                    set_failed.add((item.subject, item.pipeline))
                 elif decision.status in {"succeeded", "blocked"}:
-                    terminal[(item.case_type, item.pipeline)] = decision.status
+                    terminal[(item.subject, item.pipeline)] = decision.status
 
         return OrchestrationPassResult(run_id, tuple(decisions))
 
@@ -461,7 +461,7 @@ class Orchestrator:
                 "blocked",
                 f"blocked by failed upstream {blocked_by}",
             )
-        existing = terminal.get((item.case_type, item.pipeline))
+        existing = terminal.get((item.subject, item.pipeline))
         if existing in {"failed", "blocked", "succeeded"}:
             return _decision(
                 orchestration_run_id,
@@ -475,7 +475,7 @@ class Orchestrator:
         started = time.perf_counter()
         try:
             self._runner.run(
-                item.case_type,
+                item.subject,
                 item.pipeline,
                 base_dir,
                 run_date=run_date,
@@ -521,9 +521,9 @@ class Orchestrator:
         set_failed: set[tuple[str, str]],
     ) -> str | None:
         for dependency in item.depends_on:
-            upstream_case_type = dependency.upstream_case_type or item.case_type
-            if (upstream_case_type, dependency.upstream_pipeline) in set_failed:
-                return f"{upstream_case_type}/{dependency.upstream_pipeline}"
+            upstream_subject = dependency.upstream_subject or item.subject
+            if (upstream_subject, dependency.upstream_pipeline) in set_failed:
+                return f"{upstream_subject}/{dependency.upstream_pipeline}"
         return None
 
     def _all_due_terminal(self, result: OrchestrationPassResult) -> bool:
@@ -541,12 +541,12 @@ class Orchestrator:
         if not self._overrides:
             return
         declared = {
-            (pipeline_set.name, item.case_type, item.pipeline)
+            (pipeline_set.name, item.subject, item.pipeline)
             for pipeline_set in self._sets
             for item in pipeline_set.pipelines
         }
         for raw in _override_items(self._overrides):
-            key = (raw["set"], raw["case_type"], raw["pipeline"])
+            key = (raw["set"], raw["subject"], raw["pipeline"])
             if key not in declared:
                 raise ValueError(
                     "orchestration override references unknown scheduled pipeline "
@@ -557,7 +557,7 @@ class Orchestrator:
         self, set_name: str, item: ScheduledPipeline
     ) -> ScheduledPipeline:
         override = _find_override(
-            self._overrides, set_name, item.case_type, item.pipeline
+            self._overrides, set_name, item.subject, item.pipeline
         )
         if override is None:
             return item
@@ -593,7 +593,7 @@ def _decision(
         orchestration_run_id=orchestration_run_id,
         item_key=item_key,
         set_name=set_name,
-        case_type=item.case_type,
+        subject=item.subject,
         pipeline=item.pipeline,
         run_date=run_date,
         status=status,
@@ -603,7 +603,7 @@ def _decision(
 
 
 def _item_key(set_name: str, item: ScheduledPipeline, run_date: dt.date) -> str:
-    return f"{set_name}/{item.case_type}/{item.pipeline}/{run_date.isoformat()}"
+    return f"{set_name}/{item.subject}/{item.pipeline}/{run_date.isoformat()}"
 
 
 def _freshness_days(item: ScheduledPipeline) -> int:
@@ -615,12 +615,12 @@ def _override_items(overrides: dict) -> list[dict]:
 
 
 def _find_override(
-    overrides: dict, set_name: str, case_type: str, pipeline: str
+    overrides: dict, set_name: str, subject: str, pipeline: str
 ) -> dict | None:
     for item in _override_items(overrides):
         if (
             item.get("set") == set_name
-            and item.get("case_type") == case_type
+            and item.get("subject") == subject
             and item.get("pipeline") == pipeline
         ):
             return item
@@ -664,7 +664,7 @@ def _item_context(
         run_log=parent_context.run_log,
         run_registry=parent_context.run_registry,
         base_dir=parent_context.base_dir,
-        case_type=parent_context.case_type,
+        subject=parent_context.subject,
         pipeline=parent_context.pipeline,
         freshness_days=parent_context.freshness_days,
     )

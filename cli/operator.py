@@ -8,7 +8,7 @@ stays local SQLite + JSONL, with no external services.
 Run from the repository root so the import-only ``framework`` package resolves::
 
     python -m cli run pipelines/orders /data --run-date 2026-05-29
-    python -m cli status /data --case-type cases
+    python -m cli status /data --subject cases
     python -m cli runs /data --pipeline cases/ingest --limit 5
     python -m cli log /data cases --run-id <execution-id>
 
@@ -161,7 +161,7 @@ def _orchestrate(args: argparse.Namespace) -> int:
     for decision in decisions:
         line = (
             f"{decision.run_date.isoformat()}  {decision.set_name}  "
-            f"{decision.case_type}/{decision.pipeline}  {decision.status}"
+            f"{decision.subject}/{decision.pipeline}  {decision.status}"
         )
         if decision.reason:
             line += f"  {decision.reason}"
@@ -201,7 +201,7 @@ def _format_record(record: dict) -> str:
 
 
 def _log(args: argparse.Namespace) -> int:
-    path = Path(args.base_dir) / _RUNS_RELPATH / f"{args.case_type}.log"
+    path = Path(args.base_dir) / _RUNS_RELPATH / f"{args.subject}.log"
     if not path.exists():
         print(f"no run log at {path}", file=sys.stderr)
         return 1
@@ -240,8 +240,8 @@ def _status(args: argparse.Namespace) -> int:
         latest = summaries[-1:] if summaries else []
     else:
         latest = registry.latest_run_per_pipeline()
-        if args.case_type is not None:
-            prefix = f"{args.case_type}/"
+        if args.subject is not None:
+            prefix = f"{args.subject}/"
             latest = [r for r in latest if (r.get("pipeline") or "").startswith(prefix)]
     if not latest:
         print("no matching runs")
@@ -308,14 +308,14 @@ def register(sub) -> None:
     status.add_argument("base_dir")
     status.add_argument("--pipeline", help="one pipeline label, e.g. cases/ingest")
     status.add_argument(
-        "--case-type", help="narrow to a subject's pipelines, e.g. cases"
+        "--subject", help="narrow to a subject's pipelines, e.g. cases"
     )
     status.set_defaults(func=_status)
 
     log = sub.add_parser("log", help="inspect/summarize a run log file")
     log.add_argument("base_dir")
     log.add_argument(
-        "case_type", help="the subject whose _runs/<case_type>.log to read"
+        "subject", help="the subject whose _runs/<subject>.log to read"
     )
     log.add_argument(
         "--run-id", help="only records whose execution id starts with this"
