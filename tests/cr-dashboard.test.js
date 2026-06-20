@@ -23,10 +23,14 @@ class StubEl {
     this.eligibleCaseTypes = [];
     /** @type {string[]} */
     this.ownedCaseTypes = [];
+    this._attrs = {};
+    this.cases = null;
   }
   replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
   appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
   append(/** @type {StubEl[]} */ ...cs) { this._children.push(...cs); }
+  setAttribute(/** @type {string} */ k, /** @type {string} */ v) { this._attrs[k] = v; }
+  getAttribute(/** @type {string} */ k) { return this._attrs[k] ?? null; }
   addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
     (this._listeners[t] ??= []).push(h);
   }

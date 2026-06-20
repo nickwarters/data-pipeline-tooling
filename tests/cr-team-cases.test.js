@@ -15,7 +15,12 @@ class StubEl {
     this.cases = null;
     /** @type {any} */
     this.toolbar = null;
-    connectedCallbackCalled: false;
+    this.connectedCallbackCalled = false;
+    this.client = null;
+    this.currentUser = null;
+    this.eligibleCaseTypes = [];
+    this.queryString = "";
+    this.currentUserId = "";
   }
   replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
   appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }

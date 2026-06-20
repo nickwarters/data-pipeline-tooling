@@ -1,5 +1,7 @@
 // @ts-check
-import { CRElement } from '../components/cr-element.js';
+import { ReactiveElement } from '../components/reactive-element.js';
+import { signal } from '../lib/signal.js';
+import { h } from '../lib/html.js';
 import { fetchReviewerTeamCases } from '../services/reviewer-team-fetcher.js';
 import { aggregateReviewerTeamData } from '../evaluators/reviewer-team-aggregator.js';
 import { computeTimeWindows } from '../evaluators/time-windows.js';
@@ -7,7 +9,7 @@ import { computeTimeWindows } from '../evaluators/time-windows.js';
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
 
-export class CRReviewerTeamReport extends CRElement {
+export class CRReviewerTeamReport extends ReactiveElement {
   constructor() {
     super();
     /** @type {SharePointClient|null} */
@@ -16,29 +18,43 @@ export class CRReviewerTeamReport extends CRElement {
     this.currentUser = null;
     /** @type {string[]} */
     this.eligibleCaseTypes = [];
+
+    /** @type {import('../lib/signal.js').Signal<import('../evaluators/reviewer-team-aggregator.js').AggregateResult | null>} */
+    this._data = signal(null);
+    /** @type {import('../lib/signal.js').Signal<import('../evaluators/time-windows.js').TimeWindows | null>} */
+    this._windows = signal(null);
   }
 
   async connectedCallback() {
-    const h1 = document.createElement('h1');
-    h1.textContent = 'Reviewer Team Performance';
+    super.connectedCallback();
+    await this._fetchData();
+  }
 
-    const back = document.createElement('a');
-    back.setAttribute('href', '#/reports');
-    back.textContent = '← Back to Reports';
-
-    if (!this.client || !this.currentUser) {
-      this.replaceChildren(h1, back);
-      return;
-    }
-
+  async _fetchData() {
+    if (!this.client || !this.currentUser) return;
     const cases = await fetchReviewerTeamCases(this.client, this.currentUser.id, this.eligibleCaseTypes);
     const windows = computeTimeWindows(new Date());
-    const data = aggregateReviewerTeamData(cases, windows);
+    this._windows.set(windows);
+    this._data.set(aggregateReviewerTeamData(cases, windows));
+  }
 
-    const kpiSection = this._renderKpiSection(data, windows);
-    const breakdownSection = this._renderBreakdownSection(data, windows);
+  render() {
+    const h1 = h('h1', {}, 'Reviewer Team Performance');
+    const back = h('a', { href: '#/reports' }, '← Back to Reports');
 
-    this.replaceChildren(h1, back, kpiSection, breakdownSection);
+    const data = this._data.get();
+    const windows = this._windows.get();
+
+    if (!data || !windows) {
+      return [h1, back];
+    }
+
+    return [
+      h1,
+      back,
+      this._renderKpiSection(data, windows),
+      this._renderBreakdownSection(data, windows)
+    ];
   }
 
   /**
@@ -46,9 +62,6 @@ export class CRReviewerTeamReport extends CRElement {
    * @param {import('../evaluators/time-windows.js').TimeWindows} windows
    */
   _renderKpiSection(data, windows) {
-    const section = document.createElement('div');
-    section.className = 'cr-kpi-section';
-
     const since7 = windows.sevenDaysAgo.toISOString().slice(0, 10);
     const since30 = windows.thirtyDaysAgo.toISOString().slice(0, 10);
     const today = new Date().toISOString().slice(0, 10);
@@ -60,23 +73,12 @@ export class CRReviewerTeamReport extends CRElement {
       { label: 'Overdue', value: data.overdue, href: `#/team-cases?manager=me&role=reviewer-manager&status=overdue` },
     ];
 
-    for (const { label, value, href } of tiles) {
-      const tile = document.createElement('div');
-      tile.className = 'cr-kpi-tile';
-
-      const count = document.createElement('a');
-      count.setAttribute('href', href);
-      count.textContent = String(value);
-
-      const lbl = document.createElement('span');
-      lbl.textContent = label;
-
-      tile.appendChild(count);
-      tile.appendChild(lbl);
-      section.appendChild(tile);
-    }
-
-    return section;
+    return h('div', { className: 'cr-kpi-section' },
+      ...tiles.map(t => h('div', { className: 'cr-kpi-tile' },
+        h('a', { href: t.href }, String(t.value)),
+        h('span', {}, t.label)
+      ))
+    );
   }
 
   /**
@@ -84,39 +86,25 @@ export class CRReviewerTeamReport extends CRElement {
    * @param {import('../evaluators/time-windows.js').TimeWindows} windows
    */
   _renderBreakdownSection(data, windows) {
-    const section = document.createElement('div');
-    section.className = 'cr-breakdown-section';
-
     const since7 = windows.sevenDaysAgo.toISOString().slice(0, 10);
     const since30 = windows.thirtyDaysAgo.toISOString().slice(0, 10);
     const today = new Date().toISOString().slice(0, 10);
 
-    for (const [caseType, counts] of Object.entries(data.byType)) {
-      const row = document.createElement('div');
-      row.className = 'cr-breakdown-row';
+    return h('div', { className: 'cr-breakdown-section' },
+      ...Object.entries(data.byType).map(([caseType, counts]) => {
+        const cells = [
+          { value: counts.completedLast7d, href: `#/team-cases?manager=me&role=reviewer-manager&caseType=${caseType}&status=completed&completedSince=${since7}&completedUntil=${today}` },
+          { value: counts.completedLast30d, href: `#/team-cases?manager=me&role=reviewer-manager&caseType=${caseType}&status=completed&completedSince=${since30}&completedUntil=${today}` },
+          { value: counts.outstanding, href: `#/team-cases?manager=me&role=reviewer-manager&caseType=${caseType}&status=outstanding` },
+          { value: counts.overdue, href: `#/team-cases?manager=me&role=reviewer-manager&caseType=${caseType}&status=overdue` },
+        ];
 
-      const name = document.createElement('span');
-      name.textContent = caseType;
-      row.appendChild(name);
-
-      const cells = [
-        { value: counts.completedLast7d, href: `#/team-cases?manager=me&role=reviewer-manager&caseType=${caseType}&status=completed&completedSince=${since7}&completedUntil=${today}` },
-        { value: counts.completedLast30d, href: `#/team-cases?manager=me&role=reviewer-manager&caseType=${caseType}&status=completed&completedSince=${since30}&completedUntil=${today}` },
-        { value: counts.outstanding, href: `#/team-cases?manager=me&role=reviewer-manager&caseType=${caseType}&status=outstanding` },
-        { value: counts.overdue, href: `#/team-cases?manager=me&role=reviewer-manager&caseType=${caseType}&status=overdue` },
-      ];
-
-      for (const { value, href } of cells) {
-        const cell = document.createElement('a');
-        cell.setAttribute('href', href);
-        cell.textContent = String(value);
-        row.appendChild(cell);
-      }
-
-      section.appendChild(row);
-    }
-
-    return section;
+        return h('div', { className: 'cr-breakdown-row' },
+          h('span', {}, caseType),
+          ...cells.map(c => h('a', { href: c.href }, String(c.value)))
+        );
+      })
+    );
   }
 }
 

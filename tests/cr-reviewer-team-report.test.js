@@ -18,6 +18,8 @@ class StubEl {
     this.currentUser = null;
     /** @type {string[]} */
     this.eligibleCaseTypes = [];
+    this.cases = null;
+    this.currentUserId = "";
   }
   replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
   appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }

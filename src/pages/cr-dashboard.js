@@ -1,15 +1,18 @@
 // @ts-check
-import { CRElement } from '../components/cr-element.js';
+import { ReactiveElement } from '../components/reactive-element.js';
+import { signal } from '../lib/signal.js';
+import { h } from '../lib/html.js';
 import '../components/cr-case-table.js';
+import '../components/cr-allocation.js';
+import '../components/cr-owner-summary.js';
 import './cr-responsible-party-dashboard.js';
 import { isOverdue } from '../evaluators/overdue-evaluator.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
-/** @typedef {import('../components/cr-case-table.js').CRCaseTable} CRCaseTable */
 
-export class CRDashboard extends CRElement {
+export class CRDashboard extends ReactiveElement {
   constructor() {
     super();
     /** @type {SharePointClient | null} */
@@ -20,71 +23,66 @@ export class CRDashboard extends CRElement {
     this.capabilities = { isReviewer: false, ownedCaseTypes: [], isResponsibleParty: false, isReviewerManager: false, isResponsiblePartyManager: false, isMaintainer: false, isQaReviewer: false, isVisitor: false };
     /** @type {string[]} */
     this.eligibleCaseTypes = [];
+
+    /** @type {import('../lib/signal.js').Signal<CaseRow[]>} */
+    this._cases = signal([]);
   }
 
   async connectedCallback() {
+    super.connectedCallback();
+    await this._fetchData();
+  }
+
+  async _fetchData() {
     if (!this.client) return;
-    /** @type {CaseRow[]} */
-    let cases = [];
     if (this.capabilities.isReviewer) {
       const raw = await this.client.listCases({
         status: 'In-progress',
         assignedReviewer: this.currentUserId,
       });
-      cases = raw.map(c => ({ ...c, overdue: isOverdue(c) }));
+      this._cases.set(raw.map(c => ({ ...c, overdue: isOverdue(c) })));
     }
-    this._render(cases);
   }
 
-  /** @param {CaseRow[]} cases */
-  _render(cases) {
-    /** @type {Element[]} */
+  render() {
     const children = [];
 
     if (this.capabilities.isReviewer) {
-      const h1 = document.createElement('h1');
-      h1.textContent = 'Outstanding Cases';
-      children.push(h1);
+      children.push(h('h1', {}, 'Outstanding Cases'));
 
-      const caseTable = /** @type {CRCaseTable} */ (document.createElement('cr-case-table'));
-      caseTable.cases = cases;
-      caseTable.addEventListener('cr-case-open', (/** @type {any} */ e) => {
-        location.hash = `#/case/${e.detail.caseId}`;
-      });
-      children.push(caseTable);
+      children.push(h('cr-case-table', {
+        cases: this._cases.get(),
+        'oncr-case-open': (/** @type {any} */ e) => {
+          location.hash = `#/case/${e.detail.caseId}`;
+        }
+      }));
 
-      const allocationEl = /** @type {import('../components/cr-allocation.js').CRAllocation} */ (
-        document.createElement('cr-allocation')
-      );
-      allocationEl.client = this.client;
-      allocationEl.currentUserId = this.currentUserId;
-      allocationEl.eligibleCaseTypes = this.eligibleCaseTypes;
-      allocationEl.addEventListener('cr-allocated', () => this.connectedCallback());
-      children.push(allocationEl);
+      children.push(h('cr-allocation', {
+        client: this.client,
+        currentUserId: this.currentUserId,
+        eligibleCaseTypes: this.eligibleCaseTypes,
+        'oncr-allocated': () => this._fetchData()
+      }));
     }
 
     if (this.capabilities.ownedCaseTypes.length > 0) {
-      const ownerSection = /** @type {import('../components/cr-owner-summary.js').CROwnerSummary} */ (
-        document.createElement('cr-owner-summary')
-      );
-      ownerSection.client = this.client;
-      ownerSection.ownedCaseTypes = this.capabilities.ownedCaseTypes;
-      children.push(ownerSection);
+      children.push(h('cr-owner-summary', {
+        client: this.client,
+        ownedCaseTypes: this.capabilities.ownedCaseTypes
+      }));
     }
 
     if (this.capabilities.isResponsibleParty) {
-      const rpEl = /** @type {import('./cr-responsible-party-dashboard.js').CRResponsiblePartyDashboard} */ (
-        document.createElement('cr-responsible-party-dashboard')
-      );
-      rpEl.client = this.client;
-      rpEl.currentUserId = this.currentUserId;
-      rpEl.addEventListener('cr-open-conversation', (/** @type {any} */ e) => {
-        location.hash = `#/conversation/${e.detail.caseId}`;
-      });
-      children.push(rpEl);
+      children.push(h('cr-responsible-party-dashboard', {
+        client: this.client,
+        currentUserId: this.currentUserId,
+        'oncr-open-conversation': (/** @type {any} */ e) => {
+          location.hash = `#/conversation/${e.detail.caseId}`;
+        }
+      }));
     }
 
-    this.replaceChildren(...children);
+    return children;
   }
 }
 

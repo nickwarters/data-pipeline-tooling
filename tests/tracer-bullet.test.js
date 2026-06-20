@@ -27,6 +27,11 @@ class StubEl {
     this._updateArgs = null;
     /** @type {Record<string, string>} */
     this.style = {};
+    this.client = null;
+    this.currentUserId = "";
+    this.eligibleCaseTypes = [];
+    this.ownedCaseTypes = [];
+    this.cases = null;
   }
   replaceChildren(/** @type {StubEl[]} */ ...cs) { this._children = cs; }
   appendChild(/** @type {StubEl} */ c) { this._children.push(c); return c; }
@@ -617,7 +622,7 @@ test('CRReviewerTeamReport: rendered page includes a back link to #/reports', ()
 
   /** @param {any} node @param {string} href @returns {boolean} */
   function hasLink(node, href) {
-    if (node._attrs?.href === href) return true;
+    if (node._attrs?.href === href || node.href === href) return true;
     return (node._children ?? []).some((/** @type {any} */ c) => hasLink(c, href));
   }
 
