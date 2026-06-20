@@ -10,8 +10,8 @@ from framework.io.readers import DatasetReader, SqliteReader
 from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun
 from framework.run.builder import Pipeline
-from framework.run.run_log import RunLog
-from framework.run.run_registry import RunRegistry
+from tools.observability.run_log import RunLog
+from tools.observability.run_registry import RunRegistry
 from framework.run.runner import (
     FreshnessError,
     FreshnessGuard,

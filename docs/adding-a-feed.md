@@ -210,7 +210,7 @@ from framework.core import RAW, SILVER
 from framework.io import Refresh, StoreCatalog
 from framework.run import Pipeline
 from framework.transform import Rename, SchemaCoercion
-from framework.validate import ColumnValidator, SchemaValidator
+from framework.core import ColumnValidator, SchemaValidator
 
 store = StoreCatalog("/path/to/share").store("cases")
 (
@@ -329,7 +329,7 @@ about medallion layers or load rules:
 from framework.core import RAW
 from framework.io import ExcelReader, Refresh, StoreCatalog
 from framework.run import Pipeline
-from framework.validate import ColumnValidator, SchemaDriftValidator
+from framework.core import ColumnValidator, SchemaDriftValidator
 
 store = StoreCatalog("/path/to/share").store("cases")
 landed = (
@@ -400,7 +400,7 @@ fetch with an empty Dataset. Swap in a different `RemoteRunner` (keyword-only
 `runner=`) to add the real exec/transfer behind the same interface.
 
 ```python
-from framework.io import SasReader
+from tools.integrations.remote import SasReader
 
 # Reads cases.csv already landed in /data/landing/cases (stubbed transfer).
 reader = SasReader("run_cases.sas", "*.csv", "/data/landing/cases")
@@ -423,8 +423,8 @@ the `(site, list_name, auth)` config verbatim. Two fetchers ship:
   in-memory fake list backend — see `tests/framework/test_sharepoint_reader.py`.)
 
 ```python
-from framework.io import SharePointReader
-from framework.io.remote import LocalCsvFetcher  # internal seam: swappable fetcher
+from tools.integrations.remote import SharePointReader
+from tools.integrations.remote import LocalCsvFetcher  # internal seam: swappable fetcher
 
 # Offline: reads a local fixture in place of the SharePoint list.
 reader = SharePointReader(

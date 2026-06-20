@@ -201,7 +201,7 @@ def test_run_validation_failure_reports_clear_error(tmp_path, monkeypatch, capsy
     from types import SimpleNamespace
 
     from cli import operator
-    from framework.validate import ValidationError
+    from framework.core import ValidationError
 
     def boom(_context):
         raise ValidationError("row count 0 below required minimum 1")

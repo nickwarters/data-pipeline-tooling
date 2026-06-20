@@ -5,8 +5,8 @@ import pandas as pd
 import pytest
 
 from framework.core.dataset import Dataset
-from framework.validate import RowCheck, SchemaValidator, row_checks
-from framework.validate.validators import ValidationError
+from framework.core import RowCheck, SchemaValidator, row_checks
+from framework.core.validators import ValidationError
 
 
 @dataclass

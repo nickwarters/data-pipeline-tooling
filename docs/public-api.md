@@ -18,7 +18,7 @@ rule that follows from that split.
 from framework.core import Dataset, RAW, SILVER, GOLD
 from framework.io import CsvReader, StoreCatalog, Refresh
 from framework.transform import Filter, VectorizedFilter, SchemaCoercion
-from framework.validate import ColumnValidator, SchemaValidator, ValidationError
+from framework.core import ColumnValidator, SchemaValidator, ValidationError
 from framework.run import Pipeline, PipelineRunner, RunContext
 from framework.recipes import raw_to_silver, silver_to_gold
 from tools.retry import RetryPolicy, WorkingDayCalendar

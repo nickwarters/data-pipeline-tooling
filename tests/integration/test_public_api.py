@@ -64,7 +64,7 @@ def test_package_root_exposes_only_public_facade_modules():
     assert framework.core.Dataset is not None
     assert framework.io.CsvReader is not None
     assert framework.transform.Filter is not None
-    assert framework.validate.ColumnValidator is not None
+    assert framework.core.ColumnValidator is not None
     assert framework.run.Pipeline is not None
 
     unsupported_facade_names = {
@@ -104,8 +104,7 @@ def test_file_deliverable_writers_are_available_through_the_io_facade(tmp_path):
         ExcelWriter,
         JsonWriter,
         Refresh,
-        SharePointWriter,
-    )
+        )
     from framework.run import Pipeline
 
     target = tmp_path / "deliverables" / "cases.csv"
@@ -117,7 +116,7 @@ def test_file_deliverable_writers_are_available_through_the_io_facade(tmp_path):
     assert target.exists()
     assert ExcelWriter is not None
     assert JsonWriter is not None
-    assert SharePointWriter is not None
+    
 
 
 def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_path):
@@ -127,7 +126,7 @@ def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_p
     from framework.io import CsvReader, Refresh, Store
     from framework.run import Pipeline
     from framework.transform import Filter, Score, VectorizedDerive, VectorizedFilter
-    from framework.validate import ColumnValidator
+    from framework.core import ColumnValidator
 
     store = Store(tmp_path / "cases")
     p = Pipeline("cases")
@@ -151,7 +150,7 @@ def test_an_author_can_compose_ordered_stages_through_the_run_facade(tmp_path):
     from framework.io import CsvReader, Refresh, Store
     from framework.run import Pipeline
     from framework.transform import Score
-    from framework.validate import ColumnValidator
+    from framework.core import ColumnValidator
 
     store = Store(tmp_path / "cases")
     p = Pipeline("cases")
@@ -171,7 +170,7 @@ def test_internal_plumbing_stays_out_of_the_public_facades():
     # implementation detail (connection factory, layer-name helper, trace
     # mechanics, remote client seam, runner/run-log internals) — documented as
     # internal in docs/public-api.md and absent from every facade's __all__.
-    from framework import core, io, run, transform, validate
+    from framework import core, io, run, transform
 
     internal = {
         "connect",  # framework._internal.connection — connection factory seam
@@ -183,7 +182,7 @@ def test_internal_plumbing_stays_out_of_the_public_facades():
         "StepMetrics",  # framework.run.run_log — internal timing record
         "pipeline_label",  # framework.run.runner — internal label helper
     }
-    for facade in (core, io, transform, validate, run):
+    for facade in (core, io, transform, run):
         leaked = internal & set(facade.__all__)
         assert not leaked, f"{facade.__name__} leaks internal names: {leaked}"
         # __all__ is also honest: every advertised name resolves on the facade.

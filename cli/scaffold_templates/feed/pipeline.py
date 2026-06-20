@@ -42,7 +42,7 @@ from framework.io import (
     StoreCatalog,
 )
 from framework.run import Pipeline, RunContext
-from framework.validate import ColumnValidator, SchemaValidator
+from framework.core import ColumnValidator, SchemaValidator
 
 from .schema import MyfeedRow
 

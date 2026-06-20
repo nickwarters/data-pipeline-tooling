@@ -16,7 +16,7 @@ from framework.core.protocols import Reader, Validator, Writer
 from framework.core.dataset import Dataset
 from framework.run.execution import PipelineExecution
 from framework.run.run_context import RunContext
-from framework.run.run_log import NULL_RUN_LOG, RunLog
+from tools.observability.run_log import NULL_RUN_LOG, RunLog
 from framework.core import PipelineError
 
 log = logging.getLogger(__name__)
@@ -149,7 +149,7 @@ class ValidateNode(Node):
                 self.warn_hits.append(msg)
                 session.warn_hits.append(msg)
             else:
-                from framework.validate.validators import ValidationError
+                from framework.core.validators import ValidationError
                 if isinstance(exc, ValidationError):
                     raise ValidationError(f"{session.pipeline_name} {self.name} failed: {exc}") from exc
                 raise

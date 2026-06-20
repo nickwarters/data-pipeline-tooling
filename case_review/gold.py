@@ -16,7 +16,7 @@ from framework.io import Store
 from framework.core import GOLD, SILVER
 from framework.run import Pipeline, RunLog
 from framework.transform import DeriveKey, LatestPerKey, Unpivot
-from framework.validate import UniqueValidator
+from framework.core import UniqueValidator
 from framework.io.strategy import Refresh
 
 # A Case is identified by its ``case_id`` everywhere downstream. The generic

@@ -17,7 +17,7 @@ without depending on each other.
 
 Like the value-level rules it runs, the check is **engine-confined**: it reaches
 the backing frame via ``to_pandas()`` exactly as a Reader/Writer/processor does.
-Unlike the structural checks in :mod:`framework.validate.validators` (which read
+Unlike the structural checks in :mod:`framework.core.validators` (which read
 only the dataset's engine-agnostic shape), it inspects column *dtypes* and
 *values*.
 """
@@ -39,8 +39,8 @@ from framework._internal.schema import (
     _unwrap,
 )
 from framework.core.dataset import Dataset
-from framework.validate.validators import ValidationError
-from framework.validate.value_rules import NonNull, Nullable
+from framework.core.validators import ValidationError
+from framework.core.value_rules import NonNull, Nullable
 
 
 def _declared_nullability(schema: type) -> dict[str, bool]:

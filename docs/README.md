@@ -282,7 +282,7 @@ python -m cli scaffold --case-type claims  # + case_type.py; source -> raw -> si
 from framework.core import RAW
 from framework.io import ExcelReader, Refresh, StoreCatalog
 from framework.run import Pipeline
-from framework.validate import ColumnValidator  # optional input gate
+from framework.core import ColumnValidator  # optional input gate
 
 store = StoreCatalog("/share").store("cases")       # the "cases" subject
 (

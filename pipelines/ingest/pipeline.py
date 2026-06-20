@@ -29,7 +29,7 @@ from framework.core import RAW, SILVER, PipelineError, format_failure
 from framework.io import AccumulateByRun, CsvReader, StoreCatalog
 from framework.run import Pipeline, RunContext
 from framework.transform import Filter, SchemaCoercion
-from framework.validate import SchemaValidator
+from framework.core import SchemaValidator
 
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "activity_cases.csv"
 

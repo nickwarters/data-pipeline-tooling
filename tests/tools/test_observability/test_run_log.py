@@ -15,8 +15,8 @@ import pytest
 
 from framework.core.dataset import Dataset
 from framework.run.builder import Pipeline
-from framework.run.run_log import RunLog
-from framework.validate.validators import ColumnValidator, ValidationError
+from tools.observability.run_log import RunLog
+from framework.core.validators import ColumnValidator, ValidationError
 
 
 class RecordingReader:
@@ -147,7 +147,7 @@ def test_console_output_is_human_readable_not_raw_json(tmp_path, caplog):
     r = p.read(reader, name="read")
     p.write(CapturingWriter(), r, name="write")
 
-    with caplog.at_level(logging.INFO, logger="framework.run.run_log"):
+    with caplog.at_level(logging.INFO, logger="tools.observability.run_log"):
         p.run()
 
     read_lines = [m for m in caplog.messages if "read" in m and "cases" in m]

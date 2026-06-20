@@ -208,7 +208,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Annotated
 
-from framework.validate import NonNull, Nullable, Pattern, Length, Unique, OneOf
+from framework.core import NonNull, Nullable, Pattern, Length, Unique, OneOf
 
 @dataclass
 class CaseA:
@@ -311,7 +311,7 @@ from dataclasses import dataclass
 from datetime import date
 
 import pandas as pd
-from framework.validate import RowCheck, row_checks
+from framework.core import RowCheck, row_checks
 
 
 def opened_before_closed(row) -> str | None:

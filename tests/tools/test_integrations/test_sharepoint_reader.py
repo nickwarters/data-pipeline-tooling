@@ -4,14 +4,15 @@ import pandas as pd
 import pytest
 
 from framework.core.dataset import Dataset
-from framework.io.readers import CsvReader, SharePointReader, SqliteReader
-from framework.io.remote import LocalCsvFetcher
+from framework.io.readers import CsvReader, SqliteReader
+from tools.integrations.remote import SharePointReader
+from tools.integrations.remote import LocalCsvFetcher
 from framework.io.strategy import AccumulateByRun, Refresh
 from framework.io.writers import (
     AccumulateByRunWriter,
-    SharePointWriter,
     SqliteTruncateReloadWriter,
 )
+from tools.integrations.remote import SharePointWriter
 from framework.run.builder import Pipeline
 
 

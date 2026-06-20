@@ -1,7 +1,7 @@
 """Shared schema introspection: dataclass annotations → columns / types / rules.
 
 The value-rule-independent core both schema adapters derive from — the
-:class:`~framework.validate.schema.SchemaValidator` (which *checks*) and the
+:class:`~framework.core.schema.SchemaValidator` (which *checks*) and the
 :class:`~framework.transform.coercion.SchemaCoercion` (which *coerces*). It owns
 the one Python-type ↔ pandas-dtype mapping and the dataclass-annotation reading,
 so the rest of the system keeps naming only Python types and the two adapters
@@ -9,7 +9,7 @@ stay consistent without depending on each other.
 
 Private layout: pipelines and the case-review layer never import from here; the
 adapters reach it, and the value-rule classes live in
-:mod:`framework.validate.value_rules`.
+:mod:`framework.core.value_rules`.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ class ValueRule(Protocol):
 
     The protocol lives here, with the annotation reading that selects rules; the
     concrete rules (``Pattern`` / ``Length`` / ``Unique`` / ``OneOf``) live in
-    :mod:`framework.validate.value_rules`.
+    :mod:`framework.core.value_rules`.
     """
 
     def check(self, series: "pd.Series") -> str | None:  # noqa: F821

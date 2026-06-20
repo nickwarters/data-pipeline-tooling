@@ -276,7 +276,7 @@ than silently skipping it.
 ### `Parse` — decode a packed text column through a callable
 
 ```python
-from framework.transform import Parse
+from tools.analytics.processors import Parse
 
 Parse("payload")                          # default parser: json.loads
 Parse(["payload", "meta"])                # several columns, same parser
@@ -492,7 +492,7 @@ Adviser × region; `Sample` takes no key and samples the feed as a whole.
 ### `TopNPerGroup` — ranked
 
 ```python
-from framework.transform import TopNPerGroup
+from tools.analytics.processors import TopNPerGroup
 
 # the single highest-scoring Case per adviser
 TopNPerGroup(key="adviser", by="score", n=1)
@@ -511,7 +511,7 @@ for separate domains — Selection narrowing vs current-state reduction.
 ### `SamplePerGroup` — seeded random, pure
 
 ```python
-from framework.transform import SamplePerGroup
+from tools.analytics.processors import SamplePerGroup
 
 SamplePerGroup(key="region", n=5, seed=7)   # 5 Cases per region, reproducibly
 ```
@@ -529,7 +529,7 @@ input and re-feeds the same seed to reproduce a past draw.
 ### `Sample` — ungrouped seeded random, pure
 
 ```python
-from framework.transform import Sample
+from tools.analytics.processors import Sample
 
 Sample(n=100, seed=7)          # 100 Cases drawn from the whole feed, reproducibly
 Sample(fraction=0.1, seed=7)   # 10% of the feed, scaling with the population

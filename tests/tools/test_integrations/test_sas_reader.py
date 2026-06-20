@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from framework.io.readers import SasReader
+from tools.integrations.remote import SasReader
 from framework.io.writers import SqliteTruncateReloadWriter
 from framework.run.builder import Pipeline
 

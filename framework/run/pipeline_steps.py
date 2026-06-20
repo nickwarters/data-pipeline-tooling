@@ -14,7 +14,7 @@ from framework._internal.describe import component_summary
 from framework.core.protocols import Severity, Validator
 from framework.core.dataset import Dataset
 from framework.run.execution import PipelineExecution
-from framework.run.run_log import StepMetrics
+from tools.observability.run_log import StepMetrics
 from framework.run.trace import RowTrace
 
 StepKind = Literal[
