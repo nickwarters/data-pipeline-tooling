@@ -47,6 +47,11 @@ class RunLog:
     def __init__(self, log_path: str | os.PathLike[str]) -> None:
         self._path = Path(log_path)
 
+    @property
+    def path(self) -> Path:
+        """The ``.log`` file this sink appends to (and the registry ingests)."""
+        return self._path
+
     def describe(self) -> str:
         return render(self, path=str(self._path))
 

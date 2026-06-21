@@ -123,6 +123,7 @@ def run_pipeline(
     logical_run_id: str | None = None,
     freshness_days: int = 0,
     freshness_guard: FreshnessGuard | None = None,
+    run_log: RunLog | None = None,
 ) -> object:
     """Execute one pipeline handler with freshness checks and run recording.
 
@@ -134,6 +135,11 @@ def run_pipeline(
     and the run log partitions under ``_runs/<subject>.log``; when ``None`` (the
     path-addressed case) both fall back to ``name``.
 
+    ``run_log`` lets a caller supply its own sink; when ``None`` (the default) one
+    is opened at ``<base_dir>/_runs/<subject or name>.log``. A supplied log placed
+    outside ``_runs/`` won't be picked up by the freshness sweep below, so prefer
+    the default unless you have a reason to redirect it.
+
     The shared ``RunRegistry`` is caught up from *every* ``_runs/*.log`` before
     freshness runs, so a declared upstream's history is visible no matter which
     log file partitioned it. ``ingest`` is incremental and idempotent, so the
@@ -142,9 +148,10 @@ def run_pipeline(
     guard = freshness_guard or FreshnessGuard()
     root = Path(base_dir)
     runs_dir = root / "_runs"
-    run_log_path = runs_dir / f"{subject or name}.log"
     registry_path = root / "_registry" / "runs.db"
-    run_log = RunLog(run_log_path)
+    if run_log is None:
+        run_log = RunLog(runs_dir / f"{subject or name}.log")
+    run_log_path = run_log.path
     run_registry = RunRegistry(registry_path)
     if runs_dir.exists():
         for log_file in sorted(runs_dir.glob("*.log")):
@@ -201,6 +208,7 @@ def run_pipeline(
 class _RegisteredPipeline:
     handler: Handler
     freshness: tuple[FreshnessRequirement, ...] = field(default_factory=tuple)
+    run_log: RunLog | None = None
 
 
 class PipelineRunner:
@@ -217,8 +225,16 @@ class PipelineRunner:
         handler: Handler,
         *,
         freshness: tuple[FreshnessRequirement, ...] = (),
+        run_log: RunLog | None = None,
     ) -> None:
-        self._registered[(subject, pipeline)] = _RegisteredPipeline(handler, freshness)
+        """Register a domain Pipeline under ``(subject, pipeline)``.
+
+        ``run_log`` optionally supplies the sink the run records to; when omitted
+        (the default) the run opens one at ``<base_dir>/_runs/<subject>.log``.
+        """
+        self._registered[(subject, pipeline)] = _RegisteredPipeline(
+            handler, freshness, run_log
+        )
 
     def run(
         self,
@@ -246,6 +262,7 @@ class PipelineRunner:
             logical_run_id=logical_run_id,
             freshness_days=freshness_days,
             freshness_guard=self._freshness_guard,
+            run_log=registered.run_log,
         )
 
 

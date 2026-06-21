@@ -162,28 +162,33 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv[1:])
     base_dir = Path(args.base_dir) if args.base_dir else Path.cwd() / "data"
 
-    from framework.run.runner import PipelineRunner
+    from framework.run import PipelineRunner
 
     def handler(ctx: RunContext) -> Dataset:
         return run(ctx, describe=args.describe)
 
+    # A source feed has no medallion subject, so it registers under the empty
+    # subject and records to <base_dir>/_runs/myfeed.log. To redirect the run log
+    # elsewhere, pass run_log=RunLog(path) here; omit it for that default.
     runner = PipelineRunner()
     runner.register(
-        case_type="",
+        subject="",
         pipeline=FEED_NAME,
         handler=handler,
         freshness=UPSTREAMS,
     )
 
     try:
-        runner.run("", FEED_NAME, base_dir=base_dir)
+        result = runner.run("", FEED_NAME, base_dir=base_dir)
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1
 
-    # We don't have len(dataset) easily accessible anymore with the DAG without
-    # an explicit output, but we can change the message.
-    print(f"Refined source -> raw -> silver -> gold under {base_dir / FEED_NAME}")
+    rows = len(result) if isinstance(result, Dataset) else 0
+    print(
+        f"Refined {rows} rows source -> raw -> silver -> gold "
+        f"under {base_dir / FEED_NAME}"
+    )
     return 0
 
 
