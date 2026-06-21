@@ -17,3 +17,4 @@ status: accepted
 - Bad upstream data stops the pipeline; operators must fix the source or mark specific validators `warn` deliberately.
 - `warn` severity is the explicit escape hatch for known-tolerable conditions.
 - The JSONL schema (execution `run_id` + per-step metrics) is effectively the contract the future run-registry will consume.
+- **Scope of "atomic":** the all-or-nothing guarantee is **per writer, per layer DB** — one writer's delete+insert never half-wipes its own table. It does **not** bracket multiple writers into one publish unit. A run's intermediate artifacts (quarantine, explain/trace, checkpoint) are **independently committed evidence** that survives a later step's failure; the run log's `committed` marker shows which landed. See [amendment 03](0007-amendment-03-independent-artifact-commits.md). Hardening the per-writer transaction itself is #139 / #165.

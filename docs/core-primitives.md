@@ -777,6 +777,11 @@ then returns the bulk-tier `Dataset`.
 - A **warn**-severity failure logs a warning naming the problem and the run
   continues — the explicit, deliberate escape hatch for known-tolerable
   conditions.
+- Atomicity is **per writer**, not per run. A run's intermediate artifacts —
+  quarantine rejects, an explain/trace, a checkpoint — each commit through their
+  own writer as their node runs, so an abort *after* one of them leaves that
+  artifact on disk as **independently committed evidence** (ADR-0007 amd 03).
+  The run-log `committed` marker flags which steps durably wrote.
 
 The builder still makes **no** write decisions — no layer logic, no
 refresh-vs-accumulate branching; that all lives on the Writer. Because the

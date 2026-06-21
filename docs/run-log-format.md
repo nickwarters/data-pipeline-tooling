@@ -77,6 +77,7 @@ leads each line; the examples below elide it for width but it is always present:
 | `duration`  | float \| null       | Wall-clock seconds for the step/run. |
 | `errors`    | string[]            | Error messages when `status` is `error`; `[]` otherwise. |
 | `warn_hits` | string[]            | Warn-severity validator messages tolerated at this step; `[]` otherwise. |
+| `committed` | bool                | `true` on a step that durably wrote an artifact (`write`, `quarantine` with rejects, `explain`, `checkpoint`) — independently committed evidence that **survives a later step's failure** (ADR-0007 amd 03). Set only on the success record; `false` everywhere else. |
 
 ### Steps per run
 
@@ -126,6 +127,22 @@ ADR-0007), and `.run()` re-raises `ValidationError`:
 {"run_id": "…", "pipeline": "cases", "step": "read",         "status": "ok",    "rows_out": 1, "errors": [],                                                     "warn_hits": []}
 {"run_id": "…", "pipeline": "cases", "step": "pre-validate", "status": "error", "rows_in": 1,  "errors": ["cases pre-validate failed: missing required column(s): case_ref"], "warn_hits": []}
 {"run_id": "…", "pipeline": "cases", "step": "run",          "status": "error", "errors": ["cases pre-validate failed: missing required column(s): case_ref"], "warn_hits": []}
+```
+
+### Abort *after* a committed artifact
+
+A run that writes an artifact (quarantine reject, explain/trace, or checkpoint)
+and *then* fails leaves that artifact **on disk** — it is independently committed
+evidence, not rolled back ([ADR-0007 amd 03](adr/0007-amendment-03-independent-artifact-commits.md)).
+The `committed` marker is the operator's index of what already landed: the
+quarantine step below committed (`committed: true`) before the terminus `write`
+blew up, so the reject table is real even though the run is `error`.
+
+```json
+{"run_id": "…", "pipeline": "cases", "step": "read",       "status": "ok",    "rows_out": 4, "committed": false, "errors": []}
+{"run_id": "…", "pipeline": "cases", "step": "quarantine", "status": "ok",    "rows_out": 3, "rows_quarantined": 1, "committed": true,  "errors": []}
+{"run_id": "…", "pipeline": "cases", "step": "write",      "status": "error", "rows_in": 3,  "committed": false, "errors": ["terminus write failed: …"]}
+{"run_id": "…", "pipeline": "cases", "step": "run",        "status": "error", "committed": false, "errors": ["terminus write failed: …"]}
 ```
 
 ### Warn escape hatch
