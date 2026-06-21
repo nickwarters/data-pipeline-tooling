@@ -56,6 +56,7 @@ class RunRegistry:
                 rows_excluded    INTEGER,
                 duration         REAL,
                 errors           TEXT,
+                error_category   TEXT,
                 warn_hits        TEXT,
                 PRIMARY KEY (run_id, step, step_ordinal)
             )
@@ -183,8 +184,8 @@ class RunRegistry:
                     INSERT OR IGNORE INTO run_records (
                         timestamp, run_id, pipeline, step, step_ordinal, status,
                         rows_in, rows_out, rows_quarantined, rows_excluded,
-                        duration, errors, warn_hits
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        duration, errors, error_category, warn_hits
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         rec.get("timestamp"),
@@ -199,6 +200,7 @@ class RunRegistry:
                         rec.get("rows_excluded"),
                         rec.get("duration"),
                         json.dumps(rec.get("errors") or []),
+                        rec.get("error_category"),
                         json.dumps(rec.get("warn_hits") or []),
                     ),
                 )
