@@ -2,12 +2,21 @@
 
 A run fails **loudly and cleanly**: `.run()` is fail-fast and atomic, so a
 validation breach (or a coercion failure, or a stale upstream) aborts the run and
-rolls back its single SQLite transaction — **no layer is left half-written**
-([ADR-0007](adr/0007-fail-fast-atomic-runs-jsonl-observability.md)). The failure
-is recorded in the RunLog / RunRegistry with the failing step and message, and at
-a run boundary it surfaces as a short `framework.core.format_failure` block rather
-than a traceback. This guide is the operator loop from *that block* back to a
-green run.
+rolls back the failing writer's single SQLite transaction — **no layer is left
+half-written** ([ADR-0007](adr/0007-fail-fast-atomic-runs-jsonl-observability.md)).
+The failure is recorded in the RunLog / RunRegistry with the failing step and
+message, and at a run boundary it surfaces as a short
+`framework.core.format_failure` block rather than a traceback. This guide is the
+operator loop from *that block* back to a green run.
+
+> **Committed artifacts are not rolled back.** Atomicity is per writer, per layer
+> DB — it does not span a run's writers. If the run already wrote a **quarantine**
+> reject table, an **explain/trace**, or a **checkpoint** before it failed, those
+> artifacts are **independently committed evidence** and stay on disk
+> ([ADR-0007 amd 03](adr/0007-amendment-03-independent-artifact-commits.md)). The
+> run log's `committed` markers list exactly what landed — read them before you
+> re-drive so you know which evidence is already present (re-driving replaces an
+> artifact's rows under the same logical run id, so there is nothing to clean up).
 
 The worked example below is a **validation failure** (the common case), but the
 same loop applies to any expected `PipelineError`.
