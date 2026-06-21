@@ -373,7 +373,7 @@ SAS (no macOS runtime, and the cross-platform constraint forbids a Windows-only
 path) and SharePoint (**Subscription Edition on-prem**; the connection drops in
 from a separate repo). Their Readers keep the same `read() -> Dataset` shape,
 but the remote behaviour — shelling to `ssh`/`scp`, calling the SharePoint list
-API — sits behind a **swappable seam in `framework.io.remote` that is stubbed
+API — sits behind a **swappable seam in `tools.integrations.remote` that is stubbed
 today** (ADR-0004, ADR-0005). The on-prem SE auth (NTLM/Kerberos/REST — **not**
 Azure AD/Graph) is a client-seam concern designed once for both directions, and
 keeping it behind the seam keeps the cross-platform constraint (Windows + macOS)
@@ -459,8 +459,9 @@ SelectionPool and writes here (`SqliteReader(gold, "selection_pool")` →
 shared source, not a mid-run checkpoint (CONTEXT.md, #48):
 
 ```python
-from framework.io import Refresh, SharePointWriter, SqliteReader
+from framework.io import Refresh, SqliteReader
 from framework.run import Pipeline
+from tools.integrations.remote import SharePointWriter
 
 p = Pipeline("selection-deliverable")
 r = p.read(SqliteReader(gold_db, "selection_pool"), name="read")
@@ -473,7 +474,8 @@ p.run()
 ```
 
 ```python
-from framework.io import Refresh, SharePointWriter
+from framework.io import Refresh
+from tools.integrations.remote import SharePointWriter
 
 writer = SharePointWriter(
     "https://contoso.sharepoint.com/sites/cases",

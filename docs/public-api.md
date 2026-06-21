@@ -124,8 +124,8 @@ Moving data across the boundary.
 
 | Names | What |
 |-------|------|
-| `Reader`, `DatasetReader`, `CsvReader`, `GlobCsvReader`, `ExcelReader`, `SqliteReader`, `SasReader`, `SharePointReader` | The `read() -> Dataset` port and its concrete sources. |
-| `Writer`, `CsvWriter`, `ExcelWriter`, `JsonWriter`, `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `QuarantineWriter`, `SharePointWriter`, `StdoutWriter` | The `write(dataset)` port and its concrete sinks (`StdoutWriter` is a console sink for *seeing* a result — e.g. an explainer trace — rather than persisting it). |
+| `Reader`, `DatasetReader`, `CsvReader`, `GlobCsvReader`, `ExcelReader`, `SqliteReader` | The `read() -> Dataset` port and its concrete sources. (The remote `SasReader` / `SharePointReader` live in `tools.integrations`, not this facade — see below.) |
+| `Writer`, `CsvWriter`, `ExcelWriter`, `JsonWriter`, `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `QuarantineWriter`, `StdoutWriter` | The `write(dataset)` port and its concrete sinks (`StdoutWriter` is a console sink for *seeing* a result — e.g. an explainer trace — rather than persisting it). (The remote `SharePointWriter` lives in `tools.integrations`, not this facade — see below.) |
 | `Store`, `StoreCatalog`, `StoreBackend`, `DirectoryStoreBackend` | Per-subject medallions minted from shared configuration. |
 | `Refresh`, `AccumulateByRun`, `UpsertStrategy` | The load strategies a Writer carries. |
 
@@ -157,6 +157,7 @@ public helpers carry stable names and are imported directly:
 | `tools.calendar` — `WorkingDayCalendar` | Working-day availability arithmetic (pure utility). |
 | `tools.orchestration` — `Orchestrator`, `PipelineSet`, `ScheduledPipeline`, `Weekdays`, `SpecificWeekdays`, `DayOfMonth`, `NthWorkingDayOfMonth`, `LastWorkingDayOfMonth`, `ManualOnly` | Scheduled orchestration above `PipelineRunner`: evaluate due work for a run date, isolate failures by scheduled item/PipelineSet, and record decisions in `_orchestration/runs.db`. |
 | `tools.observability` — `RunLog`, `RunRegistry` | The structured-observability seam and its query store (also re-exported via `framework.run`). |
+| `tools.integrations.remote` — `SasReader`, `SharePointReader`, `SharePointWriter` | The remote-source/sink Reader and Writer (SAS extract, SharePoint list) — same `read()` / `write()` ports as the file/SQLite ones, but reaching a remote client that is **stubbed** behind swappable seams (`RemoteRunner`, `SharePointFetcher` / `SharePointPusher`) until the on-prem SE client (NTLM/Kerberos/REST) lands (ADR-0004/0005). |
 
 ## Internal modules — do not import from these
 
@@ -179,11 +180,12 @@ without notice:
 - `framework._internal.describe` (`render`, `redact_url`) — shared helpers for the opt-in
   `describe()` protocol (#145); a component implements `describe()` using these
   to render its own safe plan summary, not imported by pipeline scripts.
-- `framework.io.remote` (`RemoteRunner`, `StubbedRemoteRunner`, `SharePointFetcher`,
+- `tools.integrations.remote` (`RemoteRunner`, `StubbedRemoteRunner`, `SharePointFetcher`,
   `SharePointPusher`,
-  …) — the **stubbed remote-client seam** behind `SasReader` / `SharePointReader`
-  / `SharePointWriter` (ADR-0004/0005). An advanced extension point, documented in
-  [adding-a-feed.md](adding-a-feed.md); not part of the day-to-day surface.
+  …) — the **stubbed remote-client seam** behind the `tools.integrations`
+  `SasReader` / `SharePointReader` / `SharePointWriter` (ADR-0004/0005). This lives in
+  the `tools` sibling package (above), not a `framework` facade. An advanced extension
+  point, documented in [adding-a-feed.md](adding-a-feed.md); not part of the day-to-day surface.
 - `framework.transform.quarantine` (`SchemaValueRulePartitioner`, …) — the
   value-rule / row-check quarantine partitioner; wired by the schema/quarantine flow.
 - `framework._internal.schema` (the `ValueRule` protocol, the `RowCheck` carrier +
@@ -200,7 +202,7 @@ Code examples throughout the docs import via the facades. The per-slice deep
 docs may still name a primitive's **home module** in prose to locate the
 implementation (e.g. the processors live in `framework.transform.processors`); that is
 where the code is, but it is not how pipeline scripts import it. The one
-exception in examples is `framework.io.remote`, shown in
+exception in examples is `tools.integrations.remote`, shown in
 [adding-a-feed.md](adding-a-feed.md) only to swap the stubbed remote fetcher or
 pusher — internal seams with no facade.
 
