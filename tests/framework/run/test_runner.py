@@ -212,6 +212,31 @@ def test_runner_redrives_a_business_run_under_an_explicit_logical_run_id(tmp_pat
     assert len(set(landed["execution_id"])) == 1  # the latest execution's rows
 
 
+def test_runner_defaults_run_log_to_runs_dir_under_base_dir(tmp_path):
+    runner = PipelineRunner()
+    runner.register("cases", "ingest", lambda context: None)
+
+    runner.run("cases", "ingest", tmp_path, run_date=dt.date(2026, 5, 29))
+
+    # With no run_log supplied, the run records under <base_dir>/_runs/<subject>.log.
+    assert (tmp_path / "_runs" / "cases.log").exists()
+
+
+def test_runner_records_to_a_run_log_supplied_at_register(tmp_path):
+    custom_log = tmp_path / "elsewhere" / "ingest.log"
+    runner = PipelineRunner()
+    runner.register("cases", "ingest", lambda context: None, run_log=RunLog(custom_log))
+
+    runner.run("cases", "ingest", tmp_path, run_date=dt.date(2026, 5, 29))
+
+    # The supplied sink is used instead of the default <base_dir>/_runs/ location.
+    assert custom_log.exists()
+    assert not (tmp_path / "_runs" / "cases.log").exists()
+    registry = RunRegistry(tmp_path / "_registry" / "runs.db")
+    (run,) = registry.query_runs(pipeline="cases/ingest")
+    assert run["status"] == "ok"
+
+
 def test_runner_unknown_pipeline_raises_clear_error(tmp_path):
     runner = PipelineRunner()
 

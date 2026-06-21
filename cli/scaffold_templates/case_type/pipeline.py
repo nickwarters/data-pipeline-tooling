@@ -106,11 +106,14 @@ def run(context: RunContext) -> Dataset:
 def main(argv: list[str]) -> int:
     base_dir = Path(argv[1]) if len(argv) > 1 else Path.cwd() / "data"
 
-    from framework.run.runner import PipelineRunner
+    from framework.run import PipelineRunner
 
+    # The Case Type's name is the medallion subject, so the run records to
+    # <base_dir>/_runs/<CASE_TYPE.name>.log. Pass run_log=RunLog(path) to register
+    # to redirect it; omit it for that default.
     runner = PipelineRunner()
     runner.register(
-        case_type=CASE_TYPE.name,
+        subject=CASE_TYPE.name,
         pipeline=FEED_NAME,
         handler=run,
         freshness=UPSTREAMS,
