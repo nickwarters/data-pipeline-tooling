@@ -59,7 +59,10 @@ from framework.run import Pipeline
 reader = RetryingReader(SasReader(...), policy)
 writer = RetryingWriter(SqliteTruncateReloadWriter(db, "cases"), policy)
 
-Pipeline("cases", reader).write_to(writer).run()
+p = Pipeline("cases")
+r = p.read(reader, name="read")
+p.write(writer, r, name="write")
+p.run()
 ```
 
 Only the wrapped `read()` / `write()` is retried. The decorators are ordinary

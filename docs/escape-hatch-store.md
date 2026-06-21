@@ -178,11 +178,10 @@ active_cases = store.query(
     "SELECT case_ref, opened FROM raw_export WHERE status = 'OPEN'"
 )
 
-(
-    Pipeline("spike", active_cases)
-    .write_to(ExcelWriter("/tmp/spike/active.xlsx", Refresh()))
-    .run()
-)
+p = Pipeline("spike")
+r = p.read(active_cases, name="read")
+p.write(ExcelWriter("/tmp/spike/active.xlsx", Refresh()), r, name="write")
+p.run()
 ```
 
 ## What you are knowingly giving up

@@ -457,13 +457,18 @@ already_reviewed = JoinDependency(
 def selection_value_case(row):
     return row["amount"] >= 50
 
-selection_pool = (
-    Pipeline("cases", cases.reader(SILVER, "cases"))
-    .transform(Filter(selection_value_case, name="selection-value"))
-    .transform(AntiJoinWith(already_reviewed, on="case_ref", name="already-reviewed"))
-    .transform(JoinWith(reference, on="adviser", name="adviser-reference"))
-    .run()
+p = Pipeline("cases")
+r = p.read(cases.reader(SILVER, "cases"), name="read")
+valued = p.transform(Filter(selection_value_case, name="selection-value"), r, name="filter")
+anti = p.transform(
+    AntiJoinWith(already_reviewed, on="case_ref", name="already-reviewed"),
+    valued,
+    name="anti-join",
 )
+joined = p.transform(
+    JoinWith(reference, on="adviser", name="adviser-reference"), anti, name="join"
+)
+selection_pool = p.run()
 ```
 
 At `.run()` the pipeline reads `cases` silver, reads the `advisers` dependency
@@ -680,16 +685,17 @@ python -m pipelines.demo_fan_out /tmp/demo_fan_out
 
 ```python
 # Cases pipeline: shared raw → project case columns → coerce/validate → silver
-(
-    Pipeline("cases", store.reader("raw", SUBJECT))
-    .transform(Filter(lambda row: row["run_id"] == RUN_ID))
-    .transform(Rename({"case_ref_no": "case_ref"}))     # shared normalisation
-    .transform(SelectColumns(["case_ref", "adviser", "activity_date", "amount"]))
-    .transform(SchemaCoercion(CaseSchema))
-    .validate(SchemaValidator(CaseSchema))
-    .write_to(store.writer("silver", "cases", AccumulateByRun(RUN_ID, RUN_ID)))
-    .run()
+p = Pipeline("cases")
+r = p.read(store.reader("raw", SUBJECT), name="read")
+this_run = p.transform(Filter(lambda row: row["run_id"] == RUN_ID), r, name="filter-run")
+renamed = p.transform(Rename({"case_ref_no": "case_ref"}), this_run, name="rename")  # shared normalisation
+projected = p.transform(
+    SelectColumns(["case_ref", "adviser", "activity_date", "amount"]), renamed, name="select"
 )
+coerced = p.transform(SchemaCoercion(CaseSchema), projected, name="coerce")
+validated = p.validate(SchemaValidator(CaseSchema), coerced, name="post-validate")
+p.write(store.writer("silver", "cases", AccumulateByRun(RUN_ID, RUN_ID)), validated, name="write")
+p.run()
 # CASES is the feed's CaseType — it owns the identity contract (namespace +
 # natural_key), so both builders below derive the same case_id (ADR-0009).
 # Cases gold: DeriveKey → LatestPerKey → UniqueValidator → current-only gold
@@ -713,5 +719,3 @@ instance; each is independently validated and writes its own gold. See
 - **Typed `Case` objects** at the domain edge: the CasePool returns the bulk-tier
   `Dataset` today; materialising fully typed Cases on demand is reserved for a
   later slice (ADR-0002).
-- **Lineage checkpoints** (`.checkpoint(writer)`): persisting an intermediate
-  layer mid-pipeline, the other half of the deferred-builder terminus story.
