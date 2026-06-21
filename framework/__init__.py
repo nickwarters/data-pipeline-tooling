@@ -6,9 +6,10 @@ Use the public facade modules:
   foundational vocabulary the other facades build on.
 - ``framework.io`` for Readers, Writers, Store, and strategies.
 - ``framework.transform`` for the reshaping processors and SchemaCoercion.
-- ``framework.validate`` for the ``validate(dataset)`` checks and the
-  declared-schema contract.
 - ``framework.run`` for Pipeline, orchestration, RunLog, and RunRegistry.
+
+(The ``validate(dataset)`` checks and the declared-schema contract live on
+``framework.core`` — the ``validate`` facade was folded into ``core``.)
 
 (``tests.framework_testing`` is a separate test-only surface; ``framework._internal``
 is private layout.)
@@ -16,4 +17,4 @@ is private layout.)
 
 from framework import core, io, run, transform
 
-__all__ = ["core", "io", "transform", "validate", "run"]
+__all__ = ["core", "io", "transform", "run"]
