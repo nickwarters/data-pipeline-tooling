@@ -111,6 +111,33 @@ def test_rendered_pipeline_runs_and_lands_its_sample_feed(tmp_path):
     assert [{c: row[c] for c in source_columns} for row in landed] == rows_of(dataset)
 
 
+def test_rendered_pipeline_main_runs_and_records_a_run(tmp_path, capsys):
+    # Drive the rendered feed's CLI entry point (main) end to end, the way
+    # `python -m pipelines.widgets.pipeline <base_dir>` does. This exercises the
+    # PipelineRunner registration/dispatch the in-process `run()` test skips.
+    repo = tmp_path / "repo"
+    scaffold.render("widgets", repo)
+    base_dir = tmp_path / "data"
+
+    sys.path.insert(0, str(repo / "pipelines"))
+    try:
+        pipeline = importlib.import_module("widgets.pipeline")
+        importlib.reload(pipeline)
+        exit_code = pipeline.main(["prog", str(base_dir)])
+    finally:
+        sys.path.remove(str(repo / "pipelines"))
+        for name in list(sys.modules):
+            if name == "widgets" or name.startswith("widgets."):
+                del sys.modules[name]
+
+    assert exit_code == 0
+    assert "rows source -> raw -> silver -> gold" in capsys.readouterr().out
+    # A source feed has no subject, so the run records under _runs/<feed>.log.
+    assert (base_dir / "_runs" / "widgets.log").exists()
+    store = StoreCatalog(base_dir).store("widgets")
+    assert len(read_rows(store, RAW, "widgets")) > 0
+
+
 def test_cli_creates_the_feed_and_reports_it(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr(scaffold, "_REPO_ROOT", tmp_path)
 
