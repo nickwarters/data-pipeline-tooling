@@ -17,16 +17,24 @@ from framework.io import CsvReader, Refresh, StoreCatalog
 from framework.run import Pipeline, RunLog
 
 run_log = RunLog("/path/to/share/cases/runs.log")
-pipeline = Pipeline("cases", CsvReader("feed.csv"), run_log=run_log)
-landed = (
-    pipeline
-    .write_to(
-        StoreCatalog("/path/to/share").store("cases").writer(RAW, "cases", Refresh())
-    )
-    .run()
+pipeline = Pipeline("cases", run_log=run_log)
+source = pipeline.read(CsvReader("feed.csv"), name="read")
+pipeline.write(
+    StoreCatalog("/path/to/share").store("cases").writer(RAW, "cases", Refresh()),
+    source,
+    name="write_raw",
 )
+pipeline.run()
 print(pipeline.run_id)  # the run's correlating id, shared by every record
 ```
+
+When a pipeline runs under the `PipelineRunner` (or the path-addressed `run`
+command), the run — not the builder — owns the sink: by default it opens
+`<base>/_runs/<subject or pipeline>.log`. Pass a `RunLog` to
+`PipelineRunner.register(..., run_log=...)` to redirect it; omit it for that
+default. The handler's `RunContext` carries whichever `RunLog` the run resolved,
+so a builder composed inside the handler should read `context.run_log` rather
+than open its own.
 
 If no `RunLog` is composed, `.run()` behaves identically but emits nothing (a
 null sink keeps the terminus branch-free). The human-readable console lines are
