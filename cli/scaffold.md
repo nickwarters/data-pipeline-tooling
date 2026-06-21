@@ -254,7 +254,9 @@ def _render_schema(text: str, feed: str, spec: _FeedSpec) -> str:
             f"    # {spec.dropped} column(s) beyond the scaffold's limit of "
             f"{_MAX_FEED_COLUMNS} were dropped from this schema."
         )
-    lines += [f"    {name}: {type_name}" for name, type_name in zip(spec.names, spec.inferred)]
+    lines += [
+        f"    {name}: {type_name}" for name, type_name in zip(spec.names, spec.inferred)
+    ]
     body = "\n".join(lines) + "\n"
     # The dataclass is the last thing in schema.py, so replace it to EOF; the
     # module docstring and imports above it are left intact.
@@ -307,10 +309,10 @@ def _render_pipeline(text: str, feed: str, spec: _FeedSpec) -> str:
 def _source_literal(spec: _FeedSpec) -> str:
     lines = ["    source = ["]
     for cells in spec.sample_cells:
-        pairs = [
-            f'"{_esc(column)}": {_literal(cells[i] if i < len(cells) else "", spec.inferred[i])}'
-            for i, column in enumerate(spec.columns)
-        ]
+        pairs = []
+        for i, column in enumerate(spec.columns):
+            cell = cells[i] if i < len(cells) else ""
+            pairs.append(f'"{_esc(column)}": {_literal(cell, spec.inferred[i])}')
         lines.append("        {" + ", ".join(pairs) + "},")
     lines.append("    ]")
     return "\n".join(lines) + "\n"
@@ -329,8 +331,7 @@ def _render_test(text: str, feed: str, spec: _FeedSpec) -> str:
         # ``fields``/schema imports stay.
         text = text.replace(
             f"from pipelines.{feed}.pipeline import FEED_NAME, run",
-            f"from pipelines.{feed}.pipeline import "
-            f"FEED_NAME, RAW_FEED_COLUMNS, run",
+            f"from pipelines.{feed}.pipeline import FEED_NAME, RAW_FEED_COLUMNS, run",
         )
         text = text.replace(
             f"{{f.name for f in fields({cls})}}.issubset(landed[0].keys())",

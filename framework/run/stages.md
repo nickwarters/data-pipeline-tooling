@@ -9,15 +9,16 @@ and ``.run()`` executes that one ordered step plan. A stage's behaviour, timing,
 and row-trace observation live in its Step, with no second execution path.
 Stages stay inside one class-level ``Pipeline`` run:
 ``Reader -> Dataset -> Stage* -> Writer``. The dataset->dataset *transform*
-extension point is :class:`~framework.transform.processors.Processor`, not a
-custom Stage.
+extension point is :class:`~framework.core.protocols.Processor` — a callable
+taking one or more datasets and returning one (implemented and re-exported by
+``framework.transform``), not a custom Stage.
 """
 
 from __future__ import annotations
 
 from typing import Iterable, Protocol, Sequence, runtime_checkable
 
-from framework.core.protocols import Severity, Validator, Writer
+from framework.core.protocols import Processor, Severity, Validator, Writer
 
 
 @runtime_checkable

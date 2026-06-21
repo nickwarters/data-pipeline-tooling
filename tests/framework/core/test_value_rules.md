@@ -16,7 +16,6 @@ from typing import Annotated
 import pandas as pd
 import pytest
 
-from framework.core.dataset import Dataset
 from framework.core import (
     Length,
     NonNull,
@@ -27,6 +26,7 @@ from framework.core import (
     SchemaValidator,
     Unique,
 )
+from framework.core.dataset import Dataset
 from framework.core.validators import ValidationError
 
 

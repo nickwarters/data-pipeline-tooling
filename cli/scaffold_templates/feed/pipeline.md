@@ -35,7 +35,16 @@ import sys
 from dataclasses import fields
 from pathlib import Path
 
-from framework.core import GOLD, RAW, SILVER, Dataset, PipelineError, format_failure
+from framework.core import (
+    GOLD,
+    RAW,
+    SILVER,
+    ColumnValidator,
+    Dataset,
+    PipelineError,
+    SchemaValidator,
+    format_failure,
+)
 from framework.io import (
     AccumulateByRun,
     CsvReader,
@@ -43,7 +52,6 @@ from framework.io import (
     StoreCatalog,
 )
 from framework.run import Pipeline, RunContext
-from framework.core import ColumnValidator, SchemaValidator
 
 from .schema import MyfeedRow
 
@@ -72,17 +80,15 @@ def build_pipeline(context: RunContext) -> Pipeline:
     # Reads the source, gates it with a ColumnValidator, and writes a faithful copy.
     # -------------------------------------------------------------------------
     raw_source = p.read(CsvReader(SAMPLE_CSV), name="read_csv")
-    
+
     raw_validated = p.validate(
-        ColumnValidator([f.name for f in fields(MyfeedRow)]), 
-        raw_source, 
-        name="raw_col_validate"
+        ColumnValidator([f.name for f in fields(MyfeedRow)]),
+        raw_source,
+        name="raw_col_validate",
     )
-    
+
     raw_written = p.write(
-        store.writer(RAW, FEED_NAME, strategy), 
-        raw_validated, 
-        name="write_raw"
+        store.writer(RAW, FEED_NAME, strategy), raw_validated, name="write_raw"
     )
 
     # -------------------------------------------------------------------------
@@ -99,18 +105,16 @@ def build_pipeline(context: RunContext) -> Pipeline:
         # df = coerce_to_schema(df, MyfeedRow)
         return Dataset(df)
 
-    silver_transformed = p.transform(rename_and_coerce, raw_written, name="silver_transform")
-    
-    silver_validated = p.validate(
-        SchemaValidator(MyfeedRow), 
-        silver_transformed, 
-        name="silver_schema_validate"
+    silver_transformed = p.transform(
+        rename_and_coerce, raw_written, name="silver_transform"
     )
-    
+
+    silver_validated = p.validate(
+        SchemaValidator(MyfeedRow), silver_transformed, name="silver_schema_validate"
+    )
+
     silver_written = p.write(
-        store.writer(SILVER, FEED_NAME, strategy), 
-        silver_validated, 
-        name="write_silver"
+        store.writer(SILVER, FEED_NAME, strategy), silver_validated, name="write_silver"
     )
 
     # -------------------------------------------------------------------------
@@ -122,11 +126,9 @@ def build_pipeline(context: RunContext) -> Pipeline:
         return dataset
 
     gold_transformed = p.transform(assemble_gold, silver_written, name="gold_transform")
-    
-    gold_written = p.write(
-        store.writer(GOLD, FEED_NAME, Refresh()), 
-        gold_transformed, 
-        name="write_gold"
+
+    p.write(
+        store.writer(GOLD, FEED_NAME, Refresh()), gold_transformed, name="write_gold"
     )
 
     return p
@@ -137,7 +139,7 @@ def run(context: RunContext, *, describe: bool = False) -> Dataset:
     pipeline = build_pipeline(context)
     if describe:
         print(pipeline.describe())
-    
+
     return pipeline.run(context)
 
 
@@ -161,7 +163,7 @@ def main(argv: list[str]) -> int:
     base_dir = Path(args.base_dir) if args.base_dir else Path.cwd() / "data"
 
     from framework.run.runner import PipelineRunner
-    
+
     def handler(ctx: RunContext) -> Dataset:
         return run(ctx, describe=args.describe)
 
@@ -178,7 +180,7 @@ def main(argv: list[str]) -> int:
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1
-    
+
     # We don't have len(dataset) easily accessible anymore with the DAG without
     # an explicit output, but we can change the message.
     print(f"Refined source -> raw -> silver -> gold under {base_dir / FEED_NAME}")

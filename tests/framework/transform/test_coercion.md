@@ -16,10 +16,10 @@ from datetime import date
 import pandas as pd
 import pytest
 
+from framework.core import SchemaValidator
 from framework.core.dataset import Dataset
 from framework.transform import SchemaCoercion
 from framework.transform.processors import CoercionError
-from framework.core import SchemaValidator
 
 
 @dataclass

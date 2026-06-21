@@ -36,13 +36,14 @@ from pathlib import Path
 
 from framework.core import PipelineError, format_failure
 from framework.run import RunRegistry, run_pipeline
-from tools.orchestration import Orchestrator
 from tools.calendar import WorkingDayCalendar
+from tools.orchestration import Orchestrator
 
 # Mirrors the layout PipelineRunner writes: a per-base run registry and the
 # per-case-type JSONL run logs the runner emits alongside it.
 _REGISTRY_RELPATH = ("_registry", "runs.db")
 _RUNS_RELPATH = "_runs"
+
 
 def _resolve_app(name: str):
     """Import the application module that supplies the pipeline registry.
@@ -308,16 +309,12 @@ def register(sub) -> None:
     status = sub.add_parser("status", help="show the latest run status per pipeline")
     status.add_argument("base_dir")
     status.add_argument("--pipeline", help="one pipeline label, e.g. cases/ingest")
-    status.add_argument(
-        "--subject", help="narrow to a subject's pipelines, e.g. cases"
-    )
+    status.add_argument("--subject", help="narrow to a subject's pipelines, e.g. cases")
     status.set_defaults(func=_status)
 
     log = sub.add_parser("log", help="inspect/summarize a run log file")
     log.add_argument("base_dir")
-    log.add_argument(
-        "subject", help="the subject whose _runs/<subject>.log to read"
-    )
+    log.add_argument("subject", help="the subject whose _runs/<subject>.log to read")
     log.add_argument(
         "--run-id", help="only records whose execution id starts with this"
     )

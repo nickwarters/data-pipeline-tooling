@@ -6,6 +6,7 @@ import pytest
 
 from framework.core.dataset import Dataset
 from framework.run import FreshnessRequirement, PipelineRunner
+from tools.calendar import WorkingDayCalendar
 from tools.orchestration import (
     DayOfMonth,
     LastWorkingDayOfMonth,
@@ -18,7 +19,6 @@ from tools.orchestration import (
     SpecificWeekdays,
     Weekdays,
 )
-from tools.calendar import WorkingDayCalendar
 
 
 def _runner(calls: list[str], failing: set[str] | None = None) -> PipelineRunner:
@@ -63,11 +63,16 @@ def test_downstream_waits_until_declared_upstreams_are_fresh(tmp_path):
             PipelineSet(
                 "cases",
                 (
-                    ScheduledPipeline("cases", "selection", Weekdays(), depends_on=(
-                        FreshnessRequirement("feed-a"),
-                        FreshnessRequirement("feed-b"),
-                        FreshnessRequirement("feed-c"),
-                    )),
+                    ScheduledPipeline(
+                        "cases",
+                        "selection",
+                        Weekdays(),
+                        depends_on=(
+                            FreshnessRequirement("feed-a"),
+                            FreshnessRequirement("feed-b"),
+                            FreshnessRequirement("feed-c"),
+                        ),
+                    ),
                 ),
             ),
         ),

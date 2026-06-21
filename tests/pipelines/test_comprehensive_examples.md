@@ -1,12 +1,12 @@
 ```python
 from framework.core import GOLD, SILVER
 from framework.io import StoreCatalog
-from tests.framework_testing import read_rows
 from pipelines.comprehensive_examples import (
     bronze_to_silver,
     high_risk_or_vulnerable,
     silver_to_gold,
 )
+from tests.framework_testing import read_rows
 
 
 def test_complex_bronze_to_silver_example_combines_sources_and_validates(tmp_path):

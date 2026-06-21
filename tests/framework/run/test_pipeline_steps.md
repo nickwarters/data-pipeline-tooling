@@ -5,6 +5,7 @@ Each concrete PipelineStep renders its own describe() entry; these tests verify
 the rendering in isolation, independent of the full Pipeline.describe() path.
 """
 
+from framework.core.validators import ColumnValidator
 from framework.run.pipeline_steps import (
     CheckpointStep,
     ExplainWriteStep,
@@ -15,7 +16,6 @@ from framework.run.pipeline_steps import (
     ValidatorStep,
     WriteStep,
 )
-from framework.core.validators import ColumnValidator
 
 
 class DescribedReader:

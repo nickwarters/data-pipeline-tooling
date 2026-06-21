@@ -27,10 +27,9 @@ from case_review.case_pool import CasePool
 from framework.core import GOLD, PipelineError, format_failure
 from framework.io import AccumulateByRun, DatasetReader, StoreCatalog
 from framework.run import FreshnessRequirement, Pipeline, RunContext
-from tools.calendar import WorkingDayCalendar
 from framework.transform import Filter, Score, Sort, Stamp
-
 from pipelines.ingest.pipeline import AS_OF, CASES
+from tools.calendar import WorkingDayCalendar
 
 # Selection only runs once the CasePool is current.
 UPSTREAMS = (FreshnessRequirement(upstream_pipeline="ingest"),)
@@ -70,15 +69,17 @@ def run(context: RunContext):
     sc = p.transform(Score("priority_score", priority_score), r, name="score")
     f = p.transform(Filter(high_value_case, name="high-value"), sc, name="filter")
     so = p.transform(Sort("priority_score", ascending=False), f, name="sort")
-    st = p.transform(Stamp("question_bank_id", variation.question_bank_id), so, name="stamp")
-    e = p.explain(
+    st = p.transform(
+        Stamp("question_bank_id", variation.question_bank_id), so, name="stamp"
+    )
+    p.explain(
         store.writer(GOLD, "selection_trace", strategy),
         st,
         id_column="case_ref",
         score_column="priority_score",
-        name="explain"
+        name="explain",
     )
-    w = p.write(store.writer(GOLD, "selection_pool", strategy), st, name="write")
+    p.write(store.writer(GOLD, "selection_pool", strategy), st, name="write")
     selection_pool = p.run()
 
     trace = store.reader(GOLD, "selection_trace").read()

@@ -28,11 +28,17 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from framework.core import RAW, SILVER, Dataset, PipelineError, format_failure
+from framework.core import (
+    RAW,
+    SILVER,
+    Dataset,
+    PipelineError,
+    SchemaValidator,
+    format_failure,
+)
 from framework.io import AccumulateByRun, CsvReader, StoreCatalog
 from framework.run import Pipeline, RunContext
 from framework.transform import Filter, SchemaCoercion
-from framework.core import SchemaValidator
 
 from .case_type import CASE_TYPE
 
@@ -60,7 +66,7 @@ def run(context: RunContext) -> Dataset:
 
     p = Pipeline(FEED_NAME)
     r = p.read(CsvReader(SAMPLE_CSV), name="read")
-    w = p.write(store.writer(RAW, FEED_NAME, strategy), r, name="write")
+    p.write(store.writer(RAW, FEED_NAME, strategy), r, name="write")
     p.run()
 
     p_silver = Pipeline(FEED_NAME)
@@ -68,9 +74,17 @@ def run(context: RunContext) -> Dataset:
     current = r_silver
     if isinstance(strategy, AccumulateByRun):
         run_id = strategy.run_id
-        current = p_silver.transform(Filter(lambda row, _rid=run_id: row["run_id"] == _rid), current, name="filter-by-run-id")
-    coerced = p_silver.transform(SchemaCoercion(CASE_TYPE.schema), current, name="coerce")
-    validated = p_silver.validate(SchemaValidator(CASE_TYPE.schema), coerced, name="post-validate")
+        current = p_silver.transform(
+            Filter(lambda row, _rid=run_id: row["run_id"] == _rid),
+            current,
+            name="filter-by-run-id",
+        )
+    coerced = p_silver.transform(
+        SchemaCoercion(CASE_TYPE.schema), current, name="coerce"
+    )
+    validated = p_silver.validate(
+        SchemaValidator(CASE_TYPE.schema), coerced, name="post-validate"
+    )
     p_silver.write(store.writer(SILVER, FEED_NAME, strategy), validated, name="write")
     silver = p_silver.run()
 
@@ -92,8 +106,9 @@ def run(context: RunContext) -> Dataset:
 
 def main(argv: list[str]) -> int:
     base_dir = Path(argv[1]) if len(argv) > 1 else Path.cwd() / "data"
-    
+
     from framework.run.runner import PipelineRunner
+
     runner = PipelineRunner()
     runner.register(
         case_type=CASE_TYPE.name,
@@ -107,7 +122,7 @@ def main(argv: list[str]) -> int:
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
         return 1
-    
+
     print(
         f"Refined {len(silver)} rows source -> raw -> silver for Case Type "
         f"'{CASE_TYPE.name}' under {Path(base_dir) / FEED_NAME} "

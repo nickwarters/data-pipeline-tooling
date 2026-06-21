@@ -131,7 +131,7 @@ def test_run_log_records_retry_attempts_and_final_outcome(tmp_path):
     reader = RetryingReader(inner, RetryPolicy(attempts=3, retry_on=(ConnectionError,)))
 
     p = Pipeline("flaky-feed", run_log=RunLog(log_path))
-    r = p.read(reader, name="read")
+    p.read(reader, name="read")
     p.run()
 
     [read_record] = [r for r in _read_log(log_path) if r["step"] == "read"]
@@ -148,7 +148,7 @@ def test_run_log_records_a_non_retryable_abort(tmp_path):
     reader = RetryingReader(inner, RetryPolicy(attempts=5, retry_on=(ConnectionError,)))
 
     p = Pipeline("flaky-feed", run_log=RunLog(log_path))
-    r = p.read(reader, name="read")
+    p.read(reader, name="read")
 
     with pytest.raises(FileNotFoundError):
         p.run()
@@ -175,7 +175,5 @@ def test_policy_wraps_a_bare_remote_client_call():
 
     assert policy.call(fetch) == "rows"
     assert calls["n"] == 2
-
-
 
 ```

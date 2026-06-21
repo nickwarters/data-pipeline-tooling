@@ -23,9 +23,9 @@ import statistics
 from typing import Iterable, Protocol
 
 from framework._internal.describe import render
-from framework.core.errors import PipelineError
-from framework.core.protocols import Severity, Validator
 from framework.core.dataset import Dataset
+from framework.core.errors import PipelineError
+
 
 class ValidationError(PipelineError):
     """Raised by a Validator when the data fails its check."""
