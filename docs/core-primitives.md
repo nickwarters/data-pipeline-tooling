@@ -6,12 +6,12 @@ builder; slice #14 added the **`Writer`** port and reshaped the builder terminus
 to `.write_to(writer).run()`; slice #3 added the **`Validator`** port and made
 `.run()` fail-fast and atomic; slice #4 added the **`RunLog`** primitive and
 wired structured JSONL observability into the terminus; slice #7 added the
-**`Schema`** (a Case Type dataclass) and its **`SchemaValidator`**, plus the
-**`raw_to_silver`** builder that enforces the schema at the silver boundary;
-slice #23 added the **`Processor`** seam (`.with_processor`) and the
-**`SchemaCoercion`** processor that repairs raw's round-trip-lossy types ahead of
-that validator; slice #8 added the **`silver_to_gold`** builder that accumulates
-validated silver into the gold layer, stamped by run; slice #9 added the
+**`Schema`** (a Case Type dataclass) and its **`SchemaValidator`**, enforcing
+the schema at the silver boundary; slice #23 added the **`Processor`** seam and
+the **`SchemaCoercion`** processor that repairs raw's round-trip-lossy types
+ahead of that validator; slice #8 added the **`AccumulateByRun`** gold load
+strategy that accumulates validated silver into the gold layer, stamped by run;
+slice #9 added the
 **Selection processors** (`Filter`/`Score`/`VectorizedFilter`/
 `VectorizedDerive`/`Sort`/`Rename`) and **`JoinWith`** / **`AntiJoinWith`**,
 the cross-feed join over an explicit read-only dependency. Every later slice
@@ -21,13 +21,13 @@ CasePool, Feed, Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
 
 Application code (`pipelines/` + the `case_review/` domain layer) imports these
 primitives through the public facades (`framework.core` / `framework.io` /
-`framework.transform` / `framework.validate` / `framework.run` /
-`framework.recipes` / `framework.shared`), not the home modules named per-primitive below; the home
-modules locate the code, the facades are the stable contract. The package root
-exposes only those facade modules for discovery (`framework.core`,
-`framework.io`, `framework.transform`, `framework.validate`, `framework.run`,
-`framework.recipes`, `framework.shared`); it does not re-export primitive classes directly. See
-[`public-api.md`](public-api.md).
+`framework.transform` / `framework.run`), not the home modules named per-primitive
+below; the home modules locate the code, the facades are the stable contract. The
+package root exposes only those four facade modules for discovery (`framework.core`,
+`framework.io`, `framework.transform`, `framework.run`); it does not re-export
+primitive classes directly. The cross-cutting `retry` / `calendar` /
+orchestration / observability utilities live in the sibling top-level `tools`
+package, not a facade. See [`public-api.md`](public-api.md).
 
 ## Medallion layers
 
@@ -43,7 +43,7 @@ names are placeholders pending a domain rename — see CONTEXT.)
 |--------|----------------------------------------|----------------|
 | **raw** | A faithful, schema-light snapshot of the source as landed — the framework's landing zone. | **Full refresh** each run: truncate + reload from the source snapshot, so re-runs are deterministic (ADR-0006). |
 | silver | Validated, normalised data: the **schema boundary** — a Case Type's declared columns + dtypes are enforced here as a post-validator before the data lands (ADR-0008, #7). Normalising *coercion* (parsing dates, casting booleans) runs as a `process` step ahead of that check (#23). | Full refresh from raw. |
-| gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. The `silver_to_gold` builder carries validated silver forward (#8). | Accumulates, stamped with logical run id / `load_date` and, when context-driven, `execution_id`; idempotent re-run via delete-by-logical-run then insert (ADR-0006; [gold-accumulation doc](gold-accumulation.md)). |
+| gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. A gold hop composes an explicit `Pipeline` whose Writer carries the load strategy (#8). | **Current-only** (ingest gold: `Refresh`, one row per Case) **or accumulating** (Selection / Sync: `AccumulateByRun`, stamped with logical run id / `load_date` and, when context-driven, `execution_id`; idempotent re-run via delete-by-logical-run then insert — ADR-0006; [gold-accumulation doc](gold-accumulation.md)). |
 
 raw stays schema-light on purpose: it mirrors the source so the landing zone is
 faithful, and schema enforcement arrives at silver and gold (ADR-0008).
@@ -77,13 +77,13 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > — the seam the run-registry ingests (ADR-0007;
 > [format doc](run-log-format.md)). **Schema enforcement at silver** has landed:
 > a `SchemaValidator` derived from a Case Type's dataclass checks columns +
-> dtypes, and the `raw_to_silver` builder attaches it as a post-validator so a
+> dtypes, composed onto the raw→silver pipeline as a post-validator so a
 > breach aborts before silver is written (ADR-0008;
 > [schema-enforcement doc](schema-enforcement.md)). **Coercion between raw and
-> silver** has landed: a `Processor` seam (`.with_processor`) runs as a `process`
+> silver** has landed: a `Processor` seam runs as a transform
 > step, and `SchemaCoercion` casts the schema's round-trip-lossy types (dates,
 > booleans) ahead of the validator so a date/bool schema survives the round-trip
-> (ADR-0008, #23). **Gold accumulation** has landed: the `silver_to_gold` builder
+> (ADR-0008, #23). **Gold accumulation** has landed: a gold hop
 > carries validated silver into gold via the `AccumulateByRunWriter`, stamping each
 > row with the logical run id / `load_date` and, for context-derived strategies,
 > `execution_id`; a re-driven business run is idempotent via delete-by-logical-run
@@ -212,8 +212,9 @@ Deliverables and SQLite tables:
   `logical_run_id`, `load_date`, and optional `execution_id`. The legacy `run_id`
   column is the logical/idempotency key; `execution_id` is the trace key that
   matches RunLog/RunRegistry when the strategy is derived from a `RunContext`.
-  A re-driven run is idempotent via *delete-by-run then insert*. Wired by the
-  `silver_to_gold` builder (#8; [gold-accumulation doc](gold-accumulation.md)).
+  A re-driven run is idempotent via *delete-by-run then insert*. Minted by
+  `Store.writer(layer, table, AccumulateByRun(...))` (#8;
+  [gold-accumulation doc](gold-accumulation.md)).
 - `SqliteUpsertWriter(db_path, table, key_columns)` — **update-or-insert** by a
   declared key set (#136): for each incoming row whose key already exists in the
   target the row is replaced; new keys are inserted; target rows whose key is
@@ -359,23 +360,25 @@ built**, not mid-run. Postponed (string) annotations from
 Nullability and value-level rules (format / length / uniqueness / encoding)
 extend the same dataclass through `typing.Annotated`.
 
-### `raw_to_silver` — the schema-enforcing builder
-`raw_to_silver(store, table, schema)` encodes the ADR-0008 convention in one
-place: it composes the subject's raw Reader and silver Writer into a deferred
-`Pipeline` with `SchemaValidator(schema)` attached as a **post**-validator, and
-returns it (call `.run()` to execute):
+### Schema enforcement at the silver boundary
+There is no recipe builder for this; the raw→silver hop composes the primitives
+**explicitly** onto a `Pipeline` — read the subject's raw, coerce, validate, write
+silver — so the ADR-0008 convention is visible in the pipeline like any other hop:
 
 ```python
-raw_to_silver(store, "cases", CaseA).run()   # validates, then writes silver.db
+p = Pipeline("cases")
+raw = p.read(store.reader("raw", "cases"), name="read")
+coerced = p.transform(SchemaCoercion(CaseA), raw, name="coerce")
+validated = p.validate(SchemaValidator(CaseA), coerced, name="post-validate")
+p.write(store.writer("silver", "cases", Refresh()), validated, name="write")
+p.run()   # coerces, validates, then writes silver.db
 ```
 
 A breach aborts at the silver boundary **before** silver is written (fail-fast
 and atomic — ADR-0007), so nothing partial lands. Raw stays schema-light: data
-the schema would reject still lands faithfully in raw. The builder makes no
+the schema would reject still lands faithfully in raw. The pipeline makes no
 write or load decisions — the Store mints the Writer, which owns location +
 strategy. Full walkthrough: [schema-enforcement.md](schema-enforcement.md).
-The implementation home is `framework.recipes`; `framework.run` re-exports the
-recipe for compatibility with existing pipeline code.
 
 ### `Processor` — an engine-confined transform, run mid-pipeline
 A `Processor` transforms data between the read and the post-validators. The
@@ -405,9 +408,9 @@ text) and `bool` (`TRUE`/`FALSE` text or `1`/`0`). `str`/`int`/`float` survive a
 SQLite round-trip, so they pass through untouched and stay the validator's gate;
 undeclared columns are left alone. A value it cannot cast (an unparseable date,
 an unknown boolean encoding) raises a **`CoercionError`** with one located
-message naming the column. `raw_to_silver` composes it ahead of the
-`SchemaValidator`, so the per-run order is **read → pre-validate → process
-(coerce) → post-validate (schema) → write** (ADR-0008, #23).
+message naming the column. The raw→silver hop composes it ahead of the
+`SchemaValidator`, so the per-run order is **read → coerce (transform) →
+post-validate (schema) → write** (ADR-0008, #23).
 
 **Selection transforms (#9)** — the `filter/score/sort/join` of `CONTEXT.md`:
 

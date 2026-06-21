@@ -153,8 +153,8 @@ tests/pipelines/
   omits it.
 - **It refines through the settled ingest spine** — source → raw (a faithful,
   accumulated copy, the system of record) → silver (schema coerced + validated,
-  accumulated via `raw_to_silver`) — importing only `case_review` + the public
-  facades, never framework internals.
+  composing `SchemaCoercion` + `SchemaValidator` onto the hop) — importing only
+  `case_review` + the public facades, never framework internals.
 
 **It deliberately stops at silver.** How accumulated silver is reduced or
 assembled into **gold** — a single-feed current reduce, a multi-feed *join*
@@ -200,10 +200,10 @@ shape-hardening (`schema-enforcement.md`). The step order is:
 2. **`SchemaCoercion`** — repair the dtypes storage round-trips lose.
 3. **`SchemaValidator`** (as a post-validator) — check at the silver boundary.
 
-Because the canonicalisation has to run *before* `SchemaCoercion` and the
-validator, a spaced feed **composes the raw → silver pipeline directly** rather
-than calling the `raw_to_silver` recipe — that recipe hardcodes `SchemaCoercion`
-as its only processor and has no seam to slip a `Rename` in ahead of it:
+The raw → silver hop is **composed explicitly** (there is no recipe builder), so
+slipping the canonicalisation in is just another step: a spaced feed adds a
+`Rename` *before* `SchemaCoercion` and the validator, so the renamed columns reach
+the schema check under their canonical names:
 
 ```python
 from framework.core import RAW, SILVER

@@ -141,14 +141,14 @@ The foundational vocabulary. Each links to its deep doc; the consolidated
 reference with worked examples is [`core-primitives.md`](core-primitives.md).
 
 > **Importing.** Application code (`pipelines/` + `case_review/`) imports these through the public **facades**
-> — `framework.core` (`Dataset` + the medallion `Layer` constants), `framework.io`
-> (sources/sinks/stores), `framework.transform` (the reshaping processors +
-> `SchemaCoercion`), `framework.validate` (the `validate(dataset)` checks + the
-> declared-schema contract: `SchemaValidator`, the value rules, and the row checks),
-> `framework.run` (the `Pipeline` builder, orchestration, runner, observability),
-> `framework.recipes` (higher-level medallion builders),
-> and `framework.shared` (cross-cutting utilities — retry, `WorkingDayCalendar`)
-> — not from the modules behind them. The facade names are the stable surface.
+> — `framework.core` (`Dataset` + the medallion `Layer` constants, plus the
+> declared-schema contract: the `validate(dataset)` checks, `SchemaValidator`, the
+> value rules, and the row checks), `framework.io` (sources/sinks/stores),
+> `framework.transform` (the reshaping processors + `SchemaCoercion`), and
+> `framework.run` (the `Pipeline` builder, runner, observability)
+> — not from the modules behind them. The cross-cutting `retry` / `calendar` /
+> orchestration / observability utilities are a sibling top-level `tools` package,
+> not a facade. The facade names are the stable surface.
 > `import framework` exposes only those facade modules for discovery; it is
 > not a shortcut for
 > `framework.CsvReader` / `framework.Filter` / `framework.Pipeline`. See
@@ -232,8 +232,9 @@ CASES = CaseType(
 ```
 
 **3. Ingest a Feed into the medallion** — land raw, then refine to silver with the
-schema enforced (`raw_to_silver` coerces storage-lossy types, then validates).
-See the *Add a new Feed* how-to.
+schema enforced (compose `SchemaCoercion` to repair storage-lossy types, then
+`SchemaValidator` to validate, before the silver write). See the *Add a new Feed*
+how-to.
 
 **4. Read it through the CasePool** — the clean domain abstraction over silver:
 
@@ -293,12 +294,19 @@ store = StoreCatalog("/share").store("cases")       # the "cases" subject
 )
 ```
 
-Then refine raw → silver with the schema enforced:
+Then refine raw → silver with the schema enforced, composing the coercion and the
+schema check explicitly onto the hop:
 
 ```python
-from framework.recipes import raw_to_silver
+from framework.core import SchemaValidator
+from framework.transform import SchemaCoercion
 
-raw_to_silver(store, "cases", ActivityCase).run()   # coerce -> validate -> write silver
+p = Pipeline("cases")
+raw = p.read(store.reader(RAW, "cases"), name="read")
+coerced = p.transform(SchemaCoercion(ActivityCase), raw, name="coerce")
+validated = p.validate(SchemaValidator(ActivityCase), coerced, name="post-validate")
+p.write(store.writer(SILVER, "cases", Refresh()), validated, name="write")
+p.run()   # coerce -> validate -> write silver
 ```
 
 Swapping the Reader is the only change needed to ingest the same feed from a
@@ -535,7 +543,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`public-api.md`](public-api.md) | The public API: the facades (`framework.core` / `io` / `transform` / `validate` / `run` / `recipes` / `shared`), the internal-module boundary, and the packaging non-goal. |
 | [`core-primitives.md`](core-primitives.md) | The consolidated framework primitives reference with worked examples and build status per slice. |
 | [`adding-a-feed.md`](adding-a-feed.md) | Every Reader, and the stubbed remote (SAS / SharePoint) seams. |
-| [`schema-enforcement.md`](schema-enforcement.md) | `Schema` / `SchemaValidator` / `SchemaCoercion`, value-level rules, `raw_to_silver`. |
+| [`schema-enforcement.md`](schema-enforcement.md) | `Schema` / `SchemaValidator` / `SchemaCoercion`, value-level rules, composing the schema boundary onto a pipeline. |
 | [`gold-accumulation.md`](gold-accumulation.md) | Gold's accumulate-by-run semantics, idempotent re-run, reading "current". |
 | [`processors.md`](processors.md) | The Selection transforms (`JoinWith`, per-group sampling) and the Ingest / fan-out transforms (`SelectColumns`, `Unpivot`, `DeriveKey`, `LatestPerKey`). |
 | [`selection.md`](selection.md) | The full CaseType / Variation → CasePool → SelectionPool flow + explainability. |
