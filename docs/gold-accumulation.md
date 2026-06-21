@@ -1,7 +1,7 @@
 # Gold accumulation & what "gold" means
 
-This documents the **gold** layer's load semantics and the `silver_to_gold`
-builder introduced in #8: rows stamped `run_id` / `load_date`, accumulating
+This documents the **gold** layer's load semantics — the `AccumulateByRun`
+strategy introduced in #8: rows stamped `run_id` / `load_date`, accumulating
 across runs, with an idempotent re-run via *delete-by-run then insert*. For the
 *why*, see [ADR-0006](adr/0006-load-idempotency-refresh-upstream-accumulate-downstream.md);
 for the surrounding primitives, [core-primitives.md](core-primitives.md); for the
@@ -68,10 +68,12 @@ stable, logical load key — and the two are **deliberately not unified**:
   idempotency key.
 
 Stamping gold rows with a fresh-per-execution uuid would break idempotency: a
-re-run would never match prior rows and would silently duplicate history. So
-`silver_to_gold` takes `run_id` / `load_date` as **caller-supplied** arguments.
-(Linking the two for lineage — having the run log *record* the gold `run_id` as
-metadata — is deferred to the run-registry, ADR-0005.)
+re-run would never match prior rows and would silently duplicate history. So the
+`AccumulateByRun` strategy takes `run_id` / `load_date` as **caller-supplied**
+values — `AccumulateByRun.from_context(context)` derives them from the shared
+`RunContext` so `--logical-run-id` flows straight through. (Linking the two for
+lineage — having the run log *record* the gold `run_id` as metadata — is deferred
+to the run-registry, ADR-0005.)
 
 ## How a changing record is represented across runs
 
@@ -139,63 +141,52 @@ out** the single writer's in-place commit instead of erroring — it waits for t
 lock rather than failing fast. (WAL is unavailable over a network share, so this
 is on the default rollback journal.)
 
-## `silver_to_gold` — accumulate validated silver into gold
+## Building a gold hop — compose the write with a strategy
 
-The builder wires one subject's table from silver into gold:
+There is no recipe builder for gold; a gold hop is an explicit `Pipeline` whose
+**Writer carries the load strategy** that decides the shape. To *accumulate*
+validated silver into gold stamped by run, compose an `AccumulateByRun` writer:
 
 ```python
-from framework.io import StoreCatalog
-from framework.recipes import silver_to_gold
+from framework.io import AccumulateByRun, StoreCatalog
+from framework.run import Pipeline
 
 store = StoreCatalog("/path/to/share").store("cases")
-silver_to_gold(
-    store, "selection_pool", run_id="2026-05-30", load_date="2026-05-30"
-).run()   # reads silver, accumulates into gold.db stamped by run
+
+p = Pipeline("selection_pool")
+silver = p.read(store.reader("silver", "selection_pool"), name="read")
+p.write(
+    store.writer("gold", "selection_pool", AccumulateByRun.from_context(context)),
+    silver,
+    name="write",
+)
+p.run()
 ```
 
-It reads `store`'s **silver** table and accumulates it into the **gold** table
-via the `AccumulateByRunWriter` the `Store` mints — all deferred until `.run()`.
-The per-run step order is:
+The `Store` mints the `AccumulateByRunWriter`, which owns the location and the
+delete-by-run/insert accumulate behaviour (ADR-0003, ADR-0006); the pipeline makes
+no load decision of its own. `AccumulateByRun.from_context(context)` derives the
+logical `run_id` / `load_date` from the shared `RunContext`, so a re-drive under
+the same `--logical-run-id` replaces that load idempotently.
 
-```
-read → pre-validate → process → post-validate → write
-```
+To enforce the schema on the same footing as silver, insert a `SchemaValidator`
+validate step before the write (ADR-0008,
+[`schema-enforcement.md`](schema-enforcement.md)) — a belt-and-braces guard for
+rows assembled at gold rather than mirrored from ingest; no `SchemaCoercion` is
+needed because gold reads already-coerced silver. A breach raises *before* the
+Writer's delete-by-run/insert transaction (ADR-0007), so nothing is deleted or
+accumulated and prior gold rows stay intact.
 
-By default the builder is a **pure pass-through**: silver is already
-schema-validated upstream, so no validators or processors are attached — it
-carries validated silver forward and lets the Writer stamp and accumulate it. The
-builder makes no write or load decisions of its own: the `Store` mints the Writer,
-which owns its location and accumulate strategy (ADR-0003, ADR-0006).
+### Current-only gold vs accumulation
 
-### Optional `schema=` — validate on the same footing as silver
-
-Pass a Case Type schema to enforce it at the gold boundary too (ADR-0008,
-[`schema-enforcement.md`](schema-enforcement.md)):
-
-```python
-from tests._schema_fixtures import LandedCase  # any Case Type dataclass
-
-silver_to_gold(
-    store, "selection_pool",
-    run_id="2026-05-30", load_date="2026-05-30",
-    schema=LandedCase,                    # enforced before the gold write
-).run()
-```
-
-When supplied, `SchemaValidator(schema)` attaches as a **post**-validator, so the
-schema is checked on the data about to be written and the step order becomes:
-
-```
-read → pre-validate → process → post-validate (schema) → write
-```
-
-Because `.run()` is fail-fast and atomic (ADR-0007), a breach raises at
-**post-validate** *before* the Writer's delete-by-run/insert transaction — so
-nothing is deleted or accumulated and any **prior runs' gold rows stay intact**.
-No coercion processor is attached (unlike `raw_to_silver`): gold reads
-already-coerced silver, so this is purely a **belt-and-braces** guard for
-selection-built rows rather than ingest mirrors. Omit `schema=` and the accumulate
-pass-through is unchanged.
+Not every gold accumulates. **Ingest** gold is *current-only*: the
+`case_review.gold.ingest_silver_to_gold` helper reduces accumulated silver to one
+row per Case (`DeriveKey → LatestPerKey → UniqueValidator → Refresh`), so its gold
+is a current snapshot, not a per-run history. **Selection** / **Sync** gold use
+`AccumulateByRun`, where history must survive. *Which* model a Case Type's gold
+takes — and how multiple feeds fan into it — is an open decision (snapshot-vs-join,
+#163); the `case_review.gold` helpers are where that assembly currently lives, in
+the application layer rather than the framework.
 
 ## Not yet (follow-on tickets)
 

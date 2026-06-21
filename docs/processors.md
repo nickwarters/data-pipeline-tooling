@@ -470,8 +470,8 @@ At `.run()` the pipeline reads `cases` silver, reads the `advisers` dependency
 once under `dependency:advisers`, reads `already-reviewed` once under its own
 dependency step, filters, anti-joins on `case_ref`, then merges on `adviser` in
 Python. The store never performs the join. The result is the bulk-tier `Dataset`
-the Selection Pipeline would accumulate into gold as the SelectionPool (via
-[`silver_to_gold`](gold-accumulation.md)).
+the Selection Pipeline would accumulate into gold as the SelectionPool (via an
+`AccumulateByRun` gold write — see [gold-accumulation.md](gold-accumulation.md)).
 
 The domain capstone (#11, landed) composes these processors into a Case Type's
 full Selection flow — `CaseType`/`Variation` + `CasePool` → `SelectionPool`,

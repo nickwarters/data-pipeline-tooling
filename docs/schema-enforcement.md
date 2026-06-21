@@ -1,8 +1,9 @@
 # Schema enforcement & what "silver" means
 
-This documents the `Schema` + `SchemaValidator` adapter and the `raw_to_silver`
-builder introduced in #7, plus the `SchemaCoercion` processor that repairs
-raw's round-trip-lossy types ahead of the validator (#23). For the *why*, see
+This documents the `Schema` + `SchemaValidator` adapter (#7) and the
+`SchemaCoercion` processor that repairs raw's round-trip-lossy types ahead of the
+validator (#23), plus how they compose onto a `Pipeline` to enforce the schema at
+the silver boundary. For the *why*, see
 [ADR-0008](adr/0008-graduated-schema-enforcement.md); for the surrounding
 primitives, [core-primitives.md](core-primitives.md).
 
@@ -14,7 +15,7 @@ Enforcement is **graduated** across the medallion (ADR-0008):
 |-------|------------------|
 | **raw** | **Schema-light.** A faithful mirror of the source snapshot as landed — booleans still as `TRUE`/`FALSE` text, dates still unparsed, warts and all. At most a loud column-presence check so a wholesale source change fails immediately. |
 | **silver** | **Validated — the schema boundary.** A Case Type's declared columns + dtypes are enforced here, as a post-validator, before the data lands. This is where "is this data valid and processable?" gets its authoritative answer. |
-| **gold** | **Validated on the same footing as silver** (the accumulating SelectionPool / Review Outcomes) — via an optional `schema=` post-validator on `silver_to_gold` (see below). |
+| **gold** | **Validated on the same footing as silver** (ADR-0008) — by composing the same `SchemaValidator` as a post-validator onto the gold-building pipeline (see below). |
 
 **Why silver, not raw?** Raw must stay faithful to the source so the landing
 zone is diagnosable and re-runnable; hardening the shape is a silver-stage
@@ -138,63 +139,64 @@ reason, and the run aborts fail-fast (ADR-0007):
 CaseA coercion: column 'active' has unrecognized boolean encoding(s): 'maybe'
 ```
 
-## `raw_to_silver` — coerce, then enforce, at the boundary
+## Composing the boundary — coerce, then enforce
 
-The builder wires the convention together for one subject's table:
+There is no recipe builder for this; the two primitives compose **explicitly**
+onto a `Pipeline`, so the schema boundary is visible in the pipeline the same way
+every other hop is. The raw→silver hop reads raw, coerces, validates, and writes
+silver:
 
 ```python
-from framework.io import StoreCatalog
-from framework.recipes import raw_to_silver
+from framework.io import Refresh, StoreCatalog
+from framework.run import Pipeline
+from framework.transform import SchemaCoercion
+from framework.core import SchemaValidator
 
 store = StoreCatalog("/path/to/share").store("cases")
-raw_to_silver(store, "cases", CaseA).run()   # reads raw, coerces, validates, writes silver.db
+
+p = Pipeline("cases")
+raw = p.read(store.reader("raw", "cases"), name="read")
+coerced = p.transform(SchemaCoercion(CaseA), raw, name="coerce")
+validated = p.validate(SchemaValidator(CaseA), coerced, name="post-validate")
+p.write(store.writer("silver", "cases", Refresh()), validated, name="write")
+p.run()
 ```
 
-It reads `store`'s **raw** `cases` table, runs `SchemaCoercion(CaseA)` as the
-**process** step, attaches `SchemaValidator(CaseA)` as a **post**-validator over
-that coerced output, and writes the **silver** `cases` table — all deferred until
-`.run()`. Optional `name=` labels the run for observability (default the table)
-and `run_log=` supplies a `RunLog` sink. The per-run step order is:
+`SchemaCoercion(CaseA)` runs as a **transform** step and `SchemaValidator(CaseA)`
+as a **validate** step over that coerced output, before the **silver** write. The
+per-run step order is:
 
 ```
-read → pre-validate → process (coerce) → post-validate (schema) → write
+read → coerce (transform) → post-validate (schema) → write
 ```
 
-Because `.run()` is fail-fast and atomic (ADR-0007), either a coercion failure
-at the **process** step or a schema breach at the **post-validate** step raises
+Because `.run()` is fail-fast and atomic (ADR-0007), either a coercion failure at
+the **transform** step or a schema breach at the **post-validate** step raises
 *before* the Writer is called — so **no `silver.db` is written** and nothing
-partial lands. The builder itself makes no write or load decisions: the `Store`
-mints the Writer, which owns its location and load strategy (ADR-0003, ADR-0006).
+partial lands. The pipeline makes no write or load decisions: the `Store` mints
+the Writer, which owns its location and load strategy (ADR-0003, ADR-0006). For
+the full feed pattern (raw accumulation, filtering the current run before
+coercion), see [`pipelines/ingest/pipeline.py`](../pipelines/ingest/pipeline.py)
+and [adding-a-feed.md](adding-a-feed.md).
 
-## `silver_to_gold` — the same schema, at the gold boundary
+## The same schema, at the gold boundary
 
-Gold is validated *on the same footing as silver* (ADR-0008): `silver_to_gold`
-takes the **same** optional `schema=` and attaches the **same** `SchemaValidator`
-as a post-validator before the gold write.
-
-```python
-from framework.recipes import silver_to_gold
-
-silver_to_gold(
-    store, "selection_pool",
-    run_id="2026-05-30", load_date="2026-05-30",
-    schema=CaseA,
-).run()   # reads silver, validates, accumulates into gold.db
-```
-
-Two deliberate differences from `raw_to_silver`:
+Gold is validated *on the same footing as silver* (ADR-0008): the **same**
+`SchemaValidator` composes as a post-validator onto whatever pipeline builds gold,
+before the gold write. Two deliberate differences from the silver hop:
 
 - **No `SchemaCoercion`.** Gold reads already-coerced silver, so the round-trip
   repair step is unneeded — only the validator attaches.
 - **Belt-and-braces, not the primary gate.** Silver is already schema-validated
-  upstream, so gold enforcement guards *selection-built* rows (rows assembled in
-  the Selection Pipeline, not mirrored from ingest) rather than re-checking ingest
-  mirrors. It is therefore **optional**: omit `schema=` and `silver_to_gold` is a
-  pure accumulate pass-through.
+  upstream, so gold enforcement guards *assembled* rows (rows built during gold
+  reduction, not mirrored from ingest) rather than re-checking ingest mirrors. It
+  is therefore **optional** — a gold builder may attach `SchemaValidator` or not.
 
-A breach raises at **post-validate**, before the writer's delete-by-run/insert
-transaction (ADR-0007) — so a failed run accumulates nothing and leaves prior
-runs' gold rows intact. See [`gold-accumulation.md`](gold-accumulation.md).
+A breach raises at the validate step, before the writer runs (ADR-0007) — so a
+failed run writes no gold and leaves prior gold intact. How accumulated silver is
+assembled into gold is an application concern (the `case_review.gold` helpers, and
+the open snapshot-vs-join decision in #163); see
+[`gold-accumulation.md`](gold-accumulation.md).
 
 ## Value-level rules — format / length / uniqueness / value-set (#24)
 
@@ -288,9 +290,9 @@ column would only add a spurious second failure.
 
 ### Where they bite
 
-`SchemaValidator` is already the post-validator on both `raw_to_silver` and
-`silver_to_gold`, so nullability and value rules enforce at **both** boundaries
-with no builder change. As with dtype breaches, a nullability or value-rule
+`SchemaValidator` carries the column/dtype, nullability, **and** value rules
+together, so wherever it is composed — at the silver boundary, and again at gold —
+nullability and value rules enforce with no extra wiring. As with dtype breaches, a nullability or value-rule
 breach raises at the post-validate step **before** the writer runs — so the run
 aborts fail-fast and atomically (ADR-0007) and nothing partial lands. `Unique`
 here is the field-annotation form of uniqueness; the one-row-per-Case *grain*
@@ -376,7 +378,7 @@ One property **diverges** — and it's deliberate:
 ### Where they bite
 
 Like value rules, row checks run on the same `SchemaValidator` seam, so they
-enforce at **both** the silver and gold boundaries with no builder change, and
+enforce at **both** the silver and gold boundaries wherever it is composed, and
 abort fail-fast before the writer runs. And like value rules they also feed
 **quarantine**: a `SchemaValueRulePartitioner` routes a row-check-breaching row
 to the reject table with its phrase in the `failed_rule` reason (the footprint

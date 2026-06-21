@@ -21,8 +21,8 @@ SelectionPool. For the domain language behind the terms, see
 ```
 
 **Ingest** lands a feed into `raw` (schema-light) and refines it into `silver`
-with the Case Type's schema enforced (`raw_to_silver` — see
-[`schema-enforcement.md`](schema-enforcement.md)). That validated **silver is the
+with the Case Type's schema enforced (`SchemaCoercion` + `SchemaValidator`
+composed onto the hop — see [`schema-enforcement.md`](schema-enforcement.md)). That validated **silver is the
 CasePool**: the current-state population of Cases. Sources are current-state
 snapshots, so raw and silver are full-refreshed each run (ADR-0006); the
 accumulating layer is gold, where the **SelectionPool** lands stamped by run.
