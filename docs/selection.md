@@ -139,15 +139,20 @@ def priority_score(row: Mapping[str, Any]) -> int:
 
 
 variation = CASES.variation("v1")
-(
-    Pipeline("selection", DatasetReader(available))
-    .transform(Score("priority_score", priority_score))
-    .transform(Filter(high_value_case, name="high-value"))
-    .transform(Sort("priority_score", ascending=False))    # rank top-first
-    .transform(Stamp("question_bank_id", variation.question_bank_id))
-    .write_to(store.writer(GOLD, "selection_pool", AccumulateByRun(run_id, load_date)))
-    .run()
+p = Pipeline("selection")
+r = p.read(DatasetReader(available), name="read")
+scored = p.transform(Score("priority_score", priority_score), r, name="score")
+high = p.transform(Filter(high_value_case, name="high-value"), scored, name="filter")
+ranked = p.transform(Sort("priority_score", ascending=False), high, name="sort")  # top-first
+stamped = p.transform(
+    Stamp("question_bank_id", variation.question_bank_id), ranked, name="stamp"
 )
+p.write(
+    store.writer(GOLD, "selection_pool", AccumulateByRun(run_id, load_date)),
+    stamped,
+    name="write",
+)
+p.run()
 ```
 
 The **availability and selection criteria are specific Python processors**
@@ -193,20 +198,27 @@ reason, never silently drop* shape, pointed at
 **eligibility** rather than **validity** (ADR-0007 amendment 02).
 
 ```python
-(
-    Pipeline("selection", DatasetReader(available))
-    .transform(Score("priority_score", priority_score))
-    .transform(Filter(high_value_case, name="high-value"))
-    .transform(Sort("priority_score", ascending=False))
-    .transform(Stamp("question_bank_id", variation.question_bank_id))
-    .explain(                                   # land a per-Case trace alongside
-        store.writer(GOLD, "selection_trace", AccumulateByRun(run_id, load_date)),
-        id_column="case_ref",
-        score_column="priority_score",
-    )
-    .write_to(store.writer(GOLD, "selection_pool", AccumulateByRun(run_id, load_date)))
-    .run()
+p = Pipeline("selection")
+r = p.read(DatasetReader(available), name="read")
+scored = p.transform(Score("priority_score", priority_score), r, name="score")
+high = p.transform(Filter(high_value_case, name="high-value"), scored, name="filter")
+ranked = p.transform(Sort("priority_score", ascending=False), high, name="sort")
+stamped = p.transform(
+    Stamp("question_bank_id", variation.question_bank_id), ranked, name="stamp"
 )
+# land a per-Case trace alongside the SelectionPool (a sibling branch of `stamped`)
+p.explain(
+    store.writer(GOLD, "selection_trace", AccumulateByRun(run_id, load_date)),
+    stamped,
+    id_column="case_ref",
+    score_column="priority_score",
+)
+p.write(
+    store.writer(GOLD, "selection_pool", AccumulateByRun(run_id, load_date)),
+    stamped,
+    name="write",
+)
+p.run()
 ```
 
 The framework's generic **RowTrace** mechanics land a case-review selection trace
