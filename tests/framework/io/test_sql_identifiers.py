@@ -9,6 +9,7 @@ from framework.io.sql import quote_identifier
 from framework.io.writers import (
     AccumulateByRunWriter,
     QuarantineWriter,
+    SqliteTruncateReloadWriter,
     SqliteUpsertWriter,
 )
 
@@ -27,6 +28,13 @@ def test_name_with_spaces_hyphens_and_reserved_word_is_quoted():
     # Correctness: names that are illegal unquoted become legal once quoted.
     assert quote_identifier("order by") == '"order by"'
     assert quote_identifier("sort-key") == '"sort-key"'
+
+
+def test_mixed_case_name_is_preserved_by_quoting():
+    # Quoting preserves case verbatim — important on case-insensitive platforms
+    # (Windows, default macOS) where a bare identifier would fold.
+    assert quote_identifier("CasePool") == '"CasePool"'
+    assert quote_identifier("Case_ID") == '"Case_ID"'
 
 
 def test_reader_reads_a_table_whose_name_needs_quoting(tmp_path):
@@ -79,6 +87,20 @@ def test_upsert_writer_merges_into_table_and_columns_needing_quoting(tmp_path):
     result = SqliteReader(db, "case pool").read().to_pandas()
     by_id = dict(zip(result["case id"], result["full name"]))
     assert by_id == {1: "Ada Lovelace", 2: "Linus", 3: "Grace"}
+
+
+def test_truncate_reload_writer_round_trips_a_table_name_needing_quoting(tmp_path):
+    # This writer builds no SQL itself — it delegates to pandas to_sql, which
+    # quotes the table name. The round-trip proves an awkward name still works.
+    db = tmp_path / "raw.db"
+    frame = pd.DataFrame({"id": [1, 2]})
+
+    SqliteTruncateReloadWriter(db, "order detail").write(Dataset.from_pandas(frame))
+    # Full refresh: a second write replaces, not appends.
+    SqliteTruncateReloadWriter(db, "order detail").write(Dataset.from_pandas(frame))
+
+    result = SqliteReader(db, "order detail").read()
+    assert len(result) == 2
 
 
 def test_accumulate_writer_deletes_by_run_in_table_needing_quoting(tmp_path):
