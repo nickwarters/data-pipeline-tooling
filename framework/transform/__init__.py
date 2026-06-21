@@ -14,8 +14,8 @@ and ``SchemaCoercion`` — the *coerce* half of the schema adapter, which casts 
 column's round-trip-lossy values to the declared types (a reshape, not a check).
 
 The schema *check* (``SchemaValidator``) and the declared-schema value rules
-(``ValueRule`` / ``Nullable`` / ``Pattern`` / ...) live on the sibling
-``framework.validate`` facade, the ``validate(dataset)`` checks (``ColumnValidator``
+(``ValueRule`` / ``Nullable`` / ``Pattern`` / ...) live on
+``framework.core``, the ``validate(dataset)`` checks (``ColumnValidator``
 & friends) likewise, and ``WorkingDayCalendar`` on ``framework.shared`` — none of
 them reshape a dataset, so they sit apart from these transforms.
 

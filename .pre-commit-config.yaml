@@ -13,3 +13,17 @@ repos:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
+
+  # Run the test suite on commit. `language: system` uses the active environment
+  # (activate the venv, or `pip install -r requirements-dev.txt`) so pytest and
+  # its deps resolve cross-platform; `python -m pytest` avoids a hardcoded
+  # `.venv/bin` path that would differ on Windows. The whole suite runs once
+  # (pass_filenames: false) whenever any Python file is staged.
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: python -m pytest -q
+        language: system
+        types: [python]
+        pass_filenames: false

@@ -8,7 +8,7 @@ by :class:`~framework.core.schema.SchemaValidator`, and the masks they
 produce drive the quarantine partitioner. Each satisfies the
 :class:`~framework._internal.schema.ValueRule` protocol structurally.
 
-Re-exported from :mod:`framework.validate`.
+Re-exported from :mod:`framework.core`.
 """
 
 from __future__ import annotations

@@ -73,12 +73,15 @@ python3 -m venv .venv
 .venv/bin/pre-commit run --all-files             # lint + format the whole tree on demand
 ```
 
-**Lint/format:** `ruff` is the linter and formatter (config in `pyproject.toml`).
-The `.pre-commit-config.yaml` hooks run `ruff check --fix` then `ruff format` on
-staged files at commit time once `pre-commit install` has been run; a commit is
-blocked if `ruff check` reports an unfixable error (e.g. an unused variable or an
-over-long line), so fix it and re-stage. The hooks read the same `pyproject.toml`
-config, so they match a local `ruff` invocation.
+**Lint/format/test:** `ruff` is the linter and formatter (config in
+`pyproject.toml`). The `.pre-commit-config.yaml` hooks run `ruff check --fix` then
+`ruff format` on staged files at commit time once `pre-commit install` has been
+run; a commit is blocked if `ruff check` reports an unfixable error (e.g. an
+unused variable or an over-long line), so fix it and re-stage. The hooks read the
+same `pyproject.toml` config, so they match a local `ruff` invocation. A third
+hook runs the **full `pytest` suite** whenever any Python file is staged (a
+`language: system` local hook, so it uses the active environment — activate the
+venv before committing); a failing test blocks the commit.
 
 Run pipelines as **modules from the repo root** (`python -m pipelines.<name>`)
 so the import-only `framework` package resolves on `sys.path`. The framework

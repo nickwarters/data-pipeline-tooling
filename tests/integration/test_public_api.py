@@ -1,8 +1,8 @@
 """The public framework API: subpackage facades.
 
 A pipeline author depends on ``framework.core`` / ``framework.io`` /
-``framework.transform`` / ``framework.validate`` / ``framework.run`` /
-``framework.shared`` / ``framework.recipes`` — the stable public surface — not
+``framework.transform`` / ``framework.run`` / ``framework.shared`` /
+``framework.recipes`` — the stable public surface — not
 on internal modules by accident. These tests exercise that surface the way an
 author would: by building and running a real pipeline through the facades, and
 by asserting the internal plumbing stays out of reach.
@@ -15,7 +15,7 @@ FIXTURE = Path(__file__).parent.parent / "fixtures" / "cases.csv"
 
 PIPELINES_DIR = Path(__file__).parent.parent.parent / "pipelines"
 CASE_REVIEW_DIR = Path(__file__).parent.parent.parent / "case_review"
-PUBLIC_FACADES = {"core", "io", "transform", "validate", "run"}
+PUBLIC_FACADES = {"core", "io", "transform", "run"}
 
 
 def _framework_submodules_imported(source: str) -> set[str]:
@@ -58,12 +58,22 @@ def test_package_root_exposes_only_public_facade_modules():
         "core",
         "io",
         "transform",
-        "validate",
         "run",
     ]
+    # Every advertised facade must actually be bound on the package — not merely
+    # listed in __all__. A stale name in __all__ (e.g. a folded-away facade whose
+    # directory lingers on disk) passes ruff's F822 but raises AttributeError at
+    # runtime, so guard the binding here.
+    for name in framework.__all__:
+        assert hasattr(framework, name), (
+            f"framework.{name} listed in __all__ but unbound"
+        )
     assert framework.core.Dataset is not None
     assert framework.io.CsvReader is not None
     assert framework.transform.Filter is not None
+    # The validate(dataset) checks live on framework.core (the validate facade
+    # was folded into core).
+    assert framework.core.SchemaValidator is not None
     assert framework.core.ColumnValidator is not None
     assert framework.run.Pipeline is not None
 
@@ -120,7 +130,7 @@ def test_file_deliverable_writers_are_available_through_the_io_facade(tmp_path):
 
 def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_path):
     # Selection-style narrowing: processors come from framework.transform and
-    # the checks from framework.validate, composed onto the framework.run Pipeline.
+    # the checks from framework.core, composed onto the framework.run Pipeline.
     from framework.core import RAW, ColumnValidator
     from framework.io import CsvReader, Refresh, Store
     from framework.run import Pipeline
