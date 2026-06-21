@@ -14,7 +14,8 @@ seam, and those checks live in the pipeline's stages, not the seam.
 
 ## The pieces
 
-Import through the `framework.shared` facade (see [public-api.md](public-api.md)):
+Import from the top-level `tools.retry` package (see
+[public-api.md](public-api.md)):
 
 ```python
 from tools.retry import RetryPolicy, RetryingReader, RetryingWriter

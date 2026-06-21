@@ -16,7 +16,7 @@ python -m cli scaffold orders --force    # overwrite if it exists
 python -m cli scaffold orders --from-feed-file sample.csv  # seed from a real CSV
 ```
 
-This renders, from the template under `framework/_cli/scaffold_templates/feed/`, the feed
+This renders, from the template under `cli/scaffold_templates/feed/`, the feed
 **code** as a subpackage and its **test** under `tests/pipelines/` (with the rest
 of the suite, mirroring the source layout) — wired together and ready to run:
 
@@ -132,7 +132,7 @@ rows *are* a Case Type, reach for the additive variant instead (#155):
 python -m cli scaffold --case-type claims   # -> pipelines/claims/ + tests/pipelines/test_claims.py
 ```
 
-It renders, from `framework/_cli/scaffold_templates/case_type/`, a case-review-flavoured
+It renders, from `cli/scaffold_templates/case_type/`, a case-review-flavoured
 slice that does two things the generic scaffold won't:
 
 ```
