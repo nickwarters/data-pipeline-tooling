@@ -501,6 +501,7 @@ of writing a wrapper script. It is a thin shell over the runner and the
 
 ```sh
 python -m cli run pipelines/ingest /data --run-date 2026-05-29
+python -m cli run pipelines/ingest /data --dry-run   # preview each step, write nothing
 python -m cli status /data --pipeline ingest
 python -m cli runs /data --pipeline ingest --limit 5
 python -m cli log /data ingest --run-id 5f8ff8c7

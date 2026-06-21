@@ -931,10 +931,15 @@ the supplied `RunContext` or creates one for ad hoc runs, exposes the execution
 id as `pipeline.run_id`, times each planned step, and drives the composed
 `RunLog` (timing + structured JSONL logging — landed in #4). The planned step
 objects are internal: they expose stable name/kind/order, the wrapped component
-where applicable, and read-only/side-effect metadata for future plan-validation
-and dry-run work, but pipeline scripts still use only the builder methods. The
-named processor task (`.task()`, compatible with `.transform()`) landed in #23;
-lineage checkpoints (a `.write()`
+where applicable, and read-only/side-effect metadata for plan-validation and the
+**dry-run preview**, but pipeline scripts still use only the builder methods. A
+run carried out under `RunContext(dry_run=True)` (the `dry_run_pipeline` core
+behind `cli run --dry-run`, #102) reads, transforms, and validates real data but
+skips every write, quarantine, and explain commit — and touches no run log —
+accumulating a `DryRunReport` of columns, dtypes, row counts, and a bounded row
+sample per step; it falls back to an ambient run context so an author's bare
+`p.run()` inherits the dry-run flag without threading it by hand. The
+named processor task (`.task()`, compatible with `.transform()`) landed in #23; lineage checkpoints (a `.write()`
 on an intermediate node) landed in #49; the explicit DAG builder landed in #122.
 
 ### `WorkingDayCalendar` — working-day arithmetic (pure utility)

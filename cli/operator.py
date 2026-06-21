@@ -34,7 +34,7 @@ import sys
 from pathlib import Path
 
 from framework.core import PipelineError, format_failure
-from framework.run import RunRegistry, run_pipeline
+from framework.run import RunRegistry, dry_run_pipeline, run_pipeline
 from tools.calendar import WorkingDayCalendar
 from tools.orchestration import Orchestrator
 
@@ -119,6 +119,20 @@ def _run(args: argparse.Namespace) -> int:
     if module is None:
         return 1
     name = args.pipeline.strip("/").split("/")[-1]
+    if args.dry_run:
+        report = dry_run_pipeline(
+            module.run,
+            name,
+            Path(args.base_dir),
+            run_date=args.run_date,
+            logical_run_id=args.logical_run_id,
+            freshness_days=args.freshness_days,
+        )
+        print(report.render())
+        if report.failed:
+            print(format_failure(report.error), file=sys.stderr)
+            return 1
+        return 0
     try:
         run_pipeline(
             module.run,
@@ -276,6 +290,12 @@ def register(sub) -> None:
         default=[],
         metavar="KEY=VALUE",
         help="pass a run parameter to run(context), e.g. source_file=/path/file.csv",
+    )
+    run.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="preview the pipeline (read/process/validate) without writing any "
+        "artifacts; prints columns, dtypes, row counts, and a row sample per step",
     )
     run.set_defaults(func=_run)
 

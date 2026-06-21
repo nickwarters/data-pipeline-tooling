@@ -17,7 +17,7 @@ from framework.core.protocols import Processor, Reader, Validator, Writer
 from framework.core.validators import ValidationError
 from framework.run.address import RunAddress
 from framework.run.execution import PipelineExecution
-from framework.run.run_context import RunContext
+from framework.run.run_context import RunContext, current_context
 from tools.observability.run_log import NULL_RUN_LOG, RunLog
 
 log = logging.getLogger(__name__)
@@ -40,6 +40,9 @@ class Node:
         self._result: Any = None
         self._executed: bool = False
         self.warn_hits: list[str] = []
+        # A dry-run note this node contributes to the preview (e.g. the intent of
+        # a skipped commit). Set by side-effecting nodes; None for plain steps.
+        self.dry_run_note: str | None = None
         # Set by a side-effecting node once it has durably written an artifact;
         # surfaced on this node's run-log record so the log shows independently
         # committed evidence that outlives a later failure (ADR-0007 amd 03).
@@ -88,6 +91,13 @@ class Node:
                 committed=self.committed,
                 step_address=self.address.label if self.address is not None else None,
             )
+            if context.dry_run and context.dry_run_report is not None:
+                context.dry_run_report.observe(
+                    self.name,
+                    self.node_type,
+                    self._result,
+                    note=self.dry_run_note,
+                )
             return self._result
         except Exception as exc:
             # Log failure, tagged with its triage category (None for a raw bug).
@@ -99,6 +109,12 @@ class Node:
                 error_category=getattr(exc, "category", None),
                 step_address=self.address.label if self.address is not None else None,
             )
+            # A dry run still surfaces the failing step so the preview shows the
+            # shape so far and the clear reason it stopped (issue #102).
+            if context.dry_run and context.dry_run_report is not None:
+                context.dry_run_report.observe(
+                    self.name, self.node_type, note=f"FAILED: {exc}"
+                )
             raise
 
     def _do_execute(
@@ -232,8 +248,16 @@ class ExplainNode(Node):
     ) -> Dataset:
         if session.trace is not None:
             trace_ds = session.trace.finalize(dataset)
-            self.writer.write(trace_ds)
-            self.committed = True
+            if context.dry_run:
+                # Dry-run: build the trace to report its shape, but commit nothing.
+                self.dry_run_note = (
+                    f"would write trace: {len(trace_ds)} row(s) "
+                    f"({session.trace.selected} selected, "
+                    f"{session.trace.excluded} excluded)"
+                )
+            else:
+                self.writer.write(trace_ds)
+                self.committed = True
 
             # The original architecture recorded these counts in the metrics
             # of the explain step
@@ -243,7 +267,7 @@ class ExplainNode(Node):
                 rows_in=session.trace.considered,
                 rows_out=session.trace.selected,
                 rows_excluded=session.trace.excluded,
-                committed=True,
+                committed=self.committed,
                 step_address=self.address.label if self.address is not None else None,
             )
         return dataset
@@ -266,6 +290,19 @@ class QuarantineNode(Node):
         self, session: PipelineExecution, context: RunContext, dataset: Dataset
     ) -> Dataset:
         good, rejected = self.validator.partition(dataset)
+
+        if context.dry_run:
+            # Dry-run: report the quarantine count, but commit no rejects.
+            self.dry_run_note = f"would quarantine {len(rejected)} row(s)"
+            session.record(
+                self.name,
+                "ok",
+                rows_in=len(dataset),
+                rows_out=len(good),
+                rows_quarantined=len(rejected),
+                committed=False,
+            )
+            return good
 
         if len(rejected) > 0:
             frame = rejected.to_pandas()
@@ -303,6 +340,10 @@ class WriteNode(Node):
     def _do_execute(
         self, session: PipelineExecution, context: RunContext, dataset: Dataset
     ) -> Dataset:
+        if context.dry_run:
+            # Dry-run: skip the commit, report intent only (issue #102).
+            self.dry_run_note = f"would write {len(dataset)} row(s)"
+            return dataset
         try:
             self.writer.write(dataset)
             self.committed = True
@@ -427,7 +468,13 @@ class Pipeline:
         return "\n".join(lines)
 
     def run(self, context: RunContext | None = None) -> Any:
-        context = context or RunContext(pipeline=self._name, run_log=self._run_log)
+        # Fall back to the ambient run context (set by a dry run, say) before
+        # minting a fresh default, so an author's bare ``p.run()`` inherits it.
+        context = (
+            context
+            or current_context()
+            or RunContext(pipeline=self._name, run_log=self._run_log)
+        )
         run_log = (
             context.run_log if context.run_log is not NULL_RUN_LOG else self._run_log
         )

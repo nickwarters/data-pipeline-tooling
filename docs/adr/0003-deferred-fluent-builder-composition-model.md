@@ -32,7 +32,10 @@ The author-facing builder remains the same fluent API, but `.run()` now executes
 one ordered internal plan of `PipelineStep` objects rather than carrying the
 whole read/validate/process/checkpoint/explain/write procedure inline. Each step
 has a stable name/kind/order, a wrapped component where applicable, and
-read-only/side-effect metadata for future plan validation and dry-run work.
+read-only/side-effect metadata for plan validation and dry-run work. (The
+dry-run/preview that metadata anticipated landed in #102: `.run()` under
+`RunContext(dry_run=True)` reads/transforms/validates real data but skips every
+side-effecting commit, accumulating a `DryRunReport`.)
 
 This is not an orchestration engine and not a DAG model. Pipeline scripts still
 compose Readers, ordered single-dataset stages, optional governance outputs, and
