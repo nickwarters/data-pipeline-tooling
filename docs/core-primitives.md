@@ -166,6 +166,15 @@ lets a pipeline read only the columns it needs, leaving `read() -> Dataset`
 unchanged. This is what keeps each single-table pipeline narrow when a wide feed
 (650+ columns) is fanned out into a Case table and its Detail Tables.
 
+**Table and column names you configure** (the `table` and `columns=[...]` you pass
+to a `SqliteReader`/Writer) accept **any string** — spaces, hyphens, mixed case,
+and SQL reserved words are all fine. Every identifier is double-quoted at the
+SQLite seam through the single `framework.io.sql.quote_identifier` choke point, so
+the name is preserved verbatim (case included) and can never break out of the
+statement or inject SQL. Values such as `run_id` are passed as bound parameters,
+never interpolated. There is no separate "valid identifier" rule to learn: name a
+table or column whatever the source calls it.
+
 #### Source type coverage
 
 The Reader/Writer set is symmetric where the framework supports both inbound
