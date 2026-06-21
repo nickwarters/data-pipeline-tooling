@@ -6,9 +6,9 @@ structural validators it is **engine-confined**: it reaches the backing frame vi
 ``to_pandas``/``from_pandas`` because a transform needs the engine's vectorised
 operations.
 
-The builder attaches processors with :meth:`Pipeline.with_processor` and runs
-them as the ``process`` step. A processor has no severity: a transform either
-applies or it can't, so a failure is always fail-fast.
+The builder attaches a processor as a DAG node with :meth:`Pipeline.transform`
+and runs it as a ``transform`` step. A processor has no severity: a transform
+either applies or it can't, so a failure is always fail-fast.
 
 Two families of concrete processor live in the framework. The schema-driven
 ``SchemaCoercion`` (in :mod:`framework.transform.coercion`) is the write-side

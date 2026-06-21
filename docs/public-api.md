@@ -65,7 +65,7 @@ the implementation modules living alongside it:
 - `framework/transform/` — the dataset-reshaping primitives: `processors`,
   `coercion` (`SchemaCoercion` — the *coerce* half of the schema adapter),
   `quarantine`.
-- `framework/run/` — `builder`, `stages`, `execution`, `pipeline_steps`,
+- `framework/run/` — `builder`, `execution`, `pipeline_steps`,
   `trace`, `runner`, `run_context`. It also re-exports the observability seam
   (`RunLog`, `RunRegistry`) that lives in the sibling `tools.observability`
   package.
@@ -142,8 +142,7 @@ Moving data across the boundary.
 
 | Names | What |
 |-------|------|
-| `Pipeline` | The deferred DAG builder (`.add_stage(...)`, `.describe()` for a pre-run plan, `.run()` to execute). |
-| `ValidationStage`, `ProcessingStage`, `CheckpointStage` | Built-in ordered stage types for validation, processing, and explicit checkpoint side effects inside one class-level `Pipeline` run, composed via `.add_stage(...)`. Each is a spec that compiles to the internal step plan `.run()` executes — there is no public custom-`Stage` contract; the dataset→dataset transform extension point is the `Processor` (`framework.transform`). |
+| `Pipeline` | The deferred DAG builder. Nodes are declared explicitly — `.read` / `.transform` / `.validate` / `.write` (plus `.action` / `.explain` / `.quarantine`) each return a wired node that later steps depend on; `.describe()` renders the pre-run plan and `.run()` executes it in topological order. The dataset→dataset transform extension point is any `Dataset -> Dataset` callable passed to `.transform` (`framework.transform` ships `Score` / `Filter` / `JoinWith`). |
 | `run_pipeline`, `PipelineRunner`, `RunContext`, `FreshnessRequirement`, `FreshnessError`, `UnknownPipelineError` | The `run_pipeline` execution core (used by the path-addressed `run` command) + the thin domain runner and freshness guard. |
 | `RunLog`, `RunRegistry` | The structured-observability seam and its query store (re-exported here from `tools.observability`). |
 

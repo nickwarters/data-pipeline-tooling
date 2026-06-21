@@ -10,7 +10,7 @@ Import from here rather than the underlying modules::
     from framework.run import Pipeline, PipelineRunner, RunContext
 
 The modules behind this facade (``framework.run.builder``,
-``framework.run.stages``, ``framework.run.execution``,
+``framework.run.execution``,
 ``framework.run.pipeline_steps``, ``framework.run.runner``,
 ``framework.run.run_context``, ``framework.run.run_log``,
 ``framework.run.run_registry``) are internal layout: re-exports here are the
@@ -26,19 +26,11 @@ from framework.run.runner import (
     UnknownPipelineError,
     run_pipeline,
 )
-from framework.run.stages import (
-    CheckpointStage,
-    ProcessingStage,
-    ValidationStage,
-)
 from tools.observability.run_log import RunLog
 from tools.observability.run_registry import RunRegistry
 
 __all__ = [
     "Pipeline",
-    "ValidationStage",
-    "ProcessingStage",
-    "CheckpointStage",
     "PipelineRunner",
     "run_pipeline",
     "RunContext",
