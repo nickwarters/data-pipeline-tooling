@@ -42,12 +42,14 @@ from typing import (
 
 from framework._internal.describe import render
 from framework.core.dataset import Dataset
-from framework.core.errors import PipelineError
+from framework.core.errors import ErrorCategory, PipelineError
 from framework.core.protocols import DatasetSupplier
 
 
 class CoercionError(PipelineError):
     """Raised by a Processor when it cannot cast a value to its declared type."""
+
+    category = ErrorCategory.DATA
 
 
 # Business rules are expressed as plain Python callables over a row mapping; the

@@ -117,6 +117,49 @@ def test_failed_validation_records_the_failing_step_and_aborts(tmp_path):
     assert "write" not in steps
 
 
+def test_failed_validation_records_its_triage_category(tmp_path):
+    # A ValidationError is a DATA failure; the category lands on both the failing
+    # step record and the run summary so an operator can triage from the log.
+    log_path = tmp_path / "cases.log"
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
+
+    p = Pipeline("cases", run_log=RunLog(log_path))
+    r = p.read(reader, name="read")
+    v = p.validate(ColumnValidator(["case_ref"]), r, name="pre-validate")
+    p.write(CapturingWriter(), v, name="write")
+
+    with pytest.raises(ValidationError):
+        p.run()
+
+    steps = _by_step(_read_records(log_path))
+    assert steps["pre-validate"]["error_category"] == "data"
+    assert steps["run"]["error_category"] == "data"
+
+
+def test_a_raw_bug_records_a_null_category(tmp_path):
+    # A non-PipelineError (a genuine bug in a processor) is recorded with a null
+    # category — the absence is the signal that this was a bug, not an expected
+    # data/operational/config failure.
+    log_path = tmp_path / "cases.log"
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
+
+    def boom(dataset: Dataset) -> Dataset:
+        raise KeyError("missing key")
+
+    p = Pipeline("cases", run_log=RunLog(log_path))
+    r = p.read(reader, name="read")
+    t = p.transform(boom, r, name="boom")
+    p.write(CapturingWriter(), t, name="write")
+
+    with pytest.raises(KeyError):
+        p.run()
+
+    steps = _by_step(_read_records(log_path))
+    assert steps["boom"]["status"] == "error"
+    assert steps["boom"]["error_category"] is None
+    assert steps["run"]["error_category"] is None
+
+
 def test_warn_validator_is_recorded_as_a_warn_hit_and_the_run_continues(tmp_path):
     log_path = tmp_path / "cases.log"
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))

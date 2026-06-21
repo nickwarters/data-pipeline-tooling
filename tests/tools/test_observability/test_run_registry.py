@@ -142,6 +142,21 @@ def test_query_runs_returns_summaries_filterable_by_pipeline_and_status(tmp_path
     assert {r["run_id"] for r in errored} == {err_a}
 
 
+def test_ingest_preserves_the_error_triage_category(tmp_path):
+    # The failure's triage category survives the emitter->registry round-trip, so
+    # an operator can query "which runs failed on a data issue?" without grepping.
+    log_path = tmp_path / "runs.log"
+    err = _run_failing_pipeline(log_path, name="cases")
+
+    registry = RunRegistry(tmp_path / "registry.db")
+    registry.ingest(log_path)
+
+    by_step = {r["step"]: r for r in registry.records_for_run(err)}
+    # A missing-column ValidationError is a DATA failure.
+    assert by_step["pre-validate"]["error_category"] == "data"
+    assert by_step["run"]["error_category"] == "data"
+
+
 def test_ingest_tolerates_a_pre_timestamp_log(tmp_path):
     # The registry must read a log written before the timestamp field existed
     # (, the format the emitter produced previously): the record ingests,

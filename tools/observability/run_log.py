@@ -81,6 +81,9 @@ class RunLog:
                 rows_excluded=metrics.rows_excluded,
                 duration=time.perf_counter() - started,
                 errors=[str(exc)],
+                # An expected PipelineError carries its triage category; a raw
+                # exception (a genuine bug) has none — that absence is the signal.
+                error_category=getattr(exc, "category", None),
                 warn_hits=metrics.warn_hits,
             )
             raise
@@ -110,6 +113,7 @@ class RunLog:
         rows_excluded: int | None = None,
         duration: float | None = None,
         errors: list[str] | None = None,
+        error_category: str | None = None,
         warn_hits: list[str] | None = None,
     ) -> None:
         """Append one JSONL record and echo a human-readable line to the console."""
@@ -126,6 +130,9 @@ class RunLog:
             "rows_excluded": rows_excluded,
             "duration": duration,
             "errors": errors or [],
+            # The triage category of the failure (data/operational/config), or
+            # None for a non-PipelineError bug. See framework.core.ErrorCategory.
+            "error_category": error_category,
             "warn_hits": warn_hits or [],
         }
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -149,6 +156,8 @@ class RunLog:
             parts.append(f"{record['duration']:.3f}s")
         if record["errors"]:
             parts.append(f"errors={'; '.join(record['errors'])}")
+        if record.get("error_category"):
+            parts.append(f"category={record['error_category']}")
         if record["warn_hits"]:
             parts.append(f"warn={'; '.join(record['warn_hits'])}")
         parts.append(f"[run {record['run_id'][:8]}]")

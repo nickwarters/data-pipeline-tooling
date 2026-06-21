@@ -149,6 +149,10 @@ _Here_: every expected failure subclasses `PipelineError`, so a run boundary
 (the operator CLI, a scaffolded `main()`) catches the whole family with one
 `except` and presents it via `format_failure` — kind + message, no stack trace;
 a bug is *not* a `PipelineError`, so it keeps its traceback and gets noticed.
+Each expected failure also carries a **triage category** (`ErrorCategory`:
+`data` / `operational` / `config`) recorded on the run log (`error_category`),
+so an operator can route a failure — fix the data, the run, or the wiring —
+without reading every message; a bug has no category (the absence is the signal).
 
 **Port / Adapter**:
 A **port** is the abstract contract a collaborator must satisfy (in Python, a

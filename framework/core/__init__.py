@@ -15,7 +15,7 @@ contract, the submodule paths are not. See ``docs/public-api.md``.
 
 from framework._internal.schema import RowCheck, ValueRule, row_checks
 from framework.core.dataset import Dataset
-from framework.core.errors import PipelineError, format_failure
+from framework.core.errors import ErrorCategory, PipelineError, format_failure
 from framework.core.layers import GOLD, RAW, SILVER, Layer
 from framework.core.protocols import Processor, Reader, Severity, Validator, Writer
 from framework.core.schema import SchemaValidator
@@ -50,6 +50,7 @@ __all__ = [
     "Processor",
     "Validator",
     "Severity",
+    "ErrorCategory",
     "PipelineError",
     "format_failure",
     "ValidationError",

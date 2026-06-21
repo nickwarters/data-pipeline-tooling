@@ -76,12 +76,13 @@ class Node:
             )
             return self._result
         except Exception as exc:
-            # Log failure
+            # Log failure, tagged with its triage category (None for a raw bug).
             session.record(
                 self.name,
                 "error",
                 duration=time.perf_counter() - started,
                 errors=[str(exc)],
+                error_category=getattr(exc, "category", None),
             )
             raise
 
@@ -403,6 +404,7 @@ class Pipeline:
                 "error",
                 duration=time.perf_counter() - started,
                 errors=[str(exc)],
+                error_category=getattr(exc, "category", None),
             )
             raise
         finally:
