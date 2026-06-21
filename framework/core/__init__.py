@@ -1,8 +1,8 @@
 """Public facade: the foundational data vocabulary.
 
-The nouns every pipeline names regardless of task — ``Dataset`` and the medallion 
+The nouns every pipeline names regardless of task — ``Dataset`` and the medallion
 ``Layer`` constants ``RAW`` / ``SILVER`` / ``GOLD``. Plus, the foundational data
-contracts: declaring and enforcing a feed's schema (``SchemaValidator``, value rules) 
+contracts: declaring and enforcing a feed's schema (``SchemaValidator``, value rules)
 and structural validations.
 
 Import from here rather than the underlying modules::
@@ -13,12 +13,11 @@ The modules behind this facade are internal layout: re-exports here are the publ
 contract, the submodule paths are not. See ``docs/public-api.md``.
 """
 
-from framework.core.protocols import Reader, Severity, Validator, Writer
+from framework._internal.schema import RowCheck, ValueRule, row_checks
 from framework.core.dataset import Dataset
 from framework.core.errors import PipelineError, format_failure
 from framework.core.layers import GOLD, RAW, SILVER, Layer
-
-from framework._internal.schema import RowCheck, ValueRule, row_checks
+from framework.core.protocols import Processor, Reader, Severity, Validator, Writer
 from framework.core.schema import SchemaValidator
 from framework.core.validators import (
     ColumnValidator,
@@ -48,6 +47,7 @@ __all__ = [
     "GOLD",
     "Reader",
     "Writer",
+    "Processor",
     "Validator",
     "Severity",
     "PipelineError",

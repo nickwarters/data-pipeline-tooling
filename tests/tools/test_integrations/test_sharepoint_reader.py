@@ -5,15 +5,17 @@ import pytest
 
 from framework.core.dataset import Dataset
 from framework.io.readers import CsvReader, SqliteReader
-from tools.integrations.remote import SharePointReader
-from tools.integrations.remote import LocalCsvFetcher
 from framework.io.strategy import AccumulateByRun, Refresh
 from framework.io.writers import (
     AccumulateByRunWriter,
     SqliteTruncateReloadWriter,
 )
-from tools.integrations.remote import SharePointWriter
 from framework.run.builder import Pipeline
+from tools.integrations.remote import (
+    LocalCsvFetcher,
+    SharePointReader,
+    SharePointWriter,
+)
 
 
 class FakeListBackend:
@@ -116,9 +118,11 @@ def test_sharepoint_reader_composes_in_the_pipeline_builder(fixture_csv, tmp_pat
             "Advisers",
             fetcher=LocalCsvFetcher(fixture_csv),
         ),
-        name="read"
+        name="read",
     )
-    w = p.write(SqliteTruncateReloadWriter(tmp_path / "raw.db", "advisers"), r, name="write")
+    p.write(
+        SqliteTruncateReloadWriter(tmp_path / "raw.db", "advisers"), r, name="write"
+    )
     landed = p.run()
 
     assert landed.columns == ["adviser_id", "name"]
@@ -160,9 +164,9 @@ def test_sharepoint_writer_composes_in_the_pipeline_builder(fixture_csv):
             "Advisers",
             fetcher=LocalCsvFetcher(fixture_csv),
         ),
-        name="read"
+        name="read",
     )
-    w = p.write(
+    p.write(
         SharePointWriter(
             "https://contoso.sharepoint.com/sites/cases",
             "Advisers",
@@ -171,7 +175,7 @@ def test_sharepoint_writer_composes_in_the_pipeline_builder(fixture_csv):
             pusher=pusher,
         ),
         r,
-        name="write"
+        name="write",
     )
     p.run()
 
@@ -255,7 +259,11 @@ def test_selection_pool_is_delivered_to_a_per_case_type_list(tmp_path):
 
     p = Pipeline("selection-deliverable")
     r = p.read(SqliteReader(gold_db, "selection_pool"), name="read")
-    w = p.write(SharePointWriter(site, list_name, strategy=Refresh(), pusher=backend), r, name="write")
+    p.write(
+        SharePointWriter(site, list_name, strategy=Refresh(), pusher=backend),
+        r,
+        name="write",
+    )
     p.run()
 
     delivered = SharePointReader(site, list_name, fetcher=backend).read()

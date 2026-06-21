@@ -7,6 +7,7 @@ hits / validation failures / step order without parsing files by hand.
 
 import pytest
 
+from framework.core import ColumnValidator
 from framework.run import Pipeline
 from tests.framework_testing import (
     RecordingRunLog,
@@ -14,7 +15,6 @@ from tests.framework_testing import (
     given_rows,
     read_run_log,
 )
-from framework.core import ColumnValidator
 
 
 def test_recording_run_log_captures_warn_hits_in_memory():
@@ -25,8 +25,10 @@ def test_recording_run_log_captures_warn_hits_in_memory():
 
     p = Pipeline("cases", run_log=run_log)
     r = p.read(given_rows([{"amount": 100}]), name="read")
-    v = p.validate(ColumnValidator(["missing_col"]), r, severity="warn", name="validator")
-    w = p.write(writer, v, name="write")
+    v = p.validate(
+        ColumnValidator(["missing_col"]), r, severity="warn", name="validator"
+    )
+    p.write(writer, v, name="write")
     p.run()
 
     assert any("missing_col" in w for w in run_log.warn_hits)
@@ -46,7 +48,7 @@ def test_recording_run_log_captures_a_validation_failure():
     p = Pipeline("cases", run_log=run_log)
     r = p.read(given_rows([{"amount": 100}]), name="read")
     v = p.validate(ColumnValidator(["missing_col"]), r, name="validator")
-    w = p.write(writer, v, name="write")
+    p.write(writer, v, name="write")
 
     with pytest.raises(ValidationError):
         p.run()
@@ -65,7 +67,7 @@ def test_read_run_log_parses_an_on_disk_jsonl_file(tmp_path):
     writer = RecordingWriter()
     p = Pipeline("cases", run_log=RunLog(log_path))
     r = p.read(given_rows([{"amount": 100}]), name="read")
-    w = p.write(writer, r, name="write")
+    p.write(writer, r, name="write")
     p.run()
 
     records = read_run_log(log_path)

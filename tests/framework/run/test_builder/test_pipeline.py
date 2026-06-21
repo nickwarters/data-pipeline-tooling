@@ -1,21 +1,19 @@
-import logging
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
 from framework.core.dataset import Dataset
-from framework.io.readers import CsvReader
-from tools.integrations.remote import SharePointReader
-from framework.io.store import Store
-from framework.io.strategy import AccumulateByRun
-from framework.io.writers import QuarantineWriter
-from framework.run.builder import Pipeline, ReadNode, TransformNode, ValidateNode, WriteNode
-from tools.observability.run_log import RunLog
 from framework.core.validators import (
     ColumnValidator,
     RowCountValidator,
     ValidationError,
+)
+from framework.io.readers import CsvReader
+from framework.io.store import Store
+from framework.io.strategy import AccumulateByRun
+from framework.run.builder import (
+    Pipeline,
 )
 
 FIXTURE = Path(__file__).parent.parent.parent.parent / "fixtures" / "cases.csv"
@@ -46,6 +44,7 @@ def adding_processor(column: str):
         frame = dataset.to_pandas().copy()
         frame[column] = "derived"
         return Dataset.from_pandas(frame)
+
     return process
 
 
@@ -53,6 +52,7 @@ def dropping_processor(column: str):
     def process(dataset: Dataset) -> Dataset:
         frame = dataset.to_pandas().drop(columns=[column])
         return Dataset.from_pandas(frame)
+
     return process
 
 
@@ -67,10 +67,10 @@ def test_pipeline_describe_shows_the_deferred_execution_plan():
     n3 = p.transform(adding_processor("derived"), n2, name="process")
     n4 = p.write(checkpoint, n3, name="checkpoint")
     n5 = p.validate(ColumnValidator(["derived"]), n4, name="post-validate")
-    n6 = p.write(writer, n5, name="write")
+    p.write(writer, n5, name="write")
 
     plan = p.describe()
-    
+
     assert "[Read] read" in plan
     assert "[Validate] pre-validate (depends on: read)" in plan
     assert "[Transform] process (depends on: pre-validate)" in plan
@@ -90,7 +90,7 @@ def test_pipeline_defers_all_work_until_run():
     p = Pipeline("cases")
     read = p.read(reader, name="read")
     p.write(writer, read, name="write")
-    
+
     assert reader.read_count == 0
     assert writer.write_count == 0
 
@@ -115,7 +115,7 @@ def test_run_hands_the_read_dataset_to_the_writer_and_returns_it():
 def test_error_severity_pre_validator_aborts_before_any_write():
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
     writer = CapturingWriter()
-    
+
     p = Pipeline("cases")
     read = p.read(reader, name="read")
     val = p.validate(ColumnValidator(["case_ref"]), read, name="pre-validate")
@@ -133,11 +133,15 @@ def test_failed_run_leaves_the_gold_layer_untouched(tmp_path):
     store.writer("gold", "casepool", AccumulateByRun("r1", "2026-05-29")).write(seed)
 
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [3]})))
-    
+
     p = Pipeline("cases")
     read = p.read(reader, name="read")
     val = p.validate(RowCountValidator(minimum=100), read, name="post-validate")
-    p.write(store.writer("gold", "casepool", AccumulateByRun("r2", "2026-05-30")), val, name="write")
+    p.write(
+        store.writer("gold", "casepool", AccumulateByRun("r2", "2026-05-30")),
+        val,
+        name="write",
+    )
 
     with pytest.raises(ValidationError):
         p.run()
@@ -171,8 +175,8 @@ def test_checkpoint_sees_state_at_its_position_in_the_stage_sequence():
     read = p.read(reader, name="read")
     add_a = p.transform(adding_processor("col_a"), read, name="add_a")
     checkpoint = p.write(cp, add_a, name="checkpoint")
-    add_b = p.transform(adding_processor("col_b"), checkpoint, name="add_b")
-    
+    p.transform(adding_processor("col_b"), checkpoint, name="add_b")
+
     p.run()
 
     assert "col_a" in cp.written.columns

@@ -1,17 +1,13 @@
-import threading
 import uuid
 
 import pandas as pd
-import pytest
 
 from case_review.case_type import CaseType
 from case_review.gold import ingest_silver_to_gold
-from framework._internal.connection import connect
 from framework.core.dataset import Dataset
 from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun, Refresh
-from framework.core.validators import ValidationError
-from tests._schema_fixtures import LandedCase, RuledCase
+from tests._schema_fixtures import LandedCase
 
 # The Case Type owns identity now; its namespace derives from its name, so this
 # is the same UUID space the explicit _NS used to name.

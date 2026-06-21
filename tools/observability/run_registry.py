@@ -143,8 +143,7 @@ class RunRegistry:
 
             # --- decode lines (strip \r to handle CRLF on Windows) ---
             raw_lines = [
-                chunk.rstrip(b"\r").decode("utf-8")
-                for chunk in consumed.split(b"\n")
+                chunk.rstrip(b"\r").decode("utf-8") for chunk in consumed.split(b"\n")
             ]
 
             # --- collect run_ids in the tail for ordinal seeding ---

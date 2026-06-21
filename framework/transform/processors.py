@@ -41,9 +41,9 @@ from typing import (
 )
 
 from framework._internal.describe import render
+from framework.core.dataset import Dataset
 from framework.core.errors import PipelineError
 from framework.core.protocols import DatasetSupplier
-from framework.core.dataset import Dataset
 
 
 class CoercionError(PipelineError):
@@ -319,7 +319,9 @@ class JoinColumns:
 _MergeHow = Literal["left", "right", "inner", "outer", "cross"]
 
 
-def _as_supplier(source: DatasetSupplier | Dataset | object) -> DatasetSupplier | Dataset:
+def _as_supplier(
+    source: DatasetSupplier | Dataset | object,
+) -> DatasetSupplier | Dataset:
     if isinstance(source, Dataset):
         return source
     if callable(source):
@@ -327,7 +329,9 @@ def _as_supplier(source: DatasetSupplier | Dataset | object) -> DatasetSupplier 
     read = getattr(source, "read", None)
     if callable(read):
         return read
-    raise TypeError("join dependency must be a Dataset, callable, or object with read()")
+    raise TypeError(
+        "join dependency must be a Dataset, callable, or object with read()"
+    )
 
 
 class JoinDependency:
@@ -853,9 +857,7 @@ class Sample:
         if (n is None) == (fraction is None):
             raise ValueError("Sample requires exactly one of `n` or `fraction`")
         if fraction is not None and not 0 < fraction <= 1:
-            raise ValueError(
-                f"Sample `fraction` must be in (0, 1], got {fraction!r}"
-            )
+            raise ValueError(f"Sample `fraction` must be in (0, 1], got {fraction!r}")
         self._n = n
         self._fraction = fraction
         self._seed = seed

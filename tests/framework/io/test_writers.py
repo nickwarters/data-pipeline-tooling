@@ -69,7 +69,7 @@ def test_csv_writer_round_trips_through_the_matching_reader(tmp_path):
 
     p = Pipeline("cases")
     r = p.read(CsvReader(FIXTURE), name="read")
-    w = p.write(CsvWriter(target, Refresh()), r, name="write")
+    p.write(CsvWriter(target, Refresh()), r, name="write")
     landed = p.run()
 
     round_tripped = CsvReader(target).read()
@@ -87,7 +87,7 @@ def test_excel_writer_round_trips_through_the_matching_reader(tmp_path):
 
     p = Pipeline("cases")
     r = p.read(CsvReader(FIXTURE), name="read")
-    w = p.write(ExcelWriter(target, Refresh(), sheet="cases"), r, name="write")
+    p.write(ExcelWriter(target, Refresh(), sheet="cases"), r, name="write")
     p.run()
 
     round_tripped = ExcelReader(target, sheet="cases").read()
@@ -103,7 +103,7 @@ def test_json_writer_emits_file_deliverable_records(tmp_path):
 
     p = Pipeline("cases")
     r = p.read(CsvReader(FIXTURE), name="read")
-    w = p.write(JsonWriter(target, Refresh()), r, name="write")
+    p.write(JsonWriter(target, Refresh()), r, name="write")
     p.run()
 
     records = json.loads(target.read_text(encoding="utf-8"))

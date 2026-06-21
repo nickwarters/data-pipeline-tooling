@@ -9,9 +9,9 @@ from framework.io.readers import DatasetReader
 from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun, Refresh
 from framework.run.builder import Pipeline
-from tools.calendar import WorkingDayCalendar
 from framework.transform.processors import Filter, Sort, Stamp
 from tests._schema_fixtures import ActivityCase
+from tools.calendar import WorkingDayCalendar
 
 
 def _case_type() -> CaseType:
@@ -70,13 +70,15 @@ def test_selection_narrows_the_casepool_into_a_stamped_selection_pool(tmp_path):
     r = p.read(DatasetReader(available), name="read")
     f = p.transform(Filter(lambda row: row["amount"] >= 100), r, name="filter")
     s = p.transform(Sort("amount", ascending=False), f, name="sort")
-    st = p.transform(Stamp("question_bank_id", variation.question_bank_id), s, name="stamp")
-    w = p.write(
+    st = p.transform(
+        Stamp("question_bank_id", variation.question_bank_id), s, name="stamp"
+    )
+    p.write(
         store.writer(
             "gold", "selection_pool", AccumulateByRun("2026-05-29", "2026-05-29")
         ),
         st,
-        name="write"
+        name="write",
     )
     p.run()
 

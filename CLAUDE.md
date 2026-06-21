@@ -62,14 +62,23 @@ domain language in `CONTEXT.md`; the core primitives are documented in
 
 ```sh
 python3 -m venv .venv
-.venv/bin/pip install -r requirements-dev.txt   # pandas + pytest
+.venv/bin/pip install -r requirements-dev.txt   # pandas + pytest + ruff + pre-commit
+.venv/bin/pre-commit install                      # activate the lint/format git hooks (once per clone)
 .venv/bin/python -m pytest                       # run the suite
 .venv/bin/python -m pipelines.demo_csv_to_raw /tmp/demo   # run the demo (module form, from repo root)
 .venv/bin/python -m cli scaffold orders            # scaffold a feed -> pipelines/orders/ + tests/pipelines/test_orders.py (#97)
 .venv/bin/python -m cli scaffold orders --from-feed-file sample.csv  # seed schema/sample/test from a real CSV header
 .venv/bin/python -m cli scaffold --case-type claims # scaffold a Case Type ingest feed (source->raw->silver, identity declared; #155)
 .venv/bin/python -m cli run pipelines/ingest /tmp/demo            # operator CLI: run/orchestrate/status/runs/log (see docs/operator-cli.md)
+.venv/bin/pre-commit run --all-files             # lint + format the whole tree on demand
 ```
+
+**Lint/format:** `ruff` is the linter and formatter (config in `pyproject.toml`).
+The `.pre-commit-config.yaml` hooks run `ruff check --fix` then `ruff format` on
+staged files at commit time once `pre-commit install` has been run; a commit is
+blocked if `ruff check` reports an unfixable error (e.g. an unused variable or an
+over-long line), so fix it and re-stage. The hooks read the same `pyproject.toml`
+config, so they match a local `ruff` invocation.
 
 Run pipelines as **modules from the repo root** (`python -m pipelines.<name>`)
 so the import-only `framework` package resolves on `sys.path`. The framework

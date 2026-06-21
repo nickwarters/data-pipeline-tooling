@@ -12,14 +12,16 @@ from tests.framework_testing import read_rows
 from .pipeline import FEED_NAME, run
 from .schema import MyfeedRow
 
+
 def test_source_rows_process_correctly():
     source = [
         {"dummy": "row"},
     ]
     assert len(source) > 0
 
+
 def test_bundled_sample_feed_refines_through_to_gold(tmp_path):
-    dataset = run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
+    run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
 
     store = StoreCatalog(tmp_path).store(FEED_NAME)
 

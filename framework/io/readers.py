@@ -8,13 +8,26 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+
 import pandas as pd
 
 from framework._internal.connection import connect
-from framework._internal.describe import redact_url, render
-from framework.core.protocols import Reader
+from framework._internal.describe import render
 from framework.core.dataset import Dataset
+from framework.core.protocols import Reader
 from framework.io.sql import quote_identifier
+
+# ``Reader`` is imported only to be re-exported through ``framework.io``; listing
+# it in ``__all__`` marks it as intentional public surface so lint won't strip it.
+__all__ = [
+    "Reader",
+    "DatasetReader",
+    "CsvReader",
+    "GlobCsvReader",
+    "ExcelReader",
+    "SqliteReader",
+]
+
 
 class DatasetReader:
     """Adapt an already-in-memory ``Dataset`` to the ``Reader`` shape.
@@ -144,5 +157,3 @@ class SqliteReader:
             table=self._table,
             columns=self._columns,
         )
-
-

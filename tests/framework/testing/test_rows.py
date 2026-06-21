@@ -7,8 +7,8 @@ without wiring temp directories or SQLite by hand.
 
 import pytest
 
-from framework.run import Pipeline
 from framework.core import Dataset
+from framework.run import Pipeline
 from tests.framework_testing import (
     RecordingWriter,
     assert_rows_equal,
@@ -28,10 +28,11 @@ def test_given_rows_through_pipeline_into_recording_writer():
 
     p = Pipeline("selection")
     read = p.read(reader, name="read")
+
     def filter_high_value(dataset: Dataset) -> Dataset:
         df = dataset.to_pandas()
         return Dataset(df[df["amount"] >= 100])
-        
+
     filtered = p.transform(filter_high_value, read, name="filter")
     p.write(writer, filtered, name="write")
     p.run()
@@ -90,18 +91,17 @@ def test_assert_rows_equal_unwraps_a_recording_writer_and_ignores_a_stamp():
     writer = RecordingWriter()
     p = Pipeline("cases")
     read = p.read(given_rows([{"case_id": "c1", "amount": 100}]), name="read")
+
     def stamp(dataset: Dataset) -> Dataset:
         df = dataset.to_pandas()
         df["run_id"] = "run-123"
         return Dataset(df)
-        
+
     stamped = p.transform(stamp, read, name="stamp")
     p.write(writer, stamped, name="write")
     p.run()
 
-    assert_rows_equal(
-        writer, [{"case_id": "c1", "amount": 100}], ignoring=["run_id"]
-    )
+    assert_rows_equal(writer, [{"case_id": "c1", "amount": 100}], ignoring=["run_id"])
 
 
 def test_assert_rows_equal_raises_on_a_real_mismatch():
