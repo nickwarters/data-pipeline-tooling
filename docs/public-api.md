@@ -66,7 +66,8 @@ the implementation modules living alongside it:
   `coercion` (`SchemaCoercion` — the *coerce* half of the schema adapter),
   `quarantine`.
 - `framework/run/` — `builder`, `execution`, `pipeline_steps`,
-  `trace`, `runner`, `run_context`. It also re-exports the observability seam
+  `trace`, `runner`, `run_context`, `dry_run` (the preview report behind
+  `dry_run_pipeline`). It also re-exports the observability seam
   (`RunLog`, `RunRegistry`) that lives in the sibling `tools.observability`
   package.
 
@@ -146,6 +147,7 @@ Moving data across the boundary.
 | `Pipeline` | The deferred DAG builder. Nodes are declared explicitly — `.read` / `.task` / `.validate` / `.write` (plus compatible `.transform`, `.action`, `.explain`, and `.quarantine`) each return a wired node that later steps depend on; `.describe()` renders the pre-run plan and `.run()` executes it in topological order. A **task** is the preferred public name for a stable named unit of work inside a pipeline. Dataset→dataset work is any `Dataset -> Dataset` callable passed to `.task(name, func, *inputs)`; `.transform(func, *inputs, name=...)` remains supported with the same execution path (`framework.transform` ships `Score` / `Filter` / `JoinWith`). |
 | `RunAddress`, `RunAddressError` | A stable address for dependency targets: whole Pipelines (`pipeline`, `subject/pipeline`) or named run steps (`pipeline.step`, `subject/pipeline.step`, for example `pipeline_2.step_4`). The builder wires these onto run-log records as `step_address`; `RunRegistry.records_for_address(...)`, `RunRegistry.has_successful_address(...)`, and `RunRegistry.latest_success(...)` use that key for upstream dependency checks. Use `RunAddress.pipeline(...)`, `RunAddress.step(...)`, or `RunAddress.parse(label)` when code already has structured pieces or accepts config labels. Invalid labels raise `RunAddressError`, a config-category `PipelineError`. |
 | `run_pipeline`, `PipelineRunner`, `RunContext`, `Requirement`, `FreshnessRequirement`, `FreshnessError`, `UnknownPipelineError` | The `run_pipeline` execution core (used by the path-addressed `run` command) + the thin domain runner and requirement guard. `FreshnessRequirement` is the compatibility adapter for old pipeline-level freshness checks. |
+| `dry_run_pipeline`, `DryRunReport` | The preview/dry-run path (used by `run --dry-run`): runs a handler under a dry-run `RunContext` that reads, processes, and validates real data but skips every write/quarantine/explain commit, returning a `DryRunReport` of columns, dtypes, row counts, and a bounded row sample per step. |
 | `RunLog`, `RunRegistry` | The structured-observability seam and its query store (re-exported here from `tools.observability`). |
 
 ## The `tools` package — sibling utilities

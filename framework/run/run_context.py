@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import contextvars
 import datetime as dt
 import uuid
 from collections.abc import Mapping
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator
 
+from framework.run.dry_run import DryRunReport
 from tools.observability.run_log import NULL_RUN_LOG, RunLog
 from tools.observability.run_registry import RunRegistry
 
@@ -37,7 +41,10 @@ class RunContext:
         pipeline: str | None = None,
         freshness_days: int = 0,
         params: RunParams | None = None,
+        dry_run: bool = False,
     ) -> None:
+        self.dry_run = dry_run
+        self.dry_run_report: DryRunReport | None = DryRunReport() if dry_run else None
         self.base_dir = Path(base_dir) if base_dir is not None else None
         self.subject = subject
         self.pipeline = pipeline
@@ -80,3 +87,28 @@ class RunContext:
 
 def _date_text(value: dt.date | str) -> str:
     return value.isoformat() if isinstance(value, dt.date) else value
+
+
+# The ambient run context for the current call stack. A handler runs inside
+# ``active_context(ctx)``; a ``Pipeline.run()`` invoked with no explicit context
+# falls back to this. That makes a dry run safe even for the common
+# ``p.run()`` (no-arg) authoring style: the dry-run flag reaches every nested
+# pipeline without each call having to thread the context through by hand.
+_ACTIVE_CONTEXT: contextvars.ContextVar["RunContext | None"] = contextvars.ContextVar(
+    "active_run_context", default=None
+)
+
+
+@contextmanager
+def active_context(context: "RunContext") -> "Iterator[RunContext]":
+    """Make ``context`` the ambient run context for the duration of the block."""
+    token = _ACTIVE_CONTEXT.set(context)
+    try:
+        yield context
+    finally:
+        _ACTIVE_CONTEXT.reset(token)
+
+
+def current_context() -> "RunContext | None":
+    """Return the ambient run context, or ``None`` outside an active block."""
+    return _ACTIVE_CONTEXT.get()
