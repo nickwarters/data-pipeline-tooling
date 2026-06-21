@@ -213,18 +213,23 @@ from framework.transform import Rename, SchemaCoercion
 from framework.core import ColumnValidator, SchemaValidator
 
 store = StoreCatalog("/path/to/share").store("cases")
-(
-    Pipeline("cases", store.reader(RAW, "cases"))
-    # optional: gate the *source* columns in the source's own vocabulary, so a
-    # missing/renamed source column fails as "missing 'Case Number'" rather than
-    # surfacing later as a confusing "missing 'case_number'" after the rename.
-    .validate(ColumnValidator(["Case Number", "Adviser Name"]))
-    .transform(Rename({"Case Number": "case_number", "Adviser Name": "adviser_name"}))
-    .transform(SchemaCoercion(CasesRow))
-    .validate(SchemaValidator(CasesRow))
-    .write_to(store.writer(SILVER, "cases", Refresh()))
-    .run()
+p = Pipeline("cases")
+raw = p.read(store.reader(RAW, "cases"), name="read")
+# optional: gate the *source* columns in the source's own vocabulary, so a
+# missing/renamed source column fails as "missing 'Case Number'" rather than
+# surfacing later as a confusing "missing 'case_number'" after the rename.
+gated = p.validate(
+    ColumnValidator(["Case Number", "Adviser Name"]), raw, name="source-columns"
 )
+renamed = p.transform(
+    Rename({"Case Number": "case_number", "Adviser Name": "adviser_name"}),
+    gated,
+    name="rename",
+)
+coerced = p.transform(SchemaCoercion(CasesRow), renamed, name="coerce")
+validated = p.validate(SchemaValidator(CasesRow), coerced, name="post-validate")
+p.write(store.writer(SILVER, "cases", Refresh()), validated, name="write")
+p.run()
 ```
 
 The leading `ColumnValidator` is **optional** and is about error legibility, not
@@ -332,23 +337,25 @@ from framework.run import Pipeline
 from framework.core import ColumnValidator, SchemaDriftValidator
 
 store = StoreCatalog("/path/to/share").store("cases")
-landed = (
-    Pipeline("cases", ExcelReader("feed.xlsx", sheet="cases"))
-    .validate(ColumnValidator(["case_id"]))   # optional: gate the input
-    # optional: warn (don't abort) when the source's columns drift from the
-    # prior run's landed set — catches owner-controlled schema change at the
-    # door (#51). First run has no prior, so it's a clean no-op.
-    .validate(
-        SchemaDriftValidator(store.columns_of(RAW, "cases")), severity="warn"
-    )
-    .write_to(store.writer(RAW, "cases", Refresh()))
-    .run()
+p = Pipeline("cases")
+raw = p.read(ExcelReader("feed.xlsx", sheet="cases"), name="read")
+gated = p.validate(ColumnValidator(["case_id"]), raw, name="columns")  # optional: gate input
+# optional: warn (don't abort) when the source's columns drift from the
+# prior run's landed set — catches owner-controlled schema change at the
+# door (#51). First run has no prior, so it's a clean no-op.
+checked = p.validate(
+    SchemaDriftValidator(store.columns_of(RAW, "cases")),
+    gated,
+    name="drift",
+    severity="warn",
 )
+p.write(store.writer(RAW, "cases", Refresh()), checked, name="write")
+landed = p.run()
 ```
 
 Swapping the Reader is the only change needed to ingest the same feed from a
 different source type — the rest of the pipeline is identical. Validators and
-(later) processors compose in the same fluent way; see
+processors compose as explicit steps wired to their upstream node; see
 [`core-primitives.md`](core-primitives.md).
 
 If a landing directory contains many files, choose the component by the logical
@@ -453,11 +460,16 @@ shared source, not a mid-run checkpoint (CONTEXT.md, #48):
 
 ```python
 from framework.io import Refresh, SharePointWriter, SqliteReader
-from framework.run.builder import Pipeline
+from framework.run import Pipeline
 
-Pipeline("selection-deliverable", SqliteReader(gold_db, "selection_pool")).write_to(
-    SharePointWriter(site, f"Selection - {case_type}", strategy=Refresh(), pusher=client)
-).run()
+p = Pipeline("selection-deliverable")
+r = p.read(SqliteReader(gold_db, "selection_pool"), name="read")
+p.write(
+    SharePointWriter(site, f"Selection - {case_type}", strategy=Refresh(), pusher=client),
+    r,
+    name="write",
+)
+p.run()
 ```
 
 ```python
