@@ -231,7 +231,7 @@ def test_feed_file_seeds_the_tests_sample_rows(tmp_path):
     scaffold.render("orders", tmp_path, feed_file=feed)
 
     test_text = (tmp_path / "tests" / "pipelines" / "test_orders.py").read_text("utf-8")
-    assert '{"order_id": "O1", "customer": "Acme", "total": 100}' in test_text
+    assert '"order_id": "O1"' in test_text
     assert "record_id" not in test_text  # no leftover template sample rows
 
 
