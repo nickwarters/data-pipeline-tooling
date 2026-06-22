@@ -66,3 +66,5 @@ The framework's primary deployment target is **Windows**, but it must also run o
 The framework's language, runtime, and tooling have not been chosen yet. Before scaffolding anything substantial, confirm those decisions with the user rather than assuming — they have indicated the details will be defined collaboratively ("We'll dive into the details next").
 
 **Keep the docs in sync with every change.** Any piece of work — a new primitive, a renamed term, a behaviour change — is not done until the affected documentation reflects it: the relevant per-slice doc under `docs/`, the usage guide [`docs/README.md`](docs/README.md), the domain language in [`CONTEXT.md`](CONTEXT.md), and any ADR it touches. Treat stale docs as a defect in the change itself, not a follow-up.
+
+- Always activate the virtual environment (`. .venv/bin/activate`) before running `git commit` to ensure pre-commit hooks run in the correct environment with all dependencies. Never use `--no-verify` to bypass hooks unless explicitly instructed.
