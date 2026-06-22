@@ -2,33 +2,50 @@
 """Operator CLI (`python -m cli`).
 
 Drives the CLI as a subprocess so the tests exercise the same entry point an
-operator does: argument parsing, dispatch, exit codes, and console output. Every
-behaviour runs on the bundled CSV feed + local SQLite only, with no external
-services.
+operator does: argument parsing, dispatch, exit codes, and console output. These
+tests cover the CLI *plumbing* only, so they run against the throwaway fixture
+pipelines under ``tests/fixtures/clipipelines/`` rather than the real application
+pipelines -- nothing here should break when ``pipelines/ingest`` or
+``pipelines/selection`` change. The real pipelines' own end-to-end CLI coverage
+lives in ``tests/integration/test_operator_cli_e2e.py``. Everything runs on local
+SQLite only, with no external services.
 """
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
+FIXTURES = ROOT / "tests" / "fixtures"
 
 
 def _cli(*args):
+    # Put the fixture pipelines on the import path so `run clipipelines/<name>`
+    # resolves to tests/fixtures/clipipelines/<name>/pipeline.py.
+    env = {
+        **os.environ,
+        "PYTHONPATH": os.pathsep.join(
+            [str(FIXTURES), os.environ.get("PYTHONPATH", "")]
+        ),
+    }
     return subprocess.run(
         [sys.executable, "-m", "cli", *args],
         capture_output=True,
         text=True,
         cwd=ROOT,
+        env=env,
     )
 
 
 def test_run_executes_a_pipeline_by_its_path(tmp_path):
-    result = _cli("run", "pipelines/ingest", str(tmp_path), "--run-date", "2026-05-29")
+    result = _cli(
+        "run", "clipipelines/_source", str(tmp_path), "--run-date", "2026-05-29"
+    )
 
     assert result.returncode == 0, result.stderr
-    assert (tmp_path / "cases" / "raw.db").exists()
+    assert (tmp_path / "fixture" / "raw.db").exists()
     assert (tmp_path / "_registry" / "runs.db").exists()
 
 
@@ -38,15 +55,15 @@ def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
 
     assert (
         _cli(
-            "run", "pipelines/ingest", str(tmp_path), "--run-date", "2026-05-29"
+            "run", "clipipelines/_source", str(tmp_path), "--run-date", "2026-05-29"
         ).returncode
         == 0
     )
 
-    def selection():
+    def downstream():
         return _cli(
             "run",
-            "pipelines/selection",
+            "clipipelines/_downstream",
             str(tmp_path),
             "--run-date",
             "2026-05-29",
@@ -54,16 +71,12 @@ def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
             "REDRIVE-7",
         )
 
-    assert selection().returncode == 0, selection().stderr
+    assert downstream().returncode == 0, downstream().stderr
     # Re-drive the same business run a second time.
-    assert selection().returncode == 0
+    assert downstream().returncode == 0
 
     pool = (
-        StoreCatalog(tmp_path)
-        .store("cases")
-        .reader(GOLD, "selection_pool")
-        .read()
-        .to_pandas()
+        StoreCatalog(tmp_path).store("fixture").reader(GOLD, "pool").read().to_pandas()
     )
     # Replaced under the one logical run id, not accumulated into duplicates.
     assert set(pool["run_id"]) == {"REDRIVE-7"}
@@ -71,18 +84,36 @@ def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
     assert list(pool["case_ref"]) == ["c1", "c2"]
 
 
+def test_run_downstream_succeeds_after_fresh_source_history(tmp_path):
+    # With a current successful _source run on record, the freshness gate passes
+    # and _downstream runs to completion.
+    assert (
+        _cli(
+            "run", "clipipelines/_source", str(tmp_path), "--run-date", "2026-05-29"
+        ).returncode
+        == 0
+    )
+
+    downstream = _cli(
+        "run", "clipipelines/_downstream", str(tmp_path), "--run-date", "2026-05-29"
+    )
+
+    assert downstream.returncode == 0, downstream.stderr
+    assert "FixturePool" in downstream.stdout
+
+
 def test_run_unknown_pipeline_reports_clear_error(tmp_path):
-    result = _cli("run", "pipelines/nope", str(tmp_path))
+    result = _cli("run", "clipipelines/nope", str(tmp_path))
 
     assert result.returncode != 0
-    assert "no pipeline at 'pipelines/nope'" in result.stderr
+    assert "no pipeline at 'clipipelines/nope'" in result.stderr
     assert "Traceback" not in result.stderr
 
 
 def test_runs_lists_recent_runs_from_the_registry(tmp_path):
     assert (
         _cli(
-            "run", "pipelines/ingest", str(tmp_path), "--run-date", "2026-05-29"
+            "run", "clipipelines/_source", str(tmp_path), "--run-date", "2026-05-29"
         ).returncode
         == 0
     )
@@ -90,37 +121,37 @@ def test_runs_lists_recent_runs_from_the_registry(tmp_path):
     result = _cli("runs", str(tmp_path))
 
     assert result.returncode == 0, result.stderr
-    assert "ingest" in result.stdout
+    assert "_source" in result.stdout
     assert "ok" in result.stdout
 
 
 def test_status_shows_latest_run_per_pipeline(tmp_path):
     assert (
         _cli(
-            "run", "pipelines/ingest", str(tmp_path), "--run-date", "2026-05-29"
+            "run", "clipipelines/_source", str(tmp_path), "--run-date", "2026-05-29"
         ).returncode
         == 0
     )
 
-    result = _cli("status", str(tmp_path), "--pipeline", "ingest")
+    result = _cli("status", str(tmp_path), "--pipeline", "_source")
 
     assert result.returncode == 0, result.stderr
-    assert "ingest" in result.stdout
+    assert "_source" in result.stdout
     assert "ok" in result.stdout
 
 
 def test_log_summarizes_a_run_log_file(tmp_path):
     assert (
         _cli(
-            "run", "pipelines/ingest", str(tmp_path), "--run-date", "2026-05-29"
+            "run", "clipipelines/_source", str(tmp_path), "--run-date", "2026-05-29"
         ).returncode
         == 0
     )
 
-    result = _cli("log", str(tmp_path), "ingest")
+    result = _cli("log", str(tmp_path), "_source")
 
     assert result.returncode == 0, result.stderr
-    assert "ingest" in result.stdout
+    assert "_source" in result.stdout
     assert "ok" in result.stdout
     assert "step records" in result.stdout
 
@@ -157,7 +188,7 @@ def test_status_without_a_registry_reports_clear_error(tmp_path):
 
 
 def test_log_without_a_log_file_reports_clear_error(tmp_path):
-    result = _cli("log", str(tmp_path), "cases")
+    result = _cli("log", str(tmp_path), "_source")
 
     assert result.returncode != 0
     assert "no run log" in result.stderr
@@ -165,18 +196,18 @@ def test_log_without_a_log_file_reports_clear_error(tmp_path):
 
 
 def test_run_stale_upstream_reports_clear_error(tmp_path):
-    # Selection declares ingest as a freshness upstream; with only stale ingest
-    # history the run must abort with a clear stale-upstream message, not a crash.
-    # The shared registry catches up from every _runs/*.log, so a record in the
-    # upstream's own log is enough to drive the freshness verdict.
-    log = tmp_path / "_runs" / "ingest.log"
+    # _downstream declares _source as a freshness upstream; with only stale
+    # _source history the run must abort with a clear stale-upstream message, not
+    # a crash. The shared registry catches up from every _runs/*.log, so a record
+    # in the upstream's own log is enough to drive the freshness verdict.
+    log = tmp_path / "_runs" / "_source.log"
     log.parent.mkdir(parents=True, exist_ok=True)
     log.write_text(
         json.dumps(
             {
                 "timestamp": "2026-05-20T00:00:00+00:00",
                 "run_id": "old",
-                "pipeline": "ingest",
+                "pipeline": "_source",
                 "step": "run",
                 "status": "ok",
                 "errors": [],
@@ -188,11 +219,11 @@ def test_run_stale_upstream_reports_clear_error(tmp_path):
     )
 
     result = _cli(
-        "run", "pipelines/selection", str(tmp_path), "--run-date", "2026-05-29"
+        "run", "clipipelines/_downstream", str(tmp_path), "--run-date", "2026-05-29"
     )
 
     assert result.returncode != 0
-    assert "upstream ingest is stale" in result.stderr
+    assert "upstream _source is stale" in result.stderr
     assert "Traceback" not in result.stderr
 
 
