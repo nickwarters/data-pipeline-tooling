@@ -198,7 +198,7 @@ def test_read_node_can_explicitly_depend_on_action_node():
     act = p.action(my_action, name="setup")
     # By making the read depend on the action, we ensure action executes first
     p.read(EventRecordingReader(), name="read", depends_on=[act])
-    
+
     plan = p.describe()
     assert "[Read] read (depends on: setup)" in plan
 

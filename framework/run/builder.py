@@ -102,7 +102,9 @@ class ReadNode(Node):
         super().__init__(name, "Read", inputs)
         self.reader = reader
 
-    def _do_execute(self, session: PipelineExecution, context: RunContext, *deps: Any) -> Dataset:
+    def _do_execute(
+        self, session: PipelineExecution, context: RunContext, *deps: Any
+    ) -> Dataset:
         try:
             dataset = self.reader.read()
         finally:
