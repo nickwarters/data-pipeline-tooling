@@ -1,4 +1,5 @@
-record_id,label,amount
-R001,alpha,100
-R002,beta,250
-R003,gamma,75
+record_id,department,resolution_days
+C1,hr,5
+C2,finance,2
+C3,hr,10
+

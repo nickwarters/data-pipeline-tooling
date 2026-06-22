@@ -58,9 +58,9 @@ _TEST_SAMPLE_ROWS = 2
 _TEMPLATE_DIR_CASE_TYPE = Path(__file__).parent / "scaffold_templates" / "case_type"
 _TEMPLATE_DIR = Path(__file__).parent / "scaffold_templates" / "feed"
 
-# scaffold.py lives at ``framework/_cli/scaffold.py``, so the repo root under
-# which the rendered ``pipelines/`` and ``tests/`` sit is three parents up.
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# scaffold.py lives at ``cli/scaffold.py``, so the repo root under
+# which the rendered ``pipelines/`` and ``tests/`` sit is two parents up.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _pascal(feed: str) -> str:

@@ -8,16 +8,45 @@ as the Writer. This never touches SQLite, the network, or the filesystem.
 
 from __future__ import annotations
 
+import shutil
+from pathlib import Path
+
 import pytest
 
-from framework.core import ValidationError
-from pipelines.complaints_c.pipeline import raw_builder, silver_builder
+from framework.core import RAW, SILVER, ValidationError
+from framework.io import StoreCatalog
+from framework.run import RunContext
+from pipelines.complaints_c.pipeline import FEED_NAME, raw_builder, run, silver_builder
 from tests.framework_testing import (
     RecordingRunLog,
     RecordingWriter,
     assert_rows_equal,
     given_rows,
+    read_rows,
 )
+
+
+def test_bundled_sample_feed_refines_through_to_silver(tmp_path):
+    landing = tmp_path / "landing_zone"
+    landing.mkdir(parents=True)
+
+    sample_dir = (
+        Path(__file__).parent.parent.parent
+        / "pipelines"
+        / "complaints_c"
+        / "sample_data"
+    )
+    shutil.copy(sample_dir / f"{FEED_NAME}.csv", landing / f"{FEED_NAME}.csv")
+
+    run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
+
+    store = StoreCatalog(tmp_path).store(FEED_NAME)
+
+    raw = read_rows(store, RAW, FEED_NAME)
+    assert len(raw) == 3
+
+    silver = read_rows(store, SILVER, FEED_NAME)
+    assert len(silver) == 3
 
 
 def test_raw_builder_gates_source_columns():

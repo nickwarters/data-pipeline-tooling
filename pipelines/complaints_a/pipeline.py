@@ -12,12 +12,9 @@ from framework.core import (
     SchemaValidator,
     format_failure,
 )
-from framework.io import AccumulateByRun, CsvReader, StoreCatalog
-from framework.io.readers import Reader
-from framework.io.writers import QuarantineWriter, Writer
-from framework.run import Pipeline, RunContext
-from framework.transform import SchemaCoercion
-from framework.transform.quarantine import SchemaValueRulePartitioner
+from framework.io import AccumulateByRun, CsvReader, Reader, StoreCatalog, Writer
+from framework.run import Pipeline, RunContext, RunLog
+from framework.transform import SchemaCoercion, SchemaValueRulePartitioner
 
 from .case_type import CASE_TYPE
 
@@ -25,7 +22,11 @@ FEED_NAME = "complaints_a"
 UPSTREAMS = ()
 
 
-def raw_builder(reader: Reader, writer: Writer, run_log=None) -> Pipeline:
+def raw_builder(
+    reader: Reader,
+    writer: Writer,
+    run_log: RunLog | None = None,
+) -> Pipeline:
     """Build the raw hop: faithful landing zone."""
     p = Pipeline(f"{FEED_NAME}:raw", run_log=run_log)
     r = p.read(reader, name="read")
@@ -36,7 +37,10 @@ def raw_builder(reader: Reader, writer: Writer, run_log=None) -> Pipeline:
 
 
 def silver_builder(
-    reader: Reader, writer: Writer, reject_writer: Writer = None, run_log=None
+    reader: Reader,
+    writer: Writer,
+    reject_writer: Writer | None = None,
+    run_log: RunLog | None = None,
 ) -> Pipeline:
     """Build the silver hop: schema coercion and enforcement + quarantine."""
     p = Pipeline(f"{FEED_NAME}:silver", run_log=run_log)
@@ -83,7 +87,7 @@ def run(context: RunContext) -> Dataset:
     silver_pipeline = silver_builder(
         reader=store.reader(RAW, FEED_NAME),
         writer=store.writer(SILVER, FEED_NAME, strategy),
-        reject_writer=QuarantineWriter(store._subject_dir / "quarantine.db", FEED_NAME),
+        reject_writer=store.quarantine_writer(FEED_NAME),
     )
     silver = silver_pipeline.run()
 

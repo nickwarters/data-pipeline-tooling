@@ -18,6 +18,7 @@ from framework.io.sql import quote_identifier
 from framework.io.strategy import AccumulateByRun, Refresh, UpsertStrategy
 from framework.io.writers import (
     AccumulateByRunWriter,
+    QuarantineWriter,
     SqliteTruncateReloadWriter,
     SqliteUpsertWriter,
     Writer,
@@ -96,6 +97,14 @@ class Store:
         """Mint a Reader over the subject's layer file."""
         return SqliteReader(
             self._db_path(layer), table, busy_timeout_ms=self._busy_timeout_ms
+        )
+
+    def quarantine_writer(self, table: str) -> Writer:
+        """Mint a QuarantineWriter over the subject's quarantine file."""
+        return QuarantineWriter(
+            self._subject_dir / "quarantine.db",
+            table,
+            busy_timeout_ms=self._busy_timeout_ms,
         )
 
     def columns_of(self, layer: Layer | str, table: str) -> "RawTableColumns":

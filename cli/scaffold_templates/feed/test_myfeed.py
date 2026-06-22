@@ -55,6 +55,7 @@ def test_raw_builder_gates_source_columns():
     assert len(writer.writes) == 0
 
 
+@pytest.mark.skip("add value rules first")
 def test_silver_builder_quarantines_value_rule_breaches():
     run_log = RecordingRunLog()
     writer = RecordingWriter()
@@ -64,15 +65,15 @@ def test_silver_builder_quarantines_value_rule_breaches():
     reader = given_rows(
         [
             {"id": "1", "run_id": "1"},
-            {"id": "2", "run_id": "1"},
+            {"id": "invalid", "run_id": "1"},
         ]
     )
 
     p = silver_builder(reader, writer, reject_writer, run_log=run_log)
-    try:
-        p.run()
-    except ValidationError:
-        pass  # If no value rules exist yet, structural mismatch will abort
+    p.run()
+
+    assert len(writer.writes) == 1
+    assert len(reject_writer.writes) == 1
 
 
 def test_silver_builder_aborts_on_structural_breaches():

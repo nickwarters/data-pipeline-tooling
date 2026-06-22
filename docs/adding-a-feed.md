@@ -42,9 +42,9 @@ pipelines/orders` imports `pipelines.orders.pipeline` and executes
 - **`raw_builder`** gates the source with a `ColumnValidator` and lands a
   faithful copy.
 - **`silver_builder`** renames source columns to the schema's vocabulary
-  (`RENAME`), coerces the dtypes storage loses (`SchemaCoercion`), and validates
-  the declared schema (`SchemaValidator`); a `TODO` marks where further silver
-  processors go.
+  (`RENAME`), coerces the dtypes storage loses (`SchemaCoercion`), partitions
+  bad rows into a quarantine dataset (`SchemaValueRulePartitioner`), and validates
+  the declared schema (`SchemaValidator`).
 - **`gold_builder`** is a passthrough to start — reads silver, writes gold — with
   a `TODO` to build the assembly (it's per-feed and an open decision, #163).
 
@@ -81,8 +81,8 @@ Then **customise**: edit `schema.py`'s fields to your source columns (and add
 `Annotated` value rules as needed — see
 [schema-enforcement.md](schema-enforcement.md)), replace the sample CSV, swap
 `CsvReader` for another Reader (next section) if the source isn't a CSV, fill in
-the `silver_builder` `RENAME`/processor `TODO` and build out the `gold_builder`
-assembly, and grow `test_<feed>.py` to assert the rows and processors you add. The
+the `silver_builder` `RENAME` and build out the `gold_builder`
+(`def assemble_gold`). grow `test_<feed>.py` to assert the rows and processors you add. The
 silver hop already enforces the schema (`SchemaCoercion` + `SchemaValidator` — see
 [`schema-enforcement.md`](schema-enforcement.md)); the gold hop is a passthrough
 until you shape it.

@@ -45,14 +45,13 @@ from framework.core import (
 from framework.io import (
     AccumulateByRun,
     CsvReader,
+    Reader,
     Refresh,
     StoreCatalog,
+    Writer,
 )
-from framework.io.readers import Reader
-from framework.io.writers import QuarantineWriter, Writer
-from framework.run import Pipeline, RunContext
-from framework.transform import SchemaCoercion
-from framework.transform.quarantine import SchemaValueRulePartitioner
+from framework.run import Pipeline, RunContext, RunLog
+from framework.transform import SchemaCoercion, SchemaValueRulePartitioner
 
 from .schema import MyfeedRow
 
@@ -69,7 +68,11 @@ RENAME: dict[str, str] = {}
 UPSTREAMS = ()
 
 
-def raw_builder(reader: Reader, writer: Writer, run_log=None) -> Pipeline:
+def raw_builder(
+    reader: Reader,
+    writer: Writer,
+    run_log: RunLog | None = None,
+) -> Pipeline:
     """Build the raw hop: faithful landing zone."""
     p = Pipeline(f"{FEED_NAME}:raw", run_log=run_log)
     r = p.read(reader, name="read")
@@ -83,7 +86,10 @@ def raw_builder(reader: Reader, writer: Writer, run_log=None) -> Pipeline:
 
 
 def silver_builder(
-    reader: Reader, writer: Writer, reject_writer: Writer = None, run_log=None
+    reader: Reader,
+    writer: Writer,
+    reject_writer: Writer | None = None,
+    run_log: RunLog | None = None,
 ) -> Pipeline:
     """Build the silver hop: schema coercion and enforcement + quarantine."""
     p = Pipeline(f"{FEED_NAME}:silver", run_log=run_log)
@@ -114,7 +120,11 @@ def silver_builder(
     return p
 
 
-def gold_builder(reader: Reader, writer: Writer, run_log=None) -> Pipeline:
+def gold_builder(
+    reader: Reader,
+    writer: Writer,
+    run_log: RunLog | None = None,
+) -> Pipeline:
     """Build the gold hop: assemble silver into gold."""
     p = Pipeline(f"{FEED_NAME}:gold", run_log=run_log)
     r = p.read(reader, name="read")
@@ -145,7 +155,7 @@ def run(context: RunContext, *, describe: bool = False) -> Dataset:
     silver_p = silver_builder(
         reader=store.reader(RAW, FEED_NAME),
         writer=store.writer(SILVER, FEED_NAME, strategy),
-        reject_writer=QuarantineWriter(store._subject_dir / "quarantine.db", FEED_NAME),
+        reject_writer=store.quarantine_writer(FEED_NAME),
         run_log=context.run_log,
     )
     if describe:
