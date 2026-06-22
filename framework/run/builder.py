@@ -98,11 +98,11 @@ class Node:
 
 
 class ReadNode(Node):
-    def __init__(self, name: str, reader: Reader):
-        super().__init__(name, "Read")
+    def __init__(self, name: str, reader: Reader, inputs: list[Node] | None = None):
+        super().__init__(name, "Read", inputs)
         self.reader = reader
 
-    def _do_execute(self, session: PipelineExecution, context: RunContext) -> Dataset:
+    def _do_execute(self, session: PipelineExecution, context: RunContext, *deps: Any) -> Dataset:
         try:
             dataset = self.reader.read()
         finally:
@@ -288,8 +288,10 @@ class Pipeline:
         self.run_id: str | None = None
         self._nodes: list[Node] = []
 
-    def read(self, reader: Reader, *, name: str) -> Node:
-        node = ReadNode(name, reader)
+    def read(
+        self, reader: Reader, *, name: str, depends_on: list[Node] | None = None
+    ) -> Node:
+        node = ReadNode(name, reader, inputs=depends_on)
         self._nodes.append(node)
         return node
 
