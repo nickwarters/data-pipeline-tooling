@@ -57,13 +57,23 @@ class RunLog:
 
     @contextmanager
     def step(
-        self, run_id: str, pipeline: str, step: str, rows_in: int | None = None
+        self,
+        run_id: str,
+        pipeline: str,
+        step: str,
+        rows_in: int | None = None,
+        committed: bool = False,
     ) -> Iterator[StepMetrics]:
         """Time a step; emit one record when it closes — or `error` if it raises.
 
         A raising step is recorded with ``status="error"`` and the exception
         message, then the exception is re-raised so the run still aborts.
         Nothing is swallowed.
+
+        ``committed`` marks a step that durably wrote an artifact (a write,
+        quarantine, explain/trace, or checkpoint) — independently committed
+        evidence that survives a *later* step's failure (ADR-0007 amd 03). It is
+        recorded only on the success path: a step that raised committed nothing.
         """
         metrics = StepMetrics()
         metrics.rows_in = rows_in
@@ -82,6 +92,9 @@ class RunLog:
                 rows_excluded=metrics.rows_excluded,
                 duration=time.perf_counter() - started,
                 errors=[str(exc)],
+                # An expected PipelineError carries its triage category; a raw
+                # exception (a genuine bug) has none — that absence is the signal.
+                error_category=getattr(exc, "category", None),
                 warn_hits=metrics.warn_hits,
             )
             raise
@@ -96,6 +109,7 @@ class RunLog:
             rows_excluded=metrics.rows_excluded,
             duration=time.perf_counter() - started,
             warn_hits=metrics.warn_hits,
+            committed=committed,
         )
 
     def record(
@@ -111,7 +125,9 @@ class RunLog:
         rows_excluded: int | None = None,
         duration: float | None = None,
         errors: list[str] | None = None,
+        error_category: str | None = None,
         warn_hits: list[str] | None = None,
+        committed: bool = False,
     ) -> None:
         """Append one JSONL record and echo a human-readable line to the console."""
         record = {
@@ -127,7 +143,14 @@ class RunLog:
             "rows_excluded": rows_excluded,
             "duration": duration,
             "errors": errors or [],
+            # The triage category of the failure (data/operational/config), or
+            # None for a non-PipelineError bug. See framework.core.ErrorCategory.
+            "error_category": error_category,
             "warn_hits": warn_hits or [],
+            # True when this step durably wrote an artifact (write / quarantine /
+            # explain / checkpoint). Independently committed evidence — it stays
+            # on disk even if a *later* step aborts the run (ADR-0007 amd 03).
+            "committed": committed,
         }
         self._path.parent.mkdir(parents=True, exist_ok=True)
         with self._path.open("a", encoding="utf-8") as fh:
@@ -150,6 +173,10 @@ class RunLog:
             parts.append(f"{record['duration']:.3f}s")
         if record["errors"]:
             parts.append(f"errors={'; '.join(record['errors'])}")
+        if record.get("error_category"):
+            parts.append(f"category={record['error_category']}")
+        if record.get("committed"):
+            parts.append("committed")
         if record["warn_hits"]:
             parts.append(f"warn={'; '.join(record['warn_hits'])}")
         parts.append(f"[run {record['run_id'][:8]}]")
@@ -164,7 +191,12 @@ class _NullRunLog(RunLog):
 
     @contextmanager
     def step(
-        self, run_id: str, pipeline: str, step: str, rows_in: int | None = None
+        self,
+        run_id: str,
+        pipeline: str,
+        step: str,
+        rows_in: int | None = None,
+        committed: bool = False,
     ) -> Iterator[StepMetrics]:
         metrics = StepMetrics()
         metrics.rows_in = rows_in

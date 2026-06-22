@@ -3,9 +3,9 @@
 
 A small, test-only surface that makes a concrete pipeline script easy to test
 without hand-wiring temp directories, SQLite round-trips, or JSONL parsing. It
-sits *beside* the five production facades (``framework.io`` /
-``framework.transform`` / ``framework.validate`` / ``framework.run`` /
-``framework.shared``) rather than inside them: pipeline code never imports it at
+sits *beside* the production facades (``framework.core`` / ``framework.io`` /
+``framework.transform`` / ``framework.run`` / ``framework.shared``) rather than
+inside them: pipeline code never imports it at
 runtime, but a pipeline author's **tests** do.
 
     from tests.framework_testing import given_rows, rows_of, assert_rows_equal

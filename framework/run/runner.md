@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Callable
 
 from framework.core.dataset import Dataset
-from framework.core.errors import PipelineError
+from framework.core.errors import ErrorCategory, PipelineError
 from framework.run.run_context import RunContext
 from tools.observability.run_log import RunLog
 from tools.observability.run_registry import RunRegistry
@@ -28,9 +28,13 @@ from tools.observability.run_registry import RunRegistry
 class UnknownPipelineError(PipelineError):
     """Raised when no domain Pipeline is registered for the requested key."""
 
+    category = ErrorCategory.CONFIG
+
 
 class FreshnessError(PipelineError):
     """Raised when a declared upstream has history, but it is stale."""
+
+    category = ErrorCategory.OPERATIONAL
 
 
 @dataclass(frozen=True)

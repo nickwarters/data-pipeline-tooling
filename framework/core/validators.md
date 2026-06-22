@@ -24,11 +24,13 @@ from typing import Iterable, Protocol
 
 from framework._internal.describe import render
 from framework.core.dataset import Dataset
-from framework.core.errors import PipelineError
+from framework.core.errors import ErrorCategory, PipelineError
 
 
 class ValidationError(PipelineError):
     """Raised by a Validator when the data fails its check."""
+
+    category = ErrorCategory.DATA
 
 
 class ColumnValidator:
