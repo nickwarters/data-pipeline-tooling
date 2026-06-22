@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import fields
 from pathlib import Path
 
 from framework.core import (
@@ -21,12 +20,8 @@ from framework.transform import SchemaCoercion
 from framework.transform.quarantine import SchemaValueRulePartitioner
 
 from .case_type import CASE_TYPE
-from .schema import MyfeedRow
 
-FEED_NAME = "myfeed"
-SAMPLE_CSV = Path(__file__).parent / "sample_data" / "myfeed.csv"
-
-# Pipelines this feed depends on being fresh before it runs
+FEED_NAME = "complaints_c"
 UPSTREAMS = ()
 
 
@@ -36,7 +31,9 @@ def raw_builder(reader: Reader, writer: Writer, run_log=None) -> Pipeline:
     r = p.read(reader, name="read")
     # Gate the source's expected columns before landing
     v = p.validate(
-        ColumnValidator([f.name for f in fields(MyfeedRow)]), r, name="columns"
+        ColumnValidator(["record_id", "department", "resolution_days"]),
+        r,
+        name="columns",
     )
     p.write(writer, v, name="write")
     return p
@@ -70,13 +67,16 @@ def silver_builder(
 
 
 def run(context: RunContext) -> Dataset:
-    """Refine the feed source -> raw -> silver under the run context; return silver."""
+    """Wire the real readers and writers for the environment and execute."""
     store = StoreCatalog(context.base_dir).store(FEED_NAME)
     strategy = AccumulateByRun.from_context(context)
 
-    # Fetched by the SAS script or orchestrator
+    # Fetched by the SAS script
+    landing_dir = Path(context.base_dir) / "landing_zone"
+    feed_csv = landing_dir / f"{FEED_NAME}.csv"
+
     raw_pipeline = raw_builder(
-        reader=CsvReader(SAMPLE_CSV), writer=store.writer(RAW, FEED_NAME, strategy)
+        reader=CsvReader(feed_csv), writer=store.writer(RAW, FEED_NAME, strategy)
     )
     raw_pipeline.run()
 
@@ -87,15 +87,6 @@ def run(context: RunContext) -> Dataset:
     )
     silver = silver_pipeline.run()
 
-    # --- gold is yours to assemble ------------------------------------------
-    # How accumulated silver becomes gold is unique per Case Type, so the
-    # scaffold stops at silver. When you're ready, add a gold step reading
-    # the same Case Type so its case_id derives consistently with any Detail
-    # Tables:
-    #
-    #     from case_review.gold import ingest_silver_to_gold
-    #     ingest_silver_to_gold(store, CASE_TYPE).run()   # single-feed current gold
-    # ------------------------------------------------------------------------
     return silver
 
 
