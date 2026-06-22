@@ -14,7 +14,8 @@ seam, and those checks live in the pipeline's stages, not the seam.
 
 ## The pieces
 
-Import through the `framework.shared` facade (see [public-api.md](public-api.md)):
+Import from the top-level `tools.retry` package (see
+[public-api.md](public-api.md)):
 
 ```python
 from tools.retry import RetryPolicy, RetryingReader, RetryingWriter
@@ -59,7 +60,10 @@ from framework.run import Pipeline
 reader = RetryingReader(SasReader(...), policy)
 writer = RetryingWriter(SqliteTruncateReloadWriter(db, "cases"), policy)
 
-Pipeline("cases", reader).write_to(writer).run()
+p = Pipeline("cases")
+r = p.read(reader, name="read")
+p.write(writer, r, name="write")
+p.run()
 ```
 
 Only the wrapped `read()` / `write()` is retried. The decorators are ordinary

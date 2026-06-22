@@ -141,14 +141,14 @@ The foundational vocabulary. Each links to its deep doc; the consolidated
 reference with worked examples is [`core-primitives.md`](core-primitives.md).
 
 > **Importing.** Application code (`pipelines/` + `case_review/`) imports these through the public **facades**
-> — `framework.core` (`Dataset` + the medallion `Layer` constants), `framework.io`
-> (sources/sinks/stores), `framework.transform` (the reshaping processors +
-> `SchemaCoercion`), `framework.validate` (the `validate(dataset)` checks + the
-> declared-schema contract: `SchemaValidator`, the value rules, and the row checks),
-> `framework.run` (the `Pipeline` builder, orchestration, runner, observability),
-> `framework.recipes` (higher-level medallion builders),
-> and `framework.shared` (cross-cutting utilities — retry, `WorkingDayCalendar`)
-> — not from the modules behind them. The facade names are the stable surface.
+> — `framework.core` (`Dataset` + the medallion `Layer` constants, plus the
+> declared-schema contract: the `validate(dataset)` checks, `SchemaValidator`, the
+> value rules, and the row checks), `framework.io` (sources/sinks/stores),
+> `framework.transform` (the reshaping processors + `SchemaCoercion`), and
+> `framework.run` (the `Pipeline` builder, runner, observability)
+> — not from the modules behind them. The cross-cutting `retry` / `calendar` /
+> orchestration / observability utilities are a sibling top-level `tools` package,
+> not a facade. The facade names are the stable surface.
 > `import framework` exposes only those facade modules for discovery; it is
 > not a shortcut for
 > `framework.CsvReader` / `framework.Filter` / `framework.Pipeline`. See
@@ -165,8 +165,8 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`Validator`** | `validate(dataset) -> None`, **raises** on breach. `ColumnValidator`, `RowCountValidator` (engine-agnostic), `VolumeAnomalyValidator` (trips when a run's volume deviates from its recent-history baseline — catches truncated source exports, #54), `SchemaDriftValidator` (warns at the raw boundary when a feed's columns drift from the prior run's landed set — catches owner-controlled source schema change, #51). Severity (`error`/`warn`) is set where it's attached. |
 | **`Schema` / `SchemaValidator`** | A Case Type **dataclass** whose annotations *are* the column, dtype, nullability, and value-rule contract; the validator is the dataclass→validator adapter, enforced at silver (and optionally gold). Nullability/value rules extend the same dataclass via `Annotated`; cross-field **row checks** attach via the `@row_checks(...)` class decorator. → [schema-enforcement.md](schema-enforcement.md) ([ADR-0008](adr/0008-graduated-schema-enforcement.md)) |
 | **`Processor`** | `process(dataset) -> Dataset`, run mid-pipeline via `.transform()`. `SchemaCoercion` (repair storage-lossy types); the Selection transforms `Filter` / `Score` / `VectorizedFilter` / `VectorizedDerive` / `Sort` / `Rename` / `Stamp`, the ungrouped `Sample` and per-group `TopNPerGroup` / `SamplePerGroup`, the explicit-dependency cross-feed `JoinWith` / `AntiJoinWith`; the column-shaping `Parse` / `SplitColumn` / `JoinColumns` / `Zfill` / `IntegerText`; and the Ingest / fan-out transforms `SelectColumns` / `DropColumns` / `Unpivot` / `DeriveKey` / `LatestPerKey`. → [processors.md](processors.md) |
-| **`Stage`** | A position-sensitive step inside one class-level `Pipeline` run: current `Dataset` in, next `Dataset` out. Compose with `.add_node(...)` when validation, processing, or explicit checkpoint writes must appear at an exact point. Built-ins: `ValidationStage`, `ProcessingStage`, `CheckpointStage`. |
-| **`Pipeline`** (builder) | The deferred DAG builder: `Pipeline(name, reader).add_node(…).write(writer)`. It builds one ordered plan; call `.describe()` to inspect the planned reader/stages/governance/writer without executing, then `.run(context=…)` to execute that plan fail-fast and atomic with RunLog observability. ([ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md)) |
+| **Pipeline steps** | A `Pipeline` is wired from **steps**, each returning a node the next consumes: `.read(reader)`, `.transform(processor)`, `.validate(validator)`, `.write(writer)`, and `.explain(...)`. Order and any fan-in / fan-out are explicit in how nodes are wired — validation, processing, and explicit checkpoint writes land exactly where you place them. |
+| **`Pipeline`** (builder) | The deferred DAG builder: `p = Pipeline(name)`, then wire steps — `r = p.read(reader, name=...)`, `v = p.transform/validate(..., r, name=...)`, `p.write(writer, v, name=...)`. It builds one ordered plan; call `.describe()` to inspect it without executing, then `.run(context=…)` to execute fail-fast and atomic with RunLog observability. ([ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md)) |
 | **`ForEach`** | Runnable orchestration for independent repeated runs: pass items plus `pipeline_builder(item, context)`, then call `.run(context)`. It creates a fresh builder and per-item `RunContext` for each item. Default behavior fails fast on the first failed item; `continue_on_error=True` returns per-item success/failure outcomes and continues. Use when files must remain separate logical runs. |
 | **`Orchestrator` / `PipelineSet` / `ScheduledPipeline`** | Scheduled due-work orchestration above `PipelineRunner`. Python definitions own sets, dependencies, and default schedules; YAML can override enablement, schedule timing, and freshness windows. A single pass or bounded loop runs due items for one run date, marks failed items terminal, blocks their downstream dependants, and lets independent items and other sets continue. |
 | **`PipelineError` / `format_failure`** | The base of the expected fail-fast failure family (`ValidationError`, `FreshnessError`, `UnknownPipelineError`, `CoercionError`, `ForEachPipelineError` all subclass it) and the pure formatter that renders a caught one as a short, traceback-free block for `stderr`. At a run boundary — the operator CLI, a scaffolded `main()` — `except PipelineError` + `format_failure(exc)` turns a deliberate abort into a clear message; a genuine bug is not a `PipelineError` and keeps its trace. |
@@ -232,8 +232,9 @@ CASES = CaseType(
 ```
 
 **3. Ingest a Feed into the medallion** — land raw, then refine to silver with the
-schema enforced (`raw_to_silver` coerces storage-lossy types, then validates).
-See the *Add a new Feed* how-to.
+schema enforced (compose `SchemaCoercion` to repair storage-lossy types, then
+`SchemaValidator` to validate, before the silver write). See the *Add a new Feed*
+how-to.
 
 **4. Read it through the CasePool** — the clean domain abstraction over silver:
 
@@ -285,20 +286,26 @@ from framework.run import Pipeline
 from framework.core import ColumnValidator  # optional input gate
 
 store = StoreCatalog("/share").store("cases")       # the "cases" subject
-(
-    Pipeline("cases", ExcelReader("feed.xlsx", sheet="cases"))
-    .validate(ColumnValidator(["case_ref"]))  # optional: gate the input
-    .p.write(store.writer(RAW, "cases", Refresh()))
-    .run()
-)
+p = Pipeline("cases")
+raw = p.read(ExcelReader("feed.xlsx", sheet="cases"), name="read")
+gated = p.validate(ColumnValidator(["case_ref"]), raw, name="columns")  # optional: gate input
+p.write(store.writer(RAW, "cases", Refresh()), gated, name="write")
+p.run()
 ```
 
-Then refine raw → silver with the schema enforced:
+Then refine raw → silver with the schema enforced, composing the coercion and the
+schema check explicitly onto the hop:
 
 ```python
-from framework.recipes import raw_to_silver
+from framework.core import SchemaValidator
+from framework.transform import SchemaCoercion
 
-raw_to_silver(store, "cases", ActivityCase).run()   # coerce -> validate -> write silver
+p = Pipeline("cases")
+raw = p.read(store.reader(RAW, "cases"), name="read")
+coerced = p.transform(SchemaCoercion(ActivityCase), raw, name="coerce")
+validated = p.validate(SchemaValidator(ActivityCase), coerced, name="post-validate")
+p.write(store.writer(SILVER, "cases", Refresh()), validated, name="write")
+p.run()   # coerce -> validate -> write silver
 ```
 
 Swapping the Reader is the only change needed to ingest the same feed from a
@@ -320,20 +327,22 @@ separate `schema.py`, `rules.py`, `processors.py`, `pipeline.py`, and
 ### Emit a file Deliverable
 
 Reporting can emit file-form Deliverables by swapping the destination Writer.
-The builder still sees only `p.write(writer).run()`; the file adapter owns the
-path, format, and load strategy.
+Only the `write` step's Writer changes; the file adapter owns the path, format,
+and load strategy.
 
 ```python
 from framework.io import CsvReader, CsvWriter, JsonWriter, Refresh
 from framework.run import Pipeline
 
-Pipeline("report", CsvReader("report_rows.csv")).p.write(
-    CsvWriter("deliverables/report.csv", Refresh())
-).run()
+p = Pipeline("report")
+rows = p.read(CsvReader("report_rows.csv"), name="read")
+p.write(CsvWriter("deliverables/report.csv", Refresh()), rows, name="write")
+p.run()
 
-Pipeline("report-json", CsvReader("report_rows.csv")).p.write(
-    JsonWriter("deliverables/report.json", Refresh())
-).run()
+pj = Pipeline("report-json")
+rows = pj.read(CsvReader("report_rows.csv"), name="read")
+pj.write(JsonWriter("deliverables/report.json", Refresh()), rows, name="write")
+pj.run()
 ```
 
 When a directory contains many files, choose the shape by the logical run you
@@ -404,23 +413,27 @@ already_reviewed = JoinDependency(
 )
 strategy = AccumulateByRun.from_context(context)
 
-(
-    Pipeline("selection", DatasetReader(available))
-    .transform(Score("priority_score", priority_score))
-    .transform(Filter(high_value_case, name="high-value"))
-    .transform(AntiJoinWith(already_reviewed, on="case_ref", name="already-reviewed"))
-    .transform(JoinWith(reference, on="adviser"))          # read-only dependency join
-    .transform(TopNPerGroup(key="adviser", by="priority_score", n=1))
-    .transform(Sort("priority_score", ascending=False))
-    .transform(Stamp("question_bank_id", variation.question_bank_id))
-    .explain(                                                    # optional: RowTrace
-        store.writer(GOLD, "selection_trace", strategy),
-        id_column="case_ref",
-        score_column="priority_score",
-    )
-    .p.write(store.writer(GOLD, "selection_pool", strategy))
-    .run(context=context)
+p = Pipeline("selection")
+r = p.read(DatasetReader(available), name="read")
+scored = p.transform(Score("priority_score", priority_score), r, name="score")
+high = p.transform(Filter(high_value_case, name="high-value"), scored, name="filter")
+anti = p.transform(
+    AntiJoinWith(already_reviewed, on="case_ref", name="already-reviewed"), high, name="anti-join"
 )
+joined = p.transform(JoinWith(reference, on="adviser"), anti, name="join")  # read-only dependency
+topn = p.transform(TopNPerGroup(key="adviser", by="priority_score", n=1), joined, name="top-n")
+ranked = p.transform(Sort("priority_score", ascending=False), topn, name="sort")
+stamped = p.transform(
+    Stamp("question_bank_id", variation.question_bank_id), ranked, name="stamp"
+)
+p.explain(                                                    # optional: RowTrace
+    store.writer(GOLD, "selection_trace", strategy),
+    stamped,
+    id_column="case_ref",
+    score_column="priority_score",
+)
+p.write(store.writer(GOLD, "selection_pool", strategy), stamped, name="write")
+p.run(context=context)
 ```
 
 - **Business rules are plain Python** over a row mapping, never SQL —
@@ -516,9 +529,11 @@ from tests.framework_testing import given_rows, rows_of, RecordingWriter
 
 reader = given_rows([{"amount": 100}, {"amount": 50}])
 writer = RecordingWriter()
-Pipeline("selection", reader).transform(
-    Filter(lambda row: row["amount"] >= 100, name="high-value")
-).write(writer).run()
+p = Pipeline("selection")
+r = p.read(reader, name="read")
+high = p.transform(Filter(lambda row: row["amount"] >= 100, name="high-value"), r, name="filter")
+p.write(writer, high, name="write")
+p.run()
 assert rows_of(writer) == [{"amount": 100}]
 ```
 
@@ -535,7 +550,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`public-api.md`](public-api.md) | The public API: the facades (`framework.core` / `io` / `transform` / `validate` / `run` / `recipes` / `shared`), the internal-module boundary, and the packaging non-goal. |
 | [`core-primitives.md`](core-primitives.md) | The consolidated framework primitives reference with worked examples and build status per slice. |
 | [`adding-a-feed.md`](adding-a-feed.md) | Every Reader, and the stubbed remote (SAS / SharePoint) seams. |
-| [`schema-enforcement.md`](schema-enforcement.md) | `Schema` / `SchemaValidator` / `SchemaCoercion`, value-level rules, `raw_to_silver`. |
+| [`schema-enforcement.md`](schema-enforcement.md) | `Schema` / `SchemaValidator` / `SchemaCoercion`, value-level rules, composing the schema boundary onto a pipeline. |
 | [`gold-accumulation.md`](gold-accumulation.md) | Gold's accumulate-by-run semantics, idempotent re-run, reading "current". |
 | [`processors.md`](processors.md) | The Selection transforms (`JoinWith`, per-group sampling) and the Ingest / fan-out transforms (`SelectColumns`, `Unpivot`, `DeriveKey`, `LatestPerKey`). |
 | [`selection.md`](selection.md) | The full CaseType / Variation → CasePool → SelectionPool flow + explainability. |

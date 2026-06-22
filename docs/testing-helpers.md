@@ -11,8 +11,7 @@ from tests.framework_testing import RecordingWriter, RecordingRunLog, read_run_l
 ```
 
 It sits *beside* the production facades (`framework.core` / `framework.io` /
-`framework.transform` / `framework.validate` / `framework.run` /
-`framework.recipes` / `framework.shared`), not inside them — see
+`framework.transform` / `framework.run`), not inside them — see
 [public-api.md](public-api.md). Everything stays behind the `Dataset` seam
 ([ADR-0002](adr/0002-python-only-processing-dumb-store-two-tier-carrier.md)):
 the helpers take and return plain Python **row dicts**, never a pandas frame.
@@ -50,12 +49,13 @@ def test_high_value_filter_keeps_only_the_cases_at_or_above_100():
     reader = given_rows([{"amount": 100}, {"amount": 50}, {"amount": 200}])
     writer = RecordingWriter()
 
-    (
-        Pipeline("selection", reader)
-        .transform(Filter(lambda row: row["amount"] >= 100, name="high-value"))
-        .write_to(writer)
-        .run()
+    p = Pipeline("selection")
+    r = p.read(reader, name="read")
+    high = p.transform(
+        Filter(lambda row: row["amount"] >= 100, name="high-value"), r, name="filter"
     )
+    p.write(writer, high, name="write")
+    p.run()
 
     assert rows_of(writer) == [{"amount": 100}, {"amount": 200}]
 ```
@@ -73,11 +73,10 @@ from framework.run import Pipeline
 
 def test_landed_rows(tmp_path):
     store = Store(tmp_path / "cases")
-    (
-        Pipeline("cases", given_rows([{"case_id": "c1", "amount": 100}]))
-        .write_to(store.writer(RAW, "cases", Refresh()))
-        .run()
-    )
+    p = Pipeline("cases")
+    r = p.read(given_rows([{"case_id": "c1", "amount": 100}]), name="read")
+    p.write(store.writer(RAW, "cases", Refresh()), r, name="write")
+    p.run()
 
     assert read_rows(store, RAW, "cases") == [{"case_id": "c1", "amount": 100}]
 ```
@@ -96,12 +95,11 @@ from framework.run import Pipeline
 
 def test_scored_rows_ignoring_the_run_stamp():
     writer = RecordingWriter()
-    (
-        Pipeline("cases", given_rows([{"case_id": "c1", "amount": 100}]))
-        .transform(Stamp("run_id", "run-123"))
-        .write_to(writer)
-        .run()
-    )
+    p = Pipeline("cases")
+    r = p.read(given_rows([{"case_id": "c1", "amount": 100}]), name="read")
+    s = p.transform(Stamp("run_id", "run-123"), r, name="stamp")
+    p.write(writer, s, name="write")
+    p.run()
 
     assert_rows_equal(
         writer, [{"case_id": "c1", "amount": 100}], ignoring=["run_id"]
@@ -130,14 +128,13 @@ from tests.framework_testing import given_rows, RecordingWriter, RecordingRunLog
 def test_missing_required_column_aborts_and_is_recorded():
     run_log = RecordingRunLog()
     writer = RecordingWriter()
-    pipeline = (
-        Pipeline("cases", given_rows([{"amount": 100}]), run_log=run_log)
-        .validate(ColumnValidator(["missing_col"]))
-        .write_to(writer)
-    )
+    p = Pipeline("cases", run_log=run_log)
+    r = p.read(given_rows([{"amount": 100}]), name="read")
+    v = p.validate(ColumnValidator(["missing_col"]), r, name="validate")
+    p.write(writer, v, name="write")
 
     with pytest.raises(ValidationError):
-        pipeline.run()
+        p.run()
 
     assert any("missing_col" in e for e in run_log.errors)
     assert writer.writes == []  # fail-fast: nothing reached the writer

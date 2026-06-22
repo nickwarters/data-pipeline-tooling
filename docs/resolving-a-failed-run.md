@@ -2,12 +2,21 @@
 
 A run fails **loudly and cleanly**: `.run()` is fail-fast and atomic, so a
 validation breach (or a coercion failure, or a stale upstream) aborts the run and
-rolls back its single SQLite transaction — **no layer is left half-written**
-([ADR-0007](adr/0007-fail-fast-atomic-runs-jsonl-observability.md)). The failure
-is recorded in the RunLog / RunRegistry with the failing step and message, and at
-a run boundary it surfaces as a short `framework.core.format_failure` block rather
-than a traceback. This guide is the operator loop from *that block* back to a
-green run.
+rolls back the failing writer's single SQLite transaction — **no layer is left
+half-written** ([ADR-0007](adr/0007-fail-fast-atomic-runs-jsonl-observability.md)).
+The failure is recorded in the RunLog / RunRegistry with the failing step and
+message, and at a run boundary it surfaces as a short
+`framework.core.format_failure` block rather than a traceback. This guide is the
+operator loop from *that block* back to a green run.
+
+> **Committed artifacts are not rolled back.** Atomicity is per writer, per layer
+> DB — it does not span a run's writers. If the run already wrote a **quarantine**
+> reject table, an **explain/trace**, or a **checkpoint** before it failed, those
+> artifacts are **independently committed evidence** and stay on disk
+> ([ADR-0007 amd 03](adr/0007-amendment-03-independent-artifact-commits.md)). The
+> run log's `committed` markers list exactly what landed — read them before you
+> re-drive so you know which evidence is already present (re-driving replaces an
+> artifact's rows under the same logical run id, so there is nothing to clean up).
 
 The worked example below is a **validation failure** (the common case), but the
 same loop applies to any expected `PipelineError`.
@@ -17,9 +26,14 @@ same loop applies to any expected `PipelineError`.
 The failure is already on screen if you ran the pipeline directly:
 
 ```
-Pipeline run failed [ValidationError]
+Pipeline run failed [ValidationError, data]
   cases ingest pre-validate failed: missing required column(s): case_id
 ```
+
+The bracket carries the **kind** and its **triage category** — `data`,
+`operational`, or `config` (see [§2](#2-diagnose--read-the-message-not-the-traceback)).
+The category is also stamped on the failing step's run-log record (`error_category`)
+and the run summary, so you can triage from the log without reading every message.
 
 If it failed under `orchestrate`, or you're picking up someone else's run, read
 it back from the run store ([operator-cli.md](operator-cli.md)):
@@ -48,8 +62,21 @@ The expected failures are self-describing. Map the message to a cause:
 | `column '…' contains null value(s)` | a `NonNull()` field arrived empty | the source / upstream join |
 | `upstream ingest is stale: …` | a declared upstream hasn't run recently enough | run the upstream, or relax the window |
 
-A genuine bug (not a `PipelineError`) keeps its traceback — that's a code defect
-to fix, not an operator-resolvable data problem.
+Each expected failure also carries a **triage category** (`framework.core.ErrorCategory`)
+that tells you *whose problem it is* before you read the message:
+
+| Category | Means | Failures | The fix is in… |
+|----------|-------|----------|----------------|
+| `data` | the feed broke a declared data expectation | `ValidationError`, `CoercionError` | the **data** (source/upstream) |
+| `operational` | data and code are fine; the run conditions aren't | `FreshnessError`, `ForEachPipelineError` | the **run/environment** |
+| `config` | the pipeline is mis-addressed or mis-wired | `UnknownPipelineError` | the **wiring** |
+
+A genuine bug (not a `PipelineError`) keeps its traceback **and has no category**
+(`error_category` is null in the log) — that's a code defect to fix, not an
+operator-resolvable data problem. The deliberate non-categories: a source that
+won't open, a failed write, and a transform bug all stay raw tracebacks rather
+than being dressed up as expected failures (ADR-0007's expected-failure-vs-bug
+line).
 
 ## 3. Resolve — four legitimate moves
 

@@ -12,25 +12,25 @@ domain language in `CONTEXT.md`; the core primitives are documented in
 - **Language/runtime:** Python 3.12. The `framework/` package is **import-only**
   (on `sys.path`, never `pip install`ed); `pipelines/` holds runnable scripts.
   Packaging/installing the framework is an **explicit non-goal** (#95).
-- **Layout:** `framework/` (reusable engine, organised into the six public
+- **Layout:** `framework/` (reusable engine, organised into the four public
   facade sub-packages `framework/core` (the base vocabulary — `Dataset` + the
-  medallion `Layer` constants, which everything else builds on), `framework/io`,
-  `framework/transform` (reshaping, incl. `SchemaCoercion`), `framework/validate`
-  (the `validate(dataset)` checks + the declared-schema contract —
-  `SchemaValidator` and the value rules), `framework/run`, and `framework/shared`
-  (cross-cutting utilities — `retry`, `calendar`); plus three non-facade
-  packages — the private `framework/_internal` (`connection`, `describe`,
-  `schema`: cross-cutting helpers with no public name), the private
-  `framework/_cli` (the `python -m cli` entry point — `scaffold` plus the
-  operator commands; see below), and the test-only
-  `framework/testing`), `case_review/` (the case-review *application* — domain
-  types like `CaseType`/`CasePool` and its gold helpers, which live outside the
-  framework), `pipelines/` (scripts), `tests/` (pytest), `docs/` (architecture,
-  ADRs).
+  medallion `Layer` constants, plus the declared-schema contract: the
+  `validate(dataset)` checks, `SchemaValidator`, and the value rules — which
+  everything else builds on), `framework/io`, `framework/transform` (reshaping,
+  incl. `SchemaCoercion`), and `framework/run`; plus the private
+  `framework/_internal` (`connection`, `describe`, `schema`: cross-cutting
+  helpers with no public name)). The `python -m cli` entry point (`scaffold`
+  plus the operator commands; see below) lives in the top-level `cli/` package,
+  and the cross-cutting `retry` / `calendar` / orchestration / observability
+  utilities in the top-level `tools/` package — both siblings of `framework/`,
+  not facades. Then `case_review/` (the case-review *application* — domain types
+  like `CaseType`/`CasePool` and its gold helpers, which live outside the
+  framework), `pipelines/` (scripts), `tests/` (pytest, with author test helpers
+  in `tests/framework_testing/`), `docs/` (architecture, ADRs).
 - **Test layout:** `tests/` mirrors the source shape — `tests/framework/`
-  (itself split into `core/`, `io/`, `transform/`, `validate/`, `run/`,
-  `shared/`, `_internal/`, `_cli/`, `testing/` to mirror the framework
-  sub-packages; an
+  (itself split into `core/`, `io/`, `transform/`, `run/`,
+  `_internal/`, `_cli/`, `testing/` to mirror the framework
+  sub-packages and the `cli/` entry point; an
   implementation file covered by several test files gets a `test_<impl>/`
   package, e.g. `tests/framework/io/test_readers/`), `tests/case_review/`,
   `tests/pipelines/`, plus `tests/integration/` for tests that span trees (e.g.
@@ -41,10 +41,11 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   scaffolded feed (#97) follows the same convention: its code lands in
   `pipelines/<feed>/` and its test in `tests/pipelines/test_<feed>.py`.
 - **Public API (#95):** application code (`pipelines/` + the `case_review/`
-  domain layer) imports through the six facades `framework.core` /
-  `framework.io` / `framework.transform` / `framework.validate` /
-  `framework.run` / `framework.shared`, not the modules behind them (those are
-  internal layout).
+  domain layer) imports through the four facades `framework.core` /
+  `framework.io` / `framework.transform` / `framework.run`, not the modules
+  behind them (those are internal layout); the cross-cutting `tools.*` helpers
+  (`tools.retry` / `tools.calendar` / `tools.orchestration` /
+  `tools.observability`) are a sibling utility package, not a facade.
   The facades are the stable contract;
   [`docs/public-api.md`](docs/public-api.md) lists the surface, the internal
   modules, and the packaging non-goal. `tests/integration/test_public_api.py`
@@ -73,17 +74,20 @@ python3 -m venv .venv
 .venv/bin/pre-commit run --all-files             # lint + format the whole tree on demand
 ```
 
-**Lint/format:** `ruff` is the linter and formatter (config in `pyproject.toml`).
-The `.pre-commit-config.yaml` hooks run `ruff check --fix` then `ruff format` on
-staged files at commit time once `pre-commit install` has been run; a commit is
-blocked if `ruff check` reports an unfixable error (e.g. an unused variable or an
-over-long line), so fix it and re-stage. The hooks read the same `pyproject.toml`
-config, so they match a local `ruff` invocation.
+**Lint/format/test:** `ruff` is the linter and formatter (config in
+`pyproject.toml`). The `.pre-commit-config.yaml` hooks run `ruff check --fix` then
+`ruff format` on staged files at commit time once `pre-commit install` has been
+run; a commit is blocked if `ruff check` reports an unfixable error (e.g. an
+unused variable or an over-long line), so fix it and re-stage. The hooks read the
+same `pyproject.toml` config, so they match a local `ruff` invocation. A third
+hook runs the **full `pytest` suite** whenever any Python file is staged (a
+`language: system` local hook, so it uses the active environment — activate the
+venv before committing); a failing test blocks the commit.
 
 Run pipelines as **modules from the repo root** (`python -m pipelines.<name>`)
 so the import-only `framework` package resolves on `sys.path`. The framework
-itself is also runnable — `python -m cli <command>` (entry point in
-`framework/_cli`) is the single surface for authoring (`scaffold`) and operating
+itself is also runnable — `python -m cli <command>` (entry point in the
+top-level `cli/`) is the single surface for authoring (`scaffold`) and operating
 (`run`/`orchestrate`/`status`/`runs`/`log`) pipelines. `run` addresses a pipeline
 by **its location on disk** — `python -m cli run pipelines/<name>` imports
 `pipelines.<name>.pipeline` and executes its `run(context)` callable (reading an
@@ -95,7 +99,7 @@ takes a required `--app` naming an application's registry module that exposes
 Scaffold a new feed with `python -m cli scaffold <feed>`: it renders the
 feed code as a `pipelines/<feed>/` subpackage (schema, pipeline, sample fixture)
 and its test as `tests/pipelines/test_<feed>.py`, from the template under
-`framework/_cli/scaffold_templates/feed/`, ready to run and customise. The
+`cli/scaffold_templates/feed/`, ready to run and customise. The
 generic feed refines source -> raw -> silver -> gold, one `*_builder` per hop
 (`raw_builder` lands faithfully; `silver_builder` renames via `RENAME` + coerces +
 validates the schema; `gold_builder` is a passthrough stub with a `TODO`), wired
@@ -109,7 +113,7 @@ clean identifier (spaces/punctuation/capitals) the source names are emitted as a
 `silver_builder`'s `RENAME` map is populated to canonicalise them (raw stays
 faithful; silver renames to the schema's canonical shape). Add `--case-type`
 for the Case Type ingest variant (#155): a case-review-flavoured slice from
-`framework/_cli/scaffold_templates/case_type/` that additionally declares the Case
+`cli/scaffold_templates/case_type/` that additionally declares the Case
 Type's identity contract (`case_type.py`) and refines source → raw → silver,
 **stopping at silver** — how silver is assembled into gold is per-Case-Type and
 an open decision (snapshot-vs-join — #163), so it's left as a commented seam. See

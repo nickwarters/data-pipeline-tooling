@@ -19,8 +19,43 @@ message; the base adds no behaviour beyond being the common ancestor.
 from __future__ import annotations
 
 
+class ErrorCategory:
+    """How an expected failure should be triaged — recorded on the run log.
+
+    A ``PipelineError`` already names *what* broke (its class); the category names
+    *whose problem it is*, so an operator scanning a run log can route a failure
+    without reading every message:
+
+    - ``DATA`` — the feed broke a declared data expectation (a schema/value-rule
+      breach, an uncastable value). The fix is in the **data**.
+    - ``OPERATIONAL`` — the data and the code are fine but the run conditions are
+      not (a stale upstream, a per-item failure in a batch). The fix is in the
+      **run/environment**.
+    - ``CONFIG`` — the pipeline is mis-addressed or mis-wired (an unknown
+      pipeline). The fix is in the **wiring**.
+
+    Note the deliberate gaps: a source that won't open, a write that fails, and a
+    bug in a transform are **not** categorised here — they stay raw exceptions
+    with a full traceback (ADR-0007's "expected failure vs. genuine bug" line), so
+    they surface as the programming/operational faults they are rather than as
+    operator-actionable data failures.
+    """
+
+    DATA = "data"
+    OPERATIONAL = "operational"
+    CONFIG = "config"
+
+
 class PipelineError(Exception):
-    """Base for expected, fail-fast failures raised while running a pipeline."""
+    """Base for expected, fail-fast failures raised while running a pipeline.
+
+    ``category`` (one of :class:`ErrorCategory`) classifies the failure for the
+    run log; subclasses override it. The base defaults to ``OPERATIONAL`` — a
+    generic expected abort — so any future subclass is categorised even before it
+    chooses a more specific bucket.
+    """
+
+    category: str = ErrorCategory.OPERATIONAL
 
 
 def format_failure(error: BaseException) -> str:
@@ -45,6 +80,8 @@ def format_failure(error: BaseException) -> str:
     remains greppable. A multi-line message keeps its line breaks.
     """
     kind = type(error).__name__
+    category = getattr(error, "category", None)
+    label = f"{kind}, {category}" if category else kind
     message = str(error) or kind
     body = "\n".join(f"  {line}" for line in message.splitlines() or [""])
-    return f"Pipeline run failed [{kind}]\n{body}"
+    return f"Pipeline run failed [{label}]\n{body}"

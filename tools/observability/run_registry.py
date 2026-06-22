@@ -56,11 +56,20 @@ class RunRegistry:
                 rows_excluded    INTEGER,
                 duration         REAL,
                 errors           TEXT,
+                error_category   TEXT,
                 warn_hits        TEXT,
+                committed        INTEGER,
                 PRIMARY KEY (run_id, step, step_ordinal)
             )
             """
         )
+        # Forward-compatible migration: a registry DB created before the
+        # `committed` artifact marker (ADR-0007 amd 03) lacks the column, and the
+        # INSERT below names it. Add it in place rather than forcing a re-create —
+        # the store lives on a shared drive (ADR-0001) and is not disposable.
+        existing = {row[1] for row in con.execute("PRAGMA table_info(run_records)")}
+        if "committed" not in existing:
+            con.execute("ALTER TABLE run_records ADD COLUMN committed INTEGER")
         con.execute(
             """
             CREATE TABLE IF NOT EXISTS ingest_progress (
@@ -183,8 +192,8 @@ class RunRegistry:
                     INSERT OR IGNORE INTO run_records (
                         timestamp, run_id, pipeline, step, step_ordinal, status,
                         rows_in, rows_out, rows_quarantined, rows_excluded,
-                        duration, errors, warn_hits
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        duration, errors, error_category, warn_hits, committed
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         rec.get("timestamp"),
@@ -199,7 +208,9 @@ class RunRegistry:
                         rec.get("rows_excluded"),
                         rec.get("duration"),
                         json.dumps(rec.get("errors") or []),
+                        rec.get("error_category"),
                         json.dumps(rec.get("warn_hits") or []),
+                        1 if rec.get("committed") else 0,
                     ),
                 )
                 inserted += cur.rowcount
@@ -324,4 +335,7 @@ def _row_to_record(row: dict) -> dict:
     """Decode the JSON-encoded list columns back to lists for the caller."""
     row["errors"] = json.loads(row["errors"]) if row["errors"] else []
     row["warn_hits"] = json.loads(row["warn_hits"]) if row["warn_hits"] else []
+    # The artifact marker stores as 0/1 (or null on pre-migration rows); the
+    # caller reads the same bool the RunLog wrote.
+    row["committed"] = bool(row.get("committed"))
     return row

@@ -87,6 +87,9 @@ So the `Stage` model is consolidated onto the one step plan:
   remain the **public authoring vocabulary**, composed via `.add_stage(...)`. The
   `Stage` *protocol* is no longer part of the public facade (`framework.run`) — it is
   an internal shape — because there is no longer a custom-stage extension point.
+  *(Superseded by the 2026-06-19 amendment: the DAG builder replaced `.add_stage(...)`
+  with explicit declared-dependency nodes, leaving the three stage classes orphaned;
+  they were removed in #220.)*
 - The **dataset→dataset transform extension point is the `Processor`** (the tested,
   trace-aware one), not a custom stage. This supersedes the "public `Stage`
   contract: current `Dataset` in, next `Dataset` out" note in the 2026-06-09
@@ -114,4 +117,5 @@ p.run()
 - **Topological Sorting:** `p.run()` executes the nodes in topological order based on their declared dependencies, rather than relying on the order of chained method calls.
 - **Support for Multi-Input / Fan-Out:** The DAG natively supports branching (fanning out one source into multiple paths) and complex multi-input steps (like joins) without hacking the linear fluent chain or requiring special `JoinDependency` objects. 
 - **Legacy `Processor` Deprecation:** The explicit `Processor` protocol abstraction has been removed. Transforms (`p.transform()`) now accept any standard Python callable (e.g., `Dataset -> Dataset`). Built-in utility classes (`Score`, `Filter`, `JoinWith`) now implement `__call__` so they act seamlessly as callables within the DAG.
+- **Stage classes removed (#220):** with `.add_stage(...)` gone, the built-in stage specs (`ValidationStage`, `ProcessingStage`, `CheckpointStage`) and the internal `Stage` protocol had no remaining caller — they are removed from `framework.run`. Validation, transformation, and checkpoint writes are now expressed directly as declared nodes (`.validate` / `.transform` / `.write`).
 - **Lineage and Execution Tracking:** `PipelineExecution` tracks dependencies automatically via `__self__` properties on bound methods and traces the exact execution order, keeping all of the robustness of the prior engine while exposing a much cleaner API.

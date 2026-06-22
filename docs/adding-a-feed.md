@@ -16,7 +16,7 @@ python -m cli scaffold orders --force    # overwrite if it exists
 python -m cli scaffold orders --from-feed-file sample.csv  # seed from a real CSV
 ```
 
-This renders, from the template under `framework/_cli/scaffold_templates/feed/`, the feed
+This renders, from the template under `cli/scaffold_templates/feed/`, the feed
 **code** as a subpackage and its **test** under `tests/pipelines/` (with the rest
 of the suite, mirroring the source layout) — wired together and ready to run:
 
@@ -132,7 +132,7 @@ rows *are* a Case Type, reach for the additive variant instead (#155):
 python -m cli scaffold --case-type claims   # -> pipelines/claims/ + tests/pipelines/test_claims.py
 ```
 
-It renders, from `framework/_cli/scaffold_templates/case_type/`, a case-review-flavoured
+It renders, from `cli/scaffold_templates/case_type/`, a case-review-flavoured
 slice that does two things the generic scaffold won't:
 
 ```
@@ -153,8 +153,8 @@ tests/pipelines/
   omits it.
 - **It refines through the settled ingest spine** — source → raw (a faithful,
   accumulated copy, the system of record) → silver (schema coerced + validated,
-  accumulated via `raw_to_silver`) — importing only `case_review` + the public
-  facades, never framework internals.
+  composing `SchemaCoercion` + `SchemaValidator` onto the hop) — importing only
+  `case_review` + the public facades, never framework internals.
 
 **It deliberately stops at silver.** How accumulated silver is reduced or
 assembled into **gold** — a single-feed current reduce, a multi-feed *join*
@@ -200,10 +200,10 @@ shape-hardening (`schema-enforcement.md`). The step order is:
 2. **`SchemaCoercion`** — repair the dtypes storage round-trips lose.
 3. **`SchemaValidator`** (as a post-validator) — check at the silver boundary.
 
-Because the canonicalisation has to run *before* `SchemaCoercion` and the
-validator, a spaced feed **composes the raw → silver pipeline directly** rather
-than calling the `raw_to_silver` recipe — that recipe hardcodes `SchemaCoercion`
-as its only processor and has no seam to slip a `Rename` in ahead of it:
+The raw → silver hop is **composed explicitly** (there is no recipe builder), so
+slipping the canonicalisation in is just another step: a spaced feed adds a
+`Rename` *before* `SchemaCoercion` and the validator, so the renamed columns reach
+the schema check under their canonical names:
 
 ```python
 from framework.core import RAW, SILVER
@@ -213,18 +213,23 @@ from framework.transform import Rename, SchemaCoercion
 from framework.core import ColumnValidator, SchemaValidator
 
 store = StoreCatalog("/path/to/share").store("cases")
-(
-    Pipeline("cases", store.reader(RAW, "cases"))
-    # optional: gate the *source* columns in the source's own vocabulary, so a
-    # missing/renamed source column fails as "missing 'Case Number'" rather than
-    # surfacing later as a confusing "missing 'case_number'" after the rename.
-    .validate(ColumnValidator(["Case Number", "Adviser Name"]))
-    .transform(Rename({"Case Number": "case_number", "Adviser Name": "adviser_name"}))
-    .transform(SchemaCoercion(CasesRow))
-    .validate(SchemaValidator(CasesRow))
-    .write_to(store.writer(SILVER, "cases", Refresh()))
-    .run()
+p = Pipeline("cases")
+raw = p.read(store.reader(RAW, "cases"), name="read")
+# optional: gate the *source* columns in the source's own vocabulary, so a
+# missing/renamed source column fails as "missing 'Case Number'" rather than
+# surfacing later as a confusing "missing 'case_number'" after the rename.
+gated = p.validate(
+    ColumnValidator(["Case Number", "Adviser Name"]), raw, name="source-columns"
 )
+renamed = p.transform(
+    Rename({"Case Number": "case_number", "Adviser Name": "adviser_name"}),
+    gated,
+    name="rename",
+)
+coerced = p.transform(SchemaCoercion(CasesRow), renamed, name="coerce")
+validated = p.validate(SchemaValidator(CasesRow), coerced, name="post-validate")
+p.write(store.writer(SILVER, "cases", Refresh()), validated, name="write")
+p.run()
 ```
 
 The leading `ColumnValidator` is **optional** and is about error legibility, not
@@ -332,23 +337,25 @@ from framework.run import Pipeline
 from framework.core import ColumnValidator, SchemaDriftValidator
 
 store = StoreCatalog("/path/to/share").store("cases")
-landed = (
-    Pipeline("cases", ExcelReader("feed.xlsx", sheet="cases"))
-    .validate(ColumnValidator(["case_id"]))   # optional: gate the input
-    # optional: warn (don't abort) when the source's columns drift from the
-    # prior run's landed set — catches owner-controlled schema change at the
-    # door (#51). First run has no prior, so it's a clean no-op.
-    .validate(
-        SchemaDriftValidator(store.columns_of(RAW, "cases")), severity="warn"
-    )
-    .write_to(store.writer(RAW, "cases", Refresh()))
-    .run()
+p = Pipeline("cases")
+raw = p.read(ExcelReader("feed.xlsx", sheet="cases"), name="read")
+gated = p.validate(ColumnValidator(["case_id"]), raw, name="columns")  # optional: gate input
+# optional: warn (don't abort) when the source's columns drift from the
+# prior run's landed set — catches owner-controlled schema change at the
+# door (#51). First run has no prior, so it's a clean no-op.
+checked = p.validate(
+    SchemaDriftValidator(store.columns_of(RAW, "cases")),
+    gated,
+    name="drift",
+    severity="warn",
 )
+p.write(store.writer(RAW, "cases", Refresh()), checked, name="write")
+landed = p.run()
 ```
 
 Swapping the Reader is the only change needed to ingest the same feed from a
 different source type — the rest of the pipeline is identical. Validators and
-(later) processors compose in the same fluent way; see
+processors compose as explicit steps wired to their upstream node; see
 [`core-primitives.md`](core-primitives.md).
 
 If a landing directory contains many files, choose the component by the logical
@@ -366,7 +373,7 @@ SAS (no macOS runtime, and the cross-platform constraint forbids a Windows-only
 path) and SharePoint (**Subscription Edition on-prem**; the connection drops in
 from a separate repo). Their Readers keep the same `read() -> Dataset` shape,
 but the remote behaviour — shelling to `ssh`/`scp`, calling the SharePoint list
-API — sits behind a **swappable seam in `framework.io.remote` that is stubbed
+API — sits behind a **swappable seam in `tools.integrations.remote` that is stubbed
 today** (ADR-0004, ADR-0005). The on-prem SE auth (NTLM/Kerberos/REST — **not**
 Azure AD/Graph) is a client-seam concern designed once for both directions, and
 keeping it behind the seam keeps the cross-platform constraint (Windows + macOS)
@@ -452,16 +459,23 @@ SelectionPool and writes here (`SqliteReader(gold, "selection_pool")` →
 shared source, not a mid-run checkpoint (CONTEXT.md, #48):
 
 ```python
-from framework.io import Refresh, SharePointWriter, SqliteReader
-from framework.run.builder import Pipeline
+from framework.io import Refresh, SqliteReader
+from framework.run import Pipeline
+from tools.integrations.remote import SharePointWriter
 
-Pipeline("selection-deliverable", SqliteReader(gold_db, "selection_pool")).write_to(
-    SharePointWriter(site, f"Selection - {case_type}", strategy=Refresh(), pusher=client)
-).run()
+p = Pipeline("selection-deliverable")
+r = p.read(SqliteReader(gold_db, "selection_pool"), name="read")
+p.write(
+    SharePointWriter(site, f"Selection - {case_type}", strategy=Refresh(), pusher=client),
+    r,
+    name="write",
+)
+p.run()
 ```
 
 ```python
-from framework.io import Refresh, SharePointWriter
+from framework.io import Refresh
+from tools.integrations.remote import SharePointWriter
 
 writer = SharePointWriter(
     "https://contoso.sharepoint.com/sites/cases",

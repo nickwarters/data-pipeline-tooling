@@ -178,11 +178,10 @@ active_cases = store.query(
     "SELECT case_ref, opened FROM raw_export WHERE status = 'OPEN'"
 )
 
-(
-    Pipeline("spike", active_cases)
-    .write_to(ExcelWriter("/tmp/spike/active.xlsx", Refresh()))
-    .run()
-)
+p = Pipeline("spike")
+r = p.read(active_cases, name="read")
+p.write(ExcelWriter("/tmp/spike/active.xlsx", Refresh()), r, name="write")
+p.run()
 ```
 
 ## What you are knowingly giving up
@@ -214,8 +213,9 @@ mechanical:
    `JoinWith` processor over an explicit read-only dependency
    ([processors.md](processors.md)), and the source is landed in raw first — so
    the SQL string disappears into the typed builder.
-4. **Add the schema boundary.** Route the feed through `raw_to_silver(store,
-   table, schema)` so a declared Case Type contract is enforced at silver
+4. **Add the schema boundary.** Refine the feed raw → silver by composing
+   `SchemaCoercion(schema)` + `SchemaValidator(schema)` onto the hop, so a declared
+   Case Type contract is enforced at silver
    ([schema-enforcement.md](schema-enforcement.md), ADR-0008).
 5. **Delete `SqliteQueryReader` and `ScratchStore`** once nothing imports them.
    They are not part of the public surface ([public-api.md](public-api.md)); a

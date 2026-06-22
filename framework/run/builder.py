@@ -32,6 +32,10 @@ class Node:
         self._result: Any = None
         self._executed: bool = False
         self.warn_hits: list[str] = []
+        # Set by a side-effecting node once it has durably written an artifact;
+        # surfaced on this node's run-log record so the log shows independently
+        # committed evidence that outlives a later failure (ADR-0007 amd 03).
+        self.committed: bool = False
 
     def describe(self) -> str:
         deps = [n.name for n in self.inputs]
@@ -73,15 +77,17 @@ class Node:
                 warn_hits=self.warn_hits,
                 rows_in=rows_in,
                 rows_out=rows_out,
+                committed=self.committed,
             )
             return self._result
         except Exception as exc:
-            # Log failure
+            # Log failure, tagged with its triage category (None for a raw bug).
             session.record(
                 self.name,
                 "error",
                 duration=time.perf_counter() - started,
                 errors=[str(exc)],
+                error_category=getattr(exc, "category", None),
             )
             raise
 
@@ -197,6 +203,7 @@ class ExplainNode(Node):
         if session.trace is not None:
             trace_ds = session.trace.finalize(dataset)
             self.writer.write(trace_ds)
+            self.committed = True
 
             # The original architecture recorded these counts in the metrics
             # of the explain step
@@ -206,6 +213,7 @@ class ExplainNode(Node):
                 rows_in=session.trace.considered,
                 rows_out=session.trace.selected,
                 rows_excluded=session.trace.excluded,
+                committed=True,
             )
         return dataset
 
@@ -229,6 +237,7 @@ class QuarantineNode(Node):
             frame["load_date"] = context.load_date
             enriched_rejected = Dataset.from_pandas(frame)
             self.writer.write(enriched_rejected)
+            self.committed = True
 
         session.record(
             self.name,
@@ -236,6 +245,7 @@ class QuarantineNode(Node):
             rows_in=len(dataset),
             rows_out=len(good),
             rows_quarantined=len(rejected),
+            committed=self.committed,
         )
         return good
 
@@ -250,6 +260,7 @@ class WriteNode(Node):
     ) -> Dataset:
         try:
             self.writer.write(dataset)
+            self.committed = True
         finally:
             if hasattr(self.writer, "retry_attempts"):
                 self.warn_hits.extend(self.writer.retry_attempts)
@@ -403,6 +414,7 @@ class Pipeline:
                 "error",
                 duration=time.perf_counter() - started,
                 errors=[str(exc)],
+                error_category=getattr(exc, "category", None),
             )
             raise
         finally:

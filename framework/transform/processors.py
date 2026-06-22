@@ -6,9 +6,9 @@ structural validators it is **engine-confined**: it reaches the backing frame vi
 ``to_pandas``/``from_pandas`` because a transform needs the engine's vectorised
 operations.
 
-The builder attaches processors with :meth:`Pipeline.with_processor` and runs
-them as the ``process`` step. A processor has no severity: a transform either
-applies or it can't, so a failure is always fail-fast.
+The builder attaches a processor as a DAG node with :meth:`Pipeline.transform`
+and runs it as a ``transform`` step. A processor has no severity: a transform
+either applies or it can't, so a failure is always fail-fast.
 
 Two families of concrete processor live in the framework. The schema-driven
 ``SchemaCoercion`` (in :mod:`framework.transform.coercion`) is the write-side
@@ -42,12 +42,14 @@ from typing import (
 
 from framework._internal.describe import render
 from framework.core.dataset import Dataset
-from framework.core.errors import PipelineError
+from framework.core.errors import ErrorCategory, PipelineError
 from framework.core.protocols import DatasetSupplier
 
 
 class CoercionError(PipelineError):
     """Raised by a Processor when it cannot cast a value to its declared type."""
+
+    category = ErrorCategory.DATA
 
 
 # Business rules are expressed as plain Python callables over a row mapping; the

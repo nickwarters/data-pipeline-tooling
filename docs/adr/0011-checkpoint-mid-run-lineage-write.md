@@ -66,6 +66,11 @@ checkpoint N+1 fails, the N snapshot exists in the checkpoint's backing store
 but the terminus write has not occurred. The checkpoint writer owns its own
 load strategy and is responsible for idempotency on re-run (ADR-0006).
 
+A committed checkpoint is **independently committed evidence**: it is not rolled
+back by a later step's failure, and its run-log step carries `committed: true` so
+an operator can see it landed ([ADR-0007 amendment 03](0007-amendment-03-independent-artifact-commits.md)).
+This is the same independent-evidence model quarantine and explain follow.
+
 ## Consequences
 
 - `.checkpoint(writer)` is added to the `Pipeline` builder alongside
