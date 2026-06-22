@@ -12,5 +12,6 @@ __pycache__/
 # Pytest
 .pytest_cache/
 
-# Claude Code local (per-machine) settings and state
-.claude/
+# Claude Code local (per-machine) settings and state — but share project skills
+.claude/*
+!.claude/skills/
