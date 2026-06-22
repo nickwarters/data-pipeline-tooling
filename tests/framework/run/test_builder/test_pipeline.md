@@ -183,4 +183,27 @@ def test_checkpoint_sees_state_at_its_position_in_the_stage_sequence():
     assert "col_a" in cp.written.columns
     assert "col_b" not in cp.written.columns
 
+
+def test_read_node_can_explicitly_depend_on_action_node():
+    events = []
+
+    class EventRecordingReader:
+        def read(self) -> Dataset:
+            events.append("read")
+            return Dataset.from_pandas(pd.DataFrame({"id": [1]}))
+
+    def my_action():
+        events.append("action")
+
+    p = Pipeline("cases")
+    act = p.action(my_action, name="setup")
+    # By making the read depend on the action, we ensure action executes first
+    p.read(EventRecordingReader(), name="read", depends_on=[act])
+
+    plan = p.describe()
+    assert "[Read] read (depends on: setup)" in plan
+
+    p.run()
+    assert events == ["action", "read"]
+
 ```
