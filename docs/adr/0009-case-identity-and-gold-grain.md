@@ -93,3 +93,49 @@ terminus and not by a splitting Processor.
   Tables are **read-side** concerns (Python), not enforced by the store.
 - Each feed must declare its natural key; a feed without one falls back to the
   deferred persistent-identity-map option.
+
+## Amendment (2026-06-23): fan-out is a multi-write DAG, not N single-table pipelines
+
+The fan-out decision above — "a wide feed is fanned into its Case table and its
+Detail Tables by **N independent single-table pipelines over the shared raw
+table**" — and its rejection of "one pipeline, multiple Writers (fan-out
+terminus)" are **reversed**. The builder is a general DAG that already executes
+**any number of writes** in one run (ADR-0003 2026-06-23 amendment), so a wide
+feed is fanned out **within one DAG**: read the shared source once, normalise
+once, and branch into the Case write plus each Detail-Table write. This avoids
+re-reading and re-normalising the source once per output (the in-memory form of
+the "materialised conform boundary" this ADR held in reserve).
+
+What carries over unchanged:
+
+- **Deterministic `case_id`** (`uuid5(namespace, natural_key)`) and the
+  **one-row-per-Case grain** with its uniqueness validator. Determinism is what
+  lets the Case branch and each Detail branch derive the *same* `case_id`
+  independently — now they do so as branches of one DAG rather than as separate
+  pipelines, but the structural "same namespace + key" invariant is identical.
+- **Per-output schema and validators** — each write branch carries its own
+  `SchemaValidator` / value rules as before; the guarantees move from "one per
+  pipeline" to "one per node".
+
+What changes:
+
+- **The node, not the pipeline, is the unit of observability and recovery**
+  (ADR-0007 2026-06-23 amendment). You author and run *few large* DAGs; each write
+  branch still fails, is logged, and (via explicit `retry`) recovers
+  independently — so the operational independence the N-pipelines model was bought
+  for is preserved at node granularity instead of pipeline granularity.
+- **Reads use named dependencies, not equal reader arguments** — a branch that
+  needs another source joins it as a read-only dependency (ADR-0003), keeping a
+  multi-read DAG legible.
+
+The **persistent-identity-map / assigned-id registry** option (above, deferred)
+is also the home for **Reference Data normalisation**: a reference/dimension table
+loaded **insert-if-absent** with a **compact assigned integer surrogate key** is a
+legitimate, append-stable identity scheme distinct from `case_id`'s `uuid5`. It is
+*stateful* (the table remembers the assignment, so it is a backed-up system of
+record — ADR-0006), which is acceptable precisely because reference loads are
+insert-if-absent rather than accumulate-by-run, so ids are stable by construction
+across re-runs. The id is **minted in Python over the dumb store** (ADR-0002),
+not by a SQLite `AUTOINCREMENT`, to keep identity logic above the store seam.
+Case identity stays `uuid5`; the two schemes coexist by load profile and must not
+be "harmonised". Status: decided; not yet built.

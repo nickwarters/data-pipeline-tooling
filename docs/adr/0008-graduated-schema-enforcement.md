@@ -34,3 +34,16 @@ The body above frames raw as having "at most a single column check so an unexpec
 **Why warn, not error, for drift.** Raw must stay a faithful mirror of whatever the owner-controlled source (SharePoint list, SAS export) gives — turning every column add/drop into an abort would make raw refuse to land faithful data, contradicting this ADR's thesis that shape *hardening* is silver's job. Drift is a *change* signal, not a *contract* violation: it catches upstream change **at the door**, one layer before it would otherwise surface as a silver **Schema Breach** far from its cause. The hard contract still lives at silver/gold.
 
 Drift is **names-only** (a dtype change on a surviving column stays a silver concern) and **run-over-run against the last landing**, so a persistent drift warns **once**, not every run. Because severity and RunLog recording are owned by the builder (ADR-0007), the warning rides the existing `warn_hits` path onto the run summary, where the run registry's `runs_that_warned()` already surfaces it — no new observability plumbing.
+
+## Amendment 02 — boundary names are an application convention, not framework vocabulary (2026-06-23)
+
+This ADR's decision is graduated enforcement: a **faithful landing boundary**
+(schema-light, two column checks) and a **validated downstream boundary**
+(`SchemaValidator` on columns + dtypes). That decision is unchanged. What
+changes is that the *names* for those boundaries — "raw", "silver", "gold" — are
+an application **profile/convention** (ADR-0001 2026-06-23 amendment), not
+framework vocabulary. The framework knows logical-database namespaces and
+Validators attached at nodes; "enforce the schema at silver" is really "attach
+the `SchemaValidator` at the validated namespace the medallion profile calls
+silver". Read every "raw"/"silver"/"gold" below as the medallion profile's names
+for those boundaries, not framework concepts.

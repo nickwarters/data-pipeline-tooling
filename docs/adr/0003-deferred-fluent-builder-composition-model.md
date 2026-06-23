@@ -119,3 +119,33 @@ p.run()
 - **Legacy `Processor` Deprecation:** The explicit `Processor` protocol abstraction has been removed. Transforms (`p.transform()`) now accept any standard Python callable (e.g., `Dataset -> Dataset`). Built-in utility classes (`Score`, `Filter`, `JoinWith`) now implement `__call__` so they act seamlessly as callables within the DAG.
 - **Stage classes removed (#220):** with `.add_stage(...)` gone, the built-in stage specs (`ValidationStage`, `ProcessingStage`, `CheckpointStage`) and the internal `Stage` protocol had no remaining caller — they are removed from `framework.run`. Validation, transformation, and checkpoint writes are now expressed directly as declared nodes (`.validate` / `.transform` / `.write`).
 - **Lineage and Execution Tracking:** `PipelineExecution` tracks dependencies automatically via `__self__` properties on bound methods and traces the exact execution order, keeping all of the robustness of the prior engine while exposing a much cleaner API.
+
+## Amendment (2026-06-23): the terminus is the DAG's leaf set — any number of writers; the node is the unit
+
+The 2026-06-19 DAG amendment introduced fan-out; this makes the **terminus**
+explicit and reconciles the docs with what `.run()` already does:
+
+- **A pipeline may declare any number of writes** (alongside any number of reads,
+  transforms, and validations). There is **no single-Writer terminus** and **no
+  single-`Dataset` return**. This supersedes both the 2026-05-29 amendment's
+  one-`.write_to(writer)` framing *and* ADR-0009's "no multi-Writer terminus"
+  (see ADR-0009's 2026-06-23 amendment).
+- `.run()` executes **all leaf nodes** (nodes nothing else depends on) in
+  topological order and **returns `None`** (decided 2026-06-23). A run is
+  **side effects** — its writes — not a value it computes, so there is no
+  meaningful single "output" to hand back once a DAG can have many write leaves.
+  This **supersedes** the original Consequence "`.run()` returns the opaque
+  tabular dataset" and the current `-> Any` `results[0]`-or-list shape. To
+  inspect a node's data after a run, read it back through its Writer's table or a
+  checkpoint; the convenience `landed = p.run()` pattern is retired (a breaking
+  change, accepted pre-1.0). *Decided; not yet built — `run()` still returns the
+  leaf result(s) today.*
+- **The node is the unit of observability and recovery; the DAG/Pipeline is the
+  unit of authoring and launching.** This is the Airflow-task / dbt-model /
+  Dagster-asset split: you author and run *few large* DAGs, while each node fails,
+  is observed (one RunLog record per node + a `committed` marker — ADR-0007), and
+  (via explicit retry — ADR-0007 2026-06-23 amendment) recovers independently.
+
+This reflects current code (`run()` already executes the leaf set and returns per-
+leaf results). The downstream conventions it reverses (ADR-0009's N single-table
+pipelines) are amended alongside it.

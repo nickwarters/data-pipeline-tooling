@@ -312,6 +312,8 @@ Swapping the Reader is the only change needed to ingest the same feed from a
 different source type. A wide feed (one Case table + Detail Tables) is fanned out
 into N single-table pipelines over the shared raw table —
 [ADR-0009](adr/0009-case-identity-and-gold-grain.md), `pipelines/demo_fan_out.py`.
+*(Direction change, decided not yet built: fan-out becomes branches of one
+multi-write DAG — ADR-0009 2026-06-23 amendment.)*
 
 For a fuller authoring example, run
 `python -m pipelines.comprehensive_examples /tmp/comprehensive-demo`. It lands

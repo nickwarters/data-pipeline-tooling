@@ -40,3 +40,40 @@ Readers/Writers. Layer names are generic framework conventions (`RAW`, `SILVER`,
 `GOLD` / `raw`, `silver`, `gold`) and are validated before resolving
 `<subject>/<layer>.db`. Load strategy is still caller-provided through the
 Writer strategy (`Refresh` or `AccumulateByRun`) and is not inferred from layer.
+
+## Amendment (2026-06-23): the Store is a topology-neutral namespace→location factory; the medallion is an application convention, not framework vocabulary
+
+The framework's storage **contract** is the `Reader` / `Writer` ports plus the
+load strategies and the `connect` seam — that is all the run engine depends on
+(`framework/run`, `framework/transform`, `framework/core` never reference
+`Store`). `Store` / `StoreCatalog` are therefore a **factory/convenience**, not a
+core primitive: application wiring uses them to mint Readers/Writers, but nothing
+downstream of `.run()` consumes them.
+
+Consequently the Store is **generalised from a fixed three-layer medallion to
+addressing logical databases**:
+
+- `catalog.store(namespace).writer(table, strategy)` / `.reader(table)`, where
+  `namespace` is an **opaque logical-database name** and the `StoreBackend` maps
+  `namespace → physical file`. The `layer` axis and its three-value enum are
+  gone; a Store is a handle to one logical database holding any number of tables.
+- The **`Layer` enum (`raw`/`silver`/`gold`) and the three-files-per-subject
+  layout leave `framework.core`.** The medallion becomes an application-level
+  **profile/convention** — namespaces shaped `"<subject>/<layer>"` — shipped
+  outside the core facade (a thin `medallion(catalog, subject)` helper), so a
+  domain that wants a different topology is not forced through medallion
+  vocabulary.
+- This **enables a full normalised schema across multiple databases**: one
+  namespace per logical database, each with many related tables; cross-database
+  relationships are resolved in Python (ADR-0002), exactly as cross-medallion
+  joins already are, so splitting databases costs nothing on the join path.
+
+**Unchanged:** SQLite, in-place writes on the share, rollback-journal mode,
+`busy_timeout`, and the **single-writer-per-file** rule. **Blast-radius
+isolation** also stands — it is physical (separate files), now produced by the
+backend's namespace→file mapping rather than named by a framework "layer"/
+"subject" concept.
+
+Status: **decided; not yet built** — the code still carries the `Layer` enum and
+the medallion-shaped Store. This amendment is the target the generalisation
+migrates toward.

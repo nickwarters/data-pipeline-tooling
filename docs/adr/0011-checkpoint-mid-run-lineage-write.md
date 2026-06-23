@@ -79,3 +79,23 @@ This is the same independent-evidence model quarantine and explain follow.
   steps (`"process"` for each processor, `"checkpoint:N"` for each checkpoint).
 - The Selection two-write case (#48) is **not** a checkpoint use case — it
   remains two separate pipelines over a shared gold source (ADR-0009).
+
+## Amendment (2026-06-23): the premise reversed — multi-write is now allowed
+
+This ADR's framing ("**Why this is not the rejected multi-Writer terminus**",
+"`.write_to()` takes one Writer and `.run()` returns one Dataset") rests on
+constraints that are **reversed** (ADR-0003 / ADR-0009 2026-06-23 amendments): the
+builder is a DAG that executes **any number of writes**, and `.run()` returns
+`None`. So the elaborate distinction between a checkpoint and a "rejected
+multi-Writer terminus" is **moot** — there is no rejected terminus to distinguish
+from.
+
+What survives, simplified: a **checkpoint is just a write node on an intermediate
+node** while the DAG continues from that same node. It needs no special category;
+it is a `.write(...)` whose output another node still depends on. The
+*observability* and *fail-fast / independently-committed-evidence* sections below
+still hold (a write node emits its own RunLog record + `committed` marker —
+ADR-0007). The "two pipelines vs checkpoint" guidance (#48) is superseded by the
+node-vs-DAG model: independent outputs are write **nodes** (or separate DAGs);
+the choice is now about shared computation and recovery granularity, not about
+dodging a banned terminus.

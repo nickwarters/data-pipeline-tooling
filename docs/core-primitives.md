@@ -63,6 +63,30 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > consequences (raw becomes a backed-up system of record; volume grows
 > `records × snapshots`).
 
+> **Decided, not yet built (2026-06-23 — ADR-0001/0003/0006/0007/0008/0009
+> amendments).** A second wave of decisions, recorded in the ADRs but **not yet
+> reflected in the code or the prose below**:
+> - **The medallion is demoted to an application convention.** The framework's
+>   storage contract is the `Reader`/`Writer` ports + strategies + `connect`;
+>   `Store`/`StoreCatalog` is a *factory* (the run engine never references it),
+>   generalised to address **logical-database namespaces** (`namespace, table`)
+>   via the backend — the `Layer` enum + medallion (`raw`/`silver`/`gold`) leave
+>   `framework.core` and become a profile. This enables a normalised multi-database
+>   schema. (The "Store" sections below still describe the medallion-shaped build.)
+> - **The `Pipeline` is a multi-write DAG.** Any number of writes; **no
+>   single-Writer terminus**; **`.run()` returns `None`** (writes are side
+>   effects — the `landed = p.run()` examples below are retired). The **node** is
+>   the unit of observability and recovery; the DAG is the unit of authoring/launch
+>   (the Airflow-task / dbt-model / Dagster-asset split). Fan-out is branches of
+>   one DAG, not N single-table pipelines (ADR-0009).
+> - **Explicit `retry`** resumes a `logical_run_id` by skipping already-committed
+>   writes (re-running the in-memory prefix); a plain re-run is a full re-drive.
+>   Needs idempotent writers, unique node names, and `logical_run_id` on step
+>   records.
+> - **Reference-data normalisation** gets an `InsertIfAbsent` strategy with a
+>   compact **assigned-integer** surrogate key (minted in Python, stateful table
+>   as system of record) — distinct from Case `uuid5` identity (ADR-0009).
+
 > **Build status.** The **per-subject `Store`** has landed: `Store(subject_dir)`
 > *mints* that subject's Writers/Readers over its own
 > `<subject_dir>/{raw,silver,gold}.db`, and `StoreCatalog(root).store(subject)`
@@ -647,8 +671,11 @@ without changing the registered pipeline code.
 ### `ForEach` — independent per-item builder runs
 `ForEach` (`tools.orchestration`) is the small runnable orchestration
 primitive for repeated runs where each item must stay independent but use the
-same recipe. It sits outside the `Pipeline` builder so the builder keeps its
-single Reader/single `Dataset`/single Writer contract:
+same recipe. It sits outside the `Pipeline` builder because each item is a
+**separate logical run** (its own `RunContext`/logical run id), not because the
+builder is single-writer — the builder is a multi-write DAG (ADR-0003 2026-06-23
+amendment). Use `ForEach` for *independent runs*; use a multi-write DAG for one
+run that fans out into several writes:
 
 ```python
 from framework.io import AccumulateByRun
