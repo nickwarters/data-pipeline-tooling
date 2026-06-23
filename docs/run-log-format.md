@@ -123,6 +123,13 @@ and `block` records `error`. If history exists but is stale, the step is
 `error`, the runner writes an errored `run` summary for the downstream label,
 and the handler is not called.
 
+When the same check runs under `tools.orchestration.Orchestrator`, a stale
+pipeline/task success, a missing upstream with `on_first_run("block")`, or an
+upstream failure in the same orchestration pass produces a `blocked` decision in
+`<base_dir>/_orchestration/runs.db`. The decision `reason` stores the
+requirement failure text so operators can see which `RunAddress` prevented the
+scheduled item from running.
+
 ### Happy path (a successful run of 4 rows)
 
 ```json
