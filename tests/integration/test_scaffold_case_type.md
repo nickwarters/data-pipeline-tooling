@@ -72,8 +72,8 @@ def test_case_type_variant_refines_to_silver_and_leaves_gold_a_commented_seam(tm
     )
 
     # The settled ingest spine is rendered live: source -> raw -> silver.
-    assert "p_silver.read(" in pipeline
-    assert "p_silver.write(store.writer(SILVER" in pipeline
+    assert "silver_pipeline = silver_builder(" in pipeline
+    assert "writer=store.writer(SILVER" in pipeline
     assert "from framework.run import Pipeline" in pipeline
 
     # Gold is the author's seam, not a live call, so the scaffold makes no bet

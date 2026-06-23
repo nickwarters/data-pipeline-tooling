@@ -49,6 +49,7 @@ from framework.transform.processors import (
     VectorizedDerive,
     VectorizedFilter,
 )
+from framework.transform.quarantine import SchemaValueRulePartitioner
 
 __all__ = [
     # The processor seam (defined in framework.core.protocols, re-exported here)
@@ -73,6 +74,8 @@ __all__ = [
     "CoercionError",
     # The coerce half of the schema adapter
     "SchemaCoercion",
+    # Quarantine partitioning
+    "SchemaValueRulePartitioner",
 ]
 
 ```

@@ -9,8 +9,7 @@ and a recording writer, so the first test drives the actual hop rather than a
 rebuild of it.
 
 - ``raw_builder``   reads the source and lands it faithfully (column-gated).
-- ``silver_builder`` renames source columns to the schema's vocabulary, coerces
-  the dtypes storage loses, and validates the declared schema.
+- ``silver_builder`` renames source columns, coerces dtypes, and validates.
 - ``gold_builder``  assembles silver into gold -- a passthrough to start; the
   assembly is yours to build (see the TODO and #163).
 
@@ -22,7 +21,6 @@ Address it by its location on disk -- the framework imports
 or run the module directly with a default run context::
 
     python -m pipelines.myfeed.pipeline [BASE_DIR]
-    python -m pipelines.myfeed.pipeline [BASE_DIR] --describe   # print each plan
 
 Both run from the repo root so the import-only ``framework`` package resolves on
 ``sys.path``.
@@ -48,10 +46,13 @@ from framework.core import (
 from framework.io import (
     AccumulateByRun,
     CsvReader,
+    Reader,
     Refresh,
     StoreCatalog,
+    Writer,
 )
-from framework.run import Pipeline, RunContext
+from framework.run import Pipeline, RunContext, RunLog
+from framework.transform import SchemaCoercion, SchemaValueRulePartitioner
 
 from .schema import MyfeedRow
 
@@ -68,79 +69,110 @@ RENAME: dict[str, str] = {}
 UPSTREAMS = ()
 
 
-def build_pipeline(context: RunContext) -> Pipeline:
-    store = StoreCatalog(context.base_dir).store(FEED_NAME)
-    strategy = AccumulateByRun.from_context(context)
+def raw_builder(
+    reader: Reader,
+    writer: Writer,
+    run_log: RunLog | None = None,
+) -> Pipeline:
+    """Build the raw hop: faithful landing zone."""
+    p = Pipeline(f"{FEED_NAME}:raw", run_log=run_log)
+    r = p.read(reader, name="read")
 
-    # 1. Initialize the DAG Pipeline
-    p = Pipeline(FEED_NAME, run_log=context.run_log)
-
-    # -------------------------------------------------------------------------
-    # RAW LAYER
-    # Reads the source, gates it with a ColumnValidator, and writes a faithful copy.
-    # -------------------------------------------------------------------------
-    raw_source = p.read(CsvReader(SAMPLE_CSV), name="read_csv")
-
-    raw_validated = p.validate(
-        ColumnValidator([f.name for f in fields(MyfeedRow)]),
-        raw_source,
-        name="raw_col_validate",
+    # Gate the source's expected columns before landing
+    v = p.validate(
+        ColumnValidator([f.name for f in fields(MyfeedRow)]), r, name="raw_col_validate"
     )
+    p.write(writer, v, name="write_raw")
+    return p
 
-    raw_written = p.write(
-        store.writer(RAW, FEED_NAME, strategy), raw_validated, name="write_raw"
-    )
 
-    # -------------------------------------------------------------------------
-    # SILVER LAYER
-    # Renames source columns, coerces dtypes, and validates schema.
-    # We continue the graph from `raw_written` to avoid re-reading from disk.
-    # -------------------------------------------------------------------------
-    def rename_and_coerce(dataset: Dataset) -> Dataset:
-        # Instead of generic processor classes, manipulate the data directly
-        df = dataset.to_pandas()
+def silver_builder(
+    reader: Reader,
+    writer: Writer,
+    reject_writer: Writer | None = None,
+    run_log: RunLog | None = None,
+) -> Pipeline:
+    """Build the silver hop: schema coercion and enforcement + quarantine."""
+    p = Pipeline(f"{FEED_NAME}:silver", run_log=run_log)
+    r = p.read(reader, name="read")
+
+    def rename_columns(dataset: Dataset) -> Dataset:
         if RENAME:
-            df = df.rename(columns=RENAME)
-        # Assuming you have a helper for schema coercion or just use raw pandas:
-        # df = coerce_to_schema(df, MyfeedRow)
-        return Dataset(df)
+            return Dataset(dataset.to_pandas().rename(columns=RENAME))
+        return dataset
 
-    silver_transformed = p.transform(
-        rename_and_coerce, raw_written, name="silver_transform"
+    renamed = p.transform(rename_columns, r, name="silver_rename")
+    coerced = p.transform(SchemaCoercion(MyfeedRow), renamed, name="coerce")
+
+    if reject_writer:
+        quarantined = p.quarantine(
+            SchemaValueRulePartitioner(MyfeedRow),
+            reject_writer,
+            coerced,
+            name="quarantine",
+        )
+    else:
+        quarantined = coerced
+
+    validated = p.validate(
+        SchemaValidator(MyfeedRow), quarantined, name="post-validate"
     )
+    p.write(writer, validated, name="write_silver")
+    return p
 
-    silver_validated = p.validate(
-        SchemaValidator(MyfeedRow), silver_transformed, name="silver_schema_validate"
-    )
 
-    silver_written = p.write(
-        store.writer(SILVER, FEED_NAME, strategy), silver_validated, name="write_silver"
-    )
+def gold_builder(
+    reader: Reader,
+    writer: Writer,
+    run_log: RunLog | None = None,
+) -> Pipeline:
+    """Build the gold hop: assemble silver into gold."""
+    p = Pipeline(f"{FEED_NAME}:gold", run_log=run_log)
+    r = p.read(reader, name="read")
 
-    # -------------------------------------------------------------------------
-    # GOLD LAYER
-    # A passthrough to start: reads silver and writes gold unchanged.
-    # -------------------------------------------------------------------------
     def assemble_gold(dataset: Dataset) -> Dataset:
         # TODO: build out the gold assembly (e.g. derive a stable key, reduce, join)
         return dataset
 
-    gold_transformed = p.transform(assemble_gold, silver_written, name="gold_transform")
-
-    p.write(
-        store.writer(GOLD, FEED_NAME, Refresh()), gold_transformed, name="write_gold"
-    )
-
+    assembled = p.transform(assemble_gold, r, name="gold_transform")
+    p.write(writer, assembled, name="write_gold")
     return p
 
 
 def run(context: RunContext, *, describe: bool = False) -> Dataset:
     """Refine the feed source -> raw -> silver -> gold under the run context."""
-    pipeline = build_pipeline(context)
-    if describe:
-        print(pipeline.describe())
+    store = StoreCatalog(context.base_dir).store(FEED_NAME)
+    strategy = AccumulateByRun.from_context(context)
 
-    return pipeline.run(context)
+    raw_p = raw_builder(
+        reader=CsvReader(SAMPLE_CSV),
+        writer=store.writer(RAW, FEED_NAME, strategy),
+        run_log=context.run_log,
+    )
+    if describe:
+        print(raw_p.describe())
+    raw_p.run()
+
+    silver_p = silver_builder(
+        reader=store.reader(RAW, FEED_NAME),
+        writer=store.writer(SILVER, FEED_NAME, strategy),
+        reject_writer=store.quarantine_writer(FEED_NAME),
+        run_log=context.run_log,
+    )
+    if describe:
+        print(silver_p.describe())
+    silver_p.run()
+
+    gold_p = gold_builder(
+        reader=store.reader(SILVER, FEED_NAME),
+        writer=store.writer(GOLD, FEED_NAME, Refresh()),
+        run_log=context.run_log,
+    )
+    if describe:
+        print(gold_p.describe())
+    gold = gold_p.run()
+
+    return gold
 
 
 def main(argv: list[str]) -> int:
@@ -167,9 +199,6 @@ def main(argv: list[str]) -> int:
     def handler(ctx: RunContext) -> Dataset:
         return run(ctx, describe=args.describe)
 
-    # A source feed has no medallion subject, so it registers under the empty
-    # subject and records to <base_dir>/_runs/myfeed.log. To redirect the run log
-    # elsewhere, pass run_log=RunLog(path) here; omit it for that default.
     runner = PipelineRunner()
     runner.register(
         subject="",
