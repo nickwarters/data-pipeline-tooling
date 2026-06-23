@@ -24,9 +24,14 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from framework._internal.connection import connect
+
+if TYPE_CHECKING:
+    from framework.run.address import RunAddress
 
 
 class RunRegistry:
@@ -280,6 +285,44 @@ class RunRegistry:
         finally:
             con.close()
 
+    def latest_success(
+        self,
+        address: "RunAddress | str",
+        *,
+        on: date | None = None,
+        on_or_after: date | None = None,
+    ) -> dict | None:
+        """Latest successful record for a pipeline or step address.
+
+        Date filters are based on the run-log record ``timestamp`` date.
+        Whole-pipeline addresses match the ``run`` summary record; step/task
+        addresses match successful non-``run`` records for that step.
+        """
+        from framework.run.address import RunAddress
+
+        if on is not None and on_or_after is not None:
+            raise ValueError("Pass either on or on_or_after, not both")
+        target = RunAddress.parse(address) if isinstance(address, str) else address
+        clauses = ["step_address = ?", "status = 'ok'"]
+        params: list[object] = [target.label]
+        if target.step is None:
+            clauses.append("step = 'run'")
+        else:
+            clauses.append("step != 'run'")
+        if on is not None:
+            clauses.append("timestamp >= ? AND timestamp < ?")
+            params.extend((_start_of_day(on), _start_of_next_day(on)))
+        if on_or_after is not None:
+            clauses.append("timestamp >= ?")
+            params.append(_start_of_day(on_or_after))
+        rows = self._select(
+            "WHERE "
+            + " AND ".join(clauses)
+            + " ORDER BY timestamp DESC, rowid DESC LIMIT 1",
+            tuple(params),
+        )
+        return rows[0] if rows else None
+
     def runs_that_warned(self) -> list[dict]:
         """Run summaries that tolerated a warn-severity breach, oldest first.
 
@@ -366,6 +409,14 @@ def _row_to_record(row: dict) -> dict:
     # caller reads the same bool the RunLog wrote.
     row["committed"] = bool(row.get("committed"))
     return row
+
+
+def _start_of_day(value: date) -> str:
+    return datetime.combine(value, datetime.min.time()).isoformat()
+
+
+def _start_of_next_day(value: date) -> str:
+    return datetime.combine(value + timedelta(days=1), datetime.min.time()).isoformat()
 
 
 def _step_address(rec: dict) -> str | None:
