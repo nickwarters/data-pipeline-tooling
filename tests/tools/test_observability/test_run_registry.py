@@ -8,6 +8,7 @@ exercising the actual emitter→registry seam, never a hand-faked record shape.
 """
 
 import json
+import sqlite3
 from datetime import date
 
 import pandas as pd
@@ -211,6 +212,60 @@ def test_latest_success_for_pipeline_address_uses_latest_ok_run_summary(tmp_path
     assert latest is not None
     assert latest["run_id"] == "latest-ok"
     assert latest["step"] == "run"
+
+
+def test_latest_success_backfills_legacy_rows_without_step_address(tmp_path):
+    db_path = tmp_path / "registry.db"
+    con = sqlite3.connect(db_path)
+    try:
+        con.execute(
+            """
+            CREATE TABLE run_records (
+                timestamp        TEXT,
+                run_id           TEXT NOT NULL,
+                pipeline         TEXT,
+                step             TEXT NOT NULL,
+                step_ordinal     INTEGER NOT NULL,
+                status           TEXT,
+                rows_in          INTEGER,
+                rows_out         INTEGER,
+                rows_quarantined INTEGER,
+                rows_excluded    INTEGER,
+                duration         REAL,
+                errors           TEXT,
+                error_category   TEXT,
+                warn_hits        TEXT,
+                PRIMARY KEY (run_id, step, step_ordinal)
+            )
+            """
+        )
+        con.execute(
+            """
+            INSERT INTO run_records (
+                timestamp, run_id, pipeline, step, step_ordinal, status,
+                errors, warn_hits
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "2026-06-23T09:00:00+00:00",
+                "legacy-ok",
+                "pipeline_4",
+                "run",
+                0,
+                "ok",
+                "[]",
+                "[]",
+            ),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    latest = RunRegistry(db_path).latest_success(RunAddress.pipeline("pipeline_4"))
+
+    assert latest is not None
+    assert latest["run_id"] == "legacy-ok"
+    assert latest["step_address"] == "pipeline_4"
 
 
 def test_latest_success_for_task_address_uses_latest_ok_non_run_step(tmp_path):

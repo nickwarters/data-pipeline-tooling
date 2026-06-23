@@ -172,7 +172,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`Orchestrator` / `PipelineSet` / `ScheduledPipeline`** | Scheduled due-work orchestration above `PipelineRunner`. Python definitions own sets, dependencies, and default schedules; YAML can override enablement, schedule timing, and freshness windows. A single pass or bounded loop runs due items for one run date, marks failed items terminal, blocks their downstream dependants, and lets independent items and other sets continue. |
 | **`PipelineError` / `format_failure`** | The base of the expected fail-fast failure family (`ValidationError`, `FreshnessError`, `UnknownPipelineError`, `RunAddressError`, `CoercionError`, `ForEachPipelineError` all subclass it) and the pure formatter that renders a caught one as a short, traceback-free block for `stderr`. At a run boundary — the operator CLI, a scaffolded `main()` — `except PipelineError` + `format_failure(exc)` turns a deliberate abort into a clear message; a genuine bug is not a `PipelineError` and keeps its trace. |
 | **`RunLog` / `RunRegistry`** | `RunLog` emits one JSON record per step (+ a run summary) to a `.log` file — the observability seam. `RunRegistry` ingests that JSONL into a queryable run-history store. → [run-log-format.md](run-log-format.md) ([ADR-0007](adr/0007-fail-fast-atomic-runs-jsonl-observability.md)) |
-| **`RunContext` / `PipelineRunner` / `FreshnessRequirement`** | The thin domain runner: register handlers by `(case_type, pipeline)`, receive a context carrying execution/logical identity, dates, RunLog, and RunRegistry, and block stale downstream runs by querying recent successful upstream history. → [core-primitives.md](core-primitives.md) |
+| **`RunContext` / `PipelineRunner` / `Requirement`** | The thin domain runner: register handlers by `(case_type, pipeline)`, receive a context carrying execution/logical identity, dates, RunLog, and RunRegistry, and block stale downstream runs with `Requirement.succeeded(RunAddress.pipeline(...)).same_day()` or task-level `within_days(...)` predicates. `FreshnessRequirement` remains compatible. → [core-primitives.md](core-primitives.md) |
 | **`CaseType` / `Variation`** | Case-review application/domain objects in `case_review.case_type`, not framework primitives: a Case Type bundles its `schema`, its identity contract (`natural_key` + a `namespace` derived from `name`, ADR-0009), and its `variations`, imported directly (no global CaseType config registry). A Variation overrides only what differs — most often the `question_bank_id`. → [selection.md](selection.md) |
 | **`CasePool`** | Case-review application/domain helper in `case_review.case_pool`: the per-Case-Type population read from ingested silver, surfaced through intention-revealing retrievals (e.g. `fetch_available_cases(...)`) instead of raw `read_*`. → [selection.md](selection.md) |
 | **`WorkingDayCalendar`** | A config-seeded **pure utility** for availability arithmetic ("the last 20 working days"). Touches no Dataset/Store/engine; not a Feed. → [working-day-calendar.md](working-day-calendar.md) |
@@ -471,10 +471,9 @@ p.run(context=context)
   case-review selection trace (why each Case was/wasn't chosen) as a sibling table.
 - The SelectionPool reaches the review platform as a **Deliverable** (a later
   slice); the returned **Review Outcomes** come back via **Sync**, not here.
-- Run pipelines through the framework when freshness matters:
+- Run pipelines through the framework when upstream requirements matter:
   `python -m cli run pipelines/selection /tmp/demo --run-date 2026-05-29`
-  checks recent successful `ingest` history (its declared `UPSTREAMS`) before
-  Selection executes.
+  checks declared upstream run history before Selection executes.
 
 ### Assemble silver into gold outputs
 

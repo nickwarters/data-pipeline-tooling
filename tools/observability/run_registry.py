@@ -80,6 +80,18 @@ class RunRegistry:
             con.execute("ALTER TABLE run_records ADD COLUMN step_address TEXT")
         con.execute(
             """
+            UPDATE run_records
+            SET step_address = CASE
+                WHEN step = 'run' THEN pipeline
+                ELSE pipeline || '.' || step
+            END
+            WHERE step_address IS NULL
+              AND pipeline IS NOT NULL
+              AND step IS NOT NULL
+            """
+        )
+        con.execute(
+            """
             CREATE TABLE IF NOT EXISTS ingest_progress (
                 log_path    TEXT PRIMARY KEY,
                 byte_offset INTEGER NOT NULL

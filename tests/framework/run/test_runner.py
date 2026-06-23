@@ -9,6 +9,7 @@ from framework.core.dataset import Dataset
 from framework.io.readers import DatasetReader, SqliteReader
 from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun
+from framework.run import Requirement
 from framework.run.builder import Pipeline
 from framework.run.runner import (
     FreshnessError,
@@ -26,6 +27,7 @@ def _record_run(
     log_path: Path,
     *,
     pipeline: str,
+    step: str = "run",
     status: str = "ok",
     timestamp: str = "2026-05-29T00:00:00+00:00",
     run_id: str = "upstream",
@@ -34,7 +36,7 @@ def _record_run(
         "timestamp": timestamp,
         "run_id": run_id,
         "pipeline": pipeline,
-        "step": "run",
+        "step": step,
         "status": status,
         "rows_in": None,
         "rows_out": None,
@@ -79,6 +81,96 @@ def test_freshness_guard_allows_current_successful_upstream_run(tmp_path):
     freshness = [r for r in _records(log_path) if r["step"] == "freshness"]
     assert freshness[-1]["status"] == "ok"
     assert freshness[-1]["warn_hits"] == []
+
+
+def test_requirement_within_days_allows_recent_successful_task(tmp_path):
+    log_path = tmp_path / "runs.log"
+    _record_run(
+        log_path,
+        pipeline="cases/ingest",
+        step="normalise",
+        timestamp="2026-05-23T00:00:00+00:00",
+    )
+    context = _context(tmp_path, run_date=dt.date(2026, 5, 29))
+
+    FreshnessGuard().check(
+        context,
+        Requirement.succeeded("cases/ingest.normalise").within_days(7),
+    )
+
+    freshness = [r for r in _records(log_path) if r["step"] == "freshness"]
+    assert freshness[-1]["status"] == "ok"
+    assert freshness[-1]["warn_hits"] == []
+
+
+def test_requirement_same_day_requires_success_on_run_date(tmp_path):
+    log_path = tmp_path / "runs.log"
+    _record_run(
+        log_path,
+        pipeline="cases/ingest",
+        timestamp="2026-05-28T23:59:00+00:00",
+        run_id="yesterday",
+    )
+    context = _context(tmp_path, run_date=dt.date(2026, 5, 29))
+
+    with pytest.raises(FreshnessError, match="required on 2026-05-29"):
+        FreshnessGuard().check(
+            context,
+            Requirement.succeeded("cases/ingest").same_day(),
+        )
+
+    freshness = [r for r in _records(log_path) if r["step"] == "freshness"]
+    assert freshness[-1]["status"] == "error"
+
+
+def test_requirement_same_day_allows_success_on_run_date(tmp_path):
+    log_path = tmp_path / "runs.log"
+    _record_run(
+        log_path,
+        pipeline="cases/ingest",
+        timestamp="2026-05-29T23:59:00+00:00",
+    )
+    context = _context(tmp_path, run_date=dt.date(2026, 5, 29))
+
+    FreshnessGuard().check(context, Requirement.succeeded("cases/ingest").same_day())
+
+    freshness = [r for r in _records(log_path) if r["step"] == "freshness"]
+    assert freshness[-1]["status"] == "ok"
+    assert freshness[-1]["warn_hits"] == []
+
+
+def test_requirement_first_run_policy_can_allow_without_warning(tmp_path):
+    context = _context(tmp_path)
+
+    FreshnessGuard().check(
+        context,
+        Requirement.succeeded("cases/ingest").on_first_run("allow"),
+    )
+
+    freshness = [r for r in _records(tmp_path / "runs.log") if r["step"] == "freshness"]
+    assert freshness[-1]["status"] == "ok"
+    assert freshness[-1]["warn_hits"] == []
+
+
+def test_requirement_first_run_policy_can_block(tmp_path):
+    context = _context(tmp_path)
+
+    with pytest.raises(FreshnessError, match="blocking first run"):
+        FreshnessGuard().check(
+            context,
+            Requirement.succeeded("cases/ingest").on_first_run("block"),
+        )
+
+    freshness = [r for r in _records(tmp_path / "runs.log") if r["step"] == "freshness"]
+    assert freshness[-1]["status"] == "error"
+
+
+def test_freshness_requirement_adapts_to_requirement_with_default_subject():
+    requirement = FreshnessRequirement("ingest", max_age_days=3)
+
+    adapted = requirement.as_requirement(default_subject="cases")
+
+    assert adapted == Requirement.succeeded("cases/ingest").within_days(3)
 
 
 def test_freshness_guard_aborts_when_successful_upstream_is_too_old(tmp_path):

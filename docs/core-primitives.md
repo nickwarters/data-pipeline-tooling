@@ -102,9 +102,10 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > time, surfacing warned (incl. schema-drift) runs (ADR-0005/0007, #52;
 > [run-log-format doc](run-log-format.md)). **The thin Pipeline runner** has
 > landed: `PipelineRunner` dispatches domain Pipelines by `(case_type, pipeline)`,
-> passes a shared `RunContext` into handlers, and `FreshnessRequirement` blocks
-> stale downstream runs from `RunRegistry` history without changing the builder
-> contract (#61, #77). Still ahead: the value-level schema
+> passes a shared `RunContext` into handlers, and `Requirement` predicates
+> block stale downstream runs from `RunRegistry` history without changing the
+> builder contract (`FreshnessRequirement` remains as a compatibility adapter)
+> (#61, #77, #242). Still ahead: the value-level schema
 > rules (format / uniqueness / encoding, #24), the domain capstone
 > (CaseType/Variation + CasePool → SelectionPool, #11), and the multi-table feed work
 > (ADR-0006 amendment, ADR-0009): per-feed load strategy (Store maps
@@ -543,13 +544,13 @@ Reading the JSONL needs no change to the emitter (ADR-0007); the one format
 addition this slice made is the per-record `timestamp` (run-log-format.md), the
 time dimension the registry orders by.
 
-### `PipelineRunner` — thin domain orchestration + freshness guard
+### `PipelineRunner` — thin domain orchestration + requirement guard
 `PipelineRunner` (`framework.run.runner`) is the minimal orchestration layer above
 the builder. It registers domain Pipelines by `(case_type, pipeline)` and runs
 one requested Pipeline by name, without changing the builder contract:
 
 ```python
-from framework.run import FreshnessRequirement, PipelineRunner
+from framework.run import PipelineRunner, Requirement, RunAddress
 
 runner = PipelineRunner()
 runner.register("cases", "ingest", run_ingest)
@@ -557,7 +558,11 @@ runner.register(
     "cases",
     "selection",
     run_selection,
-    freshness=(FreshnessRequirement(upstream_pipeline="ingest"),),
+    freshness=(
+        Requirement.succeeded(RunAddress.pipeline("ingest", subject="cases"))
+        .same_day()
+        .on_first_run("block"),
+    ),
 )
 
 runner.run("cases", "selection", "/path/to/share", run_date=date(2026, 5, 29))
@@ -578,17 +583,37 @@ delegates to, and the path-addressed `run` command calls directly: given a
 handler, a pipeline `name`, an optional `subject`, and an `upstreams` tuple, it
 builds the `RunContext`, catches the shared `RunRegistry` up from every
 `_runs/*.log` (so an upstream's history is visible regardless of which log
-partitioned it), runs the freshness checks, dispatches the handler, and records
+partitioned it), runs the requirement checks, dispatches the handler, and records
 the run summary.
 
-`FreshnessRequirement` declares the upstream domain Pipeline a downstream run
-needs. The default policy is same-business-date freshness (`max_age_days=0`):
-the latest successful upstream `run` summary timestamp must be on or after the
-downstream `run_date` minus the allowed age. Failed upstream runs do not count.
-No successful upstream history is treated as a first-run skip: the runner allows
-the handler and writes a `freshness` record with a warning. Stale history aborts
-before the handler executes and writes both a `freshness` error and an errored
-domain `run` summary.
+`Requirement` declares the upstream Pipeline or task a downstream run needs.
+`Requirement.succeeded(address).within_days(n)` requires the latest successful
+record for that `RunAddress` to be no older than `n` calendar days before the
+downstream `run_date`; `same_day()` requires a success on the downstream
+`run_date`. Failed upstream records do not count. First-run behavior is explicit:
+`.on_first_run("allow")` proceeds silently, `"warn"` proceeds with a `freshness`
+warning, and `"block"` aborts before the handler executes.
+
+Examples:
+
+```python
+# Pipeline 3 Task 17 depends on Pipeline 2 Task 4 in the last 7 days.
+Requirement.succeeded(
+    RunAddress.task("pipeline_2", "step_4"),
+).within_days(7)
+
+# Pipeline 6 requires Pipeline 4 on the same day.
+Requirement.succeeded(
+    RunAddress.pipeline("pipeline_4"),
+).same_day()
+```
+
+`FreshnessRequirement(upstream_pipeline, max_age_days=n)` remains supported and
+adapts to `Requirement.succeeded(RunAddress.pipeline(...)).within_days(n)`,
+using the downstream subject when no upstream subject is supplied. Its no-history
+behavior remains the historical default: allow the first run with a warning.
+Stale history aborts before the handler executes and writes both a `freshness`
+error and an errored domain `run` summary.
 
 > **Note: `base_dir` bounds freshness visibility.** The `RunRegistry` is entirely scoped to the `base_dir` provided at execution time. It collects history by sweeping `<base_dir>/_runs/*.log`. If an upstream pipeline ran under a *different* base directory, its logs will not be visible to the downstream runner, and the `FreshnessGuard` will treat it as having no history. To validate freshness dependencies, both the upstream and downstream pipelines must be executed against the same `base_dir`.
 
