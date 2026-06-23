@@ -74,6 +74,23 @@ def test_ingest_makes_a_runs_steps_queryable_by_run_id(tmp_path):
     assert all(r["run_id"] == run_id for r in records)
 
 
+def test_ingest_makes_step_addresses_queryable(tmp_path):
+    log_path = tmp_path / "runs.log"
+    run_id = _run_pipeline(log_path, name="pipeline_2")
+
+    registry = RunRegistry(tmp_path / "registry.db")
+    registry.ingest(log_path)
+
+    [read] = registry.records_for_address("pipeline_2.read")
+    assert read["run_id"] == run_id
+    assert read["pipeline"] == "pipeline_2"
+    assert read["step"] == "read"
+    assert read["step_address"] == "pipeline_2.read"
+
+    assert registry.has_successful_address("pipeline_2.read")
+    assert not registry.has_successful_address("pipeline_2.missing")
+
+
 def test_ingest_is_idempotent_re_reading_does_not_double_count(tmp_path):
     # Re-reading the same JSONL must not double-count: a record's
     # identity is run_id + step (+ ordinal), so the second ingest inserts nothing

@@ -82,6 +82,10 @@ _Avoid_: task (reserved for named units inside a builder run), layer (reserved f
 A stable, named unit of work inside a `Pipeline` builder run. A Task may read, process, validate, write, explain, quarantine, or perform an action; it records its supplied name in `Pipeline.describe()` and the RunLog so later dependency work can address it consistently. Public authoring prefers `.task(name, callable, *inputs)` for dataset→dataset work; existing builder vocabulary such as `.read`, `.transform`, `.validate`, and `.write` remains compatible.
 _Avoid_: stage (older/informal for a run step), job, layer
 
+**Run Address**:
+A stable dependency-target label for either a whole Pipeline or one named run step inside it. The four label forms are `pipeline`, `subject/pipeline`, `pipeline.step`, and `subject/pipeline.step`; `framework.run.RunAddress` owns parsing and formatting so logs, dependency declarations, and registry queries use the same vocabulary. This follows the DAG design's `pipeline_2.step_4` address shape while the builder can still expose `.task(...)` as the authoring method. Invalid labels are configuration failures, not data or runtime failures.
+_Avoid_: ad hoc pipeline key, path (unless referring to a filesystem path)
+
 **Ingest**:
 The Pipeline that brings a Case Type's source **Feeds** in and refines them into **Cases** through that Case Type's medallion (raw→silver→gold). Per Case Type.
 _Avoid_: import, load, ETL

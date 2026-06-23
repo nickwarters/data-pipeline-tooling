@@ -717,6 +717,53 @@ run/logical identity, or should fail independently. Use a multi-file Reader
 instead when many files together are one logical Feed snapshot that should be
 read, validated, and written as a single `Dataset` under one logical run id.
 
+### `RunAddress` — dependency labels for Pipelines and steps
+`RunAddress` (`framework.run`) is the public value object for naming dependency
+targets without coupling orchestration code to a future registry schema. It can
+address either a whole **Pipeline** or a specific named run step inside that
+Pipeline, with or without a subject qualifier:
+
+| Target | Label |
+|--------|-------|
+| Pipeline | `pipeline` |
+| Subject-qualified Pipeline | `subject/pipeline` |
+| Step | `pipeline.step` |
+| Subject-qualified step | `subject/pipeline.step` |
+
+This is the stable address shape from the local-first DAG design:
+`pipeline_2.step_4`. The current builder authoring method is still `.task(...)`,
+but dependency addresses use **step** as the execution-graph term.
+
+Construct addresses explicitly when code already has structured pieces:
+
+```python
+from framework.run import RunAddress
+
+RunAddress.pipeline("claims", subject="case-review")
+RunAddress.step("claims", "validate_schema", subject="case-review")
+RunAddress.step("pipeline_2", "step_4")
+```
+
+Parse labels when accepting configuration or registry input:
+
+```python
+address = RunAddress.parse("case-review/claims.validate_schema")
+assert address.label == "case-review/claims.validate_schema"
+```
+
+`.label` and `str(address)` return the same stable string, suitable for logs,
+dependency declarations, and run-registry queries. Invalid labels raise
+`RunAddressError`, a `PipelineError` with the `config` category, so bad
+dependency wiring is reported like other expected configuration failures rather
+than leaking raw parsing exceptions.
+
+The builder wires these addresses onto its nodes automatically. For example,
+`Pipeline("pipeline_2").task("step_4", ...)` records the bare run-log step as
+`step_4` and the stable dependency key as `pipeline_2.step_4`. After the log is
+ingested, `RunRegistry.records_for_address("pipeline_2.step_4")` returns the
+matching records and `RunRegistry.has_successful_address("pipeline_2.step_4")`
+answers the upstream dependency check.
+
 ### `Pipeline` — the deferred DAG builder
 A `Pipeline` describes a feed's path and runs **nothing** until `.run()`
 (ADR-0003):

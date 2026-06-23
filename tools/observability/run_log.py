@@ -127,6 +127,7 @@ class RunLog:
         error_category: str | None = None,
         warn_hits: list[str] | None = None,
         committed: bool = False,
+        step_address: str | None = None,
     ) -> None:
         """Append one JSONL record and echo a human-readable line to the console."""
         record = {
@@ -135,6 +136,7 @@ class RunLog:
             "run_id": run_id,
             "pipeline": pipeline,
             "step": step,
+            "step_address": step_address,
             "status": status,
             "rows_in": rows_in,
             "rows_out": rows_out,
