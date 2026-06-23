@@ -101,7 +101,7 @@ feed code as a `pipelines/<feed>/` subpackage (schema, pipeline, sample fixture)
 and its test as `tests/pipelines/test_<feed>.py`, from the template under
 `cli/scaffold_templates/feed/`, ready to run and customise. The
 generic feed refines source -> raw -> silver -> gold, one `*_builder` per hop
-(`raw_builder` lands faithfully; `silver_builder` renames via `RENAME` + coerces +
+(`raw_builder` lands faithfully; `silver_builder` renames via `RENAME` + coerces + quarantines +
 validates the schema; `gold_builder` is a passthrough stub with a `TODO`), wired
 in order by `run(context, *, describe=False)` and an argparse `main`. Pass
 `--from-feed-file <path>` to seed the scaffold from a real sample CSV: the header

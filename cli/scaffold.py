@@ -58,9 +58,9 @@ _TEST_SAMPLE_ROWS = 2
 _TEMPLATE_DIR_CASE_TYPE = Path(__file__).parent / "scaffold_templates" / "case_type"
 _TEMPLATE_DIR = Path(__file__).parent / "scaffold_templates" / "feed"
 
-# scaffold.py lives at ``framework/_cli/scaffold.py``, so the repo root under
-# which the rendered ``pipelines/`` and ``tests/`` sit is three parents up.
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# scaffold.py lives at ``cli/scaffold.py``, so the repo root under
+# which the rendered ``pipelines/`` and ``tests/`` sit is two parents up.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _pascal(feed: str) -> str:
@@ -306,14 +306,14 @@ def _render_pipeline(text: str, feed: str, spec: _FeedSpec) -> str:
 
 
 def _source_literal(spec: _FeedSpec) -> str:
-    lines = ["    source = ["]
+    lines = ["    reader = given_rows(["]
     for cells in spec.sample_cells:
         pairs = []
         for i, column in enumerate(spec.columns):
             cell = cells[i] if i < len(cells) else ""
             pairs.append(f'"{_esc(column)}": {_literal(cell, spec.inferred[i])}')
         lines.append("        {" + ", ".join(pairs) + "},")
-    lines.append("    ]")
+    lines.append("    ])")
     return "\n".join(lines) + "\n"
 
 
@@ -321,7 +321,9 @@ def _render_test(text: str, feed: str, spec: _FeedSpec) -> str:
     """Seed the test's sample rows from the feed file; track the validator's columns."""
     cls = _pascal(feed) + "Row"
     text = re.sub(
-        r"(?ms)^    source = \[.*?\n    \]\n", lambda _: _source_literal(spec), text
+        r"(?ms)^    reader = given_rows\(\s*\[.*?\]\s*\)\n",
+        lambda _: _source_literal(spec),
+        text,
     )
     if spec.needs_raw:
         # The raw hop validates the source names, and raw keeps them, so the
@@ -329,8 +331,8 @@ def _render_test(text: str, feed: str, spec: _FeedSpec) -> str:
         # still checks the schema fields -- silver renames to them -- so the
         # ``fields``/schema imports stay.
         text = text.replace(
-            f"from pipelines.{feed}.pipeline import FEED_NAME, run",
-            f"from pipelines.{feed}.pipeline import FEED_NAME, RAW_FEED_COLUMNS, run",
+            f"from pipelines.{feed}.pipeline import FEED_NAME",
+            f"from pipelines.{feed}.pipeline import FEED_NAME, RAW_FEED_COLUMNS",
         )
         text = text.replace(
             f"{{f.name for f in fields({cls})}}.issubset(landed[0].keys())",
