@@ -69,6 +69,7 @@ leads each line; the examples below elide it for width but it is always present:
 | `run_id`    | string              | The run's correlating id (same on every line of the run). |
 | `pipeline`  | string              | The feed/pipeline name (the builder's `name`) or the runner's stable domain label (`<case_type>/<pipeline>`, e.g. `cases/selection`). |
 | `step`      | string              | `read`, `pre-validate`, `quarantine`, `process`, `explain`, `post-validate`, `write`, `freshness`, or `run` (the summary). |
+| `step_address` | string \| null   | The stable dependency address for this record. Builder steps are recorded as `<pipeline>.<step>` (for example `pipeline_2.step_4`); the `run` summary is recorded as the pipeline address. The registry stores this field so downstream dependency checks can ask whether a specific upstream step has succeeded. |
 | `status`    | `"ok"` \| `"error"` | Step/run outcome. |
 | `rows_in`   | int \| null         | Rows the step consumed (`null` where N/A, e.g. `read`). |
 | `rows_out`  | int \| null         | Rows the step produced. |
@@ -98,6 +99,14 @@ processor that consumes it), and `explain` (after `post-validate` — ADR-0007 a
 considered/selected by Selection). A `process` step is recorded per attached
 processor, so dependency reads are distinguishable from downstream join
 processing.
+
+Builder-created nodes receive their address when they are declared. For example,
+`Pipeline("pipeline_2").task("step_4", ...)` emits a step record with
+`step="step_4"` and `step_address="pipeline_2.step_4"`. The bare `step` remains
+for human-readable logs and existing per-run views; `step_address` is the
+cross-run dependency key. After ingest, `RunRegistry.records_for_address(...)`
+returns records for that address and `RunRegistry.has_successful_address(...)`
+answers the simple upstream-success check.
 
 The runner adds one domain-level opt-in step before a handler executes:
 `freshness`. It is emitted for a downstream Pipeline that declares an upstream
