@@ -505,6 +505,11 @@ registry.query_runs(pipeline="cases", status="error")  # narrow by pipeline/stat
 registry.latest_run_per_pipeline()                     # one row per pipeline
 registry.runs_that_warned()                            # tolerated warns (incl. drift)
 registry.records_for_run(run_id)                       # every step of one run
+registry.latest_success(RunAddress.pipeline("cases"), on=date(2026, 6, 23))
+registry.latest_success(
+    RunAddress.task("pipeline_2", "step_4"),
+    on_or_after=date(2026, 6, 16),
+)
 registry.recent_row_counts("cases", limit=10)          # read volumes, newest first
 ```
 
@@ -515,6 +520,11 @@ registry.recent_row_counts("cases", limit=10)          # read volumes, newest fi
 - **Queryable by `run_id`, pipeline, status, and time.** Ordering is by the
   record `timestamp`; "row counts over time" is `query_runs(pipeline=…)` read in
   order.
+- **Latest success queries accept `RunAddress` labels.** A whole-pipeline
+  address uses the successful `step="run"` summary record. A task/step address
+  uses successful non-`run` step records with the matching `step_address`.
+  `on=...` and `on_or_after=...` filter by the run-log record's emitted
+  `timestamp` date; they do not yet use a separate business/load date.
 - It is a **query store, not a `Dataset` carrier**, so it stays stdlib-only
   (`json` + `sqlite3`) and never names pandas. It opens through the same
   `connect` factory and honours the single-writer / rollback-journal conventions
@@ -762,7 +772,11 @@ The builder wires these addresses onto its nodes automatically. For example,
 `step_4` and the stable dependency key as `pipeline_2.step_4`. After the log is
 ingested, `RunRegistry.records_for_address("pipeline_2.step_4")` returns the
 matching records and `RunRegistry.has_successful_address("pipeline_2.step_4")`
-answers the upstream dependency check.
+answers the simple upstream dependency check. When a dependency needs the most
+recent successful attempt, `RunRegistry.latest_success(...)` accepts either a
+`RunAddress` or one of its labels. Pipeline addresses read from the `run`
+summary; task addresses read from successful non-`run` step records. Date
+filters are based on the record `timestamp` emitted by `RunLog`.
 
 ### `Pipeline` — the deferred DAG builder
 A `Pipeline` describes a feed's path and runs **nothing** until `.run()`

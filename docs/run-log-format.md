@@ -106,7 +106,12 @@ Builder-created nodes receive their address when they are declared. For example,
 for human-readable logs and existing per-run views; `step_address` is the
 cross-run dependency key. After ingest, `RunRegistry.records_for_address(...)`
 returns records for that address and `RunRegistry.has_successful_address(...)`
-answers the simple upstream-success check.
+answers the simple upstream-success check. `RunRegistry.latest_success(...)`
+returns the newest successful record for a `RunAddress`: whole-pipeline
+addresses read the `step="run"` summary, and task/step addresses read successful
+non-`run` records for the target `step_address`. Its `on=...` and
+`on_or_after=...` filters compare against the run-log record `timestamp` date;
+there is no separate load-date filter in this first implementation.
 
 The runner adds one domain-level opt-in step before a handler executes:
 `freshness`. It is emitted for a downstream Pipeline that declares an upstream

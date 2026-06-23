@@ -8,6 +8,7 @@ exercising the actual emitter→registry seam, never a hand-faked record shape.
 """
 
 import json
+from datetime import date
 
 import pandas as pd
 import pytest
@@ -18,6 +19,7 @@ from framework.core.validators import (
     ValidationError,
     VolumeAnomalyValidator,
 )
+from framework.run import RunAddress
 from framework.run.builder import Pipeline
 from tools.observability.run_log import RunLog
 from tools.observability.run_registry import RunRegistry
@@ -57,6 +59,32 @@ def _run_pipeline(log_path, name="cases", rows=2):
     p.write(CapturingWriter(), r, name="write")
     p.run()
     return p.run_id
+
+
+def _record(run_id, pipeline, step, status, timestamp):
+    return {
+        "timestamp": timestamp,
+        "run_id": run_id,
+        "pipeline": pipeline,
+        "step": step,
+        "step_address": pipeline if step == "run" else f"{pipeline}.{step}",
+        "status": status,
+        "rows_in": None,
+        "rows_out": None,
+        "rows_quarantined": None,
+        "rows_excluded": None,
+        "duration": 0.001,
+        "errors": ["boom"] if status == "error" else [],
+        "error_category": "data" if status == "error" else None,
+        "warn_hits": [],
+        "committed": False,
+    }
+
+
+def _write_records(log_path, records):
+    log_path.write_text(
+        "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"
+    )
 
 
 def test_ingest_makes_a_runs_steps_queryable_by_run_id(tmp_path):
@@ -157,6 +185,84 @@ def test_query_runs_returns_summaries_filterable_by_pipeline_and_status(tmp_path
 
     errored = registry.query_runs(status="error")
     assert {r["run_id"] for r in errored} == {err_a}
+
+
+def test_latest_success_for_pipeline_address_uses_latest_ok_run_summary(tmp_path):
+    log_path = tmp_path / "runs.log"
+    records = [
+        _record("old-ok", "pipeline_4", "run", "ok", "2026-06-22T23:00:00+00:00"),
+        _record("latest-ok", "pipeline_4", "run", "ok", "2026-06-23T09:00:00+00:00"),
+        _record(
+            "latest-failed",
+            "pipeline_4",
+            "run",
+            "error",
+            "2026-06-23T10:00:00+00:00",
+        ),
+    ]
+    _write_records(log_path, records)
+
+    registry = RunRegistry(tmp_path / "registry.db")
+    registry.ingest(log_path)
+
+    latest = registry.latest_success(
+        RunAddress.pipeline("pipeline_4"), on=date(2026, 6, 23)
+    )
+    assert latest is not None
+    assert latest["run_id"] == "latest-ok"
+    assert latest["step"] == "run"
+
+
+def test_latest_success_for_task_address_uses_latest_ok_non_run_step(tmp_path):
+    log_path = tmp_path / "runs.log"
+    records = [
+        _record(
+            "old-run",
+            "pipeline_2",
+            "step_4",
+            "ok",
+            "2026-06-16T07:00:00+00:00",
+        ),
+        _record(
+            "latest-ok-run",
+            "pipeline_2",
+            "step_4",
+            "ok",
+            "2026-06-23T08:00:00+00:00",
+        ),
+        _record(
+            "latest-failed-run",
+            "pipeline_2",
+            "step_4",
+            "error",
+            "2026-06-23T09:00:00+00:00",
+        ),
+        _record(
+            "summary-with-same-address",
+            "pipeline_2",
+            "run",
+            "ok",
+            "2026-06-23T10:00:00+00:00",
+        ),
+    ]
+    _write_records(log_path, records)
+
+    registry = RunRegistry(tmp_path / "registry.db")
+    registry.ingest(log_path)
+
+    latest = registry.latest_success(
+        RunAddress.task("pipeline_2", "step_4"), on_or_after=date(2026, 6, 16)
+    )
+    assert latest is not None
+    assert latest["run_id"] == "latest-ok-run"
+    assert latest["step"] == "step_4"
+
+    assert (
+        registry.latest_success(
+            RunAddress.task("pipeline_2", "step_4"), on_or_after=date(2026, 6, 24)
+        )
+        is None
+    )
 
 
 def test_ingest_preserves_the_error_triage_category(tmp_path):
