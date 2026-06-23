@@ -115,11 +115,13 @@ there is no separate load-date filter in this first implementation.
 
 The runner adds one domain-level opt-in step before a handler executes:
 `freshness`. It is emitted for a downstream Pipeline that declares an upstream
-freshness requirement. If the latest successful upstream run is current enough,
-the step is `ok`. If there is no successful upstream history yet, the step is
-also `ok` but carries a `warn_hits` message so the first-run gap is visible. If
-history exists but is stale, the step is `error`, the runner writes an errored
-`run` summary for the downstream label, and the handler is not called.
+`Requirement` or legacy `FreshnessRequirement`. If the latest successful
+upstream pipeline/task record satisfies the requirement, the step is `ok`. If no
+successful upstream history exists, the first-run policy controls the result:
+`allow` records `ok` silently, `warn` records `ok` with a `warn_hits` message,
+and `block` records `error`. If history exists but is stale, the step is
+`error`, the runner writes an errored `run` summary for the downstream label,
+and the handler is not called.
 
 ### Happy path (a successful run of 4 rows)
 

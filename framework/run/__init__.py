@@ -25,6 +25,7 @@ from framework.run.runner import (
     FreshnessError,
     FreshnessRequirement,
     PipelineRunner,
+    Requirement,
     UnknownPipelineError,
     run_pipeline,
 )
@@ -40,6 +41,7 @@ __all__ = [
     "RunContext",
     "RunLog",
     "RunRegistry",
+    "Requirement",
     "FreshnessRequirement",
     "FreshnessError",
     "UnknownPipelineError",

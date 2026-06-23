@@ -5,7 +5,8 @@ read/process/write path. This module is the thin orchestration layer above it:
 callers register domain Pipelines by ``(subject, pipeline)``, then run one by
 name. The runner records domain-level run summaries to ``RunLog`` using stable
 labels such as ``cases/ingest`` so ``RunRegistry`` can answer whether an
-upstream Pipeline is recent enough before a downstream Pipeline starts.
+upstream Pipeline or task satisfies a declared requirement before a downstream
+Pipeline starts.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from typing import Callable
 
 from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
+from framework.run.address import RunAddress
 from framework.run.run_context import RunContext
 from tools.observability.run_log import RunLog
 from tools.observability.run_registry import RunRegistry
@@ -44,6 +46,67 @@ class FreshnessRequirement:
     upstream_subject: str | None = None
     max_age_days: int = 0
 
+    def as_requirement(self, default_subject: str | None = None) -> "Requirement":
+        """Return the equivalent public requirement predicate."""
+
+        return Requirement.succeeded(
+            RunAddress.pipeline(
+                self.upstream_pipeline,
+                subject=self.upstream_subject or default_subject,
+            )
+        ).within_days(self.max_age_days)
+
+
+@dataclass(frozen=True)
+class Requirement:
+    """A run-history predicate that must pass before a downstream run starts."""
+
+    address: RunAddress
+    max_age_days: int | None = None
+    require_same_day: bool = False
+    first_run_policy: str = "warn"
+
+    @classmethod
+    def succeeded(cls, address: RunAddress | str) -> "Requirement":
+        """Require a successful run record for a pipeline or task address."""
+
+        target = RunAddress.parse(address) if isinstance(address, str) else address
+        return cls(target)
+
+    def within_days(self, days: int) -> "Requirement":
+        """Require the latest success to be on or after run date minus ``days``."""
+
+        if days < 0:
+            raise ValueError("days must be zero or greater")
+        return Requirement(
+            self.address,
+            max_age_days=days,
+            require_same_day=False,
+            first_run_policy=self.first_run_policy,
+        )
+
+    def same_day(self) -> "Requirement":
+        """Require a success on the downstream run date."""
+
+        return Requirement(
+            self.address,
+            max_age_days=self.max_age_days,
+            require_same_day=True,
+            first_run_policy=self.first_run_policy,
+        )
+
+    def on_first_run(self, policy: str) -> "Requirement":
+        """Set the no-history policy: ``allow``, ``warn``, or ``block``."""
+
+        if policy not in {"allow", "warn", "block"}:
+            raise ValueError("first-run policy must be 'allow', 'warn', or 'block'")
+        return Requirement(
+            self.address,
+            max_age_days=self.max_age_days,
+            require_same_day=self.require_same_day,
+            first_run_policy=policy,
+        )
+
 
 def pipeline_label(subject: str | None, pipeline: str) -> str:
     """Return the stable registry label for a domain Pipeline.
@@ -59,60 +122,49 @@ def pipeline_label(subject: str | None, pipeline: str) -> str:
 class FreshnessGuard:
     """Checks that a declared upstream has a recent successful run."""
 
-    def check(self, context: RunContext, requirement: FreshnessRequirement) -> None:
-        upstream_subject = requirement.upstream_subject or context.subject
-        upstream = pipeline_label(upstream_subject, requirement.upstream_pipeline)
-        successful = [
-            r
-            for r in context.run_registry.query_runs(pipeline=upstream, status="ok")
-            if r.get("timestamp")
-        ]
-        if not successful:
-            context.run_log.record(
-                context.run_id,
-                context.label,
-                "freshness",
-                "ok",
-                warn_hits=[
-                    "no successful run history for upstream "
-                    f"{upstream}; allowing first run"
-                ],
-            )
+    def check(
+        self, context: RunContext, requirement: FreshnessRequirement | Requirement
+    ) -> None:
+        predicate = _as_requirement(requirement, context)
+        latest = context.run_registry.latest_success(predicate.address)
+        if latest is None:
+            _handle_first_run(context, predicate)
             return
 
-        latest = max(
-            successful,
-            key=lambda r: _timestamp(r["timestamp"]),
-        )
         latest_date = _timestamp(latest["timestamp"]).date()
-        max_age_days = max(requirement.max_age_days, context.freshness_days)
+        if predicate.require_same_day:
+            if latest_date == context.run_date:
+                _record_requirement_ok(context)
+                return
+            message = (
+                f"upstream {predicate.address.label} is stale: latest successful "
+                f"run was {latest_date.isoformat()}, required on "
+                f"{context.run_date.isoformat()} for {context.label}"
+            )
+            _record_requirement_error(context, message)
+            raise FreshnessError(message)
+
+        max_age_days = (
+            context.freshness_days
+            if predicate.max_age_days is None
+            else max(predicate.max_age_days, context.freshness_days)
+        )
         oldest_allowed = context.run_date - dt.timedelta(days=max_age_days)
         if latest_date >= oldest_allowed:
-            context.run_log.record(
-                context.run_id,
-                context.label,
-                "freshness",
-                "ok",
-                warn_hits=[],
-            )
+            _record_requirement_ok(context)
             return
 
         message = (
-            f"upstream {upstream} is stale: latest successful run was "
+            f"upstream {predicate.address.label} is stale: latest successful run was "
             f"{latest_date.isoformat()}, required on or after "
             f"{oldest_allowed.isoformat()} for {context.label}"
         )
-        context.run_log.record(
-            context.run_id,
-            context.label,
-            "freshness",
-            "error",
-            errors=[message],
-        )
+        _record_requirement_error(context, message)
         raise FreshnessError(message)
 
 
 Handler = Callable[[RunContext], object]
+RunRequirement = FreshnessRequirement | Requirement
 
 
 def run_pipeline(
@@ -121,7 +173,7 @@ def run_pipeline(
     base_dir: str | Path,
     *,
     subject: str | None = None,
-    upstreams: tuple[FreshnessRequirement, ...] = (),
+    upstreams: tuple[RunRequirement, ...] = (),
     run_date: dt.date | None = None,
     logical_run_id: str | None = None,
     freshness_days: int = 0,
@@ -210,7 +262,7 @@ def run_pipeline(
 @dataclass(frozen=True)
 class _RegisteredPipeline:
     handler: Handler
-    freshness: tuple[FreshnessRequirement, ...] = field(default_factory=tuple)
+    freshness: tuple[RunRequirement, ...] = field(default_factory=tuple)
     run_log: RunLog | None = None
 
 
@@ -227,7 +279,7 @@ class PipelineRunner:
         pipeline: str,
         handler: Handler,
         *,
-        freshness: tuple[FreshnessRequirement, ...] = (),
+        freshness: tuple[RunRequirement, ...] = (),
         run_log: RunLog | None = None,
     ) -> None:
         """Register a domain Pipeline under ``(subject, pipeline)``.
@@ -248,7 +300,7 @@ class PipelineRunner:
         run_date: dt.date | None = None,
         logical_run_id: str | None = None,
         freshness_days: int = 0,
-        freshness: tuple[FreshnessRequirement, ...] = (),
+        freshness: tuple[RunRequirement, ...] = (),
     ) -> object:
         registered = self._registered.get((subject, pipeline))
         if registered is None:
@@ -272,3 +324,50 @@ class PipelineRunner:
 def _timestamp(value: str) -> dt.datetime:
     """Parse the ISO timestamp emitted by RunLog."""
     return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _as_requirement(
+    requirement: FreshnessRequirement | Requirement, context: RunContext
+) -> Requirement:
+    if isinstance(requirement, FreshnessRequirement):
+        return requirement.as_requirement(default_subject=context.subject)
+    return requirement
+
+
+def _handle_first_run(context: RunContext, requirement: Requirement) -> None:
+    message = f"no successful run history for upstream {requirement.address.label}"
+    if requirement.first_run_policy == "block":
+        error = f"{message}; blocking first run"
+        _record_requirement_error(context, error)
+        raise FreshnessError(error)
+
+    warn_hits = []
+    if requirement.first_run_policy == "warn":
+        warn_hits = [f"{message}; allowing first run"]
+    context.run_log.record(
+        context.run_id,
+        context.label,
+        "freshness",
+        "ok",
+        warn_hits=warn_hits,
+    )
+
+
+def _record_requirement_ok(context: RunContext) -> None:
+    context.run_log.record(
+        context.run_id,
+        context.label,
+        "freshness",
+        "ok",
+        warn_hits=[],
+    )
+
+
+def _record_requirement_error(context: RunContext, message: str) -> None:
+    context.run_log.record(
+        context.run_id,
+        context.label,
+        "freshness",
+        "error",
+        errors=[message],
+    )
