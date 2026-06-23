@@ -80,8 +80,9 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > dtypes, composed onto the raw→silver pipeline as a post-validator so a
 > breach aborts before silver is written (ADR-0008;
 > [schema-enforcement doc](schema-enforcement.md)). **Coercion between raw and
-> silver** has landed: a `Processor` seam runs as a transform
-> step, and `SchemaCoercion` casts the schema's round-trip-lossy types (dates,
+> silver** has landed: a `Processor` seam runs as a task
+> (compatible with the existing transform builder vocabulary), and
+> `SchemaCoercion` casts the schema's round-trip-lossy types (dates,
 > booleans) ahead of the validator so a date/bool schema survives the round-trip
 > (ADR-0008, #23). **Gold accumulation** has landed: a gold hop
 > carries validated silver into gold via the `AccumulateByRunWriter`, stamping each
@@ -377,7 +378,7 @@ silver — so the ADR-0008 convention is visible in the pipeline like any other 
 ```python
 p = Pipeline("cases")
 raw = p.read(store.reader("raw", "cases"), name="read")
-coerced = p.transform(SchemaCoercion(CaseA), raw, name="coerce")
+coerced = p.task("coerce", SchemaCoercion(CaseA), raw)
 validated = p.validate(SchemaValidator(CaseA), coerced, name="post-validate")
 p.write(store.writer("silver", "cases", Refresh()), validated, name="write")
 p.run()   # coerces, validates, then writes silver.db
@@ -403,7 +404,9 @@ single-input reshape, or a fan-in (e.g. an in-DAG join) over several branches:
 Unlike the structural validators it is **engine-confined** — a transform needs
 the engine's vectorised operations, so it reaches the frame via
 `to_pandas()`/`from_pandas()` exactly as a Reader/Writer does (ADR-0002). It is
-attached with `.transform(...)` and runs as the builder's `process` step. A
+attached with `.task(name, processor, ...)` and runs as a named task. The older
+`.transform(processor, ..., name=...)` spelling remains supported and uses the
+same execution path. A
 processor has **no severity**: a transform either applies or it can't, so a
 failure is always fail-fast (ADR-0007) — it raises and the run aborts.
 
@@ -722,7 +725,7 @@ A `Pipeline` describes a feed's path and runs **nothing** until `.run()`
 p = Pipeline("cases")
 r = p.read(CsvReader(path), name="read")
 v1 = p.validate(ColumnValidator(["case_ref"]), r, name="pre_val") # gate the input
-t1 = p.transform(NormaliseCases(), v1, name="transform")         # transform
+t1 = p.task("normalise", NormaliseCases(), v1)                   # named task
 v2 = p.validate(RowCountValidator(minimum=1), t1, name="post_val") # gate the output
 p.write(writer, v2, name="write")
 p.run()
@@ -734,7 +737,8 @@ upstream node, so a validator attached to the read node is a **pre**-validator
 (gates the output about to be written) — exactly the order above. There is no
 separate stage-composition API and no public custom-`Stage` contract; the
 dataset→dataset transform extension point is the `Processor`, attached with
-`.transform(processor, node, name=...)`. A mid-pipeline **checkpoint** — writing
+`.task(name, processor, node)` (or the compatible
+`.transform(processor, node, name=...)` spelling). A mid-pipeline **checkpoint** — writing
 a snapshot partway through — is just a `.write(...)` on an intermediate node while
 the graph continues from that same node. Severity is set per validate step
 (`.validate(v, node, name=..., severity="warn")`). The invariant remains
@@ -760,7 +764,7 @@ attributes, so a value stored under any name cannot leak into the plan:
 p = Pipeline("cases")
 r = p.read(CsvReader(path), name="read")
 v = p.validate(ColumnValidator(["case_ref"]), r, name="columns")
-t = p.transform(NormaliseCases(), v, name="normalise")
+t = p.task("normalise", NormaliseCases(), v)
 p.write(writer, t, name="write")
 
 print(p.describe())
@@ -794,7 +798,8 @@ id as `pipeline.run_id`, times each planned step, and drives the composed
 objects are internal: they expose stable name/kind/order, the wrapped component
 where applicable, and read-only/side-effect metadata for future plan-validation
 and dry-run work, but pipeline scripts still use only the builder methods. The
-`process` step (`.transform()`) landed in #23; lineage checkpoints (a `.write()`
+named processor task (`.task()`, compatible with `.transform()`) landed in #23;
+lineage checkpoints (a `.write()`
 on an intermediate node) landed in #49; the explicit DAG builder landed in #122.
 
 ### `WorkingDayCalendar` — working-day arithmetic (pure utility)

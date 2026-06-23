@@ -142,7 +142,7 @@ Moving data across the boundary.
 
 | Names | What |
 |-------|------|
-| `Pipeline` | The deferred DAG builder. Nodes are declared explicitly — `.read` / `.transform` / `.validate` / `.write` (plus `.action` / `.explain` / `.quarantine`) each return a wired node that later steps depend on; `.describe()` renders the pre-run plan and `.run()` executes it in topological order. The dataset→dataset transform extension point is any `Dataset -> Dataset` callable passed to `.transform` (`framework.transform` ships `Score` / `Filter` / `JoinWith`). |
+| `Pipeline` | The deferred DAG builder. Nodes are declared explicitly — `.read` / `.task` / `.validate` / `.write` (plus compatible `.transform`, `.action`, `.explain`, and `.quarantine`) each return a wired node that later steps depend on; `.describe()` renders the pre-run plan and `.run()` executes it in topological order. A **task** is the preferred public name for a stable named unit of work inside a pipeline. Dataset→dataset work is any `Dataset -> Dataset` callable passed to `.task(name, func, *inputs)`; `.transform(func, *inputs, name=...)` remains supported with the same execution path (`framework.transform` ships `Score` / `Filter` / `JoinWith`). |
 | `run_pipeline`, `PipelineRunner`, `RunContext`, `FreshnessRequirement`, `FreshnessError`, `UnknownPipelineError` | The `run_pipeline` execution core (used by the path-addressed `run` command) + the thin domain runner and freshness guard. |
 | `RunLog`, `RunRegistry` | The structured-observability seam and its query store (re-exported here from `tools.observability`). |
 
