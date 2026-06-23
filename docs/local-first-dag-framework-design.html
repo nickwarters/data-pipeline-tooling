@@ -1,0 +1,1128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Local-first DAG Pipeline Framework Design</title>
+  <style>
+    :root {
+      --ink: #1b1f23;
+      --muted: #5e6673;
+      --paper: #f7f5ef;
+      --panel: #ffffff;
+      --line: #d9d2c3;
+      --blue: #2457a6;
+      --green: #1f7a5c;
+      --red: #a63b32;
+      --amber: #9a6a15;
+      --code: #18202a;
+      --code-bg: #eef0ea;
+      --shadow: 0 18px 45px rgba(41, 35, 25, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(90deg, rgba(27, 31, 35, 0.035) 1px, transparent 1px),
+        linear-gradient(rgba(27, 31, 35, 0.035) 1px, transparent 1px),
+        var(--paper);
+      background-size: 28px 28px;
+      font-family: Georgia, "Times New Roman", serif;
+      line-height: 1.55;
+    }
+
+    header {
+      min-height: 74vh;
+      display: grid;
+      align-items: end;
+      padding: 44px clamp(20px, 6vw, 86px) 52px;
+      border-bottom: 1px solid var(--line);
+      background:
+        radial-gradient(circle at 22% 18%, rgba(36, 87, 166, 0.14), transparent 30%),
+        linear-gradient(135deg, rgba(255,255,255,0.94), rgba(247,245,239,0.75));
+    }
+
+    .hero {
+      max-width: 1180px;
+    }
+
+    .kicker {
+      display: inline-block;
+      margin-bottom: 18px;
+      color: var(--blue);
+      font-family: "Courier New", monospace;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      max-width: 980px;
+      margin: 0;
+      font-size: clamp(42px, 8vw, 104px);
+      line-height: 0.92;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      max-width: 760px;
+      margin: 28px 0 0;
+      color: var(--muted);
+      font-size: clamp(18px, 2.2vw, 24px);
+    }
+
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 34px;
+      font-family: "Courier New", monospace;
+      font-size: 13px;
+    }
+
+    nav a {
+      color: var(--ink);
+      text-decoration: none;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.72);
+      padding: 8px 11px;
+      border-radius: 6px;
+    }
+
+    main {
+      max-width: 1220px;
+      margin: 0 auto;
+      padding: 40px clamp(18px, 4vw, 42px) 80px;
+    }
+
+    section {
+      margin: 54px 0;
+    }
+
+    h2 {
+      margin: 0 0 18px;
+      font-size: clamp(28px, 4vw, 46px);
+      line-height: 1;
+    }
+
+    h3 {
+      margin: 26px 0 10px;
+      font-size: 22px;
+    }
+
+    p {
+      margin: 0 0 14px;
+      max-width: 850px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .span-4 { grid-column: span 4; }
+    .span-5 { grid-column: span 5; }
+    .span-6 { grid-column: span 6; }
+    .span-7 { grid-column: span 7; }
+    .span-12 { grid-column: span 12; }
+
+    .panel {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 22px;
+    }
+
+    .panel.tight {
+      padding: 16px;
+      box-shadow: none;
+    }
+
+    .label {
+      color: var(--muted);
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    ul {
+      margin: 10px 0 0;
+      padding-left: 20px;
+    }
+
+    li {
+      margin: 7px 0;
+    }
+
+    code, pre {
+      font-family: "Courier New", monospace;
+    }
+
+    code {
+      color: var(--code);
+      background: var(--code-bg);
+      padding: 1px 4px;
+      border-radius: 4px;
+      font-size: 0.92em;
+    }
+
+    pre {
+      overflow: auto;
+      margin: 0;
+      padding: 18px;
+      color: #f2f5f0;
+      background: #18202a;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.48;
+      white-space: pre;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    th, td {
+      vertical-align: top;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+    }
+
+    th {
+      background: #ede7da;
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .status {
+      display: inline-block;
+      padding: 3px 7px;
+      border-radius: 999px;
+      color: #fff;
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .status.keep { background: var(--green); }
+    .status.gap { background: var(--amber); }
+    .status.risk { background: var(--red); }
+    .status.info { background: var(--blue); }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(130px, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .node {
+      min-height: 98px;
+      padding: 14px;
+      background: var(--panel);
+      border: 2px solid var(--ink);
+      border-radius: 8px;
+      position: relative;
+    }
+
+    .node:after {
+      content: "→";
+      position: absolute;
+      right: -17px;
+      top: 34px;
+      color: var(--blue);
+      font-family: "Courier New", monospace;
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .node:last-child:after {
+      content: "";
+    }
+
+    .node b {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 17px;
+    }
+
+    .node span {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .callout {
+      border-left: 5px solid var(--blue);
+      padding: 16px 18px;
+      background: rgba(255, 255, 255, 0.76);
+    }
+
+    .compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .stamp {
+      margin-top: 34px;
+      color: var(--muted);
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+    }
+
+    @media (max-width: 900px) {
+      .span-4, .span-5, .span-6, .span-7, .span-12 {
+        grid-column: span 12;
+      }
+
+      .flow, .compare {
+        grid-template-columns: 1fr;
+      }
+
+      .node:after {
+        content: "↓";
+        right: 16px;
+        top: auto;
+        bottom: -21px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="hero">
+      <span class="kicker">Design note · local-first data orchestration</span>
+      <h1>A DAG framework where dataflow and run history are both first-class.</h1>
+      <p class="subtitle">A proposed public API for idempotent local pipelines with step-level and pipeline-level dependencies, followed by a comparison with the current <code>framework/</code> implementation.</p>
+      <nav aria-label="Page sections">
+        <a href="#interface">Interface</a>
+        <a href="#examples">Dependency examples</a>
+        <a href="#concepts">Concepts</a>
+        <a href="#current">Current code</a>
+        <a href="#comparison">Comparison</a>
+        <a href="#recommendation">Recommendation</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section id="interface">
+      <h2>Proposed Public API</h2>
+      <p>The central design choice is to separate the <strong>data graph</strong> from the <strong>execution graph</strong>. A data graph says how datasets are read, transformed, validated, and written. An execution graph says which addressable run units may start, based on prior successful runs, same-day requirements, freshness windows, locks, and idempotency keys.</p>
+
+      <div class="flow" aria-label="Concept flow">
+        <div class="node"><b>Resource</b><span>Local file, SQLite table, SharePoint list, or computed dataset.</span></div>
+        <div class="node"><b>Task</b><span>Pure read/process/write/validate function with declared inputs and outputs.</span></div>
+        <div class="node"><b>Run Unit</b><span>A pipeline or named step with an address like <code>pipeline_3.step_17</code>.</span></div>
+        <div class="node"><b>Contract</b><span>Freshness, same-day, success, data version, or artifact existence rule.</span></div>
+        <div class="node"><b>Ledger</b><span>SQLite-backed local run history, idempotency, outputs, and decisions.</span></div>
+      </div>
+
+      <div class="grid">
+        <div class="panel span-6">
+          <span class="label">Authoring shape</span>
+          <pre><code>from dagpipe import (
+    Pipeline, task, Source, Sink, RunBook,
+    succeeded, within, same_day, days
+)
+
+pipeline = Pipeline("pipeline_3")
+
+source = pipeline.read("read_cases", Source.csv("cases.csv"))
+clean = pipeline.task("clean", clean_cases, source)
+step_17 = pipeline.task(
+    "step_17",
+    score_cases,
+    clean,
+    requires=[
+        succeeded("pipeline_2.step_4").within(days=7),
+    ],
+)
+pipeline.write("publish", step_17, Sink.sqlite("gold.db", "cases"))</code></pre>
+        </div>
+
+        <div class="panel span-6">
+          <span class="label">Execution shape</span>
+          <pre><code>runbook = RunBook.local(".runs")
+runbook.register(pipeline)
+
+result = runbook.run(
+    "pipeline_3",
+    run_date=date(2026, 6, 23),
+    logical_run_id="pipeline_3:2026-06-23",
+)
+
+result.status          # "ok" | "blocked" | "failed"
+result.executed_units  # step-level execution records
+result.outputs         # committed artifacts</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="examples">
+      <h2>Dependency Examples</h2>
+      <div class="grid">
+        <div class="panel span-6">
+          <span class="label">Step dependency</span>
+          <h3>Step 17 in Pipeline 3 depends on Step 4 in Pipeline 2 within 7 days</h3>
+          <pre><code>step_17 = pipeline.task(
+    "step_17",
+    transform,
+    upstream_dataset,
+    requires=[
+        succeeded("pipeline_2.step_4").within(days=7),
+    ],
+)</code></pre>
+          <p>This requires step records to be queryable by stable address. A successful pipeline summary is not enough, because Pipeline 2 may have succeeded after Step 4 was skipped, warned, or committed an older artifact.</p>
+        </div>
+
+        <div class="panel span-6">
+          <span class="label">Pipeline dependency</span>
+          <h3>Pipeline 6 requires Pipeline 4 to have succeeded on the same day</h3>
+          <pre><code>pipeline_6 = Pipeline(
+    "pipeline_6",
+    requires=[
+        succeeded("pipeline_4").on(same_day()),
+    ],
+)</code></pre>
+          <p>This is a pipeline-level freshness rule. It can be evaluated before any task runs, which keeps failures cheap and easy to explain to an operator.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="concepts">
+      <h2>General Concepts</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Concept</th>
+            <th>Purpose</th>
+            <th>Testability hook</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Task</strong></td>
+            <td>A small callable with typed inputs and outputs. It should be pure unless it is explicitly an I/O task.</td>
+            <td>Run it directly with in-memory datasets and a fake context.</td>
+          </tr>
+          <tr>
+            <td><strong>Address</strong></td>
+            <td>A stable identity for dependency checks: <code>pipeline</code>, <code>pipeline.step</code>, or <code>pipeline.step.output</code>.</td>
+            <td>Dependency checks become pure queries against fake run history.</td>
+          </tr>
+          <tr>
+            <td><strong>Run Context</strong></td>
+            <td>Carries execution id, logical run id, run date, base directory, registry, and clock.</td>
+            <td>Inject fixed clocks, temp directories, and recording ledgers.</td>
+          </tr>
+          <tr>
+            <td><strong>Ledger</strong></td>
+            <td>SQLite query store for run records, step records, outputs, locks, and orchestration decisions.</td>
+            <td>Use an in-memory or temporary SQLite ledger for deterministic tests.</td>
+          </tr>
+          <tr>
+            <td><strong>Idempotency Policy</strong></td>
+            <td>Defines how repeated logical runs replace, upsert, skip, or accumulate data.</td>
+            <td>Assert repeated runs produce the same rows and ledger state.</td>
+          </tr>
+          <tr>
+            <td><strong>Requirement</strong></td>
+            <td>A composable predicate over ledger state: success, freshness, same day, artifact present, row count, checksum.</td>
+            <td>Evaluate rules without running pipelines.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Design principles</h3>
+      <div class="grid">
+        <div class="panel tight span-4"><span class="status keep">Keep</span><p>Local-first: JSONL and SQLite are enough for history, locks, and explainability.</p></div>
+        <div class="panel tight span-4"><span class="status keep">Keep</span><p>Explicit I/O seams: readers and writers own engines, paths, credentials, and load strategies.</p></div>
+        <div class="panel tight span-4"><span class="status keep">Keep</span><p>Idempotency by logical run id, independent from execution id.</p></div>
+        <div class="panel tight span-4"><span class="status info">Add</span><p>Stable step addresses as part of the public contract, not incidental log labels.</p></div>
+        <div class="panel tight span-4"><span class="status info">Add</span><p>A requirements DSL that can target either pipelines or steps.</p></div>
+        <div class="panel tight span-4"><span class="status info">Add</span><p>A planner that can dry-run and explain blocked, skipped, stale, and ready work before execution.</p></div>
+      </div>
+    </section>
+
+    <section id="current">
+      <h2>What The Current Code Already Has</h2>
+      <p>The existing code is close in several important ways. It already has a deferred <code>Pipeline</code> builder with read, transform, validate, quarantine, explain, action, and write nodes. It also has a separate <code>PipelineRunner</code>, <code>FreshnessRequirement</code>, <code>RunContext</code>, <code>RunLog</code>, <code>RunRegistry</code>, and <code>tools.orchestration</code> layer.</p>
+
+      <div class="compare">
+        <div class="panel">
+          <span class="label">Current dataflow builder</span>
+          <pre><code>p = Pipeline("cases")
+r = p.read(CsvReader("cases.csv"), name="read")
+c = p.task("clean", clean, r)
+v = p.validate(schema, c, name="schema")
+p.write(writer, v, name="write")
+p.run(context)</code></pre>
+          <p>The builder is a deferred DAG and executes leaf nodes recursively. This is flexible for fan-out and joins inside one pipeline run.</p>
+        </div>
+        <div class="panel">
+          <span class="label">Current runner dependency</span>
+          <pre><code>runner.register(
+    "cases",
+    "selection",
+    select_cases,
+    freshness=(
+        FreshnessRequirement("ingest", max_age_days=0),
+    ),
+)</code></pre>
+          <p>Freshness is evaluated from successful pipeline run summaries in <code>RunRegistry</code>. It is pipeline-level, date-window oriented, and deliberately thin.</p>
+        </div>
+      </div>
+
+      <h3>Current strengths</h3>
+      <ul>
+        <li>The public facades are clean: <code>framework.core</code>, <code>framework.io</code>, <code>framework.transform</code>, and <code>framework.run</code>.</li>
+        <li>The <code>Dataset</code> seam keeps pandas out of pipeline protocols and domain code.</li>
+        <li>Writers own load strategy, which is the right place for idempotency mechanics.</li>
+        <li><code>RunContext</code> already separates execution id from logical run id.</li>
+        <li><code>RunLog</code> and <code>RunRegistry</code> already provide local structured observability.</li>
+        <li><code>Orchestrator</code> isolates failed scheduled items and blocks dependants while allowing independent work to continue.</li>
+      </ul>
+    </section>
+
+    <section id="comparison">
+      <h2>Key Differences</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Area</th>
+            <th>Proposed design</th>
+            <th>Current implementation</th>
+            <th>Tradeoff</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Dependency address</td>
+            <td>Pipeline and step addresses are first-class: <code>pipeline_2.step_4</code>.</td>
+            <td>Freshness targets pipeline labels such as <code>cases/ingest</code>; step records exist but are not public dependency targets.</td>
+            <td><span class="status gap">Gap</span> Current API is simpler, but cannot naturally express step-level cross-pipeline dependencies.</td>
+          </tr>
+          <tr>
+            <td>Dependency rule language</td>
+            <td>Composable predicates: <code>succeeded(...).within(days=7)</code>, <code>.on(same_day())</code>, artifact checks, checksums.</td>
+            <td><code>FreshnessRequirement(upstream_pipeline, max_age_days)</code> covers successful upstream run recency.</td>
+            <td><span class="status info">Expand</span> Current shape is easy to test; proposed shape scales to richer operational policies.</td>
+          </tr>
+          <tr>
+            <td>Planning</td>
+            <td>Dry-run planner explains ready, blocked, skipped, stale, and already-satisfied units before running.</td>
+            <td><code>Orchestrator.run_due_once</code> records decisions while executing scheduled items.</td>
+            <td><span class="status gap">Gap</span> Current operator view is post-decision; a planner would improve explainability.</td>
+          </tr>
+          <tr>
+            <td>Execution graph</td>
+            <td>A unified graph can include task nodes, external run-history gates, and artifact edges.</td>
+            <td>Builder DAG handles in-pipeline dataflow; orchestration handles scheduled pipeline-level gates.</td>
+            <td><span class="status keep">Good split</span> The current separation is pragmatic. Unifying everything may overcomplicate day-one authoring.</td>
+          </tr>
+          <tr>
+            <td>Run ledger</td>
+            <td>Step, pipeline, output, lock, and decision records share one query model.</td>
+            <td>Run records live in <code>_registry/runs.db</code>; orchestration decisions live separately in <code>_orchestration/runs.db</code>.</td>
+            <td><span class="status info">Mixed</span> Separate stores are clear and low-risk; unified queries would be easier for dependency resolution and operator reporting.</td>
+          </tr>
+          <tr>
+            <td>Idempotency</td>
+            <td>Idempotency policy is explicit on every effectful output and can be inspected by the planner.</td>
+            <td>Writers already own strategies: refresh, accumulate-by-run, upsert.</td>
+            <td><span class="status keep">Strong</span> Existing writer strategy model should be kept.</td>
+          </tr>
+          <tr>
+            <td>Testability</td>
+            <td>Every layer accepts fake clocks, fake ledgers, in-memory datasets, and recording I/O ports.</td>
+            <td>The code already uses protocols, temp paths, recording writers, and injectable freshness guards/logs.</td>
+            <td><span class="status keep">Strong</span> Current code is already test-friendly; extend rather than replace.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Pros And Cons</h2>
+      <div class="grid">
+        <div class="panel span-6">
+          <span class="label">Proposed design</span>
+          <h3>Pros</h3>
+          <ul>
+            <li>Can express your exact examples without workarounds.</li>
+            <li>Dependency logic is declarative and independently testable.</li>
+            <li>Step outputs can become durable, addressable artifacts.</li>
+            <li>Dry-run planning can give operators clear blocked/ready explanations.</li>
+          </ul>
+          <h3>Cons</h3>
+          <ul>
+            <li>Larger public API surface that needs stable naming rules.</li>
+            <li>Requires migration from incidental step names to durable step addresses.</li>
+            <li>More ledger schema and planner complexity.</li>
+            <li>Risk of turning a lightweight framework into a local Airflow clone if scope is not controlled.</li>
+          </ul>
+        </div>
+        <div class="panel span-6">
+          <span class="label">Current code</span>
+          <h3>Pros</h3>
+          <ul>
+            <li>Small, readable primitives with a clear public/internal split.</li>
+            <li>Good local-first operational model: files, SQLite, JSONL.</li>
+            <li>Strong idempotent writer strategy model already exists.</li>
+            <li>Pipeline-level freshness is simple and effective for many workflows.</li>
+          </ul>
+          <h3>Cons</h3>
+          <ul>
+            <li>Cross-pipeline dependencies are freshness-only and pipeline-level.</li>
+            <li>Step records are observable but not stable dependency targets.</li>
+            <li>Orchestration decisions and run records are split, so richer dependency queries need joining across concepts.</li>
+            <li>“No successful history allows first run” may be too permissive for strict production dependencies unless made configurable.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="recommendation">
+      <h2>Recommended Evolution</h2>
+      <div class="callout">
+        <p><strong>Do not replace the current framework.</strong> Keep the existing builder, readers, writers, dataset carrier, run context, and run registry. Add a small dependency layer on top that makes step addresses and requirement predicates explicit.</p>
+      </div>
+
+      <h3>Suggested next slices</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Slice</th>
+            <th>Change</th>
+            <th>Why</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>Add <code>RunAddress</code>: <code>pipeline</code>, optional <code>subject</code>, optional <code>step</code>.</td>
+            <td>Creates the vocabulary for <code>pipeline_2.step_4</code> without changing execution.</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>Extend <code>RunRegistry</code> with step-success queries.</td>
+            <td>Allows dependency checks against existing JSONL step records.</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>Generalize <code>FreshnessRequirement</code> into <code>Requirement</code> predicates.</td>
+            <td>Keeps current freshness behavior while adding same-day and step-level rules.</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>Add strict first-run policy: allow, warn, or block when no upstream history exists.</td>
+            <td>Production workflows often need “must have run” semantics.</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>Add a read-only planner/explain API before orchestration execution.</td>
+            <td>Gives operators a deterministic answer to “what would run and why?”.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p class="stamp">Reviewed against <code>framework/run/builder.py</code>, <code>framework/run/runner.py</code>, <code>tools/orchestration.py</code>, <code>tools/observability/run_registry.py</code>, <code>docs/public-api.md</code>, <code>docs/core-primitives.md</code>, and <code>docs/operator-cli.md</code>.</p>
+    </section>
+    <section id="new-requirements">
+      <h2>Additional Requirements: Replay, Catch-Up, And Database-Owned Schemas</h2>
+      <p>These requirements change the recommendation in one important way: the framework should not only know whether a step succeeded, it should know which <strong>row attempts</strong> succeeded, failed, were quarantined, were corrected, and were replayed. That is a different level of operational fidelity from ordinary DAG orchestration.</p>
+
+      <div class="grid">
+        <div class="panel span-4">
+          <span class="label">Requirement</span>
+          <h3>Quarantine bad rows, investigate manually, re-run only failed rows</h3>
+          <p>The current code has the start of this: <code>SchemaValueRulePartitioner</code> partitions value-rule and row-check breaches into rejected rows, stamps run metadata, and writes them through a quarantine writer. The missing piece is a first-class replay contract.</p>
+        </div>
+        <div class="panel span-4">
+          <span class="label">Requirement</span>
+          <h3>Read dated files and catch up after weekends</h3>
+          <p><code>GlobCsvReader</code> can read many files matching a pattern, but the framework needs a date-window file selection concept: on Monday, select Saturday, Sunday, and Monday upstream files while only running the pipeline on weekdays.</p>
+        </div>
+        <div class="panel span-4">
+          <span class="label">Requirement</span>
+          <h3>Write into a full SQLite schema managed by migrations</h3>
+          <p>This pushes the framework toward “load into existing relational tables” rather than “own all table creation.” That affects ID strategy, foreign keys, staging tables, and transaction boundaries.</p>
+        </div>
+      </div>
+
+      <h3>Quarantine And Failed-Row Replay</h3>
+      <p>Re-running only failed rows is feasible, but only if it is designed as a row-attempt lifecycle rather than an ad hoc filter over a quarantine table. Most workflow engines treat the task as the retry unit. Here, the useful retry unit is a stable source row identity.</p>
+
+      <div class="compare">
+        <div class="panel">
+          <span class="label">Proposed API addition</span>
+          <pre><code>silver = pipeline.task(
+    "silver_validate",
+    coerce_and_validate,
+    raw,
+    quarantine=QuarantinePolicy(
+        table="quarantine.case_rows",
+        row_key=["source_file", "source_row_number"],
+        replayable=True,
+    ),
+)
+
+runbook.replay(
+    "claims.silver_validate",
+    where=quarantine.status.in_(["corrected", "ready"]),
+    logical_run_id="claims:replay:2026-06-23",
+)</code></pre>
+        </div>
+        <div class="panel">
+          <span class="label">Ledger shape</span>
+          <pre><code>quarantine_rows:
+  quarantine_id
+  source_row_key
+  source_file
+  source_row_number
+  failed_rule
+  original_payload_json
+  corrected_payload_json
+  status              -- open | corrected | replayed | waived
+  first_execution_id
+  replay_execution_id
+  resolved_by
+  resolved_at</code></pre>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Design point</th>
+            <th>Recommendation</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Structural failures</td>
+            <td>Still fail the step.</td>
+            <td>Missing columns, unreadable files, and wrong table shape usually mean the batch contract is broken. Row-level quarantine cannot safely interpret the data.</td>
+          </tr>
+          <tr>
+            <td>Value failures</td>
+            <td>Quarantine rows and continue when the pipeline explicitly opts in.</td>
+            <td>Bad postcodes, invalid enum values, or cross-field rule breaches are often investigable row-by-row.</td>
+          </tr>
+          <tr>
+            <td>Replay identity</td>
+            <td>Require a stable <code>source_row_key</code>.</td>
+            <td>Without a row key, replay can duplicate rows, lose corrections, or apply fixes to the wrong source row.</td>
+          </tr>
+          <tr>
+            <td>Manual correction</td>
+            <td>Store original payload and corrected payload separately.</td>
+            <td>Operators need auditability: what arrived, what was changed, who changed it, and which replay consumed it.</td>
+          </tr>
+          <tr>
+            <td>Replay pipeline</td>
+            <td>Replay from quarantine into the same downstream step boundary, not from the whole source.</td>
+            <td>This keeps replay narrow while still using the real processors, validators, writers, and run logging.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>This changes my earlier recommendation: step addresses are still needed, but row addresses become equally important for quarantine-capable steps. A future <code>RunAddress</code> should probably have a sibling <code>RowAttemptAddress</code> or <code>ArtifactRowKey</code>.</p>
+
+      <h3>Dated File Catch-Up</h3>
+      <p>For upstream processes that run every calendar day while local pipelines run weekdays, the source reader should be date-window aware. The schedule decides when the pipeline runs; the reader decides which source dates are due for ingestion.</p>
+
+      <div class="panel">
+        <span class="label">Proposed reader shape</span>
+        <pre><code>reader = DatedFileSetReader(
+    directory="/share/upstream/claims",
+    pattern="claims_{date:%Y%m%d}_*.csv",
+    date_range=UnprocessedDates(
+        since_last_success("claims.raw_ingest"),
+        through=run_date,
+        include_calendar_days=True,
+    ),
+    columns=["claim_ref", "opened_at", "status"],
+    require_all_dates=False,
+)
+
+raw = pipeline.read("read_dated_files", reader)</code></pre>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Concern</th>
+            <th>Proposed behaviour</th>
+            <th>Comparison to current code</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Multiple files per day</td>
+            <td>Resolve each date to zero, one, or many files; read files in deterministic sorted order.</td>
+            <td><code>GlobCsvReader</code> already reads many files deterministically, but it is pattern-based rather than date-window based.</td>
+          </tr>
+          <tr>
+            <td>Monday catch-up</td>
+            <td>If the last successful source date was Friday, a Monday run can select Saturday, Sunday, and Monday files.</td>
+            <td><code>WorkingDayCalendar</code> governs schedule due-ness today, not source-date catch-up.</td>
+          </tr>
+          <tr>
+            <td>Idempotency</td>
+            <td>Stamp each row with <code>source_date</code>, <code>source_file</code>, and optionally <code>source_row_number</code>; load by source-date or file identity.</td>
+            <td>The current <code>AccumulateByRun</code> stamps logical run metadata. Catch-up also needs source artifact metadata.</td>
+          </tr>
+          <tr>
+            <td>Missing files</td>
+            <td>Make strictness explicit: fail if every expected date must exist; warn/skip when upstream does not publish every day.</td>
+            <td>Current <code>GlobCsvReader</code> fails when no file matches at all.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Destination Database With SQL Migrations</h3>
+      <p>If the destination schema is defined in <code>.sql</code> files and migrated outside the framework, the framework should treat it as an external contract. It can validate the contract, write through explicit loading ports, and record lineage, but it should not silently reshape the database.</p>
+
+      <div class="compare">
+        <div class="panel">
+          <span class="label">Proposed writer shape</span>
+          <pre><code>writer = RelationalWriter(
+    db="/data/app.db",
+    target="case",
+    mode=InsertOrIgnore(
+        natural_key=["source_system", "source_case_ref"],
+        returning=["case_id"],
+    ),
+    staging_table="_stage_case",
+)
+
+case_ids = writer.write_and_return(dataset)</code></pre>
+        </div>
+        <div class="panel">
+          <span class="label">Contract check</span>
+          <pre><code>SchemaContract.from_sql_files("migrations/")
+    .expect_table("case")
+    .expect_unique("case", ["source_system", "source_case_ref"])
+    .expect_foreign_key("case_detail", "case_id", "case.case_id")
+    .verify(sqlite_connection)</code></pre>
+        </div>
+      </div>
+
+      <h3>Deterministic IDs vs Database-Generated IDs</h3>
+      <p>My recommendation is split by table role. Use deterministic IDs for domain identity when the same real-world thing must have the same identity across re-runs, environments, and downstream joins. Use database-generated surrogate IDs inside the relational destination when the database owns the schema and has a stable natural key to de-duplicate on.</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Case</th>
+            <th>Prefer</th>
+            <th>Why</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Case identity, source entity identity, cross-run joins</td>
+            <td><span class="status keep">Deterministic ID</span></td>
+            <td>Re-runs and replays must converge on the same identity without depending on insertion order. This matches the existing case-review direction around deterministic <code>case_id</code> from a natural key.</td>
+          </tr>
+          <tr>
+            <td>Internal database primary key with a declared unique natural key</td>
+            <td><span class="status info">DB-generated ID is fine</span></td>
+            <td><code>INSERT OR IGNORE</code> followed by a re-read is acceptable if the natural key is unique, indexed, and used for every lookup.</td>
+          </tr>
+          <tr>
+            <td>Parent-child loads where children need parent IDs</td>
+            <td><span class="status info">Either, but be explicit</span></td>
+            <td>Deterministic parent IDs simplify child assembly. DB-generated parent IDs require a staging load, re-read mapping by natural key, then child insert in one transaction.</td>
+          </tr>
+          <tr>
+            <td>Manual quarantine replay</td>
+            <td><span class="status keep">Deterministic source row key</span></td>
+            <td>Replay must target the original row attempt. A generated quarantine id is useful for UI/workflow, but not enough as the semantic row identity.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <p><strong>Practical rule:</strong> never rely on bare auto-increment IDs for idempotency. If the database generates IDs, pair them with a unique natural key and make the writer re-read the generated IDs by that key inside the same logical load. That pattern is testable and safe enough for SQLite.</p>
+      </div>
+
+      <h3>Updated Recommendation</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Earlier recommendation</th>
+            <th>Change after new requirements</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Add stable step addresses.</td>
+            <td>Still true, but add stable row attempt keys for quarantine and replay.</td>
+          </tr>
+          <tr>
+            <td>Generalize freshness requirements.</td>
+            <td>Also add source artifact requirements: file date, file path, source batch id, and completeness policy.</td>
+          </tr>
+          <tr>
+            <td>Keep writer-owned idempotency strategies.</td>
+            <td>Extend writers to support external schema loading: staging, natural-key merge, generated-id lookup, and contract verification.</td>
+          </tr>
+          <tr>
+            <td>Keep local-first JSONL and SQLite ledgers.</td>
+            <td>Extend the ledger with quarantine lifecycle records and source artifact ingestion records.</td>
+          </tr>
+          <tr>
+            <td>Avoid turning the framework into a local Airflow clone.</td>
+            <td>Still the constraint. The differentiator should be local, auditable row-level recovery, not broad distributed scheduling.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="clarification-task-level-file-orchestration">
+      <h2>Clarification: Task-Level Failure And Per-File Catch-Up</h2>
+      <p>After revisiting the replay idea, the better design is to keep failure at the task or run-unit level. Row-level replay is possible, but it adds a lifecycle, correction workflow, row identity model, and audit surface that would dominate the framework. For this project, quarantining can remain an investigation artifact or an explicit validation mode, while normal recovery is still rerunning a failed task, step, file, or pipeline.</p>
+
+      <h3>Multi-file catch-up should usually be orchestration</h3>
+      <p>The dated-file catch-up requirement should not automatically mean “read every matching file into one stacked dataset.” That is only correct when multiple physical files together form one logical source snapshot. If each file is independently retryable, independently auditable, or independently owned by an upstream run, then orchestration should discover the files and run the same pipeline once per file or source date.</p>
+
+      <div class="compare">
+        <div class="panel">
+          <span class="label">Reader concern</span>
+          <h3>Many files, one logical batch</h3>
+          <pre><code>reader = GlobCsvReader(
+    directory="/share/upstream/claims",
+    pattern="claims_20260623_part*.csv",
+)
+
+pipeline.run(
+    run_date=date(2026, 6, 23),
+    logical_run_id="claims:2026-06-23",
+)</code></pre>
+          <p>Use this when the files are shards of the same business input and should succeed or fail together.</p>
+        </div>
+
+        <div class="panel">
+          <span class="label">Orchestration concern</span>
+          <h3>Many files, many logical runs</h3>
+          <pre><code>for source_file in discover_dated_files(
+    directory="/share/upstream/claims",
+    since=last_successful_source_date("claims/ingest"),
+    through=run_date,
+):
+    runner.run(
+        "claims",
+        "ingest",
+        base_dir,
+        run_date=source_file.business_date,
+        logical_run_id=f"claims:ingest:{source_file.file_id}",
+        params={"source_file": source_file.path},
+    )</code></pre>
+          <p>Use this when each file should have its own run history, retry boundary, and idempotency key.</p>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Question</th>
+            <th>If yes</th>
+            <th>Design choice</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Are the files parts of one upstream extract?</td>
+            <td>All parts must be processed together to make sense.</td>
+            <td><span class="status info">Reader</span> Use <code>GlobCsvReader</code> or a shard-aware reader that stacks them into one dataset.</td>
+          </tr>
+          <tr>
+            <td>Can Saturday fail while Sunday succeeds?</td>
+            <td>Operators need to see and rerun only Saturday.</td>
+            <td><span class="status keep">Orchestration</span> Run one pipeline execution per source date or file.</td>
+          </tr>
+          <tr>
+            <td>Does each file need its own idempotency key?</td>
+            <td>Replaying one file should replace only that file's loaded rows.</td>
+            <td><span class="status keep">Orchestration</span> Use <code>logical_run_id</code> derived from file identity.</td>
+          </tr>
+          <tr>
+            <td>Does downstream logic need a combined view?</td>
+            <td>Later processing needs all successful file loads together.</td>
+            <td><span class="status info">Both</span> Ingest per file, then have a downstream pipeline read the accumulated raw/silver table.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Updated position</h3>
+      <div class="callout">
+        <p><strong>Pipeline contract:</strong> process one logical input idempotently. <strong>Orchestration contract:</strong> discover which logical inputs are due and run the pipeline for each one. <strong>Reader contract:</strong> combine files only when they are genuinely one logical input.</p>
+      </div>
+
+      <p>This fits the current codebase well. The existing <code>ForEach</code> orchestration helper already runs one freshly built pipeline per item with child contexts, and <code>RunContext.logical_run_id</code> already gives each item an idempotency key. A future source-discovery primitive could build on that rather than changing <code>GlobCsvReader</code> or making every pipeline internally loop over files.</p>
+    </section>
+
+    <section id="schedule-configuration">
+      <h2>User-Friendly Orchestration Schedules</h2>
+      <p>Schedule rules belong in orchestration. A Pipeline should describe what work does when invoked; orchestration decides whether that Pipeline is due on a given run date. The current code already has the right low-level pieces: <code>Weekdays</code>, <code>SpecificWeekdays</code>, <code>DayOfMonth</code>, <code>NthWorkingDayOfMonth</code>, <code>LastWorkingDayOfMonth</code>, <code>ManualOnly</code>, and <code>WorkingDayCalendar</code>. The redesign should add an operator-friendly layer over those primitives.</p>
+
+      <div class="compare">
+        <div class="panel">
+          <span class="label">Python authoring API</span>
+          <pre><code>ScheduledPipeline(
+    "claims",
+    "ingest",
+    Schedule.daily(),
+)
+
+ScheduledPipeline(
+    "claims",
+    "quality_check",
+    Schedule.on_weekdays("monday", "wednesday"),
+)
+
+ScheduledPipeline(
+    "claims",
+    "monthly_snapshot",
+    Schedule.day_of_month(21),
+)
+
+ScheduledPipeline(
+    "claims",
+    "month_open",
+    Schedule.nth_working_day_of_month(1),
+)</code></pre>
+        </div>
+
+        <div class="panel">
+          <span class="label">Readable config API</span>
+          <pre><code>pipelines:
+  - subject: claims
+    pipeline: ingest
+    schedule: daily
+
+  - subject: claims
+    pipeline: quality_check
+    schedule:
+      weekdays: [monday, wednesday]
+
+  - subject: claims
+    pipeline: monthly_snapshot
+    schedule:
+      day_of_month: 21
+
+  - subject: claims
+    pipeline: month_open
+    schedule:
+      working_day_of_month: 1</code></pre>
+        </div>
+      </div>
+
+      <h3>Supported schedule language</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Operator phrase</th>
+            <th>Python</th>
+            <th>Config</th>
+            <th>Calendar behaviour</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Daily / every working day</td>
+            <td><code>Schedule.daily()</code></td>
+            <td><code>schedule: daily</code></td>
+            <td>Runs on working days according to <code>WorkingDayCalendar</code>.</td>
+          </tr>
+          <tr>
+            <td>Monday and Wednesday</td>
+            <td><code>Schedule.on_weekdays("monday", "wednesday")</code></td>
+            <td><code>weekdays: [monday, wednesday]</code></td>
+            <td>Named weekdays, case-insensitive; still respects holidays if configured as working-day based.</td>
+          </tr>
+          <tr>
+            <td>21st of the month</td>
+            <td><code>Schedule.day_of_month(21)</code></td>
+            <td><code>day_of_month: 21</code></td>
+            <td>Runs when the run date's calendar day is 21; decide explicitly whether weekends should skip or run.</td>
+          </tr>
+          <tr>
+            <td>First working day of the month</td>
+            <td><code>Schedule.nth_working_day_of_month(1)</code></td>
+            <td><code>working_day_of_month: 1</code></td>
+            <td>Uses the holiday calendar; if the 1st is a weekend or holiday, moves to the first valid working day.</td>
+          </tr>
+          <tr>
+            <td>Last working day of the month</td>
+            <td><code>Schedule.last_working_day_of_month()</code></td>
+            <td><code>last_working_day_of_month: true</code></td>
+            <td>Uses the holiday calendar to find the final working day in the month.</td>
+          </tr>
+          <tr>
+            <td>Manual only</td>
+            <td><code>Schedule.manual_only()</code></td>
+            <td><code>schedule: manual_only</code></td>
+            <td>Never runs in automatic due-work passes.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Why not cron first?</h3>
+      <p>Cron is compact, but it is not the right primary interface for this project. It does not naturally express “first working day of the month” without extra business-calendar semantics, and it is harder for operators to review safely. A friendly schedule language can still have a future cron escape hatch, but the normal path should read like the operational rule.</p>
+
+      <div class="callout">
+        <p><strong>Separation of concerns:</strong> schedules answer “is this Pipeline due today?” Requirements answer “may this due Pipeline run now?” Source discovery answers “which files or source dates should become separate runs?” Keeping those decisions separate makes plans easier to test and explain.</p>
+      </div>
+
+      <h3>Plan output should explain schedules</h3>
+      <p>A friendly schedule API should produce friendly explanations. Operators should be able to see why something is ready, skipped, or blocked without reverse-engineering the schedule class.</p>
+
+      <div class="panel">
+        <span class="label">Example plan output</span>
+        <pre><code>2026-06-23  claims  ingest                 ready    schedule daily is due
+2026-06-23  claims  quality_check          skipped  schedule monday,wednesday is not due on Tuesday
+2026-06-23  claims  month_open             skipped  first working day was 2026-06-01
+2026-06-23  claims  month_close            skipped  last working day is 2026-06-30</code></pre>
+      </div>
+
+      <h3>Tickets created</h3>
+      <ul>
+        <li><a href="https://github.com/nickwarters/data-pipeline-tooling/issues/248">#248 redesign: Add user-friendly orchestration schedule API</a></li>
+        <li><a href="https://github.com/nickwarters/data-pipeline-tooling/issues/249">#249 redesign: Add readable schedule config for orchestration</a></li>
+        <li><a href="https://github.com/nickwarters/data-pipeline-tooling/issues/250">#250 redesign: Explain schedule due and skipped decisions</a></li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

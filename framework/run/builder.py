@@ -302,6 +302,9 @@ class Pipeline:
         self._nodes.append(node)
         return node
 
+    def task(self, name: str, func: Processor, *inputs: Node) -> Node:
+        return self.transform(func, *inputs, name=name)
+
     def validate(
         self,
         validator: Validator,
