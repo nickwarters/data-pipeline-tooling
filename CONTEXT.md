@@ -76,7 +76,7 @@ _Avoid_: master data, lookup, static data
 
 **Pipeline**:
 One of the four end-to-end phases of the platform — **Ingest**, **Selection**, **Sync**, **Reporting** — each processing data through its own medallion store(s). (Distinct from the `Pipeline` builder *class*, which composes one Feed/table — see Flagged ambiguities.)
-_Avoid_: stage (reserved for the steps within a run), layer (reserved for raw/silver/gold), job
+_Avoid_: stage (reserved for the steps within a run), layer (the medallion profile's namespace names — an application convention, not a synonym for Pipeline; ADR-0001 2026-06-23 amendment), job, node (the fine unit *within* a class-level Pipeline DAG)
 
 **Ingest**:
 The Pipeline that brings a Case Type's source **Feeds** in and refines them into **Cases** through that Case Type's medallion (raw→silver→gold). Per Case Type.
@@ -138,6 +138,19 @@ A line across which a guarantee changes, and therefore the natural place to
 **enforce** that guarantee. _Here_: silver is the **schema boundary** (declared
 columns + dtypes validated *before* data lands — ADR-0008); gold is the **grain
 boundary** (one-row-per-Case enforced — ADR-0009).
+
+**Node** (of a Pipeline DAG):
+One step in a class-level `Pipeline` — a read, transform, validation, or write —
+declared with a stable, **unique** name and wired to its upstream nodes
+(ADR-0003 2026-06-23 amendment). The node is the **fine unit**: each emits one
+RunLog record with a `committed` marker, and an explicit **`retry`** recovers at
+node granularity (skipping already-committed writes — ADR-0007). Contrast the
+**DAG/Pipeline**, which is the *coarse* unit you author and launch — the
+Airflow-task / dbt-model / Dagster-asset split (you run few large DAGs; each node
+fails, is observed, and recovers independently). A **leaf** node (nothing depends
+on it) is a terminus; a DAG may have **many** writes, so many leaves.
+_Avoid_: stage (the removed `.add_stage` vocabulary — #220), step (the internal
+`PipelineStep`), task
 
 **Expected failure / `PipelineError`**:
 A *deliberate, fail-fast abort* of a pipeline run — the data or environment broke
@@ -238,6 +251,18 @@ other PipelineSets continue.
 
 ## Pipelines, layers & stores
 
+> **Vocabulary update (2026-06-23, ADR-0001/0006/0008 amendments).** The
+> **medallion (raw/silver/gold) is an application convention/profile, not
+> framework vocabulary.** The framework's storage contract is the `Reader` /
+> `Writer` ports + load strategies + the `connect` seam; `Store`/`StoreCatalog`
+> are a generalised **factory** that addresses **logical databases**
+> (`catalog.store(namespace).writer(table, strategy)`), with a backend mapping
+> `namespace → file`. "raw"/"silver"/"gold" are namespace names a medallion
+> profile picks; a normalised multi-database schema picks domain-named databases
+> instead. Read "layer" below as "the medallion profile's namespace". Decided;
+> not yet built — the code still carries the `Layer` enum and the
+> medallion-shaped Store.
+
 A **subject** owns a **medallion**: three SQLite databases, one per generic framework **layer** (**raw → silver → gold**), on a network share, isolated from every other subject's files (blast-radius isolation, independent onboarding — ADR-0001). The same `raw → silver → gold` framework is **reused by every Pipeline**; business meanings such as "current CasePool" or "SelectionPool audit" are imposed by the application pipeline, not by the layer names themselves:
 
 | Pipeline | Scope | Load profile & what its gold holds |
@@ -249,7 +274,9 @@ A **subject** owns a **medallion**: three SQLite databases, one per generic fram
 
 So **CasePool** and **SelectionPool** relate to **Ingest** and **Selection** only; **Review Outcomes** live in the **Sync** store. **Load strategy is per-feed, owned by the Writer** (the Store maps `layer → location` only — ADR-0006 amendment); there is no longer a single "gold accumulates everywhere" rule. Where a layer accumulates, its history survives across runs (stamped with a logical run id / `load_date` and, when context-driven, execution id; idempotent re-run via delete-by-logical-run — ADR-0006). Ingest's *current* gold is reduced from accumulated silver (`LatestPerKey` by `case_id`) and its one-row-per-Case grain is enforced at the gold boundary (ADR-0009).
 
-**Store topology (current working assumption).** `StoreCatalog(root).store(subject)` mints the subject's **Store** from shared root/configuration. A `Store` binds `(subject, layer, table)` to concrete Readers/Writers over that subject's files; it does not infer load strategy or business meaning from the layer. Physically this maps to one three-file medallion **per subject** for now. Revisit the physical topology when Sync/Reporting are built.
+**Store topology (current working assumption).** `StoreCatalog(root).store(subject)` mints the subject's **Store** from shared root/configuration. A `Store` binds `(subject, layer, table)` to concrete Readers/Writers over that subject's files; it does not infer load strategy or business meaning from the layer. Physically this maps to one three-file medallion **per subject** for now. Revisit the physical topology when Sync/Reporting are built. *(Being superseded — ADR-0001 2026-06-23 amendment: the Store generalises to a `namespace → file` factory and `Store` is recognised as a convenience factory, not a core primitive; the run engine never references it.)*
+
+**Pipelines are DAGs; the node is the fine unit (2026-06-23, ADR-0003/0007/0009 amendments).** A class-level `Pipeline` is a **DAG** of nodes — any number of reads, transforms, validations, and **writes**; there is no single-Writer terminus and `.run()` **returns `None`** (a run is its side-effecting writes, not a computed output; the `landed = p.run()` convenience is retired — decided 2026-06-23, not yet built). You author and launch **few large DAGs**; the **node** (not the DAG) is the unit of *observability* (one RunLog record + a `committed` marker each) and *recovery*. Fan-out (a wide feed → its Case table + Detail Tables) is branches of **one DAG** that reads/normalises the source once, replacing the old "N single-table pipelines" model. Recovery has two modes: a plain **re-run** is a clean full re-drive (safe via idempotent writers — use it when the source changed, e.g. fixing a bad feed), while an explicit **`retry`** of a `logical_run_id` skips already-committed writes and re-drives the rest (re-running the in-memory read/transform prefix, since only writes persist). Retry assumes a frozen source, requires unique stable node names as identity, and still requires idempotent writers. Decided; explicit `retry` not yet built.
 
 ## Example dialogue
 
@@ -274,9 +301,9 @@ So **CasePool** and **SelectionPool** relate to **Ingest** and **Selection** onl
 - **"Pipeline" — term vs class** — RESOLVED: the four end-to-end phases (Ingest/Selection/Sync/Reporting) are **Pipelines** (the domain term). The `Pipeline` *class* (`framework/run/builder.py`) is finer-grained — a deferred builder for **one Feed/table** — so a domain Pipeline composes one or more class `Pipeline` runs. The class can be inspected before execution with `.describe()`, which renders the same ordered plan that `.run()` executes: reader, explicit read dependencies, ordered stages, governance outputs, writer, and run-log sink without running the feed. A **Stage** is a step within one class-level run (`Reader -> Dataset -> Stage* -> Writer`), such as validation, processing, or an explicit checkpoint write; it is not a domain Pipeline, DAG node, medallion layer, or second terminus. "Layer" stays reserved for raw/silver/gold.
 - **Inbound vs outbound** — RESOLVED: **Feed** is inbound-only; an outbound artifact is a **Deliverable** (file or directly-readable view). The **Sync** Pipeline is one-way inbound (no push, no correlation); the **SelectionPool** reaches the review platform as a Deliverable emitted by **Selection**.
 - **`Dataset` vs CasePool** — RESOLVED (#26): `Dataset` is the framework primitive renamed from `DataHandle` — the opaque, **bulk** in-memory carrier (the bulk tier of the two-tier carrier, ADR-0002; pandas behind the seam), returned by `Reader.read()` and flowing through builders/processors/Writers. It is **not** the **CasePool**, which is the domain population of **Cases** read from silver/gold and surfaced as typed `Case` objects. The two tiers meet only *inside* CasePool: it reads a `Dataset`, then materialises typed Cases. So "dataset" stays an `_Avoid_` alias for the *CasePool concept*, while the capitalised type `Dataset` is the carrier. (Renamed from `DataHandle` because "handle" implies a lightweight pointer; the thing actually owns a tableful of rows — the noun was the onboarding tripwire.)
-- **Store topology** — PROVISIONAL (working assumption, not yet an ADR): logically one **Store** per Pipeline; physically one SQLite DB per Case Type shared by Ingest + Selection, one DB for Sync (all Case Types), one for Reporting (all Case Types). Separate Python `Store`s/Writers may point at the same file. Revisit when Sync/Reporting are built.
+- **Store topology** — PROVISIONAL, now DIRECTED (ADR-0001 2026-06-23 amendment): the **medallion is demoted to an application convention** and the `Store` is recognised as a **factory, not a core primitive** (the run engine never references it). The Store generalises to a `namespace → file` factory addressing **logical databases** (`catalog.store(namespace).writer(table, strategy)`), so a normalised schema across multiple databases is just different namespaces; the medallion (`raw`/`silver`/`gold`) becomes a thin profile outside `framework.core`. The `Layer` enum leaves `framework.core`. Earlier working assumption (logically one Store per Pipeline; physically one SQLite DB per Case Type shared by Ingest + Selection, one for Sync, one for Reporting; separate Stores may point at the same file) still describes the medallion *profile's* physical layout. Decided; not yet built.
 - **Selection's two writes (gold audit + Deliverable)** — RESOLVED: Selection both writes the **SelectionPool** to its gold (audit trail) and emits it as a **Deliverable** to the SharePoint list. These are **two pipelines, not one run with two writes**: the Selection pipeline lands gold, then a **second pipeline reads the gold SelectionPool and writes to the SharePoint list** — consistent with ADR-0009's "single-Writer pipelines over a shared source" (no multi-Writer terminus, no checkpoint required). Mid-run lineage `.checkpoint(writer)` (#49) is a separate, general-purpose feature and is **not** the mechanism here. See #48.
-- **One feed, many tables** — RESOLVED (ADR-0009): the old "one feed → one silver table → one gold table" assumption is dropped. A Feed yields **one Case table and zero or more Detail Tables**; the wide feed is fanned out by **N single-table pipelines over the shared raw table**, each projecting its columns and sharing one reusable normalisation `Processor`. No new core seam (rejected a multi-Writer terminus and a splitting Processor — both break `.write_to`/`.run()`'s single-Writer/single-Dataset shape). Decided; not yet built.
+- **One feed, many tables** — RESOLVED, then REVISED (ADR-0009 2026-06-23 amendment): the old "one feed → one silver table → one gold table" assumption is dropped. A Feed yields **one Case table and zero or more Detail Tables**. ~~the wide feed is fanned out by **N single-table pipelines over the shared raw table**~~ — **revised:** the wide feed is fanned out **within one DAG** (the builder already does any number of writes; ADR-0003 2026-06-23 amendment), reading and normalising the shared source once and branching into the Case write plus each Detail write. Per-output schema/validators move from "one per pipeline" to "one per node"; deterministic `case_id` still lets each branch derive the same key independently. The earlier rejection of a multi-Writer terminus is itself reversed.
 - **Case identity** — RESOLVED (ADR-0009): a Case's identity is a **deterministic** surrogate `case_id = uuid5(case_type_namespace, natural_key)`, derived from the feed's stable natural key — same Case → same id every run/machine, so idempotency holds and the Case ↔ Detail link needs no join. A random `uuid4` is rejected (breaks idempotency); a persistent identity map is the deferred fallback for a feed with no natural key.
 - **Load strategy vs layer** — RESOLVED (ADR-0006 amendment): load strategy is **per-feed, owned by the Writer**; the Store maps `layer → location` only (no load decision). The global "refresh upstream / accumulate downstream" rule becomes the *default* profile, not a law. Ingest adopts **history-upstream / current-gold**; Selection/Sync/Reporting keep accumulate-by-run gold. Consequence: where the source is destructive, accumulated raw/silver are a **system of record** (backup matters) and volume grows `records × snapshots`. Decided; not yet built.
 - **Atomicity of run artifacts (publish unit)** — RESOLVED (ADR-0007 amd 03): a run's artifacts — **quarantine** rejects, the **Selection trace**, **checkpoints**, and the final output — are **independently committed evidence**, *not* one all-or-nothing publish unit. Atomicity is **per writer, per layer DB** (a single delete+insert), not across writers; an abort *after* an artifact write leaves that artifact on disk. Chosen deliberately: evidence is most valuable when the run then fails. Each run-log step carries a **`committed`** marker so operators can see what landed before an abort. Hardening the per-writer transaction itself is #139 / #165.

@@ -274,6 +274,12 @@ different shape again — fan it out into N single-table pipelines over the shar
 raw table rather than one mega-row ([ADR-0009](adr/0009-case-identity-and-gold-grain.md),
 `pipelines/demo_fan_out.py`).
 
+> **Direction change (2026-06-23, ADR-0009 amendment, decided not yet built):**
+> fan-out becomes branches of **one multi-write DAG** that reads and normalises
+> the shared source once, rather than N separate single-table pipelines. The
+> per-output schema/validators move to per-**node**, and the deterministic
+> `case_id` still lets each branch derive the same key independently.
+
 > **Scaffolding caps at 40 columns.** `scaffold --from-feed-file` deliberately
 > stops generating fields past 40 (with a loud warning) so the starting dataclass
 > stays usable — it is *not* sized for a 600-column feed. For a wide feed, scaffold
@@ -455,8 +461,11 @@ fake pusher and never touch the network.
 
 The Deliverable is emitted by a **second pipeline** that reads the gold
 SelectionPool and writes here (`SqliteReader(gold, "selection_pool")` →
-`SharePointWriter`) — consistent with ADR-0009's single-Writer pipelines over a
-shared source, not a mid-run checkpoint (CONTEXT.md, #48):
+`SharePointWriter`) — a separate run over a shared source (CONTEXT.md, #48).
+*(The "single-Writer pipelines / not a checkpoint" justification is superseded by
+the multi-write DAG + node-as-unit model — ADR-0003/0009/0011 2026-06-23
+amendments; the gold→Deliverable split remains a sensible separate run because
+the Deliverable is its own recovery/observability unit.)*
 
 ```python
 from framework.io import Refresh, SqliteReader

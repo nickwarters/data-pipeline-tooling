@@ -94,3 +94,20 @@ logical idempotency key, also stamp `logical_run_id`, and stamp `execution_id`
 so operators can correlate rows to RunRegistry records without guessing which
 `run_id` meaning applies. Quarantine and explainability artifacts follow the
 same model as the main accumulated output.
+
+## Amendment (2026-06-23): "layer" is an application convention; the Store addresses logical databases
+
+The "**Store maps `layer → location`**" language throughout this ADR is
+generalised: the Store maps a **logical-database namespace → location**
+(ADR-0001 2026-06-23 amendment). The medallion layer names (`raw`/`silver`/
+`gold`) are an application **profile**, not framework vocabulary, so "raw/silver
+accumulate, gold reduces" reads as "the feed's *upstream* namespaces accumulate,
+its *current* namespace reduces" — the same load profiles, no longer presuming
+three fixed layers.
+
+Nothing else changes: load strategy stays a **per-feed Writer choice**
+(`Refresh` / `AccumulateByRun` / `Upsert`), the idempotency mechanics
+(delete-by-logical-`run_id` then insert) are unchanged, and the
+history-upstream / current-gold Ingest profile still holds — it is simply
+expressed over whatever namespaces the feed targets rather than over the words
+"raw"/"silver"/"gold".
