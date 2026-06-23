@@ -577,6 +577,8 @@ the handler and writes a `freshness` record with a warning. Stale history aborts
 before the handler executes and writes both a `freshness` error and an errored
 domain `run` summary.
 
+> **Note: `base_dir` bounds freshness visibility.** The `RunRegistry` is entirely scoped to the `base_dir` provided at execution time. It collects history by sweeping `<base_dir>/_runs/*.log`. If an upstream pipeline ran under a *different* base directory, its logs will not be visible to the downstream runner, and the `FreshnessGuard` will treat it as having no history. To validate freshness dependencies, both the upstream and downstream pipelines must be executed against the same `base_dir`.
+
 The CLI `run` command addresses a pipeline by its location on disk, importing
 `pipelines.<name>.pipeline` and running its `run(context)` callable through
 `run_pipeline`:
