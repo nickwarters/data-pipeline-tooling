@@ -637,6 +637,8 @@ from framework.run import (
     FreshnessRequirement,
     Orchestrator,
     PipelineSet,
+    Requirement,
+    RunAddress,
     ScheduledPipeline,
     Weekdays,
 )
@@ -650,7 +652,12 @@ sets = (
                 "cases",
                 "selection",
                 Weekdays(),
-                depends_on=(FreshnessRequirement("ingest"),),
+                depends_on=(
+                    FreshnessRequirement("ingest"),
+                    Requirement.succeeded(
+                        RunAddress.task("ingest", "normalise", subject="cases")
+                    ).within_days(7),
+                ),
             ),
         ),
     ),
@@ -664,8 +671,10 @@ Orchestrator(runner, sets, WorkingDayCalendar()).run_due_once(
 
 `PipelineSet` is the independent failure boundary, normally one Case Type or one
 platform-wide group. `ScheduledPipeline` references an existing runner
-registration and carries its default schedule, freshness dependencies, and
-enablement. `Weekdays()` is the normal daily schedule, using
+registration and carries its default schedule, dependencies, and enablement.
+Dependencies may be legacy `FreshnessRequirement` values or `Requirement`
+predicates that target whole-Pipeline or task-level `RunAddress` history.
+`Weekdays()` is the normal daily schedule, using
 `WorkingDayCalendar` for weekends and holidays; other schedules are
 `SpecificWeekdays`, `DayOfMonth`, `NthWorkingDayOfMonth`,
 `LastWorkingDayOfMonth`, and `ManualOnly`.
@@ -674,9 +683,12 @@ Each invocation writes decisions to `<base_dir>/_orchestration/runs.db` with a
 stable item key of `set_name/case_type/pipeline/run_date`. `RunLog` and
 `RunRegistry` stay reserved for actual Pipeline execution records. A failed
 scheduled item is terminal for that orchestrator run and blocks downstream
-dependants, but unrelated items in the same set and every other `PipelineSet`
-continue. `run_until_complete(...)` performs a bounded Python polling loop over
-the same run date; it does not retry failed items from the same invocation.
+dependants. Requirement failures from stale task/pipeline history, missing
+history with `on_first_run("block")`, or failed upstream scheduled items are
+recorded as `blocked` decisions with their reason; unrelated items in the same
+set and every other `PipelineSet` continue. `run_until_complete(...)` performs a
+bounded Python polling loop over the same run date; it does not retry failed
+items from the same invocation.
 
 Python definitions are canonical. YAML overrides may disable a scheduled item,
 replace its schedule timing, or override freshness windows for operations

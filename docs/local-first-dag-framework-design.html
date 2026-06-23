@@ -647,8 +647,8 @@ p.run(context)</code></pre>
           </tr>
           <tr>
             <td>5</td>
-            <td>Add a read-only planner/explain API before orchestration execution.</td>
-            <td>Gives operators a deterministic answer to “what would run and why?”.</td>
+            <td>Teach <code>Orchestrator</code> to evaluate <code>Requirement</code> predicates on scheduled items.</td>
+            <td>Lets downstream work wait on fresh task-level success while preserving existing <code>FreshnessRequirement</code> schedules.</td>
           </tr>
         </tbody>
       </table>

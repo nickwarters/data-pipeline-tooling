@@ -15,7 +15,13 @@ from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
 from framework.run.builder import Pipeline
 from framework.run.run_context import RunContext
-from framework.run.runner import FreshnessError, FreshnessRequirement, PipelineRunner
+from framework.run.runner import (
+    FreshnessError,
+    FreshnessRequirement,
+    PipelineRunner,
+    Requirement,
+    RunRequirement,
+)
 from tools.calendar import WorkingDayCalendar
 
 Item = TypeVar("Item")
@@ -204,7 +210,7 @@ class ScheduledPipeline:
     subject: str
     pipeline: str
     schedule: Schedule
-    depends_on: tuple[FreshnessRequirement, ...] = ()
+    depends_on: tuple[RunRequirement, ...] = ()
     enabled: bool = True
 
     def __init__(
@@ -212,7 +218,7 @@ class ScheduledPipeline:
         subject: str,
         pipeline: str,
         schedule: Schedule,
-        depends_on: Iterable[FreshnessRequirement] = (),
+        depends_on: Iterable[RunRequirement] = (),
         enabled: bool = True,
     ) -> None:
         object.__setattr__(self, "subject", subject)
@@ -523,9 +529,10 @@ class Orchestrator:
         set_failed: set[tuple[str, str]],
     ) -> str | None:
         for dependency in item.depends_on:
-            upstream_subject = dependency.upstream_subject or item.subject
-            if (upstream_subject, dependency.upstream_pipeline) in set_failed:
-                return f"{upstream_subject}/{dependency.upstream_pipeline}"
+            upstream = _dependency_pipeline_key(dependency, item.subject)
+            if upstream in set_failed:
+                upstream_subject, upstream_pipeline = upstream
+                return f"{upstream_subject}/{upstream_pipeline}"
         return None
 
     def _all_due_terminal(self, result: OrchestrationPassResult) -> bool:
@@ -609,7 +616,30 @@ def _item_key(set_name: str, item: ScheduledPipeline, run_date: dt.date) -> str:
 
 
 def _freshness_days(item: ScheduledPipeline) -> int:
-    return max((requirement.max_age_days for requirement in item.depends_on), default=0)
+    return max(
+        (
+            requirement.max_age_days
+            for requirement in item.depends_on
+            if requirement.max_age_days is not None
+        ),
+        default=0,
+    )
+
+
+def _dependency_pipeline_key(
+    dependency: RunRequirement, default_subject: str
+) -> tuple[str, str]:
+    if isinstance(dependency, FreshnessRequirement):
+        return (
+            dependency.upstream_subject or default_subject,
+            dependency.upstream_pipeline,
+        )
+    if isinstance(dependency, Requirement):
+        return (
+            dependency.address.subject or default_subject,
+            dependency.address.pipeline,
+        )
+    raise TypeError(f"unsupported dependency requirement {dependency!r}")
 
 
 def _override_items(overrides: dict) -> list[dict]:

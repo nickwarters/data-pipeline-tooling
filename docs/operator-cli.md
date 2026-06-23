@@ -101,11 +101,16 @@ provides `Weekdays`, `SpecificWeekdays`, `DayOfMonth`,
 is the normal "daily" schedule; weekends and holidays are evaluated by
 `WorkingDayCalendar`.
 
-Dependencies are freshness-based. A scheduled downstream runs through
-`PipelineRunner` only when its declared upstreams have successful history fresh
-enough for the run date. A failed scheduled item is terminal for that
-orchestrator invocation; its downstream dependants are marked `blocked`, while
-independent pipelines in the same set and all other `PipelineSet`s continue.
+Dependencies are requirement-based. A scheduled downstream runs through
+`PipelineRunner` only when its declared `Requirement` predicates, or legacy
+`FreshnessRequirement` dependencies, have successful upstream history fresh
+enough for the run date. Requirements can target a whole Pipeline or a task-level
+`RunAddress`, for example
+`Requirement.succeeded(RunAddress.task("pipeline-2", "step-4", subject="case-a")).within_days(7)`.
+A failed scheduled item is terminal for that orchestrator invocation; its
+downstream dependants are marked `blocked`, while independent pipelines in the
+same set and all other `PipelineSet`s continue. Blocked decisions include the
+stale, missing, or failed upstream reason in `<base>/_orchestration/runs.db`.
 
 ```console
 $ python -m cli orchestrate /data --app my_app.pipelines --run-date 2026-05-29 --once
