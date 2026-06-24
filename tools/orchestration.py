@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import time
 import uuid
+from abc import abstractmethod
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -128,11 +129,11 @@ class ForEach(Generic[Item]):
 class Schedule:
     """Base class for automatic schedule predicates."""
 
-    def is_due(self, run_date: dt.date, calendar: WorkingDayCalendar) -> bool:
-        raise NotImplementedError
+    @abstractmethod
+    def is_due(self, run_date: dt.date, calendar: WorkingDayCalendar) -> bool: ...
 
-    def schedule_label(self) -> str:
-        raise NotImplementedError
+    @abstractmethod
+    def schedule_label(self) -> str: ...
 
 
 @dataclass(frozen=True)
@@ -803,12 +804,11 @@ def _check_requirement_plan(
     assert isinstance(run_registry, RunRegistry)
 
     # Normalise to a Requirement so we have one code path.
+    req: Requirement
     if isinstance(requirement, FreshnessRequirement):
         req = requirement.as_requirement(default_subject=default_subject)
-    elif isinstance(requirement, Requirement):
-        req = requirement
     else:
-        raise TypeError(f"unsupported requirement type {requirement!r}")
+        req = requirement
 
     latest = run_registry.latest_success(req.address)
 
@@ -935,12 +935,10 @@ def _dependency_pipeline_key(
             dependency.upstream_subject or default_subject,
             dependency.upstream_pipeline,
         )
-    if isinstance(dependency, Requirement):
-        return (
-            dependency.address.subject or default_subject,
-            dependency.address.pipeline,
-        )
-    raise TypeError(f"unsupported dependency requirement {dependency!r}")
+    return (
+        dependency.address.subject or default_subject,
+        dependency.address.pipeline,
+    )
 
 
 def _override_items(overrides: dict) -> list[dict]:

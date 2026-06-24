@@ -241,7 +241,7 @@ def test_plan_for_each_reports_multiple_planned_runs_without_executing(tmp_path)
         assert item.run_date == _DUE_DATE
 
 
-def test_plan_for_each_uses_file_id_fn(tmp_path):
+def test_plan_for_each_uses_file_id_fn():
     source_files = ["share/claims_20260615_a.csv", "share/claims_20260615_b.csv"]
 
     items = plan_for_each(
