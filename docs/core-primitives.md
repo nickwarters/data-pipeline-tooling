@@ -48,20 +48,13 @@ names are placeholders pending a domain rename — see CONTEXT.)
 raw stays schema-light on purpose: it mirrors the source so the landing zone is
 faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 
-> **Decided, not yet built (ADR-0006 amendment, ADR-0009).** The table above
-> describes the *current* build, where the Store maps raw/silver → full-refresh
-> and gold → accumulate-by-run. That layer→strategy mapping is being replaced:
-> **load strategy becomes per-feed, owned by the Writer**, with the Store mapping
-> `layer → location` only (`store.writer(layer, table, strategy)` where strategy
-> is `Refresh()`, `AccumulateByRun(run_id, load_date)`,
-> `AccumulateByRun.from_context(context)`, or `UpsertStrategy(key_columns)`).
-> The **Ingest** profile
-> then flips to *history-upstream / current-gold* — raw + silver accumulate the
-> change-over-time record, gold is reduced to a current **one-row-per-Case**
-> grain (`LatestPerKey` by `case_id` + a uniqueness validator). Selection/Sync/
-> Reporting keep accumulate-by-run gold. See the two ADRs for the rationale and
-> consequences (raw becomes a backed-up system of record; volume grows
-> `records × snapshots`).
+> **Load strategies are explicit.** The Store maps `layer → location` only; each
+> Writer owns its load strategy. Callers choose `Refresh()`,
+> `AccumulateByRun(run_id, load_date)`,
+> `AccumulateByRun.from_context(context)`, or
+> `UpsertStrategy(key_columns)` when asking the Store for a Writer. This supports
+> both current-state hops and accumulated histories without baking a universal
+> layer→strategy rule into the Store (ADR-0006 amendment, ADR-0009).
 
 > **Build status.** The **per-subject `Store`** has landed: `Store(subject_dir)`
 > *mints* that subject's Writers/Readers over its own
@@ -105,13 +98,13 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > passes a shared `RunContext` into handlers, and `Requirement` predicates
 > block stale downstream runs from `RunRegistry` history without changing the
 > builder contract (`FreshnessRequirement` remains as a compatibility adapter)
-> (#61, #77, #242). Still ahead: the value-level schema
-> rules (format / uniqueness / encoding, #24), the domain capstone
-> (CaseType/Variation + CasePool → SelectionPool, #11), and the multi-table feed work
-> (ADR-0006 amendment, ADR-0009): per-feed load strategy (Store maps
-> `layer → location` only), the history-upstream / current-gold Ingest profile,
-> reader column projection, the `LatestPerKey` reduction + one-row-per-Case grain
-> validator, deterministic `case_id`, and Detail Tables.
+> (#61, #77, #242). **Value-level schema rules** have landed:
+> `Nullable` / `NonNull`, `Pattern`, `Length`, `Range`, `Unique`, `OneOf`, plus
+> row checks via `@row_checks(...)`. The domain capstone has landed as the
+> `case_review` application layer (`CaseType` / `Variation`, `CasePool`, and
+> gold ingest helpers), and the multi-table feed work has landed in the current
+> primitives: explicit per-writer load strategies, reader column projection,
+> `DeriveKey`, `LatestPerKey`, `UniqueValidator`, and Detail Table helpers.
 
 ## The primitives
 
@@ -451,19 +444,6 @@ post-validate (schema) → write** (ADR-0008, #23).
   execution is owned by runner/catalog code; the builder materializes each named
   dependency once, logs it as `dependency:<name>`, and joins or anti-joins in
   Python.
-- `TopNPerGroup(key, by, n, ascending=False, tiebreak="case_id")` /
-  `SamplePerGroup(key, n, seed=0, order="case_id")` — reduce each group to at
-  most *N* Cases (CONTEXT.md **Sampling**, #62). `TopNPerGroup` is **ranked**
-  (`n=1` ⇒ "the single highest available per Adviser"), carrying its own sort and
-  a stable `tiebreak` so tied scores rank reproducibly; `SamplePerGroup` is
-  **seeded random** — a pure function of (input, `seed`) that is invariant to
-  incoming row order (ADR-0010). `Sample(n=None, seed=0, order="case_id", *, fraction=None)`
-  is the ungrouped counterpart of `SamplePerGroup` — same seeded, pure,
-  order-invariant draw, but over the whole feed rather than per group, sized by
-  an absolute `n` **or** a `fraction` of the population (exactly one).
-  `TopNPerGroup(key=K, by=B, n=1)` is the
-  structural generalisation of the Ingest reduction `LatestPerKey(key=K, by=B)`,
-  kept separate by domain (Selection narrowing vs current-state reduction).
 
 Full walkthrough + worked example: [processors.md](processors.md).
 

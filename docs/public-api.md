@@ -134,9 +134,10 @@ Moving data across the boundary.
 | Names | What |
 |-------|------|
 | `Processor` | The mid-pipeline transform seam — `Callable[..., Dataset]`: one or more `Dataset`s in (one per wired upstream node), exactly one out. |
-| `Filter`, `Score`, `VectorizedFilter`, `VectorizedDerive`, `Stamp`, `Sort`, `Rename`, `Parse`, `SplitColumn`, `JoinColumns`, `Zfill`, `IntegerText`, `JoinDependency`, `JoinWith`, `AntiJoinWith`, `LatestPerKey`, `SelectColumns`, `DropColumns`, `Unpivot`, `DeriveKey`, `TopNPerGroup`, `Sample`, `SamplePerGroup` | The concrete Selection / Ingest / fan-out transforms. |
+| `Filter`, `Score`, `VectorizedFilter`, `VectorizedDerive`, `Stamp`, `Sort`, `Rename`, `JoinColumns`, `JoinDependency`, `JoinWith`, `AntiJoinWith`, `LatestPerKey`, `SelectColumns`, `DropColumns`, `Unpivot`, `DeriveKey` | The concrete Selection / Ingest / fan-out transforms. |
 | `SchemaCoercion` | The *coerce* half of the schema adapter: casts round-trip-lossy columns (`date` / `datetime` / `bool`) to the declared types — a reshape, so it lives here, not with the schema check. |
 | `CoercionError` | Raised by `SchemaCoercion` on an uncastable value. |
+| `SchemaValueRulePartitioner` | The quarantine partitioner that routes value-rule / row-check rejects aside while preserving good rows for the main path. Usually reached through `Pipeline.quarantine(...)`, but exported for advanced schema/quarantine wiring. |
 
 ### `framework.run` — composing, executing, observing
 
@@ -187,8 +188,9 @@ without notice:
   `SasReader` / `SharePointReader` / `SharePointWriter` (ADR-0004/0005). This lives in
   the `tools` sibling package (above), not a `framework` facade. An advanced extension
   point, documented in [adding-a-feed.md](adding-a-feed.md); not part of the day-to-day surface.
-- `framework.transform.quarantine` (`SchemaValueRulePartitioner`, …) — the
-  value-rule / row-check quarantine partitioner; wired by the schema/quarantine flow.
+- Other helpers inside `framework.transform.quarantine` — implementation details
+  behind the exported `SchemaValueRulePartitioner` and the builder's
+  schema/quarantine flow.
 - `framework._internal.schema` (the `ValueRule` protocol, the `RowCheck` carrier +
   `row_checks` decorator, the Python↔pandas type mapping, and the
   dataclass-annotation reading) — the shared core both schema adapters
