@@ -1,0 +1,7 @@
+brand,channel,case_ref,cust_ref,case_cat_1,case_cat_2,case_cat_3
+Brand A,Web,CR001,CUST01,Motor,Claims,Fraud
+Brand B,Phone,CR002,CUST02,Home,Service,General
+Brand A,Web,CR003,CUST01,Motor,Claims,Fraud
+Brand A,Email,CR004,CUST03,Life,New Business,
+Brand B,Web,CR005,CUST04,Motor,,
+Brand A,Phone,CR006,CUST01,Home,Claims,
