@@ -3,9 +3,8 @@
 This documents the concrete `Processor` primitives in `framework.transform.processors`.
 They fall into two workload families:
 
-- **Selection narrowing** (#9, #62, #166) — `Filter`, `Score`,
-  `VectorizedFilter`, `VectorizedDerive`, `Sort`, `Rename`, `Stamp`, the
-  ungrouped `Sample` and per-group `TopNPerGroup` / `SamplePerGroup`, `JoinWith`,
+- **Selection narrowing** (#9, #166) — `Filter`, `Score`,
+  `VectorizedFilter`, `VectorizedDerive`, `Sort`, `Rename`, `Stamp`, `JoinWith`,
   and `AntiJoinWith`,
   the cross-feed join/exclusion gates that consume explicit read-only
   dependencies. The Selection Pipeline reads the **CasePool**, narrows and ranks
@@ -263,48 +262,13 @@ from framework.transform import Stamp
 Stamp("question_bank_id", variation.question_bank_id)
 ```
 
-## Column shaping — `Parse`, `SplitColumn`, `JoinColumns`, `Zfill`, `IntegerText`
+## Column shaping — `JoinColumns`
 
-Small, general-purpose column transforms for feeds that arrive with packed
-or delimited columns — common when a source system serialises a structured value
-into one text field, drops the leading zeros of a fixed-width identifier, or
-widens an integer column to float across a blank cell. They
-are ordinary `Processor`s (engine-confined, fail-fast) and, like
+Small, general-purpose column transforms for feeds that need a readable
+composite key or output field. They are ordinary `Processor`s
+(engine-confined, fail-fast) and, like
 `SelectColumns`/`DropColumns`, raise `ValueError` naming a missing column rather
 than silently skipping it.
-
-### `Parse` — decode a packed text column through a callable
-
-```python
-from tools.analytics.processors import Parse
-
-Parse("payload")                          # default parser: json.loads
-Parse(["payload", "meta"])                # several columns, same parser
-Parse("activity_date", parser=date.fromisoformat)
-```
-
-Runs every value in the named column(s) through `parser`, replacing each value in
-place. `parser` defaults to `json.loads`, so a JSON-encoded text column becomes
-structured Python values (a `dict`/`list` per row) ready for a downstream reshape
-— but it is any `value -> value` callable, so the same processor decodes ISO
-timestamps, a custom record parser, etc. `columns` is one name or a sequence of
-them.
-
-### `SplitColumn` — fan one delimited column into several
-
-```python
-from framework.transform import SplitColumn
-
-SplitColumn("full_name", ["first", "last"], sep=" ")
-SplitColumn("path", ["head", "rest"], sep="/")     # excess stays in `rest`
-```
-
-Splits the source `column` on `sep` (a literal string, `","` by default) into the
-columns named in `into`, in order. A row with fewer parts leaves the trailing
-destinations `None`; any delimiters past the last destination stay in the final
-column rather than spilling into columns `into` never named. The source column is
-removed once split (`drop=True` default) unless it is itself named in `into` (an
-in-place overwrite); pass `drop=False` to keep it.
 
 ### `JoinColumns` — recombine several columns into one
 
@@ -315,62 +279,13 @@ JoinColumns(["first", "last"], "full_name", sep=" ")
 JoinColumns(["region", "adviser"], "group_key", drop=True)
 ```
 
-The inverse of `SplitColumn`: stringifies each row's `columns` values and joins
-them with `sep` (`","` by default) into the `into` column (new, or an overwrite).
-The source columns are kept by default (`drop=False`) — joining typically adds a
-composite alongside its parts; pass `drop=True` to consume them. It is the
-plain-text sibling of `DeriveKey`, which hashes the joined natural key into a
-deterministic UUID; reach for `JoinColumns` when you want the readable composite
-itself, and `DeriveKey` when you want the stable `case_id`.
-
-### `Zfill` — restore leading zeros to a fixed-width column
-
-```python
-from framework.transform import Zfill
-
-Zfill("account", 8)                       # one column to width 8
-Zfill(["sort_code", "branch"], 4)         # several columns, same width
-```
-
-Left-pads each value in the named column(s) with leading zeros to `width`
-characters — the fix for a feed whose fixed-width identifier (account number,
-sort code, postcode) lost its leading zeros when a source read it as an integer.
-Each value is cast to text first; values already at or beyond `width` pass
-through unchanged, a leading sign stays at the front (`"-1"` → `"-01"`), and
-missing values stay missing. `columns` is one name or a sequence of them.
-
-### `IntegerText` — restore clean integer text to a column widened to float
-
-```python
-from framework.transform import IntegerText
-
-IntegerText("account")                    # one column
-IntegerText(["member_id", "claim_ref"])   # several columns
-```
-
-The fix for the most common storage round-trip surprise. A column of whole
-numbers (an account number, claim reference, member id) that has **any blank
-cell** can't be held as `int64` — pandas promotes the whole column to `float64`
-on read-back — so `1234567890` returns as the float `1234567890.0` and
-stringifies to `"1234567890.0"` rather than the `"1234567890"` you want.
-`IntegerText` casts each named column through pandas' nullable `Int64` (which
-drops the `.0` and keeps blanks as missing) and then to `string`, so every value
-lands as its integer text and missing values stay missing.
-
-A value that is **not** whole (a genuine fractional float) is an error, not a
-silent truncation — the column wasn't the integer it was declared to be, so the
-processor raises rather than rounding. Reach for `Zfill` next when the integer is
-also fixed-width and lost its leading zeros (`IntegerText` then `Zfill` turns
-`1234567890.0` into `"00001234567890"`). `columns` is one name or a sequence of
-them.
-
-> **Note — prevention vs. repair.** When you control the schema, the cleaner fix
-> is to *declare* the column's storage type so it round-trips faithfully (see
-> [`schema-enforcement.md`](schema-enforcement.md); a scaffold seeded from a
-> sample CSV already infers `float` for an otherwise-integer column that carries
-> a blank). `IntegerText` is the in-pipeline repair for the feeds where the float
-> has already happened and you need the integer text downstream — e.g. before a
-> `JoinColumns` composite key or an exported deliverable.
+`JoinColumns` stringifies each row's `columns` values and joins them with `sep`
+(`","` by default) into the `into` column (new, or an overwrite). The source
+columns are kept by default (`drop=False`) — joining typically adds a composite
+alongside its parts; pass `drop=True` to consume them. It is the plain-text
+sibling of `DeriveKey`, which hashes the joined natural key into a deterministic
+UUID; reach for `JoinColumns` when you want the readable composite itself, and
+`DeriveKey` when you want the stable `case_id`.
 
 ## `JoinWith` — explicit cross-feed dependency join
 
@@ -483,84 +398,6 @@ full Selection flow — `CaseType`/`Variation` + `CasePool` → `SelectionPool`,
 stamping the Variation's `question_bank_id` onto the chosen Cases. See
 [`selection.md`](selection.md).
 
-## Narrowing — `TopNPerGroup`, `SamplePerGroup`, and `Sample`
-
-Real selection rules reduce each *group* of Cases to at most *N* — "the single
-highest-scoring available Case per Adviser", or "sample 5 Cases per region" — or
-take a flat sample off the whole pool. Three processors do this (#62; CONTEXT.md
-**Sampling**). They are separate, intention-revealing names — not one `mode=`
-class — in the house style that keeps `Filter` and `Score` apart, and share a
-private draw/cut helper. For the per-group pair, `key` is one or more group
-columns (`str | Sequence[str]`, mirroring `LatestPerKey`): one adviser, or
-Adviser × region; `Sample` takes no key and samples the feed as a whole.
-
-### `TopNPerGroup` — ranked
-
-```python
-from tools.analytics.processors import TopNPerGroup
-
-# the single highest-scoring Case per adviser
-TopNPerGroup(key="adviser", by="score", n=1)
-TopNPerGroup(key=["adviser", "region"], by="score", n=3)   # top-3 per group
-```
-
-It carries its **own** sort (`by`/`ascending`), so it does not depend on a
-preceding `Sort` surviving the grouping, and applies a **stable secondary
-tie-break** on `tiebreak` (default `"case_id"` — every Case has one, ADR-0009),
-so ranked output is **reproducible when scores tie**.
-
-`TopNPerGroup(key=K, by=B, n=1)` is the structural generalisation of the Ingest
-reduction `LatestPerKey(key=K, by=B)` (top-1 per key). They keep separate names
-for separate domains — Selection narrowing vs current-state reduction.
-
-### `SamplePerGroup` — seeded random, pure
-
-```python
-from tools.analytics.processors import SamplePerGroup
-
-SamplePerGroup(key="region", n=5, seed=7)   # 5 Cases per region, reproducibly
-```
-
-It is a **pure function** of (input dataset, `seed`) — ADR-0010. The seed is a
-fixed, configurable constant, *not* derived from `run_id` or the clock: run-to-run
-variation comes from the upstream population shrinking (select-once #60, history
-gates), not from varying the randomness. Each group is ordered by `order`
-(default `"case_id"`) then drawn via a per-group seed from stdlib hashing
-(`hashlib`, stable across Windows/macOS — not the salted builtin `hash`), so the
-draw is **invariant to incoming row order** and each group is independent: same
-set in + same seed ⇒ same sample out. As-of replay (#53) reconstructs the past
-input and re-feeds the same seed to reproduce a past draw.
-
-### `Sample` — ungrouped seeded random, pure
-
-```python
-from tools.analytics.processors import Sample
-
-Sample(n=100, seed=7)          # 100 Cases drawn from the whole feed, reproducibly
-Sample(fraction=0.1, seed=7)   # 10% of the feed, scaling with the population
-```
-
-The **ungrouped** counterpart of `SamplePerGroup`: it samples the feed as a
-single population rather than per group. It shares the same draw and the same
-guarantees — a pure function of (input dataset, `seed`), ordered by `order`
-(default `"case_id"`) before the draw, so it is **invariant to incoming row
-order**: same set in + same seed ⇒ same sample out. Reach for it when there is no
-grouping key — "100 Cases off the whole pool" — and for `SamplePerGroup` when the
-quota is per group.
-
-Size it **either** by an absolute count `n` **or** by a `fraction` of the feed
-(`0 < fraction <= 1`, a proportion not a percent — `0.1` is 10%); exactly one is
-required (passing both, or neither, is a `ValueError`). A `fraction` resolves to
-`round(fraction * len)` rows against the run's **actual** population, so it scales
-with the (already upstream-narrowed) feed — "10% of whatever's available
-tonight" — where a fixed `n` does not.
-
-For all three: a group/feed with fewer than `n` rows passes through whole (no
-error), and an empty feed in yields an empty feed out (consistent with `Filter`).
-The aggregate considered/kept/dropped counts land on the run's `process` step
-(`rows_in`/`rows_out`). Exposing the *per-row* dropped reason ("ranked Kth of M",
-"not drawn") at the cut point for the explainability trace (#53) is a follow-on.
-
 ## Ingest & fan-out processors — multi-table feeds (ADR-0009)
 
 The transforms above narrow the CasePool *into* the SelectionPool. The four
@@ -665,9 +502,7 @@ the CasePool reads. **Tie-break:** when rows for a key share the maximum `by`
 value, the row appearing **last in the input** is kept — deterministic given a
 stable input order (accumulating silver is appended in load order, so the last
 tied row is the most recently appended). A missing `key`/`by` column raises
-`ValueError`. Structurally this is `TopNPerGroup(key, by, n=1)`; the two keep
-separate names for separate domains — Ingest current-state reduction vs Selection
-narrowing.
+`ValueError`.
 
 ### Worked example — fanning one wide feed into a Case table + Detail Table
 

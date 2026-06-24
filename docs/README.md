@@ -164,7 +164,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`Store` / `StoreCatalog`** | `Store(subject_dir)` binds one subject to Writer/Reader creation over `<subject>/{raw,silver,gold}.db`; `StoreCatalog(root).store(subject)` mints those stores from shared root/configuration. Holds no business logic and makes no load decision. ([ADR-0001](adr/0001-sqlite-medallion-store-on-network-share.md)) |
 | **`Validator`** | `validate(dataset) -> None`, **raises** on breach. `ColumnValidator`, `RowCountValidator` (engine-agnostic), `VolumeAnomalyValidator` (trips when a run's volume deviates from its recent-history baseline — catches truncated source exports, #54), `SchemaDriftValidator` (warns at the raw boundary when a feed's columns drift from the prior run's landed set — catches owner-controlled source schema change, #51). Severity (`error`/`warn`) is set where it's attached. |
 | **`Schema` / `SchemaValidator`** | A Case Type **dataclass** whose annotations *are* the column, dtype, nullability, and value-rule contract; the validator is the dataclass→validator adapter, enforced at silver (and optionally gold). Nullability/value rules extend the same dataclass via `Annotated`; cross-field **row checks** attach via the `@row_checks(...)` class decorator. → [schema-enforcement.md](schema-enforcement.md) ([ADR-0008](adr/0008-graduated-schema-enforcement.md)) |
-| **`Processor`** | `process(dataset) -> Dataset`, run mid-pipeline via a named `.task(...)` (`.transform(...)` remains compatible). `SchemaCoercion` (repair storage-lossy types); the Selection transforms `Filter` / `Score` / `VectorizedFilter` / `VectorizedDerive` / `Sort` / `Rename` / `Stamp`, the ungrouped `Sample` and per-group `TopNPerGroup` / `SamplePerGroup`, the explicit-dependency cross-feed `JoinWith` / `AntiJoinWith`; the column-shaping `Parse` / `SplitColumn` / `JoinColumns` / `Zfill` / `IntegerText`; and the Ingest / fan-out transforms `SelectColumns` / `DropColumns` / `Unpivot` / `DeriveKey` / `LatestPerKey`. → [processors.md](processors.md) |
+| **`Processor`** | `process(dataset) -> Dataset`, run mid-pipeline via a named `.task(...)` (`.transform(...)` remains compatible). `SchemaCoercion` (repair storage-lossy types); the Selection transforms `Filter` / `Score` / `VectorizedFilter` / `VectorizedDerive` / `Sort` / `Rename` / `Stamp`, the explicit-dependency cross-feed `JoinWith` / `AntiJoinWith`; the column-shaping `JoinColumns`; and the Ingest / fan-out transforms `SelectColumns` / `DropColumns` / `Unpivot` / `DeriveKey` / `LatestPerKey`. → [processors.md](processors.md) |
 | **Pipeline tasks** | A `Pipeline` is wired from named **tasks**, each returning a node the next consumes: `.read(reader)`, `.task(name, processor)`, `.validate(validator)`, `.write(writer)`, and `.explain(...)`. Order and any fan-in / fan-out are explicit in how nodes are wired — validation, processing, and explicit checkpoint writes land exactly where you place them. |
 | **`Pipeline`** (builder) | The deferred DAG builder: `p = Pipeline(name)`, then wire tasks — `r = p.read(reader, name=...)`, `v = p.task("normalise", processor, r)` or `p.validate(..., r, name=...)`, `p.write(writer, v, name=...)`. It builds one ordered plan; call `.describe()` to inspect it without executing, then `.run(context=…)` to execute fail-fast and atomic with RunLog observability. ([ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md)) |
 | **`RunAddress`** | A stable dependency-target address for a whole Pipeline or a named run step inside one. Labels are `pipeline`, `subject/pipeline`, `pipeline.step`, or `subject/pipeline.step` (for example `pipeline_2.step_4`). The builder records this as `step_address`, and the run registry can query it with `records_for_address(...)`, `has_successful_address(...)`, and `latest_success(...)`. Construct with `RunAddress.pipeline(...)` / `RunAddress.step(...)`, parse with `RunAddress.parse(label)`. Invalid labels raise config-category `RunAddressError`. |
@@ -392,7 +392,6 @@ from framework.transform import (
     Score,
     Sort,
     Stamp,
-    TopNPerGroup,
 )
 
 
@@ -424,12 +423,7 @@ anti = p.task(
     high,
 )
 joined = p.task("join", JoinWith(reference, on="adviser"), anti)  # read-only dependency
-topn = p.task(
-    "top-n",
-    TopNPerGroup(key="adviser", by="priority_score", n=1),
-    joined,
-)
-ranked = p.task("sort", Sort("priority_score", ascending=False), topn)
+ranked = p.task("sort", Sort("priority_score", ascending=False), joined)
 stamped = p.task(
     "stamp",
     Stamp("question_bank_id", variation.question_bank_id),
