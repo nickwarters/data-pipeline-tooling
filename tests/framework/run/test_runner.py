@@ -18,6 +18,7 @@ from framework.run.runner import (
     PipelineRunner,
     RunContext,
     UnknownPipelineError,
+    run_pipeline,
 )
 from tools.observability.run_log import RunLog
 from tools.observability.run_registry import RunRegistry
@@ -233,6 +234,44 @@ def test_runner_registers_and_runs_handler_by_subject_and_pipeline(tmp_path):
     registry = RunRegistry(tmp_path / "_registry" / "runs.db")
     (run,) = registry.query_runs(pipeline="cases/ingest")
     assert run["status"] == "ok"
+
+
+def test_run_context_carries_explicit_params():
+    context = RunContext(params={"source_file": "/share/upstream/claims/a.csv"})
+
+    assert context.params == {"source_file": "/share/upstream/claims/a.csv"}
+
+
+def test_run_pipeline_passes_params_to_handler_and_records_safe_diagnostics(tmp_path):
+    seen = []
+
+    def handler(context):
+        seen.append(context.params)
+        return Dataset.from_pandas(pd.DataFrame({"id": [1]}))
+
+    run_pipeline(
+        handler,
+        "ingest",
+        tmp_path,
+        run_date=dt.date(2026, 6, 22),
+        params={
+            "source_file": "/share/upstream/claims/claims_20260622_a.csv",
+            "api_secret": "super-secret-token",
+        },
+    )
+
+    assert seen == [
+        {
+            "source_file": "/share/upstream/claims/claims_20260622_a.csv",
+            "api_secret": "super-secret-token",
+        }
+    ]
+    log_records = _records(tmp_path / "_runs" / "ingest.log")
+    run_summary = [record for record in log_records if record["step"] == "run"][-1]
+    assert run_summary["params"] == {
+        "source_file": "/share/upstream/claims/claims_20260622_a.csv",
+        "api_secret": "<redacted>",
+    }
 
 
 def test_runner_context_correlates_logs_registry_and_accumulated_rows(tmp_path):

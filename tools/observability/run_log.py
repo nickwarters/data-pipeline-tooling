@@ -128,6 +128,7 @@ class RunLog:
         warn_hits: list[str] | None = None,
         committed: bool = False,
         step_address: str | None = None,
+        params: dict[str, str] | None = None,
     ) -> None:
         """Append one JSONL record and echo a human-readable line to the console."""
         record = {
@@ -152,6 +153,8 @@ class RunLog:
             # explain / checkpoint). Independently committed evidence — it stays
             # on disk even if a *later* step aborts the run (ADR-0007 amd 03).
             "committed": committed,
+            # Run parameters are recorded only after caller-side redaction.
+            "params": params or {},
         }
         self._path.parent.mkdir(parents=True, exist_ok=True)
         with self._path.open("a", encoding="utf-8") as fh:
