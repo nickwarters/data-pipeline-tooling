@@ -22,6 +22,7 @@ from framework.core.protocols import Writer
 from framework.io.sql import quote_identifier
 from framework.io.strategy import (
     AccumulateByRun,
+    InsertOrIgnore,
     Refresh,
     UpsertStrategy,
 )
@@ -45,7 +46,7 @@ __all__ = [
 
 def _frame_for_strategy(
     dataset: Dataset,
-    strategy: Refresh | AccumulateByRun | UpsertStrategy,
+    strategy: Refresh | AccumulateByRun | InsertOrIgnore | UpsertStrategy,
     read_existing: Callable[[], pd.DataFrame],
 ) -> pd.DataFrame:
     frame = dataset.to_pandas()
@@ -57,6 +58,13 @@ def _frame_for_strategy(
         existing = read_existing()
         if len(existing) > 0 and "run_id" in existing.columns:
             existing = existing[existing["run_id"] != strategy.run_id]
+        return pd.concat([existing, frame], ignore_index=True)
+    if isinstance(strategy, InsertOrIgnore):
+        # Files carry no table constraints, so every incoming row is appended —
+        # equivalent to a plain append, matching SQLite's no-constraint behaviour.
+        existing = read_existing()
+        if len(existing) == 0:
+            return frame
         return pd.concat([existing, frame], ignore_index=True)
     raise TypeError(f"Unsupported load strategy: {type(strategy).__name__}")
 
@@ -77,13 +85,15 @@ class CsvWriter:
 
     Owns its target file and load strategy. ``Refresh`` overwrites the file with
     the current dataset; ``AccumulateByRun`` rewrites the file after replacing
-    only that logical run's stamped rows.
+    only that logical run's stamped rows; ``InsertOrIgnore`` appends incoming
+    rows to the existing file (files carry no constraints, so no rows are
+    ignored — equivalent to a plain append).
     """
 
     def __init__(
         self,
         path: str | os.PathLike[str],
-        strategy: Refresh | AccumulateByRun,
+        strategy: Refresh | AccumulateByRun | InsertOrIgnore,
     ) -> None:
         self._path = Path(path)
         self._strategy = strategy
@@ -108,7 +118,7 @@ class ExcelWriter:
     def __init__(
         self,
         path: str | os.PathLike[str],
-        strategy: Refresh | AccumulateByRun,
+        strategy: Refresh | AccumulateByRun | InsertOrIgnore,
         sheet: str = "Sheet1",
     ) -> None:
         self._path = Path(path)
@@ -136,7 +146,7 @@ class JsonWriter:
     def __init__(
         self,
         path: str | os.PathLike[str],
-        strategy: Refresh | AccumulateByRun,
+        strategy: Refresh | AccumulateByRun | InsertOrIgnore,
     ) -> None:
         self._path = Path(path)
         self._strategy = strategy

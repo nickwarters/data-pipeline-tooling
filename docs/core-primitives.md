@@ -246,13 +246,15 @@ Deliverables and SQLite tables:
   declares `key_columns`), not constraint-driven (no table constraints are
   required). Minted by `Store.writer(layer, table, InsertIfAbsent(key_columns))`.
 
-The file Writers accept the same explicit strategy objects as Store-minted
-Writers: `Refresh()` overwrites the file; `AccumulateByRun(...)` reads any
+The file Writers accept `Refresh()`, `AccumulateByRun(...)`, and `InsertOrIgnore()`
+strategies: `Refresh()` overwrites the file; `AccumulateByRun(...)` reads any
 existing file, replaces rows for that logical run, stamps the new rows, and
-rewrites the file. Round-tripping through matching Readers is stable for CSV and
-Excel at the Dataset shape level; exact pandas dtype inference can still differ
-after a file round-trip, so schema-sensitive flows should continue to validate
-after reading.
+rewrites the file; `InsertOrIgnore()` appends incoming rows to the existing file
+(files carry no table constraints, so no rows are ignored — equivalent to a plain
+append). Round-tripping through matching Readers is stable for CSV and Excel at
+the Dataset shape level; exact pandas dtype inference can still differ after a
+file round-trip, so schema-sensitive flows should continue to validate after
+reading.
 
 ### `Store` / `StoreCatalog` — subject medallions, minted from shared configuration
 `Store(subject_dir, busy_timeout_ms=5000)` is the mouth of **one subject's**
