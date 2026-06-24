@@ -2,7 +2,7 @@
 
 import pytest
 
-from framework.io.strategy import AccumulateByRun, Refresh, UpsertStrategy
+from framework.io.strategy import AccumulateByRun, InsertOrIgnore, Refresh, UpsertStrategy
 
 
 def test_refresh_is_a_value_type_with_no_required_args():
@@ -41,3 +41,10 @@ def test_upsert_strategy_is_a_value_type():
     assert hash(UpsertStrategy("id")) == hash(UpsertStrategy(("id",)))
     assert UpsertStrategy(("a", "b")) == UpsertStrategy(("a", "b"))
     assert UpsertStrategy("a") != UpsertStrategy("b")
+
+
+def test_insert_or_ignore_is_a_value_type_with_no_required_args():
+    s = InsertOrIgnore()
+    assert isinstance(s, InsertOrIgnore)
+    assert s == InsertOrIgnore()
+    assert hash(s) == hash(InsertOrIgnore())

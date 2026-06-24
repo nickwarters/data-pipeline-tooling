@@ -20,7 +20,7 @@ from framework._internal.describe import render
 from framework.core.dataset import Dataset
 from framework.core.protocols import Writer
 from framework.io.sql import quote_identifier
-from framework.io.strategy import AccumulateByRun, Refresh, UpsertStrategy
+from framework.io.strategy import AccumulateByRun, InsertOrIgnore, Refresh, UpsertStrategy
 
 # ``Writer`` is imported only to be re-exported through ``framework.io``; listing
 # it in ``__all__`` marks it as intentional public surface so lint won't strip it.
@@ -34,6 +34,7 @@ __all__ = [
     "QuarantineWriter",
     "SqliteUpsertWriter",
     "AccumulateByRunWriter",
+    "SqliteInsertOrIgnoreWriter",
 ]
 
 
@@ -342,6 +343,62 @@ class SqliteUpsertWriter:
             table=self._table,
             key_columns=list(self._key_columns),
         )
+
+
+class SqliteInsertOrIgnoreWriter:
+    """A Writer that appends new rows and silently skips conflicting ones.
+
+    Uses SQLite's ``INSERT OR IGNORE`` so any row that would violate an
+    existing constraint (PRIMARY KEY, UNIQUE, NOT NULL, CHECK) on the target
+    table is discarded without raising an error.  Rows that do not conflict are
+    appended.  Target rows absent from the incoming batch are never touched.
+
+    When the target table carries no constraints every incoming row is appended,
+    which is equivalent to a plain append.
+    """
+
+    def __init__(
+        self,
+        db_path: str | os.PathLike[str],
+        table: str,
+        busy_timeout_ms: int = 5000,
+    ) -> None:
+        self._db_path = Path(db_path)
+        self._table = table
+        self._busy_timeout_ms = busy_timeout_ms
+        self._staging = f"_insert_or_ignore_stage_{table}"
+
+    def write(self, dataset: Dataset) -> None:
+        frame = dataset.to_pandas()
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        con = connect(self._db_path, self._busy_timeout_ms)
+        try:
+            table = quote_identifier(self._table)
+            staging = quote_identifier(self._staging)
+            col_list = ", ".join(quote_identifier(c) for c in frame.columns)
+
+            # Write incoming rows to a scratch staging table so we can drive
+            # the INSERT OR IGNORE via a single SELECT rather than row-by-row.
+            frame.to_sql(self._staging, con, if_exists="replace", index=False)
+
+            # Ensure the target table exists with the right schema before
+            # inserting.  "append" on an empty frame is a DDL no-op when the
+            # table already exists, or creates it without constraints when it
+            # doesn't.
+            frame.iloc[:0].to_sql(self._table, con, if_exists="append", index=False)
+
+            con.execute(
+                f"INSERT OR IGNORE INTO {table} ({col_list}) "
+                f"SELECT {col_list} FROM {staging}"
+            )
+            con.commit()
+
+            con.execute(f"DROP TABLE IF EXISTS {staging}")
+        finally:
+            con.close()
+
+    def describe(self) -> str:
+        return render(self, db_path=str(self._db_path), table=self._table)
 
 
 class AccumulateByRunWriter:

@@ -51,8 +51,8 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > **Load strategies are explicit.** The Store maps `layer → location` only; each
 > Writer owns its load strategy. Callers choose `Refresh()`,
 > `AccumulateByRun(run_id, load_date)`,
-> `AccumulateByRun.from_context(context)`, or
-> `UpsertStrategy(key_columns)` when asking the Store for a Writer. This supports
+> `AccumulateByRun.from_context(context)`, `UpsertStrategy(key_columns)`, or
+> `InsertOrIgnore()` when asking the Store for a Writer. This supports
 > both current-state hops and accumulated histories without baking a universal
 > layer→strategy rule into the Store (ADR-0006 amendment, ADR-0009).
 
@@ -181,7 +181,7 @@ directions are explicit:
 | CSV file | `CsvReader`, `GlobCsvReader` | `CsvWriter` | `CsvWriter(path, strategy)` emits one CSV file; `GlobCsvReader` is read-only because many inbound files together form one logical snapshot. |
 | Excel file | `ExcelReader` | `ExcelWriter` | Both target one worksheet (`sheet=...`). |
 | JSON file | _intentionally absent_ | `JsonWriter` | JSON is currently a Reporting Deliverable format only; no inbound JSON Feed has been needed yet. |
-| SQLite table | `SqliteReader` | `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter` | The Store mints these over medallion layer databases. |
+| SQLite table | `SqliteReader` | `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `SqliteInsertOrIgnoreWriter` | The Store mints these over medallion layer databases. |
 | SAS extract | `SasReader` | _intentionally absent_ | SAS is an inbound-only remote source; the framework lands the remote output then reads local CSV files. |
 | SharePoint list | `SharePointReader` | `SharePointWriter` | Target is **SE on-prem**. Both sides are stubbed behind swappable `SharePointFetcher` / `SharePointPusher` seams until the on-prem SE client (NTLM/Kerberos/REST) lands. `SharePointWriter` emits the canonical Selection Deliverable — one list per Case Type. |
 | Console (stdout) | _intentionally absent_ | `StdoutWriter` | A terminal sink for *seeing* a result rather than persisting it — e.g. printing a Selection explainer's per-Case trace while driving a feed by hand. Owns no location or load strategy; prints the dataset as a plain-text table to the stream (defaulting to `sys.stdout`). |
@@ -226,6 +226,13 @@ Deliverables and SQLite tables:
   transaction. Minted by `Store.writer(layer, table, UpsertStrategy(...))`.
   Useful for a table that holds the **current state of a keyed entity**, e.g.
   `active_cases` keyed on `case_id`.
+- `SqliteInsertOrIgnoreWriter(db_path, table)` — **insert-or-ignore**: appends
+  incoming rows and silently discards any row that would violate an existing
+  constraint (PRIMARY KEY, UNIQUE, NOT NULL, CHECK) on the target table.
+  Rows that do not conflict are appended; target rows absent from the batch are
+  never touched. Conflict resolution is driven by the table's own constraints —
+  when the table carries no constraints the behaviour is equivalent to a plain
+  append. Minted by `Store.writer(layer, table, InsertOrIgnore())`.
 
 The file Writers accept the same explicit strategy objects as Store-minted
 Writers: `Refresh()` overwrites the file; `AccumulateByRun(...)` reads any
@@ -243,9 +250,9 @@ It holds **no business logic** (ADR-0002) and makes **no** load decision
 (ADR-0003 amendment) — it merely mints the layer-appropriate component:
 
 - `store.writer(layer, table, strategy)` — mints a Writer over the chosen layer
-  using the caller's explicit `Refresh()`, `AccumulateByRun(...)`, or
-  `UpsertStrategy(...)` strategy. Context-driven accumulation uses
-  `AccumulateByRun.from_context(context)`.
+  using the caller's explicit `Refresh()`, `AccumulateByRun(...)`,
+  `UpsertStrategy(...)`, or `InsertOrIgnore()` strategy. Context-driven
+  accumulation uses `AccumulateByRun.from_context(context)`.
 - `store.reader(layer, table)` — a `SqliteReader` over the same file.
 
 Layer names are validated through `RAW`, `SILVER`, `GOLD` / `Layer`; existing
