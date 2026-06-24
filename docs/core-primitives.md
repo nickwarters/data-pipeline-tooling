@@ -758,6 +758,49 @@ run/logical identity, or should fail independently. Use a multi-file Reader
 instead when many files together are one logical Feed snapshot that should be
 read, validated, and written as a single `Dataset` under one logical run id.
 
+### `DatedFileDiscovery` — source-artifact discovery for dated-file catch-up
+`DatedFileDiscovery` (`tools.discovery`) finds source files whose filenames
+encode a business date and turns them into `SourceArtifact` value objects,
+each carrying `path`, `business_date`, and a stable `file_id` (the filename).
+It is an orchestration concern, not a reader concern: each artifact is its own
+logical run with its own retry boundary and idempotency key.
+
+```python
+from tools.discovery import DatedFileDiscovery, SourceArtifact
+from tools.orchestration import ForEach
+
+files = DatedFileDiscovery(
+    directory="/share/upstream/claims",
+    pattern="claims_{date:%Y%m%d}_*.csv",
+).available_between(last_successful_source_date, run_date)
+
+def pipeline_builder(artifact: SourceArtifact, context: RunContext) -> Pipeline:
+    ...
+
+ForEach(
+    files,
+    pipeline_builder,
+    logical_run_id=lambda a, _i, _c: f"claims:ingest:{a.file_id}",
+).run(context)
+```
+
+`available_between(start, end)` returns artifacts where
+`start < business_date <= end`. Pass the last successfully processed source
+date as *start* and the current run date as *end* to discover exactly the
+un-processed dates since the last successful run. Results are sorted
+deterministically by `(business_date, path)` across Windows and macOS.
+
+The `{date:FORMAT}` placeholder uses `strptime` format codes; `*` is a
+wildcard for any other filename segment. Constructing a `DatedFileDiscovery`
+with a pattern missing `{date:...}` raises `ValueError` immediately.
+
+**Decision rule — reader vs orchestration concern:**
+
+| Shape | Use |
+|---|---|
+| Many files are one logical batch (one `Dataset`, one logical run id) | `GlobCsvReader(directory, pattern)` |
+| Each file is its own logical run (own run history, retry, idempotency) | `DatedFileDiscovery` + `ForEach` |
+
 ### `RunAddress` — dependency labels for Pipelines and steps
 `RunAddress` (`framework.run`) is the public value object for naming dependency
 targets without coupling orchestration code to a future registry schema. It can

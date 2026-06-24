@@ -217,6 +217,18 @@ original exception for failed items. Do **not** use it for many files that
 together form one Feed snapshot; that is a multi-file Reader returning one
 `Dataset`.
 
+**Dated-file discovery** (`tools.discovery`):
+Source-artifact discovery for dated-file catch-up, modelled as an orchestration
+concern (not a Reader). _Here_: `DatedFileDiscovery(directory, pattern)` scans
+a directory for files whose names encode a business date using a
+`{date:FORMAT}` placeholder (e.g. `"claims_{date:%Y%m%d}_*.csv"`).
+`.available_between(start, end)` returns `SourceArtifact` value objects —
+each with `path`, `business_date`, and a stable `file_id` — for every file
+where `start < business_date <= end`, sorted deterministically by
+`(business_date, path)`. Pair with `ForEach` when each file needs its own run
+history, retry boundary, and idempotency key. Use `GlobCsvReader` instead when
+all matched files together form one logical Feed snapshot.
+
 **Scheduled orchestration**:
 The framework-level coordinator that decides which registered domain Pipelines
 are due for a run date. _Here_: an `Orchestrator` owns one or more
