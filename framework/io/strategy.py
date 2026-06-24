@@ -5,7 +5,7 @@ feed, independent of which medallion layer it targets. The Store resolves only
 the *location* (which ``<subject>/<layer>.db``); the Writer owns both location
 and strategy.
 
-Three strategies exist:
+Four strategies exist:
 
 - :class:`Refresh` — truncate + reload each run; the table mirrors the current
   source snapshot after every run.
@@ -15,6 +15,10 @@ Three strategies exist:
 - :class:`UpsertStrategy` — merge incoming rows into the target by a declared
   key set: matching keys are replaced, new keys are inserted, unmatched target
   rows are preserved.
+- :class:`InsertOrIgnore` — append new rows; silently skip any row that
+  conflicts with an existing constraint on the target table (PRIMARY KEY,
+  UNIQUE, etc.). The conflict resolution is driven by the table's own
+  constraints, not by the strategy.
 """
 
 from __future__ import annotations
@@ -92,3 +96,19 @@ class UpsertStrategy:
 
     def __repr__(self) -> str:
         return f"UpsertStrategy(key_columns={self.key_columns!r})"
+
+
+@dataclass(frozen=True)
+class InsertOrIgnore:
+    """Append new rows; silently skip rows that conflict with existing constraints.
+
+    Uses SQLite's ``INSERT OR IGNORE`` so any row that would violate a
+    PRIMARY KEY, UNIQUE, NOT NULL, or CHECK constraint on the target table is
+    silently discarded rather than raising an error.  Rows that do not conflict
+    are appended.  Target rows that are not in the incoming batch are never
+    touched.
+
+    Conflict resolution is driven by the target table's own constraints, not by
+    this strategy.  When the table carries no constraints every incoming row is
+    appended (equivalent to a plain append).
+    """
