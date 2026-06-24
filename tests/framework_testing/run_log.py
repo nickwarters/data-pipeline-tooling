@@ -50,6 +50,7 @@ class RecordingRunLog(RunLog):
             "run_id": run_id,
             "pipeline": pipeline,
             "step": step,
+            "step_address": fields.get("step_address"),
             "status": status,
             "rows_in": fields.get("rows_in"),
             "rows_out": fields.get("rows_out"),
@@ -64,6 +65,10 @@ class RecordingRunLog(RunLog):
     def records_for_step(self, step: str) -> list[dict[str, Any]]:
         """Every captured record for the named step, in execution order."""
         return [r for r in self.records if r["step"] == step]
+
+    def records_for_address(self, address: str) -> list[dict[str, Any]]:
+        """Every captured record for the stable step address, in execution order."""
+        return [r for r in self.records if r["step_address"] == address]
 
     @property
     def warn_hits(self) -> list[str]:

@@ -24,9 +24,14 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from framework._internal.connection import connect
+
+if TYPE_CHECKING:
+    from framework.run.address import RunAddress
 
 
 class RunRegistry:
@@ -48,6 +53,7 @@ class RunRegistry:
                 run_id           TEXT NOT NULL,
                 pipeline         TEXT,
                 step             TEXT NOT NULL,
+                step_address     TEXT,
                 step_ordinal     INTEGER NOT NULL,
                 status           TEXT,
                 rows_in          INTEGER,
@@ -70,6 +76,20 @@ class RunRegistry:
         existing = {row[1] for row in con.execute("PRAGMA table_info(run_records)")}
         if "committed" not in existing:
             con.execute("ALTER TABLE run_records ADD COLUMN committed INTEGER")
+        if "step_address" not in existing:
+            con.execute("ALTER TABLE run_records ADD COLUMN step_address TEXT")
+        con.execute(
+            """
+            UPDATE run_records
+            SET step_address = CASE
+                WHEN step = 'run' THEN pipeline
+                ELSE pipeline || '.' || step
+            END
+            WHERE step_address IS NULL
+              AND pipeline IS NOT NULL
+              AND step IS NOT NULL
+            """
+        )
         con.execute(
             """
             CREATE TABLE IF NOT EXISTS ingest_progress (
@@ -190,16 +210,18 @@ class RunRegistry:
                 cur = con.execute(
                     """
                     INSERT OR IGNORE INTO run_records (
-                        timestamp, run_id, pipeline, step, step_ordinal, status,
-                        rows_in, rows_out, rows_quarantined, rows_excluded,
-                        duration, errors, error_category, warn_hits, committed
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        timestamp, run_id, pipeline, step, step_address,
+                        step_ordinal, status, rows_in, rows_out,
+                        rows_quarantined, rows_excluded, duration, errors,
+                        error_category, warn_hits, committed
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         rec.get("timestamp"),
                         rec["run_id"],
                         rec.get("pipeline"),
                         rec["step"],
+                        _step_address(rec),
                         ordinal,
                         rec.get("status"),
                         rec.get("rows_in"),
@@ -252,6 +274,66 @@ class RunRegistry:
             params.append(status)
         where = "WHERE " + " AND ".join(clauses) + " ORDER BY timestamp, rowid"
         return self._select(where, tuple(params))
+
+    def records_for_address(self, address: str) -> list[dict]:
+        """Every record for a stable pipeline/step address, oldest first."""
+        return self._select(
+            "WHERE step_address = ? ORDER BY timestamp, rowid", (address,)
+        )
+
+    def has_successful_address(self, address: str) -> bool:
+        """Whether the address has at least one successful ingested record."""
+        con = self._connect()
+        try:
+            row = con.execute(
+                """
+                SELECT 1 FROM run_records
+                WHERE step_address = ? AND status = 'ok'
+                LIMIT 1
+                """,
+                (address,),
+            ).fetchone()
+            return row is not None
+        finally:
+            con.close()
+
+    def latest_success(
+        self,
+        address: "RunAddress | str",
+        *,
+        on: date | None = None,
+        on_or_after: date | None = None,
+    ) -> dict | None:
+        """Latest successful record for a pipeline or step address.
+
+        Date filters are based on the run-log record ``timestamp`` date.
+        Whole-pipeline addresses match the ``run`` summary record; step/task
+        addresses match successful non-``run`` records for that step.
+        """
+        from framework.run.address import RunAddress
+
+        if on is not None and on_or_after is not None:
+            raise ValueError("Pass either on or on_or_after, not both")
+        target = RunAddress.parse(address) if isinstance(address, str) else address
+        clauses = ["step_address = ?", "status = 'ok'"]
+        params: list[object] = [target.label]
+        if target.step is None:
+            clauses.append("step = 'run'")
+        else:
+            clauses.append("step != 'run'")
+        if on is not None:
+            clauses.append("timestamp >= ? AND timestamp < ?")
+            params.extend((_start_of_day(on), _start_of_next_day(on)))
+        if on_or_after is not None:
+            clauses.append("timestamp >= ?")
+            params.append(_start_of_day(on_or_after))
+        rows = self._select(
+            "WHERE "
+            + " AND ".join(clauses)
+            + " ORDER BY timestamp DESC, rowid DESC LIMIT 1",
+            tuple(params),
+        )
+        return rows[0] if rows else None
 
     def runs_that_warned(self) -> list[dict]:
         """Run summaries that tolerated a warn-severity breach, oldest first.
@@ -339,3 +421,24 @@ def _row_to_record(row: dict) -> dict:
     # caller reads the same bool the RunLog wrote.
     row["committed"] = bool(row.get("committed"))
     return row
+
+
+def _start_of_day(value: date) -> str:
+    return datetime.combine(value, datetime.min.time()).isoformat()
+
+
+def _start_of_next_day(value: date) -> str:
+    return datetime.combine(value + timedelta(days=1), datetime.min.time()).isoformat()
+
+
+def _step_address(rec: dict) -> str | None:
+    address = rec.get("step_address")
+    if address:
+        return address
+    pipeline = rec.get("pipeline")
+    step = rec.get("step")
+    if not pipeline or not step:
+        return None
+    if step == "run":
+        return pipeline
+    return f"{pipeline}.{step}"

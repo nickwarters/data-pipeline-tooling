@@ -42,7 +42,8 @@ run store directly and need neither.)
 
 ```sh
 python -m cli run pipelines/<name> <base_dir> \
-    [--run-date YYYY-MM-DD] [--logical-run-id ID] [--freshness-days N]
+    [--run-date YYYY-MM-DD] [--logical-run-id ID] [--freshness-days N] \
+    [--param KEY=VALUE ...]
 ```
 
 Imports `pipelines.<name>.pipeline` and runs its `run(context)` callable, after
@@ -78,6 +79,33 @@ The second invocation replaces the first run's rows in the SelectionPool (the
 `run_id` / `logical_run_id` columns hold `2026-05-correction`); the row count
 stays stable instead of doubling.
 
+### Passing run parameters — `--param`
+
+Pass one or more `--param KEY=VALUE` entries when a path-addressed pipeline
+needs an explicit run input without discovering it internally. The parameters
+arrive as `context.params`:
+
+```console
+$ python -m cli run pipelines/claims /data \
+    --run-date 2026-06-22 \
+    --logical-run-id claims:ingest:20260622:claims_20260622_a.csv \
+    --param source_file=/share/upstream/claims/claims_20260622_a.csv
+```
+
+```python
+from framework.io import CsvReader
+from framework.run import RunContext
+
+
+def run(context: RunContext):
+    source_file = context.params["source_file"]
+    return raw_builder(CsvReader(source_file), writer).run(context=context)
+```
+
+Run parameters are recorded on the run summary in the JSONL run log for
+diagnosis; values whose keys look sensitive, such as `password`, `secret`,
+`token`, `credential`, or `key`, are redacted by default.
+
 ## `orchestrate` — run scheduled due work
 
 ```sh
@@ -101,11 +129,16 @@ provides `Weekdays`, `SpecificWeekdays`, `DayOfMonth`,
 is the normal "daily" schedule; weekends and holidays are evaluated by
 `WorkingDayCalendar`.
 
-Dependencies are freshness-based. A scheduled downstream runs through
-`PipelineRunner` only when its declared upstreams have successful history fresh
-enough for the run date. A failed scheduled item is terminal for that
-orchestrator invocation; its downstream dependants are marked `blocked`, while
-independent pipelines in the same set and all other `PipelineSet`s continue.
+Dependencies are requirement-based. A scheduled downstream runs through
+`PipelineRunner` only when its declared `Requirement` predicates, or legacy
+`FreshnessRequirement` dependencies, have successful upstream history fresh
+enough for the run date. Requirements can target a whole Pipeline or a task-level
+`RunAddress`, for example
+`Requirement.succeeded(RunAddress.task("pipeline-2", "step-4", subject="case-a")).within_days(7)`.
+A failed scheduled item is terminal for that orchestrator invocation; its
+downstream dependants are marked `blocked`, while independent pipelines in the
+same set and all other `PipelineSet`s continue. Blocked decisions include the
+stale, missing, or failed upstream reason in `<base>/_orchestration/runs.db`.
 
 ```console
 $ python -m cli orchestrate /data --app my_app.pipelines --run-date 2026-05-29 --once

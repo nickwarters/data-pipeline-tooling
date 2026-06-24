@@ -80,8 +80,9 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > dtypes, composed onto the raw→silver pipeline as a post-validator so a
 > breach aborts before silver is written (ADR-0008;
 > [schema-enforcement doc](schema-enforcement.md)). **Coercion between raw and
-> silver** has landed: a `Processor` seam runs as a transform
-> step, and `SchemaCoercion` casts the schema's round-trip-lossy types (dates,
+> silver** has landed: a `Processor` seam runs as a task
+> (compatible with the existing transform builder vocabulary), and
+> `SchemaCoercion` casts the schema's round-trip-lossy types (dates,
 > booleans) ahead of the validator so a date/bool schema survives the round-trip
 > (ADR-0008, #23). **Gold accumulation** has landed: a gold hop
 > carries validated silver into gold via the `AccumulateByRunWriter`, stamping each
@@ -101,9 +102,10 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > time, surfacing warned (incl. schema-drift) runs (ADR-0005/0007, #52;
 > [run-log-format doc](run-log-format.md)). **The thin Pipeline runner** has
 > landed: `PipelineRunner` dispatches domain Pipelines by `(case_type, pipeline)`,
-> passes a shared `RunContext` into handlers, and `FreshnessRequirement` blocks
-> stale downstream runs from `RunRegistry` history without changing the builder
-> contract (#61, #77). Still ahead: the value-level schema
+> passes a shared `RunContext` into handlers, and `Requirement` predicates
+> block stale downstream runs from `RunRegistry` history without changing the
+> builder contract (`FreshnessRequirement` remains as a compatibility adapter)
+> (#61, #77, #242). Still ahead: the value-level schema
 > rules (format / uniqueness / encoding, #24), the domain capstone
 > (CaseType/Variation + CasePool → SelectionPool, #11), and the multi-table feed work
 > (ADR-0006 amendment, ADR-0009): per-feed load strategy (Store maps
@@ -377,7 +379,7 @@ silver — so the ADR-0008 convention is visible in the pipeline like any other 
 ```python
 p = Pipeline("cases")
 raw = p.read(store.reader("raw", "cases"), name="read")
-coerced = p.transform(SchemaCoercion(CaseA), raw, name="coerce")
+coerced = p.task("coerce", SchemaCoercion(CaseA), raw)
 validated = p.validate(SchemaValidator(CaseA), coerced, name="post-validate")
 p.write(store.writer("silver", "cases", Refresh()), validated, name="write")
 p.run()   # coerces, validates, then writes silver.db
@@ -403,7 +405,9 @@ single-input reshape, or a fan-in (e.g. an in-DAG join) over several branches:
 Unlike the structural validators it is **engine-confined** — a transform needs
 the engine's vectorised operations, so it reaches the frame via
 `to_pandas()`/`from_pandas()` exactly as a Reader/Writer does (ADR-0002). It is
-attached with `.transform(...)` and runs as the builder's `process` step. A
+attached with `.task(name, processor, ...)` and runs as a named task. The older
+`.transform(processor, ..., name=...)` spelling remains supported and uses the
+same execution path. A
 processor has **no severity**: a transform either applies or it can't, so a
 failure is always fail-fast (ADR-0007) — it raises and the run aborts.
 
@@ -502,6 +506,11 @@ registry.query_runs(pipeline="cases", status="error")  # narrow by pipeline/stat
 registry.latest_run_per_pipeline()                     # one row per pipeline
 registry.runs_that_warned()                            # tolerated warns (incl. drift)
 registry.records_for_run(run_id)                       # every step of one run
+registry.latest_success(RunAddress.pipeline("cases"), on=date(2026, 6, 23))
+registry.latest_success(
+    RunAddress.task("pipeline_2", "step_4"),
+    on_or_after=date(2026, 6, 16),
+)
 registry.recent_row_counts("cases", limit=10)          # read volumes, newest first
 ```
 
@@ -512,6 +521,11 @@ registry.recent_row_counts("cases", limit=10)          # read volumes, newest fi
 - **Queryable by `run_id`, pipeline, status, and time.** Ordering is by the
   record `timestamp`; "row counts over time" is `query_runs(pipeline=…)` read in
   order.
+- **Latest success queries accept `RunAddress` labels.** A whole-pipeline
+  address uses the successful `step="run"` summary record. A task/step address
+  uses successful non-`run` step records with the matching `step_address`.
+  `on=...` and `on_or_after=...` filter by the run-log record's emitted
+  `timestamp` date; they do not yet use a separate business/load date.
 - It is a **query store, not a `Dataset` carrier**, so it stays stdlib-only
   (`json` + `sqlite3`) and never names pandas. It opens through the same
   `connect` factory and honours the single-writer / rollback-journal conventions
@@ -530,13 +544,13 @@ Reading the JSONL needs no change to the emitter (ADR-0007); the one format
 addition this slice made is the per-record `timestamp` (run-log-format.md), the
 time dimension the registry orders by.
 
-### `PipelineRunner` — thin domain orchestration + freshness guard
+### `PipelineRunner` — thin domain orchestration + requirement guard
 `PipelineRunner` (`framework.run.runner`) is the minimal orchestration layer above
 the builder. It registers domain Pipelines by `(case_type, pipeline)` and runs
 one requested Pipeline by name, without changing the builder contract:
 
 ```python
-from framework.run import FreshnessRequirement, PipelineRunner
+from framework.run import PipelineRunner, Requirement, RunAddress
 
 runner = PipelineRunner()
 runner.register("cases", "ingest", run_ingest)
@@ -544,15 +558,20 @@ runner.register(
     "cases",
     "selection",
     run_selection,
-    freshness=(FreshnessRequirement(upstream_pipeline="ingest"),),
+    freshness=(
+        Requirement.succeeded(RunAddress.pipeline("ingest", subject="cases"))
+        .same_day()
+        .on_first_run("block"),
+    ),
 )
 
 runner.run("cases", "selection", "/path/to/share", run_date=date(2026, 5, 29))
 ```
 
 Handlers receive a `RunContext` carrying `base_dir`, `case_type`, `pipeline`,
-`run_date`, `load_date`, `execution_id`, `logical_run_id`, the runner-level
-`RunLog`, the `RunRegistry`, and `freshness_days`. `execution_id` is the concrete
+`run_date`, `load_date`, `execution_id`, `logical_run_id`, a string
+`params` mapping, the runner-level `RunLog`, the `RunRegistry`, and
+`freshness_days`. `execution_id` is the concrete
 attempt recorded in RunLog/RunRegistry; `logical_run_id` is the idempotency key a
 re-driven business run reuses for accumulated rows. A run's history label is
 `<case_type>/<pipeline>` when registered with a subject (the registry /
@@ -562,20 +581,44 @@ metadata is stored under `<base_dir>/_runs/<label-stem>.log` and
 
 `run_pipeline` (`framework.run`) is the execution core `PipelineRunner.run`
 delegates to, and the path-addressed `run` command calls directly: given a
-handler, a pipeline `name`, an optional `subject`, and an `upstreams` tuple, it
-builds the `RunContext`, catches the shared `RunRegistry` up from every
+handler, a pipeline `name`, an optional `subject`, an `upstreams` tuple, and
+optional run `params`, it builds the `RunContext`, catches the shared
+`RunRegistry` up from every
 `_runs/*.log` (so an upstream's history is visible regardless of which log
-partitioned it), runs the freshness checks, dispatches the handler, and records
-the run summary.
+partitioned it), runs the requirement checks, dispatches the handler, and records
+the run summary. Run summary records include the parameters after default
+redaction of likely secret keys.
 
-`FreshnessRequirement` declares the upstream domain Pipeline a downstream run
-needs. The default policy is same-business-date freshness (`max_age_days=0`):
-the latest successful upstream `run` summary timestamp must be on or after the
-downstream `run_date` minus the allowed age. Failed upstream runs do not count.
-No successful upstream history is treated as a first-run skip: the runner allows
-the handler and writes a `freshness` record with a warning. Stale history aborts
-before the handler executes and writes both a `freshness` error and an errored
-domain `run` summary.
+`Requirement` declares the upstream Pipeline or task a downstream run needs.
+`Requirement.succeeded(address).within_days(n)` requires the latest successful
+record for that `RunAddress` to be no older than `n` calendar days before the
+downstream `run_date`; `same_day()` requires a success on the downstream
+`run_date`. Failed upstream records do not count. First-run behavior is explicit:
+`.on_first_run("allow")` proceeds silently, `"warn"` proceeds with a `freshness`
+warning, and `"block"` aborts before the handler executes.
+
+Examples:
+
+```python
+# Pipeline 3 Task 17 depends on Pipeline 2 Task 4 in the last 7 days.
+Requirement.succeeded(
+    RunAddress.task("pipeline_2", "step_4"),
+).within_days(7)
+
+# Pipeline 6 requires Pipeline 4 on the same day.
+Requirement.succeeded(
+    RunAddress.pipeline("pipeline_4"),
+).same_day()
+```
+
+`FreshnessRequirement(upstream_pipeline, max_age_days=n)` remains supported and
+adapts to `Requirement.succeeded(RunAddress.pipeline(...)).within_days(n)`,
+using the downstream subject when no upstream subject is supplied. Its no-history
+behavior remains the historical default: allow the first run with a warning.
+Stale history aborts before the handler executes and writes both a `freshness`
+error and an errored domain `run` summary.
+
+> **Note: `base_dir` bounds freshness visibility.** The `RunRegistry` is entirely scoped to the `base_dir` provided at execution time. It collects history by sweeping `<base_dir>/_runs/*.log`. If an upstream pipeline ran under a *different* base directory, its logs will not be visible to the downstream runner, and the `FreshnessGuard` will treat it as having no history. To validate freshness dependencies, both the upstream and downstream pipelines must be executed against the same `base_dir`.
 
 The CLI `run` command addresses a pipeline by its location on disk, importing
 `pipelines.<name>.pipeline` and running its `run(context)` callable through
@@ -584,6 +627,10 @@ The CLI `run` command addresses a pipeline by its location on disk, importing
 ```sh
 python -m cli run pipelines/ingest /tmp/demo --run-date 2026-05-29
 python -m cli run pipelines/selection /tmp/demo --run-date 2026-05-29
+python -m cli run pipelines/claims /tmp/demo \
+  --run-date 2026-06-22 \
+  --logical-run-id claims:ingest:20260622:claims_20260622_a.csv \
+  --param source_file=/share/upstream/claims/claims_20260622_a.csv
 ```
 
 ### `Orchestrator` — scheduled PipelineSets
@@ -597,6 +644,8 @@ from framework.run import (
     FreshnessRequirement,
     Orchestrator,
     PipelineSet,
+    Requirement,
+    RunAddress,
     ScheduledPipeline,
     Weekdays,
 )
@@ -610,7 +659,12 @@ sets = (
                 "cases",
                 "selection",
                 Weekdays(),
-                depends_on=(FreshnessRequirement("ingest"),),
+                depends_on=(
+                    FreshnessRequirement("ingest"),
+                    Requirement.succeeded(
+                        RunAddress.task("ingest", "normalise", subject="cases")
+                    ).within_days(7),
+                ),
             ),
         ),
     ),
@@ -624,8 +678,10 @@ Orchestrator(runner, sets, WorkingDayCalendar()).run_due_once(
 
 `PipelineSet` is the independent failure boundary, normally one Case Type or one
 platform-wide group. `ScheduledPipeline` references an existing runner
-registration and carries its default schedule, freshness dependencies, and
-enablement. `Weekdays()` is the normal daily schedule, using
+registration and carries its default schedule, dependencies, and enablement.
+Dependencies may be legacy `FreshnessRequirement` values or `Requirement`
+predicates that target whole-Pipeline or task-level `RunAddress` history.
+`Weekdays()` is the normal daily schedule, using
 `WorkingDayCalendar` for weekends and holidays; other schedules are
 `SpecificWeekdays`, `DayOfMonth`, `NthWorkingDayOfMonth`,
 `LastWorkingDayOfMonth`, and `ManualOnly`.
@@ -634,9 +690,12 @@ Each invocation writes decisions to `<base_dir>/_orchestration/runs.db` with a
 stable item key of `set_name/case_type/pipeline/run_date`. `RunLog` and
 `RunRegistry` stay reserved for actual Pipeline execution records. A failed
 scheduled item is terminal for that orchestrator run and blocks downstream
-dependants, but unrelated items in the same set and every other `PipelineSet`
-continue. `run_until_complete(...)` performs a bounded Python polling loop over
-the same run date; it does not retry failed items from the same invocation.
+dependants. Requirement failures from stale task/pipeline history, missing
+history with `on_first_run("block")`, or failed upstream scheduled items are
+recorded as `blocked` decisions with their reason; unrelated items in the same
+set and every other `PipelineSet` continue. `run_until_complete(...)` performs a
+bounded Python polling loop over the same run date; it does not retry failed
+items from the same invocation.
 
 Python definitions are canonical. YAML overrides may disable a scheduled item,
 replace its schedule timing, or override freshness windows for operations
@@ -712,6 +771,57 @@ run/logical identity, or should fail independently. Use a multi-file Reader
 instead when many files together are one logical Feed snapshot that should be
 read, validated, and written as a single `Dataset` under one logical run id.
 
+### `RunAddress` — dependency labels for Pipelines and steps
+`RunAddress` (`framework.run`) is the public value object for naming dependency
+targets without coupling orchestration code to a future registry schema. It can
+address either a whole **Pipeline** or a specific named run step inside that
+Pipeline, with or without a subject qualifier:
+
+| Target | Label |
+|--------|-------|
+| Pipeline | `pipeline` |
+| Subject-qualified Pipeline | `subject/pipeline` |
+| Step | `pipeline.step` |
+| Subject-qualified step | `subject/pipeline.step` |
+
+This is the stable address shape from the local-first DAG design:
+`pipeline_2.step_4`. The current builder authoring method is still `.task(...)`,
+but dependency addresses use **step** as the execution-graph term.
+
+Construct addresses explicitly when code already has structured pieces:
+
+```python
+from framework.run import RunAddress
+
+RunAddress.pipeline("claims", subject="case-review")
+RunAddress.step("claims", "validate_schema", subject="case-review")
+RunAddress.step("pipeline_2", "step_4")
+```
+
+Parse labels when accepting configuration or registry input:
+
+```python
+address = RunAddress.parse("case-review/claims.validate_schema")
+assert address.label == "case-review/claims.validate_schema"
+```
+
+`.label` and `str(address)` return the same stable string, suitable for logs,
+dependency declarations, and run-registry queries. Invalid labels raise
+`RunAddressError`, a `PipelineError` with the `config` category, so bad
+dependency wiring is reported like other expected configuration failures rather
+than leaking raw parsing exceptions.
+
+The builder wires these addresses onto its nodes automatically. For example,
+`Pipeline("pipeline_2").task("step_4", ...)` records the bare run-log step as
+`step_4` and the stable dependency key as `pipeline_2.step_4`. After the log is
+ingested, `RunRegistry.records_for_address("pipeline_2.step_4")` returns the
+matching records and `RunRegistry.has_successful_address("pipeline_2.step_4")`
+answers the simple upstream dependency check. When a dependency needs the most
+recent successful attempt, `RunRegistry.latest_success(...)` accepts either a
+`RunAddress` or one of its labels. Pipeline addresses read from the `run`
+summary; task addresses read from successful non-`run` step records. Date
+filters are based on the record `timestamp` emitted by `RunLog`.
+
 ### `Pipeline` — the deferred DAG builder
 A `Pipeline` describes a feed's path and runs **nothing** until `.run()`
 (ADR-0003):
@@ -720,7 +830,7 @@ A `Pipeline` describes a feed's path and runs **nothing** until `.run()`
 p = Pipeline("cases")
 r = p.read(CsvReader(path), name="read")
 v1 = p.validate(ColumnValidator(["case_ref"]), r, name="pre_val") # gate the input
-t1 = p.transform(NormaliseCases(), v1, name="transform")         # transform
+t1 = p.task("normalise", NormaliseCases(), v1)                   # named task
 v2 = p.validate(RowCountValidator(minimum=1), t1, name="post_val") # gate the output
 p.write(writer, v2, name="write")
 p.run()
@@ -732,7 +842,8 @@ upstream node, so a validator attached to the read node is a **pre**-validator
 (gates the output about to be written) — exactly the order above. There is no
 separate stage-composition API and no public custom-`Stage` contract; the
 dataset→dataset transform extension point is the `Processor`, attached with
-`.transform(processor, node, name=...)`. A mid-pipeline **checkpoint** — writing
+`.task(name, processor, node)` (or the compatible
+`.transform(processor, node, name=...)` spelling). A mid-pipeline **checkpoint** — writing
 a snapshot partway through — is just a `.write(...)` on an intermediate node while
 the graph continues from that same node. Severity is set per validate step
 (`.validate(v, node, name=..., severity="warn")`). The invariant remains
@@ -758,7 +869,7 @@ attributes, so a value stored under any name cannot leak into the plan:
 p = Pipeline("cases")
 r = p.read(CsvReader(path), name="read")
 v = p.validate(ColumnValidator(["case_ref"]), r, name="columns")
-t = p.transform(NormaliseCases(), v, name="normalise")
+t = p.task("normalise", NormaliseCases(), v)
 p.write(writer, t, name="write")
 
 print(p.describe())
@@ -792,7 +903,8 @@ id as `pipeline.run_id`, times each planned step, and drives the composed
 objects are internal: they expose stable name/kind/order, the wrapped component
 where applicable, and read-only/side-effect metadata for future plan-validation
 and dry-run work, but pipeline scripts still use only the builder methods. The
-`process` step (`.transform()`) landed in #23; lineage checkpoints (a `.write()`
+named processor task (`.task()`, compatible with `.transform()`) landed in #23;
+lineage checkpoints (a `.write()`
 on an intermediate node) landed in #49; the explicit DAG builder landed in #122.
 
 ### `WorkingDayCalendar` — working-day arithmetic (pure utility)

@@ -384,3 +384,15 @@ abort fail-fast before the writer runs. And like value rules they also feed
 to the reject table with its phrase in the `failed_rule` reason (the footprint
 guard skips a check whose column is absent there too), so a horizontal breach
 can be isolated row-by-row rather than aborting the run.
+
+## Handling Schema Drift in Accumulating Layers (Silver/Gold)
+
+When an upstream source changes its shape (e.g. adding a new column) and you want to accept this drift into your accumulating silver or gold tables, follow this four-step process:
+
+1. **Identify**: The `SchemaDriftValidator` at the raw boundary will perform a soft check and surface a warning (visible in `runs_that_warned()`) when the columns differ from the prior run. Raw continues to land the data faithfully. When that data reaches the silver boundary, the `SchemaValidator` will intentionally fail-fast with a `ValidationError` (Schema Breach) to protect downstream logic.
+2. **Update Schema**: Modify the Python `CaseType` dataclass for that feed to include the new column or changed type. This updates the hard contract so the `SchemaValidator` expects the new shape.
+3. **Migrate the Database**: Because accumulating writers (`AccumulateByRunWriter`, `SqliteUpsertWriter`) rely on `pandas.to_sql(if_exists="append")`, and SQLite does not automatically evolve table schemas, you **must manually run an `ALTER TABLE` migration** against the target database (e.g. `silver.db`) before re-running:
+   ```sql
+   ALTER TABLE cases ADD COLUMN new_column_name TEXT;
+   ```
+4. **Re-run**: Because the pipelines are idempotent by logical run ID, simply re-run the pipeline. It will clear the partial/failed rows for that run and cleanly insert the new data under the updated schema. Historical rows will automatically receive `NULL` for the new column.
