@@ -13,9 +13,11 @@ from framework.core.validators import (
 from framework.io.readers import CsvReader
 from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun
+from framework.run import RunAddress
 from framework.run.builder import (
     Pipeline,
 )
+from tests.framework_testing import RecordingRunLog
 
 FIXTURE = Path(__file__).parent.parent.parent.parent / "fixtures" / "cases.csv"
 
@@ -82,6 +84,57 @@ def test_pipeline_describe_shows_the_deferred_execution_plan():
     assert reader.read_count == 0
     assert checkpoint.write_count == 0
     assert writer.write_count == 0
+
+
+def test_pipeline_task_executes_as_a_named_dependency():
+    run_log = RecordingRunLog()
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
+    writer = CapturingWriter()
+
+    p = Pipeline("cases", run_log=run_log)
+    read = p.read(reader, name="read_source")
+    clean = p.task("clean_rows", adding_processor("clean"), read)
+    p.write(writer, clean, name="write_silver")
+
+    plan = p.describe()
+    assert "[Transform] clean_rows (depends on: read_source)" in plan
+    assert "[Write] write_silver (depends on: clean_rows)" in plan
+
+    p.run()
+
+    assert writer.written is not None
+    assert "clean" in writer.written.columns
+    [clean_record] = run_log.records_for_step("clean_rows")
+    assert clean_record["status"] == "ok"
+    assert clean_record["step_address"] == "cases.clean_rows"
+
+
+def test_pipeline_wires_run_addresses_onto_steps():
+    run_log = RecordingRunLog()
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
+    writer = CapturingWriter()
+
+    p = Pipeline("pipeline_2", run_log=run_log)
+    read = p.read(reader, name="read_source")
+    step = p.task("step_4", adding_processor("clean"), read)
+    p.write(writer, step, name="write_silver")
+
+    assert step.address == RunAddress.step("pipeline_2", "step_4")
+
+    p.run()
+
+    assert run_log.records_for_address("pipeline_2.step_4")[0]["status"] == "ok"
+
+
+def test_pipeline_wires_subject_qualified_run_addresses_from_runner_labels():
+    run_log = RecordingRunLog()
+    reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [1]})))
+
+    p = Pipeline("cases/selection", run_log=run_log)
+    read = p.read(reader, name="read")
+
+    assert read.address == RunAddress.step("selection", "read", subject="cases")
+    assert read.address.label == "cases/selection.read"
 
 
 def test_pipeline_defers_all_work_until_run():

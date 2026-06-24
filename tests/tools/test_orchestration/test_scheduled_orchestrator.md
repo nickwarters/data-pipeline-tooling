@@ -1,11 +1,12 @@
 ```python
 import datetime as dt
+import json
 
 import pandas as pd
 import pytest
 
 from framework.core.dataset import Dataset
-from framework.run import FreshnessRequirement, PipelineRunner
+from framework.run import FreshnessRequirement, PipelineRunner, Requirement, RunAddress
 from tools.calendar import WorkingDayCalendar
 from tools.orchestration import (
     DayOfMonth,
@@ -83,6 +84,179 @@ def test_downstream_waits_until_declared_upstreams_are_fresh(tmp_path):
 
     assert calls == ["cases/selection"]
     assert result.decisions[0].status == "succeeded"
+
+
+def test_task_level_requirement_allows_downstream_when_task_success_is_fresh(tmp_path):
+    calls: list[str] = []
+    runner = PipelineRunner()
+
+    def upstream(context):
+        calls.append(context.label)
+        context.run_log.record(context.run_id, context.label, "step-4", "ok")
+        return Dataset.from_pandas(pd.DataFrame({"id": [1]}))
+
+    def downstream(context):
+        calls.append(context.label)
+        return Dataset.from_pandas(pd.DataFrame({"id": [1]}))
+
+    runner.register("case-a", "pipeline-2", upstream)
+    runner.register("case-a", "pipeline-3", downstream)
+    orchestrator = Orchestrator(
+        runner,
+        (
+            PipelineSet(
+                "case-a",
+                (
+                    ScheduledPipeline("case-a", "pipeline-2", Weekdays()),
+                    ScheduledPipeline(
+                        "case-a",
+                        "pipeline-3",
+                        Weekdays(),
+                        depends_on=(
+                            Requirement.succeeded(
+                                RunAddress.task(
+                                    "pipeline-2", "step-4", subject="case-a"
+                                )
+                            ).within_days(7),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        WorkingDayCalendar(),
+    )
+
+    result = orchestrator.run_due_once(tmp_path, run_date=dt.date.today())
+
+    assert calls == ["case-a/pipeline-2", "case-a/pipeline-3"]
+    assert [decision.status for decision in result.decisions] == [
+        "succeeded",
+        "succeeded",
+    ]
+
+
+def test_task_level_requirement_blocks_downstream_when_task_success_is_stale(
+    tmp_path,
+):
+    calls: list[str] = []
+    log_path = tmp_path / "_runs" / "case-a.log"
+    _record_run(
+        log_path,
+        pipeline="case-a/pipeline-2",
+        step="step-4",
+        timestamp="2026-06-01T00:00:00+00:00",
+    )
+    runner = PipelineRunner()
+
+    def downstream(context):
+        calls.append(context.label)
+        return Dataset.from_pandas(pd.DataFrame({"id": [1]}))
+
+    runner.register("case-a", "pipeline-3", downstream)
+    orchestrator = Orchestrator(
+        runner,
+        (
+            PipelineSet(
+                "case-a",
+                (
+                    ScheduledPipeline(
+                        "case-a",
+                        "pipeline-3",
+                        Weekdays(),
+                        depends_on=(
+                            Requirement.succeeded(
+                                RunAddress.task(
+                                    "pipeline-2", "step-4", subject="case-a"
+                                )
+                            ).within_days(7),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        WorkingDayCalendar(),
+    )
+
+    result = orchestrator.run_due_once(tmp_path, run_date=dt.date(2026, 6, 12))
+
+    assert calls == []
+    assert result.decisions[0].status == "blocked"
+    assert "upstream case-a/pipeline-2.step-4 is stale" in result.decisions[0].reason
+    records = OrchestrationStore(tmp_path / "_orchestration" / "runs.db").records()
+    assert records[0]["status"] == "blocked"
+    assert "upstream case-a/pipeline-2.step-4 is stale" in records[0]["reason"]
+
+
+def test_task_level_requirement_blocks_downstream_when_required_task_is_missing(
+    tmp_path,
+):
+    calls: list[str] = []
+    runner = PipelineRunner()
+
+    def downstream(context):
+        calls.append(context.label)
+        return Dataset.from_pandas(pd.DataFrame({"id": [1]}))
+
+    runner.register("case-a", "pipeline-3", downstream)
+    orchestrator = Orchestrator(
+        runner,
+        (
+            PipelineSet(
+                "case-a",
+                (
+                    ScheduledPipeline(
+                        "case-a",
+                        "pipeline-3",
+                        Weekdays(),
+                        depends_on=(
+                            Requirement.succeeded(
+                                RunAddress.task(
+                                    "pipeline-2", "step-4", subject="case-a"
+                                )
+                            ).on_first_run("block"),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        WorkingDayCalendar(),
+    )
+
+    result = orchestrator.run_due_once(tmp_path, run_date=dt.date(2026, 6, 12))
+
+    assert calls == []
+    assert result.decisions[0].status == "blocked"
+    assert "no successful run history for upstream case-a/pipeline-2.step-4" in (
+        result.decisions[0].reason
+    )
+
+
+def _record_run(
+    log_path,
+    *,
+    pipeline: str,
+    step: str = "run",
+    status: str = "ok",
+    timestamp: str = "2026-06-12T00:00:00+00:00",
+    run_id: str = "upstream",
+) -> None:
+    record = {
+        "timestamp": timestamp,
+        "run_id": run_id,
+        "pipeline": pipeline,
+        "step": step,
+        "status": status,
+        "rows_in": None,
+        "rows_out": None,
+        "rows_quarantined": None,
+        "rows_excluded": None,
+        "duration": 0,
+        "errors": [],
+        "warn_hits": [],
+    }
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record) + "\n")
 
 
 def test_failed_upstream_blocks_dependant_but_not_independent_or_other_set(tmp_path):

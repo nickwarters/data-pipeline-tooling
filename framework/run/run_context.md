@@ -5,10 +5,13 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
+from collections.abc import Mapping
 from pathlib import Path
 
 from tools.observability.run_log import NULL_RUN_LOG, RunLog
 from tools.observability.run_registry import RunRegistry
+
+RunParams = Mapping[str, str]
 
 
 class RunContext:
@@ -34,10 +37,12 @@ class RunContext:
         subject: str | None = None,
         pipeline: str | None = None,
         freshness_days: int = 0,
+        params: RunParams | None = None,
     ) -> None:
         self.base_dir = Path(base_dir) if base_dir is not None else None
         self.subject = subject
         self.pipeline = pipeline
+        self.params: RunParams = dict(params or {})
         self.run_date = run_date or dt.date.today()
         self.execution_id = execution_id or run_id or uuid.uuid4().hex
         self.logical_run_id = logical_run_id or self._default_logical_run_id()

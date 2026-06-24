@@ -9,7 +9,7 @@ from framework.core import (
     ValidationError,
     format_failure,
 )
-from framework.run import FreshnessError, UnknownPipelineError
+from framework.run import FreshnessError, RunAddressError, UnknownPipelineError
 from framework.transform import CoercionError
 from tools.orchestration import ForEachPipelineError
 
@@ -20,6 +20,7 @@ from tools.orchestration import ForEachPipelineError
         ValidationError,
         FreshnessError,
         UnknownPipelineError,
+        RunAddressError,
         ForEachPipelineError,
         CoercionError,
     ],
@@ -43,6 +44,7 @@ def test_a_programming_error_is_not_a_pipeline_error():
         (FreshnessError, ErrorCategory.OPERATIONAL),
         (ForEachPipelineError, ErrorCategory.OPERATIONAL),
         (UnknownPipelineError, ErrorCategory.CONFIG),
+        (RunAddressError, ErrorCategory.CONFIG),
     ],
 )
 def test_each_expected_failure_carries_its_triage_category(

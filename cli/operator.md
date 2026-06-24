@@ -128,6 +128,7 @@ def _run(args: argparse.Namespace) -> int:
             upstreams=tuple(getattr(module, "UPSTREAMS", ())),
             run_date=args.run_date,
             logical_run_id=args.logical_run_id,
+            params=dict(args.params),
             freshness_days=args.freshness_days,
         )
     except PipelineError as exc:
@@ -268,6 +269,15 @@ def register(sub) -> None:
         "rows (default: <pipeline>:<run-date>)",
     )
     run.add_argument("--freshness-days", type=int, default=0)
+    run.add_argument(
+        "--param",
+        dest="params",
+        action="append",
+        type=_param,
+        default=[],
+        metavar="KEY=VALUE",
+        help="pass a run parameter to run(context), e.g. source_file=/path/file.csv",
+    )
     run.set_defaults(func=_run)
 
     orchestrate = sub.add_parser("orchestrate", help="run scheduled due work")
@@ -339,6 +349,13 @@ def _date(value: str) -> dt.date:
         raise argparse.ArgumentTypeError(
             f"expected YYYY-MM-DD date, got {value!r}"
         ) from exc
+
+
+def _param(value: str) -> tuple[str, str]:
+    key, separator, param_value = value.partition("=")
+    if not separator or not key:
+        raise argparse.ArgumentTypeError(f"expected KEY=VALUE parameter, got {value!r}")
+    return key, param_value
 
 
 if __name__ == "__main__":  # pragma: no cover - thin CLI entry

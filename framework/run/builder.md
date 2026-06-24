@@ -16,6 +16,7 @@ from typing import Any, Callable
 from framework.core.dataset import Dataset
 from framework.core.protocols import Processor, Reader, Validator, Writer
 from framework.core.validators import ValidationError
+from framework.run.address import RunAddress
 from framework.run.execution import PipelineExecution
 from framework.run.run_context import RunContext
 from tools.observability.run_log import NULL_RUN_LOG, RunLog
@@ -26,10 +27,17 @@ log = logging.getLogger(__name__)
 class Node:
     """A single deferred operation in the DAG."""
 
-    def __init__(self, name: str, node_type: str, inputs: list[Node] | None = None):
+    def __init__(
+        self,
+        name: str,
+        node_type: str,
+        inputs: list[Node] | None = None,
+        address: RunAddress | None = None,
+    ):
         self.name = name
         self.node_type = node_type
         self.inputs = inputs or []
+        self.address = address
         self._result: Any = None
         self._executed: bool = False
         self.warn_hits: list[str] = []
@@ -79,6 +87,7 @@ class Node:
                 rows_in=rows_in,
                 rows_out=rows_out,
                 committed=self.committed,
+                step_address=self.address.label if self.address is not None else None,
             )
             return self._result
         except Exception as exc:
@@ -89,6 +98,7 @@ class Node:
                 duration=time.perf_counter() - started,
                 errors=[str(exc)],
                 error_category=getattr(exc, "category", None),
+                step_address=self.address.label if self.address is not None else None,
             )
             raise
 
@@ -99,8 +109,14 @@ class Node:
 
 
 class ReadNode(Node):
-    def __init__(self, name: str, reader: Reader, inputs: list[Node] | None = None):
-        super().__init__(name, "Read", inputs)
+    def __init__(
+        self,
+        name: str,
+        reader: Reader,
+        inputs: list[Node] | None = None,
+        address: RunAddress | None = None,
+    ):
+        super().__init__(name, "Read", inputs, address)
         self.reader = reader
 
     def _do_execute(
@@ -121,8 +137,14 @@ class ReadNode(Node):
 
 
 class TransformNode(Node):
-    def __init__(self, name: str, func: Processor, inputs: list[Node]):
-        super().__init__(name, "Transform", inputs)
+    def __init__(
+        self,
+        name: str,
+        func: Processor,
+        inputs: list[Node],
+        address: RunAddress | None = None,
+    ):
+        super().__init__(name, "Transform", inputs, address)
         self.func = func
 
     def _do_execute(
@@ -149,9 +171,14 @@ class TransformNode(Node):
 
 class ValidateNode(Node):
     def __init__(
-        self, name: str, validator: Validator, input_node: Node, severity: str = "error"
+        self,
+        name: str,
+        validator: Validator,
+        input_node: Node,
+        severity: str = "error",
+        address: RunAddress | None = None,
     ):
-        super().__init__(name, "Validate", [input_node])
+        super().__init__(name, "Validate", [input_node], address)
         self.validator = validator
         self.severity = severity
 
@@ -194,8 +221,9 @@ class ExplainNode(Node):
         id_column: str,
         input_node: Node,
         score_column: str | None = None,
+        address: RunAddress | None = None,
     ):
-        super().__init__(name, "Explain", [input_node])
+        super().__init__(name, "Explain", [input_node], address)
         self.writer = writer
         self.id_column = id_column
         self.score_column = score_column
@@ -217,13 +245,21 @@ class ExplainNode(Node):
                 rows_out=session.trace.selected,
                 rows_excluded=session.trace.excluded,
                 committed=True,
+                step_address=self.address.label if self.address is not None else None,
             )
         return dataset
 
 
 class QuarantineNode(Node):
-    def __init__(self, name: str, validator: Any, writer: Writer, input_node: Node):
-        super().__init__(name, "Quarantine", [input_node])
+    def __init__(
+        self,
+        name: str,
+        validator: Any,
+        writer: Writer,
+        input_node: Node,
+        address: RunAddress | None = None,
+    ):
+        super().__init__(name, "Quarantine", [input_node], address)
         self.validator = validator
         self.writer = writer
 
@@ -249,13 +285,20 @@ class QuarantineNode(Node):
             rows_out=len(good),
             rows_quarantined=len(rejected),
             committed=self.committed,
+            step_address=self.address.label if self.address is not None else None,
         )
         return good
 
 
 class WriteNode(Node):
-    def __init__(self, name: str, writer: Writer, input_node: Node):
-        super().__init__(name, "Write", [input_node])
+    def __init__(
+        self,
+        name: str,
+        writer: Writer,
+        input_node: Node,
+        address: RunAddress | None = None,
+    ):
+        super().__init__(name, "Write", [input_node], address)
         self.writer = writer
 
     def _do_execute(
@@ -272,8 +315,14 @@ class WriteNode(Node):
 
 
 class ActionNode(Node):
-    def __init__(self, name: str, action: Callable, inputs: list[Node]):
-        super().__init__(name, "Action", inputs)
+    def __init__(
+        self,
+        name: str,
+        action: Callable,
+        inputs: list[Node],
+        address: RunAddress | None = None,
+    ):
+        super().__init__(name, "Action", inputs, address)
         self.action = action
 
     def _do_execute(
@@ -294,14 +343,19 @@ class Pipeline:
     def read(
         self, reader: Reader, *, name: str, depends_on: list[Node] | None = None
     ) -> Node:
-        node = ReadNode(name, reader, inputs=depends_on)
+        node = ReadNode(
+            name, reader, inputs=depends_on, address=self._step_address(name)
+        )
         self._nodes.append(node)
         return node
 
     def transform(self, func: Processor, *inputs: Node, name: str) -> Node:
-        node = TransformNode(name, func, list(inputs))
+        node = TransformNode(name, func, list(inputs), address=self._step_address(name))
         self._nodes.append(node)
         return node
+
+    def task(self, name: str, func: Processor, *inputs: Node) -> Node:
+        return self.transform(func, *inputs, name=name)
 
     def validate(
         self,
@@ -311,17 +365,28 @@ class Pipeline:
         name: str,
         severity: str = "error",
     ) -> Node:
-        node = ValidateNode(name, validator, input_node, severity=severity)
+        node = ValidateNode(
+            name,
+            validator,
+            input_node,
+            severity=severity,
+            address=self._step_address(name),
+        )
         self._nodes.append(node)
         return node
 
     def write(self, writer: Writer, input_node: Node, *, name: str) -> Node:
-        node = WriteNode(name, writer, input_node)
+        node = WriteNode(
+            writer=writer,
+            name=name,
+            input_node=input_node,
+            address=self._step_address(name),
+        )
         self._nodes.append(node)
         return node
 
     def action(self, func: Callable, *inputs: Node, name: str) -> Node:
-        node = ActionNode(name, func, list(inputs))
+        node = ActionNode(name, func, list(inputs), address=self._step_address(name))
         self._nodes.append(node)
         return node
 
@@ -335,14 +400,23 @@ class Pipeline:
         name: str = "explain",
     ) -> Node:
         self._explain_config = {"id_column": id_column, "score_column": score_column}
-        node = ExplainNode(name, writer, id_column, input_node, score_column)
+        node = ExplainNode(
+            name,
+            writer,
+            id_column,
+            input_node,
+            score_column,
+            address=self._step_address(name),
+        )
         self._nodes.append(node)
         return node
 
     def quarantine(
         self, validator: Any, writer: Writer, input_node: Node, name: str = "quarantine"
     ) -> Node:
-        node = QuarantineNode(name, validator, writer, input_node)
+        node = QuarantineNode(
+            name, validator, writer, input_node, address=self._step_address(name)
+        )
         self._nodes.append(node)
         return node
 
@@ -408,6 +482,7 @@ class Pipeline:
                 warn_hits=session.warn_hits,
                 rows_in=rows_in,
                 rows_out=rows_out,
+                step_address=self._pipeline_address().label,
             )
 
             if len(results) == 1:
@@ -420,10 +495,25 @@ class Pipeline:
                 duration=time.perf_counter() - started,
                 errors=[str(exc)],
                 error_category=getattr(exc, "category", None),
+                step_address=self._pipeline_address().label,
             )
             raise
         finally:
             context.mark_run_summary_recorded()
+
+    def _step_address(self, step_name: str) -> RunAddress:
+        subject, pipeline = self._address_parts()
+        return RunAddress.step(pipeline, step_name, subject=subject)
+
+    def _pipeline_address(self) -> RunAddress:
+        subject, pipeline = self._address_parts()
+        return RunAddress.pipeline(pipeline, subject=subject)
+
+    def _address_parts(self) -> tuple[str | None, str]:
+        if "/" not in self._name:
+            return None, self._name
+        subject, pipeline = self._name.split("/", 1)
+        return subject, pipeline
 
     def _get_leaf_nodes(self) -> list[Node]:
         """Find nodes that no other node depends on to trigger execution."""

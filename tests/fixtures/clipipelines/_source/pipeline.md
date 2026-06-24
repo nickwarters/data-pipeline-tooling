@@ -35,6 +35,8 @@ def run(context: RunContext) -> Dataset:
     result = p.run()
 
     print(f"FixtureSource: landed {len(result)} rows into {SUBJECT}/raw")
+    if "source_file" in context.params:
+        print(f"source_file={context.params['source_file']}")
     return result
 
 ```
