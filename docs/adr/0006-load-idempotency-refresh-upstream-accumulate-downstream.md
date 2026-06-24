@@ -86,6 +86,9 @@ Pipeline execution now has one shared `RunContext` carrying:
   RunRegistry.
 - `logical_run_id` — the business/idempotency key reused by a re-driven run.
 - `load_date` and `run_date` — the persisted load stamp and business run date.
+- `params` — explicit string run inputs such as `source_file`, used by
+  orchestration to run the same pipeline once per source artifact without making
+  the pipeline scan internally.
 - `run_log` and `run_registry` collaborators for orchestration.
 
 `AccumulateByRun.from_context(context)` derives the Writer strategy from that

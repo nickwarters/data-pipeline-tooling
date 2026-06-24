@@ -569,8 +569,9 @@ runner.run("cases", "selection", "/path/to/share", run_date=date(2026, 5, 29))
 ```
 
 Handlers receive a `RunContext` carrying `base_dir`, `case_type`, `pipeline`,
-`run_date`, `load_date`, `execution_id`, `logical_run_id`, the runner-level
-`RunLog`, the `RunRegistry`, and `freshness_days`. `execution_id` is the concrete
+`run_date`, `load_date`, `execution_id`, `logical_run_id`, a string
+`params` mapping, the runner-level `RunLog`, the `RunRegistry`, and
+`freshness_days`. `execution_id` is the concrete
 attempt recorded in RunLog/RunRegistry; `logical_run_id` is the idempotency key a
 re-driven business run reuses for accumulated rows. A run's history label is
 `<case_type>/<pipeline>` when registered with a subject (the registry /
@@ -580,11 +581,13 @@ metadata is stored under `<base_dir>/_runs/<label-stem>.log` and
 
 `run_pipeline` (`framework.run`) is the execution core `PipelineRunner.run`
 delegates to, and the path-addressed `run` command calls directly: given a
-handler, a pipeline `name`, an optional `subject`, and an `upstreams` tuple, it
-builds the `RunContext`, catches the shared `RunRegistry` up from every
+handler, a pipeline `name`, an optional `subject`, an `upstreams` tuple, and
+optional run `params`, it builds the `RunContext`, catches the shared
+`RunRegistry` up from every
 `_runs/*.log` (so an upstream's history is visible regardless of which log
 partitioned it), runs the requirement checks, dispatches the handler, and records
-the run summary.
+the run summary. Run summary records include the parameters after default
+redaction of likely secret keys.
 
 `Requirement` declares the upstream Pipeline or task a downstream run needs.
 `Requirement.succeeded(address).within_days(n)` requires the latest successful
@@ -624,6 +627,10 @@ The CLI `run` command addresses a pipeline by its location on disk, importing
 ```sh
 python -m cli run pipelines/ingest /tmp/demo --run-date 2026-05-29
 python -m cli run pipelines/selection /tmp/demo --run-date 2026-05-29
+python -m cli run pipelines/claims /tmp/demo \
+  --run-date 2026-06-22 \
+  --logical-run-id claims:ingest:20260622:claims_20260622_a.csv \
+  --param source_file=/share/upstream/claims/claims_20260622_a.csv
 ```
 
 ### `Orchestrator` — scheduled PipelineSets

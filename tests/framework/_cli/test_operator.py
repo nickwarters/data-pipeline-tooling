@@ -48,6 +48,23 @@ def test_run_executes_a_pipeline_by_its_path(tmp_path):
     assert (tmp_path / "_registry" / "runs.db").exists()
 
 
+def test_run_passes_params_to_path_addressed_pipeline(tmp_path):
+    result = _cli(
+        "run",
+        "clipipelines/_source",
+        str(tmp_path),
+        "--run-date",
+        "2026-06-22",
+        "--param",
+        "source_file=/share/upstream/claims/claims_20260622_a.csv",
+        "--param",
+        "batch=claims-20260622-a",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "source_file=/share/upstream/claims/claims_20260622_a.csv" in result.stdout
+
+
 def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
     from framework.core import GOLD
     from framework.io import StoreCatalog

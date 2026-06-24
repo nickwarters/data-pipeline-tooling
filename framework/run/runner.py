@@ -14,6 +14,7 @@ from __future__ import annotations
 import datetime as dt
 import time
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -165,6 +166,7 @@ class FreshnessGuard:
 
 Handler = Callable[[RunContext], object]
 RunRequirement = FreshnessRequirement | Requirement
+RunParams = Mapping[str, str]
 
 
 def run_pipeline(
@@ -176,6 +178,7 @@ def run_pipeline(
     upstreams: tuple[RunRequirement, ...] = (),
     run_date: dt.date | None = None,
     logical_run_id: str | None = None,
+    params: RunParams | None = None,
     freshness_days: int = 0,
     freshness_guard: FreshnessGuard | None = None,
     run_log: RunLog | None = None,
@@ -219,6 +222,7 @@ def run_pipeline(
         run_date=run_date or dt.date.today(),
         execution_id=uuid.uuid4().hex,
         logical_run_id=logical_run_id,
+        params=params,
         run_log=run_log,
         run_registry=run_registry,
         freshness_days=freshness_days,
@@ -238,6 +242,7 @@ def run_pipeline(
                 "error",
                 duration=time.perf_counter() - started,
                 errors=[str(exc)],
+                params=_diagnostic_params(context.params),
             )
             context.mark_run_summary_recorded()
         run_registry.ingest(run_log_path)
@@ -253,6 +258,7 @@ def run_pipeline(
             rows_in=rows,
             rows_out=rows,
             duration=time.perf_counter() - started,
+            params=_diagnostic_params(context.params),
         )
         context.mark_run_summary_recorded()
     run_registry.ingest(run_log_path)
@@ -299,6 +305,7 @@ class PipelineRunner:
         *,
         run_date: dt.date | None = None,
         logical_run_id: str | None = None,
+        params: RunParams | None = None,
         freshness_days: int = 0,
         freshness: tuple[RunRequirement, ...] = (),
     ) -> object:
@@ -315,10 +322,23 @@ class PipelineRunner:
             upstreams=(*registered.freshness, *freshness),
             run_date=run_date,
             logical_run_id=logical_run_id,
+            params=params,
             freshness_days=freshness_days,
             freshness_guard=self._freshness_guard,
             run_log=registered.run_log,
         )
+
+
+def _diagnostic_params(params: RunParams) -> dict[str, str]:
+    """Return params suitable for operator logs without exposing likely secrets."""
+    sensitive_markers = ("secret", "token", "password", "credential", "key")
+    safe: dict[str, str] = {}
+    for key, value in params.items():
+        if any(marker in key.lower() for marker in sensitive_markers):
+            safe[key] = "<redacted>"
+        else:
+            safe[key] = value
+    return safe
 
 
 def _timestamp(value: str) -> dt.datetime:
