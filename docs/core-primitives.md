@@ -51,10 +51,11 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > **Load strategies are explicit.** The Store maps `layer → location` only; each
 > Writer owns its load strategy. Callers choose `Refresh()`,
 > `AccumulateByRun(run_id, load_date)`,
-> `AccumulateByRun.from_context(context)`, `UpsertStrategy(key_columns)`, or
-> `InsertOrIgnore()` when asking the Store for a Writer. This supports
-> both current-state hops and accumulated histories without baking a universal
-> layer→strategy rule into the Store (ADR-0006 amendment, ADR-0009).
+> `AccumulateByRun.from_context(context)`, `UpsertStrategy(key_columns)`,
+> `InsertOrIgnore()`, or `InsertIfAbsent(key_columns)` when asking the Store
+> for a Writer. This supports both current-state hops and accumulated histories
+> without baking a universal layer→strategy rule into the Store (ADR-0006
+> amendment, ADR-0009).
 
 > **Build status.** The **per-subject `Store`** has landed: `Store(subject_dir)`
 > *mints* that subject's Writers/Readers over its own
@@ -181,7 +182,7 @@ directions are explicit:
 | CSV file | `CsvReader`, `GlobCsvReader` | `CsvWriter` | `CsvWriter(path, strategy)` emits one CSV file; `GlobCsvReader` is read-only because many inbound files together form one logical snapshot. |
 | Excel file | `ExcelReader` | `ExcelWriter` | Both target one worksheet (`sheet=...`). |
 | JSON file | _intentionally absent_ | `JsonWriter` | JSON is currently a Reporting Deliverable format only; no inbound JSON Feed has been needed yet. |
-| SQLite table | `SqliteReader` | `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `SqliteInsertOrIgnoreWriter` | The Store mints these over medallion layer databases. |
+| SQLite table | `SqliteReader` | `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `SqliteInsertOrIgnoreWriter`, `SqliteInsertIfAbsentWriter` | The Store mints these over medallion layer databases. |
 | SAS extract | `SasReader` | _intentionally absent_ | SAS is an inbound-only remote source; the framework lands the remote output then reads local CSV files. |
 | SharePoint list | `SharePointReader` | `SharePointWriter` | Target is **SE on-prem**. Both sides are stubbed behind swappable `SharePointFetcher` / `SharePointPusher` seams until the on-prem SE client (NTLM/Kerberos/REST) lands. `SharePointWriter` emits the canonical Selection Deliverable — one list per Case Type. |
 | Console (stdout) | _intentionally absent_ | `StdoutWriter` | A terminal sink for *seeing* a result rather than persisting it — e.g. printing a Selection explainer's per-Case trace while driving a feed by hand. Owns no location or load strategy; prints the dataset as a plain-text table to the stream (defaulting to `sys.stdout`). |
@@ -233,6 +234,17 @@ Deliverables and SQLite tables:
   never touched. Conflict resolution is driven by the table's own constraints —
   when the table carries no constraints the behaviour is equivalent to a plain
   append. Minted by `Store.writer(layer, table, InsertOrIgnore())`.
+- `SqliteInsertIfAbsentWriter(db_path, table, key_columns, surrogate_column="id")` —
+  **reference/dimension load**: on each write, checks which natural keys are
+  already present in the target, mints compact integer surrogates in Python
+  for new keys (next int above the current max), and inserts only those rows.
+  Existing rows are never modified or deleted; re-running the same input is a
+  no-op (the reference table is a stable system of record). The surrogate is
+  minted above the store seam — not delegated to SQLite `AUTOINCREMENT` —
+  so identity logic stays in Python (ADR-0002). This is distinct from
+  `InsertOrIgnore`: conflict resolution here is key-driven (the strategy
+  declares `key_columns`), not constraint-driven (no table constraints are
+  required). Minted by `Store.writer(layer, table, InsertIfAbsent(key_columns))`.
 
 The file Writers accept the same explicit strategy objects as Store-minted
 Writers: `Refresh()` overwrites the file; `AccumulateByRun(...)` reads any
@@ -251,8 +263,8 @@ It holds **no business logic** (ADR-0002) and makes **no** load decision
 
 - `store.writer(layer, table, strategy)` — mints a Writer over the chosen layer
   using the caller's explicit `Refresh()`, `AccumulateByRun(...)`,
-  `UpsertStrategy(...)`, or `InsertOrIgnore()` strategy. Context-driven
-  accumulation uses `AccumulateByRun.from_context(context)`.
+  `UpsertStrategy(...)`, `InsertOrIgnore()`, or `InsertIfAbsent(key_columns)`
+  strategy. Context-driven accumulation uses `AccumulateByRun.from_context(context)`.
 - `store.reader(layer, table)` — a `SqliteReader` over the same file.
 
 Layer names are validated through `RAW`, `SILVER`, `GOLD` / `Layer`; existing

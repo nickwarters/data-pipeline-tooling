@@ -20,7 +20,11 @@ from framework._internal.describe import render
 from framework.core.dataset import Dataset
 from framework.core.protocols import Writer
 from framework.io.sql import quote_identifier
-from framework.io.strategy import AccumulateByRun, InsertOrIgnore, Refresh, UpsertStrategy
+from framework.io.strategy import (
+    AccumulateByRun,
+    Refresh,
+    UpsertStrategy,
+)
 
 # ``Writer`` is imported only to be re-exported through ``framework.io``; listing
 # it in ``__all__`` marks it as intentional public surface so lint won't strip it.
@@ -35,6 +39,7 @@ __all__ = [
     "SqliteUpsertWriter",
     "AccumulateByRunWriter",
     "SqliteInsertOrIgnoreWriter",
+    "SqliteInsertIfAbsentWriter",
 ]
 
 
@@ -399,6 +404,107 @@ class SqliteInsertOrIgnoreWriter:
 
     def describe(self) -> str:
         return render(self, db_path=str(self._db_path), table=self._table)
+
+
+class SqliteInsertIfAbsentWriter:
+    """A Writer that inserts new keys only and mints compact integer surrogates.
+
+    On each write:
+    1. Read the existing key→surrogate mapping from the target (empty on first run).
+    2. Filter incoming rows to those whose key is not already present.
+    3. Deduplicate on key within the batch.
+    4. Mint compact integer surrogates (max_existing_id + 1, +2, …) for new keys.
+    5. Append only the new rows (with surrogates) in a single atomic commit.
+
+    Existing rows are never modified or deleted.  Re-running the same input is a
+    no-op and leaves all surrogate assignments unchanged — the reference table is
+    a stable system of record across re-runs.
+    """
+
+    def __init__(
+        self,
+        db_path: str | os.PathLike[str],
+        table: str,
+        key_columns: tuple[str, ...],
+        surrogate_column: str = "id",
+        busy_timeout_ms: int = 5000,
+    ) -> None:
+        self._db_path = Path(db_path)
+        self._table = table
+        self._key_columns = key_columns
+        self._surrogate_column = surrogate_column
+        self._busy_timeout_ms = busy_timeout_ms
+
+    def write(self, dataset: Dataset) -> None:
+        frame = dataset.to_pandas()
+        missing = [c for c in self._key_columns if c not in frame.columns]
+        if missing:
+            raise ValueError(
+                f"InsertIfAbsent key column(s) not found in dataset: {missing}"
+            )
+
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        con = connect(self._db_path, self._busy_timeout_ms)
+        try:
+            # Read existing key→surrogate mapping; empty DataFrame if table absent.
+            surr_q = quote_identifier(self._surrogate_column)
+            key_cols_sql = ", ".join(quote_identifier(k) for k in self._key_columns)
+            try:
+                table_q = quote_identifier(self._table)
+                existing = pd.read_sql(
+                    f"SELECT {surr_q}, {key_cols_sql} FROM {table_q}",
+                    con,
+                )
+            except Exception:
+                existing = pd.DataFrame(
+                    columns=[self._surrogate_column, *self._key_columns]
+                )
+
+            # Identify rows whose key is not already in the target.
+            if len(existing) > 0:
+                existing_keys = existing[list(self._key_columns)]
+                merged = frame.merge(
+                    existing_keys,
+                    on=list(self._key_columns),
+                    how="left",
+                    indicator=True,
+                )
+                new_rows = (
+                    merged[merged["_merge"] == "left_only"]
+                    .drop(columns=["_merge"])
+                    .reset_index(drop=True)
+                )
+            else:
+                new_rows = frame.copy()
+
+            # Deduplicate on key within the batch (a key must receive exactly one id).
+            new_rows = new_rows.drop_duplicates(subset=list(self._key_columns))
+            new_rows = new_rows.reset_index(drop=True)
+
+            if len(new_rows) == 0:
+                return
+
+            # Mint surrogates above the store seam, not via SQLite AUTOINCREMENT.
+            max_id = (
+                int(existing[self._surrogate_column].max()) if len(existing) > 0 else 0
+            )
+            new_rows.insert(
+                0, self._surrogate_column, range(max_id + 1, max_id + 1 + len(new_rows))
+            )
+
+            new_rows.to_sql(self._table, con, if_exists="append", index=False)
+            con.commit()
+        finally:
+            con.close()
+
+    def describe(self) -> str:
+        return render(
+            self,
+            db_path=str(self._db_path),
+            table=self._table,
+            key_columns=list(self._key_columns),
+            surrogate_column=self._surrogate_column,
+        )
 
 
 class AccumulateByRunWriter:
