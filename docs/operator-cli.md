@@ -179,6 +179,63 @@ $ python -m cli orchestrate /data --app my_app.pipelines --run-date 2026-05-29 -
 2026-05-29  cases  cases/selection  succeeded
 ```
 
+## Orchestration plan preview — `Orchestrator.plan()`
+
+Before running `orchestrate`, you can preview what would happen for a given run
+date without executing any pipelines or touching any log file. Call
+`Orchestrator.plan(base_dir, run_date=...)` from Python — it reads the existing
+run registry and returns a `PlanResult` whose items describe each scheduled
+pipeline's projected status:
+
+| Status | Meaning |
+|--------|---------|
+| `ready` | schedule is due and all freshness requirements are met |
+| `skipped` | schedule is not due on that date |
+| `disabled` | item has `enabled=False` |
+| `already-satisfied` | pipeline already succeeded on the run date |
+| `blocked` | a declared upstream is stale or missing |
+
+```python
+from tools.orchestration import Orchestrator
+
+result = orchestrator.plan("/data", run_date=dt.date(2026, 6, 23))
+print(result)
+```
+
+```
+2026-06-23  claims  claims/ingest          ready              schedule daily is due
+2026-06-23  claims  claims/quality_check   skipped            schedule monday,wednesday is not due on tuesday
+2026-06-23  claims  claims/month_open      already-satisfied  already succeeded on 2026-06-23
+2026-06-23  claims  claims/reporting       blocked            upstream claims/ingest is stale: ...
+```
+
+`str(result)` renders an aligned table using only stdlib; columns are sized to
+the widest value so the output stays readable regardless of pipeline name length.
+
+For per-file source artifact planning (catch-up scenarios where a backlog of
+files needs processing), use the standalone `plan_for_each()` helper:
+
+```python
+from tools.orchestration import plan_for_each
+
+items = plan_for_each(
+    source_files=["share/claims_20260601.csv", "share/claims_20260602.csv"],
+    subject="claims",
+    pipeline="ingest",
+    set_name="claims",
+    run_date=dt.date(2026, 6, 23),
+    file_id_fn=lambda f: Path(f).name,
+)
+# Each item: status="ready", reason="source file: claims_20260601.csv"
+```
+
+`plan_for_each()` returns one `PlanItem(status="ready")` per source file without
+consulting run history or calling any handler — it is a pure projection of
+planned per-file runs.
+
+> **Note:** CLI dry-run support for the `run` and `orchestrate` commands (passing
+> `--dry-run` / `--plan` on the command line) is tracked separately in issue #195.
+
 ## `status` — the latest run per pipeline
 
 ```sh
