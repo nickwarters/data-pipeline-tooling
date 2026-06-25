@@ -169,7 +169,7 @@ test('cr-app-nav: case type owner sees dashboard, reports, and question bank lin
   const el = new CRAppNav();
   el.capabilities = {
     isReviewer: false,
-    ownedCaseTypes: ['hello-review'],
+    ownedCaseTypes: ['example-review'],
     isResponsibleParty: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,

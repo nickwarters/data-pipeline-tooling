@@ -72,7 +72,7 @@ test('routes-team-cases: mounts cr-team-cases with client, currentUser, eligible
   elements.length = 0;
   const client = { id: 'mock' };
   const currentUser = { id: 'u1', displayName: 'U' };
-  const eligibleCaseTypes = ['hello-review'];
+  const eligibleCaseTypes = ['example-review'];
 
   const router = new Router();
   const container = { replaceChildren(/** @type {any[]} */ ...args) {} };

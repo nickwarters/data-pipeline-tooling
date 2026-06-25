@@ -48,7 +48,7 @@ const { CRCaseDetails, caseDetailFields } =
 function makeCase(overrides = {}) {
   return {
     id: 'case-1',
-    caseType: 'hello-review',
+    caseType: 'example-review',
     title: 'A test case',
     status: 'In-progress',
     assignedReviewer: 'user-reviewer',

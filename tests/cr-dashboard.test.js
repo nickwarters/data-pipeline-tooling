@@ -112,7 +112,7 @@ test('CRDashboard: reviewer capability — outstanding Cases heading and allocat
     isQaReviewer: false,
     isVisitor: false,
   };
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
 
   await el.connectedCallback();
 
@@ -139,7 +139,7 @@ test('CRDashboard: owner-only capability — owner summary visible, no outstandi
   el.currentUserId = 'user-owner';
   el.capabilities = {
     isReviewer: false,
-    ownedCaseTypes: ['hello-review'],
+    ownedCaseTypes: ['example-review'],
     isResponsibleParty: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
@@ -174,7 +174,7 @@ test('CRDashboard: admin capability — both reviewer and owner sections visible
   el.currentUserId = 'user-admin';
   el.capabilities = {
     isReviewer: true,
-    ownedCaseTypes: ['hello-review'],
+    ownedCaseTypes: ['example-review'],
     isResponsibleParty: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
@@ -182,7 +182,7 @@ test('CRDashboard: admin capability — both reviewer and owner sections visible
     isQaReviewer: false,
     isVisitor: false,
   };
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
 
   await el.connectedCallback();
 
@@ -217,7 +217,7 @@ test('CRDashboard: reviewer with no ownedCaseTypes never renders owner section (
     isQaReviewer: false,
     isVisitor: false,
   };
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
 
   // Must not throw.
   await el.connectedCallback();
@@ -285,7 +285,7 @@ test('CRDashboard: reviewer + RP capability — both reviewer and RP sections vi
     isQaReviewer: false,
     isVisitor: false,
   };
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
 
   await el.connectedCallback();
 
@@ -391,7 +391,7 @@ test('CRDashboard: cr-allocation element listens for cr-allocated and re-fetches
     isQaReviewer: false,
     isVisitor: false,
   };
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
 
   await el.connectedCallback();
   const initialFetchCount = fetchCount;
@@ -453,7 +453,7 @@ test('CRDashboard: stamps overdue:true on rows whose dueDate is in the past', as
   const fetchedCases = [
     {
       id: 'od-past',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       title: 'Overdue',
       status: 'In-progress',
       assignedReviewer: 'u1',
@@ -467,7 +467,7 @@ test('CRDashboard: stamps overdue:true on rows whose dueDate is in the past', as
     },
     {
       id: 'od-future',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       title: 'On Time',
       status: 'In-progress',
       assignedReviewer: 'u1',
@@ -481,7 +481,7 @@ test('CRDashboard: stamps overdue:true on rows whose dueDate is in the past', as
     },
     {
       id: 'od-none',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       title: 'No Due Date',
       status: 'In-progress',
       assignedReviewer: 'u1',

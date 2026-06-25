@@ -53,7 +53,7 @@ const { CRAppeal } = await import('../src/components/cr-appeal.js');
 function makeCase(overrides = {}) {
   return {
     id: 'c1',
-    caseType: 'hello-review',
+    caseType: 'example-review',
     title: 'T',
     status: 'Completed',
     assignedReviewer: 'u1',

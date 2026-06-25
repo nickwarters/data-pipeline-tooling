@@ -51,43 +51,46 @@ const baseParams = () => ({
 test('fetchTeamCases: fans out to all eligible case types when caseType is null', async () => {
   const client = makeClient();
   await fetchTeamCases(/** @type {any} */ (client), baseParams(), 'u1', [
-    'hello-review',
+    'example-review',
     'product-sale-review',
   ]);
   assert.equal(client.calls.length, 2);
-  assert.ok(client.calls.some((c) => c.caseType === 'hello-review'));
+  assert.ok(client.calls.some((c) => c.caseType === 'example-review'));
   assert.ok(client.calls.some((c) => c.caseType === 'product-sale-review'));
 });
 
 test('fetchTeamCases: queries only the specified caseType when set', async () => {
   const client = makeClient();
-  const params = { ...baseParams(), caseType: 'hello-review' };
+  const params = { ...baseParams(), caseType: 'example-review' };
   await fetchTeamCases(/** @type {any} */ (client), params, 'u1', [
-    'hello-review',
+    'example-review',
     'product-sale-review',
   ]);
   assert.equal(client.calls.length, 1);
-  assert.equal(client.calls[0].caseType, 'hello-review');
+  assert.equal(client.calls[0].caseType, 'example-review');
 });
 
 test('fetchTeamCases: passes assignedReviewerManager filter for role=reviewer-manager', async () => {
   const client = makeClient();
   await fetchTeamCases(/** @type {any} */ (client), baseParams(), 'mgr-99', [
-    'hello-review',
+    'example-review',
   ]);
   assert.equal(client.calls[0].assignedReviewerManager, 'mgr-99');
 });
 
 test('fetchTeamCases: merges results from multiple case type lists', async () => {
   const client = makeClient({
-    'hello-review': [row('c1', 'hello-review'), row('c2', 'hello-review')],
+    'example-review': [
+      row('c1', 'example-review'),
+      row('c2', 'example-review'),
+    ],
     'product-sale-review': [row('c3', 'product-sale-review')],
   });
   const result = await fetchTeamCases(
     /** @type {any} */ (client),
     baseParams(),
     'u1',
-    ['hello-review', 'product-sale-review']
+    ['example-review', 'product-sale-review']
   );
   assert.equal(result.length, 3);
   assert.ok(result.some((c) => c.id === 'c1'));

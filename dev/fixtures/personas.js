@@ -18,12 +18,12 @@ export const personas = {
   owner: {
     userId: 'user-owner',
     displayName: 'Sam Owner',
-    groups: ['CaseTypeOwners-HelloReview'],
+    groups: ['CaseTypeOwners-ExampleReview'],
   },
   admin: {
     userId: 'user-admin',
     displayName: 'Riley Admin',
-    groups: ['Reviewers', 'CaseTypeOwners-HelloReview'],
+    groups: ['Reviewers', 'CaseTypeOwners-ExampleReview'],
   },
   'responsible-party': {
     userId: 'user-rp',

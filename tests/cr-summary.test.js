@@ -96,7 +96,7 @@ const { CRSummary } = await import('../src/components/cr-summary.js');
 function makeCase(overrides = {}) {
   return {
     id: 'c1',
-    caseType: 'hello-review',
+    caseType: 'example-review',
     title: 'T',
     status: 'In-progress',
     assignedReviewer: 'u1',

@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Before doing any non-trivial work in this repo, read:
 
 1. **[CONTEXT.md](./CONTEXT.md)** — domain language. Use these terms exactly when discussing or coding (`Case Type`, `Question Definition`, `Applicable Question`, `Answer`, `Remediation Action`, `Reviewer`, `Responsible Party`, `Case Type Owner`, `Conversation`, `Outcome`).
-2. **[docs/PLAN.md](./docs/PLAN.md)** — the slice-based execution roadmap. Slice 1 ("Hello Case") is the immediate next work; subsequent slices are sketched.
+2. **[docs/PLAN.md](./docs/PLAN.md)** — the slice-based execution roadmap. Slice 1 ("Example Case") is the immediate next work; subsequent slices are sketched.
 3. **[docs/adr/](./docs/adr/)** — 10 architecture decisions, numbered. Every non-trivial decision in the codebase traces back to one of these. Don't deviate from an ADR without surfacing the deviation explicitly.
 
 ## Project overview
@@ -127,7 +127,7 @@ src/
     cr-styles.css
 
 case-types/                     # one module per Case Type (lazy-loaded by cr-case-review)
-  hello-review.js
+  example-review.js
 
 dev/
   fixtures/                     # mock data used by MockSharePointClient (?mock=1)

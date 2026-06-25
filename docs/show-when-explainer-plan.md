@@ -22,7 +22,7 @@ Before writing any code, read these files in full:
 | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `src/applicability-evaluator.js`                            | The full implementation: `evaluate()`, `evalCondition()`, `evalOp()`, `detectCycles()`, `allApplicableAnswered()` |
 | `docs/adr/0006-applicability-graph-and-outcome-function.md` | Design constraints: why showWhen is per-Case-Type not per-Question, cycle rejection policy, schema growth rules   |
-| `case-types/hello-review.js`                                | The reference dataset — 5 real questions including one with `showWhen` — use these questions throughout the page  |
+| `case-types/example-review.js`                              | The reference dataset — 5 real questions including one with `showWhen` — use these questions throughout the page  |
 | `src/sharepoint-client.js` lines 1–46                       | The `QuestionDefinition` and `Answer` typedefs that define the schema                                             |
 | `docs/signal-explainer.html`                                | Copy the header, legend, concept-card, scene, walkthrough patterns exactly                                        |
 
@@ -66,7 +66,7 @@ treated as unconditional truth, not an error.
 
 ### 2. Interactive dependency graph (the main demo)
 
-This is the centrepiece. Use the `hello-review.js` questions as the dataset.
+This is the centrepiece. Use the `example-review.js` questions as the dataset.
 Render a node graph where:
 
 - Each question is a node (rounded rectangle)
@@ -75,7 +75,7 @@ Render a node graph where:
 - Hidden questions are dimmed (muted, dashed border)
 - The applicable Set re-evaluates live as the user changes answers
 
-**Node layout** for hello-review questions:
+**Node layout** for example-review questions:
 
 ```
 [q-welcome]   [q-needs]   [q-channel]   [q-products]
@@ -94,7 +94,7 @@ so they always appear.
   current evaluation trace (which operator ran, what value was checked,
   true or false)
 - Each applicable node shows answer controls inline (yes/no/na radio buttons
-  for yes-no-na type; the hello-review questions are all yes-no-na)
+  for yes-no-na type; the example-review questions are all yes-no-na)
 - Changing `q-needs` to "Yes" → `q-resolve` lights up (applicable)
 - Changing `q-needs` back to "" (unanswered) or "No" → `q-resolve` dims
 - A live "Applicable set" badge in the corner lists the current Set<string>
@@ -276,7 +276,7 @@ Serve with `python3 -m http.server 7777` from the repo root and open
   <!-- Section 2 -->
   <section class="scene" id="scene-graph">
     <h2>Interactive Dependency Graph</h2>
-    <!-- hello-review 5-question graph, live answer toggles, applicable Set badge -->
+    <!-- example-review 5-question graph, live answer toggles, applicable Set badge -->
 
   <!-- Section 3 -->
   <section class="scene" id="scene-evaluate">
@@ -302,7 +302,7 @@ Serve with `python3 -m http.server 7777` from the repo root and open
 
 **Interactive graph (Section 2):**
 
-- Hardcode the 5 hello-review questions as a JS array (don't import the module)
+- Hardcode the 5 example-review questions as a JS array (don't import the module)
 - Use a `answers` plain object as state, updated by radio button `change` events
 - After each change, call `evaluate(catalogue, answers)` and re-render node classes
 - Node classes: `q-applicable` (full color) vs `q-hidden` (muted, dashed)

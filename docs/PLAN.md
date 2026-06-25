@@ -4,7 +4,7 @@ This document is the execution roadmap. The architectural decisions it depends o
 
 ## Approach
 
-Build the framework via **vertical tracer-bullet slices**. Slice 1 exercises every architectural layer end-to-end against a tiny throwaway Case Type (`hello-review`). Slices 2–7 add capability against that same throwaway. Slice 8 is the first real Case Type — the moment "the framework" becomes "an actual review tool."
+Build the framework via **vertical tracer-bullet slices**. Slice 1 exercises every architectural layer end-to-end against a tiny throwaway Case Type (`example-review`). Slices 2–7 add capability against that same throwaway. Slice 8 is the first real Case Type — the moment "the framework" becomes "an actual review tool."
 
 The framework is built once, against a stand-in. Real Case Types are added later. This avoids the trap of co-evolving framework and first-real-case-type, which couples them and makes both worse.
 
@@ -19,7 +19,7 @@ These have **deliberately not** been decided up-front because they're better ans
 - **Network failure simulation in mock client** — defer to Slice 9 unless reviewers hit issues earlier.
 - **`localStorage` queue persistence** — explicitly out for v1 (ADR-0008). Reconsider only if real outage data shows it's needed.
 
-## Slice 1 — "Hello Case" (tracer bullet)
+## Slice 1 — "Example Case" (tracer bullet)
 
 **Goal:** prove every architectural layer works together end-to-end against a 3-question throwaway Case Type.
 
@@ -37,7 +37,7 @@ These have **deliberately not** been decided up-front because they're better ans
 
 **One Case Type**
 
-- `case-types/hello-review.js` — exports `default` Case Type config:
+- `case-types/example-review.js` — exports `default` Case Type config:
   - 3 Question Definitions (Yes/No/NA only)
   - One question with a `showWhen` rule (proves the applicability evaluator works)
   - One question with a remediation action attached on failure (proves the data shape, even if remediation UI is deferred)
@@ -45,7 +45,7 @@ These have **deliberately not** been decided up-front because they're better ans
 
 **Two views**
 
-- `<cr-dashboard>` — lists outstanding hello cases from fixtures, each row links to `#/case/{id}`
+- `<cr-dashboard>` — lists outstanding example cases from fixtures, each row links to `#/case/{id}`
 - `<cr-case-review>` — header (case ID + assigned reviewer name) + Questions section only
 
 **One section component**
@@ -61,9 +61,9 @@ These have **deliberately not** been decided up-front because they're better ans
 
 **Fixtures (`dev/fixtures/`)**
 
-- 3 hello cases: untouched, partially-answered, completable
+- 3 example cases: untouched, partially-answered, completable
 - One Reviewer persona with a fixed user ID
-- Question Definitions for the hello case type (mock-only — schema for real SP list is deferred)
+- Question Definitions for the example case type (mock-only — schema for real SP list is deferred)
 
 **Dev harness**
 
@@ -74,7 +74,7 @@ These have **deliberately not** been decided up-front because they're better ans
 - Signal primitive: subscription, computed propagation, effect lifecycle
 - Applicability evaluator: `showWhen` rules including `$and`/`$or`, cycle detection rejects bad configs
 - SaveQueue: debounce, retry backoff, ETag conflict handling (mock 412 injection)
-- Outcome function (the hello one)
+- Outcome function (the example one)
 - MockSharePointClient: read/write/PATCH semantics, ETag generation, fixture loading
 
 **CI**
@@ -118,7 +118,7 @@ These have **deliberately not** been decided up-front because they're better ans
 
 - `HttpSharePointClient` — `fetch` with `credentials: 'include'`, OData query construction, form digest fetch + refresh on 403, ETag on PATCH/DELETE, `Retry-After` honoring on 429
 - Question Definitions SharePoint list — schema decided, list provisioned, fixtures replaced by real reads
-- One `Cases-HelloReview` SharePoint list — provisioned with the columns the framework needs
+- One `Cases-ExampleReview` SharePoint list — provisioned with the columns the framework needs
 - Deploy mechanism documented (Style Library upload + Content Editor refresh runbook)
 - Manual smoke-test checklist
 
@@ -147,7 +147,7 @@ These have **deliberately not** been decided up-front because they're better ans
 
 **Validation:**
 
-- Hello Case Type extended with one question of each type
+- Example Case Type extended with one question of each type
 - Saving multi-choice persists arrays correctly through the JSON blob
 - Remediation summary updates live as failures are added/removed
 
@@ -224,7 +224,7 @@ These have **deliberately not** been decided up-front because they're better ans
 
 ## Slice 8 — First real Case Type
 
-**Goal:** replace `hello-review` with the first real Case Type (likely "Sales Call Review" or whichever is most operationally pressing).
+**Goal:** replace `example-review` with the first real Case Type (likely "Sales Call Review" or whichever is most operationally pressing).
 
 **In:**
 

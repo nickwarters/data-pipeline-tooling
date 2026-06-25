@@ -119,9 +119,9 @@ Case Type modules (under `case-types/`) are pure JS — no DOM needed. Test them
 ```js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import config from '../case-types/hello-review.js';
+import config from '../case-types/example-review.js';
 
-test('hello-review computeOutcome: any No answer → fail', () => {
+test('example-review computeOutcome: any No answer → fail', () => {
   assert.deepStrictEqual(
     config.computeOutcome({ 'q-welcome': { value: 'No' } }),
     { verdict: 'fail' }

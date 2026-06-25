@@ -27,7 +27,7 @@ test('CRBankDock: 0 changes → "0 changes"; >1 → plural', () => {
   assert.ok(pendingStat.innerHTML.includes('0 changes'));
 
   commit((t) => {
-    const b = t['hello-review'];
+    const b = t['example-review'];
     b.questions.push({
       id: 'a',
       text: '',
@@ -65,7 +65,7 @@ test('CRBankDock: Preview + Submit buttons open the drawer', () => {
 test('CRBankDock: pluralises "change" with singular form on 1', () => {
   _resetStore();
   commit((t) => {
-    t['hello-review'].questions[0].text = 'edited just once';
+    t['example-review'].questions[0].text = 'edited just once';
   });
   const e = new CRBankDock();
   e.connectedCallback();

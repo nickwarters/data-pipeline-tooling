@@ -10,7 +10,7 @@ import {
 const sampleConfig = {
   reviewer: 'Reviewers',
   caseTypeOwners: {
-    'hello-review': 'CaseTypeOwners-HelloReview',
+    'example-review': 'CaseTypeOwners-ExampleReview',
     'kyc-review': 'CaseTypeOwners-KycReview',
   },
   responsibleParty: 'CR-ResponsibleParty',
@@ -52,28 +52,31 @@ test('resolveCapabilities: reviewer group → isReviewer=true, no owned types', 
 
 test('resolveCapabilities: owner group only → isReviewer=false, owned slug returned', () => {
   const caps = resolveCapabilities(
-    ['CaseTypeOwners-HelloReview'],
+    ['CaseTypeOwners-ExampleReview'],
     sampleConfig
   );
   assert.equal(caps.isReviewer, false);
-  assert.deepEqual(caps.ownedCaseTypes, ['hello-review']);
+  assert.deepEqual(caps.ownedCaseTypes, ['example-review']);
 });
 
 test('resolveCapabilities: admin (both groups) → reviewer + owned types', () => {
   const caps = resolveCapabilities(
-    ['Reviewers', 'CaseTypeOwners-HelloReview'],
+    ['Reviewers', 'CaseTypeOwners-ExampleReview'],
     sampleConfig
   );
   assert.equal(caps.isReviewer, true);
-  assert.deepEqual(caps.ownedCaseTypes, ['hello-review']);
+  assert.deepEqual(caps.ownedCaseTypes, ['example-review']);
 });
 
 test('resolveCapabilities: multiple ownership groups → all owned slugs returned', () => {
   const caps = resolveCapabilities(
-    ['CaseTypeOwners-HelloReview', 'CaseTypeOwners-KycReview'],
+    ['CaseTypeOwners-ExampleReview', 'CaseTypeOwners-KycReview'],
     sampleConfig
   );
-  assert.deepEqual(caps.ownedCaseTypes.sort(), ['hello-review', 'kyc-review']);
+  assert.deepEqual(caps.ownedCaseTypes.sort(), [
+    'example-review',
+    'kyc-review',
+  ]);
 });
 
 test('resolveCapabilities: unknown group is silently ignored', () => {
@@ -184,7 +187,8 @@ test('resolveCapabilities: CR-ResponsibleParty → isVisitor=false', () => {
 
 test('resolveCapabilities: owner of a Case Type → isVisitor=false', () => {
   assert.equal(
-    resolveCapabilities(['CaseTypeOwners-HelloReview'], sampleConfig).isVisitor,
+    resolveCapabilities(['CaseTypeOwners-ExampleReview'], sampleConfig)
+      .isVisitor,
     false
   );
 });

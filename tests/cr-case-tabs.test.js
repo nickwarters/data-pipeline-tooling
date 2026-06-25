@@ -21,7 +21,7 @@ test('CRCaseTabs: one tab per case type; clicking switches activeSlug', () => {
   e.connectedCallback();
   const nav = /** @type {any} */ (e)._children[0];
   const tabsContainer = nav._children[1];
-  assert.equal(tabsContainer._children.length, 2); // hello-review + complaint-review
+  assert.equal(tabsContainer._children.length, 2); // example-review + complaint-review
   tabsContainer._children[1]._listeners.click[0]();
   assert.equal(activeSlug.get(), 'complaint-review');
   e.disconnectedCallback();
@@ -46,7 +46,7 @@ test('CRCaseTabs: Revert with dirty state + confirmed reverts to baseline', () =
   _resetStore();
   cases.set({
     ...cases.get(),
-    'hello-review': { ...cases.get()['hello-review'], label: 'CHANGED' },
+    'example-review': { ...cases.get()['example-review'], label: 'CHANGED' },
   });
   /** @type {any} */ (globalThis).confirm = () => true;
   /** @type {any} */ (globalThis).setTimeout = () => 0;
@@ -57,8 +57,8 @@ test('CRCaseTabs: Revert with dirty state + confirmed reverts to baseline', () =
   const revertBtn = right._children[0];
   revertBtn._listeners.click[0]();
   assert.equal(
-    cases.get()['hello-review'].label,
-    baseline.get()['hello-review'].label
+    cases.get()['example-review'].label,
+    baseline.get()['example-review'].label
   );
   e.disconnectedCallback();
 });
@@ -67,7 +67,7 @@ test('CRCaseTabs: Revert with cancelled confirm is a no-op', () => {
   _resetStore();
   cases.set({
     ...cases.get(),
-    'hello-review': { ...cases.get()['hello-review'], label: 'NEW' },
+    'example-review': { ...cases.get()['example-review'], label: 'NEW' },
   });
   /** @type {any} */ (globalThis).confirm = () => false;
   const e = new CRCaseTabs();
@@ -76,7 +76,7 @@ test('CRCaseTabs: Revert with cancelled confirm is a no-op', () => {
   const right = nav._children[2];
   const revertBtn = right._children[0];
   revertBtn._listeners.click[0]();
-  assert.equal(cases.get()['hello-review'].label, 'NEW');
+  assert.equal(cases.get()['example-review'].label, 'NEW');
   e.disconnectedCallback();
 });
 

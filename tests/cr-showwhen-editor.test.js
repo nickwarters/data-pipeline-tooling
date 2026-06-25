@@ -17,7 +17,7 @@ test('CRShowwhenEditor: no question → renders nothing', () => {
 
 test('CRShowwhenEditor: question without showWhen renders empty-state note', () => {
   _resetStore();
-  const q = cases.get()['hello-review'].questions[0];
+  const q = cases.get()['example-review'].questions[0];
   const e = new CRShowwhenEditor();
   e.question = q;
   e.connectedCallback();
@@ -29,7 +29,7 @@ test('CRShowwhenEditor: question without showWhen renders empty-state note', () 
 
 test('CRShowwhenEditor: question with single condition omits empty-state', () => {
   _resetStore();
-  const q = cases.get()['hello-review'].questions[2]; // has showWhen
+  const q = cases.get()['example-review'].questions[2]; // has showWhen
   const e = new CRShowwhenEditor();
   e.question = q;
   e.connectedCallback();

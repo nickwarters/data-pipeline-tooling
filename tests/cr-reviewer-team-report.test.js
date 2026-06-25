@@ -121,7 +121,7 @@ function makeClient(cases = []) {
 function makeCase(overrides) {
   return {
     id: 'c1',
-    caseType: 'hello-review',
+    caseType: 'example-review',
     title: 'T',
     status: 'In-progress',
     assignedReviewer: 'r',
@@ -183,7 +183,7 @@ test('cr-reviewer-team-report: renders 4 KPI tiles with correct counts', async (
   const el = new CRReviewerTeamReport();
   el.client = makeClient(cases);
   el.currentUser = { id: 'user-rm', displayName: 'Morgan Manager' };
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
   await el.connectedCallback();
 
   const tiles = findByClass(el, 'cr-kpi-tile');
@@ -199,7 +199,7 @@ test('cr-reviewer-team-report: renders breakdown table rows per case type', asyn
   const cases = [
     makeCase({
       id: 'c1',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       status: 'Completed',
       completedAt: new Date(Date.now() - 3 * 86400000).toISOString(),
     }),
@@ -213,12 +213,12 @@ test('cr-reviewer-team-report: renders breakdown table rows per case type', asyn
   const el = new CRReviewerTeamReport();
   el.client = makeClient(cases);
   el.currentUser = { id: 'user-rm', displayName: 'Morgan Manager' };
-  el.eligibleCaseTypes = ['hello-review', 'product-sale-review'];
+  el.eligibleCaseTypes = ['example-review', 'product-sale-review'];
   await el.connectedCallback();
 
   const rows = findByClass(el, 'cr-breakdown-row');
   assert.equal(rows.length, 2, 'should render one row per case type with data');
-  assert.ok(hasText(el, 'hello-review'), 'should include hello-review row');
+  assert.ok(hasText(el, 'example-review'), 'should include example-review row');
   assert.ok(
     hasText(el, 'product-sale-review'),
     'should include product-sale-review row'
@@ -229,7 +229,7 @@ test('cr-reviewer-team-report: drill-through links navigate to #/team-cases with
   const cases = [
     makeCase({
       id: 'c1',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       status: 'In-progress',
       dueDate: new Date(Date.now() + 3 * 86400000).toISOString(),
     }),
@@ -237,14 +237,14 @@ test('cr-reviewer-team-report: drill-through links navigate to #/team-cases with
   const el = new CRReviewerTeamReport();
   el.client = makeClient(cases);
   el.currentUser = { id: 'user-rm', displayName: 'Morgan Manager' };
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
   await el.connectedCallback();
 
   const link = findLinkWhere(
     el,
     (href) =>
       href.startsWith('#/team-cases') &&
-      href.includes('caseType=hello-review') &&
+      href.includes('caseType=example-review') &&
       href.includes('status=outstanding')
   );
   assert.ok(
@@ -257,7 +257,7 @@ test('cr-reviewer-team-report: empty state when no cases', async () => {
   const el = new CRReviewerTeamReport();
   el.client = makeClient([]);
   el.currentUser = { id: 'user-rm', displayName: 'Morgan Manager' };
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
   await el.connectedCallback();
 
   const tiles = findByClass(el, 'cr-kpi-tile');

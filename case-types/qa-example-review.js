@@ -4,7 +4,7 @@
 
 /**
  * QA Check Case Type (issue #47, PRD #43) — the meta-review of a Completed
- * hello-review Case. A **QA Reviewer** is the Assigned Reviewer here; they answer
+ * example-review Case. A **QA Reviewer** is the Assigned Reviewer here; they answer
  * these QA-specific Question Definitions about whether the original review was
  * conducted properly. This module is the `qa-{slug}` tracer for the extension
  * point: the framework treats it as an ordinary Case Type, so the standard

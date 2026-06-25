@@ -83,7 +83,7 @@ test('dashboard route: mount creates and mounts cr-dashboard element', () => {
 test('dashboard route: mount sets client, currentUserId, capabilities, eligibleCaseTypes on element', () => {
   const client = { id: 'client' };
   const capabilities = { canEditBank: true };
-  const eligibleCaseTypes = ['hello-review'];
+  const eligibleCaseTypes = ['example-review'];
   const currentUser = { id: 'u99' };
 
   const elements = /** @type {any[]} */ ([]);

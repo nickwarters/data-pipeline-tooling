@@ -22,7 +22,7 @@ test('CRShowwhenGroup: missing question/group → no children', () => {
 
 test('CRShowwhenGroup: empty AND group renders head + empty children container', () => {
   _resetStore();
-  const q = cases.get()['hello-review'].questions[2];
+  const q = cases.get()['example-review'].questions[2];
   const g = mkGroup();
   const e = new CRShowwhenGroup();
   e.question = q;
@@ -44,9 +44,9 @@ test('CRShowwhenGroup: + condition appends a leaf, alerts when no other question
   };
   // Force currentBank to have only this question by mutating state
   cases.set({
-    'hello-review': {
+    'example-review': {
       label: 'L',
-      slug: 'hello-review',
+      slug: 'example-review',
       eligibleGroups: [],
       questions: [lonely],
     },
@@ -71,7 +71,7 @@ test('CRShowwhenGroup: + condition appends a leaf, alerts when no other question
 
 test('CRShowwhenGroup: + condition appends a leaf when others exist', () => {
   _resetStore();
-  const bank = cases.get()['hello-review'];
+  const bank = cases.get()['example-review'];
   const q = bank.questions[2];
   const g = mkGroup();
   const e = new CRShowwhenGroup();
@@ -88,7 +88,7 @@ test('CRShowwhenGroup: + condition appends a leaf when others exist', () => {
 
 test('CRShowwhenGroup: + group adds a flipped-op sub-group', () => {
   _resetStore();
-  const q = cases.get()['hello-review'].questions[2];
+  const q = cases.get()['example-review'].questions[2];
   const g = mkGroup({ op: 'and' });
   const e = new CRShowwhenGroup();
   e.question = q;
@@ -104,7 +104,7 @@ test('CRShowwhenGroup: + group adds a flipped-op sub-group', () => {
 
 test('CRShowwhenGroup: op toggle flips AND ↔ OR', () => {
   _resetStore();
-  const q = cases.get()['hello-review'].questions[2];
+  const q = cases.get()['example-review'].questions[2];
   const g = mkGroup();
   const e = new CRShowwhenGroup();
   e.question = q;
@@ -119,7 +119,7 @@ test('CRShowwhenGroup: op toggle flips AND ↔ OR', () => {
 
 test('CRShowwhenGroup: non-root shows × group button', () => {
   _resetStore();
-  const q = cases.get()['hello-review'].questions[2];
+  const q = cases.get()['example-review'].questions[2];
   const g = mkGroup();
   const e = new CRShowwhenGroup();
   e.question = q;
@@ -158,7 +158,7 @@ test('CRShowwhenGroup: × group on non-root removes self from parent tree', asyn
 
 test('CRShowwhenGroup: renders conjunctions between children + leaf/group mix', () => {
   _resetStore();
-  const q = cases.get()['hello-review'].questions[2];
+  const q = cases.get()['example-review'].questions[2];
   const g = mkGroup({
     op: 'or',
     children: [

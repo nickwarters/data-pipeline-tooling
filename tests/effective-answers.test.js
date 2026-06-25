@@ -140,7 +140,7 @@ test('effectiveAnswers: leaves the frozen Answers and untouched keys intact', ()
   assert.deepEqual(effective['q-needs'], { value: 'Yes' });
 });
 
-// computeOutcome stand-in mirroring hello-review: any 'No' Answer fails.
+// computeOutcome stand-in mirroring example-review: any 'No' Answer fails.
 /**
  * @param {Record<string, Answer>} answers
  * @returns {import('../src/sharepoint-client.js').OutcomeResult}

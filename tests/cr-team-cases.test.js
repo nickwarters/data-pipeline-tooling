@@ -111,7 +111,7 @@ test('cr-team-cases: renders heading', async () => {
     },
   });
   el.currentUser = { id: 'u1', displayName: 'U' };
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
   el.queryString = '?manager=me&role=reviewer-manager';
 
   await el.connectedCallback();
@@ -126,7 +126,7 @@ test('cr-team-cases: renders empty state when no cases returned', async () => {
     },
   });
   el.currentUser = { id: 'u1', displayName: 'U' };
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
   el.queryString = '?manager=me&role=reviewer-manager';
 
   await el.connectedCallback();
@@ -141,7 +141,7 @@ test('cr-team-cases: renders empty state when no cases returned', async () => {
 });
 
 test('cr-team-cases: renders cr-case-table with cases when results returned', async () => {
-  const cases = [row('c1', 'hello-review'), row('c2', 'hello-review')];
+  const cases = [row('c1', 'example-review'), row('c2', 'example-review')];
   const el = new CRTeamCases();
   el.client = /** @type {any} */ ({
     async listCases() {
@@ -149,7 +149,7 @@ test('cr-team-cases: renders cr-case-table with cases when results returned', as
     },
   });
   el.currentUser = { id: 'u1', displayName: 'U' };
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
   el.queryString = '?manager=me&role=reviewer-manager';
 
   await el.connectedCallback();
@@ -166,16 +166,16 @@ test('cr-team-cases: passes query-string params to fetcher (caseType scoping)', 
   el.client = /** @type {any} */ ({
     async listCases(/** @type {any} */ f) {
       calls.push(f);
-      return [row('c1', 'hello-review')];
+      return [row('c1', 'example-review')];
     },
   });
   el.currentUser = { id: 'u1', displayName: 'U' };
-  el.eligibleCaseTypes = ['hello-review', 'product-sale-review'];
-  el.queryString = '?manager=me&role=reviewer-manager&caseType=hello-review';
+  el.eligibleCaseTypes = ['example-review', 'product-sale-review'];
+  el.queryString = '?manager=me&role=reviewer-manager&caseType=example-review';
 
   await el.connectedCallback();
   assert.equal(calls.length, 1, 'should query only the specified caseType');
-  assert.equal(calls[0].caseType, 'hello-review');
+  assert.equal(calls[0].caseType, 'example-review');
 });
 
 test('cr-team-cases: renders back link to #/reports', async () => {

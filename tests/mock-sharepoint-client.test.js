@@ -10,8 +10,8 @@ import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js'
 const CASES = [
   {
     id: 'case-1',
-    caseType: 'hello-review',
-    title: 'Hello Review #1',
+    caseType: 'example-review',
+    title: 'Example Review #1',
     status: 'In-progress',
     assignedReviewer: 'user-1',
     responsibleParty: 'user-2',
@@ -23,8 +23,8 @@ const CASES = [
   },
   {
     id: 'case-2',
-    caseType: 'hello-review',
-    title: 'Hello Review #2',
+    caseType: 'example-review',
+    title: 'Example Review #2',
     status: 'In-progress',
     assignedReviewer: 'user-1',
     responsibleParty: 'user-3',
@@ -36,8 +36,8 @@ const CASES = [
   },
   {
     id: 'case-3',
-    caseType: 'hello-review',
-    title: 'Hello Review #3',
+    caseType: 'example-review',
+    title: 'Example Review #3',
     status: 'Completed',
     assignedReviewer: 'user-2',
     responsibleParty: 'user-4',
@@ -93,7 +93,7 @@ test('MockSharePointClient: getCase returns the correct fixture Case', async () 
   const client = makeClient();
   const c = await client.getCase('case-1');
   assert.equal(c?.id, 'case-1');
-  assert.equal(c?.title, 'Hello Review #1');
+  assert.equal(c?.title, 'Example Review #1');
   assert.equal(c?.status, 'In-progress');
 });
 
@@ -116,7 +116,7 @@ test('MockSharePointClient: patchCase merges only the specified fields', async (
   assert.equal(result.status, 200);
   assert.equal(result.data?.notes, 'test note');
   // Fields not in the patch remain unchanged
-  assert.equal(result.data?.title, 'Hello Review #1');
+  assert.equal(result.data?.title, 'Example Review #1');
   assert.equal(result.data?.status, 'In-progress');
   assert.equal(result.data?.assignedReviewer, 'user-1');
 });
@@ -219,7 +219,7 @@ test('MockSharePointClient: getQuestionDefinitions returns empty array for unkno
 
 test('MockSharePointClient: listCases filters by caseType', async () => {
   const client = makeClient();
-  const cases = await client.listCases({ caseType: 'hello-review' });
+  const cases = await client.listCases({ caseType: 'example-review' });
   assert.equal(cases.length, 3);
 
   // A different caseType should return nothing
@@ -237,7 +237,7 @@ test('MockSharePointClient: listCases filters by responsibleParty', async () => 
 test('MockSharePointClient: listCases filters by both caseType and responsibleParty', async () => {
   const client = makeClient();
   const cases = await client.listCases({
-    caseType: 'hello-review',
+    caseType: 'example-review',
     responsibleParty: 'user-3',
   });
   assert.equal(cases.length, 1);
@@ -314,7 +314,7 @@ test('MockSharePointClient: listCases with overdue:true returns only In-progress
   const FUTURE = '2099-01-01T00:00:00Z';
   const overdueCase = /** @type {CaseRow} */ ({
     id: 'od-1',
-    caseType: 'hello-review',
+    caseType: 'example-review',
     title: 'Overdue',
     status: 'In-progress',
     assignedReviewer: '',
@@ -328,7 +328,7 @@ test('MockSharePointClient: listCases with overdue:true returns only In-progress
   });
   const onTimeCase = /** @type {CaseRow} */ ({
     id: 'od-2',
-    caseType: 'hello-review',
+    caseType: 'example-review',
     title: 'On Time',
     status: 'In-progress',
     assignedReviewer: '',
@@ -342,7 +342,7 @@ test('MockSharePointClient: listCases with overdue:true returns only In-progress
   });
   const completedLateCase = /** @type {CaseRow} */ ({
     id: 'od-3',
-    caseType: 'hello-review',
+    caseType: 'example-review',
     title: 'Completed Late',
     status: 'Completed',
     assignedReviewer: '',
@@ -356,7 +356,7 @@ test('MockSharePointClient: listCases with overdue:true returns only In-progress
   });
   const noDueDateCase = /** @type {CaseRow} */ ({
     id: 'od-4',
-    caseType: 'hello-review',
+    caseType: 'example-review',
     title: 'No Due Date',
     status: 'In-progress',
     assignedReviewer: '',

@@ -87,7 +87,7 @@ test('CRCompileDrawer: Send for Review snapshots baseline + closes', () => {
   _resetStore();
   drawerOpen.set(true);
   commit((t) => {
-    t['hello-review'].label = 'AFTER';
+    t['example-review'].label = 'AFTER';
   });
   const e = new CRCompileDrawer();
   e.connectedCallback();
@@ -95,7 +95,7 @@ test('CRCompileDrawer: Send for Review snapshots baseline + closes', () => {
   const foot = drawer._children[2];
   const sendBtn = foot._children[1]._children[1];
   sendBtn._listeners.click[0]();
-  assert.equal(baseline.get()['hello-review'].label, 'AFTER');
+  assert.equal(baseline.get()['example-review'].label, 'AFTER');
   assert.equal(drawerOpen.get(), false);
   assert.equal(toastMsg.get(), 'Submitted for review');
   e.disconnectedCallback();
@@ -104,7 +104,7 @@ test('CRCompileDrawer: Send for Review snapshots baseline + closes', () => {
 test('CRCompileDrawer: diff cards render added / changed / removed counts', () => {
   _resetStore();
   commit((t) => {
-    t['hello-review'].questions.push({
+    t['example-review'].questions.push({
       id: 'new',
       text: '',
       responseType: 'yes-no-na',

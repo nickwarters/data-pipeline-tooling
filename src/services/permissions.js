@@ -35,7 +35,7 @@
 export const permissions = {
   reviewer: 'Reviewers',
   caseTypeOwners: {
-    'hello-review': 'CaseTypeOwners-HelloReview',
+    'example-review': 'CaseTypeOwners-ExampleReview',
   },
   responsibleParty: 'CR-ResponsibleParty',
   reviewerManager: 'Reviewer-Managers',

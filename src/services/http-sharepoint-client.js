@@ -34,7 +34,7 @@ export class HttpSharePointClient {
     this._webUrl = (opts.webUrl ?? '').replace(/\/+$/, '');
     // List names are placeholders until the SharePoint list schema is decided
     // (deferred per docs/PLAN.md slice 2). Constructor opts let deployers override.
-    this._caseListName = opts.caseListName ?? 'Cases-HelloReview';
+    this._caseListName = opts.caseListName ?? 'Cases-ExampleReview';
     this._qDefListName =
       opts.questionDefinitionsListName ?? 'QuestionDefinitions';
     /** @type {FetchImpl} */

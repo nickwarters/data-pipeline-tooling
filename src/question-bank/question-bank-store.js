@@ -33,7 +33,7 @@ export const cases = signal(
 export const baseline = signal(
   /** @type {Record<string, QuestionBank>} */ (structuredClone(initial))
 );
-export const activeSlug = signal(/** @type {string} */ ('hello-review'));
+export const activeSlug = signal(/** @type {string} */ ('example-review'));
 export const filters = signal(
   /** @type {Filters} */ ({
     category: null,
@@ -148,7 +148,7 @@ function cssEscape(s) {
 export function _resetStore() {
   cases.set(structuredClone(initial));
   baseline.set(structuredClone(initial));
-  activeSlug.set('hello-review');
+  activeSlug.set('example-review');
   filters.set({ category: null, showDeprecated: true, conditionalOnly: false });
   drawerOpen.set(false);
   toastMsg.set('');

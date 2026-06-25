@@ -17,7 +17,7 @@ test('CRWordingEditor: no question → renders nothing', () => {
 
 test('CRWordingEditor: renders edit mark, textarea, status pill, char count', () => {
   _resetStore();
-  const q = cases.get()['hello-review'].questions[0];
+  const q = cases.get()['example-review'].questions[0];
   const e = new CRWordingEditor();
   e.question = q;
   e.connectedCallback();
@@ -38,9 +38,9 @@ test('CRWordingEditor: shows "Edited" when text diverges from baseline', () => {
   _resetStore();
   // Mutate the question text after baseline snapshot
   commit((t) => {
-    t['hello-review'].questions[0].text = 'CHANGED';
+    t['example-review'].questions[0].text = 'CHANGED';
   });
-  const q = cases.get()['hello-review'].questions[0];
+  const q = cases.get()['example-review'].questions[0];
   const e = new CRWordingEditor();
   e.question = q;
   e.connectedCallback();
@@ -58,7 +58,7 @@ test('CRWordingEditor: shows "New draft" when no baseline match', () => {
     responseType: 'yes-no-na',
     deprecated: false,
   };
-  activeSlug.set('hello-review');
+  activeSlug.set('example-review');
   const e = new CRWordingEditor();
   e.question = q;
   e.connectedCallback();
@@ -104,7 +104,7 @@ test('CRWordingEditor: deprecated question adds deprecated-text class', () => {
 
 test('CRWordingEditor: focus/blur toggle "focused" class; input commits text', () => {
   _resetStore();
-  const q = cases.get()['hello-review'].questions[0];
+  const q = cases.get()['example-review'].questions[0];
   const e = new CRWordingEditor();
   e.question = q;
   e.connectedCallback();
@@ -123,7 +123,7 @@ test('CRWordingEditor: long baseline text gets ellipsis', () => {
   _resetStore();
   const long = 'A'.repeat(100);
   commit((t) => {
-    t['hello-review'].questions[0].text = long;
+    t['example-review'].questions[0].text = long;
   });
   // Now baseline still has the original short text, current has long — wait,
   // we want the *opposite*: baseline is long, current is different.
@@ -132,7 +132,7 @@ test('CRWordingEditor: long baseline text gets ellipsis', () => {
   // Force baseline lookup: not in baseline → branch already covered above.
   // Instead set the question to one *in* baseline but with current text differing,
   // and a baseline text >60 chars.
-  const q = cases.get()['hello-review'].questions[0];
+  const q = cases.get()['example-review'].questions[0];
   q.text = 'short';
   e.question = q;
   e.connectedCallback();

@@ -151,8 +151,8 @@ const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 function makeCase(/** @type {Partial<CaseRow>} */ overrides = {}) {
   return {
     id: 'case-1',
-    caseType: 'hello-review',
-    title: 'Hello Review #1',
+    caseType: 'example-review',
+    title: 'Example Review #1',
     status: 'In-progress',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-rp',
@@ -449,7 +449,7 @@ test('CRResponsiblePartyDashboard: remediation table filterable by case type', a
   const cases = [
     makeCase({
       id: 'c1',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       answers: {
         'q-1': {
           value: 'No',
@@ -473,14 +473,14 @@ test('CRResponsiblePartyDashboard: remediation table filterable by case type', a
   el.currentUserId = 'user-rp';
   await el.connectedCallback();
   // Apply case type filter
-  el._setCaseTypeFilter('hello-review');
+  el._setCaseTypeFilter('example-review');
   const rows = findAll(el, 'tr').filter((r) =>
     r.className.includes('cr-remediation-row')
   );
   assert.equal(rows.length, 1);
   // Case Type is the second cell in the remediation column set
   const caseTypeCells = rows.map((r) => r._children[1]?.textContent);
-  assert.ok(caseTypeCells.every((t) => t === 'hello-review'));
+  assert.ok(caseTypeCells.every((t) => t === 'example-review'));
 });
 
 test('CRResponsiblePartyDashboard: sort by due date ascending puts earliest due first', async () => {
@@ -691,7 +691,7 @@ test('CRResponsiblePartyDashboard: select change event calls _refreshRemediation
   const cases = [
     makeCase({
       id: 'c1',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       answers: {
         'q-1': {
           value: 'No',
@@ -724,12 +724,12 @@ test('CRResponsiblePartyDashboard: select change event calls _refreshRemediation
   assert.ok(select, 'remediation filter select should exist');
 
   // Fire the change event with a filter value
-  select.value = 'hello-review';
+  select.value = 'example-review';
   for (const h of select._listeners['change'] ?? []) {
     h({ target: select });
   }
 
-  // After filtering, only the hello-review case should appear in the remediation table
+  // After filtering, only the example-review case should appear in the remediation table
   const rows = findAll(el, 'tr').filter((r) =>
     r.className.includes('cr-remediation-row')
   );
@@ -738,7 +738,7 @@ test('CRResponsiblePartyDashboard: select change event calls _refreshRemediation
     1,
     'only matching case type should remain after change event'
   );
-  assert.equal(rows[0]._children[1]?.textContent, 'hello-review');
+  assert.equal(rows[0]._children[1]?.textContent, 'example-review');
 });
 
 test('CRResponsiblePartyDashboard: Open button click dispatches cr-case-open on messages table', async () => {
@@ -788,7 +788,7 @@ test('CRResponsiblePartyDashboard: _setCaseTypeFilter sets filter and re-renders
   const cases = [
     makeCase({
       id: 'c1',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       answers: {
         'q-1': {
           value: 'No',
@@ -813,14 +813,14 @@ test('CRResponsiblePartyDashboard: _setCaseTypeFilter sets filter and re-renders
   await el.connectedCallback();
 
   // _setCaseTypeFilter is not wired to the DOM select but must be callable directly
-  el._setCaseTypeFilter('hello-review');
+  el._setCaseTypeFilter('example-review');
 
   // After calling _setCaseTypeFilter, the filter should be applied on next render
   const remediationTable = caseTableInSection(el, 'cr-rp-remediation');
   assert.ok(remediationTable, 'remediation table must exist after re-render');
   assert.equal(
     el._caseTypeFilter,
-    'hello-review',
+    'example-review',
     '_caseTypeFilter must be updated'
   );
 });
@@ -829,7 +829,7 @@ test('CRResponsiblePartyDashboard: select change with null e.target falls back t
   const cases = [
     makeCase({
       id: 'c1',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       answers: {
         'q-1': {
           value: 'No',

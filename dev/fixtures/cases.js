@@ -20,7 +20,7 @@ const _twentyDaysAgo = new Date(
 );
 
 /**
- * hello-review Cases:
+ * example-review Cases:
  *   case-1  — untouched (no Answers, assigned)
  *   case-2  — partially answered (assigned)
  *   case-3  — completable (assigned)
@@ -43,8 +43,8 @@ const _twentyDaysAgo = new Date(
 export const cases = [
   {
     id: 'case-1',
-    caseType: 'hello-review',
-    title: 'Hello Review #1',
+    caseType: 'example-review',
+    title: 'Example Review #1',
     status: 'In-progress',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-a',
@@ -57,8 +57,8 @@ export const cases = [
   },
   {
     id: 'case-2',
-    caseType: 'hello-review',
-    title: 'Hello Review #2',
+    caseType: 'example-review',
+    title: 'Example Review #2',
     status: 'In-progress',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-b',
@@ -84,8 +84,8 @@ export const cases = [
   },
   {
     id: 'case-3',
-    caseType: 'hello-review',
-    title: 'Hello Review #3',
+    caseType: 'example-review',
+    title: 'Example Review #3',
     status: 'In-progress',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-c',
@@ -122,8 +122,8 @@ export const cases = [
   },
   {
     id: 'case-4',
-    caseType: 'hello-review',
-    title: 'Hello Review #4',
+    caseType: 'example-review',
+    title: 'Example Review #4',
     status: 'In-progress',
     assignedReviewer: '',
     responsibleParty: 'user-agent-d',
@@ -136,8 +136,8 @@ export const cases = [
   },
   {
     id: 'case-5',
-    caseType: 'hello-review',
-    title: 'Hello Review #5',
+    caseType: 'example-review',
+    title: 'Example Review #5',
     status: 'Completed',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-e',
@@ -150,8 +150,8 @@ export const cases = [
   },
   {
     id: 'case-6',
-    caseType: 'hello-review',
-    title: 'Hello Review #6',
+    caseType: 'example-review',
+    title: 'Example Review #6',
     status: 'Completed',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-f',
@@ -164,8 +164,8 @@ export const cases = [
   },
   {
     id: 'case-7',
-    caseType: 'hello-review',
-    title: 'Hello Review #7',
+    caseType: 'example-review',
+    title: 'Example Review #7',
     status: 'In-progress',
     assignedReviewer: '',
     responsibleParty: 'user-agent-g',
@@ -179,8 +179,8 @@ export const cases = [
   // --- Responsible Party portal fixture cases (responsibleParty: 'user-rp') ---
   {
     id: 'case-8',
-    caseType: 'hello-review',
-    title: 'Hello Review #8',
+    caseType: 'example-review',
+    title: 'Example Review #8',
     status: 'Completed',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-rp',
@@ -194,8 +194,8 @@ export const cases = [
   },
   {
     id: 'case-9',
-    caseType: 'hello-review',
-    title: 'Hello Review #9',
+    caseType: 'example-review',
+    title: 'Example Review #9',
     status: 'Completed',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-rp',
@@ -209,8 +209,8 @@ export const cases = [
   },
   {
     id: 'case-10',
-    caseType: 'hello-review',
-    title: 'Hello Review #10',
+    caseType: 'example-review',
+    title: 'Example Review #10',
     status: 'In-progress',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-rp',
@@ -236,8 +236,8 @@ export const cases = [
   },
   {
     id: 'case-11',
-    caseType: 'hello-review',
-    title: 'Hello Review #11',
+    caseType: 'example-review',
+    title: 'Example Review #11',
     status: 'In-progress',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-rp',
@@ -262,8 +262,8 @@ export const cases = [
   },
   {
     id: 'case-12',
-    caseType: 'hello-review',
-    title: 'Hello Review #12',
+    caseType: 'example-review',
+    title: 'Example Review #12',
     status: 'In-progress',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-rp',
@@ -292,8 +292,8 @@ export const cases = [
   },
   {
     id: 'case-13',
-    caseType: 'hello-review',
-    title: 'Hello Review #13',
+    caseType: 'example-review',
+    title: 'Example Review #13',
     status: 'In-progress',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-rp',
@@ -318,8 +318,8 @@ export const cases = [
     // snapshot. Completed two months ago so it sits outside the owner roll-up's
     // 7-day window.
     id: 'case-14',
-    caseType: 'hello-review',
-    title: 'Hello Review #14 (overridden)',
+    caseType: 'example-review',
+    title: 'Example Review #14 (overridden)',
     status: 'Completed',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-rp',
@@ -358,15 +358,15 @@ export const cases = [
     etag: 'etag-c14-v1',
   },
   {
-    // QA Check (issue #47): a qa-hello-review Case meta-reviewing case-14 (a
-    // Completed hello-review Case that already carries one Answer Override). The
+    // QA Check (issue #47): a qa-example-review Case meta-reviewing case-14 (a
+    // Completed example-review Case that already carries one Answer Override). The
     // QA Reviewer (user-qa) is its Assigned Reviewer; opening it renders the
     // standard shell with the QA questions plus a read-only source-Case panel
     // (case-14's Effective Answers + Current Outcome) and the embedded Override
     // editor, which writes cross-row to case-14's `overrides[]` (ADR-0018).
     id: 'qa-case-1',
-    caseType: 'qa-hello-review',
-    title: 'QA Check — Hello Review #14',
+    caseType: 'qa-example-review',
+    title: 'QA Check — Example Review #14',
     status: 'In-progress',
     assignedReviewer: 'user-qa',
     responsibleParty: '',
@@ -381,8 +381,8 @@ export const cases = [
   // --- Reviewer Manager (user-rm) report fixture cases ---
   {
     id: 'rm-case-1',
-    caseType: 'hello-review',
-    title: 'Hello Review #RM-1',
+    caseType: 'example-review',
+    title: 'Example Review #RM-1',
     status: 'Completed',
     assignedReviewer: 'user-reviewer-2',
     assignedReviewerManager: 'user-rm',
@@ -396,8 +396,8 @@ export const cases = [
   },
   {
     id: 'rm-case-2',
-    caseType: 'hello-review',
-    title: 'Hello Review #RM-2',
+    caseType: 'example-review',
+    title: 'Example Review #RM-2',
     status: 'Completed',
     assignedReviewer: 'user-reviewer-2',
     assignedReviewerManager: 'user-rm',
@@ -411,8 +411,8 @@ export const cases = [
   },
   {
     id: 'rm-case-3',
-    caseType: 'hello-review',
-    title: 'Hello Review #RM-3',
+    caseType: 'example-review',
+    title: 'Example Review #RM-3',
     status: 'In-progress',
     assignedReviewer: 'user-reviewer-2',
     assignedReviewerManager: 'user-rm',
@@ -427,8 +427,8 @@ export const cases = [
   },
   {
     id: 'rm-case-4',
-    caseType: 'hello-review',
-    title: 'Hello Review #RM-4',
+    caseType: 'example-review',
+    title: 'Example Review #RM-4',
     status: 'In-progress',
     assignedReviewer: 'user-reviewer-2',
     assignedReviewerManager: 'user-rm',

@@ -98,8 +98,8 @@ const CURRENT_USER = { id: 'user-reviewer', displayName: 'Alex Reviewer' };
 /** @type {CaseRow} */
 const BASE_CASE = {
   id: 'case-1',
-  caseType: 'hello-review',
-  title: 'Hello Review #1',
+  caseType: 'example-review',
+  title: 'Example Review #1',
   status: 'In-progress',
   assignedReviewer: 'user-reviewer',
   responsibleParty: 'user-agent',

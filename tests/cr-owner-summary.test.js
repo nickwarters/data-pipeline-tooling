@@ -79,7 +79,7 @@ test('CROwnerSummary: connectedCallback does nothing when ownedCaseTypes is empt
 test('CROwnerSummary: connectedCallback does nothing when client is null', async () => {
   const el = new CROwnerSummary();
   el.client = null;
-  el.ownedCaseTypes = ['hello-review'];
+  el.ownedCaseTypes = ['example-review'];
   await el.connectedCallback();
   assert.equal(/** @type {any} */ (el)._children.length, 0);
 });
@@ -96,21 +96,21 @@ test('CROwnerSummary: calls listCases with caseType filter for each owned type',
       return [];
     },
   });
-  el.ownedCaseTypes = ['hello-review', 'audit-review'];
+  el.ownedCaseTypes = ['example-review', 'audit-review'];
   await el.connectedCallback();
   assert.equal(calls.length, 2);
-  assert.deepEqual(calls[0], { caseType: 'hello-review' });
+  assert.deepEqual(calls[0], { caseType: 'example-review' });
   assert.deepEqual(calls[1], { caseType: 'audit-review' });
 });
 
 test('CROwnerSummary: stores summaries on _summaries after _refresh', async () => {
   const el = new CROwnerSummary();
   el.client = /** @type {any} */ (makeClient([]));
-  el.ownedCaseTypes = ['hello-review'];
+  el.ownedCaseTypes = ['example-review'];
   await el.connectedCallback();
   assert.ok(Array.isArray(el._summaries), '_summaries should be set');
   assert.equal(el._summaries.length, 1);
-  assert.equal(el._summaries[0].caseType, 'hello-review');
+  assert.equal(el._summaries[0].caseType, 'example-review');
 });
 
 test('CROwnerSummary: outstanding count = unassigned in-progress cases', async () => {
@@ -118,7 +118,7 @@ test('CROwnerSummary: outstanding count = unassigned in-progress cases', async (
   const fixtureCases = [
     {
       id: 'c1',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       title: 'C1',
       status: 'In-progress',
       assignedReviewer: '',
@@ -131,7 +131,7 @@ test('CROwnerSummary: outstanding count = unassigned in-progress cases', async (
     },
     {
       id: 'c2',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       title: 'C2',
       status: 'In-progress',
       assignedReviewer: 'user-x',
@@ -145,7 +145,7 @@ test('CROwnerSummary: outstanding count = unassigned in-progress cases', async (
   ];
   const el = new CROwnerSummary();
   el.client = /** @type {any} */ (makeClient(fixtureCases));
-  el.ownedCaseTypes = ['hello-review'];
+  el.ownedCaseTypes = ['example-review'];
   await el.connectedCallback();
   assert.equal(el._summaries[0].outstanding, 1);
 });
@@ -155,7 +155,7 @@ test('CROwnerSummary: assigned count = in-progress cases with an assigned review
   const fixtureCases = [
     {
       id: 'c1',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       title: 'C1',
       status: 'In-progress',
       assignedReviewer: '',
@@ -168,7 +168,7 @@ test('CROwnerSummary: assigned count = in-progress cases with an assigned review
     },
     {
       id: 'c2',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       title: 'C2',
       status: 'In-progress',
       assignedReviewer: 'user-x',
@@ -181,7 +181,7 @@ test('CROwnerSummary: assigned count = in-progress cases with an assigned review
     },
     {
       id: 'c3',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       title: 'C3',
       status: 'In-progress',
       assignedReviewer: 'user-y',
@@ -195,7 +195,7 @@ test('CROwnerSummary: assigned count = in-progress cases with an assigned review
   ];
   const el = new CROwnerSummary();
   el.client = /** @type {any} */ (makeClient(fixtureCases));
-  el.ownedCaseTypes = ['hello-review'];
+  el.ownedCaseTypes = ['example-review'];
   await el.connectedCallback();
   assert.equal(el._summaries[0].assigned, 2);
 });
@@ -205,7 +205,7 @@ test('CROwnerSummary: completedToday count = completed cases with completedAt to
   const fixtureCases = [
     {
       id: 'c1',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       title: 'C1',
       status: 'Completed',
       assignedReviewer: 'u',
@@ -218,7 +218,7 @@ test('CROwnerSummary: completedToday count = completed cases with completedAt to
     },
     {
       id: 'c2',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       title: 'C2',
       status: 'Completed',
       assignedReviewer: 'u',
@@ -232,7 +232,7 @@ test('CROwnerSummary: completedToday count = completed cases with completedAt to
   ];
   const el = new CROwnerSummary();
   el.client = /** @type {any} */ (makeClient(fixtureCases));
-  el.ownedCaseTypes = ['hello-review'];
+  el.ownedCaseTypes = ['example-review'];
   await el.connectedCallback();
   assert.equal(el._summaries[0].completedToday, 1);
 });
@@ -242,7 +242,7 @@ test('CROwnerSummary: completedLast7Days includes cases from within 7 days', asy
   const fixtureCases = [
     {
       id: 'c1',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       title: 'C1',
       status: 'Completed',
       assignedReviewer: 'u',
@@ -255,7 +255,7 @@ test('CROwnerSummary: completedLast7Days includes cases from within 7 days', asy
     },
     {
       id: 'c2',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       title: 'C2',
       status: 'Completed',
       assignedReviewer: 'u',
@@ -268,7 +268,7 @@ test('CROwnerSummary: completedLast7Days includes cases from within 7 days', asy
     },
     {
       id: 'c3',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       title: 'C3',
       status: 'Completed',
       assignedReviewer: 'u',
@@ -282,7 +282,7 @@ test('CROwnerSummary: completedLast7Days includes cases from within 7 days', asy
   ];
   const el = new CROwnerSummary();
   el.client = /** @type {any} */ (makeClient(fixtureCases));
-  el.ownedCaseTypes = ['hello-review'];
+  el.ownedCaseTypes = ['example-review'];
   await el.connectedCallback();
   assert.equal(
     el._summaries[0].completedLast7Days,
@@ -302,7 +302,7 @@ test('CROwnerSummary: overdue count = in-progress cases with dueDate in the past
   const fixtureCases = [
     {
       id: 'c1',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       title: 'C1',
       status: 'In-progress',
       assignedReviewer: 'u',
@@ -316,7 +316,7 @@ test('CROwnerSummary: overdue count = in-progress cases with dueDate in the past
     },
     {
       id: 'c2',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       title: 'C2',
       status: 'In-progress',
       assignedReviewer: 'u',
@@ -330,7 +330,7 @@ test('CROwnerSummary: overdue count = in-progress cases with dueDate in the past
     },
     {
       id: 'c3',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       title: 'C3',
       status: 'In-progress',
       assignedReviewer: 'u',
@@ -344,7 +344,7 @@ test('CROwnerSummary: overdue count = in-progress cases with dueDate in the past
   ];
   const el = new CROwnerSummary();
   el.client = /** @type {any} */ (makeClient(fixtureCases));
-  el.ownedCaseTypes = ['hello-review'];
+  el.ownedCaseTypes = ['example-review'];
   await el.connectedCallback();
   assert.equal(el._summaries[0].overdue, 1);
 });
@@ -356,13 +356,13 @@ test('CROwnerSummary: renders heading and one card per owned case type', async (
       return [];
     },
   });
-  el.ownedCaseTypes = ['hello-review', 'audit-review'];
+  el.ownedCaseTypes = ['example-review', 'audit-review'];
   await el.connectedCallback();
   // _children: [h2, card-0, card-1]
   assert.equal(/** @type {any} */ (el)._children.length, 3);
 });
 
-test('CROwnerSummary: renders correct counts for hello-review fixture data', async () => {
+test('CROwnerSummary: renders correct counts for example-review fixture data', async () => {
   const { cases } = await import('../dev/fixtures/cases.js');
   const el = new CROwnerSummary();
   el.client = /** @type {any} */ ({
@@ -374,7 +374,7 @@ test('CROwnerSummary: renders correct counts for hello-review fixture data', asy
         .map((c) => ({ ...c }));
     },
   });
-  el.ownedCaseTypes = ['hello-review'];
+  el.ownedCaseTypes = ['example-review'];
   await el.connectedCallback();
 
   const s = el._summaries[0];

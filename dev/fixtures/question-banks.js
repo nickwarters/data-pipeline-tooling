@@ -50,9 +50,9 @@
 
 /** @type {Record<string, QuestionBank>} */
 export const questionBanks = {
-  'hello-review': {
-    label: 'Hello Review',
-    slug: 'hello-review',
+  'example-review': {
+    label: 'Example Review',
+    slug: 'example-review',
     eligibleGroups: ['Reviewers'],
     labels: [
       { id: 'lbl-coaching', name: 'Coaching', color: '#2563eb' },

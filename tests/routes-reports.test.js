@@ -98,7 +98,7 @@ test('reports/reviewer-team route: mounts page with client, currentUser, eligibl
   try {
     const client = { id: 'mock-client' };
     const currentUser = { id: 'user-rm', displayName: 'Morgan Manager' };
-    const eligibleCaseTypes = ['hello-review'];
+    const eligibleCaseTypes = ['example-review'];
 
     const router = new Router();
     const container = { replaceChildren(/** @type {any[]} */ ...args) {} };

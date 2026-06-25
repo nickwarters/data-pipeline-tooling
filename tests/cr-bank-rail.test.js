@@ -52,9 +52,9 @@ test('CRBankRail: clicking a category chip sets category', () => {
 test('CRBankRail: uncategorised questions get an "Uncategorised" chip', () => {
   _resetStore();
   cases.set({
-    'hello-review': {
+    'example-review': {
       label: 'L',
-      slug: 'hello-review',
+      slug: 'example-review',
       eligibleGroups: [],
       questions: [
         /** @type {any} */ ({

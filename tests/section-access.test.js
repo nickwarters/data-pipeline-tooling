@@ -17,7 +17,7 @@ import {
 function makeCase(overrides = {}) {
   return {
     id: 'case-1',
-    caseType: 'hello-review',
+    caseType: 'example-review',
     title: 'T',
     status: 'In-progress',
     assignedReviewer: 'user-reviewer',
@@ -90,7 +90,7 @@ test('resolveRoles: responsible party', () => {
 test('resolveRoles: case type owner', () => {
   const caps = {
     isReviewer: false,
-    ownedCaseTypes: ['hello-review'],
+    ownedCaseTypes: ['example-review'],
     isResponsibleParty: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
@@ -120,7 +120,7 @@ test('resolveRoles: none', () => {
 test('resolveRoles: multiple roles — assigned reviewer + owner', () => {
   const caps = {
     isReviewer: true,
-    ownedCaseTypes: ['hello-review'],
+    ownedCaseTypes: ['example-review'],
     isResponsibleParty: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,

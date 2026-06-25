@@ -104,8 +104,8 @@ function findFirst(root, tag) {
 function makeCase(overrides = {}) {
   return {
     id: 'case-1',
-    caseType: 'hello-review',
-    title: 'Hello Review #1',
+    caseType: 'example-review',
+    title: 'Example Review #1',
     status: 'In-progress',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-agent-a',
@@ -172,7 +172,7 @@ test('CRCaseTable: row contains a link to the case', () => {
 test('CRCaseTable: free-text filter hides non-matching rows', () => {
   const el = new CRCaseTable();
   el.cases = [
-    makeCase({ id: 'c1', title: 'Alpha Review', caseType: 'hello-review' }),
+    makeCase({ id: 'c1', title: 'Alpha Review', caseType: 'example-review' }),
     makeCase({ id: 'c2', title: 'Beta Review', caseType: 'goodbye-review' }),
   ];
   el.connectedCallback();
@@ -193,7 +193,7 @@ test('CRCaseTable: free-text filter hides non-matching rows', () => {
 test('CRCaseTable: free-text filter matches case type', () => {
   const el = new CRCaseTable();
   el.cases = [
-    makeCase({ id: 'c1', title: 'Case One', caseType: 'hello-review' }),
+    makeCase({ id: 'c1', title: 'Case One', caseType: 'example-review' }),
     makeCase({ id: 'c2', title: 'Case Two', caseType: 'goodbye-review' }),
   ];
   el.connectedCallback();

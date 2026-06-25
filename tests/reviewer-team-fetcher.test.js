@@ -27,7 +27,7 @@ function makeClient(casesByType = {}) {
 test('fetchReviewerTeamCases: calls listCases once per eligible case type with assignedReviewerManager filter', async () => {
   const client = makeClient();
   await fetchReviewerTeamCases(/** @type {any} */ (client), 'user-rm', [
-    'hello-review',
+    'example-review',
     'product-sale-review',
   ]);
   assert.equal(client.calls.length, 2, 'should make one call per case type');
@@ -36,8 +36,8 @@ test('fetchReviewerTeamCases: calls listCases once per eligible case type with a
     'all calls should filter by managerId'
   );
   assert.ok(
-    client.calls.some((c) => c.caseType === 'hello-review'),
-    'should query hello-review'
+    client.calls.some((c) => c.caseType === 'example-review'),
+    'should query example-review'
   );
   assert.ok(
     client.calls.some((c) => c.caseType === 'product-sale-review'),
@@ -61,16 +61,16 @@ test('fetchReviewerTeamCases: merges results from all case types into one array'
     etag: 'e',
   });
   const client = makeClient({
-    'hello-review': [
-      makeRow('c1', 'hello-review'),
-      makeRow('c2', 'hello-review'),
+    'example-review': [
+      makeRow('c1', 'example-review'),
+      makeRow('c2', 'example-review'),
     ],
     'product-sale-review': [makeRow('c3', 'product-sale-review')],
   });
   const result = await fetchReviewerTeamCases(
     /** @type {any} */ (client),
     'user-rm',
-    ['hello-review', 'product-sale-review']
+    ['example-review', 'product-sale-review']
   );
   assert.equal(result.length, 3, 'should return all cases from all types');
   assert.ok(result.some((c) => c.id === 'c1'));

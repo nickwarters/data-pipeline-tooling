@@ -333,7 +333,7 @@ test('CRDashboard: owner capability causes cr-owner-summary to be added to layou
   el.currentUserId = 'user-owner';
   el.capabilities = {
     isReviewer: true,
-    ownedCaseTypes: ['hello-review'],
+    ownedCaseTypes: ['example-review'],
     isResponsibleParty: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
@@ -346,7 +346,7 @@ test('CRDashboard: owner capability causes cr-owner-summary to be added to layou
   // _children: [h1, caseTable, allocationEl, ownerSection]
   const ownerSection = /** @type {any} */ (el)._children[3];
   assert.ok(ownerSection, 'owner section should exist');
-  assert.deepEqual(ownerSection.ownedCaseTypes, ['hello-review']);
+  assert.deepEqual(ownerSection.ownedCaseTypes, ['example-review']);
   assert.ok(
     ownerSection.client !== null,
     'client should be set on owner section'
@@ -397,14 +397,14 @@ test('CRDashboard: layout includes a cr-allocation element at index 2 for review
     isQaReviewer: false,
     isVisitor: false,
   };
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
   await el.connectedCallback();
 
   // _children: [h1, caseTable, allocationEl]
   const allocationEl = /** @type {any} */ (el)._children[2];
   assert.ok(allocationEl, 'allocation element should exist at index 2');
   assert.equal(allocationEl.currentUserId, 'user-reviewer');
-  assert.deepEqual(allocationEl.eligibleCaseTypes, ['hello-review']);
+  assert.deepEqual(allocationEl.eligibleCaseTypes, ['example-review']);
 });
 
 // ===== TESTS: CRCaseReview =====

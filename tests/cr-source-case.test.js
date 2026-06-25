@@ -74,7 +74,7 @@ const CATALOGUE = [
   },
 ];
 
-/** Mirrors hello-review: fail if any Answer is 'No'. */
+/** Mirrors example-review: fail if any Answer is 'No'. */
 const computeOutcome = (/** @type {Record<string, any>} */ a) => ({
   verdict: Object.values(a).some((x) => x.value === 'No') ? 'fail' : 'pass',
 });
@@ -83,8 +83,8 @@ const computeOutcome = (/** @type {Record<string, any>} */ a) => ({
 function originalRow() {
   return {
     id: 'case-14',
-    caseType: 'hello-review',
-    title: 'Hello Review #14 (overridden)',
+    caseType: 'example-review',
+    title: 'Example Review #14 (overridden)',
     status: 'Completed',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-rp',
@@ -141,7 +141,7 @@ test('cr-source-case: renders the SourceCaseId and the original Case title', () 
     'renders the SourceCaseId'
   );
   assert.ok(
-    texts.some((t) => t.includes('Hello Review #14')),
+    texts.some((t) => t.includes('Example Review #14')),
     'renders the original title'
   );
 });

@@ -2,7 +2,7 @@
 /** @typedef {import('../../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 
 /**
- * Question Definitions for the hello-review Case Type.
+ * Question Definitions for the example-review Case Type.
  * q-resolve is conditional on q-needs being answered 'Yes'.
  *
  * @type {QuestionDefinition[]}

@@ -79,7 +79,7 @@ const { SaveQueue } = await import('../src/services/save-queue.js');
 /** @type {CaseRow} */
 const BASE_ROW = {
   id: 'c1',
-  caseType: 'hello-review',
+  caseType: 'example-review',
   title: 'Test Case',
   status: 'In-progress',
   assignedReviewer: 'u1',
@@ -2422,12 +2422,12 @@ test('CRCaseReview: a QA Reviewer on an In-progress Case gets no override editor
 
 // ===== QA Check source Case panel (issue #47, ADR-0018) =====
 
-/** The original Completed hello-review Case a QA Check meta-reviews. */
+/** The original Completed example-review Case a QA Check meta-reviews. */
 function makeOriginalRow() {
   return /** @type {CaseRow} */ ({
     id: 'case-14',
-    caseType: 'hello-review',
-    title: 'Hello Review #14 (overridden)',
+    caseType: 'example-review',
+    title: 'Example Review #14 (overridden)',
     status: 'Completed',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-rp',
@@ -2450,12 +2450,12 @@ function makeOriginalRow() {
   });
 }
 
-/** The QA Check Case (qa-hello-review) linked to the original via sourceCaseId. */
+/** The QA Check Case (qa-example-review) linked to the original via sourceCaseId. */
 function makeQaCheckRow() {
   return /** @type {CaseRow} */ ({
     id: 'qa-case-1',
-    caseType: 'qa-hello-review',
-    title: 'QA Check — Hello Review #14',
+    caseType: 'qa-example-review',
+    title: 'QA Check — Example Review #14',
     status: 'In-progress',
     assignedReviewer: 'user-qa',
     responsibleParty: '',

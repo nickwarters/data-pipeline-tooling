@@ -10,19 +10,19 @@ test('resolveEligibleCaseTypes: returns a Promise', async () => {
   await result;
 });
 
-test('resolveEligibleCaseTypes: includes hello-review when user is in Reviewers group', async () => {
+test('resolveEligibleCaseTypes: includes example-review when user is in Reviewers group', async () => {
   const result = await resolveEligibleCaseTypes(['Reviewers']);
   assert.ok(
-    result.includes('hello-review'),
-    'hello-review should be eligible for Reviewers'
+    result.includes('example-review'),
+    'example-review should be eligible for Reviewers'
   );
 });
 
-test('resolveEligibleCaseTypes: excludes hello-review when user has no matching group', async () => {
+test('resolveEligibleCaseTypes: excludes example-review when user has no matching group', async () => {
   const result = await resolveEligibleCaseTypes(['SomeOtherGroup']);
   assert.ok(
-    !result.includes('hello-review'),
-    'hello-review should not be eligible for non-Reviewers'
+    !result.includes('example-review'),
+    'example-review should not be eligible for non-Reviewers'
   );
 });
 
@@ -43,8 +43,8 @@ test('resolveEligibleCaseTypes: returns an array', async () => {
 test('resolveEligibleCaseTypes: Reviewer-Managers get all case types (needed for fan-out reporting)', async () => {
   const result = await resolveEligibleCaseTypes(['Reviewer-Managers']);
   assert.ok(
-    result.includes('hello-review'),
-    'hello-review should be eligible for Reviewer-Managers'
+    result.includes('example-review'),
+    'example-review should be eligible for Reviewer-Managers'
   );
   assert.ok(result.length > 0, 'should return at least one case type');
 });

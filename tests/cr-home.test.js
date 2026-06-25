@@ -155,7 +155,7 @@ test('CRHome: responsible party — links to my cases', () => {
 
 test('CRHome: case type owner — links to question bank', () => {
   const el = new CRHome();
-  el.capabilities = caps({ ownedCaseTypes: ['hello-review'] });
+  el.capabilities = caps({ ownedCaseTypes: ['example-review'] });
   el.connectedCallback();
 
   assert.deepEqual(sectionHeadings(el), ['Case Type Owner']);
@@ -176,7 +176,7 @@ test('CRHome: multi-role — only matching sections, in documented order', () =>
   el.capabilities = caps({
     isReviewer: true,
     isResponsiblePartyManager: true,
-    ownedCaseTypes: ['hello-review'],
+    ownedCaseTypes: ['example-review'],
     isMaintainer: true,
   });
   el.connectedCallback();
@@ -196,7 +196,7 @@ test('CRHome: full order — all roles render in documented order', () => {
     isReviewerManager: true,
     isResponsiblePartyManager: true,
     isResponsibleParty: true,
-    ownedCaseTypes: ['hello-review'],
+    ownedCaseTypes: ['example-review'],
     isMaintainer: true,
     isVisitor: true,
   });

@@ -21,7 +21,7 @@ const WINDOWS = {
 function makeCase(overrides) {
   return {
     id: 'c1',
-    caseType: 'hello-review',
+    caseType: 'example-review',
     title: 'Test Case',
     status: 'In-progress',
     assignedReviewer: 'user-rev',
@@ -84,7 +84,7 @@ test('aggregateReviewerTeamData: byType groups counts per caseType slug', () => 
   const cases = [
     makeCase({
       id: 'c5',
-      caseType: 'hello-review',
+      caseType: 'example-review',
       status: 'Completed',
       completedAt: new Date(2026, 4, 14).toISOString(),
     }),
@@ -96,8 +96,11 @@ test('aggregateReviewerTeamData: byType groups counts per caseType slug', () => 
     }),
   ];
   const result = aggregateReviewerTeamData(cases, WINDOWS);
-  assert.ok(result.byType['hello-review'], 'should have hello-review entry');
-  assert.equal(result.byType['hello-review'].completedLast7d, 1);
+  assert.ok(
+    result.byType['example-review'],
+    'should have example-review entry'
+  );
+  assert.equal(result.byType['example-review'].completedLast7d, 1);
   assert.ok(
     result.byType['product-sale-review'],
     'should have product-sale-review entry'

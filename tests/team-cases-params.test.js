@@ -41,10 +41,10 @@ test('parseTeamCasesParams: ignores unknown role values', () => {
   assert.strictEqual(parseTeamCasesParams('?role=admin').role, null);
 });
 
-test('parseTeamCasesParams: parses ?caseType=hello-review', () => {
+test('parseTeamCasesParams: parses ?caseType=example-review', () => {
   assert.strictEqual(
-    parseTeamCasesParams('?caseType=hello-review').caseType,
-    'hello-review'
+    parseTeamCasesParams('?caseType=example-review').caseType,
+    'example-review'
   );
 });
 
@@ -80,11 +80,11 @@ test('parseTeamCasesParams: parses ?completedSince and ?completedUntil', () => {
 
 test('parseTeamCasesParams: parses combined params', () => {
   const p = parseTeamCasesParams(
-    '?manager=me&role=reviewer-manager&caseType=hello-review&status=completed&completedSince=2026-01-01&completedUntil=2026-05-18'
+    '?manager=me&role=reviewer-manager&caseType=example-review&status=completed&completedSince=2026-01-01&completedUntil=2026-05-18'
   );
   assert.strictEqual(p.manager, 'me');
   assert.strictEqual(p.role, 'reviewer-manager');
-  assert.strictEqual(p.caseType, 'hello-review');
+  assert.strictEqual(p.caseType, 'example-review');
   assert.strictEqual(p.status, 'completed');
   assert.strictEqual(p.completedSince, '2026-01-01');
   assert.strictEqual(p.completedUntil, '2026-05-18');

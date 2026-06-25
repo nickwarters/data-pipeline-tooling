@@ -106,12 +106,12 @@ function makeClient(allCases) {
   };
 }
 
-/** Unassigned hello-review case with a given `created` timestamp. */
+/** Unassigned example-review case with a given `created` timestamp. */
 function unassignedCase(id = 'c1', created = '2026-01-01T00:00:00Z') {
   /** @type {CaseRow} */
   const c = {
     id,
-    caseType: 'hello-review',
+    caseType: 'example-review',
     title: `Case ${id}`,
     status: 'In-progress',
     assignedReviewer: '',
@@ -139,7 +139,7 @@ test('CRAllocation: connectedCallback renders "Request next Case" button', async
   const el = new CRAllocation();
   el.client = /** @type {any} */ (makeClient([]));
   el.currentUserId = 'user-reviewer';
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
   el.connectedCallback();
   const btn = /** @type {any} */ (el)._children[0];
   assert.ok(btn, 'should have a child element');
@@ -160,7 +160,7 @@ test('CRAllocation: _requestNextCase assigns the oldest unassigned case and disp
   const el = new CRAllocation();
   el.client = /** @type {any} */ (client);
   el.currentUserId = 'user-reviewer';
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
 
   /** @type {any[]} */
   const dispatched = [];
@@ -213,7 +213,7 @@ test('CRAllocation: _requestNextCase retries with next case on 412 and dispatche
   const el = new CRAllocation();
   el.client = /** @type {any} */ (client);
   el.currentUserId = 'user-reviewer';
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
 
   /** @type {any[]} */
   const dispatched = [];
@@ -251,7 +251,7 @@ test('CRAllocation: _requestNextCase shows "No Cases available" when no unassign
   const el = new CRAllocation();
   el.client = /** @type {any} */ (client);
   el.currentUserId = 'user-reviewer';
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
 
   await el._requestNextCase();
 
@@ -276,7 +276,7 @@ test('CRAllocation: _requestNextCase shows "No Cases available" when all retries
   const el = new CRAllocation();
   el.client = /** @type {any} */ (client);
   el.currentUserId = 'user-reviewer';
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
 
   await el._requestNextCase();
 
@@ -285,7 +285,7 @@ test('CRAllocation: _requestNextCase shows "No Cases available" when all retries
 });
 
 test('CRAllocation: _requestNextCase only considers eligible case types', async () => {
-  const eligibleCase = unassignedCase('c-eligible', '2026-01-01T00:00:00Z'); // hello-review
+  const eligibleCase = unassignedCase('c-eligible', '2026-01-01T00:00:00Z'); // example-review
   const ineligibleCase = /** @type {CaseRow} */ ({
     ...unassignedCase('c-ineligible', '2025-12-01T00:00:00Z'), // older but wrong type
     caseType: 'other-review',
@@ -295,7 +295,7 @@ test('CRAllocation: _requestNextCase only considers eligible case types', async 
   const el = new CRAllocation();
   el.client = /** @type {any} */ (client);
   el.currentUserId = 'user-reviewer';
-  el.eligibleCaseTypes = ['hello-review']; // only hello-review eligible
+  el.eligibleCaseTypes = ['example-review']; // only example-review eligible
 
   /** @type {any} */ (globalThis).location.hash = '';
   await el._requestNextCase();
@@ -316,7 +316,7 @@ test('CRAllocation: patchCase is called with the correct etag', async () => {
   const el = new CRAllocation();
   el.client = /** @type {any} */ (client);
   el.currentUserId = 'user-reviewer';
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
 
   await el._requestNextCase();
 
@@ -330,7 +330,7 @@ test('CRAllocation: _requestNextCase does not navigate and dispatches cr-allocat
   const el = new CRAllocation();
   el.client = /** @type {any} */ (client);
   el.currentUserId = 'user-reviewer';
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
 
   /** @type {any[]} */
   const dispatched = [];
@@ -355,7 +355,7 @@ test('CRAllocation: _requestNextCase does not navigate and dispatches cr-allocat
 test('CRAllocation: _getUnassignedCases returns empty array when client is null', async () => {
   const el = new CRAllocation();
   el.client = null;
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
   const result = await el._getUnassignedCases();
   assert.deepEqual(result, []);
 });
@@ -374,7 +374,7 @@ test('CRAllocation: _getUnassignedCases filters out assigned cases', async () =>
   const client = makeClient([c1, c2]);
   const el = new CRAllocation();
   el.client = /** @type {any} */ (client);
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
   const result = await el._getUnassignedCases();
   assert.equal(result.length, 1);
   assert.equal(result[0].id, 'c1');
@@ -387,7 +387,7 @@ test('CRAllocation: _getUnassignedCases filters out ineligible case types', asyn
   const client = makeClient([c1, c2]);
   const el = new CRAllocation();
   el.client = /** @type {any} */ (client);
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
   const result = await el._getUnassignedCases();
   assert.equal(result.length, 1);
   assert.equal(result[0].id, 'c1');
@@ -401,7 +401,7 @@ test('CRAllocation: _getUnassignedCases sorting handles equal or greater dates',
   const client = makeClient([c3, c2, c1]);
   const el = new CRAllocation();
   el.client = /** @type {any} */ (client);
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
 
   const result = await el._getUnassignedCases();
   // c1 and c2 are equal, c3 is greater.
@@ -416,7 +416,7 @@ test('CRAllocation: _getUnassignedCases sorting handles smaller date', async () 
   const client = makeClient([c1, c2]);
   const el = new CRAllocation();
   el.client = /** @type {any} */ (client);
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
 
   const result = await el._getUnassignedCases();
   assert.equal(result[0].id, 'c2');
@@ -439,7 +439,7 @@ test('CRAllocation: _getUnassignedCases handles null created via ?? fallback', a
 
   const el = new CRAllocation();
   el.client = /** @type {any} */ (client);
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
 
   const result = await el._getUnassignedCases();
   // null created sorts as '' which is less than '2026-...', so c1 comes first
@@ -458,7 +458,7 @@ test('CRAllocation: button click triggers _requestNextCase', async () => {
   const el = new CRAllocation();
   el.client = /** @type {any} */ (client);
   el.currentUserId = 'user-reviewer';
-  el.eligibleCaseTypes = ['hello-review'];
+  el.eligibleCaseTypes = ['example-review'];
   el.connectedCallback();
 
   /** @type {any[]} */

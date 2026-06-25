@@ -27,7 +27,7 @@ test('CRShowwhenLeaf: no question/leaf → renders nothing', () => {
 
 test('CRShowwhenLeaf: equals op renders qId select, op select, and value input', () => {
   _resetStore();
-  const others = cases.get()['hello-review'].questions;
+  const others = cases.get()['example-review'].questions;
   /** @type {any} */
   const parent = { children: [] };
   const leaf = mkLeaf();
@@ -44,7 +44,7 @@ test('CRShowwhenLeaf: equals op renders qId select, op select, and value input',
 
 test('CRShowwhenLeaf: answered op renders hint instead of value input', () => {
   _resetStore();
-  const others = cases.get()['hello-review'].questions;
+  const others = cases.get()['example-review'].questions;
   /** @type {any} */
   const parent = { children: [] };
   const leaf = mkLeaf({ op: 'answered', value: true });
@@ -61,7 +61,7 @@ test('CRShowwhenLeaf: answered op renders hint instead of value input', () => {
 
 test('CRShowwhenLeaf: in op renders comma-joined value', () => {
   _resetStore();
-  const others = cases.get()['hello-review'].questions;
+  const others = cases.get()['example-review'].questions;
   /** @type {any} */
   const parent = { children: [] };
   const leaf = mkLeaf({ op: 'in', value: ['A', 'B'] });
@@ -78,7 +78,7 @@ test('CRShowwhenLeaf: in op renders comma-joined value', () => {
 
 test('CRShowwhenLeaf: changing qId select updates leaf.qId', () => {
   _resetStore();
-  const others = cases.get()['hello-review'].questions;
+  const others = cases.get()['example-review'].questions;
   /** @type {any} */
   const parent = { children: [] };
   const leaf = mkLeaf();
@@ -96,7 +96,7 @@ test('CRShowwhenLeaf: changing qId select updates leaf.qId', () => {
 
 test('CRShowwhenLeaf: changing op to answered, in, equals normalises value', () => {
   _resetStore();
-  const others = cases.get()['hello-review'].questions;
+  const others = cases.get()['example-review'].questions;
   /** @type {any} */
   const parent = { children: [] };
   const leaf = mkLeaf();
@@ -125,7 +125,7 @@ test('CRShowwhenLeaf: changing op to answered, in, equals normalises value', () 
 
 test('CRShowwhenLeaf: in→in change preserves array; equals→in coerces string', () => {
   _resetStore();
-  const others = cases.get()['hello-review'].questions;
+  const others = cases.get()['example-review'].questions;
   /** @type {any} */
   const parent = { children: [] };
   const leaf = mkLeaf({ op: 'in', value: ['A'] });
@@ -143,7 +143,7 @@ test('CRShowwhenLeaf: in→in change preserves array; equals→in coerces string
 
 test('CRShowwhenLeaf: typed value commits — split for in, plain for equals', () => {
   _resetStore();
-  const others = cases.get()['hello-review'].questions;
+  const others = cases.get()['example-review'].questions;
   /** @type {any} */
   const parent = { children: [] };
   const leaf = mkLeaf({ op: 'in', value: [] });
@@ -174,7 +174,7 @@ test('CRShowwhenLeaf: typed value commits — split for in, plain for equals', (
 
 test('CRShowwhenLeaf: × removes self from parent', () => {
   _resetStore();
-  const others = cases.get()['hello-review'].questions;
+  const others = cases.get()['example-review'].questions;
   /** @type {any} */
   const parent = { children: [] };
   const leaf = mkLeaf();
@@ -192,7 +192,7 @@ test('CRShowwhenLeaf: × removes self from parent', () => {
 
 test('CRShowwhenLeaf: leaf.value undefined falls through to empty string', () => {
   _resetStore();
-  const others = cases.get()['hello-review'].questions;
+  const others = cases.get()['example-review'].questions;
   /** @type {any} */
   const parent = { children: [] };
   const leaf = mkLeaf({ value: undefined });

@@ -42,6 +42,11 @@ const config = {
       fields: [
         { key: 'rootCause', label: 'Root cause', type: 'text', required: true },
         { key: 'whatHappened', label: 'What happened', type: 'textarea' },
+        {
+          key: 'contributingFactors',
+          label: 'Contributing factors',
+          type: 'textarea',
+        },
       ],
     },
     {
@@ -56,8 +61,62 @@ const config = {
           options: ['Low', 'Med', 'High'],
         },
         {
+          key: 'priority',
+          label: 'Priority',
+          type: 'select',
+          options: ['P1', 'P2', 'P3'],
+        },
+        {
           key: 'repeatIssue',
           label: 'Repeat issue?',
+          type: 'radio',
+          options: ['Yes', 'No'],
+        },
+      ],
+    },
+    {
+      key: 'impact',
+      label: 'Impact',
+      collapsed: true,
+      fields: [
+        {
+          key: 'customerImpact',
+          label: 'Impact on the customer',
+          type: 'textarea',
+        },
+        {
+          key: 'impactArea',
+          label: 'Impact area',
+          type: 'select',
+          options: ['Financial', 'Operational', 'Reputational', 'None'],
+        },
+        {
+          key: 'regulatoryBreach',
+          label: 'Regulatory breach?',
+          type: 'radio',
+          options: ['Yes', 'No'],
+        },
+      ],
+    },
+    {
+      key: 'resolution',
+      label: 'Resolution',
+      collapsed: true,
+      fields: [
+        {
+          key: 'correctiveAction',
+          label: 'Corrective action taken',
+          type: 'textarea',
+        },
+        {
+          key: 'preventiveAction',
+          label: 'Preventive action',
+          type: 'textarea',
+        },
+        { key: 'actionOwner', label: 'Action owner', type: 'text' },
+        {
+          key: 'followUpRequired',
+          label: 'Follow-up required?',
           type: 'radio',
           options: ['Yes', 'No'],
         },

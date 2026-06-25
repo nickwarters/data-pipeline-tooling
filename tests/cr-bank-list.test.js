@@ -15,7 +15,7 @@ test('CRBankList: renders dirty pill + question cards + add button', () => {
   const section = /** @type {any} */ (e)._children[0];
   // editor-head, listRoot, add-card
   assert.equal(section._children.length, 3);
-  // hello-review fixture has 5 questions; with default filters all visible
+  // example-review fixture has 5 questions; with default filters all visible
   const listRoot = section._children[1];
   assert.equal(listRoot._children.length, 5);
   e.disconnectedCallback();
@@ -30,9 +30,9 @@ test('CRBankList: empty-state when no question passes filters', () => {
     conditionalOnly: false,
   });
   cases.set({
-    'hello-review': {
+    'example-review': {
       label: 'L',
-      slug: 'hello-review',
+      slug: 'example-review',
       eligibleGroups: [],
       questions: [
         /** @type {any} */ ({
@@ -75,27 +75,27 @@ test('CRBankList: conditionalOnly hides unconditional questions', () => {
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
   const listRoot = section._children[1];
-  // Only q-resolve has showWhen in hello-review
+  // Only q-resolve has showWhen in example-review
   assert.equal(listRoot._children.length, 1);
   e.disconnectedCallback();
 });
 
 test('CRBankList: + Draft a new question appends a draft', () => {
   _resetStore();
-  activeSlug.set('hello-review');
-  const before = cases.get()['hello-review'].questions.length;
+  activeSlug.set('example-review');
+  const before = cases.get()['example-review'].questions.length;
   const e = new CRBankList();
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
   const addBtn = section._children[2];
   addBtn._listeners.click[0]();
-  assert.equal(cases.get()['hello-review'].questions.length, before + 1);
+  assert.equal(cases.get()['example-review'].questions.length, before + 1);
   e.disconnectedCallback();
 });
 
 test('CRBankList: + Draft falls back to immediate scroll when no rAF', () => {
   _resetStore();
-  activeSlug.set('hello-review');
+  activeSlug.set('example-review');
   const saved = /** @type {any} */ (globalThis).requestAnimationFrame;
   /** @type {any} */ (globalThis).requestAnimationFrame = undefined;
   const e = new CRBankList();

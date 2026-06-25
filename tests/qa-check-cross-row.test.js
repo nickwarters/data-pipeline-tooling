@@ -15,8 +15,8 @@ function fixtures() {
   /** @type {CaseRow} */
   const original = {
     id: 'case-14',
-    caseType: 'hello-review',
-    title: 'Hello Review #14',
+    caseType: 'example-review',
+    title: 'Example Review #14',
     status: 'Completed',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-rp',
@@ -30,7 +30,7 @@ function fixtures() {
   /** @type {CaseRow} */
   const qaCheck = {
     id: 'qa-case-1',
-    caseType: 'qa-hello-review',
+    caseType: 'qa-example-review',
     title: 'QA Check — #14',
     status: 'In-progress',
     assignedReviewer: 'user-qa',

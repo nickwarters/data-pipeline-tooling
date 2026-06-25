@@ -14,7 +14,7 @@ const NOW = new Date('2026-05-17T12:00:00Z');
 function baseCase() {
   return {
     id: 'c1',
-    caseType: 'hello-review',
+    caseType: 'example-review',
     title: 'Test',
     status: 'In-progress',
     assignedReviewer: '',

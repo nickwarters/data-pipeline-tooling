@@ -107,7 +107,7 @@ test('HttpSharePointClient: form digest is fetched lazily and reused across writ
             Conversation: '[]',
             Notes: '',
             CompletedAt: null,
-            CaseType: 'hello-review',
+            CaseType: 'example-review',
           }),
           { status: 200, headers: { ETag: '"new-etag"' } }
         ),
@@ -165,7 +165,7 @@ test('HttpSharePointClient: 403 on write triggers digest refresh and one retry',
             Conversation: '[]',
             Notes: 'done',
             CompletedAt: null,
-            CaseType: 'hello-review',
+            CaseType: 'example-review',
           }),
           { status: 200, headers: { ETag: '"after-refresh"' } }
         ),
@@ -244,7 +244,7 @@ test('HttpSharePointClient: PATCH sends If-Match header with the supplied ETag',
             Conversation: '[]',
             Notes: 'n',
             CompletedAt: null,
-            CaseType: 'hello-review',
+            CaseType: 'example-review',
           }),
           { status: 200, headers: { ETag: '"v2"' } }
         ),
@@ -287,7 +287,7 @@ test('HttpSharePointClient: patchCase result.data.etag reflects the new ETag fro
             Conversation: '[]',
             Notes: 'n',
             CompletedAt: null,
-            CaseType: 'hello-review',
+            CaseType: 'example-review',
           }),
           { status: 200, headers: { ETag: '"server-new"' } }
         ),
@@ -357,7 +357,7 @@ test('HttpSharePointClient: 429 with Retry-After waits the indicated seconds bef
             Conversation: '[]',
             Notes: '',
             CompletedAt: null,
-            CaseType: 'hello-review',
+            CaseType: 'example-review',
           }),
           { status: 200, headers: { ETag: '"ok"' } }
         );
@@ -397,7 +397,7 @@ test('HttpSharePointClient: 429 without Retry-After falls back to a default dela
             Conversation: '[]',
             Notes: '',
             CompletedAt: null,
-            CaseType: 'hello-review',
+            CaseType: 'example-review',
           }),
           { status: 200, headers: { ETag: '"ok"' } }
         );
@@ -442,7 +442,7 @@ test('HttpSharePointClient: 429 with garbage Retry-After string falls back to de
             Conversation: '[]',
             Notes: '',
             CompletedAt: null,
-            CaseType: 'hello-review',
+            CaseType: 'example-review',
           }),
           { status: 200, headers: { ETag: '"ok"' } }
         );
@@ -475,7 +475,7 @@ test('HttpSharePointClient: getCase returns fallback empty objects when Answers/
             Id: 'case-bad',
             Title: 'Bad JSON',
             Status: 'In-progress',
-            CaseType: 'hello-review',
+            CaseType: 'example-review',
             AssignedReviewerId: 'u1',
             ResponsiblePartyId: 'u2',
             Answers: 'not valid json {{{',
@@ -506,7 +506,7 @@ test('HttpSharePointClient: getCase returns fallback empty objects when Answers/
 // --- pagination ---
 
 test('HttpSharePointClient: listCases follows odata.nextLink across pages and concatenates results', async () => {
-  const page2Url = `${WEB_URL}/_api/web/lists/getbytitle('Cases-HelloReview')/items?$skiptoken=PAGE2`;
+  const page2Url = `${WEB_URL}/_api/web/lists/getbytitle('Cases-ExampleReview')/items?$skiptoken=PAGE2`;
   const { fetch, calls } = makeFetch([
     {
       when: (c) => c.method === 'GET' && c.url.includes('$skiptoken=PAGE2'),
@@ -524,7 +524,7 @@ test('HttpSharePointClient: listCases follows odata.nextLink across pages and co
                 Conversation: '[]',
                 Notes: '',
                 CompletedAt: null,
-                CaseType: 'hello-review',
+                CaseType: 'example-review',
               },
             ],
           }),
@@ -533,7 +533,8 @@ test('HttpSharePointClient: listCases follows odata.nextLink across pages and co
     },
     {
       when: (c) =>
-        c.method === 'GET' && c.url.includes("getbytitle('Cases-HelloReview')"),
+        c.method === 'GET' &&
+        c.url.includes("getbytitle('Cases-ExampleReview')"),
       respond: () =>
         new Response(
           JSON.stringify({
@@ -548,7 +549,7 @@ test('HttpSharePointClient: listCases follows odata.nextLink across pages and co
                 Conversation: '[]',
                 Notes: '',
                 CompletedAt: null,
-                CaseType: 'hello-review',
+                CaseType: 'example-review',
               },
               {
                 Id: 'case-2',
@@ -560,7 +561,7 @@ test('HttpSharePointClient: listCases follows odata.nextLink across pages and co
                 Conversation: '[]',
                 Notes: '',
                 CompletedAt: null,
-                CaseType: 'hello-review',
+                CaseType: 'example-review',
               },
             ],
             'odata.nextLink': page2Url,
@@ -633,7 +634,7 @@ test('HttpSharePointClient: getCase parses Answers/Conversation JSON blobs and c
             Id: 'case-1',
             Title: 'Hello',
             Status: 'In-progress',
-            CaseType: 'hello-review',
+            CaseType: 'example-review',
             AssignedReviewerId: 'user-1',
             ResponsiblePartyId: 'user-2',
             Answers: JSON.stringify({ 'q-welcome': { value: 'Yes' } }),
@@ -724,7 +725,7 @@ test('HttpSharePointClient: patchCase handles 200 response with JSON body (no se
     Conversation: '[]',
     Notes: 'n',
     CompletedAt: null,
-    CaseType: 'hello-review',
+    CaseType: 'example-review',
   };
   const { fetch } = makeFetch([
     {
@@ -858,7 +859,7 @@ test('HttpSharePointClient: _getAllPages handles legacy d.results OData format',
                   Conversation: '[]',
                   Notes: '',
                   CompletedAt: null,
-                  CaseType: 'hello-review',
+                  CaseType: 'example-review',
                 },
               ],
             },
@@ -907,7 +908,7 @@ test('HttpSharePointClient: 429 with HTTP-date Retry-After waits until that time
             Conversation: '[]',
             Notes: '',
             CompletedAt: null,
-            CaseType: 'hello-review',
+            CaseType: 'example-review',
           }),
           { status: 200, headers: { ETag: '"ok"' } }
         );

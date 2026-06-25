@@ -68,7 +68,7 @@ const { CROverrideEditor } =
 function makeCase(overrides = {}) {
   return {
     id: 'c1',
-    caseType: 'hello-review',
+    caseType: 'example-review',
     title: 'T',
     status: 'Completed',
     assignedReviewer: 'rev1',
@@ -691,8 +691,8 @@ test('CROverrideEditor: a missing current user authors with an empty author stam
 
 test('CROverrideEditor: stamps sourceCaseId when authored from a QA Check surface', () => {
   const { el, queue } = makeEditor();
-  el.sourceCaseId = 'qa-hello-review-7';
+  el.sourceCaseId = 'qa-example-review-7';
   el.connectedCallback();
   author(el, { answerKey: 'q2', value: 'Yes', reasoning: 'Fine.' });
-  assert.equal(queue.enqueued[0].value[0].sourceCaseId, 'qa-hello-review-7');
+  assert.equal(queue.enqueued[0].value[0].sourceCaseId, 'qa-example-review-7');
 });

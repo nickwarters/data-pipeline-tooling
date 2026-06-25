@@ -17,7 +17,7 @@ test('CRQuestionCard: no question → nothing renders', () => {
 
 test('CRQuestionCard: yes-no-na shows failure-criteria field + no options', () => {
   _resetStore();
-  const q = cases.get()['hello-review'].questions[0];
+  const q = cases.get()['example-review'].questions[0];
   const e = new CRQuestionCard();
   e.question = q;
   e.questionIndex = 0;
@@ -34,7 +34,7 @@ test('CRQuestionCard: yes-no-na shows failure-criteria field + no options', () =
 
 test('CRQuestionCard: single-choice renders options-editor + no failure-criteria', () => {
   _resetStore();
-  const q = cases.get()['hello-review'].questions[3]; // q-channel
+  const q = cases.get()['example-review'].questions[3]; // q-channel
   const e = new CRQuestionCard();
   e.question = q;
   e.questionIndex = 3;
@@ -47,7 +47,7 @@ test('CRQuestionCard: single-choice renders options-editor + no failure-criteria
 
 test('CRQuestionCard: changing response-type to non-yes-no-na initialises options', () => {
   _resetStore();
-  const q = cases.get()['hello-review'].questions[0];
+  const q = cases.get()['example-review'].questions[0];
   const e = new CRQuestionCard();
   e.question = q;
   e.questionIndex = 0;
@@ -62,7 +62,7 @@ test('CRQuestionCard: changing response-type to non-yes-no-na initialises option
 
 test('CRQuestionCard: changing response-type to yes-no-na deletes options', () => {
   _resetStore();
-  const q = cases.get()['hello-review'].questions[3]; // q-channel single-choice
+  const q = cases.get()['example-review'].questions[3]; // q-channel single-choice
   const e = new CRQuestionCard();
   e.question = q;
   e.questionIndex = 3;
@@ -77,7 +77,7 @@ test('CRQuestionCard: changing response-type to yes-no-na deletes options', () =
 
 test('CRQuestionCard: id-input commits trimmed value (falls back to old on empty)', () => {
   _resetStore();
-  const q = cases.get()['hello-review'].questions[0];
+  const q = cases.get()['example-review'].questions[0];
   const oldId = q.id;
   const e = new CRQuestionCard();
   e.question = q;
@@ -94,7 +94,7 @@ test('CRQuestionCard: id-input commits trimmed value (falls back to old on empty
 
 test('CRQuestionCard: category text commits to undefined when emptied', () => {
   _resetStore();
-  const q = cases.get()['hello-review'].questions[0];
+  const q = cases.get()['example-review'].questions[0];
   const e = new CRQuestionCard();
   e.question = q;
   e.questionIndex = 0;
@@ -109,7 +109,7 @@ test('CRQuestionCard: category text commits to undefined when emptied', () => {
 
 test('CRQuestionCard: failure-criteria — selecting "—" clears the field', () => {
   _resetStore();
-  const q = cases.get()['hello-review'].questions[0]; // failureCriteria: 'No'
+  const q = cases.get()['example-review'].questions[0]; // failureCriteria: 'No'
   const e = new CRQuestionCard();
   e.question = q;
   e.questionIndex = 0;
@@ -124,7 +124,7 @@ test('CRQuestionCard: failure-criteria — selecting "—" clears the field', ()
 
 test('CRQuestionCard: deprecate / undeprecate icon toggles state', () => {
   _resetStore();
-  const q = cases.get()['hello-review'].questions[0];
+  const q = cases.get()['example-review'].questions[0];
   const e = new CRQuestionCard();
   e.question = q;
   e.questionIndex = 0;
@@ -139,25 +139,25 @@ test('CRQuestionCard: deprecate / undeprecate icon toggles state', () => {
 
 test('CRQuestionCard: duplicate inserts a copy with -copy id', () => {
   _resetStore();
-  activeSlug.set('hello-review');
-  const q = cases.get()['hello-review'].questions[0];
+  activeSlug.set('example-review');
+  const q = cases.get()['example-review'].questions[0];
   const e = new CRQuestionCard();
   e.question = q;
   e.questionIndex = 0;
   e.connectedCallback();
   const actions = /** @type {any} */ (e)._children[1]._children[2];
   const dupBtn = actions._children[1];
-  const before = cases.get()['hello-review'].questions.length;
+  const before = cases.get()['example-review'].questions.length;
   dupBtn._listeners.click[0]();
-  const after = cases.get()['hello-review'].questions.length;
+  const after = cases.get()['example-review'].questions.length;
   assert.equal(after, before + 1);
-  assert.equal(cases.get()['hello-review'].questions[1].id, q.id + '-copy');
+  assert.equal(cases.get()['example-review'].questions[1].id, q.id + '-copy');
 });
 
 test('CRQuestionCard: delete removes after confirm; cancelled confirm is a no-op', () => {
   _resetStore();
-  activeSlug.set('hello-review');
-  const q = cases.get()['hello-review'].questions[0];
+  activeSlug.set('example-review');
+  const q = cases.get()['example-review'].questions[0];
   const e = new CRQuestionCard();
   e.question = q;
   e.questionIndex = 0;
@@ -167,19 +167,19 @@ test('CRQuestionCard: delete removes after confirm; cancelled confirm is a no-op
 
   // Cancelled
   /** @type {any} */ (globalThis).confirm = () => false;
-  const before = cases.get()['hello-review'].questions.length;
+  const before = cases.get()['example-review'].questions.length;
   delBtn._listeners.click[0]();
-  assert.equal(cases.get()['hello-review'].questions.length, before);
+  assert.equal(cases.get()['example-review'].questions.length, before);
 
   // Confirmed
   /** @type {any} */ (globalThis).confirm = () => true;
   delBtn._listeners.click[0]();
-  assert.equal(cases.get()['hello-review'].questions.length, before - 1);
+  assert.equal(cases.get()['example-review'].questions.length, before - 1);
 });
 
 test('CRQuestionCard: showWhen + active marks card-stripe with ochre', () => {
   _resetStore();
-  const q = cases.get()['hello-review'].questions[2]; // has showWhen
+  const q = cases.get()['example-review'].questions[2]; // has showWhen
   const e = new CRQuestionCard();
   e.question = q;
   e.questionIndex = 2;
@@ -190,7 +190,7 @@ test('CRQuestionCard: showWhen + active marks card-stripe with ochre', () => {
 
 test('CRQuestionCard: deprecated adds "deprecated" class to the card', () => {
   _resetStore();
-  const q = cases.get()['hello-review'].questions[0];
+  const q = cases.get()['example-review'].questions[0];
   q.deprecated = true;
   const e = new CRQuestionCard();
   e.question = q;
@@ -202,7 +202,7 @@ test('CRQuestionCard: deprecated adds "deprecated" class to the card', () => {
 test('CRQuestionCard: tolerates missing confirm() global', () => {
   _resetStore();
   /** @type {any} */ (globalThis).confirm = undefined;
-  const q = cases.get()['hello-review'].questions[0];
+  const q = cases.get()['example-review'].questions[0];
   const e = new CRQuestionCard();
   e.question = q;
   e.questionIndex = 0;
