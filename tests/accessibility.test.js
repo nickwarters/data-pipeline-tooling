@@ -31,6 +31,11 @@ class StubEl {
   }
   replaceChildren(/** @type {StubEl[]} */ ...cs) {
     this._children = cs;
+    // Faithfully model the browser: mutating a subtree detaches (and therefore
+    // blurs) whatever was focused inside it. activeElement falls back to "body"
+    // (null here). This is exactly the behaviour that strands keyboard focus.
+    const doc = /** @type {any} */ (globalThis).document;
+    if (doc) doc._active = null;
   }
   appendChild(/** @type {StubEl} */ c) {
     this._children.push(c);
@@ -51,14 +56,21 @@ class StubEl {
   focus() {
     this._focused = true;
     /** @type {any} */ (globalThis)._lastFocused = this;
+    const doc = /** @type {any} */ (globalThis).document;
+    if (doc) doc._active = this;
   }
   /** @returns {StubEl | null} */
-  querySelector(/** @type {string} */ _sel) {
-    // walk children & find first matching by tagName comparison (best-effort stub)
+  querySelector(/** @type {string} */ sel) {
+    const keyMatch = sel.startsWith('[data-focus-key=');
+    const wantKey = keyMatch ? sel.slice('[data-focus-key="'.length, -2) : null;
     /** @param {StubEl} node @returns {StubEl | null} */
     const walk = (node) => {
       for (const c of node._children) {
-        if (c.tagName && c.tagName.toLowerCase() === 'input') return c;
+        if (keyMatch) {
+          if (c.getAttribute('data-focus-key') === wantKey) return c;
+        } else if (c.tagName && c.tagName.toLowerCase() === 'input') {
+          return c;
+        }
         const found = walk(c);
         if (found) return found;
       }
@@ -70,6 +82,10 @@ class StubEl {
 
 /** @type {any} */ (globalThis).HTMLElement = StubEl;
 /** @type {any} */ (globalThis).document = {
+  _active: /** @type {StubEl | null} */ (null),
+  get activeElement() {
+    return this._active;
+  },
   /** @param {string} tag @returns {StubEl} */
   createElement(tag) {
     const el = new StubEl();
@@ -288,6 +304,170 @@ test('CRQuestionList: update reuses existing cr-question DOM elements to prevent
     initialQ2,
     'existing cr-question element for q2 should be reused'
   );
+});
+
+test('CRQuestion: answer inputs carry a stable data-focus-key (single-choice)', () => {
+  const q = /** @type {QuestionDefinition} */ ({
+    id: 'q-chan',
+    text: 'Channel?',
+    responseType: 'single-choice',
+    options: ['Phone', 'Email'],
+    deprecated: false,
+  });
+  const el = new CRQuestion();
+  el.question = q;
+  el.currentValue = '';
+  el.connectedCallback();
+
+  const fieldset = /** @type {any} */ (el)._children[0];
+  // fieldset children: [legend, label0, label1]; each label is [input, span].
+  const firstInput = fieldset._children[1]._children[0];
+  const secondInput = fieldset._children[2]._children[0];
+  assert.equal(firstInput._attrs['data-focus-key'], 'answer:q-chan:0');
+  assert.equal(secondInput._attrs['data-focus-key'], 'answer:q-chan:1');
+});
+
+test('CRQuestion: answer inputs carry a stable data-focus-key (multi-choice)', () => {
+  const q = /** @type {QuestionDefinition} */ ({
+    id: 'q-prod',
+    text: 'Products?',
+    responseType: 'multi-choice',
+    options: ['A', 'B'],
+    deprecated: false,
+  });
+  const el = new CRQuestion();
+  el.question = q;
+  el.currentValue = [];
+  el.connectedCallback();
+
+  const fieldset = /** @type {any} */ (el)._children[0];
+  const firstInput = fieldset._children[1]._children[0];
+  assert.equal(firstInput._attrs['data-focus-key'], 'answer:q-prod:0');
+});
+
+// ---- cr-question-list focus PRESERVATION (regression: changing an answer near
+//      the end of the list must not strand keyboard focus at the top) ----
+
+/**
+ * Attaches a fake answer input (carrying the same data-focus-key that
+ * CRQuestion would render) to a reused cr-question host and marks it focused,
+ * mirroring a keyboard user sitting on that radio.
+ * @param {any} host
+ * @param {string} key
+ * @returns {any} the input
+ */
+function focusInputOn(host, key) {
+  const input = /** @type {any} */ (globalThis).document.createElement('input');
+  input.tagName = 'input';
+  input.setAttribute('data-focus-key', key);
+  host.appendChild(input);
+  input.focus();
+  return input;
+}
+
+test('CRQuestionList: changing an answer restores focus after the list rebuilds', () => {
+  const list = new CRQuestionList();
+  /** @type {QuestionDefinition[]} */
+  const questions = [
+    { id: 'q1', text: 'Q1?', responseType: 'yes-no-na', deprecated: false },
+    { id: 'q2', text: 'Q2?', responseType: 'yes-no-na', deprecated: false },
+    { id: 'q3', text: 'Q3?', responseType: 'yes-no-na', deprecated: false },
+  ];
+  list.questions = questions;
+  list.answers = {};
+  list.connectedCallback();
+
+  // User is sitting on the second-to-last question's input.
+  const input = focusInputOn(list.questionElements[1], 'answer:q2:0');
+  /** @type {any} */ (globalThis)._lastFocused = null;
+
+  // Answering q2 makes q3 no longer applicable → the list rebuilds (which blurs
+  // the focused input). Without restoration the user is stranded at the top.
+  list.update([questions[0], questions[1]], { q2: { value: 'Yes' } });
+
+  assert.equal(
+    /** @type {any} */ (globalThis).document.activeElement,
+    input,
+    'focus must return to the input the user was editing after a rebuild'
+  );
+});
+
+test('CRQuestionList: focus is preserved without a redundant re-focus when nothing rebuilds', () => {
+  const list = new CRQuestionList();
+  /** @type {QuestionDefinition[]} */
+  const questions = [
+    { id: 'q1', text: 'Q1?', responseType: 'yes-no-na', deprecated: false },
+  ];
+  list.questions = questions;
+  list.answers = {};
+  list.connectedCallback();
+
+  const input = focusInputOn(list.questionElements[0], 'answer:q1:0');
+  /** @type {any} */ (globalThis)._lastFocused = null;
+
+  // Same question set → no DOM rebuild → focus never lost → no re-focus needed.
+  list.update(questions, { q1: { value: 'No' } });
+
+  assert.equal(
+    /** @type {any} */ (globalThis)._lastFocused,
+    null,
+    'restore must be a no-op when the focused input never lost focus'
+  );
+  assert.equal(
+    /** @type {any} */ (globalThis).document.activeElement,
+    input,
+    'the input remains focused'
+  );
+});
+
+test('CRQuestionList: focus is not forced elsewhere when the focused question is removed', () => {
+  const list = new CRQuestionList();
+  /** @type {QuestionDefinition[]} */
+  const questions = [
+    { id: 'q1', text: 'Q1?', responseType: 'yes-no-na', deprecated: false },
+    { id: 'q2', text: 'Q2?', responseType: 'yes-no-na', deprecated: false },
+  ];
+  list.questions = questions;
+  list.answers = {};
+  list.connectedCallback();
+
+  // User focused q2, then an upstream change removes q2 entirely.
+  focusInputOn(list.questionElements[1], 'answer:q2:0');
+  /** @type {any} */ (globalThis)._lastFocused = null;
+
+  list.update([questions[0]], {});
+
+  assert.equal(
+    /** @type {any} */ (globalThis).document.activeElement,
+    null,
+    'a removed input cannot (and must not) be re-focused'
+  );
+});
+
+test('CRQuestionList: swapping a question (same count, different id) rebuilds the list', () => {
+  const list = new CRQuestionList();
+  /** @type {QuestionDefinition[]} */
+  const initial = [
+    { id: 'q1', text: 'Q1?', responseType: 'yes-no-na', deprecated: false },
+    { id: 'q2', text: 'Q2?', responseType: 'yes-no-na', deprecated: false },
+  ];
+  list.questions = initial;
+  list.answers = {};
+  list.connectedCallback();
+  const q1Host = list.questionElements[0];
+
+  // q2 → q3: same length, but a different element identity at index 1, so the
+  // list must rebuild (and reuse q1's host).
+  list.update(
+    [
+      initial[0],
+      { id: 'q3', text: 'Q3?', responseType: 'yes-no-na', deprecated: false },
+    ],
+    {}
+  );
+
+  assert.equal(list.questionElements[0], q1Host, 'q1 host is reused');
+  assert.equal(list.questionElements[1].question.id, 'q3', 'q3 host is fresh');
 });
 
 test('CRQuestionList: multi-choice question with no answer initialises currentValue to empty array', () => {

@@ -43,15 +43,50 @@ export class CRQuestionList extends ReactiveElement {
       if (firstNewIndex === -1 && !previous.has(q.id)) firstNewIndex = i;
     });
 
+    // Capture the user's focus *before* re-rendering. Answering a question can
+    // re-evaluate applicability, which rebuilds the list via replaceChildren and
+    // detaches (blurring) the focused input. Without this, keyboard users get
+    // stranded at the top of the list and have to tab all the way back.
+    const restoreFocus = this._captureFocus();
+
     this.questions = questions;
     this.answers = answers;
     this._render();
 
-    // Only auto-focus when something genuinely new appeared (not on first render).
+    // Priority 1: a genuinely new question appeared (a conditional follow-up
+    // that just became applicable) — move focus to it so the user can continue
+    // answering without hunting. Not on first render.
     if (previous.size > 0 && firstNewIndex !== -1) {
       const child = this.questionElements[firstNewIndex];
       child?.focus?.();
+      return;
     }
+
+    // Priority 2: nothing new appeared, but the DOM may have been rebuilt (e.g.
+    // a downstream question disappeared). Put the user back where they were.
+    restoreFocus();
+  }
+
+  /**
+   * Snapshot the currently-focused answer input (identified by its stable
+   * `data-focus-key`) and return a closure that re-focuses the matching input
+   * after the list has re-rendered. Mirrors the focus-preservation in
+   * question-bank-store's `commit()`. No-op when nothing relevant is focused
+   * or when the same element still holds focus after rendering.
+   * @returns {() => void}
+   */
+  _captureFocus() {
+    const doc = typeof document !== 'undefined' ? document : null;
+    const active = doc && doc.activeElement;
+    const focusKey = active?.getAttribute?.('data-focus-key') ?? null;
+    if (!focusKey) return () => {};
+
+    return () => {
+      const found = this.querySelector(
+        `[data-focus-key="${focusKey.replace(/(["\\])/g, '\\$1')}"]`
+      );
+      if (found && found !== doc.activeElement) found.focus?.();
+    };
   }
 
   _render() {

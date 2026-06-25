@@ -91,7 +91,7 @@ export class CRQuestion extends ReactiveElement {
     const current =
       typeof this.currentValue === 'string' ? this.currentValue : '';
 
-    return options.map((opt) =>
+    return options.map((opt, i) =>
       h(
         'label',
         {},
@@ -99,6 +99,7 @@ export class CRQuestion extends ReactiveElement {
           type: 'radio',
           name: `cr-q-${q.id}`,
           value: opt,
+          'data-focus-key': `answer:${q.id}:${i}`,
           checked: current === opt,
           disabled: this.access === 'read-only',
           onchange: () => {
@@ -125,7 +126,7 @@ export class CRQuestion extends ReactiveElement {
       Array.isArray(this.currentValue) ? this.currentValue : []
     );
 
-    return options.map((opt) =>
+    return options.map((opt, i) =>
       h(
         'label',
         {},
@@ -133,6 +134,7 @@ export class CRQuestion extends ReactiveElement {
           type: 'checkbox',
           name: `cr-q-${q.id}`,
           value: opt,
+          'data-focus-key': `answer:${q.id}:${i}`,
           checked: selected.has(opt),
           disabled: this.access === 'read-only',
           onchange: (/** @type {any} */ e) => {
