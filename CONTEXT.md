@@ -68,6 +68,10 @@ _Avoid_: source (reserved for source *type*: Excel/CSV/SAS/SQLite/SharePoint), i
 An outbound artifact a Pipeline produces for downstream consumption, in one of three concrete forms: a **file** (CSV/Excel/JSON), a **directly-readable view/table** the consumer reads, or **rows pushed to a platform-owned remote list** (a SharePoint Subscription Edition list — the canonical **Selection** Deliverable, one list per Case Type). The push form is an *active* write to a system the framework does not own, not a passive artifact left for collection; files are reserved for **Reporting** outputs. Emitted by a **Writer**: `CsvWriter`, `ExcelWriter`, and `JsonWriter` emit file Deliverables; SQLite Writers emit directly-readable tables; the stubbed `SharePointWriter` is the outbound dual of the **SharePoint Reader** (same source type, both directions).
 _Avoid_: report, export, output feed
 
+**Data Dictionary**:
+The human-readable description of a table/Feed and what each of its fields *means* — the prose companion to the machine-enforced `schema.py` (columns, dtypes, nullability, value rules). One entry per table per medallion layer (raw column names differ from the canonical silver/gold shape). Stored in **Confluence**; the checked-in [`docs/data-dictionary-template.md`](docs/data-dictionary-template.md) is the source-of-truth template. A new column is not "done" until it has a Data Dictionary row.
+_Avoid_: schema (reserved for the enforced dataclass contract), glossary (that is this file, for domain nouns)
+
 **Reference Data**:
 Shared, cross-cutting data that many Case Types' Selection joins against (e.g. the **Adviser hierarchy**, product codes, mappings). Ingested as ordinary **Feeds** and refined through its own per-subject medallion exactly like a Case Type's data, but **read-only** to Case Types — a Case Type joins it (in Python) and never writes it.
 _Avoid_: master data, lookup, static data

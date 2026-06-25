@@ -97,6 +97,12 @@ silver hop already enforces the schema (`SchemaCoercion` + `SchemaValidator` —
 [`schema-enforcement.md`](schema-enforcement.md)); the gold hop is a passthrough
 until you shape it.
 
+Finally, **document the feed's tables in a data dictionary** — one entry per
+table per layer describing what the table is and what each field means (the prose
+companion to `schema.py`). Copy the Confluence-ready template in
+[`data-dictionary-template.md`](data-dictionary-template.md); a new column in the
+schema isn't done until it has a dictionary row.
+
 #### Seed it from a real feed file: `--from-feed-file`
 
 Most of that customising is mechanical — retyping a source's column names into
