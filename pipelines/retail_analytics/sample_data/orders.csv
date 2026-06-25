@@ -1,0 +1,11 @@
+order_id,customer_id,product_id,qty,unit_price,order_date,region,status
+ORD001,CUST01,PROD01,2,49.99,2026-05-15,north,completed
+ORD002,CUST02,PROD02,1,199.99,2026-06-01,south,completed
+ORD003,CUST03,PROD03,3,9.99,2026-05-20,east,cancelled
+ORD004,CUST04,PROD01,1,49.99,2026-06-10,west,pending
+ORD005,CUST05,PROD04,5,29.99,2026-04-10,north,completed
+ORD006,CUST01,PROD05,2,399.99,2026-06-12,south,completed
+ORD007,CUST06,PROD02,1,199.99,2026-05-05,east,cancelled
+ORD008,CUST07,PROD03,10,9.99,2026-06-18,west,pending
+ORD009,CUST08,PROD04,2,29.99,2026-06-20,north,completed
+ORD010,CUST09,PROD05,1,399.99,2026-05-30,south,pending
