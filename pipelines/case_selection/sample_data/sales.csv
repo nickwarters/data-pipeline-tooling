@@ -1,0 +1,11 @@
+sale_id,adviser,sale_date,risk_score,category,product
+S001,adv001,2026-06-20,180,A,pension
+S002,adv001,2026-06-18,180,B,isa
+S003,adv001,2026-01-05,300,A,mortgage
+S010,adv002,2026-06-19,220,A,pension
+S020,adv003,2026-06-17,270,A,isa
+S030,adv004,2026-06-16,240,B,bond
+S040,adv005,2026-06-15,160,A,pension
+S050,adv006,2026-06-14,100,A,isa
+S060,adv007,2026-06-21,260,A,mortgage
+S070,adv008,2026-06-19,200,B,pension
