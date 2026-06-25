@@ -36,6 +36,21 @@ export class CRCaptureGroups extends ReactiveElement {
      * @type {Map<string, boolean>}
      */
     this._collapsed = new Map();
+    /**
+     * Per-field value setters from the most recent editable build, keyed by field
+     * key. Lets a value-only re-render (the common autosave case) push new values
+     * into the existing controls instead of rebuilding the DOM.
+     * @type {Map<string, (value: string) => void>}
+     */
+    this._fieldSetters = new Map();
+    /**
+     * Signature of the structure last rendered in editable mode. When an update
+     * leaves it unchanged, only field values can have changed, so we sync them in
+     * place rather than tearing the controls down — which would otherwise detach
+     * the control the Reviewer is using, losing focus and resetting page scroll.
+     * @type {string | null}
+     */
+    this._builtSig = null;
   }
 
   connectedCallback() {
@@ -56,11 +71,26 @@ export class CRCaptureGroups extends ReactiveElement {
   }
 
   _render() {
+    // Fast path: in editable mode, when only field values changed (same groups,
+    // fields, collapse state and edit-ability), push them into the live controls
+    // instead of rebuilding. Rebuilding detaches the control the Reviewer just
+    // touched, which loses focus and — because it breaks the browser's scroll
+    // anchoring — throws the page back to the top on every capture edit.
+    if (
+      this.canCapture &&
+      this._builtSig !== null &&
+      this._builtSig === this._signature()
+    ) {
+      this._syncValues();
+      return;
+    }
     const children = this.render() || [];
     this.replaceChildren(...(Array.isArray(children) ? children : [children]));
+    this._builtSig = this.canCapture ? this._signature() : null;
   }
 
   render() {
+    this._fieldSetters = new Map();
     const children = [];
     for (const group of this.groups) {
       const section = this.canCapture
@@ -69,6 +99,34 @@ export class CRCaptureGroups extends ReactiveElement {
       if (section) children.push(section);
     }
     return children;
+  }
+
+  /**
+   * A stable string describing the editable structure (not the values): which
+   * groups are shown, their collapse state, and each visible field's identity.
+   * @returns {string}
+   */
+  _signature() {
+    return JSON.stringify(
+      this.groups.map((g) => ({
+        k: g.key,
+        c: this._isCollapsed(g),
+        f: this._isCollapsed(g)
+          ? []
+          : g.fields.map((fld) => ({
+              k: fld.key,
+              t: fld.type,
+              o: fld.options ?? null,
+            })),
+      }))
+    );
+  }
+
+  /** Push current capture values into the live controls (no DOM teardown). */
+  _syncValues() {
+    for (const [key, setValue] of this._fieldSetters) {
+      setValue(this._currentString(key));
+    }
   }
 
   /**
@@ -121,12 +179,34 @@ export class CRCaptureGroups extends ReactiveElement {
       this._dispatch(field.key, value);
     });
 
+    this._fieldSetters.set(field.key, this._makeSetter(field, control));
+
     return h(
       'div',
       { className: 'cr-capture-field' },
       h('label', { className: 'cr-capture-label' }, field.label),
       control
     );
+  }
+
+  /**
+   * Builds a setter that applies a value to an already-rendered control, so a
+   * value-only re-render needn't recreate it. Radio groups toggle the matching
+   * input's `checked`; everything else (text/textarea/select) sets `.value`.
+   * @param {CaptureField} field
+   * @param {HTMLElement} control
+   * @returns {(value: string) => void}
+   */
+  _makeSetter(field, control) {
+    if (field.type === 'radio') {
+      const inputs = collectInputs(control);
+      return (value) => {
+        for (const input of inputs) input.checked = input.value === value;
+      };
+    }
+    return (value) => {
+      /** @type {any} */ (control).value = value;
+    };
   }
 
   /**
@@ -177,6 +257,23 @@ export class CRCaptureGroups extends ReactiveElement {
       })
     );
   }
+}
+
+/**
+ * Collects descendant `<input>` elements. Walks `children` (real DOM) or
+ * `_children` (test stubs) so it works in both environments.
+ * @param {any} el
+ * @param {any[]} [out]
+ * @returns {any[]}
+ */
+function collectInputs(el, out = []) {
+  const kids = el.children ? Array.from(el.children) : (el._children ?? []);
+  for (const k of kids) {
+    const tag = (k.tagName || k._tagName || '').toLowerCase();
+    if (tag === 'input') out.push(k);
+    else collectInputs(k, out);
+  }
+  return out;
 }
 
 customElements.define('cr-capture-groups', CRCaptureGroups);

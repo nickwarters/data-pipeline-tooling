@@ -367,3 +367,70 @@ test('CRCaptureGroups: a radio field declared without options renders no inputs'
     0
   );
 });
+
+// ===== node reuse on value-only updates (scroll/focus preservation) =====
+// An autosave-driven re-render that only changes field values must NOT tear down
+// the controls: rebuilding detaches the control the Reviewer is editing, which
+// loses focus and resets page scroll (the "thrown back to the top" bug).
+
+test('CRCaptureGroups: a value-only update reuses the same control node and reflects the new value', () => {
+  const el = new CRCaptureGroups();
+  el.update(GROUPS, { rootCause: 'First' }, true);
+  const before = findAllByClass(el, 'cr-capture-input')[0];
+  assert.equal(before.value, 'First');
+
+  el.update(GROUPS, { rootCause: 'Second' }, true);
+  const after = findAllByClass(el, 'cr-capture-input')[0];
+  assert.strictEqual(after, before, 'text control reused, not recreated');
+  assert.equal(after.value, 'Second', 'reused control shows the new value');
+});
+
+test('CRCaptureGroups: a value-only update syncs radio checked state in place', () => {
+  const el = new CRCaptureGroups();
+  el.update(GROUPS, {}, true);
+  findAllByClass(el, 'cr-capture-group-header')[1]._fire('click'); // expand Grading
+  const radiosBefore = findAllByTag(el, 'input').filter(
+    (i) => i.type === 'radio'
+  );
+
+  el.update(GROUPS, { repeat: 'Yes' }, true);
+  const radiosAfter = findAllByTag(el, 'input').filter(
+    (i) => i.type === 'radio'
+  );
+  assert.strictEqual(radiosAfter[0], radiosBefore[0], 'radio inputs reused');
+  assert.deepEqual(
+    radiosAfter.map((r) => r.checked),
+    [true, false],
+    'reused radios reflect the new value'
+  );
+});
+
+test('CRCaptureGroups: a structural change (edit→read-only) still rebuilds', () => {
+  const el = new CRCaptureGroups();
+  el.update(GROUPS, { rootCause: 'X' }, true);
+  assert.ok(findByClass(el, 'cr-capture-input'), 'editable controls present');
+
+  el.update(GROUPS, { rootCause: 'X' }, false);
+  assert.equal(
+    findByClass(el, 'cr-capture-input'),
+    null,
+    'read-only rebuild replaces controls with static text'
+  );
+});
+
+test('CRCaptureGroups: expanding a group rebuilds (structure changed, not a value-only sync)', () => {
+  const el = new CRCaptureGroups();
+  el.update(GROUPS, {}, true);
+  // Grading starts collapsed -> no Severity control.
+  assert.equal(
+    findAllByTag(el, 'select').length,
+    0,
+    'collapsed group has no controls'
+  );
+  findAllByClass(el, 'cr-capture-group-header')[1]._fire('click'); // expand Grading
+  assert.equal(
+    findAllByTag(el, 'select').length,
+    1,
+    'expanding the group builds its controls'
+  );
+});
