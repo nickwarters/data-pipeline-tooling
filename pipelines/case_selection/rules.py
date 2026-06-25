@@ -13,12 +13,14 @@ and the *parsed* dates ``selected_date`` / ``completed_date`` (a ``date`` or
 
 from __future__ import annotations
 
+import math
 from datetime import date
 from typing import Any, Mapping, Sequence
 
 # --- tunable thresholds (the spec's numbers, named in one place) -------------
 RECENT_SALE_DAYS = 15  # a sale is a candidate if dated within this many days
-MAX_CHECKS_PER_YEAR = 10  # rolling-12-month cap on checks per adviser
+FULL_YEAR_CHECK_TARGET = 10  # the check target over 12 *active* months...
+CHECK_TARGET_MONTHS = 12  # ...pro-rata'd by active months below this many
 TYPE_C_QUOTA = 2  # of those checks, this many must be case type C
 MIN_DAYS_BETWEEN_CASES = 21  # last completed case -> next selection
 FAILED_REVIEW_COOLDOWN_DAYS = 28  # extra wait after a failed review
@@ -116,11 +118,39 @@ def has_case_in_progress(reviews: Sequence[Row]) -> bool:
     return any(r["status"] == "in_progress" for r in reviews)
 
 
+def _round_half_up(value: float) -> int:
+    return math.floor(value + 0.5)
+
+
+def active_months(sales: Sequence[Row], as_of: date) -> int:
+    """Count an adviser's *active* months: rolling-window months with >= 1 sale."""
+    window = rolling_months(as_of, count=CHECK_TARGET_MONTHS)
+    return len(
+        {
+            (s["sale_date"].year, s["sale_date"].month)
+            for s in sales
+            if (s["sale_date"].year, s["sale_date"].month) in window
+        }
+    )
+
+
+def check_target(sales: Sequence[Row], as_of: date) -> int:
+    """The adviser's check target: 10 over 12 active months, pro-rata below that.
+
+    The target of ``FULL_YEAR_CHECK_TARGET`` (10) applies to a full 12 active
+    months; an adviser active in fewer months has it scaled pro-rata to their
+    active months (rounded half up), so a less-active adviser isn't held to a
+    full-year target.
+    """
+    scaled = FULL_YEAR_CHECK_TARGET * active_months(sales, as_of) / CHECK_TARGET_MONTHS
+    return _round_half_up(scaled)
+
+
 def at_check_capacity(
-    reviews: Sequence[Row], as_of: date, *, max_checks: int = MAX_CHECKS_PER_YEAR
+    reviews: Sequence[Row], sales: Sequence[Row], as_of: date
 ) -> bool:
-    """Whether the adviser already has ``max_checks`` in the rolling year."""
-    return checks_in_window(reviews, as_of) >= max_checks
+    """Whether the adviser already has their (pro-rata) target of checks."""
+    return checks_in_window(reviews, as_of) >= check_target(sales, as_of)
 
 
 def blocked_by_failed_review(
@@ -155,45 +185,56 @@ def too_soon_since_last_case(
     return (as_of - most_recent).days < min_gap_days
 
 
-def exclusion_reason(reviews: Sequence[Row], as_of: date) -> str | None:
+def exclusion_reason(
+    reviews: Sequence[Row], sales: Sequence[Row], as_of: date
+) -> str | None:
     """The first gate (if any) that excludes the adviser, else ``None``.
 
-    The order is the spec's order of mention; the first failing gate wins so the
-    selection trace records one clear reason per excluded adviser.
+    The first failing gate wins, so the trace records one clear reason. The order
+    follows the agreed rule priority: an in-progress case first, then the
+    (pro-rata) check capacity, then the 21-day gap between cases, then the longer
+    28-day cooldown that a failed review adds on top. The 21-day gap is checked
+    before the 28-day cooldown so an adviser still inside the general gap is
+    reported as such rather than as a failed-review case.
     """
     if has_case_in_progress(reviews):
         return "a case is already in progress"
-    if at_check_capacity(reviews, as_of):
-        return f"at the {MAX_CHECKS_PER_YEAR}-check rolling-year capacity"
-    if blocked_by_failed_review(reviews, as_of):
-        return f"within the {FAILED_REVIEW_COOLDOWN_DAYS}-day failed-review cooldown"
+    if at_check_capacity(reviews, sales, as_of):
+        return (
+            f"at the rolling-year check capacity "
+            f"({checks_in_window(reviews, as_of)} of a pro-rata "
+            f"{check_target(sales, as_of)})"
+        )
     if too_soon_since_last_case(reviews, as_of):
         return f"within {MIN_DAYS_BETWEEN_CASES} days of the last completed case"
+    if blocked_by_failed_review(reviews, as_of):
+        return f"within the {FAILED_REVIEW_COOLDOWN_DAYS}-day failed-review cooldown"
     return None
 
 
 def assign_case_type(
     risk_score: int,
     reviews: Sequence[Row],
+    sales: Sequence[Row],
     as_of: date,
     *,
-    max_checks: int = MAX_CHECKS_PER_YEAR,
     type_c_quota: int = TYPE_C_QUOTA,
 ) -> str:
     """The case type to record: the risk-derived type, raised to C to meet quota.
 
     The case type is normally derived from the risk score
     (:func:`case_type_for_score`). But each adviser must end the rolling year with
-    ``type_c_quota`` of their ``max_checks`` as case type C. When the adviser's
-    remaining slots in the year are no more than their outstanding type-C
-    shortfall, this selection is forced to C so the quota is still reachable.
+    ``type_c_quota`` of their checks as case type C. When the adviser's remaining
+    slots — against their (pro-rata) :func:`check_target` — are no more than their
+    outstanding type-C shortfall, this selection is forced to C so the quota is
+    still reachable.
     """
     natural = case_type_for_score(risk_score)
     if natural == "C":
         return "C"
     done = checks_in_window(reviews, as_of)
     type_c_needed = max(0, type_c_quota - type_c_checks_in_window(reviews, as_of))
-    slots_remaining = max_checks - done  # this selection fills one of them
+    slots_remaining = check_target(sales, as_of) - done  # this fills one of them
     if 0 < slots_remaining <= type_c_needed:
         return "C"
     return natural

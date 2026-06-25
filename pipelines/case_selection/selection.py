@@ -56,18 +56,24 @@ def select_cases(
     for review in reviews:
         reviews_by_adviser[review["adviser"]].append(review)
 
-    recent_by_adviser: dict[str, list[Row]] = defaultdict(list)
+    # All of an adviser's sales (not just recent ones) — the full history feeds
+    # the active-month / pro-rata capacity arithmetic; recency only picks the
+    # candidate sale.
+    sales_by_adviser: dict[str, list[Row]] = defaultdict(list)
     for sale in sales:
-        if is_recent_sale(sale["sale_date"], as_of):
-            recent_by_adviser[sale["adviser"]].append(sale)
+        sales_by_adviser[sale["adviser"]].append(sale)
 
     pool: list[dict[str, Any]] = []
     trace: list[dict[str, Any]] = []
-    for adviser in sorted(recent_by_adviser):
+    for adviser in sorted(sales_by_adviser):
+        adviser_sales = sales_by_adviser[adviser]
+        recent = [s for s in adviser_sales if is_recent_sale(s["sale_date"], as_of)]
+        if not recent:
+            continue  # no sale in the last 15 days -> not a candidate
         adviser_reviews = reviews_by_adviser.get(adviser, [])
-        sale = best_sale(recent_by_adviser[adviser])
+        sale = best_sale(recent)
 
-        reason = exclusion_reason(adviser_reviews, as_of)
+        reason = exclusion_reason(adviser_reviews, adviser_sales, as_of)
         if reason is not None:
             trace.append(
                 {
@@ -81,7 +87,9 @@ def select_cases(
             )
             continue
 
-        case_type = assign_case_type(int(sale["risk_score"]), adviser_reviews, as_of)
+        case_type = assign_case_type(
+            int(sale["risk_score"]), adviser_reviews, adviser_sales, as_of
+        )
         pool.append(
             {
                 "adviser": adviser,
