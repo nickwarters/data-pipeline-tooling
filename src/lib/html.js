@@ -10,14 +10,23 @@
 export function h(tag, props = {}, ...children) {
   const el = document.createElement(tag);
 
+  // A form control's `value` can only be applied *after* its children exist —
+  // setting `<select>.value` before its `<option>`s are appended is a no-op in a
+  // real browser (the value silently resets to the first option). Defer it.
+  let deferredValue;
+  let hasDeferredValue = false;
+
   for (const [k, v] of Object.entries(props)) {
     if (v == null) continue;
     if (k.startsWith('on') && typeof v === 'function') {
       el.addEventListener(k.slice(2).toLowerCase(), v);
     } else if (k === 'class' || k === 'className') {
       el.className = v;
+    } else if (k === 'value' && 'value' in el) {
+      deferredValue = v;
+      hasDeferredValue = true;
     } else if (k in el) {
-      // Properties like 'checked', 'disabled', 'value'
+      // Properties like 'checked', 'disabled'
       /** @type {any} */ (el)[k] = v;
     } else {
       // Custom attributes like 'aria-required'
@@ -50,6 +59,12 @@ export function h(tag, props = {}, ...children) {
   } else {
     append(children);
   }
+
+  // Apply `value` last so `<select>` matches against options that now exist.
+  if (hasDeferredValue) {
+    /** @type {any} */ (el).value = deferredValue;
+  }
+
   return el;
 }
 
