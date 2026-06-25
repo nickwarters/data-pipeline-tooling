@@ -7,6 +7,9 @@ import { buildCaptureControl } from '../lib/capture-engine.js';
 /** @typedef {import('../sharepoint-client.js').CaptureField} CaptureField */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 
+/** Per-instance counter so each component scopes its radio-group `name`s. */
+let uid = 0;
+
 /**
  * Renders the **Issue Capture Group**s of a single *failed* Answer (ADR-0020).
  *
@@ -51,6 +54,13 @@ export class CRCaptureGroups extends ReactiveElement {
      * @type {string | null}
      */
     this._builtSig = null;
+    /**
+     * Unique radio-name prefix for this instance. Without it, every failed
+     * Answer's identically-keyed radios (e.g. `repeatIssue`) would share a
+     * `name` and form one cross-Answer native radio group — picking one would
+     * clear the others.
+     */
+    this._uid = `cg${uid++}-`;
   }
 
   connectedCallback() {
@@ -175,9 +185,15 @@ export class CRCaptureGroups extends ReactiveElement {
   _renderEditableField(field) {
     const current = this._currentString(field.key);
 
-    const control = buildCaptureControl(field, current, (value) => {
-      this._dispatch(field.key, value);
-    });
+    const control = buildCaptureControl(
+      field,
+      current,
+      (value) => {
+        this._dispatch(field.key, value);
+      },
+      'cr-capture-input',
+      this._uid
+    );
 
     this._fieldSetters.set(field.key, this._makeSetter(field, control));
 

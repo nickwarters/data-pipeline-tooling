@@ -9,13 +9,19 @@ import { h } from './html.js';
  * @param {CaptureField | RemediationField} fieldConfig
  * @param {string} currentValue
  * @param {(value: string) => void} onChange
+ * @param {string} [className]
+ * @param {string} [namePrefix] Prefix for the radio-group `name`. Callers that
+ *   render the same field for several rows (e.g. one per failed Answer) must pass
+ *   a per-row prefix, otherwise every row's radios share a `name` and collapse
+ *   into a single native radio group — selecting one clears the others.
  * @returns {HTMLElement}
  */
 export function buildCaptureControl(
   fieldConfig,
   currentValue,
   onChange,
-  className = 'cr-capture-input'
+  className = 'cr-capture-input',
+  namePrefix = ''
 ) {
   const onChangeHandler = (/** @type {Event} */ ev) => {
     const target =
@@ -35,7 +41,7 @@ export function buildCaptureControl(
           { className: 'cr-capture-radio' },
           h('input', {
             type: 'radio',
-            name: fieldConfig.key,
+            name: `${namePrefix}${fieldConfig.key}`,
             value: opt,
             checked: currentValue === opt,
             onchange: () => onChange(opt),

@@ -242,6 +242,36 @@ test('CRCaptureGroups: radio renders one input per option with the current one c
   );
 });
 
+test('CRCaptureGroups: radio names are scoped per instance so separate Answers are independent groups', () => {
+  const a = new CRCaptureGroups();
+  const b = new CRCaptureGroups();
+  a.update(GROUPS, {}, true);
+  b.update(GROUPS, {}, true);
+  a._fire('click'); // no-op safety
+  findAllByClass(a, 'cr-capture-group-header')[1]._fire('click'); // expand Grading
+  findAllByClass(b, 'cr-capture-group-header')[1]._fire('click');
+
+  const aRadios = findAllByTag(a, 'input').filter((i) => i.type === 'radio');
+  const bRadios = findAllByTag(b, 'input').filter((i) => i.type === 'radio');
+
+  // Yes/No within one instance must share a name (one working radio group)…
+  assert.equal(
+    aRadios[0].getAttribute('name'),
+    aRadios[1].getAttribute('name'),
+    'options within an instance share a radio-group name'
+  );
+  assert.ok(
+    aRadios[0].getAttribute('name').endsWith('repeat'),
+    'name is scoped to the field key'
+  );
+  // …but two instances must NOT, or selecting one Answer clears the other.
+  assert.notEqual(
+    aRadios[0].getAttribute('name'),
+    bRadios[0].getAttribute('name'),
+    'separate instances use distinct radio-group names'
+  );
+});
+
 test('CRCaptureGroups: changing a text control dispatches a bubbling cr-capture', () => {
   const el = new CRCaptureGroups();
   el.update(GROUPS, {}, true);
