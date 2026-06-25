@@ -773,7 +773,188 @@ body { font-family: monospace; background: #d8d8d8; }
 
 
 <!-- ══════════════════════════════════════════
-     SLIDE 9 — SUMMARY
+     SLIDE 9 — PRODUCTIVITY IMPACT
+══════════════════════════════════════════ -->
+<div class="slide">
+<svg width="960" height="540" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Background -->
+  <rect x="0" y="0" width="960" height="540" fill="#fff"/>
+
+  <!-- Header -->
+  <rect x="0" y="0" width="960" height="60" fill="#EE3524"/>
+  <text x="480" y="38" text-anchor="middle" font-family="monospace" font-size="18" font-weight="bold" fill="#fff">Standardisation Pays Off Immediately</text>
+
+  <!-- Column dividers -->
+  <line x1="323" y1="60" x2="323" y2="428" stroke="#ebebeb" stroke-width="1"/>
+  <line x1="637" y1="60" x2="637" y2="428" stroke="#ebebeb" stroke-width="1"/>
+
+  <!-- ── COLUMN 1: Building a new feed ── -->
+  <text x="168" y="90" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#111">Building a new feed</text>
+
+  <text x="168" y="112" text-anchor="middle" font-family="monospace" font-size="8" fill="#9FA1A4" letter-spacing="1">BEFORE</text>
+  <!-- Before bar: full width 266px -->
+  <rect x="35" y="118" width="266" height="36" fill="#9FA1A4" rx="2"/>
+  <text x="168" y="141" text-anchor="middle" font-family="monospace" font-size="10" fill="#fff">days of bespoke boilerplate</text>
+
+  <text x="168" y="172" text-anchor="middle" font-family="monospace" font-size="8" fill="#9FA1A4" letter-spacing="1">WITH FRAMEWORK</text>
+  <!-- After bar: short 58px -->
+  <rect x="35" y="178" width="58" height="36" fill="#111" rx="2"/>
+  <text x="168" y="225" text-anchor="middle" font-family="monospace" font-size="9" fill="#9FA1A4">python -m cli scaffold orders</text>
+
+  <!-- Big stat -->
+  <text x="168" y="320" text-anchor="middle" font-family="monospace" font-size="72" font-weight="bold" fill="#EE3524">&lt;1min</text>
+  <text x="168" y="352" text-anchor="middle" font-family="monospace" font-size="14" fill="#EE3524">to scaffold a working feed</text>
+  <text x="168" y="374" text-anchor="middle" font-family="monospace" font-size="9" fill="#9FA1A4">schema · pipeline · sample · test · all wired</text>
+
+  <!-- ── COLUMN 2: After a failure ── -->
+  <text x="480" y="90" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#111">After a failure</text>
+
+  <text x="480" y="112" text-anchor="middle" font-family="monospace" font-size="8" fill="#9FA1A4" letter-spacing="1">BEFORE</text>
+  <!-- Before bar: full width -->
+  <rect x="347" y="118" width="266" height="36" fill="#9FA1A4" rx="2"/>
+  <text x="480" y="141" text-anchor="middle" font-family="monospace" font-size="10" fill="#fff">dig through logs, re-run blind</text>
+
+  <text x="480" y="172" text-anchor="middle" font-family="monospace" font-size="8" fill="#9FA1A4" letter-spacing="1">WITH FRAMEWORK</text>
+  <!-- After bar: short -->
+  <rect x="347" y="178" width="58" height="36" fill="#111" rx="2"/>
+  <text x="480" y="225" text-anchor="middle" font-family="monospace" font-size="9" fill="#9FA1A4">python -m cli log /data orders</text>
+
+  <!-- Big stat -->
+  <text x="480" y="320" text-anchor="middle" font-family="monospace" font-size="72" font-weight="bold" fill="#EE3524">1</text>
+  <text x="480" y="352" text-anchor="middle" font-family="monospace" font-size="14" fill="#EE3524">query to see what failed</text>
+  <text x="480" y="374" text-anchor="middle" font-family="monospace" font-size="9" fill="#9FA1A4">step · status · rows quarantined · run_id</text>
+
+  <!-- ── COLUMN 3: Changing data source ── -->
+  <text x="790" y="90" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#111">Changing data source</text>
+
+  <text x="790" y="112" text-anchor="middle" font-family="monospace" font-size="8" fill="#9FA1A4" letter-spacing="1">BEFORE</text>
+  <!-- Before bar: full width -->
+  <rect x="659" y="118" width="266" height="36" fill="#9FA1A4" rx="2"/>
+  <text x="790" y="141" text-anchor="middle" font-family="monospace" font-size="10" fill="#fff">rewrite pipeline logic end-to-end</text>
+
+  <text x="790" y="172" text-anchor="middle" font-family="monospace" font-size="8" fill="#9FA1A4" letter-spacing="1">WITH FRAMEWORK</text>
+  <!-- After bar: short -->
+  <rect x="659" y="178" width="58" height="36" fill="#111" rx="2"/>
+  <text x="790" y="225" text-anchor="middle" font-family="monospace" font-size="9" fill="#9FA1A4">swap the Reader only</text>
+
+  <!-- Big stat -->
+  <text x="790" y="320" text-anchor="middle" font-family="monospace" font-size="72" font-weight="bold" fill="#EE3524">1</text>
+  <text x="790" y="352" text-anchor="middle" font-family="monospace" font-size="14" fill="#EE3524">change to switch source</text>
+  <text x="790" y="374" text-anchor="middle" font-family="monospace" font-size="9" fill="#9FA1A4">CsvReader → SqliteReader · rest unchanged</text>
+
+  <!-- Bottom strip -->
+  <rect x="0" y="428" width="960" height="112" fill="#f5f5f5"/>
+  <line x1="0" y1="428" x2="960" y2="428" stroke="#ebebeb" stroke-width="1"/>
+  <text x="480" y="466" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#111">One framework. Same shape every time. No decisions to relitigate.</text>
+  <text x="480" y="494" text-anchor="middle" font-family="monospace" font-size="11" fill="#9FA1A4">The boilerplate is already written — every new feed starts with working code, not a blank file.</text>
+
+</svg>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     SLIDE 10 — STABILITY & CONFIDENCE
+══════════════════════════════════════════ -->
+<div class="slide">
+<svg width="960" height="540" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Background -->
+  <rect x="0" y="0" width="960" height="540" fill="#fff"/>
+
+  <!-- Header -->
+  <rect x="0" y="0" width="960" height="60" fill="#EE3524"/>
+  <text x="480" y="38" text-anchor="middle" font-family="monospace" font-size="18" font-weight="bold" fill="#fff">Stability and Confidence</text>
+
+  <!-- Divider -->
+  <line x1="460" y1="60" x2="460" y2="476" stroke="#e0e0e0" stroke-width="1"/>
+
+  <!-- Section headers -->
+  <text x="228" y="82" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#9FA1A4" letter-spacing="1">WITHOUT THE FRAMEWORK</text>
+  <text x="706" y="82" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#111" letter-spacing="1">WITH THE FRAMEWORK</text>
+
+  <!-- ── ROW 1: Did my data land? ── -->
+  <!-- Left: question/unknown -->
+  <rect x="10" y="90" width="440" height="86" fill="#f8f8f8" stroke="#e0e0e0" stroke-width="1" rx="3" stroke-dasharray="6,3"/>
+  <circle cx="50" cy="133" r="24" fill="#f0f0f0" stroke="#9FA1A4" stroke-width="1.5"/>
+  <text x="50" y="139" text-anchor="middle" font-family="monospace" font-size="18" fill="#9FA1A4">?</text>
+  <text x="82" y="122" font-family="monospace" font-size="12" font-weight="bold" fill="#9FA1A4">Did my data land?</text>
+  <text x="82" y="142" font-family="monospace" font-size="10" fill="#9FA1A4">check the DB? count rows? hope so?</text>
+  <text x="82" y="160" font-family="monospace" font-size="10" fill="#9FA1A4">no consistent answer</text>
+  <!-- Right: answer -->
+  <rect x="470" y="90" width="480" height="86" fill="#f8f8f8" stroke="#e0e0e0" stroke-width="1" rx="3"/>
+  <circle cx="516" cy="133" r="24" fill="#EE3524"/>
+  <line x1="504" y1="133" x2="512" y2="141" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="512" y1="141" x2="526" y2="124" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+  <text x="550" y="122" font-family="monospace" font-size="12" font-weight="bold" fill="#111">Did my data land?</text>
+  <text x="550" y="142" font-family="monospace" font-size="10" fill="#555">committed: false — nothing was written</text>
+  <text x="550" y="160" font-family="monospace" font-size="10" fill="#9FA1A4">run log always records outcome</text>
+
+  <!-- ── ROW 2: Which rows failed? ── -->
+  <rect x="10" y="184" width="440" height="86" fill="#f8f8f8" stroke="#e0e0e0" stroke-width="1" rx="3" stroke-dasharray="6,3"/>
+  <circle cx="50" cy="227" r="24" fill="#f0f0f0" stroke="#9FA1A4" stroke-width="1.5"/>
+  <text x="50" y="233" text-anchor="middle" font-family="monospace" font-size="18" fill="#9FA1A4">?</text>
+  <text x="82" y="216" font-family="monospace" font-size="12" font-weight="bold" fill="#9FA1A4">Which rows failed?</text>
+  <text x="82" y="236" font-family="monospace" font-size="10" fill="#9FA1A4">manually add prints? re-run with debug?</text>
+  <text x="82" y="254" font-family="monospace" font-size="10" fill="#9FA1A4">rows are gone — no trace</text>
+
+  <rect x="470" y="184" width="480" height="86" fill="#f8f8f8" stroke="#e0e0e0" stroke-width="1" rx="3"/>
+  <circle cx="516" cy="227" r="24" fill="#EE3524"/>
+  <line x1="504" y1="227" x2="512" y2="235" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="512" y1="235" x2="526" y2="218" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+  <text x="550" y="216" font-family="monospace" font-size="12" font-weight="bold" fill="#111">Which rows failed?</text>
+  <text x="550" y="236" font-family="monospace" font-size="10" fill="#555">quarantine.db — every row, with reason</text>
+  <text x="550" y="254" font-family="monospace" font-size="10" fill="#9FA1A4">always captured, never lost</text>
+
+  <!-- ── ROW 3: Safe to re-run? ── -->
+  <rect x="10" y="278" width="440" height="86" fill="#f8f8f8" stroke="#e0e0e0" stroke-width="1" rx="3" stroke-dasharray="6,3"/>
+  <circle cx="50" cy="321" r="24" fill="#f0f0f0" stroke="#9FA1A4" stroke-width="1.5"/>
+  <text x="50" y="327" text-anchor="middle" font-family="monospace" font-size="18" fill="#9FA1A4">?</text>
+  <text x="82" y="310" font-family="monospace" font-size="12" font-weight="bold" fill="#9FA1A4">Safe to re-run?</text>
+  <text x="82" y="330" font-family="monospace" font-size="10" fill="#9FA1A4">will it double-write? corrupt state?</text>
+  <text x="82" y="348" font-family="monospace" font-size="10" fill="#9FA1A4">depends on who wrote it</text>
+
+  <rect x="470" y="278" width="480" height="86" fill="#f8f8f8" stroke="#e0e0e0" stroke-width="1" rx="3"/>
+  <circle cx="516" cy="321" r="24" fill="#EE3524"/>
+  <line x1="504" y1="321" x2="512" y2="329" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="512" y1="329" x2="526" y2="312" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+  <text x="550" y="310" font-family="monospace" font-size="12" font-weight="bold" fill="#111">Safe to re-run?</text>
+  <text x="550" y="330" font-family="monospace" font-size="10" fill="#555">yes — idempotent by run_id, always</text>
+  <text x="550" y="348" font-family="monospace" font-size="10" fill="#9FA1A4">guaranteed by the framework contract</text>
+
+  <!-- ── ROW 4: What exactly failed? ── -->
+  <rect x="10" y="372" width="440" height="86" fill="#f8f8f8" stroke="#e0e0e0" stroke-width="1" rx="3" stroke-dasharray="6,3"/>
+  <circle cx="50" cy="415" r="24" fill="#f0f0f0" stroke="#9FA1A4" stroke-width="1.5"/>
+  <text x="50" y="421" text-anchor="middle" font-family="monospace" font-size="18" fill="#9FA1A4">?</text>
+  <text x="82" y="404" font-family="monospace" font-size="12" font-weight="bold" fill="#9FA1A4">What exactly failed?</text>
+  <text x="82" y="424" font-family="monospace" font-size="10" fill="#9FA1A4">stack trace hunting, check every script</text>
+  <text x="82" y="442" font-family="monospace" font-size="10" fill="#9FA1A4">inconsistent error shapes</text>
+
+  <rect x="470" y="372" width="480" height="86" fill="#f8f8f8" stroke="#e0e0e0" stroke-width="1" rx="3"/>
+  <circle cx="516" cy="415" r="24" fill="#EE3524"/>
+  <line x1="504" y1="415" x2="512" y2="423" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="512" y1="423" x2="526" y2="406" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+  <text x="550" y="404" font-family="monospace" font-size="12" font-weight="bold" fill="#111">What exactly failed?</text>
+  <text x="550" y="424" font-family="monospace" font-size="10" fill="#555">ValidationError names the column and rule</text>
+  <text x="550" y="442" font-family="monospace" font-size="10" fill="#9FA1A4">same error shape across every pipeline</text>
+
+  <!-- Bottom strip -->
+  <rect x="0" y="476" width="960" height="64" fill="#111"/>
+  <!-- Error type chips -->
+  <rect x="160" y="492" width="80" height="28" fill="#EE3524" rx="3"/>
+  <text x="200" y="511" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#fff">data error</text>
+  <rect x="260" y="492" width="110" height="28" fill="#555" rx="3"/>
+  <text x="315" y="511" text-anchor="middle" font-family="monospace" font-size="10" fill="#fff">operational error</text>
+  <rect x="380" y="492" width="90" height="28" fill="#9FA1A4" rx="3"/>
+  <text x="425" y="511" text-anchor="middle" font-family="monospace" font-size="10" fill="#fff">config error</text>
+  <text x="510" y="511" font-family="monospace" font-size="10" fill="#9FA1A4">— every failure is categorised, not just logged</text>
+
+</svg>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     SLIDE 11 — SUMMARY
 ══════════════════════════════════════════ -->
 <div class="slide">
 <svg width="960" height="540" xmlns="http://www.w3.org/2000/svg">
