@@ -145,6 +145,59 @@ test('compileBank: empty questions still produces a valid module', () => {
   assert.ok(out.includes('export default config;'));
 });
 
+test('compileBank: emits a labels block when the bank has labels', () => {
+  const out = compileBank({
+    label: 'L',
+    slug: 's',
+    eligibleGroups: [],
+    labels: [
+      { id: 'lbl-a', name: 'Alpha', color: '#123456' },
+      { id: 'lbl-b', name: 'Beta', color: '#abcdef' },
+    ],
+    questions: [],
+  });
+  assert.ok(out.includes('labels: ['));
+  assert.ok(out.includes('{ id: "lbl-a", name: "Alpha", color: "#123456" },'));
+  assert.ok(out.includes('{ id: "lbl-b", name: "Beta", color: "#abcdef" },'));
+});
+
+test('compileBank: omits the labels block when there are none', () => {
+  const out = compileBank({
+    label: 'L',
+    slug: 's',
+    eligibleGroups: [],
+    labels: [],
+    questions: [],
+  });
+  assert.ok(!out.includes('labels: ['));
+});
+
+test('compileBank: emits labelIds on a question that carries them', () => {
+  const out = compileBank(
+    bank({
+      id: 'q1',
+      text: 'T',
+      labelIds: ['lbl-a', 'lbl-b'],
+      responseType: 'yes-no-na',
+      deprecated: false,
+    })
+  );
+  assert.ok(out.includes('labelIds: ["lbl-a","lbl-b"]'));
+});
+
+test('compileBank: omits labelIds when absent or empty', () => {
+  const out = compileBank(
+    bank({
+      id: 'q1',
+      text: 'T',
+      labelIds: [],
+      responseType: 'yes-no-na',
+      deprecated: false,
+    })
+  );
+  assert.ok(!out.includes('labelIds:'));
+});
+
 test('highlight: wraps comments, strings, keywords, booleans, and property keys', () => {
   const code = `const x = 'hi'; // comment\nreturn true;\nconst obj = { key: 1 };`;
   const out = highlight(code);

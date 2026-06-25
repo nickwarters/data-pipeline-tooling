@@ -13,10 +13,21 @@
  */
 
 /**
+ * A reporting label that can be assigned to Question Definitions from the
+ * question bank. Purely a bank-side concept: labels are never recorded against
+ * or edited from Cases. They carry a `color` so the editor can render a colour
+ * pill, and they exist to support external reporting (ADR-0015) — they do not
+ * affect how a question is presented to a Reviewer.
+ *
+ * @typedef {{ id: string, name: string, color: string }} Label
+ */
+
+/**
  * @typedef {{
  *   id: string,
  *   text: string,
  *   category?: string,
+ *   labelIds?: string[],
  *   responseType: 'yes-no-na' | 'single-choice' | 'multi-choice',
  *   options?: string[],
  *   showWhen?: Record<string, unknown>,
@@ -32,6 +43,7 @@
  *   label: string,
  *   slug: string,
  *   eligibleGroups: string[],
+ *   labels?: Label[],
  *   questions: DraftQuestion[],
  * }} QuestionBank
  */
@@ -42,11 +54,16 @@ export const questionBanks = {
     label: 'Hello Review',
     slug: 'hello-review',
     eligibleGroups: ['Reviewers'],
+    labels: [
+      { id: 'lbl-coaching', name: 'Coaching', color: '#2563eb' },
+      { id: 'lbl-regulatory', name: 'Regulatory', color: '#b91c1c' },
+    ],
     questions: [
       {
         id: 'q-welcome',
         text: 'Was the customer greeted professionally?',
         category: 'Opening',
+        labelIds: ['lbl-coaching'],
         responseType: 'yes-no-na',
         failureCriteria: 'No',
         deprecated: false,
@@ -55,6 +72,7 @@ export const questionBanks = {
         id: 'q-needs',
         text: "Were the customer's needs identified before proceeding?",
         category: 'Discovery',
+        labelIds: ['lbl-coaching', 'lbl-regulatory'],
         responseType: 'yes-no-na',
         failureCriteria: 'No',
         remediationActions: ['Retrain agent on needs-identification protocol.'],
@@ -92,11 +110,16 @@ export const questionBanks = {
     label: 'Complaint Review',
     slug: 'complaint-review',
     eligibleGroups: ['Reviewers', 'ComplianceLeads'],
+    labels: [
+      { id: 'lbl-sla', name: 'SLA', color: '#d97706' },
+      { id: 'lbl-regulatory', name: 'Regulatory', color: '#b91c1c' },
+    ],
     questions: [
       {
         id: 'q-acknowledged',
         text: 'Was the complaint acknowledged within SLA?',
         category: 'Intake',
+        labelIds: ['lbl-sla'],
         responseType: 'yes-no-na',
         failureCriteria: 'No',
         deprecated: false,
@@ -113,6 +136,7 @@ export const questionBanks = {
         id: 'q-rootcause',
         text: 'Was a root cause documented?',
         category: 'Analysis',
+        labelIds: ['lbl-regulatory'],
         responseType: 'yes-no-na',
         showWhen: {
           $and: [

@@ -24,9 +24,9 @@ test('CRQuestionCard: yes-no-na shows failure-criteria field + no options', () =
   e.connectedCallback();
   const head = /** @type {any} */ (e)._children[1];
   const body = head._children[1];
-  // body kids: wording-editor, grid, showwhen-editor, remediation-editor
-  // (no options-editor for yes-no-na)
-  assert.equal(body._children.length, 4);
+  // body kids: wording-editor, grid, labels-editor, showwhen-editor,
+  // remediation-editor (no options-editor for yes-no-na)
+  assert.equal(body._children.length, 5);
   // grid has 3 fields: category, response-type, failure-criteria
   const grid = body._children[1];
   assert.equal(grid._children.length, 3);
@@ -40,8 +40,9 @@ test('CRQuestionCard: single-choice renders options-editor + no failure-criteria
   e.questionIndex = 3;
   e.connectedCallback();
   const body = /** @type {any} */ (e)._children[1]._children[1];
-  // wording-editor, grid (2 fields), options-editor, showwhen, remediation
-  assert.equal(body._children.length, 5);
+  // wording-editor, grid (2 fields), options-editor, labels, showwhen,
+  // remediation
+  assert.equal(body._children.length, 6);
 });
 
 test('CRQuestionCard: changing response-type to non-yes-no-na initialises options', () => {

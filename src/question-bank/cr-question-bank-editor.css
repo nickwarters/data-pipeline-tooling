@@ -713,6 +713,136 @@ cr-bank-editor .tag-add:hover {
   border-style: solid;
 }
 
+/* ── Labels block (reporting tags) ────────────────────────────────────── */
+cr-bank-editor .labels-block {
+  margin-top: var(--cr-space-4);
+}
+cr-bank-editor .labels-help {
+  font-size: var(--cr-font-size-2xs);
+  color: var(--cr-color-text-muted);
+  margin: 2px 0 var(--cr-space-2);
+}
+cr-bank-editor .label-row,
+cr-bank-editor .label-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cr-space-2);
+}
+cr-bank-editor .label-add-row {
+  margin-top: var(--cr-space-2);
+}
+cr-bank-editor .label-empty {
+  font-size: var(--cr-font-size-sm);
+  color: var(--cr-color-text-muted);
+  font-style: italic;
+}
+cr-bank-editor .label-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cr-space-1);
+  padding: 2px var(--cr-space-2) 2px 4px;
+  border-radius: var(--cr-radius-pill, 999px);
+  font-size: var(--cr-font-size-sm);
+  font-weight: var(--cr-font-weight-medium);
+  color: var(--cr-color-on-surface);
+  background: color-mix(in srgb, var(--pill) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--pill) 45%, transparent);
+}
+cr-bank-editor .label-pill-name {
+  line-height: 1;
+}
+/* A native colour input squeezed into a swatch that reads as the pill dot. */
+cr-bank-editor .label-pill-color {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+cr-bank-editor .label-pill-color::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+cr-bank-editor .label-pill-color::-webkit-color-swatch {
+  border: 1px solid color-mix(in srgb, var(--pill) 60%, transparent);
+  border-radius: 50%;
+}
+cr-bank-editor .label-pill-x {
+  cursor: pointer;
+  color: var(--cr-color-text-muted);
+  font-family: var(--cr-font-mono);
+  line-height: 1;
+}
+cr-bank-editor .label-pill-x:hover {
+  color: var(--cr-color-danger);
+}
+cr-bank-editor .label-add-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cr-space-1);
+  background: transparent;
+  border: 1px dashed var(--cr-color-border-strong);
+  padding: var(--cr-space-1) var(--cr-space-2);
+  border-radius: var(--cr-radius-pill, 999px);
+  font-family: var(--cr-font-body);
+  font-size: var(--cr-font-size-sm);
+  color: var(--cr-color-text-muted);
+  cursor: pointer;
+}
+cr-bank-editor .label-add-chip:hover {
+  border-style: solid;
+  border-color: var(--pill);
+  color: var(--cr-color-on-surface);
+}
+cr-bank-editor .label-swatch-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pill);
+}
+cr-bank-editor .label-new {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cr-space-1);
+}
+cr-bank-editor .label-new-name {
+  background: transparent;
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-md);
+  padding: var(--cr-space-1) var(--cr-space-2);
+  font-size: var(--cr-font-size-sm);
+  color: var(--cr-color-on-surface);
+  width: 9rem;
+}
+cr-bank-editor .label-new-color {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+cr-bank-editor .label-new-add {
+  background: transparent;
+  border: 1px dashed var(--cr-color-border-strong);
+  padding: var(--cr-space-1) var(--cr-space-3);
+  font-family: var(--cr-font-body);
+  font-size: var(--cr-font-size-sm);
+  color: var(--cr-color-text-muted);
+  border-radius: var(--cr-radius-md);
+  cursor: pointer;
+}
+cr-bank-editor .label-new-add:hover {
+  border-color: var(--cr-color-accent);
+  color: var(--cr-color-accent);
+  border-style: solid;
+}
+
 /* ── showWhen block ───────────────────────────────────────────────────── */
 cr-bank-editor .showwhen-block {
   margin-top: var(--cr-space-4);

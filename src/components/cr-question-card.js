@@ -93,6 +93,7 @@ export class CRQuestionCard extends ReactiveElement {
       bodyChildren.push(h('cr-options-editor', { question: q }));
     }
     bodyChildren.push(
+      h('cr-question-labels', { question: q }),
       h('cr-showwhen-editor', { question: q }),
       h('cr-remediation-editor', { question: q })
     );

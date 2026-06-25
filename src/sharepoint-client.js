@@ -146,10 +146,22 @@
  */
 
 /**
+ * A reporting **Label** assigned to Question Definitions from the question bank
+ * (ADR-0015). Bank-side only — never recorded against a Case. `color` drives the
+ * editor's colour pill and is carried into the data-only reporting export.
+ *
+ * @typedef {{ id: string, name: string, color: string }} Label
+ */
+
+/**
+ * `labelIds` references the owning Case Type's `labels` by id (ADR-0015). It is
+ * reporting metadata only and does not affect how a question is presented.
+ *
  * @typedef {{
  *   id: string,
  *   text: string,
  *   category?: string,
+ *   labelIds?: string[],
  *   responseType: 'yes-no-na' | 'single-choice' | 'multi-choice',
  *   options?: string[],
  *   showWhen?: Record<string, unknown>,
@@ -212,6 +224,7 @@
  * @typedef {{
  *   questions: QuestionDefinition[],
  *   computeOutcome: (answers: Record<string, Answer>) => OutcomeResult,
+ *   labels?: Label[],
  *   eligibleGroups?: string[],
  *   sections?: Partial<Record<'details'|'questions'|'conversation'|'notes'|'remediation'|'summary'|'appeal', SectionConfig>>,
  *   slaHours?: number,

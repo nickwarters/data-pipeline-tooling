@@ -31,6 +31,15 @@ export function compileBank(bank) {
   lines.push(`/** @type {CaseTypeConfig} */`);
   lines.push(`const config = {`);
   lines.push(`  eligibleGroups: ${JSON.stringify(bank.eligibleGroups)},`);
+  if (bank.labels && bank.labels.length) {
+    lines.push(`  labels: [`);
+    for (const l of bank.labels) {
+      lines.push(
+        `    { id: ${JSON.stringify(l.id)}, name: ${JSON.stringify(l.name)}, color: ${JSON.stringify(l.color)} },`
+      );
+    }
+    lines.push(`  ],`);
+  }
   lines.push(`  questions: [`);
   for (const q of bank.questions) {
     lines.push(`    {`);
@@ -38,6 +47,8 @@ export function compileBank(bank) {
     lines.push(`      text: ${JSON.stringify(q.text)},`);
     if (q.category)
       lines.push(`      category: ${JSON.stringify(q.category)},`);
+    if (q.labelIds && q.labelIds.length)
+      lines.push(`      labelIds: ${JSON.stringify(q.labelIds)},`);
     lines.push(`      responseType: ${JSON.stringify(q.responseType)},`);
     if (q.options) lines.push(`      options: ${JSON.stringify(q.options)},`);
     if (q.showWhen)
