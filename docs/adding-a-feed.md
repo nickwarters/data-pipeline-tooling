@@ -72,10 +72,20 @@ imports the feed absolutely (`from pipelines.orders.pipeline import …`):
 
 ```sh
 python -m cli run pipelines/orders /data   # run via the framework (freshness + run log)
+python -m cli run pipelines/orders /data --dry-run  # preview each step, write nothing
 python -m pipelines.orders.pipeline /data        # or directly: refine the bundled sample to gold
 python -m pipelines.orders.pipeline /data --describe  # print each hop's plan, then run it
 python -m pytest tests/pipelines/test_orders.py  # the generated test passes as-is
 ```
+
+`--dry-run` is the local-development inner loop: it runs the feed end to end
+against real data but **lands nothing**, printing per-step columns, dtypes, row
+counts, a small row sample, and any validation failure (it stops fast on an
+error-severity one, just like a real run). Use it to confirm a schema, a
+`RENAME` map, or a processor reshapes the way you expect before you commit a
+single row. Because it skips the *current* run's writes, preview a feed whose
+upstream hops have already been landed for real — see
+[the operator CLI's `--dry-run`](operator-cli.md#previewing-a-pipeline----dry-run).
 
 Then **customise**: edit `schema.py`'s fields to your source columns (and add
 `Annotated` value rules as needed — see

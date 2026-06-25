@@ -43,7 +43,7 @@ run store directly and need neither.)
 ```sh
 python -m cli run pipelines/<name> <base_dir> \
     [--run-date YYYY-MM-DD] [--logical-run-id ID] [--freshness-days N] \
-    [--param KEY=VALUE ...]
+    [--param KEY=VALUE ...] [--dry-run]
 ```
 
 Imports `pipelines.<name>.pipeline` and runs its `run(context)` callable, after
@@ -56,6 +56,39 @@ Exit code is `0` on success, non-zero on a clear error (see below).
 $ python -m cli run pipelines/selection /data --run-date 2026-05-29
 available cases: 3 -> SelectionPool: 2 cases (Question Bank qb-100, logical run selection:2026-05-29); trace: 3 considered, 1 excluded with a reason
 ```
+
+### Previewing a pipeline — `--dry-run`
+
+Pass `--dry-run` to **preview** a pipeline during local development without
+landing anything. The handler runs against real data — every read, transform,
+and validation executes — but each write, quarantine commit, and explain trace
+is **skipped**, and no run log or run registry is touched. The command prints a
+per-step report: the node type and name, the row count, the columns with their
+dtypes, a small bounded sample of rows, and the *intent* of each skipped commit
+(`would write N row(s)`, `would quarantine N row(s)`).
+
+```console
+$ python -m cli run pipelines/ingest /data --run-date 2026-05-29 --dry-run
+dry run — no artifacts were written
+  [Read] read: 5 rows
+      columns: case_ref:str, adviser:str, activity_date:str, amount:int64
+      case_ref=c1, adviser=adv-a, activity_date=2026-05-29, amount=500
+      ...
+  [Write] write: 5 rows
+      ...
+      would write 5 row(s)
+```
+
+A dry run **reads against committed data**: it skips the *current* run's writes,
+so a later hop that reads an intermediate store sees what is already on disk, not
+what this dry run would have written. Land the upstream hops for real once, then
+preview — previewing a brand-new feed whose own raw store does not exist yet only
+previews up to that first read.
+
+An error-severity validation failure stops the run fast (the AC's documented
+behaviour): the preview still prints every step up to the failure with a clear
+`FAILED: <reason>` note, the `stopped:` line names the error, and the exit code
+is non-zero — same fail-fast contract as a real run, without writing anything.
 
 ### Re-driving a business run — `--logical-run-id`
 
@@ -145,6 +178,63 @@ $ python -m cli orchestrate /data --app my_app.pipelines --run-date 2026-05-29 -
 2026-05-29  cases  cases/ingest  succeeded
 2026-05-29  cases  cases/selection  succeeded
 ```
+
+## Orchestration plan preview — `Orchestrator.plan()`
+
+Before running `orchestrate`, you can preview what would happen for a given run
+date without executing any pipelines or touching any log file. Call
+`Orchestrator.plan(base_dir, run_date=...)` from Python — it reads the existing
+run registry and returns a `PlanResult` whose items describe each scheduled
+pipeline's projected status:
+
+| Status | Meaning |
+|--------|---------|
+| `ready` | schedule is due and all freshness requirements are met |
+| `skipped` | schedule is not due on that date |
+| `disabled` | item has `enabled=False` |
+| `already-satisfied` | pipeline already succeeded on the run date |
+| `blocked` | a declared upstream is stale or missing |
+
+```python
+from tools.orchestration import Orchestrator
+
+result = orchestrator.plan("/data", run_date=dt.date(2026, 6, 23))
+print(result)
+```
+
+```
+2026-06-23  claims  claims/ingest          ready              schedule daily is due
+2026-06-23  claims  claims/quality_check   skipped            schedule monday,wednesday is not due on tuesday
+2026-06-23  claims  claims/month_open      already-satisfied  already succeeded on 2026-06-23
+2026-06-23  claims  claims/reporting       blocked            upstream claims/ingest is stale: ...
+```
+
+`str(result)` renders an aligned table using only stdlib; columns are sized to
+the widest value so the output stays readable regardless of pipeline name length.
+
+For per-file source artifact planning (catch-up scenarios where a backlog of
+files needs processing), use the standalone `plan_for_each()` helper:
+
+```python
+from tools.orchestration import plan_for_each
+
+items = plan_for_each(
+    source_files=["share/claims_20260601.csv", "share/claims_20260602.csv"],
+    subject="claims",
+    pipeline="ingest",
+    set_name="claims",
+    run_date=dt.date(2026, 6, 23),
+    file_id_fn=lambda f: Path(f).name,
+)
+# Each item: status="ready", reason="source file: claims_20260601.csv"
+```
+
+`plan_for_each()` returns one `PlanItem(status="ready")` per source file without
+consulting run history or calling any handler — it is a pure projection of
+planned per-file runs.
+
+> **Note:** CLI dry-run support for the `run` and `orchestrate` commands (passing
+> `--dry-run` / `--plan` on the command line) is tracked separately in issue #195.
 
 ## `status` — the latest run per pipeline
 

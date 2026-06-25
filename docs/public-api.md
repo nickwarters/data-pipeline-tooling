@@ -66,7 +66,8 @@ the implementation modules living alongside it:
   `coercion` (`SchemaCoercion` — the *coerce* half of the schema adapter),
   `quarantine`.
 - `framework/run/` — `builder`, `execution`, `pipeline_steps`,
-  `trace`, `runner`, `run_context`. It also re-exports the observability seam
+  `trace`, `runner`, `run_context`, `dry_run` (the preview report behind
+  `dry_run_pipeline`). It also re-exports the observability seam
   (`RunLog`, `RunRegistry`) that lives in the sibling `tools.observability`
   package.
 
@@ -125,18 +126,19 @@ Moving data across the boundary.
 | Names | What |
 |-------|------|
 | `Reader`, `DatasetReader`, `CsvReader`, `GlobCsvReader`, `ExcelReader`, `SqliteReader` | The `read() -> Dataset` port and its concrete sources. (The remote `SasReader` / `SharePointReader` live in `tools.integrations`, not this facade — see below.) |
-| `Writer`, `CsvWriter`, `ExcelWriter`, `JsonWriter`, `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `QuarantineWriter`, `StdoutWriter` | The `write(dataset)` port and its concrete sinks (`StdoutWriter` is a console sink for *seeing* a result — e.g. an explainer trace — rather than persisting it). (The remote `SharePointWriter` lives in `tools.integrations`, not this facade — see below.) |
+| `Writer`, `CsvWriter`, `ExcelWriter`, `JsonWriter`, `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `SqliteInsertOrIgnoreWriter`, `QuarantineWriter`, `StdoutWriter` | The `write(dataset)` port and its concrete sinks (`StdoutWriter` is a console sink for *seeing* a result — e.g. an explainer trace — rather than persisting it). (The remote `SharePointWriter` lives in `tools.integrations`, not this facade — see below.) |
 | `Store`, `StoreCatalog`, `StoreBackend`, `DirectoryStoreBackend` | Per-subject medallions minted from shared configuration. |
-| `Refresh`, `AccumulateByRun`, `UpsertStrategy` | The load strategies a Writer carries. |
+| `Refresh`, `AccumulateByRun`, `UpsertStrategy`, `InsertOrIgnore` | The load strategies a Writer carries. |
 
 ### `framework.transform` — reshaping a feed mid-pipeline
 
 | Names | What |
 |-------|------|
 | `Processor` | The mid-pipeline transform seam — `Callable[..., Dataset]`: one or more `Dataset`s in (one per wired upstream node), exactly one out. |
-| `Filter`, `Score`, `VectorizedFilter`, `VectorizedDerive`, `Stamp`, `Sort`, `Rename`, `Parse`, `SplitColumn`, `JoinColumns`, `Zfill`, `IntegerText`, `JoinDependency`, `JoinWith`, `AntiJoinWith`, `LatestPerKey`, `SelectColumns`, `DropColumns`, `Unpivot`, `DeriveKey`, `TopNPerGroup`, `Sample`, `SamplePerGroup` | The concrete Selection / Ingest / fan-out transforms. |
+| `Filter`, `Score`, `VectorizedFilter`, `VectorizedDerive`, `Stamp`, `Sort`, `Rename`, `JoinColumns`, `JoinDependency`, `JoinWith`, `AntiJoinWith`, `LatestPerKey`, `SelectColumns`, `DropColumns`, `Unpivot`, `DeriveKey` | The concrete Selection / Ingest / fan-out transforms. |
 | `SchemaCoercion` | The *coerce* half of the schema adapter: casts round-trip-lossy columns (`date` / `datetime` / `bool`) to the declared types — a reshape, so it lives here, not with the schema check. |
 | `CoercionError` | Raised by `SchemaCoercion` on an uncastable value. |
+| `SchemaValueRulePartitioner` | The quarantine partitioner that routes value-rule / row-check rejects aside while preserving good rows for the main path. Usually reached through `Pipeline.quarantine(...)`, but exported for advanced schema/quarantine wiring. |
 
 ### `framework.run` — composing, executing, observing
 
@@ -145,6 +147,7 @@ Moving data across the boundary.
 | `Pipeline` | The deferred DAG builder. Nodes are declared explicitly — `.read` / `.task` / `.validate` / `.write` (plus compatible `.transform`, `.action`, `.explain`, and `.quarantine`) each return a wired node that later steps depend on; `.describe()` renders the pre-run plan and `.run()` executes it in topological order. A **task** is the preferred public name for a stable named unit of work inside a pipeline. Dataset→dataset work is any `Dataset -> Dataset` callable passed to `.task(name, func, *inputs)`; `.transform(func, *inputs, name=...)` remains supported with the same execution path (`framework.transform` ships `Score` / `Filter` / `JoinWith`). |
 | `RunAddress`, `RunAddressError` | A stable address for dependency targets: whole Pipelines (`pipeline`, `subject/pipeline`) or named run steps (`pipeline.step`, `subject/pipeline.step`, for example `pipeline_2.step_4`). The builder wires these onto run-log records as `step_address`; `RunRegistry.records_for_address(...)`, `RunRegistry.has_successful_address(...)`, and `RunRegistry.latest_success(...)` use that key for upstream dependency checks. Use `RunAddress.pipeline(...)`, `RunAddress.step(...)`, or `RunAddress.parse(label)` when code already has structured pieces or accepts config labels. Invalid labels raise `RunAddressError`, a config-category `PipelineError`. |
 | `run_pipeline`, `PipelineRunner`, `RunContext`, `Requirement`, `FreshnessRequirement`, `FreshnessError`, `UnknownPipelineError` | The `run_pipeline` execution core (used by the path-addressed `run` command) + the thin domain runner and requirement guard. `FreshnessRequirement` is the compatibility adapter for old pipeline-level freshness checks. |
+| `dry_run_pipeline`, `DryRunReport` | The preview/dry-run path (used by `run --dry-run`): runs a handler under a dry-run `RunContext` that reads, processes, and validates real data but skips every write/quarantine/explain commit, returning a `DryRunReport` of columns, dtypes, row counts, and a bounded row sample per step. |
 | `RunLog`, `RunRegistry` | The structured-observability seam and its query store (re-exported here from `tools.observability`). |
 
 ## The `tools` package — sibling utilities
@@ -187,8 +190,9 @@ without notice:
   `SasReader` / `SharePointReader` / `SharePointWriter` (ADR-0004/0005). This lives in
   the `tools` sibling package (above), not a `framework` facade. An advanced extension
   point, documented in [adding-a-feed.md](adding-a-feed.md); not part of the day-to-day surface.
-- `framework.transform.quarantine` (`SchemaValueRulePartitioner`, …) — the
-  value-rule / row-check quarantine partitioner; wired by the schema/quarantine flow.
+- Other helpers inside `framework.transform.quarantine` — implementation details
+  behind the exported `SchemaValueRulePartitioner` and the builder's
+  schema/quarantine flow.
 - `framework._internal.schema` (the `ValueRule` protocol, the `RowCheck` carrier +
   `row_checks` decorator, the Python↔pandas type mapping, and the
   dataclass-annotation reading) — the shared core both schema adapters

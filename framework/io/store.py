@@ -15,10 +15,18 @@ from framework._internal.connection import connect
 from framework.core.layers import Layer, layer_name
 from framework.io.readers import Reader, SqliteReader
 from framework.io.sql import quote_identifier
-from framework.io.strategy import AccumulateByRun, Refresh, UpsertStrategy
+from framework.io.strategy import (
+    AccumulateByRun,
+    InsertIfAbsent,
+    InsertOrIgnore,
+    Refresh,
+    UpsertStrategy,
+)
 from framework.io.writers import (
     AccumulateByRunWriter,
     QuarantineWriter,
+    SqliteInsertIfAbsentWriter,
+    SqliteInsertOrIgnoreWriter,
     SqliteTruncateReloadWriter,
     SqliteUpsertWriter,
     Writer,
@@ -67,7 +75,11 @@ class Store:
         self,
         layer: Layer | str,
         table: str,
-        strategy: Refresh | AccumulateByRun | UpsertStrategy,
+        strategy: Refresh
+        | AccumulateByRun
+        | UpsertStrategy
+        | InsertOrIgnore
+        | InsertIfAbsent,  # noqa: E501
     ) -> Writer:
         """Mint a Writer over the subject's layer file with the given strategy."""
         db_path = self._db_path(layer)
@@ -89,6 +101,18 @@ class Store:
                 db_path,
                 table,
                 strategy.key_columns,
+                busy_timeout_ms=self._busy_timeout_ms,
+            )
+        if isinstance(strategy, InsertOrIgnore):
+            return SqliteInsertOrIgnoreWriter(
+                db_path, table, busy_timeout_ms=self._busy_timeout_ms
+            )
+        if isinstance(strategy, InsertIfAbsent):
+            return SqliteInsertIfAbsentWriter(
+                db_path,
+                table,
+                strategy.key_columns,
+                surrogate_column=strategy.surrogate_column,
                 busy_timeout_ms=self._busy_timeout_ms,
             )
         raise TypeError(f"unknown strategy {strategy!r}")

@@ -26,6 +26,27 @@ def _cli(*args):
     )
 
 
+def test_dry_run_previews_without_touching_any_artifact(tmp_path):
+    # Land real data first so there is something to preview.
+    first = _cli("run", "pipelines/ingest", str(tmp_path), "--run-date", "2026-05-29")
+    assert first.returncode == 0, first.stderr
+    raw_db = tmp_path / "cases" / "raw.db"
+    registry = tmp_path / "_registry" / "runs.db"
+    before = {p: p.stat().st_mtime_ns for p in (raw_db, registry)}
+
+    result = _cli(
+        "run", "pipelines/ingest", str(tmp_path), "--run-date", "2026-05-29", "--dry-run"
+    )
+
+    assert result.returncode == 0, result.stderr
+    # Non-destructive: neither the store nor the run registry was touched.
+    after = {p: p.stat().st_mtime_ns for p in (raw_db, registry)}
+    assert after == before
+    assert "dry run" in result.stdout.lower()
+    assert "[Read]" in result.stdout
+    assert "rows" in result.stdout
+
+
 def test_cli_runs_real_ingest_then_selection_end_to_end(tmp_path):
     ingest = _cli("run", "pipelines/ingest", str(tmp_path), "--run-date", "2026-05-29")
     assert ingest.returncode == 0, ingest.stderr

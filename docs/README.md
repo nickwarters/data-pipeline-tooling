@@ -164,11 +164,12 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`Store` / `StoreCatalog`** | `Store(subject_dir)` binds one subject to Writer/Reader creation over `<subject>/{raw,silver,gold}.db`; `StoreCatalog(root).store(subject)` mints those stores from shared root/configuration. Holds no business logic and makes no load decision. ([ADR-0001](adr/0001-sqlite-medallion-store-on-network-share.md)) |
 | **`Validator`** | `validate(dataset) -> None`, **raises** on breach. `ColumnValidator`, `RowCountValidator` (engine-agnostic), `VolumeAnomalyValidator` (trips when a run's volume deviates from its recent-history baseline — catches truncated source exports, #54), `SchemaDriftValidator` (warns at the raw boundary when a feed's columns drift from the prior run's landed set — catches owner-controlled source schema change, #51). Severity (`error`/`warn`) is set where it's attached. |
 | **`Schema` / `SchemaValidator`** | A Case Type **dataclass** whose annotations *are* the column, dtype, nullability, and value-rule contract; the validator is the dataclass→validator adapter, enforced at silver (and optionally gold). Nullability/value rules extend the same dataclass via `Annotated`; cross-field **row checks** attach via the `@row_checks(...)` class decorator. → [schema-enforcement.md](schema-enforcement.md) ([ADR-0008](adr/0008-graduated-schema-enforcement.md)) |
-| **`Processor`** | `process(dataset) -> Dataset`, run mid-pipeline via a named `.task(...)` (`.transform(...)` remains compatible). `SchemaCoercion` (repair storage-lossy types); the Selection transforms `Filter` / `Score` / `VectorizedFilter` / `VectorizedDerive` / `Sort` / `Rename` / `Stamp`, the ungrouped `Sample` and per-group `TopNPerGroup` / `SamplePerGroup`, the explicit-dependency cross-feed `JoinWith` / `AntiJoinWith`; the column-shaping `Parse` / `SplitColumn` / `JoinColumns` / `Zfill` / `IntegerText`; and the Ingest / fan-out transforms `SelectColumns` / `DropColumns` / `Unpivot` / `DeriveKey` / `LatestPerKey`. → [processors.md](processors.md) |
+| **`Processor`** | `process(dataset) -> Dataset`, run mid-pipeline via a named `.task(...)` (`.transform(...)` remains compatible). `SchemaCoercion` (repair storage-lossy types); the Selection transforms `Filter` / `Score` / `VectorizedFilter` / `VectorizedDerive` / `Sort` / `Rename` / `Stamp`, the explicit-dependency cross-feed `JoinWith` / `AntiJoinWith`; the column-shaping `JoinColumns`; and the Ingest / fan-out transforms `SelectColumns` / `DropColumns` / `Unpivot` / `DeriveKey` / `LatestPerKey`. → [processors.md](processors.md) |
 | **Pipeline tasks** | A `Pipeline` is wired from named **tasks**, each returning a node the next consumes: `.read(reader)`, `.task(name, processor)`, `.validate(validator)`, `.write(writer)`, and `.explain(...)`. Order and any fan-in / fan-out are explicit in how nodes are wired — validation, processing, and explicit checkpoint writes land exactly where you place them. |
 | **`Pipeline`** (builder) | The deferred DAG builder: `p = Pipeline(name)`, then wire tasks — `r = p.read(reader, name=...)`, `v = p.task("normalise", processor, r)` or `p.validate(..., r, name=...)`, `p.write(writer, v, name=...)`. It builds one ordered plan; call `.describe()` to inspect it without executing, then `.run(context=…)` to execute fail-fast and atomic with RunLog observability. ([ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md)) |
 | **`RunAddress`** | A stable dependency-target address for a whole Pipeline or a named run step inside one. Labels are `pipeline`, `subject/pipeline`, `pipeline.step`, or `subject/pipeline.step` (for example `pipeline_2.step_4`). The builder records this as `step_address`, and the run registry can query it with `records_for_address(...)`, `has_successful_address(...)`, and `latest_success(...)`. Construct with `RunAddress.pipeline(...)` / `RunAddress.step(...)`, parse with `RunAddress.parse(label)`. Invalid labels raise config-category `RunAddressError`. |
 | **`ForEach`** | Runnable orchestration for independent repeated runs: pass items plus `pipeline_builder(item, context)`, then call `.run(context)`. It creates a fresh builder and per-item `RunContext` for each item. Default behavior fails fast on the first failed item; `continue_on_error=True` returns per-item success/failure outcomes and continues. Use when files must remain separate logical runs. |
+| **`DatedFileDiscovery` / `SourceArtifact`** | Source-artifact discovery for dated-file catch-up (`tools.discovery`). `DatedFileDiscovery(directory, pattern)` finds files whose names encode a business date (e.g. `"claims_{date:%Y%m%d}_*.csv"`). `.available_between(start, end)` returns `SourceArtifact` value objects (each with `path`, `business_date`, `file_id`) where `start < business_date <= end`, sorted deterministically. Use with `ForEach` when each file needs its own run history and idempotency key. Use `GlobCsvReader` instead when all files together form one logical batch. → [core-primitives.md](core-primitives.md) |
 | **`Orchestrator` / `PipelineSet` / `ScheduledPipeline`** | Scheduled due-work orchestration above `PipelineRunner`. Python definitions own sets, dependencies, and default schedules; YAML can override enablement, schedule timing, and freshness windows. A single pass or bounded loop runs due items for one run date, marks failed items terminal, blocks their downstream dependants, and lets independent items and other sets continue. |
 | **`PipelineError` / `format_failure`** | The base of the expected fail-fast failure family (`ValidationError`, `FreshnessError`, `UnknownPipelineError`, `RunAddressError`, `CoercionError`, `ForEachPipelineError` all subclass it) and the pure formatter that renders a caught one as a short, traceback-free block for `stderr`. At a run boundary — the operator CLI, a scaffolded `main()` — `except PipelineError` + `format_failure(exc)` turns a deliberate abort into a clear message; a genuine bug is not a `PipelineError` and keeps its trace. |
 | **`RunLog` / `RunRegistry`** | `RunLog` emits one JSON record per step (+ a run summary) to a `.log` file — the observability seam. `RunRegistry` ingests that JSONL into a queryable run-history store. → [run-log-format.md](run-log-format.md) ([ADR-0007](adr/0007-fail-fast-atomic-runs-jsonl-observability.md)) |
@@ -392,7 +393,6 @@ from framework.transform import (
     Score,
     Sort,
     Stamp,
-    TopNPerGroup,
 )
 
 
@@ -424,12 +424,7 @@ anti = p.task(
     high,
 )
 joined = p.task("join", JoinWith(reference, on="adviser"), anti)  # read-only dependency
-topn = p.task(
-    "top-n",
-    TopNPerGroup(key="adviser", by="priority_score", n=1),
-    joined,
-)
-ranked = p.task("sort", Sort("priority_score", ascending=False), topn)
+ranked = p.task("sort", Sort("priority_score", ascending=False), joined)
 stamped = p.task(
     "stamp",
     Stamp("question_bank_id", variation.question_bank_id),
@@ -506,6 +501,7 @@ of writing a wrapper script. It is a thin shell over the runner and the
 
 ```sh
 python -m cli run pipelines/ingest /data --run-date 2026-05-29
+python -m cli run pipelines/ingest /data --dry-run   # preview each step, write nothing
 python -m cli status /data --pipeline ingest
 python -m cli runs /data --pipeline ingest --limit 5
 python -m cli log /data ingest --run-id 5f8ff8c7

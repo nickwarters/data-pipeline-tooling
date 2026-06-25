@@ -20,6 +20,7 @@ public contract, the submodule paths are not. See ``docs/public-api.md``.
 
 from framework.run.address import RunAddress, RunAddressError
 from framework.run.builder import Pipeline
+from framework.run.dry_run import DryRunReport
 from framework.run.run_context import RunContext
 from framework.run.runner import (
     FreshnessError,
@@ -27,6 +28,7 @@ from framework.run.runner import (
     PipelineRunner,
     Requirement,
     UnknownPipelineError,
+    dry_run_pipeline,
     run_pipeline,
 )
 from tools.observability.run_log import RunLog
@@ -38,6 +40,8 @@ __all__ = [
     "RunAddressError",
     "PipelineRunner",
     "run_pipeline",
+    "dry_run_pipeline",
+    "DryRunReport",
     "RunContext",
     "RunLog",
     "RunRegistry",

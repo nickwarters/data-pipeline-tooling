@@ -48,20 +48,14 @@ names are placeholders pending a domain rename — see CONTEXT.)
 raw stays schema-light on purpose: it mirrors the source so the landing zone is
 faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 
-> **Decided, not yet built (ADR-0006 amendment, ADR-0009).** The table above
-> describes the *current* build, where the Store maps raw/silver → full-refresh
-> and gold → accumulate-by-run. That layer→strategy mapping is being replaced:
-> **load strategy becomes per-feed, owned by the Writer**, with the Store mapping
-> `layer → location` only (`store.writer(layer, table, strategy)` where strategy
-> is `Refresh()`, `AccumulateByRun(run_id, load_date)`,
-> `AccumulateByRun.from_context(context)`, or `UpsertStrategy(key_columns)`).
-> The **Ingest** profile
-> then flips to *history-upstream / current-gold* — raw + silver accumulate the
-> change-over-time record, gold is reduced to a current **one-row-per-Case**
-> grain (`LatestPerKey` by `case_id` + a uniqueness validator). Selection/Sync/
-> Reporting keep accumulate-by-run gold. See the two ADRs for the rationale and
-> consequences (raw becomes a backed-up system of record; volume grows
-> `records × snapshots`).
+> **Load strategies are explicit.** The Store maps `layer → location` only; each
+> Writer owns its load strategy. Callers choose `Refresh()`,
+> `AccumulateByRun(run_id, load_date)`,
+> `AccumulateByRun.from_context(context)`, `UpsertStrategy(key_columns)`,
+> `InsertOrIgnore()`, or `InsertIfAbsent(key_columns)` when asking the Store
+> for a Writer. This supports both current-state hops and accumulated histories
+> without baking a universal layer→strategy rule into the Store (ADR-0006
+> amendment, ADR-0009).
 
 > **Build status.** The **per-subject `Store`** has landed: `Store(subject_dir)`
 > *mints* that subject's Writers/Readers over its own
@@ -105,13 +99,13 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0008).
 > passes a shared `RunContext` into handlers, and `Requirement` predicates
 > block stale downstream runs from `RunRegistry` history without changing the
 > builder contract (`FreshnessRequirement` remains as a compatibility adapter)
-> (#61, #77, #242). Still ahead: the value-level schema
-> rules (format / uniqueness / encoding, #24), the domain capstone
-> (CaseType/Variation + CasePool → SelectionPool, #11), and the multi-table feed work
-> (ADR-0006 amendment, ADR-0009): per-feed load strategy (Store maps
-> `layer → location` only), the history-upstream / current-gold Ingest profile,
-> reader column projection, the `LatestPerKey` reduction + one-row-per-Case grain
-> validator, deterministic `case_id`, and Detail Tables.
+> (#61, #77, #242). **Value-level schema rules** have landed:
+> `Nullable` / `NonNull`, `Pattern`, `Length`, `Range`, `Unique`, `OneOf`, plus
+> row checks via `@row_checks(...)`. The domain capstone has landed as the
+> `case_review` application layer (`CaseType` / `Variation`, `CasePool`, and
+> gold ingest helpers), and the multi-table feed work has landed in the current
+> primitives: explicit per-writer load strategies, reader column projection,
+> `DeriveKey`, `LatestPerKey`, `UniqueValidator`, and Detail Table helpers.
 
 ## The primitives
 
@@ -188,7 +182,7 @@ directions are explicit:
 | CSV file | `CsvReader`, `GlobCsvReader` | `CsvWriter` | `CsvWriter(path, strategy)` emits one CSV file; `GlobCsvReader` is read-only because many inbound files together form one logical snapshot. |
 | Excel file | `ExcelReader` | `ExcelWriter` | Both target one worksheet (`sheet=...`). |
 | JSON file | _intentionally absent_ | `JsonWriter` | JSON is currently a Reporting Deliverable format only; no inbound JSON Feed has been needed yet. |
-| SQLite table | `SqliteReader` | `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter` | The Store mints these over medallion layer databases. |
+| SQLite table | `SqliteReader` | `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `SqliteInsertOrIgnoreWriter`, `SqliteInsertIfAbsentWriter` | The Store mints these over medallion layer databases. |
 | SAS extract | `SasReader` | _intentionally absent_ | SAS is an inbound-only remote source; the framework lands the remote output then reads local CSV files. |
 | SharePoint list | `SharePointReader` | `SharePointWriter` | Target is **SE on-prem**. Both sides are stubbed behind swappable `SharePointFetcher` / `SharePointPusher` seams until the on-prem SE client (NTLM/Kerberos/REST) lands. `SharePointWriter` emits the canonical Selection Deliverable — one list per Case Type. |
 | Console (stdout) | _intentionally absent_ | `StdoutWriter` | A terminal sink for *seeing* a result rather than persisting it — e.g. printing a Selection explainer's per-Case trace while driving a feed by hand. Owns no location or load strategy; prints the dataset as a plain-text table to the stream (defaulting to `sys.stdout`). |
@@ -233,14 +227,34 @@ Deliverables and SQLite tables:
   transaction. Minted by `Store.writer(layer, table, UpsertStrategy(...))`.
   Useful for a table that holds the **current state of a keyed entity**, e.g.
   `active_cases` keyed on `case_id`.
+- `SqliteInsertOrIgnoreWriter(db_path, table)` — **insert-or-ignore**: appends
+  incoming rows and silently discards any row that would violate an existing
+  constraint (PRIMARY KEY, UNIQUE, NOT NULL, CHECK) on the target table.
+  Rows that do not conflict are appended; target rows absent from the batch are
+  never touched. Conflict resolution is driven by the table's own constraints —
+  when the table carries no constraints the behaviour is equivalent to a plain
+  append. Minted by `Store.writer(layer, table, InsertOrIgnore())`.
+- `SqliteInsertIfAbsentWriter(db_path, table, key_columns, surrogate_column="id")` —
+  **reference/dimension load**: on each write, checks which natural keys are
+  already present in the target, mints compact integer surrogates in Python
+  for new keys (next int above the current max), and inserts only those rows.
+  Existing rows are never modified or deleted; re-running the same input is a
+  no-op (the reference table is a stable system of record). The surrogate is
+  minted above the store seam — not delegated to SQLite `AUTOINCREMENT` —
+  so identity logic stays in Python (ADR-0002). This is distinct from
+  `InsertOrIgnore`: conflict resolution here is key-driven (the strategy
+  declares `key_columns`), not constraint-driven (no table constraints are
+  required). Minted by `Store.writer(layer, table, InsertIfAbsent(key_columns))`.
 
-The file Writers accept the same explicit strategy objects as Store-minted
-Writers: `Refresh()` overwrites the file; `AccumulateByRun(...)` reads any
+The file Writers accept `Refresh()`, `AccumulateByRun(...)`, and `InsertOrIgnore()`
+strategies: `Refresh()` overwrites the file; `AccumulateByRun(...)` reads any
 existing file, replaces rows for that logical run, stamps the new rows, and
-rewrites the file. Round-tripping through matching Readers is stable for CSV and
-Excel at the Dataset shape level; exact pandas dtype inference can still differ
-after a file round-trip, so schema-sensitive flows should continue to validate
-after reading.
+rewrites the file; `InsertOrIgnore()` appends incoming rows to the existing file
+(files carry no table constraints, so no rows are ignored — equivalent to a plain
+append). Round-tripping through matching Readers is stable for CSV and Excel at
+the Dataset shape level; exact pandas dtype inference can still differ after a
+file round-trip, so schema-sensitive flows should continue to validate after
+reading.
 
 ### `Store` / `StoreCatalog` — subject medallions, minted from shared configuration
 `Store(subject_dir, busy_timeout_ms=5000)` is the mouth of **one subject's**
@@ -250,9 +264,9 @@ It holds **no business logic** (ADR-0002) and makes **no** load decision
 (ADR-0003 amendment) — it merely mints the layer-appropriate component:
 
 - `store.writer(layer, table, strategy)` — mints a Writer over the chosen layer
-  using the caller's explicit `Refresh()`, `AccumulateByRun(...)`, or
-  `UpsertStrategy(...)` strategy. Context-driven accumulation uses
-  `AccumulateByRun.from_context(context)`.
+  using the caller's explicit `Refresh()`, `AccumulateByRun(...)`,
+  `UpsertStrategy(...)`, `InsertOrIgnore()`, or `InsertIfAbsent(key_columns)`
+  strategy. Context-driven accumulation uses `AccumulateByRun.from_context(context)`.
 - `store.reader(layer, table)` — a `SqliteReader` over the same file.
 
 Layer names are validated through `RAW`, `SILVER`, `GOLD` / `Layer`; existing
@@ -451,19 +465,6 @@ post-validate (schema) → write** (ADR-0008, #23).
   execution is owned by runner/catalog code; the builder materializes each named
   dependency once, logs it as `dependency:<name>`, and joins or anti-joins in
   Python.
-- `TopNPerGroup(key, by, n, ascending=False, tiebreak="case_id")` /
-  `SamplePerGroup(key, n, seed=0, order="case_id")` — reduce each group to at
-  most *N* Cases (CONTEXT.md **Sampling**, #62). `TopNPerGroup` is **ranked**
-  (`n=1` ⇒ "the single highest available per Adviser"), carrying its own sort and
-  a stable `tiebreak` so tied scores rank reproducibly; `SamplePerGroup` is
-  **seeded random** — a pure function of (input, `seed`) that is invariant to
-  incoming row order (ADR-0010). `Sample(n=None, seed=0, order="case_id", *, fraction=None)`
-  is the ungrouped counterpart of `SamplePerGroup` — same seeded, pure,
-  order-invariant draw, but over the whole feed rather than per group, sized by
-  an absolute `n` **or** a `fraction` of the population (exactly one).
-  `TopNPerGroup(key=K, by=B, n=1)` is the
-  structural generalisation of the Ingest reduction `LatestPerKey(key=K, by=B)`,
-  kept separate by domain (Selection narrowing vs current-state reduction).
 
 Full walkthrough + worked example: [processors.md](processors.md).
 
@@ -771,6 +772,49 @@ run/logical identity, or should fail independently. Use a multi-file Reader
 instead when many files together are one logical Feed snapshot that should be
 read, validated, and written as a single `Dataset` under one logical run id.
 
+### `DatedFileDiscovery` — source-artifact discovery for dated-file catch-up
+`DatedFileDiscovery` (`tools.discovery`) finds source files whose filenames
+encode a business date and turns them into `SourceArtifact` value objects,
+each carrying `path`, `business_date`, and a stable `file_id` (the filename).
+It is an orchestration concern, not a reader concern: each artifact is its own
+logical run with its own retry boundary and idempotency key.
+
+```python
+from tools.discovery import DatedFileDiscovery, SourceArtifact
+from tools.orchestration import ForEach
+
+files = DatedFileDiscovery(
+    directory="/share/upstream/claims",
+    pattern="claims_{date:%Y%m%d}_*.csv",
+).available_between(last_successful_source_date, run_date)
+
+def pipeline_builder(artifact: SourceArtifact, context: RunContext) -> Pipeline:
+    ...
+
+ForEach(
+    files,
+    pipeline_builder,
+    logical_run_id=lambda a, _i, _c: f"claims:ingest:{a.file_id}",
+).run(context)
+```
+
+`available_between(start, end)` returns artifacts where
+`start < business_date <= end`. Pass the last successfully processed source
+date as *start* and the current run date as *end* to discover exactly the
+un-processed dates since the last successful run. Results are sorted
+deterministically by `(business_date, path)` across Windows and macOS.
+
+The `{date:FORMAT}` placeholder uses `strptime` format codes; `*` is a
+wildcard for any other filename segment. Constructing a `DatedFileDiscovery`
+with a pattern missing `{date:...}` raises `ValueError` immediately.
+
+**Decision rule — reader vs orchestration concern:**
+
+| Shape | Use |
+|---|---|
+| Many files are one logical batch (one `Dataset`, one logical run id) | `GlobCsvReader(directory, pattern)` |
+| Each file is its own logical run (own run history, retry, idempotency) | `DatedFileDiscovery` + `ForEach` |
+
 ### `RunAddress` — dependency labels for Pipelines and steps
 `RunAddress` (`framework.run`) is the public value object for naming dependency
 targets without coupling orchestration code to a future registry schema. It can
@@ -901,10 +945,15 @@ the supplied `RunContext` or creates one for ad hoc runs, exposes the execution
 id as `pipeline.run_id`, times each planned step, and drives the composed
 `RunLog` (timing + structured JSONL logging — landed in #4). The planned step
 objects are internal: they expose stable name/kind/order, the wrapped component
-where applicable, and read-only/side-effect metadata for future plan-validation
-and dry-run work, but pipeline scripts still use only the builder methods. The
-named processor task (`.task()`, compatible with `.transform()`) landed in #23;
-lineage checkpoints (a `.write()`
+where applicable, and read-only/side-effect metadata for plan-validation and the
+**dry-run preview**, but pipeline scripts still use only the builder methods. A
+run carried out under `RunContext(dry_run=True)` (the `dry_run_pipeline` core
+behind `cli run --dry-run`, #102) reads, transforms, and validates real data but
+skips every write, quarantine, and explain commit — and touches no run log —
+accumulating a `DryRunReport` of columns, dtypes, row counts, and a bounded row
+sample per step; it falls back to an ambient run context so an author's bare
+`p.run()` inherits the dry-run flag without threading it by hand. The
+named processor task (`.task()`, compatible with `.transform()`) landed in #23; lineage checkpoints (a `.write()`
 on an intermediate node) landed in #49; the explicit DAG builder landed in #122.
 
 ### `WorkingDayCalendar` — working-day arithmetic (pure utility)
