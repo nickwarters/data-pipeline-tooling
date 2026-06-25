@@ -123,6 +123,86 @@ export function highlight(code) {
 }
 
 /**
+ * Returns a canonical JSON string with object keys sorted alphabetically at
+ * every nesting level. Arrays preserve their order. Used to produce a
+ * stable hash input regardless of how question objects were constructed.
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+function canonicalise(value) {
+  if (Array.isArray(value)) {
+    return '[' + value.map(canonicalise).join(',') + ']';
+  }
+  if (value !== null && typeof value === 'object') {
+    const keys = Object.keys(/** @type {object} */ (value)).sort();
+    return (
+      '{' +
+      keys
+        .map((k) => JSON.stringify(k) + ':' + canonicalise(/** @type {any} */ (value)[k]))
+        .join(',') +
+      '}'
+    );
+  }
+  return JSON.stringify(value);
+}
+
+/**
+ * Data-only JSON export envelope for external reporting (ADR-0015, ADR-0021).
+ *
+ * Returns the function-free projection of the bank: slug, label, generatedAt,
+ * a full SHA-256 hash (stable over questions+slug only), and a questions array
+ * that carries id/text/category/responseType/options/showWhen/failureCriteria/
+ * deprecated. Excluded: computeOutcome, remediationActions,
+ * allowFreeFormRemediation, eligibleGroups, labelIds (Step 5).
+ *
+ * @param {QuestionBank} bank
+ * @returns {Promise<{
+ *   slug: string,
+ *   label: string,
+ *   generatedAt: string,
+ *   hash: string,
+ *   questions: Array<{
+ *     id: string,
+ *     text: string,
+ *     category: string | null,
+ *     responseType: string,
+ *     options: string[] | null,
+ *     showWhen: Record<string, unknown> | null,
+ *     failureCriteria: string | null,
+ *     deprecated: boolean,
+ *   }>,
+ * }>}
+ */
+export async function compileExport(bank) {
+  const questions = bank.questions.map((q) => ({
+    id: q.id,
+    text: q.text,
+    category: q.category ?? null,
+    responseType: q.responseType,
+    options: q.options ?? null,
+    showWhen: q.showWhen ?? null,
+    failureCriteria: q.failureCriteria ?? null,
+    deprecated: q.deprecated,
+  }));
+
+  const canonical = canonicalise({ slug: bank.slug, questions });
+  const buf = new TextEncoder().encode(canonical);
+  const hashBuf = await crypto.subtle.digest('SHA-256', buf);
+  const hashHex = [...new Uint8Array(hashBuf)]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+
+  return {
+    slug: bank.slug,
+    label: bank.label,
+    generatedAt: new Date().toISOString(),
+    hash: `sha256:${hashHex}`,
+    questions,
+  };
+}
+
+/**
  * @param {string} s
  * @returns {Promise<string>}
  */

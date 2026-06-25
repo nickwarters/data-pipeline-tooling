@@ -7,6 +7,7 @@ import {
   highlight,
   escapeHtml,
   hashStr,
+  compileExport,
 } from '../src/question-bank/question-bank-compile.js';
 
 /** Tiny helper to build a bank with one question. */
@@ -222,4 +223,181 @@ test('hashStr: returns 12 hex chars (6 bytes)', async () => {
 
 test('hashStr: deterministic for the same input', async () => {
   assert.equal(await hashStr('x'), await hashStr('x'));
+});
+
+// ── compileExport ───────────────────────────────────────────────────────────
+
+/** Minimal bank fixture used by compileExport tests. */
+const exportBank = {
+  label: 'Hello Review',
+  slug: 'hello-review',
+  eligibleGroups: ['Reviewers'],
+  questions: [
+    {
+      id: 'q1',
+      text: 'Was the agent polite?',
+      category: 'Conduct',
+      responseType: /** @type {const} */ ('yes-no-na'),
+      failureCriteria: 'No',
+      deprecated: false,
+    },
+    {
+      id: 'q2',
+      text: 'Which channel?',
+      category: 'Context',
+      responseType: /** @type {const} */ ('single-choice'),
+      options: ['Phone', 'Email'],
+      deprecated: false,
+    },
+  ],
+};
+
+test('compileExport: returns envelope with slug, label, generatedAt, hash, questions', async () => {
+  const result = await compileExport(exportBank);
+  assert.ok('slug' in result);
+  assert.ok('label' in result);
+  assert.ok('generatedAt' in result);
+  assert.ok('hash' in result);
+  assert.ok('questions' in result);
+  assert.equal(result.slug, 'hello-review');
+  assert.equal(result.label, 'Hello Review');
+  assert.equal(result.questions.length, 2);
+});
+
+test('compileExport: generatedAt is a valid ISO-8601 string', async () => {
+  const { generatedAt } = await compileExport(exportBank);
+  assert.ok(!isNaN(Date.parse(generatedAt)), `Not a valid date: ${generatedAt}`);
+  assert.match(generatedAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+});
+
+test('compileExport: hash starts with sha256: followed by 64 hex chars (full digest)', async () => {
+  const { hash } = await compileExport(exportBank);
+  assert.match(hash, /^sha256:[0-9a-f]{64}$/);
+});
+
+test('compileExport: same questions+slug, different label/generatedAt → same hash', async () => {
+  const bankA = { ...exportBank, label: 'Label A' };
+  const bankB = { ...exportBank, label: 'Label B' };
+  const [a, b] = await Promise.all([compileExport(bankA), compileExport(bankB)]);
+  assert.equal(a.hash, b.hash);
+});
+
+test('compileExport: different questions → different hash', async () => {
+  const bankA = { ...exportBank };
+  const bankB = {
+    ...exportBank,
+    questions: [{ ...exportBank.questions[0], text: 'Different text' }, exportBank.questions[1]],
+  };
+  const [a, b] = await Promise.all([compileExport(bankA), compileExport(bankB)]);
+  assert.notEqual(a.hash, b.hash);
+});
+
+test('compileExport: different slug → different hash', async () => {
+  const bankA = { ...exportBank, slug: 'slug-a' };
+  const bankB = { ...exportBank, slug: 'slug-b' };
+  const [a, b] = await Promise.all([compileExport(bankA), compileExport(bankB)]);
+  assert.notEqual(a.hash, b.hash);
+});
+
+test('compileExport: key order in question objects does not affect hash', async () => {
+  const q = exportBank.questions[0];
+  const qReordered = {
+    text: q.text,
+    deprecated: q.deprecated,
+    id: q.id,
+    failureCriteria: q.failureCriteria,
+    category: q.category,
+    responseType: q.responseType,
+  };
+  const bankA = { ...exportBank };
+  const bankB = { ...exportBank, questions: [qReordered, exportBank.questions[1]] };
+  const [a, b] = await Promise.all([compileExport(bankA), compileExport(bankB)]);
+  assert.equal(a.hash, b.hash);
+});
+
+test('compileExport: excludes computeOutcome, remediationActions, allowFreeFormRemediation, eligibleGroups', async () => {
+  const bankWithExtras = {
+    ...exportBank,
+    questions: [
+      {
+        ...exportBank.questions[0],
+        remediationActions: ['Fix it'],
+        allowFreeFormRemediation: true,
+      },
+      exportBank.questions[1],
+    ],
+  };
+  const result = await compileExport(bankWithExtras);
+  assert.ok(!('computeOutcome' in result));
+  assert.ok(!('eligibleGroups' in result));
+  for (const q of result.questions) {
+    assert.ok(!('remediationActions' in q));
+    assert.ok(!('allowFreeFormRemediation' in q));
+  }
+});
+
+test('compileExport: excludes labelIds from question output', async () => {
+  const bankWithLabels = {
+    ...exportBank,
+    questions: [
+      { ...exportBank.questions[0], labelIds: ['lbl-a'] },
+      exportBank.questions[1],
+    ],
+  };
+  const result = await compileExport(bankWithLabels);
+  for (const q of result.questions) {
+    assert.ok(!('labelIds' in q));
+  }
+});
+
+test('compileExport: absent optional question fields are emitted as null', async () => {
+  const minimalBank = {
+    label: 'L',
+    slug: 's',
+    eligibleGroups: [],
+    questions: [{ id: 'q1', text: 'T', responseType: /** @type {const} */ ('yes-no-na'), deprecated: false }],
+  };
+  const result = await compileExport(minimalBank);
+  const q = result.questions[0];
+  assert.equal(q.category, null);
+  assert.equal(q.options, null);
+  assert.equal(q.showWhen, null);
+  assert.equal(q.failureCriteria, null);
+});
+
+test('compileExport: present optional question fields are carried through', async () => {
+  const result = await compileExport(exportBank);
+  const q0 = result.questions[0];
+  assert.equal(q0.category, 'Conduct');
+  assert.equal(q0.failureCriteria, 'No');
+  const q1 = result.questions[1];
+  assert.deepEqual(q1.options, ['Phone', 'Email']);
+});
+
+test('compileExport: showWhen is carried through when present', async () => {
+  const bankWithShowWhen = {
+    ...exportBank,
+    questions: [
+      { ...exportBank.questions[0], showWhen: { q0: { equals: 'Yes' } } },
+      exportBank.questions[1],
+    ],
+  };
+  const result = await compileExport(bankWithShowWhen);
+  assert.deepEqual(result.questions[0].showWhen, { q0: { equals: 'Yes' } });
+});
+
+test('compileExport: deprecated true is preserved', async () => {
+  const bankWithDeprecated = {
+    ...exportBank,
+    questions: [{ ...exportBank.questions[0], deprecated: true }, exportBank.questions[1]],
+  };
+  const result = await compileExport(bankWithDeprecated);
+  assert.equal(result.questions[0].deprecated, true);
+});
+
+test('compileExport: empty questions array produces deterministic hash', async () => {
+  const emptyBank = { label: 'L', slug: 'empty', eligibleGroups: [], questions: [] };
+  const [a, b] = await Promise.all([compileExport(emptyBank), compileExport(emptyBank)]);
+  assert.equal(a.hash, b.hash);
+  assert.equal(a.questions.length, 0);
 });
