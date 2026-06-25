@@ -558,6 +558,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`core-primitives.md`](core-primitives.md) | The consolidated framework primitives reference with worked examples and build status per slice. |
 | [`adding-a-feed.md`](adding-a-feed.md) | Every Reader, and the stubbed remote (SAS / SharePoint) seams. |
 | [`schema-enforcement.md`](schema-enforcement.md) | `Schema` / `SchemaValidator` / `SchemaCoercion`, value-level rules, composing the schema boundary onto a pipeline. |
+| [`data-dictionary-template.md`](data-dictionary-template.md) | The Confluence-ready template for documenting what every table/Feed and each of its fields means — the prose companion to `schema.py`. |
 | [`gold-accumulation.md`](gold-accumulation.md) | Gold's accumulate-by-run semantics, idempotent re-run, reading "current". |
 | [`processors.md`](processors.md) | The Selection transforms (`JoinWith`, per-group sampling) and the Ingest / fan-out transforms (`SelectColumns`, `Unpivot`, `DeriveKey`, `LatestPerKey`). |
 | [`selection.md`](selection.md) | The full CaseType / Variation → CasePool → SelectionPool flow + explainability. |
