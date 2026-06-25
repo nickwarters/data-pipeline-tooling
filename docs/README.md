@@ -326,6 +326,14 @@ follows the scaffold layout under `pipelines/comprehensive_examples/`, with
 separate `schema.py`, `rules.py`, `processors.py`, `pipeline.py`, and
 `sample_data/` files.
 
+For a worked **selection** example — two source feeds (all sales + all case
+reviews) narrowed to one Case to check per adviser by a real multi-rule policy
+(recency, highest risk, rolling-year quotas, cooldowns) — see
+[`example-case-selection.md`](example-case-selection.md) and
+`pipelines/case_selection/`. It keeps every selection criterion as a named, pure,
+unit-tested rule while the framework owns the IO, schema enforcement, and gold
+write.
+
 ### Emit a file Deliverable
 
 Reporting can emit file-form Deliverables by swapping the destination Writer.
