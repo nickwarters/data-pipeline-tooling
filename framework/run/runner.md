@@ -23,7 +23,8 @@ from typing import Callable
 from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError
 from framework.run.address import RunAddress
-from framework.run.run_context import RunContext
+from framework.run.dry_run import DryRunReport
+from framework.run.run_context import RunContext, active_context
 from tools.observability.run_log import RunLog
 from tools.observability.run_registry import RunRegistry
 
@@ -264,6 +265,45 @@ def run_pipeline(
         context.mark_run_summary_recorded()
     run_registry.ingest(run_log_path)
     return result
+
+
+def dry_run_pipeline(
+    handler: Handler,
+    name: str,
+    base_dir: str | Path,
+    *,
+    subject: str | None = None,
+    run_date: dt.date | None = None,
+    logical_run_id: str | None = None,
+    freshness_days: int = 0,
+) -> DryRunReport:
+    """Preview a pipeline handler without committing anything (issue #102).
+
+    Runs ``handler`` under a dry-run :class:`RunContext` made ambient for the
+    call, so every nested ``Pipeline.run()`` reads, processes, and validates real
+    data but skips every write, quarantine commit, and explain trace. No run log
+    or run registry is touched. Returns the accumulated :class:`DryRunReport`;
+    a fail-fast :class:`PipelineError` (e.g. an error-severity validation
+    failure) is recorded on the report rather than raised, so the caller still
+    gets the preview of every step up to the stop.
+    """
+    context = RunContext(
+        base_dir=Path(base_dir),
+        subject=subject,
+        pipeline=name,
+        run_date=run_date or dt.date.today(),
+        logical_run_id=logical_run_id,
+        freshness_days=freshness_days,
+        dry_run=True,
+    )
+    report = context.dry_run_report
+    assert report is not None  # a dry-run context always carries one
+    try:
+        with active_context(context):
+            handler(context)
+    except PipelineError as exc:
+        report.mark_failed(exc)
+    return report
 
 
 @dataclass(frozen=True)

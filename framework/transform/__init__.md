@@ -5,20 +5,19 @@ The stable import surface for everything that reshapes or gates a
 :class:`~framework.core.dataset.Dataset` between the read and the write: the
 ``Processor`` seam and its concrete transforms (the Selection ``Filter`` /
 ``Score`` / ``VectorizedFilter`` / ``VectorizedDerive`` / ``Sort`` /
-``Rename`` / ``Stamp``, the ungrouped ``Sample`` and per-group
-``TopNPerGroup`` / ``SamplePerGroup``,
-the column-shaping ``Parse`` / ``JoinColumns``,
+``Rename`` / ``Stamp``, the column-shaping ``JoinColumns``,
 the lazy ``JoinWith`` / ``AntiJoinWith``, the Ingest / fan-out
 ``SelectColumns`` / ``DropColumns`` / ``Unpivot`` / ``DeriveKey`` /
 ``LatestPerKey``)
 and ``SchemaCoercion`` — the *coerce* half of the schema adapter, which casts a
-column's round-trip-lossy values to the declared types (a reshape, not a check).
+column's round-trip-lossy values to the declared types (a reshape, not a check) —
+plus ``SchemaValueRulePartitioner`` for quarantine routing.
 
 The schema *check* (``SchemaValidator``) and the declared-schema value rules
 (``ValueRule`` / ``Nullable`` / ``Pattern`` / ...) live on
 ``framework.core``, the ``validate(dataset)`` checks (``ColumnValidator``
-& friends) likewise, and ``WorkingDayCalendar`` on ``framework.shared`` — none of
-them reshape a dataset, so they sit apart from these transforms.
+& friends) likewise, and ``WorkingDayCalendar`` in the sibling ``tools`` package
+— none of them reshape a dataset, so they sit apart from these transforms.
 
 Import from here rather than the underlying modules::
 

@@ -47,6 +47,27 @@ class Dataset:
         """Column names, in order."""
         return list(self._frame.columns)
 
+    @property
+    def dtypes(self) -> dict[str, str]:
+        """Column name -> engine dtype name, in column order.
+
+        A shape accessor for previews/diagnostics: stringified so callers never
+        touch a pandas dtype object across the seam.
+        """
+        return {col: str(dtype) for col, dtype in self._frame.dtypes.items()}
+
+    def sample(self, n: int = 5) -> list[dict[str, object]]:
+        """Return up to ``n`` leading rows as plain dicts (engine-confined exit).
+
+        For previewing a dataset without dumping the whole frame; values are
+        coerced to native Python types so no pandas object leaks out.
+        """
+        head = self._frame.head(max(n, 0))
+        return [
+            {col: _native(value) for col, value in row.items()}
+            for row in head.to_dict(orient="records")
+        ]
+
     def __len__(self) -> int:
         """Number of rows."""
         return len(self._frame)
@@ -57,5 +78,16 @@ class Dataset:
         for col, val in values.items():
             frame[col] = val
         return Dataset.from_pandas(frame)
+
+
+def _native(value: object) -> object:
+    """Coerce a pandas/numpy scalar to a plain Python value for previews."""
+    item = getattr(value, "item", None)
+    if callable(item):
+        try:
+            return item()
+        except (ValueError, TypeError):
+            return value
+    return value
 
 ```

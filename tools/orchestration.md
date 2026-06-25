@@ -25,6 +25,18 @@ from framework.run.runner import (
 )
 from tools.calendar import WorkingDayCalendar
 
+_WEEKDAY_NAMES = [
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+]
+
+_ORDINAL_SUFFIXES = {1: "st", 2: "nd", 3: "rd"}
+
 Item = TypeVar("Item")
 
 
@@ -120,6 +132,9 @@ class Schedule:
     def is_due(self, run_date: dt.date, calendar: WorkingDayCalendar) -> bool:
         raise NotImplementedError
 
+    def schedule_label(self) -> str:
+        raise NotImplementedError
+
 
 @dataclass(frozen=True)
 class Weekdays(Schedule):
@@ -127,6 +142,9 @@ class Weekdays(Schedule):
 
     def is_due(self, run_date: dt.date, calendar: WorkingDayCalendar) -> bool:
         return calendar.is_working_day(run_date)
+
+    def schedule_label(self) -> str:
+        return "daily"
 
 
 @dataclass(frozen=True)
@@ -144,6 +162,10 @@ class SpecificWeekdays(Schedule):
     def is_due(self, run_date: dt.date, calendar: WorkingDayCalendar) -> bool:
         return run_date.weekday() in self.weekdays and calendar.is_working_day(run_date)
 
+    def schedule_label(self) -> str:
+        names = sorted(_WEEKDAY_NAMES[day] for day in self.weekdays)
+        return ",".join(names)
+
 
 @dataclass(frozen=True)
 class DayOfMonth(Schedule):
@@ -157,6 +179,9 @@ class DayOfMonth(Schedule):
 
     def is_due(self, run_date: dt.date, calendar: WorkingDayCalendar) -> bool:
         return run_date.day == self.day and calendar.is_working_day(run_date)
+
+    def schedule_label(self) -> str:
+        return f"day {self.day} of month"
 
 
 @dataclass(frozen=True)
@@ -180,6 +205,10 @@ class NthWorkingDayOfMonth(Schedule):
             day += dt.timedelta(days=1)
         return count == self.n
 
+    def schedule_label(self) -> str:
+        suffix = _ORDINAL_SUFFIXES.get(self.n, "th")
+        return f"{self.n}{suffix} working day of month"
+
 
 @dataclass(frozen=True)
 class LastWorkingDayOfMonth(Schedule):
@@ -195,6 +224,9 @@ class LastWorkingDayOfMonth(Schedule):
             day += dt.timedelta(days=1)
         return True
 
+    def schedule_label(self) -> str:
+        return "last working day of month"
+
 
 @dataclass(frozen=True)
 class ManualOnly(Schedule):
@@ -202,6 +234,9 @@ class ManualOnly(Schedule):
 
     def is_due(self, run_date: dt.date, calendar: WorkingDayCalendar) -> bool:
         return False
+
+    def schedule_label(self) -> str:
+        return "manual only"
 
 
 @dataclass(frozen=True)
@@ -266,6 +301,47 @@ class OrchestrationPassResult:
     @property
     def ran_count(self) -> int:
         return sum(1 for decision in self.decisions if decision.status == "succeeded")
+
+
+@dataclass(frozen=True)
+class PlanItem:
+    """One pipeline's projected status in an orchestration plan preview."""
+
+    run_date: dt.date
+    set_name: str
+    subject: str
+    pipeline: str
+    status: str  # "ready" | "skipped" | "already-satisfied" | "blocked" | "disabled"
+    reason: str
+
+
+@dataclass(frozen=True)
+class PlanResult:
+    """The full projected plan for one run date."""
+
+    run_date: dt.date
+    items: tuple[PlanItem, ...]
+
+    def __str__(self) -> str:
+        if not self.items:
+            return f"{self.run_date.isoformat()}  (no scheduled items)"
+        rows = [
+            (
+                item.run_date.isoformat(),
+                item.set_name,
+                f"{item.subject}/{item.pipeline}",
+                item.status,
+                item.reason,
+            )
+            for item in self.items
+        ]
+        col_widths = [max(len(row[i]) for row in rows) for i in range(len(rows[0]))]
+        lines = []
+        for row in rows:
+            parts = [cell.ljust(col_widths[i]) for i, cell in enumerate(row[:-1])]
+            parts.append(row[-1])
+            lines.append("  ".join(parts))
+        return "\n".join(lines)
 
 
 class OrchestrationStore:
@@ -428,6 +504,127 @@ class Orchestrator:
                 time.sleep(poll_seconds)
         return results
 
+    def plan(
+        self,
+        base_dir: str | Path,
+        *,
+        run_date: dt.date | None = None,
+    ) -> PlanResult:
+        """Return a read-only projection of what would run, be skipped, or be blocked.
+
+        No pipeline handler is called and no run log or orchestration store is
+        written to. The plan sweeps the existing run registry once (the same
+        incremental ingest used by ``run_due_once``) and then evaluates each
+        ``ScheduledPipeline`` in order:
+
+        * ``disabled`` — item has ``enabled=False``
+        * ``skipped`` — schedule is not due on ``run_date``
+        * ``already-satisfied`` — pipeline already succeeded on ``run_date``
+        * ``blocked`` — a declared freshness/requirement dependency is not met
+        * ``ready`` — all checks pass
+
+        The returned :class:`PlanResult` formats as an aligned table via
+        ``str(result)``.
+        """
+        from tools.observability.run_registry import RunRegistry
+
+        root = Path(base_dir)
+        day = run_date or dt.date.today()
+        weekday_name = _WEEKDAY_NAMES[day.weekday()]
+
+        # Sweep the registry once before evaluating any item.
+        registry_path = root / "_registry" / "runs.db"
+        runs_dir = root / "_runs"
+        run_registry = RunRegistry(registry_path)
+        if runs_dir.exists():
+            for log_file in sorted(runs_dir.glob("*.log")):
+                run_registry.ingest(log_file)
+
+        items: list[PlanItem] = []
+        for pipeline_set in self._sets:
+            for scheduled in pipeline_set.pipelines:
+                item = self._apply_override(pipeline_set.name, scheduled)
+                plan_item = self._plan_item(
+                    pipeline_set.name, item, day, weekday_name, run_registry
+                )
+                items.append(plan_item)
+
+        return PlanResult(run_date=day, items=tuple(items))
+
+    def _plan_item(
+        self,
+        set_name: str,
+        item: ScheduledPipeline,
+        run_date: dt.date,
+        weekday_name: str,
+        run_registry: object,
+    ) -> PlanItem:
+        from tools.observability.run_registry import RunRegistry
+
+        assert isinstance(run_registry, RunRegistry)
+
+        if not item.enabled:
+            return PlanItem(
+                run_date=run_date,
+                set_name=set_name,
+                subject=item.subject,
+                pipeline=item.pipeline,
+                status="disabled",
+                reason="disabled",
+            )
+
+        if not item.schedule.is_due(run_date, self._calendar):
+            return PlanItem(
+                run_date=run_date,
+                set_name=set_name,
+                subject=item.subject,
+                pipeline=item.pipeline,
+                status="skipped",
+                reason=(
+                    f"schedule {item.schedule.schedule_label()}"
+                    f" is not due on {weekday_name}"
+                ),
+            )
+
+        # Check if it already succeeded today.
+        from framework.run.address import RunAddress
+
+        address = RunAddress.pipeline(item.pipeline, subject=item.subject)
+        if run_registry.latest_success(address, on=run_date) is not None:
+            return PlanItem(
+                run_date=run_date,
+                set_name=set_name,
+                subject=item.subject,
+                pipeline=item.pipeline,
+                status="already-satisfied",
+                reason=f"already succeeded on {run_date.isoformat()}",
+            )
+
+        # Check freshness requirements without running handlers.
+        freshness_days = _freshness_days(item)
+        for requirement in item.depends_on:
+            blocked, reason = _check_requirement_plan(
+                requirement, run_registry, run_date, freshness_days, item.subject
+            )
+            if blocked:
+                return PlanItem(
+                    run_date=run_date,
+                    set_name=set_name,
+                    subject=item.subject,
+                    pipeline=item.pipeline,
+                    status="blocked",
+                    reason=reason,
+                )
+
+        return PlanItem(
+            run_date=run_date,
+            set_name=set_name,
+            subject=item.subject,
+            pipeline=item.pipeline,
+            status="ready",
+            reason=f"schedule {item.schedule.schedule_label()} is due",
+        )
+
     def _decide_item(
         self,
         base_dir: Path,
@@ -587,6 +784,110 @@ class Orchestrator:
                 ),
             )
         return changed
+
+
+def _check_requirement_plan(
+    requirement: RunRequirement,
+    run_registry: object,
+    run_date: dt.date,
+    freshness_days: int,
+    default_subject: str,
+) -> tuple[bool, str]:
+    """Pure freshness check for plan preview — no side-effects.
+
+    Returns ``(blocked, reason)``.  ``blocked=False`` means the requirement is
+    satisfied (or has no history and the first-run policy allows it);
+    ``blocked=True`` means the downstream should be marked ``blocked``.
+    """
+    from tools.observability.run_registry import RunRegistry
+
+    assert isinstance(run_registry, RunRegistry)
+
+    # Normalise to a Requirement so we have one code path.
+    if isinstance(requirement, FreshnessRequirement):
+        req = requirement.as_requirement(default_subject=default_subject)
+    elif isinstance(requirement, Requirement):
+        req = requirement
+    else:
+        raise TypeError(f"unsupported requirement type {requirement!r}")
+
+    latest = run_registry.latest_success(req.address)
+
+    if latest is None:
+        # No history — consult the first-run policy.
+        if req.first_run_policy == "block":
+            return (
+                True,
+                f"no successful run history for upstream {req.address.label};"
+                " blocking first run",
+            )
+        # "warn" or "allow" → not blocked
+        return False, ""
+
+    import datetime as _dt
+
+    latest_date = _dt.datetime.fromisoformat(
+        latest["timestamp"].replace("Z", "+00:00")
+    ).date()
+
+    if req.require_same_day:
+        if latest_date == run_date:
+            return False, ""
+        return (
+            True,
+            f"upstream {req.address.label} is stale: latest successful run was "
+            f"{latest_date.isoformat()}, required on {run_date.isoformat()}",
+        )
+
+    effective_max_age = (
+        freshness_days
+        if req.max_age_days is None
+        else max(req.max_age_days, freshness_days)
+    )
+    oldest_allowed = run_date - dt.timedelta(days=effective_max_age)
+    if latest_date >= oldest_allowed:
+        return False, ""
+
+    return (
+        True,
+        f"upstream {req.address.label} is stale: latest successful run was "
+        f"{latest_date.isoformat()}, required on or after {oldest_allowed.isoformat()}",
+    )
+
+
+def plan_for_each(
+    source_files: Iterable[str | Path],
+    subject: str,
+    pipeline: str,
+    set_name: str,
+    run_date: dt.date,
+    *,
+    file_id_fn: Callable[[str | Path], str] | None = None,
+) -> list[PlanItem]:
+    """Project one ``PlanItem`` per source file without executing any handler.
+
+    Each item carries ``status="ready"`` and a ``reason`` that names the source
+    file, using ``file_id_fn(file)`` if provided, otherwise the file's name as a
+    string. No run history is consulted — this is a pure projection of planned
+    per-file runs, useful for catch-up planning when a backlog of source files
+    needs processing.
+    """
+    items: list[PlanItem] = []
+    for source_file in source_files:
+        file_id = (
+            file_id_fn(source_file) if file_id_fn is not None else str(source_file)
+        )
+        items.append(
+            PlanItem(
+                run_date=run_date,
+                set_name=set_name,
+                subject=subject,
+                pipeline=pipeline,
+                status="ready",
+                reason=f"source file: {file_id}",
+            )
+        )
+    return items
 
 
 def _decision(

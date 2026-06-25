@@ -119,6 +119,19 @@ def test_run_downstream_succeeds_after_fresh_source_history(tmp_path):
     assert "FixturePool" in downstream.stdout
 
 
+def test_dry_run_previews_without_writing_artifacts(tmp_path):
+    result = _cli(
+        "run", "clipipelines/_source", str(tmp_path), "--run-date", "2026-05-29", "--dry-run"
+    )
+
+    assert result.returncode == 0, result.stderr
+    # Dry run must not land any store or registry.
+    assert not (tmp_path / "fixture" / "raw.db").exists()
+    assert not (tmp_path / "_registry" / "runs.db").exists()
+    assert "dry run" in result.stdout.lower()
+    assert "rows" in result.stdout
+
+
 def test_run_unknown_pipeline_reports_clear_error(tmp_path):
     result = _cli("run", "clipipelines/nope", str(tmp_path))
 

@@ -8,7 +8,7 @@ import pytest
 from framework._internal.connection import connect
 from framework.core.dataset import Dataset
 from framework.io.readers import CsvReader, ExcelReader, SqliteReader
-from framework.io.strategy import AccumulateByRun, Refresh
+from framework.io.strategy import AccumulateByRun, InsertOrIgnore, Refresh
 from framework.io.writers import (
     AccumulateByRunWriter,
     CsvWriter,
@@ -184,6 +184,54 @@ def test_accumulate_by_run_writer_is_idempotent_per_run(tmp_path):
     writer.write(dataset)
 
     assert len(SqliteReader(db, "selection_pool").read()) == len(dataset)
+
+
+def test_csv_writer_insert_or_ignore_appends_to_existing_file(tmp_path):
+    # Files carry no constraints, so InsertOrIgnore is equivalent to a plain
+    # append — all incoming rows land regardless of any prior content.
+    dataset = CsvReader(FIXTURE).read()
+    target = tmp_path / "out.csv"
+
+    CsvWriter(target, InsertOrIgnore()).write(dataset)
+    CsvWriter(target, InsertOrIgnore()).write(dataset)
+
+    landed = CsvReader(target).read()
+    assert len(landed) == 2 * len(dataset)
+
+
+def test_csv_writer_insert_or_ignore_on_empty_file_writes_normally(tmp_path):
+    dataset = CsvReader(FIXTURE).read()
+    target = tmp_path / "out.csv"
+
+    CsvWriter(target, InsertOrIgnore()).write(dataset)
+
+    landed = CsvReader(target).read()
+    assert len(landed) == len(dataset)
+    assert landed.columns == dataset.columns
+
+
+def test_excel_writer_insert_or_ignore_appends_to_existing_sheet(tmp_path):
+    dataset = CsvReader(FIXTURE).read()
+    target = tmp_path / "out.xlsx"
+
+    ExcelWriter(target, InsertOrIgnore()).write(dataset)
+    ExcelWriter(target, InsertOrIgnore()).write(dataset)
+
+    from framework.io.readers import ExcelReader
+
+    landed = ExcelReader(target).read()
+    assert len(landed) == 2 * len(dataset)
+
+
+def test_json_writer_insert_or_ignore_appends_to_existing_file(tmp_path):
+    dataset = CsvReader(FIXTURE).read()
+    target = tmp_path / "out.json"
+
+    JsonWriter(target, InsertOrIgnore()).write(dataset)
+    JsonWriter(target, InsertOrIgnore()).write(dataset)
+
+    records = json.loads(target.read_text(encoding="utf-8"))
+    assert len(records) == 2 * len(dataset)
 
 
 def test_accumulate_by_run_writer_is_atomic_when_the_write_fails(tmp_path):

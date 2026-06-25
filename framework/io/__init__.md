@@ -30,13 +30,21 @@ from framework.io.store import (
     StoreBackend,
     StoreCatalog,
 )
-from framework.io.strategy import AccumulateByRun, Refresh, UpsertStrategy
+from framework.io.strategy import (
+    AccumulateByRun,
+    InsertIfAbsent,
+    InsertOrIgnore,
+    Refresh,
+    UpsertStrategy,
+)
 from framework.io.writers import (
     AccumulateByRunWriter,
     CsvWriter,
     ExcelWriter,
     JsonWriter,
     QuarantineWriter,
+    SqliteInsertIfAbsentWriter,
+    SqliteInsertOrIgnoreWriter,
     SqliteTruncateReloadWriter,
     SqliteUpsertWriter,
     StdoutWriter,
@@ -66,6 +74,10 @@ __all__ = [
     "AccumulateByRun",
     "UpsertStrategy",
     "SqliteUpsertWriter",
+    "InsertOrIgnore",
+    "SqliteInsertOrIgnoreWriter",
+    "InsertIfAbsent",
+    "SqliteInsertIfAbsentWriter",
 ]
 
 ```
