@@ -1,0 +1,6 @@
+product_id,name,category,cost,stock_qty
+PROD01,Widget Alpha,Hardware,25.00,50
+PROD02,Widget Beta,Hardware,80.00,0
+PROD03,Gadget Gamma,Software,2.00,120
+PROD04,Gadget Delta,Software,12.00,0
+PROD05,Service Epsilon,Services,150.00,5
