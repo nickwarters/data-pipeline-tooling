@@ -1,0 +1,14 @@
+case_id,adviser,case_type,status,outcome,selected_date,completed_date
+CR-A01,adv001,C,completed,pass,2025-09-05,2025-09-20
+CR-A02,adv001,C,completed,pass,2026-01-10,2026-01-25
+CR-B01,adv002,A,in_progress,none,2026-06-05,
+CR-C01,adv003,A,completed,pass,2025-09-02,2025-09-17
+CR-C02,adv003,B,completed,pass,2025-11-02,2025-11-17
+CR-C03,adv003,C,completed,pass,2026-01-05,2026-01-20
+CR-C04,adv003,A,completed,pass,2026-03-02,2026-03-17
+CR-C05,adv003,B,completed,pass,2026-05-02,2026-05-17
+CR-D01,adv004,B,completed,fail,2026-05-20,2026-05-31
+CR-E01,adv005,A,completed,pass,2026-05-28,2026-06-10
+CR-F01,adv006,A,completed,pass,2026-03-01,2026-03-15
+CR-F02,adv006,B,completed,pass,2026-04-05,2026-04-20
+CR-H01,adv008,B,completed,fail,2026-04-25,2026-05-10

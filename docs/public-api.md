@@ -125,7 +125,7 @@ Moving data across the boundary.
 
 | Names | What |
 |-------|------|
-| `Reader`, `DatasetReader`, `CsvReader`, `GlobCsvReader`, `ExcelReader`, `SqliteReader` | The `read() -> Dataset` port and its concrete sources. (The remote `SasReader` / `SharePointReader` live in `tools.integrations`, not this facade — see below.) |
+| `Reader`, `DatasetReader`, `CsvReader`, `StrictCsvReader`, `StrictCsvParseError`, `GlobCsvReader`, `ExcelReader`, `SqliteReader` | The `read() -> Dataset` port and its concrete sources (`StrictCsvReader` is the char-by-char RFC 4180 parser; `StrictCsvParseError` is the located error it raises). (The remote `SasReader` / `SharePointReader` live in `tools.integrations`, not this facade — see below.) |
 | `Writer`, `CsvWriter`, `ExcelWriter`, `JsonWriter`, `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `SqliteInsertOrIgnoreWriter`, `QuarantineWriter`, `StdoutWriter` | The `write(dataset)` port and its concrete sinks (`StdoutWriter` is a console sink for *seeing* a result — e.g. an explainer trace — rather than persisting it). (The remote `SharePointWriter` lives in `tools.integrations`, not this facade — see below.) |
 | `Store`, `StoreCatalog`, `StoreBackend`, `DirectoryStoreBackend` | Per-subject medallions minted from shared configuration. |
 | `Refresh`, `AccumulateByRun`, `UpsertStrategy`, `InsertOrIgnore` | The load strategies a Writer carries. |
