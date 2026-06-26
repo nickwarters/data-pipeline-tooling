@@ -92,9 +92,14 @@ const BASE_ROW = {
 };
 
 /**
- * @param {{ caseRow?: CaseRow, patchOk?: boolean, resolveUsers?: (accounts: string[]) => Promise<Record<string, string | null>> }} [opts]
+ * @param {{ caseRow?: CaseRow, patchOk?: boolean, resolveUsers?: (accounts: string[]) => Promise<Record<string, string | null>>, exportHash?: string | null }} [opts]
  */
-function makeClient({ caseRow = BASE_ROW, patchOk = true, resolveUsers } = {}) {
+function makeClient({
+  caseRow = BASE_ROW,
+  patchOk = true,
+  resolveUsers,
+  exportHash = null,
+} = {}) {
   return {
     async getCase() {
       return caseRow;
@@ -109,6 +114,9 @@ function makeClient({ caseRow = BASE_ROW, patchOk = true, resolveUsers } = {}) {
       return [];
     },
     resolveUsers: resolveUsers ?? (async () => ({})),
+    async getExportHash() {
+      return exportHash;
+    },
   };
 }
 
@@ -728,6 +736,9 @@ function makeRecordingClient({ patchOk = true } = {}) {
     },
     async resolveUsers() {
       return {};
+    },
+    async getExportHash() {
+      return null;
     },
   };
 }
@@ -2289,6 +2300,9 @@ function makeQaClient(/** @type {CaseRow} */ caseRow) {
       return [];
     },
     resolveUsers: async () => ({}),
+    async getExportHash() {
+      return null;
+    },
   };
 }
 
@@ -2485,6 +2499,9 @@ function makeQaCheckClient(qaRow, originalRow) {
       return [];
     },
     resolveUsers: async () => ({}),
+    async getExportHash() {
+      return null;
+    },
   };
 }
 
@@ -2604,6 +2621,9 @@ test('CRCaseReview: a missing source Case still mounts the panel (renders its no
       return [];
     },
     resolveUsers: async () => ({}),
+    async getExportHash() {
+      return null;
+    },
   };
   const el = new CRCaseReview();
   el.client = /** @type {any} */ (client);
@@ -2639,5 +2659,95 @@ test('CRCaseReview: a standard Case (no sourceCaseId) mounts no source panel', a
     tabsOf(el).panels.questions !== undefined,
     true,
     'tabs remain at their standard position'
+  );
+});
+
+// ===== QUESTION BANK VERSION STAMP AT COMPLETION (ADR-0021 Step 3, #182) =====
+
+test('CaseMachine.transitionToCompleted stamps questionBankVersion when provided', () => {
+  const machine = new CaseMachine(
+    BASE_ROW,
+    { id: 'u1' },
+    { ownedCaseTypes: [] },
+    {}
+  );
+  const fields = machine.transitionToCompleted(
+    null,
+    undefined,
+    'sha256:aabbccdd'
+  );
+  assert.equal(
+    fields.questionBankVersion,
+    'sha256:aabbccdd',
+    'questionBankVersion is included in the PATCH fields'
+  );
+});
+
+test('CaseMachine.transitionToCompleted omits questionBankVersion when null', () => {
+  const machine = new CaseMachine(
+    BASE_ROW,
+    { id: 'u1' },
+    { ownedCaseTypes: [] },
+    {}
+  );
+  const fields = machine.transitionToCompleted(null, undefined, null);
+  assert.equal(
+    Object.hasOwn(fields, 'questionBankVersion'),
+    false,
+    'no questionBankVersion key when null'
+  );
+});
+
+test('CaseMachine.transitionToCompleted omits questionBankVersion when not provided', () => {
+  const machine = new CaseMachine(
+    BASE_ROW,
+    { id: 'u1' },
+    { ownedCaseTypes: [] },
+    {}
+  );
+  const fields = machine.transitionToCompleted(null, undefined);
+  assert.equal(
+    Object.hasOwn(fields, 'questionBankVersion'),
+    false,
+    'no questionBankVersion key when argument absent'
+  );
+});
+
+test('CRCaseReview: complete button passes exportHash as questionBankVersion to transitionToCompleted', async () => {
+  const HASH = 'sha256:fixture-hash-for-example-review';
+  const client = makeClient({ exportHash: HASH });
+  const completableRow = {
+    ...BASE_ROW,
+    answers: {
+      'q-welcome': { value: 'Yes' },
+      'q-needs': { value: 'No' },
+      'q-channel': { value: 'Email' },
+      'q-products': { value: ['Billing'] },
+    },
+  };
+  client.getCase = async () => completableRow;
+  client.getExportHash = async () => HASH;
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  saveQueue.loadCase(completableRow);
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  /** @type {any} */
+  let captured = null;
+  el._completeCase = async (caseId, client, saveQueue, patchFields) => {
+    captured = patchFields;
+  };
+
+  completeBtnOf(el)._listeners['click'][0]();
+  await Promise.resolve();
+
+  assert.equal(
+    captured?.questionBankVersion,
+    HASH,
+    'questionBankVersion from the export hash is included in the completion PATCH'
   );
 });

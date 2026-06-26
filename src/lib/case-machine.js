@@ -60,9 +60,10 @@ export class CaseMachine {
   /**
    * @param {((answers: Record<string, Answer>) => import('../sharepoint-client.js').OutcomeResult) | null | undefined} computeOutcome
    * @param {Record<string, Answer>} [answers]
+   * @param {string | null} [questionBankVersion]
    * @returns {Partial<CaseRow>}
    */
-  transitionToCompleted(computeOutcome, answers) {
+  transitionToCompleted(computeOutcome, answers, questionBankVersion) {
     /** @type {Partial<CaseRow>} */
     const fields = {
       status: 'Completed',
@@ -76,6 +77,9 @@ export class CaseMachine {
       fields.effectiveOutcome = fields.outcomeAtCompletion;
       fields.effectiveHadRemediation = fields.hadRemediation;
       fields.outcomeOverridden = false;
+    }
+    if (questionBankVersion) {
+      fields.questionBankVersion = questionBankVersion;
     }
     return fields;
   }

@@ -1269,3 +1269,79 @@ test('HttpSharePointClient: resolveUsers returns an empty map without any read f
   assert.deepEqual(await client.resolveUsers([]), {});
   assert.equal(calls.length, 0);
 });
+
+// --- getExportHash (ADR-0021 Step 3) ---
+
+test('HttpSharePointClient: getExportHash fetches {slug}.json and returns the hash field', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET' && c.url.includes('example-review.json'),
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            slug: 'example-review',
+            hash: 'sha256:aabbccdd',
+            generatedAt: '2026-06-01T00:00:00Z',
+            questions: [],
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const hash = await client.getExportHash('example-review');
+
+  assert.equal(hash, 'sha256:aabbccdd');
+  assert.ok(
+    calls[0].url.includes('example-review.json'),
+    'fetches the {slug}.json file from the Style Library'
+  );
+});
+
+test('HttpSharePointClient: getExportHash returns null when the file is not found (404)', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () => new Response('not found', { status: 404 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const hash = await client.getExportHash('example-review');
+  assert.equal(hash, null);
+});
+
+test('HttpSharePointClient: getExportHash returns null when the response carries no hash field', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({ slug: 'example-review', questions: [] }),
+          {
+            status: 200,
+          }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const hash = await client.getExportHash('example-review');
+  assert.equal(hash, null);
+});
+
+test('HttpSharePointClient: assignable to SharePointClient interface (includes getExportHash)', () => {
+  /** @type {import('../src/sharepoint-client.js').SharePointClient} */
+  const c = new HttpSharePointClient({ webUrl: WEB_URL });
+  assert.equal(typeof c.getExportHash, 'function');
+});

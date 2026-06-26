@@ -174,6 +174,9 @@ function makeStubClient({
     async getCurrentUser() {
       return { id: 'user-reviewer', displayName: 'Alex Reviewer' };
     },
+    async getExportHash() {
+      return null;
+    },
   };
 }
 
@@ -435,6 +438,9 @@ test('CRCaseReview: connectedCallback calls getCase and saveQueue.loadCase', asy
     },
     async getCurrentUser() {
       return { id: 'user-reviewer', displayName: 'Alex' };
+    },
+    async getExportHash() {
+      return null;
     },
   };
 

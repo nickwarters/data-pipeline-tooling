@@ -234,6 +234,27 @@ export class HttpSharePointClient {
     }
   }
 
+  /**
+   * Reads the content-hash from the current `{slug}.json` export envelope
+   * (ADR-0021). Returns null when the file is absent or carries no `hash` field
+   * — never hard-fails so a missing export does not block completion.
+   *
+   * @param {string} slug
+   * @returns {Promise<string | null>}
+   */
+  async getExportHash(slug) {
+    const url = this._absolute(
+      `/Style%20Library/case-review/case-types/${encodeURIComponent(slug)}.json`
+    );
+    try {
+      const body = await this._read(url);
+      const hash = body?.hash;
+      return typeof hash === 'string' && hash !== '' ? hash : null;
+    } catch {
+      return null;
+    }
+  }
+
   // --- internals -----------------------------------------------------------
 
   /**

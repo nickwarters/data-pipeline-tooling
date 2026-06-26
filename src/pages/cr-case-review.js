@@ -326,7 +326,8 @@ export class CRCaseReview extends ReactiveElement {
         const patchFields = machine.transitionToCompleted
           ? machine.transitionToCompleted(
               config.computeOutcome,
-              vm.answersSignal.get()
+              vm.answersSignal.get(),
+              vm.exportHash ?? null
             )
           : {
               status: /** @type {'Completed'} */ ('Completed'),

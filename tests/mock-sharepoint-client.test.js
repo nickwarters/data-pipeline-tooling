@@ -481,3 +481,35 @@ test('MockSharePointClient: resolveUsers returns an empty map for an empty list'
   const client = makePeopleClient();
   assert.deepEqual(await client.resolveUsers([]), {});
 });
+
+// --- getExportHash (ADR-0021 Step 3) ---
+
+test('MockSharePointClient: getExportHash returns the configured hash for a known slug', async () => {
+  const client = new MockSharePointClient({
+    cases: CASES,
+    questionDefinitions: QUESTION_DEFS,
+    personas: PERSONAS,
+    exportHashes: { 'example-review': 'sha256:abc123' },
+  });
+  const hash = await client.getExportHash('example-review');
+  assert.equal(hash, 'sha256:abc123');
+});
+
+test('MockSharePointClient: getExportHash returns null when slug has no configured hash', async () => {
+  const client = makeClient();
+  const hash = await client.getExportHash('example-review');
+  assert.equal(hash, null);
+});
+
+test('MockSharePointClient: patchCase with questionBankVersion round-trips the field (ADR-0021 Step 3)', async () => {
+  const client = makeClient();
+  const result = await client.patchCase(
+    'case-1',
+    { questionBankVersion: 'sha256:deadbeef' },
+    'etag-1'
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.data?.questionBankVersion, 'sha256:deadbeef');
+  const stored = await client.getCase('case-1');
+  assert.equal(stored?.questionBankVersion, 'sha256:deadbeef');
+});

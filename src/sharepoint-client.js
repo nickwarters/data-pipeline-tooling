@@ -128,6 +128,7 @@
  *   completedAt: string | null,
  *   outcome?: string | null,
  *   outcomeAtCompletion?: string,
+ *   questionBankVersion?: string,
  *   hadRemediation?: boolean,
  *   effectiveOutcome?: string,
  *   effectiveHadRemediation?: boolean,
@@ -198,7 +199,8 @@
  *   getCurrentUserGroups: () => Promise<string[]>,
  *   getCurrentUser: () => Promise<CurrentUser>,
  *   searchPeople: (query: string) => Promise<PersonResult[]>,
- *   resolveUsers: (accountNames: string[]) => Promise<Record<string, string | null>>
+ *   resolveUsers: (accountNames: string[]) => Promise<Record<string, string | null>>,
+ *   getExportHash: (slug: string) => Promise<string | null>
  * }} SharePointClient
  */
 

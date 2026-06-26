@@ -12,7 +12,8 @@ export class MockSharePointClient {
    *   questionDefinitions: QuestionDefinition[],
    *   personas: Record<string, { groups: string[], userId?: string, displayName?: string }>,
    *   persona?: string,
-   *   people?: PersonResult[]
+   *   people?: PersonResult[],
+   *   exportHashes?: Record<string, string>
    * }} opts
    */
   constructor({
@@ -21,6 +22,7 @@ export class MockSharePointClient {
     personas,
     persona = 'reviewer',
     people = [],
+    exportHashes = /** @type {Record<string, string>} */ ({}),
   }) {
     // Deep-clone cases so fixture arrays are not mutated across tests.
     this._cases = cases.map((c) => ({ ...c, answers: { ...c.answers } }));
@@ -28,6 +30,7 @@ export class MockSharePointClient {
     this._personas = personas;
     this._persona = persona;
     this._people = people.slice();
+    this._exportHashes = exportHashes;
     this._etagCounter = 1000;
     this._injectNext412 = false;
   }
@@ -172,5 +175,16 @@ export class MockSharePointClient {
       id: p?.userId ?? this._persona,
       displayName: p?.displayName ?? this._persona,
     };
+  }
+
+  /**
+   * Returns the content hash for the current {slug}.json export envelope, or
+   * null when no hash is configured for this slug (ADR-0021).
+   *
+   * @param {string} slug
+   * @returns {Promise<string | null>}
+   */
+  async getExportHash(slug) {
+    return this._exportHashes[slug] ?? null;
   }
 }

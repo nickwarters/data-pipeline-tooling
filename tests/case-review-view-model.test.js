@@ -71,3 +71,72 @@ test('handleCapture works (no throw) when window is absent', () => {
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0][2].q1.capture, { rootCause: 'x' });
 });
+
+// --- exportHash loading (ADR-0021 Step 3) ---
+
+test('CaseReviewViewModel.load() calls getExportHash with the case type slug and stores it as exportHash', async () => {
+  const vm = new CaseReviewViewModel(
+    /** @type {any} */ ({
+      getCase: async () => ({
+        id: 'c1',
+        caseType: 'example-review',
+        title: 'T',
+        status: 'In-progress',
+        assignedReviewer: 'u1',
+        responsibleParty: 'u2',
+        answers: {},
+        conversation: [],
+        notes: '',
+        completedAt: null,
+        etag: 'e1',
+      }),
+      getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
+      getExportHash: async (slug) =>
+        slug === 'example-review' ? 'sha256:testHash' : null,
+      resolveUsers: async () => ({}),
+    }),
+    /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+    'c1',
+    'u1',
+    null
+  );
+
+  await vm.load();
+
+  assert.equal(
+    vm.exportHash,
+    'sha256:testHash',
+    'exportHash is stored from getExportHash result'
+  );
+});
+
+test('CaseReviewViewModel.load() stores null exportHash when getExportHash returns null', async () => {
+  const vm = new CaseReviewViewModel(
+    /** @type {any} */ ({
+      getCase: async () => ({
+        id: 'c1',
+        caseType: 'example-review',
+        title: 'T',
+        status: 'In-progress',
+        assignedReviewer: 'u1',
+        responsibleParty: 'u2',
+        answers: {},
+        conversation: [],
+        notes: '',
+        completedAt: null,
+        etag: 'e1',
+      }),
+      getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
+      getExportHash: async () => null,
+      resolveUsers: async () => ({}),
+    }),
+    /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+    'c1',
+    'u1',
+    null
+  );
+
+  await vm.load();
+
+  assert.equal(vm.exportHash, null);
+});

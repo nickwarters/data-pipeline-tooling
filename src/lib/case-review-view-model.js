@@ -65,6 +65,9 @@ export class CaseReviewViewModel {
         .every((q) => !!answers[q.id]?.value);
     });
 
+    /** @type {string | null} */
+    this.exportHash = null;
+
     /** @type {CaseMachine | null} */
     this.machine = null;
     /** @type {import('../services/section-access.js').Role[]} */
@@ -97,10 +100,12 @@ export class CaseReviewViewModel {
     this.currentUser = currentUser;
     saveQueue.loadCase(caseRow);
 
-    const caseTypeModule = await import(
-      `../../case-types/${caseRow.caseType}.js`
-    );
+    const [caseTypeModule, exportHash] = await Promise.all([
+      import(`../../case-types/${caseRow.caseType}.js`),
+      this.client.getExportHash(caseRow.caseType),
+    ]);
     this.config = caseTypeModule.default;
+    this.exportHash = exportHash;
 
     validateCaptureGroups(this.config.captureGroups);
     this.catalogue = this.config.questions.filter((q) => !q.deprecated);
