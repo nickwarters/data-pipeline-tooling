@@ -114,8 +114,7 @@ consumption/grain boundary
 > location` only ([ADR-0004](adr/0004-per-feed-load-strategy-owned-by-writer.md)). "Refresh upstream / accumulate downstream" is a common profile,
 > not a framework law. The **Ingest** profile is *history-upstream /
 > current-gold* (raw + silver accumulate the change-over-time record; gold
-> reduces to one current row per Case). See the deep docs below for what has
-> landed vs. what is decided-not-yet-built.
+> reduces to one current row per Case). See the deep docs below for the full load model.
 
 ### How the pieces fit
 
