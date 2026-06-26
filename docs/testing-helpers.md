@@ -13,7 +13,7 @@ from tests.framework_testing import RecordingWriter, RecordingRunLog, read_run_l
 It sits *beside* the production facades (`framework.core` / `framework.io` /
 `framework.transform` / `framework.run`), not inside them — see
 [public-api.md](public-api.md). Everything stays behind the `Dataset` seam
-([ADR-0002](adr/0002-python-only-processing-dumb-store-two-tier-carrier.md)):
+([ADR-0002](adr/0002-python-processing-opaque-dataset-carrier.md)):
 the helpers take and return plain Python **row dicts**, never a pandas frame.
 
 ## The surface
@@ -114,7 +114,7 @@ file-backed reader (`CsvReader` / `GlobCsvReader`) rather than an in-memory feed
 
 Compose a `RecordingRunLog` to assert what a run recorded. A **warn**-severity
 breach keeps the run going and rides `warn_hits`; an **error**-severity breach
-aborts fail-fast ([ADR-0007](adr/0007-fail-fast-atomic-runs-jsonl-observability.md)),
+aborts fail-fast ([ADR-0005](adr/0005-fail-fast-atomic-runs-and-observability.md)),
 recording an `error` for the failing step and the run summary *before* the
 exception propagates — so a validation failure is asserted through the captured
 records:

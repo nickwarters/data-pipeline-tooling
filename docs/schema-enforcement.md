@@ -4,18 +4,18 @@ This documents the `Schema` + `SchemaValidator` adapter (#7) and the
 `SchemaCoercion` processor that repairs raw's round-trip-lossy types ahead of the
 validator (#23), plus how they compose onto a `Pipeline` to enforce the schema at
 the silver boundary. For the *why*, see
-[ADR-0008](adr/0008-graduated-schema-enforcement.md); for the surrounding
+[ADR-0006](adr/0006-graduated-schema-enforcement.md); for the surrounding
 primitives, [core-primitives.md](core-primitives.md).
 
 ## The three layers, and where the schema bites
 
-Enforcement is **graduated** across the medallion (ADR-0008):
+Enforcement is **graduated** across the medallion (ADR-0006):
 
 | Layer | Shape discipline |
 |-------|------------------|
 | **raw** | **Schema-light.** A faithful mirror of the source snapshot as landed — booleans still as `TRUE`/`FALSE` text, dates still unparsed, warts and all. At most a loud column-presence check so a wholesale source change fails immediately. |
 | **silver** | **Validated — the schema boundary.** A Case Type's declared columns + dtypes are enforced here, as a post-validator, before the data lands. This is where "is this data valid and processable?" gets its authoritative answer. |
-| **gold** | **Validated on the same footing as silver** (ADR-0008) — by composing the same `SchemaValidator` as a post-validator onto the gold-building pipeline (see below). |
+| **gold** | **Validated on the same footing as silver** (ADR-0006) — by composing the same `SchemaValidator` as a post-validator onto the gold-building pipeline (see below). |
 
 **Why silver, not raw?** Raw must stay faithful to the source so the landing
 zone is diagnosable and re-runnable; hardening the shape is a silver-stage
@@ -42,7 +42,7 @@ class CaseA:
 
 No base class, no registration. Declaring the schema does **not** force you to
 materialise typed objects — it is a *validation contract first*; typed objects
-(`Iterator[CaseA]`) are an opt-in convenience for later (ADR-0008).
+(`Iterator[CaseA]`) are an opt-in convenience for later (ADR-0006).
 
 Because the **field names are the column contract**, they must be valid Python
 identifiers — a source whose columns carry spaces or punctuation (`Case Number`)
@@ -98,7 +98,7 @@ operations over actual values. Re-exposing all of that engine-agnostically would
 re-implement a dataframe API on the `Dataset` seam. So `SchemaValidator`
 reaches the backing frame via `to_pandas()` exactly as a Reader/Writer/processor
 does — keeping `Dataset`'s public surface tiny and the pandas-dtype mapping in
-one place (`framework._internal.schema`). See ADR-0002 and ADR-0008.
+one place (`framework._internal.schema`). See ADR-0002 and ADR-0006.
 
 ## `SchemaCoercion` — repairing what storage loses
 
@@ -133,7 +133,7 @@ storage; validation enforces the contract.**
 A value the coercer cannot cast — an unparseable date, a boolean encoding
 outside the known set (`"maybe"`) — is **not** silently dropped: it raises a
 `CoercionError` with one located message naming the schema, the column, and the
-reason, and the run aborts fail-fast (ADR-0007):
+reason, and the run aborts fail-fast (ADR-0005):
 
 ```
 CaseA coercion: column 'active' has unrecognized boolean encoding(s): 'maybe'
@@ -170,18 +170,18 @@ per-run step order is:
 read → coerce (transform) → post-validate (schema) → write
 ```
 
-Because `.run()` is fail-fast and atomic (ADR-0007), either a coercion failure at
+Because `.run()` is fail-fast and atomic (ADR-0005), either a coercion failure at
 the **transform** step or a schema breach at the **post-validate** step raises
 *before* the Writer is called — so **no `silver.db` is written** and nothing
 partial lands. The pipeline makes no write or load decisions: the `Store` mints
-the Writer, which owns its location and load strategy (ADR-0003, ADR-0006). For
+the Writer, which owns its location and load strategy (ADR-0003, ADR-0004). For
 the full feed pattern (raw accumulation, filtering the current run before
 coercion), see [`pipelines/ingest/pipeline.py`](../pipelines/ingest/pipeline.py)
 and [adding-a-feed.md](adding-a-feed.md).
 
 ## The same schema, at the gold boundary
 
-Gold is validated *on the same footing as silver* (ADR-0008): the **same**
+Gold is validated *on the same footing as silver* (ADR-0006): the **same**
 `SchemaValidator` composes as a post-validator onto whatever pipeline builds gold,
 before the gold write. Two deliberate differences from the silver hop:
 
@@ -192,7 +192,7 @@ before the gold write. Two deliberate differences from the silver hop:
   reduction, not mirrored from ingest) rather than re-checking ingest mirrors. It
   is therefore **optional** — a gold builder may attach `SchemaValidator` or not.
 
-A breach raises at the validate step, before the writer runs (ADR-0007) — so a
+A breach raises at the validate step, before the writer runs (ADR-0005) — so a
 failed run writes no gold and leaves prior gold intact. How accumulated silver is
 assembled into gold is an application concern (the `case_review.gold` helpers, and
 the open snapshot-vs-join decision in #163); see
@@ -294,7 +294,7 @@ column would only add a spurious second failure.
 together, so wherever it is composed — at the silver boundary, and again at gold —
 nullability and value rules enforce with no extra wiring. As with dtype breaches, a nullability or value-rule
 breach raises at the post-validate step **before** the writer runs — so the run
-aborts fail-fast and atomically (ADR-0007) and nothing partial lands. `Unique`
+aborts fail-fast and atomically (ADR-0005) and nothing partial lands. `Unique`
 here is the field-annotation form of uniqueness; the one-row-per-Case *grain*
 on a (possibly composite) key stays the job of `UniqueValidator` at the gold
 boundary (#37, ADR-0009).

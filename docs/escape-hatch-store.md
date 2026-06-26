@@ -4,7 +4,7 @@ The supported way to reach a SQLite store is the **layer pattern**: a
 `StoreCatalog(root).store(subject)` mints Writers/Readers over that subject's
 `<subject>/{raw,silver,gold}.db`, and the Store maps *only* `(subject, layer,
 table) → location` ([core-primitives.md](core-primitives.md#store--storecatalog--subject-medallions-minted-from-shared-configuration),
-[ADR-0001](adr/0001-sqlite-medallion-store-on-network-share.md)). That mapping is
+[ADR-0001](adr/0001-sqlite-per-subject-medallion-store.md)). That mapping is
 what keeps every pipeline ignorant of physical layout and every subject isolated.
 
 Sometimes you are not ready for that. You have a one-off `.db` someone handed
@@ -29,7 +29,7 @@ can't migrate:
 
 - **The `Dataset` seam.** pandas (or any engine) lives *behind* `Dataset` and
   never appears in a pipeline script or the domain layer
-  ([ADR-0002](adr/0002-python-only-processing-dumb-store-two-tier-carrier.md)).
+  ([ADR-0002](adr/0002-python-processing-opaque-dataset-carrier.md)).
   An ad-hoc Reader still returns a `Dataset`; an ad-hoc Writer still takes one.
 - **The `Reader` / `Writer` shape.** `read() -> Dataset` and
   `write(dataset) -> None`. If your escape hatch honours these, the `Pipeline`
@@ -37,7 +37,7 @@ can't migrate:
   which is the whole point of cutting the corner *here* and nowhere else.
 - **The connection conventions.** Open SQLite through the shared `connect`
   factory (`busy_timeout`, rollback journal — WAL is unavailable on a network
-  share, [ADR-0001](adr/0001-sqlite-medallion-store-on-network-share.md)) rather
+  share, [ADR-0001](adr/0001-sqlite-per-subject-medallion-store.md)) rather
   than a bare `sqlite3.connect`, and quote every table/column with
   `quote_identifier`. Paths are `pathlib` so the spike still runs on Windows and
   macOS.
@@ -216,7 +216,7 @@ mechanical:
 4. **Add the schema boundary.** Refine the feed raw → silver by composing
    `SchemaCoercion(schema)` + `SchemaValidator(schema)` onto the hop, so a declared
    Case Type contract is enforced at silver
-   ([schema-enforcement.md](schema-enforcement.md), ADR-0008).
+   ([schema-enforcement.md](schema-enforcement.md), ADR-0006).
 5. **Delete `SqliteQueryReader` and `ScratchStore`** once nothing imports them.
    They are not part of the public surface ([public-api.md](public-api.md)); a
    lingering escape hatch is the defect, not the migration.

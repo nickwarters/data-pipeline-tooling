@@ -24,7 +24,7 @@ SelectionPool. For the domain language behind the terms, see
 with the Case Type's schema enforced (`SchemaCoercion` + `SchemaValidator`
 composed onto the hop — see [`schema-enforcement.md`](schema-enforcement.md)). That validated **silver is the
 CasePool**: the current-state population of Cases. Sources are current-state
-snapshots, so raw and silver are full-refreshed each run (ADR-0006); the
+snapshots, so raw and silver are full-refreshed each run (ADR-0004); the
 accumulating layer is gold, where the **SelectionPool** lands stamped by run.
 
 ## `CaseType` / `Variation` — the declarative domain objects
@@ -34,7 +34,7 @@ fields, its Variations, and — over time — its ingest/selection/processing
 (CONTEXT.md). It is an **explicit declarative object imported directly**, not an
 entry in a global domain registry. The minimal `PipelineRunner` registry is only
 for dispatching named domain Pipelines such as `cases/ingest` and
-`cases/selection` (ADR-0005).
+`cases/selection` (ADR-0011).
 
 ```python
 from dataclasses import dataclass
@@ -71,7 +71,7 @@ stamps that id onto the chosen Cases. `CaseType.variation(id)` resolves a Variat
 raises `KeyError` with a located message on an unknown id, so a mis-config
 surfaces where it is asked for rather than as a silent miss downstream. Further
 overrides (ingest, selection criteria, divergent processing) are deferred
-(ADR-0005).
+(ADR-0011).
 
 ## `CasePool` — the domain population, behind intention-revealing reads
 
@@ -195,7 +195,7 @@ exclude (ADR-0002 plain-Python callables), leaving no trace.
 `.explain(writer, id_column=…)` closes that gap (#53): it is the
 eligibility-stage twin of `.quarantine()` (#50) — the same *route aside with a
 reason, never silently drop* shape, pointed at
-**eligibility** rather than **validity** (ADR-0007 amendment 02).
+**eligibility** rather than **validity** (ADR-0008).
 
 ```python
 p = Pipeline("selection")

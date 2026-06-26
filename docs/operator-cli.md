@@ -10,8 +10,8 @@ list recent **runs**, and inspect a run **log** (issue #99). It is a thin shell
 over the public `framework.run` runtime surface (`run_pipeline`,
 `Orchestrator`) and the `RunLog` / `RunRegistry` observability seam —
 everything stays local SQLite + JSONL, with no external services
-([ADR-0001](adr/0001-sqlite-medallion-store-on-network-share.md),
-[ADR-0007](adr/0007-fail-fast-atomic-runs-jsonl-observability.md)).
+([ADR-0001](adr/0001-sqlite-per-subject-medallion-store.md),
+[ADR-0005](adr/0005-fail-fast-atomic-runs-and-observability.md)).
 
 Run it as a module from the repository root so the import-only `framework`
 package resolves on `sys.path`:
@@ -95,7 +95,7 @@ is non-zero — same fail-fast contract as a real run, without writing anything.
 A run's **logical run id** is the idempotency key for its accumulated rows: a
 re-run under the *same* logical id replaces that run's rows rather than adding
 duplicates, while each execution stays individually traceable by its own
-`execution_id` ([ADR-0006](adr/0006-load-idempotency-refresh-upstream-accumulate-downstream.md),
+`execution_id` ([ADR-0004](adr/0004-per-feed-load-strategy-owned-by-writer.md),
 #77). When omitted it defaults to `<pipeline>:run_date`, so re-running a
 given date is already idempotent.
 

@@ -161,7 +161,7 @@ public helpers carry stable names and are imported directly:
 | `tools.calendar` — `WorkingDayCalendar` | Working-day availability arithmetic (pure utility). |
 | `tools.orchestration` — `Orchestrator`, `PipelineSet`, `ScheduledPipeline`, `Weekdays`, `SpecificWeekdays`, `DayOfMonth`, `NthWorkingDayOfMonth`, `LastWorkingDayOfMonth`, `ManualOnly` | Scheduled orchestration above `PipelineRunner`: evaluate due work for a run date, isolate failures by scheduled item/PipelineSet, and record decisions in `_orchestration/runs.db`. |
 | `tools.observability` — `RunLog`, `RunRegistry` | The structured-observability seam and its query store (also re-exported via `framework.run`). |
-| `tools.integrations.remote` — `SasReader`, `SharePointReader`, `SharePointWriter` | The remote-source/sink Reader and Writer (SAS extract, SharePoint list) — same `read()` / `write()` ports as the file/SQLite ones, but reaching a remote client that is **stubbed** behind swappable seams (`RemoteRunner`, `SharePointFetcher` / `SharePointPusher`) until the on-prem SE client (NTLM/Kerberos/REST) lands (ADR-0004/0005). |
+| `tools.integrations.remote` — `SasReader`, `SharePointReader`, `SharePointWriter` | The remote-source/sink Reader and Writer (SAS extract, SharePoint list) — same `read()` / `write()` ports as the file/SQLite ones, but reaching a remote client that is **stubbed** behind swappable seams (`RemoteRunner`, `SharePointFetcher` / `SharePointPusher`) until the on-prem SE client (NTLM/Kerberos/REST) lands (ADR-0012/0005). |
 
 ## Internal modules — do not import from these
 
@@ -187,7 +187,7 @@ without notice:
 - `tools.integrations.remote` (`RemoteRunner`, `StubbedRemoteRunner`, `SharePointFetcher`,
   `SharePointPusher`,
   …) — the **stubbed remote-client seam** behind the `tools.integrations`
-  `SasReader` / `SharePointReader` / `SharePointWriter` (ADR-0004/0005). This lives in
+  `SasReader` / `SharePointReader` / `SharePointWriter` (ADR-0012/0005). This lives in
   the `tools` sibling package (above), not a `framework` facade. An advanced extension
   point, documented in [adding-a-feed.md](adding-a-feed.md); not part of the day-to-day surface.
 - Other helpers inside `framework.transform.quarantine` — implementation details
