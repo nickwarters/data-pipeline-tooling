@@ -136,7 +136,17 @@ class Reader(Protocol):
     def read(self) -> Dataset: ...
 ```
 
-`CsvReader(path)` reads one source CSV file. `GlobCsvReader(directory, pattern)`
+`CsvReader(path)` reads one source CSV file (pandas behind the seam, with its
+type inference). `StrictCsvReader(path)` reads one source CSV file too, but
+parses it **character by character** through a hand-written RFC 4180 state
+machine for feeds that honour the CSV grammar yet trip pandas / the stdlib
+`csv` module — a quoted field containing the delimiter, an embedded newline, or
+the quote character itself written doubled (`""`). It accepts `CR`/`LF`/`CRLF`
+record endings (preserving line breaks *inside* quoted fields verbatim),
+tolerates a BOM, lands every value as faithful **text** (no type inference —
+dtype decisions stay with silver's `SchemaCoercion`), and raises a located
+`StrictCsvParseError` on a ragged record or an unterminated quote — the *strict*
+in the name. `GlobCsvReader(directory, pattern)`
 reads many local CSV files that together form one logical Feed snapshot: it
 matches files with `pathlib.Path.glob`, reads them in sorted deterministic
 order, concatenates them behind the `Dataset` seam, and raises
@@ -179,7 +189,7 @@ directions are explicit:
 
 | Source type | Reader | Writer | Notes |
 |-------------|--------|--------|-------|
-| CSV file | `CsvReader`, `GlobCsvReader` | `CsvWriter` | `CsvWriter(path, strategy)` emits one CSV file; `GlobCsvReader` is read-only because many inbound files together form one logical snapshot. |
+| CSV file | `CsvReader`, `StrictCsvReader`, `GlobCsvReader` | `CsvWriter` | `CsvWriter(path, strategy)` emits one CSV file; `StrictCsvReader` is the char-by-char RFC 4180 parser for grammar-correct feeds that defeat pandas; `GlobCsvReader` is read-only because many inbound files together form one logical snapshot. |
 | Excel file | `ExcelReader` | `ExcelWriter` | Both target one worksheet (`sheet=...`). |
 | JSON file | _intentionally absent_ | `JsonWriter` | JSON is currently a Reporting Deliverable format only; no inbound JSON Feed has been needed yet. |
 | SQLite table | `SqliteReader` | `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `SqliteInsertOrIgnoreWriter`, `SqliteInsertIfAbsentWriter` | The Store mints these over medallion layer databases. |
