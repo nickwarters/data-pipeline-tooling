@@ -16,9 +16,9 @@ They fall into two workload families:
   accumulated history to current-state gold (ADR-0009).
 
 For the *why*, see
-[ADR-0002](adr/0002-python-only-processing-dumb-store-two-tier-carrier.md)
+[ADR-0002](adr/0002-python-processing-opaque-dataset-carrier.md)
 (Python-only processing),
-[ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md) (deferred
+[ADR-0003](adr/0003-deferred-dag-composition.md) (deferred
 builder, explicit join dependencies), and
 [ADR-0009](adr/0009-case-identity-and-gold-grain.md) (case identity, gold grain,
 multi-table feeds). The schema-driven `SchemaCoercion` processor lives with the
@@ -41,7 +41,7 @@ structural validators it is **engine-confined** — a transform needs the engine
 vectorised operations, so it reaches the backing frame via
 `to_pandas()`/`from_pandas()` exactly as a Reader/Writer does (ADR-0002). A
 processor has **no severity**: a transform either applies or it can't, so a
-failure is always fail-fast (ADR-0007) — it raises and the run aborts.
+failure is always fail-fast (ADR-0005) — it raises and the run aborts.
 
 The sections below cover the **Selection** transforms first (the
 `filter/score/sort/join` of `CONTEXT.md`): the Selection Pipeline reads the
@@ -496,7 +496,7 @@ LatestPerKey(key="case_id", by="load_date")
 Keeps the **latest row per `key`**, where "latest" is the maximum `by` value (a
 timestamp or load column). `key` is one column or a list. This is the
 *current-gold* reduction of the history-upstream / current-gold Ingest profile
-(ADR-0006 amendment): raw + silver accumulate the change-over-time record, and
+(ADR-0004): raw + silver accumulate the change-over-time record, and
 `LatestPerKey` reduces accumulated silver to the one-row-per-Case current state
 the CasePool reads. **Tie-break:** when rows for a key share the maximum `by`
 value, the row appearing **last in the input** is kept — deterministic given a

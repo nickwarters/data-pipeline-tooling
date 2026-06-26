@@ -3,7 +3,7 @@
 This documents the **gold** layer's load semantics — the `AccumulateByRun`
 strategy introduced in #8: rows stamped `run_id` / `load_date`, accumulating
 across runs, with an idempotent re-run via *delete-by-run then insert*. For the
-*why*, see [ADR-0006](adr/0006-load-idempotency-refresh-upstream-accumulate-downstream.md);
+*why*, see [ADR-0004](adr/0004-per-feed-load-strategy-owned-by-writer.md);
 for the surrounding primitives, [core-primitives.md](core-primitives.md); for the
 domain terms (CasePool, SelectionPool, Review Outcomes), [`../CONTEXT.md`](../CONTEXT.md).
 
@@ -52,14 +52,14 @@ DELETE FROM <table> WHERE run_id = :run_id;   -- clear only this run's prior row
 INSERT INTO <table> ...                        -- then re-insert this run
 ```
 
-Both statements commit as a **single SQLite transaction** (ADR-0007): if the
+Both statements commit as a **single SQLite transaction** (ADR-0005): if the
 insert fails, the delete rolls back, so a failed re-run never half-wipes prior
 rows. The result: re-running a given load is safe and deterministic, while the
 historical record of prior loads is preserved.
 
 ## `run_id` is *not* the run-log's execution id
 
-The run-log (ADR-0007) mints a **fresh uuid `run_id` per `.run()`** to correlate
+The run-log (ADR-0005) mints a **fresh uuid `run_id` per `.run()`** to correlate
 every record of one execution. Gold's `run_id` is a **different thing** — a
 stable, logical load key — and the two are **deliberately not unified**:
 
@@ -73,7 +73,7 @@ re-run would never match prior rows and would silently duplicate history. So the
 values — `AccumulateByRun.from_context(context)` derives them from the shared
 `RunContext` so `--logical-run-id` flows straight through. (Linking the two for
 lineage — having the run log *record* the gold `run_id` as metadata — is deferred
-to the run-registry, ADR-0005.)
+to the run-registry, ADR-0011.)
 
 ## How a changing record is represented across runs
 
@@ -121,11 +121,11 @@ rows remain.
 
 - **Periodic snapshot** — every run re-writes the full set (Sync, ingest). Simple
   and self-correcting, but **unchanged records are re-copied every run**: 10k
-  stable records × 100 daily runs ≈ 1M rows, mostly identical. ADR-0006 bounds
+  stable records × 100 daily runs ≈ 1M rows, mostly identical. ADR-0004 bounds
   this at ~1M rows; beyond that, change-detection or retention becomes a real
   decision. There is no built-in "is-current" flag — consumers derive it.
 - **Event / decision log** — each run appends only new facts (selections made,
-  outcomes received) that never restate prior rows. This is what ADR-0006
+  outcomes received) that never restate prior rows. This is what ADR-0004
   originally framed gold around; it grows with events, not with records × runs.
 
 In both, `run_id` is the **unit of replacement**: you can re-drive a whole load
@@ -164,17 +164,17 @@ p.run()
 ```
 
 The `Store` mints the `AccumulateByRunWriter`, which owns the location and the
-delete-by-run/insert accumulate behaviour (ADR-0003, ADR-0006); the pipeline makes
+delete-by-run/insert accumulate behaviour (ADR-0003, ADR-0004); the pipeline makes
 no load decision of its own. `AccumulateByRun.from_context(context)` derives the
 logical `run_id` / `load_date` from the shared `RunContext`, so a re-drive under
 the same `--logical-run-id` replaces that load idempotently.
 
 To enforce the schema on the same footing as silver, insert a `SchemaValidator`
-validate step before the write (ADR-0008,
+validate step before the write (ADR-0006,
 [`schema-enforcement.md`](schema-enforcement.md)) — a belt-and-braces guard for
 rows assembled at gold rather than mirrored from ingest; no `SchemaCoercion` is
 needed because gold reads already-coerced silver. A breach raises *before* the
-Writer's delete-by-run/insert transaction (ADR-0007), so nothing is deleted or
+Writer's delete-by-run/insert transaction (ADR-0005), so nothing is deleted or
 accumulated and prior gold rows stay intact.
 
 ### Current-only gold vs accumulation
@@ -192,4 +192,4 @@ the application layer rather than the framework.
 
 - **Row→run lineage.** Recording the gold `run_id` / `load_date` as metadata on
   the run log, linking an execution to the logical load it produced, lands with
-  the run-registry (ADR-0005).
+  the run-registry (ADR-0011).

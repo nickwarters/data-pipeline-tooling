@@ -3,8 +3,8 @@
 Every `.run()` can emit **structured run observability**: one JSON object per
 line to a `.log` file, plus a human-readable line per record to the console for
 development. The file is deliberately infrastructure-free now, yet it is the
-**seam the run-registry ingests** (ADR-0005) without parsing free text. See
-ADR-0007 for the *why* (fail-fast, atomic, no silent drops).
+**seam the run-registry ingests** (ADR-0011) without parsing free text. See
+ADR-0005 for the *why* (fail-fast, atomic, no silent drops).
 
 ## Wiring it in
 
@@ -73,12 +73,12 @@ leads each line; the examples below elide it for width but it is always present:
 | `status`    | `"ok"` \| `"error"` | Step/run outcome. |
 | `rows_in`   | int \| null         | Rows the step consumed (`null` where N/A, e.g. `read`). |
 | `rows_out`  | int \| null         | Rows the step produced. |
-| `rows_quarantined` | int \| null  | Rows routed aside on a `quarantine` step (value-rule breaches — ADR-0007 amd 01); `null` elsewhere. |
-| `rows_excluded` | int \| null     | Cases a gate excluded on an `explain` step (Selection explainability — ADR-0007 amd 02); `null` elsewhere. |
+| `rows_quarantined` | int \| null  | Rows routed aside on a `quarantine` step (value-rule breaches — ADR-0007); `null` elsewhere. |
+| `rows_excluded` | int \| null     | Cases a gate excluded on an `explain` step (Selection explainability — ADR-0008); `null` elsewhere. |
 | `duration`  | float \| null       | Wall-clock seconds for the step/run. |
 | `errors`    | string[]            | Error messages when `status` is `error`; `[]` otherwise. |
 | `warn_hits` | string[]            | Warn-severity validator messages tolerated at this step; `[]` otherwise. |
-| `committed` | bool                | `true` on a step that durably wrote an artifact (`write`, `quarantine` with rejects, `explain`, `checkpoint`) — independently committed evidence that **survives a later step's failure** (ADR-0007 amd 03). Set only on the success record; `false` everywhere else. |
+| `committed` | bool                | `true` on a step that durably wrote an artifact (`write`, `quarantine` with rejects, `explain`, `checkpoint`) — independently committed evidence that **survives a later step's failure** (ADR-0005). Set only on the success record; `false` everywhere else. |
 
 ### Steps per run
 
@@ -86,15 +86,15 @@ One record per step, in execution order, then a final `run` summary:
 
 1. `read` — `rows_out` is the rows the Reader produced.
 2. `pre-validate` — input validators; `warn_hits` lists any tolerated failures.
-3. `post-validate` — output validators (the home of ADR-0008 schema checks).
+3. `post-validate` — output validators (the home of ADR-0006 schema checks).
 4. `write` — present only when a Writer is composed; `rows_in` is the rows handed to it.
 5. `run` — the **summary**: overall `status`, total `duration`, and the
    run's aggregated `warn_hits`.
 
 Opt-in steps appear only when their path is configured: `quarantine` (between
-`pre-validate` and the processors — ADR-0007 amd 01, with `rows_quarantined`),
+`pre-validate` and the processors — ADR-0007, with `rows_quarantined`),
 `dependency:<name>` (a read-only join dependency materialized before the
-processor that consumes it), and `explain` (after `post-validate` — ADR-0007 amd
+processor that consumes it), and `explain` (after `post-validate` — ADR-0005 amd
 02, with `rows_excluded`; its `rows_in`/`rows_out` are the Cases
 considered/selected by Selection). A `process` step is recorded per attached
 processor, so dependency reads are distinguishable from downstream join
@@ -144,7 +144,7 @@ scheduled item from running.
 
 The failing step is recorded `error` with its message, the `run` summary closes
 the run as `error`, **no `write` record is emitted** (nothing partial lands —
-ADR-0007), and `.run()` re-raises `ValidationError`:
+ADR-0005), and `.run()` re-raises `ValidationError`:
 
 ```json
 {"run_id": "…", "pipeline": "cases", "step": "read",         "status": "ok",    "rows_out": 1, "errors": [],                                                     "warn_hits": []}
@@ -156,7 +156,7 @@ ADR-0007), and `.run()` re-raises `ValidationError`:
 
 A run that writes an artifact (quarantine reject, explain/trace, or checkpoint)
 and *then* fails leaves that artifact **on disk** — it is independently committed
-evidence, not rolled back ([ADR-0007 amd 03](adr/0007-amendment-03-independent-artifact-commits.md)).
+evidence, not rolled back ([ADR-0005](adr/0005-fail-fast-atomic-runs-and-observability.md)).
 The `committed` marker is the operator's index of what already landed: the
 quarantine step below committed (`committed: true`) before the terminus `write`
 blew up, so the reject table is real even though the run is `error`.
@@ -172,7 +172,7 @@ blew up, so the reject table is real even though the run is `error`.
 
 A warn-severity failure is recorded as a `warn_hit` on its step (status stays
 `ok`), the run continues to the write, and the `run` summary surfaces the
-aggregated `warn_hits` — so a tolerated condition is still visible (ADR-0007).
+aggregated `warn_hits` — so a tolerated condition is still visible (ADR-0005).
 
 ## Reading the log back
 

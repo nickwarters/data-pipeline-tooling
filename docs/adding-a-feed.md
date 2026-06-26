@@ -293,7 +293,7 @@ raw table rather than one mega-row ([ADR-0009](adr/0009-case-identity-and-gold-g
 ## 1. Pick a `Reader`
 
 A `Reader` encapsulates *how one source type is read* behind a single method
-(ADR-0002, ADR-0005):
+(ADR-0002, ADR-0011):
 
 ```python
 class Reader(Protocol):
@@ -346,7 +346,7 @@ dual of the Sqlite Writers — it opens through the shared `connect` factory, so
 it inherits the share-tolerant settings (ADR-0001) and can read a subject's own
 layer **or** another subject's read-only Reference Data medallion (joined in
 Python — ADR-0002). `SasReader` and `SharePointReader` follow the same `read()`
-shape but reach a remote source whose client is **stubbed for now** (ADR-0004);
+shape but reach a remote source whose client is **stubbed for now** (ADR-0012);
 see [Remote feeds (SAS, SharePoint)](#remote-feeds-sas-sharepoint) below.
 
 ## 2. Compose the pipeline and land it
@@ -399,7 +399,7 @@ path) and SharePoint (**Subscription Edition on-prem**; the connection drops in
 from a separate repo). Their Readers keep the same `read() -> Dataset` shape,
 but the remote behaviour — shelling to `ssh`/`scp`, calling the SharePoint list
 API — sits behind a **swappable seam in `tools.integrations.remote` that is stubbed
-today** (ADR-0004, ADR-0005). The on-prem SE auth (NTLM/Kerberos/REST — **not**
+today** (ADR-0012, ADR-0011). The on-prem SE auth (NTLM/Kerberos/REST — **not**
 Azure AD/Graph) is a client-seam concern designed once for both directions, and
 keeping it behind the seam keeps the cross-platform constraint (Windows + macOS)
 the framework's, not the caller's. Because the remote step is a seam, the whole
@@ -446,7 +446,7 @@ Configured with the SharePoint `site` URL, `list_name`, and `auth` config; on
 the `(site, list_name, auth)` config verbatim. Two fetchers ship:
 
 - **`StubbedSharePointFetcher`** (the default): the real on-prem SE client is
-  deferred (NTLM/Kerberos/REST auth out of scope — ADR-0004), so `read()` raises
+  deferred (NTLM/Kerberos/REST auth out of scope — ADR-0012), so `read()` raises
   `NotImplementedError` rather than pretending to reach the network.
 - **`LocalCsvFetcher(path)`**: an offline fetcher backed by a local CSV fixture;
   it ignores the SharePoint config and reads the file, so the read path is

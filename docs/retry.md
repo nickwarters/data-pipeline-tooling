@@ -42,7 +42,7 @@ policy = RetryPolicy(
   never retried.
 - `attempts` bounds the tries; after the last one the transient error is
   re-raised, so an edge that stays down still aborts the run (fail-fast,
-  [ADR-0007](adr/0007-fail-fast-atomic-runs-jsonl-observability.md)).
+  [ADR-0005](adr/0005-fail-fast-atomic-runs-and-observability.md)).
 - `backoff_seconds` is slept between attempts through an injectable `sleep`,
   keeping the wait cross-platform and tests fast.
 
