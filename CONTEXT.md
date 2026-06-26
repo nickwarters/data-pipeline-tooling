@@ -115,7 +115,7 @@ A **Feed**'s landed column set changing run-over-run — an owner-controlled sou
 _Avoid_: schema change, schema mismatch (use the precise term)
 
 **Schema Breach**:
-Data violating a Case Type's declared **Schema** (a missing column or wrong dtype) at the **silver** or **gold** boundary — a hard, fail-fast abort (ADR-0005/0008), not a warning. Contrast **Schema Drift**: drift is a soft, run-over-run *change* signal at raw; a breach is a hard *contract* violation downstream.
+Data violating a Case Type's declared **Schema** (a missing column or wrong dtype) at the **silver** or **gold** boundary — a hard, fail-fast abort (ADR-0005, ADR-0006), not a warning. Contrast **Schema Drift**: drift is a soft, run-over-run *change* signal at raw; a breach is a hard *contract* violation downstream.
 _Avoid_: drift, schema error
 
 ## Engineering vocabulary (cross-cutting)
@@ -131,7 +131,7 @@ A place where you can change behaviour without editing code *at* that place
 can be substituted without the other noticing. _Here_: pandas lives **behind the
 `Dataset` seam** (`from_pandas`/`to_pandas`) so the engine is swappable
 (ADR-0002); `.with_processor` is the processing seam; the
-**dataclass→validator adapter** is the seam to Pydantic-later (ADR-0011/0008).
+**dataclass→validator adapter** is the seam to Pydantic-later (ADR-0011, ADR-0006).
 
 **Edge**:
 Where the system meets something outside itself — external I/O, or the
