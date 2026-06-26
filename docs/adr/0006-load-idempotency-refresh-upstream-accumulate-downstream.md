@@ -78,6 +78,26 @@ Consequences:
   starting profile** for a simple current-state feed whose source is
   non-destructive; it is just no longer the only profile.
 
+## Amendment (2026-06-26): Writer/Reader are protocols — the Store is one factory, not the exclusive mechanism; strategy set has grown
+
+The 2026-06-01 amendment stated strategy as "Refresh() (truncate + reload) or AccumulateByRun(run_id, load_date)." That list is now incomplete and the framing was too Store-centric on two counts.
+
+**Strategy set.** Five strategies exist, all in `framework.io`:
+
+| Strategy | Behaviour |
+|---|---|
+| `Refresh` | Truncate + reload each run — current-state snapshot |
+| `AccumulateByRun` | Accumulate rows stamped by `run_id` / `load_date` / `execution_id`; idempotent via delete-by-run then insert |
+| `UpsertStrategy(key_columns)` | Merge by key: matching rows replaced, new rows inserted, unmatched rows untouched |
+| `InsertOrIgnore` | Append; silently skip rows that conflict with existing table constraints |
+| `InsertIfAbsent(key_columns)` | Reference/dimension load: insert new keys only, mint compact integer surrogates, never update existing rows |
+
+`Store.writer(layer, table, strategy)` dispatches on these types and returns the corresponding SQLite Writer. `CsvWriter`, `ExcelWriter`, and `JsonWriter` also accept `Refresh | AccumulateByRun | InsertOrIgnore` directly — the same strategy vocabulary applies to file-backed writers without the Store.
+
+**Writer/Reader are protocols; the Store is one factory.** `Writer` and `Reader` are structural protocols (`write(dataset) -> None` / `read() -> Dataset`). A pipeline accepts any conforming object — `store.writer()` outputs, file-based writers, test doubles (`RecordingWriter`), remote writers (`SharePointWriter`), or custom implementations. The DAG builder's write nodes are wired at call time with whatever the pipeline author injects; the framework places no constraint on the source of those objects. The Store is the standard SQLite-medallion factory for the `<subject>/<layer>.db` files; it is not the exclusive write mechanism.
+
+**Business code is the configuration point.** The pipeline author (in `pipelines/`) decides what strategy to instantiate, whether to use the Store or a file-based writer, and what to inject into the DAG builder. The framework defines the strategy types and the Writer/Reader protocols; it does not prescribe which combination a given feed uses.
+
 ## Amendment (2026-06-07): RunContext separates execution identity from logical idempotency identity
 
 Pipeline execution now has one shared `RunContext` carrying:
