@@ -1,6 +1,6 @@
 # The Selection flow — CaseType / Variation, CasePool, SelectionPool
 
-The domain capstone (#11) ties the primitives the earlier slices built into the
+The domain capstone ties the primitives the earlier slices built into the
 full per-Case-Type path the framework exists to make routine: a source feed is
 **ingested** into a Case Type's medallion, surfaced as a **CasePool**, then
 **Selection** narrows it into the **SelectionPool** written to gold. This doc
@@ -192,8 +192,8 @@ Selecting *which advisers' Cases get reviewed* is itself a governed act that wil
 be challenged after the fact ("why wasn't this adviser picked up last quarter?").
 But `Filter`/`Score`/`JoinWith`/`AntiJoinWith` **silently drop** the Cases they
 exclude (ADR-0002 plain-Python callables), leaving no trace.
-`.explain(writer, id_column=…)` closes that gap (#53): it is the
-eligibility-stage twin of `.quarantine()` (#50) — the same *route aside with a
+`.explain(writer, id_column=…)` closes that gap: it is the
+eligibility-stage twin of `.quarantine()` — the same *route aside with a
 reason, never silently drop* shape, pointed at
 **eligibility** rather than **validity** (ADR-0008).
 
@@ -242,7 +242,7 @@ run's `explain` step logs the governance counts —
 considered / selected / excluded (see [`run-log-format.md`](run-log-format.md)).
 
 Explainability is the trace of *one run*. Re-deriving what Selection *would* have
-picked "as of" a past date (reproducibility against accumulated silver — #38) is a
+picked "as of" a past date (reproducibility against accumulated silver) is a
 separate concern, deferred to a follow-up.
 
 ## End to end — the runnable demo

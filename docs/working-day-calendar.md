@@ -9,7 +9,7 @@ behaves identically on Windows and macOS.
 
 It is deliberately **not a Feed**: cross-cutting Reference Data lives in
 per-subject medallions, but the working-day calendar is seeded from config, not
-ingested (ADR-0001 amendment; `CONTEXT.md` Reference Data note).
+ingested (ADR-0001; `CONTEXT.md` Reference Data note).
 
 ## Construction (the config)
 

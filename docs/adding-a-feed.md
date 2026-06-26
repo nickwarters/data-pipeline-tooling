@@ -8,7 +8,7 @@ engine code is needed for the source types that already ship.
 ## 0. Scaffold the feed (the quickest start)
 
 For a fresh CSV feed, generate a runnable starting point instead of writing the
-files by hand (#97):
+files by hand:
 
 ```sh
 python -m cli scaffold orders            # -> pipelines/orders/ + tests/pipelines/test_orders.py
@@ -46,7 +46,7 @@ pipelines/orders` imports `pipelines.orders.pipeline` and executes
   bad rows into a quarantine dataset (`SchemaValueRulePartitioner`), and validates
   the declared schema (`SchemaValidator`).
 - **`gold_builder`** is a passthrough to start — reads silver, writes gold — with
-  a `TODO` to build the assembly (it's per-feed and an open decision, #163).
+  a `TODO` to build the assembly (it's per-feed and an open decision).
 
 `run()` wires the real `CsvReader` and the subject's layer Writers (deriving the
 raw/silver `AccumulateByRun` strategy from the `RunContext`, so re-drives under
@@ -136,7 +136,7 @@ The generic scaffold above refines source → raw → silver → gold but is
 **case-review-agnostic** — silver enforces only the declared schema and gold is a
 plain passthrough; there's no Case identity (a Feed isn't necessarily a Case Type
 — Reference Data feeds are ordinary Feeds with no Case identity). When the feed's
-rows *are* a Case Type, reach for the additive variant instead (#155):
+rows *are* a Case Type, reach for the additive variant instead:
 
 ```sh
 python -m cli scaffold --case-type claims   # -> pipelines/claims/ + tests/pipelines/test_claims.py
@@ -169,7 +169,7 @@ tests/pipelines/
 **It deliberately stops at silver.** How accumulated silver is reduced or
 assembled into **gold** — a single-feed current reduce, a multi-feed *join*
 enriching one Case Type, Detail Tables — is unique per Case Type and is an open
-design decision (snapshot-vs-join, single- vs multi-feed — issue #163), so the
+design decision (snapshot-vs-join, single- vs multi-feed), so the
 gold step is left to you rather than baked into the template. `pipeline.py`
 sketches it as a commented seam with pointers to `ingest_silver_to_gold` (the
 single-feed current-gold reduce) and, for repeated sections / child rows,
@@ -367,7 +367,7 @@ raw = p.read(ExcelReader("feed.xlsx", sheet="cases"), name="read")
 gated = p.validate(ColumnValidator(["case_id"]), raw, name="columns")  # optional: gate input
 # optional: warn (don't abort) when the source's columns drift from the
 # prior run's landed set — catches owner-controlled schema change at the
-# door (#51). First run has no prior, so it's a clean no-op.
+# door. First run has no prior, so it's a clean no-op.
 checked = p.validate(
     SchemaDriftValidator(store.columns_of(RAW, "cases")),
     gated,
@@ -481,7 +481,7 @@ fake pusher and never touch the network.
 The Deliverable is emitted by a **second pipeline** that reads the gold
 SelectionPool and writes here (`SqliteReader(gold, "selection_pool")` →
 `SharePointWriter`) — consistent with ADR-0009's single-Writer pipelines over a
-shared source, not a mid-run checkpoint (CONTEXT.md, #48):
+shared source, not a mid-run checkpoint (CONTEXT.md):
 
 ```python
 from framework.io import Refresh, SqliteReader

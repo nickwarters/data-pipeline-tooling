@@ -6,7 +6,7 @@ The framework is import-only, but it is also runnable as a tool:
 operator side is a small command surface for the everyday tasks that would
 otherwise need a hand-written wrapper script: **run** a
 pipeline by its path, **orchestrate** scheduled due work, check its **status**,
-list recent **runs**, and inspect a run **log** (issue #99). It is a thin shell
+list recent **runs**, and inspect a run **log**. It is a thin shell
 over the public `framework.run` runtime surface (`run_pipeline`,
 `Orchestrator`) and the `RunLog` / `RunRegistry` observability seam —
 everything stays local SQLite + JSONL, with no external services
@@ -95,8 +95,7 @@ is non-zero — same fail-fast contract as a real run, without writing anything.
 A run's **logical run id** is the idempotency key for its accumulated rows: a
 re-run under the *same* logical id replaces that run's rows rather than adding
 duplicates, while each execution stays individually traceable by its own
-`execution_id` ([ADR-0004](adr/0004-per-feed-load-strategy-owned-by-writer.md),
-#77). When omitted it defaults to `<pipeline>:run_date`, so re-running a
+`execution_id` ([ADR-0004](adr/0004-per-feed-load-strategy-owned-by-writer.md)). When omitted it defaults to `<pipeline>:run_date`, so re-running a
 given date is already idempotent.
 
 Pass `--logical-run-id` to re-drive a specific business run explicitly — for
@@ -152,7 +151,7 @@ has settled or the idle poll limit is reached.
 
 > **Note:** when `run` moved to path-addressing, the demo's `--app` orchestration
 > wiring (`build_runner()` / `build_pipeline_sets()`) was removed; re-expressing
-> orchestrate's schedules over path-addressed pipelines is tracked in issue #197.
+> orchestrate's schedules over path-addressed pipelines is a known follow-up.
 > The command and its `--app` contract are unchanged for a real application that
 > still supplies a registry module.
 
@@ -234,7 +233,7 @@ consulting run history or calling any handler — it is a pure projection of
 planned per-file runs.
 
 > **Note:** CLI dry-run support for the `run` and `orchestrate` commands (passing
-> `--dry-run` / `--plan` on the command line) is tracked separately in issue #195.
+> `--dry-run` / `--plan` on the command line) is a known follow-up.
 
 ## `status` — the latest run per pipeline
 

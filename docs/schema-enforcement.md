@@ -1,8 +1,8 @@
 # Schema enforcement & what "silver" means
 
-This documents the `Schema` + `SchemaValidator` adapter (#7) and the
+This documents the `Schema` + `SchemaValidator` adapter and the
 `SchemaCoercion` processor that repairs raw's round-trip-lossy types ahead of the
-validator (#23), plus how they compose onto a `Pipeline` to enforce the schema at
+validator, plus how they compose onto a `Pipeline` to enforce the schema at
 the silver boundary. For the *why*, see
 [ADR-0006](adr/0006-graduated-schema-enforcement.md); for the surrounding
 primitives, [core-primitives.md](core-primitives.md).
@@ -195,10 +195,10 @@ before the gold write. Two deliberate differences from the silver hop:
 A breach raises at the validate step, before the writer runs (ADR-0005) — so a
 failed run writes no gold and leaves prior gold intact. How accumulated silver is
 assembled into gold is an application concern (the `case_review.gold` helpers, and
-the open snapshot-vs-join decision in #163); see
+the open snapshot-vs-join decision); see
 [`gold-accumulation.md`](gold-accumulation.md).
 
-## Value-level rules — format / length / uniqueness / value-set (#24)
+## Value-level rules — format / length / uniqueness / value-set
 
 Columns + dtypes check a column's *shape*; **value-level rules** check its
 *contents*. They extend the **same** Case Type dataclass — attached to a field
@@ -221,10 +221,10 @@ class CaseA:
 ```
 
 A field can carry **several** rules (they all run), or none — a bare
-`opened: date` keeps the exact columns+dtypes behaviour from #7, so the plain
+`opened: date` keeps the exact columns+dtypes behaviour, so the plain
 path is untouched.
 
-## Nullability — nullable by default, non-null when declared (#90)
+## Nullability — nullable by default, non-null when declared
 
 Nullability is field-level schema metadata, declared with the same
 `typing.Annotated` form as value rules:
@@ -277,7 +277,7 @@ Three shared properties:
 ### One message, naming column + rule
 
 Value-rule breaches join the dtype/column breaches in the validator's **single**
-located message (the "report at once" contract from #7), each naming its column
+located message (the "report at once" contract), each naming its column
 and rule:
 
 ```
@@ -297,9 +297,9 @@ breach raises at the post-validate step **before** the writer runs — so the ru
 aborts fail-fast and atomically (ADR-0005) and nothing partial lands. `Unique`
 here is the field-annotation form of uniqueness; the one-row-per-Case *grain*
 on a (possibly composite) key stays the job of `UniqueValidator` at the gold
-boundary (#37, ADR-0009).
+boundary (ADR-0009).
 
-## Row checks — relationships *between* a row's fields (#183)
+## Row checks — relationships *between* a row's fields
 
 A value rule is **vertical**: one column across many rows, handed a `Series`. A
 **row check** is **horizontal**: one row across many fields — the relationship
