@@ -88,8 +88,12 @@ class StrictCsvReader:
     What it guarantees:
 
     - Quoted fields may contain the delimiter, ``CR``/``LF`` line breaks, and
-      the quote character itself (written doubled). Everything between the
-      opening and closing quote is taken verbatim.
+      the quote character itself. By default the quote is escaped by *doubling*
+      (``""``) per RFC 4180; pass ``escapechar`` (e.g. ``"\\"``) for the dialect
+      that escapes it with a preceding character instead — then the escapechar
+      removes the special meaning of the character that follows it (``\\"`` is a
+      literal quote, ``\\\\`` a literal backslash) and quote-doubling is off.
+      Everything between the opening and closing quote is taken verbatim.
     - ``CRLF``, lone ``LF``, and lone ``CR`` each terminate a record when they
       appear outside quotes (Windows/macOS/old-Mac line endings all parse);
       inside a quoted field they are preserved verbatim as data.
@@ -115,16 +119,20 @@ class StrictCsvReader:
         *,
         delimiter: str = ",",
         quotechar: str = '"',
+        escapechar: str | None = None,
         encoding: str = "utf-8-sig",
     ) -> None:
         if len(delimiter) != 1:
             raise ValueError("delimiter must be a single character")
         if len(quotechar) != 1:
             raise ValueError("quotechar must be a single character")
+        if escapechar is not None and len(escapechar) != 1:
+            raise ValueError("escapechar must be a single character")
         self._path = Path(path)
         self._columns = columns
         self._delimiter = delimiter
         self._quotechar = quotechar
+        self._escapechar = escapechar
         self._encoding = encoding
 
     def read(self) -> Dataset:
@@ -133,7 +141,9 @@ class StrictCsvReader:
         # an embedded CRLF survive inside a quoted field.
         with self._path.open(encoding=self._encoding, newline="") as handle:
             text = handle.read()
-        records = _parse_strict_csv(text, self._delimiter, self._quotechar)
+        records = _parse_strict_csv(
+            text, self._delimiter, self._quotechar, self._escapechar
+        )
         if not records:
             frame = pd.DataFrame()
             return Dataset.from_pandas(frame)
@@ -163,17 +173,25 @@ class StrictCsvReader:
             columns=self._columns,
             delimiter=self._delimiter,
             quotechar=self._quotechar,
+            escapechar=self._escapechar,
             encoding=self._encoding,
         )
 
 
-def _parse_strict_csv(text: str, delimiter: str, quotechar: str) -> list[list[str]]:
+def _parse_strict_csv(
+    text: str,
+    delimiter: str,
+    quotechar: str,
+    escapechar: str | None = None,
+) -> list[list[str]]:
     """Tokenise CSV text into records of string fields, one character at a time.
 
-    A small four-state walk (in/out of a quoted field, with one character of
-    look-ahead to fold a doubled quote): an unquoted delimiter ends a field, an
-    unquoted ``CR``/``LF``/``CRLF`` ends a record, and anything inside quotes —
-    including delimiters and line breaks — is data. Raises
+    A small state walk (in/out of a quoted field): an unquoted delimiter ends a
+    field, an unquoted ``CR``/``LF``/``CRLF`` ends a record, and anything inside
+    quotes — including delimiters and line breaks — is data. The quote character
+    inside a quoted field is escaped either by *doubling* (``""``, the RFC 4180
+    default) or, when ``escapechar`` is given, by a preceding ``escapechar``
+    which strips the special meaning of whatever character follows it. Raises
     :class:`StrictCsvParseError` on a quote that never closes.
     """
     records: list[list[str]] = []
@@ -185,9 +203,21 @@ def _parse_strict_csv(text: str, delimiter: str, quotechar: str) -> list[list[st
     n = len(text)
     while i < n:
         ch = text[i]
+        if escapechar is not None and ch == escapechar:
+            # The escapechar removes any special meaning from the next character
+            # (quote, delimiter, line break, or the escapechar itself); a
+            # trailing escapechar with nothing after it stays a literal.
+            if i + 1 < n:
+                field.append(text[i + 1])
+                i += 2
+            else:
+                field.append(ch)
+                i += 1
+            field_started = True
+            continue
         if in_quotes:
             if ch == quotechar:
-                if i + 1 < n and text[i + 1] == quotechar:
+                if escapechar is None and i + 1 < n and text[i + 1] == quotechar:
                     field.append(quotechar)  # doubled quote -> one literal quote
                     i += 2
                     continue
