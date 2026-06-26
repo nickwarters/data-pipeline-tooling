@@ -141,7 +141,11 @@ type inference). `StrictCsvReader(path)` reads one source CSV file too, but
 parses it **character by character** through a hand-written RFC 4180 state
 machine for feeds that honour the CSV grammar yet trip pandas / the stdlib
 `csv` module — a quoted field containing the delimiter, an embedded newline, or
-the quote character itself written doubled (`""`). It accepts `CR`/`LF`/`CRLF`
+the quote character itself written doubled (`""`). For the dialect that escapes
+an inner quote with a preceding character instead of doubling it, pass
+`escapechar` (e.g. `StrictCsvReader(path, escapechar="\\")` for `\"`): the
+escapechar then strips the special meaning of the character that follows it and
+quote-doubling is off. It accepts `CR`/`LF`/`CRLF`
 record endings (preserving line breaks *inside* quoted fields verbatim),
 tolerates a BOM, lands every value as faithful **text** (no type inference —
 dtype decisions stay with silver's `SchemaCoercion`), and raises a located
