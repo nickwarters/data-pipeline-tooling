@@ -213,7 +213,7 @@ reading.
 
 ### `Store` / `StoreCatalog` — subject medallions, minted from shared configuration
 `Store(subject_dir, busy_timeout_ms=5000)` is the mouth of **one subject's**
-medallion (a Case Type or a Reference Data set — ADR-0001 amendment): its three
+medallion (a Case Type or a Reference Data set — ADR-0001): its three
 files `<subject_dir>/{raw,silver,gold}.db`, isolated from every other subject's.
 It holds **no business logic** (ADR-0002) and makes **no** load decision
 (ADR-0003) — it merely mints the layer-appropriate component:

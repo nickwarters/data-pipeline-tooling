@@ -111,9 +111,8 @@ consumption/grain boundary
 ([ADR-0009](adr/0009-case-identity-and-gold-grain.md)).
 
 > **Load strategy is per-feed, owned by the Writer** — the Store maps `layer →
-> location` only ([ADR-0004](adr/0004-per-feed-load-strategy-owned-by-writer.md)
-> amendment). "Refresh upstream / accumulate downstream" is a common profile,
-> not a framework law. The **Ingest** profile is moving to *history-upstream /
+> location` only ([ADR-0004](adr/0004-per-feed-load-strategy-owned-by-writer.md)). "Refresh upstream / accumulate downstream" is a common profile,
+> not a framework law. The **Ingest** profile is *history-upstream /
 > current-gold* (raw + silver accumulate the change-over-time record; gold
 > reduces to one current row per Case). See the deep docs below for what has
 > landed vs. what is decided-not-yet-built.

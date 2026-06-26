@@ -108,7 +108,7 @@ The retrieval:
 
 It returns the bulk-tier `Dataset` (the carrier), which flows straight into the
 Selection pipeline. Surfacing fully typed `Case` objects is the
-**typed-on-demand** edge ADR-0002 reserves for a later slice — the *concept* of
+**typed-on-demand** edge at the domain layer (ADR-0002) — the *concept* of
 the retrieval is the deliverable here, not a mandated signature.
 `fetch_available_cases` is illustrative; a Case Type may name its own retrievals.
 

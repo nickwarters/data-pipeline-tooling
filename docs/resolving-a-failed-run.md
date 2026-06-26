@@ -98,8 +98,7 @@ Pick by *why* it failed; they are not interchangeable.
    test, not a re-run.
 
 > **Destructive sources can't be re-pulled.** Where the source is a current-state
-> system that overwrites ([ADR-0004](adr/0004-per-feed-load-strategy-owned-by-writer.md)
-> amendment), option 1 isn't available — you can't re-fetch yesterday. Resolve
+> system that overwrites ([ADR-0004](adr/0004-per-feed-load-strategy-owned-by-writer.md)), option 1 isn't available — you can't re-fetch yesterday. Resolve
 > with a **correction batch** (below) against the raw/silver you already
 > accumulated, or with options 2–4.
 
