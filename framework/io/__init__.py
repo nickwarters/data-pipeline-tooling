@@ -22,6 +22,8 @@ from framework.io.readers import (
     GlobCsvReader,
     Reader,
     SqliteReader,
+    StrictCsvParseError,
+    StrictCsvReader,
 )
 from framework.io.store import (
     DirectoryStoreBackend,
@@ -54,6 +56,8 @@ __all__ = [
     "Reader",
     "DatasetReader",
     "CsvReader",
+    "StrictCsvReader",
+    "StrictCsvParseError",
     "GlobCsvReader",
     "ExcelReader",
     "SqliteReader",

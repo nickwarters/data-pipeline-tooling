@@ -310,7 +310,8 @@ Concrete Readers that ship:
 
 | Reader | Source | Construct with |
 |--------|--------|----------------|
-| `CsvReader(path)` | A CSV file | the file path |
+| `CsvReader(path)` | A CSV file (pandas, with type inference) | the file path |
+| `StrictCsvReader(path)` | A CSV file that honours the RFC 4180 grammar but defeats pandas / the stdlib `csv` module (embedded delimiters, embedded newlines, doubled-quote escapes) | the file path |
 | `GlobCsvReader(directory, pattern)` | Many local CSV files that together form one Feed snapshot | directory path + glob pattern |
 | `ExcelReader(path, sheet=0)` | One worksheet of an `.xlsx` workbook | path + sheet **name or zero-based index** (default the first sheet) |
 | `SqliteReader(db_path, table)` | One table of a SQLite layer db | db path + table name |
@@ -324,6 +325,17 @@ validated, processed, written, and failed as one logical Feed snapshot. If no
 files match, it raises `FileNotFoundError` naming the directory and pattern;
 `columns=[...]` projects columns with the same pandas `usecols` behavior as
 `CsvReader`.
+
+`StrictCsvReader` parses the file **character by character** through a
+hand-written RFC 4180 state machine instead of delegating to pandas, so a
+grammar-correct feed that pandas mis-tokenises (a quoted field carrying the
+delimiter, a newline, or a doubled `""` quote) round-trips faithfully. It
+accepts `CR`/`LF`/`CRLF` line endings (line breaks inside a quoted field are
+kept verbatim), tolerates a BOM, lands every value as **text** (no type
+inference — leave dtype to silver's `SchemaCoercion`), supports the same
+`columns=[...]` projection, and raises a located `StrictCsvParseError` on a
+ragged record or an unterminated quote. Reach for it when `CsvReader` mangles a
+source that is, in fact, valid CSV.
 
 `ExcelReader` reads `.xlsx` via pandas + **openpyxl** (a pure-Python,
 cross-platform engine; in `requirements.txt`). `SqliteReader` is the read-side
