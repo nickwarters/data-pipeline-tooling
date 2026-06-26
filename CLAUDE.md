@@ -55,9 +55,8 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `Writer` (`write(dataset) -> None`; owns target location + load strategy —
   added by #14), `Store` (per-subject medallion that mints the layer's
   Writers/Readers over `<subject>/{raw,silver,gold}.db` — #15; `connect` factory
-  now in `framework._internal.connection`), `Pipeline` (deferred fluent builder;
-  `.write_to(writer)` composes, `.run()` executes — replaced `.to(layer)` in
-  #14).
+  now in `framework._internal.connection`), `Pipeline` (deferred DAG builder; nodes wired by `.read` / `.transform` /
+  `.validate` / `.write` and executed in topological order at `.run()`).
 
 ### Commands
 
