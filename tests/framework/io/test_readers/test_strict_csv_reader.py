@@ -161,3 +161,67 @@ def test_describe_reports_config():
 
     assert summary.startswith("StrictCsvReader(")
     assert "case_id" in summary
+
+
+def test_backslash_escapechar_unescapes_quote_inside_quoted_field(tmp_path):
+    src = tmp_path / "backslash.csv"
+    # A quote inside the quoted field is escaped by a preceding backslash, not
+    # by doubling: "She said \"hi\"".
+    src.write_text('case_id,note\nC001,"She said \\"hi\\""\n', encoding="utf-8")
+
+    rows = _rows(StrictCsvReader(src, escapechar="\\").read())
+
+    assert rows == [{"case_id": "C001", "note": 'She said "hi"'}]
+
+
+def test_backslash_escapechar_unescapes_a_literal_backslash(tmp_path):
+    src = tmp_path / "backslash_lit.csv"
+    src.write_text('a\n"a\\\\b"\n', encoding="utf-8")
+
+    rows = _rows(StrictCsvReader(src, escapechar="\\").read())
+
+    # \\ -> one literal backslash.
+    assert rows == [{"a": "a\\b"}]
+
+
+def test_escaped_quote_does_not_close_the_field(tmp_path):
+    src = tmp_path / "midfield.csv"
+    # The escaped quote must not terminate the field; the real comma and the
+    # closing quote still delimit it.
+    src.write_text('a,b\n"x\\"y",z\n', encoding="utf-8")
+
+    rows = _rows(StrictCsvReader(src, escapechar="\\").read())
+
+    assert rows == [{"a": 'x"y', "b": "z"}]
+
+
+def test_escapechar_disables_doubled_quote_escaping(tmp_path):
+    src = tmp_path / "no_doubling.csv"
+    # With escapechar set, "" is NOT a doubled-quote escape: the first quote
+    # closes the field and the second opens a new (empty) quoted region.
+    src.write_text('a,b\n"x""y",z\n', encoding="utf-8")
+
+    rows = _rows(StrictCsvReader(src, escapechar="\\").read())
+
+    assert rows == [{"a": "xy", "b": "z"}]
+
+
+def test_doubled_quote_still_default_without_escapechar(tmp_path):
+    src = tmp_path / "default.csv"
+    src.write_text('a\n"x""y"\n', encoding="utf-8")
+
+    rows = _rows(StrictCsvReader(src).read())
+
+    # Regression guard: the RFC 4180 doubled-quote default is unchanged.
+    assert rows == [{"a": 'x"y'}]
+
+
+def test_multi_character_escapechar_raises():
+    with pytest.raises(ValueError, match="escapechar must be a single character"):
+        StrictCsvReader(FIXTURE, escapechar="\\\\")
+
+
+def test_describe_reports_escapechar(tmp_path):
+    summary = StrictCsvReader(tmp_path / "x.csv", escapechar="\\").describe()
+
+    assert "escapechar" in summary
