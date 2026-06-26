@@ -1,4 +1,4 @@
-# Testing helpers for pipeline authors (#94)
+# Testing helpers for pipeline authors
 
 `tests.framework_testing` is a small, **test-only** surface that makes a concrete
 pipeline script easy to test — without hand-wiring temp directories, SQLite

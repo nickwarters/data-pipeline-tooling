@@ -3,14 +3,14 @@
 This documents the concrete `Processor` primitives in `framework.transform.processors`.
 They fall into two workload families:
 
-- **Selection narrowing** (#9, #166) — `Filter`, `Score`,
+- **Selection narrowing** — `Filter`, `Score`,
   `VectorizedFilter`, `VectorizedDerive`, `Sort`, `Rename`, `Stamp`, `JoinWith`,
   and `AntiJoinWith`,
   the cross-feed join/exclusion gates that consume explicit read-only
   dependencies. The Selection Pipeline reads the **CasePool**, narrows and ranks
   it, joins in Reference Data, filters exclusion lists, and emits the
   **SelectionPool**.
-- **Ingest & fan-out reshaping** (#35, #36, #39, #153) — `SelectColumns`, `DropColumns`, `Unpivot`,
+- **Ingest & fan-out reshaping** — `SelectColumns`, `DropColumns`, `Unpivot`,
   `DeriveKey`, `LatestPerKey`: the transforms that fan one wide feed into a Case
   table and its Detail Tables, derive the deterministic `case_id`, and reduce
   accumulated history to current-state gold (ADR-0009).
@@ -47,7 +47,7 @@ The sections below cover the **Selection** transforms first (the
 `filter/score/sort/join` of `CONTEXT.md`): the Selection Pipeline reads the
 **CasePool**, narrows and ranks it, joins in Reference Data, and emits the
 **SelectionPool**. The **Ingest & fan-out** transforms follow. The
-`SchemaCoercion` processor (#23) is documented separately —
+`SchemaCoercion` processor is documented separately —
 [schema-enforcement.md](schema-enforcement.md).
 
 Pipeline authors may also define small, pipeline-local processors when the
@@ -167,7 +167,7 @@ filter has already matched nothing.
 An optional `name=` labels the eligibility gate so Selection explainability can
 record *which* filter excluded a Case — `Filter(high_value_case,
 name="high-value")`. Unnamed filters still work; see
-[`selection.md`](selection.md) for the per-Case trace (#53).
+[`selection.md`](selection.md) for the per-Case trace.
 
 ### `Score` — rank the rows
 
@@ -309,7 +309,7 @@ JoinWith(reference, on="adviser", how="inner")
   `left`/`right`/`outer`, or `cross`.
 - `name=` (optional) — labels the join so Selection explainability records a Case
   an *inner* join drops as excluded by this join, rather than silently absent
-  (#53; see [`selection.md`](selection.md)).
+  (see [`selection.md`](selection.md)).
 
 ### Explicit dependencies
 
@@ -393,7 +393,7 @@ Python. The store never performs the join. The result is the bulk-tier `Dataset`
 the Selection Pipeline would accumulate into gold as the SelectionPool (via an
 `AccumulateByRun` gold write — see [gold-accumulation.md](gold-accumulation.md)).
 
-The domain capstone (#11, landed) composes these processors into a Case Type's
+The domain capstone composes these processors into a Case Type's
 full Selection flow — `CaseType`/`Variation` + `CasePool` → `SelectionPool`,
 stamping the Variation's `question_bank_id` onto the chosen Cases. See
 [`selection.md`](selection.md).
@@ -403,7 +403,7 @@ stamping the Variation's `question_bank_id` onto the chosen Cases. See
 The transforms above narrow the CasePool *into* the SelectionPool. The four
 below sit on the other side of the medallion: **Ingest**, where one wide source
 feed (650+ columns) is fanned out into a Case table and zero or more **Detail
-Tables**, each a single-table pipeline over the shared raw table (#39, #35, #36;
+Tables**, each a single-table pipeline over the shared raw table (
 [ADR-0009](adr/0009-case-identity-and-gold-grain.md)). They are ordinary
 `Processor`s — same `process(dataset) -> Dataset` shape, same engine-confined,
 fail-fast contract — composed on the `raw → silver` and `silver → gold` builders.

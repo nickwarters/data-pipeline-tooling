@@ -1,4 +1,4 @@
-# The public API — what pipeline authors import (#95)
+# The public API — what pipeline authors import
 
 The framework is **import-only** (on `sys.path`, never `pip install`ed — see
 [CLAUDE.md](../CLAUDE.md) and *Packaging* below). This document is the contract
@@ -172,7 +172,7 @@ without notice:
 - `framework._internal.connection` (`connect`) — the connection factory seam (ADR-0001);
   used by Readers/Writers/Store, not by pipelines.
 - `framework.io.sql` (`quote_identifier`) — the single place a table/column name is
-  turned into a safely-quoted SQL identifier (issue #138); applied at every
+  turned into a safely-quoted SQL identifier; applied at every
   identifier interpolation across the SQLite seam, not imported by pipelines.
 - `framework.core.layers` (`layer_name`, `LAYERS`) — internal layer-name validation;
   the public layer surface is `Layer`/`RAW`/`SILVER`/`GOLD` via `framework.core`.
@@ -182,7 +182,7 @@ without notice:
   builder's internal ordered execution plan; inspected by `.describe()` and
   executed by `.run()`, not imported by pipeline scripts.
 - `framework._internal.describe` (`render`, `redact_url`) — shared helpers for the opt-in
-  `describe()` protocol (#145); a component implements `describe()` using these
+  `describe()` protocol; a component implements `describe()` using these
   to render its own safe plan summary, not imported by pipeline scripts.
 - `tools.integrations.remote` (`RemoteRunner`, `StubbedRemoteRunner`, `SharePointFetcher`,
   `SharePointPusher`,
@@ -238,7 +238,7 @@ support modules), not under `framework/` — see
 
 As a layer *above* the framework, `case_review` is a **plain facade consumer** —
 the same architectural position as `pipelines/` — so it imports the framework
-only through the runtime facades, and the boundary test holds it there (#159). The
+only through the runtime facades, and the boundary test holds it there. The
 two boundary tests are complementary: `test_framework_boundary.py` governs *where
 domain code lives*, while `test_public_api.py` governs *how `case_review` imports
 the framework*.

@@ -42,8 +42,8 @@ names are placeholders pending a domain rename — see CONTEXT.)
 | Layer  | Holds                                  | Load behaviour |
 |--------|----------------------------------------|----------------|
 | **raw** | A faithful, schema-light snapshot of the source as landed — the framework's landing zone. | **Full refresh** each run: truncate + reload from the source snapshot, so re-runs are deterministic (ADR-0004). |
-| silver | Validated, normalised data: the **schema boundary** — a Case Type's declared columns + dtypes are enforced here as a post-validator before the data lands (ADR-0006, #7). Normalising *coercion* (parsing dates, casting booleans) runs as a `process` step ahead of that check (#23). | Full refresh from raw. |
-| gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. A gold hop composes an explicit `Pipeline` whose Writer carries the load strategy (#8). | **Current-only** (ingest gold: `Refresh`, one row per Case) **or accumulating** (Selection / Sync: `AccumulateByRun`, stamped with logical run id / `load_date` and, when context-driven, `execution_id`; idempotent re-run via delete-by-logical-run then insert — ADR-0004; [gold-accumulation doc](gold-accumulation.md)). |
+| silver | Validated, normalised data: the **schema boundary** — a Case Type's declared columns + dtypes are enforced here as a post-validator before the data lands (ADR-0006, #7). Normalising *coercion* (parsing dates, casting booleans) runs as a `process` step ahead of that check. | Full refresh from raw. |
+| gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. A gold hop composes an explicit `Pipeline` whose Writer carries the load strategy. | **Current-only** (ingest gold: `Refresh`, one row per Case) **or accumulating** (Selection / Sync: `AccumulateByRun`, stamped with logical run id / `load_date` and, when context-driven, `execution_id`; idempotent re-run via delete-by-logical-run then insert — ADR-0004; [gold-accumulation doc](gold-accumulation.md)). |
 
 raw stays schema-light on purpose: it mirrors the source so the landing zone is
 faithful, and schema enforcement arrives at silver and gold (ADR-0006).
@@ -99,7 +99,7 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0006).
 > passes a shared `RunContext` into handlers, and `Requirement` predicates
 > block stale downstream runs from `RunRegistry` history without changing the
 > builder contract (`FreshnessRequirement` remains as a compatibility adapter)
-> (#61, #77, #242). **Value-level schema rules** have landed:
+>. **Value-level schema rules** have landed:
 > `Nullable` / `NonNull`, `Pattern`, `Length`, `Range`, `Unique`, `OneOf`, plus
 > row checks via `@row_checks(...)`. The domain capstone has landed as the
 > `case_review` application layer (`CaseType` / `Variation`, `CasePool`, and
@@ -235,7 +235,7 @@ Deliverables and SQLite tables:
   `Store.writer(layer, table, AccumulateByRun(...))` (#8;
   [gold-accumulation doc](gold-accumulation.md)).
 - `SqliteUpsertWriter(db_path, table, key_columns)` — **update-or-insert** by a
-  declared key set (#136): for each incoming row whose key already exists in the
+  declared key set: for each incoming row whose key already exists in the
   target the row is replaced; new keys are inserted; target rows whose key is
   absent from the incoming batch are preserved. The merge is a single atomic
   transaction. Minted by `Store.writer(layer, table, UpsertStrategy(...))`.
@@ -332,7 +332,7 @@ narrow seam (`RunHistory` / `PriorColumns`) for the run-over-run comparison:
   the *static* floor/ceiling; the **`VolumeAnomalyValidator`** below is its
   history-derived sibling.
 - `VolumeAnomalyValidator(history, pipeline, tolerance=…, floor=…)` — the
-  **volume-anomaly guardrail** (#54): catches a truncated source export where
+  **volume-anomaly guardrail**: catches a truncated source export where
   every row is individually valid yet thousands are missing — invisible to
   per-row checks, visible only run-over-run. It derives a baseline from the feed's
   **recent run history** (`history.recent_row_counts(pipeline)` — the median of
@@ -343,7 +343,7 @@ narrow seam (`RunHistory` / `PriorColumns`) for the run-over-run comparison:
   *successful* runs the relative band is skipped so first nights don't trip
   spuriously. `history` is any `RunHistory` — the `RunRegistry` is the production
   one. See [`RunRegistry`](#runregistry--the-run-history-that-ingests-the-jsonl).
-- `SchemaDriftValidator(prior)` — the **raw-boundary drift detector** (#51):
+- `SchemaDriftValidator(prior)` — the **raw-boundary drift detector**:
   warns (it does not abort) when a feed's incoming columns differ from the
   **prior run's landed columns**, catching an owner-controlled source silently
   adding/dropping a column *at the door*, one layer before it would surface as a
@@ -441,7 +441,7 @@ failure is always fail-fast (ADR-0005) — it raises and the run aborts.
 
 Two families of concrete processor ship now.
 
-**Schema coercion (#23).** `SchemaCoercion(schema)` — the write-side companion of
+**Schema coercion.** `SchemaCoercion(schema)` — the write-side companion of
 `SchemaValidator`, derived from the same Case Type dataclass. Where the validator
 *checks* dtypes, the coercer *repairs* the representation raw loses to storage,
 casting only the round-trip-lossy declared types — `date`/`datetime` (landed as
@@ -453,7 +453,7 @@ message naming the column. The raw→silver hop composes it ahead of the
 `SchemaValidator`, so the per-run order is **read → coerce (transform) →
 post-validate (schema) → write** (ADR-0006, #23).
 
-**Selection transforms (#9)** — the `filter/score/sort/join` of `CONTEXT.md`:
+**Selection transforms** — the `filter/score/sort/join` of `CONTEXT.md`:
 
 - `Filter(predicate)` / `Score(column, scorer)` — carry the business rule as a
   **plain-Python callable over a row mapping**, never SQL or a column DSL
@@ -471,7 +471,7 @@ post-validate (schema) → write** (ADR-0006, #23).
 - `Rename({old: new})` — align column vocabulary (e.g. agree a key name before a
   join); unnamed columns pass through.
 - `Stamp(column, value)` — write one constant column (the run-level
-  `question_bank_id` a Variation resolves), even onto an empty feed (#11).
+  `question_bank_id` a Variation resolves), even onto an empty feed.
 - `JoinDependency(name, source)` / `JoinWith(other, on=..., how="inner")` /
   `AntiJoinWith(other, on=...)` — cross-feed joins and exclusion-list gates.
   `other` is a read-only dependency (`JoinDependency`, `Reader`, or materialized
@@ -552,7 +552,7 @@ registry.recent_row_counts("cases", limit=10)          # read volumes, newest fi
 - **It is also a baseline source.** `recent_row_counts(pipeline, limit=…)` returns
   the read-step volumes of recent *successful* runs, newest first — the history a
   [`VolumeAnomalyValidator`](#validator--a-fail-fast-check-at-a-layer-boundary)
-  builds its band over (#54). Only `ok` runs count, so a run the guardrail itself
+  builds its band over. Only `ok` runs count, so a run the guardrail itself
   tripped can't poison the next night's baseline.
 
 Reading the JSONL needs no change to the emitter (ADR-0005); the one format
@@ -915,8 +915,7 @@ are omitted entirely — there are no `none` placeholders. Each step renders its
 own entry via its `plan_entry()` method, so adding a new step kind touches one
 place and `describe()` requires no changes.
 
-Each component renders its own summary through the opt-in `describe()` protocol
-(#145): a component implements `describe() -> str` to surface the config it
+Each component renders its own summary through the opt-in `describe()` protocol: a component implements `describe() -> str` to surface the config it
 chooses (the framework readers/writers/validators/processors/`RunLog` do,
 self-redacting any credentials — e.g. `SharePointReader` strips `user:pass@`
 from its site URL and never shows `auth`). A component without `describe()` is
@@ -981,7 +980,7 @@ before `from_date`, most-recent first, skipping weekends + holidays). Full
 config and boundary semantics in
 [`working-day-calendar.md`](working-day-calendar.md).
 
-## The case-review application/domain layer (#11)
+## The case-review application/domain layer
 
 Above the generic framework primitives sits the thin **case-review application
 layer**: the declarative Case Type objects and the `CasePool` that reads the

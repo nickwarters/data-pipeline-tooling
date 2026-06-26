@@ -1,8 +1,8 @@
 # Gold accumulation & what "gold" means
 
 This documents the **gold** layer's load semantics — the `AccumulateByRun`
-strategy introduced in #8: rows stamped `run_id` / `load_date`, accumulating
-across runs, with an idempotent re-run via *delete-by-run then insert*. For the
+strategy: rows stamped `run_id` / `load_date`, accumulating across runs, with an
+idempotent re-run via *delete-by-run then insert*. For the
 *why*, see [ADR-0004](adr/0004-per-feed-load-strategy-owned-by-writer.md);
 for the surrounding primitives, [core-primitives.md](core-primitives.md); for the
 domain terms (CasePool, SelectionPool, Review Outcomes), [`../CONTEXT.md`](../CONTEXT.md).
@@ -71,9 +71,10 @@ Stamping gold rows with a fresh-per-execution uuid would break idempotency: a
 re-run would never match prior rows and would silently duplicate history. So the
 `AccumulateByRun` strategy takes `run_id` / `load_date` as **caller-supplied**
 values — `AccumulateByRun.from_context(context)` derives them from the shared
-`RunContext` so `--logical-run-id` flows straight through. (Linking the two for
-lineage — having the run log *record* the gold `run_id` as metadata — is deferred
-to the run-registry, ADR-0011.)
+`RunContext` so `--logical-run-id` flows straight through. The two are *linked*
+without being unified: an accumulated row also carries `execution_id` (the run
+log's per-execution `run_id`), so an operator can correlate a logical load's rows
+back to the exact execution that wrote them via the `RunRegistry` (ADR-0004).
 
 ## How a changing record is represented across runs
 
@@ -184,12 +185,6 @@ Not every gold accumulates. **Ingest** gold is *current-only*: the
 row per Case (`DeriveKey → LatestPerKey → UniqueValidator → Refresh`), so its gold
 is a current snapshot, not a per-run history. **Selection** / **Sync** gold use
 `AccumulateByRun`, where history must survive. *Which* model a Case Type's gold
-takes — and how multiple feeds fan into it — is an open decision (snapshot-vs-join,
-#163); the `case_review.gold` helpers are where that assembly currently lives, in
-the application layer rather than the framework.
-
-## Not yet (follow-on tickets)
-
-- **Row→run lineage.** Recording the gold `run_id` / `load_date` as metadata on
-  the run log, linking an execution to the logical load it produced, lands with
-  the run-registry (ADR-0011).
+takes — and how multiple feeds fan into it (snapshot-vs-join) — is a per-Case-Type
+choice; the `case_review.gold` helpers are where that assembly lives, in the
+application layer rather than the framework (ADR-0013).
