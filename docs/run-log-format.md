@@ -94,8 +94,7 @@ One record per step, in execution order, then a final `run` summary:
 Opt-in steps appear only when their path is configured: `quarantine` (between
 `pre-validate` and the processors — ADR-0007, with `rows_quarantined`),
 `dependency:<name>` (a read-only join dependency materialized before the
-processor that consumes it), and `explain` (after `post-validate` — ADR-0005 amd
-02, with `rows_excluded`; its `rows_in`/`rows_out` are the Cases
+processor that consumes it), and `explain` (after `post-validate` — ADR-0008, with `rows_excluded`; its `rows_in`/`rows_out` are the Cases
 considered/selected by Selection). A `process` step is recorded per attached
 processor, so dependency reads are distinguishable from downstream join
 processing.

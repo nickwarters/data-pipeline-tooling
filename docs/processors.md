@@ -552,5 +552,5 @@ instance; each is independently validated and writes its own gold. See
 ## Not yet (follow-on tickets)
 
 - **Typed `Case` objects** at the domain edge: the CasePool returns the bulk-tier
-  `Dataset` today; materialising fully typed Cases on demand is reserved for a
-  later slice (ADR-0002).
+  `Dataset` today; materialising fully typed Cases on demand is the
+  typed-on-demand edge at the domain layer (ADR-0002).
