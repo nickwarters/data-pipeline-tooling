@@ -683,7 +683,7 @@ test('HttpSharePointClient: getCurrentUser returns id and displayName', async ()
   });
 
   const u = await client.getCurrentUser();
-  assert.equal(u.id, '42');
+  assert.equal(u.id, 'alice');
   assert.equal(u.displayName, 'Alice Reviewer');
 });
 
@@ -1034,6 +1034,120 @@ test('HttpSharePointClient: listCases with outcomeOverridden filters on the Outc
     url.includes('OutcomeOverridden eq 1'),
     'corrected-Case segment uses the indexed boolean column'
   );
+});
+
+test('HttpSharePointClient: listCases with responsibleParty filters server-side on ResponsiblePartyId', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [] }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.listCases({ responsibleParty: 'rp-user' });
+
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(
+    url.includes("ResponsiblePartyId eq 'rp-user'"),
+    'should filter on ResponsiblePartyId'
+  );
+});
+
+test('HttpSharePointClient: listCases with assignedReviewerManager filters server-side on AssignedReviewerManager', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [] }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.listCases({ assignedReviewerManager: 'mgr-user' });
+
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(
+    url.includes("AssignedReviewerManager eq 'mgr-user'"),
+    'should filter on AssignedReviewerManager'
+  );
+});
+
+test('HttpSharePointClient: getCase maps AssignedReviewerManager and ResponsiblePartyManager from SP columns', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-x',
+            Title: 'X',
+            Status: 'In-progress',
+            CaseType: 'example-review',
+            AssignedReviewerId: 'user-r',
+            ResponsiblePartyId: 'user-rp',
+            AssignedReviewerManager: 'mgr-r',
+            ResponsiblePartyManager: 'mgr-rp',
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: '',
+            CompletedAt: null,
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const row = await client.getCase('case-x');
+  assert.equal(row?.assignedReviewerManager, 'mgr-r');
+  assert.equal(row?.responsiblePartyManager, 'mgr-rp');
+});
+
+test('HttpSharePointClient: patchCase writes assignedReviewerManager and responsiblePartyManager to SP columns', async () => {
+  const existingItem = {
+    Id: 'case-x',
+    Title: 'X',
+    Status: 'In-progress',
+    CaseType: 'example-review',
+    AssignedReviewerId: 'user-r',
+    ResponsiblePartyId: 'user-rp',
+    Answers: '{}',
+    Conversation: '[]',
+    Notes: '',
+    CompletedAt: null,
+    'odata.etag': '"etag-1"',
+  };
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () => digestResponse('d1'),
+    },
+    {
+      when: (c) => c.method === 'PATCH',
+      respond: () =>
+        new Response(JSON.stringify({ ...existingItem }), {
+          status: 200,
+          headers: { ETag: '"etag-2"' },
+        }),
+    },
+  ]);
+  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  await client.patchCase(
+    'case-x',
+    { assignedReviewerManager: 'mgr-r', responsiblePartyManager: 'mgr-rp' },
+    '"etag-1"'
+  );
+  const patchCall = calls.find((c) => c.method === 'PATCH');
+  const body = JSON.parse(patchCall?.body ?? '{}');
+  assert.equal(body.AssignedReviewerManager, 'mgr-r');
+  assert.equal(body.ResponsiblePartyManager, 'mgr-rp');
 });
 
 // --- searchPeople ---

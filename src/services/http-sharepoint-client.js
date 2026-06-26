@@ -111,6 +111,16 @@ export class HttpSharePointClient {
         `AssignedReviewerId eq '${escapeOData(filter.assignedReviewer)}'`
       );
     }
+    if (filter.responsibleParty) {
+      conds.push(
+        `ResponsiblePartyId eq '${escapeOData(filter.responsibleParty)}'`
+      );
+    }
+    if (filter.assignedReviewerManager) {
+      conds.push(
+        `AssignedReviewerManager eq '${escapeOData(filter.assignedReviewerManager)}'`
+      );
+    }
     if (filter.overdue === true) {
       conds.push(`DueDate lt '${new Date().toISOString()}'`);
       conds.push(`Status eq 'In-progress'`);
@@ -151,7 +161,7 @@ export class HttpSharePointClient {
   async getCurrentUser() {
     const body = await this._read(this._absolute('/_api/web/currentUser'));
     return {
-      id: String(body?.Id ?? body?.LoginName ?? ''),
+      id: toBareAccount(String(body?.LoginName ?? '')),
       displayName: String(body?.Title ?? body?.LoginName ?? ''),
     };
   }
@@ -500,6 +510,14 @@ function rowFromItem(item, etag) {
     ),
     assignedReviewer: String(item?.AssignedReviewerId ?? ''),
     responsibleParty: String(item?.ResponsiblePartyId ?? ''),
+    assignedReviewerManager:
+      item?.AssignedReviewerManager != null
+        ? String(item.AssignedReviewerManager)
+        : undefined,
+    responsiblePartyManager:
+      item?.ResponsiblePartyManager != null
+        ? String(item.ResponsiblePartyManager)
+        : undefined,
     answers: /** @type {Record<string, Answer>} */ (
       parseJsonField(item?.Answers, {})
     ),
@@ -528,6 +546,10 @@ function itemFromRow(fields) {
     out.AssignedReviewerId = fields.assignedReviewer;
   if (fields.responsibleParty !== undefined)
     out.ResponsiblePartyId = fields.responsibleParty;
+  if (fields.assignedReviewerManager !== undefined)
+    out.AssignedReviewerManager = fields.assignedReviewerManager;
+  if (fields.responsiblePartyManager !== undefined)
+    out.ResponsiblePartyManager = fields.responsiblePartyManager;
   if (fields.answers !== undefined)
     out.Answers = JSON.stringify(fields.answers);
   if (fields.conversation !== undefined)
