@@ -331,7 +331,10 @@ hand-written RFC 4180 state machine instead of delegating to pandas, so a
 grammar-correct feed that pandas mis-tokenises (a quoted field carrying the
 delimiter, a newline, or a doubled `""` quote) round-trips faithfully. It
 accepts `CR`/`LF`/`CRLF` line endings (line breaks inside a quoted field are
-kept verbatim), tolerates a BOM, lands every value as **text** (no type
+kept verbatim), tolerates a BOM, defaults to RFC 4180 doubled-quote (`""`)
+escaping but takes an `escapechar` (e.g. `escapechar="\\"`) for feeds that
+escape an inner quote with a preceding character (`\"`), lands every value as
+**text** (no type
 inference — leave dtype to silver's `SchemaCoercion`), supports the same
 `columns=[...]` projection, and raises a located `StrictCsvParseError` on a
 ragged record or an unterminated quote. Reach for it when `CsvReader` mangles a
