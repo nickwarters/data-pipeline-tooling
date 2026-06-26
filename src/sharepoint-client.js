@@ -188,6 +188,30 @@
  */
 
 /**
+ * Data-only snapshot of a versioned Question Bank export (`{slug}.{hash}.json`).
+ * Contains everything from the compile-time bank except the labels presentation
+ * table (label name/color is resolved from the current `{slug}.json` instead).
+ *
+ * @typedef {{
+ *   slug: string,
+ *   label: string,
+ *   generatedAt: string,
+ *   hash: string,
+ *   questions: Array<{
+ *     id: string,
+ *     text: string,
+ *     category: string | null,
+ *     responseType: string,
+ *     options: string[] | null,
+ *     showWhen: Record<string, unknown> | null,
+ *     failureCriteria: string | null,
+ *     deprecated: boolean,
+ *     labelIds?: string[],
+ *   }>,
+ * }} VersionedExport
+ */
+
+/**
  * Every REST consumer codes against this interface. Both MockSharePointClient
  * and HttpSharePointClient satisfy it identically.
  *
@@ -200,7 +224,8 @@
  *   getCurrentUser: () => Promise<CurrentUser>,
  *   searchPeople: (query: string) => Promise<PersonResult[]>,
  *   resolveUsers: (accountNames: string[]) => Promise<Record<string, string | null>>,
- *   getExportHash: (slug: string) => Promise<string | null>
+ *   getExportHash: (slug: string) => Promise<string | null>,
+ *   getVersionedExport: (slug: string, hash: string) => Promise<VersionedExport | null>
  * }} SharePointClient
  */
 

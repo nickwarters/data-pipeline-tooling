@@ -5,6 +5,8 @@
 /** @typedef {import('../sharepoint-client.js').PatchResult} PatchResult */
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
 
+/** @typedef {import('../sharepoint-client.js').VersionedExport} VersionedExport */
+
 export class MockSharePointClient {
   /**
    * @param {{
@@ -13,7 +15,8 @@ export class MockSharePointClient {
    *   personas: Record<string, { groups: string[], userId?: string, displayName?: string }>,
    *   persona?: string,
    *   people?: PersonResult[],
-   *   exportHashes?: Record<string, string>
+   *   exportHashes?: Record<string, string>,
+   *   versionedExports?: Record<string, VersionedExport>
    * }} opts
    */
   constructor({
@@ -23,6 +26,7 @@ export class MockSharePointClient {
     persona = 'reviewer',
     people = [],
     exportHashes = /** @type {Record<string, string>} */ ({}),
+    versionedExports = /** @type {Record<string, VersionedExport>} */ ({}),
   }) {
     // Deep-clone cases so fixture arrays are not mutated across tests.
     this._cases = cases.map((c) => ({ ...c, answers: { ...c.answers } }));
@@ -31,6 +35,7 @@ export class MockSharePointClient {
     this._persona = persona;
     this._people = people.slice();
     this._exportHashes = exportHashes;
+    this._versionedExports = versionedExports;
     this._etagCounter = 1000;
     this._injectNext412 = false;
   }
@@ -186,5 +191,17 @@ export class MockSharePointClient {
    */
   async getExportHash(slug) {
     return this._exportHashes[slug] ?? null;
+  }
+
+  /**
+   * Returns the versioned export for the given slug+hash, or null when no
+   * matching export is configured (ADR-0021 Step 4).
+   *
+   * @param {string} _slug
+   * @param {string} hash
+   * @returns {Promise<VersionedExport | null>}
+   */
+  async getVersionedExport(_slug, hash) {
+    return this._versionedExports[hash] ?? null;
   }
 }

@@ -513,3 +513,36 @@ test('MockSharePointClient: patchCase with questionBankVersion round-trips the f
   const stored = await client.getCase('case-1');
   assert.equal(stored?.questionBankVersion, 'sha256:deadbeef');
 });
+
+// --- getVersionedExport (ADR-0021 Step 4) ---
+
+const VERSIONED_EXPORT = {
+  slug: 'example-review',
+  label: 'Example Review',
+  generatedAt: '2026-01-10T09:00:00.000Z',
+  hash: 'sha256:' + 'a'.repeat(64),
+  questions: [{ id: 'q-v1', text: 'V1 question', category: null, responseType: 'yes-no-na', options: null, showWhen: null, failureCriteria: 'No', deprecated: false }],
+};
+
+test('MockSharePointClient: getVersionedExport returns the matching export for a known hash (ADR-0021 Step 4)', async () => {
+  const client = new MockSharePointClient({
+    cases: CASES,
+    questionDefinitions: QUESTION_DEFS,
+    personas: PERSONAS,
+    versionedExports: { [VERSIONED_EXPORT.hash]: VERSIONED_EXPORT },
+  });
+  const result = await client.getVersionedExport('example-review', VERSIONED_EXPORT.hash);
+  assert.deepEqual(result, VERSIONED_EXPORT);
+});
+
+test('MockSharePointClient: getVersionedExport returns null for an unknown hash (ADR-0021 Step 4)', async () => {
+  const client = makeClient();
+  const result = await client.getVersionedExport('example-review', 'sha256:unknown');
+  assert.equal(result, null);
+});
+
+test('MockSharePointClient: getVersionedExport returns null when no versionedExports configured (ADR-0021 Step 4)', async () => {
+  const client = makeClient();
+  const result = await client.getVersionedExport('example-review', 'sha256:' + 'a'.repeat(64));
+  assert.equal(result, null);
+});

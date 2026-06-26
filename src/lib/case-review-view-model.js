@@ -68,6 +68,8 @@ export class CaseReviewViewModel {
     /** @type {string | null} */
     this.exportHash = null;
 
+    this.versionWarning = signal(/** @type {string | null} */ (null));
+
     /** @type {CaseMachine | null} */
     this.machine = null;
     /** @type {import('../services/section-access.js').Role[]} */
@@ -100,15 +102,46 @@ export class CaseReviewViewModel {
     this.currentUser = currentUser;
     saveQueue.loadCase(caseRow);
 
-    const [caseTypeModule, exportHash] = await Promise.all([
+    const versionHash =
+      caseRow.status === 'Completed' && caseRow.questionBankVersion
+        ? caseRow.questionBankVersion
+        : null;
+
+    const [caseTypeModule, exportHash, versionedExport] = await Promise.all([
       import(`../../case-types/${caseRow.caseType}.js`),
       this.client.getExportHash(caseRow.caseType),
+      versionHash
+        ? this.client.getVersionedExport(caseRow.caseType, versionHash)
+        : Promise.resolve(null),
     ]);
     this.config = caseTypeModule.default;
     this.exportHash = exportHash;
 
     validateCaptureGroups(this.config.captureGroups);
-    this.catalogue = this.config.questions.filter((q) => !q.deprecated);
+
+    if (versionHash && versionedExport) {
+      // Completed Case with a published snapshot — freeze the catalogue as-reviewed.
+      this.catalogue = versionedExport.questions
+        .filter((q) => !q.deprecated)
+        .map((q) => ({
+          id: q.id,
+          text: q.text,
+          ...(q.category !== null ? { category: q.category } : {}),
+          responseType: /** @type {'yes-no-na'|'single-choice'|'multi-choice'} */ (q.responseType),
+          ...(q.options !== null ? { options: q.options } : {}),
+          ...(q.showWhen !== null ? { showWhen: q.showWhen } : {}),
+          ...(q.failureCriteria !== null ? { failureCriteria: q.failureCriteria } : {}),
+          ...(q.labelIds ? { labelIds: q.labelIds } : {}),
+          deprecated: q.deprecated,
+        }));
+    } else {
+      if (versionHash && !versionedExport) {
+        // Versioned file was stamped but not published — fall back with a warning.
+        this.versionWarning.set('as-reviewed version unavailable');
+      }
+      this.catalogue = this.config.questions.filter((q) => !q.deprecated);
+    }
+
     this.catalogueById = new Map(this.catalogue.map((q) => [q.id, q]));
 
     this.answersSignal.set({ ...caseRow.answers });

@@ -337,18 +337,63 @@ test('compileExport: excludes computeOutcome, remediationActions, allowFreeFormR
   }
 });
 
-test('compileExport: excludes labelIds from question output', async () => {
+test('compileExport: includes labelIds per question when present (ADR-0021 Step 5)', async () => {
   const bankWithLabels = {
     ...exportBank,
     questions: [
-      { ...exportBank.questions[0], labelIds: ['lbl-a'] },
+      { ...exportBank.questions[0], labelIds: ['lbl-a', 'lbl-b'] },
       exportBank.questions[1],
     ],
   };
   const result = await compileExport(bankWithLabels);
-  for (const q of result.questions) {
-    assert.ok(!('labelIds' in q));
-  }
+  assert.deepEqual(result.questions[0].labelIds, ['lbl-a', 'lbl-b']);
+  assert.ok(!('labelIds' in result.questions[1]), 'question without labelIds has no labelIds field');
+});
+
+test('compileExport: labelIds are omitted when absent or empty (ADR-0021 Step 5)', async () => {
+  const bankNoLabels = {
+    ...exportBank,
+    questions: [
+      { ...exportBank.questions[0], labelIds: [] },
+      exportBank.questions[1],
+    ],
+  };
+  const result = await compileExport(bankNoLabels);
+  assert.ok(!('labelIds' in result.questions[0]));
+  assert.ok(!('labelIds' in result.questions[1]));
+});
+
+test('compileExport: labelIds on questions affect the hash (ADR-0021 Step 5)', async () => {
+  const bankA = { ...exportBank };
+  const bankB = {
+    ...exportBank,
+    questions: [
+      { ...exportBank.questions[0], labelIds: ['lbl-x'] },
+      exportBank.questions[1],
+    ],
+  };
+  const [a, b] = await Promise.all([compileExport(bankA), compileExport(bankB)]);
+  assert.notEqual(a.hash, b.hash);
+});
+
+test('compileExport: includes labels table in envelope (ADR-0021 Step 5)', async () => {
+  const bankWithLabels = {
+    ...exportBank,
+    labels: [
+      { id: 'lbl-a', name: 'Alpha', color: '#ff0000' },
+      { id: 'lbl-b', name: 'Beta', color: '#0000ff' },
+    ],
+  };
+  const result = await compileExport(bankWithLabels);
+  assert.deepEqual(result.labels, [
+    { id: 'lbl-a', name: 'Alpha', color: '#ff0000' },
+    { id: 'lbl-b', name: 'Beta', color: '#0000ff' },
+  ]);
+});
+
+test('compileExport: labels table is empty array when bank has no labels (ADR-0021 Step 5)', async () => {
+  const result = await compileExport(exportBank);
+  assert.deepEqual(result.labels, []);
 });
 
 test('compileExport: absent optional question fields are emitted as null', async () => {
@@ -492,4 +537,38 @@ test('buildPublishArtifacts: does not mutate the existingManifest versions array
   const existing = { slug: pubEnvelope.slug, versions: [] };
   buildPublishArtifacts(pubEnvelope, existing);
   assert.equal(existing.versions.length, 0);
+});
+
+// ── buildPublishArtifacts: label table handling (ADR-0021 Step 5) ───────────
+
+const pubEnvelopeWithLabels = {
+  ...pubEnvelope,
+  labels: [{ id: 'lbl-a', name: 'Alpha', color: '#ff0000' }],
+};
+
+test('buildPublishArtifacts: current JSON includes labels table (ADR-0021 Step 5)', () => {
+  const r = buildPublishArtifacts(pubEnvelopeWithLabels, null);
+  const current = JSON.parse(r.currentJson);
+  assert.deepEqual(current.labels, [{ id: 'lbl-a', name: 'Alpha', color: '#ff0000' }]);
+});
+
+test('buildPublishArtifacts: versioned JSON omits labels table (ADR-0021 Step 5)', () => {
+  const r = buildPublishArtifacts(pubEnvelopeWithLabels, null);
+  assert.ok(r.versionedJson !== null);
+  const versioned = JSON.parse(r.versionedJson);
+  assert.ok(!('labels' in versioned), 'versioned file must not carry the label table');
+});
+
+test('buildPublishArtifacts: versioned JSON still carries all other envelope fields', () => {
+  const r = buildPublishArtifacts(pubEnvelopeWithLabels, null);
+  const versioned = JSON.parse(r.versionedJson);
+  assert.equal(versioned.slug, pubEnvelopeWithLabels.slug);
+  assert.equal(versioned.hash, pubEnvelopeWithLabels.hash);
+  assert.equal(versioned.generatedAt, pubEnvelopeWithLabels.generatedAt);
+  assert.deepEqual(versioned.questions, pubEnvelopeWithLabels.questions);
+});
+
+test('buildPublishArtifacts: envelope without labels produces identical versioned and current JSON', () => {
+  const r = buildPublishArtifacts(pubEnvelope, null);
+  assert.equal(r.versionedJson, r.currentJson);
 });

@@ -255,6 +255,29 @@ export class HttpSharePointClient {
     }
   }
 
+  /**
+   * Fetches the immutable versioned export `{slug}.{hash}.json` (ADR-0021
+   * Step 4). Returns the parsed object on success, null on any error
+   * (404, network failure) — never hard-fails so a missing file triggers the
+   * live-fallback path in the view model.
+   *
+   * @param {string} slug
+   * @param {string} hash
+   * @returns {Promise<import('../sharepoint-client.js').VersionedExport | null>}
+   */
+  async getVersionedExport(slug, hash) {
+    const url = this._absolute(
+      `/Style%20Library/case-review/case-types/${encodeURIComponent(slug)}.${encodeURIComponent(hash)}.json`
+    );
+    try {
+      const body = await this._read(url);
+      if (!body || typeof body !== 'object') return null;
+      return /** @type {import('../sharepoint-client.js').VersionedExport} */ (body);
+    } catch {
+      return null;
+    }
+  }
+
   // --- internals -----------------------------------------------------------
 
   /**

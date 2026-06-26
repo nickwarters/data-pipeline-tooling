@@ -6,16 +6,21 @@ modified yesterday," and similar.
 
 This is a _consumer_ guide. The reporting code itself is out of scope; this
 document specifies the **format** it reads and the **algorithm** it must apply.
-The decision behind it is [ADR-0015](./adr/0015-data-only-case-type-export-for-reporting.md).
+The decisions behind it are [ADR-0015](./adr/0015-data-only-case-type-export-for-reporting.md)
+and [ADR-0021](./adr/0021-versioned-question-bank-snapshots-for-completed-cases.md).
 
 ## TL;DR
 
-- You need **two inputs**: the per-Case-Type **export** (`case-types/{slug}.json`)
-  and the **Case rows** (read from the per-Case-Type SharePoint list).
+- You need **two inputs**: the per-Case-Type **export** (`case-types/{slug}.json`
+  for current, `case-types/{slug}.{hash}.json` for versioned) and the **Case
+  rows** (read from the per-Case-Type SharePoint list).
 - A question **failed** when its stored answer value matches the question's
   `failureCriteria`. That's it — no JS, no functions.
 - For a **case-level verdict** (pass / refer / fail), read the
   `outcomeAtCompletion` column on the Case row. **Do not** try to recompute it.
+- For **Completed Cases with a `questionBankVersion`**: use the versioned file
+  (`{slug}.{hash}.json`) for the question catalogue and `failureCriteria` — this
+  gives you the as-reviewed snapshot and avoids drift from later bank edits.
 
 ## What you do _not_ need
 
@@ -25,11 +30,18 @@ The decision behind it is [ADR-0015](./adr/0015-data-only-case-type-export-for-r
   (`failureCriteria`); case verdicts are a stored snapshot (`outcomeAtCompletion`).
   Reporting never executes Case Type logic.
 
-## Input 1 — the Case Type export (`case-types/{slug}.json`)
+## Input 1 — the Case Type export
 
-One file per **Case Type**, published in the Style Library beside the module, e.g.
-`/Style Library/case-review/case-types/complaint-review.json`. Fetch it by URL over
-the same NTLM/Kerberos auth as everything else.
+Two variants live in the Style Library beside the `.js` module:
+
+| File | Contents | When to use |
+| ---- | -------- | ----------- |
+| `{slug}.json` | **Current** export — always the latest bank version. Carries the `labels` table. | In-progress Cases; any report that reads only the latest bank. |
+| `{slug}.{hash}.json` | **Versioned** export — immutable snapshot. Carries frozen `labelIds` per question but not the `labels` table. | Completed Cases with a `questionBankVersion` — use this file to get as-reviewed wording, `failureCriteria`, and `showWhen`. |
+
+Fetch by URL over the same NTLM/Kerberos auth as everything else, e.g.
+`/Style Library/case-review/case-types/complaint-review.json` or
+`/Style Library/case-review/case-types/complaint-review.sha256%3Aabc123.json`.
 
 ### Envelope
 
@@ -38,20 +50,26 @@ the same NTLM/Kerberos auth as everything else.
   "slug": "complaint-review",
   "label": "Complaint Review",
   "generatedAt": "2026-06-05T09:30:00Z",
-  "hash": "sha256:1a2b3c4d5e6f",
-  "questions": [
-    /* … */
+  "hash": "sha256:1a2b3c4d5e6f…",
+  "questions": [ /* … */ ],
+  "labels": [
+    { "id": "lbl-coaching", "name": "Coaching", "color": "#2563eb" }
   ]
 }
 ```
+
+`labels` is present only in **`{slug}.json`** (the current file). Versioned files
+(`{slug}.{hash}.json`) carry the per-question `labelIds` but not the label
+definitions — see **Label resolution** below.
 
 | Field         | Meaning                                                         |
 | ------------- | --------------------------------------------------------------- |
 | `slug`        | Join key — matches the `caseType` field on a Case row.          |
 | `label`       | Human-readable Case Type name.                                  |
 | `generatedAt` | ISO-8601 timestamp the export was compiled.                     |
-| `hash`        | Identity of this export (same digest the compile drawer shows). |
+| `hash`        | Content identity (full SHA-256 of questions+slug).              |
 | `questions`   | The Case Type's **Question Bank**, as data (below).             |
+| `labels`      | Label definitions — **current file only** (see Label resolution). |
 
 ### Per-question fields
 
@@ -74,6 +92,7 @@ the same NTLM/Kerberos auth as everything else.
     ]
   },
   "failureCriteria": "No",
+  "labelIds": ["lbl-coaching"],
   "deprecated": false
 }
 ```
@@ -87,12 +106,39 @@ the same NTLM/Kerberos auth as everything else.
 | `options`         | string[] \| absent                               | Valid choices; useful for labelling, not required for failure.                                              |
 | `showWhen`        | object \| absent                                 | Applicability rule. Only needed for _denominators_ (see below); not for counting failures.                  |
 | `failureCriteria` | string \| absent                                 | The value that marks a failure. **Absent ⇒ the question cannot fail.**                                      |
+| `labelIds`        | string[] \| absent                               | IDs of labels assigned to this question (frozen in versioned files). Resolve to names via `labels` in the current file. |
 | `deprecated`      | boolean                                          | Question retired from the bank; may still appear on older Cases — label or exclude as your report requires. |
 
 Intentionally **absent**: `computeOutcome` (code), `remediationActions` /
 `allowFreeFormRemediation` (authoring templates — the remediation actually _taken_
 lives on the Answer, below), and Case-Type config (`eligibleGroups`, `slaHours`,
 `attributeFailures`).
+
+### Label resolution (ADR-0021)
+
+Labels follow a **frozen-structure / current-presentation** split:
+
+- **`labelIds` on each question** are _structure_ — which labels a question
+  carried is part of the point-in-time snapshot. They are frozen in versioned
+  files (`{slug}.{hash}.json`).
+- **Label definitions** (`id → name, color`) are _presentation_ — always read
+  from the **current** `{slug}.json`. A label rename or recolor then applies
+  consistently across all historical reports without needing to rewrite versioned
+  files.
+
+Algorithm:
+
+```python
+current = load_json(f"case-types/{slug}.json")
+label_map = {l["id"]: l for l in current.get("labels", [])}
+
+# To get label names for a question in a versioned export:
+q_labels = [label_map[lid] for lid in q.get("labelIds", []) if lid in label_map]
+```
+
+If a `labelId` from a versioned file is not present in the current `labels` table
+(e.g. the label was retired), treat it as unknown rather than failing — the
+`labelId` is still valid as a grouping key even without a display name.
 
 ## Input 2 — the Case row
 
@@ -200,9 +246,13 @@ def is_failure(question, answer):
 
 ### Worked example — "top failed questions"
 
-```
+```python
 for case in cases_modified_yesterday:           # filter on completedAt
-    export = load_export(case["caseType"])       # case-types/{slug}.json
+    version = case.get("questionBankVersion")
+    if version:                                 # ADR-0021: use the versioned file
+        export = load_json(f"case-types/{slug}.{version}.json")
+    else:
+        export = load_json(f"case-types/{case['caseType']}.json")
     by_id  = {q["id"]: q for q in export["questions"]}
     for qid, answer in case["answers"].items():
         q = by_id.get(qid)
@@ -214,15 +264,12 @@ for case in cases_modified_yesterday:           # filter on completedAt
 
 ## Caveats — read these
 
-1. **Latest-export semantics (v1).** You always read the _current_
-   `{slug}.json`. The **Question Bank** is live-edited, so if `failureCriteria`
-   changes after a Case completes, your per-question failure counts for that
-   _historical_ Case will be derived against **today's** criteria, not the
-   criteria in force when it was reviewed. For recent/operational reports
-   ("yesterday") this is virtually always fine. For long-range retrospective
-   trend reports, be aware the baseline can shift under you. (If true point-in-time
-   stability is ever needed, ADR-0015 notes the path: a per-question failure
-   snapshot at completion — not built yet.)
+1. **Use versioned exports for Completed Cases (ADR-0021).** When a Case row
+   carries a `questionBankVersion`, fetch `{slug}.{hash}.json` for that hash
+   instead of `{slug}.json`. This gives you the exact questions, wording, and
+   `failureCriteria` that were in force at review time. Cases completed before
+   ADR-0021 was deployed have no `questionBankVersion`; fall back to the current
+   `{slug}.json` for those (same behaviour as before).
 
 2. **Case verdicts are different — and stable.** The _case-level_ pass/refer/fail
    is **not** re-derived from answers. Read `outcomeAtCompletion` straight off the

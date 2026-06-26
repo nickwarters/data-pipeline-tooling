@@ -151,10 +151,11 @@ function canonicalise(value) {
  * Data-only JSON export envelope for external reporting (ADR-0015, ADR-0021).
  *
  * Returns the function-free projection of the bank: slug, label, generatedAt,
- * a full SHA-256 hash (stable over questions+slug only), and a questions array
- * that carries id/text/category/responseType/options/showWhen/failureCriteria/
- * deprecated. Excluded: computeOutcome, remediationActions,
- * allowFreeFormRemediation, eligibleGroups, labelIds (Step 5).
+ * a full SHA-256 hash (stable over questions+slug only, including labelIds),
+ * a questions array that carries id/text/category/responseType/options/
+ * showWhen/failureCriteria/labelIds/deprecated, and a labels table.
+ * Excluded: computeOutcome, remediationActions, allowFreeFormRemediation,
+ * eligibleGroups.
  *
  * @param {QuestionBank} bank
  * @returns {Promise<{
@@ -171,20 +172,27 @@ function canonicalise(value) {
  *     showWhen: Record<string, unknown> | null,
  *     failureCriteria: string | null,
  *     deprecated: boolean,
+ *     labelIds?: string[],
  *   }>,
+ *   labels: Array<{ id: string, name: string, color: string }>,
  * }>}
  */
 export async function compileExport(bank) {
-  const questions = bank.questions.map((q) => ({
-    id: q.id,
-    text: q.text,
-    category: q.category ?? null,
-    responseType: q.responseType,
-    options: q.options ?? null,
-    showWhen: q.showWhen ?? null,
-    failureCriteria: q.failureCriteria ?? null,
-    deprecated: q.deprecated,
-  }));
+  const questions = bank.questions.map((q) => {
+    /** @type {{ id: string, text: string, category: string|null, responseType: string, options: string[]|null, showWhen: Record<string,unknown>|null, failureCriteria: string|null, deprecated: boolean, labelIds?: string[] }} */
+    const out = {
+      id: q.id,
+      text: q.text,
+      category: q.category ?? null,
+      responseType: q.responseType,
+      options: q.options ?? null,
+      showWhen: q.showWhen ?? null,
+      failureCriteria: q.failureCriteria ?? null,
+      deprecated: q.deprecated,
+    };
+    if (q.labelIds && q.labelIds.length) out.labelIds = q.labelIds;
+    return out;
+  });
 
   const canonical = canonicalise({ slug: bank.slug, questions });
   const buf = new TextEncoder().encode(canonical);
@@ -199,6 +207,7 @@ export async function compileExport(bank) {
     generatedAt: new Date().toISOString(),
     hash: `sha256:${hashHex}`,
     questions,
+    labels: bank.labels ?? [],
   };
 }
 
@@ -225,6 +234,7 @@ export async function compileExport(bank) {
  *   generatedAt: string,
  *   hash: string,
  *   questions: unknown[],
+ *   labels?: unknown[],
  * }} exportEnvelope
  * @param {VersionManifest | null} existingManifest
  * @returns {{
@@ -245,8 +255,12 @@ export function buildPublishArtifacts(exportEnvelope, existingManifest) {
       : existingVersions.slice(),
   };
   const currentJson = JSON.stringify(exportEnvelope, null, 2);
+  // Versioned file omits the labels table: label name/color is "presentation"
+  // resolved from the current file so renames apply consistently across all
+  // historical reports (ADR-0021 §Reporting). labelIds per question are kept.
+  const { labels: _labels, ...versionedEnvelope } = exportEnvelope;
   return {
-    versionedJson: isNew ? currentJson : null,
+    versionedJson: isNew ? JSON.stringify(versionedEnvelope, null, 2) : null,
     currentJson,
     manifest,
     isNew,
