@@ -93,8 +93,8 @@ def test_per_step_records_carry_row_counts_and_a_run_summary(tmp_path):
 
 
 def test_write_step_is_marked_committed_read_and_validate_are_not(tmp_path):
-    # `committed` flags the steps that durably wrote an artifact (ADR-0007 amd
-    # 03): the write commits, the read and validate steps do not.
+    # `committed` flags the steps that durably wrote an artifact (ADR-0005):
+    # the write commits, the read and validate steps do not.
     log_path = tmp_path / "cases.log"
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"case_ref": ["c1"]})))
 

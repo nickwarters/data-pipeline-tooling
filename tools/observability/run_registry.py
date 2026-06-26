@@ -70,7 +70,7 @@ class RunRegistry:
             """
         )
         # Forward-compatible migration: a registry DB created before the
-        # `committed` artifact marker (ADR-0007 amd 03) lacks the column, and the
+        # `committed` artifact marker (ADR-0005) lacks the column, and the
         # INSERT below names it. Add it in place rather than forcing a re-create —
         # the store lives on a shared drive (ADR-0001) and is not disposable.
         existing = {row[1] for row in con.execute("PRAGMA table_info(run_records)")}
