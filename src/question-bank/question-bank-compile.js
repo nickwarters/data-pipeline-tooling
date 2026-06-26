@@ -203,6 +203,57 @@ export async function compileExport(bank) {
 }
 
 /**
+ * @typedef {{ slug: string, versions: Array<{ hash: string, generatedAt: string }> }} VersionManifest
+ */
+
+/**
+ * Builds the versioned publish artifacts for ADR-0021 Step 2.
+ *
+ * Given an export envelope (from `compileExport`) and the existing manifest
+ * (or null on first publish), returns:
+ * - `versionedJson`: JSON string for `{slug}.{hash}.json`; null when this hash
+ *   already exists in the manifest (idempotent re-publish — no write needed).
+ * - `currentJson`: JSON string for `{slug}.json` (current-pointer, always updated).
+ * - `manifest`: updated `{slug}.history.json` object with the new entry appended.
+ * - `isNew`: false when the hash was already in the manifest.
+ *
+ * The caller is responsible for writing these artifacts to the Style Library.
+ *
+ * @param {{
+ *   slug: string,
+ *   label: string,
+ *   generatedAt: string,
+ *   hash: string,
+ *   questions: unknown[],
+ * }} exportEnvelope
+ * @param {VersionManifest | null} existingManifest
+ * @returns {{
+ *   versionedJson: string | null,
+ *   currentJson: string,
+ *   manifest: VersionManifest,
+ *   isNew: boolean,
+ * }}
+ */
+export function buildPublishArtifacts(exportEnvelope, existingManifest) {
+  const { slug, hash, generatedAt } = exportEnvelope;
+  const existingVersions = existingManifest?.versions ?? [];
+  const isNew = !existingVersions.some((v) => v.hash === hash);
+  const manifest = {
+    slug,
+    versions: isNew
+      ? [...existingVersions, { hash, generatedAt }]
+      : existingVersions.slice(),
+  };
+  const currentJson = JSON.stringify(exportEnvelope, null, 2);
+  return {
+    versionedJson: isNew ? currentJson : null,
+    currentJson,
+    manifest,
+    isNew,
+  };
+}
+
+/**
  * @param {string} s
  * @returns {Promise<string>}
  */

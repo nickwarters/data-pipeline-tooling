@@ -8,6 +8,7 @@ import {
   escapeHtml,
   hashStr,
   compileExport,
+  buildPublishArtifacts,
 } from '../src/question-bank/question-bank-compile.js';
 
 /** Tiny helper to build a bank with one question. */
@@ -400,4 +401,95 @@ test('compileExport: empty questions array produces deterministic hash', async (
   const [a, b] = await Promise.all([compileExport(emptyBank), compileExport(emptyBank)]);
   assert.equal(a.hash, b.hash);
   assert.equal(a.questions.length, 0);
+});
+
+// ── buildPublishArtifacts ───────────────────────────────────────────────────
+
+const pubEnvelope = {
+  slug: 'test-review',
+  label: 'Test Review',
+  generatedAt: '2026-01-10T09:00:00.000Z',
+  hash: 'sha256:' + 'a'.repeat(64),
+  questions: [],
+};
+
+test('buildPublishArtifacts: first publish (null manifest) → isNew true', () => {
+  const r = buildPublishArtifacts(pubEnvelope, null);
+  assert.equal(r.isNew, true);
+});
+
+test('buildPublishArtifacts: first publish → versionedJson is the envelope as JSON', () => {
+  const r = buildPublishArtifacts(pubEnvelope, null);
+  assert.ok(r.versionedJson !== null);
+  assert.deepEqual(JSON.parse(r.versionedJson), pubEnvelope);
+});
+
+test('buildPublishArtifacts: first publish → manifest has slug and one version entry', () => {
+  const r = buildPublishArtifacts(pubEnvelope, null);
+  assert.equal(r.manifest.slug, pubEnvelope.slug);
+  assert.equal(r.manifest.versions.length, 1);
+  assert.equal(r.manifest.versions[0].hash, pubEnvelope.hash);
+  assert.equal(r.manifest.versions[0].generatedAt, pubEnvelope.generatedAt);
+});
+
+test('buildPublishArtifacts: null manifest treated same as empty-versions manifest', () => {
+  const r1 = buildPublishArtifacts(pubEnvelope, null);
+  const r2 = buildPublishArtifacts(pubEnvelope, { slug: pubEnvelope.slug, versions: [] });
+  assert.equal(r1.manifest.versions.length, r2.manifest.versions.length);
+  assert.equal(r1.isNew, r2.isNew);
+});
+
+test('buildPublishArtifacts: currentJson is always the envelope as pretty-printed JSON', () => {
+  const r = buildPublishArtifacts(pubEnvelope, null);
+  assert.equal(r.currentJson, JSON.stringify(pubEnvelope, null, 2));
+});
+
+test('buildPublishArtifacts: currentJson returned even on re-publish', () => {
+  const existing = { slug: pubEnvelope.slug, versions: [{ hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt }] };
+  const r = buildPublishArtifacts(pubEnvelope, existing);
+  assert.equal(r.currentJson, JSON.stringify(pubEnvelope, null, 2));
+});
+
+test('buildPublishArtifacts: same hash again → isNew false', () => {
+  const existing = { slug: pubEnvelope.slug, versions: [{ hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt }] };
+  const r = buildPublishArtifacts(pubEnvelope, existing);
+  assert.equal(r.isNew, false);
+});
+
+test('buildPublishArtifacts: same hash again → versionedJson null', () => {
+  const existing = { slug: pubEnvelope.slug, versions: [{ hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt }] };
+  const r = buildPublishArtifacts(pubEnvelope, existing);
+  assert.equal(r.versionedJson, null);
+});
+
+test('buildPublishArtifacts: same hash again → manifest versions unchanged', () => {
+  const existing = { slug: pubEnvelope.slug, versions: [{ hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt }] };
+  const r = buildPublishArtifacts(pubEnvelope, existing);
+  assert.equal(r.manifest.versions.length, 1);
+});
+
+test('buildPublishArtifacts: new distinct hash is appended to manifest', () => {
+  const priorHash = 'sha256:' + 'b'.repeat(64);
+  const existing = { slug: pubEnvelope.slug, versions: [{ hash: priorHash, generatedAt: '2026-01-01T00:00:00.000Z' }] };
+  const r = buildPublishArtifacts(pubEnvelope, existing);
+  assert.equal(r.isNew, true);
+  assert.equal(r.manifest.versions.length, 2);
+  assert.equal(r.manifest.versions[0].hash, priorHash);
+  assert.equal(r.manifest.versions[1].hash, pubEnvelope.hash);
+});
+
+test('buildPublishArtifacts: preserves prior versions order and appends at end', () => {
+  const v1 = { hash: 'sha256:' + 'b'.repeat(64), generatedAt: '2026-01-01T00:00:00.000Z' };
+  const v2 = { hash: 'sha256:' + 'c'.repeat(64), generatedAt: '2026-02-01T00:00:00.000Z' };
+  const existing = { slug: pubEnvelope.slug, versions: [v1, v2] };
+  const r = buildPublishArtifacts(pubEnvelope, existing);
+  assert.equal(r.manifest.versions[0].hash, v1.hash);
+  assert.equal(r.manifest.versions[1].hash, v2.hash);
+  assert.equal(r.manifest.versions[2].hash, pubEnvelope.hash);
+});
+
+test('buildPublishArtifacts: does not mutate the existingManifest versions array', () => {
+  const existing = { slug: pubEnvelope.slug, versions: [] };
+  buildPublishArtifacts(pubEnvelope, existing);
+  assert.equal(existing.versions.length, 0);
 });
