@@ -71,7 +71,7 @@ class RunLog:
 
         ``committed`` marks a step that durably wrote an artifact (a write,
         quarantine, explain/trace, or checkpoint) — independently committed
-        evidence that survives a *later* step's failure (ADR-0007 amd 03). It is
+        evidence that survives a *later* step's failure (ADR-0005). It is
         recorded only on the success path: a step that raised committed nothing.
         """
         metrics = StepMetrics()
@@ -151,7 +151,7 @@ class RunLog:
             "warn_hits": warn_hits or [],
             # True when this step durably wrote an artifact (write / quarantine /
             # explain / checkpoint). Independently committed evidence — it stays
-            # on disk even if a *later* step aborts the run (ADR-0007 amd 03).
+            # on disk even if a *later* step aborts the run (ADR-0005).
             "committed": committed,
             # Run parameters are recorded only after caller-side redaction.
             "params": params or {},
