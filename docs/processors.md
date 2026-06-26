@@ -313,7 +313,7 @@ JoinWith(reference, on="adviser", how="inner")
 
 ### Explicit dependencies
 
-`JoinWith.process()` never runs another pipeline. Upstream feeds should be run
+`JoinWith` never runs another pipeline. Upstream feeds should be run
 by the runner/catalog layer, freshness-checked there, and exposed to downstream
 selection as a read-only `Reader`, cached `Dataset`, or future named upstream
 output. The builder materializes each `JoinDependency` once before the processor
@@ -405,7 +405,7 @@ below sit on the other side of the medallion: **Ingest**, where one wide source
 feed (650+ columns) is fanned out into a Case table and zero or more **Detail
 Tables**, each a single-table pipeline over the shared raw table (
 [ADR-0009](adr/0009-case-identity-and-gold-grain.md)). They are ordinary
-`Processor`s — same `process(dataset) -> Dataset` shape, same engine-confined,
+callables — same `(dataset) -> Dataset` shape, same engine-confined,
 fail-fast contract — composed on the `raw → silver` and `silver → gold` builders.
 
 ### `SelectColumns` — project the columns this pipeline needs

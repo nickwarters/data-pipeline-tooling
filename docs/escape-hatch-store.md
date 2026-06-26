@@ -17,7 +17,7 @@ pattern.
 
 > **This is debt, on purpose.** An escape-hatch store skips subject isolation,
 > the raw→silver→gold refinement, and the strategy-on-the-Writer contract
-> (ADR-0003/0006). Treat it as a spike: reach for it to *learn*, then
+> (ADR-0003, ADR-0004). Treat it as a spike: reach for it to *learn*, then
 > [migrate](#migrating-back-to-the-layer-pattern). Anything that survives more
 > than a spike belongs on `StoreCatalog`.
 
@@ -188,9 +188,9 @@ p.run()
 
 | The layer pattern gives you | The escape hatch drops |
 |---|---|
-| **Subject isolation** — each Case Type / Reference Data set owns its own files, independent blast radius and onboarding (ADR-0001 amd). | One flat file shared by everything in the spike. |
+| **Subject isolation** — each Case Type / Reference Data set owns its own files, independent blast radius and onboarding (ADR-0001). | One flat file shared by everything in the spike. |
 | **raw → silver → gold refinement** — schema-light landing, the silver schema boundary, gold accumulation. | No layers; you read and write wherever you point. |
-| **Strategy on the Writer** — `Refresh` / `AccumulateByRun` / `UpsertStrategy` chosen per feed (ADR-0003/0006). | Full-refresh only; no idempotent accumulation, no upsert. |
+| **Strategy on the Writer** — `Refresh` / `AccumulateByRun` / `UpsertStrategy` chosen per feed (ADR-0003, ADR-0004). | Full-refresh only; no idempotent accumulation, no upsert. |
 | **Location hidden from scripts** — `StoreCatalog` owns physical layout. | The db path is hardcoded in the spike. |
 
 If a spike starts needing any row in the left column — a second subject, a silver

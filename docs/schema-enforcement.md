@@ -112,10 +112,10 @@ from the *same* dataclass:
 ```python
 from framework.transform import SchemaCoercion
 
-coerced = SchemaCoercion(CaseA).process(dataset)   # returns a transformed dataset
+coerced = SchemaCoercion(CaseA)(dataset)   # returns a transformed dataset
 ```
 
-It is a `Processor` (`process(dataset) -> Dataset`) and, like the validator,
+It is a callable transform (`(dataset) -> Dataset`) and, like the validator,
 **engine-confined** — a cast needs the engine's vectorised operations, so it
 reaches the frame via `to_pandas()`/`from_pandas()` (ADR-0002). It casts **only
 the round-trip-lossy declared types**:

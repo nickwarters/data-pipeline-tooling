@@ -1,23 +1,14 @@
 # Core primitives & the medallion layers
 
-This is the framework's foundational vocabulary. The walking skeleton (the CSV →
-raw slice, #2) introduced `Dataset`, `Reader`, `Store`, and the `Pipeline`
-builder; slice #14 added the **`Writer`** port and the deferred `.write(...)` /
-`.run()` terminus; slice #3 added the **`Validator`** port and made
-`.run()` fail-fast and atomic; slice #4 added the **`RunLog`** primitive and
-wired structured JSONL observability into the terminus; slice #7 added the
-**`Schema`** (a Case Type dataclass) and its **`SchemaValidator`**, enforcing
-the schema at the silver boundary; slice #23 added the **`Processor`** seam and
-the **`SchemaCoercion`** processor that repairs raw's round-trip-lossy types
-ahead of that validator; slice #8 added the **`AccumulateByRun`** gold load
-strategy that accumulates validated silver into the gold layer, stamped by run;
-slice #9 added the
-**Selection processors** (`Filter`/`Score`/`VectorizedFilter`/
-`VectorizedDerive`/`Sort`/`Rename`) and **`JoinWith`** / **`AntiJoinWith`**,
-the cross-feed join over an explicit read-only dependency. Every later slice
-builds on these shapes. For the
-*why* behind each, see the ADRs referenced inline; for domain language (Case,
-CasePool, Feed, Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
+This is the framework's foundational vocabulary — the primitives every pipeline
+names, and the medallion layers they move data through. The pieces are:
+`Dataset` (the opaque carrier), `Reader` / `Writer` (source and sink IO), `Store`
+/ `StoreCatalog` (the per-subject medallion), `Validator` and the declared-schema
+contract (`SchemaValidator`, value rules), the transforms (`SchemaCoercion`,
+`Filter` / `Score` / `JoinWith` and the Ingest reshapers), and the deferred
+`Pipeline` DAG builder with its `RunLog` observability. For the *why* behind each,
+see the ADRs referenced inline; for domain language (Case, CasePool, Feed,
+Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
 
 Application code (`pipelines/` + the `case_review/` domain layer) imports these
 primitives through the public facades (`framework.core` / `framework.io` /
@@ -34,7 +25,7 @@ package, not a facade. See [`public-api.md`](public-api.md).
 A medallion is three SQLite databases, one per layer (raw, silver, gold), on a
 network share: **raw → silver → gold**. Each **subject** — a Case Type or a
 shared Reference Data set — owns its **own** medallion, isolated from every
-other subject's files (ADR-0001 amendment: blast-radius isolation, independent
+other subject's files (ADR-0001: blast-radius isolation, independent
 onboarding). A Feed is ingested and refined upward; the Selection pipeline reads
 the ingested silver/gold and writes the SelectionPool back into gold. (The layer
 names are placeholders pending a domain rename — see CONTEXT.)
@@ -42,7 +33,7 @@ names are placeholders pending a domain rename — see CONTEXT.)
 | Layer  | Holds                                  | Load behaviour |
 |--------|----------------------------------------|----------------|
 | **raw** | A faithful, schema-light snapshot of the source as landed — the framework's landing zone. | **Full refresh** each run: truncate + reload from the source snapshot, so re-runs are deterministic (ADR-0004). |
-| silver | Validated, normalised data: the **schema boundary** — a Case Type's declared columns + dtypes are enforced here as a post-validator before the data lands (ADR-0006, #7). Normalising *coercion* (parsing dates, casting booleans) runs as a `process` step ahead of that check. | Full refresh from raw. |
+| silver | Validated, normalised data: the **schema boundary** — a Case Type's declared columns + dtypes are enforced here as a post-validator before the data lands (ADR-0006). Normalising *coercion* (parsing dates, casting booleans) runs as a transform step ahead of that check. | Full refresh from raw. |
 | gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. A gold hop composes an explicit `Pipeline` whose Writer carries the load strategy. | **Current-only** (ingest gold: `Refresh`, one row per Case) **or accumulating** (Selection / Sync: `AccumulateByRun`, stamped with logical run id / `load_date` and, when context-driven, `execution_id`; idempotent re-run via delete-by-logical-run then insert — ADR-0004; [gold-accumulation doc](gold-accumulation.md)). |
 
 raw stays schema-light on purpose: it mirrors the source so the landing zone is
@@ -54,58 +45,8 @@ faithful, and schema enforcement arrives at silver and gold (ADR-0006).
 > `AccumulateByRun.from_context(context)`, `UpsertStrategy(key_columns)`,
 > `InsertOrIgnore()`, or `InsertIfAbsent(key_columns)` when asking the Store
 > for a Writer. This supports both current-state hops and accumulated histories
-> without baking a universal layer→strategy rule into the Store (ADR-0004
-> amendment, ADR-0009).
-
-> **Build status.** The **per-subject `Store`** has landed: `Store(subject_dir)`
-> *mints* that subject's Writers/Readers over its own
-> `<subject_dir>/{raw,silver,gold}.db`, and `StoreCatalog(root).store(subject)`
-> mints those subject stores from shared root/configuration. The legacy global
-> `Store.write`/`read` is retired. The shared `connect` factory now lives in
-> `framework._internal.connection` (the seam that keeps `store` and `writers` cycle-free).
-> **Validators** now
-> attach to the builder (`.validate()` / `.validate()`) and
-> `.run()` is fail-fast and atomic. **Structured JSONL observability** has
-> landed: a `RunLog` composed onto the builder emits one JSON record per step
-> plus a run summary to a `.log` file (and human-readable lines to the console)
-> — the seam the run-registry ingests (ADR-0005;
-> [format doc](run-log-format.md)). **Schema enforcement at silver** has landed:
-> a `SchemaValidator` derived from a Case Type's dataclass checks columns +
-> dtypes, composed onto the raw→silver pipeline as a post-validator so a
-> breach aborts before silver is written (ADR-0006;
-> [schema-enforcement doc](schema-enforcement.md)). **Coercion between raw and
-> silver** has landed: a `Processor` seam runs as a task
-> (compatible with the existing transform builder vocabulary), and
-> `SchemaCoercion` casts the schema's round-trip-lossy types (dates,
-> booleans) ahead of the validator so a date/bool schema survives the round-trip
-> (ADR-0006, #23). **Gold accumulation** has landed: a gold hop
-> carries validated silver into gold via the `AccumulateByRunWriter`, stamping each
-> row with the logical run id / `load_date` and, for context-derived strategies,
-> `execution_id`; a re-driven business run is idempotent via delete-by-logical-run
-> then insert (ADR-0004;
-> [gold-accumulation doc](gold-accumulation.md)). **The Selection processors**
-> have landed: `Filter`/`Score` (plain-Python row callables — ADR-0002),
-> `VectorizedFilter`/`VectorizedDerive` (whole-frame callables for
-> batch-friendly filtering and column derivation), `Sort`/`Rename`, and
-> **`JoinWith`** / **`AntiJoinWith`** — the cross-feed join
-> and exclusion-list gate that hold a lazy
-> reference to another builder and resolves it to a DAG at `.run()`, joined in
-> Python (ADR-0003, #9; [processors doc](processors.md)). **The run registry**
-> has landed: a `RunRegistry` ingests the `RunLog` JSONL into its own queryable
-> SQLite store — idempotent by `run_id` + step, queryable by pipeline / status /
-> time, surfacing warned (incl. schema-drift) runs (ADR-0011/0007, #52;
-> [run-log-format doc](run-log-format.md)). **The thin Pipeline runner** has
-> landed: `PipelineRunner` dispatches domain Pipelines by `(case_type, pipeline)`,
-> passes a shared `RunContext` into handlers, and `Requirement` predicates
-> block stale downstream runs from `RunRegistry` history without changing the
-> builder contract (`FreshnessRequirement` remains as a compatibility adapter)
->. **Value-level schema rules** have landed:
-> `Nullable` / `NonNull`, `Pattern`, `Length`, `Range`, `Unique`, `OneOf`, plus
-> row checks via `@row_checks(...)`. The domain capstone has landed as the
-> `case_review` application layer (`CaseType` / `Variation`, `CasePool`, and
-> gold ingest helpers), and the multi-table feed work has landed in the current
-> primitives: explicit per-writer load strategies, reader column projection,
-> `DeriveKey`, `LatestPerKey`, `UniqueValidator`, and Detail Table helpers.
+> without baking a universal layer→strategy rule into the Store (ADR-0004,
+> ADR-0009).
 
 ## The primitives
 
@@ -122,7 +63,7 @@ Only engine-confined code (readers, writers, the store, processors) crosses the
 seam via `Dataset.from_pandas(frame)` / `dataset.to_pandas()`. **pandas must
 never appear** in a Protocol signature, a pipeline script, or the domain layer —
 only behind this seam. Typed domain objects (`Case`, `ReviewOutcome`) are the
-*other* tier, materialised on demand at the domain edge (later slice).
+*other* tier, materialised on demand at the domain edge (the CasePool).
 
 `to_pandas()` returns a **copy** by default, enforcing the opacity guarantee:
 callers cannot mutate the carrier's backing frame. Use `to_pandas(copy=False)`
@@ -232,7 +173,7 @@ Deliverables and SQLite tables:
   column is the logical/idempotency key; `execution_id` is the trace key that
   matches RunLog/RunRegistry when the strategy is derived from a `RunContext`.
   A re-driven run is idempotent via *delete-by-run then insert*. Minted by
-  `Store.writer(layer, table, AccumulateByRun(...))` (#8;
+  `Store.writer(layer, table, AccumulateByRun(...))` (see
   [gold-accumulation doc](gold-accumulation.md)).
 - `SqliteUpsertWriter(db_path, table, key_columns)` — **update-or-insert** by a
   declared key set: for each incoming row whose key already exists in the
@@ -451,7 +392,7 @@ undeclared columns are left alone. A value it cannot cast (an unparseable date,
 an unknown boolean encoding) raises a **`CoercionError`** with one located
 message naming the column. The raw→silver hop composes it ahead of the
 `SchemaValidator`, so the per-run order is **read → coerce (transform) →
-post-validate (schema) → write** (ADR-0006, #23).
+post-validate (schema) → write** (ADR-0006).
 
 **Selection transforms** — the `filter/score/sort/join` of `CONTEXT.md`:
 
@@ -509,7 +450,7 @@ per-step breakdown, and the fail-fast/warn examples live in
 
 ### `RunRegistry` — the run history that ingests the JSONL
 A `RunRegistry` is the **consumer** for the `RunLog` JSONL — the seam ADR-0011
-named — landed in #52. It ingests the run records into its **own** queryable
+names. It ingests the run records into its **own** queryable
 SQLite store so operators can answer "did last night's Ingest for Case Type B
 succeed, how many rows, did anything warn?" without grepping `.log` files:
 
@@ -529,7 +470,7 @@ registry.latest_success(
 registry.recent_row_counts("cases", limit=10)          # read volumes, newest first
 ```
 
-- **Ingest is idempotent** (AC #3): a record's identity is `run_id` + step (+ a
+- **Ingest is idempotent**: a record's identity is `run_id` + step (+ a
   step ordinal, because a multi-processor run emits one `process` record per
   processor — a bare `run_id`+step would collide them), so re-reading the same
   log inserts nothing the second time (`INSERT OR IGNORE`).
@@ -546,8 +487,8 @@ registry.recent_row_counts("cases", limit=10)          # read volumes, newest fi
   `connect` factory and honours the single-writer / rollback-journal conventions
   (ADR-0001) like any other medallion db; paths are `pathlib` (Windows/macOS).
 - **Schema-drift surfaces as a warn-hit** (ADR-0006), so `runs_that_warned()` is
-  also the drift-surfacing query (AC #6) — it pairs with the raw-drift detector
-  ([`SchemaDriftValidator`](#validator--a-fail-fast-check-at-a-layer-boundary), #51),
+  also the drift-surfacing query — it pairs with the raw-drift detector
+  ([`SchemaDriftValidator`](#validator--a-fail-fast-check-at-a-layer-boundary)),
   whose warn-severity message rides `warn_hits` onto the run summary.
 - **It is also a baseline source.** `recent_row_counts(pipeline, limit=…)` returns
   the read-step volumes of recent *successful* runs, newest first — the history a
@@ -956,25 +897,26 @@ refresh-vs-accumulate branching; that all lives on the Writer. Because the
 terminus owns execution, it is the home of the cross-cutting concerns: it uses
 the supplied `RunContext` or creates one for ad hoc runs, exposes the execution
 id as `pipeline.run_id`, times each planned step, and drives the composed
-`RunLog` (timing + structured JSONL logging — landed in #4). The planned step
+`RunLog` (timing + structured JSONL logging). The planned step
 objects are internal: they expose stable name/kind/order, the wrapped component
 where applicable, and read-only/side-effect metadata for plan-validation and the
 **dry-run preview**, but pipeline scripts still use only the builder methods. A
 run carried out under `RunContext(dry_run=True)` (the `dry_run_pipeline` core
-behind `cli run --dry-run`, #102) reads, transforms, and validates real data but
+behind `cli run --dry-run`) reads, transforms, and validates real data but
 skips every write, quarantine, and explain commit — and touches no run log —
 accumulating a `DryRunReport` of columns, dtypes, row counts, and a bounded row
 sample per step; it falls back to an ambient run context so an author's bare
-`p.run()` inherits the dry-run flag without threading it by hand. The
-named processor task (`.task()`, compatible with `.transform()`) landed in #23; lineage checkpoints (a `.write()`
-on an intermediate node) landed in #49; the explicit DAG builder landed in #122.
+`p.run()` inherits the dry-run flag without threading it by hand. The authoring
+vocabulary is the DAG builder's nodes: `.task()` / `.transform()` for
+dataset→dataset work, `.validate()` for a gate, `.write()` on an intermediate
+node for a lineage checkpoint, and explicit dependency wiring for fan-in / fan-out.
 
 ### `WorkingDayCalendar` — working-day arithmetic (pure utility)
 A config-seeded `WorkingDayCalendar(holidays=…, weekend=…)` answers working-day
 questions for availability criteria ("the last 20 working days" — `CONTEXT.md`).
 Unlike the primitives above it touches no `Dataset`, `Store`, or engine — it
 is pure stdlib `datetime`, hence deterministic and identical on Windows/macOS,
-and is **not** a Feed (ADR-0001 amendment). Two queries: `is_working_day(day)`
+and is **not** a Feed (ADR-0001). Two queries: `is_working_day(day)`
 and `last_n_working_days(n, from_date)` (the `n` most recent working days on or
 before `from_date`, most-recent first, skipping weekends + holidays). Full
 config and boundary semantics in
@@ -1006,7 +948,7 @@ retrieval is the *concept* of fetching **available cases** — e.g.
 `fetch_available_cases(as_of, activity_column=…, within_working_days=…)` narrows
 to a `WorkingDayCalendar` window in Python (ADR-0002), repairing silver's
 text-stored dates first, and returns a bulk-tier `Dataset`. Fully typed `Case`
-objects are the typed-on-demand edge reserved for a later slice (ADR-0002).
+objects are the typed-on-demand edge at the domain layer (ADR-0002).
 
 ### `DatasetReader` — bridge an in-memory Dataset into the builder
 `DatasetReader(dataset)` (`framework.io.readers`) adapts an already-in-memory
