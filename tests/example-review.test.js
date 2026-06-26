@@ -99,16 +99,26 @@ test('example-review: every select remediationField carries a non-empty options[
 
 // --- Issue Capture groups (ADR-0020) ---
 
-test('example-review: declares captureGroups exercising all four string field types', () => {
+test('example-review: declares captureGroups exercising the text field types', () => {
   const types = new Set(
     (config.captureGroups ?? []).flatMap((g) => g.fields.map((f) => f.type))
   );
-  for (const t of ['text', 'textarea', 'select', 'radio']) {
+  for (const t of ['text', 'textarea', 'select']) {
     assert.ok(
       types.has(/** @type {any} */ (t)),
       `expected a ${t} capture field`
     );
   }
+});
+
+test('example-review: capture groups use no radio fields (selects only)', () => {
+  const types = (config.captureGroups ?? []).flatMap((g) =>
+    g.fields.map((f) => f.type)
+  );
+  assert.ok(
+    !types.includes(/** @type {any} */ ('radio')),
+    'capture groups should not use radio fields'
+  );
 });
 
 test('example-review: capture field keys are unique across groups', () => {

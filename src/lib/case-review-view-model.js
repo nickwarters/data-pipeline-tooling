@@ -203,8 +203,28 @@ export class CaseReviewViewModel {
       ...current,
       [questionId]: captureValue(existing, field, value),
     };
-    this.answersSignal.set(newAnswers);
+    // Setting the answers signal synchronously re-renders the Issues list, which
+    // rebuilds DOM above the viewport and resets the page scroll. Snapshot and
+    // restore the scroll around that synchronous re-render so capturing an Issue
+    // detail doesn't throw the Reviewer back to the top. No-op outside a browser.
+    this._withPreservedScroll(() => this.answersSignal.set(newAnswers));
     this.saveQueue.enqueue(this.caseId, 'answers', newAnswers);
+  }
+
+  /**
+   * Runs `mutate` (a synchronous signal update that triggers a re-render) while
+   * holding the window scroll position steady across the resulting DOM churn.
+   * @param {() => void} mutate
+   */
+  _withPreservedScroll(mutate) {
+    if (typeof window === 'undefined') {
+      mutate();
+      return;
+    }
+    const x = window.scrollX;
+    const y = window.scrollY;
+    mutate();
+    if (window.scrollX !== x || window.scrollY !== y) window.scrollTo(x, y);
   }
 
   handleAttribute(questionId, attributedParty) {

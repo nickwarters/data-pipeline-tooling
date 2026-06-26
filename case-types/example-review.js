@@ -69,7 +69,7 @@ const config = {
         {
           key: 'repeatIssue',
           label: 'Repeat issue?',
-          type: 'radio',
+          type: 'select',
           options: ['Yes', 'No'],
         },
       ],
@@ -93,7 +93,7 @@ const config = {
         {
           key: 'regulatoryBreach',
           label: 'Regulatory breach?',
-          type: 'radio',
+          type: 'select',
           options: ['Yes', 'No'],
         },
       ],
@@ -117,7 +117,7 @@ const config = {
         {
           key: 'followUpRequired',
           label: 'Follow-up required?',
-          type: 'radio',
+          type: 'select',
           options: ['Yes', 'No'],
         },
       ],
