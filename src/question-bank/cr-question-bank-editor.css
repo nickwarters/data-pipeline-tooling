@@ -270,6 +270,16 @@ cr-bank-editor .filter-chip .chip-count {
   font-size: var(--cr-font-size-xs);
   color: var(--cr-color-text-muted);
 }
+cr-bank-editor .chip-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cr-space-1);
+}
+cr-bank-editor .chip-move {
+  width: 24px;
+  height: 24px;
+  font-size: var(--cr-font-size-sm);
+}
 cr-bank-editor .filter-chip.active .chip-count {
   color: var(--cr-color-accent);
 }
@@ -609,6 +619,15 @@ cr-bank-editor .icon-btn:hover {
   color: var(--cr-color-on-surface);
   background: var(--cr-color-surface-2);
   border-color: var(--cr-color-border);
+}
+cr-bank-editor .icon-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+cr-bank-editor .icon-btn:disabled:hover {
+  color: var(--cr-color-text-muted);
+  background: transparent;
+  border-color: transparent;
 }
 cr-bank-editor .icon-btn.danger:hover {
   color: var(--cr-color-danger);

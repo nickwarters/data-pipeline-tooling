@@ -51,6 +51,7 @@ export class CRBankList extends ReactiveElement {
           document.createElement('cr-question-card')
         );
         card.question = q;
+        card.bankQuestions = bank.questions;
         card.questionIndex = bank.questions.indexOf(q);
         listRoot.appendChild(card);
       });

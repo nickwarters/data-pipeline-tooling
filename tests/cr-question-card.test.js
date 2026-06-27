@@ -6,7 +6,7 @@ installDom();
 
 const { CRQuestionCard } =
   await import('../src/components/cr-question-card.js');
-const { _resetStore, cases, activeSlug } =
+const { _resetStore, cases, activeSlug, filters, isDirty } =
   await import('../src/question-bank/question-bank-store.js');
 
 test('CRQuestionCard: no question → nothing renders', () => {
@@ -130,11 +130,97 @@ test('CRQuestionCard: deprecate / undeprecate icon toggles state', () => {
   e.questionIndex = 0;
   e.connectedCallback();
   const actions = /** @type {any} */ (e)._children[1]._children[2];
-  const depBtn = actions._children[0];
+  const depBtn = actions._children[2];
   depBtn._listeners.click[0]();
   assert.equal(q.deprecated, true);
   depBtn._listeners.click[0]();
   assert.equal(q.deprecated, false);
+});
+
+test('CRQuestionCard: move buttons reorder questions globally and mark dirty', () => {
+  _resetStore();
+  activeSlug.set('example-review');
+  const questions = cases.get()['example-review'].questions;
+  const q = questions[1];
+  const e = new CRQuestionCard();
+  e.question = q;
+  e.bankQuestions = questions;
+  e.questionIndex = 1;
+  e.connectedCallback();
+  const actions = /** @type {any} */ (e)._children[1]._children[2];
+  const upBtn = actions._children[0];
+  const downBtn = actions._children[1];
+
+  assert.equal(upBtn.disabled, false);
+  upBtn._listeners.click[0]();
+  assert.equal(cases.get()['example-review'].questions[0], q);
+  assert.equal(isDirty.get(), true);
+
+  downBtn._listeners.click[0]();
+  assert.equal(cases.get()['example-review'].questions[1], q);
+});
+
+test('CRQuestionCard: filtered move skips questions from other categories', () => {
+  _resetStore();
+  activeSlug.set('example-review');
+  cases.set({
+    'example-review': {
+      label: 'L',
+      slug: 'example-review',
+      eligibleGroups: [],
+      questions: [
+        {
+          id: 'a1',
+          text: 'A1',
+          category: 'A',
+          responseType: 'yes-no-na',
+          deprecated: false,
+        },
+        {
+          id: 'b1',
+          text: 'B1',
+          category: 'B',
+          responseType: 'yes-no-na',
+          deprecated: false,
+        },
+        {
+          id: 'a2',
+          text: 'A2',
+          category: 'A',
+          responseType: 'yes-no-na',
+          deprecated: false,
+        },
+      ],
+    },
+  });
+  filters.set({ category: 'A', showDeprecated: true, conditionalOnly: false });
+  const questions = cases.get()['example-review'].questions;
+  const q = questions[2];
+  const e = new CRQuestionCard();
+  e.question = q;
+  e.bankQuestions = questions;
+  e.questionIndex = 2;
+  e.connectedCallback();
+  const actions = /** @type {any} */ (e)._children[1]._children[2];
+  actions._children[0]._listeners.click[0]();
+  assert.deepEqual(
+    cases.get()['example-review'].questions.map((item) => item.id),
+    ['a2', 'a1', 'b1']
+  );
+});
+
+test('CRQuestionCard: boundary move buttons are disabled', () => {
+  _resetStore();
+  activeSlug.set('example-review');
+  const questions = cases.get()['example-review'].questions;
+  const e = new CRQuestionCard();
+  e.question = questions[0];
+  e.bankQuestions = questions;
+  e.questionIndex = 0;
+  e.connectedCallback();
+  const actions = /** @type {any} */ (e)._children[1]._children[2];
+  assert.equal(actions._children[0].disabled, true);
+  assert.equal(actions._children[1].disabled, false);
 });
 
 test('CRQuestionCard: duplicate inserts a copy with -copy id', () => {
@@ -146,7 +232,7 @@ test('CRQuestionCard: duplicate inserts a copy with -copy id', () => {
   e.questionIndex = 0;
   e.connectedCallback();
   const actions = /** @type {any} */ (e)._children[1]._children[2];
-  const dupBtn = actions._children[1];
+  const dupBtn = actions._children[3];
   const before = cases.get()['example-review'].questions.length;
   dupBtn._listeners.click[0]();
   const after = cases.get()['example-review'].questions.length;
@@ -163,7 +249,7 @@ test('CRQuestionCard: delete removes after confirm; cancelled confirm is a no-op
   e.questionIndex = 0;
   e.connectedCallback();
   const actions = /** @type {any} */ (e)._children[1]._children[2];
-  const delBtn = actions._children[2];
+  const delBtn = actions._children[4];
 
   // Cancelled
   /** @type {any} */ (globalThis).confirm = () => false;
@@ -208,6 +294,6 @@ test('CRQuestionCard: tolerates missing confirm() global', () => {
   e.questionIndex = 0;
   e.connectedCallback();
   const actions = /** @type {any} */ (e)._children[1]._children[2];
-  const delBtn = actions._children[2];
+  const delBtn = actions._children[4];
   delBtn._listeners.click[0](); // no throw; treated as cancel
 });

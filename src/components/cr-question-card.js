@@ -1,12 +1,23 @@
 // @ts-check
 import { ReactiveElement } from './reactive-element.js';
 import { h } from '../lib/html.js';
-import { activeSlug, commit } from '../question-bank/question-bank-store.js';
+import {
+  activeSlug,
+  commit,
+  filters,
+} from '../question-bank/question-bank-store.js';
+import {
+  canMoveQuestion,
+  canMoveQuestionWithinCategory,
+  moveQuestion,
+  moveQuestionWithinCategory,
+} from '../question-bank/question-bank-order.js';
 
 export class CRQuestionCard extends ReactiveElement {
   constructor() {
     super();
     /** @type {any} */ this.question = null;
+    /** @type {any[]} */ this.bankQuestions = [];
     this.questionIndex = 0;
   }
 
@@ -24,6 +35,15 @@ export class CRQuestionCard extends ReactiveElement {
     const q = this.question;
     if (!q) return;
     const i = this.questionIndex ?? 0;
+    const bankQuestions =
+      /** @type {any[]} */ (this.bankQuestions) ?? /** @type {any[]} */ ([]);
+    const categoryFilterActive = Boolean(filters.get().category);
+    const canMoveUp = categoryFilterActive
+      ? canMoveQuestionWithinCategory(bankQuestions, q, -1)
+      : canMoveQuestion(bankQuestions, q, -1);
+    const canMoveDown = categoryFilterActive
+      ? canMoveQuestionWithinCategory(bankQuestions, q, 1)
+      : canMoveQuestion(bankQuestions, q, 1);
 
     const num = h(
       'div',
@@ -103,6 +123,40 @@ export class CRQuestionCard extends ReactiveElement {
     const actions = h(
       'div',
       { class: 'card-actions' },
+      h(
+        'button',
+        {
+          class: 'icon-btn',
+          title: 'Move question up',
+          'aria-label': 'Move question up',
+          disabled: !canMoveUp,
+          onclick: () =>
+            commit((types) => {
+              const b = types[activeSlug.get()];
+              if (filters.get().category)
+                moveQuestionWithinCategory(b.questions, q, -1);
+              else moveQuestion(b.questions, q, -1);
+            }),
+        },
+        '↑'
+      ),
+      h(
+        'button',
+        {
+          class: 'icon-btn',
+          title: 'Move question down',
+          'aria-label': 'Move question down',
+          disabled: !canMoveDown,
+          onclick: () =>
+            commit((types) => {
+              const b = types[activeSlug.get()];
+              if (filters.get().category)
+                moveQuestionWithinCategory(b.questions, q, 1);
+              else moveQuestion(b.questions, q, 1);
+            }),
+        },
+        '↓'
+      ),
       h(
         'button',
         {

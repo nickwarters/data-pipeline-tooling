@@ -203,6 +203,30 @@ test('compileBank: empty questions still produces a valid module', () => {
   assert.ok(out.includes('export default config;'));
 });
 
+test('compileBank: preserves edited question order', () => {
+  const out = compileBank({
+    label: 'L',
+    slug: 's',
+    eligibleGroups: [],
+    questions: [
+      {
+        id: 'q-third',
+        text: 'Third',
+        responseType: 'yes-no-na',
+        deprecated: false,
+      },
+      {
+        id: 'q-first',
+        text: 'First',
+        responseType: 'yes-no-na',
+        deprecated: false,
+      },
+    ],
+  });
+
+  assert.ok(out.indexOf('id: "q-third"') < out.indexOf('id: "q-first"'));
+});
+
 test('compileBank: emits a labels block when the bank has labels', () => {
   const out = compileBank({
     label: 'L',
@@ -319,6 +343,33 @@ test('compileExport: returns envelope with slug, label, generatedAt, hash, quest
   assert.equal(result.slug, 'hello-review');
   assert.equal(result.label, 'Hello Review');
   assert.equal(result.questions.length, 2);
+});
+
+test('compileExport: preserves edited question order', async () => {
+  const result = await compileExport({
+    label: 'L',
+    slug: 's',
+    eligibleGroups: [],
+    questions: [
+      {
+        id: 'q-third',
+        text: 'Third',
+        responseType: /** @type {const} */ ('yes-no-na'),
+        deprecated: false,
+      },
+      {
+        id: 'q-first',
+        text: 'First',
+        responseType: /** @type {const} */ ('yes-no-na'),
+        deprecated: false,
+      },
+    ],
+  });
+
+  assert.deepEqual(
+    result.questions.map((q) => q.id),
+    ['q-third', 'q-first']
+  );
 });
 
 test('compileExport: generatedAt is a valid ISO-8601 string', async () => {
