@@ -2,8 +2,8 @@
 import { ReactiveElement } from '../components/reactive-element.js';
 import { h } from '../lib/html.js';
 import { CaseReviewViewModel } from '../lib/case-review-view-model.js';
-import { computeSectionProgress } from '../evaluators/section-progress.js';
 import { CaseReviewHeaderController } from './cr-case-review/header-controller.js';
+import { QuestionPanelController } from './cr-case-review/question-panel-controller.js';
 
 import '../components/cr-question-list.js';
 import '../components/cr-section-progress.js';
@@ -41,6 +41,7 @@ export class CRCaseReview extends ReactiveElement {
     /** @type {CaseReviewViewModel | null} */
     this.viewModel = null;
     this._headerController = new CaseReviewHeaderController();
+    this._questionPanelController = new QuestionPanelController();
 
     // TODO(issue-198): Move controller-owned lifecycle state into
     // cr-case-review/conversation-controller.js and
@@ -265,7 +266,6 @@ export class CRCaseReview extends ReactiveElement {
       catalogue,
       config,
       answersSignal,
-      applicableQuestions,
       allAnswered,
       currentUser,
       access,
@@ -278,7 +278,6 @@ export class CRCaseReview extends ReactiveElement {
     if (!caseRow || !config || !machine || !currentUser) return;
 
     const answers = answersSignal.get();
-    const questions = applicableQuestions.get();
     const isAllAnswered = allAnswered.get();
 
     const searchStr =
@@ -368,37 +367,14 @@ export class CRCaseReview extends ReactiveElement {
           vm.activeTab.set(/** @type {any} */ (ev).detail.id)
       );
 
-      // TODO(issue-198): Move Review-tab answer and jump wiring to
-      // QuestionPanelController.bind().
-      this._questionsPanel.addEventListener(
-        'cr-answer',
-        (/** @type {CustomEvent} */ ev) =>
-          vm.handleAnswer(
-            /** @type {any} */ (ev).detail.questionId,
-            /** @type {any} */ (ev).detail.value
-          )
-      );
-      this._questionsPanel.addEventListener(
-        'cr-section-jump',
-        (/** @type {CustomEvent} */ ev) => {
-          const sectionName = /** @type {any} */ (ev).detail.section;
-          const children = this._qList.questionElements ?? [];
-          const target = children.find(
-            (/** @type {any} */ c) =>
-              c.question?.category === sectionName ||
-              (!c.question?.category && sectionName === 'General')
-          );
-          target?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-        }
-      );
-      this._questionsPanel.addEventListener('cr-jump-unanswered', () => {
-        const children = this._qList.questionElements ?? [];
-        const target = children.find((/** @type {any} */ c) => {
-          if (!c.question) return false;
-          const v = vm.answersSignal.get()[c.question.id]?.value;
-          return Array.isArray(v) ? v.length === 0 : !v;
-        });
-        target?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+      // TODO(issue-198): QuestionPanelController owns Review-tab event wiring;
+      // keep this context adapter until the shared node registry is wired.
+      this._questionPanelController.bind({
+        viewModel: vm,
+        nodes: this._controllerNodes(canToggleConversation),
+        displayMode,
+        completeCase: this._completeCase.bind(this),
+        toggleConversationPanel: this._toggleConversationPanel.bind(this),
       });
 
       // TODO(issue-198): Move Issues-tab capture/attribute wiring to
@@ -460,54 +436,15 @@ export class CRCaseReview extends ReactiveElement {
       access: displayMode(access.details),
     });
 
-    // TODO(issue-198): Move Review-tab property assignment, progress updates,
-    // unanswered calculation, and override editor setup to
-    // QuestionPanelController.update().
-    Object.assign(this._qList, {
-      access: displayMode(access.questions),
-      questions,
-      answers,
+    // TODO(issue-198): QuestionPanelController owns Review-tab assignment;
+    // keep this context adapter until the shared node registry is wired.
+    this._questionPanelController.update({
+      viewModel: vm,
+      nodes: this._controllerNodes(canToggleConversation),
+      displayMode,
+      completeCase: this._completeCase.bind(this),
+      toggleConversationPanel: this._toggleConversationPanel.bind(this),
     });
-    if (this._qList.update) this._qList.update(questions, answers);
-
-    const unanswered = questions.filter(
-      (/** @type {QuestionDefinition} */ q) => {
-        const v = answers[q.id]?.value;
-        return Array.isArray(v) ? v.length === 0 : !v;
-      }
-    );
-    if (this._progressEl.update)
-      this._progressEl.update(
-        computeSectionProgress(catalogue, answers),
-        unanswered
-      );
-
-    const questionsChildren = [
-      h('h2', {}, 'Questions'),
-      this._qList,
-      this._progressEl,
-    ];
-    if (access.questions === 'override') {
-      Object.assign(this._overrideEditor, {
-        caseRow,
-        saveQueue: vm.saveQueue,
-        caseId: caseRow.id,
-        access: 'override',
-        currentUser,
-        catalogue,
-        attributeFailures: config.attributeFailures === true,
-        remediationFields: config.remediationFields ?? [],
-        computeOutcome: config.computeOutcome,
-        client: vm.client,
-      });
-      questionsChildren.push(this._overrideEditor);
-    }
-
-    if (typeof this._questionsPanel.replaceChildren === 'function') {
-      this._questionsPanel.replaceChildren(...questionsChildren);
-    } else {
-      this._questionsPanel._children = questionsChildren;
-    }
 
     // TODO(issue-198): Move Issues-tab property assignment and update calls to
     // RemediationPanelController.update().
@@ -605,24 +542,7 @@ export class CRCaseReview extends ReactiveElement {
     // and remaining controllers are wired.
     this._headerController.update({
       viewModel: vm,
-      nodes: {
-        tabs: this._tabsEl,
-        details: this._detailsEl,
-        questionsPanel: this._questionsPanel,
-        questionList: this._qList,
-        progress: this._progressEl,
-        overrideEditor: this._overrideEditor,
-        remediation: this._remediationSection,
-        summary: this._summaryEl,
-        notes: this._notesEl,
-        appeal: this._appealEl,
-        conversation: this._conversationEl,
-        sourceCase: this._sourceCaseEl,
-        banner: this._bannerEl,
-        conversationToggle: canToggleConversation ? this._toggleBtn : null,
-        header: this._headerEl,
-        completeButton: this._btnEl,
-      },
+      nodes: this._controllerNodes(canToggleConversation),
       displayMode,
       completeCase: this._completeCase.bind(this),
       toggleConversationPanel: this._toggleConversationPanel.bind(this),
@@ -665,6 +585,28 @@ export class CRCaseReview extends ReactiveElement {
       this._conversationEl,
       this._btnEl,
     ].filter(Boolean);
+  }
+
+  /** @param {boolean} canToggleConversation */
+  _controllerNodes(canToggleConversation) {
+    return {
+      tabs: this._tabsEl,
+      details: this._detailsEl,
+      questionsPanel: this._questionsPanel,
+      questionList: this._qList,
+      progress: this._progressEl,
+      overrideEditor: this._overrideEditor,
+      remediation: this._remediationSection,
+      summary: this._summaryEl,
+      notes: this._notesEl,
+      appeal: this._appealEl,
+      conversation: this._conversationEl,
+      sourceCase: this._sourceCaseEl,
+      banner: this._bannerEl,
+      conversationToggle: canToggleConversation ? this._toggleBtn : null,
+      header: this._headerEl,
+      completeButton: this._btnEl,
+    };
   }
 }
 

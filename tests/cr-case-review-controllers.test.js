@@ -11,6 +11,11 @@ class StubEl {
     this.textContent = '';
     this.className = '';
     this.tagName = '';
+    /** @type {Record<string, Function[]>} */
+    this._listeners = {};
+    /** @type {any[]} */
+    this._updateArgs = [];
+    this.scrolled = false;
   }
   replaceChildren(/** @type {StubEl[]} */ ...children) {
     this._children = children;
@@ -24,6 +29,15 @@ class StubEl {
   }
   getAttribute(/** @type {string} */ key) {
     return this._attrs[key] ?? null;
+  }
+  addEventListener(/** @type {string} */ type, /** @type {Function} */ fn) {
+    (this._listeners[type] ??= []).push(fn);
+  }
+  update(/** @type {any[]} */ ...args) {
+    this._updateArgs = args;
+  }
+  scrollIntoView() {
+    this.scrolled = true;
   }
 }
 
@@ -40,6 +54,109 @@ class StubEl {
 
 const { CaseReviewHeaderController } =
   await import('../src/pages/cr-case-review/header-controller.js');
+const { QuestionPanelController, collectUnansweredQuestions } =
+  await import('../src/pages/cr-case-review/question-panel-controller.js');
+
+/** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
+const QUESTIONS = [
+  {
+    id: 'q-a',
+    text: 'A',
+    category: 'Basics',
+    responseType: 'yes-no-na',
+    deprecated: false,
+  },
+  { id: 'q-b', text: 'B', responseType: 'yes-no-na', deprecated: false },
+  {
+    id: 'q-c',
+    text: 'C',
+    category: 'Basics',
+    responseType: 'multi-choice',
+    deprecated: false,
+  },
+];
+
+/**
+ * @param {Partial<{
+ *   access: string,
+ *   answers: Record<string, any>,
+ *   questions: any[],
+ * }>} [opts]
+ */
+function makeQuestionContext(opts = {}) {
+  const questionsPanel = new StubEl();
+  const questionList = new StubEl();
+  const progress = new StubEl();
+  const overrideEditor = new StubEl();
+  const saveQueue = { id: 'queue' };
+  const client = { id: 'client' };
+  /** @type {Array<{ questionId: string, value: string | string[] }>} */
+  const answerCalls = [];
+  const answers = opts.answers ?? {
+    'q-a': { value: 'Yes' },
+    'q-b': { value: '' },
+    'q-c': { value: [] },
+  };
+  const questions = opts.questions ?? QUESTIONS;
+  return {
+    questionsPanel,
+    questionList,
+    progress,
+    overrideEditor,
+    answerCalls,
+    context: {
+      viewModel: {
+        caseRow: {
+          id: 'case-1',
+          title: 'Case One',
+          assignedReviewer: 'Alex Reviewer',
+        },
+        catalogue: QUESTIONS,
+        config: {
+          attributeFailures: true,
+          remediationFields: [{ key: 'detail', label: 'Detail' }],
+          computeOutcome: () => ({ outcome: 'pass' }),
+        },
+        answersSignal: { get: () => answers },
+        applicableQuestions: { get: () => questions },
+        currentUser: { id: 'user-1', displayName: 'Alex' },
+        access: { questions: opts.access ?? 'edit' },
+        client,
+        saveQueue,
+        handleAnswer(
+          /** @type {string} */ questionId,
+          /** @type {string | string[]} */ value
+        ) {
+          answerCalls.push({ questionId, value });
+        },
+      },
+      nodes: {
+        tabs: null,
+        details: null,
+        questionsPanel,
+        questionList,
+        progress,
+        overrideEditor,
+        remediation: null,
+        summary: null,
+        notes: null,
+        appeal: null,
+        conversation: null,
+        sourceCase: null,
+        banner: null,
+        conversationToggle: null,
+        header: null,
+        completeButton: null,
+      },
+      displayMode: (/** @type {any} */ mode) =>
+        mode === 'override' ? 'read-only' : mode,
+      completeCase: async () => {},
+      toggleConversationPanel: () => {},
+    },
+    saveQueue,
+    client,
+  };
+}
 
 /**
  * @param {{ canToggleConversation?: boolean, toggle?: StubEl | null }} [opts]
@@ -106,19 +223,97 @@ test.todo(
 // descriptors; assert hidden sections are omitted and activeTab receives
 // cr-tab-change ids.
 
-test.todo(
-  'QuestionPanelController: forwards answer and jump events to the view model and visible questions'
-);
-// TODO(issue-198): Verify cr-answer calls handleAnswer, section jumps scroll to
-// the matching category or General fallback, and jump-unanswered scrolls to the
-// first unanswered applicable question.
+test('QuestionPanelController: forwards answer and jump events to the view model and visible questions', () => {
+  const { context, questionsPanel, questionList, answerCalls } =
+    makeQuestionContext();
+  const generalQuestionEl = new StubEl();
+  /** @type {any} */ (generalQuestionEl).question = { id: 'q-b' };
+  const unansweredQuestionEl = new StubEl();
+  /** @type {any} */ (unansweredQuestionEl).question = {
+    id: 'q-c',
+    category: 'Basics',
+  };
+  const answeredQuestionEl = new StubEl();
+  /** @type {any} */ (answeredQuestionEl).question = {
+    id: 'q-a',
+    category: 'Basics',
+  };
+  /** @type {any} */ (questionList).questionElements = [
+    answeredQuestionEl,
+    generalQuestionEl,
+    unansweredQuestionEl,
+  ];
 
-test.todo(
-  'QuestionPanelController: assigns question list, progress, and override editor props'
-);
-// TODO(issue-198): Assert questions/answers/update calls, computeSectionProgress
-// inputs, and override-only editor configuration without depending on private
-// page fields.
+  new QuestionPanelController().bind(/** @type {any} */ (context));
+
+  questionsPanel._listeners['cr-answer'][0]({
+    detail: { questionId: 'q-a', value: 'No' },
+  });
+  questionsPanel._listeners['cr-section-jump'][0]({
+    detail: { section: 'General' },
+  });
+  questionsPanel._listeners['cr-jump-unanswered'][0]();
+
+  assert.deepEqual(answerCalls, [{ questionId: 'q-a', value: 'No' }]);
+  assert.equal(generalQuestionEl.scrolled, true);
+  assert.equal(unansweredQuestionEl.scrolled, false);
+  assert.equal(answeredQuestionEl.scrolled, false);
+});
+
+test('collectUnansweredQuestions: preserves empty string and empty array behavior', () => {
+  const unanswered = collectUnansweredQuestions({
+    questions: QUESTIONS,
+    answers: {
+      'q-a': { value: 'Yes' },
+      'q-b': { value: '' },
+      'q-c': { value: [] },
+    },
+    catalogue: QUESTIONS,
+  });
+
+  assert.deepEqual(
+    unanswered.map((q) => q.id),
+    ['q-b', 'q-c']
+  );
+});
+
+test('QuestionPanelController: assigns question list and progress props', () => {
+  const { context, questionsPanel, questionList, progress } =
+    makeQuestionContext();
+
+  new QuestionPanelController().update(/** @type {any} */ (context));
+
+  assert.equal(/** @type {any} */ (questionList).access, 'edit');
+  assert.equal(/** @type {any} */ (questionList).questions, QUESTIONS);
+  assert.equal(questionList._updateArgs[0], QUESTIONS);
+  assert.equal(progress._updateArgs.length, 2);
+  assert.deepEqual(
+    progress._updateArgs[1].map(
+      (
+        /** @type {import('../src/sharepoint-client.js').QuestionDefinition} */ q
+      ) => q.id
+    ),
+    ['q-b', 'q-c']
+  );
+  assert.equal(questionsPanel._children.length, 3);
+  assert.equal(questionsPanel._children[0].textContent, 'Questions');
+  assert.equal(questionsPanel._children[1], questionList);
+  assert.equal(questionsPanel._children[2], progress);
+});
+
+test('QuestionPanelController: configures the override editor only in override mode', () => {
+  const { context, questionsPanel, overrideEditor, saveQueue, client } =
+    makeQuestionContext({ access: 'override' });
+
+  new QuestionPanelController().update(/** @type {any} */ (context));
+
+  assert.equal(questionsPanel._children[3], overrideEditor);
+  assert.equal(/** @type {any} */ (overrideEditor).caseId, 'case-1');
+  assert.equal(/** @type {any} */ (overrideEditor).access, 'override');
+  assert.equal(/** @type {any} */ (overrideEditor).saveQueue, saveQueue);
+  assert.equal(/** @type {any} */ (overrideEditor).client, client);
+  assert.equal(/** @type {any} */ (overrideEditor).attributeFailures, true);
+});
 
 test.todo(
   'RemediationPanelController: forwards capture and attribution events'
