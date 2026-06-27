@@ -1,12 +1,22 @@
 // @ts-check
 
+/**
+ * @template T
+ * @typedef {{ get: () => T, set: (v: T) => void }} Signal
+ */
+
+/**
+ * @template T
+ * @typedef {{ get: () => T }} ComputedSignal
+ */
+
 /** @type {(() => void)|null} */
 let currentEffect = null;
 
 /**
  * @template T
  * @param {T} initialValue
- * @returns {{ get: () => T, set: (v: T) => void }}
+ * @returns {Signal<T>}
  */
 export function signal(initialValue) {
   let value = initialValue;
@@ -28,7 +38,7 @@ export function signal(initialValue) {
 /**
  * @template T
  * @param {() => T} fn
- * @returns {{ get: () => T }}
+ * @returns {ComputedSignal<T>}
  */
 export function computed(fn) {
   /** @type {T} */

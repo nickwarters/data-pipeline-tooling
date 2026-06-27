@@ -20,9 +20,9 @@ export class CRReviewerTeamReport extends ReactiveElement {
     this.eligibleCaseTypes = [];
 
     /** @type {import('../lib/signal.js').Signal<import('../evaluators/reviewer-team-aggregator.js').AggregateResult | null>} */
-    this._data = signal(null);
+    this._data = signal(/** @type {import('../evaluators/reviewer-team-aggregator.js').AggregateResult | null} */ (null));
     /** @type {import('../lib/signal.js').Signal<import('../evaluators/time-windows.js').TimeWindows | null>} */
-    this._windows = signal(null);
+    this._windows = signal(/** @type {import('../evaluators/time-windows.js').TimeWindows | null} */ (null));
   }
 
   async connectedCallback() {

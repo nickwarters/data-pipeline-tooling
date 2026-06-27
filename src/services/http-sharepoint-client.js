@@ -296,7 +296,7 @@ export class HttpSharePointClient {
    * @returns {Promise<any>}
    */
   async _request(url, options) {
-    const res = await this._fetchWithThrottle(url, options);
+    const res = await this._fetchWithThrottle(url, options ?? {});
     if (!res.ok) {
       const err = new Error(`HTTP Error: ${res.status}`);
       // @ts-ignore

@@ -16,18 +16,25 @@ import '../components/cr-source-case.js';
 import '../components/cr-status-banner.js';
 import '../components/cr-tabs.js';
 
+/** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
+/** @typedef {import('../services/save-queue.js').SaveQueue} SaveQueue */
+/** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
+/** @typedef {import('../sharepoint-client.js').Answer} Answer */
+/** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
+/** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
+
 export class CRCaseReview extends ReactiveElement {
   constructor() {
     super();
-    /** @type {import('../sharepoint-client.js').SharePointClient | null} */
+    /** @type {SharePointClient | null} */
     this.client = null;
-    /** @type {import('../services/save-queue.js').SaveQueue | null} */
+    /** @type {SaveQueue | null} */
     this.saveQueue = null;
     /** @type {string} */
     this.caseId = '';
     /** @type {string} */
     this.currentUserId = '';
-    /** @type {import('../services/permissions.js').Capabilities | null} */
+    /** @type {Capabilities | null} */
     this.capabilities = null;
 
     /** @type {CaseReviewViewModel | null} */
@@ -35,6 +42,42 @@ export class CRCaseReview extends ReactiveElement {
 
     /** @type {((e: KeyboardEvent) => void) | null} */
     this._keydownHandler = null;
+    /** @type {boolean} */
+    this._eventsBound = false;
+    /** @type {any} */
+    this._tabsEl = null;
+    /** @type {any} */
+    this._detailsEl = null;
+    /** @type {any} */
+    this._questionsPanel = null;
+    /** @type {any} */
+    this._qList = null;
+    /** @type {any} */
+    this._progressEl = null;
+    /** @type {any} */
+    this._overrideEditor = null;
+    /** @type {any} */
+    this._remediationSection = null;
+    /** @type {any} */
+    this._summaryEl = null;
+    /** @type {any} */
+    this._notesEl = null;
+    /** @type {any} */
+    this._appealEl = null;
+    /** @type {any} */
+    this._conversationEl = null;
+    /** @type {any} */
+    this._sourceCaseEl = null;
+    /** @type {any} */
+    this._bannerEl = null;
+    /** @type {any} */
+    this._toggleBtn = null;
+    /** @type {any} */
+    this._headerEl = null;
+    /** @type {any} */
+    this._btnEl = null;
+    /** @type {any} */
+    this._conversationToggleBtn = null;
   }
 
   async connectedCallback() {
@@ -60,6 +103,7 @@ export class CRCaseReview extends ReactiveElement {
     }
   }
 
+  /** @param {KeyboardEvent} e */
   _handleKeydown(e) {
     if (this._keydownHandler) {
       this._keydownHandler(e);
@@ -87,6 +131,20 @@ export class CRCaseReview extends ReactiveElement {
   }
 
   // Stub for tests asserting original methods
+  /**
+   * @param {{
+   *   access: Record<string, import('../services/section-access.js').Mode>,
+   *   caseRow: CaseRow,
+   *   catalogue: QuestionDefinition[],
+   *   computeOutcome: (answers: Record<string, Answer>) => import('../sharepoint-client.js').OutcomeResult,
+   *   answersSignal?: { get: () => Record<string, Answer> },
+   *   applicableQuestions?: { get: () => QuestionDefinition[] },
+   *   allAnswered?: { get: () => boolean },
+   *   currentUser: import('../sharepoint-client.js').CurrentUser,
+   *   client?: SharePointClient,
+   *   saveQueue?: SaveQueue
+   * } | null | undefined} opts
+   */
   _buildLayout(opts) {
     if (opts) {
       let activeTabId =
@@ -127,7 +185,7 @@ export class CRCaseReview extends ReactiveElement {
         },
         activeTab: {
           get: () => activeTabId,
-          set: (v) => {
+          set: (/** @type {string} */ v) => {
             activeTabId = v;
           },
         },
@@ -143,6 +201,12 @@ export class CRCaseReview extends ReactiveElement {
     else if (content) this.replaceChildren(content);
   }
 
+  /**
+   * @param {string} caseId
+   * @param {SharePointClient | null} [clientArg]
+   * @param {SaveQueue | null} [saveQueueArg]
+   * @param {Partial<CaseRow>} [patchFields]
+   */
   async _completeCase(caseId, clientArg, saveQueueArg, patchFields) {
     const client = clientArg ?? this.client;
     const saveQueue = saveQueueArg ?? this.saveQueue;
@@ -205,6 +269,7 @@ export class CRCaseReview extends ReactiveElement {
       new URLSearchParams(searchStr).get('conversation') ?? 'popover';
     this.setAttribute('data-conversation-mode', panelMode);
 
+    /** @param {import('../services/section-access.js').Mode} m */
     const displayMode = (m) => (m === 'override' ? 'read-only' : m);
 
     const tabs = [
@@ -269,21 +334,21 @@ export class CRCaseReview extends ReactiveElement {
 
     if (!this._eventsBound) {
       this._eventsBound = true;
-      this._tabsEl.addEventListener('cr-tab-change', (ev) =>
+      this._tabsEl.addEventListener('cr-tab-change', (/** @type {CustomEvent} */ ev) =>
         vm.activeTab.set(/** @type {any} */ (ev).detail.id)
       );
 
-      this._questionsPanel.addEventListener('cr-answer', (ev) =>
+      this._questionsPanel.addEventListener('cr-answer', (/** @type {CustomEvent} */ ev) =>
         vm.handleAnswer(
           /** @type {any} */ (ev).detail.questionId,
           /** @type {any} */ (ev).detail.value
         )
       );
-      this._questionsPanel.addEventListener('cr-section-jump', (ev) => {
+      this._questionsPanel.addEventListener('cr-section-jump', (/** @type {CustomEvent} */ ev) => {
         const sectionName = /** @type {any} */ (ev).detail.section;
         const children = this._qList.questionElements ?? [];
         const target = children.find(
-          /** @type {any} */ (c) =>
+          (/** @type {any} */ c) =>
             c.question?.category === sectionName ||
             (!c.question?.category && sectionName === 'General')
         );
@@ -292,7 +357,7 @@ export class CRCaseReview extends ReactiveElement {
       this._questionsPanel.addEventListener('cr-jump-unanswered', () => {
         const children = this._qList.questionElements ?? [];
         const target = children.find(
-          /** @type {any} */ (c) => {
+          (/** @type {any} */ c) => {
             if (!c.question) return false;
             const v = vm.answersSignal.get()[c.question.id]?.value;
             return Array.isArray(v) ? v.length === 0 : !v;
@@ -301,14 +366,14 @@ export class CRCaseReview extends ReactiveElement {
         target?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
       });
 
-      this._remediationSection.addEventListener('cr-capture', (ev) =>
+      this._remediationSection.addEventListener('cr-capture', (/** @type {CustomEvent} */ ev) =>
         vm.handleCapture(
           /** @type {any} */ (ev).detail.questionId,
           /** @type {any} */ (ev).detail.fieldKey,
           /** @type {any} */ (ev).detail.value
         )
       );
-      this._remediationSection.addEventListener('cr-attribute', (ev) =>
+      this._remediationSection.addEventListener('cr-attribute', (/** @type {CustomEvent} */ ev) =>
         vm.handleAttribute(
           /** @type {any} */ (ev).detail.questionId,
           /** @type {any} */ (ev).detail.attributedParty
@@ -319,7 +384,7 @@ export class CRCaseReview extends ReactiveElement {
         this._toggleConversationPanel()
       );
 
-      this._btnEl.addEventListener('click', (e) => {
+      this._btnEl.addEventListener('click', (/** @type {Event} */ e) => {
         const target = /** @type {any} */ (e?.target || this._btnEl);
         if (target.disabled) return;
         target.disabled = true;
@@ -357,7 +422,7 @@ export class CRCaseReview extends ReactiveElement {
     });
     if (this._qList.update) this._qList.update(questions, answers);
 
-    const unanswered = questions.filter((q) => {
+    const unanswered = questions.filter((/** @type {QuestionDefinition} */ q) => {
       const v = answers[q.id]?.value;
       return Array.isArray(v) ? v.length === 0 : !v;
     });

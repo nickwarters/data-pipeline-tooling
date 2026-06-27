@@ -24,7 +24,7 @@ export class CRResponsiblePartyDashboard extends ReactiveElement {
     this.currentUserId = '';
 
     /** @type {import('../lib/signal.js').Signal<CaseRow[]>} */
-    this._myCases = signal([]);
+    this._myCases = signal(/** @type {CaseRow[]} */ ([]));
     /** @type {import('../lib/signal.js').Signal<string>} */
     this._caseTypeFilterSignal = signal('');
   }
@@ -72,8 +72,8 @@ export class CRResponsiblePartyDashboard extends ReactiveElement {
         .map(([month, counts]) => ({ month, counts })),
     };
 
-    const remediationCases = cases.filter((c) => this._hasOpenActions(c));
-    const unreadCases = cases.filter((c) => this._hasUnreadMessages(c));
+    const remediationCases = cases.filter((/** @type {CaseRow} */ c) => this._hasOpenActions(c));
+    const unreadCases = cases.filter((/** @type {CaseRow} */ c) => this._hasUnreadMessages(c));
 
     return { outcomeSummary, remediationCases, unreadCases };
   }

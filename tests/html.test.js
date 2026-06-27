@@ -22,8 +22,14 @@ class StubEl {
     this._attrs = {};
     this.className = '';
     this.textContent = '';
-    this.value = '';
+    this._value = '';
     this.checked = false;
+  }
+  get value() {
+    return this._value;
+  }
+  set value(/** @type {string} */ v) {
+    this._value = v;
   }
   appendChild(/** @type {StubEl} */ c) {
     this._children.push(c);
@@ -90,7 +96,7 @@ test('h: a <select> reflects a value that matches an option appended after it', 
     h('option', { value: 'Med' }, 'Med'),
     h('option', { value: 'High' }, 'High')
   );
-  assert.equal(select.value, 'Med');
+  assert.equal(/** @type {any} */ (select).value, 'Med');
 });
 
 test('h: a <select> with no matching option falls back to the blank option', () => {
@@ -100,12 +106,12 @@ test('h: a <select> with no matching option falls back to the blank option', () 
     h('option', { value: '' }, '—'),
     h('option', { value: 'Low' }, 'Low')
   );
-  assert.equal(select.value, '');
+  assert.equal(/** @type {any} */ (select).value, '');
 });
 
 test('h: value still applies to a plain input', () => {
   const input = h('input', { type: 'text', value: 'hello' });
-  assert.equal(input.value, 'hello');
+  assert.equal(/** @type {any} */ (input).value, 'hello');
 });
 
 test('h: a value-less <select> defaults to its first option', () => {
@@ -115,5 +121,5 @@ test('h: a value-less <select> defaults to its first option', () => {
     h('option', { value: 'a' }, 'a'),
     h('option', { value: 'b' }, 'b')
   );
-  assert.equal(select.value, 'a');
+  assert.equal(/** @type {any} */ (select).value, 'a');
 });

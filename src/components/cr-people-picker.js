@@ -20,9 +20,16 @@ export class CRPeoplePicker extends ReactiveElement {
     this._searchPromise = undefined;
 
     // Internal state for rendering
+    /** @type {PersonResult[]} */
     this._people = [];
+    /** @type {string} */
     this._query = '';
+    /** @type {string} */
     this._inputValue = '';
+    /** @type {HTMLElement | null} */
+    this._input = null;
+    /** @type {HTMLElement | null} */
+    this._results = null;
   }
 
   connectedCallback() {

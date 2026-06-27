@@ -1,10 +1,12 @@
 // @ts-check
 
+/** @typedef {Node | string | number | null | false | Array<Node | string | number | null | false>} VNode */
+
 /**
  * A lightweight hyperscript-style element builder to replace manual document.createElement.
  * @param {string} tag
  * @param {Record<string, any>} [props]
- * @param  {...(HTMLElement | string | Array<HTMLElement | string> | null | false)} children
+ * @param  {...VNode} children
  * @returns {HTMLElement}
  */
 export function h(tag, props = {}, ...children) {
@@ -39,7 +41,7 @@ export function h(tag, props = {}, ...children) {
     if (Array.isArray(child)) {
       for (const c of child) append(c);
     } else if (child && typeof child === 'object' && 'appendChild' in child) {
-      el.appendChild(child);
+      el.appendChild(/** @type {Node} */ (child));
     } else {
       if (document.createTextNode) {
         el.appendChild(document.createTextNode(String(child)));
@@ -71,7 +73,7 @@ export function h(tag, props = {}, ...children) {
 /**
  * Fragment primitive for returning multiple elements
  * @param {Record<string, any>} _props
- * @param  {...(HTMLElement | string | Array<HTMLElement | string> | null | false)} children
+ * @param  {...VNode} children
  * @returns {DocumentFragment}
  */
 export function Fragment(_props, ...children) {
@@ -81,7 +83,7 @@ export function Fragment(_props, ...children) {
     if (Array.isArray(child)) {
       for (const c of child) append(c);
     } else if (child && typeof child === 'object' && 'appendChild' in child) {
-      frag.appendChild(child);
+      frag.appendChild(/** @type {Node} */ (child));
     } else {
       frag.appendChild(document.createTextNode(String(child)));
     }

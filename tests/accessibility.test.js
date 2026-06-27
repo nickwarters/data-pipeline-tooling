@@ -467,7 +467,7 @@ test('CRQuestionList: swapping a question (same count, different id) rebuilds th
   );
 
   assert.equal(list.questionElements[0], q1Host, 'q1 host is reused');
-  assert.equal(list.questionElements[1].question.id, 'q3', 'q3 host is fresh');
+  assert.equal(list.questionElements[1].question?.id, 'q3', 'q3 host is fresh');
 });
 
 test('CRQuestionList: multi-choice question with no answer initialises currentValue to empty array', () => {

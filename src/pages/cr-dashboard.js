@@ -34,7 +34,7 @@ export class CRDashboard extends ReactiveElement {
     this.eligibleCaseTypes = [];
 
     /** @type {import('../lib/signal.js').Signal<CaseRow[]>} */
-    this._cases = signal([]);
+    this._cases = signal(/** @type {CaseRow[]} */ ([]));
   }
 
   async connectedCallback() {

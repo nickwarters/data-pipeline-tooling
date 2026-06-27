@@ -57,6 +57,7 @@ export class CRConversation extends ReactiveElement {
   set messages(messages) {
     this.update(messages);
   }
+  /** @param {Message[]} messages */
   update(messages) {
     this._messages = messages;
     this._render();
@@ -116,20 +117,21 @@ export class CRConversation extends ReactiveElement {
   }
 
   _renderCompose() {
+    /** @type {HTMLTextAreaElement} */
     let textarea;
     return h(
       'div',
       { class: 'cr-conversation-compose' },
-      (textarea = h('textarea', {
+      (textarea = /** @type {HTMLTextAreaElement} */ (h('textarea', {
         class: 'cr-conversation-input',
         'aria-label': 'Message to Responsible Party',
-      })),
+      }))),
       h(
         'button',
         {
           class: 'cr-conversation-send',
           onclick: async () => {
-            const body = /** @type {any} */ (textarea.value ?? '').trim();
+            const body = (textarea.value ?? '').trim();
             if (!body) return;
             /** @type {any} */ (textarea).value = '';
             await this._sendMessage(body);

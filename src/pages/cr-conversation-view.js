@@ -26,7 +26,7 @@ export class CRConversationView extends ReactiveElement {
     this.currentUser = null;
 
     /** @type {import('../lib/signal.js').Signal<CaseRow | null>} */
-    this._caseRow = signal(null);
+    this._caseRow = signal(/** @type {CaseRow | null} */ (null));
   }
 
   async connectedCallback() {

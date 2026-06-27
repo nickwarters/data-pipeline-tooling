@@ -191,7 +191,7 @@ export class CRAttributeMenu extends ReactiveElement {
     const picker = h('cr-people-picker');
     const p = /** @type {any} */ (picker);
     p.client = this.client;
-    p.addEventListener('cr-person-selected', (ev) => {
+    p.addEventListener('cr-person-selected', (/** @type {CustomEvent<Party>} */ ev) => {
       const detail = /** @type {CustomEvent<Party>} */ (ev).detail;
       this._select({
         loginName: detail.loginName,

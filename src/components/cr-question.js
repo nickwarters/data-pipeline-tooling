@@ -40,6 +40,7 @@ export class CRQuestion extends ReactiveElement {
     if (input) input.focus();
   }
 
+  /** @returns {Node[] | undefined} */
   render() {
     const q = this.question;
     if (!q) return;
@@ -59,7 +60,7 @@ export class CRQuestion extends ReactiveElement {
           : this._renderSingleChoice(q)
       ),
       this._renderRemediationPanel(q),
-    ].filter(Boolean);
+    ].filter((node) => node !== null);
   }
 
   /**

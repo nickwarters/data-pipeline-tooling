@@ -76,7 +76,7 @@ const docListeners = {};
   _registry: {},
 };
 /** @type {any} */ (globalThis).customElements = {
-  define(tag, ctor) {
+  define(/** @type {string} */ tag, /** @type {CustomElementConstructor} */ ctor) {
     /** @type {any} */ (globalThis).document._registry[tag.toLowerCase()] =
       ctor;
   },
@@ -332,7 +332,7 @@ test('CRConversationView: cr-conversation is passed messages from caseRow', asyn
 
   const conversationEl = childrenOf(el)[1];
   assert.deepEqual(
-    conversationEl._messages,
+    /** @type {any} */ (conversationEl)._messages,
     conversation,
     'messages should be set from caseRow.conversation'
   );

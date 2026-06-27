@@ -23,6 +23,7 @@ class StubEl {
     this.eligibleCaseTypes = [];
     /** @type {string[]} */
     this.ownedCaseTypes = [];
+    /** @type {Record<string, string>} */
     this._attrs = {};
     this.cases = null;
   }

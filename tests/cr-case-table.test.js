@@ -391,11 +391,13 @@ test('CRCaseTable: aria-sort reflects current sort column and direction', () => 
   const refBtn2 = findAll(el, 'button').find(
     (b) => b.textContent === 'Reference'
   );
+  assert.ok(refBtn2);
   for (const h of refBtn2._listeners['click'] ?? []) h();
 
   const refTh2 = findAll(el, 'th').find(
     (th) => th.className === 'cr-col-reference'
   );
+  assert.ok(refTh2);
   assert.equal(
     refTh2.getAttribute('aria-sort'),
     'descending',

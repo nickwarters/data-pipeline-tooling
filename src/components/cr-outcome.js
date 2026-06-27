@@ -30,10 +30,10 @@ export class CROutcome extends ReactiveElement {
 
   _render() {
     const content = this.render();
-    if (content && typeof content === 'object' && 'appendChild' in content) {
-      this.replaceChildren(content);
-    } else if (Array.isArray(content)) {
+    if (Array.isArray(content)) {
       this.replaceChildren(...content);
+    } else if (content && typeof content === 'object' && 'appendChild' in content) {
+      this.replaceChildren(content);
     } else {
       this.replaceChildren(); // empty
     }

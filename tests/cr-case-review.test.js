@@ -3,6 +3,24 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CaseMachine } from '../src/lib/case-machine.js';
 
+/** @type {import('../src/services/permissions.js').Capabilities} */
+const NO_CAPABILITIES = {
+  isReviewer: false,
+  ownedCaseTypes: [],
+  isResponsibleParty: false,
+  isReviewerManager: false,
+  isResponsiblePartyManager: false,
+  isMaintainer: false,
+  isQaReviewer: false,
+  isVisitor: true,
+};
+
+/** @type {import('../src/sharepoint-client.js').CaseTypeConfig} */
+const EMPTY_CASE_TYPE_CONFIG = {
+  questions: [],
+  computeOutcome: () => ({ verdict: 'pass' }),
+};
+
 // ===== MINIMAL DOM STUBS =====
 class StubEl {
   constructor() {
@@ -766,8 +784,8 @@ test('CRCaseReview: _completeCase stamps the frozen outcome snapshot in the same
   const machine = new CaseMachine(
     BASE_ROW,
     { id: 'test' },
-    { ownedCaseTypes: [] },
-    {}
+    NO_CAPABILITIES,
+    EMPTY_CASE_TYPE_CONFIG
   );
   const patchFields = machine.transitionToCompleted(computeOutcome, answers);
   await el._completeCase(
@@ -819,8 +837,8 @@ test('CRCaseReview: _completeCase initialises the effective-outcome columns equa
   const machine = new CaseMachine(
     BASE_ROW,
     { id: 'test' },
-    { ownedCaseTypes: [] },
-    {}
+    NO_CAPABILITIES,
+    EMPTY_CASE_TYPE_CONFIG
   );
   const patchFields = machine.transitionToCompleted(computeOutcome, answers);
   await el._completeCase(
@@ -866,8 +884,8 @@ test('CRCaseReview: hadRemediation=true is mutually exclusive with outcomeAtComp
   const machine = new CaseMachine(
     BASE_ROW,
     { id: 'test' },
-    { ownedCaseTypes: [] },
-    {}
+    NO_CAPABILITIES,
+    EMPTY_CASE_TYPE_CONFIG
   );
   const patchFields = machine.transitionToCompleted(computeOutcome, answers);
   await el._completeCase(
@@ -1618,7 +1636,7 @@ test('CRCaseReview: _buildLayout with access.conversation=hidden omits toggle bu
   const { signal: signalFn, computed: computedFn } = /** @type {any} */ (
     // Re-use the already-imported signal module by grabbing it from the live module.
     // We reconstruct minimal stubs using plain objects since signal is already loaded.
-    {}
+    EMPTY_CASE_TYPE_CONFIG
   );
 
   // Build the minimal signal stubs _buildLayout needs
@@ -2668,8 +2686,8 @@ test('CaseMachine.transitionToCompleted stamps questionBankVersion when provided
   const machine = new CaseMachine(
     BASE_ROW,
     { id: 'u1' },
-    { ownedCaseTypes: [] },
-    {}
+    NO_CAPABILITIES,
+    EMPTY_CASE_TYPE_CONFIG
   );
   const fields = machine.transitionToCompleted(
     null,
@@ -2687,8 +2705,8 @@ test('CaseMachine.transitionToCompleted omits questionBankVersion when null', ()
   const machine = new CaseMachine(
     BASE_ROW,
     { id: 'u1' },
-    { ownedCaseTypes: [] },
-    {}
+    NO_CAPABILITIES,
+    EMPTY_CASE_TYPE_CONFIG
   );
   const fields = machine.transitionToCompleted(null, undefined, null);
   assert.equal(
@@ -2702,8 +2720,8 @@ test('CaseMachine.transitionToCompleted omits questionBankVersion when not provi
   const machine = new CaseMachine(
     BASE_ROW,
     { id: 'u1' },
-    { ownedCaseTypes: [] },
-    {}
+    NO_CAPABILITIES,
+    EMPTY_CASE_TYPE_CONFIG
   );
   const fields = machine.transitionToCompleted(null, undefined);
   assert.equal(

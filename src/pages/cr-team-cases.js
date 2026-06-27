@@ -22,7 +22,7 @@ export class CRTeamCases extends ReactiveElement {
     this.queryString = '';
 
     /** @type {import('../lib/signal.js').Signal<import('../sharepoint-client.js').CaseRow[] | null>} */
-    this._cases = signal(null);
+    this._cases = signal(/** @type {import('../sharepoint-client.js').CaseRow[] | null} */ (null));
   }
 
   async connectedCallback() {

@@ -23,7 +23,7 @@ export class CRHome extends ReactiveElement {
       return [];
     }
 
-    /** @type {import('../lib/html.js').VNode[]} */
+    /** @type {Node[]} */
     const sections = [];
 
     if (caps.isReviewer) {
@@ -61,7 +61,7 @@ export class CRHome extends ReactiveElement {
   /**
    * @param {string} roleName
    * @param {string} href
-   * @returns {import('../lib/html.js').VNode}
+   * @returns {Node}
    */
   _roleSection(roleName, href) {
     return h(
@@ -72,7 +72,7 @@ export class CRHome extends ReactiveElement {
     );
   }
 
-  /** @returns {import('../lib/html.js').VNode} */
+  /** @returns {Node} */
   _visitorSection() {
     return h(
       'section',

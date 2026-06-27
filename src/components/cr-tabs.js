@@ -43,6 +43,8 @@ export class CRTabs extends ReactiveElement {
     this._uid = `cr-tabs-${uid++}`;
     /** Set to the tab id that should receive focus on the next render. */
     this._focusId = '';
+    /** @type {HTMLElement | null} */
+    this._focusNode = null;
   }
 
   /** @returns {Tab[]} the visible (non-hidden) tabs, in declared order. */

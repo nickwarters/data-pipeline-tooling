@@ -58,7 +58,7 @@ export class CRNotes extends ReactiveElement {
         'aria-label': label,
         readOnly: isReadOnly ? true : undefined,
         readonly: isReadOnly ? 'readonly' : undefined,
-        oninput: (ev) => {
+        oninput: (/** @type {Event} */ ev) => {
           if (this.access === 'read-only') return;
           if (!this.saveQueue || !this.caseId) return;
           const val = /** @type {any} */ (ev.target).value ?? '';

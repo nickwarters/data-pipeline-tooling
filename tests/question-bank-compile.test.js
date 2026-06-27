@@ -555,13 +555,13 @@ test('buildPublishArtifacts: current JSON includes labels table (ADR-0021 Step 5
 test('buildPublishArtifacts: versioned JSON omits labels table (ADR-0021 Step 5)', () => {
   const r = buildPublishArtifacts(pubEnvelopeWithLabels, null);
   assert.ok(r.versionedJson !== null);
-  const versioned = JSON.parse(r.versionedJson);
+  const versioned = JSON.parse(/** @type {string} */ (r.versionedJson));
   assert.ok(!('labels' in versioned), 'versioned file must not carry the label table');
 });
 
 test('buildPublishArtifacts: versioned JSON still carries all other envelope fields', () => {
   const r = buildPublishArtifacts(pubEnvelopeWithLabels, null);
-  const versioned = JSON.parse(r.versionedJson);
+  const versioned = JSON.parse(/** @type {string} */ (r.versionedJson));
   assert.equal(versioned.slug, pubEnvelopeWithLabels.slug);
   assert.equal(versioned.hash, pubEnvelopeWithLabels.hash);
   assert.equal(versioned.generatedAt, pubEnvelopeWithLabels.generatedAt);

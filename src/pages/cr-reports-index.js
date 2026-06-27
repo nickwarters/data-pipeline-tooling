@@ -21,7 +21,7 @@ export class CRReportsIndex extends ReactiveElement {
   }
 
   render() {
-    /** @type {import('../lib/html.js').VNode[]} */
+    /** @type {Node[]} */
     const children = [];
 
     if (this.capabilities.isReviewerManager) {

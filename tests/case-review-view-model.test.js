@@ -91,7 +91,7 @@ test('CaseReviewViewModel.load() calls getExportHash with the case type slug and
         etag: 'e1',
       }),
       getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
-      getExportHash: async (slug) =>
+      getExportHash: async (/** @type {string} */ slug) =>
         slug === 'example-review' ? 'sha256:testHash' : null,
       resolveUsers: async () => ({}),
     }),

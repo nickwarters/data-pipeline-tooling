@@ -72,7 +72,7 @@ class StubCustomEvent {
   removeEventListener() {},
 };
 /** @type {any} */ (globalThis).customElements = {
-  define(tag, ctor) {
+  define(/** @type {string} */ tag, /** @type {CustomElementConstructor} */ ctor) {
     /** @type {any} */ (globalThis).document._registry[tag.toLowerCase()] =
       ctor;
   },

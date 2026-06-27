@@ -118,6 +118,7 @@ export class CRShowwhenGroup extends ReactiveElement {
         )
     );
 
+    /** @type {HTMLElement[]} */
     const childElements = [];
     group.children.forEach(
       (/** @type {any} */ child, /** @type {number} */ idx) => {

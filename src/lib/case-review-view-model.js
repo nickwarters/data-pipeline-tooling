@@ -20,6 +20,8 @@ import { CaseMachine } from './case-machine.js';
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
+/** @typedef {import('../sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
+/** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
 
 export class CaseReviewViewModel {
   /**
@@ -114,10 +116,11 @@ export class CaseReviewViewModel {
         ? this.client.getVersionedExport(caseRow.caseType, versionHash)
         : Promise.resolve(null),
     ]);
-    this.config = caseTypeModule.default;
+    const config = /** @type {CaseTypeConfig} */ (caseTypeModule.default);
+    this.config = config;
     this.exportHash = exportHash;
 
-    validateCaptureGroups(this.config.captureGroups);
+    validateCaptureGroups(config.captureGroups);
 
     if (versionHash && versionedExport) {
       // Completed Case with a published snapshot — freeze the catalogue as-reviewed.
@@ -139,7 +142,7 @@ export class CaseReviewViewModel {
         // Versioned file was stamped but not published — fall back with a warning.
         this.versionWarning.set('as-reviewed version unavailable');
       }
-      this.catalogue = this.config.questions.filter((q) => !q.deprecated);
+      this.catalogue = config.questions.filter((q) => !q.deprecated);
     }
 
     this.catalogueById = new Map(this.catalogue.map((q) => [q.id, q]));
@@ -162,7 +165,7 @@ export class CaseReviewViewModel {
       caseRow,
       { id: actualUserId },
       caps,
-      this.config
+      config
     );
     this.roles = this.machine.roles;
     this.access = this.machine.access;
@@ -174,7 +177,7 @@ export class CaseReviewViewModel {
     }
 
     this.summarySections = SUMMARY_SECTIONS.filter(
-      (s) => this.access[s] !== 'hidden' && showInSummary(s, this.config)
+      (s) => this.access[s] !== 'hidden' && showInSummary(s, config)
     );
 
     this.sourceCase = caseRow.sourceCaseId
@@ -208,6 +211,10 @@ export class CaseReviewViewModel {
     this.conversationHidden.set(!this.conversationHidden.get());
   }
 
+  /**
+   * @param {string} questionId
+   * @param {string | string[]} value
+   */
   handleAnswer(questionId, value) {
     if (this.access.questions !== 'edit') return;
     const q = this.catalogueById.get(questionId);
@@ -229,6 +236,11 @@ export class CaseReviewViewModel {
     this.saveQueue.enqueue(this.caseId, 'answers', newAnswers);
   }
 
+  /**
+   * @param {string} questionId
+   * @param {string} fieldKey
+   * @param {string} value
+   */
   handleCapture(questionId, fieldKey, value) {
     if (!this.machine?.canCapture) return;
     const current = this.answersSignal.get();
@@ -265,6 +277,10 @@ export class CaseReviewViewModel {
     if (window.scrollX !== x || window.scrollY !== y) window.scrollTo(x, y);
   }
 
+  /**
+   * @param {string} questionId
+   * @param {{ loginName: string, displayName: string } | null} attributedParty
+   */
   handleAttribute(questionId, attributedParty) {
     if (!this.machine?.canAttribute) return;
     const current = this.answersSignal.get();
@@ -283,6 +299,7 @@ export class CaseReviewViewModel {
   }
 
   async _resolveAttributedParties() {
+    /** @type {string[]} */
     const accounts = [];
     for (const answer of Object.values(this.answersSignal.get())) {
       const login = answer.attributedParty?.loginName;
@@ -292,6 +309,7 @@ export class CaseReviewViewModel {
 
     const resolved = await this.client.resolveUsers(accounts);
     let changed = false;
+    /** @type {Record<string, Answer>} */
     const next = {};
     for (const [id, answer] of Object.entries(this.answersSignal.get())) {
       const party = answer.attributedParty;
@@ -309,6 +327,14 @@ export class CaseReviewViewModel {
     if (changed) this.answersSignal.set(next);
   }
 
+  /**
+   * @param {string} sourceCaseId
+   * @param {string} qaCaseId
+   * @param {SharePointClient} client
+   * @param {SaveQueue} saveQueue
+   * @param {string} currentUserId
+   * @param {Capabilities} capabilities
+   */
   async _resolveSourceCase(
     sourceCaseId,
     qaCaseId,
@@ -332,7 +358,7 @@ export class CaseReviewViewModel {
 
     saveQueue.loadCase(original);
     const mod = await import(`../../case-types/${original.caseType}.js`);
-    const origConfig = mod.default;
+    const origConfig = /** @type {CaseTypeConfig} */ (mod.default);
     const origCatalogue = origConfig.questions.filter((q) => !q.deprecated);
 
     const origMachine = new CaseMachine(

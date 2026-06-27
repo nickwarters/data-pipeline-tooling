@@ -247,7 +247,7 @@ test('CRCaptureGroups: radio names are scoped per instance so separate Answers a
   const b = new CRCaptureGroups();
   a.update(GROUPS, {}, true);
   b.update(GROUPS, {}, true);
-  a._fire('click'); // no-op safety
+  /** @type {any} */ (a)._fire('click'); // no-op safety
   findAllByClass(a, 'cr-capture-group-header')[1]._fire('click'); // expand Grading
   findAllByClass(b, 'cr-capture-group-header')[1]._fire('click');
 

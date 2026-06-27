@@ -85,7 +85,9 @@ export class CRQuestionList extends ReactiveElement {
       const found = this.querySelector(
         `[data-focus-key="${focusKey.replace(/(["\\])/g, '\\$1')}"]`
       );
-      if (found && found !== doc.activeElement) found.focus?.();
+      if (found && found !== doc?.activeElement) {
+        /** @type {HTMLElement} */ (found).focus?.();
+      }
     };
   }
 
@@ -111,6 +113,7 @@ export class CRQuestionList extends ReactiveElement {
   }
 
   render() {
+    /** @type {Map<string, import('./cr-question.js').CRQuestion>} */
     const existingElements = new Map();
     if (this.questionElements) {
       for (const el of this.questionElements) {

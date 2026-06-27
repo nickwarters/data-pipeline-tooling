@@ -75,6 +75,12 @@ function makeClient({ patchResponses = [], getCaseRow } = {}) {
     async resolveUsers() {
       return {};
     },
+    async getExportHash() {
+      return null;
+    },
+    async getVersionedExport() {
+      return null;
+    },
   };
 }
 
