@@ -524,7 +524,7 @@ test('CRCaseReview: _completeCase patches status:Completed with completedAt usin
   assert.equal(client.patchCalls[0].etag, caseCompletable.etag);
 });
 
-test('CRCaseReview: cr-answer with failing value materializes remediationActions into the saved Answer', async () => {
+test('CRCaseReview: cr-answer with failing value does not auto-select remediationActions', async () => {
   const client = makeStubClient({ getRow: caseUntouched });
   const saveQueue = new SaveQueue(/** @type {any} */ (client), {
     debounceMs: 0,
@@ -548,7 +548,8 @@ test('CRCaseReview: cr-answer with failing value materializes remediationActions
   el.caseId = caseUntouched.id;
   await el.connectedCallback();
 
-  // Find the section element and dispatch a cr-answer for q-needs = No (a failure with remediationActions)
+  // Find the section element and dispatch a cr-answer for q-needs = No
+  // (a failure with available, but not selected, remediationActions).
   const section = questionSectionOf(el);
   const handler = section._listeners['cr-answer'][0];
   handler({ detail: { questionId: 'q-needs', value: 'No' } });
@@ -556,16 +557,11 @@ test('CRCaseReview: cr-answer with failing value materializes remediationActions
   assert.equal(enqueued.length, 1);
   const saved = enqueued[0].fields.answers;
   assert.equal(saved['q-needs'].value, 'No');
-  assert.ok(
-    Array.isArray(saved['q-needs'].remediationActions),
-    'remediationActions should be materialized'
-  );
-  assert.equal(saved['q-needs'].remediationActions.length, 1);
   assert.equal(
-    saved['q-needs'].remediationActions[0].text,
-    'Retrain agent on needs-identification protocol.'
+    saved['q-needs'].remediationActions,
+    undefined,
+    'remediationActions should not be selected automatically'
   );
-  assert.equal(saved['q-needs'].remediationActions[0].completed, false);
 });
 
 test('CRCaseReview: changing a failed Answer to a passing value strips remediationActions', async () => {

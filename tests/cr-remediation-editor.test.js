@@ -72,7 +72,9 @@ test('CRRemediationEditor: edit a remediation action via change event', () => {
   const item = wrap._children[2]; // h4, free-row, item, add-btn
   const input = item._children[0];
   input._listeners.change[0]({ target: { value: 'New action' } });
-  assert.deepEqual(q.remediationActions, ['New action']);
+  assert.deepEqual(q.remediationActions, [
+    { id: 'q-ra-0', text: 'New action' },
+  ]);
 });
 
 test('CRRemediationEditor: × removes action; deletes field when empty', () => {
@@ -89,7 +91,7 @@ test('CRRemediationEditor: × removes action; deletes field when empty', () => {
   e.connectedCallback();
   const wrap = /** @type {any} */ (e)._children[0];
   const item = wrap._children[2];
-  const x = item._children[1];
+  const x = item._children[2];
   x._listeners.click[0]();
   assert.equal('remediationActions' in q, false);
 });
@@ -103,5 +105,58 @@ test('CRRemediationEditor: + canned action initialises array if missing', () => 
   const wrap = /** @type {any} */ (e)._children[0];
   const addBtn = wrap._children[wrap._children.length - 1];
   addBtn._listeners.click[0]();
-  assert.deepEqual(q.remediationActions, ['New action']);
+  assert.deepEqual(q.remediationActions, [
+    { id: 'q-ra-0', text: 'New action' },
+  ]);
+});
+
+test('CRRemediationEditor: configures no-action outcome for failed questions', () => {
+  /** @type {any} */
+  const q = {
+    id: 'q',
+    text: '',
+    responseType: 'yes-no-na',
+    failureCriteria: 'No',
+    deprecated: false,
+  };
+  const e = new CRRemediationEditor();
+  e.question = q;
+  e.connectedCallback();
+  const wrap = /** @type {any} */ (e)._children[0];
+  const outcomeBlock = wrap._children[2];
+  const addOutcome = outcomeBlock._children[1];
+
+  addOutcome._listeners.click[0]();
+
+  assert.deepEqual(q.outcome, {
+    noAction: { verdict: 'fail', wording: 'Fail', rank: 100 },
+  });
+});
+
+test('CRRemediationEditor: configures action-level outcome descriptor', () => {
+  /** @type {any} */
+  const q = {
+    id: 'q',
+    text: '',
+    responseType: 'yes-no-na',
+    deprecated: false,
+    remediationActions: ['Legacy action'],
+  };
+  const e = new CRRemediationEditor();
+  e.question = q;
+  e.connectedCallback();
+  const wrap = /** @type {any} */ (e)._children[0];
+  const item = wrap._children[2];
+  const actionOutcome = item._children[1];
+  const addOutcome = actionOutcome._children[0];
+
+  addOutcome._listeners.click[0]();
+
+  assert.deepEqual(q.remediationActions, [
+    {
+      id: 'q-ra-0',
+      text: 'Legacy action',
+      outcome: { verdict: 'fail', wording: 'Fail', rank: 100 },
+    },
+  ]);
 });

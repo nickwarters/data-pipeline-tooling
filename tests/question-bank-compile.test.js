@@ -39,15 +39,13 @@ test('compileBank: emits header, eligibleGroups, computeOutcome, export', () => 
   assert.ok(out.startsWith('// @ts-check'));
   assert.ok(
     out.includes(
-      `import { countConfiguredFailures } from '../src/evaluators/failure-evaluator.js';`
+      `import { computeConfiguredOutcome } from '../src/evaluators/configured-outcome.js';`
     )
   );
   assert.ok(out.includes(`eligibleGroups: ["Reviewers"]`));
   assert.ok(out.includes('computeOutcome(answers)'));
   assert.ok(
-    out.includes(
-      'const failures = countConfiguredFailures(config.questions, answers);'
-    )
+    out.includes('return computeConfiguredOutcome(config.questions, answers);')
   );
   assert.ok(out.endsWith('export default config;'));
 });
@@ -78,8 +76,8 @@ test('compileBank: default outcome is driven by failureCriteria, not raw No answ
 
   const moduleUrl = `data:text/javascript,${encodeURIComponent(
     out.replace(
-      `../src/evaluators/failure-evaluator.js`,
-      new URL('../src/evaluators/failure-evaluator.js', import.meta.url).href
+      `../src/evaluators/configured-outcome.js`,
+      new URL('../src/evaluators/configured-outcome.js', import.meta.url).href
     )
   )}`;
   const { default: compiledConfig } = await import(moduleUrl);
@@ -88,13 +86,13 @@ test('compileBank: default outcome is driven by failureCriteria, not raw No answ
     compiledConfig.computeOutcome({
       'q-general-info': { value: 'No' },
     }),
-    { verdict: 'pass' }
+    { verdict: 'pass', wording: 'Pass' }
   );
   assert.deepStrictEqual(
     compiledConfig.computeOutcome({
       'q-required-check': { value: 'No' },
     }),
-    { verdict: 'fail' }
+    { verdict: 'fail', wording: 'Fail' }
   );
 });
 
@@ -170,6 +168,33 @@ test('compileBank: emits remediationActions array when present', () => {
   assert.ok(out.includes('remediationActions: ['));
   assert.ok(out.includes('"Action 1"'));
   assert.ok(out.includes('"Action 2"'));
+});
+
+test('compileBank: emits configured no-action and action outcome descriptors', () => {
+  const out = compileBank(
+    bank({
+      id: 'q1',
+      text: 'T',
+      responseType: 'yes-no-na',
+      failureCriteria: 'No',
+      outcome: { noAction: { verdict: 'fail', wording: 'Fail', rank: 100 } },
+      remediationActions: [
+        {
+          id: 'impact',
+          text: 'Customer impact identified',
+          outcome: { verdict: 'fail', wording: 'Fail with impact', rank: 120 },
+        },
+      ],
+      deprecated: false,
+    })
+  );
+  assert.ok(
+    out.includes(
+      'outcome: {"noAction":{"verdict":"fail","wording":"Fail","rank":100}}'
+    )
+  );
+  assert.ok(out.includes('"id":"impact"'));
+  assert.ok(out.includes('"wording":"Fail with impact"'));
 });
 
 test('compileBank: emits allowFreeFormRemediation when truthy', () => {
@@ -444,13 +469,30 @@ test('compileExport: key order in question objects does not affect hash', async 
   assert.equal(a.hash, b.hash);
 });
 
-test('compileExport: excludes computeOutcome, remediationActions, allowFreeFormRemediation, eligibleGroups', async () => {
+test('compileExport: excludes computeOutcome, allowFreeFormRemediation, eligibleGroups', async () => {
   const bankWithExtras = {
     ...exportBank,
     questions: [
       {
         ...exportBank.questions[0],
-        remediationActions: ['Fix it'],
+        outcome: {
+          noAction: {
+            verdict: /** @type {const} */ ('fail'),
+            wording: 'Fail',
+            rank: 100,
+          },
+        },
+        remediationActions: [
+          {
+            id: 'fix-it',
+            text: 'Fix it',
+            outcome: {
+              verdict: /** @type {const} */ ('refer'),
+              wording: 'Refer',
+              rank: 50,
+            },
+          },
+        ],
         allowFreeFormRemediation: true,
       },
       exportBank.questions[1],
@@ -460,9 +502,18 @@ test('compileExport: excludes computeOutcome, remediationActions, allowFreeFormR
   assert.ok(!('computeOutcome' in result));
   assert.ok(!('eligibleGroups' in result));
   for (const q of result.questions) {
-    assert.ok(!('remediationActions' in q));
     assert.ok(!('allowFreeFormRemediation' in q));
   }
+  assert.deepEqual(result.questions[0].outcome, {
+    noAction: { verdict: 'fail', wording: 'Fail', rank: 100 },
+  });
+  assert.deepEqual(result.questions[0].remediationActions, [
+    {
+      id: 'fix-it',
+      text: 'Fix it',
+      outcome: { verdict: 'refer', wording: 'Refer', rank: 50 },
+    },
+  ]);
 });
 
 test('compileExport: includes labelIds per question when present (ADR-0021 Step 5)', async () => {
@@ -550,6 +601,8 @@ test('compileExport: absent optional question fields are emitted as null', async
   assert.equal(q.options, null);
   assert.equal(q.showWhen, null);
   assert.equal(q.failureCriteria, null);
+  assert.equal(q.outcome, null);
+  assert.equal(q.remediationActions, null);
 });
 
 test('compileExport: present optional question fields are carried through', async () => {

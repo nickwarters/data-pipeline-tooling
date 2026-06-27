@@ -649,6 +649,7 @@ function qDefFromItem(raw) {
   const opts = parseJsonField(item?.Options, undefined);
   const showWhen = parseJsonField(item?.ShowWhen, undefined);
   const remediation = parseJsonField(item?.RemediationActions, undefined);
+  const outcome = parseJsonField(item?.Outcome, undefined);
   return {
     id: String(item?.QuestionId ?? item?.Id ?? ''),
     text: String(item?.QuestionText ?? item?.Title ?? ''),
@@ -665,8 +666,16 @@ function qDefFromItem(raw) {
         ? item.FailureCriteria
         : undefined,
     remediationActions: Array.isArray(remediation)
-      ? /** @type {string[]} */ (remediation)
+      ? /** @type {import('../sharepoint-client.js').QuestionDefinition['remediationActions']} */ (
+          remediation
+        )
       : undefined,
+    outcome:
+      outcome && typeof outcome === 'object'
+        ? /** @type {import('../sharepoint-client.js').QuestionDefinition['outcome']} */ (
+            outcome
+          )
+        : undefined,
     deprecated: Boolean(item?.Deprecated ?? false),
   };
 }

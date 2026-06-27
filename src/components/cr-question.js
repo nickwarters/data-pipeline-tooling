@@ -1,5 +1,6 @@
 // @ts-check
 import { ReactiveElement } from './reactive-element.js';
+import { normaliseConfiguredActions } from '../evaluators/configured-outcome.js';
 import { isFailure } from '../evaluators/failure-evaluator.js';
 import { h } from '../lib/html.js';
 
@@ -78,7 +79,9 @@ export class CRQuestion extends ReactiveElement {
       h(
         'ul',
         {},
-        q.remediationActions.map((text) => h('li', {}, text))
+        normaliseConfiguredActions(q.remediationActions, q.id).map((action) =>
+          h('li', {}, action.text)
+        )
       )
     );
   }

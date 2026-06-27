@@ -323,9 +323,9 @@ test('CROverrideEditor: an Override re-stamps the effective-outcome columns in t
   );
 });
 
-test('CROverrideEditor: a pass→fail Override re-stamps effectiveOutcome=fail with remediation', () => {
-  // q1 is a passing Answer (Yes); override it to a failing No → the canned
-  // Remediation Action materialises onto the Effective Answer.
+test('CROverrideEditor: a pass→fail Override re-stamps effectiveOutcome=fail without auto-selecting remediation', () => {
+  // q1 is a passing Answer (Yes); override it to a failing No. Configured
+  // Remediation Actions are available choices, not selected choices.
   const { el, queue } = makeEditor();
   author(el, {
     answerKey: 'q1',
@@ -337,8 +337,8 @@ test('CROverrideEditor: a pass→fail Override re-stamps effectiveOutcome=fail w
   assert.equal(fields.effectiveOutcome, 'fail');
   assert.equal(
     fields.effectiveHadRemediation,
-    true,
-    'a newly-failed Answer carries Remediation Actions'
+    false,
+    'a newly-failed Answer has no selected Remediation Actions'
   );
   assert.equal(fields.outcomeOverridden, true);
 });
@@ -438,11 +438,11 @@ test('CROverrideEditor: a satisfied pass→fail Override saves the complete repl
     displayName: 'J Doe',
   });
   assert.equal(saved.remediationDetails.rootCause, 'Training gap');
-  assert.ok(
-    saved.remediationActions?.length,
-    'the canned replacement action set is attached'
+  assert.equal(
+    saved.remediationActions,
+    undefined,
+    'no canned replacement action is selected automatically'
   );
-  assert.equal(saved.remediationActions[0].text, 'Re-record');
 });
 
 test('CROverrideEditor: a select-type Remediation Detail is captured and saved', () => {

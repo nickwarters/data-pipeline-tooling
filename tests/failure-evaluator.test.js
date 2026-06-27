@@ -104,12 +104,9 @@ test('countConfiguredFailures: counts answers matching configured failureCriteri
 
 // ===== materializeRemediationActions =====
 
-test('materializeRemediationActions: hydrates actions on failed answer', () => {
+test('materializeRemediationActions: leaves no selected actions on a newly failed answer', () => {
   const out = materializeRemediationActions(Q_FAIL_NO, { value: 'No' });
-  assert.deepEqual(out.remediationActions, [
-    { id: 'q-needs-ra-0', text: 'Retrain agent.', completed: false },
-    { id: 'q-needs-ra-1', text: 'Update script.', completed: false },
-  ]);
+  assert.equal(out.remediationActions, undefined);
 });
 
 test('materializeRemediationActions: preserves justification on failed answer', () => {
@@ -119,7 +116,19 @@ test('materializeRemediationActions: preserves justification on failed answer', 
   });
   assert.equal(out.value, 'No');
   assert.equal(out.justification, 'Skipped');
-  assert.equal(out.remediationActions?.length, 2);
+  assert.equal(out.remediationActions, undefined);
+});
+
+test('materializeRemediationActions: preserves selected actions on a still-failing answer', () => {
+  const out = materializeRemediationActions(Q_FAIL_NO, {
+    value: 'No',
+    remediationActions: [
+      { id: 'q-needs-ra-1', text: 'Update script.', completed: false },
+    ],
+  });
+  assert.deepEqual(out.remediationActions, [
+    { id: 'q-needs-ra-1', text: 'Update script.', completed: false },
+  ]);
 });
 
 test('materializeRemediationActions: strips remediationActions when answer becomes passing', () => {

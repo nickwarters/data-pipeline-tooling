@@ -99,6 +99,30 @@ test('CROutcome: shows fail verdict when allAnswered is true and any answer is N
   assert.equal(verdict.textContent, 'Fail');
 });
 
+test('CROutcome: renders configured wording while styling by verdict', () => {
+  const el = new CROutcome();
+  el.connectedCallback();
+  el.update(
+    () => ({ verdict: 'pass', wording: 'Pass with feedback' }),
+    {},
+    true
+  );
+
+  const verdict = /** @type {any} */ (el)._children[1];
+  assert.equal(verdict.className, 'cr-outcome-pass');
+  assert.equal(verdict.textContent, 'Pass with feedback');
+});
+
+test('CROutcome: supports refer verdict fallback wording', () => {
+  const el = new CROutcome();
+  el.connectedCallback();
+  el.update(() => ({ verdict: 'refer' }), {}, true);
+
+  const verdict = /** @type {any} */ (el)._children[1];
+  assert.equal(verdict.className, 'cr-outcome-refer');
+  assert.equal(verdict.textContent, 'Refer');
+});
+
 test('CROutcome: updates verdict reactively when update() is called again', () => {
   const el = new CROutcome();
   el.connectedCallback();

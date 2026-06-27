@@ -1,6 +1,7 @@
 // @ts-check
 import { ReactiveElement } from './reactive-element.js';
 import { h } from '../lib/html.js';
+import { defaultWordingFor } from '../evaluators/configured-outcome.js';
 
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../sharepoint-client.js').OutcomeResult} OutcomeResult */
@@ -32,7 +33,11 @@ export class CROutcome extends ReactiveElement {
     const content = this.render();
     if (Array.isArray(content)) {
       this.replaceChildren(...content);
-    } else if (content && typeof content === 'object' && 'appendChild' in content) {
+    } else if (
+      content &&
+      typeof content === 'object' &&
+      'appendChild' in content
+    ) {
       this.replaceChildren(content);
     } else {
       this.replaceChildren(); // empty
@@ -46,13 +51,8 @@ export class CROutcome extends ReactiveElement {
       textContent = 'Awaiting answers…';
     } else {
       const result = this.computeOutcome(this.answers);
-      if (result.verdict === 'pass') {
-        className = 'cr-outcome-pass';
-        textContent = 'Pass';
-      } else {
-        className = 'cr-outcome-fail';
-        textContent = 'Fail';
-      }
+      className = `cr-outcome-${result.verdict}`;
+      textContent = result.wording ?? defaultWordingFor(result.verdict);
     }
 
     return [h('h2', {}, 'Outcome'), h('p', { className }, textContent)];

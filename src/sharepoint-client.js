@@ -20,6 +20,14 @@
  * shares the same lifecycle — stripped when the Answer stops failing, frozen once
  * the Case is Completed.
  *
+ * @typedef {{ verdict: 'pass' | 'refer' | 'fail', wording: string, rank?: number }} OutcomeDescriptor
+ */
+
+/**
+ * @typedef {{ id: string, text: string, outcome?: OutcomeDescriptor }} RemediationActionDefinition
+ */
+
+/**
  * @typedef {{ value: string | string[], justification?: string, remediationActions?: Array<{id: string, text: string, completed: boolean}>, attributedParty?: { loginName: string, displayName: string }, remediationDetails?: Record<string, string>, capture?: Record<string, string | { loginName: string, displayName: string } | Array<{id: string, text: string, completed: boolean}>> }} Answer
  */
 
@@ -167,7 +175,8 @@
  *   options?: string[],
  *   showWhen?: Record<string, unknown>,
  *   failureCriteria?: string,
- *   remediationActions?: string[],
+ *   outcome?: { noAction?: OutcomeDescriptor },
+ *   remediationActions?: Array<string | RemediationActionDefinition>,
  *   deprecated: boolean
  * }} QuestionDefinition
  */
@@ -205,6 +214,8 @@
  *     options: string[] | null,
  *     showWhen: Record<string, unknown> | null,
  *     failureCriteria: string | null,
+ *     outcome?: { noAction?: OutcomeDescriptor } | null,
+ *     remediationActions?: Array<RemediationActionDefinition> | null,
  *     deprecated: boolean,
  *     labelIds?: string[],
  *   }>,
@@ -234,7 +245,7 @@
  */
 
 /**
- * @typedef {{ verdict: 'pass' | 'refer' | 'fail' }} OutcomeResult
+ * @typedef {{ verdict: 'pass' | 'refer' | 'fail', wording?: string }} OutcomeResult
  */
 
 /**

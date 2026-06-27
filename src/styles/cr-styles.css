@@ -727,6 +727,11 @@ cr-attribute-menu {
   font-weight: var(--cr-font-weight-semibold);
 }
 
+.cr-outcome-refer {
+  color: var(--cr-color-warning);
+  font-weight: var(--cr-font-weight-semibold);
+}
+
 .cr-outcome-indeterminate {
   color: var(--cr-color-text-muted);
   font-style: italic;

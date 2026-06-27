@@ -7,6 +7,8 @@ import { buildCaptureControl } from '../lib/capture-engine.js';
 import './cr-attribute-menu.js';
 import './cr-capture-groups.js';
 
+import { normaliseConfiguredActions } from '../evaluators/configured-outcome.js';
+
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
@@ -140,8 +142,11 @@ export class CRRemediationSection extends ReactiveElement {
 
     if (q.remediationActions?.length) {
       const actions = h('ul', { class: 'cr-remediation-actions' });
-      for (const text of q.remediationActions) {
-        actions.appendChild(h('li', {}, text));
+      for (const action of normaliseConfiguredActions(
+        q.remediationActions,
+        q.id
+      )) {
+        actions.appendChild(h('li', {}, action.text));
       }
       li.appendChild(actions);
     }

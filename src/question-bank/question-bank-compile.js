@@ -29,7 +29,7 @@ export function compileBank(bank) {
   );
   lines.push('');
   lines.push(
-    `import { countConfiguredFailures } from '../src/evaluators/failure-evaluator.js';`
+    `import { computeConfiguredOutcome } from '../src/evaluators/configured-outcome.js';`
   );
   lines.push('');
   lines.push(`/** @type {CaseTypeConfig} */`);
@@ -61,6 +61,7 @@ export function compileBank(bank) {
       lines.push(
         `      failureCriteria: ${JSON.stringify(q.failureCriteria)},`
       );
+    if (q.outcome) lines.push(`      outcome: ${JSON.stringify(q.outcome)},`);
     if (q.remediationActions) {
       lines.push(`      remediationActions: [`);
       for (const r of q.remediationActions)
@@ -76,10 +77,7 @@ export function compileBank(bank) {
   lines.push('');
   lines.push(`  /** @param {Record<string, Answer>} answers */`);
   lines.push(`  computeOutcome(answers) {`);
-  lines.push(
-    `    const failures = countConfiguredFailures(config.questions, answers);`
-  );
-  lines.push(`    return { verdict: failures > 0 ? 'fail' : 'pass' };`);
+  lines.push(`    return computeConfiguredOutcome(config.questions, answers);`);
   lines.push(`  },`);
   lines.push(`};`);
   lines.push('');
@@ -162,8 +160,8 @@ function canonicalise(value) {
  * Returns the function-free projection of the bank: slug, label, generatedAt,
  * a full SHA-256 hash (stable over questions+slug only, including labelIds),
  * a questions array that carries id/text/category/responseType/options/
- * showWhen/failureCriteria/labelIds/deprecated, and a labels table.
- * Excluded: computeOutcome, remediationActions, allowFreeFormRemediation,
+ * showWhen/failureCriteria/outcome/remediationActions/labelIds/deprecated, and
+ * a labels table. Excluded: computeOutcome, allowFreeFormRemediation,
  * eligibleGroups.
  *
  * @param {QuestionBank} bank
@@ -180,6 +178,8 @@ function canonicalise(value) {
  *     options: string[] | null,
  *     showWhen: Record<string, unknown> | null,
  *     failureCriteria: string | null,
+ *     outcome: { noAction?: import('../sharepoint-client.js').OutcomeDescriptor } | null,
+ *     remediationActions: Array<import('../sharepoint-client.js').RemediationActionDefinition> | null,
  *     deprecated: boolean,
  *     labelIds?: string[],
  *   }>,
@@ -188,7 +188,7 @@ function canonicalise(value) {
  */
 export async function compileExport(bank) {
   const questions = bank.questions.map((q) => {
-    /** @type {{ id: string, text: string, category: string|null, responseType: string, options: string[]|null, showWhen: Record<string,unknown>|null, failureCriteria: string|null, deprecated: boolean, labelIds?: string[] }} */
+    /** @type {{ id: string, text: string, category: string|null, responseType: string, options: string[]|null, showWhen: Record<string,unknown>|null, failureCriteria: string|null, outcome: { noAction?: import('../sharepoint-client.js').OutcomeDescriptor }|null, remediationActions: Array<import('../sharepoint-client.js').RemediationActionDefinition>|null, deprecated: boolean, labelIds?: string[] }} */
     const out = {
       id: q.id,
       text: q.text,
@@ -197,6 +197,14 @@ export async function compileExport(bank) {
       options: q.options ?? null,
       showWhen: q.showWhen ?? null,
       failureCriteria: q.failureCriteria ?? null,
+      outcome: q.outcome ?? null,
+      remediationActions: q.remediationActions
+        ? q.remediationActions.map((action, index) =>
+            typeof action === 'string'
+              ? { id: `${q.id}-ra-${index}`, text: action }
+              : action
+          )
+        : null,
       deprecated: q.deprecated,
     };
     if (q.labelIds && q.labelIds.length) out.labelIds = q.labelIds;

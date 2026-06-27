@@ -1,5 +1,6 @@
 // @ts-check
 import { evaluate } from './applicability-evaluator.js';
+import { normaliseConfiguredActions } from './configured-outcome.js';
 import { isFailure } from './failure-evaluator.js';
 
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
@@ -60,7 +61,9 @@ export function buildSummaryModel(catalogue, answers) {
       category: q.category,
       text: q.text,
       answer: Array.isArray(v) ? v.join(', ') : v,
-      actions: q.remediationActions ?? [],
+      actions: normaliseConfiguredActions(q.remediationActions, q.id).map(
+        (action) => action.text
+      ),
     };
   });
 

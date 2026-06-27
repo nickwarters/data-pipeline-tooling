@@ -2,6 +2,11 @@
 import { ReactiveElement } from './reactive-element.js';
 import { h } from '../lib/html.js';
 import { commit } from '../question-bank/question-bank-store.js';
+import {
+  DEFAULT_OUTCOME_RANK,
+  defaultWordingFor,
+  normaliseConfiguredActions,
+} from '../evaluators/configured-outcome.js';
 
 export class CRRemediationEditor extends ReactiveElement {
   constructor() {
@@ -48,6 +53,10 @@ export class CRRemediationEditor extends ReactiveElement {
       freeRow
     );
 
+    if (q.failureCriteria) {
+      wrap.appendChild(this._renderNoActionOutcome(q));
+    }
+
     if (q.allowFreeFormRemediation) {
       wrap.appendChild(
         h('div', {
@@ -59,12 +68,13 @@ export class CRRemediationEditor extends ReactiveElement {
       );
     }
 
-    (q.remediationActions || []).forEach(
-      (/** @type {string} */ r, /** @type {number} */ idx) => {
-        const inp = /** @type {any} */ (h('input', { value: r }));
+    normaliseConfiguredActions(q.remediationActions || [], q.id).forEach(
+      (/** @type {any} */ action, /** @type {number} */ idx) => {
+        const inp = /** @type {any} */ (h('input', { value: action.text }));
         inp.addEventListener('change', (/** @type {any} */ e) =>
           commit(() => {
-            q.remediationActions[idx] = e.target.value;
+            this._ensureActionObjects(q);
+            q.remediationActions[idx].text = e.target.value;
           })
         );
         wrap.appendChild(
@@ -72,6 +82,7 @@ export class CRRemediationEditor extends ReactiveElement {
             'div',
             { class: 'rem-item' },
             inp,
+            this._renderActionOutcome(q, action, idx),
             h(
               'span',
               {
@@ -107,7 +118,10 @@ export class CRRemediationEditor extends ReactiveElement {
           class: 'tag-add rem-add',
           onclick: () =>
             commit(() => {
-              (q.remediationActions ||= []).push('New action');
+              (q.remediationActions ||= []).push({
+                id: this._nextActionId(q),
+                text: 'New action',
+              });
             }),
         },
         '+ canned action'
@@ -115,6 +129,204 @@ export class CRRemediationEditor extends ReactiveElement {
     );
 
     return wrap;
+  }
+
+  /** @param {any} q */
+  _renderNoActionOutcome(q) {
+    const descriptor = q.outcome?.noAction;
+    return h(
+      'div',
+      { class: 'rem-outcome-block' },
+      h('h5', {}, 'Default outcome when no action is selected'),
+      this._outcomeFields({
+        descriptor,
+        onEnable: () => {
+          q.outcome ??= {};
+          q.outcome.noAction = {
+            verdict: 'fail',
+            wording: 'Fail',
+            rank: DEFAULT_OUTCOME_RANK.fail,
+          };
+        },
+        onDisable: () => {
+          if (!q.outcome) return;
+          delete q.outcome.noAction;
+          if (!Object.keys(q.outcome).length) delete q.outcome;
+        },
+      })
+    );
+  }
+
+  /**
+   * @param {any} q
+   * @param {any} action
+   * @param {number} idx
+   */
+  _renderActionOutcome(q, action, idx) {
+    return h(
+      'div',
+      { class: 'rem-action-outcome' },
+      this._outcomeFields({
+        descriptor: action.outcome,
+        onEnable: () => {
+          this._ensureActionObjects(q);
+          const configured = q.remediationActions[idx];
+          configured.outcome = {
+            verdict: 'fail',
+            wording: defaultWordingFor('fail'),
+            rank: DEFAULT_OUTCOME_RANK.fail,
+          };
+        },
+        onDisable: () => {
+          this._ensureActionObjects(q);
+          delete q.remediationActions[idx].outcome;
+        },
+        compact: true,
+      })
+    );
+  }
+
+  /**
+   * @param {{
+   *   descriptor: any,
+   *   onEnable: () => void,
+   *   onDisable: () => void,
+   *   compact?: boolean,
+   * }} opts
+   */
+  _outcomeFields(opts) {
+    if (!opts.descriptor) {
+      return h(
+        'button',
+        {
+          class: 'tag-add rem-outcome-add',
+          onclick: () => commit(opts.onEnable),
+        },
+        opts.compact ? '+ outcome' : '+ default outcome'
+      );
+    }
+
+    return h(
+      'div',
+      { class: opts.compact ? 'rem-outcome-grid compact' : 'rem-outcome-grid' },
+      this._field(
+        'Verdict',
+        this._select(
+          ['pass', 'refer', 'fail'],
+          opts.descriptor.verdict,
+          (/** @type {string} */ verdict) =>
+            commit(() => {
+              opts.descriptor.verdict = verdict;
+              opts.descriptor.wording ||= defaultWordingFor(
+                /** @type {'pass'|'refer'|'fail'} */ (verdict)
+              );
+              opts.descriptor.rank =
+                opts.descriptor.rank ??
+                DEFAULT_OUTCOME_RANK[
+                  /** @type {'pass'|'refer'|'fail'} */ (verdict)
+                ];
+            })
+        )
+      ),
+      this._field(
+        'Wording',
+        this._input(opts.descriptor.wording || '', (v) =>
+          commit(() => {
+            opts.descriptor.wording = v;
+          })
+        )
+      ),
+      this._field(
+        'Rank',
+        h('input', {
+          type: 'number',
+          value: String(
+            opts.descriptor.rank ??
+              DEFAULT_OUTCOME_RANK[
+                /** @type {'pass'|'refer'|'fail'} */ (opts.descriptor.verdict)
+              ]
+          ),
+          onchange: (/** @type {any} */ e) =>
+            commit(() => {
+              const parsed = Number(e.target.value);
+              if (Number.isFinite(parsed)) opts.descriptor.rank = parsed;
+              else delete opts.descriptor.rank;
+            }),
+        })
+      ),
+      h(
+        'button',
+        {
+          class: 'icon-btn danger',
+          title: 'Remove outcome',
+          onclick: () => commit(opts.onDisable),
+        },
+        '×'
+      )
+    );
+  }
+
+  /**
+   * @param {string} label
+   * @param {HTMLElement} control
+   */
+  _field(label, control) {
+    return h(
+      'label',
+      { class: 'rem-outcome-field' },
+      h('span', {}, label),
+      control
+    );
+  }
+
+  /**
+   * @param {string[]} options
+   * @param {string} value
+   * @param {(value: string) => void} onChange
+   */
+  _select(options, value, onChange) {
+    return h(
+      'select',
+      { onchange: (/** @type {any} */ e) => onChange(e.target.value) },
+      ...options.map((option) =>
+        h('option', { value: option, selected: option === value }, option)
+      )
+    );
+  }
+
+  /**
+   * @param {string} value
+   * @param {(value: string) => void} onChange
+   */
+  _input(value, onChange) {
+    return h('input', {
+      value,
+      onchange: (/** @type {any} */ e) => onChange(e.target.value),
+    });
+  }
+
+  /** @param {any} q */
+  _ensureActionObjects(q) {
+    q.remediationActions = normaliseConfiguredActions(
+      q.remediationActions || [],
+      q.id
+    );
+  }
+
+  /** @param {any} q */
+  _nextActionId(q) {
+    const ids = new Set(
+      normaliseConfiguredActions(q.remediationActions || [], q.id).map(
+        (a) => a.id
+      )
+    );
+    let index = ids.size;
+    let id = `${q.id}-ra-${index}`;
+    while (ids.has(id)) {
+      index += 1;
+      id = `${q.id}-ra-${index}`;
+    }
+    return id;
   }
 }
 

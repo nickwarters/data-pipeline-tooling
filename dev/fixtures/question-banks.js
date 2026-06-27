@@ -23,6 +23,11 @@
  */
 
 /**
+ * @typedef {import('../../src/sharepoint-client.js').OutcomeDescriptor} OutcomeDescriptor
+ * @typedef {import('../../src/sharepoint-client.js').RemediationActionDefinition} RemediationActionDefinition
+ */
+
+/**
  * @typedef {{
  *   id: string,
  *   text: string,
@@ -32,7 +37,8 @@
  *   options?: string[],
  *   showWhen?: Record<string, unknown>,
  *   failureCriteria?: string,
- *   remediationActions?: string[],
+ *   outcome?: { noAction?: OutcomeDescriptor },
+ *   remediationActions?: Array<string | RemediationActionDefinition>,
  *   allowFreeFormRemediation?: boolean,
  *   deprecated: boolean,
  * }} DraftQuestion

@@ -38,14 +38,13 @@ export function countConfiguredFailures(questions, answers) {
 
 /**
  * Reconciles an Answer's failure-derived metadata with whether it is still a
- * failure (ADR-0013). When the Answer remains a failure and the question has
- * remediationActions defined, returns a fresh Answer with `remediationActions`
- * populated as { id, text, completed: false } items. When the Answer is no
- * longer a failure, any stale `remediationActions`, `attributedParty`,
- * `remediationDetails`, and `capture` (ADR-0020) are stripped, so passing answers
- * never carry leftover failure metadata. The `attributedParty`,
- * `remediationDetails`, and `capture` are kept on a still-failing Answer even when
- * the question defines no remediationActions.
+ * failure (ADR-0013). Configured remediation actions are available choices, not
+ * selected choices, so a still-failing Answer keeps only the actions already
+ * present on the Answer. When the Answer is no longer a failure, any stale
+ * `remediationActions`, `attributedParty`, `remediationDetails`, and `capture`
+ * (ADR-0020) are stripped, so passing answers never carry leftover failure
+ * metadata. The `attributedParty`, `remediationDetails`, and `capture` are kept
+ * on a still-failing Answer even when the question defines no remediationActions.
  *
  * @param {QuestionDefinition} question
  * @param {Answer} answer
@@ -76,19 +75,13 @@ export function materializeRemediationActions(question, answer) {
     result = rest;
   }
 
-  if (!failing || !question.remediationActions?.length) {
+  if (!failing) {
     if (result.remediationActions) {
       const { remediationActions: _drop, ...rest } = result;
       return rest;
     }
     return result;
   }
-  return {
-    ...result,
-    remediationActions: question.remediationActions.map((text, i) => ({
-      id: `${question.id}-ra-${i}`,
-      text,
-      completed: false,
-    })),
-  };
+
+  return result;
 }
