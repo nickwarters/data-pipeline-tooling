@@ -86,15 +86,22 @@ export function normaliseConfiguredActions(actions = [], questionId = '') {
  * @param {QuestionDefinition[]} questions
  * @param {Record<string, Answer>} answers
  * @param {OutcomeOption[]} [outcomeOptions]
+ * @param {string} [defaultOutcomeId]
  * @returns {OutcomeResult}
  */
 export function computeConfiguredOutcome(
   questions,
   answers,
-  outcomeOptions = []
+  outcomeOptions = [],
+  defaultOutcomeId = ''
 ) {
-  let best = normaliseOutcome(FALLBACK_PASS);
   const optionById = outcomeOptionMap(outcomeOptions);
+  let best =
+    defaultOutcomeId && optionById.has(defaultOutcomeId)
+      ? /** @type {{ outcome: string, wording: string, severity: number }} */ (
+          optionById.get(defaultOutcomeId)
+        )
+      : normaliseOutcome(FALLBACK_PASS);
 
   for (const question of questions) {
     const answer = answers[question.id];

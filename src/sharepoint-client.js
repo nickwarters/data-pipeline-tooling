@@ -226,6 +226,8 @@
  *     deprecated: boolean,
  *     labelIds?: string[],
  *   }>,
+ *   outcomeOptions?: OutcomeOption[],
+ *   defaultOutcomeId?: string | null,
  * }} VersionedExport
  */
 
@@ -270,6 +272,7 @@
  *   questions: QuestionDefinition[],
  *   computeOutcome: (answers: Record<string, Answer>) => OutcomeResult,
  *   outcomeOptions?: OutcomeOption[],
+ *   defaultOutcomeId?: string,
  *   labels?: Label[],
  *   eligibleGroups?: string[],
  *   sections?: Partial<Record<'details'|'questions'|'conversation'|'notes'|'remediation'|'summary'|'appeal', SectionConfig>>,

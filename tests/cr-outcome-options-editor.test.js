@@ -14,8 +14,20 @@ test('CROutcomeOptionsEditor: renders one row per case-type outcome option', () 
   const e = new CROutcomeOptionsEditor();
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
-  const list = section._children[1];
+  const list = section._children[2];
   assert.equal(list._children.length, 2);
+});
+
+test('CROutcomeOptionsEditor: edits the case-type default outcome', () => {
+  _resetStore();
+  const e = new CROutcomeOptionsEditor();
+  e.connectedCallback();
+  const section = /** @type {any} */ (e)._children[0];
+  const defaultSelect = section._children[1]._children[0]._children[1];
+
+  defaultSelect._listeners.change[0]({ target: { value: 'fail' } });
+
+  assert.equal(cases.get()['example-review'].defaultOutcomeId, 'fail');
 });
 
 test('CROutcomeOptionsEditor: edits wording on the shared outcome option', () => {
@@ -23,7 +35,7 @@ test('CROutcomeOptionsEditor: edits wording on the shared outcome option', () =>
   const e = new CROutcomeOptionsEditor();
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
-  const list = section._children[1];
+  const list = section._children[2];
   const firstRow = list._children[0];
   const wordingInput = firstRow._children[1]._children[1];
 
@@ -37,7 +49,7 @@ test('CROutcomeOptionsEditor: edits severity on the shared outcome option', () =
   const e = new CROutcomeOptionsEditor();
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
-  const list = section._children[1];
+  const list = section._children[2];
   const firstRow = list._children[0];
   const severityInput = firstRow._children[2]._children[1];
 
@@ -53,10 +65,11 @@ test('CROutcomeOptionsEditor: renaming an outcome id updates question and action
   bank.questions[1].remediationActions = [
     { id: 'impact', text: 'Impact', outcomeId: 'fail' },
   ];
+  bank.defaultOutcomeId = 'fail';
   const e = new CROutcomeOptionsEditor();
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
-  const list = section._children[1];
+  const list = section._children[2];
   const failRow = list._children[1];
   const idInput = failRow._children[0]._children[1];
 
@@ -67,6 +80,7 @@ test('CROutcomeOptionsEditor: renaming an outcome id updates question and action
     /** @type {any} */ (bank.questions[1].remediationActions?.[0]).outcomeId,
     'fail-impact'
   );
+  assert.equal(bank.defaultOutcomeId, 'fail-impact');
 });
 
 test('CROutcomeOptionsEditor: adds an outcome option to the active case type', () => {
@@ -90,10 +104,11 @@ test('CROutcomeOptionsEditor: removes an outcome option', () => {
   _resetStore();
   const bank = cases.get()['example-review'];
   bank.questions[0].outcome = { noActionOutcomeId: 'pass' };
+  bank.defaultOutcomeId = 'pass';
   const e = new CROutcomeOptionsEditor();
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
-  const list = section._children[1];
+  const list = section._children[2];
   const firstRow = list._children[0];
   const remove = firstRow._children[3];
 
@@ -101,4 +116,5 @@ test('CROutcomeOptionsEditor: removes an outcome option', () => {
 
   assert.equal(cases.get()['example-review'].outcomeOptions?.length, 1);
   assert.equal(bank.questions[0].outcome, undefined);
+  assert.equal(bank.defaultOutcomeId, undefined);
 });

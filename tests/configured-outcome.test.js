@@ -161,6 +161,54 @@ test('computeConfiguredOutcome: ignores questions with no failureCriteria', () =
   assert.deepEqual(result, { outcome: 'pass', wording: 'Pass' });
 });
 
+test('computeConfiguredOutcome: uses configured default outcome when nothing fails', () => {
+  /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
+  const questions = [
+    {
+      id: 'q1',
+      text: 'Was disclosure made?',
+      responseType: /** @type {const} */ ('yes-no-na'),
+      failureCriteria: 'No',
+      deprecated: false,
+    },
+  ];
+
+  const result = computeConfiguredOutcome(
+    questions,
+    { q1: { value: 'Yes' } },
+    [{ id: 'good', wording: 'Good Outcome', severity: 0 }],
+    'good'
+  );
+
+  assert.deepEqual(result, { outcome: 'good', wording: 'Good Outcome' });
+});
+
+test('computeConfiguredOutcome: failed outcomes can override the configured default by severity', () => {
+  /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
+  const questions = [
+    {
+      id: 'q1',
+      text: 'Was disclosure made?',
+      responseType: /** @type {const} */ ('yes-no-na'),
+      failureCriteria: 'No',
+      outcome: { noActionOutcomeId: 'fail' },
+      deprecated: false,
+    },
+  ];
+
+  const result = computeConfiguredOutcome(
+    questions,
+    { q1: { value: 'No' } },
+    [
+      { id: 'good', wording: 'Good Outcome', severity: 0 },
+      { id: 'fail', wording: 'Fail', severity: 100 },
+    ],
+    'good'
+  );
+
+  assert.deepEqual(result, { outcome: 'fail', wording: 'Fail' });
+});
+
 test('computeConfiguredOutcome: outcome options without severity default to zero', () => {
   /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
   const questions = [

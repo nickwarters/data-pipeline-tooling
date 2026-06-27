@@ -52,6 +52,7 @@
  *   eligibleGroups: string[],
  *   labels?: Label[],
  *   outcomeOptions?: OutcomeOption[],
+ *   defaultOutcomeId?: string,
  *   questions: DraftQuestion[],
  * }} QuestionBank
  */
@@ -66,6 +67,7 @@ export const questionBanks = {
       { id: 'pass', wording: 'Pass', severity: 0 },
       { id: 'fail', wording: 'Fail', severity: 100 },
     ],
+    defaultOutcomeId: 'pass',
     labels: [
       { id: 'lbl-coaching', name: 'Coaching', color: '#2563eb' },
       { id: 'lbl-regulatory', name: 'Regulatory', color: '#b91c1c' },
@@ -127,6 +129,7 @@ export const questionBanks = {
       { id: 'refer', wording: 'Refer', severity: 50 },
       { id: 'fail', wording: 'Fail', severity: 100 },
     ],
+    defaultOutcomeId: 'pass',
     labels: [
       { id: 'lbl-sla', name: 'SLA', color: '#d97706' },
       { id: 'lbl-regulatory', name: 'Regulatory', color: '#b91c1c' },

@@ -46,7 +46,7 @@ test('compileBank: emits header, eligibleGroups, computeOutcome, export', () => 
   assert.ok(out.includes('computeOutcome(answers)'));
   assert.ok(
     out.includes(
-      'return computeConfiguredOutcome(config.questions, answers, config.outcomeOptions);'
+      'return computeConfiguredOutcome(config.questions, answers, config.outcomeOptions, config.defaultOutcomeId);'
     )
   );
   assert.ok(out.endsWith('export default config;'));
@@ -190,6 +190,7 @@ test('compileBank: emits shared outcome options and selected outcome ids', () =>
       deprecated: false,
     }),
     outcomeOptions: [
+      { id: 'good', wording: 'Good Outcome', severity: 0 },
       { id: 'fail', wording: 'Fail', severity: 100 },
       {
         id: 'impact',
@@ -197,8 +198,10 @@ test('compileBank: emits shared outcome options and selected outcome ids', () =>
         severity: 120,
       },
     ],
+    defaultOutcomeId: 'good',
   });
   assert.ok(out.includes('outcomeOptions: ['));
+  assert.ok(out.includes('defaultOutcomeId: "good"'));
   assert.ok(out.includes('outcome: {"noActionOutcomeId":"fail"}'));
   assert.ok(out.includes('"id":"impact"'));
   assert.ok(out.includes('"outcomeId":"impact"'));
@@ -475,6 +478,34 @@ test('compileExport: outcomeOptions affect the hash', async () => {
   assert.notEqual(a.hash, b.hash);
 });
 
+test('compileExport: defaultOutcomeId affects the hash', async () => {
+  const bankA = {
+    ...exportBank,
+    outcomeOptions: [{ id: 'good', wording: 'Good Outcome' }],
+    defaultOutcomeId: 'good',
+  };
+  const bankB = {
+    ...exportBank,
+    outcomeOptions: [{ id: 'good', wording: 'Good Outcome' }],
+    defaultOutcomeId: null,
+  };
+  const [a, b] = await Promise.all([
+    compileExport(bankA),
+    compileExport(/** @type {any} */ (bankB)),
+  ]);
+  assert.notEqual(a.hash, b.hash);
+});
+
+test('compileExport: carries defaultOutcomeId in the envelope', async () => {
+  const result = await compileExport({
+    ...exportBank,
+    outcomeOptions: [{ id: 'good', wording: 'Good Outcome' }],
+    defaultOutcomeId: 'good',
+  });
+
+  assert.equal(result.defaultOutcomeId, 'good');
+});
+
 test('compileExport: key order in question objects does not affect hash', async () => {
   const q = exportBank.questions[0];
   const qReordered = {
@@ -519,6 +550,11 @@ test('compileExport: excludes computeOutcome, allowFreeFormRemediation, eligible
     ],
     outcomeOptions: [
       {
+        id: 'good',
+        wording: 'Good Outcome',
+        severity: 0,
+      },
+      {
         id: 'fail',
         wording: 'Fail',
         severity: 100,
@@ -529,6 +565,7 @@ test('compileExport: excludes computeOutcome, allowFreeFormRemediation, eligible
         severity: 50,
       },
     ],
+    defaultOutcomeId: 'good',
   };
   const result = await compileExport(bankWithExtras);
   assert.ok(!('computeOutcome' in result));
@@ -547,9 +584,11 @@ test('compileExport: excludes computeOutcome, allowFreeFormRemediation, eligible
     },
   ]);
   assert.deepEqual(result.outcomeOptions, [
+    { id: 'good', wording: 'Good Outcome', severity: 0 },
     { id: 'fail', wording: 'Fail', severity: 100 },
     { id: 'refer', wording: 'Refer', severity: 50 },
   ]);
+  assert.equal(result.defaultOutcomeId, 'good');
 });
 
 test('compileExport: includes labelIds per question when present (ADR-0021 Step 5)', async () => {

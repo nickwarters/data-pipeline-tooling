@@ -38,6 +38,9 @@ export function compileBank(bank) {
   if (bank.outcomeOptions && bank.outcomeOptions.length) {
     lines.push(`  outcomeOptions: ${JSON.stringify(bank.outcomeOptions)},`);
   }
+  if (bank.defaultOutcomeId) {
+    lines.push(`  defaultOutcomeId: ${JSON.stringify(bank.defaultOutcomeId)},`);
+  }
   if (bank.labels && bank.labels.length) {
     lines.push(`  labels: [`);
     for (const l of bank.labels) {
@@ -81,7 +84,7 @@ export function compileBank(bank) {
   lines.push(`  /** @param {Record<string, Answer>} answers */`);
   lines.push(`  computeOutcome(answers) {`);
   lines.push(
-    `    return computeConfiguredOutcome(config.questions, answers, config.outcomeOptions);`
+    `    return computeConfiguredOutcome(config.questions, answers, config.outcomeOptions, config.defaultOutcomeId);`
   );
   lines.push(`  },`);
   lines.push(`};`);
@@ -166,7 +169,7 @@ function canonicalise(value) {
  * a full SHA-256 hash (stable over questions+slug only, including labelIds),
  * a questions array that carries id/text/category/responseType/options/
  * showWhen/failureCriteria/outcome/remediationActions/labelIds/deprecated,
- * case-type outcomeOptions, and a labels table. Excluded: computeOutcome,
+ * case-type outcomeOptions/defaultOutcomeId, and a labels table. Excluded: computeOutcome,
  * allowFreeFormRemediation, eligibleGroups.
  *
  * @param {QuestionBank} bank
@@ -190,6 +193,7 @@ function canonicalise(value) {
  *   }>,
  *   labels: Array<{ id: string, name: string, color: string }>,
  *   outcomeOptions: import('../sharepoint-client.js').OutcomeOption[],
+ *   defaultOutcomeId: string | null,
  * }>}
  */
 export async function compileExport(bank) {
@@ -222,6 +226,7 @@ export async function compileExport(bank) {
     slug: bank.slug,
     questions,
     outcomeOptions,
+    defaultOutcomeId: bank.defaultOutcomeId ?? null,
   });
   const buf = new TextEncoder().encode(canonical);
   const hashBuf = await crypto.subtle.digest('SHA-256', buf);
@@ -237,6 +242,7 @@ export async function compileExport(bank) {
     questions,
     labels: bank.labels ?? [],
     outcomeOptions,
+    defaultOutcomeId: bank.defaultOutcomeId ?? null,
   };
 }
 

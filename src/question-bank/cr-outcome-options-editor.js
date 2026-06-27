@@ -29,6 +29,20 @@ export class CROutcomeOptionsEditor extends ReactiveElement {
           '+ outcome'
         )
       ),
+      h(
+        'div',
+        { className: 'default-outcome-row' },
+        this._field(
+          'Default outcome',
+          this._outcomeSelect(bank.defaultOutcomeId ?? '', options, (id) =>
+            commit((types) => {
+              const b = types[activeSlug.get()];
+              if (id) b.defaultOutcomeId = id;
+              else delete b.defaultOutcomeId;
+            })
+          )
+        )
+      ),
       options.length
         ? h(
             'div',
@@ -141,6 +155,7 @@ export class CROutcomeOptionsEditor extends ReactiveElement {
         }
       }
     }
+    if (bank.defaultOutcomeId === previousId) bank.defaultOutcomeId = nextId;
   }
 
   /**
@@ -159,6 +174,7 @@ export class CROutcomeOptionsEditor extends ReactiveElement {
         }
       }
     }
+    if (bank.defaultOutcomeId === outcomeId) delete bank.defaultOutcomeId;
   }
 
   /**
@@ -171,6 +187,30 @@ export class CROutcomeOptionsEditor extends ReactiveElement {
       { className: 'outcome-option-field' },
       h('span', {}, label),
       control
+    );
+  }
+
+  /**
+   * @param {string} value
+   * @param {import('../sharepoint-client.js').OutcomeOption[]} outcomeOptions
+   * @param {(id: string) => void} onChange
+   */
+  _outcomeSelect(value, outcomeOptions, onChange) {
+    return h(
+      'select',
+      {
+        value,
+        disabled: outcomeOptions.length === 0,
+        onchange: (/** @type {any} */ e) => onChange(e.target.value),
+      },
+      h(
+        'option',
+        { value: '' },
+        outcomeOptions.length ? 'Built-in Pass' : 'No outcomes configured'
+      ),
+      ...outcomeOptions.map((option) =>
+        h('option', { value: option.id }, option.wording)
+      )
     );
   }
 }
