@@ -40,6 +40,9 @@ export class CRCaseReview extends ReactiveElement {
     /** @type {CaseReviewViewModel | null} */
     this.viewModel = null;
 
+    // TODO(issue-198): Move controller-owned lifecycle state into
+    // cr-case-review/conversation-controller.js and
+    // cr-case-review/node-registry.js as the page becomes a route shell.
     /** @type {((e: KeyboardEvent) => void) | null} */
     this._keydownHandler = null;
     /** @type {boolean} */
@@ -97,6 +100,8 @@ export class CRCaseReview extends ReactiveElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
+    // TODO(issue-198): Delegate teardown to controller disconnect methods,
+    // starting with ConversationPanelController for document-level shortcuts.
     if (this._keydownHandler && typeof document !== 'undefined') {
       document.removeEventListener('keydown', this._keydownHandler);
       this._keydownHandler = null;
@@ -105,6 +110,8 @@ export class CRCaseReview extends ReactiveElement {
 
   /** @param {KeyboardEvent} e */
   _handleKeydown(e) {
+    // TODO(issue-198): Move keyboard shortcut handling to
+    // cr-case-review/conversation-controller.js.
     if (this._keydownHandler) {
       this._keydownHandler(e);
     } else if (e.altKey && e.code === 'KeyC') {
@@ -114,6 +121,8 @@ export class CRCaseReview extends ReactiveElement {
 
   // Alias for tests
   _toggleConversationPanel() {
+    // TODO(issue-198): Keep this as a temporary compatibility shim while the
+    // real toggle behavior moves to ConversationPanelController.
     if (this.viewModel) {
       this.viewModel.toggleConversationPanel();
     } else if (this._conversationEl) {
@@ -146,6 +155,8 @@ export class CRCaseReview extends ReactiveElement {
    * } | null | undefined} opts
    */
   _buildLayout(opts) {
+    // TODO(issue-198): Replace this test-facing layout adapter with
+    // user-observable controller tests from tests/cr-case-review-controllers.test.js.
     if (opts) {
       let activeTabId =
         [
@@ -208,6 +219,8 @@ export class CRCaseReview extends ReactiveElement {
    * @param {Partial<CaseRow>} [patchFields]
    */
   async _completeCase(caseId, clientArg, saveQueueArg, patchFields) {
+    // TODO(issue-198): Move completion persistence to
+    // cr-case-review/completion-controller.js completeCase().
     const client = clientArg ?? this.client;
     const saveQueue = saveQueueArg ?? this.saveQueue;
     if (!client || !saveQueue) return;
@@ -270,11 +283,15 @@ export class CRCaseReview extends ReactiveElement {
       typeof location !== 'undefined' ? (location.search ?? '') : '';
     const panelMode =
       new URLSearchParams(searchStr).get('conversation') ?? 'popover';
+    // TODO(issue-198): Decide whether conversation mode belongs in the route
+    // shell or ConversationPanelController before moving this assignment.
     this.setAttribute('data-conversation-mode', panelMode);
 
     /** @param {import('../services/section-access.js').Mode} m */
     const displayMode = (m) => (m === 'override' ? 'read-only' : m);
 
+    // TODO(issue-198): Move tab descriptor construction to
+    // cr-case-review/tab-controller.js buildCaseReviewTabs().
     const tabs = [
       { id: 'details', label: 'Details', hidden: access.details === 'hidden' },
       {
@@ -297,6 +314,8 @@ export class CRCaseReview extends ReactiveElement {
     const canComplete = machine.canComplete;
     const canToggleConversation = machine.canToggleConversation;
 
+    // TODO(issue-198): Move conversation shortcut binding to
+    // ConversationPanelController.bind()/disconnect().
     if (canToggleConversation && !this._keydownHandler) {
       this._keydownHandler = (e) => {
         if (e.altKey && e.code === 'KeyC') {
@@ -311,6 +330,8 @@ export class CRCaseReview extends ReactiveElement {
       this._keydownHandler = null;
     }
 
+    // TODO(issue-198): Move node creation/reuse to
+    // cr-case-review/node-registry.js and update tests away from private caches.
     // Node reuse to satisfy tests that cache elements
     this._tabsEl ??= /** @type {any} */ (h('cr-tabs'));
     this._detailsEl ??= /** @type {any} */ (h('cr-case-details'));
@@ -337,56 +358,73 @@ export class CRCaseReview extends ReactiveElement {
 
     if (!this._eventsBound) {
       this._eventsBound = true;
-      this._tabsEl.addEventListener('cr-tab-change', (/** @type {CustomEvent} */ ev) =>
-        vm.activeTab.set(/** @type {any} */ (ev).detail.id)
+      // TODO(issue-198): Move tab event wiring to
+      // CaseReviewTabController.bind().
+      this._tabsEl.addEventListener(
+        'cr-tab-change',
+        (/** @type {CustomEvent} */ ev) =>
+          vm.activeTab.set(/** @type {any} */ (ev).detail.id)
       );
 
-      this._questionsPanel.addEventListener('cr-answer', (/** @type {CustomEvent} */ ev) =>
-        vm.handleAnswer(
-          /** @type {any} */ (ev).detail.questionId,
-          /** @type {any} */ (ev).detail.value
-        )
+      // TODO(issue-198): Move Review-tab answer and jump wiring to
+      // QuestionPanelController.bind().
+      this._questionsPanel.addEventListener(
+        'cr-answer',
+        (/** @type {CustomEvent} */ ev) =>
+          vm.handleAnswer(
+            /** @type {any} */ (ev).detail.questionId,
+            /** @type {any} */ (ev).detail.value
+          )
       );
-      this._questionsPanel.addEventListener('cr-section-jump', (/** @type {CustomEvent} */ ev) => {
-        const sectionName = /** @type {any} */ (ev).detail.section;
-        const children = this._qList.questionElements ?? [];
-        const target = children.find(
-          (/** @type {any} */ c) =>
-            c.question?.category === sectionName ||
-            (!c.question?.category && sectionName === 'General')
-        );
-        target?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-      });
+      this._questionsPanel.addEventListener(
+        'cr-section-jump',
+        (/** @type {CustomEvent} */ ev) => {
+          const sectionName = /** @type {any} */ (ev).detail.section;
+          const children = this._qList.questionElements ?? [];
+          const target = children.find(
+            (/** @type {any} */ c) =>
+              c.question?.category === sectionName ||
+              (!c.question?.category && sectionName === 'General')
+          );
+          target?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+        }
+      );
       this._questionsPanel.addEventListener('cr-jump-unanswered', () => {
         const children = this._qList.questionElements ?? [];
-        const target = children.find(
-          (/** @type {any} */ c) => {
-            if (!c.question) return false;
-            const v = vm.answersSignal.get()[c.question.id]?.value;
-            return Array.isArray(v) ? v.length === 0 : !v;
-          }
-        );
+        const target = children.find((/** @type {any} */ c) => {
+          if (!c.question) return false;
+          const v = vm.answersSignal.get()[c.question.id]?.value;
+          return Array.isArray(v) ? v.length === 0 : !v;
+        });
         target?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
       });
 
-      this._remediationSection.addEventListener('cr-capture', (/** @type {CustomEvent} */ ev) =>
-        vm.handleCapture(
-          /** @type {any} */ (ev).detail.questionId,
-          /** @type {any} */ (ev).detail.fieldKey,
-          /** @type {any} */ (ev).detail.value
-        )
+      // TODO(issue-198): Move Issues-tab capture/attribute wiring to
+      // RemediationPanelController.bind().
+      this._remediationSection.addEventListener(
+        'cr-capture',
+        (/** @type {CustomEvent} */ ev) =>
+          vm.handleCapture(
+            /** @type {any} */ (ev).detail.questionId,
+            /** @type {any} */ (ev).detail.fieldKey,
+            /** @type {any} */ (ev).detail.value
+          )
       );
-      this._remediationSection.addEventListener('cr-attribute', (/** @type {CustomEvent} */ ev) =>
-        vm.handleAttribute(
-          /** @type {any} */ (ev).detail.questionId,
-          /** @type {any} */ (ev).detail.attributedParty
-        )
+      this._remediationSection.addEventListener(
+        'cr-attribute',
+        (/** @type {CustomEvent} */ ev) =>
+          vm.handleAttribute(
+            /** @type {any} */ (ev).detail.questionId,
+            /** @type {any} */ (ev).detail.attributedParty
+          )
       );
 
       this._toggleBtn.addEventListener('click', () =>
         this._toggleConversationPanel()
       );
 
+      // TODO(issue-198): Move complete-button event wiring to
+      // CompletionController.bind().
       this._btnEl.addEventListener('click', (/** @type {Event} */ e) => {
         const target = /** @type {any} */ (e?.target || this._btnEl);
         if (target.disabled) return;
@@ -412,12 +450,17 @@ export class CRCaseReview extends ReactiveElement {
       });
     }
 
+    // TODO(issue-198): Move tab property/panel assignment to
+    // CaseReviewTabController.update().
     Object.assign(this._tabsEl, { tabs, selected: vm.activeTab.get() });
     Object.assign(this._detailsEl, {
       caseRow,
       access: displayMode(access.details),
     });
 
+    // TODO(issue-198): Move Review-tab property assignment, progress updates,
+    // unanswered calculation, and override editor setup to
+    // QuestionPanelController.update().
     Object.assign(this._qList, {
       access: displayMode(access.questions),
       questions,
@@ -425,10 +468,12 @@ export class CRCaseReview extends ReactiveElement {
     });
     if (this._qList.update) this._qList.update(questions, answers);
 
-    const unanswered = questions.filter((/** @type {QuestionDefinition} */ q) => {
-      const v = answers[q.id]?.value;
-      return Array.isArray(v) ? v.length === 0 : !v;
-    });
+    const unanswered = questions.filter(
+      (/** @type {QuestionDefinition} */ q) => {
+        const v = answers[q.id]?.value;
+        return Array.isArray(v) ? v.length === 0 : !v;
+      }
+    );
     if (this._progressEl.update)
       this._progressEl.update(
         computeSectionProgress(catalogue, answers),
@@ -462,6 +507,8 @@ export class CRCaseReview extends ReactiveElement {
       this._questionsPanel._children = questionsChildren;
     }
 
+    // TODO(issue-198): Move Issues-tab property assignment and update calls to
+    // RemediationPanelController.update().
     Object.assign(this._remediationSection, {
       client: vm.client,
       canAttribute,
@@ -484,6 +531,8 @@ export class CRCaseReview extends ReactiveElement {
         config.attributeFailures === true
       );
 
+    // TODO(issue-198): Move Summary, Notes, and Appeal property assignment to
+    // SummaryNotesAppealController.update().
     Object.assign(this._summaryEl, {
       caseRow,
       catalogue,
@@ -525,6 +574,8 @@ export class CRCaseReview extends ReactiveElement {
       appeal: this._appealEl,
     };
 
+    // TODO(issue-198): Move conversation element assignment and toggle aria
+    // updates to ConversationPanelController.update().
     Object.assign(this._conversationEl, {
       client: vm.client,
       saveQueue: vm.saveQueue,
@@ -535,6 +586,8 @@ export class CRCaseReview extends ReactiveElement {
       _messages: caseRow.conversation.slice(),
     });
 
+    // TODO(issue-198): Move banner and header assembly to
+    // CaseReviewHeaderController.update().
     Object.assign(this._bannerEl, { saveQueue: vm.saveQueue });
 
     if (canToggleConversation) {
@@ -560,6 +613,8 @@ export class CRCaseReview extends ReactiveElement {
       this._headerEl._children = headerChildren;
     }
 
+    // TODO(issue-198): Move QA Check source-case assignment to
+    // SourceCaseController.update().
     if (sourceCase) {
       Object.assign(this._sourceCaseEl, {
         originalRow: sourceCase.originalRow,
@@ -575,6 +630,8 @@ export class CRCaseReview extends ReactiveElement {
       });
     }
 
+    // TODO(issue-198): Move complete button visibility/label updates to
+    // CompletionController.update().
     this._btnEl.hidden = !(isAllAnswered && canComplete);
     this._btnEl.textContent = 'Complete Case';
 
@@ -583,6 +640,8 @@ export class CRCaseReview extends ReactiveElement {
       ? this._toggleBtn
       : null;
 
+    // TODO(issue-198): Keep final route shell assembly here after controllers
+    // own their nodes, events, and property assignment.
     return [
       this._bannerEl,
       this._headerEl,
