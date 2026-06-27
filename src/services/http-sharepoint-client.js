@@ -282,7 +282,9 @@ export class HttpSharePointClient {
     try {
       const body = await this._read(url);
       if (!body || typeof body !== 'object') return null;
-      return /** @type {import('../sharepoint-client.js').VersionedExport} */ (body);
+      return /** @type {import('../sharepoint-client.js').VersionedExport} */ (
+        body
+      );
     } catch {
       return null;
     }
@@ -525,8 +527,48 @@ function rowFromItem(item, etag) {
       parseJsonField(item?.Conversation, [])
     ),
     notes: String(item?.Notes ?? ''),
+    caseJustification:
+      item?.CaseJustification != null
+        ? String(item.CaseJustification)
+        : undefined,
     completedAt:
       typeof item?.CompletedAt === 'string' ? item.CompletedAt : null,
+    outcome: item?.Outcome != null ? String(item.Outcome) : undefined,
+    outcomeAtCompletion:
+      item?.OutcomeAtCompletion != null
+        ? String(item.OutcomeAtCompletion)
+        : undefined,
+    questionBankVersion:
+      item?.QuestionBankVersion != null
+        ? String(item.QuestionBankVersion)
+        : undefined,
+    hadRemediation:
+      item?.HadRemediation != null ? Boolean(item.HadRemediation) : undefined,
+    effectiveOutcome:
+      item?.EffectiveOutcome != null
+        ? String(item.EffectiveOutcome)
+        : undefined,
+    effectiveHadRemediation:
+      item?.EffectiveHadRemediation != null
+        ? Boolean(item.EffectiveHadRemediation)
+        : undefined,
+    outcomeOverridden:
+      item?.OutcomeOverridden != null
+        ? Boolean(item.OutcomeOverridden)
+        : undefined,
+    overrides: /** @type {CaseRow['overrides']} */ (
+      parseJsonField(item?.Overrides, undefined)
+    ),
+    appeals: /** @type {CaseRow['appeals']} */ (
+      parseJsonField(item?.Appeals, undefined)
+    ),
+    sourceCaseId:
+      item?.SourceCaseId != null ? String(item.SourceCaseId) : undefined,
+    dueDate: typeof item?.DueDate === 'string' ? item.DueDate : null,
+    relatedDate:
+      typeof item?.RelatedDate === 'string' ? item.RelatedDate : null,
+    created: item?.Created != null ? String(item.Created) : undefined,
+    overdue: item?.Overdue != null ? Boolean(item.Overdue) : undefined,
     etag,
   };
 }
@@ -541,7 +583,29 @@ function itemFromRow(fields) {
   if (fields.title !== undefined) out.Title = fields.title;
   if (fields.status !== undefined) out.Status = fields.status;
   if (fields.notes !== undefined) out.Notes = fields.notes;
+  if (fields.caseJustification !== undefined)
+    out.CaseJustification = fields.caseJustification;
   if (fields.completedAt !== undefined) out.CompletedAt = fields.completedAt;
+  if (fields.outcome !== undefined) out.Outcome = fields.outcome;
+  if (fields.outcomeAtCompletion !== undefined)
+    out.OutcomeAtCompletion = fields.outcomeAtCompletion;
+  if (fields.questionBankVersion !== undefined)
+    out.QuestionBankVersion = fields.questionBankVersion;
+  if (fields.hadRemediation !== undefined)
+    out.HadRemediation = fields.hadRemediation;
+  if (fields.effectiveOutcome !== undefined)
+    out.EffectiveOutcome = fields.effectiveOutcome;
+  if (fields.effectiveHadRemediation !== undefined)
+    out.EffectiveHadRemediation = fields.effectiveHadRemediation;
+  if (fields.outcomeOverridden !== undefined)
+    out.OutcomeOverridden = fields.outcomeOverridden;
+  if (fields.overrides !== undefined)
+    out.Overrides = JSON.stringify(fields.overrides);
+  if (fields.appeals !== undefined)
+    out.Appeals = JSON.stringify(fields.appeals);
+  if (fields.sourceCaseId !== undefined) out.SourceCaseId = fields.sourceCaseId;
+  if (fields.dueDate !== undefined) out.DueDate = fields.dueDate;
+  if (fields.relatedDate !== undefined) out.RelatedDate = fields.relatedDate;
   if (fields.assignedReviewer !== undefined)
     out.AssignedReviewerId = fields.assignedReviewer;
   if (fields.responsibleParty !== undefined)

@@ -262,6 +262,110 @@ test('HttpSharePointClient: PATCH sends If-Match header with the supplied ETag',
   assert.equal(patch.headers['if-match'], '"v1"');
 });
 
+test('HttpSharePointClient: patchCase writes mutable CaseRow fields to SharePoint columns', async () => {
+  const override = {
+    source: /** @type {'appeal'} */ ('appeal'),
+    sourceAppealId: 'appeal-1',
+    author: 'qa-reviewer',
+    at: '2026-06-01T10:00:00.000Z',
+    answerKey: 'q-1',
+    value: 'Yes',
+    reasoning: 'Agreed',
+  };
+  const appeal = {
+    id: 'appeal-1',
+    appellant: 'rp-1',
+    at: '2026-06-02T10:00:00.000Z',
+    rationale: 'Dispute outcome',
+    state: /** @type {'resolved'} */ ('resolved'),
+    resolution: {
+      verdict: /** @type {'agreed'} */ ('agreed'),
+      rationale: 'Accepted',
+      resolver: 'qa-reviewer',
+      at: '2026-06-03T10:00:00.000Z',
+    },
+  };
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () => digestResponse('d'),
+    },
+    {
+      when: (c) => c.method === 'PATCH',
+      respond: () =>
+        new Response(null, { status: 204, headers: { ETag: '"v2"' } }),
+    },
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'T',
+            Status: 'Completed',
+            AssignedReviewerId: 'u1',
+            ResponsiblePartyId: 'u2',
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: 'n',
+            CompletedAt: '2026-06-01T10:00:00.000Z',
+            CaseType: 'example-review',
+          }),
+          { status: 200, headers: { ETag: '"v2"' } }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.patchCase(
+    'case-1',
+    {
+      caseJustification: 'documented rationale',
+      completedAt: '2026-06-01T10:00:00.000Z',
+      outcome: 'fail',
+      outcomeAtCompletion: 'fail',
+      questionBankVersion: 'hash-123',
+      hadRemediation: true,
+      effectiveOutcome: 'pass',
+      effectiveHadRemediation: false,
+      outcomeOverridden: true,
+      overrides: [override],
+      appeals: [appeal],
+      sourceCaseId: 'source-1',
+      dueDate: '2026-06-10T10:00:00.000Z',
+      relatedDate: null,
+      assignedReviewerManager: null,
+      responsiblePartyManager: 'rp-manager',
+    },
+    '"v1"'
+  );
+
+  const patch = calls.find((c) => c.method === 'PATCH');
+  assert.ok(patch, 'PATCH was issued');
+  const body = JSON.parse(String(patch.body));
+  assert.deepEqual(body, {
+    CaseJustification: 'documented rationale',
+    CompletedAt: '2026-06-01T10:00:00.000Z',
+    Outcome: 'fail',
+    OutcomeAtCompletion: 'fail',
+    QuestionBankVersion: 'hash-123',
+    HadRemediation: true,
+    EffectiveOutcome: 'pass',
+    EffectiveHadRemediation: false,
+    OutcomeOverridden: true,
+    Overrides: JSON.stringify([override]),
+    Appeals: JSON.stringify([appeal]),
+    SourceCaseId: 'source-1',
+    DueDate: '2026-06-10T10:00:00.000Z',
+    RelatedDate: null,
+    AssignedReviewerManager: null,
+    ResponsiblePartyManager: 'rp-manager',
+  });
+});
+
 test('HttpSharePointClient: patchCase result.data.etag reflects the new ETag from the response', async () => {
   const { fetch } = makeFetch([
     {
@@ -660,6 +764,89 @@ test('HttpSharePointClient: getCase parses Answers/Conversation JSON blobs and c
   assert.equal(row?.answers['q-welcome']?.value, 'Yes');
   assert.equal(row?.conversation.length, 1);
   assert.equal(row?.assignedReviewer, 'user-1');
+});
+
+test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async () => {
+  const overrides = [
+    {
+      source: 'qa',
+      sourceCaseId: 'qa-1',
+      author: 'qa-reviewer',
+      at: '2026-06-01T10:00:00.000Z',
+      answerKey: 'q-1',
+      value: 'Yes',
+      reasoning: 'Evidence supports pass',
+    },
+  ];
+  const appeals = [
+    {
+      id: 'appeal-1',
+      appellant: 'rp-1',
+      at: '2026-06-02T10:00:00.000Z',
+      rationale: 'Dispute outcome',
+      state: 'raised',
+    },
+  ];
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'Full row',
+            Status: 'Completed',
+            CaseType: 'example-review',
+            AssignedReviewerId: 'reviewer-1',
+            AssignedReviewerManager: 'reviewer-manager',
+            ResponsiblePartyId: 'rp-1',
+            ResponsiblePartyManager: 'rp-manager',
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: 'note',
+            CaseJustification: 'documented rationale',
+            CompletedAt: '2026-06-03T10:00:00.000Z',
+            Outcome: 'fail',
+            OutcomeAtCompletion: 'refer',
+            QuestionBankVersion: 'hash-123',
+            HadRemediation: true,
+            EffectiveOutcome: 'pass',
+            EffectiveHadRemediation: false,
+            OutcomeOverridden: true,
+            Overrides: JSON.stringify(overrides),
+            Appeals: JSON.stringify(appeals),
+            SourceCaseId: 'source-1',
+            DueDate: '2026-06-10T10:00:00.000Z',
+            RelatedDate: '2026-06-04T10:00:00.000Z',
+            Created: '2026-06-01T09:00:00.000Z',
+            Overdue: false,
+          }),
+          { status: 200, headers: { ETag: '"v7"' } }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const row = await client.getCase('case-1');
+
+  assert.equal(row?.caseJustification, 'documented rationale');
+  assert.equal(row?.outcome, 'fail');
+  assert.equal(row?.outcomeAtCompletion, 'refer');
+  assert.equal(row?.questionBankVersion, 'hash-123');
+  assert.equal(row?.hadRemediation, true);
+  assert.equal(row?.effectiveOutcome, 'pass');
+  assert.equal(row?.effectiveHadRemediation, false);
+  assert.equal(row?.outcomeOverridden, true);
+  assert.deepEqual(row?.overrides, overrides);
+  assert.deepEqual(row?.appeals, appeals);
+  assert.equal(row?.sourceCaseId, 'source-1');
+  assert.equal(row?.dueDate, '2026-06-10T10:00:00.000Z');
+  assert.equal(row?.relatedDate, '2026-06-04T10:00:00.000Z');
+  assert.equal(row?.created, '2026-06-01T09:00:00.000Z');
+  assert.equal(row?.overdue, false);
 });
 
 test('HttpSharePointClient: getCurrentUser returns id and displayName', async () => {
@@ -1104,7 +1291,10 @@ test('HttpSharePointClient: getCase maps AssignedReviewerManager and Responsible
         ),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
   const row = await client.getCase('case-x');
   assert.equal(row?.assignedReviewerManager, 'mgr-r');
   assert.equal(row?.responsiblePartyManager, 'mgr-rp');
@@ -1138,7 +1328,10 @@ test('HttpSharePointClient: patchCase writes assignedReviewerManager and respons
         }),
     },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
   await client.patchCase(
     'case-x',
     { assignedReviewerManager: 'mgr-r', responsiblePartyManager: 'mgr-rp' },
@@ -1468,7 +1661,18 @@ test('HttpSharePointClient: getVersionedExport fetches {slug}.{hash}.json and re
     slug: 'example-review',
     hash,
     generatedAt: '2026-01-10T09:00:00.000Z',
-    questions: [{ id: 'q1', text: 'T', category: null, responseType: 'yes-no-na', options: null, showWhen: null, failureCriteria: null, deprecated: false }],
+    questions: [
+      {
+        id: 'q1',
+        text: 'T',
+        category: null,
+        responseType: 'yes-no-na',
+        options: null,
+        showWhen: null,
+        failureCriteria: null,
+        deprecated: false,
+      },
+    ],
   };
   const { fetch, calls } = makeFetch([
     {
@@ -1481,14 +1685,14 @@ test('HttpSharePointClient: getVersionedExport fetches {slug}.{hash}.json and re
     },
   ]);
 
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
   const result = await client.getVersionedExport('example-review', hash);
 
   assert.deepEqual(result, versionedPayload);
-  assert.ok(
-    calls[0].url.includes('example-review'),
-    'URL contains the slug'
-  );
+  assert.ok(calls[0].url.includes('example-review'), 'URL contains the slug');
   assert.ok(
     calls[0].url.includes(encodeURIComponent(hash)),
     'URL contains the URL-encoded hash'
@@ -1497,19 +1701,33 @@ test('HttpSharePointClient: getVersionedExport fetches {slug}.{hash}.json and re
 
 test('HttpSharePointClient: getVersionedExport returns null on 404', async () => {
   const { fetch } = makeFetch([
-    { when: () => true, respond: () => new Response('not found', { status: 404 }) },
+    {
+      when: () => true,
+      respond: () => new Response('not found', { status: 404 }),
+    },
   ]);
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
-  const result = await client.getVersionedExport('example-review', 'sha256:abc');
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+  const result = await client.getVersionedExport(
+    'example-review',
+    'sha256:abc'
+  );
   assert.equal(result, null);
 });
 
 test('HttpSharePointClient: getVersionedExport returns null on network error', async () => {
   const client = new HttpSharePointClient({
     webUrl: WEB_URL,
-    fetchImpl: async () => { throw new Error('Network error'); },
+    fetchImpl: async () => {
+      throw new Error('Network error');
+    },
   });
-  const result = await client.getVersionedExport('example-review', 'sha256:abc');
+  const result = await client.getVersionedExport(
+    'example-review',
+    'sha256:abc'
+  );
   assert.equal(result, null);
 });
 
