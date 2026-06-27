@@ -37,9 +37,65 @@ test('compileBank: emits header, eligibleGroups, computeOutcome, export', () => 
     ],
   });
   assert.ok(out.startsWith('// @ts-check'));
+  assert.ok(
+    out.includes(
+      `import { countConfiguredFailures } from '../src/evaluators/failure-evaluator.js';`
+    )
+  );
   assert.ok(out.includes(`eligibleGroups: ["Reviewers"]`));
   assert.ok(out.includes('computeOutcome(answers)'));
+  assert.ok(
+    out.includes(
+      'const failures = countConfiguredFailures(config.questions, answers);'
+    )
+  );
   assert.ok(out.endsWith('export default config;'));
+});
+
+test('compileBank: default outcome is driven by failureCriteria, not raw No answers', async () => {
+  const out = compileBank({
+    label: 'L',
+    slug: 's',
+    eligibleGroups: ['Reviewers'],
+    questions: [
+      {
+        id: 'q-general-info',
+        text: 'Was the case context reviewed?',
+        category: 'General',
+        responseType: 'yes-no-na',
+        deprecated: false,
+      },
+      {
+        id: 'q-required-check',
+        text: 'Was the required check completed?',
+        responseType: 'yes-no-na',
+        failureCriteria: 'No',
+        deprecated: false,
+      },
+    ],
+  });
+  assert.ok(!out.includes('Object.values(answers).some'));
+
+  const moduleUrl = `data:text/javascript,${encodeURIComponent(
+    out.replace(
+      `../src/evaluators/failure-evaluator.js`,
+      new URL('../src/evaluators/failure-evaluator.js', import.meta.url).href
+    )
+  )}`;
+  const { default: compiledConfig } = await import(moduleUrl);
+
+  assert.deepStrictEqual(
+    compiledConfig.computeOutcome({
+      'q-general-info': { value: 'No' },
+    }),
+    { verdict: 'pass' }
+  );
+  assert.deepStrictEqual(
+    compiledConfig.computeOutcome({
+      'q-required-check': { value: 'No' },
+    }),
+    { verdict: 'fail' }
+  );
 });
 
 test('compileBank: omits category when absent', () => {
@@ -267,7 +323,10 @@ test('compileExport: returns envelope with slug, label, generatedAt, hash, quest
 
 test('compileExport: generatedAt is a valid ISO-8601 string', async () => {
   const { generatedAt } = await compileExport(exportBank);
-  assert.ok(!isNaN(Date.parse(generatedAt)), `Not a valid date: ${generatedAt}`);
+  assert.ok(
+    !isNaN(Date.parse(generatedAt)),
+    `Not a valid date: ${generatedAt}`
+  );
   assert.match(generatedAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
 });
 
@@ -279,7 +338,10 @@ test('compileExport: hash starts with sha256: followed by 64 hex chars (full dig
 test('compileExport: same questions+slug, different label/generatedAt → same hash', async () => {
   const bankA = { ...exportBank, label: 'Label A' };
   const bankB = { ...exportBank, label: 'Label B' };
-  const [a, b] = await Promise.all([compileExport(bankA), compileExport(bankB)]);
+  const [a, b] = await Promise.all([
+    compileExport(bankA),
+    compileExport(bankB),
+  ]);
   assert.equal(a.hash, b.hash);
 });
 
@@ -287,16 +349,25 @@ test('compileExport: different questions → different hash', async () => {
   const bankA = { ...exportBank };
   const bankB = {
     ...exportBank,
-    questions: [{ ...exportBank.questions[0], text: 'Different text' }, exportBank.questions[1]],
+    questions: [
+      { ...exportBank.questions[0], text: 'Different text' },
+      exportBank.questions[1],
+    ],
   };
-  const [a, b] = await Promise.all([compileExport(bankA), compileExport(bankB)]);
+  const [a, b] = await Promise.all([
+    compileExport(bankA),
+    compileExport(bankB),
+  ]);
   assert.notEqual(a.hash, b.hash);
 });
 
 test('compileExport: different slug → different hash', async () => {
   const bankA = { ...exportBank, slug: 'slug-a' };
   const bankB = { ...exportBank, slug: 'slug-b' };
-  const [a, b] = await Promise.all([compileExport(bankA), compileExport(bankB)]);
+  const [a, b] = await Promise.all([
+    compileExport(bankA),
+    compileExport(bankB),
+  ]);
   assert.notEqual(a.hash, b.hash);
 });
 
@@ -311,8 +382,14 @@ test('compileExport: key order in question objects does not affect hash', async 
     responseType: q.responseType,
   };
   const bankA = { ...exportBank };
-  const bankB = { ...exportBank, questions: [qReordered, exportBank.questions[1]] };
-  const [a, b] = await Promise.all([compileExport(bankA), compileExport(bankB)]);
+  const bankB = {
+    ...exportBank,
+    questions: [qReordered, exportBank.questions[1]],
+  };
+  const [a, b] = await Promise.all([
+    compileExport(bankA),
+    compileExport(bankB),
+  ]);
   assert.equal(a.hash, b.hash);
 });
 
@@ -347,7 +424,10 @@ test('compileExport: includes labelIds per question when present (ADR-0021 Step 
   };
   const result = await compileExport(bankWithLabels);
   assert.deepEqual(result.questions[0].labelIds, ['lbl-a', 'lbl-b']);
-  assert.ok(!('labelIds' in result.questions[1]), 'question without labelIds has no labelIds field');
+  assert.ok(
+    !('labelIds' in result.questions[1]),
+    'question without labelIds has no labelIds field'
+  );
 });
 
 test('compileExport: labelIds are omitted when absent or empty (ADR-0021 Step 5)', async () => {
@@ -372,7 +452,10 @@ test('compileExport: labelIds on questions affect the hash (ADR-0021 Step 5)', a
       exportBank.questions[1],
     ],
   };
-  const [a, b] = await Promise.all([compileExport(bankA), compileExport(bankB)]);
+  const [a, b] = await Promise.all([
+    compileExport(bankA),
+    compileExport(bankB),
+  ]);
   assert.notEqual(a.hash, b.hash);
 });
 
@@ -401,7 +484,14 @@ test('compileExport: absent optional question fields are emitted as null', async
     label: 'L',
     slug: 's',
     eligibleGroups: [],
-    questions: [{ id: 'q1', text: 'T', responseType: /** @type {const} */ ('yes-no-na'), deprecated: false }],
+    questions: [
+      {
+        id: 'q1',
+        text: 'T',
+        responseType: /** @type {const} */ ('yes-no-na'),
+        deprecated: false,
+      },
+    ],
   };
   const result = await compileExport(minimalBank);
   const q = result.questions[0];
@@ -435,15 +525,26 @@ test('compileExport: showWhen is carried through when present', async () => {
 test('compileExport: deprecated true is preserved', async () => {
   const bankWithDeprecated = {
     ...exportBank,
-    questions: [{ ...exportBank.questions[0], deprecated: true }, exportBank.questions[1]],
+    questions: [
+      { ...exportBank.questions[0], deprecated: true },
+      exportBank.questions[1],
+    ],
   };
   const result = await compileExport(bankWithDeprecated);
   assert.equal(result.questions[0].deprecated, true);
 });
 
 test('compileExport: empty questions array produces deterministic hash', async () => {
-  const emptyBank = { label: 'L', slug: 'empty', eligibleGroups: [], questions: [] };
-  const [a, b] = await Promise.all([compileExport(emptyBank), compileExport(emptyBank)]);
+  const emptyBank = {
+    label: 'L',
+    slug: 'empty',
+    eligibleGroups: [],
+    questions: [],
+  };
+  const [a, b] = await Promise.all([
+    compileExport(emptyBank),
+    compileExport(emptyBank),
+  ]);
   assert.equal(a.hash, b.hash);
   assert.equal(a.questions.length, 0);
 });
@@ -479,7 +580,10 @@ test('buildPublishArtifacts: first publish → manifest has slug and one version
 
 test('buildPublishArtifacts: null manifest treated same as empty-versions manifest', () => {
   const r1 = buildPublishArtifacts(pubEnvelope, null);
-  const r2 = buildPublishArtifacts(pubEnvelope, { slug: pubEnvelope.slug, versions: [] });
+  const r2 = buildPublishArtifacts(pubEnvelope, {
+    slug: pubEnvelope.slug,
+    versions: [],
+  });
   assert.equal(r1.manifest.versions.length, r2.manifest.versions.length);
   assert.equal(r1.isNew, r2.isNew);
 });
@@ -490,32 +594,55 @@ test('buildPublishArtifacts: currentJson is always the envelope as pretty-printe
 });
 
 test('buildPublishArtifacts: currentJson returned even on re-publish', () => {
-  const existing = { slug: pubEnvelope.slug, versions: [{ hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt }] };
+  const existing = {
+    slug: pubEnvelope.slug,
+    versions: [
+      { hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt },
+    ],
+  };
   const r = buildPublishArtifacts(pubEnvelope, existing);
   assert.equal(r.currentJson, JSON.stringify(pubEnvelope, null, 2));
 });
 
 test('buildPublishArtifacts: same hash again → isNew false', () => {
-  const existing = { slug: pubEnvelope.slug, versions: [{ hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt }] };
+  const existing = {
+    slug: pubEnvelope.slug,
+    versions: [
+      { hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt },
+    ],
+  };
   const r = buildPublishArtifacts(pubEnvelope, existing);
   assert.equal(r.isNew, false);
 });
 
 test('buildPublishArtifacts: same hash again → versionedJson null', () => {
-  const existing = { slug: pubEnvelope.slug, versions: [{ hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt }] };
+  const existing = {
+    slug: pubEnvelope.slug,
+    versions: [
+      { hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt },
+    ],
+  };
   const r = buildPublishArtifacts(pubEnvelope, existing);
   assert.equal(r.versionedJson, null);
 });
 
 test('buildPublishArtifacts: same hash again → manifest versions unchanged', () => {
-  const existing = { slug: pubEnvelope.slug, versions: [{ hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt }] };
+  const existing = {
+    slug: pubEnvelope.slug,
+    versions: [
+      { hash: pubEnvelope.hash, generatedAt: pubEnvelope.generatedAt },
+    ],
+  };
   const r = buildPublishArtifacts(pubEnvelope, existing);
   assert.equal(r.manifest.versions.length, 1);
 });
 
 test('buildPublishArtifacts: new distinct hash is appended to manifest', () => {
   const priorHash = 'sha256:' + 'b'.repeat(64);
-  const existing = { slug: pubEnvelope.slug, versions: [{ hash: priorHash, generatedAt: '2026-01-01T00:00:00.000Z' }] };
+  const existing = {
+    slug: pubEnvelope.slug,
+    versions: [{ hash: priorHash, generatedAt: '2026-01-01T00:00:00.000Z' }],
+  };
   const r = buildPublishArtifacts(pubEnvelope, existing);
   assert.equal(r.isNew, true);
   assert.equal(r.manifest.versions.length, 2);
@@ -524,8 +651,14 @@ test('buildPublishArtifacts: new distinct hash is appended to manifest', () => {
 });
 
 test('buildPublishArtifacts: preserves prior versions order and appends at end', () => {
-  const v1 = { hash: 'sha256:' + 'b'.repeat(64), generatedAt: '2026-01-01T00:00:00.000Z' };
-  const v2 = { hash: 'sha256:' + 'c'.repeat(64), generatedAt: '2026-02-01T00:00:00.000Z' };
+  const v1 = {
+    hash: 'sha256:' + 'b'.repeat(64),
+    generatedAt: '2026-01-01T00:00:00.000Z',
+  };
+  const v2 = {
+    hash: 'sha256:' + 'c'.repeat(64),
+    generatedAt: '2026-02-01T00:00:00.000Z',
+  };
   const existing = { slug: pubEnvelope.slug, versions: [v1, v2] };
   const r = buildPublishArtifacts(pubEnvelope, existing);
   assert.equal(r.manifest.versions[0].hash, v1.hash);
@@ -549,14 +682,19 @@ const pubEnvelopeWithLabels = {
 test('buildPublishArtifacts: current JSON includes labels table (ADR-0021 Step 5)', () => {
   const r = buildPublishArtifacts(pubEnvelopeWithLabels, null);
   const current = JSON.parse(r.currentJson);
-  assert.deepEqual(current.labels, [{ id: 'lbl-a', name: 'Alpha', color: '#ff0000' }]);
+  assert.deepEqual(current.labels, [
+    { id: 'lbl-a', name: 'Alpha', color: '#ff0000' },
+  ]);
 });
 
 test('buildPublishArtifacts: versioned JSON omits labels table (ADR-0021 Step 5)', () => {
   const r = buildPublishArtifacts(pubEnvelopeWithLabels, null);
   assert.ok(r.versionedJson !== null);
   const versioned = JSON.parse(/** @type {string} */ (r.versionedJson));
-  assert.ok(!('labels' in versioned), 'versioned file must not carry the label table');
+  assert.ok(
+    !('labels' in versioned),
+    'versioned file must not carry the label table'
+  );
 });
 
 test('buildPublishArtifacts: versioned JSON still carries all other envelope fields', () => {

@@ -28,6 +28,10 @@ export function compileBank(bank) {
     `/** @typedef {import('../src/sharepoint-client.js').Answer} Answer */`
   );
   lines.push('');
+  lines.push(
+    `import { countConfiguredFailures } from '../src/evaluators/failure-evaluator.js';`
+  );
+  lines.push('');
   lines.push(`/** @type {CaseTypeConfig} */`);
   lines.push(`const config = {`);
   lines.push(`  eligibleGroups: ${JSON.stringify(bank.eligibleGroups)},`);
@@ -73,9 +77,9 @@ export function compileBank(bank) {
   lines.push(`  /** @param {Record<string, Answer>} answers */`);
   lines.push(`  computeOutcome(answers) {`);
   lines.push(
-    `    const hasNo = Object.values(answers).some(a => a.value === 'No');`
+    `    const failures = countConfiguredFailures(config.questions, answers);`
   );
-  lines.push(`    return { verdict: hasNo ? 'fail' : 'pass' };`);
+  lines.push(`    return { verdict: failures > 0 ? 'fail' : 'pass' };`);
   lines.push(`  },`);
   lines.push(`};`);
   lines.push('');
@@ -139,7 +143,12 @@ function canonicalise(value) {
     return (
       '{' +
       keys
-        .map((k) => JSON.stringify(k) + ':' + canonicalise(/** @type {any} */ (value)[k]))
+        .map(
+          (k) =>
+            JSON.stringify(k) +
+            ':' +
+            canonicalise(/** @type {any} */ (value)[k])
+        )
         .join(',') +
       '}'
     );

@@ -116,3 +116,25 @@ test('product-sale-review computeOutcome: exactly one failure → refer', () => 
     { verdict: 'refer' }
   );
 });
+
+test('product-sale-review computeOutcome: informational General question without failureCriteria does not refer or fail', () => {
+  /** @type {import('../src/sharepoint-client.js').QuestionDefinition} */
+  const infoQuestion = {
+    id: 'q-general-info',
+    text: 'Was the case context reviewed?',
+    category: 'General',
+    responseType: 'yes-no-na',
+    deprecated: false,
+  };
+  config.questions.push(infoQuestion);
+  try {
+    assert.deepStrictEqual(
+      config.computeOutcome({
+        [infoQuestion.id]: ans('No'),
+      }),
+      { verdict: 'pass' }
+    );
+  } finally {
+    config.questions.pop();
+  }
+});

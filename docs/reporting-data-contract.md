@@ -34,9 +34,9 @@ and [ADR-0021](./adr/0021-versioned-question-bank-snapshots-for-completed-cases.
 
 Two variants live in the Style Library beside the `.js` module:
 
-| File | Contents | When to use |
-| ---- | -------- | ----------- |
-| `{slug}.json` | **Current** export — always the latest bank version. Carries the `labels` table. | In-progress Cases; any report that reads only the latest bank. |
+| File                 | Contents                                                                                                      | When to use                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `{slug}.json`        | **Current** export — always the latest bank version. Carries the `labels` table.                              | In-progress Cases; any report that reads only the latest bank.                                                              |
 | `{slug}.{hash}.json` | **Versioned** export — immutable snapshot. Carries frozen `labelIds` per question but not the `labels` table. | Completed Cases with a `questionBankVersion` — use this file to get as-reviewed wording, `failureCriteria`, and `showWhen`. |
 
 Fetch by URL over the same NTLM/Kerberos auth as everything else, e.g.
@@ -51,10 +51,10 @@ Fetch by URL over the same NTLM/Kerberos auth as everything else, e.g.
   "label": "Complaint Review",
   "generatedAt": "2026-06-05T09:30:00Z",
   "hash": "sha256:1a2b3c4d5e6f…",
-  "questions": [ /* … */ ],
-  "labels": [
-    { "id": "lbl-coaching", "name": "Coaching", "color": "#2563eb" }
-  ]
+  "questions": [
+    /* … */
+  ],
+  "labels": [{ "id": "lbl-coaching", "name": "Coaching", "color": "#2563eb" }]
 }
 ```
 
@@ -62,13 +62,13 @@ Fetch by URL over the same NTLM/Kerberos auth as everything else, e.g.
 (`{slug}.{hash}.json`) carry the per-question `labelIds` but not the label
 definitions — see **Label resolution** below.
 
-| Field         | Meaning                                                         |
-| ------------- | --------------------------------------------------------------- |
-| `slug`        | Join key — matches the `caseType` field on a Case row.          |
-| `label`       | Human-readable Case Type name.                                  |
-| `generatedAt` | ISO-8601 timestamp the export was compiled.                     |
-| `hash`        | Content identity (full SHA-256 of questions+slug).              |
-| `questions`   | The Case Type's **Question Bank**, as data (below).             |
+| Field         | Meaning                                                           |
+| ------------- | ----------------------------------------------------------------- |
+| `slug`        | Join key — matches the `caseType` field on a Case row.            |
+| `label`       | Human-readable Case Type name.                                    |
+| `generatedAt` | ISO-8601 timestamp the export was compiled.                       |
+| `hash`        | Content identity (full SHA-256 of questions+slug).                |
+| `questions`   | The Case Type's **Question Bank**, as data (below).               |
 | `labels`      | Label definitions — **current file only** (see Label resolution). |
 
 ### Per-question fields
@@ -97,17 +97,24 @@ definitions — see **Label resolution** below.
 }
 ```
 
-| Field             | Type                                             | Use in reporting                                                                                            |
-| ----------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| `id`              | string                                           | Key into the Case row's `answers` map.                                                                      |
-| `text`            | string                                           | Display label for the report.                                                                               |
-| `category`        | string \| absent                                 | Group / roll up (e.g. failure rate per section).                                                            |
-| `responseType`    | `yes-no-na` \| `single-choice` \| `multi-choice` | **Selects the failure test** (scalar equality vs array-includes).                                           |
-| `options`         | string[] \| absent                               | Valid choices; useful for labelling, not required for failure.                                              |
-| `showWhen`        | object \| absent                                 | Applicability rule. Only needed for _denominators_ (see below); not for counting failures.                  |
-| `failureCriteria` | string \| absent                                 | The value that marks a failure. **Absent ⇒ the question cannot fail.**                                      |
+| Field             | Type                                             | Use in reporting                                                                                                        |
+| ----------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `id`              | string                                           | Key into the Case row's `answers` map.                                                                                  |
+| `text`            | string                                           | Display label for the report.                                                                                           |
+| `category`        | string \| absent                                 | Group / roll up (e.g. failure rate per section).                                                                        |
+| `responseType`    | `yes-no-na` \| `single-choice` \| `multi-choice` | **Selects the failure test** (scalar equality vs array-includes).                                                       |
+| `options`         | string[] \| absent                               | Valid choices; useful for labelling, not required for failure.                                                          |
+| `showWhen`        | object \| absent                                 | Applicability rule. Only needed for _denominators_ (see below); not for counting failures.                              |
+| `failureCriteria` | string \| absent                                 | The value that marks a failure. **Absent ⇒ the question cannot fail.**                                                  |
 | `labelIds`        | string[] \| absent                               | IDs of labels assigned to this question (frozen in versioned files). Resolve to names via `labels` in the current file. |
-| `deprecated`      | boolean                                          | Question retired from the bank; may still appear on older Cases — label or exclude as your report requires. |
+| `deprecated`      | boolean                                          | Question retired from the bank; may still appear on older Cases — label or exclude as your report requires.             |
+
+Maintainers can use this to add informational Question Bank questions. For
+example, a required `General` yes/no question with no `failureCriteria` still
+appears in the Review tab and counts toward completion, but a `No` answer is
+outcome-neutral and must not create an Issue or Remediation. Outcome functions
+should therefore derive failures from configured `failureCriteria`, not from raw
+answer values across every question.
 
 Intentionally **absent**: `computeOutcome` (code), `remediationActions` /
 `allowFreeFormRemediation` (authoring templates — the remediation actually _taken_

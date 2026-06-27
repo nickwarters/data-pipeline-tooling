@@ -2,6 +2,8 @@
 /** @typedef {import('../src/sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
 
+import { countConfiguredFailures } from '../src/evaluators/failure-evaluator.js';
+
 /** @type {CaseTypeConfig} */
 const config = {
   eligibleGroups: ['Reviewers'],
@@ -106,13 +108,7 @@ const config = {
 
   /** @param {Record<string, Answer>} answers */
   computeOutcome(answers) {
-    const questions = config.questions;
-    let failures = 0;
-    for (const q of questions) {
-      const answer = answers[q.id];
-      if (answer && q.failureCriteria && answer.value === q.failureCriteria)
-        failures++;
-    }
+    const failures = countConfiguredFailures(config.questions, answers);
     if (failures === 0) return { verdict: 'pass' };
     if (failures === 1) return { verdict: 'refer' };
     return { verdict: 'fail' };

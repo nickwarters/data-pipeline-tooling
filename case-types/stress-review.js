@@ -3,6 +3,7 @@
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
 
 import { stressQuestions } from '../dev/fixtures/stress-questions.js';
+import { countConfiguredFailures } from '../src/evaluators/failure-evaluator.js';
 
 /**
  * Stress-test Case Type — 500 generated questions.
@@ -17,8 +18,8 @@ const config = {
 
   /** @param {Record<string, Answer>} answers */
   computeOutcome(answers) {
-    const hasNo = Object.values(answers).some((a) => a.value === 'No');
-    return { verdict: hasNo ? 'fail' : 'pass' };
+    const failures = countConfiguredFailures(config.questions, answers);
+    return { verdict: failures > 0 ? 'fail' : 'pass' };
   },
 };
 

@@ -185,9 +185,32 @@ test('computeOutcome: any No → fail', () => {
   const answers = Object.fromEntries(
     config.questions.map((q) => [q.id, ans('Yes')])
   );
-  const [first] = config.questions;
+  const first = config.questions.find((q) => q.failureCriteria === 'No');
+  assert.ok(first, 'expected a question configured to fail on No');
   answers[first.id] = ans('No');
   assert.deepStrictEqual(config.computeOutcome(answers), { verdict: 'fail' });
+});
+
+test('computeOutcome: informational General question without failureCriteria is outcome-neutral', () => {
+  /** @type {import('../src/sharepoint-client.js').QuestionDefinition} */
+  const infoQuestion = {
+    id: 'q-general-info',
+    text: 'Was the case context reviewed?',
+    category: 'General',
+    responseType: 'yes-no-na',
+    deprecated: false,
+  };
+  config.questions.push(infoQuestion);
+  try {
+    assert.deepStrictEqual(
+      config.computeOutcome({
+        [infoQuestion.id]: ans('No'),
+      }),
+      { verdict: 'pass' }
+    );
+  } finally {
+    config.questions.pop();
+  }
 });
 
 test('computeOutcome: all N/A → pass', () => {

@@ -20,6 +20,23 @@ export function isFailure(question, answer) {
 }
 
 /**
+ * Counts answers that match a configured failureCriteria. Questions with no
+ * failureCriteria are informational for Outcome purposes, even when answered
+ * with values like "No".
+ *
+ * @param {QuestionDefinition[]} questions
+ * @param {Record<string, Answer>} answers
+ * @returns {number}
+ */
+export function countConfiguredFailures(questions, answers) {
+  let failures = 0;
+  for (const q of questions) {
+    if (isFailure(q, answers[q.id])) failures++;
+  }
+  return failures;
+}
+
+/**
  * Reconciles an Answer's failure-derived metadata with whether it is still a
  * failure (ADR-0013). When the Answer remains a failure and the question has
  * remediationActions defined, returns a fresh Answer with `remediationActions`

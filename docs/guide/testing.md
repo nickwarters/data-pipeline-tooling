@@ -129,6 +129,13 @@ test('example-review computeOutcome: any No answer → fail', () => {
 });
 ```
 
+Outcome tests should also protect informational questions. A Question Bank
+question in a grouping category such as `General`, with no `failureCriteria`, is
+required for completion but outcome-neutral: answering it `No` must not change
+the verdict, and it must not create Issues or Remediation. Default and example
+outcome functions should count configured failures rather than scanning every raw
+answer value for `No`.
+
 Standard checks for every Case Type:
 
 - Catalogue has the expected number of questions.
@@ -136,6 +143,7 @@ Standard checks for every Case Type:
 - All `showWhen` references point to questions in the catalogue.
 - No cycles in the `showWhen` graph (use `detectCycles` from `src/evaluators/applicability-evaluator.js`).
 - `computeOutcome` returns the correct verdict for pass, fail, and (if applicable) refer scenarios.
+- A no-`failureCriteria` informational question answered `No` does not affect the verdict.
 
 ---
 

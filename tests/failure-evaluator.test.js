@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  countConfiguredFailures,
   isFailure,
   materializeRemediationActions,
 } from '../src/evaluators/failure-evaluator.js';
@@ -68,6 +69,37 @@ test('isFailure: returns false when array value does not include failureCriteria
 
 test('isFailure: returns false for empty array', () => {
   assert.equal(isFailure(Q_MULTI, { value: [] }), false);
+});
+
+// ===== countConfiguredFailures =====
+
+test('countConfiguredFailures: ignores No answers for questions with no failureCriteria', () => {
+  /** @type {QuestionDefinition[]} */
+  const questions = [
+    {
+      id: 'q-general-info',
+      text: 'Was the case context reviewed?',
+      category: 'General',
+      responseType: 'yes-no-na',
+      deprecated: false,
+    },
+  ];
+  const answers = {
+    'q-general-info': { value: 'No' },
+  };
+
+  assert.equal(countConfiguredFailures(questions, answers), 0);
+});
+
+test('countConfiguredFailures: counts answers matching configured failureCriteria', () => {
+  const questions = [Q_FAIL_NO, Q_NO_CRITERIA, Q_MULTI];
+  const answers = {
+    [Q_FAIL_NO.id]: { value: 'No' },
+    [Q_NO_CRITERIA.id]: { value: 'Email' },
+    [Q_MULTI.id]: { value: ['Account', 'Billing'] },
+  };
+
+  assert.equal(countConfiguredFailures(questions, answers), 2);
 });
 
 // ===== materializeRemediationActions =====
