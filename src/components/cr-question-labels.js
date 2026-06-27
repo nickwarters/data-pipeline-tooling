@@ -101,11 +101,11 @@ export class CRQuestionLabels extends ReactiveElement {
       'div',
       { class: 'labels-block' },
       h('label', { class: 'options-label' }, 'Labels'),
-      h('div', {
-        class: 'labels-help',
-        innerHTML:
-          'Reporting tags — shown here only; they never appear on a Case.',
-      }),
+      h(
+        'div',
+        { class: 'labels-help' },
+        'Reporting tags — shown here only; they never appear on a Case.'
+      ),
       pillRow,
       addRow
     );

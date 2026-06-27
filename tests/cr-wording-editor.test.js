@@ -28,10 +28,7 @@ test('CRWordingEditor: renders edit mark, textarea, status pill, char count', ()
   const txt = wrap._children[1];
   assert.equal(txt.value, q.text);
   const foot = wrap._children[2];
-  assert.ok(
-    foot._children[0].innerHTML.includes('Unchanged') ||
-      foot._children[0].textContent.includes('Unchanged')
-  );
+  assert.ok(foot._children[0].textContent.includes('Unchanged'));
 });
 
 test('CRWordingEditor: shows "Edited" when text diverges from baseline', () => {
@@ -46,7 +43,7 @@ test('CRWordingEditor: shows "Edited" when text diverges from baseline', () => {
   e.connectedCallback();
   const wrap = /** @type {any} */ (e)._children[0];
   const foot = wrap._children[2];
-  assert.ok(foot._children[0].innerHTML.includes('Edited'));
+  assert.ok(foot._children[0]._children[0].textContent.includes('Edited'));
 });
 
 test('CRWordingEditor: shows "New draft" when no baseline match', () => {
@@ -64,7 +61,7 @@ test('CRWordingEditor: shows "New draft" when no baseline match', () => {
   e.connectedCallback();
   const wrap = /** @type {any} */ (e)._children[0];
   const foot = wrap._children[2];
-  assert.ok(foot._children[0].innerHTML.includes('New draft'));
+  assert.ok(foot._children[0]._children[0].textContent.includes('New draft'));
 });
 
 test('CRWordingEditor: char count warns over 180', () => {

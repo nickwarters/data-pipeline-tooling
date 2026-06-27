@@ -8,7 +8,6 @@ import {
   filters,
   isDirty,
 } from './question-bank-store.js';
-import { escapeHtml } from './question-bank-compile.js';
 
 export class CRBankList extends ReactiveElement {
   render() {
@@ -25,9 +24,16 @@ export class CRBankList extends ReactiveElement {
     const head = h(
       'div',
       { className: 'editor-head' },
-      h('h2', {
-        innerHTML: `<span>${escapeHtml(bank.label)}</span><span class="meta">${bank.questions.length} questions · slug: ${escapeHtml(bank.slug)}</span>`,
-      }),
+      h(
+        'h2',
+        {},
+        h('span', {}, bank.label),
+        h(
+          'span',
+          { className: 'meta' },
+          `${bank.questions.length} questions · slug: ${bank.slug}`
+        )
+      ),
       h(
         'div',
         { className: 'dirty-indicator' + (dirty ? ' is-dirty' : '') },
@@ -39,11 +45,12 @@ export class CRBankList extends ReactiveElement {
     const listRoot = h('div');
     if (visible.length === 0) {
       listRoot.appendChild(
-        h('div', {
-          className: 'empty',
-          innerHTML:
-            '<h3>No questions match your filters.</h3><p>Clear filters or add a new question below.</p>',
-        })
+        h(
+          'div',
+          { className: 'empty' },
+          h('h3', {}, 'No questions match your filters.'),
+          h('p', {}, 'Clear filters or add a new question below.')
+        )
       );
     } else {
       visible.forEach((/** @type {any} */ q) => {
@@ -63,37 +70,41 @@ export class CRBankList extends ReactiveElement {
       head,
       /** @type {any} */ (document.createElement('cr-outcome-options-editor')),
       listRoot,
-      h('button', {
-        className: 'add-card',
-        onClick: () => {
-          commit((types) => {
-            const b = types[activeSlug.get()];
-            b.questions.push(
-              /** @type {any} */ ({
-                id: `q-new-${b.questions.length + 1}`,
-                text: 'New question — click to edit',
-                category: 'Uncategorised',
-                responseType: 'yes-no-na',
-                deprecated: false,
-              })
-            );
-          });
-          const raf = /** @type {any} */ (globalThis).requestAnimationFrame;
-          const scroll = () => {
-            const cards =
-              /** @type {any} */ (this).querySelectorAll?.(
-                'cr-question-card'
-              ) ?? [];
-            cards[cards.length - 1]?.scrollIntoView?.({
-              behavior: 'smooth',
-              block: 'center',
+      h(
+        'button',
+        {
+          className: 'add-card',
+          onClick: () => {
+            commit((types) => {
+              const b = types[activeSlug.get()];
+              b.questions.push(
+                /** @type {any} */ ({
+                  id: `q-new-${b.questions.length + 1}`,
+                  text: 'New question — click to edit',
+                  category: 'Uncategorised',
+                  responseType: 'yes-no-na',
+                  deprecated: false,
+                })
+              );
             });
-          };
-          if (typeof raf === 'function') raf(scroll);
-          else scroll();
+            const raf = /** @type {any} */ (globalThis).requestAnimationFrame;
+            const scroll = () => {
+              const cards =
+                /** @type {any} */ (this).querySelectorAll?.(
+                  'cr-question-card'
+                ) ?? [];
+              cards[cards.length - 1]?.scrollIntoView?.({
+                behavior: 'smooth',
+                block: 'center',
+              });
+            };
+            if (typeof raf === 'function') raf(scroll);
+            else scroll();
+          },
         },
-        innerHTML: '<span class="plus">+</span> Draft a new question',
-      })
+        h('span', { className: 'plus' }, '+'),
+        ' Draft a new question'
+      )
     );
   }
 }

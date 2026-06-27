@@ -8,7 +8,6 @@ import {
   filters,
   setFilters,
 } from './question-bank-store.js';
-import { escapeHtml } from './question-bank-compile.js';
 import {
   canMoveCategory,
   categoryKey,
@@ -29,11 +28,15 @@ export class CRBankRail extends ReactiveElement {
     }
     const catList = h('div');
     catList.appendChild(
-      h('div', {
-        className: 'filter-chip' + (f.category === null ? ' active' : ''),
-        onClick: () => setFilters({ category: null }),
-        innerHTML: `<span>All</span><span class="chip-count">${bank.questions.length}</span>`,
-      })
+      h(
+        'div',
+        {
+          className: 'filter-chip' + (f.category === null ? ' active' : ''),
+          onClick: () => setFilters({ category: null }),
+        },
+        h('span', {}, 'All'),
+        h('span', { className: 'chip-count' }, String(bank.questions.length))
+      )
     );
     for (const [i, name] of order.entries()) {
       const n = cats.get(name) || 0;
@@ -44,7 +47,7 @@ export class CRBankRail extends ReactiveElement {
             className: 'filter-chip' + (f.category === name ? ' active' : ''),
             onClick: () => setFilters({ category: name }),
           },
-          h('span', { innerHTML: escapeHtml(name) }),
+          h('span', {}, name),
           h(
             'span',
             { className: 'chip-meta' },
@@ -137,13 +140,23 @@ export class CRBankRail extends ReactiveElement {
         'div',
         { className: 'rail-section' },
         h('h3', {}, 'Legend'),
-        h('div', {
-          className: 'rail-legend',
-          innerHTML:
-            '<div><span class="swatch active"></span>Active</div>' +
-            '<div><span class="swatch deprecated"></span>Deprecated</div>' +
-            '<div><span class="swatch conditional"></span>Conditional</div>',
-        })
+        h(
+          'div',
+          { className: 'rail-legend' },
+          h('div', {}, h('span', { className: 'swatch active' }), 'Active'),
+          h(
+            'div',
+            {},
+            h('span', { className: 'swatch deprecated' }),
+            'Deprecated'
+          ),
+          h(
+            'div',
+            {},
+            h('span', { className: 'swatch conditional' }),
+            'Conditional'
+          )
+        )
       )
     );
   }

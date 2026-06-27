@@ -22,6 +22,7 @@ class StubEl {
     this._attrs = {};
     this.className = '';
     this.textContent = '';
+    this.innerHTML = '';
     this._value = '';
     this.checked = false;
   }
@@ -83,7 +84,7 @@ class StubSelect extends StubEl {
   },
 };
 
-const { h } = await import('../src/lib/html.js');
+const { h, unsafeHTML } = await import('../src/lib/html.js');
 
 // ===== TESTS =====
 
@@ -112,6 +113,18 @@ test('h: a <select> with no matching option falls back to the blank option', () 
 test('h: value still applies to a plain input', () => {
   const input = h('input', { type: 'text', value: 'hello' });
   assert.equal(/** @type {any} */ (input).value, 'hello');
+});
+
+test('h: rejects incidental innerHTML props', () => {
+  assert.throws(
+    () => h('div', { innerHTML: '<strong>unsafe</strong>' }),
+    /does not accept innerHTML/
+  );
+});
+
+test('h: unsafeHTML is an explicit raw HTML escape hatch', () => {
+  const div = h('div', {}, unsafeHTML('<strong>reviewed</strong>'));
+  assert.equal(/** @type {any} */ (div).innerHTML, '<strong>reviewed</strong>');
 });
 
 test('h: a value-less <select> defaults to its first option', () => {

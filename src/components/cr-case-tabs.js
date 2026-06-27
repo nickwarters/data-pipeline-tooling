@@ -10,14 +10,17 @@ import {
   setFilters,
   showToast,
 } from '../question-bank/question-bank-store.js';
-import { escapeHtml } from '../question-bank/question-bank-compile.js';
 
 export class CRCaseTabs extends ReactiveElement {
   _render() {
     const content = this.render();
     if (Array.isArray(content)) {
       this.replaceChildren(...content);
-    } else if (content && typeof content === 'object' && 'appendChild' in content) {
+    } else if (
+      content &&
+      typeof content === 'object' &&
+      'appendChild' in content
+    ) {
       this.replaceChildren(content);
     } else {
       this.replaceChildren();
@@ -32,14 +35,18 @@ export class CRCaseTabs extends ReactiveElement {
     for (const slug in types) {
       const t = types[slug];
       tabs.appendChild(
-        h('button', {
-          className: 'case-tab' + (slug === active ? ' active' : ''),
-          onclick: () => {
-            activeSlug.set(slug);
-            setFilters({ category: null });
+        h(
+          'button',
+          {
+            className: 'case-tab' + (slug === active ? ' active' : ''),
+            onclick: () => {
+              activeSlug.set(slug);
+              setFilters({ category: null });
+            },
           },
-          innerHTML: `${escapeHtml(t.label)}<span class="tab-count">${t.questions.length} q</span>`,
-        })
+          t.label,
+          h('span', { className: 'tab-count' }, `${t.questions.length} q`)
+        )
       );
     }
 
@@ -70,11 +77,15 @@ export class CRCaseTabs extends ReactiveElement {
           },
           '↺ Revert'
         ),
-        h('button', {
-          className: 'pill-btn primary',
-          onclick: () => drawerOpen.set(true),
-          innerHTML: 'Compile & Submit <span class="key">⌘↵</span>',
-        })
+        h(
+          'button',
+          {
+            className: 'pill-btn primary',
+            onclick: () => drawerOpen.set(true),
+          },
+          'Compile & Submit ',
+          h('span', { className: 'key' }, '⌘↵')
+        )
       )
     );
   }

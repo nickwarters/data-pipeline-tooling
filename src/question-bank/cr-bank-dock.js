@@ -21,22 +21,10 @@ export class CRBankDock extends ReactiveElement {
       h(
         'div',
         { className: 'dock-status' },
-        h('div', {
-          className: 'dock-stat',
-          innerHTML: `<span class="label">Active</span><strong>${active}</strong>`,
-        }),
-        h('div', {
-          className: 'dock-stat',
-          innerHTML: `<span class="label">Deprecated</span><strong>${dep}</strong>`,
-        }),
-        h('div', {
-          className: 'dock-stat',
-          innerHTML: `<span class="label">Conditional</span><strong>${cond}</strong>`,
-        }),
-        h('div', {
-          className: 'dock-stat',
-          innerHTML: `<span class="label">Pending</span><strong>${pendingTxt}</strong>`,
-        })
+        stat('Active', String(active)),
+        stat('Deprecated', String(dep)),
+        stat('Conditional', String(cond)),
+        stat('Pending', pendingTxt)
       ),
       h(
         'div',
@@ -60,3 +48,16 @@ export class CRBankDock extends ReactiveElement {
 }
 
 customElements.define('cr-bank-dock', CRBankDock);
+
+/**
+ * @param {string} label
+ * @param {string} value
+ */
+function stat(label, value) {
+  return h(
+    'div',
+    { className: 'dock-stat' },
+    h('span', { className: 'label' }, label),
+    h('strong', {}, value)
+  );
+}

@@ -49,19 +49,24 @@ export class CRBankEditor extends ReactiveElement {
         h(
           'div',
           {},
-          h('div', {
-            className: 'eyebrow',
-            innerHTML:
-              'Case Type Owner <span class="dot"></span> Question Bank',
-          }),
-          h('h1', { innerHTML: 'Question <em>Bank</em>' })
+          h(
+            'div',
+            { className: 'eyebrow' },
+            'Case Type Owner ',
+            h('span', { className: 'dot' }),
+            ' Question Bank'
+          ),
+          h('h1', {}, 'Question ', h('em', {}, 'Bank'))
         ),
-        h('div', {
-          className: 'masthead-meta',
-          innerHTML:
-            'Session: <strong>local · uncommitted</strong><br>' +
-            'Schema: <strong>questions.v3</strong>',
-        })
+        h(
+          'div',
+          { className: 'masthead-meta' },
+          'Session: ',
+          h('strong', {}, 'local · uncommitted'),
+          h('br'),
+          'Schema: ',
+          h('strong', {}, 'questions.v3')
+        )
       ),
       /** @type {any} */ (document.createElement('cr-case-tabs')),
       h(

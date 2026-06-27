@@ -26,11 +26,20 @@ export class CRRemediationEditor extends ReactiveElement {
     const freeRow = h(
       'div',
       { class: 'rem-free-row' },
-      h('div', {
-        innerHTML:
-          '<div class="rem-free-title">Allow free-form remediation</div>' +
-          '<div class="rem-free-help">Reviewers can write their own remediation alongside any canned actions.</div>',
-      }),
+      h(
+        'div',
+        {},
+        h(
+          'div',
+          { className: 'rem-free-title' },
+          'Allow free-form remediation'
+        ),
+        h(
+          'div',
+          { className: 'rem-free-help' },
+          'Reviewers can write their own remediation alongside any canned actions.'
+        )
+      ),
       h('div', {
         class: 'toggle' + (q.allowFreeFormRemediation ? ' on' : ''),
         onclick: () =>
@@ -43,9 +52,16 @@ export class CRRemediationEditor extends ReactiveElement {
     const wrap = h(
       'div',
       { class: 'rem-block' },
-      h('h4', {
-        innerHTML: `Remediation Actions <span class="rem-count">(${count}${q.allowFreeFormRemediation ? ' + free-form' : ''})</span>`,
-      }),
+      h(
+        'h4',
+        {},
+        'Remediation Actions ',
+        h(
+          'span',
+          { className: 'rem-count' },
+          `(${count}${q.allowFreeFormRemediation ? ' + free-form' : ''})`
+        )
+      ),
       freeRow
     );
 
@@ -55,12 +71,20 @@ export class CRRemediationEditor extends ReactiveElement {
 
     if (q.allowFreeFormRemediation) {
       wrap.appendChild(
-        h('div', {
-          class: 'rem-free-preview',
-          innerHTML:
-            '<div class="rem-free-preview-eyebrow">Reviewer will see</div>' +
-            '<div class="rem-free-preview-body">"Describe a remediation in your own words…"</div>',
-        })
+        h(
+          'div',
+          { class: 'rem-free-preview' },
+          h(
+            'div',
+            { className: 'rem-free-preview-eyebrow' },
+            'Reviewer will see'
+          ),
+          h(
+            'div',
+            { className: 'rem-free-preview-body' },
+            '"Describe a remediation in your own words…"'
+          )
+        )
       );
     }
 

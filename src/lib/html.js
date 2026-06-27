@@ -1,6 +1,17 @@
 // @ts-check
 
-/** @typedef {Node | string | number | null | false | Array<Node | string | number | null | false>} VNode */
+/** @typedef {{ __unsafeHTML: string }} UnsafeHTML */
+/** @typedef {Node | UnsafeHTML | string | number | null | false | Array<Node | UnsafeHTML | string | number | null | false>} VNode */
+
+/**
+ * Explicit raw HTML escape hatch for narrowly reviewed markup such as syntax
+ * highlighting. Prefer DOM nodes and text children for ordinary UI.
+ * @param {string} html
+ * @returns {UnsafeHTML}
+ */
+export function unsafeHTML(html) {
+  return { __unsafeHTML: String(html) };
+}
 
 /**
  * A lightweight hyperscript-style element builder to replace manual document.createElement.
@@ -20,6 +31,11 @@ export function h(tag, props = {}, ...children) {
 
   for (const [k, v] of Object.entries(props)) {
     if (v == null) continue;
+    if (k === 'innerHTML') {
+      throw new Error(
+        'h() does not accept innerHTML; use unsafeHTML() explicitly'
+      );
+    }
     if (k.startsWith('on') && typeof v === 'function') {
       el.addEventListener(k.slice(2).toLowerCase(), v);
     } else if (k === 'class' || k === 'className') {
@@ -40,6 +56,12 @@ export function h(tag, props = {}, ...children) {
     if (child == null || child === false) return;
     if (Array.isArray(child)) {
       for (const c of child) append(c);
+    } else if (
+      child &&
+      typeof child === 'object' &&
+      typeof child.__unsafeHTML === 'string'
+    ) {
+      el.innerHTML = child.__unsafeHTML;
     } else if (child && typeof child === 'object' && 'appendChild' in child) {
       el.appendChild(/** @type {Node} */ (child));
     } else {

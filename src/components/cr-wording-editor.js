@@ -2,7 +2,6 @@
 import { ReactiveElement } from './reactive-element.js';
 import { h } from '../lib/html.js';
 import { baselineBank, commit } from '../question-bank/question-bank-store.js';
-import { escapeHtml } from '../question-bank/question-bank-compile.js';
 
 export class CRWordingEditor extends ReactiveElement {
   constructor() {
@@ -63,11 +62,26 @@ export class CRWordingEditor extends ReactiveElement {
     if (typeof raf === 'function') raf(autoresize);
     wrap.appendChild(txt);
 
-    const status = h('span');
-    if (!base) status.innerHTML = '<span class="changed">● New draft</span>';
-    else if (base.text !== q.text)
-      status.innerHTML = `<span class="changed">● Edited · was "${escapeHtml(base.text.slice(0, 60))}${base.text.length > 60 ? '…' : ''}"</span>`;
-    else status.textContent = '○ Unchanged';
+    let status;
+    if (!base) {
+      status = h(
+        'span',
+        {},
+        h('span', { className: 'changed' }, '● New draft')
+      );
+    } else if (base.text !== q.text) {
+      status = h(
+        'span',
+        {},
+        h(
+          'span',
+          { className: 'changed' },
+          `● Edited · was "${base.text.slice(0, 60)}${base.text.length > 60 ? '…' : ''}"`
+        )
+      );
+    } else {
+      status = h('span', {}, '○ Unchanged');
+    }
 
     const len = q.text.length;
     const cc = h(

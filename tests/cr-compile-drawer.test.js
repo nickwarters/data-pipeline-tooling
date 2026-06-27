@@ -120,3 +120,33 @@ test('CRCompileDrawer: diff cards render added / changed / removed counts', () =
   assert.equal(diffSummary._children.length, 3);
   e.disconnectedCallback();
 });
+
+test('CRCompileDrawer: code preview uses explicit highlighted HTML that escapes question text', () => {
+  _resetStore();
+  cases.set({
+    'example-review': {
+      label: 'Example',
+      slug: 'example-review',
+      eligibleGroups: [],
+      questions: [
+        {
+          id: 'q-danger',
+          text: '<img src=x onerror=alert(1)>',
+          responseType: 'yes-no-na',
+          deprecated: false,
+        },
+      ],
+    },
+  });
+  drawerOpen.set(true);
+  const e = new CRCompileDrawer();
+  e.connectedCallback();
+  const drawer = /** @type {any} */ (e)._children[1];
+  const body = drawer._children[1];
+  const codeBlock = body._children[1];
+
+  assert.ok(codeBlock.innerHTML.includes('&lt;img src=x onerror=alert(1)&gt;'));
+  assert.ok(!codeBlock.innerHTML.includes('<img src=x'));
+  assert.equal(codeBlock._children.length, 0);
+  e.disconnectedCallback();
+});

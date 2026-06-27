@@ -1,6 +1,6 @@
 // @ts-check
 import { ReactiveElement } from './reactive-element.js';
-import { h } from '../lib/html.js';
+import { h, unsafeHTML } from '../lib/html.js';
 import {
   baseline,
   cases,
@@ -58,11 +58,14 @@ export class CRCompileDrawer extends ReactiveElement {
           h(
             'div',
             {},
-            h('h3', { innerHTML: 'Compiled <em>config</em>.' }),
-            h('p', {
-              innerHTML:
-                'Ready for review. This is the exact module body that will be PR’d into <code class="code-inline">case-types/</code>.',
-            })
+            h('h3', {}, 'Compiled ', h('em', {}, 'config'), '.'),
+            h(
+              'p',
+              {},
+              'Ready for review. This is the exact module body that will be PR’d into ',
+              h('code', { className: 'code-inline' }, 'case-types/'),
+              '.'
+            )
           ),
           h(
             'button',
@@ -76,20 +79,11 @@ export class CRCompileDrawer extends ReactiveElement {
           h(
             'div',
             { class: 'diff-summary' },
-            h('div', {
-              class: 'diff-card added',
-              innerHTML: `<div class="n">${d.added}</div><div class="l">Added</div>`,
-            }),
-            h('div', {
-              class: 'diff-card changed',
-              innerHTML: `<div class="n">${d.changed}</div><div class="l">Changed</div>`,
-            }),
-            h('div', {
-              class: 'diff-card removed',
-              innerHTML: `<div class="n">${d.deprecated}</div><div class="l">Deprecated</div>`,
-            })
+            diffCard('diff-card added', String(d.added), 'Added'),
+            diffCard('diff-card changed', String(d.changed), 'Changed'),
+            diffCard('diff-card removed', String(d.deprecated), 'Deprecated')
           ),
-          h('div', { class: 'code-block', innerHTML: highlight(code) })
+          h('div', { class: 'code-block' }, unsafeHTML(highlight(code)))
         ),
         h(
           'div',
@@ -131,3 +125,17 @@ export class CRCompileDrawer extends ReactiveElement {
 }
 
 customElements.define('cr-compile-drawer', CRCompileDrawer);
+
+/**
+ * @param {string} className
+ * @param {string} count
+ * @param {string} label
+ */
+function diffCard(className, count, label) {
+  return h(
+    'div',
+    { class: className },
+    h('div', { className: 'n' }, count),
+    h('div', { className: 'l' }, label)
+  );
+}

@@ -51,6 +51,27 @@ test('CRQuestionLabels: renders a pill per assigned label', () => {
   assert.deepEqual(names, ['Coaching', 'Regulatory']);
 });
 
+test('CRQuestionLabels: label names render as text, not HTML', () => {
+  _resetStore();
+  activeSlug.set('example-review');
+  const bank = cases.get()['example-review'];
+  bank.labels = [
+    {
+      id: 'lbl-danger',
+      name: '<img src=x onerror=alert(1)>',
+      color: '#111111',
+    },
+  ];
+  const q = bank.questions[0];
+  q.labelIds = ['lbl-danger'];
+
+  const e = mount(q);
+  const { pillRow } = parts(e);
+  const name = pillRow._children[0]._children[1];
+  assert.equal(name.textContent, '<img src=x onerror=alert(1)>');
+  assert.equal(name.innerHTML, '');
+});
+
 test('CRQuestionLabels: shows an empty hint when no labels assigned', () => {
   _resetStore();
   activeSlug.set('example-review');

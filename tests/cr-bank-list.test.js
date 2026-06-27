@@ -118,3 +118,31 @@ test('CRBankList: dirty pill reflects isDirty', () => {
   assert.equal(dirty.className, 'dirty-indicator');
   e.disconnectedCallback();
 });
+
+test('CRBankList: bank label and slug render as text, not HTML', () => {
+  _resetStore();
+  activeSlug.set('example-review');
+  cases.set({
+    'example-review': {
+      label: '<img src=x onerror=alert(1)>',
+      slug: '<script>alert(1)</script>',
+      eligibleGroups: [],
+      questions: [],
+    },
+  });
+
+  const e = new CRBankList();
+  e.connectedCallback();
+  const section = /** @type {any} */ (e)._children[0];
+  const heading = section._children[0]._children[0];
+  const label = heading._children[0];
+  const meta = heading._children[1];
+
+  assert.equal(label.textContent, '<img src=x onerror=alert(1)>');
+  assert.equal(
+    meta.textContent,
+    '0 questions · slug: <script>alert(1)</script>'
+  );
+  assert.equal(heading.innerHTML, '');
+  e.disconnectedCallback();
+});

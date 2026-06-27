@@ -24,7 +24,7 @@ test('CRBankDock: 0 changes → "0 changes"; >1 → plural', () => {
   e.connectedCallback();
   let dock = /** @type {any} */ (e)._children[0];
   let pendingStat = dock._children[0]._children[3];
-  assert.ok(pendingStat.innerHTML.includes('0 changes'));
+  assert.equal(pendingStat._children[1].textContent, '0 changes');
 
   commit((t) => {
     const b = t['example-review'];
@@ -43,7 +43,7 @@ test('CRBankDock: 0 changes → "0 changes"; >1 → plural', () => {
   });
   dock = /** @type {any} */ (e)._children[0];
   pendingStat = dock._children[0]._children[3];
-  assert.ok(pendingStat.innerHTML.includes('2 changes'));
+  assert.equal(pendingStat._children[1].textContent, '2 changes');
   e.disconnectedCallback();
 });
 
@@ -71,7 +71,6 @@ test('CRBankDock: pluralises "change" with singular form on 1', () => {
   e.connectedCallback();
   const dock = /** @type {any} */ (e)._children[0];
   const pendingStat = dock._children[0]._children[3];
-  assert.ok(pendingStat.innerHTML.includes('1 change'));
-  assert.ok(!pendingStat.innerHTML.includes('1 changes'));
+  assert.equal(pendingStat._children[1].textContent, '1 change');
   e.disconnectedCallback();
 });
