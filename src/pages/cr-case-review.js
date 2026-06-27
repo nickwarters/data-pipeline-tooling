@@ -4,6 +4,10 @@ import { h } from '../lib/html.js';
 import { CaseReviewViewModel } from '../lib/case-review-view-model.js';
 import { CaseReviewHeaderController } from './cr-case-review/header-controller.js';
 import { QuestionPanelController } from './cr-case-review/question-panel-controller.js';
+import {
+  CompletionController,
+  completeCase,
+} from './cr-case-review/completion-controller.js';
 
 import '../components/cr-question-list.js';
 import '../components/cr-section-progress.js';
@@ -42,6 +46,7 @@ export class CRCaseReview extends ReactiveElement {
     this.viewModel = null;
     this._headerController = new CaseReviewHeaderController();
     this._questionPanelController = new QuestionPanelController();
+    this._completionController = new CompletionController();
 
     // TODO(issue-198): Move controller-owned lifecycle state into
     // cr-case-review/conversation-controller.js and
@@ -222,25 +227,14 @@ export class CRCaseReview extends ReactiveElement {
    * @param {Partial<CaseRow>} [patchFields]
    */
   async _completeCase(caseId, clientArg, saveQueueArg, patchFields) {
-    // TODO(issue-198): Move completion persistence to
-    // cr-case-review/completion-controller.js completeCase().
-    const client = clientArg ?? this.client;
-    const saveQueue = saveQueueArg ?? this.saveQueue;
-    if (!client || !saveQueue) return;
-
-    const finalFields = patchFields || {
-      status: /** @type {'Completed'} */ ('Completed'),
-      completedAt: new Date().toISOString(),
-    };
-
-    const flushed = await saveQueue.flushCase(caseId);
-    if (!flushed) return;
-
-    const etag = saveQueue.getEtag(caseId);
-    const result = await client.patchCase(caseId, finalFields, etag);
-    if (result.ok && typeof location !== 'undefined') {
-      location.hash = '#/dashboard';
-    }
+    // TODO(issue-198): Keep this temporary compatibility shim until tests call
+    // completeCase() directly instead of the page private method.
+    await completeCase({
+      caseId,
+      client: clientArg ?? this.client,
+      saveQueue: saveQueueArg ?? this.saveQueue,
+      patchFields: patchFields ?? null,
+    });
   }
 
   render() {
@@ -312,7 +306,6 @@ export class CRCaseReview extends ReactiveElement {
 
     const canAttribute = machine.canAttribute;
     const canCapture = machine.canCapture;
-    const canComplete = machine.canComplete;
     const canToggleConversation = machine.canToggleConversation;
 
     // TODO(issue-198): Move conversation shortcut binding to
@@ -373,7 +366,8 @@ export class CRCaseReview extends ReactiveElement {
         viewModel: vm,
         nodes: this._controllerNodes(canToggleConversation),
         displayMode,
-        completeCase: this._completeCase.bind(this),
+        completeCase: (caseId, client, saveQueue, patchFields) =>
+          this._completeCase(caseId, client, saveQueue, patchFields),
         toggleConversationPanel: this._toggleConversationPanel.bind(this),
       });
 
@@ -401,30 +395,15 @@ export class CRCaseReview extends ReactiveElement {
         this._toggleConversationPanel()
       );
 
-      // TODO(issue-198): Move complete-button event wiring to
-      // CompletionController.bind().
-      this._btnEl.addEventListener('click', (/** @type {Event} */ e) => {
-        const target = /** @type {any} */ (e?.target || this._btnEl);
-        if (target.disabled) return;
-        target.disabled = true;
-        const patchFields = machine.transitionToCompleted
-          ? machine.transitionToCompleted(
-              config.computeOutcome,
-              vm.answersSignal.get(),
-              vm.exportHash ?? null
-            )
-          : {
-              status: /** @type {'Completed'} */ ('Completed'),
-              completedAt: new Date().toISOString(),
-            };
-        this._completeCase(
-          caseRow.id,
-          vm.client,
-          vm.saveQueue,
-          patchFields
-        ).finally(() => {
-          target.disabled = false;
-        });
+      // TODO(issue-198): CompletionController owns completion event wiring; keep
+      // this context adapter until the shared node registry is wired.
+      this._completionController.bind({
+        viewModel: vm,
+        nodes: this._controllerNodes(canToggleConversation),
+        displayMode,
+        completeCase: (caseId, client, saveQueue, patchFields) =>
+          this._completeCase(caseId, client, saveQueue, patchFields),
+        toggleConversationPanel: this._toggleConversationPanel.bind(this),
       });
     }
 
@@ -442,7 +421,8 @@ export class CRCaseReview extends ReactiveElement {
       viewModel: vm,
       nodes: this._controllerNodes(canToggleConversation),
       displayMode,
-      completeCase: this._completeCase.bind(this),
+      completeCase: (caseId, client, saveQueue, patchFields) =>
+        this._completeCase(caseId, client, saveQueue, patchFields),
       toggleConversationPanel: this._toggleConversationPanel.bind(this),
     });
 
@@ -544,7 +524,8 @@ export class CRCaseReview extends ReactiveElement {
       viewModel: vm,
       nodes: this._controllerNodes(canToggleConversation),
       displayMode,
-      completeCase: this._completeCase.bind(this),
+      completeCase: (caseId, client, saveQueue, patchFields) =>
+        this._completeCase(caseId, client, saveQueue, patchFields),
       toggleConversationPanel: this._toggleConversationPanel.bind(this),
     });
 
@@ -565,10 +546,16 @@ export class CRCaseReview extends ReactiveElement {
       });
     }
 
-    // TODO(issue-198): Move complete button visibility/label updates to
-    // CompletionController.update().
-    this._btnEl.hidden = !(isAllAnswered && canComplete);
-    this._btnEl.textContent = 'Complete Case';
+    // TODO(issue-198): CompletionController owns complete button state; keep
+    // this context adapter until the shared node registry is wired.
+    this._completionController.update({
+      viewModel: vm,
+      nodes: this._controllerNodes(canToggleConversation),
+      displayMode,
+      completeCase: (caseId, client, saveQueue, patchFields) =>
+        this._completeCase(caseId, client, saveQueue, patchFields),
+      toggleConversationPanel: this._toggleConversationPanel.bind(this),
+    });
 
     // To satisfy tests that manually query _conversationToggleBtn
     this._conversationToggleBtn = canToggleConversation

@@ -8,19 +8,43 @@ export class CompletionController {
    * @param {import('./types.js').CaseReviewShellContext} context
    */
   bind(context) {
-    // TODO(issue-198): Attach the complete button click handler, disable during
-    // completion, build transitionToCompleted patch fields when available, and
-    // call context.completeCase.
-    void context;
+    const { viewModel: vm, nodes } = context;
+    const button = nodes.completeButton;
+    if (!button || !vm.caseRow || !vm.config || !vm.machine) return;
+    const { caseRow, config, machine } = vm;
+
+    button.addEventListener('click', (event) => {
+      const target = /** @type {HTMLButtonElement} */ (event?.target || button);
+      if (target.disabled) return;
+      target.disabled = true;
+      const patchFields = machine.transitionToCompleted
+        ? machine.transitionToCompleted(
+            config.computeOutcome,
+            vm.answersSignal.get(),
+            vm.exportHash ?? null
+          )
+        : {
+            status: /** @type {'Completed'} */ ('Completed'),
+            completedAt: new Date().toISOString(),
+          };
+      context
+        .completeCase(caseRow.id, vm.client, vm.saveQueue, patchFields)
+        .finally(() => {
+          target.disabled = false;
+        });
+    });
   }
 
   /**
    * @param {import('./types.js').CaseReviewShellContext} context
    */
   update(context) {
-    // TODO(issue-198): Keep button visibility and label aligned with
-    // allAnswered and machine.canComplete.
-    void context;
+    const { viewModel: vm, nodes } = context;
+    const button = nodes.completeButton;
+    if (!button || !vm.machine) return;
+
+    button.hidden = !(vm.allAnswered.get() && vm.machine.canComplete);
+    button.textContent = 'Complete Case';
   }
 }
 
@@ -29,8 +53,20 @@ export class CompletionController {
  * @returns {Promise<void>}
  */
 export async function completeCase(request) {
-  // TODO(issue-198): Move CRCaseReview._completeCase behavior here: flush queued
-  // saves, patch the case with the current ETag, and navigate to dashboard only
-  // on successful patch.
-  void request;
+  const { caseId, client, saveQueue, patchFields } = request;
+  if (!client || !saveQueue) return;
+
+  const finalFields = patchFields || {
+    status: /** @type {'Completed'} */ ('Completed'),
+    completedAt: new Date().toISOString(),
+  };
+
+  const flushed = await saveQueue.flushCase(caseId);
+  if (!flushed) return;
+
+  const etag = saveQueue.getEtag(caseId);
+  const result = await client.patchCase(caseId, finalFields, etag);
+  if (result.ok && typeof location !== 'undefined') {
+    location.hash = '#/dashboard';
+  }
 }

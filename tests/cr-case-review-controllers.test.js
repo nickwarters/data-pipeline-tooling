@@ -11,6 +11,8 @@ class StubEl {
     this.textContent = '';
     this.className = '';
     this.tagName = '';
+    this.disabled = false;
+    this.hidden = false;
     /** @type {Record<string, Function[]>} */
     this._listeners = {};
     /** @type {any[]} */
@@ -56,6 +58,8 @@ const { CaseReviewHeaderController } =
   await import('../src/pages/cr-case-review/header-controller.js');
 const { QuestionPanelController, collectUnansweredQuestions } =
   await import('../src/pages/cr-case-review/question-panel-controller.js');
+const { CompletionController, completeCase } =
+  await import('../src/pages/cr-case-review/completion-controller.js');
 
 /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
 const QUESTIONS = [
@@ -155,6 +159,95 @@ function makeQuestionContext(opts = {}) {
     },
     saveQueue,
     client,
+  };
+}
+
+/**
+ * @param {Partial<{
+ *   allAnswered: boolean,
+ *   canComplete: boolean,
+ *   transitionToCompleted: Function | null,
+ *   completeCase: Function,
+ * }>} [opts]
+ */
+function makeCompletionContext(opts = {}) {
+  const completeButton = new StubEl();
+  completeButton.disabled = false;
+  completeButton.hidden = false;
+  const patchFromTransition = {
+    status: 'Completed',
+    completedAt: 'transition-date',
+  };
+  /** @type {any[]} */
+  const completeCalls = [];
+  const client = { id: 'client' };
+  const saveQueue = { id: 'queue' };
+  const transitionToCompleted =
+    opts.transitionToCompleted === undefined
+      ? () => patchFromTransition
+      : opts.transitionToCompleted;
+  return {
+    completeButton,
+    completeCalls,
+    patchFromTransition,
+    context: {
+      viewModel: {
+        caseRow: {
+          id: 'case-1',
+          title: 'Case One',
+          assignedReviewer: 'Alex Reviewer',
+        },
+        config: {
+          computeOutcome: () => ({ outcome: 'pass' }),
+        },
+        answersSignal: { get: () => ({ 'q-a': { value: 'Yes' } }) },
+        exportHash: 'hash-1',
+        machine: {
+          canComplete: opts.canComplete ?? true,
+          ...(transitionToCompleted ? { transitionToCompleted } : {}),
+        },
+        allAnswered: { get: () => opts.allAnswered ?? true },
+        client,
+        saveQueue,
+      },
+      nodes: {
+        tabs: null,
+        details: null,
+        questionsPanel: null,
+        questionList: null,
+        progress: null,
+        overrideEditor: null,
+        remediation: null,
+        summary: null,
+        notes: null,
+        appeal: null,
+        conversation: null,
+        sourceCase: null,
+        banner: null,
+        conversationToggle: null,
+        header: null,
+        completeButton,
+      },
+      displayMode: (/** @type {any} */ mode) => mode,
+      completeCase:
+        opts.completeCase ??
+        (async (
+          /** @type {string} */ caseId,
+          /** @type {any} */ clientArg,
+          /** @type {any} */ saveQueueArg,
+          /** @type {any} */ patchFields
+        ) => {
+          completeCalls.push({
+            caseId,
+            client: clientArg,
+            saveQueue: saveQueueArg,
+            patchFields,
+          });
+        }),
+      toggleConversationPanel: () => {},
+    },
+    client,
+    saveQueue,
   };
 }
 
@@ -346,18 +439,142 @@ test.todo(
 // TODO(issue-198): Assert the controller unregisters keyboard handlers to avoid
 // leaking shortcuts after CRCaseReview is disconnected.
 
-test.todo(
-  'CompletionController: preserves completion button visibility and transition patch behavior'
-);
-// TODO(issue-198): Assert the button hides unless all questions are answered and
-// completion is allowed, disables during submit, uses transitionToCompleted when
-// present, and re-enables after completion settles.
+test('CompletionController: preserves completion button visibility and label', () => {
+  const visible = makeCompletionContext({
+    allAnswered: true,
+    canComplete: true,
+  });
+  new CompletionController().update(/** @type {any} */ (visible.context));
+  assert.equal(visible.completeButton.hidden, false);
+  assert.equal(visible.completeButton.textContent, 'Complete Case');
 
-test.todo(
-  'completeCase: flushes queued saves, patches with the stored ETag, and navigates on success'
-);
-// TODO(issue-198): Move existing _completeCase coverage to this public seam and
-// include the no-client, no-queue, failed-flush, and failed-patch paths.
+  const unanswered = makeCompletionContext({
+    allAnswered: false,
+    canComplete: true,
+  });
+  new CompletionController().update(/** @type {any} */ (unanswered.context));
+  assert.equal(unanswered.completeButton.hidden, true);
+
+  const blocked = makeCompletionContext({
+    allAnswered: true,
+    canComplete: false,
+  });
+  new CompletionController().update(/** @type {any} */ (blocked.context));
+  assert.equal(blocked.completeButton.hidden, true);
+});
+
+test('CompletionController: disables during submit, uses transition patch, and re-enables', async () => {
+  /** @type {(value?: unknown) => void} */
+  let resolveSubmit = () => {};
+  const { context, completeButton, completeCalls, patchFromTransition } =
+    makeCompletionContext({
+      completeCase: (
+        /** @type {string} */ caseId,
+        /** @type {any} */ client,
+        /** @type {any} */ saveQueue,
+        /** @type {any} */ patchFields
+      ) =>
+        new Promise((resolve) => {
+          completeCalls.push({ caseId, client, saveQueue, patchFields });
+          resolveSubmit = resolve;
+        }),
+    });
+
+  new CompletionController().bind(/** @type {any} */ (context));
+  completeButton._listeners.click[0]({ target: completeButton });
+
+  assert.equal(completeButton.disabled, true);
+  assert.equal(completeCalls.length, 1);
+  assert.equal(completeCalls[0].patchFields, patchFromTransition);
+
+  resolveSubmit();
+  await Promise.resolve();
+  assert.equal(completeButton.disabled, false);
+});
+
+test('CompletionController: falls back to default completion patch when no transition exists', () => {
+  const { context, completeButton, completeCalls } = makeCompletionContext({
+    transitionToCompleted: null,
+  });
+
+  new CompletionController().bind(/** @type {any} */ (context));
+  completeButton._listeners.click[0]({ target: completeButton });
+
+  assert.equal(completeCalls.length, 1);
+  assert.equal(completeCalls[0].patchFields.status, 'Completed');
+  assert.equal(typeof completeCalls[0].patchFields.completedAt, 'string');
+});
+
+test('completeCase: flushes queued saves, patches with the stored ETag, and navigates on success', async () => {
+  /** @type {any[]} */
+  const patchCalls = [];
+  const client = {
+    patchCase(
+      /** @type {string} */ caseId,
+      /** @type {any} */ fields,
+      /** @type {string} */ etag
+    ) {
+      patchCalls.push({ caseId, fields, etag });
+      return Promise.resolve({ ok: true, status: 200 });
+    },
+  };
+  const saveQueue = {
+    flushCase: async () => true,
+    getEtag: () => 'etag-1',
+  };
+  /** @type {any} */ (globalThis).location = { hash: '' };
+
+  await completeCase({
+    caseId: 'case-1',
+    client: /** @type {any} */ (client),
+    saveQueue: /** @type {any} */ (saveQueue),
+    patchFields: { status: 'Completed' },
+  });
+
+  assert.deepEqual(patchCalls, [
+    {
+      caseId: 'case-1',
+      fields: { status: 'Completed' },
+      etag: 'etag-1',
+    },
+  ]);
+  assert.equal(/** @type {any} */ (globalThis).location.hash, '#/dashboard');
+});
+
+test('completeCase: does not patch when required collaborators or flush success are missing', async () => {
+  let patchCount = 0;
+  const client = {
+    patchCase() {
+      patchCount++;
+      return Promise.resolve({ ok: true, status: 200 });
+    },
+  };
+  const saveQueue = {
+    flushCase: async () => false,
+    getEtag: () => 'etag-1',
+  };
+
+  await completeCase({
+    caseId: 'case-1',
+    client: null,
+    saveQueue: /** @type {any} */ (saveQueue),
+    patchFields: null,
+  });
+  await completeCase({
+    caseId: 'case-1',
+    client: /** @type {any} */ (client),
+    saveQueue: null,
+    patchFields: null,
+  });
+  await completeCase({
+    caseId: 'case-1',
+    client: /** @type {any} */ (client),
+    saveQueue: /** @type {any} */ (saveQueue),
+    patchFields: null,
+  });
+
+  assert.equal(patchCount, 0);
+});
 
 test.todo(
   'SourceCaseController: assigns QA Check source case props without changing override provenance'
