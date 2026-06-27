@@ -282,6 +282,7 @@
         <a href="#problem">The problem</a>
         <a href="#shape">Shape of the answer</a>
         <a href="#snapshot">Monthly snapshot</a>
+        <a href="#memory">Doesn't fit in memory</a>
         <a href="#queue">Customer DB as queue</a>
         <a href="#enrich">Daily enrichment</a>
         <a href="#scheduling">Scheduling</a>
@@ -314,7 +315,7 @@
 
       <div class="flow" aria-label="End to end flow">
         <div class="node"><b>SAS host</b><span>Monthly job emits the compressed extract; copied local (~150&nbsp;MB) — ADR-0012.</span></div>
-        <div class="node"><b>regulatory subject</b><span>Monthly ingest → silver <code>Refresh</code> snapshot, indexed by <code>customer_id</code>.</span></div>
+        <div class="node"><b>regulatory subject</b><span>Monthly ingest <em>streams</em> the extract in chunks, projects 2 columns → small indexed silver snapshot.</span></div>
         <div class="node"><b>customer DB</b><span>Every silver feed upserts the <code>customer_id</code>s it saw; null status = backlog.</span></div>
         <div class="node"><b>enrichment</b><span>Daily: read nulls → look up indexed snapshot → upsert status back.</span></div>
         <div class="node"><b>Consumers</b><span>Selection / Reporting read an enriched customer record. No live SAS scan.</span></div>
@@ -334,17 +335,62 @@
         <p style="margin:8px 0 0"><code>SasReader</code> / <code>RemoteRunner</code> are <em>specified</em> by ADR-0012 but not yet implemented in <code>framework/io</code>. Until they land, the snapshot ingest can read the already-copied, decompressed extract with the existing file reader and a <code>--param source_file=…</code>; swapping in <code>SasReader</code> later is a reader substitution, not a redesign.</p>
       </div>
 
-      <h3>Why this kills the "scan it every time" cost</h3>
-      <p>The point of standing the snapshot up in silver SQLite is that lookups stop being a <strong>full scan of a 150&nbsp;MB file</strong> and become <strong>indexed point reads</strong>. Load it once per refresh, keyed/indexed on <code>customer_id</code>; thereafter every enrichment lookup is <code>WHERE customer_id IN (…)</code> against an index. The expensive iteration happens 12 times a year, not 250.</p>
+      <h3>Why this kills the "scan it every time" cost — project, don't copy</h3>
+      <p>The extract is hundreds of GB largely because it is <strong>wide</strong> — every regulatory column for every customer. Enrichment needs exactly two: <code>customer_id</code> and <code>regulatory_status</code>. A single pass that <strong>projects those two columns</strong> yields a table that is small enough to hold and index comfortably (two short columns × the customer base — typically hundreds of MB, not hundreds of GB).</p>
+      <p>So the deal is: pay one <strong>streaming projection pass per refresh</strong> (12×/year), and in return every daily lookup becomes an <strong>indexed point read</strong> against a small SQLite table — <code>WHERE customer_id IN (…)</code> against an index — and <em>never</em> touches the giant extract again. That is precisely the "stop iterating the dataset all the time" goal, achieved by moving the one unavoidable full scan to once a month.</p>
+      <div class="callout warn">
+        <span class="label">The catch — and the next section</span>
+        <p style="margin:8px 0 0">That projection pass <strong>still can't read the extract into memory in one go</strong> (it's hundreds of GB uncompressed). It must be <strong>streamed in chunks</strong> — which the current <code>Reader.read() → Dataset</code> contract doesn't yet do. That's the one real new capability this design needs; see <a href="#memory">Reading something that doesn't fit in memory</a>.</p>
+      </div>
 
       <table>
-        <tr><th>Layer</th><th>Load strategy</th><th>Contents</th></tr>
-        <tr><td>raw</td><td><code>AccumulateByRun</code></td><td>Faithful landing of each monthly extract, stamped with <code>load_date</code> — the system-of-record history of snapshots (ADR-0004).</td></tr>
-        <tr><td>silver</td><td><code>Refresh</code></td><td>Current snapshot only: one row per <code>customer_id</code> → <code>regulatory_status</code> (+ snapshot date). Schema-enforced; this is the lookup table.</td></tr>
+        <tr><th>Layer</th><th>Form &amp; strategy</th><th>Contents</th></tr>
+        <tr><td>raw</td><td>the <strong>landed file</strong> (not a SQLite copy)</td><td>The compressed extract copied local by the <code>SasReader</code> (ADR-0012). For a hundreds-of-GB source we deliberately <em>don't</em> mirror it into raw SQLite — the copied file on disk <em>is</em> the faithful raw landing. (A pragmatic deviation from the usual raw-as-table model; flagged in open decisions.)</td></tr>
+        <tr><td>silver</td><td><code>Refresh</code> SQLite, indexed on <code>customer_id</code></td><td>The projected current snapshot: one row per <code>customer_id</code> → <code>regulatory_status</code> (+ <code>snapshot_date</code>). Schema-enforced; this small, indexed table is the lookup surface.</td></tr>
         <tr><td>gold</td><td>—</td><td>Not needed. This is reference data joined in Python, not a CasePool. Silver is the read surface.</td></tr>
       </table>
 
       <p style="margin-top:16px">Schedule: <code>NthWorkingDayOfMonth(n)</code> or <code>DayOfMonth(d)</code> to match when the upstream SAS job publishes. Add a <code>VolumeAnomalyValidator</code> so a <strong>truncated extract</strong> (every row valid, but half the customers silently missing) trips the run rather than quietly shrinking the snapshot.</p>
+    </section>
+
+    <section id="memory">
+      <h2>1a. Reading something that doesn't fit in memory</h2>
+      <p>Every <code>Reader</code> today does <code>read() → Dataset</code>, and a <code>Dataset</code> is the <strong>bulk in-memory carrier</strong> (pandas behind the seam, ADR-0002). That's fine for a CSV feed; it is impossible for a hundreds-of-GB SAS extract. The engine we lean on is the same one you already use by hand: read in bounded <strong>chunks</strong> (your 10K-row windows). pandas exposes it directly — <code>read_sas(chunksize=10_000)</code> / <code>read_csv(chunksize=…)</code> yield a sequence of bounded frames — so it stays behind the <code>Dataset</code> seam: <strong>each chunk is a small Dataset; the in-memory contract holds per chunk, never for the whole source.</strong></p>
+      <p>This is the one genuine new framework primitive the design asks for: a <strong>chunked / streaming read seam</strong> (a reader that yields a sequence of bounded Datasets rather than one). There are two ways to consume it, and which you pick is the central architectural decision here.</p>
+
+      <div class="compare">
+        <div class="panel">
+          <span class="label" style="color:var(--green)">✓ Strategy 1 — monthly streaming projection (recommended)</span>
+          <p style="margin:10px 0 0">Stream the extract once per refresh, project the two columns, append each chunk to silver. A <em>full</em> pass — you want every customer — so there's no id-pruning; just bounded memory, one chunk at a time.</p>
+          <pre style="margin-top:12px"><code><span class="c"># monthly ingest: stream → project → append</span>
+writer = regulatory.writer(SILVER, <span class="s">"status"</span>,
+                           <span class="k">AccumulateByRun</span>.from_context(ctx))
+<span class="k">for</span> chunk <span class="k">in</span> <span class="k">SasReader</span>(...).chunks(<span class="k">10_000</span>):
+    two_cols = <span class="k">SelectColumns</span>(<span class="s">"customer_id"</span>,
+                          <span class="s">"regulatory_status"</span>).apply(chunk)
+    writer.write(two_cols)        <span class="c"># append this chunk</span>
+<span class="c"># result: small, indexed silver. Daily lookups never touch the extract.</span></code></pre>
+          <p style="margin-top:10px"><strong>Your chunk-reading know-how plugs straight in here</strong> — minus the skip/stop logic, because a projection wants every row. The expensive scan is paid 12×/year.</p>
+        </div>
+        <div class="panel">
+          <span class="label" style="color:var(--amber)">~ Strategy 2 — bounded sorted-scan lookup (fallback)</span>
+          <p style="margin:10px 0 0">Your current technique, promoted into a <code>Reader</code>. Use it only if materialising a monthly snapshot is rejected. It takes the <strong>sorted backlog ids</strong> and streams the (id-ascending) extract, applying your three rules verbatim:</p>
+          <pre style="margin-top:12px"><code><span class="k">for</span> chunk <span class="k">in</span> source.chunks(<span class="k">10_000</span>):
+    lo, hi = chunk.min_id, chunk.max_id
+    <span class="k">if</span> hi &lt; targets.min: <span class="k">continue</span>   <span class="c"># chunk below range</span>
+    <span class="k">if</span> lo &gt; targets.max: <span class="k">break</span>      <span class="c"># sorted → done</span>
+    hits = chunk[chunk.id.isin(targets)]
+    <span class="k">if</span> hits.empty: <span class="k">continue</span>          <span class="c"># no wanted ids</span>
+    collected.append(hits)
+<span class="k">return</span> <span class="k">Dataset</span>.concat(collected)    <span class="c"># only matches → small</span></code></pre>
+          <p style="margin-top:10px">It returns <strong>only matched rows</strong>, so the output Dataset is small even though the source isn't — the hugeness is consumed inside the loop, never materialised.</p>
+        </div>
+      </div>
+
+      <div class="callout warn" style="margin-top:18px">
+        <span class="label">Why Strategy 2 is the fallback, honestly</span>
+        <p style="margin:8px 0 0">The skip/early-stop pruning only saves work when the backlog ids <strong>cluster at the low end</strong> of the id range. A backlog spread across the whole range still streams most of the file <em>every day</em> — which is the exact cost you're trying to escape. Strategy 1 pays that cost once a month and makes every day cheap; Strategy 2 keeps paying it daily. Reach for Strategy 2 only if you genuinely can't hold even the projected snapshot, or you need intra-month live freshness rather than month-stamped values.</p>
+      </div>
     </section>
 
     <section id="queue">
@@ -378,7 +424,7 @@ snapshot_date      TEXT  null</code></pre>
 
     <section id="enrich">
       <h2>3. The daily enrichment pipeline</h2>
-      <p>A single ordinary pipeline at <code>pipelines/regulatory_enrichment/</code>, addressable by path (<code>python -m cli run pipelines/regulatory_enrichment /data</code>). Its <code>run(context)</code> is three hops:</p>
+      <p>A single ordinary pipeline at <code>pipelines/regulatory_enrichment/</code>, addressable by path (<code>python -m cli run pipelines/regulatory_enrichment /data</code>). Under Strategy 1 its <code>run(context)</code> is three small hops — and crucially, <strong>nothing here streams the giant extract</strong>; both reads are small (the backlog, and the projected snapshot):</p>
 
       <div class="panel">
         <span class="label">pipelines/regulatory_enrichment/pipeline.py</span>
@@ -393,13 +439,11 @@ snapshot_date      TEXT  null</code></pre>
     regulatory = <span class="k">StoreCatalog</span>(context.base_dir).store(<span class="s">"regulatory"</span>)
 
     p = <span class="k">Pipeline</span>(<span class="s">"regulatory_enrichment"</span>)
-    <span class="c"># 1. the backlog: customers still missing the data point</span>
-    missing = p.read(
-        <span class="k">SqliteReader</span>(customers.path(SILVER), <span class="s">"customers"</span>,
-                    where=<span class="s">"regulatory_status IS NULL"</span>),
-        name=<span class="s">"missing"</span>,
-    )
-    <span class="c"># 2. look them up against the indexed snapshot (point reads, not a scan)</span>
+    <span class="c"># 1. the backlog — the whole customers table is small (id + status),</span>
+    <span class="c">#    so read it and keep the null rows in Python (no giant scan).</span>
+    everyone = p.read(<span class="k">SqliteReader</span>(customers.path(SILVER), <span class="s">"customers"</span>), name=<span class="s">"customers"</span>)
+    missing = p.task(<span class="s">"missing"</span>, <span class="k">Filter</span>(<span class="k">lambda</span> r: r.regulatory_status <span class="k">is None</span>), everyone)
+    <span class="c"># 2. look them up against the small, INDEXED projected snapshot</span>
     snapshot = p.read(<span class="k">SqliteReader</span>(regulatory.path(SILVER), <span class="s">"status"</span>), name=<span class="s">"snapshot"</span>)
     enriched = p.task(<span class="s">"lookup"</span>, join_status, missing, snapshot)
     <span class="c"># 3. merge the resolved values back into the customer DB</span>
@@ -409,10 +453,10 @@ snapshot_date      TEXT  null</code></pre>
       </div>
 
       <ul>
-        <li><strong>Incremental by construction.</strong> It only ever reads the null backlog, so cost scales with <em>what's missing today</em>, not the size of the customer base or the snapshot.</li>
+        <li><strong>Incremental by construction.</strong> It enriches only the null backlog, so the resolved set scales with <em>what's missing today</em>, not the customer base or the extract.</li>
+        <li><strong>No streaming on the daily path (Strategy 1).</strong> Both reads are small SQLite tables; the join is in Python behind the <code>Dataset</code> seam. The hundreds-of-GB extract is only ever touched by the monthly projection. (Under the Strategy 2 fallback, hop 2 instead uses the bounded sorted-scan reader, fed the backlog ids — see <a href="#memory">above</a>.)</li>
         <li><strong>Idempotent.</strong> The <code>UpsertStrategy("customer_id")</code> write merges; re-running the same day re-resolves whatever is still null and changes nothing else. Logical run id defaults to <code>regulatory_enrichment:&lt;run-date&gt;</code> (ADR-0004), so a re-drive is safe.</li>
-        <li><strong>Self-healing across a refresh.</strong> When the monthly snapshot turns over, you can additionally null-out (or re-stamp) statuses older than the new <code>snapshot_date</code> so the next daily sweep refreshes them — see <a href="#edges">edge cases</a>.</li>
-        <li><strong>Lookups are indexed.</strong> The join is the day's small missing set against the indexed snapshot, in Python behind the <code>Dataset</code> seam — never an iteration over the raw extract.</li>
+        <li><strong>Self-healing across a refresh.</strong> When the monthly snapshot turns over, null-out (or re-stamp) statuses older than the new <code>snapshot_date</code> so the next daily sweep refreshes them — see <a href="#edges">edge cases</a>.</li>
       </ul>
     </section>
 
@@ -553,7 +597,8 @@ ingest_set = PipelineSet(<span class="s">"feeds"</span>, [
     <section id="build">
       <h2>7. What to build</h2>
       <ol>
-        <li><strong><code>regulatory</code> Reference Data subject + monthly ingest pipeline.</strong> Lands the extract (file reader now; <code>SasReader</code> per ADR-0012 when implemented) → silver <code>Refresh</code>, indexed on <code>customer_id</code>, with a <code>VolumeAnomalyValidator</code>. Schedule <code>NthWorkingDayOfMonth</code>/<code>DayOfMonth</code>.</li>
+        <li><strong>A chunked / streaming read seam</strong> — the one real new framework primitive. A reader that yields a sequence of bounded Datasets (e.g. <code>.chunks(n)</code> over pandas <code>chunksize</code>), behind the <code>Dataset</code> seam per ADR-0002. Everything else here is wiring; this is the capability that makes a hundreds-of-GB source tractable at all.</li>
+        <li><strong><code>regulatory</code> Reference Data subject + monthly ingest pipeline.</strong> <code>SasReader</code> (ADR-0012; file reader as a stopgap) → <strong>streaming projection</strong> of <code>customer_id</code>+<code>regulatory_status</code> → silver <code>Refresh</code>, indexed on <code>customer_id</code>, with a <code>VolumeAnomalyValidator</code>. Raw is the landed file, not a SQLite mirror. Schedule <code>NthWorkingDayOfMonth</code>/<code>DayOfMonth</code>.</li>
         <li><strong><code>register_customers</code> task in each silver feed builder.</strong> Projects <code>customer_id</code> and upserts into the shared <code>customers</code> table (<code>UpsertStrategy("customer_id")</code>). A small reusable helper so every feed wires it the same way.</li>
         <li><strong><code>pipelines/regulatory_enrichment/</code>.</strong> Read null backlog → join indexed snapshot → upsert status back. <code>UPSTREAMS</code> = one hard <code>within_days(40)</code> on <code>regulatory/ingest</code>.</li>
         <li><strong>Orchestration wiring.</strong> Enrichment scheduled <code>Weekdays()</code>, last in the feed set(s); optional soft per-feed requirements for visibility. Verify with <code>Orchestrator.plan()</code> that it reads <code>ready</code> on a mixed-feed day.</li>
@@ -563,6 +608,8 @@ ingest_set = PipelineSet(<span class="s">"feeds"</span>, [
 
       <h3>Open decisions to confirm with the team</h3>
       <ul>
+        <li><span class="status info">decide</span> <strong>Strategy 1 (monthly projection) vs Strategy 2 (daily sorted-scan):</strong> the central choice. Strategy 1 is recommended unless the projected snapshot can't be held, or intra-month live freshness is required. Both need the chunked-read seam.</li>
+        <li><span class="status info">decide</span> <strong>Raw landing for an oversized source:</strong> accept "raw = the copied file on disk" (recommended; avoids a hundreds-of-GB SQLite mirror) vs. mirror a projected raw table. A pragmatic deviation from the usual raw-as-table model — worth an ADR note.</li>
         <li><span class="status info">decide</span> <strong>Refresh semantics on snapshot turnover:</strong> null-and-re-resolve vs. lookup-time staleness check vs. accept point-in-time staleness until a customer is touched again. Affects how "current" the data point stays between refreshes.</li>
         <li><span class="status info">decide</span> <strong>Soft per-feed requirements:</strong> declare them (plan-visibility) or rely purely on declaration order (simplicity)?</li>
         <li><span class="status info">decide</span> <strong>Where the customer DB lives:</strong> its own subject medallion (recommended, blast-radius isolation per ADR-0001) vs. folded into an existing platform store.</li>
@@ -571,11 +618,11 @@ ingest_set = PipelineSet(<span class="s">"feeds"</span>, [
 
       <div class="callout good" style="margin-top:24px">
         <span class="label">The one idea to take away</span>
-        <p style="margin:8px 0 0">Don't synchronise enrichment to a moving set of feeds. Let the customer DB <em>be</em> the queue, stand the monthly extract up as an indexed snapshot, and run one idempotent daily drainer last in the set. Manual trigger stays in your pocket for backfills and re-drives — but the steady state is fully scheduled, and resilient to whichever feeds happen to run on any given day.</p>
+        <p style="margin:8px 0 0">Move the one unavoidable full scan to <strong>once a month</strong>: stream the extract in chunks, <em>project the two columns you need</em>, and land a small indexed snapshot. Then let the customer DB <em>be</em> the queue, and run one idempotent daily drainer last in the set — it reads only small tables, never the giant extract. Don't synchronise enrichment to a moving set of feeds; the queue makes a late feed a non-event. Manual trigger stays in your pocket for backfills and re-drives, but the steady state is fully scheduled and resilient to whichever feeds run on any given day.</p>
       </div>
     </section>
 
-    <p class="stamp">Plan · regulatory enrichment pipeline · grounded in framework primitives (Store / Reader / Writer / Pipeline / Orchestrator) and ADR-0001, 0004, 0005, 0009, 0012.</p>
+    <p class="stamp">Plan · regulatory enrichment pipeline · grounded in framework primitives (Store / Reader / Writer / Pipeline / Orchestrator) and ADR-0001, 0002, 0004, 0005, 0009, 0012. New capability required: a chunked/streaming read seam.</p>
 
   </main>
 </body>
