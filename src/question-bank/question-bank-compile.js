@@ -35,6 +35,9 @@ export function compileBank(bank) {
   lines.push(`/** @type {CaseTypeConfig} */`);
   lines.push(`const config = {`);
   lines.push(`  eligibleGroups: ${JSON.stringify(bank.eligibleGroups)},`);
+  if (bank.outcomeOptions && bank.outcomeOptions.length) {
+    lines.push(`  outcomeOptions: ${JSON.stringify(bank.outcomeOptions)},`);
+  }
   if (bank.labels && bank.labels.length) {
     lines.push(`  labels: [`);
     for (const l of bank.labels) {
@@ -77,7 +80,9 @@ export function compileBank(bank) {
   lines.push('');
   lines.push(`  /** @param {Record<string, Answer>} answers */`);
   lines.push(`  computeOutcome(answers) {`);
-  lines.push(`    return computeConfiguredOutcome(config.questions, answers);`);
+  lines.push(
+    `    return computeConfiguredOutcome(config.questions, answers, config.outcomeOptions);`
+  );
   lines.push(`  },`);
   lines.push(`};`);
   lines.push('');
@@ -160,9 +165,9 @@ function canonicalise(value) {
  * Returns the function-free projection of the bank: slug, label, generatedAt,
  * a full SHA-256 hash (stable over questions+slug only, including labelIds),
  * a questions array that carries id/text/category/responseType/options/
- * showWhen/failureCriteria/outcome/remediationActions/labelIds/deprecated, and
- * a labels table. Excluded: computeOutcome, allowFreeFormRemediation,
- * eligibleGroups.
+ * showWhen/failureCriteria/outcome/remediationActions/labelIds/deprecated,
+ * case-type outcomeOptions, and a labels table. Excluded: computeOutcome,
+ * allowFreeFormRemediation, eligibleGroups.
  *
  * @param {QuestionBank} bank
  * @returns {Promise<{
@@ -178,17 +183,18 @@ function canonicalise(value) {
  *     options: string[] | null,
  *     showWhen: Record<string, unknown> | null,
  *     failureCriteria: string | null,
- *     outcome: { noAction?: import('../sharepoint-client.js').OutcomeDescriptor } | null,
+ *     outcome: { noActionOutcomeId?: string, noAction?: import('../sharepoint-client.js').OutcomeDescriptor } | null,
  *     remediationActions: Array<import('../sharepoint-client.js').RemediationActionDefinition> | null,
  *     deprecated: boolean,
  *     labelIds?: string[],
  *   }>,
  *   labels: Array<{ id: string, name: string, color: string }>,
+ *   outcomeOptions: import('../sharepoint-client.js').OutcomeOption[],
  * }>}
  */
 export async function compileExport(bank) {
   const questions = bank.questions.map((q) => {
-    /** @type {{ id: string, text: string, category: string|null, responseType: string, options: string[]|null, showWhen: Record<string,unknown>|null, failureCriteria: string|null, outcome: { noAction?: import('../sharepoint-client.js').OutcomeDescriptor }|null, remediationActions: Array<import('../sharepoint-client.js').RemediationActionDefinition>|null, deprecated: boolean, labelIds?: string[] }} */
+    /** @type {{ id: string, text: string, category: string|null, responseType: string, options: string[]|null, showWhen: Record<string,unknown>|null, failureCriteria: string|null, outcome: { noActionOutcomeId?: string, noAction?: import('../sharepoint-client.js').OutcomeDescriptor }|null, remediationActions: Array<import('../sharepoint-client.js').RemediationActionDefinition>|null, deprecated: boolean, labelIds?: string[] }} */
     const out = {
       id: q.id,
       text: q.text,
@@ -211,7 +217,12 @@ export async function compileExport(bank) {
     return out;
   });
 
-  const canonical = canonicalise({ slug: bank.slug, questions });
+  const outcomeOptions = bank.outcomeOptions ?? [];
+  const canonical = canonicalise({
+    slug: bank.slug,
+    questions,
+    outcomeOptions,
+  });
   const buf = new TextEncoder().encode(canonical);
   const hashBuf = await crypto.subtle.digest('SHA-256', buf);
   const hashHex = [...new Uint8Array(hashBuf)]
@@ -225,6 +236,7 @@ export async function compileExport(bank) {
     hash: `sha256:${hashHex}`,
     questions,
     labels: bank.labels ?? [],
+    outcomeOptions,
   };
 }
 

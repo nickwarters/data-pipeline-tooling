@@ -3,6 +3,7 @@ import { isFailure } from './failure-evaluator.js';
 
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../sharepoint-client.js').OutcomeDescriptor} OutcomeDescriptor */
+/** @typedef {import('../sharepoint-client.js').OutcomeOption} OutcomeOption */
 /** @typedef {import('../sharepoint-client.js').OutcomeResult} OutcomeResult */
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').RemediationActionDefinition} RemediationActionDefinition */
@@ -48,6 +49,23 @@ export function normaliseOutcome(descriptor) {
 }
 
 /**
+ * @param {OutcomeOption[]} outcomeOptions
+ * @returns {Map<string, Required<OutcomeDescriptor>>}
+ */
+function outcomeOptionMap(outcomeOptions = []) {
+  return new Map(
+    outcomeOptions.map((option) => [
+      option.id,
+      normaliseOutcome({
+        verdict: option.verdict,
+        wording: option.wording,
+        rank: option.rank,
+      }),
+    ])
+  );
+}
+
+/**
  * Normalises legacy string actions into stable action objects. Existing object
  * actions keep their configured ids and outcomes.
  *
@@ -66,10 +84,16 @@ export function normaliseConfiguredActions(actions = [], questionId = '') {
 /**
  * @param {QuestionDefinition[]} questions
  * @param {Record<string, Answer>} answers
+ * @param {OutcomeOption[]} [outcomeOptions]
  * @returns {OutcomeResult}
  */
-export function computeConfiguredOutcome(questions, answers) {
+export function computeConfiguredOutcome(
+  questions,
+  answers,
+  outcomeOptions = []
+) {
   let best = normaliseOutcome(FALLBACK_PASS);
+  const optionById = outcomeOptionMap(outcomeOptions);
 
   for (const question of questions) {
     const answer = answers[question.id];
@@ -83,7 +107,9 @@ export function computeConfiguredOutcome(questions, answers) {
       question.id
     )
       .filter((action) => selectedActionIds.has(action.id))
-      .map((action) => action.outcome)
+      .map((action) =>
+        action.outcomeId ? optionById.get(action.outcomeId) : action.outcome
+      )
       .filter((outcome) => outcome !== undefined)
       .map((outcome) =>
         normaliseOutcome(/** @type {OutcomeDescriptor} */ (outcome))
@@ -91,9 +117,16 @@ export function computeConfiguredOutcome(questions, answers) {
 
     const candidates = actionOutcomes.length
       ? actionOutcomes
-      : question.outcome?.noAction
-        ? [normaliseOutcome(question.outcome.noAction)]
-        : [normaliseOutcome(FALLBACK_FAIL)];
+      : question.outcome?.noActionOutcomeId &&
+          optionById.has(question.outcome.noActionOutcomeId)
+        ? [
+            /** @type {Required<OutcomeDescriptor>} */ (
+              optionById.get(question.outcome.noActionOutcomeId)
+            ),
+          ]
+        : question.outcome?.noAction
+          ? [normaliseOutcome(question.outcome.noAction)]
+          : [normaliseOutcome(FALLBACK_FAIL)];
 
     for (const candidate of candidates) {
       if (candidate.rank > best.rank) best = candidate;

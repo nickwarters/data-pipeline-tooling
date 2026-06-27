@@ -24,6 +24,7 @@
 
 /**
  * @typedef {import('../../src/sharepoint-client.js').OutcomeDescriptor} OutcomeDescriptor
+ * @typedef {import('../../src/sharepoint-client.js').OutcomeOption} OutcomeOption
  * @typedef {import('../../src/sharepoint-client.js').RemediationActionDefinition} RemediationActionDefinition
  */
 
@@ -37,7 +38,7 @@
  *   options?: string[],
  *   showWhen?: Record<string, unknown>,
  *   failureCriteria?: string,
- *   outcome?: { noAction?: OutcomeDescriptor },
+ *   outcome?: { noActionOutcomeId?: string, noAction?: OutcomeDescriptor },
  *   remediationActions?: Array<string | RemediationActionDefinition>,
  *   allowFreeFormRemediation?: boolean,
  *   deprecated: boolean,
@@ -50,6 +51,7 @@
  *   slug: string,
  *   eligibleGroups: string[],
  *   labels?: Label[],
+ *   outcomeOptions?: OutcomeOption[],
  *   questions: DraftQuestion[],
  * }} QuestionBank
  */
@@ -60,6 +62,10 @@ export const questionBanks = {
     label: 'Example Review',
     slug: 'example-review',
     eligibleGroups: ['Reviewers'],
+    outcomeOptions: [
+      { id: 'pass', verdict: 'pass', wording: 'Pass', rank: 0 },
+      { id: 'fail', verdict: 'fail', wording: 'Fail', rank: 100 },
+    ],
     labels: [
       { id: 'lbl-coaching', name: 'Coaching', color: '#2563eb' },
       { id: 'lbl-regulatory', name: 'Regulatory', color: '#b91c1c' },
@@ -116,6 +122,11 @@ export const questionBanks = {
     label: 'Complaint Review',
     slug: 'complaint-review',
     eligibleGroups: ['Reviewers', 'ComplianceLeads'],
+    outcomeOptions: [
+      { id: 'pass', verdict: 'pass', wording: 'Pass', rank: 0 },
+      { id: 'refer', verdict: 'refer', wording: 'Refer', rank: 50 },
+      { id: 'fail', verdict: 'fail', wording: 'Fail', rank: 100 },
+    ],
     labels: [
       { id: 'lbl-sla', name: 'SLA', color: '#d97706' },
       { id: 'lbl-regulatory', name: 'Regulatory', color: '#b91c1c' },

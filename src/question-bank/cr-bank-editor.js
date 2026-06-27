@@ -7,6 +7,7 @@ import { drawerOpen } from './question-bank-store.js';
 import '../components/cr-case-tabs.js';
 import './cr-bank-rail.js';
 import './cr-bank-list.js';
+import './cr-outcome-options-editor.js';
 import '../components/cr-question-card.js';
 import '../components/cr-question-labels.js';
 import '../components/cr-wording-editor.js';

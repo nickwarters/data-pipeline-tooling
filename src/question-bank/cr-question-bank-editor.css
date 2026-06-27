@@ -430,6 +430,65 @@ cr-bank-editor .dirty-indicator.is-dirty .dirty-dot {
   }
 }
 
+/* ── Outcome options ─────────────────────────────────────────────────── */
+cr-bank-editor .outcome-options {
+  margin-bottom: var(--cr-space-4);
+  padding: var(--cr-space-3);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-md);
+  background: var(--cr-color-surface);
+}
+cr-bank-editor .outcome-options-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cr-space-3);
+  margin-bottom: var(--cr-space-2);
+}
+cr-bank-editor .outcome-options h3 {
+  margin: 0;
+  font-family: var(--cr-font-mono);
+  font-size: var(--cr-font-size-2xs);
+  letter-spacing: var(--cr-tracking-wider);
+  text-transform: uppercase;
+  color: var(--cr-color-text-muted);
+}
+cr-bank-editor .outcome-option-list {
+  display: grid;
+  gap: var(--cr-space-2);
+}
+cr-bank-editor .outcome-option-row {
+  display: grid;
+  grid-template-columns:
+    minmax(8rem, 1fr) minmax(12rem, 2fr) minmax(7rem, 0.8fr)
+    minmax(5rem, 0.6fr) auto;
+  gap: var(--cr-space-2);
+  align-items: end;
+}
+cr-bank-editor .outcome-option-field {
+  display: grid;
+  gap: 3px;
+  font-family: var(--cr-font-body);
+  font-size: var(--cr-font-size-xs);
+  color: var(--cr-color-text-muted);
+}
+cr-bank-editor .outcome-option-field input,
+cr-bank-editor .outcome-option-field select {
+  min-width: 0;
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-sm);
+  padding: var(--cr-space-1) var(--cr-space-2);
+  background: var(--cr-color-surface-2);
+  color: var(--cr-color-on-surface);
+  font-family: var(--cr-font-body);
+  font-size: var(--cr-font-size-sm);
+}
+cr-bank-editor .outcome-empty {
+  font-family: var(--cr-font-mono);
+  font-size: var(--cr-font-size-xs);
+  color: var(--cr-color-text-muted);
+}
+
 /* ── Question card ────────────────────────────────────────────────────── */
 cr-bank-editor cr-question-card.card {
   display: block;
@@ -1128,7 +1187,8 @@ cr-bank-editor .rem-free-preview-body {
   font-style: italic;
 }
 cr-bank-editor .rem-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(12rem, 0.8fr) auto;
   align-items: center;
   gap: var(--cr-space-2);
   padding: var(--cr-space-2) 0;
@@ -1138,12 +1198,10 @@ cr-bank-editor .rem-item:last-child {
   border-bottom: none;
 }
 cr-bank-editor .rem-item::before {
-  content: '◇';
-  color: var(--cr-color-accent);
-  font-size: var(--cr-font-size-xs);
+  content: none;
 }
 cr-bank-editor .rem-item input {
-  flex: 1;
+  min-width: 0;
   background: transparent;
   border: none;
   font-size: var(--cr-font-size-sm);
@@ -1169,6 +1227,34 @@ cr-bank-editor .rem-empty {
 }
 cr-bank-editor .rem-add {
   margin-top: var(--cr-space-2);
+}
+cr-bank-editor .rem-outcome-block {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(14rem, 1fr);
+  align-items: center;
+  gap: var(--cr-space-3);
+  padding: var(--cr-space-2) var(--cr-space-3);
+  margin-bottom: var(--cr-space-2);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-md);
+  background: var(--cr-color-surface);
+}
+cr-bank-editor .rem-outcome-block h5 {
+  margin: 0;
+  font-size: var(--cr-font-size-xs);
+  color: var(--cr-color-text-muted);
+  font-weight: var(--cr-font-weight-semibold);
+}
+cr-bank-editor .rem-outcome-select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-sm);
+  padding: var(--cr-space-1) var(--cr-space-2);
+  background: var(--cr-color-surface-2);
+  color: var(--cr-color-on-surface);
+  font-family: var(--cr-font-body);
+  font-size: var(--cr-font-size-sm);
 }
 
 /* ── Add-card (dashed "Draft a new question" CTA) ─────────────────────── */

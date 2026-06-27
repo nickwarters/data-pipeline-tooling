@@ -8,12 +8,13 @@ await import('../src/question-bank/cr-bank-editor.js');
 
 const G = /** @type {any} */ (globalThis);
 
-test('cr-bank-editor: all 15 custom elements register', () => {
+test('cr-bank-editor: all 16 custom elements register', () => {
   const names = [
     'cr-bank-editor',
     'cr-case-tabs',
     'cr-bank-rail',
     'cr-bank-list',
+    'cr-outcome-options-editor',
     'cr-question-card',
     'cr-question-labels',
     'cr-wording-editor',

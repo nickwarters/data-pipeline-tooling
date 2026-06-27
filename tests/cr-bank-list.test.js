@@ -13,10 +13,10 @@ test('CRBankList: renders dirty pill + question cards + add button', () => {
   const e = new CRBankList();
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
-  // editor-head, listRoot, add-card
-  assert.equal(section._children.length, 3);
+  // editor-head, outcome-options, listRoot, add-card
+  assert.equal(section._children.length, 4);
   // example-review fixture has 5 questions; with default filters all visible
-  const listRoot = section._children[1];
+  const listRoot = section._children[2];
   assert.equal(listRoot._children.length, 5);
   e.disconnectedCallback();
 });
@@ -47,7 +47,7 @@ test('CRBankList: empty-state when no question passes filters', () => {
   const e = new CRBankList();
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
-  const listRoot = section._children[1];
+  const listRoot = section._children[2];
   assert.equal(listRoot._children[0].className, 'empty');
   e.disconnectedCallback();
 });
@@ -62,7 +62,7 @@ test('CRBankList: category filter hides non-matching questions', () => {
   const e = new CRBankList();
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
-  const listRoot = section._children[1];
+  const listRoot = section._children[2];
   // Only q-welcome is in 'Opening'
   assert.equal(listRoot._children.length, 1);
   e.disconnectedCallback();
@@ -74,7 +74,7 @@ test('CRBankList: conditionalOnly hides unconditional questions', () => {
   const e = new CRBankList();
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
-  const listRoot = section._children[1];
+  const listRoot = section._children[2];
   // Only q-resolve has showWhen in example-review
   assert.equal(listRoot._children.length, 1);
   e.disconnectedCallback();
@@ -87,7 +87,7 @@ test('CRBankList: + Draft a new question appends a draft', () => {
   const e = new CRBankList();
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
-  const addBtn = section._children[2];
+  const addBtn = section._children[3];
   addBtn._listeners.click[0]();
   assert.equal(cases.get()['example-review'].questions.length, before + 1);
   e.disconnectedCallback();
@@ -101,7 +101,7 @@ test('CRBankList: + Draft falls back to immediate scroll when no rAF', () => {
   const e = new CRBankList();
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
-  const addBtn = section._children[2];
+  const addBtn = section._children[3];
   addBtn._listeners.click[0](); // exercises the else branch
   /** @type {any} */ (globalThis).requestAnimationFrame = saved;
   e.disconnectedCallback();

@@ -6,6 +6,8 @@ installDom();
 
 const { CRRemediationEditor } =
   await import('../src/components/cr-remediation-editor.js');
+const { _resetStore } =
+  await import('../src/question-bank/question-bank-store.js');
 
 test('CRRemediationEditor: no question → renders nothing', () => {
   const e = new CRRemediationEditor();
@@ -111,6 +113,7 @@ test('CRRemediationEditor: + canned action initialises array if missing', () => 
 });
 
 test('CRRemediationEditor: configures no-action outcome for failed questions', () => {
+  _resetStore();
   /** @type {any} */
   const q = {
     id: 'q',
@@ -124,16 +127,17 @@ test('CRRemediationEditor: configures no-action outcome for failed questions', (
   e.connectedCallback();
   const wrap = /** @type {any} */ (e)._children[0];
   const outcomeBlock = wrap._children[2];
-  const addOutcome = outcomeBlock._children[1];
+  const select = outcomeBlock._children[1];
 
-  addOutcome._listeners.click[0]();
+  select._listeners.change[0]({ target: { value: 'fail' } });
 
   assert.deepEqual(q.outcome, {
-    noAction: { verdict: 'fail', wording: 'Fail', rank: 100 },
+    noActionOutcomeId: 'fail',
   });
 });
 
-test('CRRemediationEditor: configures action-level outcome descriptor', () => {
+test('CRRemediationEditor: configures action-level outcome selection', () => {
+  _resetStore();
   /** @type {any} */
   const q = {
     id: 'q',
@@ -147,16 +151,15 @@ test('CRRemediationEditor: configures action-level outcome descriptor', () => {
   e.connectedCallback();
   const wrap = /** @type {any} */ (e)._children[0];
   const item = wrap._children[2];
-  const actionOutcome = item._children[1];
-  const addOutcome = actionOutcome._children[0];
+  const select = item._children[1]._children[0];
 
-  addOutcome._listeners.click[0]();
+  select._listeners.change[0]({ target: { value: 'fail' } });
 
   assert.deepEqual(q.remediationActions, [
     {
       id: 'q-ra-0',
       text: 'Legacy action',
-      outcome: { verdict: 'fail', wording: 'Fail', rank: 100 },
+      outcomeId: 'fail',
     },
   ]);
 });

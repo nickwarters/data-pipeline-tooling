@@ -16,15 +16,19 @@ test('computeConfiguredOutcome: uses question no-action outcome when failed answ
       responseType: /** @type {const} */ ('yes-no-na'),
       failureCriteria: 'No',
       outcome: {
-        noAction: { verdict: 'fail', wording: 'Fail', rank: 100 },
+        noActionOutcomeId: 'fail',
       },
       deprecated: false,
     },
   ];
 
-  const result = computeConfiguredOutcome(questions, {
-    q1: { value: 'No', remediationActions: [] },
-  });
+  const result = computeConfiguredOutcome(
+    questions,
+    {
+      q1: { value: 'No', remediationActions: [] },
+    },
+    [{ id: 'fail', verdict: 'fail', wording: 'Fail', rank: 100 }]
+  );
 
   assert.deepEqual(result, { verdict: 'fail', wording: 'Fail' });
 });
@@ -38,36 +42,45 @@ test('computeConfiguredOutcome: uses selected action outcome wording', () => {
       responseType: /** @type {const} */ ('yes-no-na'),
       failureCriteria: 'No',
       outcome: {
-        noAction: { verdict: 'fail', wording: 'Fail', rank: 100 },
+        noActionOutcomeId: 'fail',
       },
       remediationActions: [
         {
           id: 'impact',
           text: 'Customer impact identified',
-          outcome: { verdict: 'fail', wording: 'Fail with impact', rank: 120 },
+          outcomeId: 'impact',
         },
         {
           id: 'feedback',
           text: 'Coaching feedback only',
-          outcome: {
-            verdict: 'pass',
-            wording: 'Pass with feedback',
-            rank: 20,
-          },
+          outcomeId: 'feedback',
         },
       ],
       deprecated: false,
     },
   ];
 
-  const result = computeConfiguredOutcome(questions, {
-    q1: {
-      value: 'No',
-      remediationActions: [
-        { id: 'feedback', text: 'Coaching feedback only', completed: false },
-      ],
+  const result = computeConfiguredOutcome(
+    questions,
+    {
+      q1: {
+        value: 'No',
+        remediationActions: [
+          { id: 'feedback', text: 'Coaching feedback only', completed: false },
+        ],
+      },
     },
-  });
+    [
+      { id: 'fail', verdict: 'fail', wording: 'Fail', rank: 100 },
+      { id: 'impact', verdict: 'fail', wording: 'Fail with impact', rank: 120 },
+      {
+        id: 'feedback',
+        verdict: 'pass',
+        wording: 'Pass with feedback',
+        rank: 20,
+      },
+    ]
+  );
 
   assert.deepEqual(result, {
     verdict: 'pass',
@@ -87,31 +100,43 @@ test('computeConfiguredOutcome: chooses highest ranked selected action outcome',
         {
           id: 'feedback',
           text: 'Coaching feedback only',
-          outcome: {
-            verdict: 'pass',
-            wording: 'Pass with feedback',
-            rank: 20,
-          },
+          outcomeId: 'feedback',
         },
         {
           id: 'impact',
           text: 'Customer impact identified',
-          outcome: { verdict: 'fail', wording: 'Fail with impact', rank: 120 },
+          outcomeId: 'impact',
         },
       ],
       deprecated: false,
     },
   ];
 
-  const result = computeConfiguredOutcome(questions, {
-    q1: {
-      value: 'No',
-      remediationActions: [
-        { id: 'feedback', text: 'Coaching feedback only', completed: false },
-        { id: 'impact', text: 'Customer impact identified', completed: false },
-      ],
+  const result = computeConfiguredOutcome(
+    questions,
+    {
+      q1: {
+        value: 'No',
+        remediationActions: [
+          { id: 'feedback', text: 'Coaching feedback only', completed: false },
+          {
+            id: 'impact',
+            text: 'Customer impact identified',
+            completed: false,
+          },
+        ],
+      },
     },
-  });
+    [
+      {
+        id: 'feedback',
+        verdict: 'pass',
+        wording: 'Pass with feedback',
+        rank: 20,
+      },
+      { id: 'impact', verdict: 'fail', wording: 'Fail with impact', rank: 120 },
+    ]
+  );
 
   assert.deepEqual(result, {
     verdict: 'fail',
@@ -136,6 +161,48 @@ test('computeConfiguredOutcome: ignores questions with no failureCriteria', () =
   });
 
   assert.deepEqual(result, { verdict: 'pass', wording: 'Pass' });
+});
+
+test('computeConfiguredOutcome: unranked outcome options default by semantic verdict', () => {
+  /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
+  const questions = [
+    {
+      id: 'q1',
+      text: 'Was disclosure made?',
+      responseType: /** @type {const} */ ('yes-no-na'),
+      failureCriteria: 'No',
+      outcome: { noActionOutcomeId: 'fail' },
+      deprecated: false,
+    },
+  ];
+
+  const result = computeConfiguredOutcome(questions, { q1: { value: 'No' } }, [
+    { id: 'fail', verdict: 'fail', wording: 'Fail' },
+  ]);
+
+  assert.deepEqual(result, { verdict: 'fail', wording: 'Fail' });
+});
+
+test('computeConfiguredOutcome: falls back to legacy embedded descriptors', () => {
+  /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
+  const questions = [
+    {
+      id: 'q1',
+      text: 'Was disclosure made?',
+      responseType: /** @type {const} */ ('yes-no-na'),
+      failureCriteria: 'No',
+      outcome: {
+        noAction: { verdict: 'fail', wording: 'Fail', rank: 100 },
+      },
+      deprecated: false,
+    },
+  ];
+
+  const result = computeConfiguredOutcome(questions, {
+    q1: { value: 'No' },
+  });
+
+  assert.deepEqual(result, { verdict: 'fail', wording: 'Fail' });
 });
 
 test('normaliseConfiguredActions: preserves object actions and adds legacy ids', () => {

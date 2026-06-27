@@ -61,6 +61,7 @@ export class CRBankList extends ReactiveElement {
       'section',
       { className: 'editor' },
       head,
+      /** @type {any} */ (document.createElement('cr-outcome-options-editor')),
       listRoot,
       h('button', {
         className: 'add-card',

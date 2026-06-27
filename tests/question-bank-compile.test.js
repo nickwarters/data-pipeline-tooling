@@ -45,7 +45,9 @@ test('compileBank: emits header, eligibleGroups, computeOutcome, export', () => 
   assert.ok(out.includes(`eligibleGroups: ["Reviewers"]`));
   assert.ok(out.includes('computeOutcome(answers)'));
   assert.ok(
-    out.includes('return computeConfiguredOutcome(config.questions, answers);')
+    out.includes(
+      'return computeConfiguredOutcome(config.questions, answers, config.outcomeOptions);'
+    )
   );
   assert.ok(out.endsWith('export default config;'));
 });
@@ -170,31 +172,37 @@ test('compileBank: emits remediationActions array when present', () => {
   assert.ok(out.includes('"Action 2"'));
 });
 
-test('compileBank: emits configured no-action and action outcome descriptors', () => {
-  const out = compileBank(
-    bank({
+test('compileBank: emits shared outcome options and selected outcome ids', () => {
+  const out = compileBank({
+    ...bank({
       id: 'q1',
       text: 'T',
       responseType: 'yes-no-na',
       failureCriteria: 'No',
-      outcome: { noAction: { verdict: 'fail', wording: 'Fail', rank: 100 } },
+      outcome: { noActionOutcomeId: 'fail' },
       remediationActions: [
         {
           id: 'impact',
           text: 'Customer impact identified',
-          outcome: { verdict: 'fail', wording: 'Fail with impact', rank: 120 },
+          outcomeId: 'impact',
         },
       ],
       deprecated: false,
-    })
-  );
-  assert.ok(
-    out.includes(
-      'outcome: {"noAction":{"verdict":"fail","wording":"Fail","rank":100}}'
-    )
-  );
+    }),
+    outcomeOptions: [
+      { id: 'fail', verdict: 'fail', wording: 'Fail', rank: 100 },
+      {
+        id: 'impact',
+        verdict: 'fail',
+        wording: 'Fail with impact',
+        rank: 120,
+      },
+    ],
+  });
+  assert.ok(out.includes('outcomeOptions: ['));
+  assert.ok(out.includes('outcome: {"noActionOutcomeId":"fail"}'));
   assert.ok(out.includes('"id":"impact"'));
-  assert.ok(out.includes('"wording":"Fail with impact"'));
+  assert.ok(out.includes('"outcomeId":"impact"'));
 });
 
 test('compileBank: emits allowFreeFormRemediation when truthy', () => {
@@ -447,6 +455,30 @@ test('compileExport: different slug → different hash', async () => {
   assert.notEqual(a.hash, b.hash);
 });
 
+test('compileExport: outcomeOptions affect the hash', async () => {
+  const bankA = {
+    ...exportBank,
+    outcomeOptions: [
+      { id: 'fail', verdict: /** @type {const} */ ('fail'), wording: 'Fail' },
+    ],
+  };
+  const bankB = {
+    ...exportBank,
+    outcomeOptions: [
+      {
+        id: 'fail',
+        verdict: /** @type {const} */ ('fail'),
+        wording: 'Fail with impact',
+      },
+    ],
+  };
+  const [a, b] = await Promise.all([
+    compileExport(bankA),
+    compileExport(bankB),
+  ]);
+  assert.notEqual(a.hash, b.hash);
+});
+
 test('compileExport: key order in question objects does not affect hash', async () => {
   const q = exportBank.questions[0];
   const qReordered = {
@@ -476,26 +508,32 @@ test('compileExport: excludes computeOutcome, allowFreeFormRemediation, eligible
       {
         ...exportBank.questions[0],
         outcome: {
-          noAction: {
-            verdict: /** @type {const} */ ('fail'),
-            wording: 'Fail',
-            rank: 100,
-          },
+          noActionOutcomeId: 'fail',
         },
         remediationActions: [
           {
             id: 'fix-it',
             text: 'Fix it',
-            outcome: {
-              verdict: /** @type {const} */ ('refer'),
-              wording: 'Refer',
-              rank: 50,
-            },
+            outcomeId: 'refer',
           },
         ],
         allowFreeFormRemediation: true,
       },
       exportBank.questions[1],
+    ],
+    outcomeOptions: [
+      {
+        id: 'fail',
+        verdict: /** @type {const} */ ('fail'),
+        wording: 'Fail',
+        rank: 100,
+      },
+      {
+        id: 'refer',
+        verdict: /** @type {const} */ ('refer'),
+        wording: 'Refer',
+        rank: 50,
+      },
     ],
   };
   const result = await compileExport(bankWithExtras);
@@ -505,14 +543,18 @@ test('compileExport: excludes computeOutcome, allowFreeFormRemediation, eligible
     assert.ok(!('allowFreeFormRemediation' in q));
   }
   assert.deepEqual(result.questions[0].outcome, {
-    noAction: { verdict: 'fail', wording: 'Fail', rank: 100 },
+    noActionOutcomeId: 'fail',
   });
   assert.deepEqual(result.questions[0].remediationActions, [
     {
       id: 'fix-it',
       text: 'Fix it',
-      outcome: { verdict: 'refer', wording: 'Refer', rank: 50 },
+      outcomeId: 'refer',
     },
+  ]);
+  assert.deepEqual(result.outcomeOptions, [
+    { id: 'fail', verdict: 'fail', wording: 'Fail', rank: 100 },
+    { id: 'refer', verdict: 'refer', wording: 'Refer', rank: 50 },
   ]);
 });
 

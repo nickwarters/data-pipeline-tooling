@@ -1,12 +1,8 @@
 // @ts-check
 import { ReactiveElement } from './reactive-element.js';
 import { h } from '../lib/html.js';
-import { commit } from '../question-bank/question-bank-store.js';
-import {
-  DEFAULT_OUTCOME_RANK,
-  defaultWordingFor,
-  normaliseConfiguredActions,
-} from '../evaluators/configured-outcome.js';
+import { commit, currentBank } from '../question-bank/question-bank-store.js';
+import { normaliseConfiguredActions } from '../evaluators/configured-outcome.js';
 
 export class CRRemediationEditor extends ReactiveElement {
   constructor() {
@@ -133,27 +129,23 @@ export class CRRemediationEditor extends ReactiveElement {
 
   /** @param {any} q */
   _renderNoActionOutcome(q) {
-    const descriptor = q.outcome?.noAction;
+    const outcomeOptions = currentBank.get()?.outcomeOptions ?? [];
     return h(
       'div',
       { class: 'rem-outcome-block' },
       h('h5', {}, 'Default outcome when no action is selected'),
-      this._outcomeFields({
-        descriptor,
-        onEnable: () => {
-          q.outcome ??= {};
-          q.outcome.noAction = {
-            verdict: 'fail',
-            wording: 'Fail',
-            rank: DEFAULT_OUTCOME_RANK.fail,
-          };
-        },
-        onDisable: () => {
-          if (!q.outcome) return;
-          delete q.outcome.noAction;
-          if (!Object.keys(q.outcome).length) delete q.outcome;
-        },
-      })
+      this._outcomeSelect(
+        q.outcome?.noActionOutcomeId ?? '',
+        outcomeOptions,
+        (id) =>
+          commit(() => {
+            q.outcome ??= {};
+            if (id) q.outcome.noActionOutcomeId = id;
+            else delete q.outcome.noActionOutcomeId;
+            delete q.outcome.noAction;
+            if (!Object.keys(q.outcome).length) delete q.outcome;
+          })
+      )
     );
   }
 
@@ -163,146 +155,49 @@ export class CRRemediationEditor extends ReactiveElement {
    * @param {number} idx
    */
   _renderActionOutcome(q, action, idx) {
+    const outcomeOptions = currentBank.get()?.outcomeOptions ?? [];
     return h(
       'div',
       { class: 'rem-action-outcome' },
-      this._outcomeFields({
-        descriptor: action.outcome,
-        onEnable: () => {
+      this._outcomeSelect(action.outcomeId ?? '', outcomeOptions, (id) =>
+        commit(() => {
           this._ensureActionObjects(q);
           const configured = q.remediationActions[idx];
-          configured.outcome = {
-            verdict: 'fail',
-            wording: defaultWordingFor('fail'),
-            rank: DEFAULT_OUTCOME_RANK.fail,
-          };
-        },
-        onDisable: () => {
-          this._ensureActionObjects(q);
-          delete q.remediationActions[idx].outcome;
-        },
-        compact: true,
-      })
-    );
-  }
-
-  /**
-   * @param {{
-   *   descriptor: any,
-   *   onEnable: () => void,
-   *   onDisable: () => void,
-   *   compact?: boolean,
-   * }} opts
-   */
-  _outcomeFields(opts) {
-    if (!opts.descriptor) {
-      return h(
-        'button',
-        {
-          class: 'tag-add rem-outcome-add',
-          onclick: () => commit(opts.onEnable),
-        },
-        opts.compact ? '+ outcome' : '+ default outcome'
-      );
-    }
-
-    return h(
-      'div',
-      { class: opts.compact ? 'rem-outcome-grid compact' : 'rem-outcome-grid' },
-      this._field(
-        'Verdict',
-        this._select(
-          ['pass', 'refer', 'fail'],
-          opts.descriptor.verdict,
-          (/** @type {string} */ verdict) =>
-            commit(() => {
-              opts.descriptor.verdict = verdict;
-              opts.descriptor.wording ||= defaultWordingFor(
-                /** @type {'pass'|'refer'|'fail'} */ (verdict)
-              );
-              opts.descriptor.rank =
-                opts.descriptor.rank ??
-                DEFAULT_OUTCOME_RANK[
-                  /** @type {'pass'|'refer'|'fail'} */ (verdict)
-                ];
-            })
-        )
-      ),
-      this._field(
-        'Wording',
-        this._input(opts.descriptor.wording || '', (v) =>
-          commit(() => {
-            opts.descriptor.wording = v;
-          })
-        )
-      ),
-      this._field(
-        'Rank',
-        h('input', {
-          type: 'number',
-          value: String(
-            opts.descriptor.rank ??
-              DEFAULT_OUTCOME_RANK[
-                /** @type {'pass'|'refer'|'fail'} */ (opts.descriptor.verdict)
-              ]
-          ),
-          onchange: (/** @type {any} */ e) =>
-            commit(() => {
-              const parsed = Number(e.target.value);
-              if (Number.isFinite(parsed)) opts.descriptor.rank = parsed;
-              else delete opts.descriptor.rank;
-            }),
+          if (id) configured.outcomeId = id;
+          else delete configured.outcomeId;
+          delete configured.outcome;
         })
-      ),
-      h(
-        'button',
-        {
-          class: 'icon-btn danger',
-          title: 'Remove outcome',
-          onclick: () => commit(opts.onDisable),
-        },
-        '×'
       )
     );
   }
 
   /**
-   * @param {string} label
-   * @param {HTMLElement} control
-   */
-  _field(label, control) {
-    return h(
-      'label',
-      { class: 'rem-outcome-field' },
-      h('span', {}, label),
-      control
-    );
-  }
-
-  /**
-   * @param {string[]} options
    * @param {string} value
-   * @param {(value: string) => void} onChange
+   * @param {import('../sharepoint-client.js').OutcomeOption[]} outcomeOptions
+   * @param {(id: string) => void} onChange
    */
-  _select(options, value, onChange) {
+  _outcomeSelect(value, outcomeOptions, onChange) {
     return h(
       'select',
-      { onchange: (/** @type {any} */ e) => onChange(e.target.value) },
-      ...options.map((option) =>
-        h('option', { value: option, selected: option === value }, option)
+      {
+        className: 'rem-outcome-select',
+        value,
+        onchange: (/** @type {any} */ e) => onChange(e.target.value),
+        disabled: outcomeOptions.length === 0,
+      },
+      h(
+        'option',
+        { value: '' },
+        outcomeOptions.length ? '—' : 'No outcomes configured'
+      ),
+      ...outcomeOptions.map((option) =>
+        h(
+          'option',
+          { value: option.id },
+          `${option.wording} (${option.verdict})`
+        )
       )
     );
-  }
-
-  /**
-   * @param {string} value
-   * @param {(value: string) => void} onChange
-   */
-  _input(value, onChange) {
-    return h('input', {
-      value,
-      onchange: (/** @type {any} */ e) => onChange(e.target.value),
-    });
   }
 
   /** @param {any} q */

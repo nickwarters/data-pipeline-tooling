@@ -24,7 +24,14 @@
  */
 
 /**
- * @typedef {{ id: string, text: string, outcome?: OutcomeDescriptor }} RemediationActionDefinition
+ * A case-type-level outcome option. Questions and actions select these by id so
+ * wording is configured once per Case Type.
+ *
+ * @typedef {{ id: string, verdict: 'pass' | 'refer' | 'fail', wording: string, rank?: number }} OutcomeOption
+ */
+
+/**
+ * @typedef {{ id: string, text: string, outcomeId?: string, outcome?: OutcomeDescriptor }} RemediationActionDefinition
  */
 
 /**
@@ -175,7 +182,7 @@
  *   options?: string[],
  *   showWhen?: Record<string, unknown>,
  *   failureCriteria?: string,
- *   outcome?: { noAction?: OutcomeDescriptor },
+ *   outcome?: { noActionOutcomeId?: string, noAction?: OutcomeDescriptor },
  *   remediationActions?: Array<string | RemediationActionDefinition>,
  *   deprecated: boolean
  * }} QuestionDefinition
@@ -214,7 +221,7 @@
  *     options: string[] | null,
  *     showWhen: Record<string, unknown> | null,
  *     failureCriteria: string | null,
- *     outcome?: { noAction?: OutcomeDescriptor } | null,
+ *     outcome?: { noActionOutcomeId?: string, noAction?: OutcomeDescriptor } | null,
  *     remediationActions?: Array<RemediationActionDefinition> | null,
  *     deprecated: boolean,
  *     labelIds?: string[],
@@ -262,6 +269,7 @@
  * @typedef {{
  *   questions: QuestionDefinition[],
  *   computeOutcome: (answers: Record<string, Answer>) => OutcomeResult,
+ *   outcomeOptions?: OutcomeOption[],
  *   labels?: Label[],
  *   eligibleGroups?: string[],
  *   sections?: Partial<Record<'details'|'questions'|'conversation'|'notes'|'remediation'|'summary'|'appeal', SectionConfig>>,
