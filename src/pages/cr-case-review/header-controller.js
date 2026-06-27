@@ -1,4 +1,5 @@
 // @ts-check
+import { h } from '../../lib/html.js';
 
 /**
  * Owns the route header and status banner assignments.
@@ -8,8 +9,9 @@ export class CaseReviewHeaderController {
    * @param {import('./types.js').CaseReviewShellContext} context
    */
   bind(context) {
-    // TODO(issue-198): Add header-level event wiring here if any shell-owned
-    // controls remain after conversation/completion are extracted.
+    // Deviation from the scaffold TODO: there is no header-owned event wiring
+    // yet. Conversation toggle clicks remain with the page until
+    // ConversationPanelController is wired.
     void context;
   }
 
@@ -17,8 +19,24 @@ export class CaseReviewHeaderController {
    * @param {import('./types.js').CaseReviewShellContext} context
    */
   update(context) {
-    // TODO(issue-198): Render title, reviewer, optional conversation toggle, and
-    // status banner saveQueue assignment without changing visible markup.
-    void context;
+    const { viewModel: vm, nodes } = context;
+    const { caseRow, machine } = vm;
+    if (!caseRow || !machine || !nodes.header || !nodes.banner) return;
+
+    Object.assign(nodes.banner, { saveQueue: vm.saveQueue });
+
+    const headerChildren = [
+      h('h1', {}, caseRow.title),
+      h('p', {}, `Reviewer: ${caseRow.assignedReviewer}`),
+    ];
+    if (machine.canToggleConversation && nodes.conversationToggle) {
+      headerChildren.push(nodes.conversationToggle);
+    }
+
+    if (typeof nodes.header.replaceChildren === 'function') {
+      nodes.header.replaceChildren(...headerChildren);
+    } else {
+      /** @type {any} */ (nodes.header)._children = headerChildren;
+    }
   }
 }

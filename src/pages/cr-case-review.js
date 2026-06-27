@@ -3,6 +3,7 @@ import { ReactiveElement } from '../components/reactive-element.js';
 import { h } from '../lib/html.js';
 import { CaseReviewViewModel } from '../lib/case-review-view-model.js';
 import { computeSectionProgress } from '../evaluators/section-progress.js';
+import { CaseReviewHeaderController } from './cr-case-review/header-controller.js';
 
 import '../components/cr-question-list.js';
 import '../components/cr-section-progress.js';
@@ -39,6 +40,7 @@ export class CRCaseReview extends ReactiveElement {
 
     /** @type {CaseReviewViewModel | null} */
     this.viewModel = null;
+    this._headerController = new CaseReviewHeaderController();
 
     // TODO(issue-198): Move controller-owned lifecycle state into
     // cr-case-review/conversation-controller.js and
@@ -586,10 +588,6 @@ export class CRCaseReview extends ReactiveElement {
       _messages: caseRow.conversation.slice(),
     });
 
-    // TODO(issue-198): Move banner and header assembly to
-    // CaseReviewHeaderController.update().
-    Object.assign(this._bannerEl, { saveQueue: vm.saveQueue });
-
     if (canToggleConversation) {
       this._toggleBtn.setAttribute(
         'aria-expanded',
@@ -602,16 +600,33 @@ export class CRCaseReview extends ReactiveElement {
       this._toggleBtn.textContent = 'Conversation';
     }
 
-    const headerChildren = [
-      h('h1', {}, caseRow.title),
-      h('p', {}, `Reviewer: ${caseRow.assignedReviewer}`),
-    ];
-    if (canToggleConversation) headerChildren.push(this._toggleBtn);
-    if (typeof this._headerEl.replaceChildren === 'function') {
-      this._headerEl.replaceChildren(...headerChildren);
-    } else {
-      this._headerEl._children = headerChildren;
-    }
+    // TODO(issue-198): Header and banner assignment now lives in
+    // CaseReviewHeaderController; keep this context adapter until node registry
+    // and remaining controllers are wired.
+    this._headerController.update({
+      viewModel: vm,
+      nodes: {
+        tabs: this._tabsEl,
+        details: this._detailsEl,
+        questionsPanel: this._questionsPanel,
+        questionList: this._qList,
+        progress: this._progressEl,
+        overrideEditor: this._overrideEditor,
+        remediation: this._remediationSection,
+        summary: this._summaryEl,
+        notes: this._notesEl,
+        appeal: this._appealEl,
+        conversation: this._conversationEl,
+        sourceCase: this._sourceCaseEl,
+        banner: this._bannerEl,
+        conversationToggle: canToggleConversation ? this._toggleBtn : null,
+        header: this._headerEl,
+        completeButton: this._btnEl,
+      },
+      displayMode,
+      completeCase: this._completeCase.bind(this),
+      toggleConversationPanel: this._toggleConversationPanel.bind(this),
+    });
 
     // TODO(issue-198): Move QA Check source-case assignment to
     // SourceCaseController.update().

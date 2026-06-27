@@ -1,5 +1,96 @@
 // @ts-check
+import assert from 'node:assert/strict';
 import test from 'node:test';
+
+class StubEl {
+  constructor() {
+    /** @type {StubEl[]} */
+    this._children = [];
+    /** @type {Record<string, string>} */
+    this._attrs = {};
+    this.textContent = '';
+    this.className = '';
+    this.tagName = '';
+  }
+  replaceChildren(/** @type {StubEl[]} */ ...children) {
+    this._children = children;
+  }
+  appendChild(/** @type {StubEl} */ child) {
+    this._children.push(child);
+    return child;
+  }
+  setAttribute(/** @type {string} */ key, /** @type {string} */ value) {
+    this._attrs[key] = value;
+  }
+  getAttribute(/** @type {string} */ key) {
+    return this._attrs[key] ?? null;
+  }
+}
+
+/** @type {any} */ (globalThis).HTMLElement = StubEl;
+/** @type {any} */ (globalThis).HTMLButtonElement = StubEl;
+/** @type {any} */ (globalThis).document = {
+  /** @param {string} tag @returns {StubEl} */
+  createElement(tag) {
+    const el = new StubEl();
+    el.tagName = tag.toUpperCase();
+    return el;
+  },
+};
+
+const { CaseReviewHeaderController } =
+  await import('../src/pages/cr-case-review/header-controller.js');
+
+/**
+ * @param {{ canToggleConversation?: boolean, toggle?: StubEl | null }} [opts]
+ */
+function makeHeaderContext(opts = {}) {
+  const header = new StubEl();
+  const banner = new StubEl();
+  const toggle =
+    opts.toggle === undefined ? new StubEl() : (opts.toggle ?? null);
+  const saveQueue = { id: 'queue' };
+  return {
+    header,
+    banner,
+    toggle,
+    context: {
+      viewModel: {
+        caseRow: {
+          id: 'case-1',
+          title: 'Case One',
+          assignedReviewer: 'Alex Reviewer',
+        },
+        machine: {
+          canToggleConversation: opts.canToggleConversation ?? true,
+        },
+        saveQueue,
+      },
+      nodes: {
+        tabs: null,
+        details: null,
+        questionsPanel: null,
+        questionList: null,
+        progress: null,
+        overrideEditor: null,
+        remediation: null,
+        summary: null,
+        notes: null,
+        appeal: null,
+        conversation: null,
+        sourceCase: null,
+        banner,
+        conversationToggle: toggle,
+        header,
+        completeButton: null,
+      },
+      displayMode: (/** @type {any} */ mode) => mode,
+      completeCase: async () => {},
+      toggleConversationPanel: () => {},
+    },
+    saveQueue,
+  };
+}
 
 test.todo(
   'CaseReviewNodeRegistry: creates the same long-lived page nodes currently cached by CRCaseReview'
@@ -79,8 +170,35 @@ test.todo(
 // TODO(issue-198): Assert cr-source-case receives the resolved source case data,
 // current user, client, saveQueue, override access, and sourceCaseId.
 
-test.todo(
-  'CaseReviewHeaderController: preserves title, reviewer, conversation toggle placement, and banner wiring'
-);
-// TODO(issue-198): Assert header children remain user-observable equivalents and
-// the status banner still receives the save queue.
+test('CaseReviewHeaderController: preserves title, reviewer, conversation toggle placement, and banner wiring', () => {
+  const { context, header, banner, toggle, saveQueue } = makeHeaderContext();
+
+  new CaseReviewHeaderController().update(/** @type {any} */ (context));
+
+  assert.equal(/** @type {any} */ (banner).saveQueue, saveQueue);
+  assert.equal(header._children.length, 3);
+  assert.equal(header._children[0].textContent, 'Case One');
+  assert.equal(header._children[1].textContent, 'Reviewer: Alex Reviewer');
+  assert.equal(header._children[2], toggle);
+});
+
+test('CaseReviewHeaderController: omits the conversation toggle when the machine disallows it', () => {
+  const { context, header, toggle } = makeHeaderContext({
+    canToggleConversation: false,
+  });
+
+  new CaseReviewHeaderController().update(/** @type {any} */ (context));
+
+  assert.equal(header._children.length, 2);
+  assert.ok(!header._children.includes(/** @type {StubEl} */ (toggle)));
+});
+
+test('CaseReviewHeaderController: tolerates a missing conversation toggle node', () => {
+  const { context, header } = makeHeaderContext({ toggle: null });
+
+  new CaseReviewHeaderController().update(/** @type {any} */ (context));
+
+  assert.equal(header._children.length, 2);
+  assert.equal(header._children[0].textContent, 'Case One');
+  assert.equal(header._children[1].textContent, 'Reviewer: Alex Reviewer');
+});
