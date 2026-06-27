@@ -57,7 +57,7 @@ test('qa-example-review: a clean QA review passes', () => {
       'qa-outcome-correct': 'Yes',
     })
   );
-  assert.equal(result.verdict, 'pass');
+  assert.equal(result.outcome, 'pass');
 });
 
 test('qa-example-review: an incorrect original Outcome fails the QA Check', () => {
@@ -68,7 +68,7 @@ test('qa-example-review: an incorrect original Outcome fails the QA Check', () =
       'qa-outcome-correct': 'No',
     })
   );
-  assert.equal(result.verdict, 'fail');
+  assert.equal(result.outcome, 'fail');
 });
 
 test('qa-example-review: a process/evidence lapse with a correct outcome is referred', () => {
@@ -79,7 +79,7 @@ test('qa-example-review: a process/evidence lapse with a correct outcome is refe
       'qa-outcome-correct': 'Yes',
     })
   );
-  assert.equal(result.verdict, 'refer');
+  assert.equal(result.outcome, 'refer');
 
   const evidence = config.computeOutcome(
     answers({
@@ -88,5 +88,5 @@ test('qa-example-review: a process/evidence lapse with a correct outcome is refe
       'qa-outcome-correct': 'Yes',
     })
   );
-  assert.equal(evidence.verdict, 'refer');
+  assert.equal(evidence.outcome, 'refer');
 });

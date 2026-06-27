@@ -8,59 +8,60 @@ import { isFailure } from './failure-evaluator.js';
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').RemediationActionDefinition} RemediationActionDefinition */
 
-export const DEFAULT_OUTCOME_RANK = {
+export const DEFAULT_OUTCOME_SEVERITY = {
   pass: 0,
   refer: 50,
   fail: 100,
 };
 
 const FALLBACK_PASS = /** @type {const} */ ({
-  verdict: 'pass',
+  outcome: 'pass',
   wording: 'Pass',
-  rank: DEFAULT_OUTCOME_RANK.pass,
+  severity: DEFAULT_OUTCOME_SEVERITY.pass,
 });
 
 const FALLBACK_FAIL = /** @type {const} */ ({
-  verdict: 'fail',
+  outcome: 'fail',
   wording: 'Fail',
-  rank: DEFAULT_OUTCOME_RANK.fail,
+  severity: DEFAULT_OUTCOME_SEVERITY.fail,
 });
 
 /**
- * @param {'pass' | 'refer' | 'fail'} verdict
+ * @param {string} outcome
  * @returns {string}
  */
-export function defaultWordingFor(verdict) {
-  if (verdict === 'pass') return 'Pass';
-  if (verdict === 'refer') return 'Refer';
-  return 'Fail';
+export function defaultWordingFor(outcome) {
+  if (outcome === 'pass') return 'Pass';
+  if (outcome === 'refer') return 'Refer';
+  if (outcome === 'fail') return 'Fail';
+  return outcome;
 }
 
 /**
  * @param {OutcomeDescriptor} descriptor
- * @returns {Required<OutcomeDescriptor>}
+ * @returns {{ outcome: string, wording: string, severity: number }}
  */
 export function normaliseOutcome(descriptor) {
   return {
-    verdict: descriptor.verdict,
-    wording: descriptor.wording || defaultWordingFor(descriptor.verdict),
-    rank: descriptor.rank ?? DEFAULT_OUTCOME_RANK[descriptor.verdict],
+    outcome: descriptor.outcome,
+    wording: descriptor.wording || defaultWordingFor(descriptor.outcome),
+    severity: descriptor.severity ?? 0,
   };
 }
 
 /**
  * @param {OutcomeOption[]} outcomeOptions
- * @returns {Map<string, Required<OutcomeDescriptor>>}
+ * @returns {Map<string, { outcome: string, wording: string, severity: number }>}
  */
 function outcomeOptionMap(outcomeOptions = []) {
   return new Map(
     outcomeOptions.map((option) => [
       option.id,
-      normaliseOutcome({
-        verdict: option.verdict,
+      {
+        outcome: option.id,
         wording: option.wording,
-        rank: option.rank,
-      }),
+        severity: option.severity ?? 0,
+      },
     ])
   );
 }
@@ -120,7 +121,7 @@ export function computeConfiguredOutcome(
       : question.outcome?.noActionOutcomeId &&
           optionById.has(question.outcome.noActionOutcomeId)
         ? [
-            /** @type {Required<OutcomeDescriptor>} */ (
+            /** @type {{ outcome: string, wording: string, severity: number }} */ (
               optionById.get(question.outcome.noActionOutcomeId)
             ),
           ]
@@ -129,9 +130,9 @@ export function computeConfiguredOutcome(
           : [normaliseOutcome(FALLBACK_FAIL)];
 
     for (const candidate of candidates) {
-      if (candidate.rank > best.rank) best = candidate;
+      if (candidate.severity >= best.severity) best = candidate;
     }
   }
 
-  return { verdict: best.verdict, wording: best.wording };
+  return { outcome: best.outcome, wording: best.wording };
 }

@@ -191,11 +191,7 @@ export class CRRemediationEditor extends ReactiveElement {
         outcomeOptions.length ? '—' : 'No outcomes configured'
       ),
       ...outcomeOptions.map((option) =>
-        h(
-          'option',
-          { value: option.id },
-          `${option.wording} (${option.verdict})`
-        )
+        h('option', { value: option.id }, option.wording)
       )
     );
   }

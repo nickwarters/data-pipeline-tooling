@@ -70,7 +70,7 @@ export class CaseMachine {
       completedAt: new Date().toISOString(),
     };
     if (computeOutcome && answers) {
-      fields.outcomeAtCompletion = computeOutcome(answers).verdict;
+      fields.outcomeAtCompletion = computeOutcome(answers).outcome;
       fields.hadRemediation = Object.values(answers).some(
         (a) => (a.remediationActions?.length ?? 0) > 0
       );

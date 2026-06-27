@@ -18,7 +18,7 @@ const NO_CAPABILITIES = {
 /** @type {import('../src/sharepoint-client.js').CaseTypeConfig} */
 const EMPTY_CASE_TYPE_CONFIG = {
   questions: [],
-  computeOutcome: () => ({ verdict: 'pass' }),
+  computeOutcome: () => ({ outcome: 'pass' }),
 };
 
 // ===== MINIMAL DOM STUBS =====
@@ -397,7 +397,7 @@ test('CRCaseReview: default tab falls back to the first visible Section when Det
   el._buildLayout({
     caseRow: BASE_ROW,
     catalogue: [],
-    computeOutcome: () => ({ verdict: 'pass' }),
+    computeOutcome: () => ({ outcome: 'pass' }),
     client: /** @type {any} */ (fakeClient),
     saveQueue: /** @type {any} */ (fakeSaveQueue),
     answersSignal: /** @type {any} */ ({ get: () => ({}), set: () => {} }),
@@ -441,7 +441,7 @@ function buildLayoutWith(el, access) {
   el._buildLayout({
     caseRow: BASE_ROW,
     catalogue: [],
-    computeOutcome: () => /** @type {any} */ ({ verdict: 'pass' }),
+    computeOutcome: () => /** @type {any} */ ({ outcome: 'pass' }),
     client: /** @type {any} */ (fakeClient),
     saveQueue: /** @type {any} */ (fakeSaveQueue),
     answersSignal: /** @type {any} */ ({ get: () => ({}), set: () => {} }),
@@ -778,7 +778,7 @@ test('CRCaseReview: _completeCase stamps the frozen outcome snapshot in the same
   /** @param {Record<string, any>} a */
   const computeOutcome = (a) =>
     /** @type {any} */ ({
-      verdict: Object.values(a).some((x) => x.value === 'No') ? 'fail' : 'pass',
+      outcome: Object.values(a).some((x) => x.value === 'No') ? 'fail' : 'pass',
     });
 
   const machine = new CaseMachine(
@@ -806,7 +806,7 @@ test('CRCaseReview: _completeCase stamps the frozen outcome snapshot in the same
   assert.equal(
     fields.outcomeAtCompletion,
     'fail',
-    'the frozen verdict is computed over the current answers'
+    'the frozen outcome is computed over the current answers'
   );
   assert.equal(
     fields.hadRemediation,
@@ -831,7 +831,7 @@ test('CRCaseReview: _completeCase initialises the effective-outcome columns equa
   /** @param {Record<string, any>} a */
   const computeOutcome = (a) =>
     /** @type {any} */ ({
-      verdict: Object.values(a).some((x) => x.value === 'No') ? 'fail' : 'pass',
+      outcome: Object.values(a).some((x) => x.value === 'No') ? 'fail' : 'pass',
     });
 
   const machine = new CaseMachine(
@@ -878,7 +878,7 @@ test('CRCaseReview: hadRemediation=true is mutually exclusive with outcomeAtComp
   /** @param {Record<string, any>} a */
   const computeOutcome = (a) =>
     /** @type {any} */ ({
-      verdict: Object.values(a).some((x) => x.value === 'No') ? 'fail' : 'pass',
+      outcome: Object.values(a).some((x) => x.value === 'No') ? 'fail' : 'pass',
     });
 
   const machine = new CaseMachine(
@@ -1517,7 +1517,7 @@ test('CRCaseReview: _buildLayout renders no Details tab when access.details is h
   el._buildLayout({
     caseRow: BASE_ROW,
     catalogue: [],
-    computeOutcome: () => ({ verdict: 'pass' }),
+    computeOutcome: () => ({ outcome: 'pass' }),
     client: /** @type {any} */ (fakeClient),
     saveQueue: /** @type {any} */ (fakeSaveQueue),
     answersSignal: /** @type {any} */ (answersSignal),
@@ -1737,7 +1737,7 @@ test('CRCaseReview: _buildLayout with access.conversation=hidden omits toggle bu
   el._buildLayout({
     caseRow: BASE_ROW,
     catalogue: [],
-    computeOutcome: () => ({ verdict: 'pass' }),
+    computeOutcome: () => ({ outcome: 'pass' }),
     client: /** @type {any} */ (fakeClient),
     saveQueue: /** @type {any} */ (fakeSaveQueue),
     answersSignal: /** @type {any} */ (answersSignal),

@@ -76,7 +76,7 @@ const CATALOGUE = [
 
 /** Mirrors example-review: fail if any Answer is 'No'. */
 const computeOutcome = (/** @type {Record<string, any>} */ a) => ({
-  verdict: Object.values(a).some((x) => x.value === 'No') ? 'fail' : 'pass',
+  outcome: Object.values(a).some((x) => x.value === 'No') ? 'fail' : 'pass',
 });
 
 /** @returns {CaseRow} */
@@ -160,7 +160,7 @@ test('cr-source-case: Current Outcome is derived from the Effective Answers (ove
   );
   // q-welcome is overridden Yes→No, so the Effective Answers fail.
   assert.equal(
-    computeFn({}).verdict,
+    computeFn({}).outcome,
     'fail',
     'Current Outcome re-derives to fail from the Effective Answers'
   );
@@ -274,12 +274,12 @@ test('cr-source-case: formats multi-choice and unanswered values, and tolerates 
     'an unanswered Question renders an em dash'
   );
 
-  // With no computeOutcome the panel falls back to a default verdict rather than throwing.
+  // With no computeOutcome the panel falls back to a default outcome rather than throwing.
   const outcomeEl = /** @type {any[]} */ (el._children).find(
     (c) => typeof c.update === 'function' && c._update
   );
   assert.equal(
-    outcomeEl._update[0]().verdict,
+    outcomeEl._update[0]().outcome,
     'pass',
     'falls back to a default Outcome when none is supplied'
   );

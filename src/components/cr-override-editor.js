@@ -407,11 +407,11 @@ export class CROverrideEditor extends ReactiveElement {
       // (ADR-0008) so overrides[] and the columns can never desync — including on
       // the cross-row write path, since `caseId` is the original row throughout.
       const compute =
-        this.computeOutcome ?? (() => /** @type {any} */ ({ verdict: 'pass' }));
+        this.computeOutcome ?? (() => /** @type {any} */ ({ outcome: 'pass' }));
       const effective = effectiveAnswers(this.caseRow.answers, next);
       this.saveQueue?.enqueueFields(this.caseId, {
         overrides: next,
-        effectiveOutcome: compute(effective).verdict,
+        effectiveOutcome: compute(effective).outcome,
         effectiveHadRemediation: Object.values(effective).some(
           (a) => (a.remediationActions?.length ?? 0) > 0
         ),

@@ -40,7 +40,7 @@ export function effectiveAnswers(answers, overrides) {
 }
 
 /**
- * The **Current Outcome** (ADR-0018): the verdict derived by running the Case
+ * The **Current Outcome** (ADR-0018): the outcome derived by running the Case
  * Type's `computeOutcome` over the Effective Answers. Where no Override exists
  * the Effective Answers are the frozen original, so the result equals the
  * Case's `outcomeAtCompletion`; Overrides take precedence as they are applied.

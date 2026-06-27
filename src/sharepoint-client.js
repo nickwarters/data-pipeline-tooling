@@ -20,14 +20,14 @@
  * shares the same lifecycle — stripped when the Answer stops failing, frozen once
  * the Case is Completed.
  *
- * @typedef {{ verdict: 'pass' | 'refer' | 'fail', wording: string, rank?: number }} OutcomeDescriptor
+ * @typedef {{ outcome: string, wording: string, severity?: number }} OutcomeDescriptor
  */
 
 /**
  * A case-type-level outcome option. Questions and actions select these by id so
  * wording is configured once per Case Type.
  *
- * @typedef {{ id: string, verdict: 'pass' | 'refer' | 'fail', wording: string, rank?: number }} OutcomeOption
+ * @typedef {{ id: string, wording: string, severity?: number }} OutcomeOption
  */
 
 /**
@@ -252,7 +252,7 @@
  */
 
 /**
- * @typedef {{ verdict: 'pass' | 'refer' | 'fail', wording?: string }} OutcomeResult
+ * @typedef {{ outcome: string, wording?: string }} OutcomeResult
  */
 
 /**

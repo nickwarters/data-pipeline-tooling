@@ -459,9 +459,10 @@ cr-bank-editor .outcome-option-list {
 }
 cr-bank-editor .outcome-option-row {
   display: grid;
-  grid-template-columns:
-    minmax(8rem, 1fr) minmax(12rem, 2fr) minmax(7rem, 0.8fr)
-    minmax(5rem, 0.6fr) auto;
+  grid-template-columns: minmax(8rem, 1fr) minmax(12rem, 2fr) minmax(
+      5rem,
+      0.6fr
+    ) auto;
   gap: var(--cr-space-2);
   align-items: end;
 }

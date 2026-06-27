@@ -32,7 +32,7 @@ function baseConfig() {
   return {
     slaHours: 48,
     questions: [],
-    computeOutcome: () => ({ verdict: 'pass' }),
+    computeOutcome: () => ({ outcome: 'pass' }),
   };
 }
 

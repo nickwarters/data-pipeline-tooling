@@ -169,7 +169,7 @@ function makeEditor(opts = {}) {
   el.computeOutcome = /** @type {any} */ (
     opts.computeOutcome ??
       ((/** @type {Record<string, any>} */ a) => ({
-        verdict: Object.values(a).some((x) => x.value === 'No')
+        outcome: Object.values(a).some((x) => x.value === 'No')
           ? 'fail'
           : 'pass',
       }))
@@ -359,7 +359,7 @@ test('CROverrideEditor: the re-stamp never touches the frozen outcomeAtCompletio
   assert.ok(!('hadRemediation' in fields), 'hadRemediation stays frozen');
 });
 
-test('CROverrideEditor: re-stamp falls back to a pass verdict when no computeOutcome is wired', () => {
+test('CROverrideEditor: re-stamp falls back to a pass outcome when no computeOutcome is wired', () => {
   const { el, queue } = makeEditor();
   el.computeOutcome = null;
   author(el, {

@@ -178,7 +178,7 @@ test('computeOutcome: all Yes → pass', () => {
   const answers = Object.fromEntries(
     config.questions.map((q) => [q.id, ans('Yes')])
   );
-  assert.deepStrictEqual(config.computeOutcome(answers), { verdict: 'pass' });
+  assert.deepStrictEqual(config.computeOutcome(answers), { outcome: 'pass' });
 });
 
 test('computeOutcome: any No → fail', () => {
@@ -188,7 +188,7 @@ test('computeOutcome: any No → fail', () => {
   const first = config.questions.find((q) => q.failureCriteria === 'No');
   assert.ok(first, 'expected a question configured to fail on No');
   answers[first.id] = ans('No');
-  assert.deepStrictEqual(config.computeOutcome(answers), { verdict: 'fail' });
+  assert.deepStrictEqual(config.computeOutcome(answers), { outcome: 'fail' });
 });
 
 test('computeOutcome: informational General question without failureCriteria is outcome-neutral', () => {
@@ -206,7 +206,7 @@ test('computeOutcome: informational General question without failureCriteria is 
       config.computeOutcome({
         [infoQuestion.id]: ans('No'),
       }),
-      { verdict: 'pass' }
+      { outcome: 'pass' }
     );
   } finally {
     config.questions.pop();
@@ -217,7 +217,7 @@ test('computeOutcome: all N/A → pass', () => {
   const answers = Object.fromEntries(
     config.questions.map((q) => [q.id, ans('N/A')])
   );
-  assert.deepStrictEqual(config.computeOutcome(answers), { verdict: 'pass' });
+  assert.deepStrictEqual(config.computeOutcome(answers), { outcome: 'pass' });
 });
 
 test('computeOutcome: mix of Yes and N/A → pass', () => {
@@ -227,7 +227,7 @@ test('computeOutcome: mix of Yes and N/A → pass', () => {
     [q2.id]: ans('N/A'),
     [q3.id]: ans('Yes'),
   };
-  assert.deepStrictEqual(config.computeOutcome(answers), { verdict: 'pass' });
+  assert.deepStrictEqual(config.computeOutcome(answers), { outcome: 'pass' });
 });
 
 test('computeOutcome: No among Yes and N/A → fail', () => {
@@ -237,11 +237,11 @@ test('computeOutcome: No among Yes and N/A → fail', () => {
     [q2.id]: ans('No'),
     [q3.id]: ans('N/A'),
   };
-  assert.deepStrictEqual(config.computeOutcome(answers), { verdict: 'fail' });
+  assert.deepStrictEqual(config.computeOutcome(answers), { outcome: 'fail' });
 });
 
 test('computeOutcome: empty answers → pass (no No)', () => {
-  assert.deepStrictEqual(config.computeOutcome({}), { verdict: 'pass' });
+  assert.deepStrictEqual(config.computeOutcome({}), { outcome: 'pass' });
 });
 
 // --- SLA ---

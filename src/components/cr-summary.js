@@ -19,7 +19,7 @@ import './cr-capture-groups.js';
 /**
  * The read-only Summary Section (ADR-0016). It rolls the whole Case up onto one
  * page; this tracer-bullet shell renders only the Outcome block. Outcome
- * derivation is hybrid: while the Case is In-progress the verdict is computed
+ * derivation is hybrid: while the Case is In-progress the outcome is computed
  * live from the current Answers, but once the Case is Completed it reads the
  * frozen `outcomeAtCompletion` snapshot (ADR-0012) rather than recomputing.
  *
@@ -100,11 +100,11 @@ export class CRSummary extends ReactiveElement {
       );
       outcomeEl.update(() => result, {}, true);
     } else if (frozen) {
-      // Read the frozen snapshot for a Completed Case (ADR-0012): the verdict is
+      // Read the frozen snapshot for a Completed Case (ADR-0012): the outcome is
       // whatever the system concluded at completion, not a recomputation.
       /** @type {OutcomeResult} */
       const result = {
-        verdict: /** @type {OutcomeResult['verdict']} */ (frozen),
+        outcome: frozen,
       };
       outcomeEl.update(() => result, {}, true);
     } else if (this.computeOutcome) {
@@ -114,7 +114,7 @@ export class CRSummary extends ReactiveElement {
       // Nothing to derive yet — render the Outcome block in its indeterminate
       // state until update() supplies the live state.
       outcomeEl.update(
-        () => /** @type {OutcomeResult} */ ({ verdict: 'pass' }),
+        () => /** @type {OutcomeResult} */ ({ outcome: 'pass' }),
         {},
         false
       );
@@ -183,7 +183,7 @@ export class CRSummary extends ReactiveElement {
    * Outcome corrections block (ADR-0018): a read-only list of the post-completion
    * Answer Overrides behind the Current Outcome. Each row shows the question, the
    * original→overridden value, the source (QA or Appeal) and the reasoning, so
-   * the derived verdict is always shown with its provenance.
+   * the derived outcome is always shown with its provenance.
    *
    * @param {import('../sharepoint-client.js').Override[]} overrides
    * @returns {HTMLElement}

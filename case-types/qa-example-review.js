@@ -73,7 +73,7 @@ const config = {
   ],
 
   /**
-   * QA verdict over the QA Answers only:
+   * QA outcome over the QA Answers only:
    *  - an incorrect original Outcome fails the QA Check;
    *  - a process or evidence lapse where the outcome still stood is referred;
    *  - otherwise the review passes QA.
@@ -82,11 +82,11 @@ const config = {
    */
   computeOutcome(answers) {
     if (answers['qa-outcome-correct']?.value === 'No')
-      return { verdict: 'fail' };
+      return { outcome: 'fail' };
     const lapsed =
       answers['qa-process']?.value === 'No' ||
       answers['qa-evidence']?.value === 'No';
-    return { verdict: lapsed ? 'refer' : 'pass' };
+    return { outcome: lapsed ? 'refer' : 'pass' };
   },
 };
 

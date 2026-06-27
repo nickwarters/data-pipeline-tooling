@@ -113,7 +113,7 @@ function makeCase(overrides = {}) {
 /** @param {Record<string, import('../src/sharepoint-client.js').Answer>} answers */
 function makeComputeOutcome(answers) {
   const hasNo = Object.values(answers).some((a) => a.value === 'No');
-  return { verdict: /** @type {'pass' | 'fail'} */ (hasNo ? 'fail' : 'pass') };
+  return { outcome: /** @type {'pass' | 'fail'} */ (hasNo ? 'fail' : 'pass') };
 }
 
 test('CRSummary: renders a Summary heading as its first child', () => {
@@ -159,7 +159,7 @@ test('CRSummary: reads the frozen outcomeAtCompletion snapshot once the Case is 
   el.connectedCallback();
 
   // Even with live Answers that would compute "pass", a Completed Case shows the
-  // frozen verdict (ADR-0012).
+  // frozen outcome (ADR-0012).
   el.update((/** @type {any} */ a) => makeComputeOutcome(a), {}, true);
 
   const block = /** @type {any} */ (el)._children[1];
@@ -169,9 +169,9 @@ test('CRSummary: reads the frozen outcomeAtCompletion snapshot once the Case is 
     'frozen outcome is treated as answered'
   );
   assert.equal(
-    block._updateArgs.a1().verdict,
+    block._updateArgs.a1().outcome,
     'fail',
-    'the frozen verdict is rendered, not a recomputation'
+    'the frozen outcome is rendered, not a recomputation'
   );
 });
 
@@ -201,9 +201,9 @@ test('CRSummary: renders an indeterminate Outcome block before update() is calle
     false,
     'allAnswered is false until update supplies state'
   );
-  // The placeholder outcome function resolves to a pass verdict, but allAnswered
+  // The placeholder outcome function resolves to a pass outcome, but allAnswered
   // is false so the Outcome block renders its indeterminate state regardless.
-  assert.equal(block._updateArgs.a1().verdict, 'pass');
+  assert.equal(block._updateArgs.a1().outcome, 'pass');
 });
 
 test('CRSummary: renders a Key dates block (Created, Completed) from the Case row', () => {
@@ -523,7 +523,7 @@ test('CRSummary: a Completed Case with Overrides shows the derived Current Outco
 
   const block = /** @type {any} */ (el)._children[1];
   assert.equal(
-    block._updateArgs.a1().verdict,
+    block._updateArgs.a1().outcome,
     'fail',
     'Current Outcome derived over Effective Answers'
   );

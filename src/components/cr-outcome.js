@@ -1,7 +1,6 @@
 // @ts-check
 import { ReactiveElement } from './reactive-element.js';
 import { h } from '../lib/html.js';
-import { defaultWordingFor } from '../evaluators/configured-outcome.js';
 
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../sharepoint-client.js').OutcomeResult} OutcomeResult */
@@ -51,8 +50,8 @@ export class CROutcome extends ReactiveElement {
       textContent = 'Awaiting answers…';
     } else {
       const result = this.computeOutcome(this.answers);
-      className = `cr-outcome-${result.verdict}`;
-      textContent = result.wording ?? defaultWordingFor(result.verdict);
+      className = `cr-outcome-${classSuffixFor(result.outcome)}`;
+      textContent = result.wording ?? defaultWordingFor(result.outcome);
     }
 
     return [h('h2', {}, 'Outcome'), h('p', { className }, textContent)];
@@ -60,3 +59,19 @@ export class CROutcome extends ReactiveElement {
 }
 
 customElements.define('cr-outcome', CROutcome);
+
+/** @param {string} value */
+function classSuffixFor(value) {
+  return String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/** @param {string} outcome */
+function defaultWordingFor(outcome) {
+  if (outcome === 'pass') return 'Pass';
+  if (outcome === 'refer') return 'Refer';
+  if (outcome === 'fail') return 'Fail';
+  return outcome;
+}

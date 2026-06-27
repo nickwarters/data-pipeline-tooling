@@ -35,7 +35,7 @@ function makeCase(overrides = {}) {
 function makeConfig(overrides = {}) {
   return {
     questions: [],
-    computeOutcome: () => ({ verdict: 'pass' }),
+    computeOutcome: () => ({ outcome: 'pass' }),
     ...overrides,
   };
 }

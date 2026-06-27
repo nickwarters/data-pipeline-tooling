@@ -27,10 +27,10 @@ test('computeConfiguredOutcome: uses question no-action outcome when failed answ
     {
       q1: { value: 'No', remediationActions: [] },
     },
-    [{ id: 'fail', verdict: 'fail', wording: 'Fail', rank: 100 }]
+    [{ id: 'fail', wording: 'Fail', severity: 100 }]
   );
 
-  assert.deepEqual(result, { verdict: 'fail', wording: 'Fail' });
+  assert.deepEqual(result, { outcome: 'fail', wording: 'Fail' });
 });
 
 test('computeConfiguredOutcome: uses selected action outcome wording', () => {
@@ -71,24 +71,23 @@ test('computeConfiguredOutcome: uses selected action outcome wording', () => {
       },
     },
     [
-      { id: 'fail', verdict: 'fail', wording: 'Fail', rank: 100 },
-      { id: 'impact', verdict: 'fail', wording: 'Fail with impact', rank: 120 },
+      { id: 'fail', wording: 'Fail', severity: 100 },
+      { id: 'impact', wording: 'Fail with impact', severity: 120 },
       {
         id: 'feedback',
-        verdict: 'pass',
         wording: 'Pass with feedback',
-        rank: 20,
+        severity: 20,
       },
     ]
   );
 
   assert.deepEqual(result, {
-    verdict: 'pass',
+    outcome: 'feedback',
     wording: 'Pass with feedback',
   });
 });
 
-test('computeConfiguredOutcome: chooses highest ranked selected action outcome', () => {
+test('computeConfiguredOutcome: chooses highest severity selected action outcome', () => {
   /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
   const questions = [
     {
@@ -130,16 +129,15 @@ test('computeConfiguredOutcome: chooses highest ranked selected action outcome',
     [
       {
         id: 'feedback',
-        verdict: 'pass',
         wording: 'Pass with feedback',
-        rank: 20,
+        severity: 20,
       },
-      { id: 'impact', verdict: 'fail', wording: 'Fail with impact', rank: 120 },
+      { id: 'impact', wording: 'Fail with impact', severity: 120 },
     ]
   );
 
   assert.deepEqual(result, {
-    verdict: 'fail',
+    outcome: 'impact',
     wording: 'Fail with impact',
   });
 });
@@ -160,10 +158,10 @@ test('computeConfiguredOutcome: ignores questions with no failureCriteria', () =
     'q-info': { value: 'No' },
   });
 
-  assert.deepEqual(result, { verdict: 'pass', wording: 'Pass' });
+  assert.deepEqual(result, { outcome: 'pass', wording: 'Pass' });
 });
 
-test('computeConfiguredOutcome: unranked outcome options default by semantic verdict', () => {
+test('computeConfiguredOutcome: outcome options without severity default to zero', () => {
   /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
   const questions = [
     {
@@ -177,10 +175,10 @@ test('computeConfiguredOutcome: unranked outcome options default by semantic ver
   ];
 
   const result = computeConfiguredOutcome(questions, { q1: { value: 'No' } }, [
-    { id: 'fail', verdict: 'fail', wording: 'Fail' },
+    { id: 'fail', wording: 'Fail' },
   ]);
 
-  assert.deepEqual(result, { verdict: 'fail', wording: 'Fail' });
+  assert.deepEqual(result, { outcome: 'fail', wording: 'Fail' });
 });
 
 test('computeConfiguredOutcome: falls back to legacy embedded descriptors', () => {
@@ -192,7 +190,7 @@ test('computeConfiguredOutcome: falls back to legacy embedded descriptors', () =
       responseType: /** @type {const} */ ('yes-no-na'),
       failureCriteria: 'No',
       outcome: {
-        noAction: { verdict: 'fail', wording: 'Fail', rank: 100 },
+        noAction: { outcome: 'fail', wording: 'Fail', severity: 100 },
       },
       deprecated: false,
     },
@@ -202,7 +200,7 @@ test('computeConfiguredOutcome: falls back to legacy embedded descriptors', () =
     q1: { value: 'No' },
   });
 
-  assert.deepEqual(result, { verdict: 'fail', wording: 'Fail' });
+  assert.deepEqual(result, { outcome: 'fail', wording: 'Fail' });
 });
 
 test('normaliseConfiguredActions: preserves object actions and adds legacy ids', () => {
@@ -213,7 +211,7 @@ test('normaliseConfiguredActions: preserves object actions and adds legacy ids',
         {
           id: 'stable',
           text: 'Stable action',
-          outcome: { verdict: 'refer', wording: 'Refer', rank: 50 },
+          outcome: { outcome: 'refer', wording: 'Refer', severity: 50 },
         },
       ],
       'q1'
@@ -223,7 +221,7 @@ test('normaliseConfiguredActions: preserves object actions and adds legacy ids',
       {
         id: 'stable',
         text: 'Stable action',
-        outcome: { verdict: 'refer', wording: 'Refer', rank: 50 },
+        outcome: { outcome: 'refer', wording: 'Refer', severity: 50 },
       },
     ]
   );

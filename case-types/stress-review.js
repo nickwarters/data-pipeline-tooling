@@ -19,7 +19,7 @@ const config = {
   /** @param {Record<string, Answer>} answers */
   computeOutcome(answers) {
     const failures = countConfiguredFailures(config.questions, answers);
-    return { verdict: failures > 0 ? 'fail' : 'pass' };
+    return { outcome: failures > 0 ? 'fail' : 'pass' };
   },
 };
 

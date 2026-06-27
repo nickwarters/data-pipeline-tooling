@@ -109,9 +109,9 @@ const config = {
   /** @param {Record<string, Answer>} answers */
   computeOutcome(answers) {
     const failures = countConfiguredFailures(config.questions, answers);
-    if (failures === 0) return { verdict: 'pass' };
-    if (failures === 1) return { verdict: 'refer' };
-    return { verdict: 'fail' };
+    if (failures === 0) return { outcome: 'pass' };
+    if (failures === 1) return { outcome: 'refer' };
+    return { outcome: 'fail' };
   },
 };
 

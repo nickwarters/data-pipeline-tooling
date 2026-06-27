@@ -88,13 +88,13 @@ test('compileBank: default outcome is driven by failureCriteria, not raw No answ
     compiledConfig.computeOutcome({
       'q-general-info': { value: 'No' },
     }),
-    { verdict: 'pass', wording: 'Pass' }
+    { outcome: 'pass', wording: 'Pass' }
   );
   assert.deepStrictEqual(
     compiledConfig.computeOutcome({
       'q-required-check': { value: 'No' },
     }),
-    { verdict: 'fail', wording: 'Fail' }
+    { outcome: 'fail', wording: 'Fail' }
   );
 });
 
@@ -190,12 +190,11 @@ test('compileBank: emits shared outcome options and selected outcome ids', () =>
       deprecated: false,
     }),
     outcomeOptions: [
-      { id: 'fail', verdict: 'fail', wording: 'Fail', rank: 100 },
+      { id: 'fail', wording: 'Fail', severity: 100 },
       {
         id: 'impact',
-        verdict: 'fail',
         wording: 'Fail with impact',
-        rank: 120,
+        severity: 120,
       },
     ],
   });
@@ -458,16 +457,13 @@ test('compileExport: different slug → different hash', async () => {
 test('compileExport: outcomeOptions affect the hash', async () => {
   const bankA = {
     ...exportBank,
-    outcomeOptions: [
-      { id: 'fail', verdict: /** @type {const} */ ('fail'), wording: 'Fail' },
-    ],
+    outcomeOptions: [{ id: 'fail', wording: 'Fail' }],
   };
   const bankB = {
     ...exportBank,
     outcomeOptions: [
       {
         id: 'fail',
-        verdict: /** @type {const} */ ('fail'),
         wording: 'Fail with impact',
       },
     ],
@@ -524,15 +520,13 @@ test('compileExport: excludes computeOutcome, allowFreeFormRemediation, eligible
     outcomeOptions: [
       {
         id: 'fail',
-        verdict: /** @type {const} */ ('fail'),
         wording: 'Fail',
-        rank: 100,
+        severity: 100,
       },
       {
         id: 'refer',
-        verdict: /** @type {const} */ ('refer'),
         wording: 'Refer',
-        rank: 50,
+        severity: 50,
       },
     ],
   };
@@ -553,8 +547,8 @@ test('compileExport: excludes computeOutcome, allowFreeFormRemediation, eligible
     },
   ]);
   assert.deepEqual(result.outcomeOptions, [
-    { id: 'fail', verdict: 'fail', wording: 'Fail', rank: 100 },
-    { id: 'refer', verdict: 'refer', wording: 'Refer', rank: 50 },
+    { id: 'fail', wording: 'Fail', severity: 100 },
+    { id: 'refer', wording: 'Refer', severity: 50 },
   ]);
 });
 

@@ -82,11 +82,11 @@ export class CRSourceCase extends ReactiveElement {
     const overrides = row.overrides ?? [];
 
     // Current Outcome, re-derived from the Effective Answers (ADR-0018). The
-    // source Case is Completed, so the verdict is always resolved.
+    // source Case is Completed, so the outcome is always resolved.
     const effective = effectiveAnswers(row.answers, overrides);
     const result = currentOutcome(
       this.computeOutcome ??
-        (() => /** @type {OutcomeResult} */ ({ verdict: 'pass' })),
+        (() => /** @type {OutcomeResult} */ ({ outcome: 'pass' })),
       row.answers,
       overrides
     );

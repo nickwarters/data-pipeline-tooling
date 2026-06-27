@@ -63,8 +63,8 @@ export const questionBanks = {
     slug: 'example-review',
     eligibleGroups: ['Reviewers'],
     outcomeOptions: [
-      { id: 'pass', verdict: 'pass', wording: 'Pass', rank: 0 },
-      { id: 'fail', verdict: 'fail', wording: 'Fail', rank: 100 },
+      { id: 'pass', wording: 'Pass', severity: 0 },
+      { id: 'fail', wording: 'Fail', severity: 100 },
     ],
     labels: [
       { id: 'lbl-coaching', name: 'Coaching', color: '#2563eb' },
@@ -123,9 +123,9 @@ export const questionBanks = {
     slug: 'complaint-review',
     eligibleGroups: ['Reviewers', 'ComplianceLeads'],
     outcomeOptions: [
-      { id: 'pass', verdict: 'pass', wording: 'Pass', rank: 0 },
-      { id: 'refer', verdict: 'refer', wording: 'Refer', rank: 50 },
-      { id: 'fail', verdict: 'fail', wording: 'Fail', rank: 100 },
+      { id: 'pass', wording: 'Pass', severity: 0 },
+      { id: 'refer', wording: 'Refer', severity: 50 },
+      { id: 'fail', wording: 'Fail', severity: 100 },
     ],
     labels: [
       { id: 'lbl-sla', name: 'SLA', color: '#d97706' },

@@ -2,10 +2,6 @@
 import { ReactiveElement } from '../components/reactive-element.js';
 import { h } from '../lib/html.js';
 import { activeSlug, commit, currentBank } from './question-bank-store.js';
-import {
-  DEFAULT_OUTCOME_RANK,
-  defaultWordingFor,
-} from '../evaluators/configured-outcome.js';
 
 export class CROutcomeOptionsEditor extends ReactiveElement {
   render() {
@@ -73,30 +69,15 @@ export class CROutcomeOptionsEditor extends ReactiveElement {
                   })
                 ),
                 this._field(
-                  'Verdict',
-                  this._select(
-                    ['pass', 'refer', 'fail'],
-                    option.verdict,
-                    (verdict) =>
-                      commit(() => {
-                        option.verdict =
-                          /** @type {'pass' | 'refer' | 'fail'} */ (verdict);
-                        option.wording ||= defaultWordingFor(option.verdict);
-                        option.rank =
-                          option.rank ?? DEFAULT_OUTCOME_RANK[option.verdict];
-                      })
-                  )
-                ),
-                this._field(
-                  'Priority',
+                  'Severity',
                   h('input', {
                     type: 'number',
-                    value: String(option.rank ?? index),
+                    value: String(option.severity ?? index),
                     onchange: (/** @type {any} */ e) =>
                       commit(() => {
                         const parsed = Number(e.target.value);
-                        if (Number.isFinite(parsed)) option.rank = parsed;
-                        else delete option.rank;
+                        if (Number.isFinite(parsed)) option.severity = parsed;
+                        else delete option.severity;
                       }),
                   })
                 ),
@@ -139,9 +120,8 @@ export class CROutcomeOptionsEditor extends ReactiveElement {
     }
     return {
       id,
-      verdict: 'fail',
       wording: 'New outcome',
-      rank: DEFAULT_OUTCOME_RANK.fail,
+      severity: 100,
     };
   }
 
@@ -191,19 +171,6 @@ export class CROutcomeOptionsEditor extends ReactiveElement {
       { className: 'outcome-option-field' },
       h('span', {}, label),
       control
-    );
-  }
-
-  /**
-   * @param {string[]} options
-   * @param {string} value
-   * @param {(value: string) => void} onChange
-   */
-  _select(options, value, onChange) {
-    return h(
-      'select',
-      { value, onchange: (/** @type {any} */ e) => onChange(e.target.value) },
-      ...options.map((option) => h('option', { value: option }, option))
     );
   }
 }

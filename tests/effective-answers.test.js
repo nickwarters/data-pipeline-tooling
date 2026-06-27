@@ -146,7 +146,7 @@ test('effectiveAnswers: leaves the frozen Answers and untouched keys intact', ()
  * @returns {import('../src/sharepoint-client.js').OutcomeResult}
  */
 const computeOutcome = (answers) => ({
-  verdict: Object.values(answers).some((a) => a.value === 'No')
+  outcome: Object.values(answers).some((a) => a.value === 'No')
     ? 'fail'
     : 'pass',
 });
@@ -158,11 +158,11 @@ test('currentOutcome: with no Override equals the original derivation (== outcom
     'q-needs': { value: 'Yes' },
   };
   assert.deepEqual(currentOutcome(computeOutcome, answers, []), {
-    verdict: 'pass',
+    outcome: 'pass',
   });
 });
 
-test('currentOutcome: a pass→fail Override flips the derived verdict to fail', () => {
+test('currentOutcome: a pass→fail Override flips the derived outcome to fail', () => {
   /** @type {Record<string, Answer>} */
   const answers = {
     'q-welcome': { value: 'Yes' },
@@ -180,11 +180,11 @@ test('currentOutcome: a pass→fail Override flips the derived verdict to fail',
     },
   ];
   assert.deepEqual(currentOutcome(computeOutcome, answers, overrides), {
-    verdict: 'fail',
+    outcome: 'fail',
   });
 });
 
-test('currentOutcome: a fail→pass Override flips the derived verdict to pass', () => {
+test('currentOutcome: a fail→pass Override flips the derived outcome to pass', () => {
   /** @type {Record<string, Answer>} */
   const answers = { 'q-welcome': { value: 'No' }, 'q-needs': { value: 'Yes' } };
   /** @type {Override[]} */
@@ -200,7 +200,7 @@ test('currentOutcome: a fail→pass Override flips the derived verdict to pass',
     },
   ];
   assert.deepEqual(currentOutcome(computeOutcome, answers, overrides), {
-    verdict: 'pass',
+    outcome: 'pass',
   });
 });
 

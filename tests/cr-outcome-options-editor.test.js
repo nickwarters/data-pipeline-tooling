@@ -32,6 +32,20 @@ test('CROutcomeOptionsEditor: edits wording on the shared outcome option', () =>
   assert.equal(cases.get()['example-review'].outcomeOptions?.[0].wording, 'A');
 });
 
+test('CROutcomeOptionsEditor: edits severity on the shared outcome option', () => {
+  _resetStore();
+  const e = new CROutcomeOptionsEditor();
+  e.connectedCallback();
+  const section = /** @type {any} */ (e)._children[0];
+  const list = section._children[1];
+  const firstRow = list._children[0];
+  const severityInput = firstRow._children[2]._children[1];
+
+  severityInput._listeners.change[0]({ target: { value: '25' } });
+
+  assert.equal(cases.get()['example-review'].outcomeOptions?.[0].severity, 25);
+});
+
 test('CROutcomeOptionsEditor: renaming an outcome id updates question and action references', () => {
   _resetStore();
   const bank = cases.get()['example-review'];
@@ -81,7 +95,7 @@ test('CROutcomeOptionsEditor: removes an outcome option', () => {
   const section = /** @type {any} */ (e)._children[0];
   const list = section._children[1];
   const firstRow = list._children[0];
-  const remove = firstRow._children[4];
+  const remove = firstRow._children[3];
 
   remove._listeners.click[0]();
 

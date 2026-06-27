@@ -44,7 +44,7 @@ const { CROutcome } = await import('../src/components/cr-outcome.js');
 /** @param {Record<string, import('../src/sharepoint-client.js').Answer>} answers */
 function makeComputeOutcome(answers) {
   const hasNo = Object.values(answers).some((a) => a.value === 'No');
-  return { verdict: /** @type {'pass' | 'fail'} */ (hasNo ? 'fail' : 'pass') };
+  return { outcome: /** @type {'pass' | 'fail'} */ (hasNo ? 'fail' : 'pass') };
 }
 
 test('CROutcome: renders h2 Outcome heading', () => {
@@ -59,22 +59,22 @@ test('CROutcome: shows indeterminate state on initial render (no update called)'
   const el = new CROutcome();
   el.connectedCallback();
 
-  const verdict = /** @type {any} */ (el)._children[1];
-  assert.equal(verdict.className, 'cr-outcome-indeterminate');
-  assert.equal(verdict.textContent, 'Awaiting answers…');
+  const outcome = /** @type {any} */ (el)._children[1];
+  assert.equal(outcome.className, 'cr-outcome-indeterminate');
+  assert.equal(outcome.textContent, 'Awaiting answers…');
 });
 
 test('CROutcome: shows indeterminate state when allAnswered is false', () => {
   const el = new CROutcome();
   el.connectedCallback();
-  el.update(() => ({ verdict: 'pass' }), {}, false);
+  el.update(() => ({ outcome: 'pass' }), {}, false);
 
-  const verdict = /** @type {any} */ (el)._children[1];
-  assert.equal(verdict.className, 'cr-outcome-indeterminate');
-  assert.equal(verdict.textContent, 'Awaiting answers…');
+  const outcome = /** @type {any} */ (el)._children[1];
+  assert.equal(outcome.className, 'cr-outcome-indeterminate');
+  assert.equal(outcome.textContent, 'Awaiting answers…');
 });
 
-test('CROutcome: shows pass verdict when allAnswered is true and no No answers', () => {
+test('CROutcome: shows pass outcome when allAnswered is true and no No answers', () => {
   const answers = {
     'q-welcome': { value: 'Yes' },
     'q-needs': { value: 'N/A' },
@@ -83,47 +83,47 @@ test('CROutcome: shows pass verdict when allAnswered is true and no No answers',
   el.connectedCallback();
   el.update((a) => makeComputeOutcome(a), answers, true);
 
-  const verdict = /** @type {any} */ (el)._children[1];
-  assert.equal(verdict.className, 'cr-outcome-pass');
-  assert.equal(verdict.textContent, 'Pass');
+  const outcome = /** @type {any} */ (el)._children[1];
+  assert.equal(outcome.className, 'cr-outcome-pass');
+  assert.equal(outcome.textContent, 'Pass');
 });
 
-test('CROutcome: shows fail verdict when allAnswered is true and any answer is No', () => {
+test('CROutcome: shows fail outcome when allAnswered is true and any answer is No', () => {
   const answers = { 'q-welcome': { value: 'Yes' }, 'q-needs': { value: 'No' } };
   const el = new CROutcome();
   el.connectedCallback();
   el.update((a) => makeComputeOutcome(a), answers, true);
 
-  const verdict = /** @type {any} */ (el)._children[1];
-  assert.equal(verdict.className, 'cr-outcome-fail');
-  assert.equal(verdict.textContent, 'Fail');
+  const outcome = /** @type {any} */ (el)._children[1];
+  assert.equal(outcome.className, 'cr-outcome-fail');
+  assert.equal(outcome.textContent, 'Fail');
 });
 
-test('CROutcome: renders configured wording while styling by verdict', () => {
+test('CROutcome: renders configured wording while styling by outcome id', () => {
   const el = new CROutcome();
   el.connectedCallback();
   el.update(
-    () => ({ verdict: 'pass', wording: 'Pass with feedback' }),
+    () => ({ outcome: 'pass', wording: 'Pass with feedback' }),
     {},
     true
   );
 
-  const verdict = /** @type {any} */ (el)._children[1];
-  assert.equal(verdict.className, 'cr-outcome-pass');
-  assert.equal(verdict.textContent, 'Pass with feedback');
+  const outcome = /** @type {any} */ (el)._children[1];
+  assert.equal(outcome.className, 'cr-outcome-pass');
+  assert.equal(outcome.textContent, 'Pass with feedback');
 });
 
-test('CROutcome: supports refer verdict fallback wording', () => {
+test('CROutcome: supports refer fallback wording', () => {
   const el = new CROutcome();
   el.connectedCallback();
-  el.update(() => ({ verdict: 'refer' }), {}, true);
+  el.update(() => ({ outcome: 'refer' }), {}, true);
 
-  const verdict = /** @type {any} */ (el)._children[1];
-  assert.equal(verdict.className, 'cr-outcome-refer');
-  assert.equal(verdict.textContent, 'Refer');
+  const outcome = /** @type {any} */ (el)._children[1];
+  assert.equal(outcome.className, 'cr-outcome-refer');
+  assert.equal(outcome.textContent, 'Refer');
 });
 
-test('CROutcome: updates verdict reactively when update() is called again', () => {
+test('CROutcome: updates outcome reactively when update() is called again', () => {
   const el = new CROutcome();
   el.connectedCallback();
 
@@ -146,14 +146,14 @@ test('CROutcome: transitions from indeterminate to pass when all questions answe
   const el = new CROutcome();
   el.connectedCallback();
 
-  el.update(() => ({ verdict: 'pass' }), {}, false);
+  el.update(() => ({ outcome: 'pass' }), {}, false);
   assert.equal(
     /** @type {any} */ (el)._children[1].className,
     'cr-outcome-indeterminate'
   );
 
   el.update(
-    () => ({ verdict: 'pass' }),
+    () => ({ outcome: 'pass' }),
     { 'q-welcome': { value: 'Yes' } },
     true
   );
@@ -163,11 +163,11 @@ test('CROutcome: transitions from indeterminate to pass when all questions answe
   );
 });
 
-test('CROutcome: always renders exactly two children (h2 + verdict p)', () => {
+test('CROutcome: always renders exactly two children (h2 + outcome p)', () => {
   const el = new CROutcome();
   el.connectedCallback();
   assert.equal(/** @type {any} */ (el)._children.length, 2);
 
-  el.update(() => ({ verdict: 'fail' }), { 'q-x': { value: 'No' } }, true);
+  el.update(() => ({ outcome: 'fail' }), { 'q-x': { value: 'No' } }, true);
   assert.equal(/** @type {any} */ (el)._children.length, 2);
 });
