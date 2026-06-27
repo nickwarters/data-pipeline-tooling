@@ -948,6 +948,81 @@ test('CRCaseReview: complete button feeds the live answers + computeOutcome into
   );
 });
 
+test('CRCaseReview: _completeCase flushes pending answers before stamping Completed', async () => {
+  const answers = {
+    'q-welcome': { value: 'Yes' },
+    'q-needs': { value: 'No' },
+    'q-channel': { value: 'Email' },
+    'q-products': { value: ['Billing'] },
+  };
+  let liveRow = { ...BASE_ROW, answers: {}, etag: 'etag-start' };
+  /** @type {Array<{ fields: any, etag: string }>} */
+  const patches = [];
+  const client = {
+    async getCase() {
+      return liveRow;
+    },
+    async getCurrentUser() {
+      return { id: 'u1', displayName: 'User 1' };
+    },
+    async patchCase(
+      /** @type {string} */ _id,
+      /** @type {any} */ fields,
+      /** @type {string} */ etag
+    ) {
+      patches.push({ fields, etag });
+      liveRow = { ...liveRow, ...fields, etag: `etag-${patches.length}` };
+      return { ok: true, status: 200, data: liveRow };
+    },
+    async searchPeople() {
+      return [];
+    },
+    async resolveUsers() {
+      return {};
+    },
+    async getExportHash() {
+      return null;
+    },
+  };
+  const saveQueue = new SaveQueue(/** @type {any} */ (client), {
+    debounceMs: 5000,
+  });
+  saveQueue.loadCase(liveRow);
+
+  const el = new CRCaseReview();
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = saveQueue;
+  saveQueue.enqueue('c1', 'answers', answers);
+
+  const machine = new CaseMachine(
+    BASE_ROW,
+    { id: 'u1' },
+    NO_CAPABILITIES,
+    EMPTY_CASE_TYPE_CONFIG
+  );
+  const patchFields = machine.transitionToCompleted(
+    EMPTY_CASE_TYPE_CONFIG.computeOutcome,
+    answers
+  );
+
+  await el._completeCase('c1', el.client, saveQueue, patchFields);
+
+  assert.equal(patches.length, 2);
+  assert.deepEqual(
+    patches[0].fields,
+    { answers },
+    'pending answers are persisted before completion'
+  );
+  assert.equal(
+    patches[1].etag,
+    'etag-1',
+    'completion uses the ETag returned by the answer flush'
+  );
+  assert.equal(patches[1].fields.status, 'Completed');
+  assert.deepEqual(liveRow.answers, answers);
+  assert.equal(liveRow.status, 'Completed');
+});
+
 test('CRCaseReview: no inline cr-save-status paragraph in rendered children', async () => {
   const client = makeClient();
   const el = new CRCaseReview();

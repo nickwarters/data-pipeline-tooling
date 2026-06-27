@@ -12,7 +12,8 @@ import { signal } from '../lib/signal.js';
  * @typedef {{
  *   etag: string,
  *   baselineAnswers: Record<string, Answer> | null,
- *   pending: Record<string, { value: unknown, timerId: ReturnType<typeof setTimeout> }>
+ *   pending: Record<string, { value: Partial<CaseRow>, timerId: ReturnType<typeof setTimeout> }>,
+ *   inFlight: Set<Promise<boolean>>
  * }} CaseState
  */
 
@@ -52,6 +53,7 @@ export class SaveQueue {
       etag: row.etag,
       baselineAnswers: row.answers ? { ...row.answers } : null,
       pending: existing?.pending ?? {},
+      inFlight: existing?.inFlight ?? new Set(),
     };
   }
 
@@ -72,6 +74,48 @@ export class SaveQueue {
    */
   enqueue(caseId, fieldName, value) {
     this._scheduleFlush(caseId, fieldName, { [fieldName]: value });
+  }
+
+  /**
+   * Immediately flush all debounced writes for a Case and wait until they have
+   * persisted. Returns false if a conflict or missing Case prevents persistence.
+   * @param {string} caseId
+   * @returns {Promise<boolean>}
+   */
+  async flushCase(caseId) {
+    const state = this._state[caseId];
+    if (!state) return true;
+
+    const pendingEntries = Object.entries(state.pending);
+    for (const [pendingKey, pending] of pendingEntries) {
+      clearTimeout(pending.timerId);
+      delete state.pending[pendingKey];
+    }
+
+    const existingResults = await Promise.all([...state.inFlight]);
+    if (!existingResults.every(Boolean)) return false;
+
+    for (const [, pending] of pendingEntries) {
+      const flushed = await this._flush(caseId, pending.value, 0);
+      if (!flushed) return false;
+    }
+    return this.status.get() !== 'conflict';
+  }
+
+  /**
+   * @param {string} caseId
+   * @returns {CaseState}
+   */
+  _ensureState(caseId) {
+    if (!this._state[caseId]) {
+      this._state[caseId] = {
+        etag: '',
+        baselineAnswers: null,
+        pending: {},
+        inFlight: new Set(),
+      };
+    }
+    return this._state[caseId];
   }
 
   /**
@@ -99,10 +143,7 @@ export class SaveQueue {
    * @param {Partial<CaseRow>} fields
    */
   _scheduleFlush(caseId, pendingKey, fields) {
-    if (!this._state[caseId]) {
-      this._state[caseId] = { etag: '', baselineAnswers: null, pending: {} };
-    }
-    const state = this._state[caseId];
+    const state = this._ensureState(caseId);
 
     const existing = state.pending[pendingKey];
     if (existing) clearTimeout(existing.timerId);
@@ -122,10 +163,27 @@ export class SaveQueue {
    * @param {string} caseId
    * @param {Partial<CaseRow>} fields
    * @param {number} retryIdx
+   * @returns {Promise<boolean>}
    */
   async _flush(caseId, fields, retryIdx) {
+    const state = this._ensureState(caseId);
+    const flush = this._flushAttempt(caseId, fields, retryIdx).finally(() => {
+      state.inFlight.delete(flush);
+      this._markSavedIfIdle();
+    });
+    state.inFlight.add(flush);
+    return await flush;
+  }
+
+  /**
+   * @param {string} caseId
+   * @param {Partial<CaseRow>} fields
+   * @param {number} retryIdx
+   * @returns {Promise<boolean>}
+   */
+  async _flushAttempt(caseId, fields, retryIdx) {
     const state = this._state[caseId];
-    if (!state) return;
+    if (!state) return true;
 
     /** @type {PatchResult} */
     let result;
@@ -142,13 +200,12 @@ export class SaveQueue {
           ? { ...result.data.answers }
           : state.baselineAnswers;
       }
-      this._statusSignal.set('saved');
-      return;
+      this._markSavedIfIdle();
+      return true;
     }
 
     if (result.status === 412) {
-      await this._handle412(caseId, fields, retryIdx);
-      return;
+      return await this._handle412(caseId, fields, retryIdx);
     }
 
     const delay =
@@ -156,13 +213,15 @@ export class SaveQueue {
         Math.min(retryIdx, this._backoffSchedule.length - 1)
       ];
     this._statusSignal.set('reconnecting');
-    setTimeout(() => this._flush(caseId, fields, retryIdx + 1), delay);
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    return await this._flushAttempt(caseId, fields, retryIdx + 1);
   }
 
   /**
    * @param {string} caseId
    * @param {Partial<CaseRow>} fields
    * @param {number} retryIdx
+   * @returns {Promise<boolean>}
    */
   async _handle412(caseId, fields, retryIdx) {
     const state = this._state[caseId];
@@ -170,7 +229,7 @@ export class SaveQueue {
 
     if (!fresh) {
       this._statusSignal.set('conflict');
-      return;
+      return false;
     }
 
     const baseJson = JSON.stringify(state.baselineAnswers ?? {});
@@ -178,11 +237,21 @@ export class SaveQueue {
 
     if (freshJson !== baseJson) {
       this._statusSignal.set('conflict');
-      return;
+      return false;
     }
 
     state.etag = fresh.etag;
     state.baselineAnswers = fresh.answers ? { ...fresh.answers } : null;
-    await this._flush(caseId, fields, retryIdx);
+    return await this._flushAttempt(caseId, fields, retryIdx);
+  }
+
+  _markSavedIfIdle() {
+    const hasWork = Object.values(this._state).some(
+      (state) =>
+        state.inFlight.size > 0 || Object.keys(state.pending).length > 0
+    );
+    if (!hasWork && this.status.get() !== 'conflict') {
+      this._statusSignal.set('saved');
+    }
   }
 }

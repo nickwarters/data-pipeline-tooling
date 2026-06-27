@@ -217,6 +217,9 @@ export class CRCaseReview extends ReactiveElement {
       completedAt: new Date().toISOString(),
     };
 
+    const flushed = await saveQueue.flushCase(caseId);
+    if (!flushed) return;
+
     const etag = saveQueue.getEtag(caseId);
     const result = await client.patchCase(caseId, finalFields, etag);
     if (result.ok && typeof location !== 'undefined') {

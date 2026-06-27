@@ -448,6 +448,76 @@ test('SaveQueue: _handle412 with null baselineAnswers uses {} for comparison', a
   assert.equal(q.status.get(), 'saved');
 });
 
+test('SaveQueue: flushCase immediately persists a pending debounced field', async () => {
+  const client = makeClient();
+  const q = new SaveQueue(client, { debounceMs: 5000 });
+  q.loadCase(BASE_ROW);
+
+  q.enqueue('c1', 'answers', { 'q-1': { value: 'Yes' } });
+
+  const flushed = await q.flushCase('c1');
+
+  assert.equal(flushed, true);
+  assert.equal(client.patchCalls.length, 1);
+  assert.deepEqual(client.patchCalls[0].fields, {
+    answers: { 'q-1': { value: 'Yes' } },
+  });
+  assert.equal(q.status.get(), 'saved');
+});
+
+test('SaveQueue: flushCase persists multiple pending fields under refreshed ETags', async () => {
+  const client = makeClient();
+  const q = new SaveQueue(client, { debounceMs: 30 });
+  q.loadCase(BASE_ROW);
+
+  q.enqueue('c1', 'answers', { 'q-1': { value: 'Yes' } });
+  q.enqueue('c1', 'notes', 'still pending');
+  await q.flushCase('c1');
+
+  assert.equal(client.patchCalls.length, 2);
+  assert.equal(client.patchCalls[0].etag, 'etag-1');
+  assert.equal(client.patchCalls[1].etag, 'etag-ok-1');
+  assert.equal(q.status.get(), 'saved');
+});
+
+test('SaveQueue: flushCase waits for an already in-flight flush', async () => {
+  /** @type {() => void} */
+  let releasePatch = () => {};
+  const client = {
+    patchCalls: /** @type {any[]} */ ([]),
+    async patchCase(
+      /** @type {string} */ _id,
+      /** @type {Partial<CaseRow>} */ fields,
+      /** @type {string} */ etag
+    ) {
+      this.patchCalls.push({ fields, etag });
+      await new Promise((resolve) => {
+        releasePatch = /** @type {() => void} */ (resolve);
+      });
+      return {
+        ok: true,
+        status: 200,
+        data: { ...BASE_ROW, ...fields, etag: 'etag-after-inflight' },
+      };
+    },
+    async getCase() {
+      return { ...BASE_ROW };
+    },
+  };
+  const q = new SaveQueue(/** @type {any} */ (client), { debounceMs: 0 });
+  q.loadCase(BASE_ROW);
+
+  q.enqueue('c1', 'answers', { 'q-1': { value: 'Yes' } });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  const flushed = q.flushCase('c1');
+  await new Promise((resolve) => setTimeout(resolve, 5));
+
+  assert.equal(client.patchCalls.length, 1);
+  releasePatch();
+  assert.equal(await flushed, true);
+  assert.equal(q.getEtag('c1'), 'etag-after-inflight');
+});
+
 test('SaveQueue: enqueueFields writes all fields in a single ETag-guarded PATCH (ADR-0008/0019)', async () => {
   const client = makeClient();
   const q = new SaveQueue(client, { debounceMs: 0 });
