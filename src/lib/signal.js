@@ -1,6 +1,10 @@
 // @ts-check
 
 /**
+ * @typedef {{ run: () => void, deps: Set<Set<Observer>>, disposed?: boolean }} Observer
+ */
+
+/**
  * @template T
  * @typedef {{ get: () => T, set: (v: T) => void }} Signal
  */
@@ -10,8 +14,25 @@
  * @typedef {{ get: () => T }} ComputedSignal
  */
 
-/** @type {(() => void)|null} */
-let currentEffect = null;
+/** @type {Observer|null} */
+let currentObserver = null;
+
+/**
+ * @param {Set<Observer>} subscribers
+ */
+function track(subscribers) {
+  if (!currentObserver) return;
+  subscribers.add(currentObserver);
+  currentObserver.deps.add(subscribers);
+}
+
+/**
+ * @param {Observer} observer
+ */
+function cleanup(observer) {
+  for (const subscribers of observer.deps) subscribers.delete(observer);
+  observer.deps.clear();
+}
 
 /**
  * @template T
@@ -20,17 +41,17 @@ let currentEffect = null;
  */
 export function signal(initialValue) {
   let value = initialValue;
-  /** @type {Set<() => void>} */
+  /** @type {Set<Observer>} */
   const subscribers = new Set();
 
   return {
     get() {
-      if (currentEffect) subscribers.add(currentEffect);
+      track(subscribers);
       return value;
     },
     set(newValue) {
       value = newValue;
-      for (const sub of [...subscribers]) sub();
+      for (const sub of [...subscribers]) sub.run();
     },
   };
 }
@@ -46,31 +67,36 @@ export function computed(fn) {
   let dirty = true;
 
   // Downstream effects/computeds that read this computed.
-  /** @type {Set<() => void>} */
+  /** @type {Set<Observer>} */
   const dependents = new Set();
 
   // Called by signal.set() when any of our dependencies change.
-  const invalidate = () => {
-    if (!dirty) {
-      dirty = true;
-      for (const sub of [...dependents]) sub();
-    }
+  /** @type {Observer} */
+  const observer = {
+    deps: new Set(),
+    run() {
+      if (!dirty) {
+        dirty = true;
+        for (const sub of [...dependents]) sub.run();
+      }
+    },
   };
 
   return {
     get() {
       // Register this computed as a dependency of the outer effect/computed.
-      if (currentEffect) dependents.add(currentEffect);
+      track(dependents);
 
       if (dirty) {
         // Evaluate fn() with invalidate as the current tracking context so
         // any signals read inside fn() will notify us when they change.
-        const prev = currentEffect;
-        currentEffect = invalidate;
+        cleanup(observer);
+        const prev = currentObserver;
+        currentObserver = observer;
         try {
           cachedValue = fn();
         } finally {
-          currentEffect = prev;
+          currentObserver = prev;
         }
         dirty = false;
       }
@@ -85,22 +111,27 @@ export function computed(fn) {
  * @returns {() => void} dispose
  */
 export function effect(fn) {
-  let disposed = false;
-
-  const run = () => {
-    if (disposed) return;
-    const prev = currentEffect;
-    currentEffect = run;
-    try {
-      fn();
-    } finally {
-      currentEffect = prev;
-    }
+  /** @type {Observer} */
+  const observer = {
+    deps: new Set(),
+    disposed: false,
+    run() {
+      if (observer.disposed) return;
+      cleanup(observer);
+      const prev = currentObserver;
+      currentObserver = observer;
+      try {
+        fn();
+      } finally {
+        currentObserver = prev;
+      }
+    },
   };
 
-  run();
+  observer.run();
 
   return () => {
-    disposed = true;
+    observer.disposed = true;
+    cleanup(observer);
   };
 }

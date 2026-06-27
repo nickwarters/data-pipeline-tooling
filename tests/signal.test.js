@@ -70,6 +70,29 @@ test('computed: chains multiple signals', () => {
   assert.equal(sum.get(), 11);
 });
 
+test('computed: re-run tracks only the signals read on the latest evaluation', () => {
+  const useLeft = signal(true);
+  const left = signal(1);
+  const right = signal(10);
+  let evalCount = 0;
+  const chosen = computed(() => {
+    evalCount++;
+    return useLeft.get() ? left.get() : right.get();
+  });
+
+  assert.equal(chosen.get(), 1);
+  useLeft.set(false);
+  assert.equal(chosen.get(), 10);
+
+  left.set(2);
+  assert.equal(chosen.get(), 10);
+  assert.equal(evalCount, 2);
+
+  right.set(20);
+  assert.equal(chosen.get(), 20);
+  assert.equal(evalCount, 3);
+});
+
 // --- effect ---
 
 test('effect: runs immediately on creation', () => {
@@ -119,4 +142,40 @@ test('effect: disposed effect does not re-subscribe on signal change', () => {
   dispose();
   s.set(1);
   assert.equal(runCount, 1); // only the initial run
+});
+
+test('effect: re-run unsubscribes from signals that are no longer read', () => {
+  const useLeft = signal(true);
+  const left = signal(1);
+  const right = signal(10);
+  /** @type {number[]} */
+  const log = [];
+
+  effect(() => {
+    log.push(useLeft.get() ? left.get() : right.get());
+  });
+
+  useLeft.set(false);
+  left.set(2);
+  right.set(20);
+
+  assert.deepEqual(log, [1, 10, 20]);
+});
+
+test('effect: dispose removes subscriptions from computed dependents', () => {
+  const s = signal(1);
+  let evalCount = 0;
+  const doubled = computed(() => {
+    evalCount++;
+    return s.get() * 2;
+  });
+  /** @type {number[]} */
+  const log = [];
+
+  const dispose = effect(() => log.push(doubled.get()));
+  dispose();
+  s.set(2);
+
+  assert.deepEqual(log, [2]);
+  assert.equal(evalCount, 1);
 });
