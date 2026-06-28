@@ -1,5 +1,4 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
 import { normaliseConfiguredActions } from '../evaluators/configured-outcome.js';
 import { isFailure } from '../evaluators/failure-evaluator.js';
 import { h } from '../lib/html.js';
@@ -8,11 +7,131 @@ import { h } from '../lib/html.js';
 
 const YES_NO_NA = ['Yes', 'No', 'NA'];
 
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
-export class CRQuestion extends ReactiveElement {
+/**
+ * @typedef {Object} QuestionProps
+ * @property {QuestionDefinition | null} question
+ * @property {string | string[]} currentValue
+ * @property {'edit'|'read-only'|'hidden'} access
+ * @property {(detail: { questionId: string, value: string | string[] }) => void} onAnswer
+ */
+
+/**
+ * @param {QuestionProps} props
+ * @returns {Node[]}
+ */
+export function Question({ question, currentValue, access, onAnswer }) {
+  if (!question) return [];
+
+  return [
+    h(
+      'fieldset',
+      {
+        class: 'cr-question',
+        id: `cr-q-${question.id}`,
+        role: question.responseType === 'multi-choice' ? 'group' : 'radiogroup',
+        'aria-required': 'true',
+      },
+      h('legend', {}, question.text),
+      question.responseType === 'multi-choice'
+        ? renderMultiChoice({ question, currentValue, access, onAnswer })
+        : renderSingleChoice({ question, currentValue, access, onAnswer })
+    ),
+    renderRemediationPanel(question, currentValue),
+  ].filter((node) => node !== null);
+}
+
+/**
+ * @param {QuestionDefinition} question
+ * @param {string | string[]} currentValue
+ * @returns {HTMLElement | null}
+ */
+function renderRemediationPanel(question, currentValue) {
+  if (!question.remediationActions?.length) return null;
+  const answer = { value: currentValue };
+  if (!isFailure(question, answer)) return null;
+
+  return h(
+    'details',
+    { class: 'cr-remediation-panel', open: true },
+    h('summary', {}, 'Actions required'),
+    h(
+      'ul',
+      {},
+      normaliseConfiguredActions(question.remediationActions, question.id).map(
+        (action) => h('li', {}, action.text)
+      )
+    )
+  );
+}
+
+/**
+ * @param {QuestionProps & { question: QuestionDefinition }} props
+ * @returns {HTMLElement[]}
+ */
+function renderSingleChoice({ question, currentValue, access, onAnswer }) {
+  const options =
+    question.responseType === 'yes-no-na'
+      ? YES_NO_NA
+      : (question.options ?? []);
+  const current = typeof currentValue === 'string' ? currentValue : '';
+
+  return options.map((option, index) =>
+    h(
+      'label',
+      {},
+      h('input', {
+        type: 'radio',
+        name: `cr-q-${question.id}`,
+        value: option,
+        'data-focus-key': `answer:${question.id}:${index}`,
+        checked: current === option,
+        disabled: access === 'read-only',
+        onchange: () => {
+          if (access === 'read-only') return;
+          onAnswer({ questionId: question.id, value: option });
+        },
+      }),
+      h('span', {}, ` ${option}`)
+    )
+  );
+}
+
+/**
+ * @param {QuestionProps & { question: QuestionDefinition }} props
+ * @returns {HTMLElement[]}
+ */
+function renderMultiChoice({ question, currentValue, access, onAnswer }) {
+  const options = question.options ?? [];
+  const selected = new Set(Array.isArray(currentValue) ? currentValue : []);
+
+  return options.map((option, index) =>
+    h(
+      'label',
+      {},
+      h('input', {
+        type: 'checkbox',
+        name: `cr-q-${question.id}`,
+        value: option,
+        'data-focus-key': `answer:${question.id}:${index}`,
+        checked: selected.has(option),
+        disabled: access === 'read-only',
+        onchange: (/** @type {any} */ event) => {
+          if (access === 'read-only') return;
+          const next = new Set(selected);
+          if (event.target.checked) next.add(option);
+          else next.delete(option);
+          onAnswer({
+            questionId: question.id,
+            value: options.filter((item) => next.has(item)),
+          });
+        },
+      }),
+      h('span', {}, ` ${option}`)
+    )
+  );
+}
+
+export class CRQuestion extends HTMLElement {
   constructor() {
     super();
     /** @type {QuestionDefinition | null} */
@@ -23,19 +142,25 @@ export class CRQuestion extends ReactiveElement {
     this.access = 'edit';
   }
 
-  // Preserve manual _render for existing tests that bypass reactive updates
+  connectedCallback() {
+    this._render();
+  }
+
   _render() {
-    const content = this.render();
-    if (content) {
-      if (Array.isArray(content)) {
-        this.replaceChildren(...content);
-      } else {
-        // @ts-ignore
-        this.replaceChildren(content);
-      }
-    } else {
-      this.replaceChildren();
-    }
+    const content = Question({
+      question: this.question,
+      currentValue: this.currentValue,
+      access: this.access,
+      onAnswer: (detail) => {
+        this.dispatchEvent(
+          new CustomEvent('cr-answer', {
+            detail,
+            bubbles: true,
+          })
+        );
+      },
+    });
+    this.replaceChildren(...content);
   }
 
   focus() {
@@ -43,125 +168,6 @@ export class CRQuestion extends ReactiveElement {
       this.querySelector('input')
     );
     if (input) input.focus();
-  }
-
-  /** @returns {Node[] | undefined} */
-  render() {
-    const q = this.question;
-    if (!q) return;
-
-    return [
-      h(
-        'fieldset',
-        {
-          class: 'cr-question',
-          id: `cr-q-${q.id}`,
-          role: q.responseType === 'multi-choice' ? 'group' : 'radiogroup',
-          'aria-required': 'true',
-        },
-        h('legend', {}, q.text),
-        q.responseType === 'multi-choice'
-          ? this._renderMultiChoice(q)
-          : this._renderSingleChoice(q)
-      ),
-      this._renderRemediationPanel(q),
-    ].filter((node) => node !== null);
-  }
-
-  /**
-   * @param {QuestionDefinition} q
-   */
-  _renderRemediationPanel(q) {
-    if (!q.remediationActions?.length) return null;
-    const answer = { value: this.currentValue };
-    if (!isFailure(q, answer)) return null;
-
-    return h(
-      'details',
-      { class: 'cr-remediation-panel', open: true },
-      h('summary', {}, 'Actions required'),
-      h(
-        'ul',
-        {},
-        normaliseConfiguredActions(q.remediationActions, q.id).map((action) =>
-          h('li', {}, action.text)
-        )
-      )
-    );
-  }
-
-  /**
-   * @param {QuestionDefinition} q
-   */
-  _renderSingleChoice(q) {
-    const options =
-      q.responseType === 'yes-no-na' ? YES_NO_NA : (q.options ?? []);
-    const current =
-      typeof this.currentValue === 'string' ? this.currentValue : '';
-
-    return options.map((opt, i) =>
-      h(
-        'label',
-        {},
-        h('input', {
-          type: 'radio',
-          name: `cr-q-${q.id}`,
-          value: opt,
-          'data-focus-key': `answer:${q.id}:${i}`,
-          checked: current === opt,
-          disabled: this.access === 'read-only',
-          onchange: () => {
-            if (this.access === 'read-only') return;
-            this.dispatchEvent(
-              new CustomEvent('cr-answer', {
-                detail: { questionId: q.id, value: opt },
-                bubbles: true,
-              })
-            );
-          },
-        }),
-        h('span', {}, ` ${opt}`)
-      )
-    );
-  }
-
-  /**
-   * @param {QuestionDefinition} q
-   */
-  _renderMultiChoice(q) {
-    const options = q.options ?? [];
-    const selected = new Set(
-      Array.isArray(this.currentValue) ? this.currentValue : []
-    );
-
-    return options.map((opt, i) =>
-      h(
-        'label',
-        {},
-        h('input', {
-          type: 'checkbox',
-          name: `cr-q-${q.id}`,
-          value: opt,
-          'data-focus-key': `answer:${q.id}:${i}`,
-          checked: selected.has(opt),
-          disabled: this.access === 'read-only',
-          onchange: (/** @type {any} */ e) => {
-            if (this.access === 'read-only') return;
-            const next = new Set(selected);
-            if (e.target.checked) next.add(opt);
-            else next.delete(opt);
-            const value = options.filter((o) => next.has(o));
-            this.dispatchEvent(
-              new CustomEvent('cr-answer', {
-                detail: { questionId: q.id, value },
-                bubbles: true,
-              })
-            );
-          },
-        }),
-        h('span', {}, ` ${opt}`)
-      )
-    );
   }
 }
 

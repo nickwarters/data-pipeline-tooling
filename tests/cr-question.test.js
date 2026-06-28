@@ -72,7 +72,8 @@ class StubEl {
 /** @type {any} */ (globalThis).customElements = { define() {} };
 
 // ===== IMPORTS =====
-const { CRQuestion } = await import('../src/components/cr-question.js');
+const { CRQuestion, Question } =
+  await import('../src/components/cr-question.js');
 
 // ===== TESTS =====
 
@@ -96,6 +97,39 @@ test('CRQuestion: renders nothing if question is missing', () => {
   const el = new CRQuestion();
   el.connectedCallback();
   assert.equal(/** @type {any} */ (el)._children.length, 0);
+});
+
+test('Question: plain function renders no nodes when question is missing', () => {
+  const nodes = Question({
+    question: null,
+    currentValue: '',
+    access: 'edit',
+    onAnswer() {},
+  });
+
+  assert.deepEqual(nodes, []);
+});
+
+test('Question: plain function renders answers and emits through onAnswer', () => {
+  /** @type {any[]} */
+  const answers = [];
+  const nodes = Question({
+    question: Q_YES_NO,
+    currentValue: 'No',
+    access: 'edit',
+    onAnswer: (detail) => answers.push(detail),
+  });
+
+  const fieldset = /** @type {any} */ (nodes[0]);
+  assert.equal(fieldset.className, 'cr-question');
+  const yesRadio = fieldset._children[1]._children[0];
+  const noRadio = fieldset._children[2]._children[0];
+
+  assert.equal(yesRadio.checked, false);
+  assert.equal(noRadio.checked, true);
+
+  yesRadio._listeners['change'][0]();
+  assert.deepEqual(answers, [{ questionId: 'q1', value: 'Yes' }]);
 });
 
 test('CRQuestion: renders yes-no-na options', () => {
