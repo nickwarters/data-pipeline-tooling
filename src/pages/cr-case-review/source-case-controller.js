@@ -8,8 +8,6 @@ export class SourceCaseController {
    * @param {import('./types.js').CaseReviewShellContext} context
    */
   bind(context) {
-    // TODO(issue-198): Add shell-level source-case event wiring here if the
-    // refactor exposes any events from cr-source-case.
     void context;
   }
 
@@ -17,9 +15,21 @@ export class SourceCaseController {
    * @param {import('./types.js').CaseReviewShellContext} context
    */
   update(context) {
-    // TODO(issue-198): Assign originalRow, catalogue, computeOutcome,
-    // attributeFailures, remediationFields, saveQueue, currentUser, client,
-    // overrideAccess, and sourceCaseId when the view model has a source case.
-    void context;
+    const { viewModel: vm, nodes } = context;
+    const sourceCase = vm.sourceCase;
+    if (!sourceCase || !nodes.sourceCase) return;
+
+    Object.assign(nodes.sourceCase, {
+      originalRow: sourceCase.originalRow,
+      catalogue: sourceCase.catalogue,
+      computeOutcome: sourceCase.computeOutcome,
+      attributeFailures: sourceCase.attributeFailures,
+      remediationFields: sourceCase.remediationFields,
+      saveQueue: vm.saveQueue,
+      currentUser: vm.currentUser,
+      client: vm.client,
+      overrideAccess: sourceCase.overrideAccess,
+      sourceCaseId: sourceCase.sourceCaseId,
+    });
   }
 }

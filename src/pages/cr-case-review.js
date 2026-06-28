@@ -8,6 +8,7 @@ import { createCaseReviewNodeRegistry } from './cr-case-review/node-registry.js'
 import { CaseReviewTabController } from './cr-case-review/tab-controller.js';
 import { RemediationPanelController } from './cr-case-review/remediation-controller.js';
 import { SummaryNotesAppealController } from './cr-case-review/summary-notes-appeal-controller.js';
+import { SourceCaseController } from './cr-case-review/source-case-controller.js';
 import {
   CompletionController,
   completeCase,
@@ -53,6 +54,7 @@ export class CRCaseReview extends ReactiveElement {
     this._questionPanelController = new QuestionPanelController();
     this._remediationPanelController = new RemediationPanelController();
     this._summaryNotesAppealController = new SummaryNotesAppealController();
+    this._sourceCaseController = new SourceCaseController();
     this._completionController = new CompletionController();
     this._nodeRegistry = createCaseReviewNodeRegistry();
 
@@ -424,22 +426,14 @@ export class CRCaseReview extends ReactiveElement {
       toggleConversationPanel: this._toggleConversationPanel.bind(this),
     });
 
-    // TODO(issue-198): Move QA Check source-case assignment to
-    // SourceCaseController.update().
-    if (sourceCase) {
-      Object.assign(this._sourceCaseEl, {
-        originalRow: sourceCase.originalRow,
-        catalogue: sourceCase.catalogue,
-        computeOutcome: sourceCase.computeOutcome,
-        attributeFailures: sourceCase.attributeFailures,
-        remediationFields: sourceCase.remediationFields,
-        saveQueue: vm.saveQueue,
-        currentUser: vm.currentUser,
-        client: vm.client,
-        overrideAccess: sourceCase.overrideAccess,
-        sourceCaseId: sourceCase.sourceCaseId,
-      });
-    }
+    this._sourceCaseController.update({
+      viewModel: vm,
+      nodes: this._controllerNodes(canToggleConversation),
+      displayMode,
+      completeCase: (caseId, client, saveQueue, patchFields) =>
+        this._completeCase(caseId, client, saveQueue, patchFields),
+      toggleConversationPanel: this._toggleConversationPanel.bind(this),
+    });
 
     // TODO(issue-198): CompletionController owns complete button state; keep
     // this context adapter until the shared node registry is wired.

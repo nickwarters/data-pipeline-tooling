@@ -66,6 +66,8 @@ const { RemediationPanelController } =
   await import('../src/pages/cr-case-review/remediation-controller.js');
 const { SummaryNotesAppealController } =
   await import('../src/pages/cr-case-review/summary-notes-appeal-controller.js');
+const { SourceCaseController } =
+  await import('../src/pages/cr-case-review/source-case-controller.js');
 const { CompletionController, completeCase } =
   await import('../src/pages/cr-case-review/completion-controller.js');
 
@@ -533,6 +535,68 @@ function makeSummaryNotesAppealContext(opts = {}) {
       },
       displayMode: (/** @type {any} */ mode) =>
         mode === 'override' ? 'read-only' : mode,
+      completeCase: async () => {},
+      toggleConversationPanel: () => {},
+    },
+  };
+}
+
+function makeSourceCaseContext() {
+  const sourceCaseNode = new StubEl();
+  const saveQueue = { id: 'queue' };
+  const client = { id: 'client' };
+  const currentUser = { id: 'user-1', displayName: 'QA Reviewer' };
+  const originalRow = {
+    id: 'original-1',
+    title: 'Original Case',
+    assignedReviewer: 'Alex Reviewer',
+  };
+  const computeOutcome = () => ({ outcome: 'pass' });
+  const remediationFields = [{ key: 'detail', label: 'Detail' }];
+  const sourceCase = {
+    originalRow,
+    catalogue: QUESTIONS,
+    computeOutcome,
+    attributeFailures: true,
+    remediationFields,
+    overrideAccess: 'override',
+    sourceCaseId: 'qa-check-1',
+  };
+  return {
+    sourceCaseNode,
+    saveQueue,
+    client,
+    currentUser,
+    sourceCase,
+    originalRow,
+    computeOutcome,
+    remediationFields,
+    context: {
+      viewModel: {
+        sourceCase,
+        saveQueue,
+        client,
+        currentUser,
+      },
+      nodes: {
+        tabs: null,
+        details: null,
+        questionsPanel: null,
+        questionList: null,
+        progress: null,
+        overrideEditor: null,
+        remediation: null,
+        summary: null,
+        notes: null,
+        appeal: null,
+        conversation: null,
+        sourceCase: sourceCaseNode,
+        banner: null,
+        conversationToggle: null,
+        header: null,
+        completeButton: null,
+      },
+      displayMode: (/** @type {any} */ mode) => mode,
       completeCase: async () => {},
       toggleConversationPanel: () => {},
     },
@@ -1011,11 +1075,37 @@ test('completeCase: does not patch when required collaborators or flush success 
   assert.equal(patchCount, 0);
 });
 
-test.todo(
-  'SourceCaseController: assigns QA Check source case props without changing override provenance'
-);
-// TODO(issue-198): Assert cr-source-case receives the resolved source case data,
-// current user, client, saveQueue, override access, and sourceCaseId.
+test('SourceCaseController: assigns QA Check source case props without changing override provenance', () => {
+  const {
+    context,
+    sourceCaseNode,
+    saveQueue,
+    client,
+    currentUser,
+    originalRow,
+    computeOutcome,
+    remediationFields,
+  } = makeSourceCaseContext();
+
+  new SourceCaseController().update(/** @type {any} */ (context));
+
+  assert.equal(/** @type {any} */ (sourceCaseNode).originalRow, originalRow);
+  assert.equal(/** @type {any} */ (sourceCaseNode).catalogue, QUESTIONS);
+  assert.equal(
+    /** @type {any} */ (sourceCaseNode).computeOutcome,
+    computeOutcome
+  );
+  assert.equal(/** @type {any} */ (sourceCaseNode).attributeFailures, true);
+  assert.equal(
+    /** @type {any} */ (sourceCaseNode).remediationFields,
+    remediationFields
+  );
+  assert.equal(/** @type {any} */ (sourceCaseNode).saveQueue, saveQueue);
+  assert.equal(/** @type {any} */ (sourceCaseNode).currentUser, currentUser);
+  assert.equal(/** @type {any} */ (sourceCaseNode).client, client);
+  assert.equal(/** @type {any} */ (sourceCaseNode).overrideAccess, 'override');
+  assert.equal(/** @type {any} */ (sourceCaseNode).sourceCaseId, 'qa-check-1');
+});
 
 test('CaseReviewHeaderController: preserves title, reviewer, conversation toggle placement, and banner wiring', () => {
   const { context, header, banner, toggle, saveQueue } = makeHeaderContext();
