@@ -5,6 +5,7 @@ import { CaseReviewViewModel } from '../lib/case-review-view-model.js';
 import { CaseReviewHeaderController } from './cr-case-review/header-controller.js';
 import { QuestionPanelController } from './cr-case-review/question-panel-controller.js';
 import { createCaseReviewNodeRegistry } from './cr-case-review/node-registry.js';
+import { CaseReviewTabController } from './cr-case-review/tab-controller.js';
 import {
   CompletionController,
   completeCase,
@@ -46,6 +47,7 @@ export class CRCaseReview extends ReactiveElement {
     /** @type {CaseReviewViewModel | null} */
     this.viewModel = null;
     this._headerController = new CaseReviewHeaderController();
+    this._tabController = new CaseReviewTabController();
     this._questionPanelController = new QuestionPanelController();
     this._completionController = new CompletionController();
     this._nodeRegistry = createCaseReviewNodeRegistry();
@@ -287,25 +289,6 @@ export class CRCaseReview extends ReactiveElement {
     /** @param {import('../services/section-access.js').Mode} m */
     const displayMode = (m) => (m === 'override' ? 'read-only' : m);
 
-    // TODO(issue-198): Move tab descriptor construction to
-    // cr-case-review/tab-controller.js buildCaseReviewTabs().
-    const tabs = [
-      { id: 'details', label: 'Details', hidden: access.details === 'hidden' },
-      {
-        id: 'questions',
-        label: 'Review',
-        hidden: access.questions === 'hidden',
-      },
-      {
-        id: 'remediation',
-        label: 'Issues',
-        hidden: access.remediation === 'hidden',
-      },
-      { id: 'summary', label: 'Summary', hidden: access.summary === 'hidden' },
-      { id: 'notes', label: 'Notes', hidden: access.notes === 'hidden' },
-      { id: 'appeal', label: 'Appeal', hidden: access.appeal === 'hidden' },
-    ];
-
     const canAttribute = machine.canAttribute;
     const canCapture = machine.canCapture;
     const canToggleConversation = machine.canToggleConversation;
@@ -331,13 +314,14 @@ export class CRCaseReview extends ReactiveElement {
 
     if (!this._eventsBound) {
       this._eventsBound = true;
-      // TODO(issue-198): Move tab event wiring to
-      // CaseReviewTabController.bind().
-      this._tabsEl.addEventListener(
-        'cr-tab-change',
-        (/** @type {CustomEvent} */ ev) =>
-          vm.activeTab.set(/** @type {any} */ (ev).detail.id)
-      );
+      this._tabController.bind({
+        viewModel: vm,
+        nodes: this._controllerNodes(canToggleConversation),
+        displayMode,
+        completeCase: (caseId, client, saveQueue, patchFields) =>
+          this._completeCase(caseId, client, saveQueue, patchFields),
+        toggleConversationPanel: this._toggleConversationPanel.bind(this),
+      });
 
       // TODO(issue-198): QuestionPanelController owns Review-tab event wiring;
       // keep this context adapter until the shared node registry is wired.
@@ -386,9 +370,14 @@ export class CRCaseReview extends ReactiveElement {
       });
     }
 
-    // TODO(issue-198): Move tab property/panel assignment to
-    // CaseReviewTabController.update().
-    Object.assign(this._tabsEl, { tabs, selected: vm.activeTab.get() });
+    this._tabController.update({
+      viewModel: vm,
+      nodes: this._controllerNodes(canToggleConversation),
+      displayMode,
+      completeCase: (caseId, client, saveQueue, patchFields) =>
+        this._completeCase(caseId, client, saveQueue, patchFields),
+      toggleConversationPanel: this._toggleConversationPanel.bind(this),
+    });
     Object.assign(this._detailsEl, {
       caseRow,
       access: displayMode(access.details),
@@ -462,15 +451,6 @@ export class CRCaseReview extends ReactiveElement {
       catalogue,
       answers: caseRow.answers,
     });
-
-    this._tabsEl.panels = {
-      details: this._detailsEl,
-      questions: this._questionsPanel,
-      remediation: this._remediationSection,
-      summary: this._summaryEl,
-      notes: this._notesEl,
-      appeal: this._appealEl,
-    };
 
     // TODO(issue-198): Move conversation element assignment and toggle aria
     // updates to ConversationPanelController.update().

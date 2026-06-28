@@ -58,6 +58,8 @@ const { CaseReviewHeaderController } =
   await import('../src/pages/cr-case-review/header-controller.js');
 const { createCaseReviewNodeRegistry } =
   await import('../src/pages/cr-case-review/node-registry.js');
+const { CaseReviewTabController, buildCaseReviewTabs } =
+  await import('../src/pages/cr-case-review/tab-controller.js');
 const { QuestionPanelController, collectUnansweredQuestions } =
   await import('../src/pages/cr-case-review/question-panel-controller.js');
 const { CompletionController, completeCase } =
@@ -304,6 +306,61 @@ function makeHeaderContext(opts = {}) {
   };
 }
 
+/**
+ * @param {Partial<{
+ *   access: Record<string, string>,
+ *   activeTab: string,
+ * }>} [opts]
+ */
+function makeTabContext(opts = {}) {
+  const tabs = new StubEl();
+  const nodes = {
+    tabs,
+    details: new StubEl(),
+    questionsPanel: new StubEl(),
+    questionList: null,
+    progress: null,
+    overrideEditor: null,
+    remediation: new StubEl(),
+    summary: new StubEl(),
+    notes: new StubEl(),
+    appeal: new StubEl(),
+    conversation: null,
+    sourceCase: null,
+    banner: null,
+    conversationToggle: null,
+    header: null,
+    completeButton: null,
+  };
+  /** @type {string[]} */
+  const activeTabSets = [];
+  return {
+    tabs,
+    nodes,
+    activeTabSets,
+    context: {
+      viewModel: {
+        access: opts.access ?? {
+          details: 'read-only',
+          questions: 'edit',
+          remediation: 'edit',
+          summary: 'read-only',
+          notes: 'edit',
+          appeal: 'hidden',
+        },
+        activeTab: {
+          get: () => opts.activeTab ?? 'questions',
+          set: (/** @type {string} */ id) => activeTabSets.push(id),
+        },
+      },
+      nodes,
+      displayMode: (/** @type {any} */ mode) => mode,
+      completeCase: async () => {},
+      toggleConversationPanel: () => {},
+    },
+  };
+}
+
 test('CaseReviewNodeRegistry: creates and reuses the long-lived page nodes currently cached by CRCaseReview', () => {
   const registry = createCaseReviewNodeRegistry();
   const first = registry.ensure();
@@ -367,12 +424,65 @@ test('CaseReviewNodeRegistry: creates and reuses the long-lived page nodes curre
   assert.equal(registry.completeButton, firstNodes.completeButton);
 });
 
-test.todo(
-  'CaseReviewTabController: maps section access into visible tabs in the current order'
-);
-// TODO(issue-198): Cover details, Review, Issues, Summary, Notes, and Appeal tab
-// descriptors; assert hidden sections are omitted and activeTab receives
-// cr-tab-change ids.
+test('CaseReviewTabController: maps section access into tabs in the current order', () => {
+  const { context } = makeTabContext({
+    access: {
+      details: 'read-only',
+      questions: 'hidden',
+      remediation: 'edit',
+      summary: 'read-only',
+      notes: 'hidden',
+      appeal: 'edit',
+    },
+  });
+
+  assert.deepEqual(buildCaseReviewTabs(/** @type {any} */ (context)), [
+    { id: 'details', label: 'Details', hidden: false },
+    { id: 'questions', label: 'Review', hidden: true },
+    { id: 'remediation', label: 'Issues', hidden: false },
+    { id: 'summary', label: 'Summary', hidden: false },
+    { id: 'notes', label: 'Notes', hidden: true },
+    { id: 'appeal', label: 'Appeal', hidden: false },
+  ]);
+});
+
+test('CaseReviewTabController: assigns selected tab and panel nodes', () => {
+  const { context, tabs, nodes } = makeTabContext({ activeTab: 'summary' });
+
+  new CaseReviewTabController().update(/** @type {any} */ (context));
+
+  assert.equal(/** @type {any} */ (tabs).selected, 'summary');
+  assert.deepEqual(
+    /** @type {any} */ (tabs).tabs.map(
+      (/** @type {any} */ tab) => `${tab.id}:${tab.label}:${tab.hidden}`
+    ),
+    [
+      'details:Details:false',
+      'questions:Review:false',
+      'remediation:Issues:false',
+      'summary:Summary:false',
+      'notes:Notes:false',
+      'appeal:Appeal:true',
+    ]
+  );
+  assert.deepEqual(/** @type {any} */ (tabs).panels, {
+    details: nodes.details,
+    questions: nodes.questionsPanel,
+    remediation: nodes.remediation,
+    summary: nodes.summary,
+    notes: nodes.notes,
+    appeal: nodes.appeal,
+  });
+});
+
+test('CaseReviewTabController: forwards cr-tab-change ids to activeTab', () => {
+  const { context, tabs, activeTabSets } = makeTabContext();
+
+  new CaseReviewTabController().bind(/** @type {any} */ (context));
+  tabs._listeners['cr-tab-change'][0]({ detail: { id: 'notes' } });
+
+  assert.deepEqual(activeTabSets, ['notes']);
+});
 
 test('QuestionPanelController: forwards answer and jump events to the view model and visible questions', () => {
   const { context, questionsPanel, questionList, answerCalls } =

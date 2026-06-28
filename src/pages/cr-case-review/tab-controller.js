@@ -8,18 +8,33 @@ export class CaseReviewTabController {
    * @param {import('./types.js').CaseReviewShellContext} context
    */
   bind(context) {
-    // TODO(issue-198): Attach the cr-tab-change listener and forward selected
-    // tab ids into viewModel.activeTab.
-    void context;
+    const { viewModel: vm, nodes } = context;
+    if (!nodes.tabs) return;
+
+    nodes.tabs.addEventListener('cr-tab-change', (/** @type {Event} */ ev) =>
+      vm.activeTab.set(/** @type {CustomEvent} */ (ev).detail.id)
+    );
   }
 
   /**
    * @param {import('./types.js').CaseReviewShellContext} context
    */
   update(context) {
-    // TODO(issue-198): Build the six route-level tab descriptors from section
-    // access and assign tabs, selected, and panels on the cr-tabs node.
-    void context;
+    const { viewModel: vm, nodes } = context;
+    if (!nodes.tabs) return;
+
+    Object.assign(nodes.tabs, {
+      tabs: buildCaseReviewTabs(context),
+      selected: vm.activeTab.get(),
+      panels: {
+        details: nodes.details,
+        questions: nodes.questionsPanel,
+        remediation: nodes.remediation,
+        summary: nodes.summary,
+        notes: nodes.notes,
+        appeal: nodes.appeal,
+      },
+    });
   }
 }
 
@@ -28,8 +43,21 @@ export class CaseReviewTabController {
  * @returns {import('./types.js').CaseReviewTab[]}
  */
 export function buildCaseReviewTabs(context) {
-  // TODO(issue-198): Preserve the current tab ids, labels, order, and hidden
-  // behavior while moving the descriptor construction out of CRCaseReview.
-  void context;
-  return [];
+  const { access } = context.viewModel;
+  return [
+    { id: 'details', label: 'Details', hidden: access.details === 'hidden' },
+    {
+      id: 'questions',
+      label: 'Review',
+      hidden: access.questions === 'hidden',
+    },
+    {
+      id: 'remediation',
+      label: 'Issues',
+      hidden: access.remediation === 'hidden',
+    },
+    { id: 'summary', label: 'Summary', hidden: access.summary === 'hidden' },
+    { id: 'notes', label: 'Notes', hidden: access.notes === 'hidden' },
+    { id: 'appeal', label: 'Appeal', hidden: access.appeal === 'hidden' },
+  ];
 }
