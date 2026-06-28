@@ -2,20 +2,27 @@
 import { ReactiveElement } from '../components/reactive-element.js';
 import { h } from '../lib/html.js';
 import { CaseReviewViewModel } from '../lib/case-review-view-model.js';
-import { CaseReviewHeaderController } from './cr-case-review/header-controller.js';
-import { QuestionPanelController } from './cr-case-review/question-panel-controller.js';
+import { updateCaseReviewHeader } from './cr-case-review/header-controller.js';
+import {
+  bindQuestionPanel,
+  updateQuestionPanel,
+} from './cr-case-review/question-panel-controller.js';
 import { createCaseReviewNodeRegistry } from './cr-case-review/node-registry.js';
-import { CaseReviewTabController } from './cr-case-review/tab-controller.js';
+import {
+  bindCaseReviewTabs,
+  updateCaseReviewTabs,
+} from './cr-case-review/tab-controller.js';
 import {
   bindRemediationPanel,
   updateRemediationPanel,
 } from './cr-case-review/remediation-controller.js';
 import { updateSummaryNotesAppeal } from './cr-case-review/summary-notes-appeal-controller.js';
-import { SourceCaseController } from './cr-case-review/source-case-controller.js';
+import { updateSourceCase } from './cr-case-review/source-case-controller.js';
 import { createConversationPanelBinding } from './cr-case-review/conversation-controller.js';
 import {
-  CompletionController,
+  bindCompletion,
   completeCase,
+  updateCompletion,
 } from './cr-case-review/completion-controller.js';
 
 import '../components/cr-question-list.js';
@@ -57,12 +64,7 @@ export class CRCaseReview extends ReactiveElement {
 
     /** @type {CaseReviewViewModel | null} */
     this.viewModel = null;
-    this._headerController = new CaseReviewHeaderController();
-    this._tabController = new CaseReviewTabController();
-    this._questionPanelController = new QuestionPanelController();
-    this._sourceCaseController = new SourceCaseController();
     this._conversationPanel = createConversationPanelBinding();
-    this._completionController = new CompletionController();
     this._nodeRegistry = createCaseReviewNodeRegistry();
 
     // TODO(simplify-ui): Collapse this page toward a route shell that composes
@@ -290,7 +292,7 @@ export class CRCaseReview extends ReactiveElement {
 
     if (!this._eventsBound) {
       this._eventsBound = true;
-      this._tabController.bind({
+      bindCaseReviewTabs({
         viewModel: vm,
         nodes: this._controllerNodes(canToggleConversation),
         displayMode,
@@ -299,9 +301,7 @@ export class CRCaseReview extends ReactiveElement {
         toggleConversationPanel: this._toggleConversationPanel.bind(this),
       });
 
-      // TODO(issue-198): QuestionPanelController owns Review-tab event wiring;
-      // keep this context adapter until the shared node registry is wired.
-      this._questionPanelController.bind({
+      bindQuestionPanel({
         viewModel: vm,
         nodes: this._controllerNodes(canToggleConversation),
         displayMode,
@@ -329,9 +329,7 @@ export class CRCaseReview extends ReactiveElement {
       });
       this._keydownHandler = this._conversationPanel.keydownHandler;
 
-      // TODO(issue-198): CompletionController owns completion event wiring; keep
-      // this context adapter until the shared node registry is wired.
-      this._completionController.bind({
+      bindCompletion({
         viewModel: vm,
         nodes: this._controllerNodes(canToggleConversation),
         displayMode,
@@ -341,7 +339,7 @@ export class CRCaseReview extends ReactiveElement {
       });
     }
 
-    this._tabController.update({
+    updateCaseReviewTabs({
       viewModel: vm,
       nodes: this._controllerNodes(canToggleConversation),
       displayMode,
@@ -354,9 +352,7 @@ export class CRCaseReview extends ReactiveElement {
       access: displayMode(access.details),
     });
 
-    // TODO(issue-198): QuestionPanelController owns Review-tab assignment;
-    // keep this context adapter until the shared node registry is wired.
-    this._questionPanelController.update({
+    updateQuestionPanel({
       viewModel: vm,
       nodes: this._controllerNodes(canToggleConversation),
       displayMode,
@@ -392,10 +388,7 @@ export class CRCaseReview extends ReactiveElement {
       toggleConversationPanel: this._toggleConversationPanel.bind(this),
     });
 
-    // TODO(issue-198): Header and banner assignment now lives in
-    // CaseReviewHeaderController; keep this context adapter until node registry
-    // and remaining controllers are wired.
-    this._headerController.update({
+    updateCaseReviewHeader({
       viewModel: vm,
       nodes: this._controllerNodes(canToggleConversation),
       displayMode,
@@ -404,7 +397,7 @@ export class CRCaseReview extends ReactiveElement {
       toggleConversationPanel: this._toggleConversationPanel.bind(this),
     });
 
-    this._sourceCaseController.update({
+    updateSourceCase({
       viewModel: vm,
       nodes: this._controllerNodes(canToggleConversation),
       displayMode,
@@ -413,9 +406,7 @@ export class CRCaseReview extends ReactiveElement {
       toggleConversationPanel: this._toggleConversationPanel.bind(this),
     });
 
-    // TODO(issue-198): CompletionController owns complete button state; keep
-    // this context adapter until the shared node registry is wired.
-    this._completionController.update({
+    updateCompletion({
       viewModel: vm,
       nodes: this._controllerNodes(canToggleConversation),
       displayMode,
@@ -429,8 +420,10 @@ export class CRCaseReview extends ReactiveElement {
       ? this._toggleBtn
       : null;
 
-    // TODO(issue-198): Keep final route shell assembly here after controllers
-    // own their nodes, events, and property assignment.
+    // TODO(simplify-ui): Replace this route shell assembly with a plain
+    // CaseReviewPage() function once the custom-element route boundary is
+    // demoted. The shell should compose h() nodes and call binding functions
+    // only for browser events that need lifecycle cleanup.
     return [
       this._bannerEl,
       this._headerEl,

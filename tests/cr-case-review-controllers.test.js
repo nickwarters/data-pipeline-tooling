@@ -69,23 +69,23 @@ const documentListeners = {};
   },
 };
 
-const { CaseReviewHeaderController } =
+const { updateCaseReviewHeader } =
   await import('../src/pages/cr-case-review/header-controller.js');
 const { createCaseReviewNodeRegistry } =
   await import('../src/pages/cr-case-review/node-registry.js');
-const { CaseReviewTabController, buildCaseReviewTabs } =
+const { bindCaseReviewTabs, buildCaseReviewTabs, updateCaseReviewTabs } =
   await import('../src/pages/cr-case-review/tab-controller.js');
-const { QuestionPanelController, collectUnansweredQuestions } =
+const { bindQuestionPanel, collectUnansweredQuestions, updateQuestionPanel } =
   await import('../src/pages/cr-case-review/question-panel-controller.js');
 const { bindRemediationPanel, updateRemediationPanel } =
   await import('../src/pages/cr-case-review/remediation-controller.js');
 const { updateSummaryNotesAppeal } =
   await import('../src/pages/cr-case-review/summary-notes-appeal-controller.js');
-const { SourceCaseController } =
+const { updateSourceCase } =
   await import('../src/pages/cr-case-review/source-case-controller.js');
 const { createConversationPanelBinding } =
   await import('../src/pages/cr-case-review/conversation-controller.js');
-const { CompletionController, completeCase } =
+const { bindCompletion, completeCase, updateCompletion } =
   await import('../src/pages/cr-case-review/completion-controller.js');
 
 /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
@@ -782,10 +782,10 @@ test('CaseReviewTabController: maps section access into tabs in the current orde
   ]);
 });
 
-test('CaseReviewTabController: assigns selected tab and panel nodes', () => {
+test('updateCaseReviewTabs: assigns selected tab and panel nodes', () => {
   const { context, tabs, nodes } = makeTabContext({ activeTab: 'summary' });
 
-  new CaseReviewTabController().update(/** @type {any} */ (context));
+  updateCaseReviewTabs(/** @type {any} */ (context));
 
   assert.equal(/** @type {any} */ (tabs).selected, 'summary');
   assert.deepEqual(
@@ -811,16 +811,16 @@ test('CaseReviewTabController: assigns selected tab and panel nodes', () => {
   });
 });
 
-test('CaseReviewTabController: forwards cr-tab-change ids to activeTab', () => {
+test('bindCaseReviewTabs: forwards cr-tab-change ids to activeTab', () => {
   const { context, tabs, activeTabSets } = makeTabContext();
 
-  new CaseReviewTabController().bind(/** @type {any} */ (context));
+  bindCaseReviewTabs(/** @type {any} */ (context));
   tabs._listeners['cr-tab-change'][0]({ detail: { id: 'notes' } });
 
   assert.deepEqual(activeTabSets, ['notes']);
 });
 
-test('QuestionPanelController: forwards answer and jump events to the view model and visible questions', () => {
+test('bindQuestionPanel: forwards answer and jump events to the view model and visible questions', () => {
   const { context, questionsPanel, questionList, answerCalls } =
     makeQuestionContext();
   const generalQuestionEl = new StubEl();
@@ -841,7 +841,7 @@ test('QuestionPanelController: forwards answer and jump events to the view model
     unansweredQuestionEl,
   ];
 
-  new QuestionPanelController().bind(/** @type {any} */ (context));
+  bindQuestionPanel(/** @type {any} */ (context));
 
   questionsPanel._listeners['cr-answer'][0]({
     detail: { questionId: 'q-a', value: 'No' },
@@ -874,11 +874,11 @@ test('collectUnansweredQuestions: preserves empty string and empty array behavio
   );
 });
 
-test('QuestionPanelController: assigns question list and progress props', () => {
+test('updateQuestionPanel: assigns question list and progress props', () => {
   const { context, questionsPanel, questionList, progress } =
     makeQuestionContext();
 
-  new QuestionPanelController().update(/** @type {any} */ (context));
+  updateQuestionPanel(/** @type {any} */ (context));
 
   assert.equal(/** @type {any} */ (questionList).access, 'edit');
   assert.equal(/** @type {any} */ (questionList).questions, QUESTIONS);
@@ -898,11 +898,11 @@ test('QuestionPanelController: assigns question list and progress props', () => 
   assert.equal(questionsPanel._children[2], progress);
 });
 
-test('QuestionPanelController: configures the override editor only in override mode', () => {
+test('updateQuestionPanel: configures the override editor only in override mode', () => {
   const { context, questionsPanel, overrideEditor, saveQueue, client } =
     makeQuestionContext({ access: 'override' });
 
-  new QuestionPanelController().update(/** @type {any} */ (context));
+  updateQuestionPanel(/** @type {any} */ (context));
 
   assert.equal(questionsPanel._children[3], overrideEditor);
   assert.equal(/** @type {any} */ (overrideEditor).caseId, 'case-1');
@@ -1073,12 +1073,12 @@ test('createConversationPanelBinding: removes document-level listeners on discon
   assert.equal(documentListeners.keydown.includes(handler), false);
 });
 
-test('CompletionController: preserves completion button visibility and label', () => {
+test('updateCompletion: preserves completion button visibility and label', () => {
   const visible = makeCompletionContext({
     allAnswered: true,
     canComplete: true,
   });
-  new CompletionController().update(/** @type {any} */ (visible.context));
+  updateCompletion(/** @type {any} */ (visible.context));
   assert.equal(visible.completeButton.hidden, false);
   assert.equal(visible.completeButton.textContent, 'Complete Case');
 
@@ -1086,18 +1086,18 @@ test('CompletionController: preserves completion button visibility and label', (
     allAnswered: false,
     canComplete: true,
   });
-  new CompletionController().update(/** @type {any} */ (unanswered.context));
+  updateCompletion(/** @type {any} */ (unanswered.context));
   assert.equal(unanswered.completeButton.hidden, true);
 
   const blocked = makeCompletionContext({
     allAnswered: true,
     canComplete: false,
   });
-  new CompletionController().update(/** @type {any} */ (blocked.context));
+  updateCompletion(/** @type {any} */ (blocked.context));
   assert.equal(blocked.completeButton.hidden, true);
 });
 
-test('CompletionController: disables during submit, uses transition patch, and re-enables', async () => {
+test('bindCompletion: disables during submit, uses transition patch, and re-enables', async () => {
   /** @type {(value?: unknown) => void} */
   let resolveSubmit = () => {};
   const { context, completeButton, completeCalls, patchFromTransition } =
@@ -1114,7 +1114,7 @@ test('CompletionController: disables during submit, uses transition patch, and r
         }),
     });
 
-  new CompletionController().bind(/** @type {any} */ (context));
+  bindCompletion(/** @type {any} */ (context));
   completeButton._listeners.click[0]({ target: completeButton });
 
   assert.equal(completeButton.disabled, true);
@@ -1126,12 +1126,12 @@ test('CompletionController: disables during submit, uses transition patch, and r
   assert.equal(completeButton.disabled, false);
 });
 
-test('CompletionController: falls back to default completion patch when no transition exists', () => {
+test('bindCompletion: falls back to default completion patch when no transition exists', () => {
   const { context, completeButton, completeCalls } = makeCompletionContext({
     transitionToCompleted: null,
   });
 
-  new CompletionController().bind(/** @type {any} */ (context));
+  bindCompletion(/** @type {any} */ (context));
   completeButton._listeners.click[0]({ target: completeButton });
 
   assert.equal(completeCalls.length, 1);
@@ -1210,7 +1210,7 @@ test('completeCase: does not patch when required collaborators or flush success 
   assert.equal(patchCount, 0);
 });
 
-test('SourceCaseController: assigns QA Check source case props without changing override provenance', () => {
+test('updateSourceCase: assigns QA Check source case props without changing override provenance', () => {
   const {
     context,
     sourceCaseNode,
@@ -1222,7 +1222,7 @@ test('SourceCaseController: assigns QA Check source case props without changing 
     remediationFields,
   } = makeSourceCaseContext();
 
-  new SourceCaseController().update(/** @type {any} */ (context));
+  updateSourceCase(/** @type {any} */ (context));
 
   assert.equal(/** @type {any} */ (sourceCaseNode).originalRow, originalRow);
   assert.equal(/** @type {any} */ (sourceCaseNode).catalogue, QUESTIONS);
@@ -1242,10 +1242,10 @@ test('SourceCaseController: assigns QA Check source case props without changing 
   assert.equal(/** @type {any} */ (sourceCaseNode).sourceCaseId, 'qa-check-1');
 });
 
-test('CaseReviewHeaderController: preserves title, reviewer, conversation toggle placement, and banner wiring', () => {
+test('updateCaseReviewHeader: preserves title, reviewer, conversation toggle placement, and banner wiring', () => {
   const { context, header, banner, toggle, saveQueue } = makeHeaderContext();
 
-  new CaseReviewHeaderController().update(/** @type {any} */ (context));
+  updateCaseReviewHeader(/** @type {any} */ (context));
 
   assert.equal(/** @type {any} */ (banner).saveQueue, saveQueue);
   assert.equal(header._children.length, 3);
@@ -1254,21 +1254,21 @@ test('CaseReviewHeaderController: preserves title, reviewer, conversation toggle
   assert.equal(header._children[2], toggle);
 });
 
-test('CaseReviewHeaderController: omits the conversation toggle when the machine disallows it', () => {
+test('updateCaseReviewHeader: omits the conversation toggle when the machine disallows it', () => {
   const { context, header, toggle } = makeHeaderContext({
     canToggleConversation: false,
   });
 
-  new CaseReviewHeaderController().update(/** @type {any} */ (context));
+  updateCaseReviewHeader(/** @type {any} */ (context));
 
   assert.equal(header._children.length, 2);
   assert.ok(!header._children.includes(/** @type {StubEl} */ (toggle)));
 });
 
-test('CaseReviewHeaderController: tolerates a missing conversation toggle node', () => {
+test('updateCaseReviewHeader: tolerates a missing conversation toggle node', () => {
   const { context, header } = makeHeaderContext({ toggle: null });
 
-  new CaseReviewHeaderController().update(/** @type {any} */ (context));
+  updateCaseReviewHeader(/** @type {any} */ (context));
 
   assert.equal(header._children.length, 2);
   assert.equal(header._children[0].textContent, 'Case One');

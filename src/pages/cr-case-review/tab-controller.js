@@ -1,44 +1,54 @@
 // @ts-check
 
 /**
- * Coordinates visible tabs and active tab selection for CRCaseReview.
+ * @param {import('./types.js').CaseReviewShellContext} context
  */
-// TODO(simplify-ui): Collapse this controller class into plain action and
-// binding functions as the Case Review page moves to function components plus
-// reactive() for local-signal UI. Avoid preserving controller classes as a
-// second DOM orchestration layer.
+export function bindCaseReviewTabs(context) {
+  const { viewModel: vm, nodes } = context;
+  if (!nodes.tabs) return;
+
+  nodes.tabs.addEventListener('cr-tab-change', (/** @type {Event} */ ev) =>
+    vm.activeTab.set(/** @type {CustomEvent} */ (ev).detail.id)
+  );
+}
+
+/**
+ * @param {import('./types.js').CaseReviewShellContext} context
+ */
+export function updateCaseReviewTabs(context) {
+  const { viewModel: vm, nodes } = context;
+  if (!nodes.tabs) return;
+
+  Object.assign(nodes.tabs, {
+    tabs: buildCaseReviewTabs(context),
+    selected: vm.activeTab.get(),
+    panels: {
+      details: nodes.details,
+      questions: nodes.questionsPanel,
+      remediation: nodes.remediation,
+      summary: nodes.summary,
+      notes: nodes.notes,
+      appeal: nodes.appeal,
+    },
+  });
+}
+
+/**
+ * @deprecated Use bindCaseReviewTabs() and updateCaseReviewTabs().
+ */
 export class CaseReviewTabController {
   /**
    * @param {import('./types.js').CaseReviewShellContext} context
    */
   bind(context) {
-    const { viewModel: vm, nodes } = context;
-    if (!nodes.tabs) return;
-
-    nodes.tabs.addEventListener('cr-tab-change', (/** @type {Event} */ ev) =>
-      vm.activeTab.set(/** @type {CustomEvent} */ (ev).detail.id)
-    );
+    bindCaseReviewTabs(context);
   }
 
   /**
    * @param {import('./types.js').CaseReviewShellContext} context
    */
   update(context) {
-    const { viewModel: vm, nodes } = context;
-    if (!nodes.tabs) return;
-
-    Object.assign(nodes.tabs, {
-      tabs: buildCaseReviewTabs(context),
-      selected: vm.activeTab.get(),
-      panels: {
-        details: nodes.details,
-        questions: nodes.questionsPanel,
-        remediation: nodes.remediation,
-        summary: nodes.summary,
-        notes: nodes.notes,
-        appeal: nodes.appeal,
-      },
-    });
+    updateCaseReviewTabs(context);
   }
 }
 
