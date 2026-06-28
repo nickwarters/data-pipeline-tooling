@@ -237,7 +237,12 @@ are due for a run date. _Here_: an `Orchestrator` owns one or more
 `PipelineSet`s of `ScheduledPipeline` references and invokes the existing
 `PipelineRunner`; it is not a Pipeline that runs other Pipelines. Python
 definitions own the canonical sets, dependencies, and default schedules, while
-YAML may override enablement, timing, and freshness windows. Decisions are
+YAML may override enablement, timing, and freshness windows. Schedules are
+expressed with the friendly `Schedule.*` constructors (`Schedule.daily()`,
+`Schedule.on_weekdays("monday", …)`, `Schedule.day_of_month(n)`,
+`Schedule.nth_working_day_of_month(n)`, `Schedule.last_working_day_of_month()`,
+`Schedule.manual_only()`) over the concrete schedule classes, keeping `is_due`
+the core protocol. Decisions are
 recorded in `_orchestration/runs.db`; actual executions remain in
 `RunLog` / `RunRegistry`. Failures are isolated: a failed scheduled item blocks
 its downstream dependants for that orchestrator run, but independent items and
