@@ -9,6 +9,7 @@ import { CaseReviewTabController } from './cr-case-review/tab-controller.js';
 import { RemediationPanelController } from './cr-case-review/remediation-controller.js';
 import { SummaryNotesAppealController } from './cr-case-review/summary-notes-appeal-controller.js';
 import { SourceCaseController } from './cr-case-review/source-case-controller.js';
+import { ConversationPanelController } from './cr-case-review/conversation-controller.js';
 import {
   CompletionController,
   completeCase,
@@ -55,6 +56,7 @@ export class CRCaseReview extends ReactiveElement {
     this._remediationPanelController = new RemediationPanelController();
     this._summaryNotesAppealController = new SummaryNotesAppealController();
     this._sourceCaseController = new SourceCaseController();
+    this._conversationPanelController = new ConversationPanelController();
     this._completionController = new CompletionController();
     this._nodeRegistry = createCaseReviewNodeRegistry();
 
@@ -118,19 +120,15 @@ export class CRCaseReview extends ReactiveElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    // TODO(issue-198): Delegate teardown to controller disconnect methods,
-    // starting with ConversationPanelController for document-level shortcuts.
-    if (this._keydownHandler && typeof document !== 'undefined') {
-      document.removeEventListener('keydown', this._keydownHandler);
-      this._keydownHandler = null;
-    }
+    this._conversationPanelController.disconnect();
+    this._keydownHandler = null;
   }
 
   /** @param {KeyboardEvent} e */
   _handleKeydown(e) {
-    // TODO(issue-198): Move keyboard shortcut handling to
-    // cr-case-review/conversation-controller.js.
-    if (this._keydownHandler) {
+    if (this._conversationPanelController.keydownHandler) {
+      this._conversationPanelController.keydownHandler(e);
+    } else if (this._keydownHandler) {
       this._keydownHandler(e);
     } else if (e.altKey && e.code === 'KeyC') {
       this._toggleConversationPanel();
@@ -282,22 +280,6 @@ export class CRCaseReview extends ReactiveElement {
 
     const canToggleConversation = machine.canToggleConversation;
 
-    // TODO(issue-198): Move conversation shortcut binding to
-    // ConversationPanelController.bind()/disconnect().
-    if (canToggleConversation && !this._keydownHandler) {
-      this._keydownHandler = (e) => {
-        if (e.altKey && e.code === 'KeyC') {
-          this._toggleConversationPanel();
-        }
-      };
-      if (typeof document !== 'undefined')
-        document.addEventListener('keydown', this._keydownHandler);
-    } else if (!canToggleConversation && this._keydownHandler) {
-      if (typeof document !== 'undefined')
-        document.removeEventListener('keydown', this._keydownHandler);
-      this._keydownHandler = null;
-    }
-
     this._nodeRegistry.ensure();
     this._syncLegacyNodeAliases();
 
@@ -332,9 +314,15 @@ export class CRCaseReview extends ReactiveElement {
         toggleConversationPanel: this._toggleConversationPanel.bind(this),
       });
 
-      this._toggleBtn.addEventListener('click', () =>
-        this._toggleConversationPanel()
-      );
+      this._conversationPanelController.bind({
+        viewModel: vm,
+        nodes: this._controllerNodes(canToggleConversation),
+        displayMode,
+        completeCase: (caseId, client, saveQueue, patchFields) =>
+          this._completeCase(caseId, client, saveQueue, patchFields),
+        toggleConversationPanel: this._toggleConversationPanel.bind(this),
+      });
+      this._keydownHandler = this._conversationPanelController.keydownHandler;
 
       // TODO(issue-198): CompletionController owns completion event wiring; keep
       // this context adapter until the shared node registry is wired.
@@ -390,29 +378,14 @@ export class CRCaseReview extends ReactiveElement {
       toggleConversationPanel: this._toggleConversationPanel.bind(this),
     });
 
-    // TODO(issue-198): Move conversation element assignment and toggle aria
-    // updates to ConversationPanelController.update().
-    Object.assign(this._conversationEl, {
-      client: vm.client,
-      saveQueue: vm.saveQueue,
-      caseId: caseRow.id,
-      currentUser,
-      access: displayMode(access.conversation),
-      hidden: vm.conversationHidden.get(),
-      _messages: caseRow.conversation.slice(),
+    this._conversationPanelController.update({
+      viewModel: vm,
+      nodes: this._controllerNodes(canToggleConversation),
+      displayMode,
+      completeCase: (caseId, client, saveQueue, patchFields) =>
+        this._completeCase(caseId, client, saveQueue, patchFields),
+      toggleConversationPanel: this._toggleConversationPanel.bind(this),
     });
-
-    if (canToggleConversation) {
-      this._toggleBtn.setAttribute(
-        'aria-expanded',
-        String(!vm.conversationHidden.get())
-      );
-      this._toggleBtn.setAttribute(
-        'aria-label',
-        'Toggle conversation panel (⌥C / Alt+C)'
-      );
-      this._toggleBtn.textContent = 'Conversation';
-    }
 
     // TODO(issue-198): Header and banner assignment now lives in
     // CaseReviewHeaderController; keep this context adapter until node registry

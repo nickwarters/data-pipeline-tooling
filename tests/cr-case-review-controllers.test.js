@@ -45,12 +45,22 @@ class StubEl {
 
 /** @type {any} */ (globalThis).HTMLElement = StubEl;
 /** @type {any} */ (globalThis).HTMLButtonElement = StubEl;
+/** @type {Record<string, Function[]>} */
+const documentListeners = {};
 /** @type {any} */ (globalThis).document = {
   /** @param {string} tag @returns {StubEl} */
   createElement(tag) {
     const el = new StubEl();
     el.tagName = tag.toUpperCase();
     return el;
+  },
+  addEventListener(/** @type {string} */ type, /** @type {Function} */ fn) {
+    (documentListeners[type] ??= []).push(fn);
+  },
+  removeEventListener(/** @type {string} */ type, /** @type {Function} */ fn) {
+    documentListeners[type] = (documentListeners[type] ?? []).filter(
+      (listener) => listener !== fn
+    );
   },
 };
 
@@ -68,6 +78,8 @@ const { SummaryNotesAppealController } =
   await import('../src/pages/cr-case-review/summary-notes-appeal-controller.js');
 const { SourceCaseController } =
   await import('../src/pages/cr-case-review/source-case-controller.js');
+const { ConversationPanelController } =
+  await import('../src/pages/cr-case-review/conversation-controller.js');
 const { CompletionController, completeCase } =
   await import('../src/pages/cr-case-review/completion-controller.js');
 
@@ -603,6 +615,83 @@ function makeSourceCaseContext() {
   };
 }
 
+/**
+ * @param {Partial<{
+ *   canToggleConversation: boolean,
+ *   conversationHidden: boolean,
+ *   conversationAccess: string,
+ * }>} [opts]
+ */
+function makeConversationContext(opts = {}) {
+  documentListeners.keydown = [];
+  const conversation = new StubEl();
+  const toggle = new StubEl();
+  const saveQueue = { id: 'queue' };
+  const client = { id: 'client' };
+  const currentUser = { id: 'user-1', displayName: 'Alex Reviewer' };
+  const conversationMessages = [{ body: 'Message one' }];
+  /** @type {number} */
+  let toggleCalls = 0;
+  return {
+    conversation,
+    toggle,
+    saveQueue,
+    client,
+    currentUser,
+    conversationMessages,
+    get toggleCalls() {
+      return toggleCalls;
+    },
+    context: {
+      viewModel: {
+        caseRow: {
+          id: 'case-1',
+          title: 'Case One',
+          assignedReviewer: 'Alex Reviewer',
+          conversation: conversationMessages,
+        },
+        currentUser,
+        access: {
+          conversation: opts.conversationAccess ?? 'edit',
+        },
+        conversationHidden: {
+          get: () => opts.conversationHidden ?? true,
+        },
+        machine: {
+          canToggleConversation: opts.canToggleConversation ?? true,
+        },
+        client,
+        saveQueue,
+      },
+      nodes: {
+        tabs: null,
+        details: null,
+        questionsPanel: null,
+        questionList: null,
+        progress: null,
+        overrideEditor: null,
+        remediation: null,
+        summary: null,
+        notes: null,
+        appeal: null,
+        conversation,
+        sourceCase: null,
+        banner: null,
+        conversationToggle:
+          opts.canToggleConversation === false ? null : toggle,
+        header: null,
+        completeButton: null,
+      },
+      displayMode: (/** @type {any} */ mode) =>
+        mode === 'override' ? 'read-only' : mode,
+      completeCase: async () => {},
+      toggleConversationPanel: () => {
+        toggleCalls += 1;
+      },
+    },
+  };
+}
+
 test('CaseReviewNodeRegistry: creates and reuses the long-lived page nodes currently cached by CRCaseReview', () => {
   const registry = createCaseReviewNodeRegistry();
   const first = registry.ensure();
@@ -926,17 +1015,58 @@ test('SummaryNotesAppealController: assigns Summary, Notes, and Appeal tab props
   assert.equal(/** @type {any} */ (appeal).answers, answers);
 });
 
-test.todo(
-  'ConversationPanelController: preserves click and Alt+C conversation toggling'
-);
-// TODO(issue-198): Assert the toggle button and document keydown path call the
-// same view-model toggle method and keep aria-expanded in sync.
+test('ConversationPanelController: preserves click and Alt+C conversation toggling', () => {
+  const setup = makeConversationContext({
+    conversationHidden: false,
+    conversationAccess: 'override',
+  });
+  const { context, conversation, toggle, saveQueue, client, currentUser } =
+    setup;
+  const controller = new ConversationPanelController();
 
-test.todo(
-  'ConversationPanelController: removes document-level listeners on disconnect'
-);
-// TODO(issue-198): Assert the controller unregisters keyboard handlers to avoid
-// leaking shortcuts after CRCaseReview is disconnected.
+  controller.bind(/** @type {any} */ (context));
+  controller.update(/** @type {any} */ (context));
+  toggle._listeners.click[0]();
+  documentListeners.keydown[0]({ altKey: true, code: 'KeyC' });
+  documentListeners.keydown[0]({ altKey: false, code: 'KeyC' });
+
+  assert.equal(setup.toggleCalls, 2);
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  assert.equal(
+    toggle.getAttribute('aria-label'),
+    'Toggle conversation panel (⌥C / Alt+C)'
+  );
+  assert.equal(toggle.textContent, 'Conversation');
+  assert.equal(/** @type {any} */ (conversation).client, client);
+  assert.equal(/** @type {any} */ (conversation).saveQueue, saveQueue);
+  assert.equal(/** @type {any} */ (conversation).caseId, 'case-1');
+  assert.equal(/** @type {any} */ (conversation).currentUser, currentUser);
+  assert.equal(/** @type {any} */ (conversation).access, 'read-only');
+  assert.equal(/** @type {any} */ (conversation).hidden, false);
+  assert.deepEqual(/** @type {any} */ (conversation)._messages, [
+    { body: 'Message one' },
+  ]);
+  assert.equal(
+    /** @type {any} */ (conversation)._messages ===
+      /** @type {any} */ (context).viewModel.caseRow.conversation,
+    false
+  );
+});
+
+test('ConversationPanelController: removes document-level listeners on disconnect', () => {
+  const setup = makeConversationContext();
+  const controller = new ConversationPanelController();
+
+  controller.bind(/** @type {any} */ (setup.context));
+  const handler = controller.keydownHandler;
+  assert.ok(handler);
+  assert.equal(documentListeners.keydown.includes(handler), true);
+
+  controller.disconnect();
+
+  assert.equal(controller.keydownHandler, null);
+  assert.equal(documentListeners.keydown.includes(handler), false);
+});
 
 test('CompletionController: preserves completion button visibility and label', () => {
   const visible = makeCompletionContext({
