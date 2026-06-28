@@ -1,15 +1,35 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
 import { h } from '../lib/html.js';
 
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../sharepoint-client.js').OutcomeResult} OutcomeResult */
 
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
-export class CROutcome extends ReactiveElement {
+/**
+ * @typedef {Object} OutcomeProps
+ * @property {((answers: Record<string, Answer>) => OutcomeResult) | null} computeOutcome
+ * @property {Record<string, Answer>} answers
+ * @property {boolean} allAnswered
+ */
+
+/**
+ * @param {OutcomeProps} props
+ * @returns {Node[]}
+ */
+export function Outcome({ computeOutcome, answers, allAnswered }) {
+  let className, textContent;
+  if (!allAnswered || !computeOutcome) {
+    className = 'cr-outcome-indeterminate';
+    textContent = 'Awaiting answers…';
+  } else {
+    const result = computeOutcome(answers);
+    className = `cr-outcome-${classSuffixFor(result.outcome)}`;
+    textContent = result.wording ?? defaultWordingFor(result.outcome);
+  }
+
+  return [h('h2', {}, 'Outcome'), h('p', { className }, textContent)];
+}
+
+export class CROutcome extends HTMLElement {
   constructor() {
     super();
     /** @type {((answers: Record<string, Answer>) => OutcomeResult) | null} */
@@ -18,6 +38,10 @@ export class CROutcome extends ReactiveElement {
     this.answers = {};
     /** @type {boolean} */
     this.allAnswered = false;
+  }
+
+  connectedCallback() {
+    this._render();
   }
 
   /**
@@ -33,32 +57,13 @@ export class CROutcome extends ReactiveElement {
   }
 
   _render() {
-    const content = this.render();
-    if (Array.isArray(content)) {
-      this.replaceChildren(...content);
-    } else if (
-      content &&
-      typeof content === 'object' &&
-      'appendChild' in content
-    ) {
-      this.replaceChildren(content);
-    } else {
-      this.replaceChildren(); // empty
-    }
-  }
-
-  render() {
-    let className, textContent;
-    if (!this.allAnswered || !this.computeOutcome) {
-      className = 'cr-outcome-indeterminate';
-      textContent = 'Awaiting answers…';
-    } else {
-      const result = this.computeOutcome(this.answers);
-      className = `cr-outcome-${classSuffixFor(result.outcome)}`;
-      textContent = result.wording ?? defaultWordingFor(result.outcome);
-    }
-
-    return [h('h2', {}, 'Outcome'), h('p', { className }, textContent)];
+    this.replaceChildren(
+      ...Outcome({
+        computeOutcome: this.computeOutcome,
+        answers: this.answers,
+        allAnswered: this.allAnswered,
+      })
+    );
   }
 }
 

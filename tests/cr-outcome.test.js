@@ -1,9 +1,4 @@
 // @ts-check
-// TODO(simplify-ui): Rewrite these lifecycle-heavy tests around the
-// future function-component API. Prefer asserting plain functions, h() output,
-// reactive() updates, and route-shell behavior over manual connectedCallback()/
-// disconnectedCallback() calls on custom element classes.
-
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -44,13 +39,27 @@ class StubEl {
 };
 /** @type {any} */ (globalThis).customElements = { define() {} };
 
-const { CROutcome } = await import('../src/components/cr-outcome.js');
+const { CROutcome, Outcome } = await import('../src/components/cr-outcome.js');
 
 /** @param {Record<string, import('../src/sharepoint-client.js').Answer>} answers */
 function makeComputeOutcome(answers) {
   const hasNo = Object.values(answers).some((a) => a.value === 'No');
   return { outcome: /** @type {'pass' | 'fail'} */ (hasNo ? 'fail' : 'pass') };
 }
+
+test('Outcome: plain function renders heading and indeterminate state', () => {
+  const nodes = Outcome({
+    computeOutcome: null,
+    answers: {},
+    allAnswered: false,
+  });
+
+  assert.equal(/** @type {any} */ (nodes[0]).textContent, 'Outcome');
+  assert.equal(
+    /** @type {any} */ (nodes[1]).className,
+    'cr-outcome-indeterminate'
+  );
+});
 
 test('CROutcome: renders h2 Outcome heading', () => {
   const el = new CROutcome();

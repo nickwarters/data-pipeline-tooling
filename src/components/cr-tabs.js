@@ -12,6 +12,106 @@ import { h } from '../lib/html.js';
 let uid = 0;
 
 /**
+ * @typedef {Object} TabsProps
+ * @property {Tab[]} tabs
+ * @property {Record<string, Node>} panels
+ * @property {string} selected
+ * @property {string} uid
+ * @property {string} focusId
+ * @property {(id: string) => void} onSelect
+ * @property {(event: KeyboardEvent) => void} onKeydown
+ * @property {(node: HTMLElement | null) => void} onFocusTarget
+ */
+
+/**
+ * @param {Tab[]} tabs
+ * @returns {Tab[]}
+ */
+export function visibleTabs(tabs) {
+  return tabs.filter((tab) => !tab.hidden);
+}
+
+/**
+ * @param {Tab[]} tabs
+ * @param {string} selected
+ * @returns {string}
+ */
+export function activeTabId(tabs, selected) {
+  const visible = visibleTabs(tabs);
+  if (visible.some((tab) => tab.id === selected)) return selected;
+  return visible.length ? visible[0].id : '';
+}
+
+/**
+ * @param {TabsProps} props
+ * @returns {Node[]}
+ */
+export function Tabs({
+  tabs,
+  panels,
+  selected,
+  uid,
+  focusId,
+  onSelect,
+  onKeydown,
+  onFocusTarget,
+}) {
+  const activeId = activeTabId(tabs, selected);
+  const visible = visibleTabs(tabs);
+
+  /** @type {HTMLElement[]} */
+  const panelNodes = [];
+  /** @type {HTMLElement | null} */
+  let focusTarget = null;
+
+  const tablist = h(
+    'div',
+    { role: 'tablist', class: 'cr-tabs-list' },
+    ...visible.map((tab) => {
+      const isSelected = tab.id === activeId;
+      const tabId = `${uid}-tab-${tab.id}`;
+      const panelId = `${uid}-panel-${tab.id}`;
+
+      const btn = h(
+        'button',
+        {
+          class: 'cr-tabs-tab',
+          type: 'button',
+          role: 'tab',
+          id: tabId,
+          'aria-controls': panelId,
+          'aria-selected': String(isSelected),
+          tabindex: isSelected ? '0' : '-1',
+          onclick: () => onSelect(tab.id),
+          onkeydown: onKeydown,
+        },
+        tab.label
+      );
+
+      const panel = h('div', {
+        class: 'cr-tabs-panel',
+        role: 'tabpanel',
+        id: panelId,
+        'aria-labelledby': tabId,
+        tabindex: '0',
+      });
+      panel.hidden = !isSelected;
+
+      const content = panels[tab.id];
+      if (content) panel.appendChild(content);
+      panelNodes.push(panel);
+
+      if (focusId === tab.id) focusTarget = btn;
+
+      return btn;
+    })
+  );
+
+  onFocusTarget(focusTarget);
+  return [tablist, ...panelNodes];
+}
+
+/**
  * Generic, domain-free tab-navigation primitive.
  *
  * Given a list of `{ id, label, hidden }` tabs and a selected id it renders an
@@ -30,10 +130,6 @@ let uid = 0;
  *   tabs.selected = 'one';
  *   tabs.addEventListener('cr-tab-change', e => console.log(e.detail.id));
  */
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
 export class CRTabs extends ReactiveElement {
   constructor() {
     super();
@@ -53,7 +149,7 @@ export class CRTabs extends ReactiveElement {
 
   /** @returns {Tab[]} the visible (non-hidden) tabs, in declared order. */
   _visible() {
-    return this.tabs.filter((t) => !t.hidden);
+    return visibleTabs(this.tabs);
   }
 
   /**
@@ -62,9 +158,7 @@ export class CRTabs extends ReactiveElement {
    * @returns {string}
    */
   _activeId() {
-    const visible = this._visible();
-    if (visible.some((t) => t.id === this.selected)) return this.selected;
-    return visible.length ? visible[0].id : '';
+    return activeTabId(this.tabs, this.selected);
   }
 
   /**
@@ -107,61 +201,20 @@ export class CRTabs extends ReactiveElement {
   }
 
   render() {
-    const activeId = this._activeId();
-    const visible = this._visible();
-
-    /** @type {HTMLElement[]} */
-    const panelNodes = [];
-    /** @type {HTMLElement | null} */
-    let focusTarget = null;
-
-    const tablist = h(
-      'div',
-      { role: 'tablist', class: 'cr-tabs-list' },
-      ...visible.map((tab) => {
-        const isSelected = tab.id === activeId;
-        const tabId = `${this._uid}-tab-${tab.id}`;
-        const panelId = `${this._uid}-panel-${tab.id}`;
-
-        const btn = h(
-          'button',
-          {
-            class: 'cr-tabs-tab',
-            type: 'button',
-            role: 'tab',
-            id: tabId,
-            'aria-controls': panelId,
-            'aria-selected': String(isSelected),
-            tabindex: isSelected ? '0' : '-1',
-            onclick: () => this._select(tab.id),
-            onkeydown: (/** @type {KeyboardEvent} */ e) => this._onKeydown(e),
-          },
-          tab.label
-        );
-
-        const panel = h('div', {
-          class: 'cr-tabs-panel',
-          role: 'tabpanel',
-          id: panelId,
-          'aria-labelledby': tabId,
-          tabindex: '0',
-        });
-        panel.hidden = !isSelected;
-
-        const content = this.panels[tab.id];
-        if (content) panel.appendChild(content);
-        panelNodes.push(panel);
-
-        if (this._focusId === tab.id) focusTarget = btn;
-
-        return btn;
-      })
-    );
-
-    this._focusNode = focusTarget;
+    const focusId = this._focusId;
     this._focusId = '';
-
-    return [tablist, ...panelNodes];
+    return Tabs({
+      tabs: this.tabs,
+      panels: this.panels,
+      selected: this.selected,
+      uid: this._uid,
+      focusId,
+      onSelect: (id) => this._select(id),
+      onKeydown: (event) => this._onKeydown(event),
+      onFocusTarget: (node) => {
+        this._focusNode = node;
+      },
+    });
   }
 }
 

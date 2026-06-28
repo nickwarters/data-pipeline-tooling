@@ -1,9 +1,4 @@
 // @ts-check
-// TODO(simplify-ui): Rewrite these lifecycle-heavy tests around the
-// future function-component API. Prefer asserting plain functions, h() output,
-// reactive() updates, and route-shell behavior over manual connectedCallback()/
-// disconnectedCallback() calls on custom element classes.
-
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -93,7 +88,7 @@ function allText(el) {
 };
 /** @type {any} */ (globalThis).customElements = { define() {} };
 
-const { CRSummary } = await import('../src/components/cr-summary.js');
+const { CRSummary, Summary } = await import('../src/components/cr-summary.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 
@@ -126,6 +121,21 @@ test('CRSummary: renders a Summary heading as its first child', () => {
   el.connectedCallback();
   const heading = /** @type {any} */ (el)._children[0];
   assert.equal(heading.textContent, 'Summary');
+});
+
+test('Summary: plain function renders heading and outcome block', () => {
+  const nodes = Summary({
+    computeOutcome: null,
+    answers: {},
+    allAnswered: false,
+    caseRow: null,
+    catalogue: [],
+    summarySections: [],
+    captureGroups: [],
+  });
+
+  assert.equal(/** @type {any} */ (nodes[0]).textContent, 'Summary');
+  assert.equal(/** @type {any} */ (nodes[1])._updateArgs.a3, false);
 });
 
 test('CRSummary: renders an Outcome block (cr-outcome) as the first content block', () => {

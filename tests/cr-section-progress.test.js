@@ -1,9 +1,4 @@
 // @ts-check
-// TODO(simplify-ui): Rewrite these lifecycle-heavy tests around the
-// future function-component API. Prefer asserting plain functions, h() output,
-// reactive() updates, and route-shell behavior over manual connectedCallback()/
-// disconnectedCallback() calls on custom element classes.
-
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -71,7 +66,7 @@ class StubCustomEvent {
 /** @type {any} */ (globalThis).CustomEvent = StubCustomEvent;
 
 // ===== IMPORTS =====
-const { CRSectionProgress } =
+const { CRSectionProgress, SectionProgress } =
   await import('../src/components/cr-section-progress.js');
 
 /** @typedef {import('../src/evaluators/section-progress.js').SectionProgress} SectionProgress */
@@ -86,6 +81,24 @@ function render(sections) {
 }
 
 // ===== TESTS =====
+
+test('SectionProgress: plain function renders rows and jump button', () => {
+  const nodes = SectionProgress({
+    sections: [{ section: 'Opening', answered: 1, total: 2 }],
+    unansweredQuestions: [],
+    onSectionJump: () => {},
+    onJumpUnanswered: () => {},
+  });
+
+  assert.equal(
+    /** @type {any} */ (nodes[0]).className,
+    'cr-section-progress-row'
+  );
+  assert.equal(
+    /** @type {any} */ (nodes[1]).className,
+    'cr-jump-unanswered-btn'
+  );
+});
 
 test('CRSectionProgress: update renders one row per section', () => {
   const el = render([

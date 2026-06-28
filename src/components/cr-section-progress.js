@@ -1,15 +1,56 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
 import { h } from '../lib/html.js';
 
 /** @typedef {import('../evaluators/section-progress.js').SectionProgress} SectionProgress */
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
-export class CRSectionProgress extends ReactiveElement {
+/**
+ * @typedef {Object} SectionProgressProps
+ * @property {SectionProgress[]} sections
+ * @property {QuestionDefinition[]} unansweredQuestions
+ * @property {(section: string) => void} onSectionJump
+ * @property {() => void} onJumpUnanswered
+ */
+
+/**
+ * @param {SectionProgressProps} props
+ * @returns {Node[]}
+ */
+export function SectionProgress({ sections, onSectionJump, onJumpUnanswered }) {
+  const rows = sections.map(({ section, answered, total }) => {
+    const className =
+      answered === total && total > 0
+        ? 'cr-section-progress-row complete'
+        : 'cr-section-progress-row';
+
+    return h(
+      'div',
+      {
+        className,
+        onclick: () => onSectionJump(section),
+      },
+      h('span', { className: 'cr-section-progress-label' }, section),
+      h(
+        'span',
+        { className: 'cr-section-progress-count' },
+        `${answered}/${total}`
+      )
+    );
+  });
+
+  const jumpBtn = h(
+    'button',
+    {
+      className: 'cr-jump-unanswered-btn',
+      onclick: onJumpUnanswered,
+    },
+    'Jump to next unanswered'
+  );
+
+  return [...rows, jumpBtn];
+}
+
+export class CRSectionProgress extends HTMLElement {
   constructor() {
     super();
     /** @type {SectionProgress[]} */
@@ -29,52 +70,25 @@ export class CRSectionProgress extends ReactiveElement {
   }
 
   _render() {
-    this.replaceChildren(...this.render());
-  }
-
-  render() {
-    const rows = this._sections.map(({ section, answered, total }) => {
-      const className =
-        answered === total && total > 0
-          ? 'cr-section-progress-row complete'
-          : 'cr-section-progress-row';
-
-      return h(
-        'div',
-        {
-          className,
-          onclick: () => {
-            this.dispatchEvent(
-              new CustomEvent('cr-section-jump', {
-                detail: { section },
-                bubbles: true,
-              })
-            );
-          },
+    this.replaceChildren(
+      ...SectionProgress({
+        sections: this._sections,
+        unansweredQuestions: this._unansweredQuestions,
+        onSectionJump: (section) => {
+          this.dispatchEvent(
+            new CustomEvent('cr-section-jump', {
+              detail: { section },
+              bubbles: true,
+            })
+          );
         },
-        h('span', { className: 'cr-section-progress-label' }, section),
-        h(
-          'span',
-          { className: 'cr-section-progress-count' },
-          `${answered}/${total}`
-        )
-      );
-    });
-
-    const jumpBtn = h(
-      'button',
-      {
-        className: 'cr-jump-unanswered-btn',
-        onclick: () => {
+        onJumpUnanswered: () => {
           this.dispatchEvent(
             new CustomEvent('cr-jump-unanswered', { bubbles: true })
           );
         },
-      },
-      'Jump to next unanswered'
+      })
     );
-
-    return [...rows, jumpBtn];
   }
 }
 

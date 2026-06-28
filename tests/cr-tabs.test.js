@@ -1,9 +1,4 @@
 // @ts-check
-// TODO(simplify-ui): Rewrite these lifecycle-heavy tests around the
-// future function-component API. Prefer asserting plain functions, h() output,
-// reactive() updates, and route-shell behavior over manual connectedCallback()/
-// disconnectedCallback() calls on custom element classes.
-
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -85,7 +80,8 @@ class StubCustomEvent {
 /** @type {any} */ (globalThis).CustomEvent = StubCustomEvent;
 
 // ===== IMPORTS (after stubs) =====
-const { CRTabs } = await import('../src/components/cr-tabs.js');
+const { CRTabs, Tabs, activeTabId, visibleTabs } =
+  await import('../src/components/cr-tabs.js');
 
 /**
  * Build a configured cr-tabs element and connect it.
@@ -122,6 +118,37 @@ const THREE = [
   { id: 'b', label: 'Bravo' },
   { id: 'c', label: 'Charlie' },
 ];
+
+test('visibleTabs: filters hidden tabs without mutating order', () => {
+  assert.deepEqual(
+    visibleTabs([
+      { id: 'a', label: 'Alpha' },
+      { id: 'b', label: 'Bravo', hidden: true },
+      { id: 'c', label: 'Charlie' },
+    ]).map((tab) => tab.id),
+    ['a', 'c']
+  );
+});
+
+test('activeTabId: falls back to the first visible tab', () => {
+  assert.equal(activeTabId(THREE, 'missing'), 'a');
+});
+
+test('Tabs: plain function renders tablist and panels', () => {
+  const nodes = Tabs({
+    tabs: THREE,
+    panels: {},
+    selected: 'b',
+    uid: 'test-tabs',
+    focusId: '',
+    onSelect: () => {},
+    onKeydown: () => {},
+    onFocusTarget: () => {},
+  });
+
+  assert.equal(/** @type {any} */ (nodes[0])._attrs.role, 'tablist');
+  assert.equal(nodes.length, 4);
+});
 
 test('CRTabs: renders one tab button per non-hidden tab', () => {
   const el = makeTabs({ tabs: THREE, selected: 'a' });

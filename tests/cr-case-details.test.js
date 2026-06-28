@@ -1,9 +1,4 @@
 // @ts-check
-// TODO(simplify-ui): Rewrite these lifecycle-heavy tests around the
-// future function-component API. Prefer asserting plain functions, h() output,
-// reactive() updates, and route-shell behavior over manual connectedCallback()/
-// disconnectedCallback() calls on custom element classes.
-
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -46,7 +41,7 @@ class StubEl {
 };
 /** @type {any} */ (globalThis).customElements = { define() {} };
 
-const { CRCaseDetails, caseDetailFields } =
+const { CRCaseDetails, CaseDetails, caseDetailFields } =
   await import('../src/components/cr-case-details.js');
 
 /** @returns {import('../src/sharepoint-client.js').CaseRow} */
@@ -120,6 +115,20 @@ test('caseDetailFields: returns the labelled Case Details fields in order with e
   assert.equal(byField.title, 'T');
   assert.equal(byField.dueDate, '—');
   assert.equal(byField.completedAt, '2026-06-05');
+});
+
+test('CaseDetails: plain function renders no nodes without a case row', () => {
+  assert.deepEqual(CaseDetails({ caseRow: null, access: 'read-only' }), []);
+});
+
+test('CaseDetails: plain function renders the Case row fields', () => {
+  const nodes = CaseDetails({
+    caseRow: makeCase({ title: 'Plain case' }),
+    access: 'read-only',
+  });
+  const fields = fieldMap({ _children: nodes });
+
+  assert.equal(fields.title, 'Plain case');
 });
 
 test('CRCaseDetails: defaults to read-only access', () => {

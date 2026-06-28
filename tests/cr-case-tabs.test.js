@@ -1,15 +1,11 @@
 // @ts-check
-// TODO(simplify-ui): Rewrite these lifecycle-heavy tests around the
-// future function-component API. Prefer asserting plain functions, h() output,
-// reactive() updates, and route-shell behavior over manual connectedCallback()/
-// disconnectedCallback() calls on custom element classes.
-
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_bank-dom-stub.js';
 installDom();
 
-const { CRCaseTabs } = await import('../src/components/cr-case-tabs.js');
+const { CRCaseTabs, CaseTabs } =
+  await import('../src/components/cr-case-tabs.js');
 const {
   _resetStore,
   activeSlug,
@@ -19,6 +15,24 @@ const {
   isDirty,
   toastMsg,
 } = await import('../src/question-bank/question-bank-store.js');
+
+test('CaseTabs: plain function renders one tab per case type', () => {
+  const nav = CaseTabs({
+    types: {
+      alpha: { label: 'Alpha', questions: [{ id: 'a' }] },
+      beta: { label: 'Beta', questions: [{ id: 'b' }, { id: 'c' }] },
+    },
+    active: 'beta',
+    dirty: false,
+    onSelect: () => {},
+    onRevert: () => {},
+    onCompile: () => {},
+  });
+
+  const tabsContainer = /** @type {any} */ (nav)._children[1];
+  assert.equal(tabsContainer._children.length, 2);
+  assert.equal(tabsContainer._children[1].className, 'case-tab active');
+});
 
 test('CRCaseTabs: one tab per case type; clicking switches activeSlug', () => {
   _resetStore();

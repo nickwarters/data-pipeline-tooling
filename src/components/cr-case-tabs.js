@@ -11,10 +11,73 @@ import {
   showToast,
 } from '../question-bank/question-bank-store.js';
 
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
+/**
+ * @typedef {Object} CaseTabsProps
+ * @property {Record<string, { label: string, questions: unknown[] }>} types
+ * @property {string} active
+ * @property {boolean} dirty
+ * @property {(slug: string) => void} onSelect
+ * @property {() => void} onRevert
+ * @property {() => void} onCompile
+ */
+
+/**
+ * @param {CaseTabsProps} props
+ * @returns {HTMLElement}
+ */
+export function CaseTabs({
+  types,
+  active,
+  dirty: _dirty,
+  onSelect,
+  onRevert,
+  onCompile,
+}) {
+  const tabs = h('div', { className: 'case-tabs' });
+  for (const slug in types) {
+    const type = types[slug];
+    tabs.appendChild(
+      h(
+        'button',
+        {
+          className: 'case-tab' + (slug === active ? ' active' : ''),
+          onclick: () => onSelect(slug),
+        },
+        type.label,
+        h('span', { className: 'tab-count' }, `${type.questions.length} q`)
+      )
+    );
+  }
+
+  return h(
+    'nav',
+    { className: 'case-bar' },
+    h('span', { className: 'case-bar-label' }, 'Case Type'),
+    tabs,
+    h(
+      'div',
+      { className: 'case-bar-right' },
+      h(
+        'button',
+        {
+          className: 'pill-btn',
+          onclick: onRevert,
+        },
+        '↺ Revert'
+      ),
+      h(
+        'button',
+        {
+          className: 'pill-btn primary',
+          onclick: onCompile,
+        },
+        'Compile & Submit ',
+        h('span', { className: 'key' }, '⌘↵')
+      )
+    )
+  );
+}
+
 export class CRCaseTabs extends ReactiveElement {
   _render() {
     const content = this.render();
@@ -35,63 +98,28 @@ export class CRCaseTabs extends ReactiveElement {
     const types = cases.get();
     const active = activeSlug.get();
 
-    const tabs = h('div', { className: 'case-tabs' });
-    for (const slug in types) {
-      const t = types[slug];
-      tabs.appendChild(
-        h(
-          'button',
-          {
-            className: 'case-tab' + (slug === active ? ' active' : ''),
-            onclick: () => {
-              activeSlug.set(slug);
-              setFilters({ category: null });
-            },
-          },
-          t.label,
-          h('span', { className: 'tab-count' }, `${t.questions.length} q`)
-        )
-      );
-    }
-
-    return h(
-      'nav',
-      { className: 'case-bar' },
-      h('span', { className: 'case-bar-label' }, 'Case Type'),
-      tabs,
-      h(
-        'div',
-        { className: 'case-bar-right' },
-        h(
-          'button',
-          {
-            className: 'pill-btn',
-            onclick: () => {
-              if (!isDirty.get()) {
-                showToast('Nothing to revert');
-                return;
-              }
-              const ok = /** @type {any} */ (globalThis).confirm?.(
-                'Discard all uncommitted edits and return to the last synced state?'
-              );
-              if (!ok) return;
-              cases.set(structuredClone(baseline.get()));
-              showToast('Reverted to baseline');
-            },
-          },
-          '↺ Revert'
-        ),
-        h(
-          'button',
-          {
-            className: 'pill-btn primary',
-            onclick: () => drawerOpen.set(true),
-          },
-          'Compile & Submit ',
-          h('span', { className: 'key' }, '⌘↵')
-        )
-      )
-    );
+    return CaseTabs({
+      types,
+      active,
+      dirty: isDirty.get(),
+      onSelect: (slug) => {
+        activeSlug.set(slug);
+        setFilters({ category: null });
+      },
+      onRevert: () => {
+        if (!isDirty.get()) {
+          showToast('Nothing to revert');
+          return;
+        }
+        const ok = /** @type {any} */ (globalThis).confirm?.(
+          'Discard all uncommitted edits and return to the last synced state?'
+        );
+        if (!ok) return;
+        cases.set(structuredClone(baseline.get()));
+        showToast('Reverted to baseline');
+      },
+      onCompile: () => drawerOpen.set(true),
+    });
   }
 }
 

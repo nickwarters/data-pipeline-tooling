@@ -1,5 +1,4 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
 import { h } from '../lib/html.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
@@ -38,11 +37,37 @@ export function caseDetailFields(caseRow) {
  * reviewer, status, dates). The Case Type-specific detail fields and their
  * storage are explicitly out of scope and ship in a follow-on slice.
  */
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
-export class CRCaseDetails extends ReactiveElement {
+/**
+ * @typedef {Object} CaseDetailsProps
+ * @property {CaseRow | null} caseRow
+ * @property {'edit'|'read-only'|'hidden'} access
+ */
+
+/**
+ * @param {CaseDetailsProps} props
+ * @returns {Node[]}
+ */
+export function CaseDetails({ caseRow }) {
+  if (!caseRow) return [];
+
+  return [
+    h('h2', {}, 'Case Details'),
+    h(
+      'dl',
+      { className: 'cr-case-details-list' },
+      ...caseDetailFields(caseRow).flatMap(({ field, label, display }) => [
+        h('dt', { className: 'cr-case-details-label' }, label),
+        h(
+          'dd',
+          { className: 'cr-case-details-value', 'data-field': field },
+          display
+        ),
+      ])
+    ),
+  ];
+}
+
+export class CRCaseDetails extends HTMLElement {
   constructor() {
     super();
     /** @type {CaseRow | null} */
@@ -53,28 +78,13 @@ export class CRCaseDetails extends ReactiveElement {
 
   connectedCallback() {
     this.setAttribute('data-access', this.access);
-    super.connectedCallback();
+    this._render();
   }
 
-  render() {
-    const caseRow = this.caseRow;
-    if (!caseRow) return [];
-
-    return [
-      h('h2', {}, 'Case Details'),
-      h(
-        'dl',
-        { className: 'cr-case-details-list' },
-        ...caseDetailFields(caseRow).flatMap(({ field, label, display }) => [
-          h('dt', { className: 'cr-case-details-label' }, label),
-          h(
-            'dd',
-            { className: 'cr-case-details-value', 'data-field': field },
-            display
-          ),
-        ])
-      ),
-    ];
+  _render() {
+    this.replaceChildren(
+      ...CaseDetails({ caseRow: this.caseRow, access: this.access })
+    );
   }
 }
 
