@@ -1,16 +1,33 @@
 // @ts-check
-// TODO(simplify-ui): Rewrite these lifecycle-heavy tests around the
-// future function-component API. Prefer asserting plain functions, h() output,
-// reactive() updates, and route-shell behavior over manual connectedCallback()/
-// disconnectedCallback() calls on custom element classes.
-
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_bank-dom-stub.js';
 installDom();
 
-const { CROptionsEditor } =
+const { CROptionsEditor, OptionsEditor } =
   await import('../src/components/cr-options-editor.js');
+
+test('OptionsEditor: plain function renders nothing when no question set', () => {
+  assert.equal(
+    OptionsEditor({
+      question: null,
+      onRemoveOption: () => {},
+      onAddOption: () => {},
+    }),
+    undefined
+  );
+});
+
+test('OptionsEditor: plain function renders option tags and add button', () => {
+  const node = OptionsEditor({
+    question: { options: ['A', 'B'] },
+    onRemoveOption: () => {},
+    onAddOption: () => {},
+  });
+  const row = /** @type {any} */ (node)._children[1];
+
+  assert.equal(row._children.length, 3);
+});
 
 test('CROptionsEditor: renders nothing when no question set', () => {
   const e = new CROptionsEditor();

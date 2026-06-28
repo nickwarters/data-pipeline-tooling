@@ -1,18 +1,45 @@
 // @ts-check
-// TODO(simplify-ui): Rewrite these lifecycle-heavy tests around the
-// future function-component API. Prefer asserting plain functions, h() output,
-// reactive() updates, and route-shell behavior over manual connectedCallback()/
-// disconnectedCallback() calls on custom element classes.
-
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_bank-dom-stub.js';
 installDom();
 
-const { CRWordingEditor } =
+const { CRWordingEditor, WordingEditor } =
   await import('../src/components/cr-wording-editor.js');
 const { _resetStore, cases, activeSlug, commit } =
   await import('../src/question-bank/question-bank-store.js');
+
+test('WordingEditor: plain function renders nothing without a question', () => {
+  assert.equal(
+    WordingEditor({
+      question: null,
+      baselineQuestion: null,
+      onTextInput: () => {},
+    }),
+    undefined
+  );
+});
+
+test('WordingEditor: plain function renders textarea and char count', () => {
+  const node = WordingEditor({
+    question: {
+      id: 'q1',
+      text: 'Question text',
+      responseType: 'yes-no-na',
+      deprecated: false,
+    },
+    baselineQuestion: {
+      id: 'q1',
+      text: 'Question text',
+    },
+    onTextInput: () => {},
+  });
+
+  const textarea = /** @type {any} */ (node)._children[1];
+  const foot = /** @type {any} */ (node)._children[2];
+  assert.equal(textarea.value, 'Question text');
+  assert.equal(foot._children[1].textContent, '13 chars');
+});
 
 test('CRWordingEditor: no question → renders nothing', () => {
   const e = new CRWordingEditor();
