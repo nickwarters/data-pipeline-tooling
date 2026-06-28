@@ -161,6 +161,36 @@ provides `Weekdays`, `SpecificWeekdays`, `DayOfMonth`,
 is the normal "daily" schedule; weekends and holidays are evaluated by
 `WorkingDayCalendar`.
 
+For everyday authoring, prefer the friendly `Schedule.*` constructors over the
+implementation class names and weekday ordinals — they read as operator language
+and produce exactly the same schedules:
+
+```python
+from tools.orchestration import Schedule, ScheduledPipeline
+
+ScheduledPipeline("claims", "ingest", Schedule.daily())
+
+ScheduledPipeline(
+    "claims",
+    "weekly_quality_check",
+    Schedule.on_weekdays("monday", "wednesday"),  # case-insensitive names
+)
+
+ScheduledPipeline("claims", "monthly_snapshot", Schedule.day_of_month(21))
+
+ScheduledPipeline("claims", "month_open", Schedule.nth_working_day_of_month(1))
+
+ScheduledPipeline("claims", "month_close", Schedule.last_working_day_of_month())
+
+ScheduledPipeline("claims", "ad_hoc_backfill", Schedule.manual_only())
+```
+
+`Schedule.on_weekdays(...)` accepts the full English weekday names
+(`"monday"` … `"sunday"`) case-insensitively; an unknown weekday name or an
+out-of-range month day fails immediately with a clear message. `is_due(run_date,
+calendar)` stays the core protocol — these constructors are ergonomics only and
+leave the orchestration semantics unchanged.
+
 Dependencies are requirement-based. A scheduled downstream runs through
 `PipelineRunner` only when its declared `Requirement` predicates, or legacy
 `FreshnessRequirement` dependencies, have successful upstream history fresh
