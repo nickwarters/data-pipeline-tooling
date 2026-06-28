@@ -71,6 +71,10 @@ No changes to `SaveQueue` are needed. `enqueue` accepts any `fieldName` string a
 
 ## Worked example: a component that saves notes
 
+> TODO(simplify-ui): Rewrite this example as a plain `Notes(props)` function
+> that returns `h()` nodes and wires input events to `SaveQueue`; class-backed
+> `CRElement` examples should become an advanced integration-shell pattern only.
+
 ```js
 // src/components/cr-notes.js  (simplified)
 // @ts-check

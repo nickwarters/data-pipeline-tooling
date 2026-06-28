@@ -11,7 +11,24 @@
  */
 
 /**
- * Context passed to pure view render functions.
+ * Props passed to plain function components.
+ *
+ * @template {Record<string, any>} Props
+ * @callback FunctionComponent
+ * @param {Readonly<Props>} props
+ * @returns {ViewRenderResult}
+ */
+
+/**
+ * Reactive render function for local-signal UI.
+ *
+ * @callback ReactiveRender
+ * @returns {ViewRenderResult}
+ */
+
+/**
+ * Context passed to custom-element shell render functions. Prefer plain
+ * function components plus reactive() for ordinary feature UI.
  *
  * @template {Record<string, any>} Props
  * @typedef {Object} ViewContext
@@ -20,7 +37,7 @@
  */
 
 /**
- * Pure render function for a custom-element-backed view.
+ * Custom-element shell render function.
  *
  * @template {Record<string, any>} Props
  * @callback ViewRender
@@ -29,7 +46,7 @@
  */
 
 /**
- * Hook that runs after the host element is connected.
+ * Hook that runs after a reactive view or custom-element shell is connected.
  *
  * @template {Record<string, any>} Props
  * @callback MountHook
@@ -38,7 +55,9 @@
  */
 
 /**
- * Declarative view definition used by the future component authoring API.
+ * Declarative custom-element shell definition. This is intentionally not the
+ * default component authoring API; most feature UI should be plain functions
+ * returning h() nodes, wrapped by reactive() only when it reads local signals.
  *
  * @template {Record<string, any>} Props
  * @typedef {Object} ViewDefinition
@@ -53,7 +72,8 @@
  */
 
 /**
- * Lifecycle scope used by defineView() to collect mount hooks and cleanup work.
+ * Lifecycle scope used by reactive() and defineView() to collect mount hooks and
+ * cleanup work.
  * Exposed now so lifecycle helper behavior can be tested before defineView()
  * owns render/mount orchestration.
  * @typedef {Object} ViewLifecycle
@@ -85,7 +105,8 @@ function requireLifecycle(helperName) {
 }
 
 /**
- * TODO(simplify-ui): Wire this lifecycle scope into defineView() so ordinary
+ * TODO(simplify-ui): Wire this lifecycle scope into reactive() for plain
+ * function components and defineView() for custom-element shells so ordinary
  * feature components never need to construct it directly.
  *
  * @returns {ViewLifecycle}
@@ -132,9 +153,23 @@ export function createLifecycle() {
 }
 
 /**
- * TODO(simplify-ui): Implement the pure authoring wrapper so feature authors
- * can define custom-element-backed views without writing classes,
- * connectedCallback, disconnectedCallback, or manual render effects.
+ * TODO(simplify-ui): Implement the default function-component wrapper for
+ * local-signal UI. Authors should be able to write `function Question(props) {
+ * const response = signal(props.response); return reactive(() => h(...)); }`
+ * without classes, connectedCallback, disconnectedCallback, or manual render
+ * effects.
+ *
+ * @param {ReactiveRender} render
+ * @returns {HTMLElement | undefined}
+ */
+export function reactive(render) {
+  return undefined;
+}
+
+/**
+ * TODO(simplify-ui): Implement this only as the custom-element shell escape
+ * hatch for route boundaries and SharePoint/browser integration points. Do not
+ * make defineView() the default way to author leaf feature components.
  *
  * @template {Record<string, any>} Props
  * @param {string} tagName
@@ -144,7 +179,7 @@ export function defineView(tagName, definition) {}
 
 /**
  * TODO(simplify-ui): Register an event listener that is automatically removed
- * when the owning view disconnects.
+ * when the owning reactive() view or custom-element shell disconnects.
  *
  * @param {ListenerTarget} target
  * @param {string} type
@@ -162,8 +197,9 @@ export function on(target, type, listener, options) {
 }
 
 /**
- * TODO(simplify-ui): Register mount-time work for the current view context and
- * capture any returned cleanup callback for automatic disposal.
+ * TODO(simplify-ui): Register mount-time work for the current reactive() view
+ * or custom-element shell and capture any returned cleanup callback for
+ * automatic disposal.
  *
  * @param {() => void | Cleanup} hook
  */

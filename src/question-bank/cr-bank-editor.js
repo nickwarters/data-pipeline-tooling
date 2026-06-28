@@ -20,6 +20,10 @@ import './cr-bank-dock.js';
 import '../components/cr-compile-drawer.js';
 import '../components/cr-toast.js';
 
+// TODO(simplify-ui): Convert this class-backed custom element to the simpler
+// function-component model. The target shape is a plain function returning h()
+// nodes, wrapped in reactive() only when local signals need to re-render; keep
+// custom elements only for route or browser-integration shells.
 export class CRBankEditor extends ReactiveElement {
   constructor() {
     super();
@@ -29,8 +33,8 @@ export class CRBankEditor extends ReactiveElement {
   connectedCallback() {
     super.connectedCallback();
     // TODO(simplify-ui): Replace this manual document listener lifecycle with
-    // on(document, 'keydown', handler) from src/lib/view.js when the pure view
-    // wrapper owns mount/disconnect cleanup.
+    // on(document, 'keydown', handler) from src/lib/view.js when this shell's
+    // mount/disconnect cleanup is owned by reactive()/defineView().
     this._key = (/** @type {any} */ e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault?.();

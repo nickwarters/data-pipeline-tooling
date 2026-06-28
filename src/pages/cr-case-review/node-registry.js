@@ -9,6 +9,10 @@ import { h } from '../../lib/html.js';
  * TODO(issue-198): Move the existing CRCaseReview node reuse here without
  * changing element identity expectations that current tests depend on.
  */
+// TODO(simplify-ui): Collapse this controller class into plain action and
+// binding functions as the Case Review page moves to function components plus
+// reactive() for local-signal UI. Avoid preserving controller classes as a
+// second DOM orchestration layer.
 export class CaseReviewNodeRegistry {
   constructor() {
     /** @type {CaseReviewNodeRegistryShape['tabs']} */

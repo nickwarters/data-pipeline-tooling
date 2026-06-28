@@ -3,6 +3,10 @@
 /**
  * Owns conversation panel toggling, keyboard shortcuts, and element assignment.
  */
+// TODO(simplify-ui): Collapse this controller class into plain action and
+// binding functions as the Case Review page moves to function components plus
+// reactive() for local-signal UI. Avoid preserving controller classes as a
+// second DOM orchestration layer.
 export class ConversationPanelController {
   constructor() {
     /** @type {((event: KeyboardEvent) => void) | null} */
@@ -40,8 +44,8 @@ export class ConversationPanelController {
         }
       };
       // TODO(simplify-ui): Replace this manual document listener lifecycle with
-      // on(document, 'keydown', handler) from src/lib/view.js once controller
-      // event binding moves behind the pure view shell.
+      // on(document, 'keydown', handler) from src/lib/view.js once conversation
+      // event binding moves behind a route shell lifecycle.
       if (typeof document !== 'undefined' && document.addEventListener) {
         document.addEventListener('keydown', this.keydownHandler);
       }

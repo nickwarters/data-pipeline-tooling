@@ -85,6 +85,11 @@ dispose(); // stop; future label.set() calls are ignored
 
 ## Worked example: a counter component
 
+> TODO(simplify-ui): Rewrite this example as a plain `Counter(props)`
+> function that returns `h()` nodes and uses `reactive(() => h(...))` for its
+> local `count` signal. `CRElement` should no longer be the introductory signal
+> authoring pattern.
+
 ```js
 // src/components/cr-counter.js
 // @ts-check

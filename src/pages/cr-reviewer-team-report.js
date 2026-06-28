@@ -9,6 +9,10 @@ import { computeTimeWindows } from '../evaluators/time-windows.js';
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
 
+// TODO(simplify-ui): Convert this class-backed custom element to the simpler
+// function-component model. The target shape is a plain function returning h()
+// nodes, wrapped in reactive() only when local signals need to re-render; keep
+// custom elements only for route or browser-integration shells.
 export class CRReviewerTeamReport extends ReactiveElement {
   constructor() {
     super();
@@ -20,9 +24,17 @@ export class CRReviewerTeamReport extends ReactiveElement {
     this.eligibleCaseTypes = [];
 
     /** @type {import('../lib/signal.js').Signal<import('../evaluators/reviewer-team-aggregator.js').AggregateResult | null>} */
-    this._data = signal(/** @type {import('../evaluators/reviewer-team-aggregator.js').AggregateResult | null} */ (null));
+    this._data = signal(
+      /** @type {import('../evaluators/reviewer-team-aggregator.js').AggregateResult | null} */ (
+        null
+      )
+    );
     /** @type {import('../lib/signal.js').Signal<import('../evaluators/time-windows.js').TimeWindows | null>} */
-    this._windows = signal(/** @type {import('../evaluators/time-windows.js').TimeWindows | null} */ (null));
+    this._windows = signal(
+      /** @type {import('../evaluators/time-windows.js').TimeWindows | null} */ (
+        null
+      )
+    );
   }
 
   async connectedCallback() {

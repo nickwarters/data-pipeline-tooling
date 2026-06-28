@@ -9,6 +9,10 @@ import '../components/cr-case-table.js';
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
 
+// TODO(simplify-ui): Convert this class-backed custom element to the simpler
+// function-component model. The target shape is a plain function returning h()
+// nodes, wrapped in reactive() only when local signals need to re-render; keep
+// custom elements only for route or browser-integration shells.
 export class CRTeamCases extends ReactiveElement {
   constructor() {
     super();
@@ -22,7 +26,9 @@ export class CRTeamCases extends ReactiveElement {
     this.queryString = '';
 
     /** @type {import('../lib/signal.js').Signal<import('../sharepoint-client.js').CaseRow[] | null>} */
-    this._cases = signal(/** @type {import('../sharepoint-client.js').CaseRow[] | null} */ (null));
+    this._cases = signal(
+      /** @type {import('../sharepoint-client.js').CaseRow[] | null} */ (null)
+    );
   }
 
   async connectedCallback() {

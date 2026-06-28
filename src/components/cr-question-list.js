@@ -6,6 +6,10 @@ import './cr-question.js';
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 
+// TODO(simplify-ui): Convert this class-backed custom element to the simpler
+// function-component model. The target shape is a plain function returning h()
+// nodes, wrapped in reactive() only when local signals need to re-render; keep
+// custom elements only for route or browser-integration shells.
 export class CRQuestionList extends ReactiveElement {
   constructor() {
     super();
@@ -43,9 +47,10 @@ export class CRQuestionList extends ReactiveElement {
       if (firstNewIndex === -1 && !previous.has(q.id)) firstNewIndex = i;
     });
 
-    // TODO(simplify-ui): Move the generic focus-key snapshot/restore mechanics
-    // into captureFocus()/restoreFocus() in src/lib/view.js, leaving only this
-    // component's "new applicable question appeared" policy here.
+    // TODO(simplify-ui): Move generic focus-key snapshot/restore mechanics into
+    // captureFocus()/restoreFocus() in src/lib/view.js so a future
+    // QuestionList(props) function only keeps its "new applicable question
+    // appeared" focus policy.
     // Capture the user's focus *before* re-rendering. Answering a question can
     // re-evaluate applicability, which rebuilds the list via replaceChildren and
     // detaches (blurring) the focused input. Without this, keyboard users get

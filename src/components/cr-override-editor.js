@@ -45,6 +45,10 @@ import './cr-attribute-menu.js';
  * QA Check; `source` / `sourceCaseId` / `sourceAppealId` stamp provenance, but the
  * write always targets `caseId` (the original row).
  */
+// TODO(simplify-ui): Convert this class-backed custom element to the simpler
+// function-component model. The target shape is a plain function returning h()
+// nodes, wrapped in reactive() only when local signals need to re-render; keep
+// custom elements only for route or browser-integration shells.
 export class CROverrideEditor extends ReactiveElement {
   constructor() {
     super();

@@ -653,7 +653,7 @@
             <div>
               <div class="eyebrow">Proposed target</div>
               <h2 id="target-title">
-                Pure authoring, custom elements underneath
+                Function components first, custom elements at the edges
               </h2>
             </div>
             <p>
@@ -665,23 +665,36 @@
           <div class="two-col">
             <div class="statement">
               <p>
-                <strong>Principle:</strong> route shells may know about custom
-                elements. Feature components should usually be pure render
-                functions plus explicit action functions. Lifecycle, effects,
-                property setters, and teardown belong in the framework.
+                <strong>Principle:</strong> ordinary feature UI should be plain
+                functions that return <code>h()</code> nodes. Use
+                <code>reactive(() =&gt; h(...))</code> only where local signals
+                need to re-render. Custom elements stay at route and browser
+                integration boundaries.
               </p>
             </div>
             <div class="target">
-              <pre><code>defineView('cr-status-banner', {
-  props: {
-    status: 'saved',
-    message: '',
-  },
+              <pre><code>export function Question(props) {
+  const response = signal(props.response ?? '');
 
-  render({ props }) {
-    return h('p', { role: 'status' }, props.message);
-  },
-});</code></pre>
+  return reactive(() =>
+    h('fieldset', {},
+      h('legend', {}, props.text),
+      props.options.map((option) =>
+        h('label', {},
+          h('input', {
+            type: 'radio',
+            checked: response.get() === option,
+            onchange: () => {
+              response.set(option);
+              props.onAnswer?.(option);
+            },
+          }),
+          option
+        )
+      )
+    )
+  );
+}</code></pre>
               <div class="callout">
                 <strong>What authors stop writing</strong>
                 Class declarations, constructors for default props,
@@ -709,11 +722,11 @@
           <div class="timeline">
             <article class="slice">
               <div>
-                <h3>Add <code>defineView()</code></h3>
+                <h3>Add <code>reactive()</code></h3>
                 <p>
-                  Create a small wrapper that defines the custom element class,
-                  applies default props, runs <code>render()</code> in an
-                  effect, and disposes automatically.
+                  Create a small wrapper for plain function components that runs
+                  a render function in an effect, replaces the host children,
+                  and disposes automatically.
                 </p>
               </div>
             </article>
@@ -779,9 +792,10 @@
               <div>
                 <h3>Rewrite the authoring guide</h3>
                 <p>
-                  Make pure function components the default documentation.
-                  Document raw custom elements as an advanced integration escape
-                  hatch only.
+                  Make plain function components the default documentation.
+                  Document <code>defineView()</code>, raw custom elements, and
+                  class-backed elements as advanced route or integration escape
+                  hatches only.
                 </p>
               </div>
             </article>

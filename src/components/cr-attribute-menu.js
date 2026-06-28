@@ -19,6 +19,10 @@ import './cr-people-picker.js';
  * answers signal stays the single source of truth — hence the event does not
  * bubble, leaving the host to re-dispatch with the relevant question id.
  */
+// TODO(simplify-ui): Convert this class-backed custom element to the simpler
+// function-component model. The target shape is a plain function returning h()
+// nodes, wrapped in reactive() only when local signals need to re-render; keep
+// custom elements only for route or browser-integration shells.
 export class CRAttributeMenu extends ReactiveElement {
   constructor() {
     super();
@@ -191,13 +195,16 @@ export class CRAttributeMenu extends ReactiveElement {
     const picker = h('cr-people-picker');
     const p = /** @type {any} */ (picker);
     p.client = this.client;
-    p.addEventListener('cr-person-selected', (/** @type {CustomEvent<Party>} */ ev) => {
-      const detail = /** @type {CustomEvent<Party>} */ (ev).detail;
-      this._select({
-        loginName: detail.loginName,
-        displayName: detail.displayName,
-      });
-    });
+    p.addEventListener(
+      'cr-person-selected',
+      (/** @type {CustomEvent<Party>} */ ev) => {
+        const detail = /** @type {CustomEvent<Party>} */ (ev).detail;
+        this._select({
+          loginName: detail.loginName,
+          displayName: detail.displayName,
+        });
+      }
+    );
     children.push(picker);
 
     return h(

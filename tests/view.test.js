@@ -7,11 +7,13 @@ import {
   createLifecycle,
   defineView,
   on,
+  reactive,
   restoreFocus,
 } from '../src/lib/view.js';
 
 test('view API: exports the future framework primitives', () => {
   assert.equal(typeof defineView, 'function');
+  assert.equal(typeof reactive, 'function');
   assert.equal(typeof createLifecycle, 'function');
   assert.equal(typeof on, 'function');
   assert.equal(typeof afterMount, 'function');
@@ -19,15 +21,15 @@ test('view API: exports the future framework primitives', () => {
   assert.equal(typeof restoreFocus, 'function');
 });
 
-test.todo('defineView: defines a custom element for the supplied tag name');
+test.todo('reactive: renders a plain function component into a host node');
 
-test.todo('defineView: applies default props to new host instances');
+test.todo('reactive: re-renders when signals read by render change');
 
-test.todo('defineView: renders returned nodes into the host element');
+test.todo('reactive: disposes render effects when the host disconnects');
 
-test.todo('defineView: re-renders when signals read by render change');
+test.todo('reactive: supports local signal state inside function components');
 
-test.todo('defineView: disposes render effects when the host disconnects');
+test.todo('defineView: remains available for custom-element shell boundaries');
 
 test('on: removes registered listeners when the owning lifecycle disconnects', () => {
   const lifecycle = createLifecycle();

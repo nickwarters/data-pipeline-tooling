@@ -1,9 +1,9 @@
 # Component Authoring
 
-> TODO(simplify-ui): Rewrite this guide around `defineView()` and pure render
-> functions once `src/lib/view.js` is implemented. Direct `CRElement` /
-> `ReactiveElement` subclassing should become an advanced escape hatch, not the
-> default authoring path.
+> TODO(simplify-ui): Rewrite this guide around plain function components that
+> return `h()` nodes, using `reactive(() => h(...))` only when local signals are
+> read. `defineView()`, `CRElement`, and `ReactiveElement` should become advanced
+> route/integration-shell escape hatches, not the default authoring path.
 
 ## Quick reference
 

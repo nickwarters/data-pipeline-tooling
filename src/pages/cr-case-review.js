@@ -34,6 +34,10 @@ import '../components/cr-tabs.js';
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
 
+// TODO(simplify-ui): Convert this class-backed custom element to the simpler
+// function-component model. The target shape is a plain function returning h()
+// nodes, wrapped in reactive() only when local signals need to re-render; keep
+// custom elements only for route or browser-integration shells.
 export class CRCaseReview extends ReactiveElement {
   constructor() {
     super();
@@ -60,9 +64,9 @@ export class CRCaseReview extends ReactiveElement {
     this._completionController = new CompletionController();
     this._nodeRegistry = createCaseReviewNodeRegistry();
 
-    // TODO(simplify-ui): Collapse this page toward a route shell plus pure
-    // renderCaseReview(viewModel) output once src/lib/view.js can own lifecycle,
-    // listener cleanup, and render effects for ordinary components.
+    // TODO(simplify-ui): Collapse this page toward a route shell that composes
+    // plain function components. Ordinary tab UI should return h() nodes and
+    // use reactive() only where local signals drive re-rendering.
     /** @type {((e: KeyboardEvent) => void) | null} */
     this._keydownHandler = null;
     /** @type {boolean} */

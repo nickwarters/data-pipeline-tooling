@@ -3,6 +3,10 @@
 /**
  * Owns Issues-tab property assignment and event forwarding.
  */
+// TODO(simplify-ui): Collapse this controller class into plain action and
+// binding functions as the Case Review page moves to function components plus
+// reactive() for local-signal UI. Avoid preserving controller classes as a
+// second DOM orchestration layer.
 export class RemediationPanelController {
   /**
    * @param {import('./types.js').CaseReviewShellContext} context

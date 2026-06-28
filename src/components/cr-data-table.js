@@ -15,6 +15,10 @@ import { h } from '../lib/html.js';
  * }} ColumnDef
  */
 
+// TODO(simplify-ui): Convert this class-backed custom element to the simpler
+// function-component model. The target shape is a plain function returning h()
+// nodes, wrapped in reactive() only when local signals need to re-render; keep
+// custom elements only for route or browser-integration shells.
 export class CRDataTable extends ReactiveElement {
   constructor() {
     super();

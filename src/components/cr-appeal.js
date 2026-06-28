@@ -24,6 +24,10 @@ import './cr-override-editor.js';
  * the Section is not rendered at all. At most one Appeal may be open at a time;
  * once every Appeal is resolved a fresh one can be raised, with full history kept.
  */
+// TODO(simplify-ui): Convert this class-backed custom element to the simpler
+// function-component model. The target shape is a plain function returning h()
+// nodes, wrapped in reactive() only when local signals need to re-render; keep
+// custom elements only for route or browser-integration shells.
 export class CRAppeal extends ReactiveElement {
   constructor() {
     super();

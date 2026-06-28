@@ -3,6 +3,10 @@
 /**
  * Owns property assignment for Summary, Notes, and Appeal tabs.
  */
+// TODO(simplify-ui): Collapse this controller class into plain action and
+// binding functions as the Case Review page moves to function components plus
+// reactive() for local-signal UI. Avoid preserving controller classes as a
+// second DOM orchestration layer.
 export class SummaryNotesAppealController {
   /**
    * @param {import('./types.js').CaseReviewShellContext} context

@@ -7,6 +7,10 @@ import { h } from '../lib/html.js';
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
 /** @typedef {import('../services/save-queue.js').SaveQueue} SaveQueue */
 
+// TODO(simplify-ui): Convert this class-backed custom element to the simpler
+// function-component model. The target shape is a plain function returning h()
+// nodes, wrapped in reactive() only when local signals need to re-render; keep
+// custom elements only for route or browser-integration shells.
 export class CRConversation extends ReactiveElement {
   constructor() {
     super();
@@ -122,10 +126,12 @@ export class CRConversation extends ReactiveElement {
     return h(
       'div',
       { class: 'cr-conversation-compose' },
-      (textarea = /** @type {HTMLTextAreaElement} */ (h('textarea', {
-        class: 'cr-conversation-input',
-        'aria-label': 'Message to Responsible Party',
-      }))),
+      (textarea = /** @type {HTMLTextAreaElement} */ (
+        h('textarea', {
+          class: 'cr-conversation-input',
+          'aria-label': 'Message to Responsible Party',
+        })
+      )),
       h(
         'button',
         {

@@ -2,9 +2,9 @@
 
 /** @returns {Promise<void>} */
 export async function registerComponents() {
-  // TODO(simplify-ui): Once defineView() owns customElements.define(), keep this
-  // file as the route-level module loader rather than the place every feature
-  // author must remember to register class-backed components.
+  // TODO(simplify-ui): Once ordinary UI is plain function components, keep this
+  // file focused on route/integration shell modules rather than requiring every
+  // feature author to register class-backed custom elements.
   await Promise.all([
     import('../components/cr-allocation.js'),
     import('../components/cr-app-nav.js'),

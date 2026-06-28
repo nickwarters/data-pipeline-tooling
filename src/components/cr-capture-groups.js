@@ -24,6 +24,10 @@ let uid = 0;
  * In read-only mode (`!canCapture`) only populated fields are shown, as static
  * `label: value` text, every group expanded — this is what the Summary renders.
  */
+// TODO(simplify-ui): Convert this class-backed custom element to the simpler
+// function-component model. The target shape is a plain function returning h()
+// nodes, wrapped in reactive() only when local signals need to re-render; keep
+// custom elements only for route or browser-integration shells.
 export class CRCaptureGroups extends ReactiveElement {
   constructor() {
     super();

@@ -15,6 +15,10 @@ import { CRCaseTable } from '../components/cr-case-table.js';
  * }} OutcomeSummary
  */
 
+// TODO(simplify-ui): Convert this class-backed custom element to the simpler
+// function-component model. The target shape is a plain function returning h()
+// nodes, wrapped in reactive() only when local signals need to re-render; keep
+// custom elements only for route or browser-integration shells.
 export class CRResponsiblePartyDashboard extends ReactiveElement {
   constructor() {
     super();
@@ -72,8 +76,12 @@ export class CRResponsiblePartyDashboard extends ReactiveElement {
         .map(([month, counts]) => ({ month, counts })),
     };
 
-    const remediationCases = cases.filter((/** @type {CaseRow} */ c) => this._hasOpenActions(c));
-    const unreadCases = cases.filter((/** @type {CaseRow} */ c) => this._hasUnreadMessages(c));
+    const remediationCases = cases.filter((/** @type {CaseRow} */ c) =>
+      this._hasOpenActions(c)
+    );
+    const unreadCases = cases.filter((/** @type {CaseRow} */ c) =>
+      this._hasUnreadMessages(c)
+    );
 
     return { outcomeSummary, remediationCases, unreadCases };
   }

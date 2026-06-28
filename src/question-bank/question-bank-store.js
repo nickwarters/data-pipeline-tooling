@@ -85,9 +85,9 @@ export const diffCounts = computed(() => {
  * @param {(types: Record<string, QuestionBank>) => void} mutator
  */
 export function commit(mutator) {
-  // TODO(simplify-ui): Replace this local focus-key snapshot/restore with the
-  // shared captureFocus()/restoreFocus() helpers from src/lib/view.js once
-  // framework-managed render passes own focus preservation.
+  // TODO(simplify-ui): Replace this local focus-key snapshot/restore with
+  // captureFocus()/restoreFocus() from src/lib/view.js once reactive() render
+  // passes own focus preservation for function components.
   const doc = /** @type {any} */ (globalThis).document;
   const active = doc?.activeElement;
   const focusKey = active?.getAttribute?.('data-focus-key') ?? null;

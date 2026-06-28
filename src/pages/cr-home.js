@@ -10,6 +10,10 @@ import { h } from '../lib/html.js';
  * Visitors (no role) get an explainer only; access is managed out-of-band by
  * their team, so there is no in-app access-request affordance.
  */
+// TODO(simplify-ui): Convert this class-backed custom element to the simpler
+// function-component model. The target shape is a plain function returning h()
+// nodes, wrapped in reactive() only when local signals need to re-render; keep
+// custom elements only for route or browser-integration shells.
 export class CRHome extends ReactiveElement {
   constructor() {
     super();

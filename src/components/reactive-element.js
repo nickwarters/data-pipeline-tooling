@@ -8,9 +8,10 @@ import { effect } from '../lib/signal.js';
  * inside an effect. Any signals read during `render()` will automatically trigger
  * a re-render when they change.
  *
- * TODO(simplify-ui): Replace direct subclass authoring with the pure
- * defineView() wrapper in src/lib/view.js so feature components do not need to
- * know about connectedCallback, render effects, or replaceChildren.
+ * TODO(simplify-ui): Replace direct subclass authoring with plain function
+ * components that return h() nodes, using reactive() from src/lib/view.js when
+ * local signals drive re-rendering. Keep custom elements only for route or
+ * browser-integration shells.
  */
 export class ReactiveElement extends CRElement {
   constructor() {

@@ -4,6 +4,10 @@ import { h } from '../lib/html.js';
 import { commit, currentBank } from '../question-bank/question-bank-store.js';
 import { normaliseConfiguredActions } from '../evaluators/configured-outcome.js';
 
+// TODO(simplify-ui): Convert this class-backed custom element to the simpler
+// function-component model. The target shape is a plain function returning h()
+// nodes, wrapped in reactive() only when local signals need to re-render; keep
+// custom elements only for route or browser-integration shells.
 export class CRRemediationEditor extends ReactiveElement {
   constructor() {
     super();

@@ -31,6 +31,10 @@ import './cr-override-editor.js';
  * to the original row's `overrides[]`, and its `override` capability is resolved
  * by the page against the linked original (passed in as `overrideAccess`).
  */
+// TODO(simplify-ui): Convert this class-backed custom element to the simpler
+// function-component model. The target shape is a plain function returning h()
+// nodes, wrapped in reactive() only when local signals need to re-render; keep
+// custom elements only for route or browser-integration shells.
 export class CRSourceCase extends ReactiveElement {
   constructor() {
     super();

@@ -1,5 +1,11 @@
 # Sharing Signals Between Components
 
+> TODO(simplify-ui): Rewrite this guide around shared signals passed into plain
+> function components. The future examples should compose `QuestionList(props)`
+> and `Outcome(props)` functions with `h()` nodes, using `reactive()` only where
+> the shared signal is read during render; do not teach `document.createElement`,
+> `connectedCallback`, or `CRElement.subscribe()` as the default path.
+
 ## Quick reference
 
 ```js
