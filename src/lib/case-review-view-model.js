@@ -13,8 +13,10 @@ import {
   SUMMARY_SECTIONS,
 } from '../services/section-access.js';
 import { CaseMachine } from './case-machine.js';
-// TODO(issue-199): Import `loadCaseTypeConfig` from `../../case-types/manifest.js`
-// and route both primary and QA source Case Type resolution through the manifest.
+import {
+  UnknownCaseTypeError,
+  loadCaseTypeConfig,
+} from '../../case-types/manifest.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../services/save-queue.js').SaveQueue} SaveQueue */
@@ -111,17 +113,27 @@ export class CaseReviewViewModel {
         ? caseRow.questionBankVersion
         : null;
 
-    // TODO(issue-199): Replace the data-constructed dynamic import below with
-    // manifest-backed Case Type loading so unknown `caseRow.caseType` values
-    // become a clear user-facing error and useful developer error.
-    const [caseTypeModule, exportHash, versionedExport] = await Promise.all([
-      import(`../../case-types/${caseRow.caseType}.js`),
-      this.client.getExportHash(caseRow.caseType),
-      versionHash
-        ? this.client.getVersionedExport(caseRow.caseType, versionHash)
-        : Promise.resolve(null),
-    ]);
-    const config = /** @type {CaseTypeConfig} */ (caseTypeModule.default);
+    let config;
+    let exportHash;
+    let versionedExport;
+    try {
+      [config, exportHash, versionedExport] = await Promise.all([
+        loadCaseTypeConfig(caseRow.caseType),
+        this.client.getExportHash(caseRow.caseType),
+        versionHash
+          ? this.client.getVersionedExport(caseRow.caseType, versionHash)
+          : Promise.resolve(null),
+      ]);
+    } catch (error) {
+      if (error instanceof UnknownCaseTypeError) {
+        console.error(error);
+        this.error.set(
+          `This Case uses an unsupported Case Type: ${caseRow.caseType}.`
+        );
+        return;
+      }
+      throw error;
+    }
     this.config = config;
     this.exportHash = exportHash;
 
