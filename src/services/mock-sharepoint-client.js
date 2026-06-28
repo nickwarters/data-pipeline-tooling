@@ -66,6 +66,12 @@ export class MockSharePointClient {
    * @returns {Promise<PatchResult>}
    */
   async patchCase(id, fields, etag) {
+    console.log('MockSharePointClient.patchCase payload', {
+      id,
+      etag,
+      fields,
+    });
+
     if (this._injectNext412) {
       this._injectNext412 = false;
       return { ok: false, status: 412 };
