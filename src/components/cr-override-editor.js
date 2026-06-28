@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import {
   isFailure,
@@ -282,7 +282,7 @@ export function renderOverrideFailureBlock(props, question) {
   );
 }
 
-export class CROverrideEditor extends ReactiveElement {
+export class CROverrideEditor extends ShellElement {
   constructor() {
     super();
     /** @type {CaseRow | null} */

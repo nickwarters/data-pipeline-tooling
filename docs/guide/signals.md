@@ -81,7 +81,6 @@ dispose(); // stop; future label.set() calls are ignored
 
 Use `reactive()` for signal-driven DOM. Use `effect()` directly only for
 non-rendering side effects, and keep the returned disposer somewhere explicit.
-`CRElement.subscribe()` exists only for legacy custom-element shells.
 
 ---
 

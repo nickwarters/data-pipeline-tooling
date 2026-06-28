@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from '../components/reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { ReportsIndexPage } from './reports-index-page.js';
 
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
@@ -8,7 +8,7 @@ export { ReportsIndexPage };
 
 // TODO(simplify-ui): Remove this compatibility wrapper once all routes and
 // tests consume ReportsIndexPage() directly.
-export class CRReportsIndex extends ReactiveElement {
+export class CRReportsIndex extends ShellElement {
   constructor() {
     super();
     /** @type {Capabilities} */

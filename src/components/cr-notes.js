@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 
 /** @typedef {import('../services/save-queue.js').SaveQueue} SaveQueue */
@@ -75,7 +75,7 @@ export function notesBox({
   ];
 }
 
-export class CRNotes extends ReactiveElement {
+export class CRNotes extends ShellElement {
   constructor() {
     super();
     /** @type {string} */

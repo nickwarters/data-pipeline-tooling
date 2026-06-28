@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from '../components/reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import {
   activeSlug,
@@ -160,7 +160,7 @@ export function BankRail(props) {
   );
 }
 
-export class CRBankRail extends ReactiveElement {
+export class CRBankRail extends ShellElement {
   render() {
     return BankRail({
       bank: currentBank.get(),

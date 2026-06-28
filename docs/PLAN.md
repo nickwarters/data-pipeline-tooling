@@ -28,7 +28,7 @@ These have **deliberately not** been decided up-front because they're better ans
 **Framework primitives**
 
 - `signal()` / `computed()` / `effect()` — ~50 LOC reactivity primitive
-- `CRElement` base class (extends `HTMLElement`, light DOM, lifecycle wires signal subscriptions, auto-unsubscribe on disconnect)
+- `h()` plus `reactive()` / `defineView()` view primitives for plain function UI and shell boundaries
 - `Router` — hash parsing, view registry (`#/dashboard`, `#/case/{id}`), mount/unmount
 - `SharePointClient` JSDoc typedef — the interface every REST consumer codes against
 - `MockSharePointClient` — in-memory store seeded from `dev/fixtures/`

@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
@@ -115,7 +115,7 @@ export function OwnerSummary({ summaries }) {
   return [h2, ...cards];
 }
 
-export class CROwnerSummary extends ReactiveElement {
+export class CROwnerSummary extends ShellElement {
   constructor() {
     super();
     /** @type {SharePointClient | null} */

@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 
 /** @typedef {import('../sharepoint-client.js').Message} Message */
@@ -158,7 +158,7 @@ export async function refreshConversation(context) {
   }
 }
 
-export class CRConversation extends ReactiveElement {
+export class CRConversation extends ShellElement {
   constructor() {
     super();
     /** @type {Message[]} */

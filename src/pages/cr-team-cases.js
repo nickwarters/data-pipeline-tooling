@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from '../components/reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { signal } from '../lib/signal.js';
 import { h } from '../lib/html.js';
 import { parseTeamCasesParams } from '../services/team-cases-params.js';
@@ -13,7 +13,7 @@ import '../components/cr-case-table.js';
 // function-component model. The target shape is a plain function returning h()
 // nodes, wrapped in reactive() only when local signals need to re-render; keep
 // custom elements only for route or browser-integration shells.
-export class CRTeamCases extends ReactiveElement {
+export class CRTeamCases extends ShellElement {
   constructor() {
     super();
     /** @type {SharePointClient|null} */

@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from '../components/reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import { currentBank, diffCounts, drawerOpen } from './question-bank-store.js';
 
@@ -48,7 +48,7 @@ export function BankDock(props) {
   );
 }
 
-export class CRBankDock extends ReactiveElement {
+export class CRBankDock extends ShellElement {
   render() {
     return BankDock({
       bank: currentBank.get(),

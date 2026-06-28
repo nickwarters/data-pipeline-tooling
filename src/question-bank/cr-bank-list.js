@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from '../components/reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import {
   activeSlug,
@@ -86,7 +86,7 @@ export function BankList(props) {
   );
 }
 
-export class CRBankList extends ReactiveElement {
+export class CRBankList extends ShellElement {
   render() {
     return BankList({
       bank: currentBank.get(),

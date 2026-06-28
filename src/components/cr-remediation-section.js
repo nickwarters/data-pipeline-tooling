@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import { evaluate } from '../evaluators/applicability-evaluator.js';
 import { isFailure } from '../evaluators/failure-evaluator.js';
@@ -208,7 +208,7 @@ export function renderRemediationCapture(props, li, q) {
   li.appendChild(/** @type {any} */ (cg));
 }
 
-export class CRRemediationSection extends ReactiveElement {
+export class CRRemediationSection extends ShellElement {
   constructor() {
     super();
     /** @type {QuestionDefinition[]} */

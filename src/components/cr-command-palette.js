@@ -1,6 +1,6 @@
 // @ts-check
 import { signal } from '../lib/signal.js';
-import { ReactiveElement } from './reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import {
   isOpen,
@@ -214,7 +214,7 @@ export function CommandPalette(state) {
   );
 }
 
-export class CRCommandPalette extends ReactiveElement {
+export class CRCommandPalette extends ShellElement {
   constructor() {
     super();
     this._state = createCommandPaletteState();

@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
@@ -78,7 +78,7 @@ export function AppNav({ capabilities, hash }) {
   return { node, navItems };
 }
 
-export class CRAppNav extends ReactiveElement {
+export class CRAppNav extends ShellElement {
   constructor() {
     super();
     /** @type {Capabilities} */

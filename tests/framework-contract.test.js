@@ -22,10 +22,10 @@ test('framework contract: component authoring is function-first', () => {
   const doc = read('docs/guide/component-authoring.md');
 
   assert.match(doc, /Write new UI as plain functions/);
-  assert.match(doc, /legacy integration-shell APIs/);
+  assert.match(doc, /Do not add lifecycle-backed base classes/);
 
   for (const block of jsCodeBlocks(doc)) {
-    assert.doesNotMatch(block, /extends\s+(CRElement|ReactiveElement)/);
+    assert.doesNotMatch(block, /extends\s+[A-Z]\w+/);
     assert.doesNotMatch(block, /connectedCallback\s*\(/);
     assert.doesNotMatch(block, /disconnectedCallback\s*\(/);
   }

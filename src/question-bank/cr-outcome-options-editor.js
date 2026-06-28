@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from '../components/reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import { activeSlug, commit, currentBank } from './question-bank-store.js';
 
@@ -92,7 +92,7 @@ export function OutcomeOptionsEditor(props) {
   );
 }
 
-export class CROutcomeOptionsEditor extends ReactiveElement {
+export class CROutcomeOptionsEditor extends ShellElement {
   render() {
     const bank = currentBank.get();
     return OutcomeOptionsEditor({

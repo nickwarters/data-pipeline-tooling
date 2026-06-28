@@ -95,6 +95,10 @@ import { effect } from './signal.js';
 /** @type {{ cleanups: Cleanup[], mountHooks: Array<() => void | Cleanup>, mounted: boolean } | null} */
 let activeLifecycle = null;
 
+const HTMLElementBase = /** @type {typeof HTMLElement} */ (
+  /** @type {unknown} */ (globalThis.HTMLElement ?? class {})
+);
+
 /**
  * @param {ViewRenderResult} content
  * @returns {Node[]}
@@ -208,6 +212,68 @@ export function reactive(render) {
   const disconnect = mountReactiveRender(host, render);
   /** @type {any} */ (host).disconnectedCallback = disconnect;
   return host;
+}
+
+/**
+ * Minimal custom-element shell for the remaining browser integration points.
+ * Prefer plain functions returning h() nodes for feature UI; use this only when
+ * a DOM-defined element boundary is still required by routes or existing tests.
+ */
+export class ShellElement extends HTMLElementBase {
+  constructor() {
+    super();
+    /** @type {Cleanup | null} */
+    this._viewDisconnect = null;
+    /** @type {(() => void) | null} */
+    this._shellRenderNow = null;
+    /** @type {Cleanup[]} */
+    this._shellDisposes = [];
+  }
+
+  connectedCallback() {
+    if (this._viewDisconnect) {
+      this._shellRenderNow?.();
+      return;
+    }
+    const host = /** @type {HTMLElement} */ (this);
+    const lifecycle = createLifecycle();
+    const renderNow = () => {
+      const snapshot = captureFocus(host);
+      lifecycle.disconnect();
+      const content = lifecycle.run(() => this.render());
+      replaceHostChildren(host, content);
+      lifecycle.mount();
+      restoreFocus(host, snapshot);
+    };
+    this._shellRenderNow = renderNow;
+    const disposeEffect = effect(renderNow);
+    this._viewDisconnect = () => {
+      disposeEffect();
+      lifecycle.disconnect();
+    };
+  }
+
+  disconnectedCallback() {
+    if (!this._viewDisconnect) return;
+    this._viewDisconnect();
+    this._viewDisconnect = null;
+    this._shellRenderNow = null;
+    for (const dispose of this._shellDisposes.splice(0).reverse()) dispose();
+  }
+
+  /** @returns {ViewRenderResult} */
+  render() {
+    return undefined;
+  }
+
+  /**
+   * @template T
+   * @param {{ get: () => T }} sig
+   * @param {(value: T) => void} cb
+   */
+  subscribe(sig, cb) {
+    this._shellDisposes.push(effect(() => cb(sig.get())));
+  }
 }
 
 /**

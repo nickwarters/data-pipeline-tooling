@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
@@ -40,7 +40,7 @@ export async function getUnassignedCases({ client, eligibleCaseTypes }) {
     .sort((a, b) => ((a.created ?? '') < (b.created ?? '') ? -1 : 1));
 }
 
-export class CRAllocation extends ReactiveElement {
+export class CRAllocation extends ShellElement {
   constructor() {
     super();
     /** @type {SharePointClient | null} */

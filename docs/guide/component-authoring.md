@@ -3,9 +3,8 @@
 Write new UI as plain functions that return `h()` nodes. Reach for `signal()`
 for local state and `reactive()` when a host needs to re-render from signals.
 
-`CRElement`, `ReactiveElement`, `connectedCallback()`, and
-`disconnectedCallback()` are legacy integration-shell APIs. Do not use them for
-new feature components.
+Do not add lifecycle-backed base classes for feature components. Keep browser
+custom elements at route or integration boundaries only.
 
 ## Quick Reference
 
@@ -118,11 +117,11 @@ export function KeyboardHelp() {
 }
 ```
 
-## Legacy Shells
+## Shells
 
-Use `defineView()` or an existing custom element only where the browser boundary
-is genuinely useful, such as route shells, SharePoint integration, or preserving
-compatibility while old code is migrated.
+Use `defineView()` only where the browser boundary is genuinely useful, such as
+route shells or SharePoint integration. Existing shell elements should delegate
+their UI to plain functions and lifecycle helpers.
 
 Do not add new components to a global registry. Routes import the shell modules
 they still create, and ordinary UI is composed by calling functions.

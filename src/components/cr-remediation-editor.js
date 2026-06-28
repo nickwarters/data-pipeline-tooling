@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import { commit, currentBank } from '../question-bank/question-bank-store.js';
 import { normaliseConfiguredActions } from '../evaluators/configured-outcome.js';
@@ -143,7 +143,7 @@ export function RemediationEditor(props) {
   return wrap;
 }
 
-export class CRRemediationEditor extends ReactiveElement {
+export class CRRemediationEditor extends ShellElement {
   constructor() {
     super();
     /** @type {any} */

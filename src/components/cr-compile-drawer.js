@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h, unsafeHTML } from '../lib/html.js';
 import {
   baseline,
@@ -19,7 +19,7 @@ import {
 // function-component model. The target shape is a plain function returning h()
 // nodes, wrapped in reactive() only when local signals need to re-render; keep
 // custom elements only for route or browser-integration shells.
-export class CRCompileDrawer extends ReactiveElement {
+export class CRCompileDrawer extends ShellElement {
   _render() {
     const content = this.render();
     if (content !== undefined) {

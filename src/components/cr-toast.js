@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import { toastMsg } from '../question-bank/question-bank-store.js';
 
@@ -7,7 +7,7 @@ import { toastMsg } from '../question-bank/question-bank-store.js';
 // function-component model. The target shape is a plain function returning h()
 // nodes, wrapped in reactive() only when local signals need to re-render; keep
 // custom elements only for route or browser-integration shells.
-export class CRToast extends ReactiveElement {
+export class CRToast extends ShellElement {
   _render() {
     const content = this.render();
     if (Array.isArray(content)) {

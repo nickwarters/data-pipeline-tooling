@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
@@ -95,7 +95,7 @@ export async function searchPeople(context, query) {
   context.renderResults(people, q);
 }
 
-export class CRPeoplePicker extends ReactiveElement {
+export class CRPeoplePicker extends ShellElement {
   constructor() {
     super();
     /** @type {SharePointClient | null} */
@@ -123,8 +123,6 @@ export class CRPeoplePicker extends ReactiveElement {
   }
 
   connectedCallback() {
-    // ReactiveElement's connectedCallback will call render() inside an effect,
-    // but since we don't use signals here, we do an initial render manually.
     super.connectedCallback();
     this._render();
   }

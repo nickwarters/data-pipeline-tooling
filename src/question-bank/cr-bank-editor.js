@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from '../components/reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import { drawerOpen } from './question-bank-store.js';
 
@@ -79,7 +79,7 @@ export function bindBankEditorKeys(target) {
   return () => target.removeEventListener('keydown', key);
 }
 
-export class CRBankEditor extends ReactiveElement {
+export class CRBankEditor extends ShellElement {
   constructor() {
     super();
     /** @type {(() => void) | null} */

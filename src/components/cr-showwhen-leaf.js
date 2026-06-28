@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import { commit, currentBank } from '../question-bank/question-bank-store.js';
 import { commitTreeFor } from '../question-bank/question-bank-tree.js';
@@ -71,7 +71,7 @@ export function ShowwhenLeaf(props) {
   );
 }
 
-export class CRShowwhenLeaf extends ReactiveElement {
+export class CRShowwhenLeaf extends ShellElement {
   constructor() {
     super();
     /** @type {any} */ this.question = null;

@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import {
   activeSlug,
@@ -152,7 +152,7 @@ export function QuestionCard(props) {
   return [stripe, h('div', { class: 'card-head' }, num, body, actions)];
 }
 
-export class CRQuestionCard extends ReactiveElement {
+export class CRQuestionCard extends ShellElement {
   constructor() {
     super();
     /** @type {any} */ this.question = null;

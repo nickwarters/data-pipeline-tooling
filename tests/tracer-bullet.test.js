@@ -1,15 +1,9 @@
 // @ts-check
-// TODO(simplify-ui): Rewrite these lifecycle-heavy tests around the
-// future function-component API. Prefer asserting plain functions, h() output,
-// reactive() updates, and route-shell behavior over manual connectedCallback()/
-// disconnectedCallback() calls on custom element classes.
-
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 // ===== MINIMAL DOM STUBS =====
-// Must be set before any import that transitively loads cr-element.js,
-// because CRElement does: const Base = globalThis.HTMLElement at eval time.
+// Must be set before imports that create custom-element shell classes.
 
 class StubEl {
   constructor() {

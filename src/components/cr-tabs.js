@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 
 /**
@@ -130,7 +130,7 @@ export function Tabs({
  *   tabs.selected = 'one';
  *   tabs.addEventListener('cr-tab-change', e => console.log(e.detail.id));
  */
-export class CRTabs extends ReactiveElement {
+export class CRTabs extends ShellElement {
   constructor() {
     super();
     /** @type {Tab[]} */
@@ -175,7 +175,7 @@ export class CRTabs extends ReactiveElement {
       new CustomEvent('cr-tab-change', { detail: { id }, bubbles: true })
     );
     // Force re-render and replace children manually because tabs/selected are not signals
-    if (this._renderDispose) {
+    if (this._viewDisconnect) {
       const tree = this.render();
       this.replaceChildren(...(Array.isArray(tree) ? tree : [tree]));
       if (this._focusNode) {

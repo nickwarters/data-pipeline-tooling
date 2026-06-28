@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from '../components/reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import { CaseReviewViewModel } from '../lib/case-review-view-model.js';
 import { updateCaseReviewHeader } from './cr-case-review/header-controller.js';
@@ -48,7 +48,7 @@ import '../components/cr-tabs.js';
 // function-component model. The target shape is a plain function returning h()
 // nodes, wrapped in reactive() only when local signals need to re-render; keep
 // custom elements only for route or browser-integration shells.
-export class CRCaseReview extends ReactiveElement {
+export class CRCaseReview extends ShellElement {
   constructor() {
     super();
     /** @type {SharePointClient | null} */

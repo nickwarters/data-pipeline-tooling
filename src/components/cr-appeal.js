@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import { isFailure } from '../evaluators/failure-evaluator.js';
 import { buildCaptureControl } from '../lib/capture-engine.js';
@@ -320,7 +320,7 @@ export function buildAppealOverrideEditor(props) {
   return editor;
 }
 
-export class CRAppeal extends ReactiveElement {
+export class CRAppeal extends ShellElement {
   constructor() {
     super();
     /** @type {CaseRow | null} */

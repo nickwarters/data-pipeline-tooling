@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { signal, computed } from '../lib/signal.js';
 import { h } from '../lib/html.js';
 
@@ -128,7 +128,7 @@ export function DataTable({
   return table;
 }
 
-export class CRDataTable extends ReactiveElement {
+export class CRDataTable extends ShellElement {
   constructor() {
     super();
 

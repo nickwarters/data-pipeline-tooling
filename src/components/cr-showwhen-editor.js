@@ -1,5 +1,5 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
+import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import {
   countLeaves,
@@ -53,7 +53,7 @@ export function ShowwhenEditor(props) {
   );
 }
 
-export class CRShowwhenEditor extends ReactiveElement {
+export class CRShowwhenEditor extends ShellElement {
   constructor() {
     super();
     /** @type {any} */

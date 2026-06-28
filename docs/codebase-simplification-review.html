@@ -523,10 +523,9 @@
 
           <div class="metrics" role="list" aria-label="Review metrics">
             <div class="metric" role="listitem">
-              <b>47</b>
+              <b>0</b>
               <span
-                ><code>ReactiveElement</code> subclasses under
-                <code>src</code></span
+                >old framework base-class imports under <code>src</code></span
               >
             </div>
             <div class="metric" role="listitem">
@@ -593,15 +592,13 @@
             <article class="finding" data-priority="p2">
               <h3><span class="tag">P2</span> Mixed render models</h3>
               <p>
-                <code>ReactiveElement</code> already renders inside a signal
-                effect, but components still maintain private
+                The old base-class render surface has been removed. Remaining
+                shell components should continue moving private
                 <code>_render()</code> methods, custom
                 <code>update()</code> paths, and direct
-                <code>replaceChildren()</code> calls.
+                <code>replaceChildren()</code> calls toward plain functions.
               </p>
-              <a class="code-ref" href="../src/components/reactive-element.js"
-                >src/components/reactive-element.js</a
-              >
+              <a class="code-ref" href="../src/lib/view.js">src/lib/view.js</a>
             </article>
 
             <article class="finding" data-priority="p2">
