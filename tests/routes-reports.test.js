@@ -28,6 +28,15 @@ function makeDocSpy() {
     createElement(/** @type {string} */ tag) {
       const el = /** @type {any} */ ({
         tag,
+        tagName: tag.toUpperCase(),
+        textContent: '',
+        className: '',
+        href: '',
+        _children: [],
+        appendChild(/** @type {any} */ child) {
+          this._children.push(child);
+          return child;
+        },
         setAttribute() {},
         replaceChildren() {},
       });
@@ -65,6 +74,37 @@ test('reports route: registers #/reports and #/reports/reviewer-team', () => {
   assert.ok(
     router._routes.some((r) => r.re.test('#/reports/reviewer-team')),
     '#/reports/reviewer-team should be registered'
+  );
+});
+
+test('reports route: #/reports renders ReportsIndexPage directly', () => {
+  makeDocSpy();
+  const rendered = /** @type {any[]} */ ([]);
+
+  const router = new Router();
+  const container = {
+    replaceChildren(/** @type {any[]} */ ...children) {
+      rendered.splice(0, rendered.length, ...children);
+    },
+  };
+  router._container = /** @type {any} */ (container);
+  register(
+    router,
+    /** @type {any} */ ({
+      capabilities: { isReviewerManager: true, ownedCaseTypes: [] },
+      client: {},
+      currentUser: { id: 'u1' },
+      eligibleCaseTypes: [],
+    })
+  );
+
+  router.navigate('#/reports');
+
+  assert.equal(rendered.length, 1, 'reports index should render one card');
+  assert.equal(rendered[0].tagName, 'DIV');
+  assert.equal(
+    rendered[0]._children[0].textContent,
+    'Reviewer Team Performance'
   );
 });
 

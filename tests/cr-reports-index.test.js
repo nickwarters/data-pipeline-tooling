@@ -1,9 +1,4 @@
 // @ts-check
-// TODO(simplify-ui): Rewrite these lifecycle-heavy tests around the
-// future function-component API. Prefer asserting plain functions, h() output,
-// reactive() updates, and route-shell behavior over manual connectedCallback()/
-// disconnectedCallback() calls on custom element classes.
-
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -56,7 +51,8 @@ class StubEl {
 /** @type {any} */ (globalThis).customElements = { define() {} };
 
 // ===== IMPORTS (after stubs) =====
-const { CRReportsIndex } = await import('../src/pages/cr-reports-index.js');
+const { ReportsIndexPage, CRReportsIndex } =
+  await import('../src/pages/cr-reports-index.js');
 
 /** @returns {import('../src/services/permissions.js').Capabilities} */
 function managerCaps() {
@@ -106,40 +102,49 @@ function findLink(node, href) {
   return null;
 }
 
-test('cr-reports-index: reviewer manager sees Reviewer Team Performance card', () => {
-  const el = new CRReportsIndex();
-  el.capabilities = managerCaps();
-  el.connectedCallback();
+/** @param {Node[]} nodes @returns {StubEl} */
+function wrapNodes(nodes) {
+  const root = new StubEl();
+  root.append(.../** @type {StubEl[]} */ (/** @type {unknown} */ (nodes)));
+  return root;
+}
+
+test('ReportsIndexPage: reviewer manager sees Reviewer Team Performance card', () => {
+  const root = wrapNodes(ReportsIndexPage({ capabilities: managerCaps() }));
   assert.ok(
-    hasText(el, 'Reviewer Team Performance'),
+    hasText(root, 'Reviewer Team Performance'),
     'should render card title'
   );
 });
 
-test('cr-reports-index: reviewer manager card links to #/reports/reviewer-team', () => {
-  const el = new CRReportsIndex();
-  el.capabilities = managerCaps();
-  el.connectedCallback();
-  const link = findLink(el, '#/reports/reviewer-team');
+test('ReportsIndexPage: reviewer manager card links to #/reports/reviewer-team', () => {
+  const root = wrapNodes(ReportsIndexPage({ capabilities: managerCaps() }));
+  const link = findLink(root, '#/reports/reviewer-team');
   assert.ok(link, 'should render link to #/reports/reviewer-team');
 });
 
-test('cr-reports-index: non-manager sees empty-state message', () => {
+test('ReportsIndexPage: non-manager sees empty-state message', () => {
+  const root = wrapNodes(ReportsIndexPage({ capabilities: nonManagerCaps() }));
+  assert.ok(
+    hasText(root, "You don't have access to any reports"),
+    'should render empty-state'
+  );
+});
+
+test('ReportsIndexPage: non-manager does not see Reviewer Team Performance card', () => {
+  const root = wrapNodes(ReportsIndexPage({ capabilities: nonManagerCaps() }));
+  assert.ok(
+    !hasText(root, 'Reviewer Team Performance'),
+    'should not render card for non-manager'
+  );
+});
+
+test('CRReportsIndex: compatibility wrapper delegates to ReportsIndexPage', () => {
   const el = new CRReportsIndex();
   el.capabilities = nonManagerCaps();
   el.connectedCallback();
   assert.ok(
     hasText(el, "You don't have access to any reports"),
-    'should render empty-state'
-  );
-});
-
-test('cr-reports-index: non-manager does not see Reviewer Team Performance card', () => {
-  const el = new CRReportsIndex();
-  el.capabilities = nonManagerCaps();
-  el.connectedCallback();
-  assert.ok(
-    !hasText(el, 'Reviewer Team Performance'),
-    'should not render card for non-manager'
+    'wrapper should render the same empty-state'
   );
 });

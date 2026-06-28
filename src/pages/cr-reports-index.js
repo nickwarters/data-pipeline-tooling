@@ -1,13 +1,13 @@
 // @ts-check
 import { ReactiveElement } from '../components/reactive-element.js';
-import { h } from '../lib/html.js';
+import { ReportsIndexPage } from './reports-index-page.js';
 
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
 
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
+export { ReportsIndexPage };
+
+// TODO(simplify-ui): Remove this compatibility wrapper once all routes and
+// tests consume ReportsIndexPage() directly.
 export class CRReportsIndex extends ReactiveElement {
   constructor() {
     super();
@@ -25,23 +25,7 @@ export class CRReportsIndex extends ReactiveElement {
   }
 
   render() {
-    /** @type {Node[]} */
-    const children = [];
-
-    if (this.capabilities.isReviewerManager) {
-      children.push(
-        h(
-          'div',
-          { className: 'cr-report-card' },
-          h('h2', {}, 'Reviewer Team Performance'),
-          h('a', { href: '#/reports/reviewer-team' }, 'View report')
-        )
-      );
-    } else {
-      children.push(h('p', {}, "You don't have access to any reports"));
-    }
-
-    return children;
+    return ReportsIndexPage({ capabilities: this.capabilities });
   }
 }
 

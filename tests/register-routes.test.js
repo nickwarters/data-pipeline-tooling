@@ -247,13 +247,23 @@ test('registerRoutes: registers #/reports route', () => {
   );
 });
 
-test('registerRoutes: #/reports mount creates cr-reports-index element', () => {
-  const created = /** @type {string[]} */ ([]);
+test('registerRoutes: #/reports mount renders reports index directly', () => {
+  const rendered = /** @type {any[]} */ ([]);
   const origCreate = /** @type {any} */ (globalThis).document;
   /** @type {any} */ (globalThis).document = {
     createElement(/** @type {string} */ tag) {
-      created.push(tag);
-      return { setAttribute() {} };
+      return {
+        tagName: tag.toUpperCase(),
+        textContent: '',
+        className: '',
+        href: '',
+        _children: /** @type {any[]} */ ([]),
+        appendChild(/** @type {any} */ child) {
+          this._children.push(child);
+          return child;
+        },
+        setAttribute() {},
+      };
     },
     createTreeWalker() {
       return {
@@ -266,14 +276,27 @@ test('registerRoutes: #/reports mount creates cr-reports-index element', () => {
 
   try {
     const router = new Router();
-    const container = { replaceChildren() {} };
+    const container = {
+      replaceChildren(/** @type {any[]} */ ...children) {
+        rendered.splice(0, rendered.length, ...children);
+      },
+    };
     router._container = /** @type {any} */ (container);
-    registerRoutes(router, makeContext());
+    const context = makeContext();
+    context.capabilities = {
+      isReviewer: false,
+      ownedCaseTypes: [],
+      isResponsibleParty: false,
+      isReviewerManager: true,
+      isResponsiblePartyManager: false,
+      isMaintainer: false,
+      isQaReviewer: false,
+      isVisitor: false,
+    };
+    registerRoutes(router, context);
     router.navigate('#/reports');
-    assert.ok(
-      created.includes('cr-reports-index'),
-      'cr-reports-index should be created on mount'
-    );
+    assert.equal(rendered.length, 1, 'reports index should render one card');
+    assert.equal(rendered[0].tagName, 'DIV');
   } finally {
     /** @type {any} */ (globalThis).document = origCreate;
   }
