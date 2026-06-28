@@ -28,6 +28,9 @@ export class CRBankEditor extends ReactiveElement {
   }
   connectedCallback() {
     super.connectedCallback();
+    // TODO(simplify-ui): Replace this manual document listener lifecycle with
+    // on(document, 'keydown', handler) from src/lib/view.js when the pure view
+    // wrapper owns mount/disconnect cleanup.
     this._key = (/** @type {any} */ e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault?.();

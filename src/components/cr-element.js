@@ -18,6 +18,10 @@ export class CRElement extends Base {
    * Subscribes to a signal, firing cb immediately and on every change.
    * The subscription is automatically disposed in disconnectedCallback.
    *
+   * TODO(simplify-ui): Fold subscription cleanup into the view lifecycle helpers
+   * in src/lib/view.js so feature code can register effects/listeners without
+   * subclassing CRElement.
+   *
    * @template T
    * @param {{ get: () => T }} sig
    * @param {(value: T) => void} cb

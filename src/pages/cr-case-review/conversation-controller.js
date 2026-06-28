@@ -39,6 +39,9 @@ export class ConversationPanelController {
           this.togglePanel?.();
         }
       };
+      // TODO(simplify-ui): Replace this manual document listener lifecycle with
+      // on(document, 'keydown', handler) from src/lib/view.js once controller
+      // event binding moves behind the pure view shell.
       if (typeof document !== 'undefined' && document.addEventListener) {
         document.addEventListener('keydown', this.keydownHandler);
       }

@@ -43,6 +43,9 @@ export class CRQuestionList extends ReactiveElement {
       if (firstNewIndex === -1 && !previous.has(q.id)) firstNewIndex = i;
     });
 
+    // TODO(simplify-ui): Move the generic focus-key snapshot/restore mechanics
+    // into captureFocus()/restoreFocus() in src/lib/view.js, leaving only this
+    // component's "new applicable question appeared" policy here.
     // Capture the user's focus *before* re-rendering. Answering a question can
     // re-evaluate applicability, which rebuilds the list via replaceChildren and
     // detaches (blurring) the focused input. Without this, keyboard users get

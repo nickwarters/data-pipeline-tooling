@@ -7,6 +7,10 @@ import { effect } from '../lib/signal.js';
  * reactivity. Instead of manual `.subscribe()`, it calls a `render()` method
  * inside an effect. Any signals read during `render()` will automatically trigger
  * a re-render when they change.
+ *
+ * TODO(simplify-ui): Replace direct subclass authoring with the pure
+ * defineView() wrapper in src/lib/view.js so feature components do not need to
+ * know about connectedCallback, render effects, or replaceChildren.
  */
 export class ReactiveElement extends CRElement {
   constructor() {
