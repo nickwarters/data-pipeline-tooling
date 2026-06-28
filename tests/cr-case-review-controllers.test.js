@@ -56,6 +56,8 @@ class StubEl {
 
 const { CaseReviewHeaderController } =
   await import('../src/pages/cr-case-review/header-controller.js');
+const { createCaseReviewNodeRegistry } =
+  await import('../src/pages/cr-case-review/node-registry.js');
 const { QuestionPanelController, collectUnansweredQuestions } =
   await import('../src/pages/cr-case-review/question-panel-controller.js');
 const { CompletionController, completeCase } =
@@ -302,12 +304,68 @@ function makeHeaderContext(opts = {}) {
   };
 }
 
-test.todo(
-  'CaseReviewNodeRegistry: creates the same long-lived page nodes currently cached by CRCaseReview'
-);
-// TODO(issue-198): Assert each expected custom element/button/header is created
-// once and reused across renders so behavior remains stable while removing
-// private element caching from the page class.
+test('CaseReviewNodeRegistry: creates and reuses the long-lived page nodes currently cached by CRCaseReview', () => {
+  const registry = createCaseReviewNodeRegistry();
+  const first = registry.ensure();
+  const firstNodes = {
+    tabs: first.tabs,
+    details: first.details,
+    questionsPanel: first.questionsPanel,
+    questionList: first.questionList,
+    progress: first.progress,
+    overrideEditor: first.overrideEditor,
+    remediation: first.remediation,
+    summary: first.summary,
+    notes: first.notes,
+    appeal: first.appeal,
+    conversation: first.conversation,
+    sourceCase: first.sourceCase,
+    banner: first.banner,
+    conversationToggle: first.conversationToggle,
+    header: first.header,
+    completeButton: first.completeButton,
+  };
+
+  assert.equal(firstNodes.tabs?.tagName, 'CR-TABS');
+  assert.equal(firstNodes.details?.tagName, 'CR-CASE-DETAILS');
+  assert.equal(firstNodes.questionsPanel?.tagName, 'SECTION');
+  assert.equal(firstNodes.questionList?.tagName, 'CR-QUESTION-LIST');
+  assert.equal(firstNodes.progress?.tagName, 'CR-SECTION-PROGRESS');
+  assert.equal(firstNodes.overrideEditor?.tagName, 'CR-OVERRIDE-EDITOR');
+  assert.equal(firstNodes.remediation?.tagName, 'CR-REMEDIATION-SECTION');
+  assert.equal(firstNodes.summary?.tagName, 'CR-SUMMARY');
+  assert.equal(firstNodes.notes?.tagName, 'CR-NOTES');
+  assert.equal(firstNodes.appeal?.tagName, 'CR-APPEAL');
+  assert.equal(firstNodes.conversation?.tagName, 'CR-CONVERSATION');
+  assert.equal(firstNodes.sourceCase?.tagName, 'CR-SOURCE-CASE');
+  assert.equal(firstNodes.banner?.tagName, 'CR-STATUS-BANNER');
+  assert.equal(firstNodes.conversationToggle?.tagName, 'BUTTON');
+  assert.equal(
+    firstNodes.conversationToggle?.className,
+    'cr-conversation-toggle-btn'
+  );
+  assert.equal(firstNodes.header?.tagName, 'HEADER');
+  assert.equal(firstNodes.completeButton?.tagName, 'BUTTON');
+  assert.equal(firstNodes.completeButton?.className, 'cr-complete-btn');
+
+  assert.equal(registry.ensure(), registry);
+  assert.equal(registry.tabs, firstNodes.tabs);
+  assert.equal(registry.details, firstNodes.details);
+  assert.equal(registry.questionsPanel, firstNodes.questionsPanel);
+  assert.equal(registry.questionList, firstNodes.questionList);
+  assert.equal(registry.progress, firstNodes.progress);
+  assert.equal(registry.overrideEditor, firstNodes.overrideEditor);
+  assert.equal(registry.remediation, firstNodes.remediation);
+  assert.equal(registry.summary, firstNodes.summary);
+  assert.equal(registry.notes, firstNodes.notes);
+  assert.equal(registry.appeal, firstNodes.appeal);
+  assert.equal(registry.conversation, firstNodes.conversation);
+  assert.equal(registry.sourceCase, firstNodes.sourceCase);
+  assert.equal(registry.banner, firstNodes.banner);
+  assert.equal(registry.conversationToggle, firstNodes.conversationToggle);
+  assert.equal(registry.header, firstNodes.header);
+  assert.equal(registry.completeButton, firstNodes.completeButton);
+});
 
 test.todo(
   'CaseReviewTabController: maps section access into visible tabs in the current order'

@@ -4,6 +4,7 @@ import { h } from '../lib/html.js';
 import { CaseReviewViewModel } from '../lib/case-review-view-model.js';
 import { CaseReviewHeaderController } from './cr-case-review/header-controller.js';
 import { QuestionPanelController } from './cr-case-review/question-panel-controller.js';
+import { createCaseReviewNodeRegistry } from './cr-case-review/node-registry.js';
 import {
   CompletionController,
   completeCase,
@@ -47,6 +48,7 @@ export class CRCaseReview extends ReactiveElement {
     this._headerController = new CaseReviewHeaderController();
     this._questionPanelController = new QuestionPanelController();
     this._completionController = new CompletionController();
+    this._nodeRegistry = createCaseReviewNodeRegistry();
 
     // TODO(issue-198): Move controller-owned lifecycle state into
     // cr-case-review/conversation-controller.js and
@@ -324,31 +326,8 @@ export class CRCaseReview extends ReactiveElement {
       this._keydownHandler = null;
     }
 
-    // TODO(issue-198): Move node creation/reuse to
-    // cr-case-review/node-registry.js and update tests away from private caches.
-    // Node reuse to satisfy tests that cache elements
-    this._tabsEl ??= /** @type {any} */ (h('cr-tabs'));
-    this._detailsEl ??= /** @type {any} */ (h('cr-case-details'));
-    this._questionsPanel ??= /** @type {any} */ (h('section'));
-    this._qList ??= /** @type {any} */ (h('cr-question-list'));
-    this._progressEl ??= /** @type {any} */ (h('cr-section-progress'));
-    this._overrideEditor ??= /** @type {any} */ (h('cr-override-editor'));
-    this._remediationSection ??= /** @type {any} */ (
-      h('cr-remediation-section')
-    );
-    this._summaryEl ??= /** @type {any} */ (h('cr-summary'));
-    this._notesEl ??= /** @type {any} */ (h('cr-notes'));
-    this._appealEl ??= /** @type {any} */ (h('cr-appeal'));
-    this._conversationEl ??= /** @type {any} */ (h('cr-conversation'));
-    this._sourceCaseEl ??= /** @type {any} */ (h('cr-source-case'));
-    this._bannerEl ??= /** @type {any} */ (h('cr-status-banner'));
-    this._toggleBtn ??= /** @type {any} */ (
-      h('button', { class: 'cr-conversation-toggle-btn' })
-    );
-    this._headerEl ??= /** @type {any} */ (h('header'));
-    this._btnEl ??= /** @type {any} */ (
-      h('button', { class: 'cr-complete-btn' })
-    );
+    this._nodeRegistry.ensure();
+    this._syncLegacyNodeAliases();
 
     if (!this._eventsBound) {
       this._eventsBound = true;
@@ -576,24 +555,34 @@ export class CRCaseReview extends ReactiveElement {
 
   /** @param {boolean} canToggleConversation */
   _controllerNodes(canToggleConversation) {
+    this._nodeRegistry.ensure();
     return {
-      tabs: this._tabsEl,
-      details: this._detailsEl,
-      questionsPanel: this._questionsPanel,
-      questionList: this._qList,
-      progress: this._progressEl,
-      overrideEditor: this._overrideEditor,
-      remediation: this._remediationSection,
-      summary: this._summaryEl,
-      notes: this._notesEl,
-      appeal: this._appealEl,
-      conversation: this._conversationEl,
-      sourceCase: this._sourceCaseEl,
-      banner: this._bannerEl,
-      conversationToggle: canToggleConversation ? this._toggleBtn : null,
-      header: this._headerEl,
-      completeButton: this._btnEl,
+      ...this._nodeRegistry,
+      conversationToggle: canToggleConversation
+        ? this._nodeRegistry.conversationToggle
+        : null,
     };
+  }
+
+  _syncLegacyNodeAliases() {
+    // TODO(issue-198): Remove these aliases once tests and remaining page logic
+    // consume CaseReviewNodeRegistry directly.
+    this._tabsEl = this._nodeRegistry.tabs;
+    this._detailsEl = this._nodeRegistry.details;
+    this._questionsPanel = this._nodeRegistry.questionsPanel;
+    this._qList = this._nodeRegistry.questionList;
+    this._progressEl = this._nodeRegistry.progress;
+    this._overrideEditor = this._nodeRegistry.overrideEditor;
+    this._remediationSection = this._nodeRegistry.remediation;
+    this._summaryEl = this._nodeRegistry.summary;
+    this._notesEl = this._nodeRegistry.notes;
+    this._appealEl = this._nodeRegistry.appeal;
+    this._conversationEl = this._nodeRegistry.conversation;
+    this._sourceCaseEl = this._nodeRegistry.sourceCase;
+    this._bannerEl = this._nodeRegistry.banner;
+    this._toggleBtn = this._nodeRegistry.conversationToggle;
+    this._headerEl = this._nodeRegistry.header;
+    this._btnEl = this._nodeRegistry.completeButton;
   }
 }
 

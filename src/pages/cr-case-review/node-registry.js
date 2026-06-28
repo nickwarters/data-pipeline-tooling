@@ -49,12 +49,26 @@ export class CaseReviewNodeRegistry {
    * @returns {CaseReviewNodeRegistry}
    */
   ensure() {
-    // TODO(issue-198): Create the existing cr-tabs, cr-case-details,
-    // cr-question-list, cr-section-progress, cr-override-editor,
-    // cr-remediation-section, cr-summary, cr-notes, cr-appeal,
-    // cr-conversation, cr-source-case, cr-status-banner, header, and button
-    // nodes here.
-    void h;
+    this.tabs ??= h('cr-tabs');
+    this.details ??= h('cr-case-details');
+    this.questionsPanel ??= h('section');
+    this.questionList ??= h('cr-question-list');
+    this.progress ??= h('cr-section-progress');
+    this.overrideEditor ??= h('cr-override-editor');
+    this.remediation ??= h('cr-remediation-section');
+    this.summary ??= h('cr-summary');
+    this.notes ??= h('cr-notes');
+    this.appeal ??= h('cr-appeal');
+    this.conversation ??= h('cr-conversation');
+    this.sourceCase ??= h('cr-source-case');
+    this.banner ??= h('cr-status-banner');
+    this.conversationToggle ??= /** @type {HTMLButtonElement} */ (
+      h('button', { class: 'cr-conversation-toggle-btn' })
+    );
+    this.header ??= h('header');
+    this.completeButton ??= /** @type {HTMLButtonElement} */ (
+      h('button', { class: 'cr-complete-btn' })
+    );
     return this;
   }
 }
@@ -63,6 +77,5 @@ export class CaseReviewNodeRegistry {
  * @returns {CaseReviewNodeRegistry}
  */
 export function createCaseReviewNodeRegistry() {
-  // TODO(issue-198): Return the page-level registry used by CRCaseReview.
   return new CaseReviewNodeRegistry();
 }
