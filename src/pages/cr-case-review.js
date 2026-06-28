@@ -6,6 +6,7 @@ import { CaseReviewHeaderController } from './cr-case-review/header-controller.j
 import { QuestionPanelController } from './cr-case-review/question-panel-controller.js';
 import { createCaseReviewNodeRegistry } from './cr-case-review/node-registry.js';
 import { CaseReviewTabController } from './cr-case-review/tab-controller.js';
+import { RemediationPanelController } from './cr-case-review/remediation-controller.js';
 import {
   CompletionController,
   completeCase,
@@ -49,6 +50,7 @@ export class CRCaseReview extends ReactiveElement {
     this._headerController = new CaseReviewHeaderController();
     this._tabController = new CaseReviewTabController();
     this._questionPanelController = new QuestionPanelController();
+    this._remediationPanelController = new RemediationPanelController();
     this._completionController = new CompletionController();
     this._nodeRegistry = createCaseReviewNodeRegistry();
 
@@ -289,8 +291,6 @@ export class CRCaseReview extends ReactiveElement {
     /** @param {import('../services/section-access.js').Mode} m */
     const displayMode = (m) => (m === 'override' ? 'read-only' : m);
 
-    const canAttribute = machine.canAttribute;
-    const canCapture = machine.canCapture;
     const canToggleConversation = machine.canToggleConversation;
 
     // TODO(issue-198): Move conversation shortcut binding to
@@ -334,25 +334,14 @@ export class CRCaseReview extends ReactiveElement {
         toggleConversationPanel: this._toggleConversationPanel.bind(this),
       });
 
-      // TODO(issue-198): Move Issues-tab capture/attribute wiring to
-      // RemediationPanelController.bind().
-      this._remediationSection.addEventListener(
-        'cr-capture',
-        (/** @type {CustomEvent} */ ev) =>
-          vm.handleCapture(
-            /** @type {any} */ (ev).detail.questionId,
-            /** @type {any} */ (ev).detail.fieldKey,
-            /** @type {any} */ (ev).detail.value
-          )
-      );
-      this._remediationSection.addEventListener(
-        'cr-attribute',
-        (/** @type {CustomEvent} */ ev) =>
-          vm.handleAttribute(
-            /** @type {any} */ (ev).detail.questionId,
-            /** @type {any} */ (ev).detail.attributedParty
-          )
-      );
+      this._remediationPanelController.bind({
+        viewModel: vm,
+        nodes: this._controllerNodes(canToggleConversation),
+        displayMode,
+        completeCase: (caseId, client, saveQueue, patchFields) =>
+          this._completeCase(caseId, client, saveQueue, patchFields),
+        toggleConversationPanel: this._toggleConversationPanel.bind(this),
+      });
 
       this._toggleBtn.addEventListener('click', () =>
         this._toggleConversationPanel()
@@ -394,29 +383,14 @@ export class CRCaseReview extends ReactiveElement {
       toggleConversationPanel: this._toggleConversationPanel.bind(this),
     });
 
-    // TODO(issue-198): Move Issues-tab property assignment and update calls to
-    // RemediationPanelController.update().
-    Object.assign(this._remediationSection, {
-      client: vm.client,
-      canAttribute,
-      responsibleParty: caseRow.responsibleParty
-        ? {
-            loginName: caseRow.responsibleParty,
-            displayName: caseRow.responsibleParty,
-          }
-        : null,
-      captureGroups: config.captureGroups ?? [],
-      canCapture,
-      catalogue,
-      answers,
-      attributeFailures: config.attributeFailures === true,
+    this._remediationPanelController.update({
+      viewModel: vm,
+      nodes: this._controllerNodes(canToggleConversation),
+      displayMode,
+      completeCase: (caseId, client, saveQueue, patchFields) =>
+        this._completeCase(caseId, client, saveQueue, patchFields),
+      toggleConversationPanel: this._toggleConversationPanel.bind(this),
     });
-    if (this._remediationSection.update)
-      this._remediationSection.update(
-        catalogue,
-        answers,
-        config.attributeFailures === true
-      );
 
     // TODO(issue-198): Move Summary, Notes, and Appeal property assignment to
     // SummaryNotesAppealController.update().

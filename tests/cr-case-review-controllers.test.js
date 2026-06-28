@@ -62,6 +62,8 @@ const { CaseReviewTabController, buildCaseReviewTabs } =
   await import('../src/pages/cr-case-review/tab-controller.js');
 const { QuestionPanelController, collectUnansweredQuestions } =
   await import('../src/pages/cr-case-review/question-panel-controller.js');
+const { RemediationPanelController } =
+  await import('../src/pages/cr-case-review/remediation-controller.js');
 const { CompletionController, completeCase } =
   await import('../src/pages/cr-case-review/completion-controller.js');
 
@@ -361,6 +363,91 @@ function makeTabContext(opts = {}) {
   };
 }
 
+/**
+ * @param {Partial<{
+ *   responsibleParty: string | null,
+ *   attributeFailures: boolean,
+ *   canAttribute: boolean,
+ *   canCapture: boolean,
+ * }>} [opts]
+ */
+function makeRemediationContext(opts = {}) {
+  const remediation = new StubEl();
+  const client = { id: 'client' };
+  const answers = { 'q-a': { value: 'No' } };
+  const captureGroups = [{ key: 'group-1', label: 'Group 1', fields: [] }];
+  /** @type {any[]} */
+  const captureCalls = [];
+  /** @type {any[]} */
+  const attributeCalls = [];
+  return {
+    remediation,
+    answers,
+    captureGroups,
+    client,
+    captureCalls,
+    attributeCalls,
+    context: {
+      viewModel: {
+        caseRow: {
+          id: 'case-1',
+          title: 'Case One',
+          assignedReviewer: 'Alex Reviewer',
+          responsibleParty:
+            opts.responsibleParty === undefined
+              ? 'rp@example.com'
+              : opts.responsibleParty,
+        },
+        catalogue: QUESTIONS,
+        config: {
+          captureGroups,
+          attributeFailures: opts.attributeFailures ?? true,
+        },
+        answersSignal: { get: () => answers },
+        machine: {
+          canAttribute: opts.canAttribute ?? true,
+          canCapture: opts.canCapture ?? true,
+        },
+        client,
+        handleCapture(
+          /** @type {string} */ questionId,
+          /** @type {string} */ fieldKey,
+          /** @type {any} */ value
+        ) {
+          captureCalls.push({ questionId, fieldKey, value });
+        },
+        handleAttribute(
+          /** @type {string} */ questionId,
+          /** @type {any} */ attributedParty
+        ) {
+          attributeCalls.push({ questionId, attributedParty });
+        },
+      },
+      nodes: {
+        tabs: null,
+        details: null,
+        questionsPanel: null,
+        questionList: null,
+        progress: null,
+        overrideEditor: null,
+        remediation,
+        summary: null,
+        notes: null,
+        appeal: null,
+        conversation: null,
+        sourceCase: null,
+        banner: null,
+        conversationToggle: null,
+        header: null,
+        completeButton: null,
+      },
+      displayMode: (/** @type {any} */ mode) => mode,
+      completeCase: async () => {},
+      toggleConversationPanel: () => {},
+    },
+  };
+}
+
 test('CaseReviewNodeRegistry: creates and reuses the long-lived page nodes currently cached by CRCaseReview', () => {
   const registry = createCaseReviewNodeRegistry();
   const first = registry.ensure();
@@ -576,17 +663,62 @@ test('QuestionPanelController: configures the override editor only in override m
   assert.equal(/** @type {any} */ (overrideEditor).attributeFailures, true);
 });
 
-test.todo(
-  'RemediationPanelController: forwards capture and attribution events'
-);
-// TODO(issue-198): Verify cr-capture and cr-attribute event details are passed
-// unchanged to handleCapture and handleAttribute.
+test('RemediationPanelController: forwards capture and attribution events', () => {
+  const { context, remediation, captureCalls, attributeCalls } =
+    makeRemediationContext();
 
-test.todo(
-  'RemediationPanelController: assigns Issues tab properties without changing capture behavior'
-);
-// TODO(issue-198): Cover responsibleParty shaping, captureGroups, canCapture,
-// canAttribute, catalogue, answers, and attributeFailures update arguments.
+  new RemediationPanelController().bind(/** @type {any} */ (context));
+  remediation._listeners['cr-capture'][0]({
+    detail: { questionId: 'q-a', fieldKey: 'detail', value: 'Needs work' },
+  });
+  const attributedParty = {
+    loginName: 'person@example.com',
+    displayName: 'Person Example',
+  };
+  remediation._listeners['cr-attribute'][0]({
+    detail: { questionId: 'q-b', attributedParty },
+  });
+
+  assert.deepEqual(captureCalls, [
+    { questionId: 'q-a', fieldKey: 'detail', value: 'Needs work' },
+  ]);
+  assert.deepEqual(attributeCalls, [{ questionId: 'q-b', attributedParty }]);
+});
+
+test('RemediationPanelController: assigns Issues tab properties without changing capture behavior', () => {
+  const { context, remediation, client, answers, captureGroups } =
+    makeRemediationContext({
+      responsibleParty: 'owner@example.com',
+      canAttribute: false,
+      canCapture: true,
+      attributeFailures: false,
+    });
+
+  new RemediationPanelController().update(/** @type {any} */ (context));
+
+  assert.equal(/** @type {any} */ (remediation).client, client);
+  assert.equal(/** @type {any} */ (remediation).canAttribute, false);
+  assert.deepEqual(/** @type {any} */ (remediation).responsibleParty, {
+    loginName: 'owner@example.com',
+    displayName: 'owner@example.com',
+  });
+  assert.equal(/** @type {any} */ (remediation).captureGroups, captureGroups);
+  assert.equal(/** @type {any} */ (remediation).canCapture, true);
+  assert.equal(/** @type {any} */ (remediation).catalogue, QUESTIONS);
+  assert.equal(/** @type {any} */ (remediation).answers, answers);
+  assert.equal(/** @type {any} */ (remediation).attributeFailures, false);
+  assert.deepEqual(remediation._updateArgs, [QUESTIONS, answers, false]);
+});
+
+test('RemediationPanelController: forwards null Responsible Party as null quick-pick', () => {
+  const { context, remediation } = makeRemediationContext({
+    responsibleParty: null,
+  });
+
+  new RemediationPanelController().update(/** @type {any} */ (context));
+
+  assert.equal(/** @type {any} */ (remediation).responsibleParty, null);
+});
 
 test.todo(
   'SummaryNotesAppealController: assigns Summary, Notes, and Appeal tab props'
