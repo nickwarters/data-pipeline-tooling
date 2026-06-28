@@ -4,10 +4,80 @@ import { h } from '../lib/html.js';
 
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
 
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
+/**
+ * @typedef {{ el: HTMLElement, href: string }} NavItemRef
+ */
+
+/**
+ * @param {string} label
+ * @param {string} href
+ * @param {NavItemRef[]} navItems
+ * @returns {HTMLElement}
+ */
+export function AppNavItem(label, href, navItems) {
+  const a = h('a', { href, class: 'cr-app-nav-item', role: 'listitem' }, label);
+  navItems.push({ el: a, href });
+  return a;
+}
+
+/**
+ * @param {NavItemRef[]} navItems
+ * @param {string} hash
+ */
+export function updateActiveNavItems(navItems, hash) {
+  for (const { el, href } of navItems) {
+    const active =
+      hash === href || (href !== '#/dashboard' && hash.startsWith(href));
+    el.className = active
+      ? 'cr-app-nav-item cr-app-nav-item--active'
+      : 'cr-app-nav-item';
+    el.setAttribute('aria-current', active ? 'page' : '');
+  }
+}
+
+/**
+ * @param {{ capabilities: Capabilities, hash: string }} props
+ * @returns {{ node: HTMLElement, navItems: NavItemRef[] }}
+ */
+export function AppNav({ capabilities, hash }) {
+  /** @type {NavItemRef[]} */
+  const navItems = [];
+  const brand = h(
+    'a',
+    {
+      href: '#/dashboard',
+      class: 'cr-app-nav-brand',
+      'aria-label': 'Case Review — home',
+    },
+    h('span', { class: 'cr-app-nav-mark', 'aria-hidden': 'true' }, 'CR'),
+    h('span', { class: 'cr-app-nav-name' }, 'Case Review')
+  );
+
+  const itemsEl = h('div', { class: 'cr-app-nav-items', role: 'list' });
+
+  const { isReviewer, ownedCaseTypes, isResponsibleParty, isReviewerManager } =
+    capabilities;
+  const isOwner = ownedCaseTypes.length > 0;
+  const hasAnyRole =
+    isReviewer || isResponsibleParty || isReviewerManager || isOwner;
+
+  if (hasAnyRole) {
+    itemsEl.appendChild(AppNavItem('Dashboard', '#/dashboard', navItems));
+  }
+  if (isReviewerManager || isOwner) {
+    itemsEl.appendChild(AppNavItem('Reports', '#/reports', navItems));
+  }
+  if (isOwner) {
+    itemsEl.appendChild(
+      AppNavItem('Question Bank', '#/question-bank', navItems)
+    );
+  }
+
+  const node = h('div', { class: 'cr-app-nav-bar' }, brand, itemsEl);
+  updateActiveNavItems(navItems, hash);
+  return { node, navItems };
+}
+
 export class CRAppNav extends ReactiveElement {
   constructor() {
     super();
@@ -53,55 +123,13 @@ export class CRAppNav extends ReactiveElement {
   }
 
   render() {
-    this._navItems = [];
-
-    const brand = h(
-      'a',
-      {
-        href: '#/dashboard',
-        class: 'cr-app-nav-brand',
-        'aria-label': 'Case Review — home',
-      },
-      h('span', { class: 'cr-app-nav-mark', 'aria-hidden': 'true' }, 'CR'),
-      h('span', { class: 'cr-app-nav-name' }, 'Case Review')
-    );
-
-    const itemsEl = h('div', { class: 'cr-app-nav-items', role: 'list' });
-
-    const {
-      isReviewer,
-      ownedCaseTypes,
-      isResponsibleParty,
-      isReviewerManager,
-    } = this.capabilities;
-    const isOwner = ownedCaseTypes.length > 0;
-    const hasAnyRole =
-      isReviewer || isResponsibleParty || isReviewerManager || isOwner;
-
-    if (hasAnyRole) {
-      itemsEl.appendChild(this._makeItem('Dashboard', '#/dashboard'));
-    }
-    if (isReviewerManager || isOwner) {
-      itemsEl.appendChild(this._makeItem('Reports', '#/reports'));
-    }
-    if (isOwner) {
-      itemsEl.appendChild(this._makeItem('Question Bank', '#/question-bank'));
-    }
-
-    const bar = h('div', { class: 'cr-app-nav-bar' }, brand, itemsEl);
-
-    // Update active classes immediately on the newly created elements
     const hash = typeof location !== 'undefined' ? location.hash || '#/' : '#/';
-    for (const { el, href } of this._navItems) {
-      const active =
-        hash === href || (href !== '#/dashboard' && hash.startsWith(href));
-      el.className = active
-        ? 'cr-app-nav-item cr-app-nav-item--active'
-        : 'cr-app-nav-item';
-      el.setAttribute('aria-current', active ? 'page' : '');
-    }
-
-    return bar;
+    const { node, navItems } = AppNav({
+      capabilities: this.capabilities,
+      hash,
+    });
+    this._navItems = navItems;
+    return node;
   }
 
   /**
@@ -110,25 +138,12 @@ export class CRAppNav extends ReactiveElement {
    * @returns {any}
    */
   _makeItem(label, href) {
-    const a = h(
-      'a',
-      { href, class: 'cr-app-nav-item', role: 'listitem' },
-      label
-    );
-    this._navItems.push({ el: a, href });
-    return a;
+    return AppNavItem(label, href, this._navItems);
   }
 
   _updateActive() {
     const hash = typeof location !== 'undefined' ? location.hash || '#/' : '#/';
-    for (const { el, href } of this._navItems) {
-      const active =
-        hash === href || (href !== '#/dashboard' && hash.startsWith(href));
-      el.className = active
-        ? 'cr-app-nav-item cr-app-nav-item--active'
-        : 'cr-app-nav-item';
-      el.setAttribute('aria-current', active ? 'page' : '');
-    }
+    updateActiveNavItems(this._navItems, hash);
   }
 }
 

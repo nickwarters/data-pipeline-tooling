@@ -15,10 +15,119 @@ import { h } from '../lib/html.js';
  * }} ColumnDef
  */
 
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
+/**
+ * @typedef {Object} DataTableProps
+ * @property {Array<ColumnDef<any>>} columns
+ * @property {any[]} rows
+ * @property {string} sortKey
+ * @property {'asc' | 'desc'} sortDir
+ * @property {(row: any) => string} rowClass
+ * @property {((row: any) => void) | null} onRowActivate
+ * @property {(key: string) => void} onHeaderClick
+ * @property {(event: KeyboardEvent) => void} onKeydown
+ * @property {(tbody: HTMLElement) => void} onTbody
+ */
+
+/**
+ * @param {DataTableProps} props
+ * @returns {HTMLElement}
+ */
+export function DataTable({
+  columns,
+  rows,
+  sortKey,
+  sortDir,
+  rowClass,
+  onRowActivate,
+  onHeaderClick,
+  onKeydown,
+  onTbody,
+}) {
+  let tbody;
+
+  const table = h(
+    'table',
+    {
+      class: 'cr-data-table',
+      role: 'grid',
+      onkeydown: onKeydown,
+    },
+    h(
+      'thead',
+      {},
+      h(
+        'tr',
+        {},
+        ...columns.map((col) => {
+          const v =
+            col.key === sortKey
+              ? sortDir === 'asc'
+                ? 'ascending'
+                : 'descending'
+              : 'none';
+          const thProps = {
+            scope: 'col',
+            'aria-sort': v,
+            class: `cr-col-${col.key}`,
+          };
+
+          if (col.sortable) {
+            return h(
+              'th',
+              thProps,
+              h(
+                'button',
+                {
+                  type: 'button',
+                  onclick: () => onHeaderClick(col.key),
+                },
+                col.label
+              )
+            );
+          }
+          return h('th', thProps, col.label);
+        })
+      )
+    ),
+    (tbody = h(
+      'tbody',
+      { class: 'cr-data-table-body' },
+      ...rows.map((row) => {
+        const cls = rowClass(row);
+        /** @type {any} */
+        const trProps = { tabindex: '0' };
+        if (cls) trProps.class = cls;
+        if (onRowActivate) {
+          trProps.onkeydown = (/** @type {any} */ e) => {
+            if (e.key === 'Enter') onRowActivate(row);
+          };
+        }
+
+        return h(
+          'tr',
+          trProps,
+          ...columns.map((col) => {
+            let content;
+            if (col.renderCell) {
+              const rc = col.renderCell(row);
+              content = rc == null ? [] : rc;
+            } else if (col.getValue) {
+              const v = col.getValue(row);
+              content = v == null || v === '' ? '—' : String(v);
+            } else {
+              content = '—';
+            }
+            return h('td', {}, content);
+          })
+        );
+      })
+    ))
+  );
+
+  onTbody(tbody);
+  return table;
+}
+
 export class CRDataTable extends ReactiveElement {
   constructor() {
     super();
@@ -98,96 +207,19 @@ export class CRDataTable extends ReactiveElement {
   }
 
   render() {
-    const cols = this._columns.get();
-    const rows = this._sorted.get();
-    const sortKey = this._sortKey.get();
-    const sortDir = this._sortDir.get();
-
-    let tbody;
-
-    const table = h(
-      'table',
-      {
-        class: 'cr-data-table',
-        role: 'grid',
-        onkeydown: (/** @type {any} */ e) => this._onKeydown(e),
+    return DataTable({
+      columns: this._columns.get(),
+      rows: this._sorted.get(),
+      sortKey: this._sortKey.get(),
+      sortDir: this._sortDir.get(),
+      rowClass: this._rowClass,
+      onRowActivate: this._onRowActivate,
+      onHeaderClick: (key) => this._onHeaderClick(key),
+      onKeydown: (/** @type {any} */ e) => this._onKeydown(e),
+      onTbody: (tbody) => {
+        this._tbodyEl = tbody;
       },
-      h(
-        'thead',
-        {},
-        h(
-          'tr',
-          {},
-          ...cols.map((col) => {
-            const v =
-              col.key === sortKey
-                ? sortDir === 'asc'
-                  ? 'ascending'
-                  : 'descending'
-                : 'none';
-            const thProps = {
-              scope: 'col',
-              'aria-sort': v,
-              class: `cr-col-${col.key}`,
-            };
-
-            if (col.sortable) {
-              return h(
-                'th',
-                thProps,
-                h(
-                  'button',
-                  {
-                    type: 'button',
-                    onclick: () => this._onHeaderClick(col.key),
-                  },
-                  col.label
-                )
-              );
-            } else {
-              return h('th', thProps, col.label);
-            }
-          })
-        )
-      ),
-      (tbody = h(
-        'tbody',
-        { class: 'cr-data-table-body' },
-        ...rows.map((row) => {
-          const cls = this._rowClass(row);
-          /** @type {any} */
-          const trProps = { tabindex: '0' };
-          if (cls) trProps.class = cls;
-          if (this._onRowActivate) {
-            const activate = this._onRowActivate;
-            trProps.onkeydown = (/** @type {any} */ e) => {
-              if (e.key === 'Enter') activate(row);
-            };
-          }
-
-          return h(
-            'tr',
-            trProps,
-            ...cols.map((col) => {
-              let content;
-              if (col.renderCell) {
-                const rc = col.renderCell(row);
-                content = rc == null ? [] : rc;
-              } else if (col.getValue) {
-                const v = col.getValue(row);
-                content = v == null || v === '' ? '—' : String(v);
-              } else {
-                content = '—';
-              }
-              return h('td', {}, content);
-            })
-          );
-        })
-      ))
-    );
-
-    this._tbodyEl = tbody;
-    return table;
+    });
   }
 
   /** @param {string} key */

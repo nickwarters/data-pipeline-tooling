@@ -5,10 +5,41 @@ import { h } from '../lib/html.js';
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
+/**
+ * @param {{ isEmpty: boolean, onRequestNextCase: () => void }} props
+ * @returns {HTMLElement}
+ */
+export function Allocation({ isEmpty, onRequestNextCase }) {
+  if (isEmpty) {
+    return h('p', { className: 'cr-allocation-empty' }, 'No Cases available');
+  }
+  return h(
+    'button',
+    {
+      className: 'cr-allocation-btn',
+      onClick: onRequestNextCase,
+    },
+    'Request next Case'
+  );
+}
+
+/**
+ * @param {{
+ *   client: SharePointClient | null,
+ *   eligibleCaseTypes: string[]
+ * }} props
+ * @returns {Promise<CaseRow[]>}
+ */
+export async function getUnassignedCases({ client, eligibleCaseTypes }) {
+  if (!client) return [];
+  const all = await client.listCases({ status: 'In-progress' });
+  return all
+    .filter(
+      (c) => c.assignedReviewer === '' && eligibleCaseTypes.includes(c.caseType)
+    )
+    .sort((a, b) => ((a.created ?? '') < (b.created ?? '') ? -1 : 1));
+}
+
 export class CRAllocation extends ReactiveElement {
   constructor() {
     super();
@@ -44,17 +75,10 @@ export class CRAllocation extends ReactiveElement {
   }
 
   render() {
-    if (this.isEmpty) {
-      return h('p', { className: 'cr-allocation-empty' }, 'No Cases available');
-    }
-    return h(
-      'button',
-      {
-        className: 'cr-allocation-btn',
-        onClick: () => this._requestNextCase(),
-      },
-      'Request next Case'
-    );
+    return Allocation({
+      isEmpty: this.isEmpty,
+      onRequestNextCase: () => this._requestNextCase(),
+    });
   }
 
   /** @returns {Promise<void>} */
@@ -83,15 +107,10 @@ export class CRAllocation extends ReactiveElement {
 
   /** @returns {Promise<CaseRow[]>} */
   async _getUnassignedCases() {
-    if (!this.client) return [];
-    const all = await this.client.listCases({ status: 'In-progress' });
-    return all
-      .filter(
-        (c) =>
-          c.assignedReviewer === '' &&
-          this.eligibleCaseTypes.includes(c.caseType)
-      )
-      .sort((a, b) => ((a.created ?? '') < (b.created ?? '') ? -1 : 1));
+    return getUnassignedCases({
+      client: this.client,
+      eligibleCaseTypes: this.eligibleCaseTypes,
+    });
   }
 
   _renderEmpty() {

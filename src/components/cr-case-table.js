@@ -16,7 +16,7 @@ import { CRDataTable } from './cr-data-table.js';
  * @param {(caseId: string) => void} openCase
  * @returns {CaseColumn[]}
  */
-function defaultColumns(openCase) {
+export function defaultCaseColumns(openCase) {
   return [
     {
       key: 'reference',
@@ -73,10 +73,105 @@ function defaultColumns(openCase) {
   ];
 }
 
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
+/**
+ * @typedef {Object} CaseTableToolbarProps
+ * @property {(text: string) => void} onFilterText
+ * @property {(status: string) => void} onStatusFilter
+ */
+
+/**
+ * @param {CaseTableToolbarProps} props
+ * @returns {HTMLElement}
+ */
+export function CaseTableToolbar({ onFilterText, onStatusFilter }) {
+  return h(
+    'div',
+    { className: 'cr-case-table-toolbar' },
+    h('input', {
+      className: 'cr-case-table-filter',
+      type: 'text',
+      placeholder: 'Filter cases…',
+      'aria-label': 'Filter cases',
+      oninput: (/** @type {any} */ e) => onFilterText(e.target?.value ?? ''),
+    }),
+    h(
+      'select',
+      {
+        className: 'cr-case-table-status-filter',
+        'aria-label': 'Filter by status',
+        onchange: (/** @type {any} */ e) =>
+          onStatusFilter(e.target?.value ?? ''),
+      },
+      h('option', { value: '' }, 'All statuses'),
+      h('option', { value: 'In-progress' }, 'In Progress'),
+      h('option', { value: 'Completed' }, 'Completed')
+    )
+  );
+}
+
+/**
+ * @typedef {Object} CaseTableProps
+ * @property {CaseRow[]} rows
+ * @property {CaseColumn[] | null} customColumns
+ * @property {((row: CaseRow) => string) | null} customRowClass
+ * @property {'default' | 'hidden'} toolbarMode
+ * @property {{ key: string, dir?: 'asc' | 'desc' } | null} initialSort
+ * @property {HTMLElement | null} toolbar
+ * @property {CRDataTable | null} inner
+ * @property {(toolbar: HTMLElement) => void} onToolbar
+ * @property {(inner: CRDataTable) => void} onInner
+ * @property {(caseId: string) => void} onOpenCase
+ * @property {(text: string) => void} onFilterText
+ * @property {(status: string) => void} onStatusFilter
+ */
+
+/**
+ * @param {CaseTableProps} props
+ * @returns {Array<HTMLElement | CRDataTable>}
+ */
+export function CaseTable({
+  rows,
+  customColumns,
+  customRowClass,
+  toolbarMode,
+  initialSort,
+  toolbar,
+  inner,
+  onToolbar,
+  onInner,
+  onOpenCase,
+  onFilterText,
+  onStatusFilter,
+}) {
+  const toolbarEl =
+    toolbar ?? CaseTableToolbar({ onFilterText, onStatusFilter });
+  if (!toolbar) onToolbar(toolbarEl);
+
+  const innerTable = inner ?? new CRDataTable();
+  if (!inner) onInner(innerTable);
+
+  const columns = customColumns ?? defaultCaseColumns(onOpenCase);
+  innerTable.columns = columns;
+
+  if (customRowClass) {
+    innerTable.rowClass = customRowClass;
+  } else if (!customColumns) {
+    innerTable.rowClass = (/** @type {CaseRow} */ row) =>
+      row.overdue ? 'cr-case-row cr-case-row--overdue' : 'cr-case-row';
+  }
+
+  innerTable.onRowActivate = (/** @type {CaseRow} */ row) => onOpenCase(row.id);
+  if (initialSort) innerTable.sort = initialSort;
+  innerTable.rows = rows;
+
+  const children = [];
+  if (toolbarMode === 'default' && !customColumns) {
+    children.push(toolbarEl);
+  }
+  children.push(innerTable);
+  return children;
+}
+
 export class CRCaseTable extends ReactiveElement {
   constructor() {
     super();
@@ -161,57 +256,31 @@ export class CRCaseTable extends ReactiveElement {
       this._inner = new CRDataTable();
     }
 
-    const columns =
-      this._customColumns ?? defaultColumns((id) => this._openCase(id));
-    this._inner.columns = columns;
-
-    if (this._customRowClass) {
-      this._inner.rowClass = this._customRowClass;
-    } else if (!this._customColumns) {
-      this._inner.rowClass = (/** @type {CaseRow} */ row) =>
-        row.overdue ? 'cr-case-row cr-case-row--overdue' : 'cr-case-row';
-    }
-
-    this._inner.onRowActivate = (/** @type {CaseRow} */ row) =>
-      this._openCase(row.id);
-    if (this._initialSort) this._inner.sort = this._initialSort;
-
-    this._inner.rows = this._filtered.get();
-
-    const children = [];
-    if (this._toolbarMode === 'default' && !this._customColumns) {
-      children.push(this._toolbar);
-    }
-    children.push(this._inner);
-
-    return children;
+    return CaseTable({
+      rows: this._filtered.get(),
+      customColumns: this._customColumns,
+      customRowClass: this._customRowClass,
+      toolbarMode: this._toolbarMode,
+      initialSort: this._initialSort,
+      toolbar: this._toolbar,
+      inner: this._inner,
+      onToolbar: (toolbar) => {
+        this._toolbar = toolbar;
+      },
+      onInner: (inner) => {
+        this._inner = inner;
+      },
+      onOpenCase: (id) => this._openCase(id),
+      onFilterText: (text) => this._filterText.set(text),
+      onStatusFilter: (status) => this._statusFilter.set(status),
+    });
   }
 
   _buildToolbar() {
-    return h(
-      'div',
-      { className: 'cr-case-table-toolbar' },
-      h('input', {
-        className: 'cr-case-table-filter',
-        type: 'text',
-        placeholder: 'Filter cases…',
-        'aria-label': 'Filter cases',
-        oninput: (/** @type {any} */ e) =>
-          this._filterText.set(e.target?.value ?? ''),
-      }),
-      h(
-        'select',
-        {
-          className: 'cr-case-table-status-filter',
-          'aria-label': 'Filter by status',
-          onchange: (/** @type {any} */ e) =>
-            this._statusFilter.set(e.target?.value ?? ''),
-        },
-        h('option', { value: '' }, 'All statuses'),
-        h('option', { value: 'In-progress' }, 'In Progress'),
-        h('option', { value: 'Completed' }, 'Completed')
-      )
-    );
+    return CaseTableToolbar({
+      onFilterText: (text) => this._filterText.set(text),
+      onStatusFilter: (status) => this._statusFilter.set(status),
+    });
   }
 
   /** @param {string} caseId */
