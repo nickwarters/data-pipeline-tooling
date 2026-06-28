@@ -1,16 +1,54 @@
 // @ts-check
-import { ReactiveElement } from './reactive-element.js';
-import { h } from '../lib/html.js';
-import './cr-question.js';
+import { captureFocus, restoreFocus } from '../lib/view.js';
+import { CRQuestion } from './cr-question.js';
 
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
-export class CRQuestionList extends ReactiveElement {
+/**
+ * @typedef {Object} QuestionListProps
+ * @property {QuestionDefinition[]} questions
+ * @property {Record<string, Answer>} answers
+ * @property {'edit'|'read-only'|'hidden'} access
+ * @property {CRQuestion[]} [existing]
+ */
+
+/**
+ * Compose a list of question hosts from data. Existing hosts are reused by id
+ * so answer changes do not replace focused DOM nodes when the catalogue order is
+ * stable.
+ *
+ * @param {QuestionListProps} props
+ * @returns {CRQuestion[]}
+ */
+export function QuestionList({ questions, answers, access, existing = [] }) {
+  /** @type {Map<string, CRQuestion>} */
+  const existingById = new Map();
+  for (const element of existing) {
+    if (element.question?.id) existingById.set(element.question.id, element);
+  }
+
+  return questions.map((question) => {
+    const answerValue = answers[question.id]?.value;
+    const currentValue =
+      answerValue ?? (question.responseType === 'multi-choice' ? [] : '');
+
+    const existingElement = existingById.get(question.id);
+    const element = existingElement ?? new CRQuestion();
+    if (!existingElement) {
+      /** @type {any} */ (element).tagName = 'cr-question';
+    }
+    element.tabIndex = -1;
+
+    element.question = question;
+    element.access = access;
+    element.currentValue = currentValue;
+    if (!existingElement) element._render();
+    return element;
+  });
+}
+
+export class CRQuestionList extends HTMLElement {
   constructor() {
     super();
     /** @type {QuestionDefinition[]} */
@@ -26,9 +64,13 @@ export class CRQuestionList extends ReactiveElement {
      * (e.g. cr-case-review's "Jump to next unanswered" handler) can locate
      * a question's host element without reaching into the (browser-only,
      * not-on-our-test-stub) `children` HTMLCollection.
-     * @type {import('./cr-question.js').CRQuestion[]}
+     * @type {CRQuestion[]}
      */
     this.questionElements = [];
+  }
+
+  connectedCallback() {
+    this._render();
   }
 
   /**
@@ -41,122 +83,61 @@ export class CRQuestionList extends ReactiveElement {
    */
   update(questions, answers) {
     const previous = this._renderedIds;
-    /** @type {number} */
     let firstNewIndex = -1;
-    questions.forEach((q, i) => {
-      if (firstNewIndex === -1 && !previous.has(q.id)) firstNewIndex = i;
+    questions.forEach((question, index) => {
+      if (firstNewIndex === -1 && !previous.has(question.id)) {
+        firstNewIndex = index;
+      }
     });
 
-    // TODO(simplify-ui): Move generic focus-key snapshot/restore mechanics into
-    // captureFocus()/restoreFocus() in src/lib/view.js so a future
-    // QuestionList(props) function only keeps its "new applicable question
-    // appeared" focus policy.
-    // Capture the user's focus *before* re-rendering. Answering a question can
-    // re-evaluate applicability, which rebuilds the list via replaceChildren and
-    // detaches (blurring) the focused input. Without this, keyboard users get
-    // stranded at the top of the list and have to tab all the way back.
-    const restoreFocus = this._captureFocus();
+    const focusSnapshot = captureFocus(this);
 
     this.questions = questions;
     this.answers = answers;
-    this._render();
+    const changed = this._render();
 
-    // Priority 1: a genuinely new question appeared (a conditional follow-up
-    // that just became applicable) — move focus to it so the user can continue
-    // answering without hunting. Not on first render.
     if (previous.size > 0 && firstNewIndex !== -1) {
       const child = this.questionElements[firstNewIndex];
-      child?.focus?.();
+      if (child) HTMLElement.prototype.focus.call(child);
       return;
     }
 
-    // Priority 2: nothing new appeared, but the DOM may have been rebuilt (e.g.
-    // a downstream question disappeared). Put the user back where they were.
-    restoreFocus();
+    if (changed) restoreFocus(this, focusSnapshot);
   }
 
-  /**
-   * Snapshot the currently-focused answer input (identified by its stable
-   * `data-focus-key`) and return a closure that re-focuses the matching input
-   * after the list has re-rendered. Mirrors the focus-preservation in
-   * question-bank-store's `commit()`. No-op when nothing relevant is focused
-   * or when the same element still holds focus after rendering.
-   * @returns {() => void}
-   */
-  _captureFocus() {
-    const doc = typeof document !== 'undefined' ? document : null;
-    const active = doc && doc.activeElement;
-    const focusKey = active?.getAttribute?.('data-focus-key') ?? null;
-    if (!focusKey) return () => {};
-
-    return () => {
-      const found = this.querySelector(
-        `[data-focus-key="${focusKey.replace(/(["\\])/g, '\\$1')}"]`
-      );
-      if (found && found !== doc?.activeElement) {
-        /** @type {HTMLElement} */ (found).focus?.();
-      }
-    };
-  }
-
+  /** @returns {boolean} */
   _render() {
-    const oldElements = this.questionElements ? [...this.questionElements] : [];
-    const els = this.render();
-
-    let changed = oldElements.length !== els.length;
-    if (!changed) {
-      for (let i = 0; i < els.length; i++) {
-        if (oldElements[i] !== els[i]) {
-          changed = true;
-          break;
-        }
-      }
-    }
-
-    if (changed || els.length === 0) {
-      if (Array.isArray(els)) this.replaceChildren(...els);
-      else if (els) this.replaceChildren(els);
-      else this.replaceChildren();
-    }
-  }
-
-  render() {
-    /** @type {Map<string, import('./cr-question.js').CRQuestion>} */
-    const existingElements = new Map();
-    if (this.questionElements) {
-      for (const el of this.questionElements) {
-        if (el.question && el.question.id) {
-          existingElements.set(el.question.id, el);
-        }
-      }
-    }
-
-    const elements = this.questions.map((q) => {
-      const v = this.answers[q.id]?.value;
-      const currentValue = v ?? (q.responseType === 'multi-choice' ? [] : '');
-
-      const existing = existingElements.get(q.id);
-      if (existing) {
-        existing.question = q;
-        existing.access = this.access;
-        existing.currentValue = currentValue;
-        return existing;
-      }
-
-      const el = /** @type {import('./cr-question.js').CRQuestion} */ (
-        h('cr-question', {
-          tabIndex: -1,
-          question: q,
-          access: this.access,
-          currentValue,
-        })
-      );
-      return el;
+    const previousElements = [...this.questionElements];
+    const nextElements = QuestionList({
+      questions: this.questions,
+      answers: this.answers,
+      access: this.access,
+      existing: previousElements,
     });
-    this.questionElements = elements;
-    this._renderedIds = new Set(this.questions.map((q) => q.id));
-    return elements;
+
+    this.questionElements = nextElements;
+    this._renderedIds = new Set(this.questions.map((question) => question.id));
+
+    if (
+      childrenChanged(previousElements, nextElements) ||
+      nextElements.length === 0
+    ) {
+      this.replaceChildren(...nextElements);
+      return true;
+    }
+
+    return false;
   }
+}
+
+/**
+ * @param {CRQuestion[]} previous
+ * @param {CRQuestion[]} next
+ * @returns {boolean}
+ */
+function childrenChanged(previous, next) {
+  if (previous.length !== next.length) return true;
+  return next.some((element, index) => previous[index] !== element);
 }
 
 customElements.define('cr-question-list', CRQuestionList);

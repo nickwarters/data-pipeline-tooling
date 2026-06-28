@@ -89,6 +89,7 @@ import { effect } from './signal.js';
  * @property {string | null} key
  * @property {number | null} selectionStart
  * @property {number | null} selectionEnd
+ * @property {Element | null} element
  */
 
 /** @type {{ cleanups: Cleanup[], mountHooks: Array<() => void | Cleanup>, mounted: boolean } | null} */
@@ -300,8 +301,7 @@ export function captureFocus(root) {
   const key = active.getAttribute('data-focus-key');
   if (!key || !root?.querySelector) return undefined;
 
-  const selector = `[data-focus-key="${CSS.escape(key)}"]`;
-  if (root.querySelector(selector) !== active) return undefined;
+  if (!containsNode(root, active)) return undefined;
 
   return {
     key,
@@ -309,6 +309,7 @@ export function captureFocus(root) {
       typeof active.selectionStart === 'number' ? active.selectionStart : null,
     selectionEnd:
       typeof active.selectionEnd === 'number' ? active.selectionEnd : null,
+    element: active,
   };
 }
 
@@ -320,8 +321,12 @@ export function captureFocus(root) {
  */
 export function restoreFocus(root, snapshot) {
   if (!snapshot?.key || !root?.querySelector) return;
-  const selector = `[data-focus-key="${CSS.escape(snapshot.key)}"]`;
-  const next = /** @type {any} */ (root.querySelector(selector));
+  const selector = `[data-focus-key="${escapeSelectorValue(snapshot.key)}"]`;
+  const next = /** @type {any} */ (
+    snapshot.element && containsNode(root, snapshot.element)
+      ? snapshot.element
+      : root.querySelector(selector)
+  );
   if (!next || typeof next.focus !== 'function') return;
 
   next.focus();
@@ -332,4 +337,34 @@ export function restoreFocus(root, snapshot) {
   ) {
     next.setSelectionRange(snapshot.selectionStart, snapshot.selectionEnd);
   }
+}
+
+/**
+ * @param {ParentNode} root
+ * @param {Element} node
+ * @returns {boolean}
+ */
+function containsNode(root, node) {
+  if ('contains' in root && typeof root.contains === 'function') {
+    return root.contains(node);
+  }
+
+  /** @param {any} current */
+  const walk = (current) => {
+    for (const child of current?._children ?? []) {
+      if (child === node || walk(child)) return true;
+    }
+    return false;
+  };
+  return walk(root);
+}
+
+/**
+ * @param {string} value
+ * @returns {string}
+ */
+function escapeSelectorValue(value) {
+  return globalThis.CSS?.escape
+    ? globalThis.CSS.escape(value)
+    : value.replace(/(["\\])/g, '\\$1');
 }
