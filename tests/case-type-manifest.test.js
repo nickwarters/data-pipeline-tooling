@@ -85,6 +85,75 @@ test('CaseReviewViewModel.load(): unknown primary Case Type slug sets a clear us
   }
 });
 
-test.todo(
-  'CaseReviewViewModel._resolveSourceCase(): unknown QA source Case Type slug follows the same error path'
-);
+test('CaseReviewViewModel._resolveSourceCase(): unknown QA source Case Type slug follows the same error path', async () => {
+  /** @type {any[]} */
+  const errors = [];
+  const originalConsoleError = console.error;
+  console.error = (...args) => errors.push(args);
+
+  try {
+    const vm = new CaseReviewViewModel(
+      /** @type {any} */ ({
+        getCase: async (/** @type {string} */ id) =>
+          id === 'source-1'
+            ? {
+                id: 'source-1',
+                caseType: '../unexpected-source',
+                title: 'Source',
+                status: 'Completed',
+                assignedReviewer: 'u1',
+                responsibleParty: 'u2',
+                answers: {},
+                conversation: [],
+                notes: '',
+                completedAt: '2026-01-01T00:00:00Z',
+                etag: 'source-etag',
+              }
+            : {
+                id: 'qa-1',
+                caseType: 'qa-example-review',
+                title: 'QA',
+                status: 'In-progress',
+                assignedReviewer: 'u1',
+                responsibleParty: '',
+                sourceCaseId: 'source-1',
+                answers: {},
+                conversation: [],
+                notes: '',
+                completedAt: null,
+                etag: 'qa-etag',
+              },
+        getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
+        getExportHash: async () => null,
+        resolveUsers: async () => ({}),
+      }),
+      /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+      'qa-1',
+      'u1',
+      {
+        isReviewer: true,
+        ownedCaseTypes: [],
+        isResponsibleParty: false,
+        isReviewerManager: false,
+        isResponsiblePartyManager: false,
+        isMaintainer: false,
+        isQaReviewer: true,
+        isVisitor: false,
+      }
+    );
+
+    await vm.load();
+
+    assert.equal(
+      vm.error.get(),
+      'This Case links to a source Case with an unsupported Case Type: ../unexpected-source.'
+    );
+    assert.equal(vm.loaded.get(), false);
+    assert.equal(vm.sourceCase, null);
+    assert.equal(errors.length, 1);
+    assert.ok(errors[0][0] instanceof UnknownCaseTypeError);
+    assert.equal(errors[0][0].slug, '../unexpected-source');
+  } finally {
+    console.error = originalConsoleError;
+  }
+});

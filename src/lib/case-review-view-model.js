@@ -197,16 +197,27 @@ export class CaseReviewViewModel {
       (s) => this.access[s] !== 'hidden' && showInSummary(s, config)
     );
 
-    this.sourceCase = caseRow.sourceCaseId
-      ? await this._resolveSourceCase(
-          caseRow.sourceCaseId,
-          caseRow.id,
-          client,
-          saveQueue,
-          actualUserId,
-          caps
-        )
-      : null;
+    try {
+      this.sourceCase = caseRow.sourceCaseId
+        ? await this._resolveSourceCase(
+            caseRow.sourceCaseId,
+            caseRow.id,
+            client,
+            saveQueue,
+            actualUserId,
+            caps
+          )
+        : null;
+    } catch (error) {
+      if (error instanceof UnknownCaseTypeError) {
+        console.error(error);
+        this.error.set(
+          `This Case links to a source Case with an unsupported Case Type: ${error.slug}.`
+        );
+        return;
+      }
+      throw error;
+    }
 
     const tabs = [
       { id: 'details', hidden: this.access.details === 'hidden' },
@@ -374,11 +385,7 @@ export class CaseReviewViewModel {
     }
 
     saveQueue.loadCase(original);
-    // TODO(issue-199): Use the same manifest-backed loader for QA source cases
-    // so the linked original Case cannot construct arbitrary module paths from
-    // SharePoint row data.
-    const mod = await import(`../../case-types/${original.caseType}.js`);
-    const origConfig = /** @type {CaseTypeConfig} */ (mod.default);
+    const origConfig = await loadCaseTypeConfig(original.caseType);
     const origCatalogue = origConfig.questions.filter((q) => !q.deprecated);
 
     const origMachine = new CaseMachine(
