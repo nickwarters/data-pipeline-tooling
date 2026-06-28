@@ -1,4 +1,9 @@
 // @ts-check
+// TODO(simplify-ui): Keep this test focused on the simple public seams as
+// the UI migrates. Where this behavior is consumed by screens, add coverage
+// through function components, h() output, reactive() updates, or thin route
+// shells rather than class lifecycle setup.
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js';
@@ -521,7 +526,18 @@ const VERSIONED_EXPORT = {
   label: 'Example Review',
   generatedAt: '2026-01-10T09:00:00.000Z',
   hash: 'sha256:' + 'a'.repeat(64),
-  questions: [{ id: 'q-v1', text: 'V1 question', category: null, responseType: 'yes-no-na', options: null, showWhen: null, failureCriteria: 'No', deprecated: false }],
+  questions: [
+    {
+      id: 'q-v1',
+      text: 'V1 question',
+      category: null,
+      responseType: 'yes-no-na',
+      options: null,
+      showWhen: null,
+      failureCriteria: 'No',
+      deprecated: false,
+    },
+  ],
 };
 
 test('MockSharePointClient: getVersionedExport returns the matching export for a known hash (ADR-0021 Step 4)', async () => {
@@ -531,18 +547,27 @@ test('MockSharePointClient: getVersionedExport returns the matching export for a
     personas: PERSONAS,
     versionedExports: { [VERSIONED_EXPORT.hash]: VERSIONED_EXPORT },
   });
-  const result = await client.getVersionedExport('example-review', VERSIONED_EXPORT.hash);
+  const result = await client.getVersionedExport(
+    'example-review',
+    VERSIONED_EXPORT.hash
+  );
   assert.deepEqual(result, VERSIONED_EXPORT);
 });
 
 test('MockSharePointClient: getVersionedExport returns null for an unknown hash (ADR-0021 Step 4)', async () => {
   const client = makeClient();
-  const result = await client.getVersionedExport('example-review', 'sha256:unknown');
+  const result = await client.getVersionedExport(
+    'example-review',
+    'sha256:unknown'
+  );
   assert.equal(result, null);
 });
 
 test('MockSharePointClient: getVersionedExport returns null when no versionedExports configured (ADR-0021 Step 4)', async () => {
   const client = makeClient();
-  const result = await client.getVersionedExport('example-review', 'sha256:' + 'a'.repeat(64));
+  const result = await client.getVersionedExport(
+    'example-review',
+    'sha256:' + 'a'.repeat(64)
+  );
   assert.equal(result, null);
 });

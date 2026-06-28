@@ -1,4 +1,9 @@
 // @ts-check
+// TODO(simplify-ui): Rewrite these lifecycle-heavy tests around the
+// future function-component API. Prefer asserting plain functions, h() output,
+// reactive() updates, and route-shell behavior over manual connectedCallback()/
+// disconnectedCallback() calls on custom element classes.
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { signal } from '../src/lib/signal.js';
@@ -20,7 +25,8 @@ import { signal } from '../src/lib/signal.js';
   }
 };
 
-const { ReactiveElement } = await import('../src/components/reactive-element.js');
+const { ReactiveElement } =
+  await import('../src/components/reactive-element.js');
 
 test('ReactiveElement: disconnectedCallback releases render signal subscriptions', () => {
   const value = signal('initial');

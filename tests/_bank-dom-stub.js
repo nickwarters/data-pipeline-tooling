@@ -1,4 +1,9 @@
 // @ts-check
+// TODO(simplify-ui): Rewrite these lifecycle-heavy tests around the
+// future function-component API. Prefer asserting plain functions, h() output,
+// reactive() updates, and route-shell behavior over manual connectedCallback()/
+// disconnectedCallback() calls on custom element classes.
+
 /**
  * Shared DOM stub for tests of `cr-*` Question Bank components.
  *

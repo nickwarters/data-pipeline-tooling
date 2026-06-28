@@ -1,4 +1,9 @@
 // @ts-check
+// TODO(simplify-ui): Keep this test focused on the simple public seams as
+// the UI migrates. Where this behavior is consumed by screens, add coverage
+// through function components, h() output, reactive() updates, or thin route
+// shells rather than class lifecycle setup.
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CaseReviewViewModel } from '../src/lib/case-review-view-model.js';
@@ -199,17 +204,30 @@ test('CaseReviewViewModel.load() uses versioned catalogue for Completed Case wit
     makeStep4Client({
       status: 'Completed',
       questionBankVersion: 'sha256:abc123',
-      versionedExport: { slug: 'example-review', questions: versionedCatalogue },
+      versionedExport: {
+        slug: 'example-review',
+        questions: versionedCatalogue,
+      },
     }),
     /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    'c1', 'u1', null
+    'c1',
+    'u1',
+    null
   );
 
   await vm.load();
 
-  assert.equal(vm.catalogue.length, 1, 'only non-deprecated versioned questions');
+  assert.equal(
+    vm.catalogue.length,
+    1,
+    'only non-deprecated versioned questions'
+  );
   assert.equal(vm.catalogue[0].id, 'q-old', 'id from versioned file');
-  assert.equal(vm.catalogue[0].text, 'A question from version time', 'text from versioned file');
+  assert.equal(
+    vm.catalogue[0].text,
+    'A question from version time',
+    'text from versioned file'
+  );
 });
 
 test('CaseReviewViewModel.load(): versioned catalogue mapping normalises null optional fields to undefined', async () => {
@@ -219,11 +237,24 @@ test('CaseReviewViewModel.load(): versioned catalogue mapping normalises null op
       questionBankVersion: 'sha256:abc123',
       versionedExport: {
         slug: 'example-review',
-        questions: [{ id: 'q1', text: 'T', category: null, responseType: 'yes-no-na', options: null, showWhen: null, failureCriteria: null, deprecated: false }],
+        questions: [
+          {
+            id: 'q1',
+            text: 'T',
+            category: null,
+            responseType: 'yes-no-na',
+            options: null,
+            showWhen: null,
+            failureCriteria: null,
+            deprecated: false,
+          },
+        ],
       },
     }),
     /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    'c1', 'u1', null
+    'c1',
+    'u1',
+    null
   );
 
   await vm.load();
@@ -242,11 +273,25 @@ test('CaseReviewViewModel.load(): versioned catalogue carries labelIds when pres
       questionBankVersion: 'sha256:abc123',
       versionedExport: {
         slug: 'example-review',
-        questions: [{ id: 'q1', text: 'T', category: null, responseType: 'yes-no-na', options: null, showWhen: null, failureCriteria: null, deprecated: false, labelIds: ['lbl-a'] }],
+        questions: [
+          {
+            id: 'q1',
+            text: 'T',
+            category: null,
+            responseType: 'yes-no-na',
+            options: null,
+            showWhen: null,
+            failureCriteria: null,
+            deprecated: false,
+            labelIds: ['lbl-a'],
+          },
+        ],
       },
     }),
     /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    'c1', 'u1', null
+    'c1',
+    'u1',
+    null
   );
 
   await vm.load();
@@ -256,9 +301,15 @@ test('CaseReviewViewModel.load(): versioned catalogue carries labelIds when pres
 
 test('CaseReviewViewModel.load(): missing versioned file falls back to live catalogue + versionWarning (ADR-0021 Step 4)', async () => {
   const vm = new CaseReviewViewModel(
-    makeStep4Client({ status: 'Completed', questionBankVersion: 'sha256:abc123', versionedExport: null }),
+    makeStep4Client({
+      status: 'Completed',
+      questionBankVersion: 'sha256:abc123',
+      versionedExport: null,
+    }),
     /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    'c1', 'u1', null
+    'c1',
+    'u1',
+    null
   );
 
   await vm.load();
@@ -275,21 +326,29 @@ test('CaseReviewViewModel.load(): In-progress Case loads live catalogue; version
   const vm = new CaseReviewViewModel(
     makeStep4Client({ status: 'In-progress' }),
     /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    'c1', 'u1', null
+    'c1',
+    'u1',
+    null
   );
 
   await vm.load();
 
   const liveIds = new Set(vm.catalogue.map((q) => q.id));
   assert.ok(liveIds.has('q-welcome'), 'live bank loaded');
-  assert.equal(vm.versionWarning.get(), null, 'no warning for in-progress case');
+  assert.equal(
+    vm.versionWarning.get(),
+    null,
+    'no warning for in-progress case'
+  );
 });
 
 test('CaseReviewViewModel.load(): Completed Case without questionBankVersion falls back to live (backward compat, ADR-0021 Step 4)', async () => {
   const vm = new CaseReviewViewModel(
     makeStep4Client({ status: 'Completed', questionBankVersion: undefined }),
     /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    'c1', 'u1', null
+    'c1',
+    'u1',
+    null
   );
 
   await vm.load();

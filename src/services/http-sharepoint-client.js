@@ -1,4 +1,9 @@
 // @ts-check
+// TODO(simplify-ui): Keep service access as explicit plain dependencies
+// passed into route shells/function components. The simplified UI should not
+// require component authors to understand service classes, global singletons,
+// or lifecycle wiring to perform ordinary reads and writes.
+
 import { toBareAccount, toClaimsLogin } from './account-name.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */

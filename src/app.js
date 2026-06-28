@@ -1,4 +1,8 @@
 // @ts-check
+// TODO(simplify-ui): Collapse bootstrapping around the function-component
+// model. The app shell should wire shared services/signals once, register only
+// route or browser-integration shells, and avoid ordinary custom-element
+// registration as the default rendering path.
 
 /** @returns {Promise<void>} */
 async function boot() {

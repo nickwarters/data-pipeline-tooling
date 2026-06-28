@@ -1,4 +1,9 @@
 // @ts-check
+// TODO(simplify-ui): Simplify this orchestration boundary into plain
+// state transition and binding functions that can be called from function
+// components. Avoid preserving controller/view-model objects as a second
+// framework layer around reactive().
+
 import { signal, computed } from './signal.js';
 import { evaluate } from '../evaluators/applicability-evaluator.js';
 import { materializeRemediationActions } from '../evaluators/failure-evaluator.js';
@@ -147,10 +152,15 @@ export class CaseReviewViewModel {
           id: q.id,
           text: q.text,
           ...(q.category !== null ? { category: q.category } : {}),
-          responseType: /** @type {'yes-no-na'|'single-choice'|'multi-choice'} */ (q.responseType),
+          responseType:
+            /** @type {'yes-no-na'|'single-choice'|'multi-choice'} */ (
+              q.responseType
+            ),
           ...(q.options !== null ? { options: q.options } : {}),
           ...(q.showWhen !== null ? { showWhen: q.showWhen } : {}),
-          ...(q.failureCriteria !== null ? { failureCriteria: q.failureCriteria } : {}),
+          ...(q.failureCriteria !== null
+            ? { failureCriteria: q.failureCriteria }
+            : {}),
           ...(q.labelIds ? { labelIds: q.labelIds } : {}),
           deprecated: q.deprecated,
         }));
@@ -178,12 +188,7 @@ export class CaseReviewViewModel {
       isVisitor: false,
     };
 
-    this.machine = new CaseMachine(
-      caseRow,
-      { id: actualUserId },
-      caps,
-      config
-    );
+    this.machine = new CaseMachine(caseRow, { id: actualUserId }, caps, config);
     this.roles = this.machine.roles;
     this.access = this.machine.access;
 

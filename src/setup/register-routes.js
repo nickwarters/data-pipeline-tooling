@@ -1,4 +1,7 @@
 // @ts-check
+// TODO(simplify-ui): Rework routing around route functions that compose
+// plain function components returning h() nodes. Keep custom elements only for
+// route/browser-integration shells, not as the unit every route has to create.
 
 import { register as registerRoot } from '../routes/root.js';
 import { register as registerDashboard } from '../routes/dashboard.js';

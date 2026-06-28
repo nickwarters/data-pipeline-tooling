@@ -1,5 +1,10 @@
 # Testing
 
+> TODO(simplify-ui): Rewrite testing guidance around pure function components,
+> `h()` output assertions, `reactive()` update tests, and thin route-shell
+> integration tests. Manual `connectedCallback()`/`disconnectedCallback()`
+> tests should become escape-hatch coverage only.
+
 ## Quick reference
 
 ```sh

@@ -1,5 +1,10 @@
 # SharePointClient Interface
 
+> TODO(simplify-ui): Reframe client usage as explicit dependencies passed into
+> route shells and function components. The guide should avoid implying that
+> authors need class components or lifecycle callbacks to perform SharePoint
+> reads and writes.
+
 ## Quick reference
 
 ```js

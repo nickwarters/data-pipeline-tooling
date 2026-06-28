@@ -1,4 +1,9 @@
 // @ts-check
+// TODO(simplify-ui): Rewrite these lifecycle-heavy tests around the
+// future function-component API. Prefer asserting plain functions, h() output,
+// reactive() updates, and route-shell behavior over manual connectedCallback()/
+// disconnectedCallback() calls on custom element classes.
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -76,7 +81,10 @@ const docListeners = {};
   _registry: {},
 };
 /** @type {any} */ (globalThis).customElements = {
-  define(/** @type {string} */ tag, /** @type {CustomElementConstructor} */ ctor) {
+  define(
+    /** @type {string} */ tag,
+    /** @type {CustomElementConstructor} */ ctor
+  ) {
     /** @type {any} */ (globalThis).document._registry[tag.toLowerCase()] =
       ctor;
   },

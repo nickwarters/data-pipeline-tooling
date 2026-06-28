@@ -1,5 +1,10 @@
 # Router Integration
 
+> TODO(simplify-ui): Rewrite this guide around route functions that compose
+> plain function components with `h()`. Route examples should not teach
+> `document.createElement('cr-*')` or custom-element lifecycle wiring as the
+> default way to mount screens.
+
 ## Quick reference
 
 ```js

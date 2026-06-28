@@ -1,4 +1,9 @@
 // @ts-check
+// TODO(simplify-ui): Preserve this as a pure function/data boundary for the
+// simplified component model. Function components should pass data in and
+// render results with h(); evaluator modules should stay free of DOM, lifecycle,
+// or framework concerns.
+
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../sharepoint-client.js').Override} Override */
 /** @typedef {import('../sharepoint-client.js').OutcomeResult} OutcomeResult */
