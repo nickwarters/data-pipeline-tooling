@@ -6,10 +6,13 @@ import { CaseReviewHeaderController } from './cr-case-review/header-controller.j
 import { QuestionPanelController } from './cr-case-review/question-panel-controller.js';
 import { createCaseReviewNodeRegistry } from './cr-case-review/node-registry.js';
 import { CaseReviewTabController } from './cr-case-review/tab-controller.js';
-import { RemediationPanelController } from './cr-case-review/remediation-controller.js';
-import { SummaryNotesAppealController } from './cr-case-review/summary-notes-appeal-controller.js';
+import {
+  bindRemediationPanel,
+  updateRemediationPanel,
+} from './cr-case-review/remediation-controller.js';
+import { updateSummaryNotesAppeal } from './cr-case-review/summary-notes-appeal-controller.js';
 import { SourceCaseController } from './cr-case-review/source-case-controller.js';
-import { ConversationPanelController } from './cr-case-review/conversation-controller.js';
+import { createConversationPanelBinding } from './cr-case-review/conversation-controller.js';
 import {
   CompletionController,
   completeCase,
@@ -57,10 +60,8 @@ export class CRCaseReview extends ReactiveElement {
     this._headerController = new CaseReviewHeaderController();
     this._tabController = new CaseReviewTabController();
     this._questionPanelController = new QuestionPanelController();
-    this._remediationPanelController = new RemediationPanelController();
-    this._summaryNotesAppealController = new SummaryNotesAppealController();
     this._sourceCaseController = new SourceCaseController();
-    this._conversationPanelController = new ConversationPanelController();
+    this._conversationPanel = createConversationPanelBinding();
     this._completionController = new CompletionController();
     this._nodeRegistry = createCaseReviewNodeRegistry();
 
@@ -124,14 +125,14 @@ export class CRCaseReview extends ReactiveElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    this._conversationPanelController.disconnect();
+    this._conversationPanel.disconnect();
     this._keydownHandler = null;
   }
 
   /** @param {KeyboardEvent} e */
   _handleKeydown(e) {
-    if (this._conversationPanelController.keydownHandler) {
-      this._conversationPanelController.keydownHandler(e);
+    if (this._conversationPanel.keydownHandler) {
+      this._conversationPanel.keydownHandler(e);
     } else if (this._keydownHandler) {
       this._keydownHandler(e);
     } else if (e.altKey && e.code === 'KeyC') {
@@ -142,7 +143,7 @@ export class CRCaseReview extends ReactiveElement {
   // Alias for tests
   _toggleConversationPanel() {
     // TODO(issue-198): Keep this as a temporary compatibility shim while the
-    // real toggle behavior moves to ConversationPanelController.
+    // real toggle behavior moves to the conversation binding.
     if (this.viewModel) {
       this.viewModel.toggleConversationPanel();
     } else if (this._conversationEl) {
@@ -276,7 +277,7 @@ export class CRCaseReview extends ReactiveElement {
     const panelMode =
       new URLSearchParams(searchStr).get('conversation') ?? 'popover';
     // TODO(issue-198): Decide whether conversation mode belongs in the route
-    // shell or ConversationPanelController before moving this assignment.
+    // shell or conversation binding before moving this assignment.
     this.setAttribute('data-conversation-mode', panelMode);
 
     /** @param {import('../services/section-access.js').Mode} m */
@@ -309,7 +310,7 @@ export class CRCaseReview extends ReactiveElement {
         toggleConversationPanel: this._toggleConversationPanel.bind(this),
       });
 
-      this._remediationPanelController.bind({
+      bindRemediationPanel({
         viewModel: vm,
         nodes: this._controllerNodes(canToggleConversation),
         displayMode,
@@ -318,7 +319,7 @@ export class CRCaseReview extends ReactiveElement {
         toggleConversationPanel: this._toggleConversationPanel.bind(this),
       });
 
-      this._conversationPanelController.bind({
+      this._conversationPanel.bind({
         viewModel: vm,
         nodes: this._controllerNodes(canToggleConversation),
         displayMode,
@@ -326,7 +327,7 @@ export class CRCaseReview extends ReactiveElement {
           this._completeCase(caseId, client, saveQueue, patchFields),
         toggleConversationPanel: this._toggleConversationPanel.bind(this),
       });
-      this._keydownHandler = this._conversationPanelController.keydownHandler;
+      this._keydownHandler = this._conversationPanel.keydownHandler;
 
       // TODO(issue-198): CompletionController owns completion event wiring; keep
       // this context adapter until the shared node registry is wired.
@@ -364,7 +365,7 @@ export class CRCaseReview extends ReactiveElement {
       toggleConversationPanel: this._toggleConversationPanel.bind(this),
     });
 
-    this._remediationPanelController.update({
+    updateRemediationPanel({
       viewModel: vm,
       nodes: this._controllerNodes(canToggleConversation),
       displayMode,
@@ -373,7 +374,7 @@ export class CRCaseReview extends ReactiveElement {
       toggleConversationPanel: this._toggleConversationPanel.bind(this),
     });
 
-    this._summaryNotesAppealController.update({
+    updateSummaryNotesAppeal({
       viewModel: vm,
       nodes: this._controllerNodes(canToggleConversation),
       displayMode,
@@ -382,7 +383,7 @@ export class CRCaseReview extends ReactiveElement {
       toggleConversationPanel: this._toggleConversationPanel.bind(this),
     });
 
-    this._conversationPanelController.update({
+    this._conversationPanel.update({
       viewModel: vm,
       nodes: this._controllerNodes(canToggleConversation),
       displayMode,

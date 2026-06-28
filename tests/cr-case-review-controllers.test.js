@@ -77,13 +77,13 @@ const { CaseReviewTabController, buildCaseReviewTabs } =
   await import('../src/pages/cr-case-review/tab-controller.js');
 const { QuestionPanelController, collectUnansweredQuestions } =
   await import('../src/pages/cr-case-review/question-panel-controller.js');
-const { RemediationPanelController } =
+const { bindRemediationPanel, updateRemediationPanel } =
   await import('../src/pages/cr-case-review/remediation-controller.js');
-const { SummaryNotesAppealController } =
+const { updateSummaryNotesAppeal } =
   await import('../src/pages/cr-case-review/summary-notes-appeal-controller.js');
 const { SourceCaseController } =
   await import('../src/pages/cr-case-review/source-case-controller.js');
-const { ConversationPanelController } =
+const { createConversationPanelBinding } =
   await import('../src/pages/cr-case-review/conversation-controller.js');
 const { CompletionController, completeCase } =
   await import('../src/pages/cr-case-review/completion-controller.js');
@@ -912,11 +912,11 @@ test('QuestionPanelController: configures the override editor only in override m
   assert.equal(/** @type {any} */ (overrideEditor).attributeFailures, true);
 });
 
-test('RemediationPanelController: forwards capture and attribution events', () => {
+test('bindRemediationPanel: forwards capture and attribution events', () => {
   const { context, remediation, captureCalls, attributeCalls } =
     makeRemediationContext();
 
-  new RemediationPanelController().bind(/** @type {any} */ (context));
+  bindRemediationPanel(/** @type {any} */ (context));
   remediation._listeners['cr-capture'][0]({
     detail: { questionId: 'q-a', fieldKey: 'detail', value: 'Needs work' },
   });
@@ -934,7 +934,7 @@ test('RemediationPanelController: forwards capture and attribution events', () =
   assert.deepEqual(attributeCalls, [{ questionId: 'q-b', attributedParty }]);
 });
 
-test('RemediationPanelController: assigns Issues tab properties without changing capture behavior', () => {
+test('updateRemediationPanel: assigns Issues tab properties without changing capture behavior', () => {
   const { context, remediation, client, answers, captureGroups } =
     makeRemediationContext({
       responsibleParty: 'owner@example.com',
@@ -943,7 +943,7 @@ test('RemediationPanelController: assigns Issues tab properties without changing
       attributeFailures: false,
     });
 
-  new RemediationPanelController().update(/** @type {any} */ (context));
+  updateRemediationPanel(/** @type {any} */ (context));
 
   assert.equal(/** @type {any} */ (remediation).client, client);
   assert.equal(/** @type {any} */ (remediation).canAttribute, false);
@@ -959,17 +959,17 @@ test('RemediationPanelController: assigns Issues tab properties without changing
   assert.deepEqual(remediation._updateArgs, [QUESTIONS, answers, false]);
 });
 
-test('RemediationPanelController: forwards null Responsible Party as null quick-pick', () => {
+test('updateRemediationPanel: forwards null Responsible Party as null quick-pick', () => {
   const { context, remediation } = makeRemediationContext({
     responsibleParty: null,
   });
 
-  new RemediationPanelController().update(/** @type {any} */ (context));
+  updateRemediationPanel(/** @type {any} */ (context));
 
   assert.equal(/** @type {any} */ (remediation).responsibleParty, null);
 });
 
-test('SummaryNotesAppealController: assigns Summary, Notes, and Appeal tab props', () => {
+test('updateSummaryNotesAppeal: assigns Summary, Notes, and Appeal tab props', () => {
   const {
     context,
     summary,
@@ -986,7 +986,7 @@ test('SummaryNotesAppealController: assigns Summary, Notes, and Appeal tab props
     caseRow,
   } = makeSummaryNotesAppealContext();
 
-  new SummaryNotesAppealController().update(/** @type {any} */ (context));
+  updateSummaryNotesAppeal(/** @type {any} */ (context));
 
   assert.equal(/** @type {any} */ (summary).caseRow, caseRow);
   assert.equal(/** @type {any} */ (summary).catalogue, QUESTIONS);
@@ -1020,14 +1020,14 @@ test('SummaryNotesAppealController: assigns Summary, Notes, and Appeal tab props
   assert.equal(/** @type {any} */ (appeal).answers, answers);
 });
 
-test('ConversationPanelController: preserves click and Alt+C conversation toggling', () => {
+test('createConversationPanelBinding: preserves click and Alt+C conversation toggling', () => {
   const setup = makeConversationContext({
     conversationHidden: false,
     conversationAccess: 'override',
   });
   const { context, conversation, toggle, saveQueue, client, currentUser } =
     setup;
-  const controller = new ConversationPanelController();
+  const controller = createConversationPanelBinding();
 
   controller.bind(/** @type {any} */ (context));
   controller.update(/** @type {any} */ (context));
@@ -1058,9 +1058,9 @@ test('ConversationPanelController: preserves click and Alt+C conversation toggli
   );
 });
 
-test('ConversationPanelController: removes document-level listeners on disconnect', () => {
+test('createConversationPanelBinding: removes document-level listeners on disconnect', () => {
   const setup = makeConversationContext();
-  const controller = new ConversationPanelController();
+  const controller = createConversationPanelBinding();
 
   controller.bind(/** @type {any} */ (setup.context));
   const handler = controller.keydownHandler;
