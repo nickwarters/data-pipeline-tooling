@@ -1,4 +1,5 @@
 // @ts-check
+import { effect } from './signal.js';
 
 /**
  * Render output accepted by the future pure-view wrapper.
@@ -94,6 +95,46 @@
 let activeLifecycle = null;
 
 /**
+ * @param {ViewRenderResult} content
+ * @returns {Node[]}
+ */
+function normalizeRenderResult(content) {
+  if (content === undefined) return [];
+  return Array.isArray(content) ? content : [content];
+}
+
+/**
+ * @param {HTMLElement} host
+ * @param {ViewRenderResult} content
+ */
+function replaceHostChildren(host, content) {
+  host.replaceChildren(...normalizeRenderResult(content));
+}
+
+/**
+ * @param {HTMLElement} host
+ * @param {() => ViewRenderResult} render
+ * @returns {Cleanup}
+ */
+function mountReactiveRender(host, render) {
+  const lifecycle = createLifecycle();
+  const disposeEffect = effect(() => {
+    const snapshot = captureFocus(host);
+    lifecycle.disconnect();
+    const content = lifecycle.run(render);
+    replaceHostChildren(host, content);
+    lifecycle.mount();
+    restoreFocus(host, snapshot);
+  });
+
+  return () => {
+    disposeEffect();
+    lifecycle.disconnect();
+    host.replaceChildren();
+  };
+}
+
+/**
  * @param {string} helperName
  * @returns {{ cleanups: Cleanup[], mountHooks: Array<() => void | Cleanup>, mounted: boolean }}
  */
@@ -105,9 +146,8 @@ function requireLifecycle(helperName) {
 }
 
 /**
- * TODO(simplify-ui): Wire this lifecycle scope into reactive() for plain
- * function components and defineView() for custom-element shells so ordinary
- * feature components never need to construct it directly.
+ * Lifecycle scope used by reactive() and defineView() so ordinary feature
+ * components do not need to construct it directly.
  *
  * @returns {ViewLifecycle}
  */
@@ -153,33 +193,69 @@ export function createLifecycle() {
 }
 
 /**
- * TODO(simplify-ui): Implement the default function-component wrapper for
- * local-signal UI. Authors should be able to write `function Question(props) {
+ * Default function-component wrapper for local-signal UI. Authors can write
+ * `function Question(props) {
  * const response = signal(props.response); return reactive(() => h(...)); }`
  * without classes, connectedCallback, disconnectedCallback, or manual render
  * effects.
  *
  * @param {ReactiveRender} render
- * @returns {HTMLElement | undefined}
+ * @returns {HTMLElement}
  */
 export function reactive(render) {
-  return undefined;
+  const host = document.createElement('div');
+  const disconnect = mountReactiveRender(host, render);
+  /** @type {any} */ (host).disconnectedCallback = disconnect;
+  return host;
 }
 
 /**
- * TODO(simplify-ui): Implement this only as the custom-element shell escape
- * hatch for route boundaries and SharePoint/browser integration points. Do not
- * make defineView() the default way to author leaf feature components.
+ * Custom-element shell escape hatch for route boundaries and
+ * SharePoint/browser integration points. Do not make defineView() the default
+ * way to author leaf feature components.
  *
  * @template {Record<string, any>} Props
  * @param {string} tagName
  * @param {ViewDefinition<Props>} definition
  */
-export function defineView(tagName, definition) {}
+export function defineView(tagName, definition) {
+  class ViewElement extends HTMLElement {
+    constructor() {
+      super();
+      Object.assign(this, definition.props ?? {});
+      /** @type {Cleanup | null} */
+      this._viewDisconnect = null;
+    }
+
+    connectedCallback() {
+      if (this._viewDisconnect) return;
+      const host = /** @type {HTMLElement} */ (this);
+      this._viewDisconnect = mountReactiveRender(host, () => {
+        const context = {
+          props: /** @type {any} */ (this),
+          host,
+        };
+        const content = definition.render(context);
+        if (definition.afterMount) {
+          afterMount(() => definition.afterMount?.(context));
+        }
+        return content;
+      });
+    }
+
+    disconnectedCallback() {
+      if (!this._viewDisconnect) return;
+      this._viewDisconnect();
+      this._viewDisconnect = null;
+    }
+  }
+
+  customElements.define(tagName, ViewElement);
+}
 
 /**
- * TODO(simplify-ui): Register an event listener that is automatically removed
- * when the owning reactive() view or custom-element shell disconnects.
+ * Register an event listener that is automatically removed when the owning
+ * reactive() view or custom-element shell disconnects.
  *
  * @param {ListenerTarget} target
  * @param {string} type
@@ -197,9 +273,8 @@ export function on(target, type, listener, options) {
 }
 
 /**
- * TODO(simplify-ui): Register mount-time work for the current reactive() view
- * or custom-element shell and capture any returned cleanup callback for
- * automatic disposal.
+ * Register mount-time work for the current reactive() view or custom-element
+ * shell and capture any returned cleanup callback for automatic disposal.
  *
  * @param {() => void | Cleanup} hook
  */
@@ -208,20 +283,49 @@ export function afterMount(hook) {
 }
 
 /**
- * TODO(simplify-ui): Move duplicated focus-key capture/restore behavior behind
- * the framework render loop.
+ * Capture the active data-focus-key and selection before a framework-managed
+ * render.
  *
  * @param {ParentNode | null | undefined} root
  * @returns {FocusSnapshot | undefined}
  */
 export function captureFocus(root) {
-  return undefined;
+  const active = /** @type {any} */ (document.activeElement);
+  if (!active || typeof active.getAttribute !== 'function') return undefined;
+
+  const key = active.getAttribute('data-focus-key');
+  if (!key || !root?.querySelector) return undefined;
+
+  const selector = `[data-focus-key="${CSS.escape(key)}"]`;
+  if (root.querySelector(selector) !== active) return undefined;
+
+  return {
+    key,
+    selectionStart:
+      typeof active.selectionStart === 'number' ? active.selectionStart : null,
+    selectionEnd:
+      typeof active.selectionEnd === 'number' ? active.selectionEnd : null,
+  };
 }
 
 /**
- * TODO(simplify-ui): Restore a focus snapshot after a framework-managed render.
+ * Restore a focus snapshot after a framework-managed render.
  *
  * @param {ParentNode | null | undefined} root
  * @param {FocusSnapshot | undefined} snapshot
  */
-export function restoreFocus(root, snapshot) {}
+export function restoreFocus(root, snapshot) {
+  if (!snapshot?.key || !root?.querySelector) return;
+  const selector = `[data-focus-key="${CSS.escape(snapshot.key)}"]`;
+  const next = /** @type {any} */ (root.querySelector(selector));
+  if (!next || typeof next.focus !== 'function') return;
+
+  next.focus();
+  if (
+    typeof next.setSelectionRange === 'function' &&
+    snapshot.selectionStart !== null &&
+    snapshot.selectionEnd !== null
+  ) {
+    next.setSelectionRange(snapshot.selectionStart, snapshot.selectionEnd);
+  }
+}
