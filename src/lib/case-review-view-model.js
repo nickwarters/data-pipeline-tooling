@@ -13,6 +13,8 @@ import {
   SUMMARY_SECTIONS,
 } from '../services/section-access.js';
 import { CaseMachine } from './case-machine.js';
+// TODO(issue-199): Import `loadCaseTypeConfig` from `../../case-types/manifest.js`
+// and route both primary and QA source Case Type resolution through the manifest.
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../services/save-queue.js').SaveQueue} SaveQueue */
@@ -109,6 +111,9 @@ export class CaseReviewViewModel {
         ? caseRow.questionBankVersion
         : null;
 
+    // TODO(issue-199): Replace the data-constructed dynamic import below with
+    // manifest-backed Case Type loading so unknown `caseRow.caseType` values
+    // become a clear user-facing error and useful developer error.
     const [caseTypeModule, exportHash, versionedExport] = await Promise.all([
       import(`../../case-types/${caseRow.caseType}.js`),
       this.client.getExportHash(caseRow.caseType),
@@ -357,6 +362,9 @@ export class CaseReviewViewModel {
     }
 
     saveQueue.loadCase(original);
+    // TODO(issue-199): Use the same manifest-backed loader for QA source cases
+    // so the linked original Case cannot construct arbitrary module paths from
+    // SharePoint row data.
     const mod = await import(`../../case-types/${original.caseType}.js`);
     const origConfig = /** @type {CaseTypeConfig} */ (mod.default);
     const origCatalogue = origConfig.questions.filter((q) => !q.deprecated);
