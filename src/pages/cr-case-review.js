@@ -7,6 +7,7 @@ import { QuestionPanelController } from './cr-case-review/question-panel-control
 import { createCaseReviewNodeRegistry } from './cr-case-review/node-registry.js';
 import { CaseReviewTabController } from './cr-case-review/tab-controller.js';
 import { RemediationPanelController } from './cr-case-review/remediation-controller.js';
+import { SummaryNotesAppealController } from './cr-case-review/summary-notes-appeal-controller.js';
 import {
   CompletionController,
   completeCase,
@@ -51,6 +52,7 @@ export class CRCaseReview extends ReactiveElement {
     this._tabController = new CaseReviewTabController();
     this._questionPanelController = new QuestionPanelController();
     this._remediationPanelController = new RemediationPanelController();
+    this._summaryNotesAppealController = new SummaryNotesAppealController();
     this._completionController = new CompletionController();
     this._nodeRegistry = createCaseReviewNodeRegistry();
 
@@ -261,24 +263,9 @@ export class CRCaseReview extends ReactiveElement {
       );
     }
 
-    const {
-      caseRow,
-      catalogue,
-      config,
-      answersSignal,
-      allAnswered,
-      currentUser,
-      access,
-      roles,
-      summarySections,
-      sourceCase,
-      machine,
-    } = vm;
+    const { caseRow, config, currentUser, access, sourceCase, machine } = vm;
 
     if (!caseRow || !config || !machine || !currentUser) return;
-
-    const answers = answersSignal.get();
-    const isAllAnswered = allAnswered.get();
 
     const searchStr =
       typeof location !== 'undefined' ? (location.search ?? '') : '';
@@ -392,38 +379,13 @@ export class CRCaseReview extends ReactiveElement {
       toggleConversationPanel: this._toggleConversationPanel.bind(this),
     });
 
-    // TODO(issue-198): Move Summary, Notes, and Appeal property assignment to
-    // SummaryNotesAppealController.update().
-    Object.assign(this._summaryEl, {
-      caseRow,
-      catalogue,
-      summarySections,
-      captureGroups: config.captureGroups ?? [],
-    });
-    if (this._summaryEl.update)
-      this._summaryEl.update(config.computeOutcome, answers, isAllAnswered);
-
-    Object.assign(this._notesEl, {
-      notes: caseRow.notes,
-      caseJustification: caseRow.caseJustification ?? '',
-      saveQueue: vm.saveQueue,
-      caseId: caseRow.id,
-      access: displayMode(access.notes),
-    });
-
-    Object.assign(this._appealEl, {
-      caseRow,
-      saveQueue: vm.saveQueue,
-      caseId: caseRow.id,
-      access: displayMode(access.appeal),
-      canResolve: roles.includes('qaReviewer'),
-      attributeFailures: config.attributeFailures === true,
-      remediationFields: config.remediationFields ?? [],
-      computeOutcome: config.computeOutcome,
-      client: vm.client,
-      currentUser,
-      catalogue,
-      answers: caseRow.answers,
+    this._summaryNotesAppealController.update({
+      viewModel: vm,
+      nodes: this._controllerNodes(canToggleConversation),
+      displayMode,
+      completeCase: (caseId, client, saveQueue, patchFields) =>
+        this._completeCase(caseId, client, saveQueue, patchFields),
+      toggleConversationPanel: this._toggleConversationPanel.bind(this),
     });
 
     // TODO(issue-198): Move conversation element assignment and toggle aria

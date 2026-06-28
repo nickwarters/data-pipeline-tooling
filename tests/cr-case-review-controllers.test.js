@@ -64,6 +64,8 @@ const { QuestionPanelController, collectUnansweredQuestions } =
   await import('../src/pages/cr-case-review/question-panel-controller.js');
 const { RemediationPanelController } =
   await import('../src/pages/cr-case-review/remediation-controller.js');
+const { SummaryNotesAppealController } =
+  await import('../src/pages/cr-case-review/summary-notes-appeal-controller.js');
 const { CompletionController, completeCase } =
   await import('../src/pages/cr-case-review/completion-controller.js');
 
@@ -448,6 +450,95 @@ function makeRemediationContext(opts = {}) {
   };
 }
 
+/**
+ * @param {Partial<{
+ *   notesAccess: string,
+ *   appealAccess: string,
+ *   roles: string[],
+ *   allAnswered: boolean,
+ * }>} [opts]
+ */
+function makeSummaryNotesAppealContext(opts = {}) {
+  const summary = new StubEl();
+  const notes = new StubEl();
+  const appeal = new StubEl();
+  const saveQueue = { id: 'queue' };
+  const client = { id: 'client' };
+  const currentUser = { id: 'user-1', displayName: 'QA Reviewer' };
+  const answers = { 'q-a': { value: 'No' } };
+  const summarySections = ['details', 'questions'];
+  const captureGroups = [{ key: 'group-1', label: 'Group 1', fields: [] }];
+  const remediationFields = [{ key: 'detail', label: 'Detail' }];
+  const computeOutcome = () => ({ outcome: 'fail' });
+  const caseRow = {
+    id: 'case-1',
+    title: 'Case One',
+    assignedReviewer: 'Alex Reviewer',
+    notes: 'Reviewer notes',
+    caseJustification: 'Because evidence',
+    answers,
+  };
+  return {
+    summary,
+    notes,
+    appeal,
+    saveQueue,
+    client,
+    currentUser,
+    answers,
+    summarySections,
+    captureGroups,
+    remediationFields,
+    computeOutcome,
+    caseRow,
+    context: {
+      viewModel: {
+        caseRow,
+        catalogue: QUESTIONS,
+        config: {
+          captureGroups,
+          attributeFailures: true,
+          remediationFields,
+          computeOutcome,
+        },
+        answersSignal: { get: () => answers },
+        allAnswered: { get: () => opts.allAnswered ?? true },
+        currentUser,
+        access: {
+          notes: opts.notesAccess ?? 'edit',
+          appeal: opts.appealAccess ?? 'override',
+        },
+        roles: opts.roles ?? ['qaReviewer'],
+        summarySections,
+        saveQueue,
+        client,
+      },
+      nodes: {
+        tabs: null,
+        details: null,
+        questionsPanel: null,
+        questionList: null,
+        progress: null,
+        overrideEditor: null,
+        remediation: null,
+        summary,
+        notes,
+        appeal,
+        conversation: null,
+        sourceCase: null,
+        banner: null,
+        conversationToggle: null,
+        header: null,
+        completeButton: null,
+      },
+      displayMode: (/** @type {any} */ mode) =>
+        mode === 'override' ? 'read-only' : mode,
+      completeCase: async () => {},
+      toggleConversationPanel: () => {},
+    },
+  };
+}
+
 test('CaseReviewNodeRegistry: creates and reuses the long-lived page nodes currently cached by CRCaseReview', () => {
   const registry = createCaseReviewNodeRegistry();
   const first = registry.ensure();
@@ -720,12 +811,56 @@ test('RemediationPanelController: forwards null Responsible Party as null quick-
   assert.equal(/** @type {any} */ (remediation).responsibleParty, null);
 });
 
-test.todo(
-  'SummaryNotesAppealController: assigns Summary, Notes, and Appeal tab props'
-);
-// TODO(issue-198): Assert computeOutcome/allAnswered are sent to Summary, Notes
-// receives queue/case/access fields, and Appeal receives qaReviewer/correction
-// context.
+test('SummaryNotesAppealController: assigns Summary, Notes, and Appeal tab props', () => {
+  const {
+    context,
+    summary,
+    notes,
+    appeal,
+    saveQueue,
+    client,
+    currentUser,
+    answers,
+    summarySections,
+    captureGroups,
+    remediationFields,
+    computeOutcome,
+    caseRow,
+  } = makeSummaryNotesAppealContext();
+
+  new SummaryNotesAppealController().update(/** @type {any} */ (context));
+
+  assert.equal(/** @type {any} */ (summary).caseRow, caseRow);
+  assert.equal(/** @type {any} */ (summary).catalogue, QUESTIONS);
+  assert.equal(/** @type {any} */ (summary).summarySections, summarySections);
+  assert.equal(/** @type {any} */ (summary).captureGroups, captureGroups);
+  assert.deepEqual(summary._updateArgs, [computeOutcome, answers, true]);
+
+  assert.equal(/** @type {any} */ (notes).notes, 'Reviewer notes');
+  assert.equal(
+    /** @type {any} */ (notes).caseJustification,
+    'Because evidence'
+  );
+  assert.equal(/** @type {any} */ (notes).saveQueue, saveQueue);
+  assert.equal(/** @type {any} */ (notes).caseId, 'case-1');
+  assert.equal(/** @type {any} */ (notes).access, 'edit');
+
+  assert.equal(/** @type {any} */ (appeal).caseRow, caseRow);
+  assert.equal(/** @type {any} */ (appeal).saveQueue, saveQueue);
+  assert.equal(/** @type {any} */ (appeal).caseId, 'case-1');
+  assert.equal(/** @type {any} */ (appeal).access, 'read-only');
+  assert.equal(/** @type {any} */ (appeal).canResolve, true);
+  assert.equal(/** @type {any} */ (appeal).attributeFailures, true);
+  assert.equal(
+    /** @type {any} */ (appeal).remediationFields,
+    remediationFields
+  );
+  assert.equal(/** @type {any} */ (appeal).computeOutcome, computeOutcome);
+  assert.equal(/** @type {any} */ (appeal).client, client);
+  assert.equal(/** @type {any} */ (appeal).currentUser, currentUser);
+  assert.equal(/** @type {any} */ (appeal).catalogue, QUESTIONS);
+  assert.equal(/** @type {any} */ (appeal).answers, answers);
+});
 
 test.todo(
   'ConversationPanelController: preserves click and Alt+C conversation toggling'
