@@ -86,13 +86,30 @@ test('registerRoutes: registers #/case/:id route', () => {
   );
 });
 
-test('registerRoutes: #/ mount creates cr-home element (no redirect)', () => {
-  const created = /** @type {string[]} */ ([]);
+test('registerRoutes: #/ mount renders home route directly (no redirect)', () => {
+  const rendered = /** @type {any[]} */ ([]);
   const origDoc = /** @type {any} */ (globalThis).document;
   /** @type {any} */ (globalThis).document = {
     createElement(/** @type {string} */ tag) {
-      created.push(tag);
-      return { setAttribute() {} };
+      return {
+        tagName: tag.toUpperCase(),
+        textContent: '',
+        className: '',
+        href: '',
+        _children: /** @type {any[]} */ ([]),
+        appendChild(/** @type {any} */ child) {
+          this._children.push(child);
+          return child;
+        },
+        setAttribute() {},
+      };
+    },
+    createTextNode(/** @type {string} */ text) {
+      return /** @type {any} */ ({
+        tagName: '#text',
+        textContent: text,
+        _children: [],
+      });
     },
     createTreeWalker() {
       return {
@@ -117,12 +134,24 @@ test('registerRoutes: #/ mount creates cr-home element (no redirect)', () => {
   try {
     const router = new Router();
     router._container = /** @type {any} */ ({});
-    registerRoutes(router, makeContext());
+    const context = makeContext();
+    context.capabilities = {
+      isReviewer: false,
+      ownedCaseTypes: [],
+      isResponsibleParty: false,
+      isReviewerManager: false,
+      isResponsiblePartyManager: false,
+      isMaintainer: false,
+      isQaReviewer: false,
+      isVisitor: true,
+    };
+    context.appEl.replaceChildren = (/** @type {any[]} */ ...children) => {
+      rendered.splice(0, rendered.length, ...children);
+    };
+    registerRoutes(router, context);
     router.navigate('#/');
-    assert.ok(
-      created.includes('cr-home'),
-      'cr-home should be created on mount'
-    );
+    assert.equal(rendered.length, 1, 'home route should render one section');
+    assert.equal(rendered[0].tagName, 'SECTION');
     assert.deepEqual(locations, [], 'should not redirect away from #/');
   } finally {
     /** @type {any} */ (globalThis).document = origDoc;

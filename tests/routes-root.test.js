@@ -29,14 +29,30 @@ test('root route: register calls router.register with #/', () => {
   );
 });
 
-test('root route: mount appends a cr-home with capabilities from context (no redirect)', () => {
-  const created = /** @type {any[]} */ ([]);
+test('root route: mount renders HomePage sections with capabilities from context (no redirect)', () => {
   const origDoc = /** @type {any} */ (globalThis).document;
   /** @type {any} */ (globalThis).document = {
     createElement(/** @type {string} */ tag) {
-      const el = /** @type {any} */ ({ tag, setAttribute() {} });
-      created.push(el);
+      const el = /** @type {any} */ ({
+        tagName: tag.toUpperCase(),
+        textContent: '',
+        className: '',
+        href: '',
+        _children: /** @type {any[]} */ ([]),
+        appendChild(/** @type {any} */ child) {
+          this._children.push(child);
+          return child;
+        },
+        setAttribute() {},
+      });
       return el;
+    },
+    createTextNode(/** @type {string} */ text) {
+      return /** @type {any} */ ({
+        tagName: '#text',
+        textContent: text,
+        _children: [],
+      });
     },
     createTreeWalker() {
       return {
@@ -47,14 +63,13 @@ test('root route: mount appends a cr-home with capabilities from context (no red
     },
   };
 
-  const appended = /** @type {any[]} */ ([]);
+  const rendered = /** @type {any[]} */ ([]);
   const appEl = {
-    appendChild(/** @type {any} */ el) {
-      appended.push(el);
-      return el;
+    replaceChildren(/** @type {any[]} */ ...children) {
+      rendered.splice(0, rendered.length, ...children);
     },
   };
-  const capabilities = { isVisitor: true };
+  const capabilities = { isVisitor: true, ownedCaseTypes: [] };
 
   const hashes = /** @type {string[]} */ ([]);
   const origLocation = globalThis.location;
@@ -73,15 +88,9 @@ test('root route: mount appends a cr-home with capabilities from context (no red
     register(router, /** @type {any} */ ({ capabilities, appEl }));
     router.navigate('#/');
 
-    const home = created.find((e) => e.tag === 'cr-home');
-    assert.ok(home, 'cr-home element should be created');
-    assert.equal(
-      home.capabilities,
-      capabilities,
-      'capabilities assigned from context'
-    );
-    assert.equal(appended.length, 1, 'cr-home appended to appEl once');
-    assert.equal(appended[0], home, 'the appended element is the cr-home');
+    assert.equal(rendered.length, 1, 'one home section rendered');
+    assert.equal(rendered[0].tagName, 'SECTION');
+    assert.equal(rendered[0]._children[0].textContent, 'Visitor');
     assert.deepEqual(hashes, [], 'no redirect away from #/');
   } finally {
     /** @type {any} */ (globalThis).document = origDoc;
@@ -104,24 +113,31 @@ test('root route: unmount clears appEl', () => {
     },
   };
 
-  let cleared = 0;
+  /** @type {number[]} */
+  const replaceCalls = [];
   const appEl = {
-    appendChild() {},
-    replaceChildren() {
-      cleared++;
+    replaceChildren(/** @type {any[]} */ ...children) {
+      replaceCalls.push(children.length);
     },
   };
 
   try {
     const router = new Router();
     router._container = /** @type {any} */ ({});
-    register(router, /** @type {any} */ ({ capabilities: {}, appEl }));
+    register(
+      router,
+      /** @type {any} */ ({ capabilities: { ownedCaseTypes: [] }, appEl })
+    );
     router.navigate('#/');
     // Navigating elsewhere triggers the root handler's unmount.
     router.register('#/other', { mount() {}, unmount() {} });
     router.navigate('#/other');
 
-    assert.equal(cleared, 1, 'unmount should clear appEl once');
+    assert.deepEqual(
+      replaceCalls,
+      [0, 0],
+      'mount renders nothing for empty capabilities and unmount clears appEl'
+    );
   } finally {
     /** @type {any} */ (globalThis).document = origDoc;
   }
