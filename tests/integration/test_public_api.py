@@ -128,6 +128,22 @@ def test_file_deliverable_writers_are_available_through_the_io_facade(tmp_path):
     assert JsonWriter is not None
 
 
+def test_streaming_readers_are_available_through_the_io_facade(tmp_path):
+    # The chunked-read seam: bounded Datasets for sources too big to hold whole,
+    # reachable through framework.io and satisfying the ChunkReader protocol.
+    from framework.io import ChunkedCsvReader, ChunkReader, SasFileReader
+
+    src = tmp_path / "feed.csv"
+    src.write_text("id,val\n1,10\n2,20\n3,30\n", encoding="utf-8")
+
+    reader = ChunkedCsvReader(src)
+    assert isinstance(reader, ChunkReader)
+    assert isinstance(SasFileReader(tmp_path / "x.sas7bdat"), ChunkReader)
+
+    sizes = [len(chunk) for chunk in reader.chunks(2)]
+    assert sizes == [2, 1]
+
+
 def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_path):
     # Selection-style narrowing: processors come from framework.transform and
     # the checks from framework.core, composed onto the framework.run Pipeline.

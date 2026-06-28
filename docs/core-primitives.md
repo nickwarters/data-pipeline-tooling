@@ -117,6 +117,47 @@ lets a pipeline read only the columns it needs, leaving `read() -> Dataset`
 unchanged. This is what keeps each single-table pipeline narrow when a wide feed
 (650+ columns) is fanned out into a Case table and its Detail Tables.
 
+#### `ChunkReader` — streaming a source too big to hold whole
+
+`read() -> Dataset` lands a whole source in memory at once — right for a
+feed-sized file, impossible for a multi-hundred-GB extract. `ChunkReader` is the
+**streaming dual**: `chunks(size) -> Iterator[Dataset]` yields a lazy sequence
+of *bounded* Datasets, so the in-memory contract (ADR-0002) holds **per chunk**,
+never for the whole source. The concrete chunking engine (pandas `chunksize`)
+stays behind the `Dataset` seam exactly as `read()` keeps pandas behind it.
+
+```python
+class ChunkReader(Protocol):
+    def chunks(self, size: int = DEFAULT_CHUNK_SIZE) -> Iterator[Dataset]: ...
+```
+
+`ChunkedCsvReader(path, columns=...)` streams a local CSV via pandas
+`read_csv(chunksize=…)`. `SasFileReader(path, columns=..., format=...)` streams
+an **already-landed** `.sas7bdat`/xport file via pandas `read_sas(chunksize=…)`;
+a gzipped extract (`extract.sas7bdat.gz`) is read on the fly (compression
+inferred from the extension), and the SAS format is inferred from the extension
+— ignoring any trailing `.gz` — unless `format=` is passed. Reading
+sas7bdat/xport needs **no extra dependency** (pandas' SAS reader is pure-Python),
+so it is first-class on Windows and macOS alike.
+
+`SasFileReader` is deliberately **not** the ADR-0012 `SasReader`: it runs no SAS
+script, does no remote execution, and copies no file — it only *reads* a file
+already on local disk. The two are complementary — `SasReader` *lands* a file
+from a remote SAS host (see the source-type table below); `SasFileReader` is one
+way to *read* a landed file once it is there — and the distinct name keeps them
+from being confused.
+
+The chunk size is configurable and defaults to `DEFAULT_CHUNK_SIZE` (10,000
+rows). `columns=[...]` projects each chunk so a caller streaming a wide source
+for just a couple of columns keeps every chunk narrow (CSV pushes it into
+`usecols`; SAS slices each chunk, since `read_sas` has no projection). A source
+with no data rows (a header-only CSV, an empty file, a zero-row SAS table)
+streams as **zero** chunks; a small non-empty source as exactly **one**. These
+readers expose `chunks()`, not `read()`, so they sit *beside* the single-shot
+`Reader` set rather than wiring into the deferred `Pipeline` builder — the
+streaming consumers (e.g. a monthly projection that appends each chunk to an
+indexed silver table) compose on top of them.
+
 **Table and column names you configure** (the `table` and `columns=[...]` you pass
 to a `SqliteReader`/Writer) accept **any string** — spaces, hyphens, mixed case,
 and SQL reserved words are all fine. Every identifier is double-quoted at the
@@ -138,7 +179,8 @@ directions are explicit:
 | Excel file | `ExcelReader` | `ExcelWriter` | Both target one worksheet (`sheet=...`). |
 | JSON file | _intentionally absent_ | `JsonWriter` | JSON is currently a Reporting Deliverable format only; no inbound JSON Feed has been needed yet. |
 | SQLite table | `SqliteReader` | `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `SqliteInsertOrIgnoreWriter`, `SqliteInsertIfAbsentWriter` | The Store mints these over medallion layer databases. |
-| SAS extract | `SasReader` | _intentionally absent_ | SAS is an inbound-only remote source; the framework lands the remote output then reads local CSV files. |
+| SAS extract (remote) | `SasReader` | _intentionally absent_ | SAS is an inbound-only remote source; the framework lands the remote output then reads local CSV files. |
+| Large source, streamed | `ChunkedCsvReader`, `SasFileReader` | _intentionally absent_ | The `ChunkReader` seam (`chunks(size) -> Iterator[Dataset]`) for sources too big to hold whole — a local CSV or an **already-landed** `.sas7bdat`/xport file (incl. gzipped). Distinct from the remote `SasReader`: no script, no remote run, no copy — read-only by nature. |
 | SharePoint list | `SharePointReader` | `SharePointWriter` | Target is **SE on-prem**. Both sides are stubbed behind swappable `SharePointFetcher` / `SharePointPusher` seams until the on-prem SE client (NTLM/Kerberos/REST) lands. `SharePointWriter` emits the canonical Selection Deliverable — one list per Case Type. |
 | Console (stdout) | _intentionally absent_ | `StdoutWriter` | A terminal sink for *seeing* a result rather than persisting it — e.g. printing a Selection explainer's per-Case trace while driving a feed by hand. Owns no location or load strategy; prints the dataset as a plain-text table to the stream (defaulting to `sys.stdout`). |
 

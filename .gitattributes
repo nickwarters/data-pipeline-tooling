@@ -1,0 +1,9 @@
+# SAS-format streaming fixtures are binary and read back byte-for-byte by the
+# SasFileReader tests. The .xpt (XPORT) header is largely ASCII, so Git could
+# misdetect it as text and a Windows checkout (core.autocrlf=true) would rewrite
+# line endings and corrupt the file. Pin them as binary so the bytes are
+# identical on Windows and macOS checkouts.
+tests/fixtures/*.xpt -text
+tests/fixtures/*.xpt.gz -text
+tests/fixtures/*.sas7bdat -text
+tests/fixtures/*.sas7bdat.gz -text

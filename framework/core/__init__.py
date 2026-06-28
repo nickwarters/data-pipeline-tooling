@@ -17,7 +17,15 @@ from framework._internal.schema import RowCheck, ValueRule, row_checks
 from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError, format_failure
 from framework.core.layers import GOLD, RAW, SILVER, Layer
-from framework.core.protocols import Processor, Reader, Severity, Validator, Writer
+from framework.core.protocols import (
+    DEFAULT_CHUNK_SIZE,
+    ChunkReader,
+    Processor,
+    Reader,
+    Severity,
+    Validator,
+    Writer,
+)
 from framework.core.schema import SchemaValidator
 from framework.core.validators import (
     ColumnValidator,
@@ -46,6 +54,8 @@ __all__ = [
     "SILVER",
     "GOLD",
     "Reader",
+    "ChunkReader",
+    "DEFAULT_CHUNK_SIZE",
     "Writer",
     "Processor",
     "Validator",

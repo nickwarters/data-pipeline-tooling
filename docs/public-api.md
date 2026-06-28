@@ -109,7 +109,8 @@ builds on them.
 |-------|------|
 | `Dataset` | The opaque bulk tabular carrier (pandas behind the seam) that flows through every Reader, Processor, Validator, and Writer. |
 | `Layer`, `RAW`, `SILVER`, `GOLD` | The medallion layer constants. |
-| `Reader`, `Writer`, `Processor`, `Validator`, `Severity` | Shared protocols used by framework internals and available for advanced typing. Concrete implementations still live on their task facades. |
+| `Reader`, `ChunkReader`, `Writer`, `Processor`, `Validator`, `Severity` | Shared protocols used by framework internals and available for advanced typing. `ChunkReader` (`chunks(size) -> Iterator[Dataset]`) is the streaming dual of `Reader` for sources too big to hold whole. Concrete implementations still live on their task facades. |
+| `DEFAULT_CHUNK_SIZE` | The default chunk size (10,000 rows) a `ChunkReader` streams in. |
 | `Validator`, `ValidationError` | The check seam and the error it raises. |
 | `ColumnValidator`, `RowCountValidator`, `VolumeAnomalyValidator`, `UniqueValidator`, `SchemaDriftValidator` | The concrete structural / volume / uniqueness / drift checks that *gate* a feed — they raise on breach rather than reshaping. Composed onto a `Pipeline` as pre/post validators. |
 | `RunHistory`, `PriorColumns` | History inputs the run-aware checks read. |
@@ -126,6 +127,7 @@ Moving data across the boundary.
 | Names | What |
 |-------|------|
 | `Reader`, `DatasetReader`, `CsvReader`, `StrictCsvReader`, `StrictCsvParseError`, `GlobCsvReader`, `ExcelReader`, `SqliteReader` | The `read() -> Dataset` port and its concrete sources (`StrictCsvReader` is the char-by-char RFC 4180 parser; `StrictCsvParseError` is the located error it raises). (The remote `SasReader` / `SharePointReader` live in `tools.integrations`, not this facade — see below.) |
+| `ChunkReader`, `ChunkedCsvReader`, `SasFileReader`, `DEFAULT_CHUNK_SIZE` | The `chunks(size) -> Iterator[Dataset]` streaming port and its concrete sources for inputs too big to hold whole: a local CSV (`ChunkedCsvReader`) and an **already-landed** `.sas7bdat`/xport file, incl. gzipped (`SasFileReader`). `SasFileReader` is read-only by nature and distinct from the remote `tools.integrations` `SasReader` (no script, no remote run, no copy). |
 | `Writer`, `CsvWriter`, `ExcelWriter`, `JsonWriter`, `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `SqliteInsertOrIgnoreWriter`, `QuarantineWriter`, `StdoutWriter` | The `write(dataset)` port and its concrete sinks (`StdoutWriter` is a console sink for *seeing* a result — e.g. an explainer trace — rather than persisting it). (The remote `SharePointWriter` lives in `tools.integrations`, not this facade — see below.) |
 | `Store`, `StoreCatalog`, `StoreBackend`, `DirectoryStoreBackend` | Per-subject medallions minted from shared configuration. |
 | `Refresh`, `AccumulateByRun`, `UpsertStrategy`, `InsertOrIgnore` | The load strategies a Writer carries. |
