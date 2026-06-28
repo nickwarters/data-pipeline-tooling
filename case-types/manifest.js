@@ -5,23 +5,35 @@
  */
 
 /**
- * TODO(issue-199): Replace data-constructed Case Type imports with this
- * allow-list. Add one entry per supported Case Type slug, for example
- * `example-review`, `product-sale-review`, `qa-example-review`, and
- * `stress-review`, each pointing at a static `import('./<slug>.js')` function.
- *
  * @type {Record<string, CaseTypeImporter>}
  */
-export const CASE_TYPE_IMPORTERS = {};
+export const CASE_TYPE_IMPORTERS = {
+  'example-review': () => import('./example-review.js'),
+  'product-sale-review': () => import('./product-sale-review.js'),
+  'qa-example-review': () => import('./qa-example-review.js'),
+  'stress-review': () => import('./stress-review.js'),
+};
+
+export class UnknownCaseTypeError extends Error {
+  /**
+   * @param {string} slug
+   */
+  constructor(slug) {
+    super(`Unknown Case Type slug "${slug}".`);
+    this.name = 'UnknownCaseTypeError';
+    this.slug = slug;
+  }
+}
 
 /**
- * TODO(issue-199): Resolve a Case Type slug through `CASE_TYPE_IMPORTERS`,
- * returning the loaded config for known slugs and throwing a developer-useful
- * unknown-slug error for malformed or unsupported SharePoint row data.
- *
- * @param {string} _slug
+ * @param {string} slug
  * @returns {Promise<import('../src/sharepoint-client.js').CaseTypeConfig>}
  */
-export async function loadCaseTypeConfig(_slug) {
-  throw new Error('TODO(issue-199): load Case Type config from manifest.');
+export async function loadCaseTypeConfig(slug) {
+  const importer = CASE_TYPE_IMPORTERS[slug];
+  if (!importer) {
+    throw new UnknownCaseTypeError(slug);
+  }
+  const mod = await importer();
+  return mod.default;
 }
