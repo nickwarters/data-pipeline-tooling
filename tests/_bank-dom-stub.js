@@ -158,7 +158,11 @@ export function installDom() {
     /** @param {string} tag */
     createElement(tag) {
       const cls = G.customElements?._registry?.[tag];
-      if (cls) return new cls();
+      if (cls) {
+        const el = new cls();
+        el.tagName = tag;
+        return el;
+      }
       return new StubEl(tag);
     },
     createTextNode(/** @type {string} */ s) {

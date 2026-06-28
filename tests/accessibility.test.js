@@ -93,14 +93,23 @@ class StubEl {
   },
   /** @param {string} tag @returns {StubEl} */
   createElement(tag) {
-    const el = new StubEl();
+    const cls = /** @type {any} */ (globalThis).customElements?._registry?.[
+      tag
+    ];
+    const el = cls ? new cls() : new StubEl();
     el.tagName = tag;
     return el;
   },
   addEventListener() {},
   removeEventListener() {},
 };
-/** @type {any} */ (globalThis).customElements = { define() {} };
+/** @type {any} */ (globalThis).customElements = {
+  /** @type {Record<string, any>} */
+  _registry: {},
+  define(/** @type {string} */ name, /** @type {any} */ cls) {
+    this._registry[name] = cls;
+  },
+};
 /** @type {any} */ (globalThis).CustomEvent = class {
   /**
    * @param {string} type

@@ -34,10 +34,9 @@ export function QuestionList({ questions, answers, access, existing = [] }) {
       answerValue ?? (question.responseType === 'multi-choice' ? [] : '');
 
     const existingElement = existingById.get(question.id);
-    const element = existingElement ?? new CRQuestion();
-    if (!existingElement) {
-      /** @type {any} */ (element).tagName = 'cr-question';
-    }
+    const element =
+      existingElement ??
+      /** @type {CRQuestion} */ (document.createElement('cr-question'));
     element.tabIndex = -1;
 
     element.question = question;
