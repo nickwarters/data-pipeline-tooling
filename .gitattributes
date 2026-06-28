@@ -1,0 +1,8 @@
+# CSV test fixtures are tokenised and asserted byte-for-byte by the readers
+# tests (e.g. StrictCsvReader preserves an embedded LF inside a quoted field
+# in tests/fixtures/strict_cases.csv). Git for Windows defaults to
+# core.autocrlf=true, which would rewrite every LF -> CRLF on checkout --
+# including that *embedded* newline -- and the parser would faithfully read
+# back "Line one\r\nLine two", breaking the assertion. Treat the fixtures as
+# binary so their bytes are identical on Windows and macOS checkouts.
+tests/fixtures/*.csv -text
