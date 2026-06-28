@@ -63,9 +63,6 @@ export class CRCaseReview extends ReactiveElement {
     // TODO(simplify-ui): Collapse this page toward a route shell plus pure
     // renderCaseReview(viewModel) output once src/lib/view.js can own lifecycle,
     // listener cleanup, and render effects for ordinary components.
-    // TODO(issue-198): Move controller-owned lifecycle state into
-    // cr-case-review/conversation-controller.js and
-    // cr-case-review/node-registry.js as the page becomes a route shell.
     /** @type {((e: KeyboardEvent) => void) | null} */
     this._keydownHandler = null;
     /** @type {boolean} */
