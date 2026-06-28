@@ -5,10 +5,96 @@ import { h } from '../lib/html.js';
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
 
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
+/**
+ * @typedef {object} PeoplePickerProps
+ * @property {string} placeholder
+ * @property {PersonResult[]} people
+ * @property {string} query
+ * @property {string} inputValue
+ * @property {(value: string) => void} onInput
+ * @property {(person: { loginName: string, displayName: string }) => void} onSelect
+ */
+
+/**
+ * @param {PeoplePickerProps} props
+ * @returns {Node[]}
+ */
+export function PeoplePicker(props) {
+  const items = props.people.map((p) =>
+    peoplePickerOption(
+      { loginName: p.loginName, displayName: p.displayName },
+      `${p.displayName} — ${p.loginName}`,
+      props.onSelect
+    )
+  );
+  if (props.people.length === 0 && props.query !== '') {
+    items.push(
+      peoplePickerOption(
+        { loginName: props.query, displayName: props.query },
+        `Use “${props.query}” as account`,
+        props.onSelect
+      )
+    );
+  }
+
+  const inputEl = h('input', {
+    class: 'cr-people-picker-input',
+    type: 'text',
+    role: 'combobox',
+    'aria-label': 'Search people',
+    placeholder: props.placeholder,
+    value: props.inputValue,
+    oninput: (/** @type {any} */ ev) => {
+      props.onInput(ev.target?.value ?? '');
+    },
+  });
+
+  const resultsEl = h(
+    'ul',
+    {
+      class: 'cr-people-picker-results',
+      role: 'listbox',
+      hidden: items.length === 0,
+    },
+    ...items
+  );
+
+  return [inputEl, resultsEl];
+}
+
+/**
+ * @param {{ loginName: string, displayName: string }} person
+ * @param {string} label
+ * @param {(person: { loginName: string, displayName: string }) => void} onSelect
+ * @returns {HTMLElement}
+ */
+export function peoplePickerOption(person, label, onSelect) {
+  return h(
+    'li',
+    {
+      class: 'cr-people-picker-option',
+      role: 'option',
+      onclick: () => onSelect(person),
+    },
+    label
+  );
+}
+
+/**
+ * @param {{ client: SharePointClient | null, renderResults(people: PersonResult[], query: string): void }} context
+ * @param {string} query
+ * @returns {Promise<void>}
+ */
+export async function searchPeople(context, query) {
+  const q = query.trim();
+  if (q === '' || !context.client) {
+    context.renderResults([], '');
+    return;
+  }
+  const people = await context.client.searchPeople(q);
+  context.renderResults(people, q);
+}
+
 export class CRPeoplePicker extends ReactiveElement {
   constructor() {
     super();
@@ -52,51 +138,26 @@ export class CRPeoplePicker extends ReactiveElement {
   }
 
   render() {
-    const items = this._people.map((p) =>
-      this._option(
-        { loginName: p.loginName, displayName: p.displayName },
-        `${p.displayName} — ${p.loginName}`
-      )
-    );
-    if (this._people.length === 0 && this._query !== '') {
-      items.push(
-        this._option(
-          { loginName: this._query, displayName: this._query },
-          `Use “${this._query}” as account`
-        )
-      );
-    }
-
-    const inputEl = h('input', {
-      class: 'cr-people-picker-input',
-      type: 'text',
-      role: 'combobox',
-      'aria-label': 'Search people',
+    const nodes = PeoplePicker({
       placeholder: this.placeholder,
-      value: this._inputValue,
-      oninput: (/** @type {any} */ ev) => {
-        const value = ev.target?.value ?? '';
-        this._inputValue = value;
-        clearTimeout(this._timer);
-        this._timer = setTimeout(() => {
-          this._searchPromise = this._search(value);
-        }, this.debounceMs);
-      },
+      people: this._people,
+      query: this._query,
+      inputValue: this._inputValue,
+      onInput: (value) => this._queueSearch(value),
+      onSelect: (person) => this._select(person),
     });
-    this._input = inputEl;
+    this._input = /** @type {HTMLElement} */ (nodes[0]);
+    this._results = /** @type {HTMLElement} */ (nodes[1]);
+    return nodes;
+  }
 
-    const resultsEl = h(
-      'ul',
-      {
-        class: 'cr-people-picker-results',
-        role: 'listbox',
-        hidden: items.length === 0,
-      },
-      ...items
-    );
-    this._results = resultsEl;
-
-    return [inputEl, resultsEl];
+  /** @param {string} value */
+  _queueSearch(value) {
+    this._inputValue = value;
+    clearTimeout(this._timer);
+    this._timer = setTimeout(() => {
+      this._searchPromise = this._search(value);
+    }, this.debounceMs);
   }
 
   /**
@@ -104,13 +165,13 @@ export class CRPeoplePicker extends ReactiveElement {
    * @returns {Promise<void>}
    */
   async _search(query) {
-    const q = query.trim();
-    if (q === '' || !this.client) {
-      this._renderResults([], '');
-      return;
-    }
-    const people = await this.client.searchPeople(q);
-    this._renderResults(people, q);
+    await searchPeople(
+      {
+        client: this.client,
+        renderResults: (people, q) => this._renderResults(people, q),
+      },
+      query
+    );
   }
 
   /**
@@ -121,23 +182,6 @@ export class CRPeoplePicker extends ReactiveElement {
     this._people = people;
     this._query = query;
     this._render();
-  }
-
-  /**
-   * @param {{ loginName: string, displayName: string }} person
-   * @param {string} label
-   * @returns {HTMLElement}
-   */
-  _option(person, label) {
-    return h(
-      'li',
-      {
-        class: 'cr-people-picker-option',
-        role: 'option',
-        onclick: () => this._select(person),
-      },
-      label
-    );
   }
 
   /** @param {{ loginName: string, displayName: string }} person */

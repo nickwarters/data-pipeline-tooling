@@ -7,10 +7,157 @@ import { h } from '../lib/html.js';
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
 /** @typedef {import('../services/save-queue.js').SaveQueue} SaveQueue */
 
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
+/**
+ * @typedef {object} ConversationProps
+ * @property {Message[]} messages
+ * @property {'edit'|'read-only'|'hidden'} access
+ * @property {(body: string) => Promise<void>} sendMessage
+ */
+
+/**
+ * @param {ConversationProps} props
+ * @returns {Node[]}
+ */
+export function Conversation(props) {
+  const children = [h('h2', {}, 'Conversation')];
+
+  if (props.messages.length === 0) {
+    children.push(
+      h('p', { class: 'cr-conversation-empty' }, 'No messages yet.')
+    );
+  } else {
+    children.push(
+      h(
+        'ul',
+        { class: 'cr-conversation-list' },
+        ...props.messages.map((msg) => conversationMessage(msg))
+      )
+    );
+  }
+
+  if (props.access === 'edit') {
+    children.push(conversationCompose(props.sendMessage));
+  }
+  return children;
+}
+
+/**
+ * @param {Message} msg
+ * @returns {HTMLElement}
+ */
+export function conversationMessage(msg) {
+  return h(
+    'li',
+    { class: 'cr-conversation-message' },
+    h('p', { class: 'cr-message-author' }, msg.author),
+    h(
+      'p',
+      { class: 'cr-message-timestamp' },
+      new Date(msg.timestamp).toLocaleString()
+    ),
+    h('p', { class: 'cr-message-body' }, msg.body)
+  );
+}
+
+/**
+ * @param {(body: string) => Promise<void>} sendMessage
+ * @returns {HTMLElement}
+ */
+export function conversationCompose(sendMessage) {
+  /** @type {HTMLTextAreaElement} */
+  let textarea;
+  return h(
+    'div',
+    { class: 'cr-conversation-compose' },
+    (textarea = /** @type {HTMLTextAreaElement} */ (
+      h('textarea', {
+        class: 'cr-conversation-input',
+        'aria-label': 'Message to Responsible Party',
+      })
+    )),
+    h(
+      'button',
+      {
+        class: 'cr-conversation-send',
+        onclick: async () => {
+          const body = (textarea.value ?? '').trim();
+          if (!body) return;
+          /** @type {any} */ (textarea).value = '';
+          await sendMessage(body);
+        },
+      },
+      'Send'
+    )
+  );
+}
+
+/**
+ * @param {{ hidden?: boolean, addEventListener(type: string, listener: () => void): void, removeEventListener(type: string, listener: () => void): void }} target
+ * @param {() => void | Promise<void>} refresh
+ * @returns {{ handler: () => void, disconnect: () => void }}
+ */
+export function bindConversationVisibility(target, refresh) {
+  const handler = () => {
+    if (!target.hidden) refresh();
+  };
+  target.addEventListener('visibilitychange', handler);
+  return {
+    handler,
+    disconnect: () => target.removeEventListener('visibilitychange', handler),
+  };
+}
+
+/**
+ * @param {{ client: SharePointClient | null, saveQueue: SaveQueue | null, caseId: string, currentUser: CurrentUser | null, messages: Message[], setMessages(messages: Message[]): void, render(): void }} context
+ * @param {string} body
+ * @returns {Promise<void>}
+ */
+export async function sendConversationMessage(context, body) {
+  if (
+    !context.client ||
+    !context.saveQueue ||
+    !context.caseId ||
+    !context.currentUser
+  ) {
+    return;
+  }
+
+  /** @type {Message} */
+  const msg = {
+    author: context.currentUser.displayName,
+    timestamp: new Date().toISOString(),
+    body,
+  };
+
+  const messages = [...context.messages, msg];
+  context.setMessages(messages);
+  context.render();
+
+  const etag = context.saveQueue.getEtag(context.caseId);
+  const result = await context.client.patchCase(
+    context.caseId,
+    { conversation: messages },
+    etag
+  );
+
+  if (result.ok && result.data) {
+    context.saveQueue.loadCase(result.data);
+  }
+}
+
+/**
+ * @param {{ client: SharePointClient | null, caseId: string, setMessages(messages: Message[]): void, render(): void }} context
+ * @returns {Promise<void>}
+ */
+export async function refreshConversation(context) {
+  if (!context.client || !context.caseId) return;
+  const fresh = await context.client.getCase(context.caseId);
+  if (fresh) {
+    context.setMessages(fresh.conversation);
+    context.render();
+  }
+}
+
 export class CRConversation extends ReactiveElement {
   constructor() {
     super();
@@ -25,6 +172,8 @@ export class CRConversation extends ReactiveElement {
     /** @type {CurrentUser | null} */
     this.currentUser = null;
     /** @type {(() => void) | null} */
+    this._unbindVisibility = null;
+    /** @type {(() => void) | null} */
     this._visibilityHandler = null;
     /** @type {'edit'|'read-only'|'hidden'} */
     this.access = 'edit';
@@ -36,23 +185,19 @@ export class CRConversation extends ReactiveElement {
       typeof document !== 'undefined' &&
       typeof document.addEventListener === 'function'
     ) {
-      this._visibilityHandler = () => {
-        if (!document.hidden) this._refresh();
-      };
-      document.addEventListener('visibilitychange', this._visibilityHandler);
+      const binding = bindConversationVisibility(document, () =>
+        this._refresh()
+      );
+      this._visibilityHandler = binding.handler;
+      this._unbindVisibility = binding.disconnect;
     }
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    if (
-      this._visibilityHandler &&
-      typeof document !== 'undefined' &&
-      typeof document.removeEventListener === 'function'
-    ) {
-      document.removeEventListener('visibilitychange', this._visibilityHandler);
-      this._visibilityHandler = null;
-    }
+    this._unbindVisibility?.();
+    this._unbindVisibility = null;
+    this._visibilityHandler = null;
   }
 
   /**
@@ -81,109 +226,42 @@ export class CRConversation extends ReactiveElement {
   }
 
   render() {
-    const children = [h('h2', {}, 'Conversation')];
-
-    if (this._messages.length === 0) {
-      children.push(
-        h('p', { class: 'cr-conversation-empty' }, 'No messages yet.')
-      );
-    } else {
-      children.push(
-        h(
-          'ul',
-          { class: 'cr-conversation-list' },
-          ...this._messages.map((msg) => this._renderMessage(msg))
-        )
-      );
-    }
-
-    if (this.access === 'edit') {
-      children.push(this._renderCompose());
-    }
-    return children;
-  }
-
-  /**
-   * @param {Message} msg
-   */
-  _renderMessage(msg) {
-    return h(
-      'li',
-      { class: 'cr-conversation-message' },
-      h('p', { class: 'cr-message-author' }, msg.author),
-      h(
-        'p',
-        { class: 'cr-message-timestamp' },
-        new Date(msg.timestamp).toLocaleString()
-      ),
-      h('p', { class: 'cr-message-body' }, msg.body)
-    );
-  }
-
-  _renderCompose() {
-    /** @type {HTMLTextAreaElement} */
-    let textarea;
-    return h(
-      'div',
-      { class: 'cr-conversation-compose' },
-      (textarea = /** @type {HTMLTextAreaElement} */ (
-        h('textarea', {
-          class: 'cr-conversation-input',
-          'aria-label': 'Message to Responsible Party',
-        })
-      )),
-      h(
-        'button',
-        {
-          class: 'cr-conversation-send',
-          onclick: async () => {
-            const body = (textarea.value ?? '').trim();
-            if (!body) return;
-            /** @type {any} */ (textarea).value = '';
-            await this._sendMessage(body);
-          },
-        },
-        'Send'
-      )
-    );
+    return Conversation({
+      messages: this._messages,
+      access: this.access,
+      sendMessage: (body) => this._sendMessage(body),
+    });
   }
 
   /**
    * @param {string} body
    */
   async _sendMessage(body) {
-    if (!this.client || !this.saveQueue || !this.caseId || !this.currentUser)
-      return;
-
-    /** @type {Message} */
-    const msg = {
-      author: this.currentUser.displayName,
-      timestamp: new Date().toISOString(),
-      body,
-    };
-
-    this._messages = [...this._messages, msg];
-    this._render();
-
-    const etag = this.saveQueue.getEtag(this.caseId);
-    const result = await this.client.patchCase(
-      this.caseId,
-      { conversation: this._messages },
-      etag
+    await sendConversationMessage(
+      {
+        client: this.client,
+        saveQueue: this.saveQueue,
+        caseId: this.caseId,
+        currentUser: this.currentUser,
+        messages: this._messages,
+        setMessages: (messages) => {
+          this._messages = messages;
+        },
+        render: () => this._render(),
+      },
+      body
     );
-
-    if (result.ok && result.data) {
-      this.saveQueue.loadCase(result.data);
-    }
   }
 
   async _refresh() {
-    if (!this.client || !this.caseId) return;
-    const fresh = await this.client.getCase(this.caseId);
-    if (fresh) {
-      this._messages = fresh.conversation;
-      this._render();
-    }
+    await refreshConversation({
+      client: this.client,
+      caseId: this.caseId,
+      setMessages: (messages) => {
+        this._messages = messages;
+      },
+      render: () => this._render(),
+    });
   }
 }
 

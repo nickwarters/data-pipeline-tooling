@@ -45,10 +45,243 @@ import './cr-attribute-menu.js';
  * QA Check; `source` / `sourceCaseId` / `sourceAppealId` stamp provenance, but the
  * write always targets `caseId` (the original row).
  */
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
+/**
+ * @typedef {object} OverrideRenderProps
+ * @property {CaseRow | null} caseRow
+ * @property {'override' | 'read-only' | 'hidden'} access
+ * @property {CurrentUser | null} currentUser
+ * @property {QuestionDefinition[]} catalogue
+ * @property {boolean} attributeFailures
+ * @property {RemediationField[]} remediationFields
+ * @property {SharePointClient | null} client
+ * @property {{ answerKey: string, value: string | string[], reasoning: string, attributedParty: Party | null, remediationDetails: Record<string, string> }} draft
+ * @property {(answerKey: string) => void} onQuestion
+ * @property {(value: string) => void} onValue
+ * @property {(key: string, value: string) => void} onDetail
+ * @property {(party: Party | null) => void} onAttribute
+ * @property {(errorEl: HTMLElement) => void} submit
+ */
+
+/**
+ * @param {OverrideRenderProps} props
+ * @returns {Node[]}
+ */
+export function OverrideEditor(props) {
+  const heading = h('h2', {}, 'Answer Overrides');
+
+  /** @type {any[]} */
+  const children = [heading];
+
+  for (const o of overridesFrom(props)) {
+    children.push(renderOverrideHistory(props, o));
+  }
+
+  if (props.access === 'override') {
+    if (isSelfReview(props)) {
+      children.push(
+        h(
+          'p',
+          { class: 'cr-override-self-review' },
+          'You were the Assigned Reviewer on this Case. An Override must be authored by a different QA Reviewer.'
+        )
+      );
+    } else {
+      children.push(renderOverrideForm(props));
+    }
+  } else if (overridesFrom(props).length === 0) {
+    children.push(
+      h('p', { class: 'cr-override-empty' }, 'No Answer Overrides.')
+    );
+  }
+
+  return children;
+}
+
+/** @param {OverrideRenderProps} props @returns {Override[]} */
+export function overridesFrom(props) {
+  return props.caseRow?.overrides ?? [];
+}
+
+/** @param {OverrideRenderProps} props @returns {QuestionDefinition[]} */
+export function overrideTargets(props) {
+  return props.catalogue.filter((q) => !q.deprecated);
+}
+
+/** @param {OverrideRenderProps} props @returns {QuestionDefinition | null} */
+export function overrideQuestion(props) {
+  return props.catalogue.find((q) => q.id === props.draft.answerKey) ?? null;
+}
+
+/** @param {OverrideRenderProps} props @returns {boolean} */
+export function isSelfReview(props) {
+  return (
+    !!props.currentUser &&
+    props.currentUser.id === props.caseRow?.assignedReviewer
+  );
+}
+
+/**
+ * @param {OverrideRenderProps} props
+ * @param {Override} o
+ * @returns {HTMLElement}
+ */
+export function renderOverrideHistory(props, o) {
+  const question = props.catalogue.find((q) => q.id === o.answerKey);
+  return h(
+    'section',
+    { class: 'cr-override-item' },
+    h(
+      'p',
+      { class: 'cr-override-item-question' },
+      question ? question.text : o.answerKey
+    ),
+    h(
+      'p',
+      { class: 'cr-override-item-value' },
+      `Corrected to: ${formatValue(o.value)}`
+    ),
+    h('p', { class: 'cr-override-item-reasoning' }, o.reasoning)
+  );
+}
+
+/**
+ * @param {OverrideRenderProps} props
+ * @returns {HTMLElement}
+ */
+export function renderOverrideForm(props) {
+  const qSelect = /** @type {any} */ (
+    h(
+      'select',
+      {
+        class: 'cr-override-question',
+        onchange: (/** @type {any} */ e) => props.onQuestion(e.target.value),
+      },
+      buildOption('', '— choose a Question —'),
+      ...overrideTargets(props).map((q) => buildOption(q.id, q.text))
+    )
+  );
+  qSelect.value = props.draft.answerKey;
+
+  const question = overrideQuestion(props);
+  let valueControl = null;
+  let failureBlock = null;
+
+  if (question) {
+    valueControl = renderOverrideValueControl(props, question);
+
+    if (isFailure(question, { value: props.draft.value })) {
+      failureBlock = renderOverrideFailureBlock(props, question);
+    }
+  }
+
+  const errorEl = h('ul', { class: 'cr-override-error', hidden: true });
+
+  const reasoningEl = buildCaptureControl(
+    { key: 'reasoning', type: 'textarea', label: 'Reasoning' },
+    props.draft.reasoning,
+    (value) => {
+      props.draft.reasoning = value;
+    },
+    'cr-override-reasoning'
+  );
+  reasoningEl.setAttribute('aria-label', 'Override reasoning');
+
+  return h(
+    'section',
+    { class: 'cr-override-form' },
+    h('label', {}, 'Which Answer is being corrected?'),
+    qSelect,
+    valueControl,
+    failureBlock,
+    h('label', {}, 'Reasoning'),
+    reasoningEl,
+    errorEl,
+    h(
+      'button',
+      {
+        class: 'cr-override-submit',
+        onclick: () => props.submit(/** @type {HTMLElement} */ (errorEl)),
+      },
+      'Save Override'
+    )
+  );
+}
+
+/**
+ * @param {OverrideRenderProps} props
+ * @param {QuestionDefinition} question
+ * @returns {Node[]}
+ */
+export function renderOverrideValueControl(props, question) {
+  const select = buildCaptureControl(
+    {
+      key: 'value',
+      type: 'select',
+      label: 'Replacement value',
+      options: optionsFor(question),
+    },
+    /** @type {string} */ (props.draft.value),
+    (value) => props.onValue(value),
+    'cr-override-value-control'
+  );
+
+  return [h('label', {}, 'Replacement value'), select];
+}
+
+/**
+ * @param {OverrideRenderProps} props
+ * @param {QuestionDefinition} question
+ * @returns {HTMLElement}
+ */
+export function renderOverrideFailureBlock(props, question) {
+  void question;
+  let attributeMenu = null;
+  if (props.attributeFailures) {
+    attributeMenu = h('cr-attribute-menu', {
+      class: 'cr-override-attribute',
+      client: props.client,
+      attributedParty: props.draft.attributedParty,
+      responsibleParty: props.caseRow?.responsibleParty
+        ? {
+            loginName: props.caseRow.responsibleParty,
+            displayName: props.caseRow.responsibleParty,
+          }
+        : null,
+      'oncr-attribute-change': (/** @type {any} */ ev) => {
+        props.onAttribute(ev.detail.attributedParty);
+      },
+    });
+  }
+
+  const detailFields = props.remediationFields.map((field) => {
+    const current = props.draft.remediationDetails[field.key] ?? '';
+    const control = buildCaptureControl(
+      field,
+      current,
+      (value) => props.onDetail(field.key, value),
+      `cr-override-detail-${field.key}`
+    );
+
+    return h(
+      'div',
+      { class: 'cr-override-detail-field' },
+      h(
+        'label',
+        {},
+        field.required ? `${field.label} (required)` : field.label
+      ),
+      control
+    );
+  });
+
+  return h(
+    'div',
+    { class: 'cr-override-failure' },
+    attributeMenu,
+    ...detailFields
+  );
+}
+
 export class CROverrideEditor extends ReactiveElement {
   constructor() {
     super();
@@ -137,134 +370,25 @@ export class CROverrideEditor extends ReactiveElement {
   }
 
   render() {
-    const heading = h('h2', {}, 'Answer Overrides');
-
-    /** @type {any[]} */
-    const children = [heading];
-
-    for (const o of this._overrides()) {
-      children.push(this._renderHistory(o));
-    }
-
-    if (this.access === 'override') {
-      if (this._isSelfReview()) {
-        children.push(
-          h(
-            'p',
-            { class: 'cr-override-self-review' },
-            'You were the Assigned Reviewer on this Case. An Override must be authored by a different QA Reviewer.'
-          )
-        );
-      } else {
-        children.push(this._renderForm());
-      }
-    } else if (this._overrides().length === 0) {
-      children.push(
-        h('p', { class: 'cr-override-empty' }, 'No Answer Overrides.')
-      );
-    }
-
-    return children;
+    return OverrideEditor(this._props());
   }
 
   /**
    * @param {Override} o
    */
   _renderHistory(o) {
-    const question = this.catalogue.find((q) => q.id === o.answerKey);
-    return h(
-      'section',
-      { class: 'cr-override-item' },
-      h(
-        'p',
-        { class: 'cr-override-item-question' },
-        question ? question.text : o.answerKey
-      ),
-      h(
-        'p',
-        { class: 'cr-override-item-value' },
-        `Corrected to: ${formatValue(o.value)}`
-      ),
-      h('p', { class: 'cr-override-item-reasoning' }, o.reasoning)
-    );
+    return renderOverrideHistory(this._props(), o);
   }
 
   _renderForm() {
-    const qSelect = /** @type {any} */ (
-      h(
-        'select',
-        {
-          class: 'cr-override-question',
-          onchange: (/** @type {any} */ e) => this._onQuestion(e.target.value),
-        },
-        buildOption('', '— choose a Question —'),
-        ...this._targets().map((q) => buildOption(q.id, q.text))
-      )
-    );
-    qSelect.value = this._draft.answerKey;
-
-    const question = this._question();
-    let valueControl = null;
-    let failureBlock = null;
-
-    if (question) {
-      valueControl = this._renderValueControl(question);
-
-      if (isFailure(question, { value: this._draft.value })) {
-        failureBlock = this._renderFailureBlock(question);
-      }
-    }
-
-    const errorEl = h('ul', { class: 'cr-override-error', hidden: true });
-
-    const reasoningEl = buildCaptureControl(
-      { key: 'reasoning', type: 'textarea', label: 'Reasoning' },
-      this._draft.reasoning,
-      (value) => {
-        this._draft.reasoning = value;
-      },
-      'cr-override-reasoning'
-    );
-    reasoningEl.setAttribute('aria-label', 'Override reasoning');
-
-    return h(
-      'section',
-      { class: 'cr-override-form' },
-      h('label', {}, 'Which Answer is being corrected?'),
-      qSelect,
-      valueControl,
-      failureBlock,
-      h('label', {}, 'Reasoning'),
-      reasoningEl,
-      errorEl,
-      h(
-        'button',
-        {
-          class: 'cr-override-submit',
-          onclick: () => this._submit(/** @type {HTMLElement} */ (errorEl)),
-        },
-        'Save Override'
-      )
-    );
+    return renderOverrideForm(this._props());
   }
 
   /**
    * @param {QuestionDefinition} question
    */
   _renderValueControl(question) {
-    const select = buildCaptureControl(
-      {
-        key: 'value',
-        type: 'select',
-        label: 'Replacement value',
-        options: optionsFor(question),
-      },
-      /** @type {string} */ (this._draft.value),
-      (value) => this._onValue(value),
-      'cr-override-value-control'
-    );
-
-    return [h('label', {}, 'Replacement value'), select];
+    return renderOverrideValueControl(this._props(), question);
   }
 
   /**
@@ -273,52 +397,7 @@ export class CROverrideEditor extends ReactiveElement {
    * @param {QuestionDefinition} question
    */
   _renderFailureBlock(question) {
-    let attributeMenu = null;
-    if (this.attributeFailures) {
-      attributeMenu = h('cr-attribute-menu', {
-        class: 'cr-override-attribute',
-        client: this.client,
-        attributedParty: this._draft.attributedParty,
-        responsibleParty: this.caseRow?.responsibleParty
-          ? {
-              loginName: this.caseRow.responsibleParty,
-              displayName: this.caseRow.responsibleParty,
-            }
-          : null,
-        'oncr-attribute-change': (/** @type {any} */ ev) => {
-          this._draft.attributedParty = ev.detail.attributedParty;
-          this._render();
-        },
-      });
-    }
-
-    const detailFields = this.remediationFields.map((field) => {
-      const current = this._draft.remediationDetails[field.key] ?? '';
-      const control = buildCaptureControl(
-        field,
-        current,
-        (value) => this._onDetail(field.key, value),
-        `cr-override-detail-${field.key}`
-      );
-
-      return h(
-        'div',
-        { class: 'cr-override-detail-field' },
-        h(
-          'label',
-          {},
-          field.required ? `${field.label} (required)` : field.label
-        ),
-        control
-      );
-    });
-
-    return h(
-      'div',
-      { class: 'cr-override-failure' },
-      attributeMenu,
-      ...detailFields
-    );
+    return renderOverrideFailureBlock(this._props(), question);
   }
 
   /** @param {string} answerKey */
@@ -435,6 +514,28 @@ export class CROverrideEditor extends ReactiveElement {
     /** @type {Node[]} */
     const items = errors.map((e) => h('li', {}, e));
     errorEl.replaceChildren(...items);
+  }
+
+  /** @returns {OverrideRenderProps} */
+  _props() {
+    return {
+      caseRow: this.caseRow,
+      access: this.access,
+      currentUser: this.currentUser,
+      catalogue: this.catalogue,
+      attributeFailures: this.attributeFailures,
+      remediationFields: this.remediationFields,
+      client: this.client,
+      draft: this._draft,
+      onQuestion: (answerKey) => this._onQuestion(answerKey),
+      onValue: (value) => this._onValue(value),
+      onDetail: (key, value) => this._onDetail(key, value),
+      onAttribute: (party) => {
+        this._draft.attributedParty = party;
+        this._render();
+      },
+      submit: (errorEl) => this._submit(errorEl),
+    };
   }
 }
 

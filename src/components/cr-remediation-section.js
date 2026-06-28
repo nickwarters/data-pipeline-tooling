@@ -14,10 +14,200 @@ import { normaliseConfiguredActions } from '../evaluators/configured-outcome.js'
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {{ loginName: string, displayName: string }} Party */
 
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
+/**
+ * @typedef {object} RemediationSectionProps
+ * @property {QuestionDefinition[]} catalogue
+ * @property {Record<string, Answer>} answers
+ * @property {boolean} attributeFailures
+ * @property {SharePointClient | null} client
+ * @property {Party | null} responsibleParty
+ * @property {boolean} canAttribute
+ * @property {import('../sharepoint-client.js').RemediationField[]} remediationFields
+ * @property {boolean} canCaptureDetails
+ * @property {import('../sharepoint-client.js').CaptureGroup[]} captureGroups
+ * @property {boolean} canCapture
+ * @property {Map<string, import('./cr-capture-groups.js').CRCaptureGroups>} captureEls
+ * @property {(questionId: string, fieldKey: string, value: string) => void} dispatchCapture
+ * @property {(questionId: string, key: string, value: string) => void} dispatchDetail
+ * @property {(questionId: string, attributedParty: Party | null) => void} dispatchAttribute
+ */
+
+/**
+ * @param {RemediationSectionProps} props
+ * @returns {Node[]}
+ */
+export function RemediationSection(props) {
+  const applicable = evaluate(props.catalogue, props.answers);
+  const failed = props.catalogue.filter(
+    (q) => applicable.has(q.id) && isFailure(q, props.answers[q.id])
+  );
+
+  const heading = h('h2', {}, 'Failures');
+
+  if (failed.length === 0) {
+    const empty = h('p', { class: 'cr-remediation-empty' }, 'No failures.');
+    return [heading, empty];
+  }
+
+  const list = h('ul', { class: 'cr-remediation-list' });
+  for (const q of failed) {
+    list.appendChild(renderRemediationItem(props, q));
+  }
+  return [heading, list];
+}
+
+/**
+ * @param {RemediationSectionProps} props
+ * @param {QuestionDefinition} q
+ * @returns {HTMLElement}
+ */
+export function renderRemediationItem(props, q) {
+  const li = h('li', { class: 'cr-remediation-item' });
+
+  if (q.category) {
+    li.appendChild(h('p', { class: 'cr-remediation-category' }, q.category));
+  }
+
+  li.appendChild(h('p', { class: 'cr-remediation-question' }, q.text));
+
+  const v = props.answers[q.id]?.value;
+  const ansText = `Answer: ${Array.isArray(v) ? v.join(', ') : (v ?? '')}`;
+  li.appendChild(h('p', { class: 'cr-remediation-answer' }, ansText));
+
+  if (props.attributeFailures) {
+    renderRemediationAttribution(props, li, q);
+  }
+
+  if (props.remediationFields?.length) {
+    renderRemediationDetails(props, li, q);
+  }
+
+  if (props.captureGroups?.length) {
+    renderRemediationCapture(props, li, q);
+  }
+
+  if (q.remediationActions?.length) {
+    const actions = h('ul', { class: 'cr-remediation-actions' });
+    for (const action of normaliseConfiguredActions(
+      q.remediationActions,
+      q.id
+    )) {
+      actions.appendChild(h('li', {}, action.text));
+    }
+    li.appendChild(actions);
+  }
+
+  return li;
+}
+
+/**
+ * @param {RemediationSectionProps} props
+ * @param {HTMLElement} li
+ * @param {QuestionDefinition} q
+ */
+export function renderRemediationAttribution(props, li, q) {
+  const attributedParty = props.answers[q.id]?.attributedParty;
+
+  if (!props.canAttribute) {
+    if (attributedParty) {
+      li.appendChild(
+        h(
+          'p',
+          { class: 'cr-remediation-attributed-party' },
+          `Attributed to: ${attributedParty.displayName}`
+        )
+      );
+    }
+    return;
+  }
+
+  const menu = /** @type {import('./cr-attribute-menu.js').CRAttributeMenu} */ (
+    h('cr-attribute-menu', {
+      client: props.client,
+      responsibleParty: props.responsibleParty,
+      'oncr-attribute-change': (/** @type {any} */ ev) => {
+        const detail =
+          /** @type {CustomEvent<{ attributedParty: Party | null }>} */ (ev)
+            .detail;
+        props.dispatchAttribute(q.id, detail.attributedParty);
+      },
+    })
+  );
+  menu.attributedParty = attributedParty ?? null;
+  li.appendChild(/** @type {any} */ (menu));
+}
+
+/**
+ * @param {RemediationSectionProps} props
+ * @param {HTMLElement} li
+ * @param {QuestionDefinition} q
+ */
+export function renderRemediationDetails(props, li, q) {
+  const details = props.answers[q.id]?.remediationDetails ?? {};
+
+  for (const field of props.remediationFields) {
+    if (!props.canCaptureDetails) {
+      const captured = details[field.key];
+      if (captured === undefined || captured === '') continue;
+      li.appendChild(
+        h(
+          'p',
+          { class: 'cr-remediation-detail-value' },
+          `${field.label}: ${captured}`
+        )
+      );
+      continue;
+    }
+
+    const control = buildCaptureControl(
+      field,
+      details[field.key] ?? '',
+      (value) => {
+        props.dispatchDetail(q.id, field.key, value);
+      },
+      'cr-remediation-detail-input'
+    );
+
+    const wrap = h(
+      'div',
+      { class: 'cr-remediation-detail-field' },
+      h('label', { class: 'cr-remediation-detail-label' }, field.label),
+      control
+    );
+
+    li.appendChild(wrap);
+  }
+}
+
+/**
+ * @param {RemediationSectionProps} props
+ * @param {HTMLElement} li
+ * @param {QuestionDefinition} q
+ */
+export function renderRemediationCapture(props, li, q) {
+  let cg = props.captureEls.get(q.id);
+  if (!cg) {
+    cg = /** @type {import('./cr-capture-groups.js').CRCaptureGroups} */ (
+      h('cr-capture-groups', {
+        'oncr-capture': (/** @type {any} */ ev) => {
+          /** @type {any} */ (ev).stopPropagation?.();
+          const { fieldKey, value } =
+            /** @type {CustomEvent<{ fieldKey: string, value: string }>} */ (ev)
+              .detail;
+          props.dispatchCapture(q.id, fieldKey, value);
+        },
+      })
+    );
+    props.captureEls.set(q.id, cg);
+  }
+  const capture = props.answers[q.id]?.capture ?? {};
+  cg.groups = props.captureGroups;
+  cg.capture = capture;
+  cg.canCapture = props.canCapture;
+  cg.update?.(props.captureGroups, capture, props.canCapture);
+  li.appendChild(/** @type {any} */ (cg));
+}
+
 export class CRRemediationSection extends ReactiveElement {
   constructor() {
     super();
@@ -96,23 +286,7 @@ export class CRRemediationSection extends ReactiveElement {
   }
 
   render() {
-    const applicable = evaluate(this.catalogue, this.answers);
-    const failed = this.catalogue.filter(
-      (q) => applicable.has(q.id) && isFailure(q, this.answers[q.id])
-    );
-
-    const heading = h('h2', {}, 'Failures');
-
-    if (failed.length === 0) {
-      const empty = h('p', { class: 'cr-remediation-empty' }, 'No failures.');
-      return [heading, empty];
-    }
-
-    const list = h('ul', { class: 'cr-remediation-list' });
-    for (const q of failed) {
-      list.appendChild(this._renderItem(q));
-    }
-    return [heading, list];
+    return RemediationSection(this._props());
   }
 
   /**
@@ -120,42 +294,7 @@ export class CRRemediationSection extends ReactiveElement {
    * @returns {HTMLElement}
    */
   _renderItem(q) {
-    const li = h('li', { class: 'cr-remediation-item' });
-
-    if (q.category) {
-      li.appendChild(h('p', { class: 'cr-remediation-category' }, q.category));
-    }
-
-    li.appendChild(h('p', { class: 'cr-remediation-question' }, q.text));
-
-    const v = this.answers[q.id]?.value;
-    const ansText = `Answer: ${Array.isArray(v) ? v.join(', ') : (v ?? '')}`;
-    li.appendChild(h('p', { class: 'cr-remediation-answer' }, ansText));
-
-    if (this.attributeFailures) {
-      this._renderAttribution(li, q);
-    }
-
-    if (this.remediationFields?.length) {
-      this._renderDetails(li, q);
-    }
-
-    if (this.captureGroups?.length) {
-      this._renderCapture(li, q);
-    }
-
-    if (q.remediationActions?.length) {
-      const actions = h('ul', { class: 'cr-remediation-actions' });
-      for (const action of normaliseConfiguredActions(
-        q.remediationActions,
-        q.id
-      )) {
-        actions.appendChild(h('li', {}, action.text));
-      }
-      li.appendChild(actions);
-    }
-
-    return li;
+    return renderRemediationItem(this._props(), q);
   }
 
   /**
@@ -171,36 +310,7 @@ export class CRRemediationSection extends ReactiveElement {
    * @param {QuestionDefinition} q
    */
   _renderAttribution(li, q) {
-    const attributedParty = this.answers[q.id]?.attributedParty;
-
-    if (!this.canAttribute) {
-      if (attributedParty) {
-        li.appendChild(
-          h(
-            'p',
-            { class: 'cr-remediation-attributed-party' },
-            `Attributed to: ${attributedParty.displayName}`
-          )
-        );
-      }
-      return;
-    }
-
-    const menu =
-      /** @type {import('./cr-attribute-menu.js').CRAttributeMenu} */ (
-        h('cr-attribute-menu', {
-          client: this.client,
-          responsibleParty: this.responsibleParty,
-          'oncr-attribute-change': (/** @type {any} */ ev) => {
-            const detail =
-              /** @type {CustomEvent<{ attributedParty: Party | null }>} */ (ev)
-                .detail;
-            this._dispatchAttribute(q.id, detail.attributedParty);
-          },
-        })
-      );
-    menu.attributedParty = attributedParty ?? null;
-    li.appendChild(/** @type {any} */ (menu));
+    renderRemediationAttribution(this._props(), li, q);
   }
 
   /**
@@ -216,40 +326,7 @@ export class CRRemediationSection extends ReactiveElement {
    * @param {QuestionDefinition} q
    */
   _renderDetails(li, q) {
-    const details = this.answers[q.id]?.remediationDetails ?? {};
-
-    for (const field of this.remediationFields) {
-      if (!this.canCaptureDetails) {
-        const captured = details[field.key];
-        if (captured === undefined || captured === '') continue;
-        li.appendChild(
-          h(
-            'p',
-            { class: 'cr-remediation-detail-value' },
-            `${field.label}: ${captured}`
-          )
-        );
-        continue;
-      }
-
-      const control = buildCaptureControl(
-        field,
-        details[field.key] ?? '',
-        (value) => {
-          this._dispatchDetail(q.id, field.key, value);
-        },
-        'cr-remediation-detail-input'
-      );
-
-      const wrap = h(
-        'div',
-        { class: 'cr-remediation-detail-field' },
-        h('label', { class: 'cr-remediation-detail-label' }, field.label),
-        control
-      );
-
-      li.appendChild(wrap);
-    }
+    renderRemediationDetails(this._props(), li, q);
   }
 
   /**
@@ -264,28 +341,32 @@ export class CRRemediationSection extends ReactiveElement {
    * @param {QuestionDefinition} q
    */
   _renderCapture(li, q) {
-    let cg = this._captureEls.get(q.id);
-    if (!cg) {
-      cg = /** @type {import('./cr-capture-groups.js').CRCaptureGroups} */ (
-        h('cr-capture-groups', {
-          'oncr-capture': (/** @type {any} */ ev) => {
-            /** @type {any} */ (ev).stopPropagation?.();
-            const { fieldKey, value } =
-              /** @type {CustomEvent<{ fieldKey: string, value: string }>} */ (
-                ev
-              ).detail;
-            this._dispatchCapture(q.id, fieldKey, value);
-          },
-        })
-      );
-      this._captureEls.set(q.id, cg);
-    }
-    const capture = this.answers[q.id]?.capture ?? {};
-    cg.groups = this.captureGroups;
-    cg.capture = capture;
-    cg.canCapture = this.canCapture;
-    cg.update?.(this.captureGroups, capture, this.canCapture);
-    li.appendChild(/** @type {any} */ (cg));
+    renderRemediationCapture(this._props(), li, q);
+  }
+
+  /**
+   * @returns {RemediationSectionProps}
+   */
+  _props() {
+    return {
+      catalogue: this.catalogue,
+      answers: this.answers,
+      attributeFailures: this.attributeFailures,
+      client: this.client,
+      responsibleParty: this.responsibleParty,
+      canAttribute: this.canAttribute,
+      remediationFields: this.remediationFields,
+      canCaptureDetails: this.canCaptureDetails,
+      captureGroups: this.captureGroups,
+      canCapture: this.canCapture,
+      captureEls: this._captureEls,
+      dispatchCapture: (questionId, fieldKey, value) =>
+        this._dispatchCapture(questionId, fieldKey, value),
+      dispatchDetail: (questionId, key, value) =>
+        this._dispatchDetail(questionId, key, value),
+      dispatchAttribute: (questionId, attributedParty) =>
+        this._dispatchAttribute(questionId, attributedParty),
+    };
   }
 
   /**
