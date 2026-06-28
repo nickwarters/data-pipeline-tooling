@@ -3,51 +3,58 @@ import { ReactiveElement } from '../components/reactive-element.js';
 import { h } from '../lib/html.js';
 import { currentBank, diffCounts, drawerOpen } from './question-bank-store.js';
 
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
-export class CRBankDock extends ReactiveElement {
-  render() {
-    const bank = currentBank.get();
-    const all = bank.questions;
-    const active = all.filter((/** @type {any} */ q) => !q.deprecated).length;
-    const dep = all.filter((/** @type {any} */ q) => q.deprecated).length;
-    const cond = all.filter((/** @type {any} */ q) => q.showWhen).length;
-    const d = diffCounts.get();
-    const total = d.added + d.changed + d.deprecated;
-    const pendingTxt =
-      total === 0 ? '0 changes' : `${total} change${total > 1 ? 's' : ''}`;
+/**
+ * @param {{ bank: any, diffCounts: { added: number, changed: number, deprecated: number }, openDrawer: () => void }} props
+ * @returns {HTMLElement}
+ */
+export function BankDock(props) {
+  const all = props.bank.questions;
+  const active = all.filter((/** @type {any} */ q) => !q.deprecated).length;
+  const dep = all.filter((/** @type {any} */ q) => q.deprecated).length;
+  const cond = all.filter((/** @type {any} */ q) => q.showWhen).length;
+  const d = props.diffCounts;
+  const total = d.added + d.changed + d.deprecated;
+  const pendingTxt =
+    total === 0 ? '0 changes' : `${total} change${total > 1 ? 's' : ''}`;
 
-    return h(
+  return h(
+    'div',
+    { className: 'dock' },
+    h(
       'div',
-      { className: 'dock' },
+      { className: 'dock-status' },
+      stat('Active', String(active)),
+      stat('Deprecated', String(dep)),
+      stat('Conditional', String(cond)),
+      stat('Pending', pendingTxt)
+    ),
+    h(
+      'div',
+      { className: 'dock-actions' },
       h(
-        'div',
-        { className: 'dock-status' },
-        stat('Active', String(active)),
-        stat('Deprecated', String(dep)),
-        stat('Conditional', String(cond)),
-        stat('Pending', pendingTxt)
+        'button',
+        { className: 'dock-btn', onClick: props.openDrawer },
+        'Preview Config'
       ),
       h(
-        'div',
-        { className: 'dock-actions' },
-        h(
-          'button',
-          { className: 'dock-btn', onClick: () => drawerOpen.set(true) },
-          'Preview Config'
-        ),
-        h(
-          'button',
-          {
-            className: 'dock-btn primary',
-            onClick: () => drawerOpen.set(true),
-          },
-          'Submit for Review →'
-        )
+        'button',
+        {
+          className: 'dock-btn primary',
+          onClick: props.openDrawer,
+        },
+        'Submit for Review →'
       )
-    );
+    )
+  );
+}
+
+export class CRBankDock extends ReactiveElement {
+  render() {
+    return BankDock({
+      bank: currentBank.get(),
+      diffCounts: diffCounts.get(),
+      openDrawer: () => drawerOpen.set(true),
+    });
   }
 }
 

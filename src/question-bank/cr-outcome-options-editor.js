@@ -3,125 +3,138 @@ import { ReactiveElement } from '../components/reactive-element.js';
 import { h } from '../lib/html.js';
 import { activeSlug, commit, currentBank } from './question-bank-store.js';
 
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
-export class CROutcomeOptionsEditor extends ReactiveElement {
-  render() {
-    const bank = currentBank.get();
-    const options = bank.outcomeOptions ?? [];
+/**
+ * @param {{ bank: import('../../dev/fixtures/question-banks.js').QuestionBank, addOutcome: () => void, setDefaultOutcome: (id: string) => void, renameOutcome: (option: import('../sharepoint-client.js').OutcomeOption, id: string) => void, setWording: (option: import('../sharepoint-client.js').OutcomeOption, wording: string) => void, setSeverity: (option: import('../sharepoint-client.js').OutcomeOption, severity: string) => void, removeOutcome: (option: import('../sharepoint-client.js').OutcomeOption, index: number) => void }} props
+ * @returns {HTMLElement}
+ */
+export function OutcomeOptionsEditor(props) {
+  const bank = props.bank;
+  const options = bank.outcomeOptions ?? [];
 
-    return h(
-      'section',
-      { className: 'outcome-options' },
+  return h(
+    'section',
+    { className: 'outcome-options' },
+    h(
+      'div',
+      { className: 'outcome-options-head' },
+      h('h3', {}, 'Outcome options'),
       h(
-        'div',
-        { className: 'outcome-options-head' },
-        h('h3', {}, 'Outcome options'),
-        h(
-          'button',
-          {
-            className: 'tag-add outcome-add',
-            onclick: () =>
-              commit((types) => {
-                const b = types[activeSlug.get()];
-                b.outcomeOptions ??= [];
-                b.outcomeOptions.push(this._newOutcomeOption(b));
-              }),
-          },
-          '+ outcome'
+        'button',
+        {
+          className: 'tag-add outcome-add',
+          onclick: props.addOutcome,
+        },
+        '+ outcome'
+      )
+    ),
+    h(
+      'div',
+      { className: 'default-outcome-row' },
+      outcomeField(
+        'Default outcome',
+        outcomeOptionsSelect(bank.defaultOutcomeId ?? '', options, (id) =>
+          props.setDefaultOutcome(id)
         )
-      ),
-      h(
-        'div',
-        { className: 'default-outcome-row' },
-        this._field(
-          'Default outcome',
-          this._outcomeSelect(bank.defaultOutcomeId ?? '', options, (id) =>
-            commit((types) => {
-              const b = types[activeSlug.get()];
-              if (id) b.defaultOutcomeId = id;
-              else delete b.defaultOutcomeId;
-            })
-          )
-        )
-      ),
-      options.length
-        ? h(
-            'div',
-            { className: 'outcome-option-list' },
-            options.map((option, index) =>
+      )
+    ),
+    options.length
+      ? h(
+          'div',
+          { className: 'outcome-option-list' },
+          options.map((option, index) =>
+            h(
+              'div',
+              { className: 'outcome-option-row' },
+              outcomeField(
+                'Id',
+                h('input', {
+                  value: option.id,
+                  'data-focus-key': `outcome:${bank.slug}:${option.id}:id`,
+                  onchange: (/** @type {any} */ e) =>
+                    props.renameOutcome(option, e.target.value),
+                })
+              ),
+              outcomeField(
+                'Wording',
+                h('input', {
+                  value: option.wording,
+                  'data-focus-key': `outcome:${bank.slug}:${option.id}:wording`,
+                  onchange: (/** @type {any} */ e) =>
+                    props.setWording(option, e.target.value),
+                })
+              ),
+              outcomeField(
+                'Severity',
+                h('input', {
+                  type: 'number',
+                  value: String(option.severity ?? index),
+                  onchange: (/** @type {any} */ e) =>
+                    props.setSeverity(option, e.target.value),
+                })
+              ),
               h(
-                'div',
-                { className: 'outcome-option-row' },
-                this._field(
-                  'Id',
-                  h('input', {
-                    value: option.id,
-                    'data-focus-key': `outcome:${bank.slug}:${option.id}:id`,
-                    onchange: (/** @type {any} */ e) =>
-                      commit(() => {
-                        const previousId = option.id;
-                        const nextId = e.target.value.trim() || previousId;
-                        option.id = nextId;
-                        if (nextId !== previousId) {
-                          this._renameOutcomeReferences(
-                            bank,
-                            previousId,
-                            nextId
-                          );
-                        }
-                      }),
-                  })
-                ),
-                this._field(
-                  'Wording',
-                  h('input', {
-                    value: option.wording,
-                    'data-focus-key': `outcome:${bank.slug}:${option.id}:wording`,
-                    onchange: (/** @type {any} */ e) =>
-                      commit(() => {
-                        option.wording = e.target.value;
-                      }),
-                  })
-                ),
-                this._field(
-                  'Severity',
-                  h('input', {
-                    type: 'number',
-                    value: String(option.severity ?? index),
-                    onchange: (/** @type {any} */ e) =>
-                      commit(() => {
-                        const parsed = Number(e.target.value);
-                        if (Number.isFinite(parsed)) option.severity = parsed;
-                        else delete option.severity;
-                      }),
-                  })
-                ),
-                h(
-                  'button',
-                  {
-                    className: 'icon-btn danger',
-                    title: 'Remove outcome option',
-                    onclick: () =>
-                      commit((types) => {
-                        const b = types[activeSlug.get()];
-                        this._clearOutcomeReferences(b, option.id);
-                        b.outcomeOptions?.splice(index, 1);
-                      }),
-                  },
-                  '×'
-                )
+                'button',
+                {
+                  className: 'icon-btn danger',
+                  title: 'Remove outcome option',
+                  onclick: () => props.removeOutcome(option, index),
+                },
+                '×'
               )
             )
           )
-        : h(
-            'div',
-            { className: 'outcome-empty' },
-            'No configured outcomes. Add at least one outcome to use dropdowns on questions.'
-          )
-    );
+        )
+      : h(
+          'div',
+          { className: 'outcome-empty' },
+          'No configured outcomes. Add at least one outcome to use dropdowns on questions.'
+        )
+  );
+}
+
+export class CROutcomeOptionsEditor extends ReactiveElement {
+  render() {
+    const bank = currentBank.get();
+    return OutcomeOptionsEditor({
+      bank,
+      addOutcome: () =>
+        commit((types) => {
+          const b = types[activeSlug.get()];
+          b.outcomeOptions ??= [];
+          b.outcomeOptions.push(this._newOutcomeOption(b));
+        }),
+      setDefaultOutcome: (id) =>
+        commit((types) => {
+          const b = types[activeSlug.get()];
+          if (id) b.defaultOutcomeId = id;
+          else delete b.defaultOutcomeId;
+        }),
+      renameOutcome: (option, id) =>
+        commit(() => {
+          const previousId = option.id;
+          const nextId = id.trim() || previousId;
+          option.id = nextId;
+          if (nextId !== previousId) {
+            this._renameOutcomeReferences(bank, previousId, nextId);
+          }
+        }),
+      setWording: (option, wording) =>
+        commit(() => {
+          option.wording = wording;
+        }),
+      setSeverity: (option, severity) =>
+        commit(() => {
+          const parsed = Number(severity);
+          if (Number.isFinite(parsed)) option.severity = parsed;
+          else delete option.severity;
+        }),
+      removeOutcome: (option, index) =>
+        commit((types) => {
+          const b = types[activeSlug.get()];
+          this._clearOutcomeReferences(b, option.id);
+          b.outcomeOptions?.splice(index, 1);
+        }),
+    });
   }
 
   /**
@@ -186,12 +199,7 @@ export class CROutcomeOptionsEditor extends ReactiveElement {
    * @param {HTMLElement} control
    */
   _field(label, control) {
-    return h(
-      'label',
-      { className: 'outcome-option-field' },
-      h('span', {}, label),
-      control
-    );
+    return outcomeField(label, control);
   }
 
   /**
@@ -200,23 +208,45 @@ export class CROutcomeOptionsEditor extends ReactiveElement {
    * @param {(id: string) => void} onChange
    */
   _outcomeSelect(value, outcomeOptions, onChange) {
-    return h(
-      'select',
-      {
-        value,
-        disabled: outcomeOptions.length === 0,
-        onchange: (/** @type {any} */ e) => onChange(e.target.value),
-      },
-      h(
-        'option',
-        { value: '' },
-        outcomeOptions.length ? 'Built-in Pass' : 'No outcomes configured'
-      ),
-      ...outcomeOptions.map((option) =>
-        h('option', { value: option.id }, option.wording)
-      )
-    );
+    return outcomeOptionsSelect(value, outcomeOptions, onChange);
   }
+}
+
+/**
+ * @param {string} label
+ * @param {HTMLElement} control
+ */
+export function outcomeField(label, control) {
+  return h(
+    'label',
+    { className: 'outcome-option-field' },
+    h('span', {}, label),
+    control
+  );
+}
+
+/**
+ * @param {string} value
+ * @param {import('../sharepoint-client.js').OutcomeOption[]} outcomeOptions
+ * @param {(id: string) => void} onChange
+ */
+export function outcomeOptionsSelect(value, outcomeOptions, onChange) {
+  return h(
+    'select',
+    {
+      value,
+      disabled: outcomeOptions.length === 0,
+      onchange: (/** @type {any} */ e) => onChange(e.target.value),
+    },
+    h(
+      'option',
+      { value: '' },
+      outcomeOptions.length ? 'Built-in Pass' : 'No outcomes configured'
+    ),
+    ...outcomeOptions.map((option) =>
+      h('option', { value: option.id }, option.wording)
+    )
+  );
 }
 
 customElements.define('cr-outcome-options-editor', CROutcomeOptionsEditor);

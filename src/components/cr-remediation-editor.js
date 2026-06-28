@@ -4,10 +4,145 @@ import { h } from '../lib/html.js';
 import { commit, currentBank } from '../question-bank/question-bank-store.js';
 import { normaliseConfiguredActions } from '../evaluators/configured-outcome.js';
 
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
+/**
+ * @param {{ question: any, outcomeOptions: import('../sharepoint-client.js').OutcomeOption[], ensureActionObjects: (q: any) => void, nextActionId: (q: any) => string }} props
+ * @returns {HTMLElement | undefined}
+ */
+export function RemediationEditor(props) {
+  const q = props.question;
+  if (!q) return;
+
+  const count = (q.remediationActions || []).length;
+
+  const freeRow = h(
+    'div',
+    { class: 'rem-free-row' },
+    h(
+      'div',
+      {},
+      h('div', { className: 'rem-free-title' }, 'Allow free-form remediation'),
+      h(
+        'div',
+        { className: 'rem-free-help' },
+        'Reviewers can write their own remediation alongside any canned actions.'
+      )
+    ),
+    h('div', {
+      class: 'toggle' + (q.allowFreeFormRemediation ? ' on' : ''),
+      onclick: () =>
+        commit(() => {
+          q.allowFreeFormRemediation = !q.allowFreeFormRemediation;
+        }),
+    })
+  );
+
+  const wrap = h(
+    'div',
+    { class: 'rem-block' },
+    h(
+      'h4',
+      {},
+      'Remediation Actions ',
+      h(
+        'span',
+        { className: 'rem-count' },
+        `(${count}${q.allowFreeFormRemediation ? ' + free-form' : ''})`
+      )
+    ),
+    freeRow
+  );
+
+  if (q.failureCriteria) {
+    wrap.appendChild(renderNoActionOutcome(q, props.outcomeOptions));
+  }
+
+  if (q.allowFreeFormRemediation) {
+    wrap.appendChild(
+      h(
+        'div',
+        { class: 'rem-free-preview' },
+        h(
+          'div',
+          { className: 'rem-free-preview-eyebrow' },
+          'Reviewer will see'
+        ),
+        h(
+          'div',
+          { className: 'rem-free-preview-body' },
+          '"Describe a remediation in your own words…"'
+        )
+      )
+    );
+  }
+
+  normaliseConfiguredActions(q.remediationActions || [], q.id).forEach(
+    (/** @type {any} */ action, /** @type {number} */ idx) => {
+      const inp = /** @type {any} */ (
+        h('input', {
+          value: action.text,
+          onchange: (/** @type {any} */ e) =>
+            commit(() => {
+              props.ensureActionObjects(q);
+              q.remediationActions[idx].text = e.target.value;
+            }),
+        })
+      );
+      wrap.appendChild(
+        h(
+          'div',
+          { class: 'rem-item' },
+          inp,
+          renderActionOutcome(q, action, idx, props.outcomeOptions, () =>
+            props.ensureActionObjects(q)
+          ),
+          h(
+            'span',
+            {
+              class: 'x',
+              onclick: () =>
+                commit(() => {
+                  q.remediationActions.splice(idx, 1);
+                  if (q.remediationActions.length === 0)
+                    delete q.remediationActions;
+                }),
+            },
+            '×'
+          )
+        )
+      );
+    }
+  );
+
+  if (count === 0 && !q.allowFreeFormRemediation) {
+    wrap.appendChild(
+      h(
+        'div',
+        { class: 'rem-empty' },
+        '// no remediations — reviewers will see none on failure'
+      )
+    );
+  }
+
+  wrap.appendChild(
+    h(
+      'button',
+      {
+        class: 'tag-add rem-add',
+        onclick: () =>
+          commit(() => {
+            (q.remediationActions ||= []).push({
+              id: props.nextActionId(q),
+              text: 'New action',
+            });
+          }),
+      },
+      '+ canned action'
+    )
+  );
+
+  return wrap;
+}
+
 export class CRRemediationEditor extends ReactiveElement {
   constructor() {
     super();
@@ -22,159 +157,17 @@ export class CRRemediationEditor extends ReactiveElement {
   }
 
   render() {
-    const q = this.question;
-    if (!q) return;
-
-    const count = (q.remediationActions || []).length;
-
-    const freeRow = h(
-      'div',
-      { class: 'rem-free-row' },
-      h(
-        'div',
-        {},
-        h(
-          'div',
-          { className: 'rem-free-title' },
-          'Allow free-form remediation'
-        ),
-        h(
-          'div',
-          { className: 'rem-free-help' },
-          'Reviewers can write their own remediation alongside any canned actions.'
-        )
-      ),
-      h('div', {
-        class: 'toggle' + (q.allowFreeFormRemediation ? ' on' : ''),
-        onclick: () =>
-          commit(() => {
-            q.allowFreeFormRemediation = !q.allowFreeFormRemediation;
-          }),
-      })
-    );
-
-    const wrap = h(
-      'div',
-      { class: 'rem-block' },
-      h(
-        'h4',
-        {},
-        'Remediation Actions ',
-        h(
-          'span',
-          { className: 'rem-count' },
-          `(${count}${q.allowFreeFormRemediation ? ' + free-form' : ''})`
-        )
-      ),
-      freeRow
-    );
-
-    if (q.failureCriteria) {
-      wrap.appendChild(this._renderNoActionOutcome(q));
-    }
-
-    if (q.allowFreeFormRemediation) {
-      wrap.appendChild(
-        h(
-          'div',
-          { class: 'rem-free-preview' },
-          h(
-            'div',
-            { className: 'rem-free-preview-eyebrow' },
-            'Reviewer will see'
-          ),
-          h(
-            'div',
-            { className: 'rem-free-preview-body' },
-            '"Describe a remediation in your own words…"'
-          )
-        )
-      );
-    }
-
-    normaliseConfiguredActions(q.remediationActions || [], q.id).forEach(
-      (/** @type {any} */ action, /** @type {number} */ idx) => {
-        const inp = /** @type {any} */ (h('input', { value: action.text }));
-        inp.addEventListener('change', (/** @type {any} */ e) =>
-          commit(() => {
-            this._ensureActionObjects(q);
-            q.remediationActions[idx].text = e.target.value;
-          })
-        );
-        wrap.appendChild(
-          h(
-            'div',
-            { class: 'rem-item' },
-            inp,
-            this._renderActionOutcome(q, action, idx),
-            h(
-              'span',
-              {
-                class: 'x',
-                onclick: () =>
-                  commit(() => {
-                    q.remediationActions.splice(idx, 1);
-                    if (q.remediationActions.length === 0)
-                      delete q.remediationActions;
-                  }),
-              },
-              '×'
-            )
-          )
-        );
-      }
-    );
-
-    if (count === 0 && !q.allowFreeFormRemediation) {
-      wrap.appendChild(
-        h(
-          'div',
-          { class: 'rem-empty' },
-          '// no remediations — reviewers will see none on failure'
-        )
-      );
-    }
-
-    wrap.appendChild(
-      h(
-        'button',
-        {
-          class: 'tag-add rem-add',
-          onclick: () =>
-            commit(() => {
-              (q.remediationActions ||= []).push({
-                id: this._nextActionId(q),
-                text: 'New action',
-              });
-            }),
-        },
-        '+ canned action'
-      )
-    );
-
-    return wrap;
+    return RemediationEditor({
+      question: this.question,
+      outcomeOptions: currentBank.get()?.outcomeOptions ?? [],
+      ensureActionObjects: (q) => this._ensureActionObjects(q),
+      nextActionId: (q) => this._nextActionId(q),
+    });
   }
 
   /** @param {any} q */
   _renderNoActionOutcome(q) {
-    const outcomeOptions = currentBank.get()?.outcomeOptions ?? [];
-    return h(
-      'div',
-      { class: 'rem-outcome-block' },
-      h('h5', {}, 'Default outcome when no action is selected'),
-      this._outcomeSelect(
-        q.outcome?.noActionOutcomeId ?? '',
-        outcomeOptions,
-        (id) =>
-          commit(() => {
-            q.outcome ??= {};
-            if (id) q.outcome.noActionOutcomeId = id;
-            else delete q.outcome.noActionOutcomeId;
-            delete q.outcome.noAction;
-            if (!Object.keys(q.outcome).length) delete q.outcome;
-          })
-      )
-    );
+    return renderNoActionOutcome(q, currentBank.get()?.outcomeOptions ?? []);
   }
 
   /**
@@ -183,19 +176,12 @@ export class CRRemediationEditor extends ReactiveElement {
    * @param {number} idx
    */
   _renderActionOutcome(q, action, idx) {
-    const outcomeOptions = currentBank.get()?.outcomeOptions ?? [];
-    return h(
-      'div',
-      { class: 'rem-action-outcome' },
-      this._outcomeSelect(action.outcomeId ?? '', outcomeOptions, (id) =>
-        commit(() => {
-          this._ensureActionObjects(q);
-          const configured = q.remediationActions[idx];
-          if (id) configured.outcomeId = id;
-          else delete configured.outcomeId;
-          delete configured.outcome;
-        })
-      )
+    return renderActionOutcome(
+      q,
+      action,
+      idx,
+      currentBank.get()?.outcomeOptions ?? [],
+      () => this._ensureActionObjects(q)
     );
   }
 
@@ -205,23 +191,7 @@ export class CRRemediationEditor extends ReactiveElement {
    * @param {(id: string) => void} onChange
    */
   _outcomeSelect(value, outcomeOptions, onChange) {
-    return h(
-      'select',
-      {
-        className: 'rem-outcome-select',
-        value,
-        onchange: (/** @type {any} */ e) => onChange(e.target.value),
-        disabled: outcomeOptions.length === 0,
-      },
-      h(
-        'option',
-        { value: '' },
-        outcomeOptions.length ? '—' : 'No outcomes configured'
-      ),
-      ...outcomeOptions.map((option) =>
-        h('option', { value: option.id }, option.wording)
-      )
-    );
+    return outcomeSelect(value, outcomeOptions, onChange);
   }
 
   /** @param {any} q */
@@ -247,6 +217,72 @@ export class CRRemediationEditor extends ReactiveElement {
     }
     return id;
   }
+}
+
+/** @param {any} q @param {import('../sharepoint-client.js').OutcomeOption[]} outcomeOptions */
+export function renderNoActionOutcome(q, outcomeOptions) {
+  return h(
+    'div',
+    { class: 'rem-outcome-block' },
+    h('h5', {}, 'Default outcome when no action is selected'),
+    outcomeSelect(q.outcome?.noActionOutcomeId ?? '', outcomeOptions, (id) =>
+      commit(() => {
+        q.outcome ??= {};
+        if (id) q.outcome.noActionOutcomeId = id;
+        else delete q.outcome.noActionOutcomeId;
+        delete q.outcome.noAction;
+        if (!Object.keys(q.outcome).length) delete q.outcome;
+      })
+    )
+  );
+}
+
+/** @param {any} q @param {any} action @param {number} idx @param {import('../sharepoint-client.js').OutcomeOption[]} outcomeOptions @param {() => void} ensureActionObjects */
+export function renderActionOutcome(
+  q,
+  action,
+  idx,
+  outcomeOptions,
+  ensureActionObjects
+) {
+  return h(
+    'div',
+    { class: 'rem-action-outcome' },
+    outcomeSelect(action.outcomeId ?? '', outcomeOptions, (id) =>
+      commit(() => {
+        ensureActionObjects();
+        const configured = q.remediationActions[idx];
+        if (id) configured.outcomeId = id;
+        else delete configured.outcomeId;
+        delete configured.outcome;
+      })
+    )
+  );
+}
+
+/**
+ * @param {string} value
+ * @param {import('../sharepoint-client.js').OutcomeOption[]} outcomeOptions
+ * @param {(id: string) => void} onChange
+ */
+export function outcomeSelect(value, outcomeOptions, onChange) {
+  return h(
+    'select',
+    {
+      className: 'rem-outcome-select',
+      value,
+      onchange: (/** @type {any} */ e) => onChange(e.target.value),
+      disabled: outcomeOptions.length === 0,
+    },
+    h(
+      'option',
+      { value: '' },
+      outcomeOptions.length ? '—' : 'No outcomes configured'
+    ),
+    ...outcomeOptions.map((option) =>
+      h('option', { value: option.id }, option.wording)
+    )
+  );
 }
 
 customElements.define('cr-remediation-editor', CRRemediationEditor);

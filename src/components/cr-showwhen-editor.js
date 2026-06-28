@@ -7,10 +7,52 @@ import {
   treeDepth,
 } from '../question-bank/question-bank-tree.js';
 
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
+/**
+ * @param {{ question: any }} props
+ * @returns {HTMLElement | undefined}
+ */
+export function ShowwhenEditor(props) {
+  const q = props.question;
+  if (!q) return undefined;
+  const tree = ensureTree(q);
+  const count = countLeaves(tree);
+  const depth = treeDepth(tree);
+  const desc =
+    count === 0
+      ? ''
+      : `${count} condition${count === 1 ? '' : 's'}${depth > 1 ? ` · ${depth} levels deep` : ''}`;
+
+  const empty =
+    tree.children.length === 0
+      ? h(
+          'div',
+          { className: 'showwhen-empty' },
+          '// always shown — add a condition to gate this question'
+        )
+      : null;
+
+  const grp = /** @type {any} */ (
+    h('cr-showwhen-group', {
+      question: q,
+      group: tree,
+      isRoot: true,
+    })
+  );
+
+  return h(
+    'div',
+    { className: 'showwhen-block' },
+    h(
+      'div',
+      { className: 'showwhen-header' },
+      h('span', {}, '◆ Show when'),
+      h('span', { className: 'showwhen-desc' }, desc)
+    ),
+    empty,
+    grp
+  );
+}
+
 export class CRShowwhenEditor extends ReactiveElement {
   constructor() {
     super();
@@ -30,45 +72,7 @@ export class CRShowwhenEditor extends ReactiveElement {
   }
 
   render() {
-    const q = this.question;
-    if (!q) return undefined;
-    const tree = ensureTree(q);
-    const count = countLeaves(tree);
-    const depth = treeDepth(tree);
-    const desc =
-      count === 0
-        ? ''
-        : `${count} condition${count === 1 ? '' : 's'}${depth > 1 ? ` · ${depth} levels deep` : ''}`;
-
-    const empty =
-      tree.children.length === 0
-        ? h(
-            'div',
-            { className: 'showwhen-empty' },
-            '// always shown — add a condition to gate this question'
-          )
-        : null;
-
-    const grp = /** @type {any} */ (
-      h('cr-showwhen-group', {
-        question: q,
-        group: tree,
-        isRoot: true,
-      })
-    );
-
-    return h(
-      'div',
-      { className: 'showwhen-block' },
-      h(
-        'div',
-        { className: 'showwhen-header' },
-        h('span', {}, '◆ Show when'),
-        h('span', { className: 'showwhen-desc' }, desc)
-      ),
-      empty,
-      grp
-    );
+    return ShowwhenEditor({ question: this.question });
   }
 }
 

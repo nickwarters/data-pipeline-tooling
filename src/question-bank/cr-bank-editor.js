@@ -20,72 +20,82 @@ import './cr-bank-dock.js';
 import '../components/cr-compile-drawer.js';
 import '../components/cr-toast.js';
 
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
+/**
+ * @returns {Node[]}
+ */
+export function BankEditor() {
+  return [
+    h(
+      'header',
+      { className: 'masthead' },
+      h(
+        'div',
+        {},
+        h(
+          'div',
+          { className: 'eyebrow' },
+          'Case Type Owner ',
+          h('span', { className: 'dot' }),
+          ' Question Bank'
+        ),
+        h('h1', {}, 'Question ', h('em', {}, 'Bank'))
+      ),
+      h(
+        'div',
+        { className: 'masthead-meta' },
+        'Session: ',
+        h('strong', {}, 'local · uncommitted'),
+        h('br'),
+        'Schema: ',
+        h('strong', {}, 'questions.v3')
+      )
+    ),
+    /** @type {any} */ (document.createElement('cr-case-tabs')),
+    h(
+      'main',
+      { className: 'bank-main' },
+      /** @type {any} */ (document.createElement('cr-bank-rail')),
+      /** @type {any} */ (document.createElement('cr-bank-list'))
+    ),
+    /** @type {any} */ (document.createElement('cr-bank-dock')),
+    /** @type {any} */ (document.createElement('cr-compile-drawer')),
+    /** @type {any} */ (document.createElement('cr-toast')),
+  ];
+}
+
+/**
+ * @param {{ addEventListener(type: string, listener: (e: any) => void): void, removeEventListener(type: string, listener: (e: any) => void): void }} target
+ * @returns {() => void}
+ */
+export function bindBankEditorKeys(target) {
+  const key = (/** @type {any} */ e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault?.();
+      drawerOpen.set(true);
+    }
+    if (e.key === 'Escape') drawerOpen.set(false);
+  };
+  target.addEventListener('keydown', key);
+  return () => target.removeEventListener('keydown', key);
+}
+
 export class CRBankEditor extends ReactiveElement {
   constructor() {
     super();
-    /** @type {((e: any) => void) | null} */
+    /** @type {(() => void) | null} */
     this._key = null;
   }
   connectedCallback() {
     super.connectedCallback();
-    // TODO(simplify-ui): Replace this manual document listener lifecycle with
-    // on(document, 'keydown', handler) from src/lib/view.js when this shell's
-    // mount/disconnect cleanup is owned by reactive()/defineView().
-    this._key = (/** @type {any} */ e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        e.preventDefault?.();
-        drawerOpen.set(true);
-      }
-      if (e.key === 'Escape') drawerOpen.set(false);
-    };
-    document.addEventListener('keydown', this._key);
+    this._key = bindBankEditorKeys(document);
   }
   disconnectedCallback() {
     super.disconnectedCallback();
-    if (this._key) document.removeEventListener('keydown', this._key);
+    this._key?.();
+    this._key = null;
   }
   render() {
-    return [
-      h(
-        'header',
-        { className: 'masthead' },
-        h(
-          'div',
-          {},
-          h(
-            'div',
-            { className: 'eyebrow' },
-            'Case Type Owner ',
-            h('span', { className: 'dot' }),
-            ' Question Bank'
-          ),
-          h('h1', {}, 'Question ', h('em', {}, 'Bank'))
-        ),
-        h(
-          'div',
-          { className: 'masthead-meta' },
-          'Session: ',
-          h('strong', {}, 'local · uncommitted'),
-          h('br'),
-          'Schema: ',
-          h('strong', {}, 'questions.v3')
-        )
-      ),
-      /** @type {any} */ (document.createElement('cr-case-tabs')),
-      h(
-        'main',
-        { className: 'bank-main' },
-        /** @type {any} */ (document.createElement('cr-bank-rail')),
-        /** @type {any} */ (document.createElement('cr-bank-list'))
-      ),
-      /** @type {any} */ (document.createElement('cr-bank-dock')),
-      /** @type {any} */ (document.createElement('cr-compile-drawer')),
-      /** @type {any} */ (document.createElement('cr-toast')),
-    ];
+    return BankEditor();
   }
 }
 
