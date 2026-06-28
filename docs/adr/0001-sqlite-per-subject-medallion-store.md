@@ -57,4 +57,29 @@ the project exists to avoid.
   transient landing zone rebuildable from source.
 - If read contention or torn-read complaints emerge for a heavily-read gold,
   revisit a "build-local, atomically publish to the share" option for that layer.
+
+## Amendment (2026-06-23): generalise to namespace → file; demote the medallion to a profile (#232)
+
+The medallion is **demoted from framework vocabulary**. The framework's storage
+contract is the `Reader`/`Writer` ports + load strategies + the `connect` seam;
+`Store`/`StoreCatalog` is a **factory** the run engine never references.
+
+- A `Store` now addresses an opaque **`namespace`** — a *logical database*, one
+  SQLite file holding many related tables — and mints `writer(table, strategy)` /
+  `reader(table)` over it. `StoreCatalog.store(namespace)` resolves the file via a
+  `StoreBackend` (`DirectoryStoreBackend` maps `<root>/<namespace>.db`, nesting on
+  a `/` in the namespace). The three-value `Layer` enum (`raw`/`silver`/`gold`) is
+  **removed from `framework.core`**.
+- The raw/silver/gold **medallion** is an **application-level profile**
+  (`tools.medallion.medallion(catalog, subject)`), exposing the `.raw` / `.silver`
+  / `.gold` namespace Stores for one subject. The on-disk layout is unchanged —
+  `<root>/<subject>/{raw,silver,gold}.db` (namespaces `<subject>/raw` etc.) — so
+  per-subject isolation and the single-writer-per-file rule above still hold.
+- This enables a **normalised schema across multiple logical databases** (one
+  namespace per database, many related tables each); cross-database joins stay in
+  Python (ADR-0002), so splitting files still costs nothing on the join path.
+
+Breaking change to the public facade: `store.writer(layer, table, strategy)`
+becomes `store.writer(table, strategy)` on a namespace-scoped Store, and
+`framework.core` no longer exports `Layer`/`RAW`/`SILVER`/`GOLD`.
 </content>

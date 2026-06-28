@@ -1,13 +1,16 @@
 """Public facade: the foundational data vocabulary.
 
-The nouns every pipeline names regardless of task — ``Dataset`` and the medallion
-``Layer`` constants ``RAW`` / ``SILVER`` / ``GOLD``. Plus, the foundational data
-contracts: declaring and enforcing a feed's schema (``SchemaValidator``, value rules)
-and structural validations.
+The noun every pipeline names regardless of task — ``Dataset`` — plus the
+foundational data contracts: declaring and enforcing a feed's schema
+(``SchemaValidator``, value rules) and structural validations.
+
+The medallion (``raw`` / ``silver`` / ``gold``) is **no longer framework
+vocabulary**: the framework stores an opaque ``namespace`` → file, and the
+medallion is an application-level profile (``tools.medallion``) layered on top.
 
 Import from here rather than the underlying modules::
 
-    from framework.core import Dataset, RAW, SchemaValidator, ColumnValidator
+    from framework.core import Dataset, SchemaValidator, ColumnValidator
 
 The modules behind this facade are internal layout: re-exports here are the public
 contract, the submodule paths are not. See ``docs/public-api.md``.
@@ -16,7 +19,6 @@ contract, the submodule paths are not. See ``docs/public-api.md``.
 from framework._internal.schema import RowCheck, ValueRule, row_checks
 from framework.core.dataset import Dataset
 from framework.core.errors import ErrorCategory, PipelineError, format_failure
-from framework.core.layers import GOLD, RAW, SILVER, Layer
 from framework.core.protocols import (
     DEFAULT_CHUNK_SIZE,
     ChunkReader,
@@ -49,10 +51,6 @@ from framework.core.value_rules import (
 
 __all__ = [
     "Dataset",
-    "Layer",
-    "RAW",
-    "SILVER",
-    "GOLD",
     "Reader",
     "ChunkReader",
     "DEFAULT_CHUNK_SIZE",

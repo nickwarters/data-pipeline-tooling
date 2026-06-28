@@ -12,7 +12,7 @@ from dataclasses import fields
 
 import pytest
 
-from framework.core import GOLD, RAW, SILVER, ValidationError
+from framework.core import ValidationError
 from framework.io import StoreCatalog
 from framework.run import RunContext
 from tests.framework_testing import (
@@ -21,6 +21,7 @@ from tests.framework_testing import (
     given_rows,
     read_rows,
 )
+from tools.medallion import medallion
 
 from .pipeline import FEED_NAME, raw_builder, run, silver_builder
 from .schema import MyfeedRow
@@ -29,16 +30,16 @@ from .schema import MyfeedRow
 def test_bundled_sample_feed_refines_through_to_gold(tmp_path):
     run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
 
-    store = StoreCatalog(tmp_path).store(FEED_NAME)
+    med = medallion(StoreCatalog(tmp_path), FEED_NAME)
 
-    landed = read_rows(store, RAW, FEED_NAME)
+    landed = read_rows(med.raw, FEED_NAME)
     assert len(landed) > 0
     assert {f.name for f in fields(MyfeedRow)}.issubset(landed[0].keys())
 
-    silver = read_rows(store, SILVER, FEED_NAME)
+    silver = read_rows(med.silver, FEED_NAME)
     assert {f.name for f in fields(MyfeedRow)}.issubset(silver[0].keys())
 
-    gold = read_rows(store, GOLD, FEED_NAME)
+    gold = read_rows(med.gold, FEED_NAME)
     assert len(gold) == len(landed)
 
 

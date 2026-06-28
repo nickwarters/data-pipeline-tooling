@@ -31,10 +31,11 @@ from pathlib import Path
 
 from case_review.case_type import CaseType
 from case_review.gold import detail_ingest_silver_to_gold, ingest_silver_to_gold
-from framework.core import GOLD, RAW, SILVER, SchemaValidator
+from framework.core import SchemaValidator
 from framework.io import AccumulateByRun, CsvReader, StoreCatalog
 from framework.run import Pipeline
 from framework.transform import Filter, Rename, SchemaCoercion, SelectColumns, Unpivot
+from tools.medallion import medallion
 
 PRODUCT_COLS = [f"product_{i}" for i in range(1, 11)]
 
@@ -60,13 +61,11 @@ WIDE_CASES = CaseType(name=SUBJECT, schema=CaseSchema, natural_key=("case_ref",)
 
 def main(target_dir: str) -> None:
     sample = Path(__file__).parent / "sample_data" / "wide_cases.csv"
-    store = StoreCatalog(target_dir).store(SUBJECT)
+    med = medallion(StoreCatalog(target_dir), SUBJECT)
 
     p = Pipeline(SUBJECT)
     r = p.read(CsvReader(sample), name="read")
-    p.write(
-        store.writer(RAW, SUBJECT, AccumulateByRun(RUN_ID, RUN_ID)), r, name="write"
-    )
+    p.write(med.raw.writer(SUBJECT, AccumulateByRun(RUN_ID, RUN_ID)), r, name="write")
     p.run()
 
     # Shared normalisation: the feed uses `case_ref_no`; both pipelines rename
@@ -74,7 +73,7 @@ def main(target_dir: str) -> None:
     normalise = Rename({"case_ref_no": "case_ref"})
 
     p_cases = Pipeline("cases")
-    r_cases = p_cases.read(store.reader(RAW, SUBJECT), name="read")
+    r_cases = p_cases.read(med.raw.reader(SUBJECT), name="read")
     f_cases = p_cases.transform(
         Filter(lambda row, rid=RUN_ID: row["run_id"] == rid), r_cases, name="filter"
     )
@@ -87,16 +86,16 @@ def main(target_dir: str) -> None:
     c_cases = p_cases.transform(SchemaCoercion(CaseSchema), s_cases, name="coerce")
     v_cases = p_cases.validate(SchemaValidator(CaseSchema), c_cases, name="validate")
     p_cases.write(
-        store.writer(SILVER, "cases", AccumulateByRun(RUN_ID, RUN_ID)),
+        med.silver.writer("cases", AccumulateByRun(RUN_ID, RUN_ID)),
         v_cases,
         name="write",
     )
     p_cases.run()
 
-    ingest_silver_to_gold(store, WIDE_CASES, "cases").run()
+    ingest_silver_to_gold(med, WIDE_CASES, "cases").run()
 
     p_prods = Pipeline("case_products")
-    r_prods = p_prods.read(store.reader(RAW, SUBJECT), name="read")
+    r_prods = p_prods.read(med.raw.reader(SUBJECT), name="read")
     f_prods = p_prods.transform(
         Filter(lambda row, rid=RUN_ID: row["run_id"] == rid), r_prods, name="filter"
     )
@@ -105,7 +104,7 @@ def main(target_dir: str) -> None:
         SelectColumns(["case_ref"] + PRODUCT_COLS), n_prods, name="select"
     )
     p_prods.write(
-        store.writer(SILVER, "case_products", AccumulateByRun(RUN_ID, RUN_ID)),
+        med.silver.writer("case_products", AccumulateByRun(RUN_ID, RUN_ID)),
         s_prods,
         name="write",
     )
@@ -114,7 +113,7 @@ def main(target_dir: str) -> None:
     # The same Case Type is used here, so product rows carry case_ids that match
     # the Cases gold table without joining back to it.
     detail_ingest_silver_to_gold(
-        store,
+        med,
         WIDE_CASES,
         "case_products",
         unpivot=Unpivot(
@@ -125,8 +124,8 @@ def main(target_dir: str) -> None:
         ),
     ).run()
 
-    cases_gold = store.reader(GOLD, "cases").read()
-    products_gold = store.reader(GOLD, "case_products").read()
+    cases_gold = med.gold.reader("cases").read()
+    products_gold = med.gold.reader("case_products").read()
     print(
         f"cases gold: {len(cases_gold)} rows | "
         f"case_products gold: {len(products_gold)} rows (run {RUN_ID})"

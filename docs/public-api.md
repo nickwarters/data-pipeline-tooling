@@ -15,14 +15,21 @@ rule that follows from that split.
 > `case_review/` to this boundary.
 
 ```python
-from framework.core import Dataset, RAW, SILVER, GOLD
+from framework.core import Dataset
 from framework.io import CsvReader, StoreCatalog, Refresh
 from framework.transform import Filter, VectorizedFilter, SchemaCoercion
 from framework.core import ColumnValidator, SchemaValidator, ValidationError
 from framework.run import Pipeline, PipelineRunner, RunContext
+from tools.medallion import medallion
 from tools.retry import RetryPolicy
 from tools.calendar import WorkingDayCalendar
 ```
+
+The framework stores an opaque **`namespace`** (a logical database) → file; the
+raw/silver/gold **medallion is no longer framework vocabulary**. It is an
+application-level store profile in the sibling `tools` package
+(`tools.medallion.medallion(catalog, subject)` → `.raw` / `.silver` / `.gold`
+namespace Stores), not a `framework.core` export.
 
 The checks (`ColumnValidator` / `SchemaValidator` / the value rules) live on
 `framework.core` alongside the base vocabulary — there is no separate `validate`
@@ -55,12 +62,12 @@ Each facade is a **sub-package** whose `__init__.py` does the re-exporting, with
 the implementation modules living alongside it:
 
 - `framework/core/` — the foundational vocabulary every other facade builds on:
-  `dataset` (`Dataset`), `layers` (the medallion `Layer` / `RAW` / `SILVER` /
-  `GOLD`), `protocols` (the small shared `Reader` / `Writer` / `Processor` /
-  `Validator` shapes), and the **declared-schema contract** — the
+  `dataset` (`Dataset`), `protocols` (the small shared `Reader` / `Writer` /
+  `Processor` / `Validator` shapes), and the **declared-schema contract** — the
   `validate(dataset)` `validators`, the `schema` check (`SchemaValidator`), and
   the `value_rules` (`Nullable` / `Pattern` / ...). It sits *below* the task
-  facades.
+  facades. (The medallion `Layer` enum was **removed** here — #232 — in favour of
+  the namespace Store + the `tools.medallion` profile.)
 - `framework/io/` — `readers`, `writers`, `store`, `strategy`, `sql`, `remote`.
 - `framework/transform/` — the dataset-reshaping primitives: `processors`,
   `coercion` (`SchemaCoercion` — the *coerce* half of the schema adapter),
@@ -108,7 +115,6 @@ builds on them.
 | Names | What |
 |-------|------|
 | `Dataset` | The opaque bulk tabular carrier (pandas behind the seam) that flows through every Reader, Processor, Validator, and Writer. |
-| `Layer`, `RAW`, `SILVER`, `GOLD` | The medallion layer constants. |
 | `Reader`, `ChunkReader`, `Writer`, `Processor`, `Validator`, `Severity` | Shared protocols used by framework internals and available for advanced typing. `ChunkReader` (`chunks(size) -> Iterator[Dataset]`) is the streaming dual of `Reader` for sources too big to hold whole. Concrete implementations still live on their task facades. |
 | `DEFAULT_CHUNK_SIZE` | The default chunk size (10,000 rows) a `ChunkReader` streams in. |
 | `Validator`, `ValidationError` | The check seam and the error it raises. |
@@ -129,7 +135,7 @@ Moving data across the boundary.
 | `Reader`, `DatasetReader`, `CsvReader`, `StrictCsvReader`, `StrictCsvParseError`, `GlobCsvReader`, `ExcelReader`, `SqliteReader` | The `read() -> Dataset` port and its concrete sources (`StrictCsvReader` is the char-by-char RFC 4180 parser; `StrictCsvParseError` is the located error it raises). (The remote `SasReader` / `SharePointReader` live in `tools.integrations`, not this facade — see below.) |
 | `ChunkReader`, `ChunkedCsvReader`, `SasFileReader`, `DEFAULT_CHUNK_SIZE` | The `chunks(size) -> Iterator[Dataset]` streaming port and its concrete sources for inputs too big to hold whole: a local CSV (`ChunkedCsvReader`) and an **already-landed** `.sas7bdat`/xport file, incl. gzipped (`SasFileReader`). `SasFileReader` is read-only by nature and distinct from the remote `tools.integrations` `SasReader` (no script, no remote run, no copy). |
 | `Writer`, `CsvWriter`, `ExcelWriter`, `JsonWriter`, `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `SqliteInsertOrIgnoreWriter`, `QuarantineWriter`, `StdoutWriter` | The `write(dataset)` port and its concrete sinks (`StdoutWriter` is a console sink for *seeing* a result — e.g. an explainer trace — rather than persisting it). (The remote `SharePointWriter` lives in `tools.integrations`, not this facade — see below.) |
-| `Store`, `StoreCatalog`, `StoreBackend`, `DirectoryStoreBackend` | Per-subject medallions minted from shared configuration. |
+| `Store`, `StoreCatalog`, `StoreBackend`, `DirectoryStoreBackend` | Namespace-scoped stores (one logical database → file) minted from shared configuration. A `Store` mints `writer(table, strategy)` / `reader(table)` over its namespace; `StoreCatalog.store(namespace)` resolves the file via the backend. The raw/silver/gold medallion is layered on top by `tools.medallion`. |
 | `Refresh`, `AccumulateByRun`, `UpsertStrategy`, `InsertOrIgnore` | The load strategies a Writer carries. |
 
 ### `framework.transform` — reshaping a feed mid-pipeline
@@ -176,8 +182,10 @@ without notice:
 - `framework.io.sql` (`quote_identifier`) — the single place a table/column name is
   turned into a safely-quoted SQL identifier; applied at every
   identifier interpolation across the SQLite seam, not imported by pipelines.
-- `framework.core.layers` (`layer_name`, `LAYERS`) — internal layer-name validation;
-  the public layer surface is `Layer`/`RAW`/`SILVER`/`GOLD` via `framework.core`.
+- `tools.medallion` (`medallion`, `Medallion`, `RAW`/`SILVER`/`GOLD`) — the
+  application-level raw/silver/gold profile over the namespace Store. It is a
+  sibling-package convention, *not* a `framework` facade; the medallion `Layer`
+  enum was removed from `framework.core` (#232).
 - `framework.run.trace` (`RowTrace`) — the generic per-row trace mechanics behind
   `Pipeline.explain()`; reached through the builder, not imported directly.
 - `framework.run.pipeline_steps` (`PipelineStep`, `PipelineExecution`, …) — the

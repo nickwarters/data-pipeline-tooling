@@ -77,17 +77,18 @@ overrides (ingest, selection criteria, divergent processing) are deferred
 
 The `CasePool` is the clean domain abstraction the platform exposes *instead of*
 raw `pandas.read_*` calls (CONTEXT.md). It is scoped **per Case Type**,
-constructed from that type's `CaseType` (for its schema), its `Store` (to read
-its silver), and a `WorkingDayCalendar` (the availability arithmetic — see
+constructed from that type's `CaseType` (for its schema), its **gold** `Store` (to read
+its current Cases), and a `WorkingDayCalendar` (the availability arithmetic — see
 [`working-day-calendar.md`](working-day-calendar.md)):
 
 ```python
 from case_review.case_pool import CasePool
 from framework.io import StoreCatalog
 from tools.calendar import WorkingDayCalendar
+from tools.medallion import medallion
 
-store = StoreCatalog("/share").store(CASES.name)
-pool = CasePool(CASES, store, WorkingDayCalendar())
+med = medallion(StoreCatalog("/share"), CASES.name)
+pool = CasePool(CASES, med.gold, WorkingDayCalendar())
 available = pool.fetch_available_cases(
     as_of=date(2026, 5, 29),
     activity_column="activity_date",
@@ -124,7 +125,6 @@ round-trip:
 ```python
 from typing import Any, Mapping
 
-from framework.core import GOLD
 from framework.io import AccumulateByRun, DatasetReader
 from framework.run import Pipeline
 from framework.transform import Filter, Score, Sort, Stamp
@@ -148,7 +148,7 @@ stamped = p.transform(
     Stamp("question_bank_id", variation.question_bank_id), ranked, name="stamp"
 )
 p.write(
-    store.writer(GOLD, "selection_pool", AccumulateByRun(run_id, load_date)),
+    med.gold.writer("selection_pool", AccumulateByRun(run_id, load_date)),
     stamped,
     name="write",
 )
@@ -208,13 +208,13 @@ stamped = p.transform(
 )
 # land a per-Case trace alongside the SelectionPool (a sibling branch of `stamped`)
 p.explain(
-    store.writer(GOLD, "selection_trace", AccumulateByRun(run_id, load_date)),
+    med.gold.writer("selection_trace", AccumulateByRun(run_id, load_date)),
     stamped,
     id_column="case_ref",
     score_column="priority_score",
 )
 p.write(
-    store.writer(GOLD, "selection_pool", AccumulateByRun(run_id, load_date)),
+    med.gold.writer("selection_pool", AccumulateByRun(run_id, load_date)),
     stamped,
     name="write",
 )

@@ -181,9 +181,9 @@ def test_error_severity_pre_validator_aborts_before_any_write():
 
 
 def test_failed_run_leaves_the_gold_layer_untouched(tmp_path):
-    store = Store(tmp_path / "cases")
+    store = Store(tmp_path / "cases.db")
     seed = Dataset.from_pandas(pd.DataFrame({"id": [1, 2]}))
-    store.writer("gold", "casepool", AccumulateByRun("r1", "2026-05-29")).write(seed)
+    store.writer("casepool", AccumulateByRun("r1", "2026-05-29")).write(seed)
 
     reader = RecordingReader(Dataset.from_pandas(pd.DataFrame({"id": [3]})))
 
@@ -191,7 +191,7 @@ def test_failed_run_leaves_the_gold_layer_untouched(tmp_path):
     read = p.read(reader, name="read")
     val = p.validate(RowCountValidator(minimum=100), read, name="post-validate")
     p.write(
-        store.writer("gold", "casepool", AccumulateByRun("r2", "2026-05-30")),
+        store.writer("casepool", AccumulateByRun("r2", "2026-05-30")),
         val,
         name="write",
     )
@@ -199,7 +199,7 @@ def test_failed_run_leaves_the_gold_layer_untouched(tmp_path):
     with pytest.raises(ValidationError):
         p.run()
 
-    assert len(store.reader("gold", "casepool").read()) == 2
+    assert len(store.reader("casepool").read()) == 2
 
 
 def test_checkpoint_write_fires_and_passes_dataset_through_to_terminus():
