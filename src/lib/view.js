@@ -217,6 +217,7 @@ export function reactive(render) {
  * @template {Record<string, any>} Props
  * @param {string} tagName
  * @param {ViewDefinition<Props>} definition
+ * @returns {CustomElementConstructor & { new(): HTMLElement & Props & { connectedCallback: () => void, disconnectedCallback: () => void } }}
  */
 export function defineView(tagName, definition) {
   class ViewElement extends HTMLElement {
@@ -251,6 +252,9 @@ export function defineView(tagName, definition) {
   }
 
   customElements.define(tagName, ViewElement);
+  return /** @type {CustomElementConstructor & { new(): HTMLElement & Props & { connectedCallback: () => void, disconnectedCallback: () => void } }} */ (
+    /** @type {unknown} */ (ViewElement)
+  );
 }
 
 /**

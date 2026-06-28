@@ -62,7 +62,7 @@ class StubEl {
 let reloadCalls = 0;
 
 const { signal } = await import('../src/lib/signal.js');
-const { CRStatusBanner } =
+const { CRStatusBanner, StatusBanner } =
   await import('../src/components/cr-status-banner.js');
 
 /**
@@ -83,6 +83,26 @@ test('CRStatusBanner: when status is saved, renders no banner', () => {
   el.saveQueue = /** @type {any} */ (makeQueue('saved'));
   el.connectedCallback();
   assert.equal(/** @type {any} */ (el)._children.length, 0);
+});
+
+test('StatusBanner: plain function returns no nodes for saved status', () => {
+  const node = StatusBanner({
+    saveQueue: /** @type {any} */ (makeQueue('saved')),
+  });
+
+  assert.deepEqual(node, []);
+});
+
+test('StatusBanner: plain function renders transient status without a class instance', () => {
+  const node = /** @type {any} */ (
+    StatusBanner({
+      saveQueue: /** @type {any} */ (makeQueue('saving')),
+    })
+  );
+
+  assert.equal(node.textContent, 'Saving…');
+  assert.equal(node.className, 'cr-banner cr-banner-saving');
+  assert.equal(node.role || node.getAttribute('role'), 'status');
 });
 
 test('CRStatusBanner: when status is saving, renders a polite live indicator with text Saving…', () => {
