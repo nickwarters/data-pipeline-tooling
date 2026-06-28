@@ -1,135 +1,106 @@
 # Sharing Signals Between Components
 
-> TODO(simplify-ui): Rewrite this guide around shared signals passed into plain
-> function components. The future examples should compose `QuestionList(props)`
-> and `Outcome(props)` functions with `h()` nodes, using `reactive()` only where
-> the shared signal is read during render; do not teach `document.createElement`,
-> `connectedCallback`, or `CRElement.subscribe()` as the default path.
+Create shared signals in the parent route or page function, then pass the signal
+to plain child functions as an explicit prop.
 
-## Quick reference
+## Quick Reference
 
 ```js
-// Create the signal in the parent (route handler or page component).
-const answers = signal({});
-
-// Pass it as a property to each component that needs it.
-const questionList = document.createElement('cr-question-list');
-questionList.answersSignal = answers;
-
-const outcome = document.createElement('cr-outcome');
-outcome.answersSignal = answers;
-
-container.replaceChildren(questionList, outcome);
-
-// Any component that calls answers.set(…) causes every subscriber to update.
-```
-
----
-
-## The pattern
-
-Signals are plain objects (`{ get, set }`). To share a signal, create it in one place (typically the route handler or a parent page component) and pass it down to children as a typed property before the children are connected to the DOM.
-
-This is the framework's substitute for a global store or prop-drilling through attributes. It keeps state co-located with the code that owns it, while allowing multiple components to react to the same value without knowing about each other.
-
----
-
-## When to share vs. keep local
-
-| Situation                                                       | Approach                                                        |
-| --------------------------------------------------------------- | --------------------------------------------------------------- |
-| A value is only relevant to one component                       | Create the signal inside `connectedCallback` — it's local state |
-| Two sibling components need to read and/or write the same value | Create the signal in their common ancestor and pass it to both  |
-| A child needs to write back to a parent                         | Pass the writable signal down; the child calls `.set()`         |
-
----
-
-## Worked example: `<cr-question-list>` and `<cr-outcome>` sharing answers
-
-Below is a simplified version of how the case review page wires two components together via a shared signal.
-
-```js
-// src/routes/case.js  (simplified)
-// @ts-check
+import { h } from '../lib/html.js';
 import { signal } from '../lib/signal.js';
+import { reactive } from '../lib/view.js';
 
-export function register(router, context) {
-  router.register('#/case/:id', {
-    mount(container, { id }) {
-      // The answers signal is owned by this route handler.
-      // Both components below read and/or write it.
-      const answers = signal(
-        /** @type {Record<string, import('../sharepoint-client.js').Answer>} */ ({})
-      );
+export function CaseReviewPage({ questions, computeOutcome }) {
+  const answers = signal({});
 
-      // Load the case and seed the signal once the data arrives.
-      context.client.getCase(id).then((row) => {
-        if (row) answers.set(row.answers ?? {});
-      });
+  return h(
+    'main',
+    {},
+    QuestionList({ questions, answers }),
+    Outcome({ answers, computeOutcome })
+  );
+}
+```
 
-      // cr-question-list: displays questions, writes answers back via the signal.
-      const questionList = document.createElement('cr-question-list');
-      questionList.answersSignal = answers;
-      questionList.saveQueue = context.saveQueue;
-      questionList.caseId = id;
+Any child that calls `answers.set(...)` updates every reactive child that reads
+`answers.get()`.
 
-      // cr-outcome: recomputes the verdict whenever answers change.
-      const outcome = document.createElement('cr-outcome');
-      outcome.answersSignal = answers;
+## The Pattern
 
-      container.replaceChildren(questionList, outcome);
-    },
-    unmount() {},
+Signals are plain objects with `{ get, set }`.
+
+Create the signal at the level that owns the state:
+
+```js
+const answers = signal(caseRow.answers ?? {});
+```
+
+Pass that exact signal to children that need to read or write it:
+
+```js
+QuestionList({ questions, answers });
+Summary({ answers, computeOutcome });
+```
+
+This keeps shared state explicit without a global store.
+
+## When To Share
+
+| Situation                                                       | Approach                                                       |
+| --------------------------------------------------------------- | -------------------------------------------------------------- |
+| A value is only relevant to one component                       | Create the signal inside that function component               |
+| Two sibling components need to read and/or write the same value | Create the signal in their parent and pass it to both          |
+| A child needs to write back to a parent                         | Pass the writable signal or a specific callback such as `save` |
+
+## Worked Example
+
+```js
+export function QuestionList({ questions, answers }) {
+  return h(
+    'section',
+    {},
+    questions.map((question) =>
+      Question({
+        question,
+        value: answers.get()[question.id]?.value ?? '',
+        onAnswer: (value) => {
+          answers.set({
+            ...answers.get(),
+            [question.id]: { value },
+          });
+        },
+      })
+    )
+  );
+}
+
+export function Outcome({ answers, computeOutcome }) {
+  return reactive(() => {
+    const result = computeOutcome(answers.get());
+    return h('p', {}, result.wording);
   });
 }
 ```
 
-Inside `cr-question-list`, when a Reviewer submits an answer:
+`QuestionList` and `Outcome` never import each other. The shared signal is their
+only shared interface.
+
+## Persistence
+
+Keep persistence explicit. If a component needs to save after updating a shared
+signal, pass a callback:
 
 ```js
-// src/components/cr-question-list.js  (excerpt)
-connectedCallback() {
-  // …build question DOM…
-
-  this.addEventListener('cr-answer', (/** @type {CustomEvent} */ ev) => {
-    // 1. Update the shared signal — cr-outcome reacts immediately.
-    const next = { ...this.answersSignal.get(), [ev.detail.questionId]: ev.detail.answer };
-    this.answersSignal.set(next);
-
-    // 2. Persist to SharePoint (debounced, via SaveQueue — never fetch() directly).
-    this.saveQueue.enqueue(this.caseId, 'answers', next);
-  });
-}
+QuestionList({
+  questions,
+  answers,
+  onAnswer: ({ questionId, value }) => {
+    const next = { ...answers.get(), [questionId]: { value } };
+    answers.set(next);
+    saveQueue.enqueue(caseId, 'answers', next);
+  },
+});
 ```
 
-Inside `cr-outcome`, `subscribe` reacts without polling or events:
-
-```js
-// src/components/cr-outcome.js  (excerpt)
-connectedCallback() {
-  const verdictEl = document.createElement('span');
-
-  this.subscribe(this.answersSignal, answers => {
-    const { verdict } = this.computeOutcome(answers);
-    verdictEl.textContent = verdict;
-  });
-
-  this.replaceChildren(verdictEl);
-}
-```
-
-The two components never import each other. The signal object is the only shared interface.
-
----
-
-## Typed property declarations
-
-Always declare shared signal properties in the constructor so `tsc --checkJs` can type-check them:
-
-```js
-constructor() {
-  super();
-  /** @type {{ get: () => Record<string, import('../sharepoint-client.js').Answer>, set: (v: Record<string, import('../sharepoint-client.js').Answer>) => void }} */
-  this.answersSignal = { get: () => ({}), set: () => {} };  // safe default; replaced at mount time
-}
-```
+The component stays simple: it calls `onAnswer`, and the parent owns both shared
+state and persistence.

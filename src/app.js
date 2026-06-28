@@ -6,6 +6,19 @@
 
 /** @returns {Promise<void>} */
 async function boot() {
+  await Promise.all([
+    import('./components/cr-app-nav.js'),
+    import('./components/cr-command-palette.js'),
+    import('./pages/cr-dashboard.js'),
+    import('./pages/cr-case-review.js'),
+    import('./pages/cr-conversation-view.js'),
+    import('./pages/cr-reports-index.js'),
+    import('./pages/cr-reviewer-team-report.js'),
+    import('./pages/cr-responsible-party-dashboard.js'),
+    import('./pages/cr-team-cases.js'),
+    import('./question-bank/cr-bank-editor.js'),
+  ]);
+
   const { createSharePointClient } =
     await import('./services/create-sharepoint-client.js');
   const client = await createSharePointClient(
@@ -15,8 +28,6 @@ async function boot() {
   const { Router } = await import('./lib/router.js');
   const { SaveQueue } = await import('./services/save-queue.js');
   const { resolveCapabilities } = await import('./services/permissions.js');
-  const { registerComponents } = await import('./setup/register-components.js');
-  await registerComponents();
 
   const saveQueue = new SaveQueue(client);
   const router = new Router();
@@ -38,6 +49,7 @@ async function boot() {
   );
   nav.capabilities = capabilities;
   appEl.appendChild(nav);
+  document.body.appendChild(document.createElement('cr-command-palette'));
 
   const routerContainer = document.createElement('div');
   routerContainer.className = 'cr-page-content';

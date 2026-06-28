@@ -71,42 +71,24 @@ No changes to `SaveQueue` are needed. `enqueue` accepts any `fieldName` string a
 
 ## Worked example: a component that saves notes
 
-> TODO(simplify-ui): Rewrite this example as a plain `Notes(props)` function
-> that returns `h()` nodes and wires input events to `SaveQueue`; class-backed
-> `CRElement` examples should become an advanced integration-shell pattern only.
-
 ```js
-// src/components/cr-notes.js  (simplified)
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { h } from '../lib/html.js';
 
 /** @typedef {import('../services/save-queue.js').SaveQueue} SaveQueue */
 
-export class CRNotes extends CRElement {
-  constructor() {
-    super();
-    this.notes = '';
-    /** @type {SaveQueue | null} */
-    this.saveQueue = null;
-    this.caseId = '';
-  }
-
-  connectedCallback() {
-    const textarea = document.createElement('textarea');
-    textarea.value = this.notes;
-
-    textarea.addEventListener('input', (ev) => {
-      if (!this.saveQueue || !this.caseId) return;
+/**
+ * @param {{ notes: string, saveQueue: SaveQueue | null, caseId: string }} props
+ */
+export function Notes({ notes, saveQueue, caseId }) {
+  return h('textarea', {
+    value: notes,
+    oninput: (ev) => {
       const value = /** @type {HTMLTextAreaElement} */ (ev.target).value ?? '';
-      // Enqueue the save — SaveQueue handles debounce, ETag, and retry.
-      this.saveQueue.enqueue(this.caseId, 'notes', value);
-    });
-
-    this.replaceChildren(textarea);
-  }
+      saveQueue?.enqueue(caseId, 'notes', value);
+    },
+  });
 }
-
-customElements.define('cr-notes', CRNotes);
 ```
 
 The component never calls `fetch()`. It never knows the ETag. It never retries. That's all `SaveQueue`'s responsibility.

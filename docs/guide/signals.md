@@ -79,43 +79,38 @@ label.set('on'); // fn() runs again → document.title = 'on'
 dispose(); // stop; future label.set() calls are ignored
 ```
 
-`CRElement.subscribe(sig, cb)` is a thin wrapper around `effect` that auto-disposes when the element disconnects from the DOM. Use `subscribe` inside components instead of calling `effect` directly.
+Use `reactive()` for signal-driven DOM. Use `effect()` directly only for
+non-rendering side effects, and keep the returned disposer somewhere explicit.
+`CRElement.subscribe()` exists only for legacy custom-element shells.
 
 ---
 
 ## Worked example: a counter component
 
-> TODO(simplify-ui): Rewrite this example as a plain `Counter(props)`
-> function that returns `h()` nodes and uses `reactive(() => h(...))` for its
-> local `count` signal. `CRElement` should no longer be the introductory signal
-> authoring pattern.
-
 ```js
-// src/components/cr-counter.js
 // @ts-check
-import { CRElement } from './cr-element.js';
+import { h } from '../lib/html.js';
 import { signal } from '../lib/signal.js';
+import { reactive } from '../lib/view.js';
 
-export class CRCounter extends CRElement {
-  connectedCallback() {
-    const count = signal(0); // local state
+export function Counter() {
+  const count = signal(0);
 
-    const label = document.createElement('span');
-    const btn = document.createElement('button');
-    btn.textContent = '+1';
-
-    // Keep the label in sync — fires immediately, then on every change.
-    this.subscribe(count, (n) => {
-      label.textContent = String(n);
-    });
-
-    btn.addEventListener('click', () => count.set(count.get() + 1));
-
-    this.replaceChildren(label, btn);
-  }
+  return reactive(() =>
+    h(
+      'div',
+      {},
+      h('span', {}, count.get()),
+      h(
+        'button',
+        { type: 'button', onclick: () => count.set(count.get() + 1) },
+        '+1'
+      )
+    )
+  );
 }
-
-customElements.define('cr-counter', CRCounter);
 ```
 
-The signal is created inside `connectedCallback` so each instance has its own independent count. If the count should be shared across components, create the signal outside and pass it in as a property (see [Sharing signals](sharing-signals.md)).
+The signal is created inside the component function so each instance has its own
+independent count. If the count should be shared across components, create the
+signal outside and pass it as a prop (see [Sharing signals](sharing-signals.md)).

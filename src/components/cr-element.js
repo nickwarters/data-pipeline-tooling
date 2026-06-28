@@ -1,10 +1,10 @@
 // @ts-check
 import { effect } from '../lib/signal.js';
 
-// Resolved at module-evaluation time, so tests can stub globalThis.HTMLElement
-// via a dynamic import() after setting the stub (see tests/cr-element.test.js).
+// Legacy custom-element base. Keep it import-safe in non-browser tests; new
+// feature code should use plain functions plus reactive() instead.
 const Base = /** @type {typeof HTMLElement} */ (
-  /** @type {unknown} */ (globalThis.HTMLElement)
+  /** @type {unknown} */ (globalThis.HTMLElement ?? class {})
 );
 
 export class CRElement extends Base {

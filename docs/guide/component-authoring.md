@@ -1,123 +1,128 @@
 # Component Authoring
 
-> TODO(simplify-ui): Rewrite this guide around plain function components that
-> return `h()` nodes, using `reactive(() => h(...))` only when local signals are
-> read. `defineView()`, `CRElement`, and `ReactiveElement` should become advanced
-> route/integration-shell escape hatches, not the default authoring path.
+Write new UI as plain functions that return `h()` nodes. Reach for `signal()`
+for local state and `reactive()` when a host needs to re-render from signals.
 
-## Quick reference
+`CRElement`, `ReactiveElement`, `connectedCallback()`, and
+`disconnectedCallback()` are legacy integration-shell APIs. Do not use them for
+new feature components.
+
+## Quick Reference
 
 ```js
-// src/components/cr-my-widget.js
-import { CRElement } from './cr-element.js';
+import { h } from '../lib/html.js';
+import { signal } from '../lib/signal.js';
+import { reactive } from '../lib/view.js';
 
-export class CRMyWidget extends CRElement {
-  constructor() {
-    super();
-    this.label = ''; // public property — set by parent before connectedCallback
-  }
+export function Counter({ initial = 0 } = {}) {
+  const count = signal(initial);
 
-  connectedCallback() {
-    const span = document.createElement('span');
-    span.textContent = this.label;
-    this.replaceChildren(span); // light DOM, NOT shadow DOM
-  }
+  return reactive(() =>
+    h(
+      'div',
+      { class: 'cr-counter' },
+      h('span', {}, count.get()),
+      h(
+        'button',
+        { type: 'button', onclick: () => count.set(count.get() + 1) },
+        '+1'
+      )
+    )
+  );
 }
-
-customElements.define('cr-my-widget', CRMyWidget);
 ```
 
-Then import the module in `src/setup/register-components.js` so the custom element is defined before any route mounts it.
+Use it from a route or another component:
 
----
+```js
+container.replaceChildren(Counter({ initial: 2 }));
+```
 
 ## Conventions
 
-### Naming
+Prefer component names that describe the domain surface, for example
+`QuestionList`, `Notes`, or `SummaryPanel`.
 
-Every custom element uses the `cr-` prefix: `<cr-question>`, `<cr-notes>`, `<cr-toast>`. This isolates the framework's CSS from SharePoint's own stylesheet. The class name matches the tag in PascalCase: `cr-my-widget` → `CRMyWidget`.
-
-### File location
-
-Put the component under `src/components/`. One file per element. The file name matches the tag name: `cr-my-widget.js`.
-
-### Light DOM, not Shadow DOM
-
-Components render into their own element directly (`this.replaceChildren(…)`), not into a shadow root. This is intentional (ADR-0003): light DOM lets browser-native form controls participate in `<form>` submission and keeps CSS simple. The `cr-` CSS prefix is the isolation mechanism instead of encapsulation.
-
-### No `innerHTML` for user data
-
-Build the DOM imperatively with `document.createElement` and set `textContent`. Never assign user-supplied data to `innerHTML` — it opens an XSS vector and clobbers input state.
-
-### Public properties
-
-Pass data in by setting properties on the element before it is connected:
+Pass data as explicit props:
 
 ```js
-const el = document.createElement('cr-my-widget');
-el.label = 'Hello'; // set property …
-container.replaceChildren(el); // … then connect
+QuestionList({
+  questions,
+  answers,
+  onAnswer: ({ questionId, value }) => saveAnswer(questionId, value),
+});
 ```
 
-`connectedCallback` reads `this.label` at mount time. If the value can change later, use a signal (see [Signals](signals.md)).
+Do not pass the whole app context into a component. It hides dependencies and
+makes the function harder to test.
 
----
+## Rendering
 
-## Lifecycle
+Use `h()` for DOM creation and text content. Do not use `innerHTML` for ordinary
+UI. Reviewed raw HTML must go through `unsafeHTML()`.
 
-| Callback               | When it fires                      | What to do                                                                                                        |
-| ---------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `constructor`          | Element created                    | Declare properties with defaults only. Don't touch the DOM.                                                       |
-| `connectedCallback`    | Element inserted into the document | Build DOM, subscribe to signals.                                                                                  |
-| `disconnectedCallback` | Element removed from the document  | `CRElement` calls `dispose()` on every subscription automatically. Override only if you have additional teardown. |
-
-`CRElement.subscribe(sig, cb)` wraps `effect()` and registers the dispose function so that all reactive subscriptions are cleaned up in `disconnectedCallback` without manual tracking.
-
----
-
-## Worked example: `<cr-greeting>`
+Return a single node or an array of nodes. Keep side effects at the edge:
 
 ```js
-// src/components/cr-greeting.js
-// @ts-check
-import { CRElement } from './cr-element.js';
+export function StatusBanner({ status }) {
+  if (status === 'saved') return null;
+  return h('p', { role: 'status' }, status);
+}
+```
 
-export class CRGreeting extends CRElement {
-  constructor() {
-    super();
-    /** @type {{ get: () => string }} */
-    this.nameSignal = { get: () => '' }; // replaced by parent at mount time
-  }
+## State
 
-  connectedCallback() {
-    const p = document.createElement('p');
+Use a local `signal()` when the component owns transient UI state. Use props
+when state belongs to the caller.
 
-    // subscribe keeps the DOM in sync with the signal.
-    // It fires immediately and again whenever nameSignal changes.
-    this.subscribe(this.nameSignal, (name) => {
-      p.textContent = `Hello, ${name}!`;
+```js
+export function Disclosure({ title, children }) {
+  const open = signal(false);
+
+  return reactive(() =>
+    h(
+      'section',
+      {},
+      h(
+        'button',
+        { type: 'button', onclick: () => open.set(!open.get()) },
+        title
+      ),
+      open.get() ? h('div', {}, children) : null
+    )
+  );
+}
+```
+
+## Effects And Cleanup
+
+Most components should not need lifecycle hooks. If a component needs a global
+listener or imperative mount work, use the lifecycle helpers from `view.js`
+inside `reactive()`:
+
+```js
+import { afterMount, on, reactive } from '../lib/view.js';
+
+export function KeyboardHelp() {
+  return reactive(() => {
+    on(document, 'keydown', (event) => {
+      if (event.key === '?') console.log('open help');
     });
 
-    this.replaceChildren(p);
-  }
+    afterMount(() => {
+      console.log('mounted');
+    });
+
+    return h('button', { type: 'button' }, 'Help');
+  });
 }
-
-customElements.define('cr-greeting', CRGreeting);
 ```
 
-Usage in a route handler:
+## Legacy Shells
 
-```js
-import { signal } from '../lib/signal.js';
+Use `defineView()` or an existing custom element only where the browser boundary
+is genuinely useful, such as route shells, SharePoint integration, or preserving
+compatibility while old code is migrated.
 
-const name = signal('World');
-
-const el = document.createElement('cr-greeting');
-el.nameSignal = name;
-container.replaceChildren(el);
-
-// Later — the DOM updates automatically:
-name.set('Alice');
-```
-
-Don't forget to add `import './cr-greeting.js'` in `src/setup/register-components.js`.
+Do not add new components to a global registry. Routes import the shell modules
+they still create, and ordinary UI is composed by calling functions.

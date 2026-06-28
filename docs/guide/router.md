@@ -9,15 +9,14 @@
 
 ```js
 // src/routes/my-page.js
+import { MyPage } from '../pages/my-page.js';
+
 export function register(router, context) {
   router.register('#/my-page/:id', {
     // :id → dynamic segment
     mount(container, { id }) {
       // called when hash matches
-      const el = document.createElement('cr-my-page');
-      el.client = context.client;
-      el.caseId = id;
-      container.replaceChildren(el);
+      container.replaceChildren(MyPage({ client: context.client, caseId: id }));
     },
     unmount() {}, // called before the next route mounts
   });
@@ -53,9 +52,9 @@ The router is created once in `app.js` and passed (via `AppContext`) to every ro
 
 1. **Create the route file** `src/routes/my-page.js` with an exported `register` function (see Quick reference above).
 
-2. **Create the page component** `src/pages/cr-my-page.js` if the route needs a dedicated view (see [Component authoring](component-authoring.md)).
+2. **Create the page function** under `src/pages/` if the route needs a dedicated view (see [Component authoring](component-authoring.md)).
 
-3. **Register the component** — import the page component in `src/setup/register-components.js` so it is defined before any route mounts it.
+3. **Import what the route uses** — import the page function, or import a legacy shell module only when the route still creates a custom element.
 
 4. **Register the route** — import and call your `register` function in `src/setup/register-routes.js`.
 
@@ -67,7 +66,9 @@ The router is created once in `app.js` and passed (via `AppContext`) to every ro
 
 `mount(container, params)` is called every time the user navigates to your route. Build the component tree and call `container.replaceChildren(…)` to render it. This replaces whatever was there before — you don't need to clean up the previous route's DOM yourself.
 
-`unmount()` is called just before the next route mounts. You rarely need to do anything here: signal subscriptions are cleaned up automatically by `CRElement.disconnectedCallback` when `replaceChildren` removes the elements. Use `unmount` only if you have teardown that cannot be tied to element disconnection (e.g., a global `setInterval`).
+`unmount()` is called just before the next route mounts. You rarely need to do
+anything here. Use `unmount` only for teardown that cannot be owned by
+`reactive()` lifecycle helpers or removed with `replaceChildren()`.
 
 ---
 
@@ -104,15 +105,12 @@ Pass the relevant slices down to components as properties. Don't pass the entire
 export function register(router, context) {
   router.register('#/my-cases', {
     mount(container) {
-      // cr-case-table is a pre-existing component that renders a list of Cases.
-      const el =
-        /** @type {import('../components/cr-case-table.js').CRCaseTable} */ (
-          document.createElement('cr-case-table')
-        );
-      el.client = context.client;
-      el.currentUserId = context.currentUser.id;
-      el.filter = { assignedReviewer: context.currentUser.id };
-      container.replaceChildren(el);
+      container.replaceChildren(
+        MyCasesPage({
+          client: context.client,
+          currentUserId: context.currentUser.id,
+        })
+      );
     },
     unmount() {},
   });
