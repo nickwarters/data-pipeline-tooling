@@ -16,11 +16,15 @@ here are the public contract, the submodule paths are not. See ``docs/public-api
 """
 
 from framework.io.readers import (
+    DEFAULT_CHUNK_SIZE,
+    ChunkedCsvReader,
+    ChunkReader,
     CsvReader,
     DatasetReader,
     ExcelReader,
     GlobCsvReader,
     Reader,
+    SasFileReader,
     SqliteReader,
     StrictCsvParseError,
     StrictCsvReader,
@@ -54,11 +58,15 @@ from framework.io.writers import (
 
 __all__ = [
     "Reader",
+    "ChunkReader",
+    "DEFAULT_CHUNK_SIZE",
     "DatasetReader",
     "CsvReader",
     "StrictCsvReader",
     "StrictCsvParseError",
     "GlobCsvReader",
+    "ChunkedCsvReader",
+    "SasFileReader",
     "ExcelReader",
     "SqliteReader",
     "Writer",
