@@ -33,8 +33,6 @@ from dataclasses import fields
 from pathlib import Path
 
 from framework.core import (
-    RAW,
-    SILVER,
     ColumnValidator,
     Dataset,
     PipelineError,
@@ -44,6 +42,7 @@ from framework.core import (
 from framework.io import AccumulateByRun, CsvReader, Reader, StoreCatalog, Writer
 from framework.run import Pipeline, RunContext, RunLog
 from framework.transform import SchemaCoercion, SchemaValueRulePartitioner
+from tools.medallion import medallion
 
 from .case_type import CASE_TYPE
 from .schema import MyfeedRow
@@ -103,19 +102,19 @@ def silver_builder(
 
 def run(context: RunContext) -> Dataset:
     """Refine the feed source -> raw -> silver under the run context; return silver."""
-    store = StoreCatalog(context.base_dir).store(FEED_NAME)
+    med = medallion(StoreCatalog(context.base_dir), FEED_NAME)
     strategy = AccumulateByRun.from_context(context)
 
     # Fetched by the SAS script or orchestrator
     raw_pipeline = raw_builder(
-        reader=CsvReader(SAMPLE_CSV), writer=store.writer(RAW, FEED_NAME, strategy)
+        reader=CsvReader(SAMPLE_CSV), writer=med.raw.writer(FEED_NAME, strategy)
     )
     raw_pipeline.run()
 
     silver_pipeline = silver_builder(
-        reader=store.reader(RAW, FEED_NAME),
-        writer=store.writer(SILVER, FEED_NAME, strategy),
-        reject_writer=store.quarantine_writer(FEED_NAME),
+        reader=med.raw.reader(FEED_NAME),
+        writer=med.silver.writer(FEED_NAME, strategy),
+        reject_writer=med.silver.quarantine_writer(FEED_NAME),
         run_log=context.run_log,
     )
     silver = silver_pipeline.run()
@@ -127,7 +126,7 @@ def run(context: RunContext) -> Dataset:
     # Tables:
     #
     #     from case_review.gold import ingest_silver_to_gold
-    #     ingest_silver_to_gold(store, CASE_TYPE).run()   # single-feed current gold
+    #     ingest_silver_to_gold(med, CASE_TYPE).run()   # single-feed current gold
     # ------------------------------------------------------------------------
     return silver
 
@@ -170,7 +169,7 @@ def main(argv: list[str]) -> int:
     print(
         f"Refined {rows} rows source -> raw -> silver for Case Type "
         f"'{CASE_TYPE.name}' under {Path(base_dir) / FEED_NAME} "
-        f"(layers {RAW}, {SILVER}); add your gold step next (see pipeline.py)."
+        "(layers raw, silver); add your gold step next (see pipeline.py)."
     )
     return 0
 

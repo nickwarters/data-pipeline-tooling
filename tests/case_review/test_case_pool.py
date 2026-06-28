@@ -5,10 +5,11 @@ import pandas as pd
 from case_review.case_pool import CasePool
 from case_review.case_type import CaseType, Variation
 from framework.core.dataset import Dataset
-from framework.io.store import Store
+from framework.io import StoreCatalog
 from framework.io.strategy import Refresh
 from tests._schema_fixtures import ActivityCase
 from tools.calendar import WorkingDayCalendar
+from tools.medallion import medallion
 
 
 def _case_type() -> CaseType:
@@ -20,11 +21,11 @@ def _case_type() -> CaseType:
     )
 
 
-def _land_gold_cases(store: Store, frame: pd.DataFrame) -> None:
+def _land_gold_cases(gold, frame: pd.DataFrame) -> None:
     # Land Cases into the ingest gold exactly as an ingest_silver_to_gold run
     # would — one row per Case, dates as text (SQLite has no date type), which
     # is what the CasePool re-reads.
-    store.writer("gold", "cases", Refresh()).write(Dataset.from_pandas(frame))
+    gold.writer("cases", Refresh()).write(Dataset.from_pandas(frame))
 
 
 def test_fetch_available_cases_keeps_only_cases_inside_the_working_day_window(
@@ -34,9 +35,9 @@ def test_fetch_available_cases_keeps_only_cases_inside_the_working_day_window(
     # last N working days of as_of (CONTEXT.md). The CasePool reads the ingested
     # silver and narrows to that window using the WorkingDayCalendar — the domain
     # retrieval Selection calls instead of a raw read.
-    store = Store(tmp_path / "cases")
+    gold = medallion(StoreCatalog(tmp_path), "cases").gold
     _land_gold_cases(
-        store,
+        gold,
         pd.DataFrame(
             {
                 "case_ref": ["c1", "c2", "c3", "c4"],
@@ -52,7 +53,7 @@ def test_fetch_available_cases_keeps_only_cases_inside_the_working_day_window(
             }
         ),
     )
-    pool = CasePool(_case_type(), store, WorkingDayCalendar())
+    pool = CasePool(_case_type(), gold, WorkingDayCalendar())
 
     available = pool.fetch_available_cases(
         as_of=date(2026, 5, 29),
@@ -68,9 +69,9 @@ def test_fetch_available_cases_returns_an_empty_pool_when_none_are_eligible(
 ):
     # No Case dated inside the window yields an empty pool, not an error — an
     # empty SelectionPool is a legitimate outcome a downstream run must tolerate.
-    store = Store(tmp_path / "cases")
+    gold = medallion(StoreCatalog(tmp_path), "cases").gold
     _land_gold_cases(
-        store,
+        gold,
         pd.DataFrame(
             {
                 "case_ref": ["c1"],
@@ -80,7 +81,7 @@ def test_fetch_available_cases_returns_an_empty_pool_when_none_are_eligible(
             }
         ),
     )
-    pool = CasePool(_case_type(), store, WorkingDayCalendar())
+    pool = CasePool(_case_type(), gold, WorkingDayCalendar())
 
     available = pool.fetch_available_cases(
         as_of=date(2026, 5, 29),

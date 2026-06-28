@@ -87,13 +87,16 @@ builder runs.
 
 ### The medallion layers (raw → silver → gold)
 
-Every Pipeline reuses the **same generic** three-layer medallion. A **subject**
+Every Pipeline reuses the **same** three-layer medallion. A **subject**
 (a Case Type, or a shared Reference Data set) owns its own medallion — three
 SQLite databases `<subject>/{raw,silver,gold}.db` on a network share, isolated
 from every other subject's files for blast-radius containment and independent
 onboarding ([ADR-0001](adr/0001-sqlite-per-subject-medallion-store.md)).
-Use the framework layer constants (`RAW`, `SILVER`, `GOLD`) rather than new
-string literals when composing new pipeline code.
+The medallion is an **application-level profile** (`tools.medallion`), not
+framework vocabulary (#232): the framework stores an opaque `namespace` → file,
+and `medallion(catalog, subject)` exposes the `.raw` / `.silver` / `.gold`
+namespace Stores. Each layer Store mints `writer(table, strategy)` /
+`reader(table)` over its file.
 
 | Layer  | Generic guarantee | Discipline |
 |--------|-------------------|------------|
@@ -139,7 +142,7 @@ The foundational vocabulary. Each links to its deep doc; the consolidated
 reference with worked examples is [`core-primitives.md`](core-primitives.md).
 
 > **Importing.** Application code (`pipelines/` + `case_review/`) imports these through the public **facades**
-> — `framework.core` (`Dataset` + the medallion `Layer` constants, plus the
+> — `framework.core` (`Dataset` plus the
 > declared-schema contract: the `validate(dataset)` checks, `SchemaValidator`, the
 > value rules, and the row checks), `framework.io` (sources/sinks/stores),
 > `framework.transform` (the reshaping processors + `SchemaCoercion`), and
@@ -160,7 +163,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`ChunkReader`** | `chunks(size) -> Iterator[Dataset]`. The **streaming dual** of `Reader` for a source too big to hold whole — yields *bounded* Datasets (default 10,000 rows), so the in-memory contract holds per chunk. `ChunkedCsvReader` (local CSV) and `SasFileReader` (an **already-landed** `.sas7bdat`/xport file, gzip read on the fly — distinct from the remote `SasReader`: no script, no remote run, no copy). → [core-primitives.md](core-primitives.md#chunkreader--streaming-a-source-too-big-to-hold-whole) |
 | **`Writer`** | `write(dataset) -> None`. The dual of Reader. Owns **both** target location and **load strategy**. File Deliverables use `CsvWriter`, `ExcelWriter`, or `JsonWriter`; SharePoint list Deliverables use the stubbed `SharePointWriter`; SQLite tables use `SqliteTruncateReloadWriter` or `AccumulateByRunWriter`; `StdoutWriter` is a console sink for *seeing* a result (e.g. an explainer trace) rather than persisting it. → [gold-accumulation.md](gold-accumulation.md) |
 | **`RetryPolicy` / `RetryingReader` / `RetryingWriter`** | Targeted retry for **transient I/O-edge failures** (remote access, SharePoint/SAS fetch, SQLite busy). An allowlist of exception types is retried; schema-validation and configuration errors abort immediately. Scoped to the `read()`/`write()` seam, never around validation. → [retry.md](retry.md) |
-| **`Store` / `StoreCatalog`** | `Store(subject_dir)` binds one subject to Writer/Reader creation over `<subject>/{raw,silver,gold}.db`; `StoreCatalog(root).store(subject)` mints those stores from shared root/configuration. Holds no business logic and makes no load decision. ([ADR-0001](adr/0001-sqlite-per-subject-medallion-store.md)) |
+| **`Store` / `StoreCatalog`** | A Store binds one **namespace** (a logical database → file) to `writer(table, strategy)` / `reader(table)` creation; `StoreCatalog(root).store(namespace)` mints those from shared root/configuration. The raw/silver/gold medallion is the `tools.medallion` profile over it (`<subject>/{raw,silver,gold}.db`). Holds no business logic and makes no load decision. ([ADR-0001](adr/0001-sqlite-per-subject-medallion-store.md)) |
 | **`Validator`** | `validate(dataset) -> None`, **raises** on breach. `ColumnValidator`, `RowCountValidator` (engine-agnostic), `VolumeAnomalyValidator` (trips when a run's volume deviates from its recent-history baseline — catches truncated source exports), `SchemaDriftValidator` (warns at the raw boundary when a feed's columns drift from the prior run's landed set — catches owner-controlled source schema change). Severity (`error`/`warn`) is set where it's attached. |
 | **`Schema` / `SchemaValidator`** | A Case Type **dataclass** whose annotations *are* the column, dtype, nullability, and value-rule contract; the validator is the dataclass→validator adapter, enforced at silver (and optionally gold). Nullability/value rules extend the same dataclass via `Annotated`; cross-field **row checks** attach via the `@row_checks(...)` class decorator. → [schema-enforcement.md](schema-enforcement.md) ([ADR-0006](adr/0006-graduated-schema-enforcement.md)) |
 | **`Processor`** | a callable `(dataset) -> Dataset`, run mid-pipeline via a named `.task(...)` (`.transform(...)` remains compatible). `SchemaCoercion` (repair storage-lossy types); the Selection transforms `Filter` / `Score` / `VectorizedFilter` / `VectorizedDerive` / `Sort` / `Rename` / `Stamp`, the explicit-dependency cross-feed `JoinWith` / `AntiJoinWith`; the column-shaping `JoinColumns`; and the Ingest / fan-out transforms `SelectColumns` / `DropColumns` / `Unpivot` / `DeriveKey` / `LatestPerKey`. → [processors.md](processors.md) |
@@ -243,9 +246,10 @@ how-to.
 from case_review.case_pool import CasePool
 from framework.io import StoreCatalog
 from tools.calendar import WorkingDayCalendar
+from tools.medallion import medallion
 
-store = StoreCatalog("/share").store(CASES.name)
-pool = CasePool(CASES, store, WorkingDayCalendar())
+med = medallion(StoreCatalog("/share"), CASES.name)
+pool = CasePool(CASES, med.gold, WorkingDayCalendar())
 available = pool.fetch_available_cases(
     as_of=date(2026, 5, 29), activity_column="activity_date", within_working_days=5,
 )
@@ -281,16 +285,16 @@ python -m cli scaffold --case-type claims  # + case_type.py; source -> raw -> si
 ```
 
 ```python
-from framework.core import RAW
 from framework.io import ExcelReader, Refresh, StoreCatalog
 from framework.run import Pipeline
 from framework.core import ColumnValidator  # optional input gate
+from tools.medallion import medallion
 
-store = StoreCatalog("/share").store("cases")       # the "cases" subject
+med = medallion(StoreCatalog("/share"), "cases")     # the "cases" subject
 p = Pipeline("cases")
 raw = p.read(ExcelReader("feed.xlsx", sheet="cases"), name="read")
 gated = p.validate(ColumnValidator(["case_ref"]), raw, name="columns")  # optional: gate input
-p.write(store.writer(RAW, "cases", Refresh()), gated, name="write")
+p.write(med.raw.writer("cases", Refresh()), gated, name="write")
 p.run()
 ```
 
@@ -302,10 +306,10 @@ from framework.core import SchemaValidator
 from framework.transform import SchemaCoercion
 
 p = Pipeline("cases")
-raw = p.read(store.reader(RAW, "cases"), name="read")
+raw = p.read(med.raw.reader("cases"), name="read")
 coerced = p.task("coerce", SchemaCoercion(ActivityCase), raw)
 validated = p.validate(SchemaValidator(ActivityCase), coerced, name="post-validate")
-p.write(store.writer(SILVER, "cases", Refresh()), validated, name="write")
+p.write(med.silver.writer("cases", Refresh()), validated, name="write")
 p.run()   # coerce -> validate -> write silver
 ```
 
@@ -389,9 +393,9 @@ and the processor reference [`processors.md`](processors.md).
 ```python
 from typing import Any, Mapping
 
-from framework.core import GOLD, SILVER
 from framework.io import AccumulateByRun, DatasetReader, StoreCatalog
 from framework.run import Pipeline
+from tools.medallion import medallion
 from framework.transform import (
     Filter,
     AntiJoinWith,
@@ -414,12 +418,13 @@ def priority_score(row: Mapping[str, Any]) -> int:
 variation = CASES.variation("v1")
 catalog = StoreCatalog("/share")
 reference = JoinDependency(
-    "advisers", catalog.store("advisers").reader(SILVER, "advisers")
+    "advisers", medallion(catalog, "advisers").silver.reader("advisers")
 )
 already_reviewed = JoinDependency(
-    "already-reviewed", catalog.store("reviews").reader(SILVER, "review_outcomes")
+    "already-reviewed", medallion(catalog, "reviews").silver.reader("review_outcomes")
 )
 strategy = AccumulateByRun.from_context(context)
+med = medallion(catalog, CASES.name)
 
 p = Pipeline("selection")
 r = p.read(DatasetReader(available), name="read")
@@ -438,12 +443,12 @@ stamped = p.task(
     ranked,
 )
 p.explain(                                                    # optional: RowTrace
-    store.writer(GOLD, "selection_trace", strategy),
+    med.gold.writer("selection_trace", strategy),
     stamped,
     id_column="case_ref",
     score_column="priority_score",
 )
-p.write(store.writer(GOLD, "selection_pool", strategy), stamped, name="write")
+p.write(med.gold.writer("selection_pool", strategy), stamped, name="write")
 p.run(context=context)
 ```
 
@@ -551,7 +556,7 @@ p.run()
 assert rows_of(writer) == [{"amount": 100}]
 ```
 
-`read_rows(store, layer, table)` reads a landed table back; `RecordingRunLog()`
+`read_rows(store, table)` reads a landed table back; `RecordingRunLog()`
 and `read_run_log(path)` make run-log records and validation failures easy to
 assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 
@@ -574,7 +579,7 @@ assert. Full reference: [`testing-helpers.md`](testing-helpers.md).
 | [`retry.md`](retry.md) | Targeted retry at the reader/writer edges — `RetryPolicy`, where to use it and where not. |
 | [`operator-cli.md`](operator-cli.md) | The operator CLI (`run` / `status` / `runs` / `log`) with example commands and output. |
 | [`resolving-a-failed-run.md`](resolving-a-failed-run.md) | The operator loop from a failed run — investigate (`status`/`log`), diagnose, resolve, and re-drive idempotently. |
-| [`escape-hatch-store.md`](escape-hatch-store.md) | Iterating against a flat scratch db (and a pre-baked SQL query) outside the medallion layer pattern, and migrating back. |
+| [`escape-hatch-store.md`](escape-hatch-store.md) | Iterating against a flat scratch db (and a pre-baked SQL query) outside the medallion / namespace Store, and migrating back. |
 | [`testing-helpers.md`](testing-helpers.md) | `tests.framework_testing` — the test-only helpers for testing concrete pipelines (`given_rows`, `RecordingWriter`, `read_rows`, `RecordingRunLog`, `read_run_log`). |
 | [`testing-external-systems.md`](testing-external-systems.md) | Mocking remote external systems (SAS, SFTP) to maintain fast, in-memory orchestration tests using Dependency Injection and boundary Protocols. |
 | [`adr/`](adr/) | Every architectural decision (the *why*). |

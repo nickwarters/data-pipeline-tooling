@@ -111,16 +111,16 @@ class RecordingWriter:
         return self.writes[-1] if self.writes else None
 
 
-def read_rows(store: Any, layer: Any, table: str) -> list[dict[str, Any]]:
-    """Read a landed layer table back as row dicts via the Store's own Reader.
+def read_rows(store: Any, table: str) -> list[dict[str, Any]]:
+    """Read a landed table back as row dicts via the Store's own Reader.
 
-    Collapses the ``store.reader(layer, table).read().to_pandas()`` chain that
-    every store-backed assertion repeats. ``store`` is any object that mints a
-    Reader for ``(layer, table)`` — a :class:`~framework.io.store.Store` or anything
-    with the same ``reader(layer, table)`` shape — so the read goes through the
-    same public seam a pipeline does, not around it.
+    Collapses the ``store.reader(table).read().to_pandas()`` chain that every
+    store-backed assertion repeats. ``store`` is any object that mints a Reader
+    for ``table`` — a namespace :class:`~framework.io.store.Store` or anything
+    with the same ``reader(table)`` shape — so the read goes through the same
+    public seam a pipeline does, not around it.
     """
-    return rows_of(store.reader(layer, table))
+    return rows_of(store.reader(table))
 
 
 def without_columns(

@@ -4,12 +4,13 @@ status: accepted
 
 # Load strategy is per-feed and owned by the Writer; accumulation is idempotent by logical run
 
-How a layer is loaded — full refresh vs accumulate — is a **per-feed choice
-carried by the Writer**, not a property of the layer. `store.writer(layer,
-table, strategy)` takes the strategy explicitly and the `Store` only resolves
-*which* `<subject>/<layer>.db` the Writer targets (ADR-0001). Two feeds may land
-in the same layer with different strategies; the composition machinery makes no
-load decision of its own.
+How a table is loaded — full refresh vs accumulate — is a **per-feed choice
+carried by the Writer**, not a property of the layer. `store.writer(table,
+strategy)` takes the strategy explicitly and the namespace `Store` only resolves
+*which* file the Writer targets (ADR-0001; with the medallion profile that file
+is `<subject>/<layer>.db` for `med.<layer>`). Two feeds may land in the same
+layer with different strategies; the composition machinery makes no load decision
+of its own.
 
 The strategies:
 

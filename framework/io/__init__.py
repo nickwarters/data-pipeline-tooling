@@ -1,10 +1,11 @@
 """Public facade: moving data across the boundary — sources, sinks, stores.
 
 The stable import surface for getting a feed *in* and a result *out*: every
-:class:`Reader` and :class:`Writer`, the per-subject :class:`Store` /
+:class:`Reader` and :class:`Writer`, the namespace-scoped :class:`Store` /
 :class:`StoreCatalog`, and the load strategies a Writer carries. The
-:class:`~framework.core.dataset.Dataset` they move and the medallion ``Layer``
-constants are the foundational vocabulary on ``framework.core``.
+:class:`~framework.core.dataset.Dataset` they move is the foundational vocabulary
+on ``framework.core``; the raw/silver/gold medallion is an application profile
+(``tools.medallion``) over the namespace Store.
 
 Import from here rather than the underlying modules::
 

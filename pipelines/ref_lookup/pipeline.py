@@ -31,8 +31,6 @@ import sys
 from pathlib import Path
 
 from framework.core import (
-    RAW,
-    SILVER,
     ColumnValidator,
     Dataset,
     PipelineError,
@@ -48,6 +46,7 @@ from framework.io import (
 )
 from framework.run import Pipeline, RunContext, RunLog
 from framework.transform import SelectColumns, Unpivot, VectorizedDerive
+from tools.medallion import medallion
 
 from .processors import (
     REF_FIELDS,
@@ -148,12 +147,12 @@ def customers_builder(
 def run(context: RunContext, *, describe: bool = False) -> Dataset:
     """Wire real readers/writers and execute all four hops in order."""
     assert context.base_dir is not None, "RunContext.base_dir is required"
-    store = StoreCatalog(context.base_dir).store(FEED_NAME)
+    med = medallion(StoreCatalog(context.base_dir), FEED_NAME)
     strategy = AccumulateByRun.from_context(context)
 
     raw_p = raw_builder(
         reader=CsvReader(SAMPLE_CSV),
-        writer=store.writer(RAW, "source", strategy),
+        writer=med.raw.writer("source", strategy),
         run_log=context.run_log,
     )
     if describe:
@@ -161,8 +160,8 @@ def run(context: RunContext, *, describe: bool = False) -> Dataset:
     raw_p.run()
 
     ref_p = ref_builder(
-        reader=store.reader(RAW, "source"),
-        writer=store.writer(SILVER, "ref", Refresh()),
+        reader=med.raw.reader("source"),
+        writer=med.silver.writer("ref", Refresh()),
         run_log=context.run_log,
     )
     if describe:
@@ -170,9 +169,9 @@ def run(context: RunContext, *, describe: bool = False) -> Dataset:
     ref_dataset: Dataset = ref_p.run()  # type: ignore[assignment]
 
     cases_p = cases_builder(
-        reader=store.reader(RAW, "source"),
+        reader=med.raw.reader("source"),
         ref=ref_dataset,
-        writer=store.writer(SILVER, "cases", Refresh()),
+        writer=med.silver.writer("cases", Refresh()),
         run_log=context.run_log,
     )
     if describe:
@@ -180,8 +179,8 @@ def run(context: RunContext, *, describe: bool = False) -> Dataset:
     cases_p.run()
 
     customers_p = customers_builder(
-        reader=store.reader(RAW, "source"),
-        writer=store.writer(SILVER, "customers", Refresh()),
+        reader=med.raw.reader("source"),
+        writer=med.silver.writer("customers", Refresh()),
         run_log=context.run_log,
     )
     if describe:

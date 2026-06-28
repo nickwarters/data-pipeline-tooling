@@ -66,8 +66,8 @@ def test_run_passes_params_to_path_addressed_pipeline(tmp_path):
 
 
 def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
-    from framework.core import GOLD
     from framework.io import StoreCatalog
+    from tools.medallion import medallion
 
     assert (
         _cli(
@@ -92,7 +92,10 @@ def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
     assert downstream().returncode == 0
 
     pool = (
-        StoreCatalog(tmp_path).store("fixture").reader(GOLD, "pool").read().to_pandas()
+        medallion(StoreCatalog(tmp_path), "fixture")
+        .gold.reader("pool")
+        .read()
+        .to_pandas()
     )
     # Replaced under the one logical run id, not accumulated into duplicates.
     assert set(pool["run_id"]) == {"REDRIVE-7"}
@@ -120,7 +123,12 @@ def test_run_downstream_succeeds_after_fresh_source_history(tmp_path):
 
 def test_dry_run_previews_without_writing_artifacts(tmp_path):
     result = _cli(
-        "run", "clipipelines/_source", str(tmp_path), "--run-date", "2026-05-29", "--dry-run"
+        "run",
+        "clipipelines/_source",
+        str(tmp_path),
+        "--run-date",
+        "2026-05-29",
+        "--dry-run",
     )
 
     assert result.returncode == 0, result.stderr

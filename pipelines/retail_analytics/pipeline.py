@@ -48,7 +48,6 @@ import sys
 from pathlib import Path
 
 from framework.core import (
-    SILVER,
     ColumnValidator,
     Dataset,
     PipelineError,
@@ -56,7 +55,6 @@ from framework.core import (
     format_failure,
 )
 from framework.io import (
-    AccumulateByRun,
     CsvReader,
     Reader,
     Refresh,
@@ -64,7 +62,8 @@ from framework.io import (
     Writer,
 )
 from framework.run import Pipeline, RunContext, RunLog
-from framework.transform import Filter, SchemaCoercion, Score
+from framework.transform import Filter, SchemaCoercion
+from tools.medallion import medallion
 
 from .schema import CatalogRow, OpsRow, OrderRow, RevenueRow, RiskRow
 
@@ -107,7 +106,6 @@ def _join_orders_with_catalog(margin_ds: Dataset, catalog_ds: Dataset) -> Datase
     ``cost_of_goods`` (qty × cost), and ``margin`` (revenue − cost_of_goods).
     Drops any order whose product_id is absent from the active catalog.
     """
-    import pandas as pd
 
     orders = margin_ds.to_pandas()
     catalog = catalog_ds.to_pandas()
@@ -332,15 +330,15 @@ def dag_builder(
 
 def run(context: RunContext, *, describe: bool = False) -> list[Dataset]:
     """Execute the retail analytics DAG, writing three silver tables under *base_dir*."""
-    store = StoreCatalog(context.base_dir).store(FEED_NAME)
+    med = medallion(StoreCatalog(context.base_dir), FEED_NAME)
     strategy = Refresh()
 
     p = dag_builder(
         orders_reader=CsvReader(ORDERS_CSV),
         catalog_reader=CsvReader(CATALOG_CSV),
-        revenue_writer=store.writer(SILVER, "revenue", strategy),
-        risk_writer=store.writer(SILVER, "risk_signals", strategy),
-        ops_writer=store.writer(SILVER, "ops_queue", strategy),
+        revenue_writer=med.silver.writer("revenue", strategy),
+        risk_writer=med.silver.writer("risk_signals", strategy),
+        ops_writer=med.silver.writer("ops_queue", strategy),
         run_log=context.run_log,
     )
     if describe:
@@ -387,7 +385,9 @@ def main(argv: list[str]) -> int:
         print(format_failure(exc), file=sys.stderr)
         return 1
 
-    print(f"Retail analytics DAG wrote revenue, risk_signals, and ops_queue under {base_dir / FEED_NAME}")
+    print(
+        f"Retail analytics DAG wrote revenue, risk_signals, and ops_queue under {base_dir / FEED_NAME}"
+    )
     return 0
 
 

@@ -25,10 +25,11 @@ from pathlib import Path
 
 from case_review.case_type import CaseType, Variation
 from case_review.gold import ingest_silver_to_gold
-from framework.core import RAW, SILVER, PipelineError, SchemaValidator, format_failure
+from framework.core import PipelineError, SchemaValidator, format_failure
 from framework.io import AccumulateByRun, CsvReader, StoreCatalog
 from framework.run import Pipeline, RunContext
 from framework.transform import Filter, SchemaCoercion
+from tools.medallion import medallion
 
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "activity_cases.csv"
 
@@ -73,16 +74,16 @@ def run(context: RunContext):
     business run a re-drive replaces) and its execution id, derived from the
     shared RunContext so ``--logical-run-id`` flows straight through.
     """
-    store = StoreCatalog(context.base_dir).store(CASES.name)
+    med = medallion(StoreCatalog(context.base_dir), CASES.name)
     strategy = AccumulateByRun.from_context(context)
 
     p = Pipeline("cases")
     r = p.read(CsvReader(SAMPLE_CSV), name="read")
-    p.write(store.writer(RAW, "cases", strategy), r, name="write")
+    p.write(med.raw.writer("cases", strategy), r, name="write")
     p.run()
 
     p_silver = Pipeline("cases")
-    r_silver = p_silver.read(store.reader(RAW, "cases"), name="read")
+    r_silver = p_silver.read(med.raw.reader("cases"), name="read")
     current = r_silver
     if isinstance(strategy, AccumulateByRun):
         run_id = strategy.run_id
@@ -95,10 +96,10 @@ def run(context: RunContext):
     validated = p_silver.validate(
         SchemaValidator(CASES.schema), coerced, name="post-validate"
     )
-    p_silver.write(store.writer(SILVER, "cases", strategy), validated, name="write")
+    p_silver.write(med.silver.writer("cases", strategy), validated, name="write")
     p_silver.run()
 
-    return ingest_silver_to_gold(store, CASES).run()
+    return ingest_silver_to_gold(med, CASES).run()
 
 
 def main(argv: list[str]) -> int:

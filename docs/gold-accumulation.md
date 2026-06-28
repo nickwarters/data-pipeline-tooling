@@ -151,13 +151,14 @@ validated silver into gold stamped by run, compose an `AccumulateByRun` writer:
 ```python
 from framework.io import AccumulateByRun, StoreCatalog
 from framework.run import Pipeline
+from tools.medallion import medallion
 
-store = StoreCatalog("/path/to/share").store("cases")
+med = medallion(StoreCatalog("/path/to/share"), "cases")
 
 p = Pipeline("selection_pool")
-silver = p.read(store.reader("silver", "selection_pool"), name="read")
+silver = p.read(med.silver.reader("selection_pool"), name="read")
 p.write(
-    store.writer("gold", "selection_pool", AccumulateByRun.from_context(context)),
+    med.gold.writer("selection_pool", AccumulateByRun.from_context(context)),
     silver,
     name="write",
 )

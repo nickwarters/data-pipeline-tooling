@@ -131,8 +131,8 @@ def test_quarantine_writer_deletes_by_run_in_table_needing_quoting(tmp_path):
     assert len(result) == 1
 
 
-def test_raw_table_columns_inspects_a_table_whose_name_needs_quoting(tmp_path):
-    from framework.io.store import RawTableColumns
+def test_table_columns_inspects_a_table_whose_name_needs_quoting(tmp_path):
+    from framework.io.store import TableColumns
 
     db = tmp_path / "raw.db"
     con = sqlite3.connect(db)
@@ -142,7 +142,7 @@ def test_raw_table_columns_inspects_a_table_whose_name_needs_quoting(tmp_path):
     finally:
         con.close()
 
-    columns = RawTableColumns(db, "order detail", layer="raw").columns()
+    columns = TableColumns(db, "order detail", "raw").columns()
 
     assert columns == ("id", "full name")
 

@@ -1,14 +1,17 @@
-# Core primitives & the medallion layers
+# Core primitives & the medallion profile
 
 This is the framework's foundational vocabulary — the primitives every pipeline
-names, and the medallion layers they move data through. The pieces are:
-`Dataset` (the opaque carrier), `Reader` / `Writer` (source and sink IO), `Store`
-/ `StoreCatalog` (the per-subject medallion), `Validator` and the declared-schema
-contract (`SchemaValidator`, value rules), the transforms (`SchemaCoercion`,
-`Filter` / `Score` / `JoinWith` and the Ingest reshapers), and the deferred
-`Pipeline` DAG builder with its `RunLog` observability. For the *why* behind each,
-see the ADRs referenced inline; for domain language (Case, CasePool, Feed,
-Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
+names. The pieces are: `Dataset` (the opaque carrier), `Reader` / `Writer`
+(source and sink IO), `Store` / `StoreCatalog` (a namespace → file factory),
+`Validator` and the declared-schema contract (`SchemaValidator`, value rules),
+the transforms (`SchemaCoercion`, `Filter` / `Score` / `JoinWith` and the Ingest
+reshapers), and the deferred `Pipeline` DAG builder with its `RunLog`
+observability. The raw/silver/gold **medallion is no longer framework
+vocabulary** (#232): the framework stores an opaque **`namespace`** (a logical
+database) → file, and the medallion is an application-level profile over it
+(`tools.medallion`). For the *why* behind each, see the ADRs referenced inline;
+for domain language (Case, CasePool, Feed, Reference Data, …) see
+[`../CONTEXT.md`](../CONTEXT.md).
 
 Application code (`pipelines/` + the `case_review/` domain layer) imports these
 primitives through the public facades (`framework.core` / `framework.io` /
@@ -20,15 +23,26 @@ primitive classes directly. The cross-cutting `retry` / `calendar` /
 orchestration / observability utilities live in the sibling top-level `tools`
 package, not a facade. See [`public-api.md`](public-api.md).
 
-## Medallion layers
+## The namespace Store and the medallion profile
 
-A medallion is three SQLite databases, one per layer (raw, silver, gold), on a
-network share: **raw → silver → gold**. Each **subject** — a Case Type or a
-shared Reference Data set — owns its **own** medallion, isolated from every
-other subject's files (ADR-0001: blast-radius isolation, independent
-onboarding). A Feed is ingested and refined upward; the Selection pipeline reads
-the ingested silver/gold and writes the SelectionPool back into gold. (The layer
-names are placeholders pending a domain rename — see CONTEXT.)
+The framework's storage contract is the `Reader`/`Writer` ports + load strategies
++ the `connect` seam. `Store` / `StoreCatalog` is a **factory** (the run engine
+never references it) that addresses an opaque **`namespace`** — a *logical
+database*, one SQLite file holding many related tables — and mints
+Readers/Writers over the tables in it. A normalised schema can span several
+namespaces (one database per namespace, related tables in each; cross-database
+joins stay in Python — ADR-0002).
+
+The raw/silver/gold **medallion** is an application-level *profile* layered on
+top by `tools.medallion`, **not** a framework enum. `medallion(catalog, subject)`
+exposes three namespace Stores — `.raw` / `.silver` / `.gold` — for one subject,
+mapping to that subject's own files `<subject>/{raw,silver,gold}.db` on a network
+share. Each **subject** — a Case Type or a shared Reference Data set — owns its
+**own** medallion, isolated from every other subject's files (ADR-0001:
+blast-radius isolation, independent onboarding). A Feed is ingested and refined
+upward; the Selection pipeline reads the ingested silver/gold and writes the
+SelectionPool back into gold. (The layer names are placeholders pending a domain
+rename — see CONTEXT.)
 
 | Layer  | Holds                                  | Load behaviour |
 |--------|----------------------------------------|----------------|
@@ -39,7 +53,7 @@ names are placeholders pending a domain rename — see CONTEXT.)
 raw stays schema-light on purpose: it mirrors the source so the landing zone is
 faithful, and schema enforcement arrives at silver and gold (ADR-0006).
 
-> **Load strategies are explicit.** The Store maps `layer → location` only; each
+> **Load strategies are explicit.** The Store maps `namespace → file` only; each
 > Writer owns its load strategy. Callers choose `Refresh()`,
 > `AccumulateByRun(run_id, load_date)`,
 > `AccumulateByRun.from_context(context)`, `UpsertStrategy(key_columns)`,
@@ -215,13 +229,13 @@ Deliverables and SQLite tables:
   column is the logical/idempotency key; `execution_id` is the trace key that
   matches RunLog/RunRegistry when the strategy is derived from a `RunContext`.
   A re-driven run is idempotent via *delete-by-run then insert*. Minted by
-  `Store.writer(layer, table, AccumulateByRun(...))` (see
+  `med.gold.writer(table, AccumulateByRun(...))` (see
   [gold-accumulation doc](gold-accumulation.md)).
 - `SqliteUpsertWriter(db_path, table, key_columns)` — **update-or-insert** by a
   declared key set: for each incoming row whose key already exists in the
   target the row is replaced; new keys are inserted; target rows whose key is
   absent from the incoming batch are preserved. The merge is a single atomic
-  transaction. Minted by `Store.writer(layer, table, UpsertStrategy(...))`.
+  transaction. Minted by `store.writer(table, UpsertStrategy(...))`.
   Useful for a table that holds the **current state of a keyed entity**, e.g.
   `active_cases` keyed on `case_id`.
 - `SqliteInsertOrIgnoreWriter(db_path, table)` — **insert-or-ignore**: appends
@@ -230,7 +244,7 @@ Deliverables and SQLite tables:
   Rows that do not conflict are appended; target rows absent from the batch are
   never touched. Conflict resolution is driven by the table's own constraints —
   when the table carries no constraints the behaviour is equivalent to a plain
-  append. Minted by `Store.writer(layer, table, InsertOrIgnore())`.
+  append. Minted by `store.writer(table, InsertOrIgnore())`.
 - `SqliteInsertIfAbsentWriter(db_path, table, key_columns, surrogate_column="id")` —
   **reference/dimension load**: on each write, checks which natural keys are
   already present in the target, mints compact integer surrogates in Python
@@ -253,31 +267,37 @@ the Dataset shape level; exact pandas dtype inference can still differ after a
 file round-trip, so schema-sensitive flows should continue to validate after
 reading.
 
-### `Store` / `StoreCatalog` — subject medallions, minted from shared configuration
-`Store(subject_dir, busy_timeout_ms=5000)` is the mouth of **one subject's**
-medallion (a Case Type or a Reference Data set — ADR-0001): its three
-files `<subject_dir>/{raw,silver,gold}.db`, isolated from every other subject's.
-It holds **no business logic** (ADR-0002) and makes **no** load decision
-(ADR-0003) — it merely mints the layer-appropriate component:
+### `Store` / `StoreCatalog` — a namespace → file factory
+`Store(db_path, *, namespace=None, busy_timeout_ms=5000)` is the mouth of **one
+namespace** — a logical database, one SQLite file holding many related tables. It
+holds **no business logic** (ADR-0002) and makes **no** load decision (ADR-0003)
+— it merely mints components over the tables in its file:
 
-- `store.writer(layer, table, strategy)` — mints a Writer over the chosen layer
+- `store.writer(table, strategy)` — mints a Writer over a table in this namespace
   using the caller's explicit `Refresh()`, `AccumulateByRun(...)`,
   `UpsertStrategy(...)`, `InsertOrIgnore()`, or `InsertIfAbsent(key_columns)`
   strategy. Context-driven accumulation uses `AccumulateByRun.from_context(context)`.
-- `store.reader(layer, table)` — a `SqliteReader` over the same file.
+- `store.reader(table)` — a `SqliteReader` over the same file.
 
-Layer names are validated through `RAW`, `SILVER`, `GOLD` / `Layer`; existing
-string calls remain accepted for compatibility and are rejected if they are not
-one of the three conventional names. The strategy lives on the Writer the store
-mints, not on the store. A new subject's directory is created on first write, so
+The strategy lives on the Writer the store mints, not on the store. The
+namespace's file (and its parent directories) is created on first write, so
 onboarding migrates nothing.
 
 `StoreCatalog(root, backend=..., busy_timeout_ms=5000)` owns shared
-configuration and mints subject stores with `catalog.store(subject)`. The
-default `DirectoryStoreBackend` maps to `<root>/<subject>`, keeping that
-physical layout out of every pipeline script while preserving the same
-`Store` responsibility: binding `(subject, layer, table)` to concrete
-Readers/Writers.
+configuration and mints namespace stores with `catalog.store(namespace)`. The
+default `DirectoryStoreBackend` maps a namespace to `<root>/<namespace>.db`,
+nesting on a `/` in the namespace (so the medallion's `<subject>/silver` →
+`<root>/<subject>/silver.db`), keeping physical layout out of every pipeline
+script while preserving the same `Store` responsibility: binding
+`(namespace, table)` to concrete Readers/Writers.
+
+The **medallion profile** (`tools.medallion.medallion(catalog, subject)`) layers
+raw/silver/gold over this: it mints three namespace Stores — `med.raw` /
+`med.silver` / `med.gold` — for one subject, each a `Store` over
+`<subject>/<layer>.db`, isolated per subject (ADR-0001). Reference Data sets are
+subjects too; a Case Type reads another subject's namespace through a `Reader`
+and joins in Python (ADR-0002), so splitting files costs nothing on the join
+path.
 
 The connection factory `connect(db_path, busy_timeout_ms)` lives in
 `framework._internal.connection` — the single place connections are configured (ADR-0001),
@@ -333,7 +353,7 @@ narrow seam (`RunHistory` / `PriorColumns`) for the run-over-run comparison:
   silver **Schema Breach**. The diff is **names-only** and a case-sensitive set
   difference (a rename reads as a drop + an add; order and dtype are not drift —
   dtype is silver's job, ADR-0006). The prior set comes from `prior` — a
-  `PriorColumns` seam minted by `store.columns_of(RAW, table)`, which reads the
+  `PriorColumns` seam minted by `med.raw.columns_of(table)`, which reads the
   live raw table's columns via `PRAGMA` (no rows) and returns `None` for the
   first-ever run, making it a clean no-op. Attach at `severity="warn"`; the
   warning rides `warn_hits` onto the run summary (see drift surfacing under
@@ -389,10 +409,10 @@ silver — so the ADR-0006 convention is visible in the pipeline like any other 
 
 ```python
 p = Pipeline("cases")
-raw = p.read(store.reader("raw", "cases"), name="read")
+raw = p.read(med.raw.reader("cases"), name="read")
 coerced = p.task("coerce", SchemaCoercion(CaseA), raw)
 validated = p.validate(SchemaValidator(CaseA), coerced, name="post-validate")
-p.write(store.writer("silver", "cases", Refresh()), validated, name="write")
+p.write(med.silver.writer("cases", Refresh()), validated, name="write")
 p.run()   # coerces, validates, then writes silver.db
 ```
 
@@ -1014,14 +1034,14 @@ carries the final outcome. Full treatment: [retry.md](retry.md).
 ## Worked example
 
 ```python
-from framework.core import RAW
 from framework.io import CsvReader, Refresh, StoreCatalog
 from framework.run import Pipeline
+from tools.medallion import medallion
 
-store = StoreCatalog("/path/to/share").store("cases")
+med = medallion(StoreCatalog("/path/to/share"), "cases")
 p = Pipeline("cases")
 r = p.read(CsvReader("feed.csv"), name="read")
-p.write(store.writer(RAW, "cases", Refresh()), r, name="write")
+p.write(med.raw.writer("cases", Refresh()), r, name="write")
 landed = p.run()
 print(len(landed), landed.columns)
 ```

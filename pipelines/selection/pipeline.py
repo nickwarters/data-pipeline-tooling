@@ -23,12 +23,13 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from case_review.case_pool import CasePool
-from framework.core import GOLD, PipelineError, format_failure
+from framework.core import PipelineError, format_failure
 from framework.io import AccumulateByRun, DatasetReader, StoreCatalog
 from framework.run import FreshnessRequirement, Pipeline, RunContext
 from framework.transform import Filter, Score, Sort, Stamp
 from pipelines.ingest.pipeline import AS_OF, CASES
 from tools.calendar import WorkingDayCalendar
+from tools.medallion import medallion
 
 # Selection only runs once the CasePool is current.
 UPSTREAMS = (FreshnessRequirement(upstream_pipeline="ingest"),)
@@ -53,12 +54,12 @@ def priority_score(row: Mapping[str, Any]) -> int:
 
 
 def run(context: RunContext):
-    store = StoreCatalog(context.base_dir).store(CASES.name)
+    med = medallion(StoreCatalog(context.base_dir), CASES.name)
     strategy = AccumulateByRun.from_context(context)
 
     # Named, pure rule functions stay independently testable while Filter/Score
     # provide the framework wiring and trace metadata.
-    pool = CasePool(CASES, store, WorkingDayCalendar())
+    pool = CasePool(CASES, med.gold, WorkingDayCalendar())
     available = pool.fetch_available_cases(
         as_of=context.run_date, activity_column="activity_date", within_working_days=5
     )
@@ -72,16 +73,16 @@ def run(context: RunContext):
         Stamp("question_bank_id", variation.question_bank_id), so, name="stamp"
     )
     p.explain(
-        store.writer(GOLD, "selection_trace", strategy),
+        med.gold.writer("selection_trace", strategy),
         st,
         id_column="case_ref",
         score_column="priority_score",
         name="explain",
     )
-    p.write(store.writer(GOLD, "selection_pool", strategy), st, name="write")
+    p.write(med.gold.writer("selection_pool", strategy), st, name="write")
     selection_pool = p.run()
 
-    trace = store.reader(GOLD, "selection_trace").read()
+    trace = med.gold.reader("selection_trace").read()
     excluded = sum(1 for v in trace.to_pandas()["verdict"] if v == "excluded")
     print(
         f"available cases: {len(available)} -> "

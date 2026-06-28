@@ -151,16 +151,23 @@ from framework.io import Refresh, StoreCatalog
 from framework.run import Pipeline
 from framework.transform import SchemaCoercion
 from framework.core import SchemaValidator
+from tools.medallion import medallion
 
-store = StoreCatalog("/path/to/share").store("cases")
+med = medallion(StoreCatalog("/path/to/share"), "cases")
 
 p = Pipeline("cases")
-raw = p.read(store.reader("raw", "cases"), name="read")
+raw = p.read(med.raw.reader("cases"), name="read")
 coerced = p.transform(SchemaCoercion(CaseA), raw, name="coerce")
 validated = p.validate(SchemaValidator(CaseA), coerced, name="post-validate")
-p.write(store.writer("silver", "cases", Refresh()), validated, name="write")
+p.write(med.silver.writer("cases", Refresh()), validated, name="write")
 p.run()
 ```
+
+The `med.raw` / `med.silver` namespaces are ordinary `Store`s scoped to one
+logical database each (`<share>/cases/{raw,silver}.db`); a Store mints
+`reader(table)` / `writer(table, strategy)` over its tables. The medallion
+(`tools.medallion`) is an application profile over the framework's
+`namespace → file` Store, not framework vocabulary.
 
 `SchemaCoercion(CaseA)` runs as a **transform** step and `SchemaValidator(CaseA)`
 as a **validate** step over that coerced output, before the **silver** write. The

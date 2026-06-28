@@ -297,7 +297,7 @@ Case Types and joined in Python, never written by them (`CONTEXT.md`, ADR-0002).
 ```python
 from framework.transform import JoinDependency, JoinWith
 
-reference = JoinDependency("advisers", advisers.reader(SILVER, "advisers"))
+reference = JoinDependency("advisers", advisers.silver.reader("advisers"))
 JoinWith(reference, on="adviser", how="inner")
 ```
 
@@ -332,7 +332,7 @@ dataset.
 from framework.transform import AntiJoinWith, JoinDependency
 
 already_reviewed = JoinDependency(
-    "already-reviewed", reviews.reader(SILVER, "review_outcomes")
+    "already-reviewed", reviews.reader("review_outcomes")
 )
 AntiJoinWith(already_reviewed, on="case_id", name="already-reviewed")
 ```
@@ -354,18 +354,19 @@ Python, and join another subject's silver Reference Data via an explicit
 read-only dependency.
 
 ```python
-from framework.core import SILVER
 from framework.io import StoreCatalog
 from framework.run import Pipeline
 from framework.transform import AntiJoinWith, Filter, JoinDependency, JoinWith
 
-catalog = StoreCatalog("/path/to/share")
-cases = catalog.store("cases")
-advisers = catalog.store("advisers")
+from tools.medallion import medallion
 
-reference = JoinDependency("advisers", advisers.reader(SILVER, "advisers"))
+catalog = StoreCatalog("/path/to/share")
+cases = medallion(catalog, "cases")
+advisers = medallion(catalog, "advisers")
+
+reference = JoinDependency("advisers", advisers.silver.reader("advisers"))
 already_reviewed = JoinDependency(
-    "already-reviewed", cases.reader(SILVER, "review_outcomes")
+    "already-reviewed", cases.silver.reader("review_outcomes")
 )
 
 
@@ -373,7 +374,7 @@ def selection_value_case(row):
     return row["amount"] >= 50
 
 p = Pipeline("cases")
-r = p.read(cases.reader(SILVER, "cases"), name="read")
+r = p.read(cases.silver.reader("cases"), name="read")
 valued = p.transform(Filter(selection_value_case, name="selection-value"), r, name="filter")
 anti = p.transform(
     AntiJoinWith(already_reviewed, on="case_ref", name="already-reviewed"),
@@ -521,7 +522,7 @@ python -m pipelines.demo_fan_out /tmp/demo_fan_out
 ```python
 # Cases pipeline: shared raw → project case columns → coerce/validate → silver
 p = Pipeline("cases")
-r = p.read(store.reader("raw", SUBJECT), name="read")
+r = p.read(med.raw.reader(SUBJECT), name="read")
 this_run = p.transform(Filter(lambda row: row["run_id"] == RUN_ID), r, name="filter-run")
 renamed = p.transform(Rename({"case_ref_no": "case_ref"}), this_run, name="rename")  # shared normalisation
 projected = p.transform(
@@ -529,12 +530,12 @@ projected = p.transform(
 )
 coerced = p.transform(SchemaCoercion(CaseSchema), projected, name="coerce")
 validated = p.validate(SchemaValidator(CaseSchema), coerced, name="post-validate")
-p.write(store.writer("silver", "cases", AccumulateByRun(RUN_ID, RUN_ID)), validated, name="write")
+p.write(med.silver.writer("cases", AccumulateByRun(RUN_ID, RUN_ID)), validated, name="write")
 p.run()
 # CASES is the feed's CaseType — it owns the identity contract (namespace +
 # natural_key), so both builders below derive the same case_id (ADR-0009).
 # Cases gold: DeriveKey → LatestPerKey → UniqueValidator → current-only gold
-ingest_silver_to_gold(store, CASES, "cases").run()
+ingest_silver_to_gold(med, CASES, "cases").run()
 
 # Products Detail Table gold: DeriveKey (same CaseType → same key) → Unpivot wide→long
 detail_ingest_silver_to_gold(

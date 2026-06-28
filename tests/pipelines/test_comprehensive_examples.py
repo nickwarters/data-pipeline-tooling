@@ -1,4 +1,3 @@
-from framework.core import GOLD, SILVER
 from framework.io import StoreCatalog
 from pipelines.comprehensive_examples import (
     bronze_to_silver,
@@ -6,13 +5,14 @@ from pipelines.comprehensive_examples import (
     silver_to_gold,
 )
 from tests.framework_testing import read_rows
+from tools.medallion import medallion
 
 
 def test_complex_bronze_to_silver_example_combines_sources_and_validates(tmp_path):
     bronze_to_silver(tmp_path, run_id="2026-05-29")
 
     catalog = StoreCatalog(tmp_path)
-    cases = read_rows(catalog.store("complex_cases"), SILVER, "case_snapshot")
+    cases = read_rows(medallion(catalog, "complex_cases").silver, "case_snapshot")
     assert [row["case_ref"] for row in cases] == ["C-100", "C-101", "C-102"]
     assert (
         cases[0]
@@ -32,7 +32,7 @@ def test_complex_bronze_to_silver_example_combines_sources_and_validates(tmp_pat
 
     # The example is intentionally not a one-table toy: silver also carries a
     # filtered detail table for downstream joins.
-    contacts = read_rows(catalog.store("complex_cases"), SILVER, "open_contacts")
+    contacts = read_rows(medallion(catalog, "complex_cases").silver, "open_contacts")
     assert [(row["case_ref"], row["contact_type"]) for row in contacts] == [
         ("C-100", "call"),
         ("C-100", "email"),
@@ -41,7 +41,7 @@ def test_complex_bronze_to_silver_example_combines_sources_and_validates(tmp_pat
 
     # Reference data is landed and validated as a separate subject, then joined
     # read-only by the case pipeline.
-    advisers = read_rows(catalog.store("adviser_reference"), SILVER, "advisers")
+    advisers = read_rows(medallion(catalog, "adviser_reference").silver, "advisers")
     assert {row["adviser_id"] for row in advisers} == {"ADV-01", "ADV-02"}
 
 
@@ -50,13 +50,15 @@ def test_complex_silver_to_gold_example_assembles_reporting_outputs(tmp_path):
     silver_to_gold(tmp_path, run_id="2026-05-29")
 
     catalog = StoreCatalog(tmp_path)
-    review_queue = read_rows(catalog.store("complex_reporting"), GOLD, "review_queue")
+    review_queue = read_rows(
+        medallion(catalog, "complex_reporting").gold, "review_queue"
+    )
     assert [row["case_ref"] for row in review_queue] == ["C-100", "C-102"]
     assert [row["review_priority"] for row in review_queue] == [1430, 775]
     assert {row["run_id"] for row in review_queue} == {"2026-05-29"}
 
     adviser_summary = read_rows(
-        catalog.store("complex_reporting"), GOLD, "adviser_summary"
+        medallion(catalog, "complex_reporting").gold, "adviser_summary"
     )
     assert adviser_summary == [
         {
