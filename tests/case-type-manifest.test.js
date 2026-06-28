@@ -8,26 +8,31 @@ import {
 } from '../case-types/manifest.js';
 
 test('case type manifest: known Case Type slugs resolve to their static import functions', async () => {
-  assert.deepEqual(Object.keys(CASE_TYPE_IMPORTERS).sort(), [
+  const knownSlugs = [
     'example-review',
     'product-sale-review',
     'qa-example-review',
     'stress-review',
-  ]);
+  ];
+  assert.deepEqual(Object.keys(CASE_TYPE_IMPORTERS).sort(), knownSlugs);
 
-  const config = await loadCaseTypeConfig('example-review');
-  assert.deepEqual(config.eligibleGroups, ['Reviewers']);
-  assert.ok(Array.isArray(config.questions));
+  for (const slug of knownSlugs) {
+    assert.equal(typeof CASE_TYPE_IMPORTERS[slug], 'function');
+    const config = await loadCaseTypeConfig(slug);
+    assert.ok(Array.isArray(config.questions), `${slug} has questions`);
+  }
 });
 
 test('case type manifest: unknown Case Type slugs reject with a developer-useful error', async () => {
+  const slug = '../unexpected';
+
   await assert.rejects(
-    loadCaseTypeConfig('../unexpected'),
+    loadCaseTypeConfig(slug),
     (error) =>
       error instanceof UnknownCaseTypeError &&
       error.name === 'UnknownCaseTypeError' &&
-      error.slug === '../unexpected' &&
-      error.message.includes('Unknown Case Type slug "../unexpected".')
+      error.slug === slug &&
+      error.message === `Unknown Case Type slug "${slug}".`
   );
 });
 
