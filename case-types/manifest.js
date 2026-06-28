@@ -17,11 +17,15 @@ export const CASE_TYPE_IMPORTERS = {
 export class UnknownCaseTypeError extends Error {
   /**
    * @param {string} slug
+   * @param {string[]} knownSlugs
    */
-  constructor(slug) {
-    super(`Unknown Case Type slug "${slug}".`);
+  constructor(slug, knownSlugs) {
+    super(
+      `Unsupported Case Type slug "${slug}". Known Case Type slugs: ${knownSlugs.join(', ')}.`
+    );
     this.name = 'UnknownCaseTypeError';
     this.slug = slug;
+    this.knownSlugs = knownSlugs;
   }
 }
 
@@ -32,7 +36,10 @@ export class UnknownCaseTypeError extends Error {
 export async function loadCaseTypeConfig(slug) {
   const importer = CASE_TYPE_IMPORTERS[slug];
   if (!importer) {
-    throw new UnknownCaseTypeError(slug);
+    throw new UnknownCaseTypeError(
+      slug,
+      Object.keys(CASE_TYPE_IMPORTERS).sort()
+    );
   }
   const mod = await importer();
   return mod.default;

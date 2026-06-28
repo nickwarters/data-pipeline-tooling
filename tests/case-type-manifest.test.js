@@ -33,7 +33,10 @@ test('case type manifest: unknown Case Type slugs reject with a developer-useful
       error instanceof UnknownCaseTypeError &&
       error.name === 'UnknownCaseTypeError' &&
       error.slug === slug &&
-      error.message === `Unknown Case Type slug "${slug}".`
+      error.knownSlugs.join(',') ===
+        'example-review,product-sale-review,qa-example-review,stress-review' &&
+      error.message ===
+        `Unsupported Case Type slug "${slug}". Known Case Type slugs: example-review, product-sale-review, qa-example-review, stress-review.`
   );
 });
 
@@ -73,13 +76,19 @@ test('CaseReviewViewModel.load(): unknown primary Case Type slug sets a clear us
 
     assert.equal(
       vm.error.get(),
-      'This Case uses an unsupported Case Type: ../unexpected.'
+      'This Case cannot be opened because its Case Type is not supported. Ask a maintainer to add "../unexpected" to the Case Type manifest.'
     );
     assert.equal(vm.loaded.get(), false);
     assert.equal(vm.config, null);
     assert.equal(errors.length, 1);
     assert.ok(errors[0][0] instanceof UnknownCaseTypeError);
     assert.equal(errors[0][0].slug, '../unexpected');
+    assert.deepEqual(errors[0][0].knownSlugs, [
+      'example-review',
+      'product-sale-review',
+      'qa-example-review',
+      'stress-review',
+    ]);
   } finally {
     console.error = originalConsoleError;
   }
@@ -146,13 +155,19 @@ test('CaseReviewViewModel._resolveSourceCase(): unknown QA source Case Type slug
 
     assert.equal(
       vm.error.get(),
-      'This Case links to a source Case with an unsupported Case Type: ../unexpected-source.'
+      'This Case cannot be opened because its source Case Type is not supported. Ask a maintainer to add "../unexpected-source" to the Case Type manifest.'
     );
     assert.equal(vm.loaded.get(), false);
     assert.equal(vm.sourceCase, null);
     assert.equal(errors.length, 1);
     assert.ok(errors[0][0] instanceof UnknownCaseTypeError);
     assert.equal(errors[0][0].slug, '../unexpected-source');
+    assert.deepEqual(errors[0][0].knownSlugs, [
+      'example-review',
+      'product-sale-review',
+      'qa-example-review',
+      'stress-review',
+    ]);
   } finally {
     console.error = originalConsoleError;
   }

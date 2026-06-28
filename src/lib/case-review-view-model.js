@@ -128,7 +128,7 @@ export class CaseReviewViewModel {
       if (error instanceof UnknownCaseTypeError) {
         console.error(error);
         this.error.set(
-          `This Case uses an unsupported Case Type: ${caseRow.caseType}.`
+          `This Case cannot be opened because its Case Type is not supported. Ask a maintainer to add "${caseRow.caseType}" to the Case Type manifest.`
         );
         return;
       }
@@ -212,7 +212,7 @@ export class CaseReviewViewModel {
       if (error instanceof UnknownCaseTypeError) {
         console.error(error);
         this.error.set(
-          `This Case links to a source Case with an unsupported Case Type: ${error.slug}.`
+          `This Case cannot be opened because its source Case Type is not supported. Ask a maintainer to add "${error.slug}" to the Case Type manifest.`
         );
         return;
       }
