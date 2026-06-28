@@ -1,0 +1,863 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Case Review Frontend Simplification Review</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #141414;
+        --muted: #5d626b;
+        --paper: #fbfbf8;
+        --panel: #ffffff;
+        --line: #d9dde3;
+        --line-strong: #aeb6c1;
+        --blue: #1b4f72;
+        --green: #1f6f50;
+        --amber: #9a5b00;
+        --red: #a0342f;
+        --slate: #293241;
+        --code: #f1f3f5;
+        --shadow: 0 18px 50px rgba(20, 20, 20, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background:
+          linear-gradient(90deg, rgba(20, 20, 20, 0.035) 1px, transparent 1px),
+          linear-gradient(rgba(20, 20, 20, 0.03) 1px, transparent 1px),
+          var(--paper);
+        background-size:
+          48px 48px,
+          48px 48px;
+        color: var(--ink);
+        font-family:
+          ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
+        line-height: 1.55;
+      }
+
+      a {
+        color: var(--blue);
+        text-decoration-color: rgba(27, 79, 114, 0.35);
+        text-underline-offset: 0.18em;
+      }
+
+      a:hover {
+        text-decoration-color: currentColor;
+      }
+
+      .shell {
+        width: min(1180px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 32px 0 64px;
+      }
+
+      .masthead {
+        display: grid;
+        grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.65fr);
+        gap: 28px;
+        align-items: stretch;
+        min-height: 360px;
+        border-top: 5px solid var(--ink);
+        padding-top: 26px;
+      }
+
+      .title-block {
+        display: flex;
+        min-height: 100%;
+        flex-direction: column;
+        justify-content: space-between;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        box-shadow: var(--shadow);
+        padding: clamp(24px, 4vw, 44px);
+      }
+
+      .eyebrow {
+        color: var(--muted);
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono',
+          monospace;
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        line-height: 1.05;
+        margin: 0;
+        letter-spacing: 0;
+      }
+
+      h1 {
+        max-width: 920px;
+        margin-top: 24px;
+        font-size: clamp(2.6rem, 7vw, 6.5rem);
+        font-weight: 800;
+      }
+
+      h2 {
+        font-size: clamp(1.8rem, 3vw, 3rem);
+      }
+
+      h3 {
+        font-size: 1.2rem;
+      }
+
+      .subtitle {
+        max-width: 780px;
+        margin: 28px 0 0;
+        color: var(--muted);
+        font-size: clamp(1.05rem, 1.5vw, 1.35rem);
+      }
+
+      .verdict {
+        display: grid;
+        gap: 16px;
+        background: var(--slate);
+        color: #fff;
+        padding: 26px;
+        box-shadow: var(--shadow);
+      }
+
+      .verdict strong {
+        display: block;
+        font-size: 1.5rem;
+        line-height: 1.12;
+      }
+
+      .verdict p {
+        margin: 0;
+        color: rgba(255, 255, 255, 0.82);
+      }
+
+      .stamp {
+        align-self: end;
+        border-top: 1px solid rgba(255, 255, 255, 0.22);
+        padding-top: 16px;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono',
+          monospace;
+        font-size: 0.8rem;
+      }
+
+      .quick-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 24px 0 0;
+      }
+
+      .quick-nav a {
+        border: 1px solid var(--line-strong);
+        background: rgba(255, 255, 255, 0.74);
+        color: var(--ink);
+        padding: 8px 11px;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono',
+          monospace;
+        font-size: 0.78rem;
+        text-decoration: none;
+      }
+
+      main {
+        display: grid;
+        gap: 26px;
+        margin-top: 32px;
+      }
+
+      section {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        box-shadow: var(--shadow);
+        padding: clamp(22px, 3vw, 34px);
+      }
+
+      .section-head {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px 24px;
+        align-items: end;
+        justify-content: space-between;
+        margin-bottom: 22px;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 18px;
+      }
+
+      .section-head p {
+        max-width: 640px;
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .metric {
+        border: 1px solid var(--line);
+        background: #fcfcfc;
+        padding: 16px;
+      }
+
+      .metric b {
+        display: block;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono',
+          monospace;
+        font-size: clamp(1.55rem, 3vw, 2.4rem);
+        line-height: 1;
+      }
+
+      .metric span {
+        display: block;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .finding-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .finding {
+        border: 1px solid var(--line);
+        padding: 18px;
+        background: #fcfcfc;
+      }
+
+      .finding[data-priority='p1'] {
+        border-left: 6px solid var(--red);
+      }
+
+      .finding[data-priority='p2'] {
+        border-left: 6px solid var(--amber);
+      }
+
+      .finding[data-priority='p3'] {
+        border-left: 6px solid var(--green);
+      }
+
+      .finding h3 {
+        display: flex;
+        gap: 10px;
+        align-items: baseline;
+        margin-bottom: 10px;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid currentColor;
+        padding: 2px 7px;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono',
+          monospace;
+        font-size: 0.72rem;
+        font-weight: 700;
+      }
+
+      .finding p {
+        margin: 0 0 12px;
+        color: var(--muted);
+      }
+
+      .finding p:last-child {
+        margin-bottom: 0;
+      }
+
+      .code-ref,
+      code {
+        border: 1px solid #d8dce2;
+        background: var(--code);
+        color: #1f2933;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono',
+          monospace;
+        font-size: 0.88em;
+      }
+
+      code {
+        padding: 0.08em 0.3em;
+      }
+
+      .code-ref {
+        display: block;
+        margin-top: 12px;
+        padding: 10px 12px;
+        text-decoration: none;
+        overflow-wrap: anywhere;
+      }
+
+      .two-col {
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+        gap: 18px;
+      }
+
+      .statement {
+        border-left: 6px solid var(--blue);
+        background: #f8fafc;
+        padding: 18px;
+      }
+
+      .statement p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .target {
+        display: grid;
+        gap: 12px;
+      }
+
+      pre {
+        margin: 0;
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        background: #111820;
+        color: #eef4f8;
+        padding: 18px;
+        font-size: 0.88rem;
+        line-height: 1.5;
+      }
+
+      .timeline {
+        display: grid;
+        gap: 12px;
+        counter-reset: step;
+      }
+
+      .slice {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 14px;
+        border: 1px solid var(--line);
+        background: #fcfcfc;
+        padding: 16px;
+      }
+
+      .slice::before {
+        counter-increment: step;
+        content: counter(step);
+        display: grid;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        background: var(--ink);
+        color: #fff;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono',
+          monospace;
+        font-weight: 700;
+      }
+
+      .slice h3 {
+        margin-bottom: 6px;
+      }
+
+      .slice p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .decision-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.95rem;
+      }
+
+      .decision-table th,
+      .decision-table td {
+        border-bottom: 1px solid var(--line);
+        padding: 12px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      .decision-table th {
+        color: var(--muted);
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono',
+          monospace;
+        font-size: 0.76rem;
+        text-transform: uppercase;
+      }
+
+      .callout {
+        border: 1px solid #b9c4cf;
+        background: #f5f8fa;
+        padding: 18px;
+      }
+
+      .callout strong {
+        display: block;
+        margin-bottom: 6px;
+      }
+
+      footer {
+        margin-top: 32px;
+        border-top: 1px solid var(--line-strong);
+        padding-top: 18px;
+        color: var(--muted);
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono',
+          monospace;
+        font-size: 0.78rem;
+      }
+
+      @media (max-width: 860px) {
+        .masthead,
+        .two-col,
+        .finding-grid,
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+
+        .title-block,
+        .verdict,
+        section {
+          padding: 22px;
+        }
+      }
+
+      @media print {
+        body {
+          background: #fff;
+        }
+
+        .shell {
+          width: auto;
+          padding: 0;
+        }
+
+        section,
+        .title-block,
+        .verdict {
+          box-shadow: none;
+          break-inside: avoid;
+        }
+
+        .quick-nav {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="masthead">
+        <div class="title-block">
+          <div>
+            <div class="eyebrow">Architecture review / maintainability</div>
+            <h1>Strip the framework back to pure authoring</h1>
+            <p class="subtitle">
+              The current codebase is functionally healthy, but the component
+              authoring model asks ordinary feature work to understand Web
+              Component lifecycle, teardown, stable node identity, and manual
+              render loops. That is the risk to junior maintainability.
+            </p>
+          </div>
+          <nav class="quick-nav" aria-label="Report sections">
+            <a href="#verdict">Verdict</a>
+            <a href="#evidence">Evidence</a>
+            <a href="#findings">Findings</a>
+            <a href="#target">Target model</a>
+            <a href="#migration">Migration plan</a>
+            <a href="#decisions">Decisions</a>
+          </nav>
+        </div>
+        <aside class="verdict" id="verdict">
+          <div>
+            <div class="eyebrow">Short answer</div>
+            <strong
+              >Keep <code>h()</code> and signals. Hide custom-element
+              classes.</strong
+            >
+          </div>
+          <p>
+            The path is not to replace the primitives. The path is to make
+            custom elements a framework-internal shell, so app authors write
+            pure render functions and named state mutations.
+          </p>
+          <p>
+            Web Components still have value at route and integration boundaries.
+            They should not be the default shape of every component.
+          </p>
+          <div class="stamp">
+            Reviewed after pulling main to fdac82a<br />
+            Gates: npm run check, npm test
+          </div>
+        </aside>
+      </header>
+
+      <main>
+        <section id="evidence" aria-labelledby="evidence-title">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">Measured surface area</div>
+              <h2 id="evidence-title">Current state</h2>
+            </div>
+            <p>
+              The test suite is green. The issue is not immediate correctness;
+              it is the amount of framework knowledge required to make routine
+              changes safely.
+            </p>
+          </div>
+
+          <div class="metrics" role="list" aria-label="Review metrics">
+            <div class="metric" role="listitem">
+              <b>47</b>
+              <span
+                ><code>ReactiveElement</code> subclasses under
+                <code>src</code></span
+              >
+            </div>
+            <div class="metric" role="listitem">
+              <b>67</b>
+              <span
+                ><code>connectedCallback</code> mentions under
+                <code>src</code></span
+              >
+            </div>
+            <div class="metric" role="listitem">
+              <b>52</b>
+              <span
+                >manual <code>_render()</code> mentions under
+                <code>src</code></span
+              >
+            </div>
+            <div class="metric" role="listitem">
+              <b>1440</b>
+              <span>passing tests after the latest pull</span>
+            </div>
+          </div>
+        </section>
+
+        <section id="findings" aria-labelledby="findings-title">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">Review findings</div>
+              <h2 id="findings-title">Where the complexity lives</h2>
+            </div>
+            <p>
+              The domain logic is mostly in good shape. The friction is in the
+              component authoring contract and a few lifecycle-heavy shells.
+            </p>
+          </div>
+
+          <div class="finding-grid">
+            <article class="finding" data-priority="p1">
+              <h3><span class="tag">P1</span> Lifecycle-first docs</h3>
+              <p>
+                The authoring guide teaches new components as custom element
+                classes with <code>connectedCallback()</code>,
+                <code>replaceChildren()</code>, and manual registration. That is
+                the opposite of the simpler model we want junior maintainers to
+                use.
+              </p>
+              <a class="code-ref" href="guide/component-authoring.md"
+                >docs/guide/component-authoring.md</a
+              >
+            </article>
+
+            <article class="finding" data-priority="p1">
+              <h3><span class="tag">P1</span> Case Review shell overload</h3>
+              <p>
+                <code>CRCaseReview</code> owns route setup, view-model creation,
+                stable node identity, controller orchestration, event binding,
+                compatibility shims, and rendering. Changes here require broad
+                knowledge of ordering and lifecycle.
+              </p>
+              <a class="code-ref" href="../src/pages/cr-case-review.js"
+                >src/pages/cr-case-review.js</a
+              >
+            </article>
+
+            <article class="finding" data-priority="p2">
+              <h3><span class="tag">P2</span> Mixed render models</h3>
+              <p>
+                <code>ReactiveElement</code> already renders inside a signal
+                effect, but components still maintain private
+                <code>_render()</code> methods, custom
+                <code>update()</code> paths, and direct
+                <code>replaceChildren()</code> calls.
+              </p>
+              <a class="code-ref" href="../src/components/reactive-element.js"
+                >src/components/reactive-element.js</a
+              >
+            </article>
+
+            <article class="finding" data-priority="p2">
+              <h3>
+                <span class="tag">P2</span> Manual teardown leaks into app code
+              </h3>
+              <p>
+                Document-level listeners are handled correctly in the examples
+                reviewed, but authors still need to remember the pattern: create
+                handler, store it, add listener, remove listener on disconnect.
+              </p>
+              <a class="code-ref" href="../src/question-bank/cr-bank-editor.js"
+                >src/question-bank/cr-bank-editor.js</a
+              >
+            </article>
+
+            <article class="finding" data-priority="p2">
+              <h3>
+                <span class="tag">P2</span> Focus preservation is duplicated
+              </h3>
+              <p>
+                Focus restoration appears in both Question Bank state commits
+                and question-list rendering. The behavior is important, but it
+                should be a framework-level render concern rather than a pattern
+                each feature area has to rediscover.
+              </p>
+              <a class="code-ref" href="../src/components/cr-question-list.js"
+                >src/components/cr-question-list.js</a
+              >
+            </article>
+
+            <article class="finding" data-priority="p3">
+              <h3><span class="tag">P3</span> The good seam already exists</h3>
+              <p>
+                Evaluators and stores are already close to the desired model:
+                inputs in, values out, named mutations, signal-derived state.
+                This lets us simplify the UI shell without replacing the working
+                domain model.
+              </p>
+              <a class="code-ref" href="../src/lib/case-review-view-model.js"
+                >src/lib/case-review-view-model.js</a
+              >
+            </article>
+          </div>
+        </section>
+
+        <section id="target" aria-labelledby="target-title">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">Proposed target</div>
+              <h2 id="target-title">
+                Pure authoring, custom elements underneath
+              </h2>
+            </div>
+            <p>
+              The framework can keep vanilla browser primitives while giving
+              authors an API that feels like plain functions.
+            </p>
+          </div>
+
+          <div class="two-col">
+            <div class="statement">
+              <p>
+                <strong>Principle:</strong> route shells may know about custom
+                elements. Feature components should usually be pure render
+                functions plus explicit action functions. Lifecycle, effects,
+                property setters, and teardown belong in the framework.
+              </p>
+            </div>
+            <div class="target">
+              <pre><code>defineView('cr-status-banner', {
+  props: {
+    status: 'saved',
+    message: '',
+  },
+
+  render({ props }) {
+    return h('p', { role: 'status' }, props.message);
+  },
+});</code></pre>
+              <div class="callout">
+                <strong>What authors stop writing</strong>
+                Class declarations, constructors for default props,
+                <code>connectedCallback()</code>,
+                <code>disconnectedCallback()</code>, manual
+                <code>replaceChildren()</code>, manual effect disposal, and
+                document listener cleanup.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="migration" aria-labelledby="migration-title">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">Migration slices</div>
+              <h2 id="migration-title">A low-risk path</h2>
+            </div>
+            <p>
+              Do not start with the hardest page. Prove the primitive on leaf
+              components, then collapse the heavier shells.
+            </p>
+          </div>
+
+          <div class="timeline">
+            <article class="slice">
+              <div>
+                <h3>Add <code>defineView()</code></h3>
+                <p>
+                  Create a small wrapper that defines the custom element class,
+                  applies default props, runs <code>render()</code> in an
+                  effect, and disposes automatically.
+                </p>
+              </div>
+            </article>
+
+            <article class="slice">
+              <div>
+                <h3>Add lifecycle helpers</h3>
+                <p>
+                  Provide <code>on(target, event, handler)</code>,
+                  <code>afterMount(fn)</code>, and cleanup registration so
+                  document-level listeners stop being hand-rolled.
+                </p>
+              </div>
+            </article>
+
+            <article class="slice">
+              <div>
+                <h3>Convert simple leaf components</h3>
+                <p>
+                  Start with <code>cr-toast</code>,
+                  <code>cr-status-banner</code>, <code>cr-outcome</code>,
+                  <code>cr-notes</code>, and <code>cr-section-progress</code>.
+                  These should become examples for new authors.
+                </p>
+              </div>
+            </article>
+
+            <article class="slice">
+              <div>
+                <h3>Move focus preservation into the framework</h3>
+                <p>
+                  Centralize stable focus-key capture and restore around
+                  framework-managed render passes. Keep component-specific focus
+                  policy only where user workflow requires it.
+                </p>
+              </div>
+            </article>
+
+            <article class="slice">
+              <div>
+                <h3>Refactor medium components</h3>
+                <p>
+                  Convert wording/options/show-when/question-label components
+                  once the leaf conversions establish the conventions and test
+                  pattern.
+                </p>
+              </div>
+            </article>
+
+            <article class="slice">
+              <div>
+                <h3>Collapse <code>CRCaseReview</code></h3>
+                <p>
+                  Keep a route shell, but move page rendering to
+                  <code>renderCaseReview(vm)</code> and event behavior to named
+                  action binders. Delete compatibility shims as tests move to
+                  public behavior.
+                </p>
+              </div>
+            </article>
+
+            <article class="slice">
+              <div>
+                <h3>Rewrite the authoring guide</h3>
+                <p>
+                  Make pure function components the default documentation.
+                  Document raw custom elements as an advanced integration escape
+                  hatch only.
+                </p>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="decisions" aria-labelledby="decisions-title">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">Decision record candidate</div>
+              <h2 id="decisions-title">Recommended decisions</h2>
+            </div>
+            <p>
+              These are the decisions that should be made explicit before
+              implementation work starts.
+            </p>
+          </div>
+
+          <table class="decision-table">
+            <thead>
+              <tr>
+                <th>Decision</th>
+                <th>Recommendation</th>
+                <th>Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Keep <code>h()</code>?</td>
+                <td>Yes</td>
+                <td>
+                  It is small, explicit, safe by default, and already blocks
+                  accidental <code>innerHTML</code>.
+                </td>
+              </tr>
+              <tr>
+                <td>Keep signals?</td>
+                <td>Yes</td>
+                <td>
+                  The model is understandable and the cleanup path is now
+                  tested. Signals are not the source of authoring complexity.
+                </td>
+              </tr>
+              <tr>
+                <td>Keep Web Components?</td>
+                <td>Only as shells</td>
+                <td>
+                  They are useful at route and browser boundaries, but should
+                  not be the everyday authoring interface.
+                </td>
+              </tr>
+              <tr>
+                <td>Default component style?</td>
+                <td>Pure render function</td>
+                <td>
+                  Junior maintainers can reason about props, state, and actions
+                  without needing lifecycle ordering knowledge.
+                </td>
+              </tr>
+              <tr>
+                <td>First implementation area?</td>
+                <td>Leaf components</td>
+                <td>
+                  They give fast proof, low blast radius, and good examples for
+                  the rewritten guide.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      </main>
+
+      <footer>
+        Generated from local code review after fast-forwarding main. No source
+        files were changed besides this report.
+      </footer>
+    </div>
+  </body>
+</html>
