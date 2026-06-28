@@ -53,12 +53,83 @@
  */
 
 /**
+ * Lifecycle scope used by defineView() to collect mount hooks and cleanup work.
+ * Exposed now so lifecycle helper behavior can be tested before defineView()
+ * owns render/mount orchestration.
+ * @typedef {Object} ViewLifecycle
+ * @property {<T>(fn: () => T) => T} run
+ * @property {() => void} mount
+ * @property {() => void} disconnect
+ */
+
+/**
  * Focus snapshot captured before a framework-managed render.
  * @typedef {Object} FocusSnapshot
  * @property {string | null} key
  * @property {number | null} selectionStart
  * @property {number | null} selectionEnd
  */
+
+/** @type {{ cleanups: Cleanup[], mountHooks: Array<() => void | Cleanup>, mounted: boolean } | null} */
+let activeLifecycle = null;
+
+/**
+ * @param {string} helperName
+ * @returns {{ cleanups: Cleanup[], mountHooks: Array<() => void | Cleanup>, mounted: boolean }}
+ */
+function requireLifecycle(helperName) {
+  if (!activeLifecycle) {
+    throw new Error(`${helperName}() must be called while a view is mounting`);
+  }
+  return activeLifecycle;
+}
+
+/**
+ * TODO(simplify-ui): Wire this lifecycle scope into defineView() so ordinary
+ * feature components never need to construct it directly.
+ *
+ * @returns {ViewLifecycle}
+ */
+export function createLifecycle() {
+  const scope = {
+    /** @type {Cleanup[]} */
+    cleanups: [],
+    /** @type {Array<() => void | Cleanup>} */
+    mountHooks: [],
+    mounted: false,
+  };
+
+  return {
+    run(fn) {
+      const previous = activeLifecycle;
+      activeLifecycle = scope;
+      try {
+        return fn();
+      } finally {
+        activeLifecycle = previous;
+      }
+    },
+    mount() {
+      if (scope.mounted) return;
+      scope.mounted = true;
+      const previous = activeLifecycle;
+      activeLifecycle = scope;
+      try {
+        for (const hook of scope.mountHooks) {
+          const cleanup = hook();
+          if (typeof cleanup === 'function') scope.cleanups.push(cleanup);
+        }
+      } finally {
+        activeLifecycle = previous;
+      }
+    },
+    disconnect() {
+      for (const cleanup of scope.cleanups.splice(0).reverse()) cleanup();
+      scope.mountHooks = [];
+      scope.mounted = false;
+    },
+  };
+}
 
 /**
  * TODO(simplify-ui): Implement the pure authoring wrapper so feature authors
@@ -80,7 +151,15 @@ export function defineView(tagName, definition) {}
  * @param {EventListenerOrEventListenerObject} listener
  * @param {boolean | AddEventListenerOptions} [options]
  */
-export function on(target, type, listener, options) {}
+export function on(target, type, listener, options) {
+  const lifecycle = requireLifecycle('on');
+  const resolved = typeof target === 'function' ? target() : target;
+  if (!resolved) return;
+  resolved.addEventListener(type, listener, options);
+  lifecycle.cleanups.push(() =>
+    resolved.removeEventListener(type, listener, options)
+  );
+}
 
 /**
  * TODO(simplify-ui): Register mount-time work for the current view context and
@@ -88,7 +167,9 @@ export function on(target, type, listener, options) {}
  *
  * @param {() => void | Cleanup} hook
  */
-export function afterMount(hook) {}
+export function afterMount(hook) {
+  requireLifecycle('afterMount').mountHooks.push(hook);
+}
 
 /**
  * TODO(simplify-ui): Move duplicated focus-key capture/restore behavior behind
