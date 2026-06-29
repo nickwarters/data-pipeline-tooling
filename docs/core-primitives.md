@@ -205,6 +205,13 @@ skip), and both wrappers expose `rows_scanned` / `rows_kept` for the most recent
 `ChunkedCsvReader` / `SasFileReader` / any future chunk reader, keeping the
 readers themselves single-purpose.
 
+Because a `ChunkReader` can't wire into the single-shot deferred `Pipeline`
+builder (a source too big to hold whole is never one `Dataset`), a streaming feed
+runs as a `pipelines/<feed>/` module that loops the chunks itself.
+`tools.observability.stream_step` drives that loop — read→filter→write — under a
+single fail-fast run-log step, recording `rows_in`/`rows_out`/`rows_excluded`. See
+[`streaming-large-sources.md`](streaming-large-sources.md) for the full pattern.
+
 **Table and column names you configure** (the `table` and `columns=[...]` you pass
 to a `SqliteReader`/Writer) accept **any string** — spaces, hyphens, mixed case,
 and SQL reserved words are all fine. Every identifier is double-quoted at the
