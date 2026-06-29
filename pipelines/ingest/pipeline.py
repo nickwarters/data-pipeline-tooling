@@ -27,11 +27,12 @@ from pathlib import Path
 from case_review.case_type import CaseType, Variation
 from case_review.gold import ingest_silver_to_gold
 from framework.core import PipelineError, SchemaValidator, format_failure
-from framework.io import AccumulateByRun, CsvReader, StoreCatalog
+from framework.io import AccumulateByRun, CsvReader
 from framework.run import Pipeline, RunContext
 from framework.transform import Filter, SchemaCoercion
 from tools.environments import known_environments, resolve_base_dir
 from tools.medallion import medallion
+from tools.store import StoreRegistry
 
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "activity_cases.csv"
 
@@ -76,7 +77,7 @@ def run(context: RunContext):
     business run a re-drive replaces) and its execution id, derived from the
     shared RunContext so ``--logical-run-id`` flows straight through.
     """
-    med = medallion(StoreCatalog(context.base_dir), CASES.name)
+    med = medallion(StoreRegistry(context.base_dir), CASES.name)
     strategy = AccumulateByRun.from_context(context)
 
     p = Pipeline("cases")

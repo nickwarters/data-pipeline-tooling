@@ -149,11 +149,12 @@ There is no recipe builder for gold; a gold hop is an explicit `Pipeline` whose
 validated silver into gold stamped by run, compose an `AccumulateByRun` writer:
 
 ```python
-from framework.io import AccumulateByRun, StoreCatalog
+from framework.io import AccumulateByRun
+from tools.store import StoreRegistry
 from framework.run import Pipeline
 from tools.medallion import medallion
 
-med = medallion(StoreCatalog("/path/to/share"), "cases")
+med = medallion(StoreRegistry("/path/to/share"), "cases")
 
 p = Pipeline("selection_pool")
 silver = p.read(med.silver.reader("selection_pool"), name="read")

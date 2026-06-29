@@ -4,8 +4,8 @@ import pandas as pd
 import pytest
 
 from framework.core.dataset import Dataset
-from framework.io.store import Store
 from framework.io.strategy import InsertIfAbsent
+from tools.store import Store
 
 
 def _ds(*rows: dict) -> Dataset:

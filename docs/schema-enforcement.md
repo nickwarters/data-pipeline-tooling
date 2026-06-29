@@ -147,13 +147,14 @@ every other hop is. The raw→silver hop reads raw, coerces, validates, and writ
 silver:
 
 ```python
-from framework.io import Refresh, StoreCatalog
+from framework.io import Refresh
+from tools.store import StoreRegistry
 from framework.run import Pipeline
 from framework.transform import SchemaCoercion
 from framework.core import SchemaValidator
 from tools.medallion import medallion
 
-med = medallion(StoreCatalog("/path/to/share"), "cases")
+med = medallion(StoreRegistry("/path/to/share"), "cases")
 
 p = Pipeline("cases")
 raw = p.read(med.raw.reader("cases"), name="read")

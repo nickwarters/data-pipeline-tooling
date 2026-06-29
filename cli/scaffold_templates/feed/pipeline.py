@@ -39,18 +39,12 @@ from framework.core import (
     SchemaValidator,
     format_failure,
 )
-from framework.io import (
-    AccumulateByRun,
-    CsvReader,
-    Reader,
-    Refresh,
-    StoreCatalog,
-    Writer,
-)
+from framework.io import AccumulateByRun, CsvReader, Reader, Refresh, Writer
 from framework.run import Pipeline, RunContext, RunLog
 from framework.transform import SchemaCoercion, SchemaValueRulePartitioner
 from tools.environments import known_environments, resolve_base_dir
 from tools.medallion import medallion
+from tools.store import StoreRegistry
 
 from .schema import MyfeedRow
 
@@ -139,7 +133,7 @@ def gold_builder(
 
 def run(context: RunContext, *, describe: bool = False) -> Dataset:
     """Refine the feed source -> raw -> silver -> gold under the run context."""
-    med = medallion(StoreCatalog(context.base_dir), FEED_NAME)
+    med = medallion(StoreRegistry(context.base_dir), FEED_NAME)
     strategy = AccumulateByRun.from_context(context)
 
     raw_p = raw_builder(

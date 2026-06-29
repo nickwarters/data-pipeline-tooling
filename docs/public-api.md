@@ -16,7 +16,8 @@ rule that follows from that split.
 
 ```python
 from framework.core import Dataset
-from framework.io import CsvReader, StoreCatalog, Refresh
+from framework.io import CsvReader, Refresh
+from tools.store import StoreRegistry
 from framework.transform import Filter, VectorizedFilter, SchemaCoercion
 from framework.core import ColumnValidator, SchemaValidator, ValidationError
 from framework.run import Pipeline, PipelineRunner, RunContext
@@ -25,11 +26,13 @@ from tools.retry import RetryPolicy
 from tools.calendar import WorkingDayCalendar
 ```
 
-The framework stores an opaque **`namespace`** (a logical database) → file; the
-raw/silver/gold **medallion is no longer framework vocabulary**. It is an
-application-level store profile in the sibling `tools` package
-(`tools.medallion.medallion(catalog, subject)` → `.raw` / `.silver` / `.gold`
-namespace Stores), not a `framework.core` export.
+Where a feed *lands* is **no longer framework vocabulary** (#232). The opaque
+**`namespace`** (a logical database) → file `Store` / `StoreRegistry` and the
+raw/silver/gold **medallion** profile over it are both **application
+infrastructure** in the sibling `tools` package — `tools.store`
+(`StoreRegistry(base_dir)`) and `tools.medallion.medallion(registry, subject)`
+(→ `.raw` / `.silver` / `.gold` namespace Stores) — not a `framework.*` export.
+`framework.io` knows only the `Reader` / `Writer` ports and the load strategies.
 
 The checks (`ColumnValidator` / `SchemaValidator` / the value rules) live on
 `framework.core` alongside the base vocabulary — there is no separate `validate`
@@ -68,7 +71,8 @@ the implementation modules living alongside it:
   the `value_rules` (`Nullable` / `Pattern` / ...). It sits *below* the task
   facades. (The medallion `Layer` enum was **removed** here — #232 — in favour of
   the namespace Store + the `tools.medallion` profile.)
-- `framework/io/` — `readers`, `writers`, `store`, `strategy`, `sql`, `remote`.
+- `framework/io/` — `readers`, `writers`, `strategy`, `sql`. (Where a feed
+  *lands* — `Store` / `StoreRegistry` — moved out to `tools.store`; #232.)
 - `framework/transform/` — the dataset-reshaping primitives: `processors`,
   `coercion` (`SchemaCoercion` — the *coerce* half of the schema adapter),
   `quarantine`.
@@ -126,16 +130,16 @@ builds on them.
 | `PipelineError`, `ErrorCategory` | The base of the expected, fail-fast failure family — `ValidationError`, `FreshnessError`, `UnknownPipelineError`, `CoercionError`, `ForEachPipelineError` all subclass it. Catch it at a run boundary to handle any deliberate abort with one `except`; a genuine bug is not a `PipelineError` and keeps its traceback. Each carries an `ErrorCategory` (`data` / `operational` / `config`) recorded on the run log for triage; a raw bug has none. |
 | `format_failure` | Renders a caught `PipelineError` as a short, traceback-free ASCII block for `stderr` (the failure kind + its message). A pure formatter — it never catches, suppresses, or exits, so the caller keeps control flow. |
 
-### `framework.io` — sources, sinks, stores
+### `framework.io` — sources & sinks
 
-Moving data across the boundary.
+Moving data across the boundary. (Where it *lands* — the namespace `Store` /
+`StoreRegistry` — is application infrastructure in `tools.store`, not here.)
 
 | Names | What |
 |-------|------|
 | `Reader`, `DatasetReader`, `CsvReader`, `StrictCsvReader`, `StrictCsvParseError`, `GlobCsvReader`, `ExcelReader`, `SqliteReader` | The `read() -> Dataset` port and its concrete sources (`StrictCsvReader` is the char-by-char RFC 4180 parser; `StrictCsvParseError` is the located error it raises). (The remote `SasReader` / `SharePointReader` live in `tools.integrations`, not this facade — see below.) |
 | `ChunkReader`, `ChunkedCsvReader`, `SasFileReader`, `DEFAULT_CHUNK_SIZE` | The `chunks(size) -> Iterator[Dataset]` streaming port and its concrete sources for inputs too big to hold whole: a local CSV (`ChunkedCsvReader`) and an **already-landed** `.sas7bdat`/xport file, incl. gzipped (`SasFileReader`). `SasFileReader` is read-only by nature and distinct from the remote `tools.integrations` `SasReader` (no script, no remote run, no copy). |
 | `Writer`, `CsvWriter`, `ExcelWriter`, `JsonWriter`, `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `SqliteInsertOrIgnoreWriter`, `QuarantineWriter`, `StdoutWriter` | The `write(dataset)` port and its concrete sinks (`StdoutWriter` is a console sink for *seeing* a result — e.g. an explainer trace — rather than persisting it). (The remote `SharePointWriter` lives in `tools.integrations`, not this facade — see below.) |
-| `Store`, `StoreCatalog`, `StoreBackend`, `DirectoryStoreBackend` | Namespace-scoped stores (one logical database → file) minted from shared configuration. A `Store` mints `writer(table, strategy)` / `reader(table)` over its namespace; `StoreCatalog.store(namespace)` resolves the file via the backend. The raw/silver/gold medallion is layered on top by `tools.medallion`. |
 | `Refresh`, `AccumulateByRun`, `UpsertStrategy`, `InsertOrIgnore` | The load strategies a Writer carries. |
 
 ### `framework.transform` — reshaping a feed mid-pipeline
@@ -165,6 +169,7 @@ public helpers carry stable names and are imported directly:
 
 | Import | What |
 |--------|------|
+| `tools.store` — `Store`, `StoreRegistry`, `StoreBackend`, `DirectoryStoreBackend` | Where a feed lands: namespace-scoped stores (one logical database → file). `StoreRegistry(base_dir)` mints a namespace `Store` via `store(namespace)` **and** keeps a registry of named Readers/Writers — `register(name, reader\|writer)` then `reader(name)` / `writer(name)` — so a pipeline refers to a component by name. A `Store` mints `writer(table, strategy)` / `reader(table)` over its namespace. The raw/silver/gold `tools.medallion` profile builds on it. Application infrastructure, moved out of `framework.io` (#232). |
 | `tools.retry` — `RetryPolicy`, `RetryingReader`, `RetryingWriter` | Targeted retry for transient I/O-edge failures — see [retry.md](retry.md). |
 | `tools.calendar` — `WorkingDayCalendar` | Working-day availability arithmetic (pure utility). |
 | `tools.environments` — `resolve_base_dir`, `known_environments` | Resolve a run's medallion `base_dir` from a named environment (`prod` / `dev`), each rooted at an OS environment variable with a `dev` fallback to `./data`. The operational env → path mapping the operator CLI and pipeline `main()`s use; see [operator-cli.md](operator-cli.md). |

@@ -13,7 +13,6 @@ from dataclasses import fields
 import pytest
 
 from framework.core import ValidationError
-from framework.io import StoreCatalog
 from framework.run import RunContext
 from tests.framework_testing import (
     RecordingRunLog,
@@ -22,6 +21,7 @@ from tests.framework_testing import (
     read_rows,
 )
 from tools.medallion import medallion
+from tools.store import StoreRegistry
 
 from .case_type import CASE_TYPE
 from .pipeline import FEED_NAME, raw_builder, run, silver_builder
@@ -37,7 +37,7 @@ def test_case_type_declares_its_identity_contract():
 
 def test_source_lands_in_raw_then_conforms_to_silver(tmp_path):
     silver = run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
-    med = medallion(StoreCatalog(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
 
     raw = read_rows(med.raw, FEED_NAME)
     assert len(raw) > 0

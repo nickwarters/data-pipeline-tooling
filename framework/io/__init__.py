@@ -1,19 +1,20 @@
-"""Public facade: moving data across the boundary — sources, sinks, stores.
+"""Public facade: moving data across the boundary — sources, sinks, strategies.
 
 The stable import surface for getting a feed *in* and a result *out*: every
-:class:`Reader` and :class:`Writer`, the namespace-scoped :class:`Store` /
-:class:`StoreCatalog`, and the load strategies a Writer carries. The
+:class:`Reader` and :class:`Writer` and the load strategies a Writer carries. The
 :class:`~framework.core.dataset.Dataset` they move is the foundational vocabulary
-on ``framework.core``; the raw/silver/gold medallion is an application profile
-(``tools.medallion``) over the namespace Store.
+on ``framework.core``. Where a feed *lands* — the namespace ``Store`` /
+``StoreRegistry`` (one logical database → file) and the raw/silver/gold medallion
+profile over it — is **application infrastructure** in the sibling ``tools``
+package (``tools.store``, ``tools.medallion``), not framework vocabulary (#232).
 
 Import from here rather than the underlying modules::
 
-    from framework.io import CsvReader, CsvWriter, StoreCatalog, Refresh
+    from framework.io import CsvReader, CsvWriter, Refresh
 
 The modules behind this facade (``framework.io.readers``, ``framework.io.writers``,
-``framework.io.store``, ``framework.io.strategy``) are internal layout: re-exports
-here are the public contract, the submodule paths are not. See ``docs/public-api.md``.
+``framework.io.strategy``) are internal layout: re-exports here are the public
+contract, the submodule paths are not. See ``docs/public-api.md``.
 """
 
 from framework.io.readers import (
@@ -29,12 +30,6 @@ from framework.io.readers import (
     SqliteReader,
     StrictCsvParseError,
     StrictCsvReader,
-)
-from framework.io.store import (
-    DirectoryStoreBackend,
-    Store,
-    StoreBackend,
-    StoreCatalog,
 )
 from framework.io.strategy import (
     AccumulateByRun,
@@ -78,10 +73,6 @@ __all__ = [
     "AccumulateByRunWriter",
     "QuarantineWriter",
     "StdoutWriter",
-    "Store",
-    "StoreCatalog",
-    "StoreBackend",
-    "DirectoryStoreBackend",
     "Refresh",
     "AccumulateByRun",
     "UpsertStrategy",

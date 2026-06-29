@@ -19,7 +19,7 @@ from framework.core import (
     SchemaValidator,
     UniqueValidator,
 )
-from framework.io import AccumulateByRun, CsvReader, Refresh, StoreCatalog
+from framework.io import AccumulateByRun, CsvReader, Refresh
 from framework.run import Pipeline
 from framework.transform import (
     Filter,
@@ -31,6 +31,7 @@ from framework.transform import (
     Sort,
 )
 from tools.medallion import medallion
+from tools.store import StoreRegistry
 
 from .processors import AddOpenContactCounts, AdviserSummary
 from .rules import high_risk_or_vulnerable, review_priority
@@ -45,7 +46,7 @@ RUN_ID = "2026-05-29"
 
 def bronze_to_silver(base_dir: str | os.PathLike[str], *, run_id: str = RUN_ID) -> None:
     """Land multiple bronze feeds, then validate and join them into silver."""
-    catalog = StoreCatalog(base_dir)
+    catalog = StoreRegistry(base_dir)
     case_med = medallion(catalog, CASE_SUBJECT)
     adviser_med = medallion(catalog, ADVISER_SUBJECT)
 
@@ -116,7 +117,7 @@ def bronze_to_silver(base_dir: str | os.PathLike[str], *, run_id: str = RUN_ID) 
 
 def silver_to_gold(base_dir: str | os.PathLike[str], *, run_id: str = RUN_ID) -> None:
     """Assemble silver case data into separate gold consumption tables."""
-    catalog = StoreCatalog(base_dir)
+    catalog = StoreRegistry(base_dir)
     source_med = medallion(catalog, CASE_SUBJECT)
     reporting_med = medallion(catalog, REPORTING_SUBJECT)
     strategy = AccumulateByRun(run_id=run_id, load_date=run_id)

@@ -1,10 +1,10 @@
 # The escape-hatch store — iterate against a raw db before adopting the layer pattern
 
 The supported way to reach a SQLite store is the **namespace Store**, usually
-through the **medallion profile**: `medallion(StoreCatalog(root), subject)` mints
+through the **medallion profile**: `medallion(StoreRegistry(root), subject)` mints
 the `.raw` / `.silver` / `.gold` namespace Stores over that subject's
 `<subject>/{raw,silver,gold}.db`, and a Store maps *only* `(namespace, table) →
-location` ([core-primitives.md](core-primitives.md#store--storecatalog--a-namespace--file-factory),
+location` ([core-primitives.md](core-primitives.md#store--storeregistry--a-namespace--file-factory),
 [ADR-0001](adr/0001-sqlite-per-subject-medallion-store.md)). That mapping is
 what keeps every pipeline ignorant of physical layout and every subject isolated.
 
@@ -20,7 +20,7 @@ pattern.
 > the raw→silver→gold refinement, and the strategy-on-the-Writer contract
 > (ADR-0003, ADR-0004). Treat it as a spike: reach for it to *learn*, then
 > [migrate](#migrating-back-to-the-namespace-store). Anything that survives more
-> than a spike belongs on `StoreCatalog` / the medallion profile.
+> than a spike belongs on `StoreRegistry` / the medallion profile.
 
 ## What stays true even off the layer pattern
 
@@ -53,7 +53,7 @@ pandas in application code".
 
 The lightest escape hatch needs nothing new: the concrete SQLite Reader/Writers
 already take a raw `db_path`, so you can address *any* file, with *any* table,
-without `StoreCatalog`, a subject, or a layer.
+without `StoreRegistry`, a subject, or a layer.
 
 ```python
 from pathlib import Path
@@ -125,7 +125,7 @@ class SqliteQueryReader:
 > `framework.io.sql.quote_identifier`, the one choke point that makes an
 > identifier injection-safe.
 
-Now wrap a **store that sits outside the catalog/medallion routing** — an object
+Now wrap a **store that sits outside the registry/medallion routing** — an object
 that owns one scratch db path and mints these escape-hatch components, mirroring
 `Store`'s *shape* (it mints Readers/Writers over named tables; it holds no
 business logic) while adding the baked-query Reader the namespace `Store` doesn't
@@ -141,12 +141,12 @@ from framework.io.writers import SqliteTruncateReloadWriter
 
 
 class ScratchStore:
-    """A flat, single-file store outside the catalog/medallion routing.
+    """A flat, single-file store outside the registry/medallion routing.
 
     Like ``Store`` it binds one db file and mints Readers/Writers over named
     tables, but it knows nothing of a subject or the raw/silver/gold medallion,
     adds a baked SQL query Reader, and chooses no load strategy. Use for spikes
-    only; migrate to ``StoreCatalog`` + the medallion profile once the feed is
+    only; migrate to ``StoreRegistry`` + the medallion profile once the feed is
     real.
     """
 
@@ -195,7 +195,7 @@ p.run()
 | **Subject isolation** — each Case Type / Reference Data set owns its own files, independent blast radius and onboarding (ADR-0001). | One flat file shared by everything in the spike. |
 | **raw → silver → gold refinement** — schema-light landing, the silver schema boundary, gold accumulation. | No layers; you read and write wherever you point. |
 | **Strategy on the Writer** — `Refresh` / `AccumulateByRun` / `UpsertStrategy` chosen per feed (ADR-0003, ADR-0004). | Full-refresh only; no idempotent accumulation, no upsert. |
-| **Location hidden from scripts** — `StoreCatalog` owns physical layout. | The db path is hardcoded in the spike. |
+| **Location hidden from scripts** — `StoreRegistry` owns physical layout. | The db path is hardcoded in the spike. |
 
 If a spike starts needing any row in the left column — a second subject, a silver
 schema check, accumulate-by-run idempotency — that is the signal to migrate, not
@@ -207,7 +207,7 @@ The reason the escape hatch honours the seams is that migration is then almost
 mechanical:
 
 1. **Mint a subject's medallion.** Replace `ScratchStore(path)` with
-   `med = medallion(StoreCatalog(root), "<subject>")`.
+   `med = medallion(StoreRegistry(root), "<subject>")`.
 2. **Name the layers.** A `store.reader(table)` becomes
    `med.raw.reader(table)`; a `store.writer(table)` becomes
    `med.raw.writer(table, strategy)` (or `.silver` / `.gold`) with an explicit
