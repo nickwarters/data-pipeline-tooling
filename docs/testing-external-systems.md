@@ -83,7 +83,7 @@ class FakeSasClient:
 Now we can thoroughly test our orchestration logic without ever touching a network, spinning up a server, or writing flaky remote tests.
 
 ```python
-from framework.io import StoreCatalog
+from tools.store import StoreRegistry
 from tests.framework_testing import read_rows
 from tools.medallion import medallion
 
@@ -110,9 +110,9 @@ def test_orchestrator_triggers_sas_and_drives_pipelines(tmp_path):
     assert (landing_zone / "complaints_a.csv").exists()
     
     # Assert 3: The downstream pipelines successfully picked them up and ran
-    catalog = StoreCatalog(tmp_path)
-    silver_a = read_rows(medallion(catalog, "complaints_a").silver, "complaints_a")
-    silver_b = read_rows(medallion(catalog, "complaints_b").silver, "complaints_b")
+    registry = StoreRegistry(tmp_path)
+    silver_a = read_rows(medallion(registry, "complaints_a").silver, "complaints_a")
+    silver_b = read_rows(medallion(registry, "complaints_b").silver, "complaints_b")
     
     assert len(silver_a) == 1
     assert silver_a[0]["amount"] == 50

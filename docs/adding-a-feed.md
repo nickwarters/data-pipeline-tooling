@@ -230,13 +230,14 @@ slipping the canonicalisation in is just another step: a spaced feed adds a
 the schema check under their canonical names:
 
 ```python
-from framework.io import Refresh, StoreCatalog
+from framework.io import Refresh
+from tools.store import StoreRegistry
 from framework.run import Pipeline
 from framework.transform import Rename, SchemaCoercion
 from framework.core import ColumnValidator, SchemaValidator
 from tools.medallion import medallion
 
-med = medallion(StoreCatalog("/path/to/share"), "cases")
+med = medallion(StoreRegistry("/path/to/share"), "cases")
 p = Pipeline("cases")
 raw = p.read(med.raw.reader("cases"), name="read")
 # optional: gate the *source* columns in the source's own vocabulary, so a
@@ -370,12 +371,13 @@ mints the destination Writer for the target layer, so the builder never learns
 about medallion layers or load rules:
 
 ```python
-from framework.io import ExcelReader, Refresh, StoreCatalog
+from framework.io import ExcelReader, Refresh
+from tools.store import StoreRegistry
 from framework.run import Pipeline
 from framework.core import ColumnValidator, SchemaDriftValidator
 from tools.medallion import medallion
 
-med = medallion(StoreCatalog("/path/to/share"), "cases")
+med = medallion(StoreRegistry("/path/to/share"), "cases")
 p = Pipeline("cases")
 raw = p.read(ExcelReader("feed.xlsx", sheet="cases"), name="read")
 gated = p.validate(ColumnValidator(["case_id"]), raw, name="columns")  # optional: gate input

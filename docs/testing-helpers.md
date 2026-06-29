@@ -66,7 +66,8 @@ When the pipeline writes to a real `Store`, `read_rows` reads the table back
 through the Store's own Reader — the same seam a pipeline uses, not around it:
 
 ```python
-from framework.io import Refresh, Store
+from framework.io import Refresh
+from tools.store import Store
 from tests.framework_testing import given_rows, read_rows
 from framework.run import Pipeline
 

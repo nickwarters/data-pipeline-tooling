@@ -10,13 +10,13 @@ from framework.core.validators import (
     ValidationError,
 )
 from framework.io.readers import CsvReader
-from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun
 from framework.run import RunAddress
 from framework.run.builder import (
     Pipeline,
 )
 from tests.framework_testing import RecordingRunLog
+from tools.store import Store
 
 FIXTURE = Path(__file__).parent.parent.parent.parent / "fixtures" / "cases.csv"
 

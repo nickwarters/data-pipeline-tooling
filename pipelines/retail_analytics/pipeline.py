@@ -54,16 +54,11 @@ from framework.core import (
     SchemaValidator,
     format_failure,
 )
-from framework.io import (
-    CsvReader,
-    Reader,
-    Refresh,
-    StoreCatalog,
-    Writer,
-)
+from framework.io import CsvReader, Reader, Refresh, Writer
 from framework.run import Pipeline, RunContext, RunLog
 from framework.transform import Filter, SchemaCoercion
 from tools.medallion import medallion
+from tools.store import StoreRegistry
 
 from .schema import CatalogRow, OpsRow, OrderRow, RevenueRow, RiskRow
 
@@ -330,7 +325,7 @@ def dag_builder(
 
 def run(context: RunContext, *, describe: bool = False) -> list[Dataset]:
     """Execute the retail analytics DAG, writing three silver tables under *base_dir*."""
-    med = medallion(StoreCatalog(context.base_dir), FEED_NAME)
+    med = medallion(StoreRegistry(context.base_dir), FEED_NAME)
     strategy = Refresh()
 
     p = dag_builder(

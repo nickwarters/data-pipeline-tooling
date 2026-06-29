@@ -40,12 +40,12 @@ from framework.io import (
     DatasetReader,
     Reader,
     Refresh,
-    StoreCatalog,
     Writer,
 )
 from framework.run import Pipeline, RunContext, RunLog
 from framework.transform import SchemaCoercion
 from tools.medallion import medallion
+from tools.store import StoreRegistry
 
 from .schema import CaseReviewRow, SalesRow, SelectedCase
 from .selection import SelectCasesToCheck
@@ -106,7 +106,7 @@ def selection_builder(
 
 def run(context: RunContext) -> Dataset:
     """Refine both feeds to silver, then assemble the gold ``selection_pool``."""
-    med = medallion(StoreCatalog(context.base_dir), SUBJECT)
+    med = medallion(StoreRegistry(context.base_dir), SUBJECT)
     strategy = AccumulateByRun.from_context(context)
     as_of = context.run_date or AS_OF
 

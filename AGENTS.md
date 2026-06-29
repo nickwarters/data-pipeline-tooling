@@ -34,9 +34,13 @@ domain language in `CONTEXT.md`; the core primitives are documented in
 - **Core primitives:** `Dataset` (opaque tabular carrier, pandas behind the
   seam), `Reader` (`read() -> Dataset`; `CsvReader`, `SqliteReader`),
   `Writer` (`write(dataset) -> None`; owns target location + load strategy —
-  added by #14), `Store` (per-subject medallion that mints the layer's
-  Writers/Readers over `<subject>/{raw,silver,gold}.db` — #15; `connect` factory
-  now in `framework._internal.connection`), `Pipeline` (deferred DAG builder; nodes wired by `.read` / `.transform` /
+  added by #14), `Store` / `StoreRegistry` (namespace → file factory minting
+  Writers/Readers over one logical database; `StoreRegistry` also registers named
+  Readers/Writers a pipeline fetches by name. Lives in the sibling `tools.store`,
+  **not** `framework.io` — where a feed lands is application infrastructure, not
+  framework vocabulary (#15/#232); the raw/silver/gold medallion is the
+  `tools.medallion` profile over it, `<subject>/{raw,silver,gold}.db`; `connect`
+  factory in `framework._internal.connection`), `Pipeline` (deferred DAG builder; nodes wired by `.read` / `.transform` /
   `.validate` / `.write` and executed in topological order at `.run()`).
 
 ### Commands

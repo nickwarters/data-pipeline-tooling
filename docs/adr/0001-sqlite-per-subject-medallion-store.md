@@ -12,7 +12,7 @@ writes** a given file; the review platform and analysts open the databases
 read-only. This keeps the store zero-infrastructure, single-file portable, and
 first-class on both Windows and macOS without standing up a database server.
 
-A `StoreCatalog(root).store(subject)` mints a subject's `Store` from shared
+A `StoreRegistry(root).store(subject)` mints a subject's `Store` from shared
 root configuration, so pipeline code never repeats physical-layout arithmetic.
 The `Store` binds `(subject, layer, table)` to concrete Readers and Writers over
 that subject's files; it resolves *which* `<subject>/<layer>.db` to target and
@@ -62,16 +62,16 @@ the project exists to avoid.
 
 The medallion is **demoted from framework vocabulary**. The framework's storage
 contract is the `Reader`/`Writer` ports + load strategies + the `connect` seam;
-`Store`/`StoreCatalog` is a **factory** the run engine never references.
+`Store`/`StoreRegistry` is a **factory** the run engine never references.
 
 - A `Store` now addresses an opaque **`namespace`** — a *logical database*, one
   SQLite file holding many related tables — and mints `writer(table, strategy)` /
-  `reader(table)` over it. `StoreCatalog.store(namespace)` resolves the file via a
+  `reader(table)` over it. `StoreRegistry.store(namespace)` resolves the file via a
   `StoreBackend` (`DirectoryStoreBackend` maps `<root>/<namespace>.db`, nesting on
   a `/` in the namespace). The three-value `Layer` enum (`raw`/`silver`/`gold`) is
   **removed from `framework.core`**.
 - The raw/silver/gold **medallion** is an **application-level profile**
-  (`tools.medallion.medallion(catalog, subject)`), exposing the `.raw` / `.silver`
+  (`tools.medallion.medallion(registry, subject)`), exposing the `.raw` / `.silver`
   / `.gold` namespace Stores for one subject. The on-disk layout is unchanged —
   `<root>/<subject>/{raw,silver,gold}.db` (namespaces `<subject>/raw` etc.) — so
   per-subject isolation and the single-writer-per-file rule above still hold.

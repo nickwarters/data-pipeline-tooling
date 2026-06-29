@@ -116,7 +116,7 @@ def read_rows(store: Any, table: str) -> list[dict[str, Any]]:
 
     Collapses the ``store.reader(table).read().to_pandas()`` chain that every
     store-backed assertion repeats. ``store`` is any object that mints a Reader
-    for ``table`` — a namespace :class:`~framework.io.store.Store` or anything
+    for ``table`` — a namespace :class:`~tools.store.Store` or anything
     with the same ``reader(table)`` shape — so the read goes through the same
     public seam a pipeline does, not around it.
     """

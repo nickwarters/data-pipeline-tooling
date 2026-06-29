@@ -16,11 +16,11 @@ import pandas as pd
 
 from framework.core.dataset import Dataset
 from framework.io.readers import DatasetReader
-from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun
 from framework.run.builder import Pipeline
 from framework.transform.processors import AntiJoinWith, Filter, JoinWith, Score, Sort
 from tools.observability.run_log import RunLog
+from tools.store import Store
 
 
 def _available() -> Dataset:

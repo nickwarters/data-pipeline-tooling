@@ -4,11 +4,11 @@ import pandas as pd
 import pytest
 
 from framework.core.dataset import Dataset
-from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun
 from framework.run.builder import Pipeline
 from framework.run.run_context import RunContext
 from tools.orchestration import ForEach, ForEachPipelineError
+from tools.store import Store
 
 
 class RecordingReader:

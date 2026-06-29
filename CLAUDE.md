@@ -16,9 +16,11 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   facade sub-packages `framework/core` (the base vocabulary — `Dataset`, plus
   the declared-schema contract: the `validate(dataset)` checks, `SchemaValidator`,
   and the value rules — which everything else builds on; the medallion `Layer`
-  enum was **removed** here in #232 — the framework stores an opaque `namespace`
-  → file and the raw/silver/gold medallion is the application profile
-  `tools.medallion`), `framework/io`, `framework/transform` (reshaping,
+  enum was **removed** here in #232, and where a feed lands — the opaque
+  `namespace` → file `Store` / `StoreRegistry` and the raw/silver/gold medallion
+  profile over it — is application infrastructure in the sibling `tools` package
+  (`tools.store`, `tools.medallion`), not framework vocabulary), `framework/io`
+  (just the `Reader` / `Writer` ports and load strategies now), `framework/transform` (reshaping,
   incl. `SchemaCoercion`), and `framework/run`; plus the private
   `framework/_internal` (`connection`, `describe`, `schema`: cross-cutting
   helpers with no public name)). The `python -m cli` entry point (`scaffold`
@@ -59,10 +61,15 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   seam), `Reader` (`read() -> Dataset`; `CsvReader`, `SqliteReader`),
   `Writer` (`write(dataset) -> None`; owns target location + load strategy —
   added by #14), `Store` (namespace → file factory minting `writer(table,
-  strategy)` / `reader(table)` over one logical database; `StoreCatalog.store(namespace)`
-  resolves the file — #15/#232; the raw/silver/gold medallion is the
-  `tools.medallion` profile over it, `<subject>/{raw,silver,gold}.db`; `connect`
-  factory in `framework._internal.connection`), `Pipeline` (deferred DAG builder; nodes wired by `.read` / `.transform` /
+  strategy)` / `reader(table)` over one logical database; **lives in the sibling
+  `tools.store`, not `framework.io`** — where a feed lands is application
+  infrastructure, not framework vocabulary (#15/#232).
+  `StoreRegistry` mints namespace stores via `store(namespace)` **and** registers
+  named Readers/Writers — `register(name, reader|writer)` then `reader(name)` /
+  `writer(name)` — so a pipeline refers to a component by name; the raw/silver/gold
+  medallion is the `tools.medallion` profile over it, `<subject>/{raw,silver,gold}.db`;
+  `connect` factory in `framework._internal.connection`), `Pipeline` (deferred DAG
+  builder; nodes wired by `.read` / `.transform` /
   `.validate` / `.write` and executed in topological order at `.run()`).
 
 ### Commands

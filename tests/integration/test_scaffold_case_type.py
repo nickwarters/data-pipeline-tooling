@@ -20,10 +20,10 @@ import importlib
 import sys
 
 from cli import scaffold
-from framework.io import StoreCatalog
 from framework.run import RunContext
 from tests.framework_testing import read_rows
 from tools.medallion import medallion
+from tools.store import StoreRegistry
 
 
 def test_case_type_variant_lays_down_the_feed_with_its_case_type(tmp_path):
@@ -104,7 +104,7 @@ def test_rendered_case_type_pipeline_runs_and_refines_to_silver(tmp_path):
             if name == "widgets" or name.startswith("widgets."):
                 del sys.modules[name]
 
-    med = medallion(StoreCatalog(tmp_path / "data"), "widgets")
+    med = medallion(StoreRegistry(tmp_path / "data"), "widgets")
     raw = read_rows(med.raw, "widgets")
     silver_rows = read_rows(med.silver, "widgets")
     assert len(raw) > 0

@@ -13,7 +13,6 @@ from dataclasses import fields
 import pytest
 
 from framework.core import ValidationError
-from framework.io import StoreCatalog
 from framework.run import RunContext
 from tests.framework_testing import (
     RecordingRunLog,
@@ -22,6 +21,7 @@ from tests.framework_testing import (
     read_rows,
 )
 from tools.medallion import medallion
+from tools.store import StoreRegistry
 
 from .pipeline import FEED_NAME, raw_builder, run, silver_builder
 from .schema import MyfeedRow
@@ -30,7 +30,7 @@ from .schema import MyfeedRow
 def test_bundled_sample_feed_refines_through_to_gold(tmp_path):
     run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
 
-    med = medallion(StoreCatalog(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
 
     landed = read_rows(med.raw, FEED_NAME)
     assert len(landed) > 0

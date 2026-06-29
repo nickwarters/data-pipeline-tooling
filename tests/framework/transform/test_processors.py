@@ -14,7 +14,6 @@ import pandas as pd
 import pytest
 
 from framework.core.dataset import Dataset
-from framework.io.store import Store
 from framework.io.strategy import Refresh
 from framework.run.builder import Pipeline
 from framework.transform import AntiJoinWith as PublicAntiJoinWith
@@ -37,6 +36,7 @@ from framework.transform.processors import (
     VectorizedFilter,
 )
 from tools.observability.run_log import RunLog
+from tools.store import Store
 
 
 class RecordingReader:

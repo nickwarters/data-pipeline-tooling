@@ -9,18 +9,19 @@ per subject (ADR-0001).
 
 Usage::
 
-    from framework.io import StoreCatalog, Refresh
+    from framework.io import Refresh
+    from tools.store import StoreRegistry
     from tools.medallion import medallion
 
-    med = medallion(StoreCatalog(base_dir), "cases")
+    med = medallion(StoreRegistry(base_dir), "cases")
     med.raw.writer("cases", Refresh()).write(dataset)
     raw = med.raw.reader("cases").read()
     med.silver.quarantine_writer("cases")
 
 Each of ``med.raw`` / ``med.silver`` / ``med.gold`` is an ordinary
-:class:`~framework.io.store.Store` scoped to that layer's namespace, so the
-table-scoped ``writer(table, strategy)`` / ``reader(table)`` surface is exactly
-the framework's.
+:class:`~tools.store.Store` scoped to that layer's namespace, so the
+table-scoped ``writer(table, strategy)`` / ``reader(table)`` surface is the
+same one the registry mints.
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from framework.io import Store, StoreCatalog
+from tools.store import Store, StoreRegistry
 
 # The conventional medallion layer names. They are a profile convention here, not
 # a framework enum — the framework knows only namespaces (ADR-0001 amendment).
@@ -47,15 +48,15 @@ class Medallion:
     gold: Store
 
 
-def medallion(catalog: StoreCatalog, subject: str | os.PathLike[str]) -> Medallion:
-    """Mint a subject's raw/silver/gold namespace Stores from ``catalog``.
+def medallion(registry: StoreRegistry, subject: str | os.PathLike[str]) -> Medallion:
+    """Mint a subject's raw/silver/gold namespace Stores from ``registry``.
 
-    Each layer is the namespace ``<subject>/<layer>``, so the catalog's backend
+    Each layer is the namespace ``<subject>/<layer>``, so the registry's backend
     maps it to that subject's own file and the three stay together and isolated.
     """
     subject = str(subject)
     return Medallion(
-        raw=catalog.store(f"{subject}/{RAW}"),
-        silver=catalog.store(f"{subject}/{SILVER}"),
-        gold=catalog.store(f"{subject}/{GOLD}"),
+        raw=registry.store(f"{subject}/{RAW}"),
+        silver=registry.store(f"{subject}/{SILVER}"),
+        gold=registry.store(f"{subject}/{GOLD}"),
     )

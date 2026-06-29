@@ -92,8 +92,9 @@ def test_package_root_exposes_only_public_facade_modules():
 def test_an_author_can_ingest_a_feed_through_the_io_and_run_facades(tmp_path):
     # The blessed import path: sources/sinks from framework.io, the builder from
     # framework.run. Composing and running them lands the feed and reads back.
-    from framework.io import CsvReader, Refresh, Store
+    from framework.io import CsvReader, Refresh
     from framework.run import Pipeline
+    from tools.store import Store
 
     store = Store(tmp_path / "cases.db")
     p = Pipeline("cases")
@@ -147,9 +148,10 @@ def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_p
     # Selection-style narrowing: processors come from framework.transform and
     # the checks from framework.core, composed onto the framework.run Pipeline.
     from framework.core import ColumnValidator
-    from framework.io import CsvReader, Refresh, Store
+    from framework.io import CsvReader, Refresh
     from framework.run import Pipeline
     from framework.transform import Filter, Score, VectorizedDerive, VectorizedFilter
+    from tools.store import Store
 
     store = Store(tmp_path / "cases.db")
     p = Pipeline("cases")
@@ -178,9 +180,10 @@ def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_p
 
 def test_an_author_can_compose_ordered_stages_through_the_run_facade(tmp_path):
     from framework.core import ColumnValidator
-    from framework.io import CsvReader, Refresh, Store
+    from framework.io import CsvReader, Refresh
     from framework.run import Pipeline
     from framework.transform import Score
+    from tools.store import Store
 
     store = Store(tmp_path / "cases.db")
     p = Pipeline("cases")

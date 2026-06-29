@@ -2,16 +2,16 @@
 
 This is the framework's foundational vocabulary — the primitives every pipeline
 names. The pieces are: `Dataset` (the opaque carrier), `Reader` / `Writer`
-(source and sink IO), `Store` / `StoreCatalog` (a namespace → file factory),
-`Validator` and the declared-schema contract (`SchemaValidator`, value rules),
-the transforms (`SchemaCoercion`, `Filter` / `Score` / `JoinWith` and the Ingest
-reshapers), and the deferred `Pipeline` DAG builder with its `RunLog`
-observability. The raw/silver/gold **medallion is no longer framework
-vocabulary** (#232): the framework stores an opaque **`namespace`** (a logical
-database) → file, and the medallion is an application-level profile over it
-(`tools.medallion`). For the *why* behind each, see the ADRs referenced inline;
-for domain language (Case, CasePool, Feed, Reference Data, …) see
-[`../CONTEXT.md`](../CONTEXT.md).
+(source and sink IO), `Validator` and the declared-schema contract
+(`SchemaValidator`, value rules), the transforms (`SchemaCoercion`, `Filter` /
+`Score` / `JoinWith` and the Ingest reshapers), and the deferred `Pipeline` DAG
+builder with its `RunLog` observability. **Where** a feed lands is *not* framework
+vocabulary (#232): `framework.io` knows only the `Reader` / `Writer` ports and the
+load strategies. The namespace → file `Store` / `StoreRegistry` and the
+raw/silver/gold **medallion** profile over it are **application infrastructure**
+in the sibling `tools` package (`tools.store`, `tools.medallion`). For the *why*
+behind each, see the ADRs referenced inline; for domain language (Case, CasePool,
+Feed, Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
 
 Application code (`pipelines/` + the `case_review/` domain layer) imports these
 primitives through the public facades (`framework.core` / `framework.io` /
@@ -26,15 +26,18 @@ package, not a facade. See [`public-api.md`](public-api.md).
 ## The namespace Store and the medallion profile
 
 The framework's storage contract is the `Reader`/`Writer` ports + load strategies
-+ the `connect` seam. `Store` / `StoreCatalog` is a **factory** (the run engine
-never references it) that addresses an opaque **`namespace`** — a *logical
-database*, one SQLite file holding many related tables — and mints
-Readers/Writers over the tables in it. A normalised schema can span several
-namespaces (one database per namespace, related tables in each; cross-database
-joins stay in Python — ADR-0002).
++ the `connect` seam. `Store` / `StoreRegistry` (in `tools.store`, **application
+infrastructure** — the run engine never references it) addresses an opaque
+**`namespace`** — a *logical database*, one SQLite file holding many related
+tables — and mints Readers/Writers over the tables in it. `StoreRegistry` also
+**registers named components**: `register(name, reader|writer)` then
+`reader(name)` / `writer(name)`, so a pipeline can refer to a component by name
+rather than re-deriving it. A normalised schema can span several namespaces (one
+database per namespace, related tables in each; cross-database joins stay in
+Python — ADR-0002).
 
 The raw/silver/gold **medallion** is an application-level *profile* layered on
-top by `tools.medallion`, **not** a framework enum. `medallion(catalog, subject)`
+top by `tools.medallion`, **not** a framework enum. `medallion(registry, subject)`
 exposes three namespace Stores — `.raw` / `.silver` / `.gold` — for one subject,
 mapping to that subject's own files `<subject>/{raw,silver,gold}.db` on a network
 share. Each **subject** — a Case Type or a shared Reference Data set — owns its
@@ -267,7 +270,12 @@ the Dataset shape level; exact pandas dtype inference can still differ after a
 file round-trip, so schema-sensitive flows should continue to validate after
 reading.
 
-### `Store` / `StoreCatalog` — a namespace → file factory
+### `Store` / `StoreRegistry` — a namespace → file factory
+`Store` / `StoreRegistry` live in `tools.store` — **application infrastructure**,
+a sibling `tools` utility, not framework vocabulary (#232). `framework.io` knows
+only the `Reader` / `Writer` ports and the load strategies; *where* those ports
+read and write is an application concern.
+
 `Store(db_path, *, namespace=None, busy_timeout_ms=5000)` is the mouth of **one
 namespace** — a logical database, one SQLite file holding many related tables. It
 holds **no business logic** (ADR-0002) and makes **no** load decision (ADR-0003)
@@ -283,15 +291,19 @@ The strategy lives on the Writer the store mints, not on the store. The
 namespace's file (and its parent directories) is created on first write, so
 onboarding migrates nothing.
 
-`StoreCatalog(root, backend=..., busy_timeout_ms=5000)` owns shared
-configuration and mints namespace stores with `catalog.store(namespace)`. The
-default `DirectoryStoreBackend` maps a namespace to `<root>/<namespace>.db`,
-nesting on a `/` in the namespace (so the medallion's `<subject>/silver` →
-`<root>/<subject>/silver.db`), keeping physical layout out of every pipeline
-script while preserving the same `Store` responsibility: binding
-`(namespace, table)` to concrete Readers/Writers.
+`StoreRegistry(root, backend=..., busy_timeout_ms=5000)` owns shared
+configuration and plays **two roles**. As a *namespace factory* it mints stores
+with `registry.store(namespace)`; the default `DirectoryStoreBackend` maps a
+namespace to `<root>/<namespace>.db`, nesting on a `/` in the namespace (so the
+medallion's `<subject>/silver` → `<root>/<subject>/silver.db`), keeping physical
+layout out of every pipeline script. As a *named registry* it holds components a
+pipeline references by name: `registry.register(name, reader|writer)` records a
+Reader or Writer (classified by its `read()` / `write()` port and returned for
+one-line use), and `registry.reader(name)` / `registry.writer(name)` fetch the
+exact object back — handing the framework `Pipeline` the same concrete component
+it would otherwise wire by hand.
 
-The **medallion profile** (`tools.medallion.medallion(catalog, subject)`) layers
+The **medallion profile** (`tools.medallion.medallion(registry, subject)`) layers
 raw/silver/gold over this: it mints three namespace Stores — `med.raw` /
 `med.silver` / `med.gold` — for one subject, each a `Store` over
 `<subject>/<layer>.db`, isolated per subject (ADR-0001). Reference Data sets are
@@ -1034,11 +1046,12 @@ carries the final outcome. Full treatment: [retry.md](retry.md).
 ## Worked example
 
 ```python
-from framework.io import CsvReader, Refresh, StoreCatalog
+from framework.io import CsvReader, Refresh
+from tools.store import StoreRegistry
 from framework.run import Pipeline
 from tools.medallion import medallion
 
-med = medallion(StoreCatalog("/path/to/share"), "cases")
+med = medallion(StoreRegistry("/path/to/share"), "cases")
 p = Pipeline("cases")
 r = p.read(CsvReader("feed.csv"), name="read")
 p.write(med.raw.writer("cases", Refresh()), r, name="write")
