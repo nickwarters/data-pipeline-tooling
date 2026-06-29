@@ -5,11 +5,11 @@ import pandas as pd
 from case_review.case_pool import CasePool
 from case_review.case_type import CaseType, Variation
 from framework.core.dataset import Dataset
-from framework.io import StoreCatalog
 from framework.io.strategy import Refresh
 from tests._schema_fixtures import ActivityCase
 from tools.calendar import WorkingDayCalendar
 from tools.medallion import medallion
+from tools.store import StoreRegistry
 
 
 def _case_type() -> CaseType:
@@ -35,7 +35,7 @@ def test_fetch_available_cases_keeps_only_cases_inside_the_working_day_window(
     # last N working days of as_of (CONTEXT.md). The CasePool reads the ingested
     # silver and narrows to that window using the WorkingDayCalendar — the domain
     # retrieval Selection calls instead of a raw read.
-    gold = medallion(StoreCatalog(tmp_path), "cases").gold
+    gold = medallion(StoreRegistry(tmp_path), "cases").gold
     _land_gold_cases(
         gold,
         pd.DataFrame(
@@ -69,7 +69,7 @@ def test_fetch_available_cases_returns_an_empty_pool_when_none_are_eligible(
 ):
     # No Case dated inside the window yields an empty pool, not an error — an
     # empty SelectionPool is a legitimate outcome a downstream run must tolerate.
-    gold = medallion(StoreCatalog(tmp_path), "cases").gold
+    gold = medallion(StoreRegistry(tmp_path), "cases").gold
     _land_gold_cases(
         gold,
         pd.DataFrame(

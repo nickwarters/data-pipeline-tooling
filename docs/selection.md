@@ -83,11 +83,11 @@ its current Cases), and a `WorkingDayCalendar` (the availability arithmetic — 
 
 ```python
 from case_review.case_pool import CasePool
-from framework.io import StoreCatalog
+from tools.store import StoreRegistry
 from tools.calendar import WorkingDayCalendar
 from tools.medallion import medallion
 
-med = medallion(StoreCatalog("/share"), CASES.name)
+med = medallion(StoreRegistry("/share"), CASES.name)
 pool = CasePool(CASES, med.gold, WorkingDayCalendar())
 available = pool.fetch_available_cases(
     as_of=date(2026, 5, 29),

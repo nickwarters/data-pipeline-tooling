@@ -12,7 +12,8 @@ ADR-0005 for the *why* (fail-fast, atomic, no silent drops).
 or format knowledge — it just drives the sink:
 
 ```python
-from framework.io import CsvReader, Refresh, StoreCatalog
+from framework.io import CsvReader, Refresh
+from tools.store import StoreRegistry
 from framework.run import Pipeline
 from tools.medallion import medallion, RunLog
 
@@ -20,7 +21,7 @@ run_log = RunLog("/path/to/share/cases/runs.log")
 pipeline = Pipeline("cases", run_log=run_log)
 source = pipeline.read(CsvReader("feed.csv"), name="read")
 pipeline.write(
-    medallion(StoreCatalog("/path/to/share"), "cases").raw.writer("cases", Refresh()),
+    medallion(StoreRegistry("/path/to/share"), "cases").raw.writer("cases", Refresh()),
     source,
     name="write_raw",
 )

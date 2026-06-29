@@ -10,10 +10,11 @@ from framework.core import (
     SchemaValidator,
     format_failure,
 )
-from framework.io import AccumulateByRun, CsvReader, Reader, StoreCatalog, Writer
+from framework.io import AccumulateByRun, CsvReader, Reader, Writer
 from framework.run import Pipeline, RunContext, RunLog
 from framework.transform import SchemaCoercion, SchemaValueRulePartitioner
 from tools.medallion import medallion
+from tools.store import StoreRegistry
 
 from .case_type import CASE_TYPE
 
@@ -67,7 +68,7 @@ def silver_builder(
 
 def run(context: RunContext) -> Dataset:
     """Wire the real readers and writers for the environment and execute."""
-    med = medallion(StoreCatalog(context.base_dir), FEED_NAME)
+    med = medallion(StoreRegistry(context.base_dir), FEED_NAME)
     strategy = AccumulateByRun.from_context(context)
 
     # In reality, this CSV is fetched from the SAS server.

@@ -15,13 +15,13 @@ from __future__ import annotations
 
 from datetime import date
 
-from framework.io import StoreCatalog
 from framework.run import RunContext
 from pipelines.case_selection import rules
 from pipelines.case_selection.pipeline import SUBJECT, run
 from pipelines.case_selection.selection import SelectCasesToCheck, select_cases
 from tests.framework_testing import given_rows, read_rows
 from tools.medallion import medallion
+from tools.store import StoreRegistry
 
 AS_OF = date(2026, 6, 25)
 
@@ -182,7 +182,7 @@ def test_selection_builder_runs_in_memory_with_recording_writers():
 
 def test_run_assembles_the_selection_pool_from_the_bundled_feeds(tmp_path):
     pool = run(RunContext(base_dir=tmp_path, pipeline=SUBJECT, run_date=AS_OF))
-    med = medallion(StoreCatalog(tmp_path), SUBJECT)
+    med = medallion(StoreRegistry(tmp_path), SUBJECT)
 
     selection_pool = read_rows(med.gold, "selection_pool")
     # One Case per eligible adviser, highest-risk first. Case types show all four

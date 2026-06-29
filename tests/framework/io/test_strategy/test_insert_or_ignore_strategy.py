@@ -5,8 +5,8 @@ import sqlite3
 import pandas as pd
 
 from framework.core.dataset import Dataset
-from framework.io.store import Store
 from framework.io.strategy import InsertOrIgnore
+from tools.store import Store
 
 
 def _ds(*rows: dict) -> Dataset:

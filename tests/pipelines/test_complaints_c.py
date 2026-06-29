@@ -14,7 +14,6 @@ from pathlib import Path
 import pytest
 
 from framework.core import ValidationError
-from framework.io import StoreCatalog
 from framework.run import RunContext
 from pipelines.complaints_c.pipeline import FEED_NAME, raw_builder, run, silver_builder
 from tests.framework_testing import (
@@ -25,6 +24,7 @@ from tests.framework_testing import (
     read_rows,
 )
 from tools.medallion import medallion
+from tools.store import StoreRegistry
 
 
 def test_bundled_sample_feed_refines_through_to_silver(tmp_path):
@@ -41,7 +41,7 @@ def test_bundled_sample_feed_refines_through_to_silver(tmp_path):
 
     run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
 
-    med = medallion(StoreCatalog(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
 
     raw = read_rows(med.raw, FEED_NAME)
     assert len(raw) == 3

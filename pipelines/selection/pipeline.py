@@ -25,13 +25,14 @@ from typing import Any, Mapping
 
 from case_review.case_pool import CasePool
 from framework.core import PipelineError, format_failure
-from framework.io import AccumulateByRun, DatasetReader, StoreCatalog
+from framework.io import AccumulateByRun, DatasetReader
 from framework.run import FreshnessRequirement, Pipeline, RunContext
 from framework.transform import Filter, Score, Sort, Stamp
 from pipelines.ingest.pipeline import AS_OF, CASES
 from tools.calendar import WorkingDayCalendar
 from tools.environments import known_environments, resolve_base_dir
 from tools.medallion import medallion
+from tools.store import StoreRegistry
 
 # Selection only runs once the CasePool is current.
 UPSTREAMS = (FreshnessRequirement(upstream_pipeline="ingest"),)
@@ -56,7 +57,7 @@ def priority_score(row: Mapping[str, Any]) -> int:
 
 
 def run(context: RunContext):
-    med = medallion(StoreCatalog(context.base_dir), CASES.name)
+    med = medallion(StoreRegistry(context.base_dir), CASES.name)
     strategy = AccumulateByRun.from_context(context)
 
     # Named, pure rule functions stay independently testable while Filter/Score

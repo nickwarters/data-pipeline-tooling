@@ -13,9 +13,9 @@ from datetime import date
 
 from case_review.case_type import CaseType
 from framework.core import Dataset
-from framework.io import Store
 from framework.transform import Filter, SchemaCoercion
 from tools.calendar import WorkingDayCalendar
+from tools.store import Store
 
 
 class CasePool:

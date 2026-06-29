@@ -1,4 +1,3 @@
-from framework.io import StoreCatalog
 from pipelines.comprehensive_examples import (
     bronze_to_silver,
     high_risk_or_vulnerable,
@@ -6,12 +5,13 @@ from pipelines.comprehensive_examples import (
 )
 from tests.framework_testing import read_rows
 from tools.medallion import medallion
+from tools.store import StoreRegistry
 
 
 def test_complex_bronze_to_silver_example_combines_sources_and_validates(tmp_path):
     bronze_to_silver(tmp_path, run_id="2026-05-29")
 
-    catalog = StoreCatalog(tmp_path)
+    catalog = StoreRegistry(tmp_path)
     cases = read_rows(medallion(catalog, "complex_cases").silver, "case_snapshot")
     assert [row["case_ref"] for row in cases] == ["C-100", "C-101", "C-102"]
     assert (
@@ -49,7 +49,7 @@ def test_complex_silver_to_gold_example_assembles_reporting_outputs(tmp_path):
     bronze_to_silver(tmp_path, run_id="2026-05-29")
     silver_to_gold(tmp_path, run_id="2026-05-29")
 
-    catalog = StoreCatalog(tmp_path)
+    catalog = StoreRegistry(tmp_path)
     review_queue = read_rows(
         medallion(catalog, "complex_reporting").gold, "review_queue"
     )

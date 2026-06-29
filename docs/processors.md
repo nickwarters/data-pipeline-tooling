@@ -314,7 +314,7 @@ JoinWith(reference, on="adviser", how="inner")
 ### Explicit dependencies
 
 `JoinWith` never runs another pipeline. Upstream feeds should be run
-by the runner/catalog layer, freshness-checked there, and exposed to downstream
+by the runner/registry layer, freshness-checked there, and exposed to downstream
 selection as a read-only `Reader`, cached `Dataset`, or future named upstream
 output. The builder materializes each `JoinDependency` once before the processor
 step and records that read separately, so upstream dependency reads and
@@ -354,15 +354,15 @@ Python, and join another subject's silver Reference Data via an explicit
 read-only dependency.
 
 ```python
-from framework.io import StoreCatalog
+from tools.store import StoreRegistry
 from framework.run import Pipeline
 from framework.transform import AntiJoinWith, Filter, JoinDependency, JoinWith
 
 from tools.medallion import medallion
 
-catalog = StoreCatalog("/path/to/share")
-cases = medallion(catalog, "cases")
-advisers = medallion(catalog, "advisers")
+registry = StoreRegistry("/path/to/share")
+cases = medallion(registry, "cases")
+advisers = medallion(registry, "advisers")
 
 reference = JoinDependency("advisers", advisers.silver.reader("advisers"))
 already_reviewed = JoinDependency(

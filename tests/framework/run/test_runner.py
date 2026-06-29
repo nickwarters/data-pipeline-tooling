@@ -6,7 +6,6 @@ import pandas as pd
 import pytest
 
 from framework.core.dataset import Dataset
-from framework.io import StoreCatalog
 from framework.io.readers import DatasetReader, SqliteReader
 from framework.io.strategy import AccumulateByRun
 from framework.run import Requirement
@@ -23,6 +22,7 @@ from framework.run.runner import (
 from tools.medallion import medallion
 from tools.observability.run_log import RunLog
 from tools.observability.run_registry import RunRegistry
+from tools.store import StoreRegistry
 
 
 def _record_run(
@@ -279,7 +279,7 @@ def test_runner_context_correlates_logs_registry_and_accumulated_rows(tmp_path):
     runner = PipelineRunner()
 
     def handler(context):
-        gold = medallion(StoreCatalog(context.base_dir), context.subject).gold
+        gold = medallion(StoreRegistry(context.base_dir), context.subject).gold
         source = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c1", "c2"]}))
         p = Pipeline(context.label)
         r = p.read(DatasetReader(source), name="read")
@@ -315,7 +315,7 @@ def test_runner_redrives_a_business_run_under_an_explicit_logical_run_id(tmp_pat
     runner = PipelineRunner()
 
     def handler(context):
-        gold = medallion(StoreCatalog(context.base_dir), context.subject).gold
+        gold = medallion(StoreRegistry(context.base_dir), context.subject).gold
         source = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c1", "c2"]}))
         p = Pipeline(context.label)
         r = p.read(DatasetReader(source), name="read")
