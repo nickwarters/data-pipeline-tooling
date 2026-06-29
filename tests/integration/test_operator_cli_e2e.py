@@ -28,14 +28,27 @@ def _cli(*args):
 
 def test_dry_run_previews_without_touching_any_artifact(tmp_path):
     # Land real data first so there is something to preview.
-    first = _cli("run", "pipelines/ingest", str(tmp_path), "--run-date", "2026-05-29")
+    first = _cli(
+        "run",
+        "pipelines/ingest",
+        "--base-dir",
+        str(tmp_path),
+        "--run-date",
+        "2026-05-29",
+    )
     assert first.returncode == 0, first.stderr
     raw_db = tmp_path / "cases" / "raw.db"
     registry = tmp_path / "_registry" / "runs.db"
     before = {p: p.stat().st_mtime_ns for p in (raw_db, registry)}
 
     result = _cli(
-        "run", "pipelines/ingest", str(tmp_path), "--run-date", "2026-05-29", "--dry-run"
+        "run",
+        "pipelines/ingest",
+        "--base-dir",
+        str(tmp_path),
+        "--run-date",
+        "2026-05-29",
+        "--dry-run",
     )
 
     assert result.returncode == 0, result.stderr
@@ -48,13 +61,25 @@ def test_dry_run_previews_without_touching_any_artifact(tmp_path):
 
 
 def test_cli_runs_real_ingest_then_selection_end_to_end(tmp_path):
-    ingest = _cli("run", "pipelines/ingest", str(tmp_path), "--run-date", "2026-05-29")
+    ingest = _cli(
+        "run",
+        "pipelines/ingest",
+        "--base-dir",
+        str(tmp_path),
+        "--run-date",
+        "2026-05-29",
+    )
     assert ingest.returncode == 0, ingest.stderr
     assert (tmp_path / "cases" / "raw.db").exists()
     assert (tmp_path / "_registry" / "runs.db").exists()
 
     selection = _cli(
-        "run", "pipelines/selection", str(tmp_path), "--run-date", "2026-05-29"
+        "run",
+        "pipelines/selection",
+        "--base-dir",
+        str(tmp_path),
+        "--run-date",
+        "2026-05-29",
     )
 
     assert selection.returncode == 0, selection.stderr

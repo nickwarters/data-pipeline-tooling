@@ -643,9 +643,9 @@ The CLI `run` command addresses a pipeline by its location on disk, importing
 `run_pipeline`:
 
 ```sh
-python -m cli run pipelines/ingest /tmp/demo --run-date 2026-05-29
-python -m cli run pipelines/selection /tmp/demo --run-date 2026-05-29
-python -m cli run pipelines/claims /tmp/demo \
+python -m cli run pipelines/ingest --base-dir /tmp/demo --run-date 2026-05-29
+python -m cli run pipelines/selection --base-dir /tmp/demo --run-date 2026-05-29
+python -m cli run pipelines/claims --base-dir /tmp/demo \
   --run-date 2026-06-22 \
   --logical-run-id claims:ingest:20260622:claims_20260622_a.csv \
   --param source_file=/share/upstream/claims/claims_20260622_a.csv

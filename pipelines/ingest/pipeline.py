@@ -18,6 +18,7 @@ or run the module directly with a default run context::
 
 from __future__ import annotations
 
+import argparse
 import sys
 from dataclasses import dataclass
 from datetime import date
@@ -29,6 +30,7 @@ from framework.core import PipelineError, SchemaValidator, format_failure
 from framework.io import AccumulateByRun, CsvReader, StoreCatalog
 from framework.run import Pipeline, RunContext
 from framework.transform import Filter, SchemaCoercion
+from tools.environments import known_environments, resolve_base_dir
 from tools.medallion import medallion
 
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "activity_cases.csv"
@@ -103,7 +105,28 @@ def run(context: RunContext):
 
 
 def main(argv: list[str]) -> int:
-    base_dir = Path(argv[1]) if len(argv) > 1 else Path.cwd() / "data"
+    parser = argparse.ArgumentParser(
+        prog="python -m pipelines.ingest.pipeline",
+        description="Land the demo Case Type feed and refine it to gold.",
+    )
+    parser.add_argument(
+        "--base-dir",
+        dest="base_dir",
+        default=None,
+        help="medallion root directory; omit to resolve it from --env",
+    )
+    parser.add_argument(
+        "--env",
+        help="named environment to resolve base_dir from when no --base-dir is "
+        f"given ({', '.join(known_environments())}); defaults to $PIPELINE_ENV or dev",
+    )
+    args = parser.parse_args(argv[1:])
+    # An explicit --base-dir wins; otherwise resolve from the named environment.
+    try:
+        base_dir = Path(args.base_dir) if args.base_dir else resolve_base_dir(args.env)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     # Direct invocation builds a default run context (fixed AS_OF run date so the
     # demo is deterministic) and runs the same handler the framework would.
     context = RunContext(base_dir=base_dir, pipeline="ingest", run_date=AS_OF)

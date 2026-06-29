@@ -10,7 +10,7 @@ selection logic testable while the framework still owns the IO, schema
 enforcement, and gold write.
 
 ```sh
-python -m cli run pipelines/case_selection /tmp/selection-demo
+python -m cli run pipelines/case_selection --base-dir /tmp/selection-demo
 python -m pipelines.case_selection.pipeline /tmp/selection-demo   # or directly
 ```
 
