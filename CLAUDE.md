@@ -76,7 +76,7 @@ python3 -m venv .venv
 .venv/bin/python -m cli scaffold orders            # scaffold a feed -> pipelines/orders/ + tests/pipelines/test_orders.py (#97)
 .venv/bin/python -m cli scaffold orders --from-feed-file sample.csv  # seed schema/sample/test from a real CSV header
 .venv/bin/python -m cli scaffold --case-type claims # scaffold a Case Type ingest feed (source->raw->silver, identity declared; #155)
-.venv/bin/python -m cli run pipelines/ingest /tmp/demo            # operator CLI: run/orchestrate/status/runs/log (see docs/operator-cli.md)
+.venv/bin/python -m cli run pipelines/ingest --base-dir /tmp/demo  # operator CLI: run/orchestrate/status/runs/log (see docs/operator-cli.md)
 .venv/bin/pre-commit run --all-files             # lint + format the whole tree on demand
 ```
 

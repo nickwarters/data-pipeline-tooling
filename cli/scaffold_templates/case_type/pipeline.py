@@ -138,15 +138,15 @@ def main(argv: list[str]) -> int:
         description="Refine the myfeed feed source -> raw -> silver.",
     )
     parser.add_argument(
-        "base_dir",
-        nargs="?",
+        "--base-dir",
+        dest="base_dir",
         default=None,
         help="medallion root directory; omit to resolve it from --env",
     )
     parser.add_argument(
         "--env",
-        help="named environment to resolve base_dir from when no path is given "
-        f"({', '.join(known_environments())}); defaults to $PIPELINE_ENV or dev",
+        help="named environment to resolve base_dir from when no --base-dir is "
+        f"given ({', '.join(known_environments())}); defaults to $PIPELINE_ENV or dev",
     )
     parser.add_argument(
         "--describe",

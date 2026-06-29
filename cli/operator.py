@@ -55,10 +55,10 @@ def _resolve_app(name: str):
 
 
 def _base_dir_or_report(args: argparse.Namespace) -> Path | None:
-    """Resolve ``base_dir`` from an explicit path or ``--env``.
+    """Resolve ``base_dir`` from ``--base-dir`` or ``--env``.
 
-    An explicit positional ``base_dir`` always wins (backward compatible); when
-    omitted it is resolved from ``--env`` (or ``$PIPELINE_ENV``) via
+    An explicit ``--base-dir`` always wins; when omitted it is resolved from
+    ``--env`` (or ``$PIPELINE_ENV``) via
     :func:`tools.environments.resolve_base_dir`. Returns ``None`` after printing
     an actionable message when the environment can't be resolved.
     """
@@ -72,17 +72,17 @@ def _base_dir_or_report(args: argparse.Namespace) -> Path | None:
 
 
 def _add_base_dir_args(parser: argparse.ArgumentParser) -> None:
-    """Add the shared ``base_dir`` positional and ``--env`` option to a command."""
+    """Add the shared ``--base-dir`` and ``--env`` options to a command."""
     parser.add_argument(
-        "base_dir",
-        nargs="?",
+        "--base-dir",
+        dest="base_dir",
         default=None,
         help="medallion root directory; omit to resolve it from --env",
     )
     parser.add_argument(
         "--env",
-        help="named environment to resolve base_dir from when no path is given "
-        f"({', '.join(known_environments())}); defaults to ${ENV_VAR} or "
+        help="named environment to resolve base_dir from when no --base-dir is "
+        f"given ({', '.join(known_environments())}); defaults to ${ENV_VAR} or "
         "the dev environment",
     )
 
