@@ -20,12 +20,16 @@ branch is **`py-to-markdown`** — if the user names something close but wrong
    ```sh
    git checkout py-to-markdown && git pull --ff-only
    ```
-2. **Merge main**
+2. **Merge the latest main**
    ```sh
-   git merge main
+   git fetch origin
+   git merge origin/main
    ```
-   If it merges cleanly, continue. **If there are conflicts, stop** and report
-   them — do not auto-resolve; mirror content depends on the merged sources.
+   Merge `origin/main`, **not** the local `main` ref — the local `main` can lag
+   behind the remote, in which case `git merge main` is a silent no-op that
+   leaves the mirrors stale. If it merges cleanly, continue. **If there are
+   conflicts, stop** and report them — do not auto-resolve; mirror content
+   depends on the merged sources.
 3. **Regenerate the mirrors** (needs the venv — system Python lacks deps):
    ```sh
    .venv/bin/python scripts/generate_md_mirrors.py
