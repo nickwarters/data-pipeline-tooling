@@ -139,3 +139,24 @@ A downstream that was **blocked** by the failure (its upstream was stale) clears
 on the next `orchestrate` pass once the upstream has a fresh successful run —
 freshness is re-evaluated each pass, so no manual unblock is needed
 ([operator-cli.md](operator-cli.md)).
+
+## "The run explains itself" — where each explanation lives
+
+You rarely need a debugger to understand what a run did or why it failed, because
+a run already records the evidence for two distinct questions on two distinct
+surfaces — joined by the run's `run_id` / `execution_id`:
+
+| Question | Surface | Unit | Where |
+|----------|---------|------|-------|
+| **Why did the run fail?** | the run log + `framework.core.format_failure` | per **step** | this guide; [run-log-format.md](run-log-format.md), [ADR-0005](adr/0005-fail-fast-atomic-runs-and-observability.md) |
+| **Why was this Case (not) selected?** | the Selection **trace** table | per **row** | [selection.md](selection.md); [ADR-0008](adr/0008-selection-explainability.md) |
+
+This self-explanation is an **emergent property** of those existing surfaces (plus
+`.describe()` for static plan inspection), not a separate feature — there is no
+unified `explain` command or model, and **authors owe nothing extra** for it: a
+genuine bug deliberately keeps its traceback and stays uncategorised
+([§2](#2-diagnose--read-the-message-not-the-traceback)), and only *declared
+expectations* explain themselves. The two surfaces are kept separate on purpose;
+the shared run identity is the only link they need. See
+[#288](https://github.com/nickwarters/data-pipeline-tooling/issues/288) for the
+design decision.
