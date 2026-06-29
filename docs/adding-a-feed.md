@@ -54,7 +54,8 @@ the same logical run id replace rather than duplicate), then runs the three hops
 in order and returns the gold `Dataset`. Pass `describe=True` (CLI `--describe`)
 to print each pipeline's plan before it runs. `main()` is the thin entry for
 running the module directly — it parses args with `argparse` (an optional
-`base_dir` and `--describe`), builds a default `RunContext`, then catches the
+`base_dir`, `--env`, and `--describe`), builds a default `RunContext`, then
+catches the
 `PipelineError` family and prints `framework.core.format_failure(exc)` to
 `stderr` with a non-zero exit, so an expected fail-fast abort (a failed check)
 reads as a clear message rather than an unhandled traceback (a genuine bug is not
@@ -72,11 +73,18 @@ imports the feed absolutely (`from pipelines.orders.pipeline import …`):
 
 ```sh
 python -m cli run pipelines/orders /data   # run via the framework (freshness + run log)
+python -m cli run pipelines/orders --env dev  # resolve base_dir from a named environment
 python -m cli run pipelines/orders /data --dry-run  # preview each step, write nothing
 python -m pipelines.orders.pipeline /data        # or directly: refine the bundled sample to gold
+python -m pipelines.orders.pipeline --env dev    # directly, base_dir from the dev environment
 python -m pipelines.orders.pipeline /data --describe  # print each hop's plan, then run it
 python -m pytest tests/pipelines/test_orders.py  # the generated test passes as-is
 ```
+
+Both `base_dir` and `--env` resolve the medallion root the same way the operator
+CLI does (see [operator-cli.md](operator-cli.md)): an explicit path wins,
+otherwise `--env` (or `$PIPELINE_ENV`) selects an environment from
+`tools.environments`, defaulting to `dev` → `./data`.
 
 `--dry-run` is the local-development inner loop: it runs the feed end to end
 against real data but **lands nothing**, printing per-step columns, dtypes, row

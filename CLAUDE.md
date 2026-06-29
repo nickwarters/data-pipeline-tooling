@@ -23,7 +23,8 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `framework/_internal` (`connection`, `describe`, `schema`: cross-cutting
   helpers with no public name)). The `python -m cli` entry point (`scaffold`
   plus the operator commands; see below) lives in the top-level `cli/` package,
-  and the cross-cutting `retry` / `calendar` / `medallion` / orchestration /
+  and the cross-cutting `retry` / `calendar` / `medallion` / `environments` /
+  orchestration /
   observability utilities in the top-level `tools/` package — both siblings of
   `framework/`,
   not facades. Then `case_review/` (the case-review *application* — domain types
@@ -48,7 +49,8 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   `framework.io` / `framework.transform` / `framework.run`, not the modules
   behind them (those are internal layout); the cross-cutting `tools.*` helpers
   (`tools.retry` / `tools.calendar` / `tools.orchestration` /
-  `tools.observability`) are a sibling utility package, not a facade.
+  `tools.observability` / `tools.environments`) are a sibling utility package,
+  not a facade.
   The facades are the stable contract;
   [`docs/public-api.md`](docs/public-api.md) lists the surface, the internal
   modules, and the packaging non-goal. `tests/integration/test_public_api.py`

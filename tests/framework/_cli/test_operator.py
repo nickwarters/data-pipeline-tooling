@@ -286,3 +286,124 @@ def test_run_validation_failure_reports_clear_error(tmp_path, monkeypatch, capsy
 
     assert code == 1
     assert "below required minimum" in capsys.readouterr().err
+
+
+def test_run_resolves_base_dir_from_env(tmp_path):
+    # No positional base_dir: --env names the environment, whose configured root
+    # comes from its OS variable (tools.environments). The registry lands there.
+    env = {
+        **os.environ,
+        "PYTHONPATH": os.pathsep.join(
+            [str(FIXTURES), os.environ.get("PYTHONPATH", "")]
+        ),
+        "PIPELINE_DATA_DIR_DEV": str(tmp_path),
+    }
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "cli",
+            "run",
+            "clipipelines/_source",
+            "--env",
+            "dev",
+            "--run-date",
+            "2026-05-29",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "_registry" / "runs.db").exists()
+
+
+def test_explicit_base_dir_overrides_env(tmp_path):
+    # An explicit positional path wins even when --env is also given.
+    explicit = tmp_path / "explicit"
+    env = {
+        **os.environ,
+        "PYTHONPATH": os.pathsep.join(
+            [str(FIXTURES), os.environ.get("PYTHONPATH", "")]
+        ),
+        "PIPELINE_DATA_DIR_DEV": str(tmp_path / "from_env"),
+    }
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "cli",
+            "run",
+            "clipipelines/_source",
+            str(explicit),
+            "--env",
+            "dev",
+            "--run-date",
+            "2026-05-29",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (explicit / "_registry" / "runs.db").exists()
+    assert not (tmp_path / "from_env").exists()
+
+
+def test_run_reports_unconfigured_env_without_traceback():
+    env = {
+        **os.environ,
+        "PYTHONPATH": os.pathsep.join(
+            [str(FIXTURES), os.environ.get("PYTHONPATH", "")]
+        ),
+    }
+    env.pop("PIPELINE_DATA_DIR_PROD", None)
+    result = subprocess.run(
+        [sys.executable, "-m", "cli", "run", "clipipelines/_source", "--env", "prod"],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        env=env,
+    )
+
+    assert result.returncode == 1
+    assert "PIPELINE_DATA_DIR_PROD" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_status_and_log_resolve_base_dir_from_env(tmp_path):
+    # Populate a registry under the env-resolved root, then query it via --env.
+    env = {
+        **os.environ,
+        "PYTHONPATH": os.pathsep.join(
+            [str(FIXTURES), os.environ.get("PYTHONPATH", "")]
+        ),
+        "PIPELINE_DATA_DIR_DEV": str(tmp_path),
+    }
+
+    def cli_env(*args):
+        return subprocess.run(
+            [sys.executable, "-m", "cli", *args],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+            env=env,
+        )
+
+    assert (
+        cli_env(
+            "run", "clipipelines/_source", "--env", "dev", "--run-date", "2026-05-29"
+        ).returncode
+        == 0
+    )
+    status = cli_env("status", "--env", "dev")
+    assert status.returncode == 0, status.stderr
+    assert "_source" in status.stdout
+    # log takes a trailing `subject` positional; base_dir comes from --env.
+    log = cli_env("log", "_source", "--env", "dev")
+    assert log.returncode == 0, log.stderr
+    assert "_source" in log.stdout

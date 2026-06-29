@@ -28,6 +28,30 @@ also writes `<base>/_orchestration/runs.db`, a separate SQLite decision log for
 due, skipped, succeeded, failed, and blocked scheduled items. Actual pipeline
 execution records remain in `RunLog` / `RunRegistry` only.
 
+### The base directory — an explicit path or `--env`
+
+The `base_dir` positional is **optional**. Pass it to point at a root directly
+(unchanged from before), or omit it and let `--env` resolve it from a named
+environment — `prod`, `dev`, and so on. Which physical root each environment maps
+to is an operational concern, not the framework's, so the mapping lives in the
+sibling utility [`tools.environments`](public-api.md): each environment reads its
+root from an OS environment variable (`PIPELINE_DATA_DIR_PROD`,
+`PIPELINE_DATA_DIR_DEV`, …), so a machine-specific path — a UNC share on Windows,
+a local directory on macOS — never has to be committed to source. `dev` falls
+back to `./data` so a fresh clone runs out of the box.
+
+```sh
+python -m cli run pipelines/ingest --env prod      # base_dir from PIPELINE_DATA_DIR_PROD
+python -m cli run pipelines/ingest --env dev        # base_dir from PIPELINE_DATA_DIR_DEV or ./data
+python -m cli run pipelines/ingest /explicit/path   # an explicit path still wins
+```
+
+`--env` defaults to the `PIPELINE_ENV` OS variable, then to `dev`. An explicit
+positional path always wins. An unknown environment, or a known one whose
+variable is unset and that has no fallback (e.g. `prod`), exits non-zero with an
+actionable message rather than a traceback. The same `base_dir` / `--env` choice
+applies to every command (`run`, `orchestrate`, `runs`, `status`, `log`).
+
 `run` addresses a pipeline by **its location on disk**: `pipelines/orders` maps
 to the module `pipelines.orders.pipeline`, imported *at runtime*, whose
 `run(context)` callable the framework executes (reading an optional `UPSTREAMS`
@@ -41,7 +65,7 @@ run store directly and need neither.)
 ## `run` — execute a pipeline by its path
 
 ```sh
-python -m cli run pipelines/<name> <base_dir> \
+python -m cli run pipelines/<name> [<base_dir>] [--env ENV] \
     [--run-date YYYY-MM-DD] [--logical-run-id ID] [--freshness-days N] \
     [--param KEY=VALUE ...] [--dry-run]
 ```

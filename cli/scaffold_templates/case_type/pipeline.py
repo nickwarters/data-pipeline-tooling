@@ -42,6 +42,7 @@ from framework.core import (
 from framework.io import AccumulateByRun, CsvReader, Reader, StoreCatalog, Writer
 from framework.run import Pipeline, RunContext, RunLog
 from framework.transform import SchemaCoercion, SchemaValueRulePartitioner
+from tools.environments import known_environments, resolve_base_dir
 from tools.medallion import medallion
 
 from .case_type import CASE_TYPE
@@ -140,7 +141,12 @@ def main(argv: list[str]) -> int:
         "base_dir",
         nargs="?",
         default=None,
-        help="medallion root directory (default: ./data)",
+        help="medallion root directory; omit to resolve it from --env",
+    )
+    parser.add_argument(
+        "--env",
+        help="named environment to resolve base_dir from when no path is given "
+        f"({', '.join(known_environments())}); defaults to $PIPELINE_ENV or dev",
     )
     parser.add_argument(
         "--describe",
@@ -148,7 +154,12 @@ def main(argv: list[str]) -> int:
         help="print each pipeline's plan before running it",
     )
     args = parser.parse_args(argv[1:])
-    base_dir = Path(args.base_dir) if args.base_dir else Path.cwd() / "data"
+    # An explicit path wins; otherwise resolve base_dir from the named environment.
+    try:
+        base_dir = Path(args.base_dir) if args.base_dir else resolve_base_dir(args.env)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
 
     from framework.run import PipelineRunner
 
