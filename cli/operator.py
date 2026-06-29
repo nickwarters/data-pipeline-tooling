@@ -36,6 +36,7 @@ from pathlib import Path
 from framework.core import PipelineError, format_failure
 from framework.run import RunRegistry, dry_run_pipeline, run_pipeline
 from tools.calendar import WorkingDayCalendar
+from tools.environments import ENV_VAR, known_environments, resolve_base_dir
 from tools.orchestration import Orchestrator
 
 # Mirrors the layout PipelineRunner writes: a per-base run registry and the
@@ -53,7 +54,40 @@ def _resolve_app(name: str):
     return importlib.import_module(name)
 
 
-def _open_registry(base_dir: str) -> RunRegistry | None:
+def _base_dir_or_report(args: argparse.Namespace) -> Path | None:
+    """Resolve ``base_dir`` from an explicit path or ``--env``.
+
+    An explicit positional ``base_dir`` always wins (backward compatible); when
+    omitted it is resolved from ``--env`` (or ``$PIPELINE_ENV``) via
+    :func:`tools.environments.resolve_base_dir`. Returns ``None`` after printing
+    an actionable message when the environment can't be resolved.
+    """
+    if getattr(args, "base_dir", None):
+        return Path(args.base_dir)
+    try:
+        return resolve_base_dir(getattr(args, "env", None))
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return None
+
+
+def _add_base_dir_args(parser: argparse.ArgumentParser) -> None:
+    """Add the shared ``base_dir`` positional and ``--env`` option to a command."""
+    parser.add_argument(
+        "base_dir",
+        nargs="?",
+        default=None,
+        help="medallion root directory; omit to resolve it from --env",
+    )
+    parser.add_argument(
+        "--env",
+        help="named environment to resolve base_dir from when no path is given "
+        f"({', '.join(known_environments())}); defaults to ${ENV_VAR} or "
+        "the dev environment",
+    )
+
+
+def _open_registry(base_dir: str | Path) -> RunRegistry | None:
     """Open the run registry under ``base_dir``, or ``None`` if none exists yet."""
     path = Path(base_dir).joinpath(*_REGISTRY_RELPATH)
     if not path.exists():
@@ -61,7 +95,7 @@ def _open_registry(base_dir: str) -> RunRegistry | None:
     return RunRegistry(path)
 
 
-def _load_registry_or_report(base_dir: str) -> RunRegistry | None:
+def _load_registry_or_report(base_dir: str | Path) -> RunRegistry | None:
     """Open the registry, printing a clear operator message when it is absent."""
     registry = _open_registry(base_dir)
     if registry is None:
@@ -118,12 +152,15 @@ def _run(args: argparse.Namespace) -> int:
     module = _load_pipeline_module(args.pipeline)
     if module is None:
         return 1
+    base_dir = _base_dir_or_report(args)
+    if base_dir is None:
+        return 1
     name = args.pipeline.strip("/").split("/")[-1]
     if args.dry_run:
         report = dry_run_pipeline(
             module.run,
             name,
-            Path(args.base_dir),
+            base_dir,
             run_date=args.run_date,
             logical_run_id=args.logical_run_id,
             freshness_days=args.freshness_days,
@@ -137,7 +174,7 @@ def _run(args: argparse.Namespace) -> int:
         run_pipeline(
             module.run,
             name,
-            Path(args.base_dir),
+            base_dir,
             upstreams=tuple(getattr(module, "UPSTREAMS", ())),
             run_date=args.run_date,
             logical_run_id=args.logical_run_id,
@@ -151,6 +188,9 @@ def _run(args: argparse.Namespace) -> int:
 
 
 def _orchestrate(args: argparse.Namespace) -> int:
+    base_dir = _base_dir_or_report(args)
+    if base_dir is None:
+        return 1
     app = _resolve_app(args.app)
     try:
         orchestrator = Orchestrator(
@@ -160,16 +200,14 @@ def _orchestrate(args: argparse.Namespace) -> int:
         )
         if args.loop:
             results = orchestrator.run_until_complete(
-                Path(args.base_dir),
+                base_dir,
                 run_date=args.run_date,
                 poll_seconds=args.poll_seconds,
                 max_idle_polls=args.max_idle_polls,
             )
             decisions = [d for result in results for d in result.decisions]
         else:
-            result = orchestrator.run_due_once(
-                Path(args.base_dir), run_date=args.run_date
-            )
+            result = orchestrator.run_due_once(base_dir, run_date=args.run_date)
             decisions = list(result.decisions)
     except PipelineError as exc:
         print(format_failure(exc), file=sys.stderr)
@@ -188,7 +226,10 @@ def _orchestrate(args: argparse.Namespace) -> int:
 
 
 def _runs(args: argparse.Namespace) -> int:
-    registry = _load_registry_or_report(args.base_dir)
+    base_dir = _base_dir_or_report(args)
+    if base_dir is None:
+        return 1
+    registry = _load_registry_or_report(base_dir)
     if registry is None:
         return 1
     summaries = registry.query_runs(pipeline=args.pipeline, status=args.status)
@@ -217,7 +258,10 @@ def _format_record(record: dict) -> str:
 
 
 def _log(args: argparse.Namespace) -> int:
-    path = Path(args.base_dir) / _RUNS_RELPATH / f"{args.subject}.log"
+    base_dir = _base_dir_or_report(args)
+    if base_dir is None:
+        return 1
+    path = base_dir / _RUNS_RELPATH / f"{args.subject}.log"
     if not path.exists():
         print(f"no run log at {path}", file=sys.stderr)
         return 1
@@ -247,7 +291,10 @@ def _log(args: argparse.Namespace) -> int:
 
 
 def _status(args: argparse.Namespace) -> int:
-    registry = _load_registry_or_report(args.base_dir)
+    base_dir = _base_dir_or_report(args)
+    if base_dir is None:
+        return 1
+    registry = _load_registry_or_report(base_dir)
     if registry is None:
         return 1
     if args.pipeline is not None:
@@ -274,7 +321,7 @@ def register(sub) -> None:
         "pipeline",
         help="the pipeline's location under pipelines/, e.g. pipelines/orders",
     )
-    run.add_argument("base_dir")
+    _add_base_dir_args(run)
     run.add_argument("--run-date", type=_date, default=dt.date.today())
     run.add_argument(
         "--logical-run-id",
@@ -300,7 +347,7 @@ def register(sub) -> None:
     run.set_defaults(func=_run)
 
     orchestrate = sub.add_parser("orchestrate", help="run scheduled due work")
-    orchestrate.add_argument("base_dir")
+    _add_base_dir_args(orchestrate)
     orchestrate.add_argument("--run-date", type=_date, default=dt.date.today())
     mode = orchestrate.add_mutually_exclusive_group()
     mode.add_argument("--once", action="store_true", help="run one due-work pass")
@@ -325,7 +372,7 @@ def register(sub) -> None:
     orchestrate.set_defaults(func=_orchestrate)
 
     runs = sub.add_parser("runs", help="list recent runs from the run registry")
-    runs.add_argument("base_dir")
+    _add_base_dir_args(runs)
     runs.add_argument(
         "--pipeline", help="narrow to one pipeline label, e.g. cases/ingest"
     )
@@ -336,13 +383,13 @@ def register(sub) -> None:
     runs.set_defaults(func=_runs)
 
     status = sub.add_parser("status", help="show the latest run status per pipeline")
-    status.add_argument("base_dir")
+    _add_base_dir_args(status)
     status.add_argument("--pipeline", help="one pipeline label, e.g. cases/ingest")
     status.add_argument("--subject", help="narrow to a subject's pipelines, e.g. cases")
     status.set_defaults(func=_status)
 
     log = sub.add_parser("log", help="inspect/summarize a run log file")
-    log.add_argument("base_dir")
+    _add_base_dir_args(log)
     log.add_argument("subject", help="the subject whose _runs/<subject>.log to read")
     log.add_argument(
         "--run-id", help="only records whose execution id starts with this"

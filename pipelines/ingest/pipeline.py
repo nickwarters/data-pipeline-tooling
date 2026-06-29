@@ -29,6 +29,7 @@ from framework.core import PipelineError, SchemaValidator, format_failure
 from framework.io import AccumulateByRun, CsvReader, StoreCatalog
 from framework.run import Pipeline, RunContext
 from framework.transform import Filter, SchemaCoercion
+from tools.environments import resolve_base_dir
 from tools.medallion import medallion
 
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "activity_cases.csv"
@@ -103,7 +104,9 @@ def run(context: RunContext):
 
 
 def main(argv: list[str]) -> int:
-    base_dir = Path(argv[1]) if len(argv) > 1 else Path.cwd() / "data"
+    # An explicit path wins; otherwise resolve base_dir from the named
+    # environment ($PIPELINE_ENV, else dev -> ./data) via tools.environments.
+    base_dir = Path(argv[1]) if len(argv) > 1 else resolve_base_dir()
     # Direct invocation builds a default run context (fixed AS_OF run date so the
     # demo is deterministic) and runs the same handler the framework would.
     context = RunContext(base_dir=base_dir, pipeline="ingest", run_date=AS_OF)
