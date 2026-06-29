@@ -175,6 +175,36 @@ readers expose `chunks()`, not `read()`, so they sit *beside* the single-shot
 streaming consumers (e.g. a monthly projection that appends each chunk to an
 indexed silver table) compose on top of them.
 
+**Chunk-level row filtering (allow-list / predicate pushdown).** When a source
+is enormous (100M+ rows) but only a small, known subset is wanted (e.g. <100K
+ids we already track), filtering *after* a whole read is impossible — the rows
+can never be materialised at once. The filter has to be **pushed down into the
+per-chunk loop**, beside where column projection already happens, so both memory
+*and* the landed table stay bounded. Two wrappers over any `ChunkReader` provide
+this (#287):
+
+- `KeyFilterChunkReader(inner, key_column, allowed_keys)` — the id-membership
+  (**semi-join**) case: keep only rows whose `key_column` is in `allowed_keys`,
+  a known set of ids-of-interest. The set grows run-over-run but is bounded
+  (~100K), so it stays an in-memory `set` / `frozenset` for a cheap per-chunk
+  membership test; pass the current set in each run. Keys are **normalised on
+  both sides** before the test (see below), so a SAS numeric id (`3.0`) matches
+  an `int` allow-list entry (`3`) and a space-padded `bytes` id (`b'A  '`)
+  matches a `str` entry (`"A"`) rather than a float-vs-int / bytes-vs-str
+  mismatch silently dropping every row.
+- `PredicateChunkReader(inner, predicate)` — the general form
+  `KeyFilterChunkReader` is built on: apply any `ChunkFilter`
+  (`Callable[[Dataset], Dataset]`) per chunk.
+
+Because the filter runs **per chunk, before concatenation**, a 100M-row source
+with a 100K allow-list lands ~100K rows with memory bounded by one chunk. A
+chunk the filter empties yields **nothing** (consistent with the zero-row-chunk
+skip), and both wrappers expose `rows_scanned` / `rows_kept` for the most recent
+`chunks()` pass so a run can report how much of the source it actually needed
+(ties to the run-observability work). They wrap and compose with
+`ChunkedCsvReader` / `SasFileReader` / any future chunk reader, keeping the
+readers themselves single-purpose.
+
 **Table and column names you configure** (the `table` and `columns=[...]` you pass
 to a `SqliteReader`/Writer) accept **any string** — spaces, hyphens, mixed case,
 and SQL reserved words are all fine. Every identifier is double-quoted at the
