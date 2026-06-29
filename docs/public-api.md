@@ -1,4 +1,4 @@
-# The public API — what pipeline authors import (#95)
+# The public API — what pipeline authors import
 
 The framework is **import-only** (on `sys.path`, never `pip install`ed — see
 [CLAUDE.md](../CLAUDE.md) and *Packaging* below). This document is the contract
@@ -15,14 +15,21 @@ rule that follows from that split.
 > `case_review/` to this boundary.
 
 ```python
-from framework.core import Dataset, RAW, SILVER, GOLD
+from framework.core import Dataset
 from framework.io import CsvReader, StoreCatalog, Refresh
 from framework.transform import Filter, VectorizedFilter, SchemaCoercion
 from framework.core import ColumnValidator, SchemaValidator, ValidationError
 from framework.run import Pipeline, PipelineRunner, RunContext
+from tools.medallion import medallion
 from tools.retry import RetryPolicy
 from tools.calendar import WorkingDayCalendar
 ```
+
+The framework stores an opaque **`namespace`** (a logical database) → file; the
+raw/silver/gold **medallion is no longer framework vocabulary**. It is an
+application-level store profile in the sibling `tools` package
+(`tools.medallion.medallion(catalog, subject)` → `.raw` / `.silver` / `.gold`
+namespace Stores), not a `framework.core` export.
 
 The checks (`ColumnValidator` / `SchemaValidator` / the value rules) live on
 `framework.core` alongside the base vocabulary — there is no separate `validate`
@@ -55,12 +62,12 @@ Each facade is a **sub-package** whose `__init__.py` does the re-exporting, with
 the implementation modules living alongside it:
 
 - `framework/core/` — the foundational vocabulary every other facade builds on:
-  `dataset` (`Dataset`), `layers` (the medallion `Layer` / `RAW` / `SILVER` /
-  `GOLD`), `protocols` (the small shared `Reader` / `Writer` / `Processor` /
-  `Validator` shapes), and the **declared-schema contract** — the
+  `dataset` (`Dataset`), `protocols` (the small shared `Reader` / `Writer` /
+  `Processor` / `Validator` shapes), and the **declared-schema contract** — the
   `validate(dataset)` `validators`, the `schema` check (`SchemaValidator`), and
   the `value_rules` (`Nullable` / `Pattern` / ...). It sits *below* the task
-  facades.
+  facades. (The medallion `Layer` enum was **removed** here — #232 — in favour of
+  the namespace Store + the `tools.medallion` profile.)
 - `framework/io/` — `readers`, `writers`, `store`, `strategy`, `sql`, `remote`.
 - `framework/transform/` — the dataset-reshaping primitives: `processors`,
   `coercion` (`SchemaCoercion` — the *coerce* half of the schema adapter),
@@ -108,8 +115,8 @@ builds on them.
 | Names | What |
 |-------|------|
 | `Dataset` | The opaque bulk tabular carrier (pandas behind the seam) that flows through every Reader, Processor, Validator, and Writer. |
-| `Layer`, `RAW`, `SILVER`, `GOLD` | The medallion layer constants. |
-| `Reader`, `Writer`, `Processor`, `Validator`, `Severity` | Shared protocols used by framework internals and available for advanced typing. Concrete implementations still live on their task facades. |
+| `Reader`, `ChunkReader`, `Writer`, `Processor`, `Validator`, `Severity` | Shared protocols used by framework internals and available for advanced typing. `ChunkReader` (`chunks(size) -> Iterator[Dataset]`) is the streaming dual of `Reader` for sources too big to hold whole. Concrete implementations still live on their task facades. |
+| `DEFAULT_CHUNK_SIZE` | The default chunk size (10,000 rows) a `ChunkReader` streams in. |
 | `Validator`, `ValidationError` | The check seam and the error it raises. |
 | `ColumnValidator`, `RowCountValidator`, `VolumeAnomalyValidator`, `UniqueValidator`, `SchemaDriftValidator` | The concrete structural / volume / uniqueness / drift checks that *gate* a feed — they raise on breach rather than reshaping. Composed onto a `Pipeline` as pre/post validators. |
 | `RunHistory`, `PriorColumns` | History inputs the run-aware checks read. |
@@ -126,8 +133,9 @@ Moving data across the boundary.
 | Names | What |
 |-------|------|
 | `Reader`, `DatasetReader`, `CsvReader`, `StrictCsvReader`, `StrictCsvParseError`, `GlobCsvReader`, `ExcelReader`, `SqliteReader` | The `read() -> Dataset` port and its concrete sources (`StrictCsvReader` is the char-by-char RFC 4180 parser; `StrictCsvParseError` is the located error it raises). (The remote `SasReader` / `SharePointReader` live in `tools.integrations`, not this facade — see below.) |
+| `ChunkReader`, `ChunkedCsvReader`, `SasFileReader`, `DEFAULT_CHUNK_SIZE` | The `chunks(size) -> Iterator[Dataset]` streaming port and its concrete sources for inputs too big to hold whole: a local CSV (`ChunkedCsvReader`) and an **already-landed** `.sas7bdat`/xport file, incl. gzipped (`SasFileReader`). `SasFileReader` is read-only by nature and distinct from the remote `tools.integrations` `SasReader` (no script, no remote run, no copy). |
 | `Writer`, `CsvWriter`, `ExcelWriter`, `JsonWriter`, `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `SqliteInsertOrIgnoreWriter`, `QuarantineWriter`, `StdoutWriter` | The `write(dataset)` port and its concrete sinks (`StdoutWriter` is a console sink for *seeing* a result — e.g. an explainer trace — rather than persisting it). (The remote `SharePointWriter` lives in `tools.integrations`, not this facade — see below.) |
-| `Store`, `StoreCatalog`, `StoreBackend`, `DirectoryStoreBackend` | Per-subject medallions minted from shared configuration. |
+| `Store`, `StoreCatalog`, `StoreBackend`, `DirectoryStoreBackend` | Namespace-scoped stores (one logical database → file) minted from shared configuration. A `Store` mints `writer(table, strategy)` / `reader(table)` over its namespace; `StoreCatalog.store(namespace)` resolves the file via the backend. The raw/silver/gold medallion is layered on top by `tools.medallion`. |
 | `Refresh`, `AccumulateByRun`, `UpsertStrategy`, `InsertOrIgnore` | The load strategies a Writer carries. |
 
 ### `framework.transform` — reshaping a feed mid-pipeline
@@ -159,9 +167,9 @@ public helpers carry stable names and are imported directly:
 |--------|------|
 | `tools.retry` — `RetryPolicy`, `RetryingReader`, `RetryingWriter` | Targeted retry for transient I/O-edge failures — see [retry.md](retry.md). |
 | `tools.calendar` — `WorkingDayCalendar` | Working-day availability arithmetic (pure utility). |
-| `tools.orchestration` — `Orchestrator`, `PipelineSet`, `ScheduledPipeline`, `Weekdays`, `SpecificWeekdays`, `DayOfMonth`, `NthWorkingDayOfMonth`, `LastWorkingDayOfMonth`, `ManualOnly` | Scheduled orchestration above `PipelineRunner`: evaluate due work for a run date, isolate failures by scheduled item/PipelineSet, and record decisions in `_orchestration/runs.db`. |
+| `tools.orchestration` — `Orchestrator`, `PipelineSet`, `ScheduledPipeline`, `Schedule`, `Weekdays`, `SpecificWeekdays`, `DayOfMonth`, `NthWorkingDayOfMonth`, `LastWorkingDayOfMonth`, `ManualOnly` | Scheduled orchestration above `PipelineRunner`: evaluate due work for a run date, isolate failures by scheduled item/PipelineSet, and record decisions in `_orchestration/runs.db`. `Schedule` carries friendly constructors (`Schedule.daily()`, `Schedule.on_weekdays("monday", …)`, `Schedule.day_of_month(n)`, `Schedule.nth_working_day_of_month(n)`, `Schedule.last_working_day_of_month()`, `Schedule.manual_only()`) over the concrete schedule classes. |
 | `tools.observability` — `RunLog`, `RunRegistry` | The structured-observability seam and its query store (also re-exported via `framework.run`). |
-| `tools.integrations.remote` — `SasReader`, `SharePointReader`, `SharePointWriter` | The remote-source/sink Reader and Writer (SAS extract, SharePoint list) — same `read()` / `write()` ports as the file/SQLite ones, but reaching a remote client that is **stubbed** behind swappable seams (`RemoteRunner`, `SharePointFetcher` / `SharePointPusher`) until the on-prem SE client (NTLM/Kerberos/REST) lands (ADR-0004/0005). |
+| `tools.integrations.remote` — `SasReader`, `SharePointReader`, `SharePointWriter` | The remote-source/sink Reader and Writer (SAS extract, SharePoint list) — same `read()` / `write()` ports as the file/SQLite ones, but reaching a remote client that is **stubbed** behind swappable seams (`RemoteRunner`, `SharePointFetcher` / `SharePointPusher`) until the on-prem SE client (NTLM/Kerberos/REST) lands (ADR-0012, ADR-0011). |
 
 ## Internal modules — do not import from these
 
@@ -172,22 +180,24 @@ without notice:
 - `framework._internal.connection` (`connect`) — the connection factory seam (ADR-0001);
   used by Readers/Writers/Store, not by pipelines.
 - `framework.io.sql` (`quote_identifier`) — the single place a table/column name is
-  turned into a safely-quoted SQL identifier (issue #138); applied at every
+  turned into a safely-quoted SQL identifier; applied at every
   identifier interpolation across the SQLite seam, not imported by pipelines.
-- `framework.core.layers` (`layer_name`, `LAYERS`) — internal layer-name validation;
-  the public layer surface is `Layer`/`RAW`/`SILVER`/`GOLD` via `framework.core`.
+- `tools.medallion` (`medallion`, `Medallion`, `RAW`/`SILVER`/`GOLD`) — the
+  application-level raw/silver/gold profile over the namespace Store. It is a
+  sibling-package convention, *not* a `framework` facade; the medallion `Layer`
+  enum was removed from `framework.core` (#232).
 - `framework.run.trace` (`RowTrace`) — the generic per-row trace mechanics behind
   `Pipeline.explain()`; reached through the builder, not imported directly.
 - `framework.run.pipeline_steps` (`PipelineStep`, `PipelineExecution`, …) — the
   builder's internal ordered execution plan; inspected by `.describe()` and
   executed by `.run()`, not imported by pipeline scripts.
 - `framework._internal.describe` (`render`, `redact_url`) — shared helpers for the opt-in
-  `describe()` protocol (#145); a component implements `describe()` using these
+  `describe()` protocol; a component implements `describe()` using these
   to render its own safe plan summary, not imported by pipeline scripts.
 - `tools.integrations.remote` (`RemoteRunner`, `StubbedRemoteRunner`, `SharePointFetcher`,
   `SharePointPusher`,
   …) — the **stubbed remote-client seam** behind the `tools.integrations`
-  `SasReader` / `SharePointReader` / `SharePointWriter` (ADR-0004/0005). This lives in
+  `SasReader` / `SharePointReader` / `SharePointWriter` (ADR-0012, ADR-0011). This lives in
   the `tools` sibling package (above), not a `framework` facade. An advanced extension
   point, documented in [adding-a-feed.md](adding-a-feed.md); not part of the day-to-day surface.
 - Other helpers inside `framework.transform.quarantine` — implementation details
@@ -238,7 +248,7 @@ support modules), not under `framework/` — see
 
 As a layer *above* the framework, `case_review` is a **plain facade consumer** —
 the same architectural position as `pipelines/` — so it imports the framework
-only through the runtime facades, and the boundary test holds it there (#159). The
+only through the runtime facades, and the boundary test holds it there. The
 two boundary tests are complementary: `test_framework_boundary.py` governs *where
 domain code lives*, while `test_public_api.py` governs *how `case_review` imports
 the framework*.

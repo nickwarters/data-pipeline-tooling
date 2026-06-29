@@ -3,22 +3,22 @@
 This documents the concrete `Processor` primitives in `framework.transform.processors`.
 They fall into two workload families:
 
-- **Selection narrowing** (#9, #166) — `Filter`, `Score`,
+- **Selection narrowing** — `Filter`, `Score`,
   `VectorizedFilter`, `VectorizedDerive`, `Sort`, `Rename`, `Stamp`, `JoinWith`,
   and `AntiJoinWith`,
   the cross-feed join/exclusion gates that consume explicit read-only
   dependencies. The Selection Pipeline reads the **CasePool**, narrows and ranks
   it, joins in Reference Data, filters exclusion lists, and emits the
   **SelectionPool**.
-- **Ingest & fan-out reshaping** (#35, #36, #39, #153) — `SelectColumns`, `DropColumns`, `Unpivot`,
+- **Ingest & fan-out reshaping** — `SelectColumns`, `DropColumns`, `Unpivot`,
   `DeriveKey`, `LatestPerKey`: the transforms that fan one wide feed into a Case
   table and its Detail Tables, derive the deterministic `case_id`, and reduce
   accumulated history to current-state gold (ADR-0009).
 
 For the *why*, see
-[ADR-0002](adr/0002-python-only-processing-dumb-store-two-tier-carrier.md)
+[ADR-0002](adr/0002-python-processing-opaque-dataset-carrier.md)
 (Python-only processing),
-[ADR-0003](adr/0003-deferred-fluent-builder-composition-model.md) (deferred
+[ADR-0003](adr/0003-deferred-dag-composition.md) (deferred
 builder, explicit join dependencies), and
 [ADR-0009](adr/0009-case-identity-and-gold-grain.md) (case identity, gold grain,
 multi-table feeds). The schema-driven `SchemaCoercion` processor lives with the
@@ -41,13 +41,13 @@ structural validators it is **engine-confined** — a transform needs the engine
 vectorised operations, so it reaches the backing frame via
 `to_pandas()`/`from_pandas()` exactly as a Reader/Writer does (ADR-0002). A
 processor has **no severity**: a transform either applies or it can't, so a
-failure is always fail-fast (ADR-0007) — it raises and the run aborts.
+failure is always fail-fast (ADR-0005) — it raises and the run aborts.
 
 The sections below cover the **Selection** transforms first (the
 `filter/score/sort/join` of `CONTEXT.md`): the Selection Pipeline reads the
 **CasePool**, narrows and ranks it, joins in Reference Data, and emits the
 **SelectionPool**. The **Ingest & fan-out** transforms follow. The
-`SchemaCoercion` processor (#23) is documented separately —
+`SchemaCoercion` processor is documented separately —
 [schema-enforcement.md](schema-enforcement.md).
 
 Pipeline authors may also define small, pipeline-local processors when the
@@ -167,7 +167,7 @@ filter has already matched nothing.
 An optional `name=` labels the eligibility gate so Selection explainability can
 record *which* filter excluded a Case — `Filter(high_value_case,
 name="high-value")`. Unnamed filters still work; see
-[`selection.md`](selection.md) for the per-Case trace (#53).
+[`selection.md`](selection.md) for the per-Case trace.
 
 ### `Score` — rank the rows
 
@@ -297,7 +297,7 @@ Case Types and joined in Python, never written by them (`CONTEXT.md`, ADR-0002).
 ```python
 from framework.transform import JoinDependency, JoinWith
 
-reference = JoinDependency("advisers", advisers.reader(SILVER, "advisers"))
+reference = JoinDependency("advisers", advisers.silver.reader("advisers"))
 JoinWith(reference, on="adviser", how="inner")
 ```
 
@@ -309,11 +309,11 @@ JoinWith(reference, on="adviser", how="inner")
   `left`/`right`/`outer`, or `cross`.
 - `name=` (optional) — labels the join so Selection explainability records a Case
   an *inner* join drops as excluded by this join, rather than silently absent
-  (#53; see [`selection.md`](selection.md)).
+  (see [`selection.md`](selection.md)).
 
 ### Explicit dependencies
 
-`JoinWith.process()` never runs another pipeline. Upstream feeds should be run
+`JoinWith` never runs another pipeline. Upstream feeds should be run
 by the runner/catalog layer, freshness-checked there, and exposed to downstream
 selection as a read-only `Reader`, cached `Dataset`, or future named upstream
 output. The builder materializes each `JoinDependency` once before the processor
@@ -332,7 +332,7 @@ dataset.
 from framework.transform import AntiJoinWith, JoinDependency
 
 already_reviewed = JoinDependency(
-    "already-reviewed", reviews.reader(SILVER, "review_outcomes")
+    "already-reviewed", reviews.reader("review_outcomes")
 )
 AntiJoinWith(already_reviewed, on="case_id", name="already-reviewed")
 ```
@@ -354,18 +354,19 @@ Python, and join another subject's silver Reference Data via an explicit
 read-only dependency.
 
 ```python
-from framework.core import SILVER
 from framework.io import StoreCatalog
 from framework.run import Pipeline
 from framework.transform import AntiJoinWith, Filter, JoinDependency, JoinWith
 
-catalog = StoreCatalog("/path/to/share")
-cases = catalog.store("cases")
-advisers = catalog.store("advisers")
+from tools.medallion import medallion
 
-reference = JoinDependency("advisers", advisers.reader(SILVER, "advisers"))
+catalog = StoreCatalog("/path/to/share")
+cases = medallion(catalog, "cases")
+advisers = medallion(catalog, "advisers")
+
+reference = JoinDependency("advisers", advisers.silver.reader("advisers"))
 already_reviewed = JoinDependency(
-    "already-reviewed", cases.reader(SILVER, "review_outcomes")
+    "already-reviewed", cases.silver.reader("review_outcomes")
 )
 
 
@@ -373,7 +374,7 @@ def selection_value_case(row):
     return row["amount"] >= 50
 
 p = Pipeline("cases")
-r = p.read(cases.reader(SILVER, "cases"), name="read")
+r = p.read(cases.silver.reader("cases"), name="read")
 valued = p.transform(Filter(selection_value_case, name="selection-value"), r, name="filter")
 anti = p.transform(
     AntiJoinWith(already_reviewed, on="case_ref", name="already-reviewed"),
@@ -393,7 +394,7 @@ Python. The store never performs the join. The result is the bulk-tier `Dataset`
 the Selection Pipeline would accumulate into gold as the SelectionPool (via an
 `AccumulateByRun` gold write — see [gold-accumulation.md](gold-accumulation.md)).
 
-The domain capstone (#11, landed) composes these processors into a Case Type's
+The domain capstone composes these processors into a Case Type's
 full Selection flow — `CaseType`/`Variation` + `CasePool` → `SelectionPool`,
 stamping the Variation's `question_bank_id` onto the chosen Cases. See
 [`selection.md`](selection.md).
@@ -403,9 +404,9 @@ stamping the Variation's `question_bank_id` onto the chosen Cases. See
 The transforms above narrow the CasePool *into* the SelectionPool. The four
 below sit on the other side of the medallion: **Ingest**, where one wide source
 feed (650+ columns) is fanned out into a Case table and zero or more **Detail
-Tables**, each a single-table pipeline over the shared raw table (#39, #35, #36;
+Tables**, each a single-table pipeline over the shared raw table (
 [ADR-0009](adr/0009-case-identity-and-gold-grain.md)). They are ordinary
-`Processor`s — same `process(dataset) -> Dataset` shape, same engine-confined,
+callables — same `(dataset) -> Dataset` shape, same engine-confined,
 fail-fast contract — composed on the `raw → silver` and `silver → gold` builders.
 
 ### `SelectColumns` — project the columns this pipeline needs
@@ -496,7 +497,7 @@ LatestPerKey(key="case_id", by="load_date")
 Keeps the **latest row per `key`**, where "latest" is the maximum `by` value (a
 timestamp or load column). `key` is one column or a list. This is the
 *current-gold* reduction of the history-upstream / current-gold Ingest profile
-(ADR-0006 amendment): raw + silver accumulate the change-over-time record, and
+(ADR-0004): raw + silver accumulate the change-over-time record, and
 `LatestPerKey` reduces accumulated silver to the one-row-per-Case current state
 the CasePool reads. **Tie-break:** when rows for a key share the maximum `by`
 value, the row appearing **last in the input** is kept — deterministic given a
@@ -521,7 +522,7 @@ python -m pipelines.demo_fan_out /tmp/demo_fan_out
 ```python
 # Cases pipeline: shared raw → project case columns → coerce/validate → silver
 p = Pipeline("cases")
-r = p.read(store.reader("raw", SUBJECT), name="read")
+r = p.read(med.raw.reader(SUBJECT), name="read")
 this_run = p.transform(Filter(lambda row: row["run_id"] == RUN_ID), r, name="filter-run")
 renamed = p.transform(Rename({"case_ref_no": "case_ref"}), this_run, name="rename")  # shared normalisation
 projected = p.transform(
@@ -529,12 +530,12 @@ projected = p.transform(
 )
 coerced = p.transform(SchemaCoercion(CaseSchema), projected, name="coerce")
 validated = p.validate(SchemaValidator(CaseSchema), coerced, name="post-validate")
-p.write(store.writer("silver", "cases", AccumulateByRun(RUN_ID, RUN_ID)), validated, name="write")
+p.write(med.silver.writer("cases", AccumulateByRun(RUN_ID, RUN_ID)), validated, name="write")
 p.run()
 # CASES is the feed's CaseType — it owns the identity contract (namespace +
 # natural_key), so both builders below derive the same case_id (ADR-0009).
 # Cases gold: DeriveKey → LatestPerKey → UniqueValidator → current-only gold
-ingest_silver_to_gold(store, CASES, "cases").run()
+ingest_silver_to_gold(med, CASES, "cases").run()
 
 # Products Detail Table gold: DeriveKey (same CaseType → same key) → Unpivot wide→long
 detail_ingest_silver_to_gold(
@@ -552,5 +553,5 @@ instance; each is independently validated and writes its own gold. See
 ## Not yet (follow-on tickets)
 
 - **Typed `Case` objects** at the domain edge: the CasePool returns the bulk-tier
-  `Dataset` today; materialising fully typed Cases on demand is reserved for a
-  later slice (ADR-0002).
+  `Dataset` today; materialising fully typed Cases on demand is the
+  typed-on-demand edge at the domain layer (ADR-0002).

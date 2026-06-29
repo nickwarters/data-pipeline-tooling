@@ -2,9 +2,9 @@
 
 Use the public facade modules:
 
-- ``framework.core`` for Dataset and the medallion Layer constants — the
+- ``framework.core`` for Dataset and the schema/validation contracts — the
   foundational vocabulary the other facades build on.
-- ``framework.io`` for Readers, Writers, Store, and strategies.
+- ``framework.io`` for Readers, Writers, the namespace Store, and strategies.
 - ``framework.transform`` for the reshaping processors and SchemaCoercion.
 - ``framework.run`` for Pipeline, orchestration, RunLog, and RunRegistry.
 

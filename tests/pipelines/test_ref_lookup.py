@@ -12,7 +12,7 @@ import math
 
 import pytest
 
-from framework.core import SILVER, ValidationError
+from framework.core import ValidationError
 from framework.io import StoreCatalog
 from framework.run import RunContext
 from pipelines.ref_lookup.pipeline import (
@@ -30,6 +30,7 @@ from tests.framework_testing import (
     read_rows,
     rows_of,
 )
+from tools.medallion import medallion
 
 # ---------------------------------------------------------------------------
 # raw_builder
@@ -232,11 +233,11 @@ def test_customers_builder_returns_distinct_cust_refs():
 def test_bundled_sample_run(tmp_path):
     run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
 
-    store = StoreCatalog(tmp_path).store(FEED_NAME)
+    med = medallion(StoreCatalog(tmp_path), FEED_NAME)
 
-    ref = read_rows(store, SILVER, "ref")
-    cases = read_rows(store, SILVER, "cases")
-    customers = read_rows(store, SILVER, "customers")
+    ref = read_rows(med.silver, "ref")
+    cases = read_rows(med.silver, "cases")
+    customers = read_rows(med.silver, "customers")
 
     # ref: unique, id-stamped pairs from all five fields
     ref_pairs = {(r["ref_group"], r["value"]) for r in ref}

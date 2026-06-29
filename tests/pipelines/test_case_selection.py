@@ -15,13 +15,13 @@ from __future__ import annotations
 
 from datetime import date
 
-from framework.core import GOLD
 from framework.io import StoreCatalog
 from framework.run import RunContext
 from pipelines.case_selection import rules
 from pipelines.case_selection.pipeline import SUBJECT, run
 from pipelines.case_selection.selection import SelectCasesToCheck, select_cases
 from tests.framework_testing import given_rows, read_rows
+from tools.medallion import medallion
 
 AS_OF = date(2026, 6, 25)
 
@@ -182,9 +182,9 @@ def test_selection_builder_runs_in_memory_with_recording_writers():
 
 def test_run_assembles_the_selection_pool_from_the_bundled_feeds(tmp_path):
     pool = run(RunContext(base_dir=tmp_path, pipeline=SUBJECT, run_date=AS_OF))
-    store = StoreCatalog(tmp_path).store(SUBJECT)
+    med = medallion(StoreCatalog(tmp_path), SUBJECT)
 
-    selection_pool = read_rows(store, GOLD, "selection_pool")
+    selection_pool = read_rows(med.gold, "selection_pool")
     # One Case per eligible adviser, highest-risk first. Case types show all four
     # outcomes: C by score (adv008), B by score (adv001), C forced by the type-C
     # quota (adv006, a low-risk sale), and A by score (adv007).
@@ -201,7 +201,7 @@ def test_run_assembles_the_selection_pool_from_the_bundled_feeds(tmp_path):
     )
     assert len(selection_pool) == len(pool)
 
-    trace = read_rows(store, GOLD, "selection_trace")
+    trace = read_rows(med.gold, "selection_trace")
     reasons = {r["adviser"]: r["reason"] for r in trace if r["verdict"] == "excluded"}
     assert "in progress" in reasons["adv002"]
     # adv003 is excluded by the pro-rata capacity (5 checks, 6 active months).

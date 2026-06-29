@@ -50,19 +50,18 @@ def test_given_csv_writes_a_csv_readable_by_csvreader(tmp_path):
     assert rows_of(CsvReader(path)) == [{"case_id": "c1", "amount": 100}]
 
 
-def test_read_rows_reads_a_landed_layer_table_back(tmp_path):
+def test_read_rows_reads_a_landed_table_back(tmp_path):
     # When a pipeline lands in a real Store, read_rows collapses the
-    # store.reader(layer, table).read().to_pandas() chain to a list of dicts.
-    from framework.core import RAW
+    # store.reader(table).read().to_pandas() chain to a list of dicts.
     from framework.io import Refresh, Store
 
-    store = Store(tmp_path / "cases")
+    store = Store(tmp_path / "cases.db")
     p = Pipeline("cases")
     read = p.read(given_rows([{"case_id": "c1", "amount": 100}]), name="read")
-    p.write(store.writer(RAW, "cases", Refresh()), read, name="write")
+    p.write(store.writer("cases", Refresh()), read, name="write")
     p.run()
 
-    assert read_rows(store, RAW, "cases") == [{"case_id": "c1", "amount": 100}]
+    assert read_rows(store, "cases") == [{"case_id": "c1", "amount": 100}]
 
 
 def test_without_columns_drops_named_columns_and_ignores_missing():

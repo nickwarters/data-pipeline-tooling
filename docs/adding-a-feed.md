@@ -8,7 +8,7 @@ engine code is needed for the source types that already ship.
 ## 0. Scaffold the feed (the quickest start)
 
 For a fresh CSV feed, generate a runnable starting point instead of writing the
-files by hand (#97):
+files by hand:
 
 ```sh
 python -m cli scaffold orders            # -> pipelines/orders/ + tests/pipelines/test_orders.py
@@ -46,7 +46,7 @@ pipelines/orders` imports `pipelines.orders.pipeline` and executes
   bad rows into a quarantine dataset (`SchemaValueRulePartitioner`), and validates
   the declared schema (`SchemaValidator`).
 - **`gold_builder`** is a passthrough to start — reads silver, writes gold — with
-  a `TODO` to build the assembly (it's per-feed and an open decision, #163).
+  a `TODO` to build the assembly (it's per-feed and an open decision).
 
 `run()` wires the real `CsvReader` and the subject's layer Writers (deriving the
 raw/silver `AccumulateByRun` strategy from the `RunContext`, so re-drives under
@@ -97,6 +97,12 @@ silver hop already enforces the schema (`SchemaCoercion` + `SchemaValidator` —
 [`schema-enforcement.md`](schema-enforcement.md)); the gold hop is a passthrough
 until you shape it.
 
+Finally, **document the feed's tables in a data dictionary** — one entry per
+table per layer describing what the table is and what each field means (the prose
+companion to `schema.py`). Copy the Confluence-ready template in
+[`data-dictionary-template.md`](data-dictionary-template.md); a new column in the
+schema isn't done until it has a dictionary row.
+
 #### Seed it from a real feed file: `--from-feed-file`
 
 Most of that customising is mechanical — retyping a source's column names into
@@ -136,7 +142,7 @@ The generic scaffold above refines source → raw → silver → gold but is
 **case-review-agnostic** — silver enforces only the declared schema and gold is a
 plain passthrough; there's no Case identity (a Feed isn't necessarily a Case Type
 — Reference Data feeds are ordinary Feeds with no Case identity). When the feed's
-rows *are* a Case Type, reach for the additive variant instead (#155):
+rows *are* a Case Type, reach for the additive variant instead:
 
 ```sh
 python -m cli scaffold --case-type claims   # -> pipelines/claims/ + tests/pipelines/test_claims.py
@@ -169,7 +175,7 @@ tests/pipelines/
 **It deliberately stops at silver.** How accumulated silver is reduced or
 assembled into **gold** — a single-feed current reduce, a multi-feed *join*
 enriching one Case Type, Detail Tables — is unique per Case Type and is an open
-design decision (snapshot-vs-join, single- vs multi-feed — issue #163), so the
+design decision (snapshot-vs-join, single- vs multi-feed), so the
 gold step is left to you rather than baked into the template. `pipeline.py`
 sketches it as a commented seam with pointers to `ingest_silver_to_gold` (the
 single-feed current-gold reduce) and, for repeated sections / child rows,
@@ -216,15 +222,15 @@ slipping the canonicalisation in is just another step: a spaced feed adds a
 the schema check under their canonical names:
 
 ```python
-from framework.core import RAW, SILVER
 from framework.io import Refresh, StoreCatalog
 from framework.run import Pipeline
 from framework.transform import Rename, SchemaCoercion
 from framework.core import ColumnValidator, SchemaValidator
+from tools.medallion import medallion
 
-store = StoreCatalog("/path/to/share").store("cases")
+med = medallion(StoreCatalog("/path/to/share"), "cases")
 p = Pipeline("cases")
-raw = p.read(store.reader(RAW, "cases"), name="read")
+raw = p.read(med.raw.reader("cases"), name="read")
 # optional: gate the *source* columns in the source's own vocabulary, so a
 # missing/renamed source column fails as "missing 'Case Number'" rather than
 # surfacing later as a confusing "missing 'case_number'" after the rename.
@@ -238,7 +244,7 @@ renamed = p.transform(
 )
 coerced = p.transform(SchemaCoercion(CasesRow), renamed, name="coerce")
 validated = p.validate(SchemaValidator(CasesRow), coerced, name="post-validate")
-p.write(store.writer(SILVER, "cases", Refresh()), validated, name="write")
+p.write(med.silver.writer("cases", Refresh()), validated, name="write")
 p.run()
 ```
 
@@ -293,7 +299,7 @@ raw table rather than one mega-row ([ADR-0009](adr/0009-case-identity-and-gold-g
 ## 1. Pick a `Reader`
 
 A `Reader` encapsulates *how one source type is read* behind a single method
-(ADR-0002, ADR-0005):
+(ADR-0002, ADR-0011):
 
 ```python
 class Reader(Protocol):
@@ -346,7 +352,7 @@ dual of the Sqlite Writers — it opens through the shared `connect` factory, so
 it inherits the share-tolerant settings (ADR-0001) and can read a subject's own
 layer **or** another subject's read-only Reference Data medallion (joined in
 Python — ADR-0002). `SasReader` and `SharePointReader` follow the same `read()`
-shape but reach a remote source whose client is **stubbed for now** (ADR-0004);
+shape but reach a remote source whose client is **stubbed for now** (ADR-0012);
 see [Remote feeds (SAS, SharePoint)](#remote-feeds-sas-sharepoint) below.
 
 ## 2. Compose the pipeline and land it
@@ -356,25 +362,25 @@ mints the destination Writer for the target layer, so the builder never learns
 about medallion layers or load rules:
 
 ```python
-from framework.core import RAW
 from framework.io import ExcelReader, Refresh, StoreCatalog
 from framework.run import Pipeline
 from framework.core import ColumnValidator, SchemaDriftValidator
+from tools.medallion import medallion
 
-store = StoreCatalog("/path/to/share").store("cases")
+med = medallion(StoreCatalog("/path/to/share"), "cases")
 p = Pipeline("cases")
 raw = p.read(ExcelReader("feed.xlsx", sheet="cases"), name="read")
 gated = p.validate(ColumnValidator(["case_id"]), raw, name="columns")  # optional: gate input
 # optional: warn (don't abort) when the source's columns drift from the
 # prior run's landed set — catches owner-controlled schema change at the
-# door (#51). First run has no prior, so it's a clean no-op.
+# door. First run has no prior, so it's a clean no-op.
 checked = p.validate(
-    SchemaDriftValidator(store.columns_of(RAW, "cases")),
+    SchemaDriftValidator(med.raw.columns_of("cases")),
     gated,
     name="drift",
     severity="warn",
 )
-p.write(store.writer(RAW, "cases", Refresh()), checked, name="write")
+p.write(med.raw.writer("cases", Refresh()), checked, name="write")
 landed = p.run()
 ```
 
@@ -399,7 +405,7 @@ path) and SharePoint (**Subscription Edition on-prem**; the connection drops in
 from a separate repo). Their Readers keep the same `read() -> Dataset` shape,
 but the remote behaviour — shelling to `ssh`/`scp`, calling the SharePoint list
 API — sits behind a **swappable seam in `tools.integrations.remote` that is stubbed
-today** (ADR-0004, ADR-0005). The on-prem SE auth (NTLM/Kerberos/REST — **not**
+today** (ADR-0012, ADR-0011). The on-prem SE auth (NTLM/Kerberos/REST — **not**
 Azure AD/Graph) is a client-seam concern designed once for both directions, and
 keeping it behind the seam keeps the cross-platform constraint (Windows + macOS)
 the framework's, not the caller's. Because the remote step is a seam, the whole
@@ -446,7 +452,7 @@ Configured with the SharePoint `site` URL, `list_name`, and `auth` config; on
 the `(site, list_name, auth)` config verbatim. Two fetchers ship:
 
 - **`StubbedSharePointFetcher`** (the default): the real on-prem SE client is
-  deferred (NTLM/Kerberos/REST auth out of scope — ADR-0004), so `read()` raises
+  deferred (NTLM/Kerberos/REST auth out of scope — ADR-0012), so `read()` raises
   `NotImplementedError` rather than pretending to reach the network.
 - **`LocalCsvFetcher(path)`**: an offline fetcher backed by a local CSV fixture;
   it ignores the SharePoint config and reads the file, so the read path is
@@ -481,7 +487,7 @@ fake pusher and never touch the network.
 The Deliverable is emitted by a **second pipeline** that reads the gold
 SelectionPool and writes here (`SqliteReader(gold, "selection_pool")` →
 `SharePointWriter`) — consistent with ADR-0009's single-Writer pipelines over a
-shared source, not a mid-run checkpoint (CONTEXT.md, #48):
+shared source, not a mid-run checkpoint (CONTEXT.md):
 
 ```python
 from framework.io import Refresh, SqliteReader

@@ -1,0 +1,17 @@
+# SAS-format streaming fixtures are binary and read back byte-for-byte by the
+# SasFileReader tests. The .xpt (XPORT) header is largely ASCII, so Git could
+# misdetect it as text and a Windows checkout (core.autocrlf=true) would rewrite
+# line endings and corrupt the file. Pin them as binary so the bytes are
+# identical on Windows and macOS checkouts.
+tests/fixtures/*.xpt -text
+tests/fixtures/*.xpt.gz -text
+tests/fixtures/*.sas7bdat -text
+tests/fixtures/*.sas7bdat.gz -text
+# CSV test fixtures are tokenised and asserted byte-for-byte by the readers
+# tests (e.g. StrictCsvReader preserves an embedded LF inside a quoted field
+# in tests/fixtures/strict_cases.csv). Git for Windows defaults to
+# core.autocrlf=true, which would rewrite every LF -> CRLF on checkout --
+# including that *embedded* newline -- and the parser would faithfully read
+# back "Line one\r\nLine two", breaking the assertion. Treat the fixtures as
+# binary so their bytes are identical on Windows and macOS checkouts.
+tests/fixtures/*.csv -text

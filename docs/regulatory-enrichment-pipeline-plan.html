@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Regulatory Enrichment Pipeline — Plan</title>
+  <style>
+    :root {
+      --ink: #1b1f23;
+      --muted: #5e6673;
+      --paper: #f7f5ef;
+      --panel: #ffffff;
+      --line: #d9d2c3;
+      --blue: #2457a6;
+      --green: #1f7a5c;
+      --red: #a63b32;
+      --amber: #9a6a15;
+      --code: #18202a;
+      --code-bg: #eef0ea;
+      --shadow: 0 18px 45px rgba(41, 35, 25, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(90deg, rgba(27, 31, 35, 0.035) 1px, transparent 1px),
+        linear-gradient(rgba(27, 31, 35, 0.035) 1px, transparent 1px),
+        var(--paper);
+      background-size: 28px 28px;
+      font-family: Georgia, "Times New Roman", serif;
+      line-height: 1.55;
+    }
+
+    header {
+      min-height: 70vh;
+      display: grid;
+      align-items: end;
+      padding: 44px clamp(20px, 6vw, 86px) 52px;
+      border-bottom: 1px solid var(--line);
+      background:
+        radial-gradient(circle at 22% 18%, rgba(36, 87, 166, 0.14), transparent 30%),
+        linear-gradient(135deg, rgba(255,255,255,0.94), rgba(247,245,239,0.75));
+    }
+
+    .hero { max-width: 1180px; }
+
+    .kicker {
+      display: inline-block;
+      margin-bottom: 18px;
+      color: var(--blue);
+      font-family: "Courier New", monospace;
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      max-width: 980px;
+      margin: 0;
+      font-size: clamp(40px, 7vw, 92px);
+      line-height: 0.94;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      max-width: 820px;
+      margin: 28px 0 0;
+      color: var(--muted);
+      font-size: clamp(18px, 2.2vw, 24px);
+    }
+
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 34px;
+      font-family: "Courier New", monospace;
+      font-size: 13px;
+    }
+
+    nav a {
+      color: var(--ink);
+      text-decoration: none;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.72);
+      padding: 8px 11px;
+      border-radius: 6px;
+    }
+
+    main {
+      max-width: 1220px;
+      margin: 0 auto;
+      padding: 40px clamp(18px, 4vw, 42px) 80px;
+    }
+
+    section { margin: 54px 0; }
+
+    h2 {
+      margin: 0 0 18px;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.02;
+    }
+
+    h3 { margin: 26px 0 10px; font-size: 22px; }
+
+    p { margin: 0 0 14px; max-width: 880px; }
+
+    .lead { font-size: 19px; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .span-4 { grid-column: span 4; }
+    .span-5 { grid-column: span 5; }
+    .span-6 { grid-column: span 6; }
+    .span-7 { grid-column: span 7; }
+    .span-8 { grid-column: span 8; }
+    .span-12 { grid-column: span 12; }
+
+    .panel {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 22px;
+    }
+
+    .panel.tight { padding: 16px; box-shadow: none; }
+
+    .label {
+      color: var(--muted);
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    ul, ol { margin: 10px 0 0; padding-left: 20px; }
+    li { margin: 7px 0; max-width: 840px; }
+
+    code, pre { font-family: "Courier New", monospace; }
+
+    code {
+      color: var(--code);
+      background: var(--code-bg);
+      padding: 1px 4px;
+      border-radius: 4px;
+      font-size: 0.92em;
+    }
+
+    pre {
+      overflow: auto;
+      margin: 0;
+      padding: 18px;
+      color: #f2f5f0;
+      background: #18202a;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre;
+    }
+
+    pre .c { color: #8aa0b6; }
+    pre .k { color: #d8b56a; }
+    pre .s { color: #9ed1a6; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    th, td {
+      vertical-align: top;
+      padding: 13px 15px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      font-size: 15px;
+    }
+
+    th {
+      background: #ede7da;
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .status {
+      display: inline-block;
+      padding: 3px 7px;
+      border-radius: 999px;
+      color: #fff;
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .status.keep { background: var(--green); }
+    .status.gap { background: var(--amber); }
+    .status.risk { background: var(--red); }
+    .status.info { background: var(--blue); }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .node {
+      min-height: 104px;
+      padding: 14px;
+      background: var(--panel);
+      border: 2px solid var(--ink);
+      border-radius: 8px;
+      position: relative;
+    }
+
+    .node:after {
+      content: "→";
+      position: absolute;
+      right: -17px;
+      top: 38px;
+      color: var(--blue);
+      font-family: "Courier New", monospace;
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .node:last-child:after { content: ""; }
+
+    .node b { display: block; margin-bottom: 5px; font-size: 16px; }
+    .node span { color: var(--muted); font-size: 13px; }
+
+    .callout {
+      border-left: 5px solid var(--blue);
+      padding: 16px 18px;
+      background: rgba(255, 255, 255, 0.76);
+      border-radius: 0 8px 8px 0;
+    }
+
+    .callout.warn { border-left-color: var(--amber); }
+    .callout.good { border-left-color: var(--green); }
+
+    .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+
+    .stamp {
+      margin-top: 34px;
+      color: var(--muted);
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+    }
+
+    @media (max-width: 900px) {
+      .span-4, .span-5, .span-6, .span-7, .span-8, .span-12 { grid-column: span 12; }
+      .flow, .compare { grid-template-columns: 1fr; }
+      .node:after { content: "↓"; right: 16px; top: auto; bottom: -21px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="hero">
+      <span class="kicker">Design note · regulatory enrichment</span>
+      <h1>Enrich customers from a monthly regulatory snapshot — without re-scanning it every day.</h1>
+      <p class="subtitle">A plan for turning a huge, monthly-refreshed SAS extract into a fast, indexed lookup, and draining a per-customer enrichment backlog with one idempotent daily pipeline — using the primitives this framework already has.</p>
+      <nav aria-label="Page sections">
+        <a href="#problem">The problem</a>
+        <a href="#shape">Shape of the answer</a>
+        <a href="#snapshot">Monthly snapshot</a>
+        <a href="#memory">Doesn't fit in memory</a>
+        <a href="#queue">Customer DB as queue</a>
+        <a href="#enrich">Daily enrichment</a>
+        <a href="#scheduling">Scheduling</a>
+        <a href="#wiring">Wiring</a>
+        <a href="#edges">Edge cases</a>
+        <a href="#build">What to build</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+
+    <section id="problem">
+      <h2>The problem, restated</h2>
+      <p class="lead">A remote regulatory dataset is refreshed <strong>once a month</strong>. It is enormous (hundreds of GB), but compresses to a ~150&nbsp;MB SAS file we hold locally. It carries the <strong>current regulatory status of every customer</strong>. We need that one data point hung onto our local customer records.</p>
+      <p>Doing the lookup live — open the extract, iterate to find the handful of customers we care about, return — is too slow to put inside a feed pipeline, and we'd pay that cost repeatedly. We want to amortise it: stand the snapshot up <em>once per refresh</em> as something we can probe cheaply, and let a small <strong>daily enrichment pipeline</strong> fill in the gaps.</p>
+      <p>Every silver feed already contributes the customer ids it touches into a shared <strong>customer database</strong>. So the enrichment job's input is naturally defined as <em>"customers in that database whose regulatory data point is still missing."</em></p>
+      <p>The open question: enrichment should run <strong>after the day's feeds</strong>, but <em>which</em> feeds run varies day to day (different refresh cadences). Is a manual trigger the honest answer here, or can the framework's orchestration express this cleanly?</p>
+
+      <div class="callout good">
+        <span class="label">Short answer</span>
+        <p style="margin:8px 0 0">Manual trigger is the <em>fallback</em>, not the design. Because enrichment reads its work from <strong>state</strong> (the customer DB) rather than from a fixed list of upstreams, it doesn't need to know which feeds ran today. Schedule it <code>Weekdays()</code> as the <strong>last item</strong> in each orchestration set, give it <strong>soft</strong> ordering dependencies (never <code>.same_day()</code> on every feed), and one hard freshness check on the monthly snapshot. It drains whatever backlog exists; a late feed simply gets picked up on the next sweep.</p>
+      </div>
+    </section>
+
+    <section id="shape">
+      <h2>The shape of the answer: decouple via a queue-in-state</h2>
+      <p>The instinct to "wait for all feeds, then enrich" couples the enrichment job to a feed set that, by your own description, isn't fixed. The framework gives us a cleaner frame: the customer DB is already an <strong>enrichment queue expressed as state</strong>. Rows with a null regulatory status <em>are</em> the work item list.</p>
+      <p>That turns a hard scheduling problem ("synchronise N pipelines with varying cadence") into a trivial one ("run a daily idempotent drainer"). Enrichment becomes a pure function of <em>what's currently missing</em>, not of <em>what happened to run today</em>. This is the same posture the rest of the platform takes: idempotent, re-runnable, state-driven (ADR-0004, ADR-0005).</p>
+
+      <div class="flow" aria-label="End to end flow">
+        <div class="node"><b>SAS host</b><span>Monthly job emits the compressed extract; copied local (~150&nbsp;MB) — ADR-0012.</span></div>
+        <div class="node"><b>regulatory subject</b><span>Monthly ingest <em>streams</em> the extract in chunks, projects 2 columns → small indexed silver snapshot.</span></div>
+        <div class="node"><b>customer DB</b><span>Every silver feed upserts the <code>customer_id</code>s it saw; null status = backlog.</span></div>
+        <div class="node"><b>enrichment</b><span>Daily: read nulls → look up indexed snapshot → upsert status back.</span></div>
+        <div class="node"><b>Consumers</b><span>Selection / Reporting read an enriched customer record. No live SAS scan.</span></div>
+      </div>
+
+      <p style="margin-top:20px">Three pieces, three lifetimes: the <strong>snapshot</strong> turns over monthly, the <strong>queue</strong> fills continuously as feeds run, the <strong>drainer</strong> runs daily. None of them needs to know the others' schedules.</p>
+    </section>
+
+    <section id="snapshot">
+      <h2>1. The monthly regulatory snapshot as a Reference Data subject</h2>
+      <p>Model the extract as a <strong>Reference Data</strong> subject (per <code>CONTEXT.md</code>): its own per-subject medallion (<code>regulatory/{raw,silver,gold}.db</code>), refined by its own ingest pipeline, <strong>read-only</strong> to everything downstream. Nobody joins it live; they join its silver table.</p>
+
+      <h3>Landing the SAS extract — ADR-0012</h3>
+      <p>The remote-execution read path is exactly <a href="adr/0012-sas-sources-via-remote-execution.md">ADR-0012</a>: a <code>SasReader</code> configured with <code>script</code> / <code>copy_glob</code> / <code>dest</code> runs the SAS job on the remote host, copies the compressed output back to a local landing dir, and reads the landed file through the ordinary file path — so the read works identically on Windows and macOS, and is testable end-to-end against a fixture via the <code>StubbedRemoteRunner</code> seam.</p>
+      <div class="callout warn">
+        <span class="label">Build note</span>
+        <p style="margin:8px 0 0"><code>SasReader</code> / <code>RemoteRunner</code> are <em>specified</em> by ADR-0012 but not yet implemented in <code>framework/io</code>. Until they land, the snapshot ingest can read the already-copied, decompressed extract with the existing file reader and a <code>--param source_file=…</code>; swapping in <code>SasReader</code> later is a reader substitution, not a redesign.</p>
+      </div>
+
+      <h3>Why this kills the "scan it every time" cost — project, don't copy</h3>
+      <p>The extract is hundreds of GB largely because it is <strong>wide</strong> — every regulatory column for every customer. Enrichment needs exactly two: <code>customer_id</code> and <code>regulatory_status</code>. A single pass that <strong>projects those two columns</strong> yields a table that is small enough to hold and index comfortably (two short columns × the customer base — typically hundreds of MB, not hundreds of GB).</p>
+      <p>So the deal is: pay one <strong>streaming projection pass per refresh</strong> (12×/year), and in return every daily lookup becomes an <strong>indexed point read</strong> against a small SQLite table — <code>WHERE customer_id IN (…)</code> against an index — and <em>never</em> touches the giant extract again. That is precisely the "stop iterating the dataset all the time" goal, achieved by moving the one unavoidable full scan to once a month.</p>
+      <div class="callout warn">
+        <span class="label">The catch — and the next section</span>
+        <p style="margin:8px 0 0">That projection pass <strong>still can't read the extract into memory in one go</strong> (it's hundreds of GB uncompressed). It must be <strong>streamed in chunks</strong> — which the current <code>Reader.read() → Dataset</code> contract doesn't yet do. That's the one real new capability this design needs; see <a href="#memory">Reading something that doesn't fit in memory</a>.</p>
+      </div>
+
+      <table>
+        <tr><th>Layer</th><th>Form &amp; strategy</th><th>Contents</th></tr>
+        <tr><td>raw</td><td>the <strong>landed file</strong> (not a SQLite copy)</td><td>The compressed extract copied local by the <code>SasReader</code> (ADR-0012). For a hundreds-of-GB source we deliberately <em>don't</em> mirror it into raw SQLite — the copied file on disk <em>is</em> the faithful raw landing. (A pragmatic deviation from the usual raw-as-table model; flagged in open decisions.)</td></tr>
+        <tr><td>silver</td><td><code>Refresh</code> SQLite, indexed on <code>customer_id</code></td><td>The projected current snapshot: one row per <code>customer_id</code> → <code>regulatory_status</code> (+ <code>snapshot_date</code>). Schema-enforced; this small, indexed table is the lookup surface.</td></tr>
+        <tr><td>gold</td><td>—</td><td>Not needed. This is reference data joined in Python, not a CasePool. Silver is the read surface.</td></tr>
+      </table>
+
+      <p style="margin-top:16px">Schedule: <code>NthWorkingDayOfMonth(n)</code> or <code>DayOfMonth(d)</code> to match when the upstream SAS job publishes. Add a <code>VolumeAnomalyValidator</code> so a <strong>truncated extract</strong> (every row valid, but half the customers silently missing) trips the run rather than quietly shrinking the snapshot.</p>
+    </section>
+
+    <section id="memory">
+      <h2>1a. Reading something that doesn't fit in memory</h2>
+      <p>Every <code>Reader</code> today does <code>read() → Dataset</code>, and a <code>Dataset</code> is the <strong>bulk in-memory carrier</strong> (pandas behind the seam, ADR-0002). That's fine for a CSV feed; it is impossible for a hundreds-of-GB SAS extract. The engine we lean on is the same one you already use by hand: read in bounded <strong>chunks</strong> (your 10K-row windows). pandas exposes it directly — <code>read_sas(chunksize=10_000)</code> / <code>read_csv(chunksize=…)</code> yield a sequence of bounded frames — so it stays behind the <code>Dataset</code> seam: <strong>each chunk is a small Dataset; the in-memory contract holds per chunk, never for the whole source.</strong></p>
+      <p>This is the one genuine new framework primitive the design asks for: a <strong>chunked / streaming read seam</strong> (a reader that yields a sequence of bounded Datasets rather than one). There are two ways to consume it, and which you pick is the central architectural decision here.</p>
+
+      <p style="margin-top:8px"><strong>This seam now exists</strong> (issue #274): the <code>ChunkReader</code> port — <code>chunks(size) → Iterator[Dataset]</code>, default 10,000 rows — with two source adapters, <code>ChunkedCsvReader</code> and <code>SasFileReader</code> (the latter streams an <strong>already-landed</strong> <code>.sas7bdat</code>/xport file, gzip read on the fly; deliberately distinct from the remote ADR-0012 <code>SasReader</code>). The <code>SasReader(...).chunks(...)</code> in the snippets below is the design-time placeholder; in code today it is <code>SasFileReader(extract_path).chunks(10_000)</code> reading the landed extract (<code>extract.sas7bdat.gz</code>). See the <a href="core-primitives.md"><code>ChunkReader</code> section of <code>core-primitives.md</code></a>.</p>
+
+      <div class="compare">
+        <div class="panel">
+          <span class="label" style="color:var(--green)">✓ Strategy 1 — monthly streaming projection (recommended)</span>
+          <p style="margin:10px 0 0">Stream the extract once per refresh, project the two columns, append each chunk to silver. A <em>full</em> pass — you want every customer — so there's no id-pruning; just bounded memory, one chunk at a time.</p>
+          <pre style="margin-top:12px"><code><span class="c"># monthly ingest: stream → project → append</span>
+writer = regulatory.writer(SILVER, <span class="s">"status"</span>,
+                           <span class="k">AccumulateByRun</span>.from_context(ctx))
+<span class="k">for</span> chunk <span class="k">in</span> <span class="k">SasReader</span>(...).chunks(<span class="k">10_000</span>):
+    two_cols = <span class="k">SelectColumns</span>(<span class="s">"customer_id"</span>,
+                          <span class="s">"regulatory_status"</span>).apply(chunk)
+    writer.write(two_cols)        <span class="c"># append this chunk</span>
+<span class="c"># result: small, indexed silver. Daily lookups never touch the extract.</span></code></pre>
+          <p style="margin-top:10px"><strong>Your chunk-reading know-how plugs straight in here</strong> — minus the skip/stop logic, because a projection wants every row. The expensive scan is paid 12×/year.</p>
+        </div>
+        <div class="panel">
+          <span class="label" style="color:var(--amber)">~ Strategy 2 — bounded sorted-scan lookup (fallback)</span>
+          <p style="margin:10px 0 0">Your current technique, promoted into a <code>Reader</code>. Use it only if materialising a monthly snapshot is rejected. It takes the <strong>sorted backlog ids</strong> and streams the (id-ascending) extract, applying your three rules verbatim:</p>
+          <pre style="margin-top:12px"><code><span class="k">for</span> chunk <span class="k">in</span> source.chunks(<span class="k">10_000</span>):
+    lo, hi = chunk.min_id, chunk.max_id
+    <span class="k">if</span> hi &lt; targets.min: <span class="k">continue</span>   <span class="c"># chunk below range</span>
+    <span class="k">if</span> lo &gt; targets.max: <span class="k">break</span>      <span class="c"># sorted → done</span>
+    hits = chunk[chunk.id.isin(targets)]
+    <span class="k">if</span> hits.empty: <span class="k">continue</span>          <span class="c"># no wanted ids</span>
+    collected.append(hits)
+<span class="k">return</span> <span class="k">Dataset</span>.concat(collected)    <span class="c"># only matches → small</span></code></pre>
+          <p style="margin-top:10px">It returns <strong>only matched rows</strong>, so the output Dataset is small even though the source isn't — the hugeness is consumed inside the loop, never materialised.</p>
+        </div>
+      </div>
+
+      <div class="callout warn" style="margin-top:18px">
+        <span class="label">Why Strategy 2 is the fallback, honestly</span>
+        <p style="margin:8px 0 0">The skip/early-stop pruning only saves work when the backlog ids <strong>cluster at the low end</strong> of the id range. A backlog spread across the whole range still streams most of the file <em>every day</em> — which is the exact cost you're trying to escape. Strategy 1 pays that cost once a month and makes every day cheap; Strategy 2 keeps paying it daily. Reach for Strategy 2 only if you genuinely can't hold even the projected snapshot, or you need intra-month live freshness rather than month-stamped values.</p>
+      </div>
+    </section>
+
+    <section id="queue">
+      <h2>2. The customer DB as the enrichment queue</h2>
+      <p>You already plan for every silver feed to extract its <code>customer_id</code>s into the customer DB. Express that as a named <strong>Task</strong> in each feed's silver builder that upserts ids into a shared <code>customers</code> table:</p>
+
+      <div class="grid">
+        <div class="panel span-7">
+          <span class="label">In each feed's silver builder</span>
+          <pre><code><span class="c"># after silver is assembled, register the customers it touched</span>
+seen = <span class="k">SelectColumns</span>(<span class="s">"customer_id"</span>)         <span class="c"># project the id</span>
+customers = store_for(<span class="s">"customers"</span>).writer(
+    SILVER, <span class="s">"customers"</span>,
+    <span class="k">UpsertStrategy</span>(<span class="s">"customer_id"</span>),       <span class="c"># merge, don't duplicate</span>
+)
+p.task(<span class="s">"register_customers"</span>, seen, silver_node)
+p.write(<span class="s">"customers"</span>, ..., customers)</code></pre>
+        </div>
+        <div class="panel span-5">
+          <span class="label">customers table</span>
+          <pre><code>customer_id        TEXT  pk
+regulatory_status  TEXT  null  <span class="c"># ← the gap</span>
+enriched_at        TEXT  null
+snapshot_date      TEXT  null</code></pre>
+          <p style="margin-top:12px"><strong>Null <code>regulatory_status</code> = un-enriched.</strong> That predicate is the entire queue.</p>
+        </div>
+      </div>
+
+      <p style="margin-top:18px"><code>UpsertStrategy("customer_id")</code> (already in <code>framework.io</code>) means a feed re-running, or two feeds sharing a customer, never duplicates the row — it merges by key. New ids arrive with a null status; enrichment fills it. ADR-0009's deterministic-key discipline keeps the id stable across runs.</p>
+    </section>
+
+    <section id="enrich">
+      <h2>3. The daily enrichment pipeline</h2>
+      <p>A single ordinary pipeline at <code>pipelines/regulatory_enrichment/</code>, addressable by path (<code>python -m cli run pipelines/regulatory_enrichment /data</code>). Under Strategy 1 its <code>run(context)</code> is three small hops — and crucially, <strong>nothing here streams the giant extract</strong>; both reads are small (the backlog, and the projected snapshot):</p>
+
+      <div class="panel">
+        <span class="label">pipelines/regulatory_enrichment/pipeline.py</span>
+        <pre><code><span class="k">UPSTREAMS</span> = (
+    <span class="c"># the only HARD dependency: a current-ish monthly snapshot must exist.</span>
+    <span class="c"># ~40 days tolerates a late monthly refresh; it does NOT require same-day.</span>
+    <span class="k">Requirement</span>.succeeded(<span class="s">"regulatory/ingest"</span>).within_days(<span class="k">40</span>),
+)
+
+<span class="k">def</span> run(context):
+    customers = <span class="k">StoreCatalog</span>(context.base_dir).store(<span class="s">"customers"</span>)
+    regulatory = <span class="k">StoreCatalog</span>(context.base_dir).store(<span class="s">"regulatory"</span>)
+
+    p = <span class="k">Pipeline</span>(<span class="s">"regulatory_enrichment"</span>)
+    <span class="c"># 1. the backlog — the whole customers table is small (id + status),</span>
+    <span class="c">#    so read it and keep the null rows in Python (no giant scan).</span>
+    everyone = p.read(<span class="k">SqliteReader</span>(customers.path(SILVER), <span class="s">"customers"</span>), name=<span class="s">"customers"</span>)
+    missing = p.task(<span class="s">"missing"</span>, <span class="k">Filter</span>(<span class="k">lambda</span> r: r.regulatory_status <span class="k">is None</span>), everyone)
+    <span class="c"># 2. look them up against the small, INDEXED projected snapshot</span>
+    snapshot = p.read(<span class="k">SqliteReader</span>(regulatory.path(SILVER), <span class="s">"status"</span>), name=<span class="s">"snapshot"</span>)
+    enriched = p.task(<span class="s">"lookup"</span>, join_status, missing, snapshot)
+    <span class="c"># 3. merge the resolved values back into the customer DB</span>
+    p.write(<span class="s">"enrich"</span>, enriched,
+            customers.writer(SILVER, <span class="s">"customers"</span>, <span class="k">UpsertStrategy</span>(<span class="s">"customer_id"</span>)))
+    <span class="k">return</span> p.run(context=context)</code></pre>
+      </div>
+
+      <ul>
+        <li><strong>Incremental by construction.</strong> It enriches only the null backlog, so the resolved set scales with <em>what's missing today</em>, not the customer base or the extract.</li>
+        <li><strong>No streaming on the daily path (Strategy 1).</strong> Both reads are small SQLite tables; the join is in Python behind the <code>Dataset</code> seam. The hundreds-of-GB extract is only ever touched by the monthly projection. (Under the Strategy 2 fallback, hop 2 instead uses the bounded sorted-scan reader, fed the backlog ids — see <a href="#memory">above</a>.)</li>
+        <li><strong>Idempotent.</strong> The <code>UpsertStrategy("customer_id")</code> write merges; re-running the same day re-resolves whatever is still null and changes nothing else. Logical run id defaults to <code>regulatory_enrichment:&lt;run-date&gt;</code> (ADR-0004), so a re-drive is safe.</li>
+        <li><strong>Self-healing across a refresh.</strong> When the monthly snapshot turns over, null-out (or re-stamp) statuses older than the new <code>snapshot_date</code> so the next daily sweep refreshes them — see <a href="#edges">edge cases</a>.</li>
+      </ul>
+    </section>
+
+    <section id="scheduling">
+      <h2>4. Scheduling — the actual question</h2>
+      <p>"Run after all of today's feeds, where the feed set varies per day." The trap is reading this as a <em>synchronisation</em> requirement. It isn't, because enrichment doesn't consume the feeds' outputs directly — it consumes the <strong>customer DB</strong>, which the feeds have already updated by the time they finish. So we need <em>ordering</em>, not <em>a guest list</em>.</p>
+
+      <div class="compare">
+        <div class="panel">
+          <span class="label" style="color:var(--red)">✗ The tempting-but-wrong design</span>
+          <p style="margin:10px 0 0">Make enrichment <code>depend_on</code> every feed with <code>.same_day()</code>. Now on any day a feed isn't due (i.e. <em>every</em> day, by premise), that dependency is unsatisfiable and enrichment is marked <code>blocked</code>. You'd be fighting the orchestrator to run the very job you scheduled.</p>
+        </div>
+        <div class="panel">
+          <span class="label" style="color:var(--green)">✓ The state-driven design</span>
+          <p style="margin:10px 0 0">Schedule enrichment <code>Weekdays()</code> and place it <strong>last</strong> in each orchestration <code>PipelineSet</code>. The orchestrator runs a set's items in declared order within a pass, so enrichment runs after whichever feeds <em>were</em> due that day. It then drains the queue — which already reflects exactly the feeds that ran.</p>
+        </div>
+      </div>
+
+      <h3>So: manual, or scheduled?</h3>
+      <table>
+        <tr><th>Option</th><th>Verdict</th><th>Why</th></tr>
+        <tr>
+          <td><span class="status keep">Primary</span> Daily <code>Weekdays()</code>, last in each set</td>
+          <td>Recommended</td>
+          <td>Matches the workload: a daily backlog drainer. Robust to the varying feed set — a late feed is simply caught on the next sweep. No manual step in the steady state.</td>
+        </tr>
+        <tr>
+          <td><span class="status gap">Fallback</span> <code>ManualOnly()</code> + <code>cli run</code></td>
+          <td>Keep available</td>
+          <td>For catch-up and re-drives: a big backfill, a re-run after fixing a bad snapshot, an ad-hoc enrichment outside the daily cadence. Same pipeline, triggered by hand. Not the steady-state path.</td>
+        </tr>
+        <tr>
+          <td><span class="status risk">Avoid</span> Hard <code>.same_day()</code> on each feed</td>
+          <td>Don't</td>
+          <td>Couples enrichment to a feed set that isn't fixed; produces spurious <code>blocked</code> decisions every day not all feeds are due.</td>
+        </tr>
+      </table>
+
+      <h3>What about ordering dependencies — none, or soft?</h3>
+      <p>Two defensible choices, both correct:</p>
+      <ol>
+        <li><strong>No feed dependencies at all.</strong> Ordering comes purely from declaration position (last in the set). Simplest; the queue makes it safe — anything a feed missed today is drained tomorrow.</li>
+        <li><strong>Soft requirements per feed:</strong> <code>Requirement.succeeded("&lt;feed&gt;/ingest").within_days(1).first_run_policy("allow")</code>. These document intent and surface a stale feed as a <em>warning</em>, but with <code>allow</code>/<code>warn</code> they never <code>block</code> when a feed wasn't due (a <code>None</code> history is permitted). Use this if you want the orchestration plan to <em>show</em> the relationship.</li>
+      </ol>
+      <p>Either way, the <strong>one hard dependency</strong> is the monthly snapshot: <code>Requirement.succeeded("regulatory/ingest").within_days(40)</code>. That's a real precondition — without a current-ish snapshot there's nothing to look up — and it blocks only on a genuinely missing/stale monthly refresh, which is exactly when an operator should be told.</p>
+
+      <div class="callout">
+        <span class="label">Settling same-day work</span>
+        <p style="margin:8px 0 0">Run the orchestrator with <code>--loop</code> (<code>run_until_complete</code>) so a pass keeps polling until the day's due items have settled. Enrichment, being last, runs once the feeds due that day have finished — no hand-tuned ordering windows required.</p>
+      </div>
+    </section>
+
+    <section id="wiring">
+      <h2>5. Orchestration wiring</h2>
+      <p>In the application's registry module (the one <code>orchestrate --app</code> imports, exposing <code>build_pipeline_sets()</code>):</p>
+
+      <div class="grid">
+        <div class="panel span-7">
+          <span class="label">Schedules &amp; sets</span>
+          <pre><code><span class="k">from</span> tools.orchestration <span class="k">import</span> (
+    PipelineSet, ScheduledPipeline,
+    Weekdays, DayOfMonth, NthWorkingDayOfMonth,
+)
+<span class="k">from</span> framework.run <span class="k">import</span> Requirement
+<span class="k">from</span> framework.run.address <span class="k">import</span> RunAddress
+
+<span class="c"># Reference Data set: the monthly snapshot, on its own cadence.</span>
+regulatory_set = PipelineSet(<span class="s">"regulatory"</span>, [
+    ScheduledPipeline(<span class="s">"regulatory"</span>, <span class="s">"ingest"</span>,
+                      NthWorkingDayOfMonth(<span class="k">2</span>)),
+])
+
+<span class="c"># Feeds + the daily drainer, last in the set.</span>
+ingest_set = PipelineSet(<span class="s">"feeds"</span>, [
+    ScheduledPipeline(<span class="s">"complaints_a"</span>, <span class="s">"ingest"</span>, Weekdays()),
+    ScheduledPipeline(<span class="s">"complaints_b"</span>, <span class="s">"ingest"</span>, DayOfMonth(<span class="k">1</span>)),
+    <span class="c"># ... feeds on whatever cadences they have ...</span>
+    ScheduledPipeline(
+        <span class="s">"regulatory_enrichment"</span>, <span class="s">"run"</span>, Weekdays(),
+        depends_on=[
+            Requirement.succeeded(
+                RunAddress.pipeline(<span class="s">"ingest"</span>, subject=<span class="s">"regulatory"</span>)
+            ).within_days(<span class="k">40</span>),                 <span class="c"># hard: snapshot must exist</span>
+        ],
+    ),
+])</code></pre>
+        </div>
+        <div class="panel span-5">
+          <span class="label">Preview before running — <code>Orchestrator.plan()</code></span>
+          <pre><code>2026-06-23 feeds complaints_a/ingest  ready
+2026-06-23 feeds complaints_b/ingest  skipped
+2026-06-23 feeds regulatory_enrich..  ready
+2026-06-23 regulatory regulatory/in.. skipped</code></pre>
+          <p style="margin-top:12px"><code>plan()</code> reads the run registry and projects <code>ready</code> / <code>skipped</code> / <code>blocked</code> / <code>already-satisfied</code> without executing anything — so you can confirm enrichment shows <code>ready</code> (not <code>blocked</code>) on a day when only some feeds are due.</p>
+        </div>
+      </div>
+
+      <p style="margin-top:18px">A failed feed is terminal only for <em>its own</em> downstream dependants in that pass; independent feeds and other sets continue. Since enrichment has no hard feed dependency, one feed failing doesn't block the day's enrichment — the failed feed's customers simply stay in the backlog until it recovers. Decisions land in <code>&lt;base&gt;/_orchestration/runs.db</code>; executions stay in <code>RunLog</code> / <code>RunRegistry</code>.</p>
+
+      <p>YAML overrides can flip enablement, retime a schedule, or relax <code>freshness_days</code> per environment without touching the Python — handy for giving production a wider snapshot window than a test box.</p>
+    </section>
+
+    <section id="edges">
+      <h2>6. Edge cases &amp; guardrails</h2>
+      <table>
+        <tr><th>Situation</th><th>Handling</th></tr>
+        <tr>
+          <td>Monthly snapshot is late</td>
+          <td>The <code>within_days(40)</code> hard requirement tolerates a slipped refresh; enrichment keeps draining against the still-current snapshot. Only a genuinely stale (&gt;40d) or missing snapshot <code>blocks</code> it, with the reason recorded.</td>
+        </tr>
+        <tr>
+          <td>Snapshot refreshed — existing statuses now stale</td>
+          <td>On a new <code>snapshot_date</code>, re-open prior rows for refresh: either null-out <code>regulatory_status</code> where <code>snapshot_date &lt; new</code> (next sweep re-resolves them), or have the daily lookup re-resolve any row whose <code>snapshot_date</code> predates the current snapshot. Pick one — see open decisions.</td>
+        </tr>
+        <tr>
+          <td>Customer not present in the snapshot</td>
+          <td>Lookup yields no match. Decide a sentinel (<code>"unknown"</code> / <code>"not_in_snapshot"</code> + <code>enriched_at</code>) so the row leaves the null backlog and isn't retried forever; it re-enters naturally after the next refresh if you re-open by <code>snapshot_date</code>.</td>
+        </tr>
+        <tr>
+          <td>Truncated / partial extract</td>
+          <td><code>VolumeAnomalyValidator</code> on the snapshot ingest trips when the row count deviates wildly from recent history — a silently-short export fails the monthly run instead of poisoning every lookup.</td>
+        </tr>
+        <tr>
+          <td>Big initial backfill</td>
+          <td>First run faces a large null backlog. Run enrichment manually (<code>cli run</code>) once to drain it, or let the daily sweep chew through it — it's idempotent, so partial progress is never lost. Optionally batch the <code>WHERE</code> by <code>LIMIT</code> if a single pass is too large.</td>
+        </tr>
+        <tr>
+          <td>Re-drive a specific day</td>
+          <td><code>cli run pipelines/regulatory_enrichment /data --logical-run-id …</code> replaces that logical run's rows rather than duplicating (ADR-0004).</td>
+        </tr>
+        <tr>
+          <td>Catch-up after an outage</td>
+          <td>The queue is durable: missed days just mean a bigger backlog next sweep. No dated-file replay needed — though <code>--freshness-days N</code> relaxes the snapshot window for a catch-up run.</td>
+        </tr>
+      </table>
+    </section>
+
+    <section id="build">
+      <h2>7. What to build</h2>
+      <ol>
+        <li><strong>A chunked / streaming read seam</strong> — the one real new framework primitive. A reader that yields a sequence of bounded Datasets (e.g. <code>.chunks(n)</code> over pandas <code>chunksize</code>), behind the <code>Dataset</code> seam per ADR-0002. Everything else here is wiring; this is the capability that makes a hundreds-of-GB source tractable at all.</li>
+        <li><strong><code>regulatory</code> Reference Data subject + monthly ingest pipeline.</strong> <code>SasReader</code> (ADR-0012; file reader as a stopgap) → <strong>streaming projection</strong> of <code>customer_id</code>+<code>regulatory_status</code> → silver <code>Refresh</code>, indexed on <code>customer_id</code>, with a <code>VolumeAnomalyValidator</code>. Raw is the landed file, not a SQLite mirror. Schedule <code>NthWorkingDayOfMonth</code>/<code>DayOfMonth</code>.</li>
+        <li><strong><code>register_customers</code> task in each silver feed builder.</strong> Projects <code>customer_id</code> and upserts into the shared <code>customers</code> table (<code>UpsertStrategy("customer_id")</code>). A small reusable helper so every feed wires it the same way.</li>
+        <li><strong><code>pipelines/regulatory_enrichment/</code>.</strong> Read null backlog → join indexed snapshot → upsert status back. <code>UPSTREAMS</code> = one hard <code>within_days(40)</code> on <code>regulatory/ingest</code>.</li>
+        <li><strong>Orchestration wiring.</strong> Enrichment scheduled <code>Weekdays()</code>, last in the feed set(s); optional soft per-feed requirements for visibility. Verify with <code>Orchestrator.plan()</code> that it reads <code>ready</code> on a mixed-feed day.</li>
+        <li><strong>Snapshot-turnover policy</strong> (re-open by <code>snapshot_date</code>) — implement the chosen variant from the open decision below.</li>
+        <li><strong>Docs.</strong> New <code>docs/regulatory-enrichment.md</code> slice doc, a <code>customers</code> + <code>regulatory</code> Data Dictionary entry, and a <code>CONTEXT.md</code> note if "enrichment queue" becomes vocabulary. (Per <code>CLAUDE.md</code>: docs are part of the change, not a follow-up.)</li>
+      </ol>
+
+      <h3>Open decisions to confirm with the team</h3>
+      <ul>
+        <li><span class="status info">decide</span> <strong>Strategy 1 (monthly projection) vs Strategy 2 (daily sorted-scan):</strong> the central choice. Strategy 1 is recommended unless the projected snapshot can't be held, or intra-month live freshness is required. Both need the chunked-read seam.</li>
+        <li><span class="status info">decide</span> <strong>Raw landing for an oversized source:</strong> accept "raw = the copied file on disk" (recommended; avoids a hundreds-of-GB SQLite mirror) vs. mirror a projected raw table. A pragmatic deviation from the usual raw-as-table model — worth an ADR note.</li>
+        <li><span class="status info">decide</span> <strong>Refresh semantics on snapshot turnover:</strong> null-and-re-resolve vs. lookup-time staleness check vs. accept point-in-time staleness until a customer is touched again. Affects how "current" the data point stays between refreshes.</li>
+        <li><span class="status info">decide</span> <strong>Soft per-feed requirements:</strong> declare them (plan-visibility) or rely purely on declaration order (simplicity)?</li>
+        <li><span class="status info">decide</span> <strong>Where the customer DB lives:</strong> its own subject medallion (recommended, blast-radius isolation per ADR-0001) vs. folded into an existing platform store.</li>
+        <li><span class="status info">decide</span> <strong>Snapshot window (<code>within_days</code>):</strong> 40 is a starting point for a monthly cadence; set it to your real tolerance for a late refresh.</li>
+      </ul>
+
+      <div class="callout good" style="margin-top:24px">
+        <span class="label">The one idea to take away</span>
+        <p style="margin:8px 0 0">Move the one unavoidable full scan to <strong>once a month</strong>: stream the extract in chunks, <em>project the two columns you need</em>, and land a small indexed snapshot. Then let the customer DB <em>be</em> the queue, and run one idempotent daily drainer last in the set — it reads only small tables, never the giant extract. Don't synchronise enrichment to a moving set of feeds; the queue makes a late feed a non-event. Manual trigger stays in your pocket for backfills and re-drives, but the steady state is fully scheduled and resilient to whichever feeds run on any given day.</p>
+      </div>
+    </section>
+
+    <p class="stamp">Plan · regulatory enrichment pipeline · grounded in framework primitives (Store / Reader / Writer / Pipeline / Orchestrator) and ADR-0001, 0002, 0004, 0005, 0009, 0012. New capability required: a chunked/streaming read seam.</p>
+
+  </main>
+</body>
+</html>

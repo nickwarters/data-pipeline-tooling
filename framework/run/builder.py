@@ -45,7 +45,7 @@ class Node:
         self.dry_run_note: str | None = None
         # Set by a side-effecting node once it has durably written an artifact;
         # surfaced on this node's run-log record so the log shows independently
-        # committed evidence that outlives a later failure (ADR-0007 amd 03).
+        # committed evidence that outlives a later failure (ADR-0005).
         self.committed: bool = False
 
     def describe(self) -> str:

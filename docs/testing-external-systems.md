@@ -84,8 +84,8 @@ Now we can thoroughly test our orchestration logic without ever touching a netwo
 
 ```python
 from framework.io import StoreCatalog
-from framework.core import SILVER
 from tests.framework_testing import read_rows
+from tools.medallion import medallion
 
 def test_orchestrator_triggers_sas_and_drives_pipelines(tmp_path):
     # Setup the fake SAS environment with our expected CSV outputs
@@ -110,9 +110,9 @@ def test_orchestrator_triggers_sas_and_drives_pipelines(tmp_path):
     assert (landing_zone / "complaints_a.csv").exists()
     
     # Assert 3: The downstream pipelines successfully picked them up and ran
-    store = StoreCatalog(tmp_path)
-    silver_a = read_rows(store.store("complaints_a"), SILVER, "complaints_a")
-    silver_b = read_rows(store.store("complaints_b"), SILVER, "complaints_b")
+    catalog = StoreCatalog(tmp_path)
+    silver_a = read_rows(medallion(catalog, "complaints_a").silver, "complaints_a")
+    silver_b = read_rows(medallion(catalog, "complaints_b").silver, "complaints_b")
     
     assert len(silver_a) == 1
     assert silver_a[0]["amount"] == 50

@@ -10,11 +10,12 @@ import pandas as pd
 from case_review.case_type import CaseType
 from case_review.gold import detail_ingest_silver_to_gold, ingest_silver_to_gold
 from framework.core.dataset import Dataset
-from framework.io.store import Store
+from framework.io import StoreCatalog
 from framework.io.strategy import AccumulateByRun, Refresh
 from framework.run.builder import Pipeline
 from framework.transform.processors import Filter, Rename, SelectColumns, Unpivot
 from tests._schema_fixtures import LandedCase
+from tools.medallion import medallion
 
 # One Case Type owns identity for the wide feed; the Cases and Detail builders
 # both read it, so case_id matches with no cross-pipeline join.
@@ -23,9 +24,9 @@ _WIDE_CASES = CaseType(name="wide_cases", schema=LandedCase, natural_key=("case_
 PRODUCT_COLS = [f"product_{i}" for i in range(1, 4)]  # keep small for tests
 
 
-def _write_wide_raw(store: Store, run_id: str) -> None:
+def _write_wide_raw(med, run_id: str) -> None:
     """Seed a shared raw table with a wide feed (case + product columns)."""
-    store.writer("raw", "wide_cases", AccumulateByRun(run_id, run_id)).write(
+    med.raw.writer("wide_cases", AccumulateByRun(run_id, run_id)).write(
         Dataset.from_pandas(
             pd.DataFrame(
                 {
@@ -46,9 +47,9 @@ def _write_wide_raw(store: Store, run_id: str) -> None:
 def test_detail_silver_to_gold_produces_one_row_per_product(tmp_path):
     # Verifies the factory: reads projected silver (case_ref + products), derives
     # case_id, unpivots wide to long, writes Refresh to gold.
-    store = Store(tmp_path)
+    med = medallion(StoreCatalog(tmp_path), "wide_cases")
     # Seed the silver table (already-projected product columns + natural key)
-    store.writer("silver", "products", Refresh()).write(
+    med.silver.writer("products", Refresh()).write(
         Dataset.from_pandas(
             pd.DataFrame(
                 {
@@ -62,7 +63,7 @@ def test_detail_silver_to_gold_produces_one_row_per_product(tmp_path):
     )
 
     detail_ingest_silver_to_gold(
-        store,
+        med,
         _WIDE_CASES,
         "products",
         unpivot=Unpivot(
@@ -73,7 +74,7 @@ def test_detail_silver_to_gold_produces_one_row_per_product(tmp_path):
         ),
     ).run()
 
-    gold = store.reader("gold", "products").read().to_pandas()
+    gold = med.gold.reader("products").read().to_pandas()
     # c1 has product_1=widget, product_2=doodad (product_3 is None → dropped)
     # c2 has product_1=gadget (product_2 and product_3 are None → dropped)
     assert len(gold) == 3
@@ -83,9 +84,9 @@ def test_detail_silver_to_gold_produces_one_row_per_product(tmp_path):
 def test_detail_case_id_matches_case_id_derived_independently(tmp_path):
     # The Detail Table's case_id is derived from the same natural_key under the
     # same namespace as the Case table; no cross-pipeline join is needed.
-    store = Store(tmp_path)
+    med = medallion(StoreCatalog(tmp_path), "wide_cases")
     # Seed case silver (needs load_date for LatestPerKey in ingest_silver_to_gold)
-    store.writer("silver", "cases", Refresh()).write(
+    med.silver.writer("cases", Refresh()).write(
         Dataset.from_pandas(
             pd.DataFrame(
                 {"case_ref": ["c1"], "amount": [500], "load_date": ["2026-06-01"]}
@@ -93,7 +94,7 @@ def test_detail_case_id_matches_case_id_derived_independently(tmp_path):
         )
     )
     # Seed product silver
-    store.writer("silver", "products", Refresh()).write(
+    med.silver.writer("products", Refresh()).write(
         Dataset.from_pandas(
             pd.DataFrame(
                 {
@@ -106,10 +107,10 @@ def test_detail_case_id_matches_case_id_derived_independently(tmp_path):
         )
     )
 
-    ingest_silver_to_gold(store, _WIDE_CASES, "cases").run()
+    ingest_silver_to_gold(med, _WIDE_CASES, "cases").run()
 
     detail_ingest_silver_to_gold(
-        store,
+        med,
         _WIDE_CASES,
         "products",
         unpivot=Unpivot(
@@ -120,8 +121,8 @@ def test_detail_case_id_matches_case_id_derived_independently(tmp_path):
         ),
     ).run()
 
-    cases_gold = store.reader("gold", "cases").read().to_pandas()
-    products_gold = store.reader("gold", "products").read().to_pandas()
+    cases_gold = med.gold.reader("cases").read().to_pandas()
+    products_gold = med.gold.reader("products").read().to_pandas()
 
     assert len(cases_gold) == 1
     assert len(products_gold) == 1  # only widget; None rows dropped
@@ -129,15 +130,15 @@ def test_detail_case_id_matches_case_id_derived_independently(tmp_path):
 
 
 def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path):
-    store = Store(tmp_path / "subject")
+    med = medallion(StoreCatalog(tmp_path), "subject")
     run_id = "2026-06-01"
 
-    _write_wide_raw(store, run_id)
+    _write_wide_raw(med, run_id)
 
     normalise = Rename({"case_ref_no": "case_ref"})
 
     p_cases = Pipeline("cases")
-    r_cases = p_cases.read(store.reader("raw", "wide_cases"), name="read")
+    r_cases = p_cases.read(med.raw.reader("wide_cases"), name="read")
     f_cases = p_cases.transform(
         Filter(lambda row, rid=run_id: row["run_id"] == rid), r_cases, name="filter"
     )
@@ -146,16 +147,16 @@ def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path
         SelectColumns(["case_ref", "amount"]), n_cases, name="select"
     )
     p_cases.write(
-        store.writer("silver", "cases", AccumulateByRun(run_id, run_id)),
+        med.silver.writer("cases", AccumulateByRun(run_id, run_id)),
         s_cases,
         name="write",
     )
     p_cases.run()
 
-    ingest_silver_to_gold(store, _WIDE_CASES, "cases").run()
+    ingest_silver_to_gold(med, _WIDE_CASES, "cases").run()
 
     p_products = Pipeline("products")
-    r_products = p_products.read(store.reader("raw", "wide_cases"), name="read")
+    r_products = p_products.read(med.raw.reader("wide_cases"), name="read")
     f_products = p_products.transform(
         Filter(lambda row, rid=run_id: row["run_id"] == rid), r_products, name="filter"
     )
@@ -164,14 +165,14 @@ def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path
         SelectColumns(["case_ref"] + PRODUCT_COLS), n_products, name="select"
     )
     p_products.write(
-        store.writer("silver", "products", AccumulateByRun(run_id, run_id)),
+        med.silver.writer("products", AccumulateByRun(run_id, run_id)),
         s_products,
         name="write",
     )
     p_products.run()
 
     detail_ingest_silver_to_gold(
-        store,
+        med,
         _WIDE_CASES,
         "products",
         unpivot=Unpivot(
@@ -182,8 +183,8 @@ def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path
         ),
     ).run()
 
-    cases_gold = store.reader("gold", "cases").read().to_pandas()
-    products_gold = store.reader("gold", "products").read().to_pandas()
+    cases_gold = med.gold.reader("cases").read().to_pandas()
+    products_gold = med.gold.reader("products").read().to_pandas()
 
     assert len(cases_gold) == 2
 
@@ -202,9 +203,9 @@ def test_demo_fan_out_runs_end_to_end(tmp_path):
 
     main(str(tmp_path))
 
-    store = Store(tmp_path / "wide_cases")
-    cases = store.reader("gold", "cases").read().to_pandas()
-    products = store.reader("gold", "case_products").read().to_pandas()
+    med = medallion(StoreCatalog(tmp_path), "wide_cases")
+    cases = med.gold.reader("cases").read().to_pandas()
+    products = med.gold.reader("case_products").read().to_pandas()
 
     assert len(cases) == 4
     assert set(cases.columns) >= {"case_id", "case_ref"}

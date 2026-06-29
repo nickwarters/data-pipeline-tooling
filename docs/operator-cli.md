@@ -6,12 +6,12 @@ The framework is import-only, but it is also runnable as a tool:
 operator side is a small command surface for the everyday tasks that would
 otherwise need a hand-written wrapper script: **run** a
 pipeline by its path, **orchestrate** scheduled due work, check its **status**,
-list recent **runs**, and inspect a run **log** (issue #99). It is a thin shell
+list recent **runs**, and inspect a run **log**. It is a thin shell
 over the public `framework.run` runtime surface (`run_pipeline`,
 `Orchestrator`) and the `RunLog` / `RunRegistry` observability seam —
 everything stays local SQLite + JSONL, with no external services
-([ADR-0001](adr/0001-sqlite-medallion-store-on-network-share.md),
-[ADR-0007](adr/0007-fail-fast-atomic-runs-jsonl-observability.md)).
+([ADR-0001](adr/0001-sqlite-per-subject-medallion-store.md),
+[ADR-0005](adr/0005-fail-fast-atomic-runs-and-observability.md)).
 
 Run it as a module from the repository root so the import-only `framework`
 package resolves on `sys.path`:
@@ -95,8 +95,7 @@ is non-zero — same fail-fast contract as a real run, without writing anything.
 A run's **logical run id** is the idempotency key for its accumulated rows: a
 re-run under the *same* logical id replaces that run's rows rather than adding
 duplicates, while each execution stays individually traceable by its own
-`execution_id` ([ADR-0006](adr/0006-load-idempotency-refresh-upstream-accumulate-downstream.md),
-#77). When omitted it defaults to `<pipeline>:run_date`, so re-running a
+`execution_id` ([ADR-0004](adr/0004-per-feed-load-strategy-owned-by-writer.md)). When omitted it defaults to `<pipeline>:run_date`, so re-running a
 given date is already idempotent.
 
 Pass `--logical-run-id` to re-drive a specific business run explicitly — for
@@ -152,7 +151,7 @@ has settled or the idle poll limit is reached.
 
 > **Note:** when `run` moved to path-addressing, the demo's `--app` orchestration
 > wiring (`build_runner()` / `build_pipeline_sets()`) was removed; re-expressing
-> orchestrate's schedules over path-addressed pipelines is tracked in issue #197.
+> orchestrate's schedules over path-addressed pipelines is a known follow-up.
 > The command and its `--app` contract are unchanged for a real application that
 > still supplies a registry module.
 
@@ -161,6 +160,36 @@ provides `Weekdays`, `SpecificWeekdays`, `DayOfMonth`,
 `NthWorkingDayOfMonth`, `LastWorkingDayOfMonth`, and `ManualOnly`. `Weekdays()`
 is the normal "daily" schedule; weekends and holidays are evaluated by
 `WorkingDayCalendar`.
+
+For everyday authoring, prefer the friendly `Schedule.*` constructors over the
+implementation class names and weekday ordinals — they read as operator language
+and produce exactly the same schedules:
+
+```python
+from tools.orchestration import Schedule, ScheduledPipeline
+
+ScheduledPipeline("claims", "ingest", Schedule.daily())
+
+ScheduledPipeline(
+    "claims",
+    "weekly_quality_check",
+    Schedule.on_weekdays("monday", "wednesday"),  # case-insensitive names
+)
+
+ScheduledPipeline("claims", "monthly_snapshot", Schedule.day_of_month(21))
+
+ScheduledPipeline("claims", "month_open", Schedule.nth_working_day_of_month(1))
+
+ScheduledPipeline("claims", "month_close", Schedule.last_working_day_of_month())
+
+ScheduledPipeline("claims", "ad_hoc_backfill", Schedule.manual_only())
+```
+
+`Schedule.on_weekdays(...)` accepts the full English weekday names
+(`"monday"` … `"sunday"`) case-insensitively; an unknown weekday name or an
+out-of-range month day fails immediately with a clear message. `is_due(run_date,
+calendar)` stays the core protocol — these constructors are ergonomics only and
+leave the orchestration semantics unchanged.
 
 Dependencies are requirement-based. A scheduled downstream runs through
 `PipelineRunner` only when its declared `Requirement` predicates, or legacy
@@ -234,7 +263,7 @@ consulting run history or calling any handler — it is a pure projection of
 planned per-file runs.
 
 > **Note:** CLI dry-run support for the `run` and `orchestrate` commands (passing
-> `--dry-run` / `--plan` on the command line) is tracked separately in issue #195.
+> `--dry-run` / `--plan` on the command line) is a known follow-up.
 
 ## `status` — the latest run per pipeline
 

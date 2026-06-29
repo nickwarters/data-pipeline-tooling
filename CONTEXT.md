@@ -21,7 +21,7 @@ The narrowed set of Cases the Selection pipeline produces by pulling from the Ca
 _Avoid_: shortlist, batch
 
 **Selection trace**:
-The per-Case audit of *why* each Case considered by Selection was or wasn't chosen: which **Filter**/**Join** excluded it (located by name), what it **Score**d, and — for survivors — where it ranked. A sibling table of the **SelectionPool**, stamped with the logical run id (`run_id` / `logical_run_id`) and, when run through a `RunContext`, the execution id that matches RunLog/RunRegistry, so the selection decision is defensible after the fact ("why wasn't this Adviser picked up last quarter?"). It is the eligibility-stage twin of **quarantine** (validity) — the same "route aside *with a reason*, never silently drop" shape, pointed at selection rather than schema (issue #53, ADR-0007 amendment 02). Produced by `.explain(writer, id_column=…)` on the Selection pipeline.
+The per-Case audit of *why* each Case considered by Selection was or wasn't chosen: which **Filter**/**Join** excluded it (located by name), what it **Score**d, and — for survivors — where it ranked. A sibling table of the **SelectionPool**, stamped with the logical run id (`run_id` / `logical_run_id`) and, when run through a `RunContext`, the execution id that matches RunLog/RunRegistry, so the selection decision is defensible after the fact ("why wasn't this Adviser picked up last quarter?"). It is the eligibility-stage twin of **quarantine** (validity) — the same "route aside *with a reason*, never silently drop" shape, pointed at selection rather than schema (ADR-0008). Produced by `.explain(writer, id_column=…)` on the Selection pipeline.
 _Avoid_: log (it is queryable state, not free text); audit log (reserve for the run-level JSONL)
 
 **Selection rule**:
@@ -29,7 +29,7 @@ A named, deterministic business rule used by Selection to narrow or rank the Cas
 _Avoid_: hidden side-effect rule, ad hoc lambda (for governed business criteria)
 
 **Sampling**:
-A narrowing technique Selection may apply, reducing a population to at most *N* Cases — either **per group** (one or more key columns, e.g. **Adviser**, or Adviser × region) or **ungrouped** (the whole feed as one population). Two forms of cut: **ranked** — the highest-scoring *N*, deterministic by a score (the common case is *N*=1, "the single highest available per Adviser"); and **random** — *N* drawn at random, made **reproducible** by a fixed **seed** (a pure function of input + seed; run-to-run variation comes from the upstream-narrowed population, not the seed — ADR-0010). The cut is itself a **selection decision**: the Cases dropped beyond *N* are excluded *with a reason*, captured by the selection trace (issue #53), never silently absent.
+A narrowing technique Selection may apply, reducing a population to at most *N* Cases — either **per group** (one or more key columns, e.g. **Adviser**, or Adviser × region) or **ungrouped** (the whole feed as one population). Two forms of cut: **ranked** — the highest-scoring *N*, deterministic by a score (the common case is *N*=1, "the single highest available per Adviser"); and **random** — *N* drawn at random, made **reproducible** by a fixed **seed** (a pure function of input + seed; run-to-run variation comes from the upstream-narrowed population, not the seed — ADR-0010). The cut is itself a **selection decision**: the Cases dropped beyond *N* are excluded *with a reason*, captured by the selection trace, never silently absent.
 _Avoid_: picking; "sample" as a loose name for the **SelectionPool** as a whole (sampling is one technique that helps produce it, not the result)
 
 **Available Cases**:
@@ -67,6 +67,10 @@ _Avoid_: source (reserved for source *type*: Excel/CSV/SAS/SQLite/SharePoint), i
 **Deliverable**:
 An outbound artifact a Pipeline produces for downstream consumption, in one of three concrete forms: a **file** (CSV/Excel/JSON), a **directly-readable view/table** the consumer reads, or **rows pushed to a platform-owned remote list** (a SharePoint Subscription Edition list — the canonical **Selection** Deliverable, one list per Case Type). The push form is an *active* write to a system the framework does not own, not a passive artifact left for collection; files are reserved for **Reporting** outputs. Emitted by a **Writer**: `CsvWriter`, `ExcelWriter`, and `JsonWriter` emit file Deliverables; SQLite Writers emit directly-readable tables; the stubbed `SharePointWriter` is the outbound dual of the **SharePoint Reader** (same source type, both directions).
 _Avoid_: report, export, output feed
+
+**Data Dictionary**:
+The human-readable description of a table/Feed and what each of its fields *means* — the prose companion to the machine-enforced `schema.py` (columns, dtypes, nullability, value rules). One entry per table per medallion layer (raw column names differ from the canonical silver/gold shape). Stored in **Confluence**; the checked-in [`docs/data-dictionary-template.md`](docs/data-dictionary-template.md) is the source-of-truth template. A new column is not "done" until it has a Data Dictionary row.
+_Avoid_: schema (reserved for the enforced dataclass contract), glossary (that is this file, for domain nouns)
 
 **Reference Data**:
 Shared, cross-cutting data that many Case Types' Selection joins against (e.g. the **Adviser hierarchy**, product codes, mappings). Ingested as ordinary **Feeds** and refined through its own per-subject medallion exactly like a Case Type's data, but **read-only** to Case Types — a Case Type joins it (in Python) and never writes it.
@@ -111,11 +115,11 @@ The two axes of a **Schema**'s content contract. A **value rule** is *vertical* 
 _Avoid_: cross-field rule (informal), constraint
 
 **Schema Drift**:
-A **Feed**'s landed column set changing run-over-run — an owner-controlled source (SharePoint list, SAS export) silently adding or dropping a column between snapshots. Detected at the **raw** boundary by diffing the incoming columns against the prior run's landed columns, and surfaced as a **warning** that does not stop the run (raw stays a faithful mirror of the source — ADR-0008). Names-only and run-over-run; a type change on a surviving column is a **Schema Breach**'s concern, not drift.
+A **Feed**'s landed column set changing run-over-run — an owner-controlled source (SharePoint list, SAS export) silently adding or dropping a column between snapshots. Detected at the **raw** boundary by diffing the incoming columns against the prior run's landed columns, and surfaced as a **warning** that does not stop the run (raw stays a faithful mirror of the source — ADR-0006). Names-only and run-over-run; a type change on a surviving column is a **Schema Breach**'s concern, not drift.
 _Avoid_: schema change, schema mismatch (use the precise term)
 
 **Schema Breach**:
-Data violating a Case Type's declared **Schema** (a missing column or wrong dtype) at the **silver** or **gold** boundary — a hard, fail-fast abort (ADR-0007/0008), not a warning. Contrast **Schema Drift**: drift is a soft, run-over-run *change* signal at raw; a breach is a hard *contract* violation downstream.
+Data violating a Case Type's declared **Schema** (a missing column or wrong dtype) at the **silver** or **gold** boundary — a hard, fail-fast abort (ADR-0005, ADR-0006), not a warning. Contrast **Schema Drift**: drift is a soft, run-over-run *change* signal at raw; a breach is a hard *contract* violation downstream.
 _Avoid_: drift, schema error
 
 ## Engineering vocabulary (cross-cutting)
@@ -130,8 +134,8 @@ A place where you can change behaviour without editing code *at* that place
 (Feathers) — a point where two parts meet through a narrow contract, so one side
 can be substituted without the other noticing. _Here_: pandas lives **behind the
 `Dataset` seam** (`from_pandas`/`to_pandas`) so the engine is swappable
-(ADR-0002); `.with_processor` is the processing seam; the
-**dataclass→validator adapter** is the seam to Pydantic-later (ADR-0005/0008).
+(ADR-0002); `.transform` / `.task` is the processing seam; the
+**dataclass→validator adapter** is the seam to Pydantic-later (ADR-0011, ADR-0006).
 
 **Edge**:
 Where the system meets something outside itself — external I/O, or the
@@ -144,7 +148,7 @@ reserves for a later slice. A seam is a *substitution* point; an edge is a
 **Boundary**:
 A line across which a guarantee changes, and therefore the natural place to
 **enforce** that guarantee. _Here_: silver is the **schema boundary** (declared
-columns + dtypes validated *before* data lands — ADR-0008); gold is the **grain
+columns + dtypes validated *before* data lands — ADR-0006); gold is the **grain
 boundary** (one-row-per-Case enforced — ADR-0009).
 
 **Expected failure / `PipelineError`**:
@@ -179,14 +183,13 @@ signature, pipeline script, or the domain layer (ADR-0002).
 **Walking skeleton**:
 A minimal end-to-end implementation that exercises the *whole* architecture —
 every layer wired together — before any one part is fleshed out, so the shape is
-validated early. _Here_: the CSV → raw path through the core primitives (issue
-#2).
+validated early. _Here_: the CSV → raw path through the core primitives.
 
 **Vertical slice / tracer bullet**:
 A unit of work cut **top-to-bottom through every layer** (rather than building one
 layer at a time), delivering a thin but complete capability that proves the path
 end-to-end and can be built on. _Here_: features land as numbered slices
-(e.g. the `Processor` slice #23, the schema-enforcement slice #7); our
+(e.g. the processor slice, the schema-enforcement slice); our
 issue-breakdown deliberately favours these over horizontal layer-by-layer work.
 
 **Blast radius**:
@@ -201,8 +204,7 @@ data propagate downstream where the failure is harder to trace. _Here_:
 **Validators** abort at the silver boundary *before* silver is written, so an
 invalid feed never lands. Some failures are invisible per-row — a **truncated
 source export** where every row is valid yet thousands are missing — and are
-caught only run-over-run: the **volume-anomaly guardrail** (`VolumeAnomalyValidator`,
-#54) trips when a run's row count deviates wildly from a baseline derived from the
+caught only run-over-run: the **volume-anomaly guardrail** (`VolumeAnomalyValidator`) trips when a run's row count deviates wildly from a baseline derived from the
 feed's **recent run history** (the run registry), not a hand-set threshold.
 
 **For-each orchestration**:
@@ -235,7 +237,12 @@ are due for a run date. _Here_: an `Orchestrator` owns one or more
 `PipelineSet`s of `ScheduledPipeline` references and invokes the existing
 `PipelineRunner`; it is not a Pipeline that runs other Pipelines. Python
 definitions own the canonical sets, dependencies, and default schedules, while
-YAML may override enablement, timing, and freshness windows. Decisions are
+YAML may override enablement, timing, and freshness windows. Schedules are
+expressed with the friendly `Schedule.*` constructors (`Schedule.daily()`,
+`Schedule.on_weekdays("monday", …)`, `Schedule.day_of_month(n)`,
+`Schedule.nth_working_day_of_month(n)`, `Schedule.last_working_day_of_month()`,
+`Schedule.manual_only()`) over the concrete schedule classes, keeping `is_due`
+the core protocol. Decisions are
 recorded in `_orchestration/runs.db`; actual executions remain in
 `RunLog` / `RunRegistry`. Failures are isolated: a failed scheduled item blocks
 its downstream dependants for that orchestrator run, but independent items and
@@ -262,14 +269,14 @@ A **subject** owns a **medallion**: three SQLite databases, one per generic fram
 
 | Pipeline | Scope | Load profile & what its gold holds |
 |----------|-------|------------------------------------|
-| **Ingest** | per Case Type | **History-upstream / current-gold** (ADR-0006 amendment): raw + silver *accumulate* the change-over-time record (the source is a destructive current-state system, so the framework is the historian); gold is *current-only*, **one row per Case** (`case_id`), the clean layer the **CasePool** reads. |
+| **Ingest** | per Case Type | **History-upstream / current-gold** (ADR-0004): raw + silver *accumulate* the change-over-time record (the source is a destructive current-state system, so the framework is the historian); gold is *current-only*, **one row per Case** (`case_id`), the clean layer the **CasePool** reads. |
 | **Selection** | per Case Type | *Accumulate-by-run* gold: the **SelectionPool** (chosen Cases), an audit trail, written into gold and emitted as a **Deliverable** to the platform. |
 | **Sync** | platform-wide | *Accumulate-by-run* gold: the review platform's state — **Review Outcomes** + its full picture of each Case (an outcome can change run to run). |
 | **Reporting** | platform-wide | *Accumulate-by-run* gold: cross-Pipeline views (Outcomes joined to selected Cases), shaped into **Deliverables**. |
 
-So **CasePool** and **SelectionPool** relate to **Ingest** and **Selection** only; **Review Outcomes** live in the **Sync** store. **Load strategy is per-feed, owned by the Writer** (the Store maps `layer → location` only — ADR-0006 amendment); there is no longer a single "gold accumulates everywhere" rule. Where a layer accumulates, its history survives across runs (stamped with a logical run id / `load_date` and, when context-driven, execution id; idempotent re-run via delete-by-logical-run — ADR-0006). Ingest's *current* gold is reduced from accumulated silver (`LatestPerKey` by `case_id`) and its one-row-per-Case grain is enforced at the gold boundary (ADR-0009).
+So **CasePool** and **SelectionPool** relate to **Ingest** and **Selection** only; **Review Outcomes** live in the **Sync** store. **Load strategy is per-feed, owned by the Writer** (the Store maps `layer → location` only — ADR-0004); there is no longer a single "gold accumulates everywhere" rule. Where a layer accumulates, its history survives across runs (stamped with a logical run id / `load_date` and, when context-driven, execution id; idempotent re-run via delete-by-logical-run — ADR-0004). Ingest's *current* gold is reduced from accumulated silver (`LatestPerKey` by `case_id`) and its one-row-per-Case grain is enforced at the gold boundary (ADR-0009).
 
-**Store topology (current working assumption).** `StoreCatalog(root).store(subject)` mints the subject's **Store** from shared root/configuration. A `Store` binds `(subject, layer, table)` to concrete Readers/Writers over that subject's files; it does not infer load strategy or business meaning from the layer. Physically this maps to one three-file medallion **per subject** for now. Revisit the physical topology when Sync/Reporting are built.
+**Store topology (current working assumption).** The framework stores an opaque **`namespace`** (a *logical database*, one file holding many related tables) → file: `StoreCatalog(root).store(namespace)` mints a namespace **Store** that binds `(namespace, table)` to concrete Readers/Writers; it does not infer load strategy or business meaning. The raw/silver/gold **medallion is an application-level profile** (`tools.medallion.medallion(catalog, subject)` → `.raw`/`.silver`/`.gold` namespace Stores), no longer framework vocabulary (#232). Physically the medallion still maps to one three-file medallion **per subject** for now (`<subject>/{raw,silver,gold}.db`). A normalised schema can span several namespaces (one database per namespace; cross-database joins stay in Python). Revisit the physical topology when Sync/Reporting are built.
 
 ## Example dialogue
 
@@ -287,16 +294,16 @@ So **CasePool** and **SelectionPool** relate to **Ingest** and **Selection** onl
 - "advisor" vs "agent" — RESOLVED: synonyms; **Advisor** is canonical, "agent" avoided.
 - "activity" vs "sale" vs "other things" — RESOLVED: these are **Case Types** (open-ended, generic A/B/C…), each with its own fields/selection/ingest/destination/processing.
 - Medallion layer names "bronze/silver/gold" (a.k.a. raw/silver/gold) are **placeholders** — to be renamed by domain later. Using raw/silver/gold for now.
-- **CasePool scope** — RESOLVED: a CasePool is **per Case Type**, typed/validated by that type's Schema. A Case Type is an explicit declarative `CaseType` object (schema + Variations) imported directly; there is no global CaseType config registry. The minimal runner registry is only for dispatching domain Pipelines by `(case_type, pipeline)` and checking upstream freshness (ADR-0005).
+- **CasePool scope** — RESOLVED: a CasePool is **per Case Type**, typed/validated by that type's Schema. A Case Type is an explicit declarative `CaseType` object (schema + Variations) imported directly; there is no global CaseType config registry. The minimal runner registry is only for dispatching domain Pipelines by `(case_type, pipeline)` and checking upstream freshness (ADR-0011).
 - **Reference Data** — RESOLVED: canonical term **Reference Data** (avoid "master data"/"lookup"). Cross-cutting reference (Adviser hierarchy, product codes, mappings) is modelled as ordinary **Feeds**, each given its **own per-subject medallion**, refined by its own pipeline, and **read-only** to Case Types' Selection (joined in Python). The working-day calendar is a config-seeded **`WorkingDayCalendar`** Python utility (not a feed). No separate reference subsystem. See ADR-0001 (per-subject medallions).
 - **Medallion scope** — RESOLVED: a medallion is scoped **per subject** (a Case Type or a Reference Data set) — three files each — for blast-radius isolation and independent onboarding; the single-writer rule holds per file. See ADR-0001.
 - **Question Bank ownership** — RESOLVED: the framework stores only a **reference** (`question_bank_id`) on the Variation and stamps it onto selected Cases so the review platform knows which bank to present; the bank's **content** is owned by the review platform.
 - **"Pipeline" — term vs class** — RESOLVED: the four end-to-end phases (Ingest/Selection/Sync/Reporting) are **Pipelines** (the domain term). The `Pipeline` *class* (`framework/run/builder.py`) is finer-grained — a deferred builder for **one Feed/table** — so a domain Pipeline composes one or more class `Pipeline` runs. The class can be inspected before execution with `.describe()`, which renders the same ordered plan that `.run()` executes: reader, explicit read dependencies, ordered Tasks, governance outputs, writer, and run-log sink without running the feed. A **Task** is a named unit within one class-level run (`Reader -> Dataset -> Task* -> Writer`), such as validation, processing, or an explicit checkpoint write; it is not a domain Pipeline, medallion layer, or second terminus. "Stage" is older/informal wording for this run-step idea, while "Layer" stays reserved for raw/silver/gold.
 - **Inbound vs outbound** — RESOLVED: **Feed** is inbound-only; an outbound artifact is a **Deliverable** (file or directly-readable view). The **Sync** Pipeline is one-way inbound (no push, no correlation); the **SelectionPool** reaches the review platform as a Deliverable emitted by **Selection**.
-- **`Dataset` vs CasePool** — RESOLVED (#26): `Dataset` is the framework primitive renamed from `DataHandle` — the opaque, **bulk** in-memory carrier (the bulk tier of the two-tier carrier, ADR-0002; pandas behind the seam), returned by `Reader.read()` and flowing through builders/processors/Writers. It is **not** the **CasePool**, which is the domain population of **Cases** read from silver/gold and surfaced as typed `Case` objects. The two tiers meet only *inside* CasePool: it reads a `Dataset`, then materialises typed Cases. So "dataset" stays an `_Avoid_` alias for the *CasePool concept*, while the capitalised type `Dataset` is the carrier. (Renamed from `DataHandle` because "handle" implies a lightweight pointer; the thing actually owns a tableful of rows — the noun was the onboarding tripwire.)
-- **Store topology** — PROVISIONAL (working assumption, not yet an ADR): logically one **Store** per Pipeline; physically one SQLite DB per Case Type shared by Ingest + Selection, one DB for Sync (all Case Types), one for Reporting (all Case Types). Separate Python `Store`s/Writers may point at the same file. Revisit when Sync/Reporting are built.
-- **Selection's two writes (gold audit + Deliverable)** — RESOLVED: Selection both writes the **SelectionPool** to its gold (audit trail) and emits it as a **Deliverable** to the SharePoint list. These are **two pipelines, not one run with two writes**: the Selection pipeline lands gold, then a **second pipeline reads the gold SelectionPool and writes to the SharePoint list** — consistent with ADR-0009's "single-Writer pipelines over a shared source" (no multi-Writer terminus, no checkpoint required). Mid-run lineage `.checkpoint(writer)` (#49) is a separate, general-purpose feature and is **not** the mechanism here. See #48.
+- **`Dataset` vs CasePool** — RESOLVED: `Dataset` is the framework primitive renamed from `DataHandle` — the opaque, **bulk** in-memory carrier (the bulk tier of the two-tier carrier, ADR-0002; pandas behind the seam), returned by `Reader.read()` and flowing through builders/processors/Writers. It is **not** the **CasePool**, which is the domain population of **Cases** read from silver/gold and surfaced as typed `Case` objects. The two tiers meet only *inside* CasePool: it reads a `Dataset`, then materialises typed Cases. So "dataset" stays an `_Avoid_` alias for the *CasePool concept*, while the capitalised type `Dataset` is the carrier. (Renamed from `DataHandle` because "handle" implies a lightweight pointer; the thing actually owns a tableful of rows — the noun was the onboarding tripwire.)
+- **Store topology** — PROVISIONAL (working assumption, not yet an ADR): the framework addresses an opaque **`namespace`** (a logical database) → file; a **Store** is namespace-scoped and binds `(namespace, table)` → Readers/Writers (#232). The raw/silver/gold **medallion** is an application profile (`tools.medallion`) over that, no longer framework vocabulary. Physically one SQLite DB per Case Type shared by Ingest + Selection, one DB for Sync (all Case Types), one for Reporting (all Case Types). Separate Python `Store`s/Writers may point at the same file. Revisit when Sync/Reporting are built.
+- **Selection's two writes (gold audit + Deliverable)** — RESOLVED: Selection both writes the **SelectionPool** to its gold (audit trail) and emits it as a **Deliverable** to the SharePoint list. These are **two pipelines, not one run with two writes**: the Selection pipeline lands gold, then a **second pipeline reads the gold SelectionPool and writes to the SharePoint list** — consistent with ADR-0009's "single-Writer pipelines over a shared source" (no multi-Writer terminus, no checkpoint required). Mid-run lineage (a `.write()` node placed mid-graph) is a separate, general-purpose feature and is **not** the mechanism here.
 - **One feed, many tables** — RESOLVED (ADR-0009): the old "one feed → one silver table → one gold table" assumption is dropped. A Feed yields **one Case table and zero or more Detail Tables**; the wide feed is fanned out by **N single-table pipelines over the shared raw table**, each projecting its columns and sharing one reusable normalisation `Processor`. No new core seam (rejected a multi-Writer terminus and a splitting Processor — both break the single-Writer/single-Dataset shape). Built through `SelectColumns`, `Unpivot`, `DeriveKey`, `LatestPerKey`, `UniqueValidator`, and the case-review gold helpers.
 - **Case identity** — RESOLVED (ADR-0009): a Case's identity is a **deterministic** surrogate `case_id = uuid5(case_type_namespace, natural_key)`, derived from the feed's stable natural key — same Case → same id every run/machine, so idempotency holds and the Case ↔ Detail link needs no join. A random `uuid4` is rejected (breaks idempotency); a persistent identity map is the deferred fallback for a feed with no natural key.
-- **Load strategy vs layer** — RESOLVED (ADR-0006 amendment): load strategy is **per-feed, owned by the Writer**; the Store maps `layer → location` only (no load decision). The global "refresh upstream / accumulate downstream" rule becomes the *default* profile, not a law. Ingest can adopt **history-upstream / current-gold**; Selection/Sync/Reporting keep accumulate-by-run gold. Consequence: where the source is destructive, accumulated raw/silver are a **system of record** (backup matters) and volume grows `records × snapshots`. Built through explicit Writer strategies (`Refresh`, `AccumulateByRun`, `UpsertStrategy`).
-- **Atomicity of run artifacts (publish unit)** — RESOLVED (ADR-0007 amd 03): a run's artifacts — **quarantine** rejects, the **Selection trace**, **checkpoints**, and the final output — are **independently committed evidence**, *not* one all-or-nothing publish unit. Atomicity is **per writer, per layer DB** (a single delete+insert), not across writers; an abort *after* an artifact write leaves that artifact on disk. Chosen deliberately: evidence is most valuable when the run then fails. Each run-log step carries a **`committed`** marker so operators can see what landed before an abort. Hardening the per-writer transaction itself is #139 / #165.
+- **Load strategy vs layer** — RESOLVED (ADR-0004): load strategy is **per-feed, owned by the Writer**; the Store maps `layer → location` only (no load decision). The global "refresh upstream / accumulate downstream" rule becomes the *default* profile, not a law. Ingest can adopt **history-upstream / current-gold**; Selection/Sync/Reporting keep accumulate-by-run gold. Consequence: where the source is destructive, accumulated raw/silver are a **system of record** (backup matters) and volume grows `records × snapshots`. Built through explicit Writer strategies (`Refresh`, `AccumulateByRun`, `UpsertStrategy`).
+- **Atomicity of run artifacts (publish unit)** — RESOLVED (ADR-0005): a run's artifacts — **quarantine** rejects, the **Selection trace**, **checkpoints**, and the final output — are **independently committed evidence**, *not* one all-or-nothing publish unit. Atomicity is **per writer, per layer DB** (a single delete+insert), not across writers; an abort *after* an artifact write leaves that artifact on disk. Chosen deliberately: evidence is most valuable when the run then fails. Each run-log step carries a **`committed`** marker so operators can see what landed before an abort. Hardening the per-writer transaction itself is a separate concern.

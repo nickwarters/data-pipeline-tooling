@@ -1,23 +1,17 @@
-# Core primitives & the medallion layers
+# Core primitives & the medallion profile
 
-This is the framework's foundational vocabulary. The walking skeleton (the CSV →
-raw slice, #2) introduced `Dataset`, `Reader`, `Store`, and the `Pipeline`
-builder; slice #14 added the **`Writer`** port and the deferred `.write(...)` /
-`.run()` terminus; slice #3 added the **`Validator`** port and made
-`.run()` fail-fast and atomic; slice #4 added the **`RunLog`** primitive and
-wired structured JSONL observability into the terminus; slice #7 added the
-**`Schema`** (a Case Type dataclass) and its **`SchemaValidator`**, enforcing
-the schema at the silver boundary; slice #23 added the **`Processor`** seam and
-the **`SchemaCoercion`** processor that repairs raw's round-trip-lossy types
-ahead of that validator; slice #8 added the **`AccumulateByRun`** gold load
-strategy that accumulates validated silver into the gold layer, stamped by run;
-slice #9 added the
-**Selection processors** (`Filter`/`Score`/`VectorizedFilter`/
-`VectorizedDerive`/`Sort`/`Rename`) and **`JoinWith`** / **`AntiJoinWith`**,
-the cross-feed join over an explicit read-only dependency. Every later slice
-builds on these shapes. For the
-*why* behind each, see the ADRs referenced inline; for domain language (Case,
-CasePool, Feed, Reference Data, …) see [`../CONTEXT.md`](../CONTEXT.md).
+This is the framework's foundational vocabulary — the primitives every pipeline
+names. The pieces are: `Dataset` (the opaque carrier), `Reader` / `Writer`
+(source and sink IO), `Store` / `StoreCatalog` (a namespace → file factory),
+`Validator` and the declared-schema contract (`SchemaValidator`, value rules),
+the transforms (`SchemaCoercion`, `Filter` / `Score` / `JoinWith` and the Ingest
+reshapers), and the deferred `Pipeline` DAG builder with its `RunLog`
+observability. The raw/silver/gold **medallion is no longer framework
+vocabulary** (#232): the framework stores an opaque **`namespace`** (a logical
+database) → file, and the medallion is an application-level profile over it
+(`tools.medallion`). For the *why* behind each, see the ADRs referenced inline;
+for domain language (Case, CasePool, Feed, Reference Data, …) see
+[`../CONTEXT.md`](../CONTEXT.md).
 
 Application code (`pipelines/` + the `case_review/` domain layer) imports these
 primitives through the public facades (`framework.core` / `framework.io` /
@@ -29,83 +23,44 @@ primitive classes directly. The cross-cutting `retry` / `calendar` /
 orchestration / observability utilities live in the sibling top-level `tools`
 package, not a facade. See [`public-api.md`](public-api.md).
 
-## Medallion layers
+## The namespace Store and the medallion profile
 
-A medallion is three SQLite databases, one per layer (raw, silver, gold), on a
-network share: **raw → silver → gold**. Each **subject** — a Case Type or a
-shared Reference Data set — owns its **own** medallion, isolated from every
-other subject's files (ADR-0001 amendment: blast-radius isolation, independent
-onboarding). A Feed is ingested and refined upward; the Selection pipeline reads
-the ingested silver/gold and writes the SelectionPool back into gold. (The layer
-names are placeholders pending a domain rename — see CONTEXT.)
+The framework's storage contract is the `Reader`/`Writer` ports + load strategies
++ the `connect` seam. `Store` / `StoreCatalog` is a **factory** (the run engine
+never references it) that addresses an opaque **`namespace`** — a *logical
+database*, one SQLite file holding many related tables — and mints
+Readers/Writers over the tables in it. A normalised schema can span several
+namespaces (one database per namespace, related tables in each; cross-database
+joins stay in Python — ADR-0002).
+
+The raw/silver/gold **medallion** is an application-level *profile* layered on
+top by `tools.medallion`, **not** a framework enum. `medallion(catalog, subject)`
+exposes three namespace Stores — `.raw` / `.silver` / `.gold` — for one subject,
+mapping to that subject's own files `<subject>/{raw,silver,gold}.db` on a network
+share. Each **subject** — a Case Type or a shared Reference Data set — owns its
+**own** medallion, isolated from every other subject's files (ADR-0001:
+blast-radius isolation, independent onboarding). A Feed is ingested and refined
+upward; the Selection pipeline reads the ingested silver/gold and writes the
+SelectionPool back into gold. (The layer names are placeholders pending a domain
+rename — see CONTEXT.)
 
 | Layer  | Holds                                  | Load behaviour |
 |--------|----------------------------------------|----------------|
-| **raw** | A faithful, schema-light snapshot of the source as landed — the framework's landing zone. | **Full refresh** each run: truncate + reload from the source snapshot, so re-runs are deterministic (ADR-0006). |
-| silver | Validated, normalised data: the **schema boundary** — a Case Type's declared columns + dtypes are enforced here as a post-validator before the data lands (ADR-0008, #7). Normalising *coercion* (parsing dates, casting booleans) runs as a `process` step ahead of that check (#23). | Full refresh from raw. |
-| gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. A gold hop composes an explicit `Pipeline` whose Writer carries the load strategy (#8). | **Current-only** (ingest gold: `Refresh`, one row per Case) **or accumulating** (Selection / Sync: `AccumulateByRun`, stamped with logical run id / `load_date` and, when context-driven, `execution_id`; idempotent re-run via delete-by-logical-run then insert — ADR-0006; [gold-accumulation doc](gold-accumulation.md)). |
+| **raw** | A faithful, schema-light snapshot of the source as landed — the framework's landing zone. | **Full refresh** each run: truncate + reload from the source snapshot, so re-runs are deterministic (ADR-0004). |
+| silver | Validated, normalised data: the **schema boundary** — a Case Type's declared columns + dtypes are enforced here as a post-validator before the data lands (ADR-0006). Normalising *coercion* (parsing dates, casting booleans) runs as a transform step ahead of that check. | Full refresh from raw. |
+| gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. A gold hop composes an explicit `Pipeline` whose Writer carries the load strategy. | **Current-only** (ingest gold: `Refresh`, one row per Case) **or accumulating** (Selection / Sync: `AccumulateByRun`, stamped with logical run id / `load_date` and, when context-driven, `execution_id`; idempotent re-run via delete-by-logical-run then insert — ADR-0004; [gold-accumulation doc](gold-accumulation.md)). |
 
 raw stays schema-light on purpose: it mirrors the source so the landing zone is
-faithful, and schema enforcement arrives at silver and gold (ADR-0008).
+faithful, and schema enforcement arrives at silver and gold (ADR-0006).
 
-> **Load strategies are explicit.** The Store maps `layer → location` only; each
+> **Load strategies are explicit.** The Store maps `namespace → file` only; each
 > Writer owns its load strategy. Callers choose `Refresh()`,
 > `AccumulateByRun(run_id, load_date)`,
 > `AccumulateByRun.from_context(context)`, `UpsertStrategy(key_columns)`,
 > `InsertOrIgnore()`, or `InsertIfAbsent(key_columns)` when asking the Store
 > for a Writer. This supports both current-state hops and accumulated histories
-> without baking a universal layer→strategy rule into the Store (ADR-0006
-> amendment, ADR-0009).
-
-> **Build status.** The **per-subject `Store`** has landed: `Store(subject_dir)`
-> *mints* that subject's Writers/Readers over its own
-> `<subject_dir>/{raw,silver,gold}.db`, and `StoreCatalog(root).store(subject)`
-> mints those subject stores from shared root/configuration. The legacy global
-> `Store.write`/`read` is retired. The shared `connect` factory now lives in
-> `framework._internal.connection` (the seam that keeps `store` and `writers` cycle-free).
-> **Validators** now
-> attach to the builder (`.validate()` / `.validate()`) and
-> `.run()` is fail-fast and atomic. **Structured JSONL observability** has
-> landed: a `RunLog` composed onto the builder emits one JSON record per step
-> plus a run summary to a `.log` file (and human-readable lines to the console)
-> — the seam the run-registry ingests (ADR-0007;
-> [format doc](run-log-format.md)). **Schema enforcement at silver** has landed:
-> a `SchemaValidator` derived from a Case Type's dataclass checks columns +
-> dtypes, composed onto the raw→silver pipeline as a post-validator so a
-> breach aborts before silver is written (ADR-0008;
-> [schema-enforcement doc](schema-enforcement.md)). **Coercion between raw and
-> silver** has landed: a `Processor` seam runs as a task
-> (compatible with the existing transform builder vocabulary), and
-> `SchemaCoercion` casts the schema's round-trip-lossy types (dates,
-> booleans) ahead of the validator so a date/bool schema survives the round-trip
-> (ADR-0008, #23). **Gold accumulation** has landed: a gold hop
-> carries validated silver into gold via the `AccumulateByRunWriter`, stamping each
-> row with the logical run id / `load_date` and, for context-derived strategies,
-> `execution_id`; a re-driven business run is idempotent via delete-by-logical-run
-> then insert (ADR-0006;
-> [gold-accumulation doc](gold-accumulation.md)). **The Selection processors**
-> have landed: `Filter`/`Score` (plain-Python row callables — ADR-0002),
-> `VectorizedFilter`/`VectorizedDerive` (whole-frame callables for
-> batch-friendly filtering and column derivation), `Sort`/`Rename`, and
-> **`JoinWith`** / **`AntiJoinWith`** — the cross-feed join
-> and exclusion-list gate that hold a lazy
-> reference to another builder and resolves it to a DAG at `.run()`, joined in
-> Python (ADR-0003, #9; [processors doc](processors.md)). **The run registry**
-> has landed: a `RunRegistry` ingests the `RunLog` JSONL into its own queryable
-> SQLite store — idempotent by `run_id` + step, queryable by pipeline / status /
-> time, surfacing warned (incl. schema-drift) runs (ADR-0005/0007, #52;
-> [run-log-format doc](run-log-format.md)). **The thin Pipeline runner** has
-> landed: `PipelineRunner` dispatches domain Pipelines by `(case_type, pipeline)`,
-> passes a shared `RunContext` into handlers, and `Requirement` predicates
-> block stale downstream runs from `RunRegistry` history without changing the
-> builder contract (`FreshnessRequirement` remains as a compatibility adapter)
-> (#61, #77, #242). **Value-level schema rules** have landed:
-> `Nullable` / `NonNull`, `Pattern`, `Length`, `Range`, `Unique`, `OneOf`, plus
-> row checks via `@row_checks(...)`. The domain capstone has landed as the
-> `case_review` application layer (`CaseType` / `Variation`, `CasePool`, and
-> gold ingest helpers), and the multi-table feed work has landed in the current
-> primitives: explicit per-writer load strategies, reader column projection,
-> `DeriveKey`, `LatestPerKey`, `UniqueValidator`, and Detail Table helpers.
+> without baking a universal layer→strategy rule into the Store (ADR-0004,
+> ADR-0009).
 
 ## The primitives
 
@@ -122,7 +77,7 @@ Only engine-confined code (readers, writers, the store, processors) crosses the
 seam via `Dataset.from_pandas(frame)` / `dataset.to_pandas()`. **pandas must
 never appear** in a Protocol signature, a pipeline script, or the domain layer —
 only behind this seam. Typed domain objects (`Case`, `ReviewOutcome`) are the
-*other* tier, materialised on demand at the domain edge (later slice).
+*other* tier, materialised on demand at the domain edge (the CasePool).
 
 `to_pandas()` returns a **copy** by default, enforcing the opacity guarantee:
 callers cannot mutate the carrier's backing frame. Use `to_pandas(copy=False)`
@@ -163,7 +118,7 @@ another subject's read-only Reference Data medallion, joined in Python —
 ADR-0002). `SasReader(script, copy_glob, dest)` and
 `SharePointReader(site, list_name, auth)` follow the same `read()` shape but
 reach a remote source whose client is **stubbed for now**, behind a swappable
-seam in `tools.integrations.remote` (ADR-0004, ADR-0005); see
+seam in `tools.integrations.remote` (ADR-0012, ADR-0011); see
 [`adding-a-feed.md`](adding-a-feed.md#remote-feeds-sas-sharepoint). Readers are
 the home of the concrete engine and are tested against **local fixture files** —
 no network, no SAS, no SharePoint. Paths are handled with `pathlib` so they
@@ -175,6 +130,47 @@ A `columns=[...]` parameter on readers that support projection (`CsvReader` and
 lets a pipeline read only the columns it needs, leaving `read() -> Dataset`
 unchanged. This is what keeps each single-table pipeline narrow when a wide feed
 (650+ columns) is fanned out into a Case table and its Detail Tables.
+
+#### `ChunkReader` — streaming a source too big to hold whole
+
+`read() -> Dataset` lands a whole source in memory at once — right for a
+feed-sized file, impossible for a multi-hundred-GB extract. `ChunkReader` is the
+**streaming dual**: `chunks(size) -> Iterator[Dataset]` yields a lazy sequence
+of *bounded* Datasets, so the in-memory contract (ADR-0002) holds **per chunk**,
+never for the whole source. The concrete chunking engine (pandas `chunksize`)
+stays behind the `Dataset` seam exactly as `read()` keeps pandas behind it.
+
+```python
+class ChunkReader(Protocol):
+    def chunks(self, size: int = DEFAULT_CHUNK_SIZE) -> Iterator[Dataset]: ...
+```
+
+`ChunkedCsvReader(path, columns=...)` streams a local CSV via pandas
+`read_csv(chunksize=…)`. `SasFileReader(path, columns=..., format=...)` streams
+an **already-landed** `.sas7bdat`/xport file via pandas `read_sas(chunksize=…)`;
+a gzipped extract (`extract.sas7bdat.gz`) is read on the fly (compression
+inferred from the extension), and the SAS format is inferred from the extension
+— ignoring any trailing `.gz` — unless `format=` is passed. Reading
+sas7bdat/xport needs **no extra dependency** (pandas' SAS reader is pure-Python),
+so it is first-class on Windows and macOS alike.
+
+`SasFileReader` is deliberately **not** the ADR-0012 `SasReader`: it runs no SAS
+script, does no remote execution, and copies no file — it only *reads* a file
+already on local disk. The two are complementary — `SasReader` *lands* a file
+from a remote SAS host (see the source-type table below); `SasFileReader` is one
+way to *read* a landed file once it is there — and the distinct name keeps them
+from being confused.
+
+The chunk size is configurable and defaults to `DEFAULT_CHUNK_SIZE` (10,000
+rows). `columns=[...]` projects each chunk so a caller streaming a wide source
+for just a couple of columns keeps every chunk narrow (CSV pushes it into
+`usecols`; SAS slices each chunk, since `read_sas` has no projection). A source
+with no data rows (a header-only CSV, an empty file, a zero-row SAS table)
+streams as **zero** chunks; a small non-empty source as exactly **one**. These
+readers expose `chunks()`, not `read()`, so they sit *beside* the single-shot
+`Reader` set rather than wiring into the deferred `Pipeline` builder — the
+streaming consumers (e.g. a monthly projection that appends each chunk to an
+indexed silver table) compose on top of them.
 
 **Table and column names you configure** (the `table` and `columns=[...]` you pass
 to a `SqliteReader`/Writer) accept **any string** — spaces, hyphens, mixed case,
@@ -197,13 +193,14 @@ directions are explicit:
 | Excel file | `ExcelReader` | `ExcelWriter` | Both target one worksheet (`sheet=...`). |
 | JSON file | _intentionally absent_ | `JsonWriter` | JSON is currently a Reporting Deliverable format only; no inbound JSON Feed has been needed yet. |
 | SQLite table | `SqliteReader` | `SqliteTruncateReloadWriter`, `AccumulateByRunWriter`, `SqliteUpsertWriter`, `SqliteInsertOrIgnoreWriter`, `SqliteInsertIfAbsentWriter` | The Store mints these over medallion layer databases. |
-| SAS extract | `SasReader` | _intentionally absent_ | SAS is an inbound-only remote source; the framework lands the remote output then reads local CSV files. |
+| SAS extract (remote) | `SasReader` | _intentionally absent_ | SAS is an inbound-only remote source; the framework lands the remote output then reads local CSV files. |
+| Large source, streamed | `ChunkedCsvReader`, `SasFileReader` | _intentionally absent_ | The `ChunkReader` seam (`chunks(size) -> Iterator[Dataset]`) for sources too big to hold whole — a local CSV or an **already-landed** `.sas7bdat`/xport file (incl. gzipped). Distinct from the remote `SasReader`: no script, no remote run, no copy — read-only by nature. |
 | SharePoint list | `SharePointReader` | `SharePointWriter` | Target is **SE on-prem**. Both sides are stubbed behind swappable `SharePointFetcher` / `SharePointPusher` seams until the on-prem SE client (NTLM/Kerberos/REST) lands. `SharePointWriter` emits the canonical Selection Deliverable — one list per Case Type. |
 | Console (stdout) | _intentionally absent_ | `StdoutWriter` | A terminal sink for *seeing* a result rather than persisting it — e.g. printing a Selection explainer's per-Case trace while driving a feed by hand. Owns no location or load strategy; prints the dataset as a plain-text table to the stream (defaulting to `sys.stdout`). |
 
 ### `Writer` — the destination, behind one method
 A `Writer` is the component-role **dual of `Reader`**: a Reader brings data in,
-a Writer takes it out (ADR-0003 amendment).
+a Writer takes it out (ADR-0003).
 
 ```python
 class Writer(Protocol):
@@ -211,7 +208,7 @@ class Writer(Protocol):
 ```
 
 A Writer owns **both** its target location (a layer db file + table, or a file
-Deliverable path) **and** its load strategy (ADR-0006). Swapping the Writer is
+Deliverable path) **and** its load strategy (ADR-0004). Swapping the Writer is
 how you target a different sink — the builder never learns about medallion
 layers, file formats, or load rules. Concrete writers ship for file
 Deliverables and SQLite tables:
@@ -232,13 +229,13 @@ Deliverables and SQLite tables:
   column is the logical/idempotency key; `execution_id` is the trace key that
   matches RunLog/RunRegistry when the strategy is derived from a `RunContext`.
   A re-driven run is idempotent via *delete-by-run then insert*. Minted by
-  `Store.writer(layer, table, AccumulateByRun(...))` (#8;
+  `med.gold.writer(table, AccumulateByRun(...))` (see
   [gold-accumulation doc](gold-accumulation.md)).
 - `SqliteUpsertWriter(db_path, table, key_columns)` — **update-or-insert** by a
-  declared key set (#136): for each incoming row whose key already exists in the
+  declared key set: for each incoming row whose key already exists in the
   target the row is replaced; new keys are inserted; target rows whose key is
   absent from the incoming batch are preserved. The merge is a single atomic
-  transaction. Minted by `Store.writer(layer, table, UpsertStrategy(...))`.
+  transaction. Minted by `store.writer(table, UpsertStrategy(...))`.
   Useful for a table that holds the **current state of a keyed entity**, e.g.
   `active_cases` keyed on `case_id`.
 - `SqliteInsertOrIgnoreWriter(db_path, table)` — **insert-or-ignore**: appends
@@ -247,7 +244,7 @@ Deliverables and SQLite tables:
   Rows that do not conflict are appended; target rows absent from the batch are
   never touched. Conflict resolution is driven by the table's own constraints —
   when the table carries no constraints the behaviour is equivalent to a plain
-  append. Minted by `Store.writer(layer, table, InsertOrIgnore())`.
+  append. Minted by `store.writer(table, InsertOrIgnore())`.
 - `SqliteInsertIfAbsentWriter(db_path, table, key_columns, surrogate_column="id")` —
   **reference/dimension load**: on each write, checks which natural keys are
   already present in the target, mints compact integer surrogates in Python
@@ -270,31 +267,37 @@ the Dataset shape level; exact pandas dtype inference can still differ after a
 file round-trip, so schema-sensitive flows should continue to validate after
 reading.
 
-### `Store` / `StoreCatalog` — subject medallions, minted from shared configuration
-`Store(subject_dir, busy_timeout_ms=5000)` is the mouth of **one subject's**
-medallion (a Case Type or a Reference Data set — ADR-0001 amendment): its three
-files `<subject_dir>/{raw,silver,gold}.db`, isolated from every other subject's.
-It holds **no business logic** (ADR-0002) and makes **no** load decision
-(ADR-0003 amendment) — it merely mints the layer-appropriate component:
+### `Store` / `StoreCatalog` — a namespace → file factory
+`Store(db_path, *, namespace=None, busy_timeout_ms=5000)` is the mouth of **one
+namespace** — a logical database, one SQLite file holding many related tables. It
+holds **no business logic** (ADR-0002) and makes **no** load decision (ADR-0003)
+— it merely mints components over the tables in its file:
 
-- `store.writer(layer, table, strategy)` — mints a Writer over the chosen layer
+- `store.writer(table, strategy)` — mints a Writer over a table in this namespace
   using the caller's explicit `Refresh()`, `AccumulateByRun(...)`,
   `UpsertStrategy(...)`, `InsertOrIgnore()`, or `InsertIfAbsent(key_columns)`
   strategy. Context-driven accumulation uses `AccumulateByRun.from_context(context)`.
-- `store.reader(layer, table)` — a `SqliteReader` over the same file.
+- `store.reader(table)` — a `SqliteReader` over the same file.
 
-Layer names are validated through `RAW`, `SILVER`, `GOLD` / `Layer`; existing
-string calls remain accepted for compatibility and are rejected if they are not
-one of the three conventional names. The strategy lives on the Writer the store
-mints, not on the store. A new subject's directory is created on first write, so
+The strategy lives on the Writer the store mints, not on the store. The
+namespace's file (and its parent directories) is created on first write, so
 onboarding migrates nothing.
 
 `StoreCatalog(root, backend=..., busy_timeout_ms=5000)` owns shared
-configuration and mints subject stores with `catalog.store(subject)`. The
-default `DirectoryStoreBackend` maps to `<root>/<subject>`, keeping that
-physical layout out of every pipeline script while preserving the same
-`Store` responsibility: binding `(subject, layer, table)` to concrete
-Readers/Writers.
+configuration and mints namespace stores with `catalog.store(namespace)`. The
+default `DirectoryStoreBackend` maps a namespace to `<root>/<namespace>.db`,
+nesting on a `/` in the namespace (so the medallion's `<subject>/silver` →
+`<root>/<subject>/silver.db`), keeping physical layout out of every pipeline
+script while preserving the same `Store` responsibility: binding
+`(namespace, table)` to concrete Readers/Writers.
+
+The **medallion profile** (`tools.medallion.medallion(catalog, subject)`) layers
+raw/silver/gold over this: it mints three namespace Stores — `med.raw` /
+`med.silver` / `med.gold` — for one subject, each a `Store` over
+`<subject>/<layer>.db`, isolated per subject (ADR-0001). Reference Data sets are
+subjects too; a Case Type reads another subject's namespace through a `Reader`
+and joins in Python (ADR-0002), so splitting files costs nothing on the join
+path.
 
 The connection factory `connect(db_path, busy_timeout_ms)` lives in
 `framework._internal.connection` — the single place connections are configured (ADR-0001),
@@ -332,7 +335,7 @@ narrow seam (`RunHistory` / `PriorColumns`) for the run-over-run comparison:
   the *static* floor/ceiling; the **`VolumeAnomalyValidator`** below is its
   history-derived sibling.
 - `VolumeAnomalyValidator(history, pipeline, tolerance=…, floor=…)` — the
-  **volume-anomaly guardrail** (#54): catches a truncated source export where
+  **volume-anomaly guardrail**: catches a truncated source export where
   every row is individually valid yet thousands are missing — invisible to
   per-row checks, visible only run-over-run. It derives a baseline from the feed's
   **recent run history** (`history.recent_row_counts(pipeline)` — the median of
@@ -343,14 +346,14 @@ narrow seam (`RunHistory` / `PriorColumns`) for the run-over-run comparison:
   *successful* runs the relative band is skipped so first nights don't trip
   spuriously. `history` is any `RunHistory` — the `RunRegistry` is the production
   one. See [`RunRegistry`](#runregistry--the-run-history-that-ingests-the-jsonl).
-- `SchemaDriftValidator(prior)` — the **raw-boundary drift detector** (#51):
+- `SchemaDriftValidator(prior)` — the **raw-boundary drift detector**:
   warns (it does not abort) when a feed's incoming columns differ from the
   **prior run's landed columns**, catching an owner-controlled source silently
   adding/dropping a column *at the door*, one layer before it would surface as a
   silver **Schema Breach**. The diff is **names-only** and a case-sensitive set
   difference (a rename reads as a drop + an add; order and dtype are not drift —
-  dtype is silver's job, ADR-0008). The prior set comes from `prior` — a
-  `PriorColumns` seam minted by `store.columns_of(RAW, table)`, which reads the
+  dtype is silver's job, ADR-0006). The prior set comes from `prior` — a
+  `PriorColumns` seam minted by `med.raw.columns_of(table)`, which reads the
   live raw table's columns via `PRAGMA` (no rows) and returns `None` for the
   first-ever run, making it a clean no-op. Attach at `severity="warn"`; the
   warning rides `warn_hits` onto the run summary (see drift surfacing under
@@ -358,7 +361,7 @@ narrow seam (`RunHistory` / `PriorColumns`) for the run-over-run comparison:
 
 A Validator knows only how to *check*; it does **not** decide what a failure
 means. **Severity is set where the Validator is attached to the builder**
-(`severity="error" | "warn"`, default `error` — ADR-0007), so the same Validator
+(`severity="error" | "warn"`, default `error` — ADR-0005), so the same Validator
 can abort one pipeline and merely warn another. These are **engine-agnostic**
 (the check reads shape only; `SchemaDriftValidator`'s `PriorColumns` seam reads
 the prior table via stdlib `sqlite3`, never pandas); the richer `SchemaValidator`
@@ -367,7 +370,7 @@ below is the *engine-confined* kind.
 ### `Schema` & `SchemaValidator` — the declared contract, enforced at silver
 A Case Type's **`Schema`** is an ordinary **dataclass** whose annotations *are*
 the contract — each field is a column name and its declared Python type, the
-single source of truth (ADR-0008):
+single source of truth (ADR-0006):
 
 ```python
 @dataclass
@@ -378,7 +381,7 @@ class CaseA:
 ```
 
 `SchemaValidator(CaseA)` is the **dataclass→validator adapter** (the seam to
-dataclass→Pydantic later, ADR-0005). It is a `Validator` of the same shape as
+dataclass→Pydantic later, ADR-0011). It is a `Validator` of the same shape as
 above, but **engine-confined**: where `ColumnValidator` reads only `dataset.columns`,
 a schema check inspects column *dtypes*, so it reaches the frame via
 `to_pandas()` exactly as a Reader/Writer/processor does (ADR-0002). It checks:
@@ -402,19 +405,19 @@ extend the same dataclass through `typing.Annotated`.
 ### Schema enforcement at the silver boundary
 There is no recipe builder for this; the raw→silver hop composes the primitives
 **explicitly** onto a `Pipeline` — read the subject's raw, coerce, validate, write
-silver — so the ADR-0008 convention is visible in the pipeline like any other hop:
+silver — so the ADR-0006 convention is visible in the pipeline like any other hop:
 
 ```python
 p = Pipeline("cases")
-raw = p.read(store.reader("raw", "cases"), name="read")
+raw = p.read(med.raw.reader("cases"), name="read")
 coerced = p.task("coerce", SchemaCoercion(CaseA), raw)
 validated = p.validate(SchemaValidator(CaseA), coerced, name="post-validate")
-p.write(store.writer("silver", "cases", Refresh()), validated, name="write")
+p.write(med.silver.writer("cases", Refresh()), validated, name="write")
 p.run()   # coerces, validates, then writes silver.db
 ```
 
 A breach aborts at the silver boundary **before** silver is written (fail-fast
-and atomic — ADR-0007), so nothing partial lands. Raw stays schema-light: data
+and atomic — ADR-0005), so nothing partial lands. Raw stays schema-light: data
 the schema would reject still lands faithfully in raw. The pipeline makes no
 write or load decisions — the Store mints the Writer, which owns location +
 strategy. Full walkthrough: [schema-enforcement.md](schema-enforcement.md).
@@ -437,11 +440,11 @@ attached with `.task(name, processor, ...)` and runs as a named task. The older
 `.transform(processor, ..., name=...)` spelling remains supported and uses the
 same execution path. A
 processor has **no severity**: a transform either applies or it can't, so a
-failure is always fail-fast (ADR-0007) — it raises and the run aborts.
+failure is always fail-fast (ADR-0005) — it raises and the run aborts.
 
 Two families of concrete processor ship now.
 
-**Schema coercion (#23).** `SchemaCoercion(schema)` — the write-side companion of
+**Schema coercion.** `SchemaCoercion(schema)` — the write-side companion of
 `SchemaValidator`, derived from the same Case Type dataclass. Where the validator
 *checks* dtypes, the coercer *repairs* the representation raw loses to storage,
 casting only the round-trip-lossy declared types — `date`/`datetime` (landed as
@@ -451,9 +454,9 @@ undeclared columns are left alone. A value it cannot cast (an unparseable date,
 an unknown boolean encoding) raises a **`CoercionError`** with one located
 message naming the column. The raw→silver hop composes it ahead of the
 `SchemaValidator`, so the per-run order is **read → coerce (transform) →
-post-validate (schema) → write** (ADR-0008, #23).
+post-validate (schema) → write** (ADR-0006).
 
-**Selection transforms (#9)** — the `filter/score/sort/join` of `CONTEXT.md`:
+**Selection transforms** — the `filter/score/sort/join` of `CONTEXT.md`:
 
 - `Filter(predicate)` / `Score(column, scorer)` — carry the business rule as a
   **plain-Python callable over a row mapping**, never SQL or a column DSL
@@ -471,7 +474,7 @@ post-validate (schema) → write** (ADR-0008, #23).
 - `Rename({old: new})` — align column vocabulary (e.g. agree a key name before a
   join); unnamed columns pass through.
 - `Stamp(column, value)` — write one constant column (the run-level
-  `question_bank_id` a Variation resolves), even onto an empty feed (#11).
+  `question_bank_id` a Variation resolves), even onto an empty feed.
 - `JoinDependency(name, source)` / `JoinWith(other, on=..., how="inner")` /
   `AntiJoinWith(other, on=...)` — cross-feed joins and exclusion-list gates.
   `other` is a read-only dependency (`JoinDependency`, `Reader`, or materialized
@@ -483,7 +486,7 @@ post-validate (schema) → write** (ADR-0008, #23).
 Full walkthrough + worked example: [processors.md](processors.md).
 
 ### `RunLog` — structured JSONL run observability
-A `RunLog` is the observability seam (ADR-0007). Composed onto the builder
+A `RunLog` is the observability seam (ADR-0005). Composed onto the builder
 (`Pipeline(name, run_log=RunLog(path))`), it emits **one JSON object per
 line** to a `.log` file — and a human-readable line per record to the console —
 for each step of a run plus a final `run` summary:
@@ -508,8 +511,8 @@ per-step breakdown, and the fail-fast/warn examples live in
 [`run-log-format.md`](run-log-format.md).
 
 ### `RunRegistry` — the run history that ingests the JSONL
-A `RunRegistry` is the **consumer** for the `RunLog` JSONL — the seam ADR-0005
-named — landed in #52. It ingests the run records into its **own** queryable
+A `RunRegistry` is the **consumer** for the `RunLog` JSONL — the seam ADR-0011
+names. It ingests the run records into its **own** queryable
 SQLite store so operators can answer "did last night's Ingest for Case Type B
 succeed, how many rows, did anything warn?" without grepping `.log` files:
 
@@ -529,7 +532,7 @@ registry.latest_success(
 registry.recent_row_counts("cases", limit=10)          # read volumes, newest first
 ```
 
-- **Ingest is idempotent** (AC #3): a record's identity is `run_id` + step (+ a
+- **Ingest is idempotent**: a record's identity is `run_id` + step (+ a
   step ordinal, because a multi-processor run emits one `process` record per
   processor — a bare `run_id`+step would collide them), so re-reading the same
   log inserts nothing the second time (`INSERT OR IGNORE`).
@@ -545,17 +548,17 @@ registry.recent_row_counts("cases", limit=10)          # read volumes, newest fi
   (`json` + `sqlite3`) and never names pandas. It opens through the same
   `connect` factory and honours the single-writer / rollback-journal conventions
   (ADR-0001) like any other medallion db; paths are `pathlib` (Windows/macOS).
-- **Schema-drift surfaces as a warn-hit** (ADR-0008), so `runs_that_warned()` is
-  also the drift-surfacing query (AC #6) — it pairs with the raw-drift detector
-  ([`SchemaDriftValidator`](#validator--a-fail-fast-check-at-a-layer-boundary), #51),
+- **Schema-drift surfaces as a warn-hit** (ADR-0006), so `runs_that_warned()` is
+  also the drift-surfacing query — it pairs with the raw-drift detector
+  ([`SchemaDriftValidator`](#validator--a-fail-fast-check-at-a-layer-boundary)),
   whose warn-severity message rides `warn_hits` onto the run summary.
 - **It is also a baseline source.** `recent_row_counts(pipeline, limit=…)` returns
   the read-step volumes of recent *successful* runs, newest first — the history a
   [`VolumeAnomalyValidator`](#validator--a-fail-fast-check-at-a-layer-boundary)
-  builds its band over (#54). Only `ok` runs count, so a run the guardrail itself
+  builds its band over. Only `ok` runs count, so a run the guardrail itself
   tripped can't poison the next night's baseline.
 
-Reading the JSONL needs no change to the emitter (ADR-0007); the one format
+Reading the JSONL needs no change to the emitter (ADR-0005); the one format
 addition this slice made is the per-record `timestamp` (run-log-format.md), the
 time dimension the registry orders by.
 
@@ -915,8 +918,7 @@ are omitted entirely — there are no `none` placeholders. Each step renders its
 own entry via its `plan_entry()` method, so adding a new step kind touches one
 place and `describe()` requires no changes.
 
-Each component renders its own summary through the opt-in `describe()` protocol
-(#145): a component implements `describe() -> str` to surface the config it
+Each component renders its own summary through the opt-in `describe()` protocol: a component implements `describe() -> str` to surface the config it
 chooses (the framework readers/writers/validators/processors/`RunLog` do,
 self-redacting any credentials — e.g. `SharePointReader` strips `user:pass@`
 from its site URL and never shows `auth`). A component without `describe()` is
@@ -933,7 +935,7 @@ p.write(writer, t, name="write")
 print(p.describe())
 ```
 
-`.run()` is the terminus and is **fail-fast and atomic** (ADR-0007): it executes
+`.run()` is the terminus and is **fail-fast and atomic** (ADR-0005): it executes
 that ordered internal plan — read, pre-validate, optional quarantine,
 stages in attach order, post-validate, optional explain write, and final write —
 then returns the bulk-tier `Dataset`.
@@ -949,7 +951,7 @@ then returns the bulk-tier `Dataset`.
 - Atomicity is **per writer**, not per run. A run's intermediate artifacts —
   quarantine rejects, an explain/trace, a checkpoint — each commit through their
   own writer as their node runs, so an abort *after* one of them leaves that
-  artifact on disk as **independently committed evidence** (ADR-0007 amd 03).
+  artifact on disk as **independently committed evidence** (ADR-0005).
   The run-log `committed` marker flags which steps durably wrote.
 
 The builder still makes **no** write decisions — no layer logic, no
@@ -957,31 +959,32 @@ refresh-vs-accumulate branching; that all lives on the Writer. Because the
 terminus owns execution, it is the home of the cross-cutting concerns: it uses
 the supplied `RunContext` or creates one for ad hoc runs, exposes the execution
 id as `pipeline.run_id`, times each planned step, and drives the composed
-`RunLog` (timing + structured JSONL logging — landed in #4). The planned step
+`RunLog` (timing + structured JSONL logging). The planned step
 objects are internal: they expose stable name/kind/order, the wrapped component
 where applicable, and read-only/side-effect metadata for plan-validation and the
 **dry-run preview**, but pipeline scripts still use only the builder methods. A
 run carried out under `RunContext(dry_run=True)` (the `dry_run_pipeline` core
-behind `cli run --dry-run`, #102) reads, transforms, and validates real data but
+behind `cli run --dry-run`) reads, transforms, and validates real data but
 skips every write, quarantine, and explain commit — and touches no run log —
 accumulating a `DryRunReport` of columns, dtypes, row counts, and a bounded row
 sample per step; it falls back to an ambient run context so an author's bare
-`p.run()` inherits the dry-run flag without threading it by hand. The
-named processor task (`.task()`, compatible with `.transform()`) landed in #23; lineage checkpoints (a `.write()`
-on an intermediate node) landed in #49; the explicit DAG builder landed in #122.
+`p.run()` inherits the dry-run flag without threading it by hand. The authoring
+vocabulary is the DAG builder's nodes: `.task()` / `.transform()` for
+dataset→dataset work, `.validate()` for a gate, `.write()` on an intermediate
+node for a lineage checkpoint, and explicit dependency wiring for fan-in / fan-out.
 
 ### `WorkingDayCalendar` — working-day arithmetic (pure utility)
 A config-seeded `WorkingDayCalendar(holidays=…, weekend=…)` answers working-day
 questions for availability criteria ("the last 20 working days" — `CONTEXT.md`).
 Unlike the primitives above it touches no `Dataset`, `Store`, or engine — it
 is pure stdlib `datetime`, hence deterministic and identical on Windows/macOS,
-and is **not** a Feed (ADR-0001 amendment). Two queries: `is_working_day(day)`
+and is **not** a Feed (ADR-0001). Two queries: `is_working_day(day)`
 and `last_n_working_days(n, from_date)` (the `n` most recent working days on or
 before `from_date`, most-recent first, skipping weekends + holidays). Full
 config and boundary semantics in
 [`working-day-calendar.md`](working-day-calendar.md).
 
-## The case-review application/domain layer (#11)
+## The case-review application/domain layer
 
 Above the generic framework primitives sits the thin **case-review application
 layer**: the declarative Case Type objects and the `CasePool` that reads the
@@ -993,7 +996,7 @@ case-review concepts belong there (or in pipeline support modules), not under
 ### `CaseType` / `Variation` — the declarative domain objects
 A `CaseType` (`case_review.case_type`) bundles a Case Type's `schema`, its
 identity contract, and its `variations`, imported directly — no global CaseType
-config registry (ADR-0005). The identity contract is the `natural_key` (the
+config registry (ADR-0011). The identity contract is the `natural_key` (the
 column(s) that identify a Case) plus a `namespace` property derived from `name`;
 the gold builders read both off the Case Type to mint the deterministic `case_id`
 (ADR-0009). `CaseType.variation(id)` resolves a `Variation` (its `question_bank_id`
@@ -1007,7 +1010,7 @@ retrieval is the *concept* of fetching **available cases** — e.g.
 `fetch_available_cases(as_of, activity_column=…, within_working_days=…)` narrows
 to a `WorkingDayCalendar` window in Python (ADR-0002), repairing silver's
 text-stored dates first, and returns a bulk-tier `Dataset`. Fully typed `Case`
-objects are the typed-on-demand edge reserved for a later slice (ADR-0002).
+objects are the typed-on-demand edge at the domain layer (ADR-0002).
 
 ### `DatasetReader` — bridge an in-memory Dataset into the builder
 `DatasetReader(dataset)` (`framework.io.readers`) adapts an already-in-memory
@@ -1031,14 +1034,14 @@ carries the final outcome. Full treatment: [retry.md](retry.md).
 ## Worked example
 
 ```python
-from framework.core import RAW
 from framework.io import CsvReader, Refresh, StoreCatalog
 from framework.run import Pipeline
+from tools.medallion import medallion
 
-store = StoreCatalog("/path/to/share").store("cases")
+med = medallion(StoreCatalog("/path/to/share"), "cases")
 p = Pipeline("cases")
 r = p.read(CsvReader("feed.csv"), name="read")
-p.write(store.writer(RAW, "cases", Refresh()), r, name="write")
+p.write(med.raw.writer("cases", Refresh()), r, name="write")
 landed = p.run()
 print(len(landed), landed.columns)
 ```

@@ -1,4 +1,4 @@
-"""Independent-commit semantics for run artifacts (ADR-0007 amd 03).
+"""Independent-commit semantics for run artifacts (ADR-0005).
 
 A ``.run()`` writes its intermediate artifacts — quarantine rejects, the
 selection/explain trace, and checkpoints — to their own backing stores as their

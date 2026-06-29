@@ -1,8 +1,14 @@
-"""Subject-scoped medallion stores that mint layer Readers and Writers.
+"""Namespace-scoped stores that mint table Readers and Writers.
 
-A ``Store`` maps a subject and layer to ``<subject_dir>/{raw,silver,gold}.db``.
-It owns no business logic and makes no load decisions; callers choose the
-strategy when minting a Writer.
+A ``namespace`` is an opaque **logical database** — one SQLite file holding many
+related tables. A :class:`Store` binds one namespace to its file and mints
+Readers/Writers over named tables; :class:`StoreCatalog` mints namespace Stores
+from a shared root via a :class:`StoreBackend`. The store owns no business logic
+and makes no load decision; callers choose the strategy when minting a Writer.
+
+The framework knows only ``namespace → file``; the raw/silver/gold medallion is
+an application-level profile layered on top (``tools.medallion``), not framework
+vocabulary.
 """
 
 from __future__ import annotations
@@ -12,7 +18,6 @@ from pathlib import Path
 from typing import Protocol
 
 from framework._internal.connection import connect
-from framework.core.layers import Layer, layer_name
 from framework.io.readers import Reader, SqliteReader
 from framework.io.sql import quote_identifier
 from framework.io.strategy import (
@@ -41,48 +46,62 @@ __all__ = [
 
 
 class StoreBackend(Protocol):
-    """Maps a catalog root and subject name to that subject's store directory."""
+    """Maps a catalog root and a namespace to that namespace's database file."""
 
-    def subject_dir(
-        self, root: Path, subject: str | os.PathLike[str]
+    def db_file(
+        self, root: Path, namespace: str | os.PathLike[str]
     ) -> str | os.PathLike[str]:
-        """Return the concrete directory for one subject's medallion."""
+        """Return the concrete file for one namespace's logical database."""
         ...
 
 
 class DirectoryStoreBackend:
-    """Filesystem backend using ``<root>/<subject>`` medallion directories."""
+    """Filesystem backend mapping a namespace to ``<root>/<namespace>.db``.
 
-    def subject_dir(
-        self, root: Path, subject: str | os.PathLike[str]
+    A namespace may nest with ``/`` (e.g. ``cases/silver``), which maps to
+    ``<root>/cases/silver.db`` — the layout the medallion profile uses to keep a
+    subject's layer files together and isolated (ADR-0001).
+    """
+
+    def db_file(
+        self, root: Path, namespace: str | os.PathLike[str]
     ) -> str | os.PathLike[str]:
-        return root / Path(subject)
+        ns = Path(namespace)
+        return root / ns.parent / f"{ns.name}.db"
 
 
 class Store:
-    """One subject's medallion: maps layer→location; mints Writers/Readers."""
+    """One namespace (a logical database): mints Writers/Readers over its tables.
+
+    ``Store`` binds a single database file and mints components over named tables
+    in it. It makes no load decision (ADR-0003); the caller chooses the strategy
+    when minting a Writer.
+    """
 
     def __init__(
-        self, subject_dir: str | os.PathLike[str], busy_timeout_ms: int = 5000
+        self,
+        db_path: str | os.PathLike[str],
+        *,
+        namespace: str | os.PathLike[str] | None = None,
+        busy_timeout_ms: int = 5000,
     ) -> None:
-        self._subject_dir = Path(subject_dir)
+        self._db_path = Path(db_path)
+        self._namespace = (
+            str(namespace) if namespace is not None else self._db_path.stem
+        )
         self._busy_timeout_ms = busy_timeout_ms
-
-    def _db_path(self, layer: Layer | str) -> Path:
-        return self._subject_dir / f"{layer_name(layer)}.db"
 
     def writer(
         self,
-        layer: Layer | str,
         table: str,
         strategy: Refresh
         | AccumulateByRun
         | UpsertStrategy
         | InsertOrIgnore
-        | InsertIfAbsent,  # noqa: E501
+        | InsertIfAbsent,
     ) -> Writer:
-        """Mint a Writer over the subject's layer file with the given strategy."""
-        db_path = self._db_path(layer)
+        """Mint a Writer over a table in this namespace with the given strategy."""
+        db_path = self._db_path
         if isinstance(strategy, Refresh):
             return SqliteTruncateReloadWriter(
                 db_path, table, busy_timeout_ms=self._busy_timeout_ms
@@ -117,53 +136,51 @@ class Store:
             )
         raise TypeError(f"unknown strategy {strategy!r}")
 
-    def reader(self, layer: Layer | str, table: str) -> Reader:
-        """Mint a Reader over the subject's layer file."""
-        return SqliteReader(
-            self._db_path(layer), table, busy_timeout_ms=self._busy_timeout_ms
-        )
+    def reader(self, table: str) -> Reader:
+        """Mint a Reader over a table in this namespace."""
+        return SqliteReader(self._db_path, table, busy_timeout_ms=self._busy_timeout_ms)
 
     def quarantine_writer(self, table: str) -> Writer:
-        """Mint a QuarantineWriter over the subject's quarantine file."""
+        """Mint a QuarantineWriter over this namespace's quarantine file."""
         return QuarantineWriter(
-            self._subject_dir / "quarantine.db",
+            self._db_path.parent / "quarantine.db",
             table,
             busy_timeout_ms=self._busy_timeout_ms,
         )
 
-    def columns_of(self, layer: Layer | str, table: str) -> "RawTableColumns":
+    def columns_of(self, table: str) -> "TableColumns":
         """Mint the prior-columns source used for schema drift checks."""
-        return RawTableColumns(
-            self._db_path(layer),
+        return TableColumns(
+            self._db_path,
             table,
-            layer_name(layer),
+            self._namespace,
             busy_timeout_ms=self._busy_timeout_ms,
         )
 
 
-class RawTableColumns:
+class TableColumns:
     """A ``PriorColumns`` source backed by ``PRAGMA table_info``.
 
     It inspects the live table columns without materialising rows, so drift
-    checks stay cheap even for a large raw table. A missing table yields
-    ``None``; ``label`` names the table in the drift warning.
+    checks stay cheap even for a large table. A missing table yields ``None``;
+    ``label`` names the namespace + table in the drift warning.
     """
 
     def __init__(
         self,
         db_path: str | os.PathLike[str],
         table: str,
-        layer: str,
+        namespace: str,
         busy_timeout_ms: int = 5000,
     ) -> None:
         self._db_path = Path(db_path)
         self._table = table
         self._busy_timeout_ms = busy_timeout_ms
-        self.label = f"{layer}.{table}"
+        self.label = f"{namespace}.{table}"
 
     def columns(self) -> tuple[str, ...] | None:
         if not self._db_path.exists():
-            return None  # the subject has landed nothing yet (first run)
+            return None  # the namespace has landed nothing yet (first run)
         con = connect(self._db_path, self._busy_timeout_ms)
         try:
             rows = con.execute(
@@ -178,7 +195,7 @@ class RawTableColumns:
 
 
 class StoreCatalog:
-    """Mints subject-scoped Stores from shared root/configuration."""
+    """Mints namespace-scoped Stores from a shared root/configuration."""
 
     def __init__(
         self,
@@ -191,9 +208,10 @@ class StoreCatalog:
         self._backend = backend or DirectoryStoreBackend()
         self._busy_timeout_ms = busy_timeout_ms
 
-    def store(self, subject: str | os.PathLike[str]) -> Store:
-        """Mint the Store for ``subject`` without exposing physical layout."""
+    def store(self, namespace: str | os.PathLike[str]) -> Store:
+        """Mint the Store for ``namespace`` without exposing physical layout."""
         return Store(
-            self._backend.subject_dir(self._root, subject),
+            self._backend.db_file(self._root, namespace),
+            namespace=namespace,
             busy_timeout_ms=self._busy_timeout_ms,
         )

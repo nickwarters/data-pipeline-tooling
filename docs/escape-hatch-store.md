@@ -1,10 +1,11 @@
 # The escape-hatch store — iterate against a raw db before adopting the layer pattern
 
-The supported way to reach a SQLite store is the **layer pattern**: a
-`StoreCatalog(root).store(subject)` mints Writers/Readers over that subject's
-`<subject>/{raw,silver,gold}.db`, and the Store maps *only* `(subject, layer,
-table) → location` ([core-primitives.md](core-primitives.md#store--storecatalog--subject-medallions-minted-from-shared-configuration),
-[ADR-0001](adr/0001-sqlite-medallion-store-on-network-share.md)). That mapping is
+The supported way to reach a SQLite store is the **namespace Store**, usually
+through the **medallion profile**: `medallion(StoreCatalog(root), subject)` mints
+the `.raw` / `.silver` / `.gold` namespace Stores over that subject's
+`<subject>/{raw,silver,gold}.db`, and a Store maps *only* `(namespace, table) →
+location` ([core-primitives.md](core-primitives.md#store--storecatalog--a-namespace--file-factory),
+[ADR-0001](adr/0001-sqlite-per-subject-medallion-store.md)). That mapping is
 what keeps every pipeline ignorant of physical layout and every subject isolated.
 
 Sometimes you are not ready for that. You have a one-off `.db` someone handed
@@ -17,9 +18,9 @@ pattern.
 
 > **This is debt, on purpose.** An escape-hatch store skips subject isolation,
 > the raw→silver→gold refinement, and the strategy-on-the-Writer contract
-> (ADR-0003/0006). Treat it as a spike: reach for it to *learn*, then
-> [migrate](#migrating-back-to-the-layer-pattern). Anything that survives more
-> than a spike belongs on `StoreCatalog`.
+> (ADR-0003, ADR-0004). Treat it as a spike: reach for it to *learn*, then
+> [migrate](#migrating-back-to-the-namespace-store). Anything that survives more
+> than a spike belongs on `StoreCatalog` / the medallion profile.
 
 ## What stays true even off the layer pattern
 
@@ -29,7 +30,7 @@ can't migrate:
 
 - **The `Dataset` seam.** pandas (or any engine) lives *behind* `Dataset` and
   never appears in a pipeline script or the domain layer
-  ([ADR-0002](adr/0002-python-only-processing-dumb-store-two-tier-carrier.md)).
+  ([ADR-0002](adr/0002-python-processing-opaque-dataset-carrier.md)).
   An ad-hoc Reader still returns a `Dataset`; an ad-hoc Writer still takes one.
 - **The `Reader` / `Writer` shape.** `read() -> Dataset` and
   `write(dataset) -> None`. If your escape hatch honours these, the `Pipeline`
@@ -37,7 +38,7 @@ can't migrate:
   which is the whole point of cutting the corner *here* and nowhere else.
 - **The connection conventions.** Open SQLite through the shared `connect`
   factory (`busy_timeout`, rollback journal — WAL is unavailable on a network
-  share, [ADR-0001](adr/0001-sqlite-medallion-store-on-network-share.md)) rather
+  share, [ADR-0001](adr/0001-sqlite-per-subject-medallion-store.md)) rather
   than a bare `sqlite3.connect`, and quote every table/column with
   `quote_identifier`. Paths are `pathlib` so the spike still runs on Windows and
   macOS.
@@ -124,10 +125,11 @@ class SqliteQueryReader:
 > `framework.io.sql.quote_identifier`, the one choke point that makes an
 > identifier injection-safe.
 
-Now wrap a **store that sits outside the layer** — an object that owns one
-scratch db path and mints these escape-hatch components, mirroring `Store`'s
-*shape* (it mints Readers/Writers; it holds no business logic) while dropping the
-layer mapping `Store` exists to provide:
+Now wrap a **store that sits outside the catalog/medallion routing** — an object
+that owns one scratch db path and mints these escape-hatch components, mirroring
+`Store`'s *shape* (it mints Readers/Writers over named tables; it holds no
+business logic) while adding the baked-query Reader the namespace `Store` doesn't
+provide and dropping the strategy choice:
 
 ```python
 # framework/io/scratch_store.py  (escape-hatch store — delete on migration)
@@ -139,11 +141,13 @@ from framework.io.writers import SqliteTruncateReloadWriter
 
 
 class ScratchStore:
-    """A flat, single-file store outside the medallion layer mapping.
+    """A flat, single-file store outside the catalog/medallion routing.
 
-    Unlike ``Store`` it knows nothing of subjects or raw/silver/gold — it binds
-    one db file and mints Readers/Writers over named tables (or a baked query).
-    Use for spikes only; migrate to ``StoreCatalog`` once the feed is real.
+    Like ``Store`` it binds one db file and mints Readers/Writers over named
+    tables, but it knows nothing of a subject or the raw/silver/gold medallion,
+    adds a baked SQL query Reader, and chooses no load strategy. Use for spikes
+    only; migrate to ``StoreCatalog`` + the medallion profile once the feed is
+    real.
     """
 
     def __init__(self, db_path: str | os.PathLike[str], busy_timeout_ms: int = 5000) -> None:
@@ -186,28 +190,28 @@ p.run()
 
 ## What you are knowingly giving up
 
-| The layer pattern gives you | The escape hatch drops |
+| The medallion profile gives you | The escape hatch drops |
 |---|---|
-| **Subject isolation** — each Case Type / Reference Data set owns its own files, independent blast radius and onboarding (ADR-0001 amd). | One flat file shared by everything in the spike. |
+| **Subject isolation** — each Case Type / Reference Data set owns its own files, independent blast radius and onboarding (ADR-0001). | One flat file shared by everything in the spike. |
 | **raw → silver → gold refinement** — schema-light landing, the silver schema boundary, gold accumulation. | No layers; you read and write wherever you point. |
-| **Strategy on the Writer** — `Refresh` / `AccumulateByRun` / `UpsertStrategy` chosen per feed (ADR-0003/0006). | Full-refresh only; no idempotent accumulation, no upsert. |
+| **Strategy on the Writer** — `Refresh` / `AccumulateByRun` / `UpsertStrategy` chosen per feed (ADR-0003, ADR-0004). | Full-refresh only; no idempotent accumulation, no upsert. |
 | **Location hidden from scripts** — `StoreCatalog` owns physical layout. | The db path is hardcoded in the spike. |
 
 If a spike starts needing any row in the left column — a second subject, a silver
 schema check, accumulate-by-run idempotency — that is the signal to migrate, not
 to grow the escape hatch toward it.
 
-## Migrating back to the layer pattern
+## Migrating back to the namespace Store
 
 The reason the escape hatch honours the seams is that migration is then almost
 mechanical:
 
-1. **Mint a subject.** Replace `ScratchStore(path)` with
-   `StoreCatalog(root).store("<subject>")`.
+1. **Mint a subject's medallion.** Replace `ScratchStore(path)` with
+   `med = medallion(StoreCatalog(root), "<subject>")`.
 2. **Name the layers.** A `store.reader(table)` becomes
-   `store.reader(RAW, table)`; a `store.writer(table)` becomes
-   `store.writer(layer, table, strategy)` with an explicit `Refresh()` /
-   `AccumulateByRun(...)` / `UpsertStrategy(...)`.
+   `med.raw.reader(table)`; a `store.writer(table)` becomes
+   `med.raw.writer(table, strategy)` (or `.silver` / `.gold`) with an explicit
+   `Refresh()` / `AccumulateByRun(...)` / `UpsertStrategy(...)`.
 3. **Land the query's result, don't read it live.** A `SqliteQueryReader` over a
    hand-written join is a spike convenience. In the real pipeline the join is a
    `JoinWith` processor over an explicit read-only dependency
@@ -216,13 +220,13 @@ mechanical:
 4. **Add the schema boundary.** Refine the feed raw → silver by composing
    `SchemaCoercion(schema)` + `SchemaValidator(schema)` onto the hop, so a declared
    Case Type contract is enforced at silver
-   ([schema-enforcement.md](schema-enforcement.md), ADR-0008).
+   ([schema-enforcement.md](schema-enforcement.md), ADR-0006).
 5. **Delete `SqliteQueryReader` and `ScratchStore`** once nothing imports them.
    They are not part of the public surface ([public-api.md](public-api.md)); a
    lingering escape hatch is the defect, not the migration.
 
 If you scaffold the real feed with `python -m cli scaffold <feed>`
-([adding-a-feed.md](adding-a-feed.md)) you get the layer-pattern wiring for free,
+([adding-a-feed.md](adding-a-feed.md)) you get the medallion wiring for free,
 which is usually the cleanest end of a successful spike.
 </content>
 </invoke>

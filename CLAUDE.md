@@ -13,16 +13,19 @@ domain language in `CONTEXT.md`; the core primitives are documented in
   (on `sys.path`, never `pip install`ed); `pipelines/` holds runnable scripts.
   Packaging/installing the framework is an **explicit non-goal** (#95).
 - **Layout:** `framework/` (reusable engine, organised into the four public
-  facade sub-packages `framework/core` (the base vocabulary — `Dataset` + the
-  medallion `Layer` constants, plus the declared-schema contract: the
-  `validate(dataset)` checks, `SchemaValidator`, and the value rules — which
-  everything else builds on), `framework/io`, `framework/transform` (reshaping,
+  facade sub-packages `framework/core` (the base vocabulary — `Dataset`, plus
+  the declared-schema contract: the `validate(dataset)` checks, `SchemaValidator`,
+  and the value rules — which everything else builds on; the medallion `Layer`
+  enum was **removed** here in #232 — the framework stores an opaque `namespace`
+  → file and the raw/silver/gold medallion is the application profile
+  `tools.medallion`), `framework/io`, `framework/transform` (reshaping,
   incl. `SchemaCoercion`), and `framework/run`; plus the private
   `framework/_internal` (`connection`, `describe`, `schema`: cross-cutting
   helpers with no public name)). The `python -m cli` entry point (`scaffold`
   plus the operator commands; see below) lives in the top-level `cli/` package,
-  and the cross-cutting `retry` / `calendar` / orchestration / observability
-  utilities in the top-level `tools/` package — both siblings of `framework/`,
+  and the cross-cutting `retry` / `calendar` / `medallion` / orchestration /
+  observability utilities in the top-level `tools/` package — both siblings of
+  `framework/`,
   not facades. Then `case_review/` (the case-review *application* — domain types
   like `CaseType`/`CasePool` and its gold helpers, which live outside the
   framework), `pipelines/` (scripts), `tests/` (pytest, with author test helpers
@@ -53,11 +56,12 @@ domain language in `CONTEXT.md`; the core primitives are documented in
 - **Core primitives:** `Dataset` (opaque tabular carrier, pandas behind the
   seam), `Reader` (`read() -> Dataset`; `CsvReader`, `SqliteReader`),
   `Writer` (`write(dataset) -> None`; owns target location + load strategy —
-  added by #14), `Store` (per-subject medallion that mints the layer's
-  Writers/Readers over `<subject>/{raw,silver,gold}.db` — #15; `connect` factory
-  now in `framework._internal.connection`), `Pipeline` (deferred fluent builder;
-  `.write_to(writer)` composes, `.run()` executes — replaced `.to(layer)` in
-  #14).
+  added by #14), `Store` (namespace → file factory minting `writer(table,
+  strategy)` / `reader(table)` over one logical database; `StoreCatalog.store(namespace)`
+  resolves the file — #15/#232; the raw/silver/gold medallion is the
+  `tools.medallion` profile over it, `<subject>/{raw,silver,gold}.db`; `connect`
+  factory in `framework._internal.connection`), `Pipeline` (deferred DAG builder; nodes wired by `.read` / `.transform` /
+  `.validate` / `.write` and executed in topological order at `.run()`).
 
 ### Commands
 

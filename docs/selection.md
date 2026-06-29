@@ -1,6 +1,6 @@
 # The Selection flow — CaseType / Variation, CasePool, SelectionPool
 
-The domain capstone (#11) ties the primitives the earlier slices built into the
+The domain capstone ties the primitives the earlier slices built into the
 full per-Case-Type path the framework exists to make routine: a source feed is
 **ingested** into a Case Type's medallion, surfaced as a **CasePool**, then
 **Selection** narrows it into the **SelectionPool** written to gold. This doc
@@ -24,7 +24,7 @@ SelectionPool. For the domain language behind the terms, see
 with the Case Type's schema enforced (`SchemaCoercion` + `SchemaValidator`
 composed onto the hop — see [`schema-enforcement.md`](schema-enforcement.md)). That validated **silver is the
 CasePool**: the current-state population of Cases. Sources are current-state
-snapshots, so raw and silver are full-refreshed each run (ADR-0006); the
+snapshots, so raw and silver are full-refreshed each run (ADR-0004); the
 accumulating layer is gold, where the **SelectionPool** lands stamped by run.
 
 ## `CaseType` / `Variation` — the declarative domain objects
@@ -34,7 +34,7 @@ fields, its Variations, and — over time — its ingest/selection/processing
 (CONTEXT.md). It is an **explicit declarative object imported directly**, not an
 entry in a global domain registry. The minimal `PipelineRunner` registry is only
 for dispatching named domain Pipelines such as `cases/ingest` and
-`cases/selection` (ADR-0005).
+`cases/selection` (ADR-0011).
 
 ```python
 from dataclasses import dataclass
@@ -71,23 +71,24 @@ stamps that id onto the chosen Cases. `CaseType.variation(id)` resolves a Variat
 raises `KeyError` with a located message on an unknown id, so a mis-config
 surfaces where it is asked for rather than as a silent miss downstream. Further
 overrides (ingest, selection criteria, divergent processing) are deferred
-(ADR-0005).
+(ADR-0011).
 
 ## `CasePool` — the domain population, behind intention-revealing reads
 
 The `CasePool` is the clean domain abstraction the platform exposes *instead of*
 raw `pandas.read_*` calls (CONTEXT.md). It is scoped **per Case Type**,
-constructed from that type's `CaseType` (for its schema), its `Store` (to read
-its silver), and a `WorkingDayCalendar` (the availability arithmetic — see
+constructed from that type's `CaseType` (for its schema), its **gold** `Store` (to read
+its current Cases), and a `WorkingDayCalendar` (the availability arithmetic — see
 [`working-day-calendar.md`](working-day-calendar.md)):
 
 ```python
 from case_review.case_pool import CasePool
 from framework.io import StoreCatalog
 from tools.calendar import WorkingDayCalendar
+from tools.medallion import medallion
 
-store = StoreCatalog("/share").store(CASES.name)
-pool = CasePool(CASES, store, WorkingDayCalendar())
+med = medallion(StoreCatalog("/share"), CASES.name)
+pool = CasePool(CASES, med.gold, WorkingDayCalendar())
 available = pool.fetch_available_cases(
     as_of=date(2026, 5, 29),
     activity_column="activity_date",
@@ -108,7 +109,7 @@ The retrieval:
 
 It returns the bulk-tier `Dataset` (the carrier), which flows straight into the
 Selection pipeline. Surfacing fully typed `Case` objects is the
-**typed-on-demand** edge ADR-0002 reserves for a later slice — the *concept* of
+**typed-on-demand** edge at the domain layer (ADR-0002) — the *concept* of
 the retrieval is the deliverable here, not a mandated signature.
 `fetch_available_cases` is illustrative; a Case Type may name its own retrievals.
 
@@ -124,7 +125,6 @@ round-trip:
 ```python
 from typing import Any, Mapping
 
-from framework.core import GOLD
 from framework.io import AccumulateByRun, DatasetReader
 from framework.run import Pipeline
 from framework.transform import Filter, Score, Sort, Stamp
@@ -148,7 +148,7 @@ stamped = p.transform(
     Stamp("question_bank_id", variation.question_bank_id), ranked, name="stamp"
 )
 p.write(
-    store.writer(GOLD, "selection_pool", AccumulateByRun(run_id, load_date)),
+    med.gold.writer("selection_pool", AccumulateByRun(run_id, load_date)),
     stamped,
     name="write",
 )
@@ -192,10 +192,10 @@ Selecting *which advisers' Cases get reviewed* is itself a governed act that wil
 be challenged after the fact ("why wasn't this adviser picked up last quarter?").
 But `Filter`/`Score`/`JoinWith`/`AntiJoinWith` **silently drop** the Cases they
 exclude (ADR-0002 plain-Python callables), leaving no trace.
-`.explain(writer, id_column=…)` closes that gap (#53): it is the
-eligibility-stage twin of `.quarantine()` (#50) — the same *route aside with a
+`.explain(writer, id_column=…)` closes that gap: it is the
+eligibility-stage twin of `.quarantine()` — the same *route aside with a
 reason, never silently drop* shape, pointed at
-**eligibility** rather than **validity** (ADR-0007 amendment 02).
+**eligibility** rather than **validity** (ADR-0008).
 
 ```python
 p = Pipeline("selection")
@@ -208,13 +208,13 @@ stamped = p.transform(
 )
 # land a per-Case trace alongside the SelectionPool (a sibling branch of `stamped`)
 p.explain(
-    store.writer(GOLD, "selection_trace", AccumulateByRun(run_id, load_date)),
+    med.gold.writer("selection_trace", AccumulateByRun(run_id, load_date)),
     stamped,
     id_column="case_ref",
     score_column="priority_score",
 )
 p.write(
-    store.writer(GOLD, "selection_pool", AccumulateByRun(run_id, load_date)),
+    med.gold.writer("selection_pool", AccumulateByRun(run_id, load_date)),
     stamped,
     name="write",
 )
@@ -242,7 +242,7 @@ run's `explain` step logs the governance counts —
 considered / selected / excluded (see [`run-log-format.md`](run-log-format.md)).
 
 Explainability is the trace of *one run*. Re-deriving what Selection *would* have
-picked "as of" a past date (reproducibility against accumulated silver — #38) is a
+picked "as of" a past date (reproducibility against accumulated silver) is a
 separate concern, deferred to a follow-up.
 
 ## End to end — the runnable demo

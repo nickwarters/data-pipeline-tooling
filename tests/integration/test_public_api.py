@@ -92,17 +92,16 @@ def test_package_root_exposes_only_public_facade_modules():
 def test_an_author_can_ingest_a_feed_through_the_io_and_run_facades(tmp_path):
     # The blessed import path: sources/sinks from framework.io, the builder from
     # framework.run. Composing and running them lands the feed and reads back.
-    from framework.core import RAW
     from framework.io import CsvReader, Refresh, Store
     from framework.run import Pipeline
 
-    store = Store(tmp_path / "cases")
+    store = Store(tmp_path / "cases.db")
     p = Pipeline("cases")
     r = p.read(CsvReader(FIXTURE), name="read")
-    p.write(store.writer(RAW, "cases", Refresh()), r, name="write")
+    p.write(store.writer("cases", Refresh()), r, name="write")
     p.run()
 
-    landed = store.reader(RAW, "cases").read()
+    landed = store.reader("cases").read()
     assert len(landed) == 3
     assert "case_id" in landed.columns
 
@@ -128,15 +127,31 @@ def test_file_deliverable_writers_are_available_through_the_io_facade(tmp_path):
     assert JsonWriter is not None
 
 
+def test_streaming_readers_are_available_through_the_io_facade(tmp_path):
+    # The chunked-read seam: bounded Datasets for sources too big to hold whole,
+    # reachable through framework.io and satisfying the ChunkReader protocol.
+    from framework.io import ChunkedCsvReader, ChunkReader, SasFileReader
+
+    src = tmp_path / "feed.csv"
+    src.write_text("id,val\n1,10\n2,20\n3,30\n", encoding="utf-8")
+
+    reader = ChunkedCsvReader(src)
+    assert isinstance(reader, ChunkReader)
+    assert isinstance(SasFileReader(tmp_path / "x.sas7bdat"), ChunkReader)
+
+    sizes = [len(chunk) for chunk in reader.chunks(2)]
+    assert sizes == [2, 1]
+
+
 def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_path):
     # Selection-style narrowing: processors come from framework.transform and
     # the checks from framework.core, composed onto the framework.run Pipeline.
-    from framework.core import RAW, ColumnValidator
+    from framework.core import ColumnValidator
     from framework.io import CsvReader, Refresh, Store
     from framework.run import Pipeline
     from framework.transform import Filter, Score, VectorizedDerive, VectorizedFilter
 
-    store = Store(tmp_path / "cases")
+    store = Store(tmp_path / "cases.db")
     p = Pipeline("cases")
     r = p.read(CsvReader(FIXTURE), name="read")
     v = p.validate(ColumnValidator(["amount"]), r, name="validate")
@@ -152,7 +167,7 @@ def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_p
         f,
         name="vector-filter",
     )
-    p.write(store.writer(RAW, "cases", Refresh()), vf, name="write")
+    p.write(store.writer("cases", Refresh()), vf, name="write")
     landed = p.run()
 
     # The Filter dropped the sub-1000 Case; Score added its column.
@@ -162,18 +177,18 @@ def test_an_author_can_shape_and_check_a_feed_through_the_transform_facade(tmp_p
 
 
 def test_an_author_can_compose_ordered_stages_through_the_run_facade(tmp_path):
-    from framework.core import RAW, ColumnValidator
+    from framework.core import ColumnValidator
     from framework.io import CsvReader, Refresh, Store
     from framework.run import Pipeline
     from framework.transform import Score
 
-    store = Store(tmp_path / "cases")
+    store = Store(tmp_path / "cases.db")
     p = Pipeline("cases")
     r = p.read(CsvReader(FIXTURE), name="read")
     v1 = p.validate(ColumnValidator(["amount"]), r, name="validate-source")
     s = p.transform(Score("priority", lambda row: row["amount"] * 2), v1, name="score")
     v2 = p.validate(ColumnValidator(["priority"]), s, name="validate-scored")
-    p.write(store.writer(RAW, "cases", Refresh()), v2, name="write")
+    p.write(store.writer("cases", Refresh()), v2, name="write")
     landed = p.run()
 
     assert len(landed) == 3
@@ -189,8 +204,6 @@ def test_internal_plumbing_stays_out_of_the_public_facades():
 
     internal = {
         "connect",  # framework._internal.connection — connection factory seam
-        "layer_name",  # framework.core.layers — internal validation helper
-        "LAYERS",  # framework.core.layers — internal tuple
         "RowTrace",  # framework.run.trace — generic trace mechanics
         "RemoteRunner",  # framework.io.remote — stubbed remote client seam
         "FreshnessGuard",  # framework.run.runner — internal guard

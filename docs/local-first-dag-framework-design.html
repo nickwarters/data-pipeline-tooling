@@ -994,7 +994,7 @@ pipeline.run(
 
     <section id="schedule-configuration">
       <h2>User-Friendly Orchestration Schedules</h2>
-      <p>Schedule rules belong in orchestration. A Pipeline should describe what work does when invoked; orchestration decides whether that Pipeline is due on a given run date. The current code already has the right low-level pieces: <code>Weekdays</code>, <code>SpecificWeekdays</code>, <code>DayOfMonth</code>, <code>NthWorkingDayOfMonth</code>, <code>LastWorkingDayOfMonth</code>, <code>ManualOnly</code>, and <code>WorkingDayCalendar</code>. The redesign should add an operator-friendly layer over those primitives.</p>
+      <p>Schedule rules belong in orchestration. A Pipeline should describe what work does when invoked; orchestration decides whether that Pipeline is due on a given run date. The current code already has the right low-level pieces: <code>Weekdays</code>, <code>SpecificWeekdays</code>, <code>DayOfMonth</code>, <code>NthWorkingDayOfMonth</code>, <code>LastWorkingDayOfMonth</code>, <code>ManualOnly</code>, and <code>WorkingDayCalendar</code>. The operator-friendly layer over those primitives is implemented as the <code>Schedule.*</code> constructors shown below (<code>from tools.orchestration import Schedule</code>); they build the same concrete schedule classes, so <code>is_due(run_date, calendar)</code> semantics are unchanged.</p>
 
       <div class="compare">
         <div class="panel">

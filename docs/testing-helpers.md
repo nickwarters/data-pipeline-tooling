@@ -1,4 +1,4 @@
-# Testing helpers for pipeline authors (#94)
+# Testing helpers for pipeline authors
 
 `tests.framework_testing` is a small, **test-only** surface that makes a concrete
 pipeline script easy to test — without hand-wiring temp directories, SQLite
@@ -13,7 +13,7 @@ from tests.framework_testing import RecordingWriter, RecordingRunLog, read_run_l
 It sits *beside* the production facades (`framework.core` / `framework.io` /
 `framework.transform` / `framework.run`), not inside them — see
 [public-api.md](public-api.md). Everything stays behind the `Dataset` seam
-([ADR-0002](adr/0002-python-only-processing-dumb-store-two-tier-carrier.md)):
+([ADR-0002](adr/0002-python-processing-opaque-dataset-carrier.md)):
 the helpers take and return plain Python **row dicts**, never a pandas frame.
 
 ## The surface
@@ -25,7 +25,7 @@ the helpers take and return plain Python **row dicts**, never a pandas frame.
 | `make_dataset(rows)` | The engine-confined bridge `given_rows` uses: row dicts → `Dataset`. Reach for it when you need a `Dataset` directly. |
 | `rows_of(source)` | Unwrap a `Dataset`, a `RecordingWriter`, or a `Reader` back to `list[dict]` — the *expect-output-rows* side, for a direct `==`. |
 | `RecordingWriter()` | A `Writer` that captures writes in memory instead of persisting. Read it with `rows_of(writer)`; `.writes` / `.dataset` expose the raw captures (e.g. for checkpoint pipelines that write more than once). |
-| `read_rows(store, layer, table)` | Read a landed layer table back as row dicts — collapses the `store.reader(layer, table).read().to_pandas()` chain. |
+| `read_rows(store, table)` | Read a landed table back as row dicts — collapses the `store.reader(table).read().to_pandas()` chain. |
 | `without_columns(rows, *names)` | Drop named columns from row dicts (missing names ignored) — strip volatile stamps before an `==`. |
 | `assert_rows_equal(actual, expected, *, ignoring=(), unordered=False)` | Assert two row lists are equal; `actual` may be anything `rows_of` accepts. `ignoring` drops stamp columns (`run_id` / `load_date`); `unordered` compares as multisets. |
 | `RecordingRunLog()` | A `RunLog` that captures records in memory. `.records`, `.records_for_step(step)`, `.warn_hits`, `.errors`. |
@@ -66,19 +66,18 @@ When the pipeline writes to a real `Store`, `read_rows` reads the table back
 through the Store's own Reader — the same seam a pipeline uses, not around it:
 
 ```python
-from framework.core import RAW
 from framework.io import Refresh, Store
 from tests.framework_testing import given_rows, read_rows
 from framework.run import Pipeline
 
 def test_landed_rows(tmp_path):
-    store = Store(tmp_path / "cases")
+    store = Store(tmp_path / "cases.db")
     p = Pipeline("cases")
     r = p.read(given_rows([{"case_id": "c1", "amount": 100}]), name="read")
-    p.write(store.writer(RAW, "cases", Refresh()), r, name="write")
+    p.write(store.writer("cases", Refresh()), r, name="write")
     p.run()
 
-    assert read_rows(store, RAW, "cases") == [{"case_id": "c1", "amount": 100}]
+    assert read_rows(store, "cases") == [{"case_id": "c1", "amount": 100}]
 ```
 
 ## Comparing rows, ignoring stamps and order
@@ -114,7 +113,7 @@ file-backed reader (`CsvReader` / `GlobCsvReader`) rather than an in-memory feed
 
 Compose a `RecordingRunLog` to assert what a run recorded. A **warn**-severity
 breach keeps the run going and rides `warn_hits`; an **error**-severity breach
-aborts fail-fast ([ADR-0007](adr/0007-fail-fast-atomic-runs-jsonl-observability.md)),
+aborts fail-fast ([ADR-0005](adr/0005-fail-fast-atomic-runs-and-observability.md)),
 recording an `error` for the failing step and the run summary *before* the
 exception propagates — so a validation failure is asserted through the captured
 records:
