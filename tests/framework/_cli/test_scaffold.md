@@ -18,10 +18,10 @@ import sys
 import pytest
 
 from cli import scaffold
-from framework.core import RAW
 from framework.io import StoreCatalog
 from framework.run import RunContext
 from tests.framework_testing import read_rows, rows_of
+from tools.medallion import medallion
 
 
 def test_render_lays_down_the_feed_code_and_its_test(tmp_path):
@@ -102,8 +102,8 @@ def test_rendered_pipeline_runs_and_lands_its_sample_feed(tmp_path):
             if name == "widgets" or name.startswith("widgets."):
                 del sys.modules[name]
 
-    store = StoreCatalog(tmp_path / "data").store("widgets")
-    landed = read_rows(store, RAW, "widgets")
+    med = medallion(StoreCatalog(tmp_path / "data"), "widgets")
+    landed = read_rows(med.raw, "widgets")
     assert len(landed) == len(dataset) > 0
     # raw accumulates under the run context, so landed rows carry the run's
     # stamps (run_id / load_date / ...) on top of the source columns; the source
@@ -135,8 +135,8 @@ def test_rendered_pipeline_main_runs_and_records_a_run(tmp_path, capsys):
     assert "rows source -> raw -> silver -> gold" in capsys.readouterr().out
     # A source feed has no subject, so the run records under _runs/<feed>.log.
     assert (base_dir / "_runs" / "widgets.log").exists()
-    store = StoreCatalog(base_dir).store("widgets")
-    assert len(read_rows(store, RAW, "widgets")) > 0
+    med = medallion(StoreCatalog(base_dir), "widgets")
+    assert len(read_rows(med.raw, "widgets")) > 0
 
 
 def test_cli_creates_the_feed_and_reports_it(tmp_path, capsys, monkeypatch):
@@ -325,8 +325,8 @@ def test_rendered_feed_from_a_spaced_file_runs_and_its_test_passes(tmp_path):
             if name == "widgets" or name.startswith("widgets."):
                 del sys.modules[name]
 
-    store = StoreCatalog(tmp_path / "data").store("widgets")
-    landed = read_rows(store, RAW, "widgets")
+    med = medallion(StoreCatalog(tmp_path / "data"), "widgets")
+    landed = read_rows(med.raw, "widgets")
     assert len(landed) == len(dataset) > 0
     assert {"Case Number", "Adviser Name"}.issubset(landed[0].keys())
 

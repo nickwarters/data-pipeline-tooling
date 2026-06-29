@@ -37,13 +37,11 @@ def _available() -> Dataset:
 
 
 def _trace(store: Store) -> pd.DataFrame:
-    return (
-        store.reader("gold", "selection_trace").read().to_pandas().set_index("case_ref")
-    )
+    return store.reader("selection_trace").read().to_pandas().set_index("case_ref")
 
 
 def test_case_dropped_by_filter_is_excluded_with_a_located_reason(tmp_path):
-    store = Store(tmp_path)
+    store = Store(tmp_path / "gold.db")
     strategy = AccumulateByRun("run-1", "2026-05-29")
     p = Pipeline("selection")
     r = p.read(DatasetReader(_available()), name="read")
@@ -51,12 +49,12 @@ def test_case_dropped_by_filter_is_excluded_with_a_located_reason(tmp_path):
         Filter(lambda r: r["amount"] >= 100, name="high-value"), r, name="high-value"
     )
     p.explain(
-        store.writer("gold", "selection_trace", strategy),
+        store.writer("selection_trace", strategy),
         f,
         id_column="case_ref",
         name="explain",
     )
-    p.write(store.writer("gold", "selection_pool", strategy), f, name="write")
+    p.write(store.writer("selection_pool", strategy), f, name="write")
     p.run()
 
     trace = _trace(store)
@@ -67,7 +65,7 @@ def test_case_dropped_by_filter_is_excluded_with_a_located_reason(tmp_path):
 
 
 def test_retained_case_is_selected_with_gates_passed_and_rank(tmp_path):
-    store = Store(tmp_path)
+    store = Store(tmp_path / "gold.db")
     strategy = AccumulateByRun("run-1", "2026-05-29")
     p = Pipeline("selection")
     r = p.read(DatasetReader(_available()), name="read")
@@ -79,12 +77,12 @@ def test_retained_case_is_selected_with_gates_passed_and_rank(tmp_path):
     )
     s = p.transform(Sort("amount", ascending=False), f2, name="sort")
     p.explain(
-        store.writer("gold", "selection_trace", strategy),
+        store.writer("selection_trace", strategy),
         s,
         id_column="case_ref",
         name="explain",
     )
-    p.write(store.writer("gold", "selection_pool", strategy), s, name="write")
+    p.write(store.writer("selection_pool", strategy), s, name="write")
     p.run()
 
     trace = _trace(store)
@@ -100,7 +98,7 @@ def test_retained_case_is_selected_with_gates_passed_and_rank(tmp_path):
 
 
 def test_score_is_retained_for_every_considered_case_including_excluded(tmp_path):
-    store = Store(tmp_path)
+    store = Store(tmp_path / "gold.db")
     strategy = AccumulateByRun("run-1", "2026-05-29")
     p = Pipeline("selection")
     r = p.read(DatasetReader(_available()), name="read")
@@ -109,13 +107,13 @@ def test_score_is_retained_for_every_considered_case_including_excluded(tmp_path
         Filter(lambda r: r["amount"] >= 100, name="high-value"), s, name="high-value"
     )
     p.explain(
-        store.writer("gold", "selection_trace", strategy),
+        store.writer("selection_trace", strategy),
         f,
         id_column="case_ref",
         score_column="priority",
         name="explain",
     )
-    p.write(store.writer("gold", "selection_pool", strategy), f, name="write")
+    p.write(store.writer("selection_pool", strategy), f, name="write")
     p.run()
 
     trace = _trace(store)
@@ -125,7 +123,7 @@ def test_score_is_retained_for_every_considered_case_including_excluded(tmp_path
 
 
 def test_trace_lands_in_a_sibling_table_stamped_with_run_id(tmp_path):
-    store = Store(tmp_path)
+    store = Store(tmp_path / "gold.db")
     strategy = AccumulateByRun("run-1", "2026-05-29")
     p = Pipeline("selection")
     r = p.read(DatasetReader(_available()), name="read")
@@ -133,19 +131,17 @@ def test_trace_lands_in_a_sibling_table_stamped_with_run_id(tmp_path):
         Filter(lambda r: r["amount"] >= 100, name="high-value"), r, name="high-value"
     )
     p.explain(
-        store.writer("gold", "selection_trace", strategy),
+        store.writer("selection_trace", strategy),
         f,
         id_column="case_ref",
         name="explain",
     )
-    p.write(store.writer("gold", "selection_pool", strategy), f, name="write")
+    p.write(store.writer("selection_pool", strategy), f, name="write")
     p.run()
 
     # The trace is its own table, a sibling of the SelectionPool, not mixed in.
-    pool_refs = set(
-        store.reader("gold", "selection_pool").read().to_pandas()["case_ref"]
-    )
-    trace_frame = store.reader("gold", "selection_trace").read().to_pandas()
+    pool_refs = set(store.reader("selection_pool").read().to_pandas()["case_ref"])
+    trace_frame = store.reader("selection_trace").read().to_pandas()
     assert pool_refs == {"c1", "c2"}  # only survivors in the pool
     # Every considered Case is in the trace (selected + excluded), each stamped
     # with the run that produced it (— per Case Type / run).
@@ -165,7 +161,7 @@ class _StaticFeed:
 
 
 def test_case_dropped_by_an_inner_join_is_explained_not_silently_absent(tmp_path):
-    store = Store(tmp_path)
+    store = Store(tmp_path / "gold.db")
     strategy = AccumulateByRun("run-1", "2026-05-29")
     # The adviser hierarchy reference covers only c1 and c2 — an inner join drops
     # c3, which says must be *explained*, not silently absent.
@@ -182,12 +178,12 @@ def test_case_dropped_by_an_inner_join_is_explained_not_silently_absent(tmp_path
         name="adviser-hierarchy",
     )
     p.explain(
-        store.writer("gold", "selection_trace", strategy),
+        store.writer("selection_trace", strategy),
         j,
         id_column="case_ref",
         name="explain",
     )
-    p.write(store.writer("gold", "selection_pool", strategy), j, name="write")
+    p.write(store.writer("selection_pool", strategy), j, name="write")
     p.run()
 
     trace = _trace(store)
@@ -197,7 +193,7 @@ def test_case_dropped_by_an_inner_join_is_explained_not_silently_absent(tmp_path
 
 
 def test_case_dropped_by_an_anti_join_is_explained_not_silently_absent(tmp_path):
-    store = Store(tmp_path)
+    store = Store(tmp_path / "gold.db")
     strategy = AccumulateByRun("run-1", "2026-05-29")
     already_reviewed = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c2"]}))
     p = Pipeline("selection")
@@ -208,12 +204,12 @@ def test_case_dropped_by_an_anti_join_is_explained_not_silently_absent(tmp_path)
         name="already-reviewed",
     )
     p.explain(
-        store.writer("gold", "selection_trace", strategy),
+        store.writer("selection_trace", strategy),
         aj,
         id_column="case_ref",
         name="explain",
     )
-    p.write(store.writer("gold", "selection_pool", strategy), aj, name="write")
+    p.write(store.writer("selection_pool", strategy), aj, name="write")
     p.run()
 
     trace = _trace(store)
@@ -223,7 +219,7 @@ def test_case_dropped_by_an_anti_join_is_explained_not_silently_absent(tmp_path)
 
 
 def test_run_log_records_an_explain_step_with_governance_counts(tmp_path):
-    store = Store(tmp_path)
+    store = Store(tmp_path / "gold.db")
     strategy = AccumulateByRun("run-1", "2026-05-29")
     log_path = tmp_path / "run.log"
     p = Pipeline("selection", run_log=RunLog(log_path))
@@ -232,12 +228,12 @@ def test_run_log_records_an_explain_step_with_governance_counts(tmp_path):
         Filter(lambda r: r["amount"] >= 100, name="high-value"), r, name="high-value"
     )
     p.explain(
-        store.writer("gold", "selection_trace", strategy),
+        store.writer("selection_trace", strategy),
         f,
         id_column="case_ref",
         name="explain",
     )
-    p.write(store.writer("gold", "selection_pool", strategy), f, name="write")
+    p.write(store.writer("selection_pool", strategy), f, name="write")
     p.run()
 
     records = [json.loads(line) for line in log_path.read_text().splitlines()]

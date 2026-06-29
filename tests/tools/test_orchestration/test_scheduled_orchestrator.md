@@ -126,7 +126,12 @@ def test_task_level_requirement_allows_downstream_when_task_success_is_fresh(tmp
         WorkingDayCalendar(),
     )
 
-    result = orchestrator.run_due_once(tmp_path, run_date=dt.date.today())
+    # A fixed working day (Friday) like the sibling tests: the pipelines are
+    # scheduled Weekdays(), so run_date must be a working day or nothing is due.
+    # Pinning it keeps the test deterministic (dt.date.today() failed on weekends
+    # and holidays); freshness still holds because the upstream runs in the same
+    # pass on the same run_date.
+    result = orchestrator.run_due_once(tmp_path, run_date=dt.date(2026, 6, 12))
 
     assert calls == ["case-a/pipeline-2", "case-a/pipeline-3"]
     assert [decision.status for decision in result.decisions] == [

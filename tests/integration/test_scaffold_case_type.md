@@ -21,10 +21,10 @@ import importlib
 import sys
 
 from cli import scaffold
-from framework.core import RAW, SILVER
 from framework.io import StoreCatalog
 from framework.run import RunContext
 from tests.framework_testing import read_rows
+from tools.medallion import medallion
 
 
 def test_case_type_variant_lays_down_the_feed_with_its_case_type(tmp_path):
@@ -73,7 +73,7 @@ def test_case_type_variant_refines_to_silver_and_leaves_gold_a_commented_seam(tm
 
     # The settled ingest spine is rendered live: source -> raw -> silver.
     assert "silver_pipeline = silver_builder(" in pipeline
-    assert "writer=store.writer(SILVER" in pipeline
+    assert "writer=med.silver.writer(" in pipeline
     assert "from framework.run import Pipeline" in pipeline
 
     # Gold is the author's seam, not a live call, so the scaffold makes no bet
@@ -105,9 +105,9 @@ def test_rendered_case_type_pipeline_runs_and_refines_to_silver(tmp_path):
             if name == "widgets" or name.startswith("widgets."):
                 del sys.modules[name]
 
-    store = StoreCatalog(tmp_path / "data").store("widgets")
-    raw = read_rows(store, RAW, "widgets")
-    silver_rows = read_rows(store, SILVER, "widgets")
+    med = medallion(StoreCatalog(tmp_path / "data"), "widgets")
+    raw = read_rows(med.raw, "widgets")
+    silver_rows = read_rows(med.silver, "widgets")
     assert len(raw) > 0
     assert len(silver_rows) == len(silver) > 0
 

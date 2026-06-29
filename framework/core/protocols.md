@@ -10,12 +10,19 @@ only to name a type.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Literal, Protocol, runtime_checkable
 
 from framework.core.dataset import Dataset
 
 Severity = Literal["error", "warn"]
+
+# The default chunk size for a streaming :class:`ChunkReader` — a sensible bound
+# for a feed-shaped row, big enough to amortise per-chunk overhead yet small
+# enough that hundreds of them never approach the memory a whole source would.
+# Defined here with the contract so both the protocol default and every concrete
+# reader share one source of truth (``framework.io`` re-exports it).
+DEFAULT_CHUNK_SIZE = 10_000
 
 
 @runtime_checkable
@@ -24,6 +31,24 @@ class Reader(Protocol):
 
     def read(self) -> Dataset:
         """Read the source and return its rows as a Dataset."""
+        ...
+
+
+@runtime_checkable
+class ChunkReader(Protocol):
+    """A source read as a *sequence of bounded Datasets* (streaming).
+
+    The streaming dual of :class:`Reader`: where ``read() -> Dataset`` lands a
+    whole source in memory at once, ``chunks(size)`` yields a lazy iterator of
+    bounded :class:`Dataset`s so a source far too large to materialise (hundreds
+    of GB) can be processed with bounded memory. The in-memory ``Dataset``
+    contract (ADR-0002) holds *per chunk*, never for the whole source; the
+    concrete chunking engine (pandas ``chunksize``) stays behind the seam and
+    never appears in this signature.
+    """
+
+    def chunks(self, size: int = DEFAULT_CHUNK_SIZE) -> Iterator[Dataset]:
+        """Yield the source as bounded Datasets of at most ``size`` rows each."""
         ...
 
 

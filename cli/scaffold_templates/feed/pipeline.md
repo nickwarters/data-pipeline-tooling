@@ -34,9 +34,6 @@ from dataclasses import fields
 from pathlib import Path
 
 from framework.core import (
-    GOLD,
-    RAW,
-    SILVER,
     ColumnValidator,
     Dataset,
     PipelineError,
@@ -53,6 +50,7 @@ from framework.io import (
 )
 from framework.run import Pipeline, RunContext, RunLog
 from framework.transform import SchemaCoercion, SchemaValueRulePartitioner
+from tools.medallion import medallion
 
 from .schema import MyfeedRow
 
@@ -141,12 +139,12 @@ def gold_builder(
 
 def run(context: RunContext, *, describe: bool = False) -> Dataset:
     """Refine the feed source -> raw -> silver -> gold under the run context."""
-    store = StoreCatalog(context.base_dir).store(FEED_NAME)
+    med = medallion(StoreCatalog(context.base_dir), FEED_NAME)
     strategy = AccumulateByRun.from_context(context)
 
     raw_p = raw_builder(
         reader=CsvReader(SAMPLE_CSV),
-        writer=store.writer(RAW, FEED_NAME, strategy),
+        writer=med.raw.writer(FEED_NAME, strategy),
         run_log=context.run_log,
     )
     if describe:
@@ -154,9 +152,9 @@ def run(context: RunContext, *, describe: bool = False) -> Dataset:
     raw_p.run()
 
     silver_p = silver_builder(
-        reader=store.reader(RAW, FEED_NAME),
-        writer=store.writer(SILVER, FEED_NAME, strategy),
-        reject_writer=store.quarantine_writer(FEED_NAME),
+        reader=med.raw.reader(FEED_NAME),
+        writer=med.silver.writer(FEED_NAME, strategy),
+        reject_writer=med.silver.quarantine_writer(FEED_NAME),
         run_log=context.run_log,
     )
     if describe:
@@ -164,8 +162,8 @@ def run(context: RunContext, *, describe: bool = False) -> Dataset:
     silver_p.run()
 
     gold_p = gold_builder(
-        reader=store.reader(SILVER, FEED_NAME),
-        writer=store.writer(GOLD, FEED_NAME, Refresh()),
+        reader=med.silver.reader(FEED_NAME),
+        writer=med.gold.writer(FEED_NAME, Refresh()),
         run_log=context.run_log,
     )
     if describe:

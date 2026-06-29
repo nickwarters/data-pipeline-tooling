@@ -29,9 +29,6 @@ from datetime import date
 from pathlib import Path
 
 from framework.core import (
-    GOLD,
-    RAW,
-    SILVER,
     ColumnValidator,
     Dataset,
     PipelineError,
@@ -49,6 +46,7 @@ from framework.io import (
 )
 from framework.run import Pipeline, RunContext, RunLog
 from framework.transform import SchemaCoercion
+from tools.medallion import medallion
 
 from .schema import CaseReviewRow, SalesRow, SelectedCase
 from .selection import SelectCasesToCheck
@@ -109,7 +107,7 @@ def selection_builder(
 
 def run(context: RunContext) -> Dataset:
     """Refine both feeds to silver, then assemble the gold ``selection_pool``."""
-    store = StoreCatalog(context.base_dir).store(SUBJECT)
+    med = medallion(StoreCatalog(context.base_dir), SUBJECT)
     strategy = AccumulateByRun.from_context(context)
     as_of = context.run_date or AS_OF
 
@@ -118,26 +116,24 @@ def run(context: RunContext) -> Dataset:
         ("sales", SALES_CSV, SalesRow),
         ("case_reviews", REVIEWS_CSV, CaseReviewRow),
     ):
-        raw_builder(CsvReader(csv), store.writer(RAW, table, Refresh()), schema).run()
+        raw_builder(CsvReader(csv), med.raw.writer(table, Refresh()), schema).run()
         silver_builder(
-            store.reader(RAW, table), store.writer(SILVER, table, Refresh()), schema
+            med.raw.reader(table), med.silver.writer(table, Refresh()), schema
         ).run()
 
     # Assemble the SelectionPool from silver sales + silver case-review history.
-    selector = SelectCasesToCheck(store.reader(SILVER, "case_reviews"), as_of)
+    selector = SelectCasesToCheck(med.silver.reader("case_reviews"), as_of)
     pool = selection_builder(
-        store.reader(SILVER, "sales"),
+        med.silver.reader("sales"),
         selector,
-        store.writer(GOLD, "selection_pool", strategy),
+        med.gold.writer("selection_pool", strategy),
         run_log=context.run_log,
     ).run()
 
     # Land the sibling trace: why each considered adviser was/wasn't selected.
     trace_pipeline = Pipeline(f"{SUBJECT}:trace")
     tr = trace_pipeline.read(DatasetReader(selector.trace_dataset()), name="read")
-    trace_pipeline.write(
-        store.writer(GOLD, "selection_trace", strategy), tr, name="write"
-    )
+    trace_pipeline.write(med.gold.writer("selection_trace", strategy), tr, name="write")
     trace = trace_pipeline.run()
 
     excluded = sum(1 for row in selector.trace if row["verdict"] == "excluded")

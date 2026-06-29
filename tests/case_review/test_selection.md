@@ -6,13 +6,14 @@ import pandas as pd
 from case_review.case_pool import CasePool
 from case_review.case_type import CaseType, Variation
 from framework.core.dataset import Dataset
+from framework.io import StoreCatalog
 from framework.io.readers import DatasetReader
-from framework.io.store import Store
 from framework.io.strategy import AccumulateByRun, Refresh
 from framework.run.builder import Pipeline
 from framework.transform.processors import Filter, Sort, Stamp
 from tests._schema_fixtures import ActivityCase
 from tools.calendar import WorkingDayCalendar
+from tools.medallion import medallion
 
 
 def _case_type() -> CaseType:
@@ -27,10 +28,10 @@ def _case_type() -> CaseType:
     )
 
 
-def _land_gold_cases(store: Store, frame: pd.DataFrame) -> None:
+def _land_gold_cases(gold, frame: pd.DataFrame) -> None:
     # Land Cases into ingest gold (current-only, one row per Case) as an
     # ingest_silver_to_gold run would — CasePool reads gold.
-    store.writer("gold", "cases", Refresh()).write(Dataset.from_pandas(frame))
+    gold.writer("cases", Refresh()).write(Dataset.from_pandas(frame))
 
 
 def test_selection_narrows_the_casepool_into_a_stamped_selection_pool(tmp_path):
@@ -39,9 +40,9 @@ def test_selection_narrows_the_casepool_into_a_stamped_selection_pool(tmp_path):
     # from the CasePool, narrows them with specific Python processors (a high-value
     # filter, a sort), stamps the chosen Variation's question_bank_id, and writes
     # the SelectionPool into gold stamped run_id / load_date (CONTEXT.md; ).
-    store = Store(tmp_path / "cases")
+    gold = medallion(StoreCatalog(tmp_path), "cases").gold
     _land_gold_cases(
-        store,
+        gold,
         pd.DataFrame(
             {
                 "case_ref": ["c1", "c2", "c3", "c4"],
@@ -58,7 +59,7 @@ def test_selection_narrows_the_casepool_into_a_stamped_selection_pool(tmp_path):
         ),
     )
     case_type = _case_type()
-    pool = CasePool(case_type, store, WorkingDayCalendar())
+    pool = CasePool(case_type, gold, WorkingDayCalendar())
     variation = case_type.variation("v2")
 
     available = pool.fetch_available_cases(
@@ -75,15 +76,13 @@ def test_selection_narrows_the_casepool_into_a_stamped_selection_pool(tmp_path):
         Stamp("question_bank_id", variation.question_bank_id), s, name="stamp"
     )
     p.write(
-        store.writer(
-            "gold", "selection_pool", AccumulateByRun("2026-05-29", "2026-05-29")
-        ),
+        gold.writer("selection_pool", AccumulateByRun("2026-05-29", "2026-05-29")),
         st,
         name="write",
     )
     p.run()
 
-    selection_pool = store.reader("gold", "selection_pool").read().to_pandas()
+    selection_pool = gold.reader("selection_pool").read().to_pandas()
     # c4 excluded by availability, c2 by the amount filter; the survivors are
     # ranked highest-amount first and all carry v2's Question Bank + run stamps.
     assert list(selection_pool["case_ref"]) == ["c3", "c1"]

@@ -207,16 +207,14 @@ def test_for_each_passes_per_item_context_with_derived_logical_run_id():
 
 
 def test_for_each_context_supports_per_item_accumulate_by_run_writes(tmp_path):
-    store = Store(tmp_path / "cases")
+    store = Store(tmp_path / "cases.db")
     parent = RunContext(logical_run_id="selection:2026-06-09", load_date="2026-06-09")
 
     def logical_run_id(item: str, index: int, context: RunContext) -> str:
         return f"{context.logical_run_id}:{item}"
 
     def build_pipeline(item: str, context: RunContext) -> Pipeline:
-        writer = store.writer(
-            "gold", "selection_pool", AccumulateByRun.from_context(context)
-        )
+        writer = store.writer("selection_pool", AccumulateByRun.from_context(context))
         p = Pipeline(f"feed-{item}")
         r = p.read(RecordingReader(item), name="read")
         p.write(writer, r, name="write")
@@ -228,7 +226,7 @@ def test_for_each_context_supports_per_item_accumulate_by_run_writes(tmp_path):
         logical_run_id=logical_run_id,
     ).run(parent)
 
-    frame = store.reader("gold", "selection_pool").read().to_pandas()
+    frame = store.reader("selection_pool").read().to_pandas()
     assert set(frame["logical_run_id"]) == {
         "selection:2026-06-09:file-a",
         "selection:2026-06-09:file-b",

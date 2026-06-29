@@ -5,8 +5,6 @@ import sys
 from pathlib import Path
 
 from framework.core import (
-    RAW,
-    SILVER,
     ColumnValidator,
     Dataset,
     PipelineError,
@@ -16,6 +14,7 @@ from framework.core import (
 from framework.io import AccumulateByRun, CsvReader, Reader, StoreCatalog, Writer
 from framework.run import Pipeline, RunContext, RunLog
 from framework.transform import SchemaCoercion, SchemaValueRulePartitioner
+from tools.medallion import medallion
 
 from .case_type import CASE_TYPE
 
@@ -69,7 +68,7 @@ def silver_builder(
 
 def run(context: RunContext) -> Dataset:
     """Wire the real readers and writers for the environment and execute."""
-    store = StoreCatalog(context.base_dir).store(FEED_NAME)
+    med = medallion(StoreCatalog(context.base_dir), FEED_NAME)
     strategy = AccumulateByRun.from_context(context)
 
     # In reality, this CSV is fetched from the SAS server.
@@ -80,15 +79,15 @@ def run(context: RunContext) -> Dataset:
 
     # 1. Run Raw
     raw_pipeline = raw_builder(
-        reader=CsvReader(feed_csv), writer=store.writer(RAW, FEED_NAME, strategy)
+        reader=CsvReader(feed_csv), writer=med.raw.writer(FEED_NAME, strategy)
     )
     raw_pipeline.run()
 
     # 2. Run Silver
     silver_pipeline = silver_builder(
-        reader=store.reader(RAW, FEED_NAME),
-        writer=store.writer(SILVER, FEED_NAME, strategy),
-        reject_writer=store.quarantine_writer(FEED_NAME),
+        reader=med.raw.reader(FEED_NAME),
+        writer=med.silver.writer(FEED_NAME, strategy),
+        reject_writer=med.silver.quarantine_writer(FEED_NAME),
     )
     silver = silver_pipeline.run()
 

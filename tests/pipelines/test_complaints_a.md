@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from framework.core import RAW, SILVER, ValidationError
+from framework.core import ValidationError
 from framework.io import StoreCatalog
 from framework.run import RunContext
 from pipelines.complaints_a.pipeline import FEED_NAME, raw_builder, run, silver_builder
@@ -25,6 +25,7 @@ from tests.framework_testing import (
     given_rows,
     read_rows,
 )
+from tools.medallion import medallion
 
 
 def test_bundled_sample_feed_refines_through_to_silver(tmp_path):
@@ -41,14 +42,14 @@ def test_bundled_sample_feed_refines_through_to_silver(tmp_path):
 
     run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
 
-    store = StoreCatalog(tmp_path).store(FEED_NAME)
+    med = medallion(StoreCatalog(tmp_path), FEED_NAME)
 
     # 2 good rows + 2 quarantined rows = 4 raw rows
-    raw = read_rows(store, RAW, FEED_NAME)
+    raw = read_rows(med.raw, FEED_NAME)
     assert len(raw) == 4
 
     # 2 rows breach value rules and are quarantined, 2 rows pass
-    silver = read_rows(store, SILVER, FEED_NAME)
+    silver = read_rows(med.silver, FEED_NAME)
     assert len(silver) == 2
 
 

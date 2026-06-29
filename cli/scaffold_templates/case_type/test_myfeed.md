@@ -13,7 +13,7 @@ from dataclasses import fields
 
 import pytest
 
-from framework.core import RAW, SILVER, ValidationError
+from framework.core import ValidationError
 from framework.io import StoreCatalog
 from framework.run import RunContext
 from tests.framework_testing import (
@@ -22,6 +22,7 @@ from tests.framework_testing import (
     given_rows,
     read_rows,
 )
+from tools.medallion import medallion
 
 from .case_type import CASE_TYPE
 from .pipeline import FEED_NAME, raw_builder, run, silver_builder
@@ -37,12 +38,12 @@ def test_case_type_declares_its_identity_contract():
 
 def test_source_lands_in_raw_then_conforms_to_silver(tmp_path):
     silver = run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
-    store = StoreCatalog(tmp_path).store(FEED_NAME)
+    med = medallion(StoreCatalog(tmp_path), FEED_NAME)
 
-    raw = read_rows(store, RAW, FEED_NAME)
+    raw = read_rows(med.raw, FEED_NAME)
     assert len(raw) > 0
 
-    silver_rows = read_rows(store, SILVER, FEED_NAME)
+    silver_rows = read_rows(med.silver, FEED_NAME)
     assert len(silver_rows) == len(silver)
     declared = {f.name for f in fields(MyfeedRow)}
     assert declared.issubset(silver_rows[0].keys())

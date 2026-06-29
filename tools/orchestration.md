@@ -127,13 +127,81 @@ class ForEach(Generic[Item]):
 
 
 class Schedule:
-    """Base class for automatic schedule predicates."""
+    """Base class for automatic schedule predicates.
+
+    The concrete subclasses below (:class:`Weekdays`, :class:`SpecificWeekdays`,
+    …) are the implementation vocabulary. Pipeline authors are encouraged to use
+    the friendly constructors on this base class instead — ``Schedule.daily()``,
+    ``Schedule.on_weekdays("monday", "wednesday")``, ``Schedule.day_of_month(21)``,
+    and so on — so they need not remember class names or weekday integer ordinals.
+    """
 
     def is_due(self, run_date: dt.date, calendar: WorkingDayCalendar) -> bool:
         raise NotImplementedError
 
     def schedule_label(self) -> str:
         raise NotImplementedError
+
+    # -- Friendly constructors -------------------------------------------------
+    # Common operator language over the concrete schedule classes. These read
+    # at call time, so referencing the subclasses defined later in this module
+    # is fine.
+
+    @classmethod
+    def daily(cls) -> "Schedule":
+        """Run on every working day (weekends and holidays skipped)."""
+        return Weekdays()
+
+    @classmethod
+    def on_weekdays(cls, *names: str) -> "Schedule":
+        """Run on the named weekdays, e.g. ``on_weekdays("monday", "wednesday")``.
+
+        Names are matched case-insensitively against the full English weekday
+        names (``"monday"`` … ``"sunday"``). At least one name is required, and
+        an unrecognised name fails with a clear message.
+        """
+        if not names:
+            raise ValueError("on_weekdays requires at least one weekday name")
+        ordinals: list[int] = []
+        for name in names:
+            ordinal = _weekday_ordinal(name)
+            ordinals.append(ordinal)
+        return SpecificWeekdays(ordinals)
+
+    @classmethod
+    def day_of_month(cls, day: int) -> "Schedule":
+        """Run on the given calendar day of the month when it is a working day."""
+        return DayOfMonth(day)
+
+    @classmethod
+    def nth_working_day_of_month(cls, n: int) -> "Schedule":
+        """Run on the ``n``-th working day of the month (``n`` is 1-based)."""
+        return NthWorkingDayOfMonth(n)
+
+    @classmethod
+    def last_working_day_of_month(cls) -> "Schedule":
+        """Run on the last working day of the month."""
+        return LastWorkingDayOfMonth()
+
+    @classmethod
+    def manual_only(cls) -> "Schedule":
+        """Never run in automatic due-work passes; only on explicit invocation."""
+        return ManualOnly()
+
+
+def _weekday_ordinal(name: str) -> int:
+    """Map a weekday name to its ordinal (Monday=0 … Sunday=6), case-insensitive."""
+    try:
+        key = name.strip().lower()
+    except AttributeError:
+        raise ValueError(f"weekday name must be a string, got {name!r}") from None
+    try:
+        return _WEEKDAY_NAMES.index(key)
+    except ValueError:
+        valid = ", ".join(_WEEKDAY_NAMES)
+        raise ValueError(
+            f"unknown weekday name {name!r}; expected one of: {valid}"
+        ) from None
 
 
 @dataclass(frozen=True)

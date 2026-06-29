@@ -2,10 +2,10 @@
 from pathlib import Path
 
 from cli import operator
-from framework.core import GOLD
-from framework.io import Store
+from framework.io import StoreCatalog
 from pipelines.selection.pipeline import high_value_case, priority_score
 from tests.framework_testing import read_rows
+from tools.medallion import medallion
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -39,8 +39,8 @@ def test_demo_runs_the_full_source_to_selection_path(tmp_path, capsys):
 
     # The SelectionPool holds only the available, high-value cases, ranked by a
     # named priority score, each stamped with the chosen Variation's bank.
-    store = Store(cases_dir)
-    selection_pool = read_rows(store, GOLD, "selection_pool")
+    gold = medallion(StoreCatalog(tmp_path), "cases").gold
+    selection_pool = read_rows(gold, "selection_pool")
     assert [r["case_ref"] for r in selection_pool] == ["c1", "c2"]
     assert [r["priority_score"] for r in selection_pool] == [1000, 240]
     assert {r["question_bank_id"] for r in selection_pool} == {"qb-100"}
@@ -52,7 +52,7 @@ def test_demo_runs_the_full_source_to_selection_path(tmp_path, capsys):
 
     # Selection explainability: a sibling trace landed alongside the pool,
     # stamped by the same run, with a per-Case verdict for every available Case.
-    trace = read_rows(store, GOLD, "selection_trace")
+    trace = read_rows(gold, "selection_trace")
     by_ref = {r["case_ref"]: r for r in trace}
     assert set(by_ref) == {"c1", "c2", "c3"}  # all considered, not just survivors
     assert {r["run_id"] for r in trace} == {"selection:2026-05-29"}

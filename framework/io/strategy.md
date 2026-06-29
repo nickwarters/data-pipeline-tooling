@@ -130,7 +130,7 @@ class InsertIfAbsent:
 
     Surrogate assignment lives in Python, not in SQLite ``AUTOINCREMENT``, so
     the same key always maps to the same id across re-runs and machines —
-    making the reference table a stable system of record (ADR-0002 / ADR-0006).
+    making the reference table a stable system of record (ADR-0002 / ADR-0004).
 
     This is distinct from :class:`InsertOrIgnore`: ``InsertOrIgnore`` lets
     SQLite's own table constraints decide what conflicts; ``InsertIfAbsent``

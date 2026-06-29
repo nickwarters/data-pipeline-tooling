@@ -3,9 +3,9 @@
 
 The CasePool is the application/domain abstraction exposed to case-review
 pipelines instead of raw ``pandas.read_*`` calls. It is scoped per Case Type,
-reads the type's current gold table through the generic framework ``Store``,
-repairs storage-round-tripped values toward the Case Type schema, and returns
-framework ``Dataset`` objects for downstream pipelines.
+reads the type's current gold table through the type's **gold** namespace
+``Store``, repairs storage-round-tripped values toward the Case Type schema, and
+returns framework ``Dataset`` objects for downstream pipelines.
 """
 
 from __future__ import annotations
@@ -25,11 +25,11 @@ class CasePool:
     def __init__(
         self,
         case_type: CaseType,
-        store: Store,
+        gold: Store,
         calendar: WorkingDayCalendar,
     ) -> None:
         self._case_type = case_type
-        self._store = store
+        self._gold = gold
         self._calendar = calendar
 
     def fetch_available_cases(
@@ -43,10 +43,10 @@ class CasePool:
 
         Available = activity dated within the last ``within_working_days``
         working days on or before ``as_of``. The narrowing is application logic
-        expressed in Python and performed after reading through the framework
-        ``Store``.
+        expressed in Python and performed after reading through the gold
+        namespace ``Store``.
         """
-        dataset = self._store.reader("gold", self._case_type.name).read()
+        dataset = self._gold.reader(self._case_type.name).read()
         dataset = SchemaCoercion(self._case_type.schema)(dataset)
 
         window = set(self._calendar.last_n_working_days(within_working_days, as_of))

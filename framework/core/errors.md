@@ -37,7 +37,7 @@ class ErrorCategory:
 
     Note the deliberate gaps: a source that won't open, a write that fails, and a
     bug in a transform are **not** categorised here — they stay raw exceptions
-    with a full traceback (ADR-0007's "expected failure vs. genuine bug" line), so
+    with a full traceback (ADR-0005's "expected failure vs. genuine bug" line), so
     they surface as the programming/operational faults they are rather than as
     operator-actionable data failures.
     """

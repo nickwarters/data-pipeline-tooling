@@ -735,7 +735,7 @@ def test_incremental_ingest_offset_persisted_across_registry_instances(tmp_path)
 
 
 def test_committed_marker_round_trips_through_ingest(tmp_path):
-    # The write step's `committed` artifact marker (ADR-0007 amd 03) survives the
+    # The write step's `committed` artifact marker (ADR-0005) survives the
     # emitter -> registry seam: it reads back as True on write, False on read.
     log_path = tmp_path / "cases.log"
     run_id = _run_pipeline(log_path)

@@ -13,11 +13,11 @@ link is structural, not two call sites that must be kept in step.
 from __future__ import annotations
 
 from case_review.case_type import CaseType
-from framework.core import GOLD, SILVER, UniqueValidator
-from framework.io import Store
+from framework.core import UniqueValidator
 from framework.io.strategy import Refresh
 from framework.run import Pipeline, RunLog
 from framework.transform import DeriveKey, LatestPerKey, Unpivot
+from tools.medallion import Medallion
 
 # A Case is identified by its ``case_id`` everywhere downstream. The generic
 # reducer calls this its ``entity_id_column``; the case-review layer fixes it.
@@ -25,7 +25,7 @@ CASE_ID_COLUMN = "case_id"
 
 
 def ingest_silver_to_gold(
-    store: Store,
+    medallion: Medallion,
     case_type: CaseType,
     table: str | None = None,
     *,
@@ -39,7 +39,7 @@ def ingest_silver_to_gold(
     """
     table_name = table or case_type.name
     p = Pipeline(name or table_name, run_log=run_log)
-    r = p.read(store.reader(SILVER, table_name), name="read")
+    r = p.read(medallion.silver.reader(table_name), name="read")
 
     keyed = p.transform(
         DeriveKey(
@@ -56,12 +56,12 @@ def ingest_silver_to_gold(
     validated = p.validate(
         UniqueValidator(CASE_ID_COLUMN), latest, name="unique-validate"
     )
-    p.write(store.writer(GOLD, table_name, Refresh()), validated, name="write")
+    p.write(medallion.gold.writer(table_name, Refresh()), validated, name="write")
     return p
 
 
 def detail_ingest_silver_to_gold(
-    store: Store,
+    medallion: Medallion,
     case_type: CaseType,
     table: str,
     *,
@@ -76,7 +76,7 @@ def detail_ingest_silver_to_gold(
     (distinct from the Case table).
     """
     p = Pipeline(name or table, run_log=run_log)
-    r = p.read(store.reader(SILVER, table), name="read")
+    r = p.read(medallion.silver.reader(table), name="read")
 
     keyed = p.transform(
         DeriveKey(
@@ -88,7 +88,7 @@ def detail_ingest_silver_to_gold(
         name="derive-key",
     )
     unpivoted = p.transform(unpivot, keyed, name="unpivot")
-    p.write(store.writer(GOLD, table, Refresh()), unpivoted, name="write")
+    p.write(medallion.gold.writer(table, Refresh()), unpivoted, name="write")
     return p
 
 ```

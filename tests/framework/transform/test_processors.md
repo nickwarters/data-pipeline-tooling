@@ -292,9 +292,9 @@ def test_anti_join_with_exposes_trace_metadata_for_selection_explainability():
 
 
 def test_pipeline_filters_one_feed_and_joins_another_feeds_silver(tmp_path):
-    cases = Store((tmp_path / "cases"))
-    advisers = Store((tmp_path / "advisers"))
-    cases.writer("silver", "cases", Refresh()).write(
+    cases = Store(tmp_path / "cases.db")
+    advisers = Store(tmp_path / "advisers.db")
+    cases.writer("cases", Refresh()).write(
         Dataset.from_pandas(
             pd.DataFrame(
                 {
@@ -305,14 +305,14 @@ def test_pipeline_filters_one_feed_and_joins_another_feeds_silver(tmp_path):
             )
         )
     )
-    advisers.writer("silver", "advisers", Refresh()).write(
+    advisers.writer("advisers", Refresh()).write(
         Dataset.from_pandas(
             pd.DataFrame({"adviser": ["a1", "a3"], "region": ["north", "south"]})
         )
     )
-    reference = JoinDependency("advisers", advisers.reader("silver", "advisers"))
+    reference = JoinDependency("advisers", advisers.reader("advisers"))
     p = Pipeline("cases")
-    r = p.read(cases.reader("silver", "cases"), name="read")
+    r = p.read(cases.reader("cases"), name="read")
     f = p.transform(Filter((lambda row: row["amount"] >= 50)), r, name="filter")
     p.transform(JoinWith(reference, on="adviser"), f, name="join")
     selected = p.run().to_pandas()
