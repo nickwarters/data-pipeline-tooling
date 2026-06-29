@@ -11,7 +11,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def _run(pipeline: str, base_dir: Path) -> int:
-    return operator.main(["run", pipeline, str(base_dir), "--run-date", "2026-05-29"])
+    return operator.main(
+        ["run", pipeline, "--base-dir", str(base_dir), "--run-date", "2026-05-29"]
+    )
 
 
 def test_demo_selection_rules_are_independently_testable():
@@ -76,7 +78,7 @@ def test_demo_pipelines_are_runnable_as_modules(tmp_path):
 
     for module in ("pipelines.ingest.pipeline", "pipelines.selection.pipeline"):
         result = subprocess.run(
-            [sys.executable, "-m", module, str(tmp_path)],
+            [sys.executable, "-m", module, "--base-dir", str(tmp_path)],
             capture_output=True,
             text=True,
             cwd=ROOT,

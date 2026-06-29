@@ -124,7 +124,7 @@ def test_rendered_pipeline_main_runs_and_records_a_run(tmp_path, capsys):
     try:
         pipeline = importlib.import_module("widgets.pipeline")
         importlib.reload(pipeline)
-        exit_code = pipeline.main(["prog", str(base_dir)])
+        exit_code = pipeline.main(["prog", "--base-dir", str(base_dir)])
     finally:
         sys.path.remove(str(repo / "pipelines"))
         for name in list(sys.modules):

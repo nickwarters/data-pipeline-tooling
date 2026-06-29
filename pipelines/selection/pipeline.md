@@ -19,6 +19,7 @@ checks for recent successful ``ingest`` history before Selection runs.
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 from typing import Any, Mapping
@@ -30,6 +31,7 @@ from framework.run import FreshnessRequirement, Pipeline, RunContext
 from framework.transform import Filter, Score, Sort, Stamp
 from pipelines.ingest.pipeline import AS_OF, CASES
 from tools.calendar import WorkingDayCalendar
+from tools.environments import known_environments, resolve_base_dir
 from tools.medallion import medallion
 
 # Selection only runs once the CasePool is current.
@@ -96,7 +98,28 @@ def run(context: RunContext):
 
 
 def main(argv: list[str]) -> int:
-    base_dir = Path(argv[1]) if len(argv) > 1 else Path.cwd() / "data"
+    parser = argparse.ArgumentParser(
+        prog="python -m pipelines.selection.pipeline",
+        description="Narrow the available CasePool into a SelectionPool.",
+    )
+    parser.add_argument(
+        "--base-dir",
+        dest="base_dir",
+        default=None,
+        help="medallion root directory; omit to resolve it from --env",
+    )
+    parser.add_argument(
+        "--env",
+        help="named environment to resolve base_dir from when no --base-dir is "
+        f"given ({', '.join(known_environments())}); defaults to $PIPELINE_ENV or dev",
+    )
+    args = parser.parse_args(argv[1:])
+    # An explicit --base-dir wins; otherwise resolve from the named environment.
+    try:
+        base_dir = Path(args.base_dir) if args.base_dir else resolve_base_dir(args.env)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     context = RunContext(base_dir=base_dir, pipeline="selection", run_date=AS_OF)
     try:
         run(context)
