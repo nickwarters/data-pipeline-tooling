@@ -40,7 +40,12 @@ def _cli(*args):
 
 def test_run_executes_a_pipeline_by_its_path(tmp_path):
     result = _cli(
-        "run", "clipipelines/_source", str(tmp_path), "--run-date", "2026-05-29"
+        "run",
+        "clipipelines/_source",
+        "--base-dir",
+        str(tmp_path),
+        "--run-date",
+        "2026-05-29",
     )
 
     assert result.returncode == 0, result.stderr
@@ -52,6 +57,7 @@ def test_run_passes_params_to_path_addressed_pipeline(tmp_path):
     result = _cli(
         "run",
         "clipipelines/_source",
+        "--base-dir",
         str(tmp_path),
         "--run-date",
         "2026-06-22",
@@ -71,7 +77,12 @@ def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
 
     assert (
         _cli(
-            "run", "clipipelines/_source", str(tmp_path), "--run-date", "2026-05-29"
+            "run",
+            "clipipelines/_source",
+            "--base-dir",
+            str(tmp_path),
+            "--run-date",
+            "2026-05-29",
         ).returncode
         == 0
     )
@@ -80,6 +91,7 @@ def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
         return _cli(
             "run",
             "clipipelines/_downstream",
+            "--base-dir",
             str(tmp_path),
             "--run-date",
             "2026-05-29",
@@ -108,13 +120,23 @@ def test_run_downstream_succeeds_after_fresh_source_history(tmp_path):
     # and _downstream runs to completion.
     assert (
         _cli(
-            "run", "clipipelines/_source", str(tmp_path), "--run-date", "2026-05-29"
+            "run",
+            "clipipelines/_source",
+            "--base-dir",
+            str(tmp_path),
+            "--run-date",
+            "2026-05-29",
         ).returncode
         == 0
     )
 
     downstream = _cli(
-        "run", "clipipelines/_downstream", str(tmp_path), "--run-date", "2026-05-29"
+        "run",
+        "clipipelines/_downstream",
+        "--base-dir",
+        str(tmp_path),
+        "--run-date",
+        "2026-05-29",
     )
 
     assert downstream.returncode == 0, downstream.stderr
@@ -125,6 +147,7 @@ def test_dry_run_previews_without_writing_artifacts(tmp_path):
     result = _cli(
         "run",
         "clipipelines/_source",
+        "--base-dir",
         str(tmp_path),
         "--run-date",
         "2026-05-29",
@@ -140,7 +163,7 @@ def test_dry_run_previews_without_writing_artifacts(tmp_path):
 
 
 def test_run_unknown_pipeline_reports_clear_error(tmp_path):
-    result = _cli("run", "clipipelines/nope", str(tmp_path))
+    result = _cli("run", "clipipelines/nope", "--base-dir", str(tmp_path))
 
     assert result.returncode != 0
     assert "no pipeline at 'clipipelines/nope'" in result.stderr
@@ -150,12 +173,17 @@ def test_run_unknown_pipeline_reports_clear_error(tmp_path):
 def test_runs_lists_recent_runs_from_the_registry(tmp_path):
     assert (
         _cli(
-            "run", "clipipelines/_source", str(tmp_path), "--run-date", "2026-05-29"
+            "run",
+            "clipipelines/_source",
+            "--base-dir",
+            str(tmp_path),
+            "--run-date",
+            "2026-05-29",
         ).returncode
         == 0
     )
 
-    result = _cli("runs", str(tmp_path))
+    result = _cli("runs", "--base-dir", str(tmp_path))
 
     assert result.returncode == 0, result.stderr
     assert "_source" in result.stdout
@@ -165,12 +193,17 @@ def test_runs_lists_recent_runs_from_the_registry(tmp_path):
 def test_status_shows_latest_run_per_pipeline(tmp_path):
     assert (
         _cli(
-            "run", "clipipelines/_source", str(tmp_path), "--run-date", "2026-05-29"
+            "run",
+            "clipipelines/_source",
+            "--base-dir",
+            str(tmp_path),
+            "--run-date",
+            "2026-05-29",
         ).returncode
         == 0
     )
 
-    result = _cli("status", str(tmp_path), "--pipeline", "_source")
+    result = _cli("status", "--base-dir", str(tmp_path), "--pipeline", "_source")
 
     assert result.returncode == 0, result.stderr
     assert "_source" in result.stdout
@@ -180,12 +213,17 @@ def test_status_shows_latest_run_per_pipeline(tmp_path):
 def test_log_summarizes_a_run_log_file(tmp_path):
     assert (
         _cli(
-            "run", "clipipelines/_source", str(tmp_path), "--run-date", "2026-05-29"
+            "run",
+            "clipipelines/_source",
+            "--base-dir",
+            str(tmp_path),
+            "--run-date",
+            "2026-05-29",
         ).returncode
         == 0
     )
 
-    result = _cli("log", str(tmp_path), "_source")
+    result = _cli("log", "_source", "--base-dir", str(tmp_path))
 
     assert result.returncode == 0, result.stderr
     assert "_source" in result.stdout
@@ -217,7 +255,7 @@ def test_format_record_includes_zero_row_metrics():
 
 
 def test_status_without_a_registry_reports_clear_error(tmp_path):
-    result = _cli("status", str(tmp_path))
+    result = _cli("status", "--base-dir", str(tmp_path))
 
     assert result.returncode != 0
     assert "no run registry" in result.stderr
@@ -225,7 +263,7 @@ def test_status_without_a_registry_reports_clear_error(tmp_path):
 
 
 def test_log_without_a_log_file_reports_clear_error(tmp_path):
-    result = _cli("log", str(tmp_path), "_source")
+    result = _cli("log", "_source", "--base-dir", str(tmp_path))
 
     assert result.returncode != 0
     assert "no run log" in result.stderr
@@ -256,7 +294,12 @@ def test_run_stale_upstream_reports_clear_error(tmp_path):
     )
 
     result = _cli(
-        "run", "clipipelines/_downstream", str(tmp_path), "--run-date", "2026-05-29"
+        "run",
+        "clipipelines/_downstream",
+        "--base-dir",
+        str(tmp_path),
+        "--run-date",
+        "2026-05-29",
     )
 
     assert result.returncode != 0
@@ -282,15 +325,15 @@ def test_run_validation_failure_reports_clear_error(tmp_path, monkeypatch, capsy
         lambda pipeline: SimpleNamespace(run=boom, UPSTREAMS=()),
     )
 
-    code = operator.main(["run", "pipelines/boom", str(tmp_path)])
+    code = operator.main(["run", "pipelines/boom", "--base-dir", str(tmp_path)])
 
     assert code == 1
     assert "below required minimum" in capsys.readouterr().err
 
 
 def test_run_resolves_base_dir_from_env(tmp_path):
-    # No positional base_dir: --env names the environment, whose configured root
-    # comes from its OS variable (tools.environments). The registry lands there.
+    # No --base-dir: --env names the environment, whose configured root comes
+    # from its OS variable (tools.environments). The registry lands there.
     env = {
         **os.environ,
         "PYTHONPATH": os.pathsep.join(
@@ -321,7 +364,7 @@ def test_run_resolves_base_dir_from_env(tmp_path):
 
 
 def test_explicit_base_dir_overrides_env(tmp_path):
-    # An explicit positional path wins even when --env is also given.
+    # An explicit --base-dir wins even when --env is also given.
     explicit = tmp_path / "explicit"
     env = {
         **os.environ,
@@ -337,6 +380,7 @@ def test_explicit_base_dir_overrides_env(tmp_path):
             "cli",
             "run",
             "clipipelines/_source",
+            "--base-dir",
             str(explicit),
             "--env",
             "dev",

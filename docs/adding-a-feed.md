@@ -72,19 +72,19 @@ the pipeline uses **relative** intra-package imports, and the relocated test
 imports the feed absolutely (`from pipelines.orders.pipeline import …`):
 
 ```sh
-python -m cli run pipelines/orders /data   # run via the framework (freshness + run log)
+python -m cli run pipelines/orders --base-dir /data   # run via the framework (freshness + run log)
 python -m cli run pipelines/orders --env dev  # resolve base_dir from a named environment
-python -m cli run pipelines/orders /data --dry-run  # preview each step, write nothing
-python -m pipelines.orders.pipeline /data        # or directly: refine the bundled sample to gold
+python -m cli run pipelines/orders --base-dir /data --dry-run  # preview each step, write nothing
+python -m pipelines.orders.pipeline --base-dir /data  # or directly: refine the bundled sample to gold
 python -m pipelines.orders.pipeline --env dev    # directly, base_dir from the dev environment
-python -m pipelines.orders.pipeline /data --describe  # print each hop's plan, then run it
+python -m pipelines.orders.pipeline --base-dir /data --describe  # print each hop's plan, then run it
 python -m pytest tests/pipelines/test_orders.py  # the generated test passes as-is
 ```
 
-Both `base_dir` and `--env` resolve the medallion root the same way the operator
-CLI does (see [operator-cli.md](operator-cli.md)): an explicit path wins,
-otherwise `--env` (or `$PIPELINE_ENV`) selects an environment from
-`tools.environments`, defaulting to `dev` → `./data`.
+Both `--base-dir` and `--env` resolve the medallion root the same way the
+operator CLI does (see [operator-cli.md](operator-cli.md)): an explicit
+`--base-dir` wins, otherwise `--env` (or `$PIPELINE_ENV`) selects an environment
+from `tools.environments`, defaulting to `dev` → `./data`.
 
 `--dry-run` is the local-development inner loop: it runs the feed end to end
 against real data but **lands nothing**, printing per-step columns, dtypes, row

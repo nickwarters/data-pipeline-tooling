@@ -28,10 +28,10 @@ also writes `<base>/_orchestration/runs.db`, a separate SQLite decision log for
 due, skipped, succeeded, failed, and blocked scheduled items. Actual pipeline
 execution records remain in `RunLog` / `RunRegistry` only.
 
-### The base directory — an explicit path or `--env`
+### The base directory — `--base-dir` or `--env`
 
-The `base_dir` positional is **optional**. Pass it to point at a root directly
-(unchanged from before), or omit it and let `--env` resolve it from a named
+The base directory is set by the **optional `--base-dir` flag**. Pass it to point
+at a root directly, or omit it and let `--env` resolve it from a named
 environment — `prod`, `dev`, and so on. Which physical root each environment maps
 to is an operational concern, not the framework's, so the mapping lives in the
 sibling utility [`tools.environments`](public-api.md): each environment reads its
@@ -41,16 +41,16 @@ a local directory on macOS — never has to be committed to source. `dev` falls
 back to `./data` so a fresh clone runs out of the box.
 
 ```sh
-python -m cli run pipelines/ingest --env prod      # base_dir from PIPELINE_DATA_DIR_PROD
-python -m cli run pipelines/ingest --env dev        # base_dir from PIPELINE_DATA_DIR_DEV or ./data
-python -m cli run pipelines/ingest /explicit/path   # an explicit path still wins
+python -m cli run pipelines/ingest --env prod              # base_dir from PIPELINE_DATA_DIR_PROD
+python -m cli run pipelines/ingest --env dev               # base_dir from PIPELINE_DATA_DIR_DEV or ./data
+python -m cli run pipelines/ingest --base-dir /explicit/path  # an explicit path still wins
 ```
 
 `--env` defaults to the `PIPELINE_ENV` OS variable, then to `dev`. An explicit
-positional path always wins. An unknown environment, or a known one whose
-variable is unset and that has no fallback (e.g. `prod`), exits non-zero with an
-actionable message rather than a traceback. The same `base_dir` / `--env` choice
-applies to every command (`run`, `orchestrate`, `runs`, `status`, `log`).
+`--base-dir` always wins. An unknown environment, or a known one whose variable
+is unset and that has no fallback (e.g. `prod`), exits non-zero with an
+actionable message rather than a traceback. The same `--base-dir` / `--env`
+choice applies to every command (`run`, `orchestrate`, `runs`, `status`, `log`).
 
 `run` addresses a pipeline by **its location on disk**: `pipelines/orders` maps
 to the module `pipelines.orders.pipeline`, imported *at runtime*, whose
@@ -65,7 +65,7 @@ run store directly and need neither.)
 ## `run` — execute a pipeline by its path
 
 ```sh
-python -m cli run pipelines/<name> [<base_dir>] [--env ENV] \
+python -m cli run pipelines/<name> [--base-dir DIR] [--env ENV] \
     [--run-date YYYY-MM-DD] [--logical-run-id ID] [--freshness-days N] \
     [--param KEY=VALUE ...] [--dry-run]
 ```
@@ -77,7 +77,7 @@ identity is its directory name (`<name>`). `--run-date` sets the run date
 Exit code is `0` on success, non-zero on a clear error (see below).
 
 ```console
-$ python -m cli run pipelines/selection /data --run-date 2026-05-29
+$ python -m cli run pipelines/selection --base-dir /data --run-date 2026-05-29
 available cases: 3 -> SelectionPool: 2 cases (Question Bank qb-100, logical run selection:2026-05-29); trace: 3 considered, 1 excluded with a reason
 ```
 
@@ -92,7 +92,7 @@ dtypes, a small bounded sample of rows, and the *intent* of each skipped commit
 (`would write N row(s)`, `would quarantine N row(s)`).
 
 ```console
-$ python -m cli run pipelines/ingest /data --run-date 2026-05-29 --dry-run
+$ python -m cli run pipelines/ingest --base-dir /data --run-date 2026-05-29 --dry-run
 dry run — no artifacts were written
   [Read] read: 5 rows
       columns: case_ref:str, adviser:str, activity_date:str, amount:int64
@@ -127,8 +127,8 @@ example to reprocess a correction batch under a stable id independent of the
 calendar date:
 
 ```console
-$ python -m cli run pipelines/selection /data --logical-run-id 2026-05-correction
-$ python -m cli run pipelines/selection /data --logical-run-id 2026-05-correction
+$ python -m cli run pipelines/selection --base-dir /data --logical-run-id 2026-05-correction
+$ python -m cli run pipelines/selection --base-dir /data --logical-run-id 2026-05-correction
 ```
 
 The second invocation replaces the first run's rows in the SelectionPool (the
@@ -142,7 +142,7 @@ needs an explicit run input without discovering it internally. The parameters
 arrive as `context.params`:
 
 ```console
-$ python -m cli run pipelines/claims /data \
+$ python -m cli run pipelines/claims --base-dir /data \
     --run-date 2026-06-22 \
     --logical-run-id claims:ingest:20260622:claims_20260622_a.csv \
     --param source_file=/share/upstream/claims/claims_20260622_a.csv
@@ -165,7 +165,7 @@ diagnosis; values whose keys look sensitive, such as `password`, `secret`,
 ## `orchestrate` — run scheduled due work
 
 ```sh
-python -m cli orchestrate <base_dir> --app MODULE \
+python -m cli orchestrate [--base-dir DIR] [--env ENV] --app MODULE \
     [--run-date YYYY-MM-DD] [--once | --loop] [--poll-seconds N]
 ```
 
@@ -227,7 +227,7 @@ same set and all other `PipelineSet`s continue. Blocked decisions include the
 stale, missing, or failed upstream reason in `<base>/_orchestration/runs.db`.
 
 ```console
-$ python -m cli orchestrate /data --app my_app.pipelines --run-date 2026-05-29 --once
+$ python -m cli orchestrate --base-dir /data --app my_app.pipelines --run-date 2026-05-29 --once
 2026-05-29  cases  cases/ingest  succeeded
 2026-05-29  cases  cases/selection  succeeded
 ```
@@ -292,7 +292,7 @@ planned per-file runs.
 ## `status` — the latest run per pipeline
 
 ```sh
-python -m cli status <base_dir> [--case-type cases] [--pipeline cases/ingest]
+python -m cli status [--base-dir DIR] [--env ENV] [--case-type cases] [--pipeline cases/ingest]
 ```
 
 With no filter, prints the most recent run summary for **every** pipeline.
@@ -301,7 +301,7 @@ With no filter, prints the most recent run summary for **every** pipeline.
 orchestrate records under).
 
 ```console
-$ python -m cli status /data
+$ python -m cli status --base-dir /data
 2026-06-10T09:39:30.627378+00:00  ingest  ok  rows_out=5  [run 5f8ff8c7]
 2026-06-10T09:39:30.882733+00:00  selection  ok  rows_out=2  [run fbde70de]
 ```
@@ -309,21 +309,21 @@ $ python -m cli status /data
 ## `runs` — recent run history
 
 ```sh
-python -m cli runs <base_dir> [--pipeline ingest] [--status ok] [--limit N]
+python -m cli runs [--base-dir DIR] [--env ENV] [--pipeline ingest] [--status ok] [--limit N]
 ```
 
 Lists recent run summaries from the registry, oldest-to-newest, capped to the
 most recent `--limit` (default 10). `--pipeline` and `--status` narrow the list.
 
 ```console
-$ python -m cli runs /data --pipeline ingest --limit 5
+$ python -m cli runs --base-dir /data --pipeline ingest --limit 5
 2026-06-10T09:39:30.627378+00:00  ingest  ok  rows_out=5  [run 5f8ff8c7]
 ```
 
 ## `log` — inspect a run log file
 
 ```sh
-python -m cli log <base_dir> <pipeline> [--run-id <execution-id-prefix>]
+python -m cli log <pipeline> [--base-dir DIR] [--env ENV] [--run-id <execution-id-prefix>]
 ```
 
 Reads `<base>/_runs/<pipeline>.log` (path-addressed runs partition the log per
@@ -332,7 +332,7 @@ the runs in the file. `--run-id` filters to a single execution (a prefix of the
 execution id — the eight-character id shown by `status` / `runs` works).
 
 ```console
-$ python -m cli log /data selection
+$ python -m cli log selection --base-dir /data
 run log: /data/_runs/selection.log
   selection  freshness: ok
   selection  run: ok  rows_in=2  rows_out=2  rows_quarantined=0  rows_excluded=0  0.008s

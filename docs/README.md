@@ -271,7 +271,7 @@ under `tests/pipelines/`, ready to run — and then customise it:
 
 ```sh
 python -m cli scaffold orders              # -> pipelines/orders/ + tests/pipelines/test_orders.py
-python -m pipelines.orders.pipeline /data        # land the bundled sample into raw
+python -m pipelines.orders.pipeline --base-dir /data  # land the bundled sample into raw
 python -m pytest tests/pipelines/test_orders.py  # the generated test passes as-is
 ```
 
@@ -479,7 +479,7 @@ p.run(context=context)
 - The SelectionPool reaches the review platform as a **Deliverable** (a later
   slice); the returned **Review Outcomes** come back via **Sync**, not here.
 - Run pipelines through the framework when upstream requirements matter:
-  `python -m cli run pipelines/selection /tmp/demo --run-date 2026-05-29`
+  `python -m cli run pipelines/selection --base-dir /tmp/demo --run-date 2026-05-29`
   checks declared upstream run history before Selection executes.
 
 ### Assemble silver into gold outputs
@@ -512,11 +512,12 @@ of writing a wrapper script. It is a thin shell over the runner and the
 [`operator-cli.md`](operator-cli.md).
 
 ```sh
-python -m cli run pipelines/ingest /data --run-date 2026-05-29
-python -m cli run pipelines/ingest /data --dry-run   # preview each step, write nothing
-python -m cli status /data --pipeline ingest
-python -m cli runs /data --pipeline ingest --limit 5
-python -m cli log /data ingest --run-id 5f8ff8c7
+python -m cli run pipelines/ingest --base-dir /data --run-date 2026-05-29
+python -m cli run pipelines/ingest --base-dir /data --dry-run   # preview each step, write nothing
+python -m cli run pipelines/ingest --env dev         # or resolve base_dir from a named environment
+python -m cli status --base-dir /data --pipeline ingest
+python -m cli runs --base-dir /data --pipeline ingest --limit 5
+python -m cli log ingest --base-dir /data --run-id 5f8ff8c7
 ```
 
 `run` addresses a pipeline by **its location on disk**: `pipelines/ingest` maps
