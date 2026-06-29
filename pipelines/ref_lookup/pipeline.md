@@ -37,17 +37,11 @@ from framework.core import (
     PipelineError,
     format_failure,
 )
-from framework.io import (
-    AccumulateByRun,
-    CsvReader,
-    Reader,
-    Refresh,
-    StoreCatalog,
-    Writer,
-)
+from framework.io import AccumulateByRun, CsvReader, Reader, Refresh, Writer
 from framework.run import Pipeline, RunContext, RunLog
 from framework.transform import SelectColumns, Unpivot, VectorizedDerive
 from tools.medallion import medallion
+from tools.store import StoreRegistry
 
 from .processors import (
     REF_FIELDS,
@@ -148,7 +142,7 @@ def customers_builder(
 def run(context: RunContext, *, describe: bool = False) -> Dataset:
     """Wire real readers/writers and execute all four hops in order."""
     assert context.base_dir is not None, "RunContext.base_dir is required"
-    med = medallion(StoreCatalog(context.base_dir), FEED_NAME)
+    med = medallion(StoreRegistry(context.base_dir), FEED_NAME)
     strategy = AccumulateByRun.from_context(context)
 
     raw_p = raw_builder(

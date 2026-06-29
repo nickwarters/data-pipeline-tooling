@@ -1,15 +1,19 @@
 ```python
-"""Namespace-scoped stores that mint table Readers and Writers.
+"""Namespace-scoped stores that mint table Readers and Writers (application infra).
 
 A ``namespace`` is an opaque **logical database** — one SQLite file holding many
 related tables. A :class:`Store` binds one namespace to its file and mints
-Readers/Writers over named tables; :class:`StoreCatalog` mints namespace Stores
-from a shared root via a :class:`StoreBackend`. The store owns no business logic
-and makes no load decision; callers choose the strategy when minting a Writer.
+Readers/Writers over named tables; :class:`StoreRegistry` mints namespace Stores
+from a shared root via a :class:`StoreBackend` **and** keeps a registry of named
+Readers/Writers a pipeline can fetch by name. The store owns no business logic and
+makes no load decision; callers choose the strategy when minting a Writer.
 
-The framework knows only ``namespace → file``; the raw/silver/gold medallion is
-an application-level profile layered on top (``tools.medallion``), not framework
-vocabulary.
+This is **application-level infrastructure**, a sibling ``tools`` utility — not
+framework vocabulary. The framework knows only the ``Reader`` / ``Writer`` ports
+(``framework.io``); where a feed lands (``namespace`` → file) and how named
+components are wired is an application concern. The raw/silver/gold medallion is a
+profile layered on top of this (``tools.medallion``), itself an application
+convention (#232).
 """
 
 from __future__ import annotations
@@ -19,35 +23,34 @@ from pathlib import Path
 from typing import Protocol
 
 from framework._internal.connection import connect
-from framework.io.readers import Reader, SqliteReader
-from framework.io.sql import quote_identifier
-from framework.io.strategy import (
+from framework.io import (
     AccumulateByRun,
+    AccumulateByRunWriter,
     InsertIfAbsent,
     InsertOrIgnore,
-    Refresh,
-    UpsertStrategy,
-)
-from framework.io.writers import (
-    AccumulateByRunWriter,
     QuarantineWriter,
+    Reader,
+    Refresh,
     SqliteInsertIfAbsentWriter,
     SqliteInsertOrIgnoreWriter,
+    SqliteReader,
     SqliteTruncateReloadWriter,
     SqliteUpsertWriter,
+    UpsertStrategy,
     Writer,
 )
+from framework.io.sql import quote_identifier
 
 __all__ = [
     "DirectoryStoreBackend",
     "Store",
     "StoreBackend",
-    "StoreCatalog",
+    "StoreRegistry",
 ]
 
 
 class StoreBackend(Protocol):
-    """Maps a catalog root and a namespace to that namespace's database file."""
+    """Maps a registry root and a namespace to that namespace's database file."""
 
     def db_file(
         self, root: Path, namespace: str | os.PathLike[str]
@@ -195,8 +198,20 @@ class TableColumns:
         return tuple(row[1] for row in rows)
 
 
-class StoreCatalog:
-    """Mints namespace-scoped Stores from a shared root/configuration."""
+class StoreRegistry:
+    """Mints namespace Stores and registers named Readers/Writers for pipelines.
+
+    Two complementary roles:
+
+    * **Namespace factory** — :meth:`store` mints a :class:`Store` over one
+      logical database from the shared root/backend (the role the former
+      ``StoreCatalog`` played; ``tools.medallion`` builds on it).
+    * **Named registry** — :meth:`register` records a Reader or Writer under a
+      name and :meth:`reader` / :meth:`writer` fetch it back, so a pipeline can
+      refer to a component by name rather than re-deriving it. The framework
+      ``Pipeline`` is unchanged: it still takes the concrete Reader / Writer that
+      :meth:`reader` / :meth:`writer` return.
+    """
 
     def __init__(
         self,
@@ -208,6 +223,8 @@ class StoreCatalog:
         self._root = Path(root)
         self._backend = backend or DirectoryStoreBackend()
         self._busy_timeout_ms = busy_timeout_ms
+        self._readers: dict[str, Reader] = {}
+        self._writers: dict[str, Writer] = {}
 
     def store(self, namespace: str | os.PathLike[str]) -> Store:
         """Mint the Store for ``namespace`` without exposing physical layout."""
@@ -216,5 +233,50 @@ class StoreCatalog:
             namespace=namespace,
             busy_timeout_ms=self._busy_timeout_ms,
         )
+
+    def register(self, name: str, component: Reader | Writer) -> Reader | Writer:
+        """Register a Reader or Writer under ``name`` for later lookup.
+
+        The kind is inferred from the component's port: a ``write`` method makes
+        it a Writer, otherwise a ``read`` method makes it a Reader. Returns the
+        component so a caller can register and use it in one expression. Raises
+        ``TypeError`` if it is neither.
+        """
+        if _is_writer(component):
+            self._writers[name] = component
+        elif _is_reader(component):
+            self._readers[name] = component
+        else:
+            raise TypeError(
+                f"cannot register {name!r}: {component!r} is neither a Reader "
+                "(read()) nor a Writer (write())"
+            )
+        return component
+
+    def reader(self, name: str) -> Reader:
+        """Return the Reader registered under ``name`` (raises if unknown)."""
+        try:
+            return self._readers[name]
+        except KeyError:
+            raise KeyError(
+                f"no Reader registered as {name!r}; registered: {sorted(self._readers)}"
+            ) from None
+
+    def writer(self, name: str) -> Writer:
+        """Return the Writer registered under ``name`` (raises if unknown)."""
+        try:
+            return self._writers[name]
+        except KeyError:
+            raise KeyError(
+                f"no Writer registered as {name!r}; registered: {sorted(self._writers)}"
+            ) from None
+
+
+def _is_writer(component: object) -> bool:
+    return callable(getattr(component, "write", None))
+
+
+def _is_reader(component: object) -> bool:
+    return callable(getattr(component, "read", None))
 
 ```

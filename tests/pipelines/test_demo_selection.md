@@ -2,10 +2,10 @@
 from pathlib import Path
 
 from cli import operator
-from framework.io import StoreCatalog
 from pipelines.selection.pipeline import high_value_case, priority_score
 from tests.framework_testing import read_rows
 from tools.medallion import medallion
+from tools.store import StoreRegistry
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -41,7 +41,7 @@ def test_demo_runs_the_full_source_to_selection_path(tmp_path, capsys):
 
     # The SelectionPool holds only the available, high-value cases, ranked by a
     # named priority score, each stamped with the chosen Variation's bank.
-    gold = medallion(StoreCatalog(tmp_path), "cases").gold
+    gold = medallion(StoreRegistry(tmp_path), "cases").gold
     selection_pool = read_rows(gold, "selection_pool")
     assert [r["case_ref"] for r in selection_pool] == ["c1", "c2"]
     assert [r["priority_score"] for r in selection_pool] == [1000, 240]

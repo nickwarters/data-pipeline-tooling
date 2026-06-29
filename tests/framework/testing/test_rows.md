@@ -54,7 +54,8 @@ def test_given_csv_writes_a_csv_readable_by_csvreader(tmp_path):
 def test_read_rows_reads_a_landed_table_back(tmp_path):
     # When a pipeline lands in a real Store, read_rows collapses the
     # store.reader(table).read().to_pandas() chain to a list of dicts.
-    from framework.io import Refresh, Store
+    from framework.io import Refresh
+    from tools.store import Store
 
     store = Store(tmp_path / "cases.db")
     p = Pipeline("cases")

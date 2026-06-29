@@ -250,7 +250,7 @@ def test_schema_drift_validator_drives_the_real_store_prior_columns_seam(tmp_pat
     # End-to-end over the production PriorColumns seam (Store.columns_of's PRAGMA
     # read of the live raw table): land one shape, then a drifted snapshot warns
     # vs the prior landing — the next run reads the door, one layer before silver.
-    from framework.io.store import Store
+    from tools.store import Store
 
     store = Store(tmp_path / "raw.db", namespace="raw")
     store.writer("cases", Refresh()).write(_dataset(id=[1], name=["a"]))

@@ -12,9 +12,10 @@ from __future__ import annotations
 import pandas as pd
 
 from framework.core import Dataset
-from framework.io import AccumulateByRun, DatasetReader, StoreCatalog
+from framework.io import AccumulateByRun, DatasetReader
 from framework.run import Pipeline, RunContext
 from tools.medallion import medallion
+from tools.store import StoreRegistry
 
 # Neutral subject so the fixture owns its own medallion tree, distinct from the
 # real demo's "cases".
@@ -26,7 +27,7 @@ UPSTREAMS = ()
 
 def run(context: RunContext) -> Dataset:
     """Land two rows into `<base_dir>/fixture/raw.db`, accumulated by run."""
-    med = medallion(StoreCatalog(context.base_dir), SUBJECT)
+    med = medallion(StoreRegistry(context.base_dir), SUBJECT)
     strategy = AccumulateByRun.from_context(context)
     source = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c1", "c2"]}))
 

@@ -6,10 +6,10 @@ import pandas as pd
 from case_review.case_type import CaseType
 from case_review.gold import ingest_silver_to_gold
 from framework.core.dataset import Dataset
-from framework.io import StoreCatalog
 from framework.io.strategy import AccumulateByRun, Refresh
 from tests._schema_fixtures import LandedCase
 from tools.medallion import Medallion, medallion
+from tools.store import StoreRegistry
 
 # The Case Type owns identity now; its namespace derives from its name, so this
 # is the same UUID space the explicit _NS used to name.
@@ -30,7 +30,7 @@ def _land_silver(
 def test_ingest_silver_to_gold_reduces_to_one_row_per_case(tmp_path):
     # ingest_silver_to_gold reads accumulated silver, derives case_id, collapses
     # to the latest row per Case, validates uniqueness, and writes a Refresh gold.
-    med = medallion(StoreCatalog(tmp_path), "cases")
+    med = medallion(StoreRegistry(tmp_path), "cases")
     _land_silver(
         med,
         "cases",
@@ -55,7 +55,7 @@ def test_ingest_silver_to_gold_reduces_to_one_row_per_case(tmp_path):
 def test_ingest_silver_to_gold_keeps_latest_version_of_a_changed_case(tmp_path):
     # A Case that changes across runs retains all versions in silver but appears
     # once (latest) in gold — the framework is the historian for a destructive source.
-    med = medallion(StoreCatalog(tmp_path), "cases")
+    med = medallion(StoreRegistry(tmp_path), "cases")
     _land_silver(
         med,
         "cases",
@@ -81,7 +81,7 @@ def test_ingest_silver_to_gold_keeps_latest_version_of_a_changed_case(tmp_path):
 def test_ingest_silver_to_gold_idempotent_re_run_leaves_gold_unchanged(tmp_path):
     # Re-running the same snapshot leaves gold unchanged — Refresh truncates and
     # reloads, and LatestPerKey yields the same deterministic result each run.
-    med = medallion(StoreCatalog(tmp_path), "cases")
+    med = medallion(StoreRegistry(tmp_path), "cases")
     _land_silver(
         med,
         "cases",
@@ -100,7 +100,7 @@ def test_ingest_silver_to_gold_idempotent_re_run_leaves_gold_unchanged(tmp_path)
 def test_ingest_silver_to_gold_new_snapshot_updates_gold_to_current(tmp_path):
     # A new snapshot (distinct run_id) accumulates in silver and updates gold to
     # reflect the latest state — gold is always one row per Case.
-    med = medallion(StoreCatalog(tmp_path), "cases")
+    med = medallion(StoreRegistry(tmp_path), "cases")
     _land_silver(
         med,
         "cases",
@@ -126,7 +126,7 @@ def test_ingest_silver_to_gold_new_snapshot_updates_gold_to_current(tmp_path):
 def test_ingest_silver_to_gold_deterministic_case_id(tmp_path):
     # case_id is a deterministic uuid5: same natural key, same namespace, same
     # id across runs and machines.
-    med = medallion(StoreCatalog(tmp_path), "cases")
+    med = medallion(StoreRegistry(tmp_path), "cases")
     _land_silver(
         med,
         "cases",

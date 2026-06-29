@@ -14,7 +14,6 @@ import math
 import pytest
 
 from framework.core import ValidationError
-from framework.io import StoreCatalog
 from framework.run import RunContext
 from pipelines.ref_lookup.pipeline import (
     FEED_NAME,
@@ -32,6 +31,7 @@ from tests.framework_testing import (
     rows_of,
 )
 from tools.medallion import medallion
+from tools.store import StoreRegistry
 
 # ---------------------------------------------------------------------------
 # raw_builder
@@ -234,7 +234,7 @@ def test_customers_builder_returns_distinct_cust_refs():
 def test_bundled_sample_run(tmp_path):
     run(RunContext(base_dir=tmp_path, pipeline=FEED_NAME))
 
-    med = medallion(StoreCatalog(tmp_path), FEED_NAME)
+    med = medallion(StoreRegistry(tmp_path), FEED_NAME)
 
     ref = read_rows(med.silver, "ref")
     cases = read_rows(med.silver, "cases")

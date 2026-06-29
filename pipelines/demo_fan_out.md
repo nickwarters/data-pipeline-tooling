@@ -33,10 +33,11 @@ from pathlib import Path
 from case_review.case_type import CaseType
 from case_review.gold import detail_ingest_silver_to_gold, ingest_silver_to_gold
 from framework.core import SchemaValidator
-from framework.io import AccumulateByRun, CsvReader, StoreCatalog
+from framework.io import AccumulateByRun, CsvReader
 from framework.run import Pipeline
 from framework.transform import Filter, Rename, SchemaCoercion, SelectColumns, Unpivot
 from tools.medallion import medallion
+from tools.store import StoreRegistry
 
 PRODUCT_COLS = [f"product_{i}" for i in range(1, 11)]
 
@@ -62,7 +63,7 @@ WIDE_CASES = CaseType(name=SUBJECT, schema=CaseSchema, natural_key=("case_ref",)
 
 def main(target_dir: str) -> None:
     sample = Path(__file__).parent / "sample_data" / "wide_cases.csv"
-    med = medallion(StoreCatalog(target_dir), SUBJECT)
+    med = medallion(StoreRegistry(target_dir), SUBJECT)
 
     p = Pipeline(SUBJECT)
     r = p.read(CsvReader(sample), name="read")

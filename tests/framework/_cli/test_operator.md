@@ -73,8 +73,8 @@ def test_run_passes_params_to_path_addressed_pipeline(tmp_path):
 
 
 def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
-    from framework.io import StoreCatalog
     from tools.medallion import medallion
+    from tools.store import StoreRegistry
 
     assert (
         _cli(
@@ -105,7 +105,7 @@ def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
     assert downstream().returncode == 0
 
     pool = (
-        medallion(StoreCatalog(tmp_path), "fixture")
+        medallion(StoreRegistry(tmp_path), "fixture")
         .gold.reader("pool")
         .read()
         .to_pandas()

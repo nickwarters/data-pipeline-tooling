@@ -18,10 +18,10 @@ import sys
 import pytest
 
 from cli import scaffold
-from framework.io import StoreCatalog
 from framework.run import RunContext
 from tests.framework_testing import read_rows, rows_of
 from tools.medallion import medallion
+from tools.store import StoreRegistry
 
 
 def test_render_lays_down_the_feed_code_and_its_test(tmp_path):
@@ -102,7 +102,7 @@ def test_rendered_pipeline_runs_and_lands_its_sample_feed(tmp_path):
             if name == "widgets" or name.startswith("widgets."):
                 del sys.modules[name]
 
-    med = medallion(StoreCatalog(tmp_path / "data"), "widgets")
+    med = medallion(StoreRegistry(tmp_path / "data"), "widgets")
     landed = read_rows(med.raw, "widgets")
     assert len(landed) == len(dataset) > 0
     # raw accumulates under the run context, so landed rows carry the run's
@@ -135,7 +135,7 @@ def test_rendered_pipeline_main_runs_and_records_a_run(tmp_path, capsys):
     assert "rows source -> raw -> silver -> gold" in capsys.readouterr().out
     # A source feed has no subject, so the run records under _runs/<feed>.log.
     assert (base_dir / "_runs" / "widgets.log").exists()
-    med = medallion(StoreCatalog(base_dir), "widgets")
+    med = medallion(StoreRegistry(base_dir), "widgets")
     assert len(read_rows(med.raw, "widgets")) > 0
 
 
@@ -325,7 +325,7 @@ def test_rendered_feed_from_a_spaced_file_runs_and_its_test_passes(tmp_path):
             if name == "widgets" or name.startswith("widgets."):
                 del sys.modules[name]
 
-    med = medallion(StoreCatalog(tmp_path / "data"), "widgets")
+    med = medallion(StoreRegistry(tmp_path / "data"), "widgets")
     landed = read_rows(med.raw, "widgets")
     assert len(landed) == len(dataset) > 0
     assert {"Case Number", "Adviser Name"}.issubset(landed[0].keys())

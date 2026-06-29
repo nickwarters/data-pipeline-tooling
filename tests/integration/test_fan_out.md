@@ -11,12 +11,12 @@ import pandas as pd
 from case_review.case_type import CaseType
 from case_review.gold import detail_ingest_silver_to_gold, ingest_silver_to_gold
 from framework.core.dataset import Dataset
-from framework.io import StoreCatalog
 from framework.io.strategy import AccumulateByRun, Refresh
 from framework.run.builder import Pipeline
 from framework.transform.processors import Filter, Rename, SelectColumns, Unpivot
 from tests._schema_fixtures import LandedCase
 from tools.medallion import medallion
+from tools.store import StoreRegistry
 
 # One Case Type owns identity for the wide feed; the Cases and Detail builders
 # both read it, so case_id matches with no cross-pipeline join.
@@ -48,7 +48,7 @@ def _write_wide_raw(med, run_id: str) -> None:
 def test_detail_silver_to_gold_produces_one_row_per_product(tmp_path):
     # Verifies the factory: reads projected silver (case_ref + products), derives
     # case_id, unpivots wide to long, writes Refresh to gold.
-    med = medallion(StoreCatalog(tmp_path), "wide_cases")
+    med = medallion(StoreRegistry(tmp_path), "wide_cases")
     # Seed the silver table (already-projected product columns + natural key)
     med.silver.writer("products", Refresh()).write(
         Dataset.from_pandas(
@@ -85,7 +85,7 @@ def test_detail_silver_to_gold_produces_one_row_per_product(tmp_path):
 def test_detail_case_id_matches_case_id_derived_independently(tmp_path):
     # The Detail Table's case_id is derived from the same natural_key under the
     # same namespace as the Case table; no cross-pipeline join is needed.
-    med = medallion(StoreCatalog(tmp_path), "wide_cases")
+    med = medallion(StoreRegistry(tmp_path), "wide_cases")
     # Seed case silver (needs load_date for LatestPerKey in ingest_silver_to_gold)
     med.silver.writer("cases", Refresh()).write(
         Dataset.from_pandas(
@@ -131,7 +131,7 @@ def test_detail_case_id_matches_case_id_derived_independently(tmp_path):
 
 
 def test_fan_out_two_pipelines_over_shared_raw_produce_cases_and_detail(tmp_path):
-    med = medallion(StoreCatalog(tmp_path), "subject")
+    med = medallion(StoreRegistry(tmp_path), "subject")
     run_id = "2026-06-01"
 
     _write_wide_raw(med, run_id)
@@ -204,7 +204,7 @@ def test_demo_fan_out_runs_end_to_end(tmp_path):
 
     main(str(tmp_path))
 
-    med = medallion(StoreCatalog(tmp_path), "wide_cases")
+    med = medallion(StoreRegistry(tmp_path), "wide_cases")
     cases = med.gold.reader("cases").read().to_pandas()
     products = med.gold.reader("case_products").read().to_pandas()
 

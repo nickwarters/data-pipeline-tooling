@@ -2,18 +2,19 @@
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from framework.core.dataset import Dataset
 from framework.io.readers import CsvReader
-from framework.io.store import DirectoryStoreBackend, Store, StoreCatalog
 from framework.io.strategy import AccumulateByRun, Refresh
+from tools.store import DirectoryStoreBackend, Store, StoreRegistry
 
-FIXTURE = Path(__file__).parent.parent.parent / "fixtures" / "cases.csv"
+FIXTURE = Path(__file__).parent.parent / "fixtures" / "cases.csv"
 
 
 def _namespace_store(tmp_path, namespace="cases"):
-    """A namespace Store over ``<tmp_path>/<namespace>.db`` via the catalog."""
-    return StoreCatalog(tmp_path).store(namespace)
+    """A namespace Store over ``<tmp_path>/<namespace>.db`` via the registry."""
+    return StoreRegistry(tmp_path).store(namespace)
 
 
 def test_store_writer_with_refresh_strategy_round_trips_a_dataset(tmp_path):
@@ -80,12 +81,12 @@ def test_store_columns_of_returns_none_when_the_table_does_not_exist(tmp_path):
     assert store.columns_of("cases").columns() is None
 
 
-def test_store_catalog_mints_namespace_stores_over_distinct_files(tmp_path):
+def test_store_registry_mints_namespace_stores_over_distinct_files(tmp_path):
     dataset = CsvReader(FIXTURE).read()
-    catalog = StoreCatalog(tmp_path)
+    registry = StoreRegistry(tmp_path)
 
-    cases = catalog.store("cases")
-    advisers = catalog.store("advisers")
+    cases = registry.store("cases")
+    advisers = registry.store("advisers")
 
     cases.writer("shared_table", Refresh()).write(dataset)
     advisers.writer("shared_table", Refresh()).write(dataset)
@@ -111,9 +112,9 @@ def test_normalised_schema_across_logical_databases(tmp_path):
     # A namespace is a logical database holding many related tables; a normalised
     # schema spans several of them, addressed through the catalog. Cross-database
     # joins happen in Python (ADR-0002), so splitting files costs nothing.
-    catalog = StoreCatalog(tmp_path)
-    customers = catalog.store("customers")  # one logical database…
-    reference = catalog.store("reference")  # …a second, read-only to the first
+    registry = StoreRegistry(tmp_path)
+    customers = registry.store("customers")  # one logical database…
+    reference = registry.store("reference")  # …a second, read-only to the first
 
     # The "customers" database carries several related tables.
     customers.writer("customer", Refresh()).write(
@@ -163,5 +164,81 @@ def test_store_can_be_constructed_directly_over_one_file(tmp_path):
 
     assert (tmp_path / "scratch.db").exists()
     assert len(store.reader("cases").read()) == len(dataset)
+
+
+def test_registry_registers_and_returns_a_named_reader_and_writer(tmp_path):
+    # The registry holds named Readers/Writers so a pipeline refers to a component
+    # by name. register() classifies by port (read()/write()) and returns the
+    # component; reader()/writer() fetch the exact object back.
+    registry = StoreRegistry(tmp_path)
+    store = registry.store("cases")
+
+    a_reader = store.reader("cases")
+    a_writer = store.writer("cases", Refresh())
+    registry.register("cases_in", a_reader)
+    registry.register("cases_out", a_writer)
+
+    assert registry.reader("cases_in") is a_reader
+    assert registry.writer("cases_out") is a_writer
+
+
+def test_register_returns_the_component_for_one_line_use(tmp_path):
+    # register() hands the component straight back so a caller can register and
+    # wire it in one expression.
+    registry = StoreRegistry(tmp_path)
+    writer = registry.store("cases").writer("cases", Refresh())
+
+    assert registry.register("cases_out", writer) is writer
+
+
+def test_registry_lookup_round_trips_through_the_named_components(tmp_path):
+    # End-to-end: a write and a read addressed purely by registered name land and
+    # read back the same rows, never touching the namespace Store directly.
+    dataset = CsvReader(FIXTURE).read()
+    registry = StoreRegistry(tmp_path)
+    store = registry.store("cases")
+    registry.register("cases_out", store.writer("cases", Refresh()))
+    registry.register("cases_in", store.reader("cases"))
+
+    registry.writer("cases_out").write(dataset)
+    landed = registry.reader("cases_in").read()
+
+    assert len(landed) == len(dataset)
+
+
+def test_registered_components_wire_into_a_framework_pipeline(tmp_path):
+    # The point of the registry: a Pipeline reads and writes through components
+    # addressed purely by registered name. The framework Pipeline is unchanged —
+    # it takes the concrete Reader / Writer that reader()/writer() hand back.
+    from framework.run import Pipeline
+
+    registry = StoreRegistry(tmp_path)
+    store = registry.store("cases")
+    registry.register("source", CsvReader(FIXTURE))
+    registry.register("sink", store.writer("cases", Refresh()))
+
+    p = Pipeline("cases")
+    r = p.read(registry.reader("source"), name="read")
+    p.write(registry.writer("sink"), r, name="write")
+    p.run()
+
+    assert len(store.reader("cases").read()) == 3
+
+
+def test_registry_raises_a_helpful_error_for_an_unknown_name(tmp_path):
+    registry = StoreRegistry(tmp_path)
+    registry.register("known", registry.store("cases").reader("cases"))
+
+    with pytest.raises(KeyError, match="no Reader registered as 'missing'"):
+        registry.reader("missing")
+    with pytest.raises(KeyError, match="no Writer registered as 'missing'"):
+        registry.writer("missing")
+
+
+def test_registry_rejects_a_component_that_is_neither_reader_nor_writer(tmp_path):
+    registry = StoreRegistry(tmp_path)
+
+    with pytest.raises(TypeError, match="neither a Reader"):
+        registry.register("bad", object())
 
 ```
