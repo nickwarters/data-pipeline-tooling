@@ -205,7 +205,13 @@ data propagate downstream where the failure is harder to trace. _Here_:
 invalid feed never lands. Some failures are invisible per-row — a **truncated
 source export** where every row is valid yet thousands are missing — and are
 caught only run-over-run: the **volume-anomaly guardrail** (`VolumeAnomalyValidator`) trips when a run's row count deviates wildly from a baseline derived from the
-feed's **recent run history** (the run registry), not a hand-set threshold.
+feed's **recent run history** (the run registry), not a hand-set threshold. Its
+**statistical sibling** is the **`Profile` task**: it records each column's *shape*
+— null rate, distinct count, min/max, a bounded top-N distribution — on the run
+log so it can be trended, and (via `ProfileDriftCheck`) warns or fails when a
+column's null rate drifts from the same recent-history baseline. Where the volume
+guardrail watches one number, profiling generalises it to any column, catching a
+silent regression like a field quietly sliding 5% → 60% null.
 
 **For-each orchestration**:
 A repeated-run shape for independent items that all use the same pipeline recipe.

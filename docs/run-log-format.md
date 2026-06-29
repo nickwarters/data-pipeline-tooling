@@ -69,7 +69,7 @@ leads each line; the examples below elide it for width but it is always present:
 | `timestamp` | string              | ISO-8601 **UTC** instant the record was emitted (step close / run end). The time dimension the run-registry orders by — "latest run per pipeline", "row counts over time". |
 | `run_id`    | string              | The run's correlating id (same on every line of the run). |
 | `pipeline`  | string              | The feed/pipeline name (the builder's `name`) or the runner's stable domain label (`<case_type>/<pipeline>`, e.g. `cases/selection`). |
-| `step`      | string              | `read`, `pre-validate`, `quarantine`, `process`, `explain`, `post-validate`, `write`, `freshness`, or `run` (the summary). |
+| `step`      | string              | `read`, `pre-validate`, `quarantine`, `process`, `profile`, `explain`, `post-validate`, `write`, `freshness`, or `run` (the summary). |
 | `step_address` | string \| null   | The stable dependency address for this record. Builder steps are recorded as `<pipeline>.<step>` (for example `pipeline_2.step_4`); the `run` summary is recorded as the pipeline address. The registry stores this field so downstream dependency checks can ask whether a specific upstream step has succeeded. |
 | `status`    | `"ok"` \| `"error"` | Step/run outcome. |
 | `rows_in`   | int \| null         | Rows the step consumed (`null` where N/A, e.g. `read`). |
@@ -80,6 +80,7 @@ leads each line; the examples below elide it for width but it is always present:
 | `errors`    | string[]            | Error messages when `status` is `error`; `[]` otherwise. |
 | `warn_hits` | string[]            | Warn-severity validator messages tolerated at this step; `[]` otherwise. |
 | `committed` | bool                | `true` on a step that durably wrote an artifact (`write`, `quarantine` with rejects, `explain`, `checkpoint`) — independently committed evidence that **survives a later step's failure** (ADR-0005). Set only on the success record; `false` everywhere else. |
+| `profile`   | object \| null      | The per-column statistical profile a `profile` step recorded (#284): a `DatasetProfile` record (`row_count` + per-column `null_rate`, `distinct_count`, `min`/`max`, bounded top-N distribution). `null` on every non-profile step. The registry stores it in a queryable `profile` column and trends it across runs via `recent_profiles(address)`. |
 
 ### Steps per run
 
@@ -95,7 +96,8 @@ One record per step, in execution order, then a final `run` summary:
 Opt-in steps appear only when their path is configured: `quarantine` (between
 `pre-validate` and the processors — ADR-0007, with `rows_quarantined`),
 `dependency:<name>` (a read-only join dependency materialized before the
-processor that consumes it), and `explain` (after `post-validate` — ADR-0008, with `rows_excluded`; its `rows_in`/`rows_out` are the Cases
+processor that consumes it), `profile` (a read-only per-column profile recorded
+on the step's `profile` field — #284), and `explain` (after `post-validate` — ADR-0008, with `rows_excluded`; its `rows_in`/`rows_out` are the Cases
 considered/selected by Selection). A `process` step is recorded per attached
 processor, so dependency reads are distinguishable from downstream join
 processing.

@@ -579,6 +579,7 @@ registry.latest_success(
     on_or_after=date(2026, 6, 16),
 )
 registry.recent_row_counts("cases", limit=10)          # read volumes, newest first
+registry.recent_profiles("cases.profile", limit=10)    # per-column profiles, newest first
 ```
 
 - **Ingest is idempotent**: a record's identity is `run_id` + step (+ a
@@ -606,10 +607,66 @@ registry.recent_row_counts("cases", limit=10)          # read volumes, newest fi
   [`VolumeAnomalyValidator`](#validator--a-fail-fast-check-at-a-layer-boundary)
   builds its band over. Only `ok` runs count, so a run the guardrail itself
   tripped can't poison the next night's baseline.
+- **It also trends per-column profiles.** `recent_profiles(address, limit=…)`
+  returns the per-column `DatasetProfile` records a
+  [`Profile` Task](#profile--per-column-data-profiling-trended-across-runs)
+  recorded at a stable `step_address` over recent *successful* runs, newest
+  first — the statistical sibling of `recent_row_counts` and the history a
+  `ProfileDriftCheck` builds its baseline over.
 
 Reading the JSONL needs no change to the emitter (ADR-0005); the one format
 addition this slice made is the per-record `timestamp` (run-log-format.md), the
 time dimension the registry orders by.
+
+### `Profile` — per-column data profiling, trended across runs
+A **profile** is the *statistical* sibling of the run log's operational metadata
+(#284 beside #89). Where the validators only *gate* a feed and
+`VolumeAnomalyValidator` watches a single run-over-run number (the row count), a
+profile captures a feed's *shape* — null rate, distinct count, min/max, and a
+bounded top-N value distribution **per column** — and records it on the run log so
+it can be trended. That turns a silent regression a row-count check misses (a
+column quietly sliding 5% → 60% null; a categorical gaining junk values) into a
+detectable, trendable one.
+
+It is wired as a read-only Task on the builder — it observes, never reshapes:
+
+```python
+from framework.run import Pipeline, RunRegistry, ProfileDriftCheck
+
+registry = RunRegistry("/path/to/share/_registry/runs.db")
+p = Pipeline("cases", run_log=run_log)
+src = p.read(reader, name="read")
+
+# Bare: compute + record a profile every run (cost-bounded, opt-in).
+p.profile(src, name="profile", columns=["amount", "status"], top_n=20)
+
+# With a baseline: warn (or fail) when a column's null rate drifts run-over-run.
+p.profile(
+    src,
+    name="profile",
+    baseline=ProfileDriftCheck(registry, "cases.profile", null_rate_tolerance=0.2),
+    severity="warn",   # or "fail" -> raises ProfileError (an ErrorCategory.DATA abort)
+)
+```
+
+- **`profile_dataset(dataset, columns=…, top_n=…)`** computes a `DatasetProfile`
+  (a `row_count` plus one `ColumnProfile` per column). `to_record()` /
+  `from_record()` are the JSON round-trip the `RunLog` writes and the
+  `RunRegistry` stores in its queryable `profile` column.
+- **Cost is bounded / opt-in.** `top_n` caps each column's distribution; a
+  `columns` allow-list narrows which columns are profiled; and a pipeline pays
+  nothing unless it wires a `profile` node in — so profiling never dominates a
+  large-feed run.
+- **`ProfileDriftCheck(baseline, address, null_rate_tolerance=…)`** is the
+  run-over-run comparison, mirroring `VolumeAnomalyValidator`: it derives a
+  per-column null-rate baseline from the median over recent profiled runs
+  (`baseline.recent_profiles(address)` — the `RunRegistry` is the production
+  source) and reports each column whose rate deviated beyond tolerance. With
+  fewer than `min_history` prior runs the band is skipped so a feed's first
+  nights don't trip spuriously.
+- **Severity is the node's call**, like any Validator: `warn` rides the deviation
+  onto the step's `warn_hits` (run continues, surfaced by `runs_that_warned()`);
+  `fail` raises `ProfileError`, an `ErrorCategory.DATA` abort.
 
 ### `PipelineRunner` — thin domain orchestration + requirement guard
 `PipelineRunner` (`framework.run.runner`) is the minimal orchestration layer above

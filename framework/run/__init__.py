@@ -31,6 +31,14 @@ from framework.run.runner import (
     dry_run_pipeline,
     run_pipeline,
 )
+from tools.observability.profile import (
+    ColumnProfile,
+    DatasetProfile,
+    ProfileBaseline,
+    ProfileDriftCheck,
+    ProfileError,
+    profile_dataset,
+)
 from tools.observability.run_log import RunLog
 from tools.observability.run_registry import RunRegistry
 
@@ -49,4 +57,10 @@ __all__ = [
     "FreshnessRequirement",
     "FreshnessError",
     "UnknownPipelineError",
+    "DatasetProfile",
+    "ColumnProfile",
+    "profile_dataset",
+    "ProfileDriftCheck",
+    "ProfileBaseline",
+    "ProfileError",
 ]
