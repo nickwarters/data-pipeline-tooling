@@ -25,8 +25,11 @@ pass to `run`. The runner lays out `<base>/_runs/<pipeline>.log` (the JSONL run
 logs, one per pipeline) and `<base>/_registry/runs.db` (the queryable run
 registry) underneath it; `status` / `runs` / `log` read from there. `orchestrate`
 also writes `<base>/_orchestration/runs.db`, a separate SQLite decision log for
-due, skipped, succeeded, failed, and blocked scheduled items. Actual pipeline
-execution records remain in `RunLog` / `RunRegistry` only.
+due, skipped, succeeded, failed, and blocked scheduled items. Each decision
+carries the `logical_run_id` the pass assigned and the `pipeline_run_id` it read
+back, so one orchestration pass joins to every pipeline execution it triggered
+(`pipeline_run_id` is the key into the run registry). Actual pipeline execution
+records remain in `RunLog` / `RunRegistry` only.
 
 ### The base directory — `--base-dir` or `--env`
 

@@ -830,7 +830,12 @@ predicates that target whole-Pipeline or task-level `RunAddress` history.
 `LastWorkingDayOfMonth`, and `ManualOnly`.
 
 Each invocation writes decisions to `<base_dir>/_orchestration/runs.db` with a
-stable item key of `set_name/case_type/pipeline/run_date`. `RunLog` and
+stable item key of `set_name/case_type/pipeline/run_date`. Each decision also
+records the `logical_run_id` the pass assigned the item (the stable business key)
+and the `pipeline_run_id` it read back from the registry, so
+`OrchestrationStore.lineage(orchestration_run_id)` joins one pass to every
+pipeline execution it triggered — `pipeline_run_id` is the key into
+`RunRegistry.records_for_run(...)`. `RunLog` and
 `RunRegistry` stay reserved for actual Pipeline execution records. A failed
 scheduled item is terminal for that orchestrator run and blocks downstream
 dependants. Requirement failures from stale task/pipeline history, missing
