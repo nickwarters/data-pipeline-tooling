@@ -85,6 +85,92 @@ function digestResponse(digest) {
 
 const WEB_URL = 'https://sp.example.com/sites/casereview';
 
+// --- Case Details round-trip (issue #213) ---
+
+test('HttpSharePointClient: getCase parses the Details JSON blob into CaseRow.details', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'T',
+            Status: 'In-progress',
+            AssignedReviewerId: 'u1',
+            ResponsiblePartyId: 'u2',
+            Answers: '{}',
+            Conversation: '[]',
+            Details: JSON.stringify({
+              customerName: 'Jordan Lee',
+              accountNumber: 'ACC-4471',
+            }),
+            Notes: '',
+            CompletedAt: null,
+            CaseType: 'example-review',
+          }),
+          { status: 200, headers: { ETag: '"v1"' } }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const row = await client.getCase('case-1');
+
+  assert.deepEqual(row?.details, {
+    customerName: 'Jordan Lee',
+    accountNumber: 'ACC-4471',
+  });
+});
+
+test('HttpSharePointClient: patchCase serialises CaseRow.details to the Details column', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () => digestResponse('d'),
+    },
+    {
+      when: (c) => c.method === 'PATCH',
+      respond: () =>
+        new Response(null, { status: 204, headers: { ETag: '"v2"' } }),
+    },
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'T',
+            Status: 'In-progress',
+            AssignedReviewerId: 'u1',
+            ResponsiblePartyId: 'u2',
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: '',
+            CompletedAt: null,
+            CaseType: 'example-review',
+          }),
+          { status: 200, headers: { ETag: '"v2"' } }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const details = { customerName: 'Jordan Lee', accountNumber: 'ACC-4471' };
+  await client.patchCase('case-1', { details }, '"v1"');
+
+  const patch = calls.find((c) => c.method === 'PATCH');
+  assert.ok(patch, 'PATCH was issued');
+  const body = JSON.parse(String(patch.body));
+  assert.equal(body.Details, JSON.stringify(details));
+});
+
 // --- form digest ---
 
 test('HttpSharePointClient: form digest is fetched lazily and reused across writes', async () => {

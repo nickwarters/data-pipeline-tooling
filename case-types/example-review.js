@@ -14,6 +14,14 @@ const config = {
   eligibleGroups: ['Reviewers'],
   slaHours: 48,
   attributeFailures: true,
+  // Case Type-specific Case Details fields (ADR-0014, issue #213). Values live
+  // in the CaseRow.details JSON blob keyed by `key`; the Case Details and
+  // Summary Sections render them read-only after the common Case-row fields.
+  detailFields: [
+    { key: 'customerName', label: 'Customer name' },
+    { key: 'accountNumber', label: 'Account number' },
+    { key: 'interactionDate', label: 'Interaction date' },
+  ],
   // Per-Section config object (ADR-0016): membership is the allow-list, and
   // showInSummary controls each Section's block in the read-only Summary. Notes
   // is deliberately excluded from Summary (Case Justification + general note).

@@ -350,6 +350,7 @@ export class CRCaseReview extends ShellElement {
     Object.assign(this._detailsEl, {
       caseRow,
       access: displayMode(access.details),
+      detailFields: config.detailFields ?? [],
     });
 
     updateQuestionPanel({

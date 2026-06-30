@@ -143,3 +143,7 @@ test('product-sale-review computeOutcome: informational General question without
     config.questions.pop();
   }
 });
+
+test('product-sale-review: declares no Case Type-specific Case Details fields', () => {
+  assert.equal(config.detailFields, undefined);
+});

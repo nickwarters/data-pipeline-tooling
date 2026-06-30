@@ -132,6 +132,7 @@ test('Summary: plain function renders heading and outcome block', () => {
     catalogue: [],
     summarySections: [],
     captureGroups: [],
+    detailFields: [],
   });
 
   assert.equal(/** @type {any} */ (nodes[0]).textContent, 'Summary');
@@ -259,6 +260,21 @@ test('CRSummary: renders a Case Details block only when details is in summarySec
   const text = allText(block);
   assert.ok(text.includes('Rollup case'), 'shows the case title');
   assert.ok(text.includes('jane'), 'shows the assigned reviewer');
+});
+
+test('CRSummary: Case Details block includes the Case Type configured detail fields', () => {
+  const el = new CRSummary();
+  el.caseRow = makeCase({
+    title: 'Rollup case',
+    details: { customerName: 'Jordan Lee' },
+  });
+  el.summarySections = ['details'];
+  el.detailFields = [{ key: 'customerName', label: 'Customer name' }];
+  el.connectedCallback();
+  const block = findByClass(/** @type {any} */ (el), 'cr-summary-details');
+  const text = allText(block);
+  assert.ok(text.includes('Customer name'), 'shows the configured label');
+  assert.ok(text.includes('Jordan Lee'), 'shows the configured value');
 });
 
 test('CRSummary: omits the Case Details block when details is not in summarySections', () => {

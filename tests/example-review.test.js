@@ -177,6 +177,22 @@ test('example-review: Notes opts out of the Summary while the other block Sectio
   assert.equal(sections.remediation?.showInSummary, true);
 });
 
+test('example-review: declares Case Details fields, each with a stable key and label', () => {
+  const detailFields = config.detailFields ?? [];
+  assert.ok(detailFields.length >= 1, 'has at least one Case Details field');
+  for (const field of detailFields) {
+    assert.equal(typeof field.key, 'string');
+    assert.ok(field.key.length > 0, 'key is non-empty');
+    assert.equal(typeof field.label, 'string');
+    assert.ok(field.label.length > 0, 'label is non-empty');
+  }
+});
+
+test('example-review: Case Details field keys are unique', () => {
+  const keys = (config.detailFields ?? []).map((f) => f.key);
+  assert.equal(new Set(keys).size, keys.length);
+});
+
 // --- computeOutcome ---
 
 test('computeOutcome: all Yes → pass', () => {

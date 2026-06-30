@@ -24,6 +24,7 @@ import './cr-capture-groups.js';
  * @property {QuestionDefinition[]} catalogue
  * @property {Section[]} summarySections
  * @property {import('../sharepoint-client.js').CaptureGroup[]} captureGroups
+ * @property {import('../sharepoint-client.js').CaseDetailField[]} detailFields
  */
 
 /**
@@ -91,7 +92,7 @@ function renderSectionBlock(props, section, caseRow) {
     return renderFieldBlock(
       'cr-summary-details',
       'Case Details',
-      caseDetailFields(caseRow).map((f) => ({
+      caseDetailFields(caseRow, props.detailFields).map((f) => ({
         label: f.label,
         display: f.display,
       }))
@@ -315,6 +316,12 @@ export class CRSummary extends HTMLElement {
      * @type {import('../sharepoint-client.js').CaptureGroup[]}
      */
     this.captureGroups = [];
+    /**
+     * The Case Type's declared Case Details fields (issue #213), appended to the
+     * Summary's Case Details block. Empty when the Case Type declares none.
+     * @type {import('../sharepoint-client.js').CaseDetailField[]}
+     */
+    this.detailFields = [];
   }
 
   connectedCallback() {
@@ -343,6 +350,7 @@ export class CRSummary extends HTMLElement {
         catalogue: this.catalogue,
         summarySections: this.summarySections,
         captureGroups: this.captureGroups,
+        detailFields: this.detailFields,
       })
     );
   }
@@ -356,6 +364,7 @@ export class CRSummary extends HTMLElement {
       catalogue: this.catalogue,
       summarySections: this.summarySections,
       captureGroups: this.captureGroups,
+      detailFields: this.detailFields,
     });
   }
 }

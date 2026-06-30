@@ -108,6 +108,44 @@ test('MockSharePointClient: getCase returns null for an unknown id', async () =>
   assert.equal(c, null);
 });
 
+test('MockSharePointClient: getCase round-trips the details JSON blob (issue #213)', async () => {
+  const client = new MockSharePointClient({
+    cases: [
+      {
+        id: 'case-d',
+        caseType: 'example-review',
+        title: 'With details',
+        status: 'In-progress',
+        assignedReviewer: 'user-1',
+        responsibleParty: 'user-2',
+        answers: {},
+        conversation: [],
+        details: { customerName: 'Jordan Lee', accountNumber: 'ACC-4471' },
+        notes: '',
+        completedAt: null,
+        etag: 'etag-d',
+      },
+    ],
+    questionDefinitions: QUESTION_DEFS,
+    personas: PERSONAS,
+  });
+  const c = await client.getCase('case-d');
+  assert.deepEqual(c?.details, {
+    customerName: 'Jordan Lee',
+    accountNumber: 'ACC-4471',
+  });
+});
+
+test('MockSharePointClient: patchCase round-trips an updated details blob (issue #213)', async () => {
+  const client = makeClient();
+  const details = { customerName: 'Sam Rivera' };
+  const result = await client.patchCase('case-1', { details }, 'etag-1');
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.data?.details, details);
+  const reread = await client.getCase('case-1');
+  assert.deepEqual(reread?.details, details);
+});
+
 // --- patchCase ---
 
 test('MockSharePointClient: patchCase merges only the specified fields', async () => {

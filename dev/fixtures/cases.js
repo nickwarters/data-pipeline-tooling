@@ -55,6 +55,11 @@ export const cases = [
     responsibleParty: 'user-agent-a',
     answers: {},
     conversation: [],
+    details: {
+      customerName: 'Jordan Lee',
+      accountNumber: 'ACC-4471',
+      interactionDate: '2026-04-29',
+    },
     notes: '',
     completedAt: null,
     created: '2026-05-01T08:00:00Z',

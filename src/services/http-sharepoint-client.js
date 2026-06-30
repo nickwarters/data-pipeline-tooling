@@ -531,6 +531,9 @@ function rowFromItem(item, etag) {
     conversation: /** @type {Message[]} */ (
       parseJsonField(item?.Conversation, [])
     ),
+    details: /** @type {Record<string, string>} */ (
+      parseJsonField(item?.Details, undefined)
+    ),
     notes: String(item?.Notes ?? ''),
     caseJustification:
       item?.CaseJustification != null
@@ -623,6 +626,8 @@ function itemFromRow(fields) {
     out.Answers = JSON.stringify(fields.answers);
   if (fields.conversation !== undefined)
     out.Conversation = JSON.stringify(fields.conversation);
+  if (fields.details !== undefined)
+    out.Details = JSON.stringify(fields.details);
   return out;
 }
 

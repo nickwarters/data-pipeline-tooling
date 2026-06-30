@@ -27,6 +27,7 @@ export function updateSummaryNotesAppeal(context) {
     catalogue,
     summarySections,
     captureGroups: config.captureGroups ?? [],
+    detailFields: config.detailFields ?? [],
   });
   if (/** @type {any} */ (summary)?.update) {
     /** @type {any} */ (summary).update(

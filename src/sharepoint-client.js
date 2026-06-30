@@ -142,6 +142,7 @@
  *   responsibleParty: string,
  *   answers: Record<string, Answer>,
  *   conversation: Message[],
+ *   details?: Record<string, string>,
  *   notes: string,
  *   caseJustification?: string,
  *   completedAt: string | null,
@@ -163,6 +164,17 @@
  *   assignedReviewerManager?: string | null,
  *   etag: string
  * }} CaseRow
+ */
+
+/**
+ * One **Case Details** field declared by a Case Type (ADR-0014, issue #213): a
+ * descriptive fact that frames the review — a customer identifier, account
+ * number, product metadata, a relevant date. The set is declared per Case Type
+ * so different types surface different details. `key` is the stable storage key
+ * (matches a `CaseRow.details` entry); `label` is the display caption. Read-only
+ * everywhere — Case Details is never editable (CONTEXT.md).
+ *
+ * @typedef {{ key: string, label: string }} CaseDetailField
  */
 
 /**
@@ -283,7 +295,8 @@
  *   slaHours?: number,
  *   attributeFailures?: boolean,
  *   remediationFields?: RemediationField[],
- *   captureGroups?: CaptureGroup[]
+ *   captureGroups?: CaptureGroup[],
+ *   detailFields?: CaseDetailField[]
  * }} CaseTypeConfig
  */
 

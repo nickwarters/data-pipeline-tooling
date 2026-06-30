@@ -117,6 +117,48 @@ test('caseDetailFields: returns the labelled Case Details fields in order with e
   assert.equal(byField.completedAt, '2026-06-05');
 });
 
+test('caseDetailFields: appends configured detail fields after the common fields with values from details', () => {
+  const fields = caseDetailFields(
+    makeCase({
+      details: { customerName: 'Jordan Lee', accountNumber: 'ACC-4471' },
+    }),
+    [
+      { key: 'customerName', label: 'Customer name' },
+      { key: 'accountNumber', label: 'Account number' },
+    ]
+  );
+  assert.deepEqual(
+    fields.map((f) => f.field),
+    [
+      'title',
+      'assignedReviewer',
+      'status',
+      'dueDate',
+      'relatedDate',
+      'created',
+      'completedAt',
+      'customerName',
+      'accountNumber',
+    ]
+  );
+  const byField = Object.fromEntries(fields.map((f) => [f.field, f.display]));
+  assert.equal(byField.customerName, 'Jordan Lee');
+  assert.equal(byField.accountNumber, 'ACC-4471');
+});
+
+test('caseDetailFields: configured field with no stored value falls back to an em dash', () => {
+  const fields = caseDetailFields(makeCase({ details: {} }), [
+    { key: 'customerName', label: 'Customer name' },
+  ]);
+  const byField = Object.fromEntries(fields.map((f) => [f.field, f.display]));
+  assert.equal(byField.customerName, '—');
+});
+
+test('caseDetailFields: a Case Type without detail fields returns only the common fields', () => {
+  const fields = caseDetailFields(makeCase());
+  assert.equal(fields.length, 7);
+});
+
 test('CaseDetails: plain function renders no nodes without a case row', () => {
   assert.deepEqual(CaseDetails({ caseRow: null, access: 'read-only' }), []);
 });
@@ -129,6 +171,35 @@ test('CaseDetails: plain function renders the Case row fields', () => {
   const fields = fieldMap({ _children: nodes });
 
   assert.equal(fields.title, 'Plain case');
+});
+
+test('CRCaseDetails: renders configured detail field values for the current Case Type', () => {
+  const el = new CRCaseDetails();
+  el.caseRow = makeCase({
+    details: { customerName: 'Jordan Lee', accountNumber: 'ACC-4471' },
+  });
+  el.detailFields = [
+    { key: 'customerName', label: 'Customer name' },
+    { key: 'accountNumber', label: 'Account number' },
+  ];
+  el.connectedCallback();
+  const fields = fieldMap(/** @type {any} */ (el));
+  assert.equal(fields.customerName, 'Jordan Lee');
+  assert.equal(fields.accountNumber, 'ACC-4471');
+});
+
+test('CRCaseDetails: defaults to no configured detail fields', () => {
+  const el = new CRCaseDetails();
+  assert.deepEqual(el.detailFields, []);
+});
+
+test('CRCaseDetails: renders only the common fields when the Case Type declares no detail fields', () => {
+  const el = new CRCaseDetails();
+  el.caseRow = makeCase({ details: { customerName: 'ignored' } });
+  el.connectedCallback();
+  const fields = fieldMap(/** @type {any} */ (el));
+  assert.equal(fields.customerName, undefined);
+  assert.equal(fields.title, 'A test case');
 });
 
 test('CRCaseDetails: defaults to read-only access', () => {
