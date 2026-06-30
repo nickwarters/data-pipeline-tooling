@@ -316,9 +316,8 @@ class QuarantineNode(Node):
 
         if len(rejected) > 0:
             frame = rejected.to_pandas()
-            frame["run_id"] = context.logical_run_id
             frame["logical_run_id"] = context.logical_run_id
-            frame["execution_id"] = context.execution_id
+            frame["pipeline_run_id"] = context.pipeline_run_id
             frame["load_date"] = context.load_date
             enriched_rejected = Dataset.from_pandas(frame)
             self.writer.write(enriched_rejected)
@@ -423,7 +422,7 @@ class Pipeline:
     def __init__(self, name: str, run_log: RunLog | None = None) -> None:
         self._name = name
         self._run_log = run_log or NULL_RUN_LOG
-        self.run_id: str | None = None
+        self.pipeline_run_id: str | None = None
         self._nodes: list[Node] = []
 
     def read(
@@ -551,7 +550,7 @@ class Pipeline:
         run_log = (
             context.run_log if context.run_log is not NULL_RUN_LOG else self._run_log
         )
-        self.run_id = context.execution_id
+        self.pipeline_run_id = context.pipeline_run_id
 
         session = PipelineExecution(
             pipeline_name=self._name,

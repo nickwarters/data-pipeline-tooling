@@ -1,8 +1,8 @@
 # Gold accumulation & what "gold" means
 
 This documents the **gold** layer's load semantics — the `AccumulateByRun`
-strategy: rows stamped `run_id` / `load_date`, accumulating across runs, with an
-idempotent re-run via *delete-by-run then insert*. For the
+strategy: rows stamped `logical_run_id` / `load_date`, accumulating across runs,
+with an idempotent re-run via *delete-by-logical-run then insert*. For the
 *why*, see [ADR-0004](adr/0004-per-feed-load-strategy-owned-by-writer.md);
 for the surrounding primitives, [core-primitives.md](core-primitives.md); for the
 domain terms (CasePool, SelectionPool, Review Outcomes), [`../CONTEXT.md`](../CONTEXT.md).
@@ -35,21 +35,22 @@ Every gold row is stamped with two columns:
 
 | Column | Meaning |
 |--------|---------|
-| `run_id` | The **logical load** this row belongs to — a stable, caller-chosen key (e.g. a business date). It is the **idempotency key**. |
+| `logical_run_id` | The **logical load** this row belongs to — a stable, caller-chosen key (e.g. a business date). It is the **idempotency key**. |
+| `pipeline_run_id` | The concrete **pipeline attempt** that wrote the row — the trace key back to the run log. Stamped only when the strategy was derived from a `RunContext`. |
 | `load_date` | The date this load represents, carried as a plain column for reporting/lineage. |
 
 A run **accumulates**: a later run adds its rows alongside earlier runs' rather
 than replacing them, so history is kept.
 
-### Idempotent re-run: delete-by-run then insert
+### Idempotent re-run: delete-by-logical-run then insert
 
-Re-driving the *same* `run_id` must not duplicate that run's rows, yet must not
-touch any *other* run's rows. The writer achieves this by scoping a delete to the
-run before appending:
+Re-driving the *same* `logical_run_id` must not duplicate that run's rows, yet
+must not touch any *other* run's rows. The writer achieves this by scoping a
+delete to the logical run before appending:
 
 ```sql
-DELETE FROM <table> WHERE run_id = :run_id;   -- clear only this run's prior rows
-INSERT INTO <table> ...                        -- then re-insert this run
+DELETE FROM <table> WHERE logical_run_id = :logical_run_id;  -- clear this run's prior rows
+INSERT INTO <table> ...                                      -- then re-insert this run
 ```
 
 Both statements commit as a **single SQLite transaction** (ADR-0005): if the
@@ -57,42 +58,44 @@ insert fails, the delete rolls back, so a failed re-run never half-wipes prior
 rows. The result: re-running a given load is safe and deterministic, while the
 historical record of prior loads is preserved.
 
-## `run_id` is *not* the run-log's execution id
+## `logical_run_id` is *not* the pipeline attempt id
 
-The run-log (ADR-0005) mints a **fresh uuid `run_id` per `.run()`** to correlate
-every record of one execution. Gold's `run_id` is a **different thing** — a
-stable, logical load key — and the two are **deliberately not unified**:
+The run-log (ADR-0005) mints a **fresh `pipeline_run_id` per `.run()`** to
+correlate every record of one execution. Gold's `logical_run_id` is a
+**different thing** — a stable, logical load key — and the two are kept as
+**separate, explicitly named columns**:
 
-- **Log `run_id`** = *this execution* — fresh uuid each `.run()`.
-- **Gold `run_id`** = *this logical load* — caller-chosen, the delete-by-run
-  idempotency key.
+- **`pipeline_run_id`** = *this execution* — a fresh id each `.run()`.
+- **`logical_run_id`** = *this logical load* — caller-chosen, the
+  delete-by-logical-run idempotency key.
 
-Stamping gold rows with a fresh-per-execution uuid would break idempotency: a
-re-run would never match prior rows and would silently duplicate history. So the
-`AccumulateByRun` strategy takes `run_id` / `load_date` as **caller-supplied**
-values — `AccumulateByRun.from_context(context)` derives them from the shared
-`RunContext` so `--logical-run-id` flows straight through. The two are *linked*
-without being unified: an accumulated row also carries `execution_id` (the run
-log's per-execution `run_id`), so an operator can correlate a logical load's rows
-back to the exact execution that wrote them via the `RunRegistry` (ADR-0004).
+Stamping the idempotency key with a fresh-per-execution id would break
+idempotency: a re-run would never match prior rows and would silently duplicate
+history. So the `AccumulateByRun` strategy takes `logical_run_id` / `load_date`
+as **caller-supplied** values — `AccumulateByRun.from_context(context)` derives
+them from the shared `RunContext` so `--logical-run-id` flows straight through.
+The two are *linked* without being conflated: an accumulated row also carries
+`pipeline_run_id` (matching the run-log/registry key), so an operator can
+correlate a logical load's rows back to the exact execution that wrote them via
+the `RunRegistry` (ADR-0004).
 
 ## How a changing record is represented across runs
 
-The delete-by-run is scoped to `run_id` **only** — never to a business key like
-`case_ref` (`framework/io/writers.py`). So gold **never updates a record in place**:
-a record that changes between runs produces *one row per run that observed it*,
-each stamped with that run's `run_id` / `load_date`. The version axis of a record
-is `(case_ref, load_date)`; `run_id` is the *load* identity, not a per-row
-version key.
+The delete-by-logical-run is scoped to `logical_run_id` **only** — never to a
+business key like `case_ref` (`framework/io/writers.py`). So gold **never updates
+a record in place**: a record that changes between runs produces *one row per run
+that observed it*, each stamped with that run's `logical_run_id` / `load_date`.
+The version axis of a record is `(case_ref, load_date)`; `logical_run_id` is the
+*load* identity, not a per-row version key.
 
 **Worked example — an outcome that changes (most visible in the Sync Pipeline).**
 Because raw/silver mirror the current-state source, each run's silver holds the
 record's *current* value, and gold accumulates it:
 
-| Run (`run_id`) | source/silver held | gold after the run |
+| Run (`logical_run_id`) | source/silver held | gold after the run |
 |----------------|--------------------|--------------------|
-| `2026-05-30` | C1 = **Pass** | `(C1, Pass, run_id=2026-05-30, load_date=2026-05-30)` |
-| `2026-05-31` | C1 = **Fail** (reviewer changed it) | adds `(C1, Fail, run_id=2026-05-31, load_date=2026-05-31)` — the `2026-05-30` row **stays** |
+| `2026-05-30` | C1 = **Pass** | `(C1, Pass, logical_run_id=2026-05-30, load_date=2026-05-30)` |
+| `2026-05-31` | C1 = **Fail** (reviewer changed it) | adds `(C1, Fail, logical_run_id=2026-05-31, load_date=2026-05-31)` — the `2026-05-30` row **stays** |
 
 Gold keeps **both** rows. The change is preserved as history; nothing is mutated.
 
@@ -102,13 +105,14 @@ The always-correct query is *"the row with the greatest `load_date` for each
 `case_ref`"*. Two shapes, depending on what a run writes:
 
 - **Full-snapshot runs** (e.g. Sync re-syncing every case each day): the latest
-  `run_id` is itself a complete current-state set, so `WHERE run_id = <latest>`
-  is a valid fast path. In a daily load you would choose `run_id = the business
-  date`, so `run_id`, `load_date`, and "the day" coincide.
+  `logical_run_id` is itself a complete current-state set, so
+  `WHERE logical_run_id = <latest>` is a valid fast path. In a daily load you
+  would choose `logical_run_id = the business date`, so `logical_run_id`,
+  `load_date`, and "the day" coincide.
 - **Subset runs** (e.g. Selection writing only the chosen Cases): the latest
-  `run_id` does **not** contain every record, so you must take `max(load_date)`
-  per `case_ref` — latest-run alone would miss records last written by an earlier
-  run.
+  `logical_run_id` does **not** contain every record, so you must take
+  `max(load_date)` per `case_ref` — latest-run alone would miss records last
+  written by an earlier run.
 
 Per ADR-0002 this "latest per record" logic lives in **Python** (e.g. on the
 CasePool's `fetch_*` retrievals), never in the Writer — the Writer stays a dumb
@@ -118,7 +122,7 @@ rows remain.
 
 ### Two shapes of accumulation, and their costs
 
-`run_id`-stamped accumulation supports two patterns; choose deliberately per Pipeline:
+`logical_run_id`-stamped accumulation supports two patterns; choose deliberately per Pipeline:
 
 - **Periodic snapshot** — every run re-writes the full set (Sync, ingest). Simple
   and self-correcting, but **unchanged records are re-copied every run**: 10k
@@ -129,9 +133,9 @@ rows remain.
   outcomes received) that never restate prior rows. This is what ADR-0004
   originally framed gold around; it grows with events, not with records × runs.
 
-In both, `run_id` is the **unit of replacement**: you can re-drive a whole load
-idempotently, but you cannot "correct one record" via delete-by-run — you re-run
-the load that produced it.
+In both, `logical_run_id` is the **unit of replacement**: you can re-drive a whole
+load idempotently, but you cannot "correct one record" via delete-by-logical-run —
+you re-run the load that produced it.
 
 ## Reading gold concurrently
 
@@ -167,10 +171,11 @@ p.run()
 ```
 
 The `Store` mints the `AccumulateByRunWriter`, which owns the location and the
-delete-by-run/insert accumulate behaviour (ADR-0003, ADR-0004); the pipeline makes
-no load decision of its own. `AccumulateByRun.from_context(context)` derives the
-logical `run_id` / `load_date` from the shared `RunContext`, so a re-drive under
-the same `--logical-run-id` replaces that load idempotently.
+delete-by-logical-run/insert accumulate behaviour (ADR-0003, ADR-0004); the
+pipeline makes no load decision of its own. `AccumulateByRun.from_context(context)`
+derives the `logical_run_id` / `load_date` (and the `pipeline_run_id` trace key)
+from the shared `RunContext`, so a re-drive under the same `--logical-run-id`
+replaces that load idempotently.
 
 To enforce the schema on the same footing as silver, insert a `SchemaValidator`
 validate step before the write (ADR-0006,

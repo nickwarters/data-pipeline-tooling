@@ -91,7 +91,7 @@ def test_task_level_requirement_allows_downstream_when_task_success_is_fresh(tmp
 
     def upstream(context):
         calls.append(context.label)
-        context.run_log.record(context.run_id, context.label, "step-4", "ok")
+        context.run_log.record(context.pipeline_run_id, context.label, "step-4", "ok")
         return Dataset.from_pandas(pd.DataFrame({"id": [1]}))
 
     def downstream(context):
@@ -242,11 +242,11 @@ def _record_run(
     step: str = "run",
     status: str = "ok",
     timestamp: str = "2026-06-12T00:00:00+00:00",
-    run_id: str = "upstream",
+    pipeline_run_id: str = "upstream",
 ) -> None:
     record = {
         "timestamp": timestamp,
-        "run_id": run_id,
+        "pipeline_run_id": pipeline_run_id,
         "pipeline": pipeline,
         "step": step,
         "status": status,

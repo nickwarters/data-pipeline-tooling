@@ -2,7 +2,7 @@
 
 A ``RunLog`` composed onto a ``Pipeline`` emits one JSON object per line to a
 ``.log`` file (the seam the run-registry ingests) and human-readable
-lines to the console. Every record of a single run shares one ``run_id``.
+lines to the console. Every record of a single run shares one ``pipeline_run_id``.
 """
 
 import datetime
@@ -64,8 +64,8 @@ def test_run_appends_jsonl_records_sharing_one_run_id(tmp_path):
 
     records = _read_records(log_path)
     assert records, "expected at least one JSONL record"
-    run_ids = {r["run_id"] for r in records}
-    assert run_ids == {p.run_id}
+    run_ids = {r["pipeline_run_id"] for r in records}
+    assert run_ids == {p.pipeline_run_id}
 
 
 def _by_step(records: list[dict]) -> dict[str, dict]:
@@ -306,9 +306,9 @@ def test_each_run_mints_a_fresh_run_id():
     r = p.read(reader, name="read")
     p.write(CapturingWriter(), r, name="write")
 
-    assert p.run_id is None
+    assert p.pipeline_run_id is None
     p.run()
-    first = p.run_id
+    first = p.pipeline_run_id
     assert first
     p.run()
-    assert p.run_id != first
+    assert p.pipeline_run_id != first

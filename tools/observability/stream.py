@@ -50,17 +50,18 @@ class StreamResult:
 def stream_step(
     run_log: RunLog,
     *,
-    run_id: str,
+    pipeline_run_id: str,
     pipeline: str,
     step: str,
     reader: ChunkReader,
     writer: Writer,
     size: int = DEFAULT_CHUNK_SIZE,
     committed: bool = True,
+    logical_run_id: str | None = None,
 ) -> StreamResult:
     """Stream ``reader`` into ``writer`` under one fail-fast run-log step.
 
-    Opens one :meth:`RunLog.step` named ``step`` for ``pipeline`` / ``run_id``,
+    Opens one :meth:`RunLog.step` named ``step`` for ``pipeline`` / ``pipeline_run_id``,
     then writes each bounded chunk ``reader.chunks(size)`` yields. Because each
     chunk lands as it streams, memory stays bounded by a single chunk and the
     write is *incrementally committed* — hence ``committed`` defaults to ``True``
@@ -74,7 +75,13 @@ def stream_step(
     """
     written = 0
     chunks = 0
-    with run_log.step(run_id, pipeline, step, committed=committed) as metrics:
+    with run_log.step(
+        pipeline_run_id,
+        pipeline,
+        step,
+        committed=committed,
+        logical_run_id=logical_run_id,
+    ) as metrics:
         metrics.rows_out = 0
         for chunk in reader.chunks(size):
             writer.write(chunk)

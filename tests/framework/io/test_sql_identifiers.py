@@ -107,13 +107,13 @@ def test_accumulate_writer_deletes_by_run_in_table_needing_quoting(tmp_path):
     db = tmp_path / "gold.db"
     frame = pd.DataFrame({"case id": [1, 2]})
 
-    AccumulateByRunWriter(db, "case pool", run_id="r1", load_date="2026-06-10").write(
-        Dataset.from_pandas(frame)
-    )
+    AccumulateByRunWriter(
+        db, "case pool", logical_run_id="r1", load_date="2026-06-10"
+    ).write(Dataset.from_pandas(frame))
     # Re-driving run r1 must replace only its own rows, not double them.
-    AccumulateByRunWriter(db, "case pool", run_id="r1", load_date="2026-06-10").write(
-        Dataset.from_pandas(frame)
-    )
+    AccumulateByRunWriter(
+        db, "case pool", logical_run_id="r1", load_date="2026-06-10"
+    ).write(Dataset.from_pandas(frame))
 
     result = SqliteReader(db, "case pool").read()
     assert len(result) == 2
@@ -123,9 +123,13 @@ def test_quarantine_writer_deletes_by_run_in_table_needing_quoting(tmp_path):
     db = tmp_path / "raw.db"
     writer = QuarantineWriter(db, "reject rows")
 
-    writer.write(Dataset.from_pandas(pd.DataFrame({"run_id": ["r1"], "v": [1]})))
+    writer.write(
+        Dataset.from_pandas(pd.DataFrame({"logical_run_id": ["r1"], "v": [1]}))
+    )
     # Re-driving run r1 replaces its own reject, not appends.
-    writer.write(Dataset.from_pandas(pd.DataFrame({"run_id": ["r1"], "v": [2]})))
+    writer.write(
+        Dataset.from_pandas(pd.DataFrame({"logical_run_id": ["r1"], "v": [2]}))
+    )
 
     result = SqliteReader(db, "reject rows").read()
     assert len(result) == 1

@@ -148,7 +148,7 @@ stamped = p.transform(
     Stamp("question_bank_id", variation.question_bank_id), ranked, name="stamp"
 )
 p.write(
-    med.gold.writer("selection_pool", AccumulateByRun(run_id, load_date)),
+    med.gold.writer("selection_pool", AccumulateByRun(logical_run_id, load_date)),
     stamped,
     name="write",
 )
@@ -159,7 +159,7 @@ The **availability and selection criteria are specific Python processors**
 (ADR-0002) — `Filter`/`Score`/`Sort` carry plain-Python row rules, and `Stamp`
 records the Variation's `question_bank_id` on every chosen Case. The result is
 the **SelectionPool**: the narrowed set of Cases actually chosen for review,
-accumulated into **gold** by the `AccumulateByRunWriter` (stamped `run_id` /
+accumulated into **gold** by the `AccumulateByRunWriter` (stamped `logical_run_id` /
 `load_date`, idempotent re-run — see
 [`gold-accumulation.md`](gold-accumulation.md)). Cross-feed joins (e.g. against
 the Adviser hierarchy Reference Data) slot in as a `JoinWith` processor — see
@@ -208,13 +208,13 @@ stamped = p.transform(
 )
 # land a per-Case trace alongside the SelectionPool (a sibling branch of `stamped`)
 p.explain(
-    med.gold.writer("selection_trace", AccumulateByRun(run_id, load_date)),
+    med.gold.writer("selection_trace", AccumulateByRun(logical_run_id, load_date)),
     stamped,
     id_column="case_ref",
     score_column="priority_score",
 )
 p.write(
-    med.gold.writer("selection_pool", AccumulateByRun(run_id, load_date)),
+    med.gold.writer("selection_pool", AccumulateByRun(logical_run_id, load_date)),
     stamped,
     name="write",
 )
@@ -223,7 +223,7 @@ p.run()
 
 The framework's generic **RowTrace** mechanics land a case-review selection trace
 as a sibling table of the SelectionPool, one row per *considered* Case (not just
-the survivors), stamped `run_id`:
+the survivors), stamped `logical_run_id`:
 
 | `case_ref` | `verdict` | `reason` | `score` | `rank` |
 |---|---|---|---:|---|
@@ -271,7 +271,7 @@ Each pipeline records its run summary under its name (`ingest`, `selection`) and
 `selection` writes the `freshness` guard record. The handlers derive their
 `AccumulateByRun` strategy from the `RunContext`
 (`AccumulateByRun.from_context(context)`), so each gold row is stamped with the
-run's logical run id (default `<pipeline>:run_date`) and `execution_id`.
+run's logical run id (default `<pipeline>:run_date`) and `pipeline_run_id`.
 Re-driving a business run under the same id replaces its rows rather than
 duplicating them — over the CLI, `python -m cli run pipelines/selection
 /tmp/demo --logical-run-id <id>` (see [operator-cli.md](operator-cli.md)). The

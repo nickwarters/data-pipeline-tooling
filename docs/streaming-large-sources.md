@@ -139,7 +139,8 @@ def run(context, *, describe=False):
 
     result = stream_step(
         context.run_log,                              # NULL_RUN_LOG if none composed
-        run_id=context.run_id,
+        pipeline_run_id=context.pipeline_run_id,
+        logical_run_id=context.logical_run_id,
         pipeline=context.label,
         step="ingest_big_feed",
         reader=reader,
@@ -152,7 +153,7 @@ def run(context, *, describe=False):
 That emits one line like:
 
 ```json
-{"run_id":"a1b2…","pipeline":"big_feed/ingest","step":"ingest_big_feed",
+{"pipeline_run_id":"a1b2…","pipeline":"big_feed/ingest","step":"ingest_big_feed",
  "status":"ok","rows_in":104000000,"rows_out":87431,"rows_excluded":103912569,
  "duration":812.4,"committed":true,"errors":[],"error_category":null}
 ```
@@ -200,7 +201,7 @@ streaming write commits incrementally, so a completed step durably landed its
 rows. A mid-stream failure records `committed=False` even though earlier chunks
 are already on disk — the per-step boolean can't express "partially committed".
 That partial write is safe because `AccumulateByRun` is keyed by
-`run_id`/`load_date`: a re-drive **replaces** that run's rows (see
+`logical_run_id`: a re-drive **replaces** that run's rows (see
 [gold-accumulation.md](gold-accumulation.md) and
 [resolving-a-failed-run.md](resolving-a-failed-run.md)), overwriting the aborted
 run's partial landing cleanly. If a multi-hour stream needs progress visibility,

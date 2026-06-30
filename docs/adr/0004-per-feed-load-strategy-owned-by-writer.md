@@ -16,8 +16,8 @@ The strategies:
 
 - **`Refresh`** — truncate + reload. The layer is a faithful current-state mirror.
 - **`AccumulateByRun(logical_run_id, load_date)`** — append, made idempotent by
-  **delete-by-logical-run then insert** (`DELETE WHERE run_id = X; INSERT …`).
-  Every row is stamped with the logical run id, `load_date`, and `execution_id`.
+  **delete-by-logical-run then insert** (`DELETE WHERE logical_run_id = X; INSERT …`).
+  Every row is stamped with `logical_run_id`, `load_date`, and `pipeline_run_id`.
 - **`InsertOrIgnore` / `InsertIfAbsent` / `UpsertStrategy`** — key-aware loads for
   the cases an accumulate or refresh doesn't fit (e.g. minting stable surrogate
   keys, or merging on a business key).
@@ -27,8 +27,8 @@ The strategies:
 A run carries a shared `RunContext` that separates the two notions of "which run"
 that were previously conflated:
 
-- **`execution_id`** — the concrete attempt. Recorded as `run_id` in the RunLog
-  and RunRegistry; correlates rows to a specific execution.
+- **`pipeline_run_id`** — the concrete attempt. Recorded under the same name in
+  the RunLog and RunRegistry; correlates rows to a specific execution.
 - **`logical_run_id`** — the business/idempotency key (a snapshot or business
   date), reused by a re-driven run so a re-run replaces exactly its own rows.
 
@@ -36,9 +36,9 @@ The context also carries `load_date`, `run_date`, and explicit `params` (e.g.
 `source_file`) so orchestration can drive the same pipeline once per source
 artifact without the pipeline scanning internally.
 `AccumulateByRun.from_context(context)` derives the Writer strategy from it.
-Accumulated rows keep `run_id` (the logical key), `logical_run_id`, and
-`execution_id`, so an operator can correlate a row to a RunRegistry record
-without guessing which "run id" applies.
+Accumulated rows keep `logical_run_id` (the idempotency key) and
+`pipeline_run_id` (the trace key), so an operator can correlate a row to a
+RunRegistry record without guessing which "run id" applies.
 
 ## Why per-feed, not per-layer
 
@@ -83,8 +83,8 @@ no longer the only one.
 - **The volume envelope grows.** Accumulating raw + silver scales `records ×
   snapshots`, beyond the original ≤~1M assumption; revisit retention/compaction
   per feed when one warrants it.
-- Re-running a logical run must scope its delete by `run_id` (the logical key),
-  never by a business key or `execution_id`, so gold never updates a record in
+- Re-running a logical run must scope its delete by `logical_run_id`,
+  never by a business key or `pipeline_run_id`, so gold never updates a record in
   place: a record that changes between logical runs yields one stamped row per run
   that observed it, and its "current" value is `max(load_date)` per business key —
   a read-side derivation in Python, not the Writer's job.
