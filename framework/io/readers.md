@@ -7,14 +7,15 @@ the protocol signature.
 
 from __future__ import annotations
 
+import math
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Iterable, Iterator
 from pathlib import Path
 
 import pandas as pd
 
 from framework._internal.connection import connect
-from framework._internal.describe import render
+from framework._internal.describe import component_summary, render
 from framework.core.dataset import Dataset
 from framework.core.protocols import DEFAULT_CHUNK_SIZE, ChunkReader, Reader
 from framework.io.sql import quote_identifier
@@ -35,7 +36,15 @@ __all__ = [
     "SasFileReader",
     "ExcelReader",
     "SqliteReader",
+    "ChunkFilter",
+    "PredicateChunkReader",
+    "KeyFilterChunkReader",
 ]
+
+# A per-chunk row filter: takes one bounded chunk and returns the rows to keep
+# (a new, possibly-empty :class:`Dataset`). Applied *before* anything downstream
+# accumulates, so both memory and the landed table stay bounded.
+ChunkFilter = Callable[[Dataset], Dataset]
 
 
 class StrictCsvParseError(ValueError):
@@ -413,6 +422,162 @@ class SasFileReader:
             format=self._format,
             columns=self._columns,
             encoding=self._encoding,
+        )
+
+
+def _normalize_key(value: object) -> str | None:
+    """Coerce one key to a canonical string so membership is type-agnostic.
+
+    The same logical id reaches us as different Python types depending on the
+    source: a SAS numeric id streams in as a float (``3.0``) while the same id in
+    our allow-list is often an ``int`` (``3``); a SAS character id streams in as
+    space-padded ``bytes`` (``b'A   '``) while the allow-list holds a ``str``
+    (``"A"``). Both the allow-list and every chunk's key column run through here
+    before comparison, so ``3.0`` matches ``3`` and ``b'A  '`` matches ``"A"``
+    rather than the float-vs-int / bytes-vs-str mismatch silently dropping every
+    row. A missing key (``None``/``NaN``) normalises to ``None`` and never
+    matches.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bytes):
+        # SAS character columns arrive as fixed-width, space-padded bytes.
+        value = value.decode("utf-8", errors="replace")
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, float):
+        if math.isnan(value):
+            return None
+        # An integral float is the same id as the int: 3.0 -> "3", not "3.0".
+        if value.is_integer():
+            return str(int(value))
+        return repr(value)
+    if isinstance(value, int):
+        return str(value)
+    return str(value).strip()
+
+
+class PredicateChunkReader:
+    """Wrap any :class:`ChunkReader`, applying a row filter to each chunk.
+
+    The composable filtering seam for the ``ChunkReader`` family: it streams the
+    ``inner`` reader and hands each bounded chunk to ``predicate``, yielding only
+    the rows the predicate keeps. Because the filter runs **per chunk, before
+    anything downstream concatenates**, a source far too large to materialise
+    whole can be narrowed to the rows of interest with memory still bounded by a
+    single chunk — and the landed table bounded by the result, not the source.
+
+    A chunk the predicate empties is skipped, consistent with the zero-row-chunk
+    behaviour of the underlying readers, so a fully-filtered chunk yields nothing
+    rather than an empty Dataset. ``rows_scanned`` / ``rows_kept`` tally the
+    filter's effect for the most recent ``chunks()`` pass, so a run can report
+    how much of the source it actually needed. The wrapper holds the readers
+    single-purpose and composes with ``ChunkedCsvReader`` / ``SasFileReader`` /
+    any future chunk reader; :class:`KeyFilterChunkReader` is the common
+    id-allow-list case built on top of it.
+    """
+
+    def __init__(self, inner: ChunkReader, predicate: ChunkFilter) -> None:
+        self._inner = inner
+        self._predicate = predicate
+        self._rows_scanned = 0
+        self._rows_kept = 0
+
+    def chunks(self, size: int = DEFAULT_CHUNK_SIZE) -> Iterator[Dataset]:
+        # Fresh tallies per pass: each chunks() call is one streaming read.
+        self._rows_scanned = 0
+        self._rows_kept = 0
+        for chunk in self._inner.chunks(size):
+            self._rows_scanned += len(chunk)
+            kept = self._predicate(chunk)
+            if len(kept) == 0:
+                continue  # nothing matched in this chunk -> no chunk
+            self._rows_kept += len(kept)
+            yield kept
+
+    @property
+    def rows_scanned(self) -> int:
+        """Rows read from the source across the most recent ``chunks()`` pass."""
+        return self._rows_scanned
+
+    @property
+    def rows_kept(self) -> int:
+        """Rows the filter kept across the most recent ``chunks()`` pass."""
+        return self._rows_kept
+
+    def describe(self) -> str:
+        return render(self, inner=component_summary(self._inner))
+
+
+class KeyFilterChunkReader:
+    """Keep only the chunk rows whose key is in a known allow-list (semi-join).
+
+    The headline filter for the "100M-row source, <100K rows we actually want"
+    case: ``allowed_keys`` is the set of ids-of-interest (e.g. the natural keys /
+    CasePool we already track), capped at ~100K so it fits trivially in memory as
+    a set for a per-chunk membership test. Each chunk is narrowed to the rows
+    whose ``key_column`` is in that set **before accumulation**, so a 100M-row
+    source with a 100K allow-list lands ~100K rows with memory bounded by a
+    single chunk.
+
+    The allow-list may grow run-over-run but stays an in-memory set bounded by
+    that ~100K cap; pass the current set in at construction each run. Keys are
+    normalised on both sides (see :func:`_normalize_key`) so a SAS numeric id
+    (``3.0``) matches an ``int`` allow-list entry (``3``) and a space-padded
+    ``bytes`` id matches a ``str`` entry, instead of a type mismatch silently
+    dropping every row. ``rows_scanned`` / ``rows_kept`` expose the filter's
+    effect for the most recent pass.
+
+    Built on :class:`PredicateChunkReader`, so it composes over any
+    ``ChunkReader`` (``ChunkedCsvReader`` / ``SasFileReader`` / future readers).
+    """
+
+    def __init__(
+        self,
+        inner: ChunkReader,
+        key_column: str,
+        allowed_keys: Iterable[object],
+    ) -> None:
+        self._inner = inner
+        self._key_column = key_column
+        # Normalise once at construction; drop missing keys (they never match).
+        self._allowed = frozenset(
+            key for key in map(_normalize_key, allowed_keys) if key is not None
+        )
+        self._filter = PredicateChunkReader(inner, self._keep)
+
+    def _keep(self, chunk: Dataset) -> Dataset:
+        frame = chunk.to_pandas(copy=False)
+        if self._key_column not in frame.columns:
+            raise ValueError(
+                f"key column {self._key_column!r} not in chunk columns: "
+                f"{list(frame.columns)}"
+            )
+        # Normalise the key column the same way the allow-list was normalised so
+        # the membership test is type-agnostic. The map is the unavoidable
+        # per-row scan cost; the *output* stays bounded by the allow-list.
+        keys = frame[self._key_column].map(_normalize_key)
+        return Dataset.from_pandas(frame[keys.isin(self._allowed)])
+
+    def chunks(self, size: int = DEFAULT_CHUNK_SIZE) -> Iterator[Dataset]:
+        return self._filter.chunks(size)
+
+    @property
+    def rows_scanned(self) -> int:
+        """Rows read from the source across the most recent ``chunks()`` pass."""
+        return self._filter.rows_scanned
+
+    @property
+    def rows_kept(self) -> int:
+        """Rows kept (allow-list hits) across the most recent ``chunks()`` pass."""
+        return self._filter.rows_kept
+
+    def describe(self) -> str:
+        return render(
+            self,
+            inner=component_summary(self._inner),
+            key_column=self._key_column,
+            allowed_keys=len(self._allowed),
         )
 
 

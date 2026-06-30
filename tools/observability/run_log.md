@@ -130,6 +130,7 @@ class RunLog:
         committed: bool = False,
         step_address: str | None = None,
         params: dict[str, str] | None = None,
+        profile: dict | None = None,
     ) -> None:
         """Append one JSONL record and echo a human-readable line to the console."""
         record = {
@@ -156,6 +157,11 @@ class RunLog:
             "committed": committed,
             # Run parameters are recorded only after caller-side redaction.
             "params": params or {},
+            # Per-column statistical profile recorded at this step (#284), or
+            # None where the step is not a profile. A structured, queryable shape
+            # the registry trends across runs — the statistical sibling of the
+            # operational metadata above.
+            "profile": profile,
         }
         self._path.parent.mkdir(parents=True, exist_ok=True)
         with self._path.open("a", encoding="utf-8") as fh:
@@ -182,6 +188,8 @@ class RunLog:
             parts.append(f"category={record['error_category']}")
         if record.get("committed"):
             parts.append("committed")
+        if record.get("profile"):
+            parts.append(f"profiled {len(record['profile'].get('columns', []))} col(s)")
         if record["warn_hits"]:
             parts.append(f"warn={'; '.join(record['warn_hits'])}")
         parts.append(f"[run {record['run_id'][:8]}]")
