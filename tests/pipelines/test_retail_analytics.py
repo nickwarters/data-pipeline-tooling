@@ -6,14 +6,16 @@ sinks — no SQLite, no temp directories required.
 
 Graph under test (abbreviated)::
 
-    orders ──► [validate] ──► filter_completed ──► add_margin ─────────► join_revenue ──► write_revenue
-                           ├──► filter_completed ──► tag_period ─────────► stack_ops ──► write_ops
-                           ├──► filter_cancelled ───────────────────────► stack_risk ──► write_risk
-                           ├──► filter_pending ──────────────────────────► stack_ops
-                           └──► filter_high_value ──────────────────────► stack_ops
+    orders ─► validate ─┬─► filter_completed ─► add_margin ─► join_revenue
+                        ├─► filter_completed ─► tag_period ─► stack_ops ─► write_ops
+                        ├─► filter_cancelled ─► stack_risk ─► write_risk
+                        ├─► filter_pending ─► stack_ops
+                        └─► filter_high_value ─► stack_ops
 
-    catalog ──► [validate] ──► filter_active ──────────────────────────► join_revenue
-                            └──► filter_low_stock ──────────────────────► stack_risk
+    catalog ─► validate ┬─► filter_active ─► join_revenue
+                        └─► filter_low_stock ─► stack_risk
+
+    join_revenue ─► write_revenue   (fed by add_margin + filter_active)
 """
 
 from __future__ import annotations
@@ -23,12 +25,10 @@ import pytest
 from framework.core import ValidationError
 from pipelines.retail_analytics.pipeline import (
     HIGH_VALUE_THRESHOLD,
-    RECENT_CUTOFF,
     dag_builder,
 )
 from tests.framework_testing import (
     RecordingWriter,
-    assert_rows_equal,
     given_rows,
     rows_of,
 )
@@ -84,15 +84,33 @@ _ORDERS = [
 
 _CATALOG = [
     # Active (stock_qty > 0) — feeds revenue terminus join
-    {"product_id": "P1", "name": "Widget Alpha", "category": "Hardware", "cost": 25.0, "stock_qty": 50},
-    {"product_id": "P2", "name": "Gadget Beta", "category": "Software", "cost": 80.0, "stock_qty": 10},
+    {
+        "product_id": "P1",
+        "name": "Widget Alpha",
+        "category": "Hardware",
+        "cost": 25.0,
+        "stock_qty": 50,
+    },
+    {
+        "product_id": "P2",
+        "name": "Gadget Beta",
+        "category": "Software",
+        "cost": 80.0,
+        "stock_qty": 10,
+    },
     # Out-of-stock — feeds risk terminus only
-    {"product_id": "P3", "name": "Service Gamma", "category": "Services", "cost": 5.0, "stock_qty": 0},
+    {
+        "product_id": "P3",
+        "name": "Service Gamma",
+        "category": "Services",
+        "cost": 5.0,
+        "stock_qty": 0,
+    },
 ]
 
 
 def _build_and_run(orders=None, catalog=None):
-    """Build the DAG with three RecordingWriters and run it; return (revenue, risk, ops)."""
+    """Build the DAG with three RecordingWriters; return (revenue, risk, ops)."""
     revenue_w = RecordingWriter()
     risk_w = RecordingWriter()
     ops_w = RecordingWriter()
@@ -134,16 +152,16 @@ def test_revenue_terminus_joins_completed_orders_with_active_catalog():
     o1 = by_order["O1"]
     assert o1["product_name"] == "Widget Alpha"
     assert o1["category"] == "Hardware"
-    assert o1["revenue"] == pytest.approx(100.0)       # 2 × 50.0
+    assert o1["revenue"] == pytest.approx(100.0)  # 2 × 50.0
     assert o1["cost_of_goods"] == pytest.approx(50.0)  # 2 × 25.0
-    assert o1["margin"] == pytest.approx(50.0)          # 100.0 − 50.0
+    assert o1["margin"] == pytest.approx(50.0)  # 100.0 − 50.0
 
     o2 = by_order["O2"]
     assert o2["product_name"] == "Gadget Beta"
     assert o2["category"] == "Software"
-    assert o2["revenue"] == pytest.approx(250.0)        # 1 × 250.0
-    assert o2["cost_of_goods"] == pytest.approx(80.0)   # 1 × 80.0
-    assert o2["margin"] == pytest.approx(170.0)          # 250.0 − 80.0
+    assert o2["revenue"] == pytest.approx(250.0)  # 1 × 250.0
+    assert o2["cost_of_goods"] == pytest.approx(80.0)  # 1 × 80.0
+    assert o2["margin"] == pytest.approx(170.0)  # 250.0 − 80.0
 
 
 def test_risk_terminus_stacks_cancelled_orders_and_low_stock():
@@ -173,7 +191,7 @@ def test_risk_terminus_stacks_cancelled_orders_and_low_stock():
 
 
 def test_ops_terminus_stacks_pending_completed_and_high_value():
-    """Ops rows cover pending orders, period-tagged completions, and high-value orders."""
+    """Ops rows: pending orders, period-tagged completions, high-value orders."""
     _, _, ops_w = _build_and_run()
     ops = rows_of(ops_w)
 
@@ -198,9 +216,11 @@ def test_ops_pending_branch_has_correct_period():
 
 
 def test_ops_completed_branch_tags_period_by_recency():
-    """Period-tagged completed orders get 'recent' or 'historical' based on RECENT_CUTOFF."""
+    """Completed orders are tagged 'recent' or 'historical' by RECENT_CUTOFF."""
     _, _, ops_w = _build_and_run()
-    completed_rows = {r["order_id"]: r for r in rows_of(ops_w) if r["ops_flag"] == "completed"}
+    completed_rows = {
+        r["order_id"]: r for r in rows_of(ops_w) if r["ops_flag"] == "completed"
+    }
 
     # Both O1 (2026-06-10) and O2 (2026-06-01) are >= RECENT_CUTOFF (2026-05-26)
     assert completed_rows["O1"]["period"] == "recent"
@@ -222,7 +242,13 @@ def test_ops_completed_historical_period():
         }
     ]
     catalog = [
-        {"product_id": "P1", "name": "Widget", "category": "Hardware", "cost": 5.0, "stock_qty": 10}
+        {
+            "product_id": "P1",
+            "name": "Widget",
+            "category": "Hardware",
+            "cost": 5.0,
+            "stock_qty": 10,
+        }
     ]
     _, _, ops_w = _build_and_run(orders=orders, catalog=catalog)
     completed_rows = [r for r in rows_of(ops_w) if r["ops_flag"] == "completed"]
@@ -231,7 +257,7 @@ def test_ops_completed_historical_period():
 
 
 def test_high_value_threshold_is_exclusive():
-    """An order exactly at the threshold is NOT flagged high-value (strictly greater-than)."""
+    """An order exactly at the threshold is NOT high-value (strictly greater-than)."""
     orders = [
         {
             "order_id": "EXACT",
@@ -245,7 +271,13 @@ def test_high_value_threshold_is_exclusive():
         }
     ]
     catalog = [
-        {"product_id": "P1", "name": "Widget", "category": "Hardware", "cost": 5.0, "stock_qty": 10}
+        {
+            "product_id": "P1",
+            "name": "Widget",
+            "category": "Hardware",
+            "cost": 5.0,
+            "stock_qty": 10,
+        }
     ]
     _, _, ops_w = _build_and_run(orders=orders, catalog=catalog)
     high_value_rows = [r for r in rows_of(ops_w) if r["ops_flag"] == "high_value"]
@@ -253,7 +285,7 @@ def test_high_value_threshold_is_exclusive():
 
 
 def test_revenue_excludes_orders_for_out_of_stock_products():
-    """Completed orders whose product is out-of-stock do not appear in the revenue terminus."""
+    """Out-of-stock completed orders do not appear in the revenue terminus."""
     orders = [
         {
             "order_id": "O_OOS",
@@ -267,7 +299,13 @@ def test_revenue_excludes_orders_for_out_of_stock_products():
         }
     ]
     catalog = [
-        {"product_id": "P_OOS", "name": "Gone", "category": "Hardware", "cost": 20.0, "stock_qty": 0}
+        {
+            "product_id": "P_OOS",
+            "name": "Gone",
+            "category": "Hardware",
+            "cost": 20.0,
+            "stock_qty": 0,
+        }
     ]
     revenue_w, risk_w, _ = _build_and_run(orders=orders, catalog=catalog)
     assert len(rows_of(revenue_w)) == 0
@@ -285,7 +323,9 @@ def test_dag_builder_gates_missing_order_columns():
     revenue_w, risk_w, ops_w = RecordingWriter(), RecordingWriter(), RecordingWriter()
 
     p = dag_builder(
-        orders_reader=given_rows([{"order_id": "O1", "customer_id": "C1"}]),  # missing columns
+        orders_reader=given_rows(
+            [{"order_id": "O1", "customer_id": "C1"}]
+        ),  # missing columns
         catalog_reader=given_rows(_CATALOG),
         revenue_writer=revenue_w,
         risk_writer=risk_w,
