@@ -55,6 +55,12 @@ _MAX_FEED_COLUMNS = 40
 _FEED_SAMPLE_ROWS = 50
 _TEST_SAMPLE_ROWS = 2
 
+# The sentinel column the template's structural-rejection tests feed to trip the
+# validators (a row missing every required column). Seeding must leave those rows
+# alone -- replacing them with the real feed columns would satisfy the gate and
+# stop the negative tests from raising. Kept in sync with the feed template.
+_INVALID_ROW_SENTINEL = "invalid_col"
+
 _TEMPLATE_DIR_CASE_TYPE = Path(__file__).parent / "scaffold_templates" / "case_type"
 _TEMPLATE_DIR = Path(__file__).parent / "scaffold_templates" / "feed"
 
@@ -318,11 +324,25 @@ def _source_literal(spec: _FeedSpec) -> str:
 
 
 def _render_test(text: str, feed: str, spec: _FeedSpec) -> str:
-    """Seed the test's sample rows from the feed file; track the validator's columns."""
+    """Seed the test's placeholder sample rows; track the validator's columns.
+
+    Only the *placeholder* ``given_rows`` blocks (real-shaped rows meant to be
+    replaced) are seeded from the feed file. The structural-rejection tests
+    deliberately feed a row missing every required column (the
+    ``_INVALID_ROW_SENTINEL``) to trip the validators, so those blocks are left
+    untouched -- seeding them with the real feed columns would satisfy the gate
+    and stop the negative tests from raising.
+    """
     cls = _pascal(feed) + "Row"
+
+    def seed(match: re.Match[str]) -> str:
+        if _INVALID_ROW_SENTINEL in match.group(0):
+            return match.group(0)
+        return _source_literal(spec)
+
     text = re.sub(
         r"(?ms)^    reader = given_rows\(\s*\[.*?\]\s*\)\n",
-        lambda _: _source_literal(spec),
+        seed,
         text,
     )
     if spec.needs_raw:

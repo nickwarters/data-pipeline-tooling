@@ -328,3 +328,22 @@ def test_rendered_feed_from_a_spaced_file_runs_and_its_test_passes(tmp_path):
     landed = read_rows(med.raw, "widgets")
     assert len(landed) == len(dataset) > 0
     assert {"Case Number", "Adviser Name"}.issubset(landed[0].keys())
+
+
+def test_feed_file_leaves_the_structural_rejection_rows_invalid(tmp_path):
+    # Seeding replaces the *placeholder* sample rows with the real feed columns,
+    # but the structural-rejection tests must keep feeding a row missing every
+    # required column -- otherwise the validators no longer raise and the
+    # generated negative tests fail straight out of the box (regression: a spaced
+    # feed scaffolded with --from-feed-file shipped with failing negative tests).
+    feed = _write_feed(
+        tmp_path / "cases.csv",
+        "Case Number,Adviser Name\nC1,Smith\nC2,Jones\n",
+    )
+    scaffold.render("cases", tmp_path, feed_file=feed)
+
+    test_text = (tmp_path / "tests" / "pipelines" / "test_cases.py").read_text("utf-8")
+    # Both negative tests keep their invalid sentinel row, untouched by seeding...
+    assert test_text.count('given_rows([{"invalid_col": "data"}])') == 2
+    # ...while a placeholder block elsewhere is seeded with the real feed columns.
+    assert '"Case Number": "C1"' in test_text
