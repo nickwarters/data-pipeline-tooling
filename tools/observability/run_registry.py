@@ -65,6 +65,7 @@ class RunRegistry:
                 error_category   TEXT,
                 warn_hits        TEXT,
                 committed        INTEGER,
+                profile          TEXT,
                 PRIMARY KEY (run_id, step, step_ordinal)
             )
             """
@@ -78,6 +79,10 @@ class RunRegistry:
             con.execute("ALTER TABLE run_records ADD COLUMN committed INTEGER")
         if "step_address" not in existing:
             con.execute("ALTER TABLE run_records ADD COLUMN step_address TEXT")
+        # Same forward-compatible migration for the per-column profile (#284):
+        # a registry predating it lacks the column the INSERT below names.
+        if "profile" not in existing:
+            con.execute("ALTER TABLE run_records ADD COLUMN profile TEXT")
         con.execute(
             """
             UPDATE run_records
@@ -213,8 +218,8 @@ class RunRegistry:
                         timestamp, run_id, pipeline, step, step_address,
                         step_ordinal, status, rows_in, rows_out,
                         rows_quarantined, rows_excluded, duration, errors,
-                        error_category, warn_hits, committed
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        error_category, warn_hits, committed, profile
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         rec.get("timestamp"),
@@ -233,6 +238,7 @@ class RunRegistry:
                         rec.get("error_category"),
                         json.dumps(rec.get("warn_hits") or []),
                         1 if rec.get("committed") else 0,
+                        json.dumps(rec["profile"]) if rec.get("profile") else None,
                     ),
                 )
                 inserted += cur.rowcount
@@ -402,6 +408,37 @@ class RunRegistry:
         finally:
             con.close()
 
+    def recent_profiles(self, address: str, limit: int = 10) -> list[dict]:
+        """Per-column profiles of recent *successful* runs at ``address``, newest first.
+
+        The baseline source for :class:`~tools.observability.profile.ProfileDriftCheck`
+        — the statistical analogue of :meth:`recent_row_counts`. Each entry is the
+        decoded ``DatasetProfile`` record a profile step recorded at the stable
+        ``step_address``; only runs whose summary closed ``ok`` count, so an
+        aborted run never poisons the baseline it derives. Newest-first, capped at
+        ``limit``.
+        """
+        con = self._connect()
+        try:
+            cur = con.execute(
+                """
+                SELECT r.profile
+                FROM run_records r
+                WHERE r.step_address = ? AND r.profile IS NOT NULL
+                  AND EXISTS (
+                      SELECT 1 FROM run_records s
+                      WHERE s.run_id = r.run_id
+                        AND s.step = 'run' AND s.status = 'ok'
+                  )
+                ORDER BY r.timestamp DESC, r.rowid DESC
+                LIMIT ?
+                """,
+                (address, limit),
+            )
+            return [json.loads(row[0]) for row in cur.fetchall()]
+        finally:
+            con.close()
+
     def _select(self, where: str, params: tuple) -> list[dict]:
         """Run a SELECT over run_records and decode each row to a record dict."""
         con = self._connect()
@@ -420,6 +457,13 @@ def _row_to_record(row: dict) -> dict:
     # The artifact marker stores as 0/1 (or null on pre-migration rows); the
     # caller reads the same bool the RunLog wrote.
     row["committed"] = bool(row.get("committed"))
+    # The per-column profile stores as a JSON blob (or null where the step is not
+    # a profile); decode it back to the dict the RunLog wrote. ``get`` tolerates a
+    # pre-migration row dict that never selected the column.
+    if row.get("profile"):
+        row["profile"] = json.loads(row["profile"])
+    else:
+        row["profile"] = None
     return row
 
 

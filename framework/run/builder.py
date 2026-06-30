@@ -13,7 +13,13 @@ import time
 from typing import Any, Callable
 
 from framework.core.dataset import Dataset
-from framework.core.protocols import Processor, Reader, Validator, Writer
+from framework.core.protocols import (
+    DatasetProfiler,
+    Processor,
+    Reader,
+    Validator,
+    Writer,
+)
 from framework.core.validators import ValidationError
 from framework.run.address import RunAddress
 from framework.run.execution import PipelineExecution
@@ -47,6 +53,9 @@ class Node:
         # surfaced on this node's run-log record so the log shows independently
         # committed evidence that outlives a later failure (ADR-0005).
         self.committed: bool = False
+        # Set by a profile node to the per-column profile record (#284); surfaced
+        # on this node's run-log record so the registry can trend it across runs.
+        self.profile: dict | None = None
 
     def describe(self) -> str:
         deps = [n.name for n in self.inputs]
@@ -89,6 +98,7 @@ class Node:
                 rows_in=rows_in,
                 rows_out=rows_out,
                 committed=self.committed,
+                profile=self.profile,
                 step_address=self.address.label if self.address is not None else None,
             )
             if context.dry_run and context.dry_run_report is not None:
@@ -371,6 +381,42 @@ class ActionNode(Node):
         self.action()
 
 
+class ProfileNode(Node):
+    """Drive an injected profiler, record its payload, pass the dataset through.
+
+    A read-only *Task* (#284): it hands the dataset to a
+    :class:`~framework.core.protocols.DatasetProfiler` (the application's
+    statistical computation, injected like a ``RunLog``), attaches the structured
+    payload that profiler returns to this node's run-log record (so the registry
+    can trend it across runs), surfaces any warn-severity messages it returns, and
+    returns the dataset **unchanged** — it observes, never reshapes. A
+    fail-severity breach is the profiler's own ``raise`` and simply propagates;
+    the framework never names the metrics or the failure type.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        profiler: DatasetProfiler,
+        input_node: Node,
+        *,
+        address: RunAddress | None = None,
+    ):
+        super().__init__(name, "Profile", [input_node], address)
+        self.profiler = profiler
+
+    def _do_execute(
+        self, session: PipelineExecution, context: RunContext, dataset: Dataset
+    ) -> Dataset:
+        payload, warnings = self.profiler.profile(dataset)
+        self.profile = payload
+        for message in warnings:
+            located = f"{self.name}: {message}"
+            self.warn_hits.append(located)
+            session.warn_hits.append(located)
+        return dataset
+
+
 class Pipeline:
     """A deferred DAG pipeline context."""
 
@@ -396,6 +442,33 @@ class Pipeline:
 
     def task(self, name: str, func: Processor, *inputs: Node) -> Node:
         return self.transform(func, *inputs, name=name)
+
+    def profile(
+        self,
+        profiler: DatasetProfiler,
+        input_node: Node,
+        *,
+        name: str = "profile",
+    ) -> Node:
+        """Wire a read-only profiling Task over ``input_node`` (#284).
+
+        ``profiler`` is an injected
+        :class:`~framework.core.protocols.DatasetProfiler` — the application's
+        statistical computation (``tools.observability.profile.DataProfiler`` in
+        practice, which bounds cost via ``top_n`` / a column allow-list and opts
+        into run-over-run drift detection). The node records the profiler's payload
+        on the run log and passes the dataset through unchanged; the framework owns
+        none of the metrics. Mirrors how ``explain`` / ``write`` take an injected
+        component rather than embedding the logic.
+        """
+        node = ProfileNode(
+            name,
+            profiler,
+            input_node,
+            address=self._step_address(name),
+        )
+        self._nodes.append(node)
+        return node
 
     def validate(
         self,

@@ -175,6 +175,43 @@ readers expose `chunks()`, not `read()`, so they sit *beside* the single-shot
 streaming consumers (e.g. a monthly projection that appends each chunk to an
 indexed silver table) compose on top of them.
 
+**Chunk-level row filtering (allow-list / predicate pushdown).** When a source
+is enormous (100M+ rows) but only a small, known subset is wanted (e.g. <100K
+ids we already track), filtering *after* a whole read is impossible — the rows
+can never be materialised at once. The filter has to be **pushed down into the
+per-chunk loop**, beside where column projection already happens, so both memory
+*and* the landed table stay bounded. Two wrappers over any `ChunkReader` provide
+this (#287):
+
+- `KeyFilterChunkReader(inner, key_column, allowed_keys)` — the id-membership
+  (**semi-join**) case: keep only rows whose `key_column` is in `allowed_keys`,
+  a known set of ids-of-interest. The set grows run-over-run but is bounded
+  (~100K), so it stays an in-memory `set` / `frozenset` for a cheap per-chunk
+  membership test; pass the current set in each run. Keys are **normalised on
+  both sides** before the test (see below), so a SAS numeric id (`3.0`) matches
+  an `int` allow-list entry (`3`) and a space-padded `bytes` id (`b'A  '`)
+  matches a `str` entry (`"A"`) rather than a float-vs-int / bytes-vs-str
+  mismatch silently dropping every row.
+- `PredicateChunkReader(inner, predicate)` — the general form
+  `KeyFilterChunkReader` is built on: apply any `ChunkFilter`
+  (`Callable[[Dataset], Dataset]`) per chunk.
+
+Because the filter runs **per chunk, before concatenation**, a 100M-row source
+with a 100K allow-list lands ~100K rows with memory bounded by one chunk. A
+chunk the filter empties yields **nothing** (consistent with the zero-row-chunk
+skip), and both wrappers expose `rows_scanned` / `rows_kept` for the most recent
+`chunks()` pass so a run can report how much of the source it actually needed
+(ties to the run-observability work). They wrap and compose with
+`ChunkedCsvReader` / `SasFileReader` / any future chunk reader, keeping the
+readers themselves single-purpose.
+
+Because a `ChunkReader` can't wire into the single-shot deferred `Pipeline`
+builder (a source too big to hold whole is never one `Dataset`), a streaming feed
+runs as a `pipelines/<feed>/` module that loops the chunks itself.
+`tools.observability.stream_step` drives that loop — read→filter→write — under a
+single fail-fast run-log step, recording `rows_in`/`rows_out`/`rows_excluded`. See
+[`streaming-large-sources.md`](streaming-large-sources.md) for the full pattern.
+
 **Table and column names you configure** (the `table` and `columns=[...]` you pass
 to a `SqliteReader`/Writer) accept **any string** — spaces, hyphens, mixed case,
 and SQL reserved words are all fine. Every identifier is double-quoted at the
@@ -542,6 +579,7 @@ registry.latest_success(
     on_or_after=date(2026, 6, 16),
 )
 registry.recent_row_counts("cases", limit=10)          # read volumes, newest first
+registry.recent_profiles("cases.profile", limit=10)    # per-column profiles, newest first
 ```
 
 - **Ingest is idempotent**: a record's identity is `run_id` + step (+ a
@@ -569,10 +607,83 @@ registry.recent_row_counts("cases", limit=10)          # read volumes, newest fi
   [`VolumeAnomalyValidator`](#validator--a-fail-fast-check-at-a-layer-boundary)
   builds its band over. Only `ok` runs count, so a run the guardrail itself
   tripped can't poison the next night's baseline.
+- **It also trends per-column profiles.** `recent_profiles(address, limit=…)`
+  returns the per-column `DatasetProfile` records a
+  [`Profile` Task](#profile--per-column-data-profiling-trended-across-runs)
+  recorded at a stable `step_address` over recent *successful* runs, newest
+  first — the statistical sibling of `recent_row_counts` and the history a
+  `ProfileDriftCheck` builds its baseline over.
 
 Reading the JSONL needs no change to the emitter (ADR-0005); the one format
 addition this slice made is the per-record `timestamp` (run-log-format.md), the
 time dimension the registry orders by.
+
+### `Profile` — per-column data profiling, trended across runs
+A **profile** is the *statistical* sibling of the run log's operational metadata
+(#284 beside #89). Where the validators only *gate* a feed and
+`VolumeAnomalyValidator` watches a single run-over-run number (the row count), a
+profile captures a feed's *shape* — null rate, distinct count, min/max, and a
+bounded top-N value distribution **per column** — and records it on the run log so
+it can be trended. That turns a silent regression a row-count check misses (a
+column quietly sliding 5% → 60% null; a categorical gaining junk values) into a
+detectable, trendable one.
+
+It is wired as a read-only Task on the builder — it observes, never reshapes. The
+**computation lives in the application/observability layer** (`tools`), injected
+into the builder as a `DataProfiler` exactly as a `RunLog` is — the framework
+drives the profiler through its `DatasetProfiler` port and records what it
+returns, but owns none of the metrics (so the lower `framework` layer never
+imports the upper `tools` layer's profiling logic):
+
+```python
+from framework.run import Pipeline, RunRegistry
+from tools.observability.profile import DataProfiler
+
+registry = RunRegistry("/path/to/share/_registry/runs.db")
+p = Pipeline("cases", run_log=run_log)
+src = p.read(reader, name="read")
+
+# Bare: compute + record a profile every run (cost-bounded, opt-in).
+p.profile(DataProfiler(columns=["amount", "status"], top_n=20), src, name="profile")
+
+# With a baseline: warn (or fail) when a column's null rate drifts run-over-run.
+p.profile(
+    DataProfiler(
+        baseline=registry,
+        address="cases.profile",
+        null_rate_tolerance=0.2,
+        severity="warn",  # or "fail" -> raises ProfileError (an ErrorCategory.DATA abort)
+    ),
+    src,
+    name="profile",
+)
+```
+
+- **`DataProfiler(...)`** (`tools.observability.profile`) is the injected port the
+  builder drives. It bundles the cost-bounding knobs and the optional drift check;
+  `Pipeline.profile(profiler, node)` records the `(payload, warnings)` it returns
+  and propagates a fail-severity `raise`. The framework's
+  `framework.core.DatasetProfiler` Protocol is the only profiling name the lower
+  layer knows.
+- **`profile_dataset(dataset, columns=…, top_n=…)`** computes a `DatasetProfile`
+  (a `row_count` plus one `ColumnProfile` per column). `to_record()` /
+  `from_record()` are the JSON round-trip the `RunLog` writes and the
+  `RunRegistry` stores in its queryable `profile` column.
+- **Cost is bounded / opt-in.** `top_n` caps each column's distribution; a
+  `columns` allow-list narrows which columns are profiled; and a pipeline pays
+  nothing unless it wires a `profile` node in — so profiling never dominates a
+  large-feed run.
+- **`ProfileDriftCheck(baseline, address, null_rate_tolerance=…)`** is the
+  run-over-run comparison, mirroring `VolumeAnomalyValidator`: it derives a
+  per-column null-rate baseline from the median over recent profiled runs
+  (`baseline.recent_profiles(address)` — the `RunRegistry` is the production
+  source) and reports each column whose rate deviated beyond tolerance. With
+  fewer than `min_history` prior runs the band is skipped so a feed's first
+  nights don't trip spuriously. `DataProfiler` builds and drives it.
+- **Severity is the profiler's call**, like any Validator: `warn` rides the
+  deviation onto the step's `warn_hits` (run continues, surfaced by
+  `runs_that_warned()`); `fail` raises `ProfileError`, an `ErrorCategory.DATA`
+  abort.
 
 ### `PipelineRunner` — thin domain orchestration + requirement guard
 `PipelineRunner` (`framework.run.runner`) is the minimal orchestration layer above

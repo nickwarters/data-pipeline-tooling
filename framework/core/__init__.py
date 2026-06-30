@@ -22,6 +22,7 @@ from framework.core.errors import ErrorCategory, PipelineError, format_failure
 from framework.core.protocols import (
     DEFAULT_CHUNK_SIZE,
     ChunkReader,
+    DatasetProfiler,
     Processor,
     Reader,
     Severity,
@@ -57,6 +58,7 @@ __all__ = [
     "Writer",
     "Processor",
     "Validator",
+    "DatasetProfiler",
     "Severity",
     "ErrorCategory",
     "PipelineError",
