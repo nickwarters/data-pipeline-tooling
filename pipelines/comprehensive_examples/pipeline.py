@@ -44,7 +44,9 @@ SAMPLE_DIR = Path(__file__).parent / "sample_data"
 RUN_ID = "2026-05-29"
 
 
-def bronze_to_silver(base_dir: str | os.PathLike[str], *, run_id: str = RUN_ID) -> None:
+def bronze_to_silver(
+    base_dir: str | os.PathLike[str], *, logical_run_id: str = RUN_ID
+) -> None:
     """Land multiple bronze feeds, then validate and join them into silver."""
     catalog = StoreRegistry(base_dir)
     case_med = medallion(catalog, CASE_SUBJECT)
@@ -115,12 +117,14 @@ def bronze_to_silver(base_dir: str | os.PathLike[str], *, run_id: str = RUN_ID) 
     p_snp.run()
 
 
-def silver_to_gold(base_dir: str | os.PathLike[str], *, run_id: str = RUN_ID) -> None:
+def silver_to_gold(
+    base_dir: str | os.PathLike[str], *, logical_run_id: str = RUN_ID
+) -> None:
     """Assemble silver case data into separate gold consumption tables."""
     catalog = StoreRegistry(base_dir)
     source_med = medallion(catalog, CASE_SUBJECT)
     reporting_med = medallion(catalog, REPORTING_SUBJECT)
-    strategy = AccumulateByRun(run_id=run_id, load_date=run_id)
+    strategy = AccumulateByRun(logical_run_id=logical_run_id, load_date=logical_run_id)
 
     p_rq = Pipeline("review-queue-silver-to-gold")
     r_rq = p_rq.read(source_med.silver.reader("case_snapshot"), name="read")

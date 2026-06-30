@@ -523,7 +523,7 @@ python -m pipelines.demo_fan_out /tmp/demo_fan_out
 # Cases pipeline: shared raw → project case columns → coerce/validate → silver
 p = Pipeline("cases")
 r = p.read(med.raw.reader(SUBJECT), name="read")
-this_run = p.transform(Filter(lambda row: row["run_id"] == RUN_ID), r, name="filter-run")
+this_run = p.transform(Filter(lambda row: row["logical_run_id"] == RUN_ID), r, name="filter-run")
 renamed = p.transform(Rename({"case_ref_no": "case_ref"}), this_run, name="rename")  # shared normalisation
 projected = p.transform(
     SelectColumns(["case_ref", "adviser", "activity_date", "amount"]), renamed, name="select"

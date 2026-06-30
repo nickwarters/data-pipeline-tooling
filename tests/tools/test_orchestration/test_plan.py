@@ -47,12 +47,12 @@ def _record_run(
     step: str = "run",
     status: str = "ok",
     timestamp: str = _SAME_DAY_DATE,
-    run_id: str = "upstream",
+    pipeline_run_id: str = "upstream",
 ) -> None:
     """Write a synthetic run record to a JSONL log file."""
     record = {
         "timestamp": timestamp,
-        "run_id": run_id,
+        "pipeline_run_id": pipeline_run_id,
         "pipeline": pipeline,
         "step": step,
         "status": status,

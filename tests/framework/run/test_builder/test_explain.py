@@ -145,7 +145,7 @@ def test_trace_lands_in_a_sibling_table_stamped_with_run_id(tmp_path):
     # Every considered Case is in the trace (selected + excluded), each stamped
     # with the run that produced it (— per Case Type / run).
     assert set(trace_frame["case_ref"]) == {"c1", "c2", "c3"}
-    assert set(trace_frame["run_id"]) == {"run-1"}
+    assert set(trace_frame["logical_run_id"]) == {"run-1"}
     assert set(trace_frame["load_date"]) == {"2026-05-29"}
 
 

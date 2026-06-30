@@ -33,11 +33,11 @@ by the quarantine node:
 | Column | Meaning |
 |---|---|
 | `failed_rule` | semicolon-joined breach descriptions for this row |
-| `run_id`, `logical_run_id` | the logical/idempotency key for replacing this run's rejects |
-| `execution_id` | correlates with the main run's JSONL/RunRegistry records |
+| `logical_run_id` | the idempotency key for replacing this run's rejects |
+| `pipeline_run_id` | correlates with the main run's JSONL/RunRegistry records |
 | `load_date` | when the row was quarantined |
 
-Rejects accumulate across runs via `QuarantineWriter` (delete-by-`run_id` +
+Rejects accumulate across runs via `QuarantineWriter` (delete-by-`logical_run_id` +
 append), so a re-driven day replaces only its own prior rejects (ADR-0004).
 
 ## Why

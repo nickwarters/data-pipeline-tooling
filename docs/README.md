@@ -496,14 +496,14 @@ steps separate from bronze-to-silver:
 ```python
 from pipelines.comprehensive_examples import bronze_to_silver, silver_to_gold
 
-bronze_to_silver("/tmp/comprehensive-demo", run_id="2026-05-29")
-silver_to_gold("/tmp/comprehensive-demo", run_id="2026-05-29")
+bronze_to_silver("/tmp/comprehensive-demo", logical_run_id="2026-05-29")
+silver_to_gold("/tmp/comprehensive-demo", logical_run_id="2026-05-29")
 ```
 
 The gold half reads `complex_cases.silver.case_snapshot`, scores and filters the
 review queue with plain-Python rules, and separately aggregates an
 `adviser_summary`. Both are written to `complex_reporting/gold.db` using
-`AccumulateByRun`, so rerunning the same logical `run_id` replaces that run's
+`AccumulateByRun`, so rerunning the same `logical_run_id` replaces that run's
 rows without touching prior loads.
 
 ### Operate pipelines from the CLI — run, status, runs, log

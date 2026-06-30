@@ -40,14 +40,15 @@ class RecordingRunLog(RunLog):
 
     def record(
         self,
-        run_id: str,
+        pipeline_run_id: str,
         pipeline: str,
         step: str,
         status: str,
         **fields: Any,
     ) -> None:
         record = {
-            "run_id": run_id,
+            "pipeline_run_id": pipeline_run_id,
+            "logical_run_id": fields.get("logical_run_id"),
             "pipeline": pipeline,
             "step": step,
             "step_address": fields.get("step_address"),

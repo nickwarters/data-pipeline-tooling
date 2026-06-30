@@ -1,7 +1,7 @@
 """Ingest pipeline: the demo Case Type's source feed -> raw -> silver -> gold.
 
 The first half of the capstone path the framework exists to make routine: land
-the bundled CSV feed into **raw** (accumulated, stamped ``run_id`` /
+the bundled CSV feed into **raw** (accumulated, stamped ``logical_run_id`` /
 ``load_date``), refine it into **silver** (accumulated, schema enforced), then
 reduce it to a current-only **gold** (one row per Case via
 ``DeriveKey`` -> ``LatestPerKey`` -> ``UniqueValidator`` -> ``Refresh``). Gold is
@@ -37,7 +37,7 @@ from tools.store import StoreRegistry
 SAMPLE_CSV = Path(__file__).parent / "sample_data" / "activity_cases.csv"
 
 # Fixed so the working-day window aligns with the bundled feed (Fri 2026-05-29);
-# doubles as the Ingest run_id / load_date idempotency key for the demo.
+# doubles as the Ingest logical_run_id / load_date idempotency key for the demo.
 AS_OF = date(2026, 5, 29)
 
 
@@ -89,9 +89,9 @@ def run(context: RunContext):
     r_silver = p_silver.read(med.raw.reader("cases"), name="read")
     current = r_silver
     if isinstance(strategy, AccumulateByRun):
-        run_id = strategy.run_id
+        logical_run_id = strategy.logical_run_id
         current = p_silver.transform(
-            Filter(lambda row, _rid=run_id: row["run_id"] == _rid),
+            Filter(lambda row, _rid=logical_run_id: row["logical_run_id"] == _rid),
             current,
             name="filter-by-run-id",
         )

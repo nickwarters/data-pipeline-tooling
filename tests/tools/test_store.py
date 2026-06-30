@@ -54,7 +54,7 @@ def test_store_writer_with_accumulate_by_run_strategy_accumulates(tmp_path):
 
     landed = store.reader("casepool").read()
     assert len(landed) == 2 * len(dataset)
-    assert "run_id" in landed.columns
+    assert "logical_run_id" in landed.columns
     assert "load_date" in landed.columns
 
 

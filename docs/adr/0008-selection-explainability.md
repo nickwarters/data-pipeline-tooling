@@ -58,7 +58,7 @@ Every considered Case lands one row: `<id_column>`, `verdict`
 (`selected`/`excluded`), `reason` (located, e.g. `excluded by filter
 'high-value'`), `score` (retained even for excluded Cases; omitted if no
 `score_column`), `rank` (1-based among survivors, null for excluded), and the run
-identity (`run_id`, `logical_run_id`, `load_date`, `execution_id`).
+identity (`logical_run_id`, `load_date`, `pipeline_run_id`).
 
 ## Consequences
 

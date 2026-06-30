@@ -17,19 +17,19 @@ def test_refresh_is_a_value_type_with_no_required_args():
 
 
 def test_accumulate_by_run_holds_run_identity():
-    s = AccumulateByRun(run_id="r1", load_date="2026-01-01")
-    assert s.run_id == "r1"
+    s = AccumulateByRun(logical_run_id="r1", load_date="2026-01-01")
+    assert s.logical_run_id == "r1"
     assert s.load_date == "2026-01-01"
 
 
 def test_accumulate_by_run_rejects_empty_run_id():
-    with pytest.raises(ValueError, match="run_id"):
-        AccumulateByRun(run_id="", load_date="2026-01-01")
+    with pytest.raises(ValueError, match="logical_run_id"):
+        AccumulateByRun(logical_run_id="", load_date="2026-01-01")
 
 
 def test_accumulate_by_run_rejects_empty_load_date():
     with pytest.raises(ValueError, match="load_date"):
-        AccumulateByRun(run_id="r1", load_date="")
+        AccumulateByRun(logical_run_id="r1", load_date="")
 
 
 def test_upsert_strategy_normalises_bare_string_to_single_element_tuple():

@@ -31,8 +31,18 @@ class PipelineExecution:
         self.run_log = run_log
         self.warn_hits: list[str] = []
         self.trace: RowTrace | None = None
-        self.step = partial(run_log.step, context.execution_id, pipeline_name)
-        self.record = partial(run_log.record, context.execution_id, pipeline_name)
+        self.step = partial(
+            run_log.step,
+            context.pipeline_run_id,
+            pipeline_name,
+            logical_run_id=context.logical_run_id,
+        )
+        self.record = partial(
+            run_log.record,
+            context.pipeline_run_id,
+            pipeline_name,
+            logical_run_id=context.logical_run_id,
+        )
 
     def timed_step(
         self, name: str, rows_in: int | None = None

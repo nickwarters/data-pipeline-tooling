@@ -20,20 +20,24 @@ RunParams = Mapping[str, str]
 class RunContext:
     """The execution context shared by orchestration, builders, and writers.
 
-    ``execution_id`` identifies this concrete execution for logs and traceability.
-    ``logical_run_id`` identifies the business run/idempotency key whose rows a
-    re-drive replaces. ``run_id`` remains as the execution-id compatibility alias
-    for RunLog/RunRegistry records.
+    The three run identifiers, widest to narrowest scope:
+
+    * ``orchestration_run_id`` — the umbrella id of one runner/orchestrator pass,
+      shared by every pipeline it triggers. Owned by ``tools.orchestration``; it
+      is not minted here (a bare ``Pipeline.run()`` has no orchestration above it).
+    * ``pipeline_run_id`` — this one concrete pipeline attempt. A fresh id per
+      execution; the correlating key every RunLog/RunRegistry record carries.
+    * ``logical_run_id`` — the business run / idempotency key (``<label>:<run_date>``)
+      whose rows a re-drive replaces. Stable across re-drives of the same run date.
     """
 
     def __init__(
         self,
         *,
         run_date: dt.date | None = None,
-        execution_id: str | None = None,
+        pipeline_run_id: str | None = None,
         logical_run_id: str | None = None,
         load_date: dt.date | str | None = None,
-        run_id: str | None = None,
         run_log: RunLog | None = None,
         run_registry: RunRegistry | None = None,
         base_dir: str | Path | None = None,
@@ -50,18 +54,13 @@ class RunContext:
         self.pipeline = pipeline
         self.params: RunParams = dict(params or {})
         self.run_date = run_date or dt.date.today()
-        self.execution_id = execution_id or run_id or uuid.uuid4().hex
+        self.pipeline_run_id = pipeline_run_id or uuid.uuid4().hex
         self.logical_run_id = logical_run_id or self._default_logical_run_id()
         self.load_date = _date_text(load_date or self.run_date)
         self.run_log = run_log or NULL_RUN_LOG
         self.run_registry = run_registry
         self.freshness_days = freshness_days
         self._run_summary_recorded = False
-
-    @property
-    def run_id(self) -> str:
-        """Compatibility alias for the execution id used by RunLog/RunRegistry."""
-        return self.execution_id
 
     @property
     def label(self) -> str:
@@ -82,7 +81,7 @@ class RunContext:
     def _default_logical_run_id(self) -> str:
         if self.pipeline:
             return f"{self.label}:{self.run_date.isoformat()}"
-        return self.execution_id
+        return self.pipeline_run_id
 
 
 def _date_text(value: dt.date | str) -> str:

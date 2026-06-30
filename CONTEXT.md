@@ -21,7 +21,7 @@ The narrowed set of Cases the Selection pipeline produces by pulling from the Ca
 _Avoid_: shortlist, batch
 
 **Selection trace**:
-The per-Case audit of *why* each Case considered by Selection was or wasn't chosen: which **Filter**/**Join** excluded it (located by name), what it **Score**d, and — for survivors — where it ranked. A sibling table of the **SelectionPool**, stamped with the logical run id (`run_id` / `logical_run_id`) and, when run through a `RunContext`, the execution id that matches RunLog/RunRegistry, so the selection decision is defensible after the fact ("why wasn't this Adviser picked up last quarter?"). It is the eligibility-stage twin of **quarantine** (validity) — the same "route aside *with a reason*, never silently drop" shape, pointed at selection rather than schema (ADR-0008). Produced by `.explain(writer, id_column=…)` on the Selection pipeline.
+The per-Case audit of *why* each Case considered by Selection was or wasn't chosen: which **Filter**/**Join** excluded it (located by name), what it **Score**d, and — for survivors — where it ranked. A sibling table of the **SelectionPool**, stamped with the `logical_run_id` and, when run through a `RunContext`, the `pipeline_run_id` that matches RunLog/RunRegistry, so the selection decision is defensible after the fact ("why wasn't this Adviser picked up last quarter?"). It is the eligibility-stage twin of **quarantine** (validity) — the same "route aside *with a reason*, never silently drop" shape, pointed at selection rather than schema (ADR-0008). Produced by `.explain(writer, id_column=…)` on the Selection pipeline.
 _Avoid_: log (it is queryable state, not free text); audit log (reserve for the run-level JSONL)
 
 **Selection rule**:
