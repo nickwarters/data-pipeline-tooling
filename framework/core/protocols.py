@@ -69,6 +69,25 @@ class Validator(Protocol):
         ...
 
 
+@runtime_checkable
+class DatasetProfiler(Protocol):
+    """A read-only observer that profiles a feed's shape for the run log.
+
+    The injected port behind ``Pipeline.profile``: given a dataset it returns the
+    structured payload to record on the step (a JSON-serialisable ``dict``, or
+    ``None``) and a list of warn-severity messages for the step's ``warn_hits``,
+    and may *raise* to abort the run on a fail-severity breach. The concrete
+    statistical computation lives in the application/observability layer
+    (``tools.observability.profile.DataProfiler``); the framework only drives this
+    port — it never names the engine or the metrics, exactly as it injects a
+    ``RunLog`` rather than owning a log format.
+    """
+
+    def profile(self, dataset: Dataset) -> "tuple[dict | None, list[str]]":
+        """Return ``(payload, warnings)`` for ``dataset``; raise to abort."""
+        ...
+
+
 DatasetSupplier = Callable[[], Dataset]
 
 # The processor seam: a transform run mid-pipeline. The builder wires a processor

@@ -316,3 +316,74 @@ class ProfileDriftCheck:
             lookback=self._lookback,
             columns=list(self._columns) if self._columns is not None else None,
         )
+
+
+class DataProfiler:
+    """The injected profiler ``Pipeline.profile`` drives — the application-layer
+    statistical computation behind the framework's
+    :class:`~framework.core.protocols.DatasetProfiler` port.
+
+    It bundles the cost-bounding knobs (``columns`` allow-list, ``top_n``) and the
+    optional run-over-run drift check into one component the pipeline wires in, so
+    the framework stays free of any profiling logic — it only calls
+    :meth:`profile` and records what it returns. When a ``baseline`` is given an
+    ``address`` must be too (the stable ``step_address`` to trend against); a
+    drift beyond tolerance either *warns* (returned as messages the node logs) or,
+    in ``"fail"`` severity, raises :class:`ProfileError` — the same warn/fail
+    escape hatch a Validator gets.
+    """
+
+    def __init__(
+        self,
+        *,
+        columns: Iterable[str] | None = None,
+        top_n: int = DEFAULT_TOP_N,
+        baseline: ProfileBaseline | None = None,
+        address: str | None = None,
+        null_rate_tolerance: float = 0.2,
+        min_history: int = 3,
+        lookback: int = 10,
+        severity: str = "warn",
+    ) -> None:
+        self._columns = tuple(columns) if columns is not None else None
+        self._top_n = top_n
+        self._severity = severity
+        if baseline is not None:
+            if address is None:
+                raise ValueError("a baseline needs an address to trend against")
+            self._drift: ProfileDriftCheck | None = ProfileDriftCheck(
+                baseline,
+                address,
+                null_rate_tolerance=null_rate_tolerance,
+                min_history=min_history,
+                lookback=lookback,
+                columns=columns,
+            )
+        else:
+            self._drift = None
+
+    def profile(self, dataset: Dataset) -> tuple[dict, list[str]]:
+        """Return ``(profile_record, warnings)``; raise in ``fail`` mode on drift.
+
+        Satisfies the framework's ``DatasetProfiler`` port: the record is the
+        ``DatasetProfile`` the run log stores, and ``warnings`` are the drift
+        messages the node surfaces as ``warn_hits`` (empty when there is no
+        baseline or nothing drifted).
+        """
+        computed = profile_dataset(dataset, columns=self._columns, top_n=self._top_n)
+        warnings: list[str] = []
+        if self._drift is not None:
+            messages = self._drift.check(computed)
+            if messages and self._severity == "fail":
+                raise ProfileError("; ".join(messages))
+            warnings = messages
+        return computed.to_record(), warnings
+
+    def describe(self) -> str:
+        return render(
+            self,
+            columns=list(self._columns) if self._columns is not None else None,
+            top_n=self._top_n,
+            severity=self._severity,
+            drift=self._drift.describe() if self._drift is not None else None,
+        )
