@@ -13,16 +13,17 @@ import time
 from typing import Any, Callable
 
 from framework.core.dataset import Dataset
-from framework.core.protocols import Processor, Reader, Validator, Writer
+from framework.core.protocols import (
+    DatasetProfiler,
+    Processor,
+    Reader,
+    Validator,
+    Writer,
+)
 from framework.core.validators import ValidationError
 from framework.run.address import RunAddress
 from framework.run.execution import PipelineExecution
 from framework.run.run_context import RunContext, current_context
-from tools.observability.profile import (
-    DEFAULT_TOP_N,
-    ProfileError,
-    profile_dataset,
-)
 from tools.observability.run_log import NULL_RUN_LOG, RunLog
 
 log = logging.getLogger(__name__)
@@ -381,54 +382,38 @@ class ActionNode(Node):
 
 
 class ProfileNode(Node):
-    """Profile a dataset's columns, record the profile, pass the dataset through.
+    """Drive an injected profiler, record its payload, pass the dataset through.
 
-    A read-only *Task* (#284): it computes a per-column :class:`DatasetProfile`,
-    attaches it to this node's run-log record (so the registry can trend it across
-    runs), optionally compares it against a baseline derived from recent run
-    history, and returns the dataset **unchanged** — it observes, never reshapes.
-
-    ``baseline`` (a :class:`~tools.observability.profile.ProfileDriftCheck`) is
-    optional; when present, every reported column deviation either *warns* (logged
-    as a ``warn_hit``, run continues) or *fails* (raises
-    :class:`~tools.observability.profile.ProfileError`) per ``severity`` — the
-    node owns the what-to-do, the check owns the how-to-compare, mirroring a
-    Validator.
+    A read-only *Task* (#284): it hands the dataset to a
+    :class:`~framework.core.protocols.DatasetProfiler` (the application's
+    statistical computation, injected like a ``RunLog``), attaches the structured
+    payload that profiler returns to this node's run-log record (so the registry
+    can trend it across runs), surfaces any warn-severity messages it returns, and
+    returns the dataset **unchanged** — it observes, never reshapes. A
+    fail-severity breach is the profiler's own ``raise`` and simply propagates;
+    the framework never names the metrics or the failure type.
     """
 
     def __init__(
         self,
         name: str,
+        profiler: DatasetProfiler,
         input_node: Node,
         *,
-        columns: list[str] | None = None,
-        top_n: int = DEFAULT_TOP_N,
-        baseline: Any | None = None,
-        severity: str = "warn",
         address: RunAddress | None = None,
     ):
         super().__init__(name, "Profile", [input_node], address)
-        self.columns = columns
-        self.top_n = top_n
-        self.baseline = baseline
-        self.severity = severity
+        self.profiler = profiler
 
     def _do_execute(
         self, session: PipelineExecution, context: RunContext, dataset: Dataset
     ) -> Dataset:
-        computed = profile_dataset(dataset, columns=self.columns, top_n=self.top_n)
-        self.profile = computed.to_record()
-
-        if self.baseline is not None:
-            for message in self.baseline.check(computed):
-                located = f"{self.name}: {message}"
-                if self.severity == "warn":
-                    self.warn_hits.append(located)
-                    session.warn_hits.append(located)
-                else:
-                    raise ProfileError(
-                        f"{session.pipeline_name} {self.name} failed: {message}"
-                    )
+        payload, warnings = self.profiler.profile(dataset)
+        self.profile = payload
+        for message in warnings:
+            located = f"{self.name}: {message}"
+            self.warn_hits.append(located)
+            session.warn_hits.append(located)
         return dataset
 
 
@@ -460,29 +445,26 @@ class Pipeline:
 
     def profile(
         self,
+        profiler: DatasetProfiler,
         input_node: Node,
         *,
         name: str = "profile",
-        columns: list[str] | None = None,
-        top_n: int = DEFAULT_TOP_N,
-        baseline: Any | None = None,
-        severity: str = "warn",
     ) -> Node:
         """Wire a read-only profiling Task over ``input_node`` (#284).
 
-        Records a per-column :class:`DatasetProfile` on the run log and passes the
-        dataset through unchanged. ``columns`` / ``top_n`` bound the cost;
-        ``baseline`` (a ``ProfileDriftCheck`` built over a ``RunRegistry``)
-        opts into run-over-run drift detection, with ``severity`` deciding whether
-        a deviation warns or fails.
+        ``profiler`` is an injected
+        :class:`~framework.core.protocols.DatasetProfiler` — the application's
+        statistical computation (``tools.observability.profile.DataProfiler`` in
+        practice, which bounds cost via ``top_n`` / a column allow-list and opts
+        into run-over-run drift detection). The node records the profiler's payload
+        on the run log and passes the dataset through unchanged; the framework owns
+        none of the metrics. Mirrors how ``explain`` / ``write`` take an injected
+        component rather than embedding the logic.
         """
         node = ProfileNode(
             name,
+            profiler,
             input_node,
-            columns=columns,
-            top_n=top_n,
-            baseline=baseline,
-            severity=severity,
             address=self._step_address(name),
         )
         self._nodes.append(node)

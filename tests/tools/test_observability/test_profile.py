@@ -14,6 +14,7 @@ import pytest
 from framework.core.dataset import Dataset
 from framework.run.builder import Pipeline
 from tools.observability.profile import (
+    DataProfiler,
     DatasetProfile,
     ProfileDriftCheck,
     ProfileError,
@@ -178,15 +179,62 @@ def test_drift_check_only_watches_named_columns_when_narrowed():
     assert check.check(today) == []  # other drifted, but it is not watched
 
 
+# --- DataProfiler: the injected port -------------------------------------
+
+
+def test_data_profiler_returns_the_record_and_no_warnings_without_a_baseline():
+    # The plain case: a profiler with no baseline returns the DatasetProfile
+    # record to record and an empty warning list.
+    profiler = DataProfiler(columns=["amount"], top_n=5)
+
+    payload, warnings = profiler.profile(_dataset(amount=[1.0, None, 3.0]))
+
+    assert warnings == []
+    amount = DatasetProfile.from_record(payload).column("amount")
+    assert amount.null_rate == pytest.approx(1 / 3)
+
+
+def test_data_profiler_warns_on_drift_in_warn_severity():
+    # warn severity returns drift messages (the node logs them) without raising.
+    baseline = _baseline_with_null_rate(0.0)
+    profiler = DataProfiler(
+        baseline=baseline,
+        address="cases.profile",
+        null_rate_tolerance=0.2,
+        severity="warn",
+    )
+
+    _, warnings = profiler.profile(_dataset(amount=[None, None, None, 1.0]))
+
+    assert warnings and "amount" in warnings[0]
+
+
+def test_data_profiler_raises_on_drift_in_fail_severity():
+    # fail severity raises ProfileError so the run aborts.
+    baseline = _baseline_with_null_rate(0.0)
+    profiler = DataProfiler(
+        baseline=baseline,
+        address="cases.profile",
+        null_rate_tolerance=0.2,
+        severity="fail",
+    )
+
+    with pytest.raises(ProfileError, match="amount"):
+        profiler.profile(_dataset(amount=[None, None, None, 1.0]))
+
+
+def test_data_profiler_rejects_a_baseline_without_an_address():
+    with pytest.raises(ValueError, match="address"):
+        DataProfiler(baseline=_baseline_with_null_rate(0.0))
+
+
 # --- end-to-end: Pipeline.profile -> RunLog -> RunRegistry ----------------
 
 
-def _run_profiling_pipeline(
-    log_path, dataset, *, name="cases", baseline=None, severity="warn"
-):
+def _run_profiling_pipeline(log_path, dataset, *, name="cases", profiler=None):
     p = Pipeline(name, run_log=RunLog(log_path))
     r = p.read(RecordingReader(dataset), name="read")
-    p.profile(r, name="profile", baseline=baseline, severity=severity)
+    p.profile(profiler or DataProfiler(), r, name="profile")
     p.run()
     return p.run_id
 
@@ -238,10 +286,15 @@ def test_profile_task_fails_the_run_on_drift_in_fail_severity(tmp_path):
         _run_profiling_pipeline(log_path, healthy)
         registry.ingest(log_path)
 
-    check = ProfileDriftCheck(registry, "cases.profile", null_rate_tolerance=0.2)
+    profiler = DataProfiler(
+        baseline=registry,
+        address="cases.profile",
+        null_rate_tolerance=0.2,
+        severity="fail",
+    )
     regressed = _dataset(amount=[None, None, None, 4.0])
 
     with pytest.raises(ProfileError, match="amount"):
         _run_profiling_pipeline(
-            tmp_path / "regressed.log", regressed, baseline=check, severity="fail"
+            tmp_path / "regressed.log", regressed, profiler=profiler
         )

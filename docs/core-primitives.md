@@ -591,27 +591,43 @@ it can be trended. That turns a silent regression a row-count check misses (a
 column quietly sliding 5% → 60% null; a categorical gaining junk values) into a
 detectable, trendable one.
 
-It is wired as a read-only Task on the builder — it observes, never reshapes:
+It is wired as a read-only Task on the builder — it observes, never reshapes. The
+**computation lives in the application/observability layer** (`tools`), injected
+into the builder as a `DataProfiler` exactly as a `RunLog` is — the framework
+drives the profiler through its `DatasetProfiler` port and records what it
+returns, but owns none of the metrics (so the lower `framework` layer never
+imports the upper `tools` layer's profiling logic):
 
 ```python
-from framework.run import Pipeline, RunRegistry, ProfileDriftCheck
+from framework.run import Pipeline, RunRegistry
+from tools.observability.profile import DataProfiler
 
 registry = RunRegistry("/path/to/share/_registry/runs.db")
 p = Pipeline("cases", run_log=run_log)
 src = p.read(reader, name="read")
 
 # Bare: compute + record a profile every run (cost-bounded, opt-in).
-p.profile(src, name="profile", columns=["amount", "status"], top_n=20)
+p.profile(DataProfiler(columns=["amount", "status"], top_n=20), src, name="profile")
 
 # With a baseline: warn (or fail) when a column's null rate drifts run-over-run.
 p.profile(
+    DataProfiler(
+        baseline=registry,
+        address="cases.profile",
+        null_rate_tolerance=0.2,
+        severity="warn",  # or "fail" -> raises ProfileError (an ErrorCategory.DATA abort)
+    ),
     src,
     name="profile",
-    baseline=ProfileDriftCheck(registry, "cases.profile", null_rate_tolerance=0.2),
-    severity="warn",   # or "fail" -> raises ProfileError (an ErrorCategory.DATA abort)
 )
 ```
 
+- **`DataProfiler(...)`** (`tools.observability.profile`) is the injected port the
+  builder drives. It bundles the cost-bounding knobs and the optional drift check;
+  `Pipeline.profile(profiler, node)` records the `(payload, warnings)` it returns
+  and propagates a fail-severity `raise`. The framework's
+  `framework.core.DatasetProfiler` Protocol is the only profiling name the lower
+  layer knows.
 - **`profile_dataset(dataset, columns=…, top_n=…)`** computes a `DatasetProfile`
   (a `row_count` plus one `ColumnProfile` per column). `to_record()` /
   `from_record()` are the JSON round-trip the `RunLog` writes and the
@@ -626,10 +642,11 @@ p.profile(
   (`baseline.recent_profiles(address)` — the `RunRegistry` is the production
   source) and reports each column whose rate deviated beyond tolerance. With
   fewer than `min_history` prior runs the band is skipped so a feed's first
-  nights don't trip spuriously.
-- **Severity is the node's call**, like any Validator: `warn` rides the deviation
-  onto the step's `warn_hits` (run continues, surfaced by `runs_that_warned()`);
-  `fail` raises `ProfileError`, an `ErrorCategory.DATA` abort.
+  nights don't trip spuriously. `DataProfiler` builds and drives it.
+- **Severity is the profiler's call**, like any Validator: `warn` rides the
+  deviation onto the step's `warn_hits` (run continues, surfaced by
+  `runs_that_warned()`); `fail` raises `ProfileError`, an `ErrorCategory.DATA`
+  abort.
 
 ### `PipelineRunner` — thin domain orchestration + requirement guard
 `PipelineRunner` (`framework.run.runner`) is the minimal orchestration layer above
