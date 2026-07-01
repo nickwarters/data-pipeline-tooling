@@ -142,6 +142,31 @@ def test_run_downstream_succeeds_after_fresh_source_history(tmp_path):
     assert "FixturePool" in downstream.stdout
 
 
+def test_orchestrate_runs_path_addressed_pipelines(tmp_path):
+    # orchestrate now addresses each scheduled pipeline by its pipelines/<name>
+    # path (via --app's build_pipeline_sets()), with no build_runner() registry.
+    # One due-work pass runs _source then its freshness-gated _downstream, both
+    # imported by path at runtime, and lands their medallion artifacts.
+    result = _cli(
+        "orchestrate",
+        "--app",
+        "cliapp",
+        "--base-dir",
+        str(tmp_path),
+        "--run-date",
+        "2026-05-29",
+        "--once",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "fixture  _source  succeeded" in result.stdout
+    assert "fixture  _downstream  succeeded" in result.stdout
+    assert (tmp_path / "fixture" / "raw.db").exists()
+    assert (tmp_path / "fixture" / "gold.db").exists()
+    # The decisions are recorded in the orchestration store, keyed by leaf name.
+    assert (tmp_path / "_orchestration" / "runs.db").exists()
+
+
 def test_dry_run_previews_without_writing_artifacts(tmp_path):
     result = _cli(
         "run",
@@ -317,11 +342,11 @@ def test_run_validation_failure_reports_clear_error(tmp_path, monkeypatch, capsy
     def boom(_context):
         raise ValidationError("row count 0 below required minimum 1")
 
-    # Stand in for the imported pipelines/<name>/pipeline.py module.
+    # Stand in for the resolved pipelines/<name>/pipeline.py, addressed by path.
     monkeypatch.setattr(
         operator,
-        "_load_pipeline_module",
-        lambda pipeline: SimpleNamespace(run=boom, UPSTREAMS=()),
+        "load_pipeline",
+        lambda path: SimpleNamespace(name="boom", run=boom, upstreams=()),
     )
 
     code = operator.main(["run", "pipelines/boom", "--base-dir", str(tmp_path)])

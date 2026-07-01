@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from framework.core.dataset import Dataset
-from framework.run import FreshnessRequirement, PipelineRunner, Requirement, RunAddress
+from framework.run import FreshnessRequirement, Requirement, RunAddress, run_pipeline
 from tools.calendar import WorkingDayCalendar
 from tools.orchestration import (
     DayOfMonth,
@@ -21,24 +21,51 @@ from tools.orchestration import (
 )
 
 
-def _runner(calls: list[str], failing: set[str] | None = None) -> PipelineRunner:
-    runner = PipelineRunner()
-    failing = failing or set()
+class _FakeInvoker:
+    """A path-addressed invoker that runs in-memory handlers, not disk modules.
 
-    def register(subject: str, pipeline: str) -> None:
-        def handler(_context):
-            label = f"{subject}/{pipeline}"
-            calls.append(label)
-            if label in failing:
-                raise RuntimeError(f"{label} failed")
+    It behaves exactly like ``PathPipelineInvoker`` — resolving the pipeline by
+    the leaf of its ``pipelines/<name>`` path and executing through
+    ``run_pipeline`` so real run logs and registry records are written — but
+    resolves the handler from a dict instead of importing a module. That lets the
+    orchestrator's decision, freshness, and lineage logic be exercised without
+    real pipeline packages on disk.
+    """
+
+    def __init__(self, calls: list[str], failing: set[str] | None = None) -> None:
+        self._calls = calls
+        self._failing = failing or set()
+
+    def run(
+        self,
+        path,
+        base_dir,
+        *,
+        run_date,
+        logical_run_id,
+        freshness_days,
+        freshness,
+    ):
+        name = path.strip("/").split("/")[-1]
+
+        def handler(context):
+            # Recorded inside the handler (after any freshness check in
+            # run_pipeline), so a freshness-blocked item never counts as a call
+            # while a handler that runs and then fails still does.
+            self._calls.append(name)
+            if name in self._failing:
+                raise RuntimeError(f"{name} failed")
             return Dataset.from_pandas(pd.DataFrame({"id": [1]}))
 
-        runner.register(subject, pipeline, handler)
-
-    for subject in ("case-a", "case-b", "cases"):
-        for pipeline in ("feed-a", "feed-b", "feed-c", "ingest", "selection"):
-            register(subject, pipeline)
-    return runner
+        return run_pipeline(
+            handler,
+            name,
+            base_dir,
+            upstreams=freshness,
+            run_date=run_date,
+            logical_run_id=logical_run_id,
+            freshness_days=freshness_days,
+        )
 
 
 def test_schedule_matching_uses_working_day_calendar():
@@ -58,36 +85,34 @@ def test_schedule_matching_uses_working_day_calendar():
 def test_downstream_waits_until_declared_upstreams_are_fresh(tmp_path):
     calls: list[str] = []
     orchestrator = Orchestrator(
-        _runner(calls),
         (
             PipelineSet(
                 "cases",
                 (
                     ScheduledPipeline(
-                        "cases",
-                        "selection",
+                        "pipelines/selection",
                         Weekdays(),
                         depends_on=(
-                            FreshnessRequirement("feed-a"),
-                            FreshnessRequirement("feed-b"),
-                            FreshnessRequirement("feed-c"),
+                            FreshnessRequirement("feed_a"),
+                            FreshnessRequirement("feed_b"),
+                            FreshnessRequirement("feed_c"),
                         ),
                     ),
                 ),
             ),
         ),
         WorkingDayCalendar(),
+        invoker=_FakeInvoker(calls),
     )
 
     result = orchestrator.run_due_once(tmp_path, run_date=dt.date(2026, 6, 12))
 
-    assert calls == ["cases/selection"]
+    assert calls == ["selection"]
     assert result.decisions[0].status == "succeeded"
 
 
 def test_task_level_requirement_allows_downstream_when_task_success_is_fresh(tmp_path):
     calls: list[str] = []
-    runner = PipelineRunner()
 
     def upstream(context):
         calls.append(context.label)
@@ -98,24 +123,35 @@ def test_task_level_requirement_allows_downstream_when_task_success_is_fresh(tmp
         calls.append(context.label)
         return Dataset.from_pandas(pd.DataFrame({"id": [1]}))
 
-    runner.register("case-a", "pipeline-2", upstream)
-    runner.register("case-a", "pipeline-3", downstream)
+    handlers = {"pipeline-2": upstream, "pipeline-3": downstream}
+
+    class _Invoker:
+        def run(
+            self, path, base_dir, *, run_date, logical_run_id, freshness_days, freshness
+        ):
+            name = path.strip("/").split("/")[-1]
+            return run_pipeline(
+                handlers[name],
+                name,
+                base_dir,
+                upstreams=freshness,
+                run_date=run_date,
+                logical_run_id=logical_run_id,
+                freshness_days=freshness_days,
+            )
+
     orchestrator = Orchestrator(
-        runner,
         (
             PipelineSet(
                 "case-a",
                 (
-                    ScheduledPipeline("case-a", "pipeline-2", Weekdays()),
+                    ScheduledPipeline("pipelines/pipeline-2", Weekdays()),
                     ScheduledPipeline(
-                        "case-a",
-                        "pipeline-3",
+                        "pipelines/pipeline-3",
                         Weekdays(),
                         depends_on=(
                             Requirement.succeeded(
-                                RunAddress.task(
-                                    "pipeline-2", "step-4", subject="case-a"
-                                )
+                                RunAddress.task("pipeline-2", "step-4")
                             ).within_days(7),
                         ),
                     ),
@@ -123,6 +159,7 @@ def test_task_level_requirement_allows_downstream_when_task_success_is_fresh(tmp
             ),
         ),
         WorkingDayCalendar(),
+        invoker=_Invoker(),
     )
 
     # A fixed working day (Friday) like the sibling tests: the pipelines are
@@ -132,7 +169,7 @@ def test_task_level_requirement_allows_downstream_when_task_success_is_fresh(tmp
     # pass on the same run_date.
     result = orchestrator.run_due_once(tmp_path, run_date=dt.date(2026, 6, 12))
 
-    assert calls == ["case-a/pipeline-2", "case-a/pipeline-3"]
+    assert calls == ["pipeline-2", "pipeline-3"]
     assert [decision.status for decision in result.decisions] == [
         "succeeded",
         "succeeded",
@@ -143,35 +180,24 @@ def test_task_level_requirement_blocks_downstream_when_task_success_is_stale(
     tmp_path,
 ):
     calls: list[str] = []
-    log_path = tmp_path / "_runs" / "case-a.log"
+    log_path = tmp_path / "_runs" / "pipeline-2.log"
     _record_run(
         log_path,
-        pipeline="case-a/pipeline-2",
+        pipeline="pipeline-2",
         step="step-4",
         timestamp="2026-06-01T00:00:00+00:00",
     )
-    runner = PipelineRunner()
-
-    def downstream(context):
-        calls.append(context.label)
-        return Dataset.from_pandas(pd.DataFrame({"id": [1]}))
-
-    runner.register("case-a", "pipeline-3", downstream)
     orchestrator = Orchestrator(
-        runner,
         (
             PipelineSet(
                 "case-a",
                 (
                     ScheduledPipeline(
-                        "case-a",
-                        "pipeline-3",
+                        "pipelines/pipeline-3",
                         Weekdays(),
                         depends_on=(
                             Requirement.succeeded(
-                                RunAddress.task(
-                                    "pipeline-2", "step-4", subject="case-a"
-                                )
+                                RunAddress.task("pipeline-2", "step-4")
                             ).within_days(7),
                         ),
                     ),
@@ -179,44 +205,34 @@ def test_task_level_requirement_blocks_downstream_when_task_success_is_stale(
             ),
         ),
         WorkingDayCalendar(),
+        invoker=_FakeInvoker(calls),
     )
 
     result = orchestrator.run_due_once(tmp_path, run_date=dt.date(2026, 6, 12))
 
     assert calls == []
     assert result.decisions[0].status == "blocked"
-    assert "upstream case-a/pipeline-2.step-4 is stale" in result.decisions[0].reason
+    assert "upstream pipeline-2.step-4 is stale" in result.decisions[0].reason
     records = OrchestrationStore(tmp_path / "_orchestration" / "runs.db").records()
     assert records[0]["status"] == "blocked"
-    assert "upstream case-a/pipeline-2.step-4 is stale" in records[0]["reason"]
+    assert "upstream pipeline-2.step-4 is stale" in records[0]["reason"]
 
 
 def test_task_level_requirement_blocks_downstream_when_required_task_is_missing(
     tmp_path,
 ):
     calls: list[str] = []
-    runner = PipelineRunner()
-
-    def downstream(context):
-        calls.append(context.label)
-        return Dataset.from_pandas(pd.DataFrame({"id": [1]}))
-
-    runner.register("case-a", "pipeline-3", downstream)
     orchestrator = Orchestrator(
-        runner,
         (
             PipelineSet(
                 "case-a",
                 (
                     ScheduledPipeline(
-                        "case-a",
-                        "pipeline-3",
+                        "pipelines/pipeline-3",
                         Weekdays(),
                         depends_on=(
                             Requirement.succeeded(
-                                RunAddress.task(
-                                    "pipeline-2", "step-4", subject="case-a"
-                                )
+                                RunAddress.task("pipeline-2", "step-4")
                             ).on_first_run("block"),
                         ),
                     ),
@@ -224,13 +240,14 @@ def test_task_level_requirement_blocks_downstream_when_required_task_is_missing(
             ),
         ),
         WorkingDayCalendar(),
+        invoker=_FakeInvoker(calls),
     )
 
     result = orchestrator.run_due_once(tmp_path, run_date=dt.date(2026, 6, 12))
 
     assert calls == []
     assert result.decisions[0].status == "blocked"
-    assert "no successful run history for upstream case-a/pipeline-2.step-4" in (
+    assert "no successful run history for upstream pipeline-2.step-4" in (
         result.decisions[0].reason
     )
 
@@ -266,56 +283,53 @@ def _record_run(
 def test_failed_upstream_blocks_dependant_but_not_independent_or_other_set(tmp_path):
     calls: list[str] = []
     orchestrator = Orchestrator(
-        _runner(calls, failing={"case-a/feed-a"}),
         (
             PipelineSet(
                 "case-a",
                 (
-                    ScheduledPipeline("case-a", "feed-a", Weekdays()),
-                    ScheduledPipeline("case-a", "feed-b", Weekdays()),
+                    ScheduledPipeline("pipelines/feed_a", Weekdays()),
+                    ScheduledPipeline("pipelines/feed_b", Weekdays()),
                     ScheduledPipeline(
-                        "case-a",
-                        "selection",
+                        "pipelines/selection",
                         Weekdays(),
-                        depends_on=(FreshnessRequirement("feed-a"),),
+                        depends_on=(FreshnessRequirement("feed_a"),),
                     ),
                 ),
             ),
             PipelineSet(
                 "case-b",
-                (ScheduledPipeline("case-b", "feed-a", Weekdays()),),
+                (ScheduledPipeline("pipelines/feed_d", Weekdays()),),
             ),
         ),
         WorkingDayCalendar(),
+        invoker=_FakeInvoker(calls, failing={"feed_a"}),
     )
 
     result = orchestrator.run_due_once(tmp_path, run_date=dt.date(2026, 6, 12))
 
     statuses = {
-        f"{decision.subject}/{decision.pipeline}": decision.status
+        f"{decision.set_name}/{decision.pipeline}": decision.status
         for decision in result.decisions
     }
-    assert calls == ["case-a/feed-a", "case-a/feed-b", "case-b/feed-a"]
+    assert calls == ["feed_a", "feed_b", "feed_d"]
     assert statuses == {
-        "case-a/feed-a": "failed",
-        "case-a/feed-b": "succeeded",
+        "case-a/feed_a": "failed",
+        "case-a/feed_b": "succeeded",
         "case-a/selection": "blocked",
-        "case-b/feed-a": "succeeded",
+        "case-b/feed_d": "succeeded",
     }
 
 
 def test_bounded_loop_does_not_retry_failed_nodes(tmp_path):
     calls: list[str] = []
     orchestrator = Orchestrator(
-        _runner(calls, failing={"cases/ingest"}),
         (
             PipelineSet(
                 "cases",
                 (
-                    ScheduledPipeline("cases", "ingest", Weekdays()),
+                    ScheduledPipeline("pipelines/ingest", Weekdays()),
                     ScheduledPipeline(
-                        "cases",
-                        "selection",
+                        "pipelines/selection",
                         Weekdays(),
                         depends_on=(FreshnessRequirement("ingest"),),
                     ),
@@ -323,6 +337,7 @@ def test_bounded_loop_does_not_retry_failed_nodes(tmp_path):
             ),
         ),
         WorkingDayCalendar(),
+        invoker=_FakeInvoker(calls, failing={"ingest"}),
     )
 
     results = orchestrator.run_until_complete(
@@ -333,7 +348,7 @@ def test_bounded_loop_does_not_retry_failed_nodes(tmp_path):
     )
 
     assert len(results) == 1
-    assert calls == ["cases/ingest"]
+    assert calls == ["ingest"]
     assert [decision.status for decision in results[0].decisions] == [
         "failed",
         "blocked",
@@ -347,11 +362,9 @@ def test_yaml_overrides_disable_schedule_and_freshness(tmp_path):
         """
 pipelines:
   - set: cases
-    subject: cases
     pipeline: ingest
     enabled: false
   - set: cases
-    subject: cases
     pipeline: selection
     schedule:
       type: specific_weekdays
@@ -364,10 +377,9 @@ pipelines:
         PipelineSet(
             "cases",
             (
-                ScheduledPipeline("cases", "ingest", Weekdays()),
+                ScheduledPipeline("pipelines/ingest", Weekdays()),
                 ScheduledPipeline(
-                    "cases",
-                    "selection",
+                    "pipelines/selection",
                     ManualOnly(),
                     depends_on=(FreshnessRequirement("ingest"),),
                 ),
@@ -376,7 +388,7 @@ pipelines:
     )
 
     orchestrator = Orchestrator.from_yaml(
-        _runner(calls), sets, WorkingDayCalendar(), overrides
+        sets, WorkingDayCalendar(), overrides, invoker=_FakeInvoker(calls)
     )
     result = orchestrator.run_due_once(tmp_path, run_date=dt.date(2026, 6, 12))
 
@@ -384,7 +396,7 @@ pipelines:
         "skipped",
         "succeeded",
     ]
-    assert calls == ["cases/selection"]
+    assert calls == ["selection"]
 
 
 def test_yaml_override_unknown_reference_fails_clearly(tmp_path):
@@ -393,7 +405,6 @@ def test_yaml_override_unknown_reference_fails_clearly(tmp_path):
         """
 pipelines:
   - set: missing
-    subject: cases
     pipeline: ingest
     enabled: false
 """,
@@ -402,30 +413,30 @@ pipelines:
 
     with pytest.raises(ValueError, match="unknown scheduled pipeline"):
         Orchestrator.from_yaml(
-            _runner([]),
             (
                 PipelineSet(
                     "cases",
-                    (ScheduledPipeline("cases", "ingest", Weekdays()),),
+                    (ScheduledPipeline("pipelines/ingest", Weekdays()),),
                 ),
             ),
             WorkingDayCalendar(),
             overrides,
+            invoker=_FakeInvoker([]),
         )
 
 
 def test_orchestration_store_records_decisions_separately(tmp_path):
     calls: list[str] = []
     orchestrator = Orchestrator(
-        _runner(calls),
-        (PipelineSet("cases", (ScheduledPipeline("cases", "ingest", Weekdays()),)),),
+        (PipelineSet("cases", (ScheduledPipeline("pipelines/ingest", Weekdays()),)),),
         WorkingDayCalendar(),
+        invoker=_FakeInvoker(calls),
     )
 
     orchestrator.run_due_once(tmp_path, run_date=dt.date(2026, 6, 12))
 
     records = OrchestrationStore(tmp_path / "_orchestration" / "runs.db").records()
-    assert records[0]["item_key"] == "cases/cases/ingest/2026-06-12"
+    assert records[0]["item_key"] == "cases/ingest/2026-06-12"
     assert records[0]["status"] == "succeeded"
 
 
@@ -439,17 +450,17 @@ def test_orchestration_lineage_links_a_pass_to_each_pipeline_execution(tmp_path)
 
     calls: list[str] = []
     orchestrator = Orchestrator(
-        _runner(calls),
         (
             PipelineSet(
                 "cases",
                 (
-                    ScheduledPipeline("cases", "feed-a", Weekdays()),
-                    ScheduledPipeline("cases", "feed-b", Weekdays()),
+                    ScheduledPipeline("pipelines/feed_a", Weekdays()),
+                    ScheduledPipeline("pipelines/feed_b", Weekdays()),
                 ),
             ),
         ),
         WorkingDayCalendar(),
+        invoker=_FakeInvoker(calls),
     )
 
     result = orchestrator.run_due_once(tmp_path, run_date=dt.date(2026, 6, 12))
@@ -457,13 +468,13 @@ def test_orchestration_lineage_links_a_pass_to_each_pipeline_execution(tmp_path)
     # Every triggered item carries both correlation ids.
     assert [d.status for d in result.decisions] == ["succeeded", "succeeded"]
     for decision in result.decisions:
-        assert decision.logical_run_id == f"cases/{decision.pipeline}:2026-06-12"
+        assert decision.logical_run_id == f"{decision.pipeline}:2026-06-12"
         assert decision.pipeline_run_id  # read back from the registry
 
     # The umbrella id fans out to each pipeline execution via the join key.
     store = OrchestrationStore(tmp_path / "_orchestration" / "runs.db")
     lineage = store.lineage(result.orchestration_run_id)
-    assert {row["pipeline"] for row in lineage} == {"feed-a", "feed-b"}
+    assert {row["pipeline"] for row in lineage} == {"feed_a", "feed_b"}
 
     registry = RunRegistry(tmp_path / "_registry" / "runs.db")
     for row in lineage:

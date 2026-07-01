@@ -130,9 +130,10 @@ narrows them into the **SelectionPool**. Every `.run()` is fail-fast and atomic,
 and emits a structured **RunLog**. Repeated independent runs can choose their
 own orchestration policy: `ForEach` is fail-fast by default, or explicit
 best-effort when later items should continue after one item fails. Scheduled
-work uses `Orchestrator` above `PipelineRunner`: it evaluates the day's due
-`PipelineSet`s, enforces freshness dependencies, isolates failures, and records
-its decisions in a separate orchestration store.
+work uses `Orchestrator` over path-addressed pipelines: it evaluates the day's
+due `PipelineSet`s, runs each due item by its `pipelines/<name>` path, enforces
+freshness dependencies, isolates failures, and records its decisions in a
+separate orchestration store.
 
 ---
 
@@ -173,7 +174,7 @@ reference with worked examples is [`core-primitives.md`](core-primitives.md).
 | **`RunAddress`** | A stable dependency-target address for a whole Pipeline or a named run step inside one. Labels are `pipeline`, `subject/pipeline`, `pipeline.step`, or `subject/pipeline.step` (for example `pipeline_2.step_4`). The builder records this as `step_address`, and the run registry can query it with `records_for_address(...)`, `has_successful_address(...)`, and `latest_success(...)`. Construct with `RunAddress.pipeline(...)` / `RunAddress.step(...)`, parse with `RunAddress.parse(label)`. Invalid labels raise config-category `RunAddressError`. |
 | **`ForEach`** | Runnable orchestration for independent repeated runs: pass items plus `pipeline_builder(item, context)`, then call `.run(context)`. It creates a fresh builder and per-item `RunContext` for each item. Default behavior fails fast on the first failed item; `continue_on_error=True` returns per-item success/failure outcomes and continues. Use when files must remain separate logical runs. |
 | **`DatedFileDiscovery` / `SourceArtifact`** | Source-artifact discovery for dated-file catch-up (`tools.discovery`). `DatedFileDiscovery(directory, pattern)` finds files whose names encode a business date (e.g. `"claims_{date:%Y%m%d}_*.csv"`). `.available_between(start, end)` returns `SourceArtifact` value objects (each with `path`, `business_date`, `file_id`) where `start < business_date <= end`, sorted deterministically. Use with `ForEach` when each file needs its own run history and idempotency key. Use `GlobCsvReader` instead when all files together form one logical batch. → [core-primitives.md](core-primitives.md) |
-| **`Orchestrator` / `PipelineSet` / `ScheduledPipeline`** | Scheduled due-work orchestration above `PipelineRunner`. Python definitions own sets, dependencies, and default schedules; YAML can override enablement, schedule timing, and freshness windows. A single pass or bounded loop runs due items for one run date, marks failed items terminal, blocks their downstream dependants, and lets independent items and other sets continue. |
+| **`Orchestrator` / `PipelineSet` / `ScheduledPipeline`** | Scheduled due-work orchestration over **path-addressed** pipelines: each `ScheduledPipeline` names a `pipelines/<name>` path, invoked at runtime by the same rule as the `run` command (no handler registry). Python definitions own sets, dependencies, and default schedules; YAML can override enablement, schedule timing, and freshness windows. A single pass or bounded loop runs due items for one run date, marks failed items terminal, blocks their downstream dependants, and lets independent items and other sets continue. |
 | **`PipelineError` / `format_failure`** | The base of the expected fail-fast failure family (`ValidationError`, `FreshnessError`, `UnknownPipelineError`, `RunAddressError`, `CoercionError`, `ForEachPipelineError` all subclass it) and the pure formatter that renders a caught one as a short, traceback-free block for `stderr`. At a run boundary — the operator CLI, a scaffolded `main()` — `except PipelineError` + `format_failure(exc)` turns a deliberate abort into a clear message; a genuine bug is not a `PipelineError` and keeps its trace. |
 | **`RunLog` / `RunRegistry`** | `RunLog` emits one JSON record per step (+ a run summary) to a `.log` file — the observability seam. `RunRegistry` ingests that JSONL into a queryable run-history store. → [run-log-format.md](run-log-format.md) ([ADR-0005](adr/0005-fail-fast-atomic-runs-and-observability.md)) |
 | **`RunContext` / `PipelineRunner` / `Requirement`** | The thin domain runner: register handlers by `(case_type, pipeline)`, receive a context carrying execution/logical identity, dates, explicit run params, RunLog, and RunRegistry, and block stale downstream runs with `Requirement.succeeded(RunAddress.pipeline(...)).same_day()` or task-level `within_days(...)` predicates. `FreshnessRequirement` remains compatible. → [core-primitives.md](core-primitives.md) |
@@ -536,7 +537,8 @@ them from `context.params`. Each command reports a clear one-line error and a
 non-zero exit on the expected failures (unknown
 pipeline path, stale upstream, validation failure, missing run history) rather
 than a traceback. Only `orchestrate` takes a required `--app` naming an
-application's registry module (`build_runner()` / `build_pipeline_sets()`).
+application's schedules module (`build_pipeline_sets()`); it runs those schedules
+over path-addressed pipelines, so no handler registry is wired up front.
 
 ### Test a pipeline — given source rows, expect output rows
 

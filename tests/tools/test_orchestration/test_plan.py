@@ -4,10 +4,7 @@ import datetime as dt
 import json
 from pathlib import Path
 
-import pandas as pd
-
-from framework.core.dataset import Dataset
-from framework.run import PipelineRunner, Requirement, RunAddress
+from framework.run import Requirement, RunAddress
 from tools.calendar import WorkingDayCalendar
 from tools.orchestration import (
     ManualOnly,
@@ -25,19 +22,27 @@ _STALE_DATE = "2026-06-01T00:00:00+00:00"  # well before _DUE_DATE
 _SAME_DAY_DATE = "2026-06-15T00:00:00+00:00"
 
 
-def _simple_runner() -> tuple[PipelineRunner, list[str]]:
-    """Return a runner that records calls and a shared call log."""
-    calls: list[str] = []
-    runner = PipelineRunner()
+class _RecordingInvoker:
+    """A path-addressed invoker that only records calls.
 
-    def handler(context):
-        calls.append(context.label)
-        return Dataset.from_pandas(pd.DataFrame({"id": [1]}))
+    ``plan()`` never invokes it — the tests assert it stays untouched — so a
+    minimal recorder is enough to prove the plan is a pure projection.
+    """
 
-    runner.register("claims", "ingest", handler)
-    runner.register("claims", "quality_check", handler)
-    runner.register("claims", "reporting", handler)
-    return runner, calls
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def run(
+        self, path, base_dir, *, run_date, logical_run_id, freshness_days, freshness
+    ):
+        self.calls.append(path)
+
+
+def _orchestrator(*pipeline_sets) -> tuple[Orchestrator, list[str]]:
+    """An orchestrator whose invoker records calls, plus the shared call log."""
+    invoker = _RecordingInvoker()
+    orchestrator = Orchestrator(pipeline_sets, WorkingDayCalendar(), invoker=invoker)
+    return orchestrator, invoker.calls
 
 
 def _record_run(
@@ -73,11 +78,8 @@ def _record_run(
 
 
 def test_plan_returns_ready_for_due_item_without_calling_handler(tmp_path):
-    runner, calls = _simple_runner()
-    orchestrator = Orchestrator(
-        runner,
-        (PipelineSet("claims", (ScheduledPipeline("claims", "ingest", Weekdays()),)),),
-        WorkingDayCalendar(),
+    orchestrator, calls = _orchestrator(
+        PipelineSet("claims", (ScheduledPipeline("pipelines/ingest", Weekdays()),))
     )
 
     result = orchestrator.plan(tmp_path, run_date=_DUE_DATE)
@@ -94,16 +96,11 @@ def test_plan_returns_ready_for_due_item_without_calling_handler(tmp_path):
 
 
 def test_plan_returns_skipped_for_not_due_item(tmp_path):
-    runner, calls = _simple_runner()
-    orchestrator = Orchestrator(
-        runner,
-        (
-            PipelineSet(
-                "claims",
-                (ScheduledPipeline("claims", "ingest", ManualOnly()),),
-            ),
+    orchestrator, calls = _orchestrator(
+        PipelineSet(
+            "claims",
+            (ScheduledPipeline("pipelines/ingest", ManualOnly()),),
         ),
-        WorkingDayCalendar(),
     )
 
     result = orchestrator.plan(tmp_path, run_date=_DUE_DATE)
@@ -118,16 +115,11 @@ def test_plan_returns_skipped_for_not_due_item(tmp_path):
 
 
 def test_plan_returns_disabled_for_disabled_item(tmp_path):
-    runner, calls = _simple_runner()
-    orchestrator = Orchestrator(
-        runner,
-        (
-            PipelineSet(
-                "claims",
-                (ScheduledPipeline("claims", "ingest", Weekdays(), enabled=False),),
-            ),
+    orchestrator, calls = _orchestrator(
+        PipelineSet(
+            "claims",
+            (ScheduledPipeline("pipelines/ingest", Weekdays(), enabled=False),),
         ),
-        WorkingDayCalendar(),
     )
 
     result = orchestrator.plan(tmp_path, run_date=_DUE_DATE)
@@ -144,36 +136,30 @@ def test_plan_returns_blocked_when_freshness_requirement_is_stale(tmp_path):
 
     No pipeline handler should be invoked.
     """
-    log_path = tmp_path / "_runs" / "claims.log"
+    log_path = tmp_path / "_runs" / "ingest.log"
     _record_run(
         log_path,
-        pipeline="claims/ingest",
+        pipeline="ingest",
         step="run",
         status="ok",
         timestamp=_STALE_DATE,
     )
 
-    runner, calls = _simple_runner()
-    orchestrator = Orchestrator(
-        runner,
-        (
-            PipelineSet(
-                "claims",
-                (
-                    ScheduledPipeline(
-                        "claims",
-                        "reporting",
-                        Weekdays(),
-                        depends_on=(
-                            Requirement.succeeded(
-                                RunAddress.pipeline("ingest", subject="claims")
-                            ).within_days(1),
-                        ),
+    orchestrator, calls = _orchestrator(
+        PipelineSet(
+            "claims",
+            (
+                ScheduledPipeline(
+                    "pipelines/reporting",
+                    Weekdays(),
+                    depends_on=(
+                        Requirement.succeeded(
+                            RunAddress.pipeline("ingest")
+                        ).within_days(1),
                     ),
                 ),
             ),
         ),
-        WorkingDayCalendar(),
     )
 
     result = orchestrator.plan(tmp_path, run_date=_DUE_DATE)
@@ -182,7 +168,7 @@ def test_plan_returns_blocked_when_freshness_requirement_is_stale(tmp_path):
     item = result.items[0]
     assert item.status == "blocked"
     assert "stale" in item.reason
-    assert "claims/ingest" in item.reason
+    assert "ingest" in item.reason
 
 
 # ── test_plan_returns_already_satisfied_when_run_succeeded_today ──────────────
@@ -190,20 +176,17 @@ def test_plan_returns_blocked_when_freshness_requirement_is_stale(tmp_path):
 
 def test_plan_returns_already_satisfied_when_run_succeeded_today(tmp_path):
     """Write a same-day success; plan() must report already-satisfied."""
-    log_path = tmp_path / "_runs" / "claims.log"
+    log_path = tmp_path / "_runs" / "ingest.log"
     _record_run(
         log_path,
-        pipeline="claims/ingest",
+        pipeline="ingest",
         step="run",
         status="ok",
         timestamp=_SAME_DAY_DATE,
     )
 
-    runner, calls = _simple_runner()
-    orchestrator = Orchestrator(
-        runner,
-        (PipelineSet("claims", (ScheduledPipeline("claims", "ingest", Weekdays()),)),),
-        WorkingDayCalendar(),
+    orchestrator, calls = _orchestrator(
+        PipelineSet("claims", (ScheduledPipeline("pipelines/ingest", Weekdays()),))
     )
 
     result = orchestrator.plan(tmp_path, run_date=_DUE_DATE)
@@ -226,7 +209,6 @@ def test_plan_for_each_reports_multiple_planned_runs_without_executing(tmp_path)
 
     items = plan_for_each(
         source_files,
-        subject="claims",
         pipeline="ingest",
         set_name="claims",
         run_date=_DUE_DATE,
@@ -236,7 +218,6 @@ def test_plan_for_each_reports_multiple_planned_runs_without_executing(tmp_path)
     for item, source_file in zip(items, source_files):
         assert item.status == "ready"
         assert str(source_file) in item.reason
-        assert item.subject == "claims"
         assert item.pipeline == "ingest"
         assert item.run_date == _DUE_DATE
 
@@ -246,7 +227,6 @@ def test_plan_for_each_uses_file_id_fn(tmp_path):
 
     items = plan_for_each(
         source_files,
-        subject="claims",
         pipeline="ingest",
         set_name="claims",
         run_date=_DUE_DATE,
@@ -261,26 +241,21 @@ def test_plan_for_each_uses_file_id_fn(tmp_path):
 
 
 def test_plan_result_str_formats_table(tmp_path):
-    runner, _ = _simple_runner()
-    orchestrator = Orchestrator(
-        runner,
-        (
-            PipelineSet(
-                "claims",
-                (
-                    ScheduledPipeline("claims", "ingest", Weekdays()),
-                    ScheduledPipeline("claims", "quality_check", ManualOnly()),
-                ),
+    orchestrator, _ = _orchestrator(
+        PipelineSet(
+            "claims",
+            (
+                ScheduledPipeline("pipelines/ingest", Weekdays()),
+                ScheduledPipeline("pipelines/quality_check", ManualOnly()),
             ),
         ),
-        WorkingDayCalendar(),
     )
 
     result = orchestrator.plan(tmp_path, run_date=_DUE_DATE)
     output = str(result)
 
-    assert "claims/ingest" in output
-    assert "claims/quality_check" in output
+    assert "ingest" in output
+    assert "quality_check" in output
     assert "ready" in output
     assert "skipped" in output
     # Lines should be aligned: every line should have the same leading date

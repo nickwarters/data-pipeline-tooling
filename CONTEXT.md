@@ -238,10 +238,12 @@ history, retry boundary, and idempotency key. Use `GlobCsvReader` instead when
 all matched files together form one logical Feed snapshot.
 
 **Scheduled orchestration**:
-The framework-level coordinator that decides which registered domain Pipelines
-are due for a run date. _Here_: an `Orchestrator` owns one or more
-`PipelineSet`s of `ScheduledPipeline` references and invokes the existing
-`PipelineRunner`; it is not a Pipeline that runs other Pipelines. Python
+The framework-level coordinator that decides which pipelines are due for a run
+date. _Here_: an `Orchestrator` owns one or more `PipelineSet`s of
+`ScheduledPipeline` items, each naming a `pipelines/<name>` path, and invokes the
+due ones **by that path at runtime** — the same addressing as the `run` command,
+so no handler registry is wired up front; it is not a Pipeline that runs other
+Pipelines. Python
 definitions own the canonical sets, dependencies, and default schedules, while
 YAML may override enablement, timing, and freshness windows. Schedules are
 expressed with the friendly `Schedule.*` constructors (`Schedule.daily()`,
