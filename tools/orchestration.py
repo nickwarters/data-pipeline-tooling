@@ -21,6 +21,7 @@ from framework.run.runner import (
     PipelineRunner,
     Requirement,
     RunRequirement,
+    pipeline_label,
 )
 from tools.calendar import WorkingDayCalendar
 
@@ -356,6 +357,14 @@ class OrchestrationDecision:
     status: str
     reason: str = ""
     duration: float | None = None
+    # The business run key the orchestrator assigned this item (stable across
+    # re-drives of the same run date). None for items that never ran (skipped /
+    # disabled, or blocked before invocation).
+    logical_run_id: str | None = None
+    # The concrete attempt the runner minted, read back from the run registry.
+    # Joins to run_records.pipeline_run_id, so one orchestration_run_id fans out
+    # to every pipeline execution it triggered. None when no run was produced.
+    pipeline_run_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -432,10 +441,25 @@ class OrchestrationStore:
                 run_date TEXT NOT NULL,
                 status TEXT NOT NULL,
                 reason TEXT,
-                duration REAL
+                duration REAL,
+                logical_run_id TEXT,
+                pipeline_run_id TEXT
             )
             """
         )
+        # Forward-compatible migration: a store created before run-execution
+        # traceability lacks the two correlation columns the INSERT below names.
+        existing = {
+            row[1] for row in con.execute("PRAGMA table_info(orchestration_records)")
+        }
+        if "logical_run_id" not in existing:
+            con.execute(
+                "ALTER TABLE orchestration_records ADD COLUMN logical_run_id TEXT"
+            )
+        if "pipeline_run_id" not in existing:
+            con.execute(
+                "ALTER TABLE orchestration_records ADD COLUMN pipeline_run_id TEXT"
+            )
         return con
 
     def record(self, decision: OrchestrationDecision) -> None:
@@ -445,8 +469,9 @@ class OrchestrationStore:
                 """
                 INSERT INTO orchestration_records (
                     timestamp, orchestration_run_id, item_key, set_name, subject,
-                    pipeline, run_date, status, reason, duration
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    pipeline, run_date, status, reason, duration,
+                    logical_run_id, pipeline_run_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     dt.datetime.now(dt.UTC).isoformat(),
@@ -459,6 +484,8 @@ class OrchestrationStore:
                     decision.status,
                     decision.reason,
                     decision.duration,
+                    decision.logical_run_id,
+                    decision.pipeline_run_id,
                 ),
             )
             con.commit()
@@ -471,10 +498,36 @@ class OrchestrationStore:
             cur = con.execute(
                 """
                 SELECT timestamp, orchestration_run_id, item_key, set_name, subject,
-                       pipeline, run_date, status, reason, duration
+                       pipeline, run_date, status, reason, duration,
+                       logical_run_id, pipeline_run_id
                 FROM orchestration_records
                 ORDER BY timestamp, rowid
                 """
+            )
+            cols = [desc[0] for desc in cur.description]
+            return [dict(zip(cols, row)) for row in cur.fetchall()]
+        finally:
+            con.close()
+
+    def lineage(self, orchestration_run_id: str) -> list[dict]:
+        """Every item one orchestration pass touched, with its execution id.
+
+        The join key from a runner invocation to the individual pipeline runs:
+        each row's ``pipeline_run_id`` matches ``run_records.pipeline_run_id`` in
+        the RunRegistry, so an operator can go from one pass to every step of
+        every pipeline it triggered. Ordered as the pass decided the items.
+        """
+        con = self._connect()
+        try:
+            cur = con.execute(
+                """
+                SELECT subject, pipeline, status, reason,
+                       logical_run_id, pipeline_run_id
+                FROM orchestration_records
+                WHERE orchestration_run_id = ?
+                ORDER BY timestamp, rowid
+                """,
+                (orchestration_run_id,),
             )
             cols = [desc[0] for desc in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
@@ -522,7 +575,7 @@ class Orchestrator:
     ) -> OrchestrationPassResult:
         root = Path(base_dir)
         day = run_date or dt.date.today()
-        run_id = orchestration_run_id or uuid.uuid4().hex
+        pass_run_id = orchestration_run_id or uuid.uuid4().hex
         store = OrchestrationStore(root / "_orchestration" / "runs.db")
         decisions: list[OrchestrationDecision] = []
         terminal: dict[tuple[str, str], str] = {}
@@ -532,7 +585,13 @@ class Orchestrator:
             for scheduled in pipeline_set.pipelines:
                 item = self._apply_override(pipeline_set.name, scheduled)
                 decision = self._decide_item(
-                    root, day, run_id, pipeline_set.name, item, terminal, set_failed
+                    root,
+                    day,
+                    pass_run_id,
+                    pipeline_set.name,
+                    item,
+                    terminal,
+                    set_failed,
                 )
                 decisions.append(decision)
                 store.record(decision)
@@ -542,7 +601,7 @@ class Orchestrator:
                 elif decision.status in {"succeeded", "blocked"}:
                     terminal[(item.subject, item.pipeline)] = decision.status
 
-        return OrchestrationPassResult(run_id, tuple(decisions))
+        return OrchestrationPassResult(pass_run_id, tuple(decisions))
 
     def run_until_complete(
         self,
@@ -553,12 +612,12 @@ class Orchestrator:
         max_idle_polls: int = 3,
     ) -> list[OrchestrationPassResult]:
         day = run_date or dt.date.today()
-        run_id = uuid.uuid4().hex
+        pass_run_id = uuid.uuid4().hex
         results: list[OrchestrationPassResult] = []
         idle = 0
         while idle < max_idle_polls:
             result = self.run_due_once(
-                base_dir, run_date=day, orchestration_run_id=run_id
+                base_dir, run_date=day, orchestration_run_id=pass_run_id
             )
             results.append(result)
             if result.ran_count:
@@ -746,12 +805,20 @@ class Orchestrator:
                 f"already {existing} in this orchestration run",
             )
         started = time.perf_counter()
+        # The orchestrator owns the business key. It matches the framework's
+        # default (label + run_date), but assigning it explicitly means the value
+        # we store is the value that ran — no coupling to the default formula. It
+        # is stable across re-drives, so idempotent accumulating writes still
+        # replace rather than duplicate.
+        label = pipeline_label(item.subject, item.pipeline)
+        logical_run_id = f"{label}:{run_date.isoformat()}"
         try:
             self._runner.run(
                 item.subject,
                 item.pipeline,
                 base_dir,
                 run_date=run_date,
+                logical_run_id=logical_run_id,
                 freshness_days=_freshness_days(item),
                 freshness=item.depends_on,
             )
@@ -765,6 +832,8 @@ class Orchestrator:
                 "blocked",
                 str(exc),
                 time.perf_counter() - started,
+                logical_run_id=logical_run_id,
+                pipeline_run_id=_latest_pipeline_run_id(base_dir, label),
             )
         except Exception as exc:
             return _decision(
@@ -776,6 +845,8 @@ class Orchestrator:
                 "failed",
                 str(exc),
                 time.perf_counter() - started,
+                logical_run_id=logical_run_id,
+                pipeline_run_id=_latest_pipeline_run_id(base_dir, label),
             )
         return _decision(
             orchestration_run_id,
@@ -786,6 +857,8 @@ class Orchestrator:
             "succeeded",
             "",
             time.perf_counter() - started,
+            logical_run_id=logical_run_id,
+            pipeline_run_id=_latest_pipeline_run_id(base_dir, label),
         )
 
     def _blocked_dependency(
@@ -966,6 +1039,9 @@ def _decision(
     status: str,
     reason: str = "",
     duration: float | None = None,
+    *,
+    logical_run_id: str | None = None,
+    pipeline_run_id: str | None = None,
 ) -> OrchestrationDecision:
     return OrchestrationDecision(
         orchestration_run_id=orchestration_run_id,
@@ -977,7 +1053,26 @@ def _decision(
         status=status,
         reason=reason,
         duration=duration,
+        logical_run_id=logical_run_id,
+        pipeline_run_id=pipeline_run_id,
     )
+
+
+def _latest_pipeline_run_id(base_dir: Path, label: str) -> str | None:
+    """The ``pipeline_run_id`` of the newest run summary for ``label``.
+
+    ``run_pipeline`` ingests the log into ``_registry/runs.db`` before it
+    returns, and the orchestrator runs items serially, so the newest ``run``
+    summary for the label is the execution the just-finished call produced.
+    ``query_runs`` is oldest-first, so the last row is newest. Returns ``None``
+    when no run summary exists yet (e.g. a freshness block that errored before
+    the summary was written).
+    """
+    from tools.observability.run_registry import RunRegistry
+
+    registry = RunRegistry(base_dir / "_registry" / "runs.db")
+    runs = registry.query_runs(pipeline=label)
+    return runs[-1]["pipeline_run_id"] if runs else None
 
 
 def _item_key(set_name: str, item: ScheduledPipeline, run_date: dt.date) -> str:

@@ -198,7 +198,7 @@ def test_pipeline_quarantine_routes_rejected_rows_to_reject_writer(tmp_path):
     assert len(rows_main) == 2
     assert len(rows_reject) == 1
     assert "failed_rule" in cols_reject
-    assert "run_id" in cols_reject
+    assert "logical_run_id" in cols_reject
     assert "load_date" in cols_reject
 
 
@@ -218,7 +218,7 @@ def test_pipeline_quarantine_uses_run_context_identity(tmp_path):
         subject="cases",
         pipeline="ingest",
         run_date=dt.date(2026, 5, 29),
-        execution_id="exec-1",
+        pipeline_run_id="exec-1",
     )
     p = Pipeline("feed")
     r = p.read(CsvReader(csv_file), name="read")
@@ -234,13 +234,12 @@ def test_pipeline_quarantine_uses_run_context_identity(tmp_path):
     con = sqlite3.connect(tmp_path / "rejects.db")
     try:
         row = con.execute(
-            "SELECT run_id, logical_run_id, execution_id, load_date FROM rejects"
+            "SELECT logical_run_id, pipeline_run_id, load_date FROM rejects"
         ).fetchone()
     finally:
         con.close()
 
     assert row == (
-        "cases/ingest:2026-05-29",
         "cases/ingest:2026-05-29",
         "exec-1",
         "2026-05-29",
@@ -248,7 +247,7 @@ def test_pipeline_quarantine_uses_run_context_identity(tmp_path):
 
 
 def test_pipeline_quarantine_is_idempotent_on_rerun(tmp_path):
-    # Quarantine rejects are scoped by logical run id (delete-by-run_id + append):
+    # Quarantine rejects are scoped by logical run id (delete-by-logical-run + append):
     # re-running under the *same* logical run id replaces that run's rejects
     # rather than duplicating them, while a *different* id keeps its own alongside.
     import sqlite3
@@ -282,7 +281,7 @@ def test_pipeline_quarantine_is_idempotent_on_rerun(tmp_path):
     run("run-B")  # different logical run id: coexists
 
     con = sqlite3.connect(reject_db)
-    rows = con.execute("SELECT run_id FROM rejects").fetchall()
+    rows = con.execute("SELECT logical_run_id FROM rejects").fetchall()
     con.close()
 
     # The re-run replaced run-A's reject; run-B's sits alongside it.

@@ -25,8 +25,11 @@ pass to `run`. The runner lays out `<base>/_runs/<pipeline>.log` (the JSONL run
 logs, one per pipeline) and `<base>/_registry/runs.db` (the queryable run
 registry) underneath it; `status` / `runs` / `log` read from there. `orchestrate`
 also writes `<base>/_orchestration/runs.db`, a separate SQLite decision log for
-due, skipped, succeeded, failed, and blocked scheduled items. Actual pipeline
-execution records remain in `RunLog` / `RunRegistry` only.
+due, skipped, succeeded, failed, and blocked scheduled items. Each decision
+carries the `logical_run_id` the pass assigned and the `pipeline_run_id` it read
+back, so one orchestration pass joins to every pipeline execution it triggered
+(`pipeline_run_id` is the key into the run registry). Actual pipeline execution
+records remain in `RunLog` / `RunRegistry` only.
 
 ### The base directory — `--base-dir` or `--env`
 
@@ -119,7 +122,7 @@ is non-zero — same fail-fast contract as a real run, without writing anything.
 A run's **logical run id** is the idempotency key for its accumulated rows: a
 re-run under the *same* logical id replaces that run's rows rather than adding
 duplicates, while each execution stays individually traceable by its own
-`execution_id` ([ADR-0004](adr/0004-per-feed-load-strategy-owned-by-writer.md)). When omitted it defaults to `<pipeline>:run_date`, so re-running a
+`pipeline_run_id` ([ADR-0004](adr/0004-per-feed-load-strategy-owned-by-writer.md)). When omitted it defaults to `<pipeline>:run_date`, so re-running a
 given date is already idempotent.
 
 Pass `--logical-run-id` to re-drive a specific business run explicitly — for
@@ -132,7 +135,7 @@ $ python -m cli run pipelines/selection --base-dir /data --logical-run-id 2026-0
 ```
 
 The second invocation replaces the first run's rows in the SelectionPool (the
-`run_id` / `logical_run_id` columns hold `2026-05-correction`); the row count
+`logical_run_id` column holds `2026-05-correction`); the row count
 stays stable instead of doubling.
 
 ### Passing run parameters — `--param`
@@ -323,13 +326,13 @@ $ python -m cli runs --base-dir /data --pipeline ingest --limit 5
 ## `log` — inspect a run log file
 
 ```sh
-python -m cli log <pipeline> [--base-dir DIR] [--env ENV] [--run-id <execution-id-prefix>]
+python -m cli log <pipeline> [--base-dir DIR] [--env ENV] [--pipeline-run-id <prefix>]
 ```
 
 Reads `<base>/_runs/<pipeline>.log` (path-addressed runs partition the log per
 pipeline name), prints one line per step record, and ends with a summary across
-the runs in the file. `--run-id` filters to a single execution (a prefix of the
-execution id — the eight-character id shown by `status` / `runs` works).
+the runs in the file. `--pipeline-run-id` filters to a single execution (a prefix
+of the pipeline run id — the eight-character id shown by `status` / `runs` works).
 
 ```console
 $ python -m cli log selection --base-dir /data

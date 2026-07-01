@@ -13,7 +13,7 @@ visible, so bad data either fails the run, is routed aside with a located reason
 but never quietly disappears.
 
 Every run emits **structured JSONL** — one JSON object per line to a `.log` file
-(execution `run_id`, pipeline, step, status, `rows_in`/`rows_out`, duration,
+(`pipeline_run_id`, `logical_run_id`, pipeline, step, status, `rows_in`/`rows_out`, duration,
 errors, warn-hits, a `committed` marker), with human-readable console output for
 development. JSONL needs no infrastructure now, yet the `RunRegistry` ingests it
 without parsing free text.
@@ -69,6 +69,6 @@ needs to resolve that abort.
 - Re-driving stays idempotent per artifact: each writer owns its own load strategy
   and idempotency key (ADR-0004), so there is nothing to "unpublish" before a
   re-drive.
-- The JSONL schema (execution `run_id`, per-step metrics, `committed`,
+- The JSONL schema (`pipeline_run_id`, per-step metrics, `committed`,
   `error_category`) is the contract the `RunRegistry` consumes.
 </content>

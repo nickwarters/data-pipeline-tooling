@@ -27,7 +27,7 @@ the helpers take and return plain Python **row dicts**, never a pandas frame.
 | `RecordingWriter()` | A `Writer` that captures writes in memory instead of persisting. Read it with `rows_of(writer)`; `.writes` / `.dataset` expose the raw captures (e.g. for checkpoint pipelines that write more than once). |
 | `read_rows(store, table)` | Read a landed table back as row dicts — collapses the `store.reader(table).read().to_pandas()` chain. |
 | `without_columns(rows, *names)` | Drop named columns from row dicts (missing names ignored) — strip volatile stamps before an `==`. |
-| `assert_rows_equal(actual, expected, *, ignoring=(), unordered=False)` | Assert two row lists are equal; `actual` may be anything `rows_of` accepts. `ignoring` drops stamp columns (`run_id` / `load_date`); `unordered` compares as multisets. |
+| `assert_rows_equal(actual, expected, *, ignoring=(), unordered=False)` | Assert two row lists are equal; `actual` may be anything `rows_of` accepts. `ignoring` drops stamp columns (`logical_run_id` / `load_date`); `unordered` compares as multisets. |
 | `RecordingRunLog()` | A `RunLog` that captures records in memory. `.records`, `.records_for_step(step)`, `.warn_hits`, `.errors`. |
 | `read_run_log(path)` | Parse an on-disk JSONL run-log file into the same record dicts a `RecordingRunLog` captures. |
 
@@ -83,7 +83,7 @@ def test_landed_rows(tmp_path):
 
 ## Comparing rows, ignoring stamps and order
 
-A direct `==` gets brittle once a pipeline stamps `run_id` / `load_date` or
+A direct `==` gets brittle once a pipeline stamps `logical_run_id` / `load_date` or
 doesn't guarantee row order. `assert_rows_equal` takes anything `rows_of` accepts
 (here a `RecordingWriter`), drops the volatile columns, and compares as a
 multiset:
@@ -97,12 +97,12 @@ def test_scored_rows_ignoring_the_run_stamp():
     writer = RecordingWriter()
     p = Pipeline("cases")
     r = p.read(given_rows([{"case_id": "c1", "amount": 100}]), name="read")
-    s = p.transform(Stamp("run_id", "run-123"), r, name="stamp")
+    s = p.transform(Stamp("logical_run_id", "run-123"), r, name="stamp")
     p.write(writer, s, name="write")
     p.run()
 
     assert_rows_equal(
-        writer, [{"case_id": "c1", "amount": 100}], ignoring=["run_id"]
+        writer, [{"case_id": "c1", "amount": 100}], ignoring=["logical_run_id"]
     )
 ```
 

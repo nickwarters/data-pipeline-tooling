@@ -110,7 +110,6 @@ def test_run_redrives_a_business_run_under_a_logical_run_id(tmp_path):
         .to_pandas()
     )
     # Replaced under the one logical run id, not accumulated into duplicates.
-    assert set(pool["run_id"]) == {"REDRIVE-7"}
     assert set(pool["logical_run_id"]) == {"REDRIVE-7"}
     assert list(pool["case_ref"]) == ["c1", "c2"]
 
@@ -281,7 +280,7 @@ def test_run_stale_upstream_reports_clear_error(tmp_path):
         json.dumps(
             {
                 "timestamp": "2026-05-20T00:00:00+00:00",
-                "run_id": "old",
+                "pipeline_run_id": "old",
                 "pipeline": "_source",
                 "step": "run",
                 "status": "ok",

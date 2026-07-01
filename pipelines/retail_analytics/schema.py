@@ -1,4 +1,4 @@
-"""Declared schemas for the retail_analytics DAG: source types and each write terminus."""
+"""Schemas for the retail_analytics DAG: source types and each write terminus."""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ class RevenueRow:
 
 @dataclass
 class RiskRow:
-    """Terminus 2: cancelled orders and out-of-stock products as unified risk signals."""
+    """Terminus 2: cancelled orders and out-of-stock products as risk signals."""
 
     signal_type: str  # "cancelled_order" | "low_stock"
     entity_id: str  # order_id for cancelled; product_id for low_stock

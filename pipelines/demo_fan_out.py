@@ -4,7 +4,7 @@ Shows how a single wide ingest feed is fanned into two independent single-table
 pipelines over the shared raw table:
 
 1. **Raw** — the wide CSV lands in one shared raw table, stamped with
-   ``run_id`` / ``load_date``.
+   ``logical_run_id`` / ``load_date``.
 2. **Cases pipeline** — projects the case columns, applies the shared
    normalisation, schema-coerces and validates, accumulates silver, then
    reduces to a current-only one-row-per-Case gold.
@@ -76,7 +76,9 @@ def main(target_dir: str) -> None:
     p_cases = Pipeline("cases")
     r_cases = p_cases.read(med.raw.reader(SUBJECT), name="read")
     f_cases = p_cases.transform(
-        Filter(lambda row, rid=RUN_ID: row["run_id"] == rid), r_cases, name="filter"
+        Filter(lambda row, rid=RUN_ID: row["logical_run_id"] == rid),
+        r_cases,
+        name="filter",
     )
     n_cases = p_cases.transform(normalise, f_cases, name="normalise")
     s_cases = p_cases.transform(
@@ -98,7 +100,9 @@ def main(target_dir: str) -> None:
     p_prods = Pipeline("case_products")
     r_prods = p_prods.read(med.raw.reader(SUBJECT), name="read")
     f_prods = p_prods.transform(
-        Filter(lambda row, rid=RUN_ID: row["run_id"] == rid), r_prods, name="filter"
+        Filter(lambda row, rid=RUN_ID: row["logical_run_id"] == rid),
+        r_prods,
+        name="filter",
     )
     n_prods = p_prods.transform(normalise, f_prods, name="normalise")
     s_prods = p_prods.transform(

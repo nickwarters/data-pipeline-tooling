@@ -26,7 +26,7 @@ pipeline.write(
     name="write_raw",
 )
 pipeline.run()
-print(pipeline.run_id)  # the run's correlating id, shared by every record
+print(pipeline.pipeline_run_id)  # the run's correlating id, shared by every record
 ```
 
 When a pipeline runs under the `PipelineRunner` (or the path-addressed `run`
@@ -44,19 +44,34 @@ logged at `INFO` on the `framework.run.run_log` logger, so an entry-point that c
 does) will surface them. The `.log` file is always written when a `RunLog` is
 present, regardless of logging configuration.
 
-## `run_id` — the execution correlation key
+## The three run identifiers
 
-Run-log `run_id` is the **execution id**: the concrete attempt being observed.
-Ad hoc `Pipeline.run()` creates a fresh execution id and exposes it as
-`pipeline.run_id`; `Pipeline.run(context=...)` uses the supplied
-`RunContext.execution_id`. **Every record of a single execution carries the same
-`run_id`**, so the registry can group a run's steps and its summary.
+Run traceability hangs off three identifiers, **widest to narrowest scope**.
+Each ends in `_run_id`; the prefix names what it identifies.
 
-Accumulating tables use a separate **logical run id** for idempotency: a
-re-driven business run uses the same logical id so it replaces its prior rows,
-while each execution still has its own execution id for traceability. Context-
-derived accumulated writes stamp `run_id` and `logical_run_id` with the logical
-id, and `execution_id` with the value that matches the run-log/registry `run_id`.
+| Identifier | Scope | Minted by | Stable across re-drives? |
+|---|---|---|---|
+| `orchestration_run_id` | one runner/orchestrator pass, **shared by every pipeline it triggers** | `tools.orchestration` (its decision store) | no — a fresh pass each time |
+| `pipeline_run_id` | one **individual pipeline attempt** | the framework, per `.run()` (a fresh uuid) | no — fresh per attempt |
+| `logical_run_id` | the **business run / idempotency key** (`<label>:<run_date>`) | the caller / the default | **yes** — a re-drive of the same `run_date` reuses it |
+
+Run-log `pipeline_run_id` is the concrete attempt being observed. Ad hoc
+`Pipeline.run()` creates a fresh one and exposes it as `pipeline.pipeline_run_id`;
+`Pipeline.run(context=...)` uses the supplied `RunContext.pipeline_run_id`.
+**Every record of a single execution carries the same `pipeline_run_id`**, so the
+registry can group a run's steps and its summary. Every record *also* carries its
+`logical_run_id`, so the business run a re-drive belongs to is visible in the log
+itself.
+
+The distinction that matters for a re-run: `pipeline_run_id` changes on every
+attempt (so it "orphans" across re-drives), while `logical_run_id` is stable —
+a re-drive of the same `run_date` reuses it. So accumulating tables key
+idempotency on `logical_run_id` (a re-driven business run replaces its prior
+rows), while each row still carries its own `pipeline_run_id` for traceability.
+Note the scope nuance: `logical_run_id` is *also* per-pipeline — it differs from
+`pipeline_run_id` by **attempt vs. business-run**, not by scope. The umbrella
+`orchestration_run_id` is the only one shared across pipelines; it lives in the
+orchestration decision store, joined to the run log via `pipeline_run_id`.
 
 ## Record schema
 
@@ -67,7 +82,8 @@ leads each line; the examples below elide it for width but it is always present:
 | Field       | Type                | Meaning |
 |-------------|---------------------|---------|
 | `timestamp` | string              | ISO-8601 **UTC** instant the record was emitted (step close / run end). The time dimension the run-registry orders by — "latest run per pipeline", "row counts over time". |
-| `run_id`    | string              | The run's correlating id (same on every line of the run). |
+| `pipeline_run_id` | string        | The pipeline attempt's correlating id (same on every line of the run). The key the registry groups a run's records by. |
+| `logical_run_id` | string \| null | The business run / idempotency key this attempt belongs to (`<label>:<run_date>`). Stable across re-drives of the same run date. |
 | `pipeline`  | string              | The feed/pipeline name (the builder's `name`) or the runner's stable domain label (`<case_type>/<pipeline>`, e.g. `cases/selection`). |
 | `step`      | string              | `read`, `pre-validate`, `quarantine`, `process`, `profile`, `explain`, `post-validate`, `write`, `freshness`, or `run` (the summary). |
 | `step_address` | string \| null   | The stable dependency address for this record. Builder steps are recorded as `<pipeline>.<step>` (for example `pipeline_2.step_4`); the `run` summary is recorded as the pipeline address. The registry stores this field so downstream dependency checks can ask whether a specific upstream step has succeeded. |
@@ -135,11 +151,11 @@ scheduled item from running.
 ### Happy path (a successful run of 4 rows)
 
 ```json
-{"run_id": "f8263986…", "pipeline": "cases", "step": "read",          "status": "ok", "rows_in": null, "rows_out": 4, "rows_quarantined": null, "rows_excluded": null, "duration": 0.0007, "errors": [], "warn_hits": []}
-{"run_id": "f8263986…", "pipeline": "cases", "step": "pre-validate",  "status": "ok", "rows_in": 4,    "rows_out": 4, "rows_quarantined": null, "rows_excluded": null, "duration": 0.0000, "errors": [], "warn_hits": []}
-{"run_id": "f8263986…", "pipeline": "cases", "step": "post-validate", "status": "ok", "rows_in": 4,    "rows_out": 4, "rows_quarantined": null, "rows_excluded": null, "duration": 0.0000, "errors": [], "warn_hits": []}
-{"run_id": "f8263986…", "pipeline": "cases", "step": "write",         "status": "ok", "rows_in": 4,    "rows_out": 4, "rows_quarantined": null, "rows_excluded": null, "duration": 0.0016, "errors": [], "warn_hits": []}
-{"run_id": "f8263986…", "pipeline": "cases", "step": "run",           "status": "ok", "rows_in": 4,    "rows_out": 4, "rows_quarantined": null, "rows_excluded": null, "duration": 0.0030, "errors": [], "warn_hits": []}
+{"pipeline_run_id": "f8263986…", "pipeline": "cases", "step": "read",          "status": "ok", "rows_in": null, "rows_out": 4, "rows_quarantined": null, "rows_excluded": null, "duration": 0.0007, "errors": [], "warn_hits": []}
+{"pipeline_run_id": "f8263986…", "pipeline": "cases", "step": "pre-validate",  "status": "ok", "rows_in": 4,    "rows_out": 4, "rows_quarantined": null, "rows_excluded": null, "duration": 0.0000, "errors": [], "warn_hits": []}
+{"pipeline_run_id": "f8263986…", "pipeline": "cases", "step": "post-validate", "status": "ok", "rows_in": 4,    "rows_out": 4, "rows_quarantined": null, "rows_excluded": null, "duration": 0.0000, "errors": [], "warn_hits": []}
+{"pipeline_run_id": "f8263986…", "pipeline": "cases", "step": "write",         "status": "ok", "rows_in": 4,    "rows_out": 4, "rows_quarantined": null, "rows_excluded": null, "duration": 0.0016, "errors": [], "warn_hits": []}
+{"pipeline_run_id": "f8263986…", "pipeline": "cases", "step": "run",           "status": "ok", "rows_in": 4,    "rows_out": 4, "rows_quarantined": null, "rows_excluded": null, "duration": 0.0030, "errors": [], "warn_hits": []}
 ```
 
 ### Fail-fast abort (error-severity validator)
@@ -149,9 +165,9 @@ the run as `error`, **no `write` record is emitted** (nothing partial lands —
 ADR-0005), and `.run()` re-raises `ValidationError`:
 
 ```json
-{"run_id": "…", "pipeline": "cases", "step": "read",         "status": "ok",    "rows_out": 1, "errors": [],                                                     "warn_hits": []}
-{"run_id": "…", "pipeline": "cases", "step": "pre-validate", "status": "error", "rows_in": 1,  "errors": ["cases pre-validate failed: missing required column(s): case_ref"], "warn_hits": []}
-{"run_id": "…", "pipeline": "cases", "step": "run",          "status": "error", "errors": ["cases pre-validate failed: missing required column(s): case_ref"], "warn_hits": []}
+{"pipeline_run_id": "…", "pipeline": "cases", "step": "read",         "status": "ok",    "rows_out": 1, "errors": [],                                                     "warn_hits": []}
+{"pipeline_run_id": "…", "pipeline": "cases", "step": "pre-validate", "status": "error", "rows_in": 1,  "errors": ["cases pre-validate failed: missing required column(s): case_ref"], "warn_hits": []}
+{"pipeline_run_id": "…", "pipeline": "cases", "step": "run",          "status": "error", "errors": ["cases pre-validate failed: missing required column(s): case_ref"], "warn_hits": []}
 ```
 
 ### Abort *after* a committed artifact
@@ -164,10 +180,10 @@ quarantine step below committed (`committed: true`) before the terminus `write`
 blew up, so the reject table is real even though the run is `error`.
 
 ```json
-{"run_id": "…", "pipeline": "cases", "step": "read",       "status": "ok",    "rows_out": 4, "committed": false, "errors": []}
-{"run_id": "…", "pipeline": "cases", "step": "quarantine", "status": "ok",    "rows_out": 3, "rows_quarantined": 1, "committed": true,  "errors": []}
-{"run_id": "…", "pipeline": "cases", "step": "write",      "status": "error", "rows_in": 3,  "committed": false, "errors": ["terminus write failed: …"]}
-{"run_id": "…", "pipeline": "cases", "step": "run",        "status": "error", "committed": false, "errors": ["terminus write failed: …"]}
+{"pipeline_run_id": "…", "pipeline": "cases", "step": "read",       "status": "ok",    "rows_out": 4, "committed": false, "errors": []}
+{"pipeline_run_id": "…", "pipeline": "cases", "step": "quarantine", "status": "ok",    "rows_out": 3, "rows_quarantined": 1, "committed": true,  "errors": []}
+{"pipeline_run_id": "…", "pipeline": "cases", "step": "write",      "status": "error", "rows_in": 3,  "committed": false, "errors": ["terminus write failed: …"]}
+{"pipeline_run_id": "…", "pipeline": "cases", "step": "run",        "status": "error", "committed": false, "errors": ["terminus write failed: …"]}
 ```
 
 ### Warn escape hatch
@@ -199,7 +215,7 @@ next call; the stored offset advances only through the last complete line.
 
 **Truncation / rotation.** If the file is shorter than the stored offset, the
 offset is reset to 0 and the whole file is re-read from the top.
-`INSERT OR IGNORE` on the primary key `(run_id, step, step_ordinal)` guarantees
+`INSERT OR IGNORE` on the primary key `(pipeline_run_id, step, step_ordinal)` guarantees
 idempotency — no record is double-counted even if earlier content is revisited.
 
 **Idempotent.** A second call on the same unchanged file returns 0 and costs

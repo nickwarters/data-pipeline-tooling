@@ -7,19 +7,20 @@ sources branch in different directions and reconverge via distinct fan-ins.
 
 Execution graph (simplified)::
 
-                              ┌─► filter_completed ─┬─► add_margin ──────────────────────────┐
-                              │                      └─► tag_period ──────────────────────────┤
-    orders ──► validate ──────┼─► filter_cancelled ────────────────────────────────────────── ┤
-                              ├─► filter_pending ──────────────────────────────────────────── ┤
-                              └─► filter_high_value ──────────────────────────────────────── ─┤
-                                                                                               │
-                              ┌─► filter_active ──────────────────────────────────────────── ─┤
-    catalog ──► validate ─────┤                                                                │
-                              └─► filter_low_stock ──────────────────────────────────────── ──┤
-                                                                                               │
-         ┌─ join(add_margin, filter_active) ──► coerce ──► validate ──► write_revenue  ◄──────┤
-         ├─ stack(filter_cancelled, filter_low_stock) ──► coerce ──► validate ──► write_risk  ┤
-         └─ stack(filter_pending, tag_period, filter_high_value) ──► coerce ──► validate ──► write_ops
+    orders ──► validate ──┬─► filter_completed ─┬─► add_margin ──┐
+                          │                     └─► tag_period ──┤
+                          ├─► filter_cancelled ─────────────────┤
+                          ├─► filter_pending ───────────────────┤
+                          └─► filter_high_value ────────────────┤
+                                                                 │
+    catalog ──► validate ─┬─► filter_active ──────────────────── ┤
+                          └─► filter_low_stock ──────────────────┤
+                                                                  │
+    Fan-in (each ◄ rail feeds one terminus):
+    join(add_margin, filter_active) ──► coerce ──► validate ──► write_revenue
+    stack(filter_cancelled, filter_low_stock) ──► coerce ──► validate ──► write_risk
+    stack(filter_pending, tag_period, filter_high_value)
+        ──► coerce ──► validate ──► write_ops
 
 The eight peak-width branches are::
 
@@ -27,8 +28,8 @@ The eight peak-width branches are::
     2. filter_cancelled   — from orders, status == cancelled  → risk terminus
     3. filter_pending     — from orders, status == pending    → ops terminus
     4. filter_high_value  — from orders, value > threshold   → ops terminus
-    5. add_margin         — from filter_completed, adds revenue column → revenue terminus
-    6. tag_period         — from filter_completed, adds recent/historical tag → ops terminus
+    5. add_margin         — from filter_completed, adds revenue column → revenue
+    6. tag_period         — from filter_completed, adds recent/historical tag → ops
     7. filter_active      — from catalog, stock_qty > 0      → revenue terminus
     8. filter_low_stock   — from catalog, stock_qty == 0     → risk terminus
 
@@ -86,7 +87,7 @@ def _add_margin(dataset: Dataset) -> Dataset:
 
 
 def _tag_period(dataset: Dataset) -> Dataset:
-    """Add a ``period`` column: 'recent' if order_date >= RECENT_CUTOFF, else 'historical'."""
+    """Tag each row 'recent' if order_date >= RECENT_CUTOFF, else 'historical'."""
     df = dataset.to_pandas()
     df["period"] = df["order_date"].apply(
         lambda d: "recent" if str(d) >= RECENT_CUTOFF else "historical"
@@ -324,7 +325,7 @@ def dag_builder(
 
 
 def run(context: RunContext, *, describe: bool = False) -> list[Dataset]:
-    """Execute the retail analytics DAG, writing three silver tables under *base_dir*."""
+    """Execute the retail analytics DAG, writing three silver tables under base_dir."""
     med = medallion(StoreRegistry(context.base_dir), FEED_NAME)
     strategy = Refresh()
 
@@ -381,7 +382,8 @@ def main(argv: list[str]) -> int:
         return 1
 
     print(
-        f"Retail analytics DAG wrote revenue, risk_signals, and ops_queue under {base_dir / FEED_NAME}"
+        "Retail analytics DAG wrote revenue, risk_signals, and ops_queue "
+        f"under {base_dir / FEED_NAME}"
     )
     return 0
 

@@ -91,7 +91,7 @@ def test_task_level_requirement_allows_downstream_when_task_success_is_fresh(tmp
 
     def upstream(context):
         calls.append(context.label)
-        context.run_log.record(context.run_id, context.label, "step-4", "ok")
+        context.run_log.record(context.pipeline_run_id, context.label, "step-4", "ok")
         return Dataset.from_pandas(pd.DataFrame({"id": [1]}))
 
     def downstream(context):
@@ -242,11 +242,11 @@ def _record_run(
     step: str = "run",
     status: str = "ok",
     timestamp: str = "2026-06-12T00:00:00+00:00",
-    run_id: str = "upstream",
+    pipeline_run_id: str = "upstream",
 ) -> None:
     record = {
         "timestamp": timestamp,
-        "run_id": run_id,
+        "pipeline_run_id": pipeline_run_id,
         "pipeline": pipeline,
         "step": step,
         "status": status,
@@ -427,3 +427,49 @@ def test_orchestration_store_records_decisions_separately(tmp_path):
     records = OrchestrationStore(tmp_path / "_orchestration" / "runs.db").records()
     assert records[0]["item_key"] == "cases/cases/ingest/2026-06-12"
     assert records[0]["status"] == "succeeded"
+
+
+def test_orchestration_lineage_links_a_pass_to_each_pipeline_execution(tmp_path):
+    # One orchestration pass fans out to several pipeline runs. Each decision
+    # records the logical_run_id the pass assigned (the stable business key) and
+    # the pipeline_run_id it read back from the registry, so lineage(pass_id)
+    # joins straight to RunRegistry.records_for_run(pipeline_run_id) — the link
+    # from a runner invocation to every pipeline execution it triggered.
+    from tools.observability.run_registry import RunRegistry
+
+    calls: list[str] = []
+    orchestrator = Orchestrator(
+        _runner(calls),
+        (
+            PipelineSet(
+                "cases",
+                (
+                    ScheduledPipeline("cases", "feed-a", Weekdays()),
+                    ScheduledPipeline("cases", "feed-b", Weekdays()),
+                ),
+            ),
+        ),
+        WorkingDayCalendar(),
+    )
+
+    result = orchestrator.run_due_once(tmp_path, run_date=dt.date(2026, 6, 12))
+
+    # Every triggered item carries both correlation ids.
+    assert [d.status for d in result.decisions] == ["succeeded", "succeeded"]
+    for decision in result.decisions:
+        assert decision.logical_run_id == f"cases/{decision.pipeline}:2026-06-12"
+        assert decision.pipeline_run_id  # read back from the registry
+
+    # The umbrella id fans out to each pipeline execution via the join key.
+    store = OrchestrationStore(tmp_path / "_orchestration" / "runs.db")
+    lineage = store.lineage(result.orchestration_run_id)
+    assert {row["pipeline"] for row in lineage} == {"feed-a", "feed-b"}
+
+    registry = RunRegistry(tmp_path / "_registry" / "runs.db")
+    for row in lineage:
+        records = registry.records_for_run(row["pipeline_run_id"])
+        # The pipeline's step records are reachable from the pass, and the run
+        # summary's logical_run_id matches the business key the pass assigned.
+        assert {r["pipeline_run_id"] for r in records} == {row["pipeline_run_id"]}
+        summary = [r for r in records if r["step"] == "run"]
+        assert summary and summary[0]["logical_run_id"] == row["logical_run_id"]

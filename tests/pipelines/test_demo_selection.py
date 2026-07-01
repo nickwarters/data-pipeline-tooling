@@ -46,17 +46,16 @@ def test_demo_runs_the_full_source_to_selection_path(tmp_path, capsys):
     assert [r["priority_score"] for r in selection_pool] == [1000, 240]
     assert {r["question_bank_id"] for r in selection_pool} == {"qb-100"}
     # Stamped with the pipeline-name logical run id derived from the RunContext,
-    # and a per-execution execution_id for traceability.
-    assert {r["run_id"] for r in selection_pool} == {"selection:2026-05-29"}
+    # and a per-execution pipeline_run_id for traceability.
     assert {r["logical_run_id"] for r in selection_pool} == {"selection:2026-05-29"}
-    assert all(r["execution_id"] for r in selection_pool)
+    assert all(r["pipeline_run_id"] for r in selection_pool)
 
     # Selection explainability: a sibling trace landed alongside the pool,
     # stamped by the same run, with a per-Case verdict for every available Case.
     trace = read_rows(gold, "selection_trace")
     by_ref = {r["case_ref"]: r for r in trace}
     assert set(by_ref) == {"c1", "c2", "c3"}  # all considered, not just survivors
-    assert {r["run_id"] for r in trace} == {"selection:2026-05-29"}
+    assert {r["logical_run_id"] for r in trace} == {"selection:2026-05-29"}
     assert by_ref["c1"]["verdict"] == "selected"
     assert by_ref["c1"]["score"] == 1000
     assert by_ref["c3"]["verdict"] == "excluded"  # below the high-value gate

@@ -126,7 +126,7 @@ python -m cli run pipelines/ingest --base-dir /data --logical-run-id 2026-05-cor
 
 Running it twice replaces the batch's rows both times; the row count stays stable
 instead of doubling. Each execution remains individually traceable by its own
-`execution_id` in the RunRegistry even though the logical id is shared.
+`pipeline_run_id` in the RunRegistry even though the logical id is shared.
 
 ## 5. Confirm — green status, clean log
 

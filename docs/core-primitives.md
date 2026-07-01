@@ -51,14 +51,14 @@ rename — see CONTEXT.)
 |--------|----------------------------------------|----------------|
 | **raw** | A faithful, schema-light snapshot of the source as landed — the framework's landing zone. | **Full refresh** each run: truncate + reload from the source snapshot, so re-runs are deterministic (ADR-0004). |
 | silver | Validated, normalised data: the **schema boundary** — a Case Type's declared columns + dtypes are enforced here as a post-validator before the data lands (ADR-0006). Normalising *coercion* (parsing dates, casting booleans) runs as a transform step ahead of that check. | Full refresh from raw. |
-| gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. A gold hop composes an explicit `Pipeline` whose Writer carries the load strategy. | **Current-only** (ingest gold: `Refresh`, one row per Case) **or accumulating** (Selection / Sync: `AccumulateByRun`, stamped with logical run id / `load_date` and, when context-driven, `execution_id`; idempotent re-run via delete-by-logical-run then insert — ADR-0004; [gold-accumulation doc](gold-accumulation.md)). |
+| gold   | Refined ingest outputs **and** the accumulating SelectionPool / Review Outcomes. A gold hop composes an explicit `Pipeline` whose Writer carries the load strategy. | **Current-only** (ingest gold: `Refresh`, one row per Case) **or accumulating** (Selection / Sync: `AccumulateByRun`, stamped with `logical_run_id` / `load_date` and, when context-driven, `pipeline_run_id`; idempotent re-run via delete-by-logical-run then insert — ADR-0004; [gold-accumulation doc](gold-accumulation.md)). |
 
 raw stays schema-light on purpose: it mirrors the source so the landing zone is
 faithful, and schema enforcement arrives at silver and gold (ADR-0006).
 
 > **Load strategies are explicit.** The Store maps `namespace → file` only; each
 > Writer owns its load strategy. Callers choose `Refresh()`,
-> `AccumulateByRun(run_id, load_date)`,
+> `AccumulateByRun(logical_run_id, load_date)`,
 > `AccumulateByRun.from_context(context)`, `UpsertStrategy(key_columns)`,
 > `InsertOrIgnore()`, or `InsertIfAbsent(key_columns)` when asking the Store
 > for a Writer. This supports both current-state hops and accumulated histories
@@ -217,7 +217,7 @@ to a `SqliteReader`/Writer) accept **any string** — spaces, hyphens, mixed cas
 and SQL reserved words are all fine. Every identifier is double-quoted at the
 SQLite seam through the single `framework.io.sql.quote_identifier` choke point, so
 the name is preserved verbatim (case included) and can never break out of the
-statement or inject SQL. Values such as `run_id` are passed as bound parameters,
+statement or inject SQL. Values such as `logical_run_id` are passed as bound parameters,
 never interpolated. There is no separate "valid identifier" rule to learn: name a
 table or column whatever the source calls it.
 
@@ -263,12 +263,12 @@ Deliverables and SQLite tables:
   lands. Emits the Selection Deliverable — one list per Case Type.
 - `SqliteTruncateReloadWriter(db_path, table)` — **full refresh** (truncate +
   reload). Used for raw/silver, which mirror a current-state source snapshot.
-- `AccumulateByRunWriter(db_path, table, run_id, load_date, execution_id=None)` —
-  **accumulate by logical run** for gold: stamps each row `run_id`,
-  `logical_run_id`, `load_date`, and optional `execution_id`. The legacy `run_id`
-  column is the logical/idempotency key; `execution_id` is the trace key that
-  matches RunLog/RunRegistry when the strategy is derived from a `RunContext`.
-  A re-driven run is idempotent via *delete-by-run then insert*. Minted by
+- `AccumulateByRunWriter(db_path, table, logical_run_id, load_date, pipeline_run_id=None)` —
+  **accumulate by logical run** for gold: stamps each row `logical_run_id`,
+  `load_date`, and optional `pipeline_run_id`. `logical_run_id` is the
+  idempotency key; `pipeline_run_id` is the trace key that matches
+  RunLog/RunRegistry when the strategy is derived from a `RunContext`.
+  A re-driven run is idempotent via *delete-by-logical-run then insert*. Minted by
   `med.gold.writer(table, AccumulateByRun(...))` (see
   [gold-accumulation doc](gold-accumulation.md)).
 - `SqliteUpsertWriter(db_path, table, key_columns)` — **update-or-insert** by a
@@ -542,16 +542,18 @@ for each step of a run plus a final `run` summary:
 
 ```python
 class RunLog:
-    def record(self, run_id, pipeline, step, status, *,
-               rows_in=None, rows_out=None, duration=None,
+    def record(self, pipeline_run_id, pipeline, step, status, *,
+               logical_run_id=None, rows_in=None, rows_out=None, duration=None,
                errors=None, warn_hits=None) -> None: ...
-    def step(self, run_id, pipeline, step, rows_in=None): ...  # times a block
+    def step(self, pipeline_run_id, pipeline, step, rows_in=None,
+             logical_run_id=None): ...  # times a block
 ```
 
-Every record of a single execution carries the same `run_id`: an execution id
-created by ad hoc `.run()` or supplied as `RunContext.execution_id`. Accumulated
-rows use the separate `logical_run_id` for idempotency and stamp `execution_id`
-for traceability when the writer strategy is context-derived. The record
+Every record of a single execution carries the same `pipeline_run_id`: the
+attempt id created by ad hoc `.run()` or supplied as `RunContext.pipeline_run_id`,
+plus the `logical_run_id` of the business run it belongs to. Accumulated rows use
+`logical_run_id` for idempotency and stamp `pipeline_run_id` for traceability when
+the writer strategy is context-derived. The record
 `timestamp` (the ISO-8601 UTC instant it was emitted) lets the run registry group
 and order a run without parsing free text. The builder owns no path or format
 knowledge — it just drives the sink; when no `RunLog` is composed a null sink
@@ -572,7 +574,7 @@ registry.ingest("/path/to/share/cases/runs.log")   # idempotent
 registry.query_runs(pipeline="cases", status="error")  # narrow by pipeline/status
 registry.latest_run_per_pipeline()                     # one row per pipeline
 registry.runs_that_warned()                            # tolerated warns (incl. drift)
-registry.records_for_run(run_id)                       # every step of one run
+registry.records_for_run(pipeline_run_id)              # every step of one run
 registry.latest_success(RunAddress.pipeline("cases"), on=date(2026, 6, 23))
 registry.latest_success(
     RunAddress.task("pipeline_2", "step_4"),
@@ -582,11 +584,11 @@ registry.recent_row_counts("cases", limit=10)          # read volumes, newest fi
 registry.recent_profiles("cases.profile", limit=10)    # per-column profiles, newest first
 ```
 
-- **Ingest is idempotent**: a record's identity is `run_id` + step (+ a
+- **Ingest is idempotent**: a record's identity is `pipeline_run_id` + step (+ a
   step ordinal, because a multi-processor run emits one `process` record per
-  processor — a bare `run_id`+step would collide them), so re-reading the same
-  log inserts nothing the second time (`INSERT OR IGNORE`).
-- **Queryable by `run_id`, pipeline, status, and time.** Ordering is by the
+  processor — a bare `pipeline_run_id`+step would collide them), so re-reading the
+  same log inserts nothing the second time (`INSERT OR IGNORE`).
+- **Queryable by `pipeline_run_id`, pipeline, status, and time.** Ordering is by the
   record `timestamp`; "row counts over time" is `query_runs(pipeline=…)` read in
   order.
 - **Latest success queries accept `RunAddress` labels.** A whole-pipeline
@@ -710,9 +712,9 @@ runner.run("cases", "selection", "/path/to/share", run_date=date(2026, 5, 29))
 ```
 
 Handlers receive a `RunContext` carrying `base_dir`, `case_type`, `pipeline`,
-`run_date`, `load_date`, `execution_id`, `logical_run_id`, a string
+`run_date`, `load_date`, `pipeline_run_id`, `logical_run_id`, a string
 `params` mapping, the runner-level `RunLog`, the `RunRegistry`, and
-`freshness_days`. `execution_id` is the concrete
+`freshness_days`. `pipeline_run_id` is the concrete
 attempt recorded in RunLog/RunRegistry; `logical_run_id` is the idempotency key a
 re-driven business run reuses for accumulated rows. A run's history label is
 `<case_type>/<pipeline>` when registered with a subject (the registry /
@@ -828,7 +830,12 @@ predicates that target whole-Pipeline or task-level `RunAddress` history.
 `LastWorkingDayOfMonth`, and `ManualOnly`.
 
 Each invocation writes decisions to `<base_dir>/_orchestration/runs.db` with a
-stable item key of `set_name/case_type/pipeline/run_date`. `RunLog` and
+stable item key of `set_name/case_type/pipeline/run_date`. Each decision also
+records the `logical_run_id` the pass assigned the item (the stable business key)
+and the `pipeline_run_id` it read back from the registry, so
+`OrchestrationStore.lineage(orchestration_run_id)` joins one pass to every
+pipeline execution it triggered — `pipeline_run_id` is the key into
+`RunRegistry.records_for_run(...)`. `RunLog` and
 `RunRegistry` stay reserved for actual Pipeline execution records. A failed
 scheduled item is terminal for that orchestrator run and blocks downstream
 dependants. Requirement failures from stale task/pipeline history, missing
@@ -1080,8 +1087,8 @@ then returns the bulk-tier `Dataset`.
 The builder still makes **no** write decisions — no layer logic, no
 refresh-vs-accumulate branching; that all lives on the Writer. Because the
 terminus owns execution, it is the home of the cross-cutting concerns: it uses
-the supplied `RunContext` or creates one for ad hoc runs, exposes the execution
-id as `pipeline.run_id`, times each planned step, and drives the composed
+the supplied `RunContext` or creates one for ad hoc runs, exposes the pipeline
+attempt id as `pipeline.pipeline_run_id`, times each planned step, and drives the composed
 `RunLog` (timing + structured JSONL logging). The planned step
 objects are internal: they expose stable name/kind/order, the wrapped component
 where applicable, and read-only/side-effect metadata for plan-validation and the
