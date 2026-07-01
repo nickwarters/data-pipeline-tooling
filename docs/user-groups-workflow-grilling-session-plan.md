@@ -39,9 +39,29 @@ Recorded as we go; the numbered sections below carry the detail.
   is declared with the rest of the Case Type config. **Controls** resolves (Appeal
   Review). See §3.
 - **D6. QA Check + Answer-level Override are SHELVED** in favour of the **Amend Outcome**
-  tab. **Controls replaces the QA Reviewer** for now. So `qaReviewer` role, ADR-0018
-  Answer Override authoring, QA Check (`qa-*` Case Types), ADR-0021 — all go dormant for
-  September. (Open: rip out vs leave dormant — see §3.)
+  tab. **Controls replaces the QA Reviewer** for now.
+- **D7. Amend Outcome = a case-level, hand-set verdict** (not derived). Controls picks
+  the new **Outcome** explicitly with a **justification** box. Store an
+  **amended-outcome record** on the Case row capturing **who** (`amendedBy`) and **when**
+  (`amendedAt`) for audit — do **not** rely on SharePoint item version history. This
+  overturns the old "Outcome is always derived, never overridden" principle
+  (CONTEXT.md / ADR-0018) for the amended case. **Current Outcome** = amended record if
+  present, else `outcomeAtCompletion`.
+- **D8. Rip QA out now** (not leave dormant): remove `qaReviewer` role, `qa-*` Case
+  Types (`qa-example-review.js`), `cr-override-editor.js`, and mark ADR-0018/0021
+  **superseded**. QA is redesigned later, closer to when its requirements are known.
+- **D9. Remediation Action becomes an object** — elevate from plain string to
+  `{ id, text, status: 'pending'|'complete'|'cancelled', cancelReason? }`. The **due
+  date is a single case-level field** on the Case row (not per action), **stamped when
+  the Reviewer clicks "Send Actions"** = send date + 10 working days.
+- **D10. RP (Adviser) sees only Summary + Conversation.** No Case Details tab for the RP
+  — Case Details is **rolled into the Summary** (same content shown in the Details tab
+  and inside Summary), so the RP needs only: **Summary (read-only)** + **Conversation
+  (edit during `Actions In Progress`)**. RP does **not** edit Remediation.
+- **D11. Reviewer sets the Responsible Party at the bottom of the Issues tab.** Must be
+  set before "Send Actions"; **cannot be changed after send**.
+- **D12. Working-day calendar** = a small maintained list of holiday dates — either a
+  small SharePoint list or an in-code array is acceptable (pick at build time).
 
 ---
 
@@ -395,15 +415,17 @@ If we only get through five things in the grill, these are them:
 1. [x] **~~Two-axis role model~~** RESOLVED (D1/D2): base↔elevated on each side —
        Reviewers→CaseTypeOwner (reviewing), Advisers→JourneyOwner (frontline);
        `Reviewers - <type>` implies Reviewer.
-2. [ ] **The status machine** — exact states, transitions, and button semantics (§2).
-       (States/casing fixed by D4; button + snapshot timing still open.)
-3. [x] **~~QA Reviewer vs Controls~~** RESOLVED (D6): Controls replaces QA; QA
-       Check + Answer Override shelved; Amend Outcome is the outcome-change surface.
-       (Open: rip out vs leave dormant; what Amend Outcome _does_ — §3.)
-4. [ ] **Remediation tab = per-action complete/cancelled tracking**, split from Issues,
-       storage-shape change (§4).
-5. [ ] **RP (Adviser) access on Send Actions** — Summary+Conversation during
-       `Actions In Progress`, contradicting the current Completed-only Summary gate (§5).
+2. [~] **The status machine** — states/casing fixed (D4); button label + due-date
+       stamp fixed (D9). Still open: outcome-snapshot timing on the actions path, and
+       reopen semantics (§2).
+3. [x] **~~QA Reviewer vs Controls~~** RESOLVED (D6/D7/D8): Controls replaces QA; QA
+       Check + Answer Override ripped out; **Amend Outcome = case-level hand-set
+       verdict + justification + who/when audit**.
+4. [x] **~~Remediation tab~~** RESOLVED (D9): per-action `status`/`cancelReason`,
+       actions elevated to objects, one case-level due date stamped at Send Actions.
+5. [x] **~~RP (Adviser) access~~** RESOLVED (D10/D11): RP sees Summary + Conversation
+       (Details folded into Summary); Reviewer sets RP at bottom of Issues, locked after
+       send.
 
 ---
 
