@@ -1,0 +1,384 @@
+# User Groups & Remediation Workflow — Grilling-Session Plan
+
+**Status:** Not yet grilled — DRAFT for the session. Created from live-testing feedback
+ahead of the September go-live.
+**Created:** 2026-07-01
+**Driver:** Pre-go-live tester feedback + a role/case-list pivot an agent recently
+started (half-landed in `permissions.js`, `section-access.js`, `sharepoint-client.js`,
+and `case-types/example-review.js`). This session locks the role model, the case
+lifecycle/status machine, the Remediation tab's purpose (resolves the parked #144),
+and a **second appeal flow** (Appeal Request → Appeal Review) that contradicts the
+current QA-based **Appeal**.
+
+> How to use this doc: each item is a decision we must land or a question we must
+> answer. Walk it top-to-bottom in the grill. **Bold ⚠️** items are the high-stakes
+> ones where the new request _contradicts_ something already documented (CONTEXT.md
+> or an ADR) or already half-built in code — resolve those first, because the rest
+> depends on them.
+
+---
+
+## 0. Framing / why are we doing this
+
+- [ ] One sentence per pain point: what did testers actually trip over? (So every
+      decision below is checked against real pain, not a nicety.)
+- [ ] Which of these ship for **September go-live** vs. which are "after"? This is a
+      lot; the lifecycle + role gating is probably the must-have, the second appeal
+      flow (Appeal Request / Appeal Review / Amend Outcome by Controls) may be a fast
+      follow.
+- [ ] Confirm this supersedes / interacts with the recent half-landed pivot. Several
+      code files already carry a partial version of these ideas (see §7 "Pre-existing
+      inconsistencies"). We either finish that model or replace it — decide which.
+
+---
+
+## 1. The role & group model ⚠️ contradicts current docs + code
+
+The request lists **eight** group families. They fall on **two different axes** that
+the current `permissions.js` blurs. Pin the axes first, then every group slots in.
+
+**Straw-man two-axis model (confirm or reject):**
+
+- **Functional role groups** — gate _what a user can do_ anywhere: `Reviewers`,
+  `Advisers`, `CaseTypeOwner - <type>`, `JourneyOwner - <type>`, `Controls`.
+- **List-access groups** — gate _which Case Type's SharePoint list a user can open_:
+  `Reviewers - <type>` (e.g. `Reviewers - Example Case Type`, `Reviewers - Complaints`).
+  These are the real ACL boundary (ADR-0010); the functional groups are UX-only
+  capability flags.
+
+Under this model a Reviewer needs **both** `Reviewers` (functional) **and**
+`Reviewers - Complaints` (list access) to actually review a Complaints case.
+
+- [ ] **Confirm the two-axis split** (functional vs list-access), or state the real
+      relationship if it's different.
+- [ ] **Does a Reviewer need both groups**, or does `Reviewers - Complaints` alone
+      imply Reviewer? (Affects `resolveCapabilities` + `resolveRoles`.)
+
+### 1a. `Advisers` — new name, collides with **Responsible Party** ⚠️
+
+The request: `Advisers` "defines the user as an Adviser (responsible party)". Today
+CONTEXT.md's **Responsible Party** is "the SharePoint user whose work is being
+reviewed", `permissions.js` has `responsibleParty: 'CR-ResponsibleParty'`, and
+`section-access.js` matches the role off the **Case row field**, not group membership.
+
+- [ ] **Is "Adviser" simply the business word for "Responsible Party"?** If yes: do we
+      rename the domain term, or keep "Responsible Party" internally and treat
+      "Adviser" as a UI label + the `Advisers` group is the new source for
+      `responsibleParty`? (CONTEXT.md avoid-list already forbids several synonyms;
+      adding "Adviser" needs a ruling.)
+- [ ] **Group vs per-case field.** Being _in_ `Advisers` makes you eligible to be a
+      Responsible Party; being _named on a Case_ makes you the RP for that case (cf.
+      Reviewer vs Assigned Reviewer). Confirm this mirrors the Reviewer/Assigned split.
+- [ ] **`CR-ResponsibleParty` and `Frontline - Complaints`** — the recent pivot left
+      both in `permissions.js`. Are these dead now (replaced by `Advisers`), or
+      distinct? `frontlineComplaints` has no home in the new spec — kill or keep?
+
+### 1b. `JourneyOwner - <type>` — new role, currently mis-modelled ⚠️
+
+The request: one group per Case Type name; gates functionality; lets holders (1) see
+the **Summary tab for _all_ cases in their case type(s)** and (2) see a new **Appeal
+Request** tab. Today `permissions.js` files `JourneyOwner - Complaints` **inside the
+`caseTypeOwners` map** — so a Journey Owner is wrongly resolved as a Case Type Owner.
+
+- [ ] **JourneyOwner is its own capability**, not a Case Type Owner. New capability
+      field (e.g. `ownedJourneyCaseTypes: string[]`), new Role in the access matrix.
+      Confirm.
+- [ ] **"Summary for all cases in their case type"** is a **cross-case** power, not a
+      single-Case section grant. That's a list/dashboard query capability
+      (`#/reports/...` or a JourneyOwner dashboard), _separate_ from the per-Case
+      section access. Where does this surface — a new route, or an existing dashboard?
+- [ ] Does JourneyOwner get **read-only** Summary on any case of its type, even cases
+      they aren't assigned to / aren't RP on? (Yes per request — confirm the mode.)
+
+### 1c. `Controls` — new role ⚠️
+
+The request: gates the **Appeal Review** tab; Controls agree/reject an appeal with
+justification; if the appeal changes the outcome they use the **Amend Outcome** tab.
+
+- [ ] New capability (`isControls`) + new Role in the matrix. Confirm.
+- [ ] **Controls vs QA Reviewer.** Today the **QA Reviewer** resolves Appeals and is
+      the _only_ role that may author **Answer Overrides** / use Amend Outcome
+      (CONTEXT.md, ADR-0018). The request hands appeal-resolution **and** Amend Outcome
+      to **Controls**. So: **does Controls replace QA Reviewer for appeals + overrides,
+      or coexist?** (This is the single biggest role contradiction — see §3.)
+
+### 1d. Group naming convention (locks SharePoint provisioning) ⚠️
+
+- [ ] **One canonical `<Role> - <CaseTypeName>` pattern**, using which case-type name?
+      The request says `Example Case Type`; existing code says `Example Review`. These
+      must match a single source of truth. Decide the display name **and** the
+      slug↔display mapping (code keys on slug `example-review`; ACLs key on the group
+      display name).
+- [ ] Where does the slug↔group-name mapping live? (A per-Case-Type field in the
+      module? A table in `permissions.js`?) Every per-type group name
+      (`Reviewers - X`, `CaseTypeOwner - X`, `JourneyOwner - X`) derives from it.
+- [ ] Final enumerated group list for **provisioning** (Maintainer runbook): list all
+      groups for the two live types (Example, Complaints) so nothing is invented later.
+
+---
+
+## 2. Case lifecycle & status machine ⚠️ contradicts CONTEXT.md + case-machine.js
+
+The request describes a **multi-stage** lifecycle that replaces today's binary
+`In-progress → Completed` (`case-machine.js`, CONTEXT.md "Completed Case"). Draw the
+full state diagram in the grill; straw-man:
+
+```
+In-progress ──(Issues done, no actions)────────────────► Complete
+     │
+     └──(Issues done, actions exist → "Send Actions")──► Actions in progress
+                                                              │
+                     (Remediation tab: every sent action     │
+                      marked complete / cancelled+reason)    │
+                                                              ▼
+                                              ("Complete Case") Complete
+```
+
+- [ ] **Lock the exact status strings** — they become SharePoint list column values
+      and ETag-guarded PATCH payloads, so casing matters. The request says
+      "Actions in progress" and "Complete"; the code already has `'Actions In Progress'`
+      (title case) and `'Completed'`. **Pick one casing for each and one terminal
+      name** (`Complete` vs `Completed`). CONTEXT.md's "Completed Case" +
+      `completedAt` must be reconciled to the chosen term.
+- [ ] **Redefine "Completed Case".** Today it means "every applicable Question has an
+      Answer" (CONTEXT.md). Under the new flow, reaching the terminal state also
+      requires either _no actions_ or _all remediation resolved_. Rewrite the
+      definition (and the "In-progress ↔ Completed" example dialogue in CONTEXT.md).
+- [ ] **The Summary bottom button.** One button, two labels:
+  - [ ] Label = **"Send Actions"** iff ≥1 Remediation Action exists across the case;
+        else **"Complete Case"**. Confirm the exact condition (any action on any failed
+        Answer? only non-cancelled? — but nothing is cancelled yet at this point).
+  - [ ] **"Send Actions"** → status `Actions in progress`, stamps a send timestamp,
+        computes remediation due dates (§4), grants RP access (§5). Confirm all four
+        side-effects fire atomically on that one PATCH (ETag/SaveQueue — ADR-0008).
+  - [ ] **"Complete Case" (no-actions path)** → status `Complete`. Confirm the
+        `outcomeAtCompletion` snapshot (ADR-0012) is stamped **here**.
+- [ ] **When is the outcome snapshotted** on the actions path — at **Send Actions**
+      (answers are frozen then) or at final **Complete**? Answers don't change during
+      remediation, so leaning "at Send Actions", but `completedAt` is at final Complete.
+      Decide both timestamps.
+- [ ] **Definition of "Issues tab complete"** (the precondition for showing the
+      button). Every failed Answer's **required** Issue Capture Fields filled
+      (ADR-0020, ADR-0017 completion gate)? Confirm this is the gate, unchanged.
+- [ ] **Reopen semantics.** If a new Question Definition becomes applicable while
+      `Actions in progress`, does the case fall back to `In-progress` (today's rule)?
+      What if it's already `Complete`? Define.
+- [ ] **`CaseRow.status` union** currently `'In-progress' | 'Completed'` — widen to the
+      final set. `CaseMachine.transitionToCompleted` needs sibling transitions
+      (`transitionToActionsInProgress`, final complete). Note in the ADR.
+
+---
+
+## 3. Appeals: a second flow that contradicts the QA appeal ⚠️⚠️
+
+This is the deepest contradiction. **Two appeal models now exist:**
+
+| | CONTEXT.md / ADR-0018 (today) | New request |
+|---|---|---|
+| Raised by | Responsible Party or their Manager | ? (JourneyOwner sees "Appeal Request") |
+| Resolved by | **QA Reviewer** | **Controls** ("Appeal Review") |
+| Outcome change via | **Answer Override** (per-Answer, QA authors) | **Amend Outcome** tab (Controls) |
+| Tabs | Appeal Section (overlay-ish), Amend Outcome = QA override home | **Appeal Request** + **Appeal Review** tabs |
+
+Resolve, in order:
+
+- [ ] **Who raises an appeal now?** The request only says JourneyOwner _sees_ the
+      "Appeal Request" tab. Do JourneyOwners **raise** appeals, or is "Appeal Request"
+      where they **triage/see** appeals raised by Advisers/RPs? Name the initiator
+      explicitly.
+- [ ] **Is this the same `appeals[]` entity** (ADR-0018, additive blob on the Case row,
+      lifecycle `raised → underReview → resolved{agreed|rejected}`) with different
+      _actors_, or a genuinely new entity? Strong preference: **same storage, new role
+      wiring** — but confirm.
+- [ ] **Does `Controls` replace `QA Reviewer` for resolution?** And does the
+      **QA Reviewer / QA Check / Answer Override** machinery (ADR-0018, ADR-0021,
+      `qa-example-review.js`, `cr-override-editor.js`) **survive at all** for
+      September, or is it out of scope / superseded? (Big blast radius — decide
+      before touching the matrix.)
+- [ ] **"Amend Outcome" ownership.** Today Amend Outcome is the canonical **Answer
+      Override** authoring surface (QA). The request gives it to **Controls**, used
+      "if the appeal results in a case outcome changing". This overlaps the **parked
+      #145** (case-level override vs per-Answer override, which contradicts ADR-0018).
+      Decide: does Amend Outcome stay **per-Answer override re-derived** (`computeOutcome`
+      over Effective Answers, CONTEXT.md), or does Controls **hand-set a verdict**?
+      (CONTEXT.md avoid-lists "Outcome Override" — a hand-set verdict breaks that.)
+- [ ] **Appeal timing vs status.** Appeals today only exist on a **Completed** Case.
+      With the new terminal name `Complete`, and the `Actions in progress` interlude,
+      when can an appeal be raised/reviewed? (Presumably only after `Complete`.)
+- [ ] **Access modes** for the two new sections (`appealRequest`, `appealReview`) — see
+      §6 matrix.
+
+---
+
+## 4. Remediation tab — resolves the parked #144 ⚠️
+
+The request finally **defines** the standalone Remediation tab (previously #144,
+"purpose undefined"): the **Reviewer** fills it in, **per question/action**, marking
+each Remediation Action **complete** or **cancelled** (cancelled ⇒ justification
+required). Plus each action carries a **due date = 10 working days after Send Actions**.
+
+This forces a storage-shape change: today a Remediation Action is a **plain string**
+(`remediationActions: string[]` on the Answer; and the ADR-0020 `actions` Issue Capture
+Field is `Action[]`). It now needs per-action **state**.
+
+- [ ] **Two distinct Sections now exist** — reconcile with CONTEXT.md, which says
+      "Issues" _is_ the Remediation-capture Section (Section key `remediation`):
+  - **Issues** tab = _capture_ actions on failed Answers (Reviewer, pre-send).
+  - **Remediation** tab = _track completion_ of sent actions (Reviewer, post-send).
+  - [ ] Do we **split the Section key** (`issues` for capture, `remediation` for
+        tracking), or keep one key with mode depending on status? The current single
+        `remediation` Section key (in `SECTIONS`, the matrix, `showInSummary`) can't be
+        both. **Name the two sections** and update CONTEXT.md's "Issues = UI label for
+        the Remediation Section" claim.
+- [ ] **Per-action data shape.** Straw-man: promote each action to
+      `{ id, text, status: 'pending'|'complete'|'cancelled', cancelReason?, dueDate }`.
+      Where does it live — widen the ADR-0020 `Action` type? A parallel
+      `remediationStatus` map on the Answer? (ADR-0007 field-level PATCH implications.)
+- [ ] **Cancelled ⇒ justification required** — a completion gate: can't reach
+      `Complete` with a cancelled-but-unjustified action. Confirm.
+- [ ] **"Remediation complete"** = every _sent_ action is `complete` or
+      `cancelled(+reason)`. This **gates the "Complete Case" button, but only when
+      actions were sent** (request). Confirm the gate is inert on the no-actions path.
+- [ ] **Access.** Remediation tab = **Reviewer edit only**. The **Responsible Party
+      does NOT edit** it — they do the work off-system and reply via **Conversation**;
+      the Reviewer records the result. Confirm (this is explicit in the request).
+- [ ] **Does Remediation feed Summary?** (`showInSummary`.) The failed-Answer detail
+      block already shows actions; should it now show each action's
+      complete/cancelled state + due date?
+
+---
+
+## 5. Responsible Party (Adviser) assignment & access ⚠️ contradicts section-access.js
+
+- [ ] **Reviewer sets the Responsible Party _within_ the case review.** Today
+      `responsibleParty` is just a Case-row field (assumed set at creation). Now it's an
+      **editable field in the UI** — **which tab/section**, and **when** (must be set
+      before "Send Actions", since send grants them access)? New editable person-field
+      surface + PATCH.
+- [ ] **RP gains access on Send Actions, not on Complete.** Today `section-access.js`
+      hides **Summary** from the RP unless `status === 'Completed'`. The request needs
+      the RP to see **Summary + Conversation** during **`Actions in progress`**. So the
+      Summary gate must change to something like "visible read-only when status ∈
+      {`Actions in progress`, `Complete`}". Confirm the exact status set.
+- [ ] **Conversation** — the recent pivot already set
+      `conversation.allowMessagesWhen: ['Actions In Progress']` in the example config,
+      which lines up: RP can post during remediation. Confirm this is intended and the
+      RP's conversation mode is `edit` during `Actions in progress`.
+- [ ] **Exact RP tab set.** Straw-man: **Case Details (read-only) + Summary (read-only)
+      + Conversation (edit, during actions)** — and _nothing_ of Review / Issues /
+      Remediation / Notes. Confirm.
+- [ ] **RP identity plumbing.** Is the RP a plain user field, or does it (like the
+      Managers) get denormalised for reporting? Any manager-of-RP relationship needed
+      here, or out of scope?
+
+---
+
+## 6. Access matrix (ADR-0011) — new Sections & Roles
+
+Everything above lands as edits to `MATRIX` in `section-access.js`. Fill this grid in
+the grill (modes: `edit` / `read-only` / `hidden`, possibly status-conditional):
+
+**New/renamed Sections:** `review` (=questions), `issues` (=capture), `remediation`
+(=NEW completion tracking), `appealRequest`, `appealReview`, `amendOutcome`.
+**New Roles:** `journeyOwner`, `controls`, plus existing `assignedReviewer`,
+`otherReviewer`, `responsibleParty` (Adviser), `caseTypeOwner`, `qaReviewer?`, `none`.
+
+| Section \ Role | assignedReviewer | responsibleParty | journeyOwner | controls | caseTypeOwner |
+|---|---|---|---|---|---|
+| details | read-only | read-only | ? | ? | read-only |
+| review (questions) | edit | hidden | ? | ? | read-only |
+| issues (capture) | edit | hidden | ? | ? | read-only |
+| remediation (tracking) | edit | **hidden** | ? | ? | ? |
+| summary | read-only | read-only *(status-gated)* | **read-only (all cases in type)** | ? | read-only |
+| appealRequest | ? | ? | **read-only/edit** | ? | ? |
+| appealReview | hidden | hidden | ? | **edit** | hidden |
+| amendOutcome | ? | hidden | ? | **edit** | ? |
+| conversation | edit | edit *(status-gated)* | ? | ? | read-only |
+| notes | edit | hidden | ? | ? | read-only |
+
+- [ ] Fill every `?`. Note which cells are **status-conditional** (function-valued in
+      the matrix) vs constant.
+- [ ] **Default tab & fallback order** with the new tab set — still `details` default?
+- [ ] **`showInSummary`** for the new/renamed Sections (which feed the Summary rollup).
+- [ ] **JourneyOwner cross-case Summary** is _not_ expressible in the per-Case matrix
+      alone (it spans cases they have no per-case role on). Decide how the matrix + a
+      list-scope capability combine (see §1b).
+
+---
+
+## 7. Pre-existing inconsistencies from the half-landed pivot (clean these up)
+
+Not new decisions — defects to fix as part of this work, called out so we don't build
+on sand:
+
+- [ ] `permissions.js`: `JourneyOwner - Complaints` is wrongly nested in
+      `caseTypeOwners` → must become its own capability (§1b).
+- [ ] `sharepoint-client.js`: `CaseRow.status` is `'In-progress' | 'Completed'` but
+      `SectionConfig.allowMessagesWhen` already allows `'Actions In Progress'`, and
+      `example-review.js` uses it — the status union is out of sync with the config
+      type (§2).
+- [ ] Casing mismatch: `'Actions In Progress'` (code) vs "Actions in progress"
+      (request); `'Completed'` (code/CONTEXT) vs "Complete" (request) — one canonical
+      set (§2).
+- [ ] Group-name mismatch: `'CaseTypeOwner - Example Review'` (code) vs
+      `'CaseTypeOwner - Example Case Type'` (request) (§1d).
+- [ ] `responsibleParty: 'CR-ResponsibleParty'` and `frontlineComplaints:
+      'Frontline - Complaints'` vs the new `Advisers` group — reconcile/retire (§1a).
+- [ ] `case-machine.js` only knows `transitionToCompleted`; `canComplete`/`canAttribute`
+      hard-code `status === 'In-progress'` — needs the new intermediate state (§2, §4).
+
+---
+
+## 8. Docs to update (outputs of this grill)
+
+- [ ] **CONTEXT.md** — new/changed terms: **Adviser** (vs Responsible Party),
+      **Journey Owner**, **Controls**, **Appeal Request** vs **Appeal Review**,
+      **Remediation** (tab redefined — per-action complete/cancelled), **status set**
+      (`Actions in progress`, terminal name), **remediation due date / working days**;
+      reconcile **Appeal** (QA vs Controls) and the **Completed Case** definition.
+- [ ] **New ADR — case lifecycle / status machine** (multi-stage: In-progress →
+      Actions in progress → Complete; button semantics; snapshot timing).
+- [ ] **New ADR — working-day due dates** (10 working days: which calendar? England &
+      Wales bank holidays, or plain Mon–Fri? No third-party deps — a small internal
+      calculator + holiday list; where does the holiday list live?).
+- [ ] **ADR-0011** — add Sections (appealRequest, appealReview, amendOutcome; split
+      issues/remediation) and Roles (journeyOwner, controls); Summary RP gate change.
+- [ ] **ADR-0018 / #145** — settle Amend Outcome ownership (Controls) and whether
+      outcome change stays per-Answer-derived or becomes case-level/hand-set.
+- [ ] **ADR-0007** — storage deltas: per-action status/reason/dueDate, `responsibleParty`
+      now Reviewer-set, new status column, send timestamp.
+- [ ] **Resolve #144** (Remediation tab) with §4; touch **#145** (Amend Outcome).
+- [ ] **docs/PLAN.md** — sequence this as its own slice(s); flag what's September-must
+      vs fast-follow (§0).
+
+---
+
+## 9. Resolve-first short list
+
+If we only get through five things in the grill, these are them:
+
+1. [ ] **Two-axis role model** (functional vs list-access) + where JourneyOwner and
+       Controls sit — everything else keys off this (§1).
+2. [ ] **The status machine** — exact states, transitions, and button semantics (§2).
+3. [ ] **QA Reviewer vs Controls** — does Controls replace QA for appeals + Amend
+       Outcome, and does the whole QA/Override stack survive September? (§3)
+4. [ ] **Remediation tab = per-action complete/cancelled tracking**, split from Issues,
+       storage-shape change (§4).
+5. [ ] **RP (Adviser) access on Send Actions** — Summary+Conversation during
+       `Actions in progress`, contradicting the current Completed-only Summary gate (§5).
+
+---
+
+## 10. Parking lot (raise if time allows)
+
+- [ ] Working-day calendar source & maintenance (bank-holiday list refresh).
+- [ ] Overdue-remediation surfacing (past due date) — a report? a badge? Managers'
+      dashboards already compute case overdue via `overdue-evaluator.js`.
+- [ ] Notifications when actions are sent to the RP (email? in-app only?). SharePoint
+      list alerts vs framework-driven — likely out of scope for a no-backend frontend.
+- [ ] JourneyOwner "see all cases in type" — new route/dashboard vs extending an
+      existing owner dashboard.
+- [ ] Multiple open appeals / re-appeal after Controls rejects (ADR-0018 allows one
+      open appeal at a time — does that hold under the Controls flow?).
+</content>
+</invoke>
