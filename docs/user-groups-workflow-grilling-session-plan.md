@@ -18,6 +18,33 @@ current QA-based **Appeal**.
 
 ---
 
+## Decisions landed — 2026-07-01 grill (running log)
+
+Recorded as we go; the numbered sections below carry the detail.
+
+- **D1. Base + elevated roles are two parallel sides of the review.** _Reviewing side:_
+  **Reviewers** (base) → **CaseTypeOwner - `<type>`** (elevated). _Frontline side:_
+  **Advisers** (base) → **JourneyOwner - `<type>`** (elevated). CaseTypeOwner and
+  JourneyOwner are the two elevated, per-Case-Type roles.
+- **D2. `Reviewers - <type>` (list-access) implies the Reviewer capability.** No need to
+  hold both `Reviewers` and `Reviewers - <type>`; the list group is sufficient to be a
+  Reviewer. (`isReviewer` = in `Reviewers` **or** in any `Reviewers - <type>`.)
+- **D3. Group naming corrected.** The Example type's owner group is the **existing**
+  `CaseTypeOwner - Example Review` (not "Example Case Type"). The code is already right;
+  no rename. §1d's "mismatch" is withdrawn.
+- **D4. Status casing/terms:** keep the existing code casing — `In-progress`,
+  `Actions In Progress`, `Completed`. (§2 "pick a casing" is resolved to these.)
+- **D5. Appeal raiser is per-Case-Type config.** Complaints: the **JourneyOwner** raises
+  (Appeal Request tab). Other types: default to the **Responsible Party Manager**. This
+  is declared with the rest of the Case Type config. **Controls** resolves (Appeal
+  Review). See §3.
+- **D6. QA Check + Answer-level Override are SHELVED** in favour of the **Amend Outcome**
+  tab. **Controls replaces the QA Reviewer** for now. So `qaReviewer` role, ADR-0018
+  Answer Override authoring, QA Check (`qa-*` Case Types), ADR-0021 — all go dormant for
+  September. (Open: rip out vs leave dormant — see §3.)
+
+---
+
 ## 0. Framing / why are we doing this
 
 - [ ] One sentence per pain point: what did testers actually trip over? (So every
@@ -104,11 +131,13 @@ justification; if the appeal changes the outcome they use the **Amend Outcome** 
 
 ### 1d. Group naming convention (locks SharePoint provisioning) ⚠️
 
-- [ ] **One canonical `<Role> - <CaseTypeName>` pattern**, using which case-type name?
-      The request says `Example Case Type`; existing code says `Example Review`. These
-      must match a single source of truth. Decide the display name **and** the
-      slug↔display mapping (code keys on slug `example-review`; ACLs key on the group
-      display name).
+- [x] **~~Which case-type name in the group?~~** RESOLVED (D3): use the **existing**
+      names — `CaseTypeOwner - Example Review`, not "Example Case Type". Code is already
+      correct; no rename needed.
+- [ ] **The slug↔display mapping still needs a home.** Code keys on slug
+      `example-review`; ACLs key on the group display name `Example Review`. Every
+      per-type group name (`Reviewers - X`, `CaseTypeOwner - X`, `JourneyOwner - X`)
+      derives from one per-Case-Type display name. Decide where that name lives.
 - [ ] Where does the slug↔group-name mapping live? (A per-Case-Type field in the
       module? A table in `permissions.js`?) Every per-type group name
       (`Reviewers - X`, `CaseTypeOwner - X`, `JourneyOwner - X`) derives from it.
@@ -179,6 +208,12 @@ This is the deepest contradiction. **Two appeal models now exist:**
 | Resolved by | **QA Reviewer** | **Controls** ("Appeal Review") |
 | Outcome change via | **Answer Override** (per-Answer, QA authors) | **Amend Outcome** tab (Controls) |
 | Tabs | Appeal Section (overlay-ish), Amend Outcome = QA override home | **Appeal Request** + **Appeal Review** tabs |
+
+**Landed (D5/D6):** appeal-raiser is **per-Case-Type config** — Complaints ⇒
+**JourneyOwner**; other types default to **Responsible Party Manager**. **Controls**
+resolves via **Appeal Review**. **QA Check + Answer Override are shelved**; **Amend
+Outcome** is the outcome-change surface; **Controls replaces QA Reviewer**. Remaining
+open questions below.
 
 Resolve, in order:
 
@@ -357,15 +392,18 @@ on sand:
 
 If we only get through five things in the grill, these are them:
 
-1. [ ] **Two-axis role model** (functional vs list-access) + where JourneyOwner and
-       Controls sit — everything else keys off this (§1).
+1. [x] **~~Two-axis role model~~** RESOLVED (D1/D2): base↔elevated on each side —
+       Reviewers→CaseTypeOwner (reviewing), Advisers→JourneyOwner (frontline);
+       `Reviewers - <type>` implies Reviewer.
 2. [ ] **The status machine** — exact states, transitions, and button semantics (§2).
-3. [ ] **QA Reviewer vs Controls** — does Controls replace QA for appeals + Amend
-       Outcome, and does the whole QA/Override stack survive September? (§3)
+       (States/casing fixed by D4; button + snapshot timing still open.)
+3. [x] **~~QA Reviewer vs Controls~~** RESOLVED (D6): Controls replaces QA; QA
+       Check + Answer Override shelved; Amend Outcome is the outcome-change surface.
+       (Open: rip out vs leave dormant; what Amend Outcome _does_ — §3.)
 4. [ ] **Remediation tab = per-action complete/cancelled tracking**, split from Issues,
        storage-shape change (§4).
 5. [ ] **RP (Adviser) access on Send Actions** — Summary+Conversation during
-       `Actions in progress`, contradicting the current Completed-only Summary gate (§5).
+       `Actions In Progress`, contradicting the current Completed-only Summary gate (§5).
 
 ---
 
