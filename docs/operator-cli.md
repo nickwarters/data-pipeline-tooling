@@ -60,10 +60,12 @@ to the module `pipelines.orders.pipeline`, imported *at runtime*, whose
 `run(context)` callable the framework executes (reading an optional `UPSTREAMS`
 tuple of freshness requirements). The dependency stays one-way — the framework
 imports the pipeline by path at runtime, so `pipelines/` depends on `framework`,
-never the reverse. `orchestrate` still needs *which* pipelines an application
-schedules, so it alone takes a **required `--app`** naming a module that exposes
-`build_runner()` and `build_pipeline_sets()`. (`runs` / `status` / `log` read the
-run store directly and need neither.)
+never the reverse. **`orchestrate` addresses pipelines exactly the same way** —
+each scheduled item names a `pipelines/<name>` path — so it needs no pre-wired
+handler registry. It still needs *which* pipelines an application schedules and
+when, so it alone takes a **required `--app`** naming a module that exposes
+`build_pipeline_sets()` (the schedules). (`runs` / `status` / `log` read the run
+store directly and need neither.)
 
 ## `run` — execute a pipeline by its path
 
@@ -176,11 +178,52 @@ Runs the configured `PipelineSet`s for the given run date. `--once` performs one
 due-work pass. `--loop` keeps polling the same run date until work due that day
 has settled or the idle poll limit is reached.
 
-> **Note:** when `run` moved to path-addressing, the demo's `--app` orchestration
-> wiring (`build_runner()` / `build_pipeline_sets()`) was removed; re-expressing
-> orchestrate's schedules over path-addressed pipelines is a known follow-up.
-> The command and its `--app` contract are unchanged for a real application that
-> still supplies a registry module.
+`orchestrate` runs the **same path-addressed pipelines** as `run`. Each
+`ScheduledPipeline` names a `pipelines/<name>` path; when it comes due the
+orchestrator imports `pipelines.<name>.pipeline` at runtime and executes its
+`run(context)` callable — composing the module's `UPSTREAMS` with the schedule's
+own `depends_on` requirements. So an application supplies only the *schedules*
+via `--app`; there is no handler registry to wire up. The `--app` module exposes
+one function:
+
+```python
+# my_app/schedules.py
+from framework.run import FreshnessRequirement
+from tools.orchestration import PipelineSet, Schedule, ScheduledPipeline
+
+
+def build_pipeline_sets():
+    return (
+        PipelineSet(
+            "claims",
+            (
+                ScheduledPipeline("pipelines/claims_ingest", Schedule.daily()),
+                ScheduledPipeline(
+                    "pipelines/claims_selection",
+                    Schedule.daily(),
+                    depends_on=(FreshnessRequirement("claims_ingest"),),
+                ),
+            ),
+        ),
+    )
+```
+
+```sh
+python -m cli orchestrate --app my_app.schedules --base-dir /data --run-date 2026-05-29 --once
+```
+
+A scheduled item's `pipelines/<name>` path lines up one-to-one with a pipeline
+package on disk, and its run-history label is that path's **leaf name** — the
+same identity `run`, `status`, `runs`, and `log` all key on. A `depends_on`
+requirement targets an upstream by that leaf name too:
+
+```
+pipelines/
+  claims_ingest/            # ScheduledPipeline("pipelines/claims_ingest", …)
+    pipeline.py             #   run(context), optional UPSTREAMS
+  claims_selection/         # ScheduledPipeline("pipelines/claims_selection", …)
+    pipeline.py             #   depends_on=(FreshnessRequirement("claims_ingest"),)
+```
 
 Schedules are Python definitions owned by the pipeline code. The framework
 provides `Weekdays`, `SpecificWeekdays`, `DayOfMonth`,
@@ -195,21 +238,20 @@ and produce exactly the same schedules:
 ```python
 from tools.orchestration import Schedule, ScheduledPipeline
 
-ScheduledPipeline("claims", "ingest", Schedule.daily())
+ScheduledPipeline("pipelines/claims_ingest", Schedule.daily())
 
 ScheduledPipeline(
-    "claims",
-    "weekly_quality_check",
+    "pipelines/weekly_quality_check",
     Schedule.on_weekdays("monday", "wednesday"),  # case-insensitive names
 )
 
-ScheduledPipeline("claims", "monthly_snapshot", Schedule.day_of_month(21))
+ScheduledPipeline("pipelines/monthly_snapshot", Schedule.day_of_month(21))
 
-ScheduledPipeline("claims", "month_open", Schedule.nth_working_day_of_month(1))
+ScheduledPipeline("pipelines/month_open", Schedule.nth_working_day_of_month(1))
 
-ScheduledPipeline("claims", "month_close", Schedule.last_working_day_of_month())
+ScheduledPipeline("pipelines/month_close", Schedule.last_working_day_of_month())
 
-ScheduledPipeline("claims", "ad_hoc_backfill", Schedule.manual_only())
+ScheduledPipeline("pipelines/ad_hoc_backfill", Schedule.manual_only())
 ```
 
 `Schedule.on_weekdays(...)` accepts the full English weekday names
@@ -218,21 +260,24 @@ out-of-range month day fails immediately with a clear message. `is_due(run_date,
 calendar)` stays the core protocol — these constructors are ergonomics only and
 leave the orchestration semantics unchanged.
 
-Dependencies are requirement-based. A scheduled downstream runs through
-`PipelineRunner` only when its declared `Requirement` predicates, or legacy
-`FreshnessRequirement` dependencies, have successful upstream history fresh
-enough for the run date. Requirements can target a whole Pipeline or a task-level
-`RunAddress`, for example
-`Requirement.succeeded(RunAddress.task("pipeline-2", "step-4", subject="case-a")).within_days(7)`.
+Dependencies are requirement-based. A scheduled downstream runs only when its
+declared `Requirement` predicates, or legacy `FreshnessRequirement` dependencies,
+have successful upstream history fresh enough for the run date. An upstream is
+identified by its leaf name — the same run-history label it records under — so a
+requirement can target a whole Pipeline or a task-level `RunAddress`, for example
+`Requirement.succeeded(RunAddress.task("claims_ingest", "normalise")).within_days(7)`.
 A failed scheduled item is terminal for that orchestrator invocation; its
 downstream dependants are marked `blocked`, while independent pipelines in the
 same set and all other `PipelineSet`s continue. Blocked decisions include the
 stale, missing, or failed upstream reason in `<base>/_orchestration/runs.db`.
 
+Each output line is `run_date  set_name  pipeline  status`, where `pipeline` is
+the scheduled item's leaf name:
+
 ```console
-$ python -m cli orchestrate --base-dir /data --app my_app.pipelines --run-date 2026-05-29 --once
-2026-05-29  cases  cases/ingest  succeeded
-2026-05-29  cases  cases/selection  succeeded
+$ python -m cli orchestrate --base-dir /data --app my_app.schedules --run-date 2026-05-29 --once
+2026-05-29  claims  claims_ingest  succeeded
+2026-05-29  claims  claims_selection  succeeded
 ```
 
 ## Orchestration plan preview — `Orchestrator.plan()`
@@ -259,10 +304,10 @@ print(result)
 ```
 
 ```
-2026-06-23  claims  claims/ingest          ready              schedule daily is due
-2026-06-23  claims  claims/quality_check   skipped            schedule monday,wednesday is not due on tuesday
-2026-06-23  claims  claims/month_open      already-satisfied  already succeeded on 2026-06-23
-2026-06-23  claims  claims/reporting       blocked            upstream claims/ingest is stale: ...
+2026-06-23  claims  claims_ingest         ready              schedule daily is due
+2026-06-23  claims  claims_quality_check  skipped            schedule monday,wednesday is not due on tuesday
+2026-06-23  claims  claims_month_open     already-satisfied  already succeeded on 2026-06-23
+2026-06-23  claims  claims_reporting      blocked            upstream claims_ingest is stale: ...
 ```
 
 `str(result)` renders an aligned table using only stdlib; columns are sized to
@@ -276,8 +321,7 @@ from tools.orchestration import plan_for_each
 
 items = plan_for_each(
     source_files=["share/claims_20260601.csv", "share/claims_20260602.csv"],
-    subject="claims",
-    pipeline="ingest",
+    pipeline="claims_ingest",
     set_name="claims",
     run_date=dt.date(2026, 6, 23),
     file_id_fn=lambda f: Path(f).name,
@@ -295,13 +339,14 @@ planned per-file runs.
 ## `status` — the latest run per pipeline
 
 ```sh
-python -m cli status [--base-dir DIR] [--env ENV] [--case-type cases] [--pipeline cases/ingest]
+python -m cli status [--base-dir DIR] [--env ENV] [--case-type cases] [--pipeline ingest]
 ```
 
 With no filter, prints the most recent run summary for **every** pipeline.
-`--pipeline` shows a single pipeline's latest run by its run-history label;
-`--case-type` narrows to one subject's pipelines (the `subject/` prefix
-orchestrate records under).
+`--pipeline` shows a single pipeline's latest run by its run-history label — the
+leaf name a path-addressed pipeline records under. `--case-type` narrows to
+labels carrying a `subject/` prefix (legacy subject-qualified runs); path-addressed
+runs use bare leaf names, so filter those with `--pipeline`.
 
 ```console
 $ python -m cli status --base-dir /data

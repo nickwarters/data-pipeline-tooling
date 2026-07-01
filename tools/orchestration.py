@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Generic, TypeVar
+from typing import Generic, Protocol, TypeVar
 
 from framework._internal.connection import connect
 from framework.core.dataset import Dataset
@@ -18,10 +18,10 @@ from framework.run.run_context import RunContext
 from framework.run.runner import (
     FreshnessError,
     FreshnessRequirement,
-    PipelineRunner,
     Requirement,
     RunRequirement,
-    pipeline_label,
+    load_pipeline,
+    run_pipeline,
 )
 from tools.calendar import WorkingDayCalendar
 
@@ -124,6 +124,61 @@ class ForEach(Generic[Item]):
         if self._continue_on_error:
             return outcomes
         return results
+
+
+class PipelineInvoker(Protocol):
+    """How the :class:`Orchestrator` runs one scheduled pipeline.
+
+    The seam between *deciding* a scheduled item is due and *executing* it. The
+    default :class:`PathPipelineInvoker` addresses the pipeline by its
+    ``pipelines/<name>`` path — the same rule the operator CLI's ``run`` command
+    uses — so orchestration never needs a pre-wired handler registry. Tests
+    substitute a fake invoker to drive decision logic without real modules.
+    """
+
+    def run(
+        self,
+        path: str,
+        base_dir: str | Path,
+        *,
+        run_date: dt.date,
+        logical_run_id: str,
+        freshness_days: int,
+        freshness: tuple[RunRequirement, ...],
+    ) -> object: ...
+
+
+class PathPipelineInvoker:
+    """Run a scheduled pipeline by its ``pipelines/<name>`` path, at run time.
+
+    Resolves the path to its ``run(context)`` callable via
+    :func:`framework.run.load_pipeline` and executes it through ``run_pipeline``,
+    composing the module's declared ``UPSTREAMS`` with the schedule's
+    ``depends_on`` requirements. The dependency stays one-way: the pipeline
+    module is imported by string at execution time, so ``pipelines/`` depends on
+    the framework, never the reverse.
+    """
+
+    def run(
+        self,
+        path: str,
+        base_dir: str | Path,
+        *,
+        run_date: dt.date,
+        logical_run_id: str,
+        freshness_days: int,
+        freshness: tuple[RunRequirement, ...],
+    ) -> object:
+        loaded = load_pipeline(path)
+        return run_pipeline(
+            loaded.run,
+            loaded.name,
+            base_dir,
+            upstreams=(*loaded.upstreams, *freshness),
+            run_date=run_date,
+            logical_run_id=logical_run_id,
+            freshness_days=freshness_days,
+        )
 
 
 class Schedule:
@@ -309,27 +364,35 @@ class ManualOnly(Schedule):
 
 @dataclass(frozen=True)
 class ScheduledPipeline:
-    """A scheduled reference to a registered domain Pipeline."""
+    """A schedule attached to a path-addressed pipeline.
 
-    subject: str
-    pipeline: str
+    ``path`` is the pipeline's location on disk (``pipelines/<name>``) — the same
+    address the operator CLI's ``run`` command uses. Its leaf is the run-history
+    label the pipeline records under, exposed as :attr:`name`, so ``depends_on``
+    requirements target upstreams by that same leaf name.
+    """
+
+    path: str
     schedule: Schedule
     depends_on: tuple[RunRequirement, ...] = ()
     enabled: bool = True
 
     def __init__(
         self,
-        subject: str,
-        pipeline: str,
+        path: str,
         schedule: Schedule,
         depends_on: Iterable[RunRequirement] = (),
         enabled: bool = True,
     ) -> None:
-        object.__setattr__(self, "subject", subject)
-        object.__setattr__(self, "pipeline", pipeline)
+        object.__setattr__(self, "path", path)
         object.__setattr__(self, "schedule", schedule)
         object.__setattr__(self, "depends_on", tuple(depends_on))
         object.__setattr__(self, "enabled", enabled)
+
+    @property
+    def name(self) -> str:
+        """The pipeline's run-history label: the leaf of its ``pipelines/`` path."""
+        return self.path.strip("/").split("/")[-1]
 
 
 @dataclass(frozen=True)
@@ -351,7 +414,6 @@ class OrchestrationDecision:
     orchestration_run_id: str
     item_key: str
     set_name: str
-    subject: str
     pipeline: str
     run_date: dt.date
     status: str
@@ -385,7 +447,6 @@ class PlanItem:
 
     run_date: dt.date
     set_name: str
-    subject: str
     pipeline: str
     status: str  # "ready" | "skipped" | "already-satisfied" | "blocked" | "disabled"
     reason: str
@@ -405,7 +466,7 @@ class PlanResult:
             (
                 item.run_date.isoformat(),
                 item.set_name,
-                f"{item.subject}/{item.pipeline}",
+                item.pipeline,
                 item.status,
                 item.reason,
             )
@@ -436,7 +497,6 @@ class OrchestrationStore:
                 orchestration_run_id TEXT NOT NULL,
                 item_key TEXT NOT NULL,
                 set_name TEXT NOT NULL,
-                subject TEXT NOT NULL,
                 pipeline TEXT NOT NULL,
                 run_date TEXT NOT NULL,
                 status TEXT NOT NULL,
@@ -468,17 +528,16 @@ class OrchestrationStore:
             con.execute(
                 """
                 INSERT INTO orchestration_records (
-                    timestamp, orchestration_run_id, item_key, set_name, subject,
+                    timestamp, orchestration_run_id, item_key, set_name,
                     pipeline, run_date, status, reason, duration,
                     logical_run_id, pipeline_run_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     dt.datetime.now(dt.UTC).isoformat(),
                     decision.orchestration_run_id,
                     decision.item_key,
                     decision.set_name,
-                    decision.subject,
                     decision.pipeline,
                     decision.run_date.isoformat(),
                     decision.status,
@@ -497,7 +556,7 @@ class OrchestrationStore:
         try:
             cur = con.execute(
                 """
-                SELECT timestamp, orchestration_run_id, item_key, set_name, subject,
+                SELECT timestamp, orchestration_run_id, item_key, set_name,
                        pipeline, run_date, status, reason, duration,
                        logical_run_id, pipeline_run_id
                 FROM orchestration_records
@@ -521,7 +580,7 @@ class OrchestrationStore:
         try:
             cur = con.execute(
                 """
-                SELECT subject, pipeline, status, reason,
+                SELECT pipeline, status, reason,
                        logical_run_id, pipeline_run_id
                 FROM orchestration_records
                 WHERE orchestration_run_id = ?
@@ -536,16 +595,23 @@ class OrchestrationStore:
 
 
 class Orchestrator:
-    """Run due registered Pipelines through PipelineRunner."""
+    """Run due path-addressed pipelines for one run date.
+
+    Each :class:`ScheduledPipeline` is addressed by its ``pipelines/<name>`` path
+    and executed through a :class:`PipelineInvoker` (the default
+    :class:`PathPipelineInvoker` imports the module at run time), so orchestration
+    needs the schedules alone — no pre-wired handler registry.
+    """
 
     def __init__(
         self,
-        runner: PipelineRunner,
         sets: Iterable[PipelineSet],
         calendar: WorkingDayCalendar,
         overrides: dict | None = None,
+        *,
+        invoker: PipelineInvoker | None = None,
     ) -> None:
-        self._runner = runner
+        self._invoker = invoker or PathPipelineInvoker()
         self._sets = tuple(sets)
         self._calendar = calendar
         self._overrides = overrides or {}
@@ -554,17 +620,18 @@ class Orchestrator:
     @classmethod
     def from_yaml(
         cls,
-        runner: PipelineRunner,
         sets: Iterable[PipelineSet],
         calendar: WorkingDayCalendar,
         path: str | Path,
+        *,
+        invoker: PipelineInvoker | None = None,
     ) -> "Orchestrator":
         import yaml
 
         loaded = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
         if not isinstance(loaded, dict):
             raise ValueError("orchestration overrides YAML must contain a mapping")
-        return cls(runner, sets, calendar, overrides=loaded)
+        return cls(sets, calendar, overrides=loaded, invoker=invoker)
 
     def run_due_once(
         self,
@@ -578,10 +645,10 @@ class Orchestrator:
         pass_run_id = orchestration_run_id or uuid.uuid4().hex
         store = OrchestrationStore(root / "_orchestration" / "runs.db")
         decisions: list[OrchestrationDecision] = []
-        terminal: dict[tuple[str, str], str] = {}
+        terminal: dict[str, str] = {}
 
         for pipeline_set in self._sets:
-            set_failed: set[tuple[str, str]] = set()
+            set_failed: set[str] = set()
             for scheduled in pipeline_set.pipelines:
                 item = self._apply_override(pipeline_set.name, scheduled)
                 decision = self._decide_item(
@@ -596,10 +663,10 @@ class Orchestrator:
                 decisions.append(decision)
                 store.record(decision)
                 if decision.status == "failed":
-                    terminal[(item.subject, item.pipeline)] = "failed"
-                    set_failed.add((item.subject, item.pipeline))
+                    terminal[item.name] = "failed"
+                    set_failed.add(item.name)
                 elif decision.status in {"succeeded", "blocked"}:
-                    terminal[(item.subject, item.pipeline)] = decision.status
+                    terminal[item.name] = decision.status
 
         return OrchestrationPassResult(pass_run_id, tuple(decisions))
 
@@ -693,8 +760,7 @@ class Orchestrator:
             return PlanItem(
                 run_date=run_date,
                 set_name=set_name,
-                subject=item.subject,
-                pipeline=item.pipeline,
+                pipeline=item.name,
                 status="disabled",
                 reason="disabled",
             )
@@ -703,8 +769,7 @@ class Orchestrator:
             return PlanItem(
                 run_date=run_date,
                 set_name=set_name,
-                subject=item.subject,
-                pipeline=item.pipeline,
+                pipeline=item.name,
                 status="skipped",
                 reason=(
                     f"schedule {item.schedule.schedule_label()}"
@@ -715,13 +780,12 @@ class Orchestrator:
         # Check if it already succeeded today.
         from framework.run.address import RunAddress
 
-        address = RunAddress.pipeline(item.pipeline, subject=item.subject)
+        address = RunAddress.pipeline(item.name)
         if run_registry.latest_success(address, on=run_date) is not None:
             return PlanItem(
                 run_date=run_date,
                 set_name=set_name,
-                subject=item.subject,
-                pipeline=item.pipeline,
+                pipeline=item.name,
                 status="already-satisfied",
                 reason=f"already succeeded on {run_date.isoformat()}",
             )
@@ -730,14 +794,13 @@ class Orchestrator:
         freshness_days = _freshness_days(item)
         for requirement in item.depends_on:
             blocked, reason = _check_requirement_plan(
-                requirement, run_registry, run_date, freshness_days, item.subject
+                requirement, run_registry, run_date, freshness_days
             )
             if blocked:
                 return PlanItem(
                     run_date=run_date,
                     set_name=set_name,
-                    subject=item.subject,
-                    pipeline=item.pipeline,
+                    pipeline=item.name,
                     status="blocked",
                     reason=reason,
                 )
@@ -745,8 +808,7 @@ class Orchestrator:
         return PlanItem(
             run_date=run_date,
             set_name=set_name,
-            subject=item.subject,
-            pipeline=item.pipeline,
+            pipeline=item.name,
             status="ready",
             reason=f"schedule {item.schedule.schedule_label()} is due",
         )
@@ -758,8 +820,8 @@ class Orchestrator:
         orchestration_run_id: str,
         set_name: str,
         item: ScheduledPipeline,
-        terminal: dict[tuple[str, str], str],
-        set_failed: set[tuple[str, str]],
+        terminal: dict[str, str],
+        set_failed: set[str],
     ) -> OrchestrationDecision:
         key = _item_key(set_name, item, run_date)
         if not item.enabled:
@@ -793,7 +855,7 @@ class Orchestrator:
                 "blocked",
                 f"blocked by failed upstream {blocked_by}",
             )
-        existing = terminal.get((item.subject, item.pipeline))
+        existing = terminal.get(item.name)
         if existing in {"failed", "blocked", "succeeded"}:
             return _decision(
                 orchestration_run_id,
@@ -809,13 +871,13 @@ class Orchestrator:
         # default (label + run_date), but assigning it explicitly means the value
         # we store is the value that ran — no coupling to the default formula. It
         # is stable across re-drives, so idempotent accumulating writes still
-        # replace rather than duplicate.
-        label = pipeline_label(item.subject, item.pipeline)
+        # replace rather than duplicate. The label is the path's leaf name, the
+        # same identity the path-addressed run records under.
+        label = item.name
         logical_run_id = f"{label}:{run_date.isoformat()}"
         try:
-            self._runner.run(
-                item.subject,
-                item.pipeline,
+            self._invoker.run(
+                item.path,
                 base_dir,
                 run_date=run_date,
                 logical_run_id=logical_run_id,
@@ -864,13 +926,12 @@ class Orchestrator:
     def _blocked_dependency(
         self,
         item: ScheduledPipeline,
-        set_failed: set[tuple[str, str]],
+        set_failed: set[str],
     ) -> str | None:
         for dependency in item.depends_on:
-            upstream = _dependency_pipeline_key(dependency, item.subject)
+            upstream = _dependency_pipeline_key(dependency)
             if upstream in set_failed:
-                upstream_subject, upstream_pipeline = upstream
-                return f"{upstream_subject}/{upstream_pipeline}"
+                return upstream
         return None
 
     def _all_due_terminal(self, result: OrchestrationPassResult) -> bool:
@@ -888,24 +949,22 @@ class Orchestrator:
         if not self._overrides:
             return
         declared = {
-            (pipeline_set.name, item.subject, item.pipeline)
+            (pipeline_set.name, item.name)
             for pipeline_set in self._sets
             for item in pipeline_set.pipelines
         }
         for raw in _override_items(self._overrides):
-            key = (raw["set"], raw["subject"], raw["pipeline"])
+            key = (raw["set"], raw["pipeline"])
             if key not in declared:
                 raise ValueError(
                     "orchestration override references unknown scheduled pipeline "
-                    f"{key[0]}/{key[1]}/{key[2]}"
+                    f"{key[0]}/{key[1]}"
                 )
 
     def _apply_override(
         self, set_name: str, item: ScheduledPipeline
     ) -> ScheduledPipeline:
-        override = _find_override(
-            self._overrides, set_name, item.subject, item.pipeline
-        )
+        override = _find_override(self._overrides, set_name, item.name)
         if override is None:
             return item
         changed = item
@@ -931,7 +990,6 @@ def _check_requirement_plan(
     run_registry: object,
     run_date: dt.date,
     freshness_days: int,
-    default_subject: str,
 ) -> tuple[bool, str]:
     """Pure freshness check for plan preview — no side-effects.
 
@@ -943,9 +1001,10 @@ def _check_requirement_plan(
 
     assert isinstance(run_registry, RunRegistry)
 
-    # Normalise to a Requirement so we have one code path.
+    # Normalise to a Requirement so we have one code path. Path-addressed
+    # upstreams record under their leaf name, so there is no default subject.
     if isinstance(requirement, FreshnessRequirement):
-        req = requirement.as_requirement(default_subject=default_subject)
+        req = requirement.as_requirement(default_subject=None)
     elif isinstance(requirement, Requirement):
         req = requirement
     else:
@@ -997,7 +1056,6 @@ def _check_requirement_plan(
 
 def plan_for_each(
     source_files: Iterable[str | Path],
-    subject: str,
     pipeline: str,
     set_name: str,
     run_date: dt.date,
@@ -1021,7 +1079,6 @@ def plan_for_each(
             PlanItem(
                 run_date=run_date,
                 set_name=set_name,
-                subject=subject,
                 pipeline=pipeline,
                 status="ready",
                 reason=f"source file: {file_id}",
@@ -1047,8 +1104,7 @@ def _decision(
         orchestration_run_id=orchestration_run_id,
         item_key=item_key,
         set_name=set_name,
-        subject=item.subject,
-        pipeline=item.pipeline,
+        pipeline=item.name,
         run_date=run_date,
         status=status,
         reason=reason,
@@ -1076,7 +1132,7 @@ def _latest_pipeline_run_id(base_dir: Path, label: str) -> str | None:
 
 
 def _item_key(set_name: str, item: ScheduledPipeline, run_date: dt.date) -> str:
-    return f"{set_name}/{item.subject}/{item.pipeline}/{run_date.isoformat()}"
+    return f"{set_name}/{item.name}/{run_date.isoformat()}"
 
 
 def _freshness_days(item: ScheduledPipeline) -> int:
@@ -1090,19 +1146,16 @@ def _freshness_days(item: ScheduledPipeline) -> int:
     )
 
 
-def _dependency_pipeline_key(
-    dependency: RunRequirement, default_subject: str
-) -> tuple[str, str]:
+def _dependency_pipeline_key(dependency: RunRequirement) -> str:
+    """The upstream's run-history leaf name a dependency targets.
+
+    Path-addressed pipelines record under their leaf name, so a dependency is
+    keyed by that name alone — the requirement's subject, if any, is ignored.
+    """
     if isinstance(dependency, FreshnessRequirement):
-        return (
-            dependency.upstream_subject or default_subject,
-            dependency.upstream_pipeline,
-        )
+        return dependency.upstream_pipeline
     if isinstance(dependency, Requirement):
-        return (
-            dependency.address.subject or default_subject,
-            dependency.address.pipeline,
-        )
+        return dependency.address.pipeline
     raise TypeError(f"unsupported dependency requirement {dependency!r}")
 
 
@@ -1110,15 +1163,9 @@ def _override_items(overrides: dict) -> list[dict]:
     return list(overrides.get("pipelines", []))
 
 
-def _find_override(
-    overrides: dict, set_name: str, subject: str, pipeline: str
-) -> dict | None:
+def _find_override(overrides: dict, set_name: str, pipeline: str) -> dict | None:
     for item in _override_items(overrides):
-        if (
-            item.get("set") == set_name
-            and item.get("subject") == subject
-            and item.get("pipeline") == pipeline
-        ):
+        if item.get("set") == set_name and item.get("pipeline") == pipeline:
             return item
     return None
 

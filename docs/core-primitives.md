@@ -777,18 +777,21 @@ python -m cli run pipelines/claims --base-dir /tmp/demo \
 ```
 
 ### `Orchestrator` — scheduled PipelineSets
-`Orchestrator` (`tools.orchestration`) sits above `PipelineRunner`. It is
-not a builder-level `Pipeline`; it decides which registered domain Pipelines are
-due for one run date, invokes them through the runner, and records scheduling
-decisions separately from execution history:
+`Orchestrator` (`tools.orchestration`) is the scheduling layer above the
+path-addressed run. It is not a builder-level `Pipeline`; it decides which
+scheduled pipelines are due for one run date, invokes each **by its
+`pipelines/<name>` path** (the same address the operator CLI's `run` command
+uses, imported at runtime by the default `PathPipelineInvoker`), and records
+scheduling decisions separately from execution history:
 
 ```python
-from framework.run import (
-    FreshnessRequirement,
+from datetime import date
+
+from framework.run import FreshnessRequirement, Requirement, RunAddress
+from tools.calendar import WorkingDayCalendar
+from tools.orchestration import (
     Orchestrator,
     PipelineSet,
-    Requirement,
-    RunAddress,
     ScheduledPipeline,
     Weekdays,
 )
@@ -797,15 +800,14 @@ sets = (
     PipelineSet(
         "cases",
         (
-            ScheduledPipeline("cases", "ingest", Weekdays()),
+            ScheduledPipeline("pipelines/ingest", Weekdays()),
             ScheduledPipeline(
-                "cases",
-                "selection",
+                "pipelines/selection",
                 Weekdays(),
                 depends_on=(
                     FreshnessRequirement("ingest"),
                     Requirement.succeeded(
-                        RunAddress.task("ingest", "normalise", subject="cases")
+                        RunAddress.task("ingest", "normalise")
                     ).within_days(7),
                 ),
             ),
@@ -813,24 +815,27 @@ sets = (
     ),
 )
 
-Orchestrator(runner, sets, WorkingDayCalendar()).run_due_once(
+Orchestrator(sets, WorkingDayCalendar()).run_due_once(
     "/path/to/share",
     run_date=date(2026, 5, 29),
 )
 ```
 
 `PipelineSet` is the independent failure boundary, normally one Case Type or one
-platform-wide group. `ScheduledPipeline` references an existing runner
-registration and carries its default schedule, dependencies, and enablement.
-Dependencies may be legacy `FreshnessRequirement` values or `Requirement`
-predicates that target whole-Pipeline or task-level `RunAddress` history.
-`Weekdays()` is the normal daily schedule, using
-`WorkingDayCalendar` for weekends and holidays; other schedules are
-`SpecificWeekdays`, `DayOfMonth`, `NthWorkingDayOfMonth`,
+platform-wide group. `ScheduledPipeline` names a `pipelines/<name>` path and
+carries its schedule, dependencies, and enablement; the path's leaf is the
+run-history label the pipeline records under (and the name a `depends_on`
+requirement targets an upstream by). Execution is by path — no handler registry
+is wired up front — so a `PathPipelineInvoker` (the default) resolves the module
+at run time, or a custom `invoker=` can be injected for tests. Dependencies may
+be legacy `FreshnessRequirement` values or `Requirement` predicates that target
+whole-Pipeline or task-level `RunAddress` history. `Weekdays()` is the normal
+daily schedule, using `WorkingDayCalendar` for weekends and holidays; other
+schedules are `SpecificWeekdays`, `DayOfMonth`, `NthWorkingDayOfMonth`,
 `LastWorkingDayOfMonth`, and `ManualOnly`.
 
 Each invocation writes decisions to `<base_dir>/_orchestration/runs.db` with a
-stable item key of `set_name/case_type/pipeline/run_date`. Each decision also
+stable item key of `set_name/pipeline/run_date`. Each decision also
 records the `logical_run_id` the pass assigned the item (the stable business key)
 and the `pipeline_run_id` it read back from the registry, so
 `OrchestrationStore.lineage(orchestration_run_id)` joins one pass to every
