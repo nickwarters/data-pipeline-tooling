@@ -1,7 +1,8 @@
 # User Groups & Remediation Workflow — Grilling-Session Plan
 
-**Status:** Not yet grilled — DRAFT for the session. Created from live-testing feedback
-ahead of the September go-live.
+**Status:** GRILLED 2026-07-01 — all resolve-first items and the follow-up batch landed
+(decisions D1–D18 below). Next: turn these into CONTEXT.md term changes + ADRs +
+a PLAN slice. Created from live-testing feedback ahead of the September go-live.
 **Created:** 2026-07-01
 **Driver:** Pre-go-live tester feedback + a role/case-list pivot an agent recently
 started (half-landed in `permissions.js`, `section-access.js`, `sharepoint-client.js`,
@@ -62,6 +63,30 @@ Recorded as we go; the numbered sections below carry the detail.
   set before "Send Actions"; **cannot be changed after send**.
 - **D12. Working-day calendar** = a small maintained list of holiday dates — either a
   small SharePoint list or an in-code array is acceptable (pick at build time).
+- **D13. New concept: "reportable".** A Case becomes **reportable** at the moment
+  **actions are sent** (if any exist) **or the case is completed** (if none). This is the
+  single freeze point (D14) and snapshot point (D15). New Case-row timestamp
+  **`reportableAt`**: on the no-actions path it equals the completed timestamp; on the
+  actions path it equals the **Send Actions** timestamp. (Distinct from `completedAt`,
+  which is only the final Complete on the actions path.)
+- **D14. Questions/Answers freeze at reportable**, not at final Complete. Once a Case is
+  reportable (actions sent, or completed), the Answers are frozen — a newly-applicable
+  Question can **no longer reopen** it. While still `In-progress` (pre-reportable), a new
+  applicable Question applies as today.
+- **D15. Outcome snapshot stamped at reportable** (= at Send Actions on the actions path;
+  at Complete on the no-actions path), together with `hadRemediation`. (Naming note: the
+  existing field is `outcomeAtCompletion`; consider renaming to reflect "at reportable",
+  or keep the name and document that "completion" here means the reportable moment.)
+- **D16. Appeal config shape** on the Case Type module:
+  `appeal: { raisedBy: 'journeyOwner' | 'responsiblePartyManager', resolvedBy: 'controls' }`.
+  `resolvedBy` is always `controls` today but kept explicit so tab-gating stays
+  data-driven.
+- **D17. CaseTypeOwner stays read-only on live cases** (elevated _reviewing_ role =
+  oversight/observer view); their only authoring power is the question bank, off the case
+  page. Unchanged from today.
+- **D18. Everything in this doc is September-must** — one delivery, no A/B split. **Fast-
+  follow (post-September)** = solidifying reports, the QA **re**design/implementation,
+  root-cause analysis, and broader Case Type expansion.
 
 ---
 
@@ -415,9 +440,9 @@ If we only get through five things in the grill, these are them:
 1. [x] **~~Two-axis role model~~** RESOLVED (D1/D2): base↔elevated on each side —
        Reviewers→CaseTypeOwner (reviewing), Advisers→JourneyOwner (frontline);
        `Reviewers - <type>` implies Reviewer.
-2. [~] **The status machine** — states/casing fixed (D4); button label + due-date
-       stamp fixed (D9). Still open: outcome-snapshot timing on the actions path, and
-       reopen semantics (§2).
+2. [x] **~~The status machine~~** RESOLVED (D4/D9/D13/D14/D15): states/casing fixed;
+       button + due-date stamp fixed; **`reportableAt`** freeze/snapshot point; Answers
+       freeze (no reopen) once reportable.
 3. [x] **~~QA Reviewer vs Controls~~** RESOLVED (D6/D7/D8): Controls replaces QA; QA
        Check + Answer Override ripped out; **Amend Outcome = case-level hand-set
        verdict + justification + who/when audit**.
