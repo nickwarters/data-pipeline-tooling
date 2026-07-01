@@ -277,6 +277,51 @@ Built as seven tracer-bullet issues (each cuts config → storage → Issues UI 
 
 ---
 
+## Slice 11 — User groups & remediation workflow (Jul 2026, September go-live)
+
+**Goal:** land the pre-go-live workflow the testers asked for — a two-axis role model, a
+multi-stage case lifecycle with a **remediation loop**, a redefined **Remediation** tab, a
+**Controls**-driven appeal + outcome-amendment flow, and the retirement of the unproven QA
+subsystem. Grilled 2026-07-01; full decision record in
+[`user-groups-workflow-grilling-session-plan.md`](./user-groups-workflow-grilling-session-plan.md).
+
+**Decisions:** [ADR-0022](./adr/0022-two-axis-role-model.md) (roles),
+[ADR-0023](./adr/0023-case-lifecycle-and-reportable-milestone.md) (lifecycle + **reportable**),
+[ADR-0024](./adr/0024-remediation-tracking-tab.md) (Remediation tab, resolves #144),
+[ADR-0025](./adr/0025-working-day-sla-due-dates.md) (due dates),
+[ADR-0026](./adr/0026-amend-outcome-case-level-and-qa-retirement.md) (Amend Outcome + QA
+retirement, resolves #145, supersedes ADR-0018),
+[ADR-0027](./adr/0027-appeal-flow-journeyowner-controls.md) (appeals). Amends ADR-0007/
+0010/0011/0012/0014/0016/0019/0021. Domain language: **Adviser · Journey Owner · Controls ·
+Amended Outcome · Reportable** in [`../CONTEXT.md`](../CONTEXT.md).
+
+Tracked as epic **#229** with ten sub-issues (each cuts config → storage → UI → autosave →
+tests, 100% coverage per CLAUDE.md):
+
+1. **#230** — Two-axis role model & permissions rework (ADR-0022). _Foundation._
+2. **#235** — Rip out QA Check & Answer Override (ADR-0026). _Clears the matrix/storage._
+3. **#231** — Case lifecycle & the reportable milestone (ADR-0023). _The spine._
+4. **#232** — Split Issues/Remediation Sections + per-action model (ADR-0024, resolves #144).
+5. **#233** — Working-day SLA due dates (ADR-0025).
+6. **#234** — Rebuild the section access matrix (ADR-0011 amend). _Blocked by #230, #232._
+7. **#236** — Amend Outcome tab (ADR-0026, resolves #145). _Blocked by #235, #234._
+8. **#237** — Appeal flow: Appeal Request / Appeal Review (ADR-0027). _Blocked by #234, #236._
+9. **#238** — Journey Owner cross-case Summary view (ADR-0022/0027). _Blocked by #230._
+10. **#239** — Storage & SharePoint provisioning updates (ADR-0007 amend). _Threaded through._
+
+**Suggested order:** #230 + #235 first (they clear the way); then #231 / #232 / #233 in
+parallel; #234 once #230 + #232 land; #236 → #237 after the matrix; #238 alongside; #239
+provisions storage as each consumer needs it.
+
+**Everything here is September-must** (grill D18) — one delivery, no A/B split. **Fast-follow
+(post-September):** QA **re**design/implementation (was #43/#50/#51), report solidification,
+root-cause analysis, and broader Case Type expansion.
+
+**Reverses #40** ("RP can mark Remediation Actions complete") — remediation completion is the
+Reviewer's, not the Responsible Party's (grill D10). Close #40 when #232 lands.
+
+---
+
 ## Notes that span multiple slices
 
 - **Every slice merges with `tsc --checkJs` clean and `node --test` green.** Non-negotiable from slice 1.

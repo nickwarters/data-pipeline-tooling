@@ -1,8 +1,11 @@
 # User Groups & Remediation Workflow — Grilling-Session Plan
 
-**Status:** GRILLED 2026-07-01 — all resolve-first items and the follow-up batch landed
-(decisions D1–D18 below). Next: turn these into CONTEXT.md term changes + ADRs +
-a PLAN slice. Created from live-testing feedback ahead of the September go-live.
+**Status:** GRILLED & WRITTEN UP 2026-07-01 — decisions D1–D18 below are now captured in
+**ADRs 0022–0027** (+ amendments to 0007/0010/0011/0012/0014/0016/0018/0019/0021), the
+**CONTEXT.md** domain language, and **PLAN.md Slice 11**. Tracked for build as epic
+**#229** with sub-issues **#230–#239**. Open confirmations for Nick are in the
+"Clarifications for Nick" section at the end. Created from live-testing feedback ahead of
+the September go-live.
 **Created:** 2026-07-01
 **Driver:** Pre-go-live tester feedback + a role/case-list pivot an agent recently
 started (half-landed in `permissions.js`, `section-access.js`, `sharepoint-client.js`,
@@ -453,6 +456,35 @@ If we only get through five things in the grill, these are them:
        send.
 
 ---
+
+## Clarifications for Nick (deferred from the write-up — none blocked the docs)
+
+Small confirmations; I picked a sensible default for each and noted it, so nothing was
+blocked. Flag any you'd change:
+
+1. **Working-day calendar jurisdiction.** ADR-0025 assumes **England & Wales public
+   holidays**, held as an **in-code array** (deploy to update) rather than a SharePoint
+   list. Correct jurisdiction? In-code vs list OK for September?
+2. **`outcomeAtCompletion` column name.** It now stamps at **reportable**, not final
+   completion. I **kept the name** (documented) to avoid a SharePoint column migration
+   mid-pre-go-live. OK, or do you want a rename to `outcomeAtReportable`?
+3. **Reverses existing ticket #40** ("RP can mark Remediation Actions complete").
+   Grill D10 puts remediation completion with the **Reviewer**. I've flagged #40 to be
+   **closed as superseded** — confirm the RP genuinely does *not* tick actions off.
+4. **Adviser vs Responsible Party wording.** I kept **Responsible Party** as the per-Case
+   role name and **Adviser** as the group/population word (mirroring Reviewer / Assigned
+   Reviewer). Happy with both words coexisting, or rename Responsible Party → Adviser
+   everywhere?
+5. **QA removal is a real deletion.** ADR-0026/#235 **delete** shipped QA code
+   (`qa-*` types, `cr-override-editor.js`, `overrides[]`) rather than leaving it dormant,
+   and supersede #43/#50/#51. Confirm you're happy losing that code (recoverable from git).
+6. **Journey Owner "all cases of type" Summary.** I scoped a **new Journey Owner view**
+   (#238) rather than folding into an existing owner dashboard. Preference?
+7. **Notifications on Send Actions.** Whether the Adviser gets an email/in-app nudge when
+   actions are sent is **out of scope** (no backend; SharePoint alerts are a Maintainer
+   config). Confirm that's fine for September.
+8. **Live Case Types for September.** The docs assume only **Example Review** + **Complaints**
+   are live (so only those groups/lists are provisioned). Any others?
 
 ## 10. Parking lot (raise if time allows)
 
