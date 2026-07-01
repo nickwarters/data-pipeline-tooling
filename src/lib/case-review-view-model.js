@@ -33,23 +33,26 @@ import {
 /** @typedef {import('../sharepoint-client.js').CaseListOptions} CaseListOptions */
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
 
+/**
+ * @typedef {Object} CaseReviewViewModelOptions
+ * @property {SharePointClient} client
+ * @property {SaveQueue} saveQueue
+ * @property {string} caseId
+ * @property {string} currentUserId
+ * @property {Capabilities | null} capabilities
+ * @property {string | null} [caseType]
+ */
+
 export class CaseReviewViewModel {
-  /**
-   * @param {SharePointClient} client
-   * @param {SaveQueue} saveQueue
-   * @param {string} caseId
-   * @param {string} currentUserId
-   * @param {import('../services/permissions.js').Capabilities | null} capabilities
-   * @param {string | null} [caseType]
-   */
-  constructor(
+  /** @param {CaseReviewViewModelOptions} options */
+  constructor({
     client,
     saveQueue,
     caseId,
     currentUserId,
     capabilities,
-    caseType = null
-  ) {
+    caseType = null,
+  }) {
     this.client = client;
     this.saveQueue = saveQueue;
     this.caseId = caseId;

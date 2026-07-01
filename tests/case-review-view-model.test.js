@@ -15,13 +15,13 @@ import { signal, effect } from '../src/lib/signal.js';
  * @param {(...args: any[]) => void} enqueue
  */
 function makeVM(enqueue) {
-  const vm = new CaseReviewViewModel(
-    /** @type {any} */ ({}),
-    /** @type {any} */ ({ enqueue }),
-    'c1',
-    'u1',
-    null
-  );
+  const vm = new CaseReviewViewModel({
+    client: /** @type {any} */ ({}),
+    saveQueue: /** @type {any} */ ({ enqueue }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: null,
+  });
   vm.machine = /** @type {any} */ ({ canCapture: true });
   vm.config = /** @type {any} */ ({
     captureGroups: [
@@ -80,8 +80,8 @@ test('handleCapture works (no throw) when window is absent', () => {
 // --- exportHash loading (ADR-0021 Step 3) ---
 
 test('CaseReviewViewModel.load() calls getExportHash with the case type slug and stores it as exportHash', async () => {
-  const vm = new CaseReviewViewModel(
-    /** @type {any} */ ({
+  const vm = new CaseReviewViewModel({
+    client: /** @type {any} */ ({
       getCase: async () => ({
         id: 'c1',
         caseType: 'example-review',
@@ -100,11 +100,11 @@ test('CaseReviewViewModel.load() calls getExportHash with the case type slug and
         slug === 'example-review' ? 'sha256:testHash' : null,
       resolveUsers: async () => ({}),
     }),
-    /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    'c1',
-    'u1',
-    null
-  );
+    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: null,
+  });
 
   await vm.load();
 
@@ -133,8 +133,8 @@ test('CaseReviewViewModel.load() resolves route caseType to listName for getCase
     completedAt: null,
     etag: 'e1',
   };
-  const vm = new CaseReviewViewModel(
-    /** @type {any} */ ({
+  const vm = new CaseReviewViewModel({
+    client: /** @type {any} */ ({
       getCase: async (
         /** @type {string} */ id,
         /** @type {import('../src/sharepoint-client.js').CaseListOptions | undefined} */ opts
@@ -146,18 +146,18 @@ test('CaseReviewViewModel.load() resolves route caseType to listName for getCase
       getExportHash: async () => null,
       resolveUsers: async () => ({}),
     }),
-    /** @type {any} */ ({
+    saveQueue: /** @type {any} */ ({
       loadCase: (
         /** @type {import('../src/sharepoint-client.js').CaseRow} */ row,
         /** @type {import('../src/sharepoint-client.js').CaseListOptions | undefined} */ opts
       ) => loadCaseCalls.push([row, opts]),
       enqueue: () => {},
     }),
-    'c1',
-    'u1',
-    null,
-    'product-sale-review'
-  );
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: null,
+    caseType: 'product-sale-review',
+  });
 
   await vm.load();
 
@@ -170,8 +170,8 @@ test('CaseReviewViewModel.load() resolves route caseType to listName for getCase
 });
 
 test('CaseReviewViewModel.load() stores null exportHash when getExportHash returns null', async () => {
-  const vm = new CaseReviewViewModel(
-    /** @type {any} */ ({
+  const vm = new CaseReviewViewModel({
+    client: /** @type {any} */ ({
       getCase: async () => ({
         id: 'c1',
         caseType: 'example-review',
@@ -189,11 +189,11 @@ test('CaseReviewViewModel.load() stores null exportHash when getExportHash retur
       getExportHash: async () => null,
       resolveUsers: async () => ({}),
     }),
-    /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    'c1',
-    'u1',
-    null
-  );
+    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: null,
+  });
 
   await vm.load();
 
@@ -254,8 +254,8 @@ const versionedCatalogue = [
 ];
 
 test('CaseReviewViewModel.load() uses versioned catalogue for Completed Case with questionBankVersion (ADR-0021 Step 4)', async () => {
-  const vm = new CaseReviewViewModel(
-    makeStep4Client({
+  const vm = new CaseReviewViewModel({
+    client: makeStep4Client({
       status: 'Completed',
       questionBankVersion: 'sha256:abc123',
       versionedExport: {
@@ -263,11 +263,11 @@ test('CaseReviewViewModel.load() uses versioned catalogue for Completed Case wit
         questions: versionedCatalogue,
       },
     }),
-    /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    'c1',
-    'u1',
-    null
-  );
+    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: null,
+  });
 
   await vm.load();
 
@@ -285,8 +285,8 @@ test('CaseReviewViewModel.load() uses versioned catalogue for Completed Case wit
 });
 
 test('CaseReviewViewModel.load(): versioned catalogue mapping normalises null optional fields to undefined', async () => {
-  const vm = new CaseReviewViewModel(
-    makeStep4Client({
+  const vm = new CaseReviewViewModel({
+    client: makeStep4Client({
       status: 'Completed',
       questionBankVersion: 'sha256:abc123',
       versionedExport: {
@@ -305,11 +305,11 @@ test('CaseReviewViewModel.load(): versioned catalogue mapping normalises null op
         ],
       },
     }),
-    /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    'c1',
-    'u1',
-    null
-  );
+    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: null,
+  });
 
   await vm.load();
 
@@ -321,8 +321,8 @@ test('CaseReviewViewModel.load(): versioned catalogue mapping normalises null op
 });
 
 test('CaseReviewViewModel.load(): versioned catalogue carries labelIds when present', async () => {
-  const vm = new CaseReviewViewModel(
-    makeStep4Client({
+  const vm = new CaseReviewViewModel({
+    client: makeStep4Client({
       status: 'Completed',
       questionBankVersion: 'sha256:abc123',
       versionedExport: {
@@ -342,11 +342,11 @@ test('CaseReviewViewModel.load(): versioned catalogue carries labelIds when pres
         ],
       },
     }),
-    /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    'c1',
-    'u1',
-    null
-  );
+    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: null,
+  });
 
   await vm.load();
 
@@ -354,17 +354,17 @@ test('CaseReviewViewModel.load(): versioned catalogue carries labelIds when pres
 });
 
 test('CaseReviewViewModel.load(): missing versioned file falls back to live catalogue + versionWarning (ADR-0021 Step 4)', async () => {
-  const vm = new CaseReviewViewModel(
-    makeStep4Client({
+  const vm = new CaseReviewViewModel({
+    client: makeStep4Client({
       status: 'Completed',
       questionBankVersion: 'sha256:abc123',
       versionedExport: null,
     }),
-    /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    'c1',
-    'u1',
-    null
-  );
+    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: null,
+  });
 
   await vm.load();
 
@@ -377,13 +377,13 @@ test('CaseReviewViewModel.load(): missing versioned file falls back to live cata
 });
 
 test('CaseReviewViewModel.load(): In-progress Case loads live catalogue; versionWarning stays null (ADR-0021 Step 4)', async () => {
-  const vm = new CaseReviewViewModel(
-    makeStep4Client({ status: 'In-progress' }),
-    /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    'c1',
-    'u1',
-    null
-  );
+  const vm = new CaseReviewViewModel({
+    client: makeStep4Client({ status: 'In-progress' }),
+    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: null,
+  });
 
   await vm.load();
 
@@ -397,13 +397,16 @@ test('CaseReviewViewModel.load(): In-progress Case loads live catalogue; version
 });
 
 test('CaseReviewViewModel.load(): Completed Case without questionBankVersion falls back to live (backward compat, ADR-0021 Step 4)', async () => {
-  const vm = new CaseReviewViewModel(
-    makeStep4Client({ status: 'Completed', questionBankVersion: undefined }),
-    /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-    'c1',
-    'u1',
-    null
-  );
+  const vm = new CaseReviewViewModel({
+    client: makeStep4Client({
+      status: 'Completed',
+      questionBankVersion: undefined,
+    }),
+    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: null,
+  });
 
   await vm.load();
 

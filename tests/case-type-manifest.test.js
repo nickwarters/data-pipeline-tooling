@@ -52,8 +52,8 @@ test('CaseReviewViewModel.load(): unknown primary Case Type slug sets a clear us
   console.error = (...args) => errors.push(args);
 
   try {
-    const vm = new CaseReviewViewModel(
-      /** @type {any} */ ({
+    const vm = new CaseReviewViewModel({
+      client: /** @type {any} */ ({
         getCase: async () => ({
           id: 'c1',
           caseType: '../unexpected',
@@ -71,11 +71,11 @@ test('CaseReviewViewModel.load(): unknown primary Case Type slug sets a clear us
         getExportHash: async () => null,
         resolveUsers: async () => ({}),
       }),
-      /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-      'c1',
-      'u1',
-      null
-    );
+      saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+      caseId: 'c1',
+      currentUserId: 'u1',
+      capabilities: null,
+    });
 
     await vm.load();
 
@@ -106,8 +106,8 @@ test('CaseReviewViewModel._resolveSourceCase(): unknown QA source Case Type slug
   console.error = (...args) => errors.push(args);
 
   try {
-    const vm = new CaseReviewViewModel(
-      /** @type {any} */ ({
+    const vm = new CaseReviewViewModel({
+      client: /** @type {any} */ ({
         getCase: async (/** @type {string} */ id) =>
           id === 'source-1'
             ? {
@@ -141,10 +141,10 @@ test('CaseReviewViewModel._resolveSourceCase(): unknown QA source Case Type slug
         getExportHash: async () => null,
         resolveUsers: async () => ({}),
       }),
-      /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-      'qa-1',
-      'u1',
-      {
+      saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+      caseId: 'qa-1',
+      currentUserId: 'u1',
+      capabilities: {
         isReviewer: true,
         ownedCaseTypes: [],
         isResponsibleParty: false,
@@ -153,8 +153,8 @@ test('CaseReviewViewModel._resolveSourceCase(): unknown QA source Case Type slug
         isMaintainer: false,
         isQaReviewer: true,
         isVisitor: false,
-      }
-    );
+      },
+    });
 
     await vm.load();
 

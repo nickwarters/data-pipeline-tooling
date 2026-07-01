@@ -115,14 +115,14 @@ export class CRCaseReview extends ShellElement {
   async connectedCallback() {
     if (!this.client || !this.saveQueue || !this.caseId) return;
 
-    this.viewModel = new CaseReviewViewModel(
-      this.client,
-      this.saveQueue,
-      this.caseId,
-      this.currentUserId,
-      this.capabilities,
-      this.caseType
-    );
+    this.viewModel = new CaseReviewViewModel({
+      client: this.client,
+      saveQueue: this.saveQueue,
+      caseId: this.caseId,
+      currentUserId: this.currentUserId,
+      capabilities: this.capabilities,
+      caseType: this.caseType,
+    });
 
     super.connectedCallback();
     await this.viewModel.load();
