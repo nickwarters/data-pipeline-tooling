@@ -10,7 +10,7 @@ from tools.store import StoreRegistry
 
 
 def test_complex_bronze_to_silver_example_combines_sources_and_validates(tmp_path):
-    bronze_to_silver(tmp_path, run_id="2026-05-29")
+    bronze_to_silver(tmp_path, logical_run_id="2026-05-29")
 
     catalog = StoreRegistry(tmp_path)
     cases = read_rows(medallion(catalog, "complex_cases").silver, "case_snapshot")
@@ -47,8 +47,8 @@ def test_complex_bronze_to_silver_example_combines_sources_and_validates(tmp_pat
 
 
 def test_complex_silver_to_gold_example_assembles_reporting_outputs(tmp_path):
-    bronze_to_silver(tmp_path, run_id="2026-05-29")
-    silver_to_gold(tmp_path, run_id="2026-05-29")
+    bronze_to_silver(tmp_path, logical_run_id="2026-05-29")
+    silver_to_gold(tmp_path, logical_run_id="2026-05-29")
 
     catalog = StoreRegistry(tmp_path)
     review_queue = read_rows(
@@ -56,7 +56,7 @@ def test_complex_silver_to_gold_example_assembles_reporting_outputs(tmp_path):
     )
     assert [row["case_ref"] for row in review_queue] == ["C-100", "C-102"]
     assert [row["review_priority"] for row in review_queue] == [1430, 775]
-    assert {row["run_id"] for row in review_queue} == {"2026-05-29"}
+    assert {row["logical_run_id"] for row in review_queue} == {"2026-05-29"}
 
     adviser_summary = read_rows(
         medallion(catalog, "complex_reporting").gold, "adviser_summary"
@@ -68,7 +68,6 @@ def test_complex_silver_to_gold_example_assembles_reporting_outputs(tmp_path):
             "selected_cases": 1,
             "total_exposure": 12800,
             "total_open_contacts": 2,
-            "run_id": "2026-05-29",
             "logical_run_id": "2026-05-29",
             "load_date": "2026-05-29",
         },
@@ -78,7 +77,6 @@ def test_complex_silver_to_gold_example_assembles_reporting_outputs(tmp_path):
             "selected_cases": 1,
             "total_exposure": 7300,
             "total_open_contacts": 0,
-            "run_id": "2026-05-29",
             "logical_run_id": "2026-05-29",
             "load_date": "2026-05-29",
         },

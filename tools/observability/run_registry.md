@@ -2,8 +2,9 @@
 """The run registry: a query store for structured ``RunLog`` records.
 
 A ``RunLog`` writes one JSON object per step plus a run summary to a ``.log``
-file, all sharing a ``run_id``. This module loads those records into its own
-queryable SQLite store so operators can answer
+file, all sharing a ``pipeline_run_id`` (the concrete pipeline attempt). This
+module loads those records into its own queryable SQLite store so operators can
+answer
 "did last night's Ingest for Case Type B succeed, how many rows, did anything
 warn?" without grepping free text.
 
@@ -51,7 +52,8 @@ class RunRegistry:
             """
             CREATE TABLE IF NOT EXISTS run_records (
                 timestamp        TEXT,
-                run_id           TEXT NOT NULL,
+                pipeline_run_id  TEXT NOT NULL,
+                logical_run_id   TEXT,
                 pipeline         TEXT,
                 step             TEXT NOT NULL,
                 step_address     TEXT,
@@ -67,7 +69,7 @@ class RunRegistry:
                 warn_hits        TEXT,
                 committed        INTEGER,
                 profile          TEXT,
-                PRIMARY KEY (run_id, step, step_ordinal)
+                PRIMARY KEY (pipeline_run_id, step, step_ordinal)
             )
             """
         )
@@ -80,6 +82,11 @@ class RunRegistry:
             con.execute("ALTER TABLE run_records ADD COLUMN committed INTEGER")
         if "step_address" not in existing:
             con.execute("ALTER TABLE run_records ADD COLUMN step_address TEXT")
+        # Forward-compatible migration for the business-run key: a registry
+        # created before logical_run_id joined the record schema lacks the
+        # column the INSERT below names.
+        if "logical_run_id" not in existing:
+            con.execute("ALTER TABLE run_records ADD COLUMN logical_run_id TEXT")
         # Same forward-compatible migration for the per-column profile (#284):
         # a registry predating it lacks the column the INSERT below names.
         if "profile" not in existing:
@@ -120,8 +127,8 @@ class RunRegistry:
             If the file is shorter than the stored offset, the file has been
             rotated or replaced.  The offset is reset to 0 and the whole file
             is re-read from the top.  ``INSERT OR IGNORE`` on the primary key
-            ``(run_id, step, step_ordinal)`` guarantees idempotency — no row is
-            double-counted even if a later ingest revisits earlier content.
+            ``(pipeline_run_id, step, step_ordinal)`` guarantees idempotency — no
+            row is double-counted even if a later ingest revisits earlier content.
 
         Partial-line safety
             The tail is read in binary mode so byte positions are not distorted
@@ -134,14 +141,14 @@ class RunRegistry:
 
         Ordinal seeding across the boundary
             ``step_ordinal`` is the zero-based position of a record among all
-            records sharing the same ``(run_id, step)`` in the file.  When
+            records sharing the same ``(pipeline_run_id, step)`` in the file.  When
             ingesting only the tail, a naïve empty ``seen`` dict would restart
             ordinal numbering from 0, colliding with rows already in the DB.
             To prevent silent drops via ``INSERT OR IGNORE``, the distinct
-            ``run_id`` values appearing in the tail are looked up in
+            ``pipeline_run_id`` values appearing in the tail are looked up in
             ``run_records`` first, and the ``seen`` dict is pre-seeded with
-            ``MAX(step_ordinal) + 1`` per ``(run_id, step)`` so tail records
-            continue from the correct next ordinal.
+            ``MAX(step_ordinal) + 1`` per ``(pipeline_run_id, step)`` so tail
+            records continue from the correct next ordinal.
 
         The new offset and the inserted records are committed in the same
         transaction so a crash leaves the DB in a consistent, re-ingestion-safe
@@ -181,7 +188,7 @@ class RunRegistry:
                 chunk.rstrip(b"\r").decode("utf-8") for chunk in consumed.split(b"\n")
             ]
 
-            # --- collect run_ids in the tail for ordinal seeding ---
+            # --- collect pipeline_run_ids in the tail for ordinal seeding ---
             tail_records: list[dict] = []
             tail_run_ids: set[str] = set()
             for raw in raw_lines:
@@ -189,42 +196,43 @@ class RunRegistry:
                     continue
                 rec = json.loads(raw)
                 tail_records.append(rec)
-                tail_run_ids.add(rec["run_id"])
+                tail_run_ids.add(rec["pipeline_run_id"])
 
-            # --- seed seen dict from existing DB rows for those run_ids ---
+            # --- seed seen dict from existing DB rows for those run ids ---
             seen: dict[tuple[str, str], int] = {}
             if tail_run_ids:
                 placeholders = ",".join("?" * len(tail_run_ids))
                 rows = con.execute(
                     f"""
-                    SELECT run_id, step, MAX(step_ordinal) + 1
+                    SELECT pipeline_run_id, step, MAX(step_ordinal) + 1
                     FROM run_records
-                    WHERE run_id IN ({placeholders})
-                    GROUP BY run_id, step
+                    WHERE pipeline_run_id IN ({placeholders})
+                    GROUP BY pipeline_run_id, step
                     """,
                     tuple(tail_run_ids),
                 ).fetchall()
-                for run_id, step, next_ordinal in rows:
-                    seen[(run_id, step)] = next_ordinal
+                for pipeline_run_id, step, next_ordinal in rows:
+                    seen[(pipeline_run_id, step)] = next_ordinal
 
             # --- insert tail records ---
             inserted = 0
             for rec in tail_records:
-                key = (rec["run_id"], rec["step"])
+                key = (rec["pipeline_run_id"], rec["step"])
                 ordinal = seen.get(key, 0)
                 seen[key] = ordinal + 1
                 cur = con.execute(
                     """
                     INSERT OR IGNORE INTO run_records (
-                        timestamp, run_id, pipeline, step, step_address,
-                        step_ordinal, status, rows_in, rows_out,
-                        rows_quarantined, rows_excluded, duration, errors,
-                        error_category, warn_hits, committed, profile
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        timestamp, pipeline_run_id, logical_run_id, pipeline,
+                        step, step_address, step_ordinal, status, rows_in,
+                        rows_out, rows_quarantined, rows_excluded, duration,
+                        errors, error_category, warn_hits, committed, profile
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         rec.get("timestamp"),
-                        rec["run_id"],
+                        rec["pipeline_run_id"],
+                        rec.get("logical_run_id"),
                         rec.get("pipeline"),
                         rec["step"],
                         _step_address(rec),
@@ -258,9 +266,11 @@ class RunRegistry:
         finally:
             con.close()
 
-    def records_for_run(self, run_id: str) -> list[dict]:
-        """Every step record of one run, in execution (ingest) order."""
-        return self._select("WHERE run_id = ? ORDER BY timestamp, rowid", (run_id,))
+    def records_for_run(self, pipeline_run_id: str) -> list[dict]:
+        """Every step record of one pipeline run, in execution (ingest) order."""
+        return self._select(
+            "WHERE pipeline_run_id = ? ORDER BY timestamp, rowid", (pipeline_run_id,)
+        )
 
     def query_runs(
         self, pipeline: str | None = None, status: str | None = None
@@ -397,7 +407,7 @@ class RunRegistry:
                 WHERE r.pipeline = ? AND r.step = ? AND r.rows_out IS NOT NULL
                   AND EXISTS (
                       SELECT 1 FROM run_records s
-                      WHERE s.run_id = r.run_id
+                      WHERE s.pipeline_run_id = r.pipeline_run_id
                         AND s.step = 'run' AND s.status = 'ok'
                   )
                 ORDER BY r.timestamp DESC, r.rowid DESC
@@ -428,7 +438,7 @@ class RunRegistry:
                 WHERE r.step_address = ? AND r.profile IS NOT NULL
                   AND EXISTS (
                       SELECT 1 FROM run_records s
-                      WHERE s.run_id = r.run_id
+                      WHERE s.pipeline_run_id = r.pipeline_run_id
                         AND s.step = 'run' AND s.status = 'ok'
                   )
                 ORDER BY r.timestamp DESC, r.rowid DESC

@@ -330,4 +330,40 @@ def test_rendered_feed_from_a_spaced_file_runs_and_its_test_passes(tmp_path):
     assert len(landed) == len(dataset) > 0
     assert {"Case Number", "Adviser Name"}.issubset(landed[0].keys())
 
+
+def _function_body(text: str, name: str) -> str:
+    start = text.index(f"def {name}(")
+    nxt = text.find("\ndef ", start + 1)
+    return text[start:] if nxt == -1 else text[start:nxt]
+
+
+def test_feed_file_seeds_structural_rejection_rows_missing_a_column(tmp_path):
+    # The structural-rejection tests are reseeded with the real feed rows minus
+    # one required column, so they stay structurally invalid and keep tripping the
+    # validators (regression: a feed scaffolded with --from-feed-file shipped with
+    # failing negative tests because seeding overwrote their invalid rows with
+    # valid data, so the validators no longer raised).
+    feed = _write_feed(
+        tmp_path / "cases.csv",
+        "Case Number,Adviser Name\nC1,Smith\nC2,Jones\n",
+    )
+    scaffold.render("cases", tmp_path, feed_file=feed)
+
+    test_text = (tmp_path / "tests" / "pipelines" / "test_cases.py").read_text("utf-8")
+    assert "invalid_col" not in test_text  # the template sentinel is gone
+
+    for name in (
+        "test_raw_builder_gates_source_columns",
+        "test_silver_builder_aborts_on_structural_breaches",
+    ):
+        body = _function_body(test_text, name)
+        assert '"Case Number": "C1"' in body  # seeded with the real feed columns
+        assert '"Adviser Name"' not in body  # ...minus the dropped required one
+
+    # A non-rejection block is seeded with the full rows, dropped column included.
+    quarantine = _function_body(
+        test_text, "test_silver_builder_quarantines_value_rule_breaches"
+    )
+    assert '"Case Number": "C1", "Adviser Name": "Smith"' in quarantine
+
 ```

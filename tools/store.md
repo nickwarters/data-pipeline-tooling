@@ -114,9 +114,9 @@ class Store:
             return AccumulateByRunWriter(
                 db_path,
                 table,
-                strategy.run_id,
+                strategy.logical_run_id,
                 strategy.load_date,
-                execution_id=strategy.execution_id,
+                pipeline_run_id=strategy.pipeline_run_id,
                 busy_timeout_ms=self._busy_timeout_ms,
             )
         if isinstance(strategy, UpsertStrategy):

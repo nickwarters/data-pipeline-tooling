@@ -147,9 +147,8 @@ class QuarantineStep(PipelineStep):
             metrics.rows_quarantined = len(rejected)
             if len(rejected) > 0 and self.reject_writer is not None:
                 stamped = rejected.with_columns(
-                    run_id=session.context.logical_run_id,
                     logical_run_id=session.context.logical_run_id,
-                    execution_id=session.context.execution_id,
+                    pipeline_run_id=session.context.pipeline_run_id,
                     load_date=session.context.load_date,
                 )
                 self.reject_writer.write(stamped)

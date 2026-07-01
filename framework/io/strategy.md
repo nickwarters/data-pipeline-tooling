@@ -10,8 +10,8 @@ Five strategies exist:
 
 - :class:`Refresh` — truncate + reload each run; the table mirrors the current
   source snapshot after every run.
-- :class:`AccumulateByRun` — accumulate rows stamped by ``run_id`` /
-  ``load_date`` plus optional ``execution_id``; a re-driven logical run is
+- :class:`AccumulateByRun` — accumulate rows stamped by ``logical_run_id`` /
+  ``load_date`` plus optional ``pipeline_run_id``; a re-driven logical run is
   idempotent via delete-by-logical-run then insert.
 - :class:`UpsertStrategy` — merge incoming rows into the target by a declared
   key set: matching keys are replaced, new keys are inserted, unmatched target
@@ -38,15 +38,20 @@ class Refresh:
 
 @dataclass(frozen=True)
 class AccumulateByRun:
-    """Accumulate rows per logical run, stamped with run metadata."""
+    """Accumulate rows per logical run, stamped with run metadata.
 
-    run_id: str
+    ``logical_run_id`` is the idempotency key a re-driven run deletes by;
+    ``pipeline_run_id`` is the concrete attempt, stamped for traceability when
+    the strategy was derived from a RunContext.
+    """
+
+    logical_run_id: str
     load_date: str
-    execution_id: str | None = None
+    pipeline_run_id: str | None = None
 
     def __post_init__(self) -> None:
-        if not self.run_id:
-            raise ValueError("AccumulateByRun requires a non-empty run_id")
+        if not self.logical_run_id:
+            raise ValueError("AccumulateByRun requires a non-empty logical_run_id")
         if not self.load_date:
             raise ValueError("AccumulateByRun requires a non-empty load_date")
 
@@ -54,15 +59,10 @@ class AccumulateByRun:
     def from_context(cls, context) -> "AccumulateByRun":
         """Derive the accumulation strategy from a shared RunContext."""
         return cls(
-            run_id=context.logical_run_id,
+            logical_run_id=context.logical_run_id,
             load_date=context.load_date,
-            execution_id=context.execution_id,
+            pipeline_run_id=context.pipeline_run_id,
         )
-
-    @property
-    def logical_run_id(self) -> str:
-        """Explicit name for the idempotency key; ``run_id`` is the legacy alias."""
-        return self.run_id
 
 
 class UpsertStrategy:

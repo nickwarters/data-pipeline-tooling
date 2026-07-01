@@ -4,9 +4,11 @@
 A ``RunLog`` emits one JSON object per line to a ``.log`` file and a
 human-readable line to the console for each record of a run. The builder's
 ``.run()`` drives it per step (read, validate, write) and with a final run-level
-summary; every record of a single run carries the same correlating ``run_id``.
-Structured-but-file-only keeps local runs simple while giving the run registry
-machine-readable records to ingest.
+summary; every record of a single run carries the same correlating
+``pipeline_run_id`` (the concrete pipeline attempt) plus the ``logical_run_id``
+(the business run / idempotency key) it belongs to. Structured-but-file-only
+keeps local runs simple while giving the run registry machine-readable records
+to ingest.
 """
 
 from __future__ import annotations
@@ -58,11 +60,12 @@ class RunLog:
     @contextmanager
     def step(
         self,
-        run_id: str,
+        pipeline_run_id: str,
         pipeline: str,
         step: str,
         rows_in: int | None = None,
         committed: bool = False,
+        logical_run_id: str | None = None,
     ) -> Iterator[StepMetrics]:
         """Time a step; emit one record when it closes — or `error` if it raises.
 
@@ -82,10 +85,11 @@ class RunLog:
             yield metrics
         except Exception as exc:
             self.record(
-                run_id,
+                pipeline_run_id,
                 pipeline,
                 step,
                 "error",
+                logical_run_id=logical_run_id,
                 rows_in=metrics.rows_in,
                 rows_out=metrics.rows_out,
                 rows_quarantined=metrics.rows_quarantined,
@@ -99,10 +103,11 @@ class RunLog:
             )
             raise
         self.record(
-            run_id,
+            pipeline_run_id,
             pipeline,
             step,
             "ok",
+            logical_run_id=logical_run_id,
             rows_in=metrics.rows_in,
             rows_out=metrics.rows_out,
             rows_quarantined=metrics.rows_quarantined,
@@ -114,11 +119,12 @@ class RunLog:
 
     def record(
         self,
-        run_id: str,
+        pipeline_run_id: str,
         pipeline: str,
         step: str,
         status: str,
         *,
+        logical_run_id: str | None = None,
         rows_in: int | None = None,
         rows_out: int | None = None,
         rows_quarantined: int | None = None,
@@ -136,7 +142,13 @@ class RunLog:
         record = {
             # The registry orders by the event time the emitter writes.
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            "run_id": run_id,
+            # The concrete pipeline attempt; the correlating key every record of
+            # one run shares, and what the registry groups a run's steps by.
+            "pipeline_run_id": pipeline_run_id,
+            # The business run / idempotency key this attempt belongs to. Stable
+            # across re-drives of the same run date, so it ties a re-driven
+            # attempt back to the run it replaces.
+            "logical_run_id": logical_run_id,
             "pipeline": pipeline,
             "step": step,
             "step_address": step_address,
@@ -192,7 +204,7 @@ class RunLog:
             parts.append(f"profiled {len(record['profile'].get('columns', []))} col(s)")
         if record["warn_hits"]:
             parts.append(f"warn={'; '.join(record['warn_hits'])}")
-        parts.append(f"[run {record['run_id'][:8]}]")
+        parts.append(f"[run {record['pipeline_run_id'][:8]}]")
         log.info(" ".join(parts))
 
 
@@ -205,11 +217,12 @@ class _NullRunLog(RunLog):
     @contextmanager
     def step(
         self,
-        run_id: str,
+        pipeline_run_id: str,
         pipeline: str,
         step: str,
         rows_in: int | None = None,
         committed: bool = False,
+        logical_run_id: str | None = None,
     ) -> Iterator[StepMetrics]:
         metrics = StepMetrics()
         metrics.rows_in = rows_in

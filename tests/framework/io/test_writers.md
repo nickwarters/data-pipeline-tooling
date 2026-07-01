@@ -154,12 +154,12 @@ def test_file_writer_accumulate_by_run_replaces_only_that_run(tmp_path):
 
     landed = CsvReader(target).read()
     assert len(landed) == 2 * len(dataset)
-    assert "run_id" in landed.columns
+    assert "logical_run_id" in landed.columns
     assert "load_date" in landed.columns
 
 
 def test_accumulate_by_run_writer_keeps_each_run(tmp_path):
-    # Gold accumulates: each run's rows are retained and stamped run_id /
+    # Gold accumulates: each run's rows are retained and stamped logical_run_id /
     # load_date. Two distinct runs land both sets.
     dataset = CsvReader(FIXTURE).read()
     db = tmp_path / "gold.db"
@@ -169,7 +169,7 @@ def test_accumulate_by_run_writer_keeps_each_run(tmp_path):
 
     landed = SqliteReader(db, "selection_pool").read()
     assert len(landed) == 2 * len(dataset)
-    assert "run_id" in landed.columns
+    assert "logical_run_id" in landed.columns
     assert "load_date" in landed.columns
 
 

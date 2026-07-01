@@ -10,8 +10,8 @@ The abort-vs-quarantine boundary:
 
 A ``RowValidator`` partitions a ``Dataset`` into ``(good, rejected)`` where the
 rejected partition carries a ``failed_rule`` column describing every violated rule for
-that row. The pipeline stamps ``run_id`` and ``load_date`` on rejected rows before
-handing them to the reject ``Writer``.
+that row. The pipeline stamps ``logical_run_id`` / ``pipeline_run_id`` and
+``load_date`` on rejected rows before handing them to the reject ``Writer``.
 """
 
 from __future__ import annotations

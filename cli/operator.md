@@ -11,7 +11,7 @@ Run from the repository root so the import-only ``framework`` package resolves::
     python -m cli run pipelines/orders /data --run-date 2026-05-29
     python -m cli status /data --subject cases
     python -m cli runs /data --pipeline cases/ingest --limit 5
-    python -m cli log /data cases --run-id <execution-id>
+    python -m cli log /data cases --pipeline-run-id <pipeline-run-id>
 
 ``run`` addresses a pipeline by *its location on disk*: ``pipelines/orders`` maps
 to the module ``pipelines.orders.pipeline``, imported at runtime, whose
@@ -118,7 +118,7 @@ def _format_run(record: dict) -> str:
         parts.append(f"rows_out={record['rows_out']}")
     if record.get("warn_hits"):
         parts.append(f"warn={'; '.join(record['warn_hits'])}")
-    parts.append(f"[run {(record.get('run_id') or '')[:8]}]")
+    parts.append(f"[run {(record.get('pipeline_run_id') or '')[:8]}]")
     return "  ".join(parts)
 
 
@@ -271,12 +271,17 @@ def _log(args: argparse.Namespace) -> int:
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    if args.run_id is not None:
+    if args.pipeline_run_id is not None:
         records = [
-            r for r in records if (r.get("run_id") or "").startswith(args.run_id)
+            r
+            for r in records
+            if (r.get("pipeline_run_id") or "").startswith(args.pipeline_run_id)
         ]
         if not records:
-            print(f"no records for run {args.run_id!r} in {path}", file=sys.stderr)
+            print(
+                f"no records for run {args.pipeline_run_id!r} in {path}",
+                file=sys.stderr,
+            )
             return 1
     summary = [r for r in records if r.get("step") == "run"]
     print(f"run log: {path}")
@@ -393,7 +398,9 @@ def register(sub) -> None:
     _add_base_dir_args(log)
     log.add_argument("subject", help="the subject whose _runs/<subject>.log to read")
     log.add_argument(
-        "--run-id", help="only records whose execution id starts with this"
+        "--pipeline-run-id",
+        dest="pipeline_run_id",
+        help="only records whose pipeline run id starts with this",
     )
     log.set_defaults(func=_log)
 

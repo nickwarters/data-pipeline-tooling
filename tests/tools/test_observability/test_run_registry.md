@@ -60,13 +60,13 @@ def _run_pipeline(log_path, name="cases", rows=2):
     r = p.read(reader, name="read")
     p.write(CapturingWriter(), r, name="write")
     p.run()
-    return p.run_id
+    return p.pipeline_run_id
 
 
 def _record(run_id, pipeline, step, status, timestamp):
     return {
         "timestamp": timestamp,
-        "run_id": run_id,
+        "pipeline_run_id": run_id,
         "pipeline": pipeline,
         "step": step,
         "step_address": pipeline if step == "run" else f"{pipeline}.{step}",
@@ -101,7 +101,7 @@ def test_ingest_makes_a_runs_steps_queryable_by_run_id(tmp_path):
     records = registry.records_for_run(run_id)
     steps = {r["step"] for r in records}
     assert {"read", "write", "run"} <= steps
-    assert all(r["run_id"] == run_id for r in records)
+    assert all(r["pipeline_run_id"] == run_id for r in records)
 
 
 def test_ingest_makes_step_addresses_queryable(tmp_path):
@@ -112,7 +112,7 @@ def test_ingest_makes_step_addresses_queryable(tmp_path):
     registry.ingest(log_path)
 
     [read] = registry.records_for_address("pipeline_2.read")
-    assert read["run_id"] == run_id
+    assert read["pipeline_run_id"] == run_id
     assert read["pipeline"] == "pipeline_2"
     assert read["step"] == "read"
     assert read["step_address"] == "pipeline_2.read"
@@ -151,7 +151,9 @@ def test_latest_run_per_pipeline_returns_the_most_recent_summary_each(tmp_path):
     registry = RunRegistry(tmp_path / "registry.db")
     registry.ingest(log_path)
 
-    latest = {r["pipeline"]: r["run_id"] for r in registry.latest_run_per_pipeline()}
+    latest = {
+        r["pipeline"]: r["pipeline_run_id"] for r in registry.latest_run_per_pipeline()
+    }
     assert latest == {"alpha": alpha_latest, "beta": beta_only}
 
 
@@ -164,7 +166,7 @@ def _run_failing_pipeline(log_path, name="cases"):
     p.write(CapturingWriter(), v, name="write")
     with pytest.raises(ValidationError):
         p.run()
-    return p.run_id
+    return p.pipeline_run_id
 
 
 def test_query_runs_returns_summaries_filterable_by_pipeline_and_status(tmp_path):
@@ -179,14 +181,14 @@ def test_query_runs_returns_summaries_filterable_by_pipeline_and_status(tmp_path
     registry.ingest(log_path)
 
     all_runs = registry.query_runs()
-    assert {r["run_id"] for r in all_runs} == {ok_a, ok_b, err_a}
+    assert {r["pipeline_run_id"] for r in all_runs} == {ok_a, ok_b, err_a}
     assert all(r["step"] == "run" for r in all_runs)  # summaries only
 
     alpha = registry.query_runs(pipeline="alpha")
-    assert {r["run_id"] for r in alpha} == {ok_a, err_a}
+    assert {r["pipeline_run_id"] for r in alpha} == {ok_a, err_a}
 
     errored = registry.query_runs(status="error")
-    assert {r["run_id"] for r in errored} == {err_a}
+    assert {r["pipeline_run_id"] for r in errored} == {err_a}
 
 
 def test_latest_success_for_pipeline_address_uses_latest_ok_run_summary(tmp_path):
@@ -211,7 +213,7 @@ def test_latest_success_for_pipeline_address_uses_latest_ok_run_summary(tmp_path
         RunAddress.pipeline("pipeline_4"), on=date(2026, 6, 23)
     )
     assert latest is not None
-    assert latest["run_id"] == "latest-ok"
+    assert latest["pipeline_run_id"] == "latest-ok"
     assert latest["step"] == "run"
 
 
@@ -223,7 +225,7 @@ def test_latest_success_backfills_legacy_rows_without_step_address(tmp_path):
             """
             CREATE TABLE run_records (
                 timestamp        TEXT,
-                run_id           TEXT NOT NULL,
+                pipeline_run_id  TEXT NOT NULL,
                 pipeline         TEXT,
                 step             TEXT NOT NULL,
                 step_ordinal     INTEGER NOT NULL,
@@ -236,14 +238,14 @@ def test_latest_success_backfills_legacy_rows_without_step_address(tmp_path):
                 errors           TEXT,
                 error_category   TEXT,
                 warn_hits        TEXT,
-                PRIMARY KEY (run_id, step, step_ordinal)
+                PRIMARY KEY (pipeline_run_id, step, step_ordinal)
             )
             """
         )
         con.execute(
             """
             INSERT INTO run_records (
-                timestamp, run_id, pipeline, step, step_ordinal, status,
+                timestamp, pipeline_run_id, pipeline, step, step_ordinal, status,
                 errors, warn_hits
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
@@ -265,7 +267,7 @@ def test_latest_success_backfills_legacy_rows_without_step_address(tmp_path):
     latest = RunRegistry(db_path).latest_success(RunAddress.pipeline("pipeline_4"))
 
     assert latest is not None
-    assert latest["run_id"] == "legacy-ok"
+    assert latest["pipeline_run_id"] == "legacy-ok"
     assert latest["step_address"] == "pipeline_4"
 
 
@@ -310,7 +312,7 @@ def test_latest_success_for_task_address_uses_latest_ok_non_run_step(tmp_path):
         RunAddress.task("pipeline_2", "step_4"), on_or_after=date(2026, 6, 16)
     )
     assert latest is not None
-    assert latest["run_id"] == "latest-ok-run"
+    assert latest["pipeline_run_id"] == "latest-ok-run"
     assert latest["step"] == "step_4"
 
     assert (
@@ -342,7 +344,7 @@ def test_ingest_tolerates_a_pre_timestamp_log(tmp_path):
     # its missing timestamp lands as null, and it is still queryable by run_id.
     log_path = tmp_path / "old.log"
     old_record = {  # the pre-amendment shape — no "timestamp" key
-        "run_id": "abc123",
+        "pipeline_run_id": "abc123",
         "pipeline": "legacy",
         "step": "run",
         "status": "ok",
@@ -357,7 +359,7 @@ def test_ingest_tolerates_a_pre_timestamp_log(tmp_path):
     assert registry.ingest(log_path) == 1
 
     (run,) = registry.query_runs(pipeline="legacy")
-    assert run["run_id"] == "abc123"
+    assert run["pipeline_run_id"] == "abc123"
     assert run["timestamp"] is None
     assert run["rows_out"] == 3
 
@@ -384,8 +386,8 @@ def test_runs_that_warned_surfaces_tolerated_warn_hits(tmp_path):
     registry.ingest(log_path)
 
     warned_runs = registry.runs_that_warned()
-    assert {r["run_id"] for r in warned_runs} == {warned.run_id}
-    assert clean not in {r["run_id"] for r in warned_runs}
+    assert {r["pipeline_run_id"] for r in warned_runs} == {warned.pipeline_run_id}
+    assert clean not in {r["pipeline_run_id"] for r in warned_runs}
     hits = warned_runs[0]["warn_hits"]
     assert isinstance(hits, list) and any("case_ref" in h for h in hits)
 
@@ -452,8 +454,10 @@ def test_volume_guardrail_trips_against_real_history_and_records_to_the_runlog(
 
     registry.ingest(truncated_log)
     warned = registry.runs_that_warned()
-    assert pipeline.run_id in {r["run_id"] for r in warned}
-    (this_run,) = [r for r in warned if r["run_id"] == pipeline.run_id]
+    assert pipeline.pipeline_run_id in {r["pipeline_run_id"] for r in warned}
+    (this_run,) = [
+        r for r in warned if r["pipeline_run_id"] == pipeline.pipeline_run_id
+    ]
     assert any("deviates" in hit for hit in this_run["warn_hits"])
 
 
@@ -480,7 +484,7 @@ def test_volume_guardrail_aborts_the_run_at_error_severity(tmp_path):
 
     registry.ingest(truncated_log)
     (summary,) = registry.query_runs(pipeline="cases", status="error")
-    assert summary["run_id"] == pipeline.run_id
+    assert summary["pipeline_run_id"] == pipeline.pipeline_run_id
 
 
 def test_repeated_process_steps_are_kept_distinct_not_deduped(tmp_path):
@@ -500,7 +504,9 @@ def test_repeated_process_steps_are_kept_distinct_not_deduped(tmp_path):
     registry.ingest(log_path)
 
     process_records = [
-        r for r in registry.records_for_run(pipeline.run_id) if r["step"] == "process"
+        r
+        for r in registry.records_for_run(pipeline.pipeline_run_id)
+        if r["step"] == "process"
     ]
     assert len(process_records) == 2
     assert {r["step_ordinal"] for r in process_records} == {0, 1}
@@ -508,7 +514,9 @@ def test_repeated_process_steps_are_kept_distinct_not_deduped(tmp_path):
     # Re-ingest must not duplicate the two process records.
     registry.ingest(log_path)
     again = [
-        r for r in registry.records_for_run(pipeline.run_id) if r["step"] == "process"
+        r
+        for r in registry.records_for_run(pipeline.pipeline_run_id)
+        if r["step"] == "process"
     ]
     assert len(again) == 2
 
@@ -541,7 +549,7 @@ def test_incremental_ingest_second_call_returns_only_new_records(tmp_path):
     assert first_count + second_count == fresh_count
 
     # Both runs are queryable.
-    all_runs = {r["run_id"] for r in registry.query_runs()}
+    all_runs = {r["pipeline_run_id"] for r in registry.query_runs()}
     assert {run_id_a, run_id_b} <= all_runs
 
     # Ordinals match between incremental and fresh ingest.
@@ -570,7 +578,7 @@ def test_incremental_ingest_ordinals_continue_across_boundary(tmp_path):
     # We write them one at a time to simulate the straddle.
     proc_log = tmp_path / "proc.log"
     base = {
-        "run_id": "straddle-run",
+        "pipeline_run_id": "straddle-run",
         "pipeline": "cases",
         "step": "process",
         "status": "ok",
@@ -622,7 +630,7 @@ def test_incremental_ingest_partial_line_not_ingested_then_completed(tmp_path):
 
     record = _json.dumps(
         {
-            "run_id": "partial-run",
+            "pipeline_run_id": "partial-run",
             "pipeline": "cases",
             "step": "run",
             "status": "ok",
@@ -674,7 +682,7 @@ def test_incremental_ingest_truncation_resets_and_picks_up_new_file(tmp_path):
 
     new_record = _json.dumps(
         {
-            "run_id": "new-run-after-rotation",
+            "pipeline_run_id": "new-run-after-rotation",
             "pipeline": "cases",
             "step": "run",
             "status": "ok",
@@ -760,7 +768,7 @@ def test_ingest_migrates_a_pre_committed_registry_db(tmp_path):
         """
         CREATE TABLE run_records (
             timestamp        TEXT,
-            run_id           TEXT NOT NULL,
+            pipeline_run_id  TEXT NOT NULL,
             pipeline         TEXT,
             step             TEXT NOT NULL,
             step_ordinal     INTEGER NOT NULL,
@@ -773,7 +781,7 @@ def test_ingest_migrates_a_pre_committed_registry_db(tmp_path):
             errors           TEXT,
             error_category   TEXT,
             warn_hits        TEXT,
-            PRIMARY KEY (run_id, step, step_ordinal)
+            PRIMARY KEY (pipeline_run_id, step, step_ordinal)
         )
         """
     )

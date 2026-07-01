@@ -747,8 +747,8 @@ class TopNPerGroup:
         )
 
 
-# The sampler is a pure function of input state and this seed, never run_id or
-# the clock. Run-to-run variation comes from the upstream population shrinking,
+# The sampler is a pure function of input state and this seed, never the run id
+# or the clock. Run-to-run variation comes from the upstream population shrinking,
 # not from the seed.
 _DEFAULT_SAMPLE_SEED = 0
 
@@ -773,7 +773,7 @@ class SamplePerGroup:
     """Draw at most ``n`` rows per group by a seeded, reproducible sample.
 
     A **pure function** of (input dataset, seed). ``key`` is one or more group
-    columns; ``seed`` a fixed, configurable constant (*not* ``run_id`` or the
+    columns; ``seed`` a fixed, configurable constant (*not* the run id or the
     clock); ``order`` the column that puts each group into a canonical order
     before the draw.
 
@@ -831,7 +831,7 @@ class Sample:
 
     The ungrouped counterpart of :class:`SamplePerGroup`: a **pure function** of
     (input dataset, seed) that samples the feed as a single population rather than
-    per group. ``seed`` is a fixed, configurable constant (*not* ``run_id`` or the
+    per group. ``seed`` is a fixed, configurable constant (*not* the run id or the
     clock); ``order`` puts the feed into a canonical order before the draw, so the
     same set in with the same seed yields the same sample out, invariant to
     incoming row order.

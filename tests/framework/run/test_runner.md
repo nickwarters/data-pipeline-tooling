@@ -33,11 +33,11 @@ def _record_run(
     step: str = "run",
     status: str = "ok",
     timestamp: str = "2026-05-29T00:00:00+00:00",
-    run_id: str = "upstream",
+    pipeline_run_id: str = "upstream",
 ) -> None:
     record = {
         "timestamp": timestamp,
-        "run_id": run_id,
+        "pipeline_run_id": pipeline_run_id,
         "pipeline": pipeline,
         "step": step,
         "status": status,
@@ -64,7 +64,7 @@ def _context(tmp_path, *, run_date=dt.date(2026, 5, 29)) -> RunContext:
         subject="cases",
         pipeline="selection",
         run_date=run_date,
-        run_id="selection-run",
+        pipeline_run_id="selection-run",
         run_log=RunLog(log_path),
         run_registry=registry,
     )
@@ -112,7 +112,7 @@ def test_requirement_same_day_requires_success_on_run_date(tmp_path):
         log_path,
         pipeline="cases/ingest",
         timestamp="2026-05-28T23:59:00+00:00",
-        run_id="yesterday",
+        pipeline_run_id="yesterday",
     )
     context = _context(tmp_path, run_date=dt.date(2026, 5, 29))
 
@@ -303,8 +303,7 @@ def test_runner_context_correlates_logs_registry_and_accumulated_rows(tmp_path):
         .to_pandas()
     )
 
-    assert set(landed["execution_id"]) == {run["run_id"]}
-    assert set(landed["run_id"]) == {"cases/selection:2026-05-29"}
+    assert set(landed["pipeline_run_id"]) == {run["pipeline_run_id"]}
     assert set(landed["logical_run_id"]) == {"cases/selection:2026-05-29"}
     assert set(landed["load_date"]) == {"2026-05-29"}
 
@@ -312,7 +311,7 @@ def test_runner_context_correlates_logs_registry_and_accumulated_rows(tmp_path):
 def test_runner_redrives_a_business_run_under_an_explicit_logical_run_id(tmp_path):
     # Re-driving a business run: two distinct executions sharing one
     # logical_run_id must replace the same rows (idempotent), each traceable by
-    # its own execution_id.
+    # its own pipeline_run_id.
     runner = PipelineRunner()
 
     def handler(context):
@@ -336,10 +335,9 @@ def test_runner_redrives_a_business_run_under_an_explicit_logical_run_id(tmp_pat
     )
     # Replaced, not duplicated: still two rows, all under the one logical run id.
     assert len(landed) == 2
-    assert set(landed["run_id"]) == {"REDRIVE-7"}
     assert set(landed["logical_run_id"]) == {"REDRIVE-7"}
     # Each execution stays individually traceable.
-    assert len(set(landed["execution_id"])) == 1  # the latest execution's rows
+    assert len(set(landed["pipeline_run_id"])) == 1  # the latest execution's rows
 
 
 def test_runner_defaults_run_log_to_runs_dir_under_base_dir(tmp_path):
@@ -403,7 +401,7 @@ def test_runner_stale_guard_prevents_handler_and_records_error_run(tmp_path):
     assert len(records) == 1
     freshness = [
         r
-        for r in registry.records_for_run(records[0]["run_id"])
+        for r in registry.records_for_run(records[0]["pipeline_run_id"])
         if r["step"] == "freshness"
     ]
     assert freshness[0]["status"] == "error"

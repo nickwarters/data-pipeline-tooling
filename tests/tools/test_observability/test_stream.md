@@ -61,7 +61,7 @@ def test_streams_only_kept_rows_and_returns_the_tally(tmp_path):
 
     result = stream_step(
         run_log,
-        run_id="run-1",
+        pipeline_run_id="run-1",
         pipeline="big/ingest",
         step="ingest_big",
         reader=reader,
@@ -80,7 +80,7 @@ def test_emits_one_ok_jsonl_record_with_filter_counts(tmp_path):
 
     stream_step(
         run_log,
-        run_id="run-1",
+        pipeline_run_id="run-1",
         pipeline="big/ingest",
         step="ingest_big",
         reader=reader,
@@ -106,7 +106,7 @@ def test_all_filtered_source_records_the_full_scan_and_zero_kept(tmp_path):
 
     result = stream_step(
         run_log,
-        run_id="run-1",
+        pipeline_run_id="run-1",
         pipeline="big/ingest",
         step="ingest_big",
         reader=reader,
@@ -128,7 +128,7 @@ def test_plain_reader_reports_nothing_excluded(tmp_path):
 
     result = stream_step(
         run_log,
-        run_id="run-1",
+        pipeline_run_id="run-1",
         pipeline="plain/ingest",
         step="ingest",
         reader=reader,
@@ -156,7 +156,7 @@ def test_failure_mid_stream_is_recorded_as_error_with_category_and_reraised(tmp_
     with pytest.raises(PipelineError, match="disk full"):
         stream_step(
             run_log,
-            run_id="run-1",
+            pipeline_run_id="run-1",
             pipeline="big/ingest",
             step="ingest_big",
             reader=reader,

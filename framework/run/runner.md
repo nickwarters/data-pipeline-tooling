@@ -222,7 +222,7 @@ def run_pipeline(
         subject=subject,
         pipeline=name,
         run_date=run_date or dt.date.today(),
-        execution_id=uuid.uuid4().hex,
+        pipeline_run_id=uuid.uuid4().hex,
         logical_run_id=logical_run_id,
         params=params,
         run_log=run_log,
@@ -238,10 +238,11 @@ def run_pipeline(
     except Exception as exc:
         if not context.run_summary_recorded:
             run_log.record(
-                context.run_id,
+                context.pipeline_run_id,
                 context.label,
                 "run",
                 "error",
+                logical_run_id=context.logical_run_id,
                 duration=time.perf_counter() - started,
                 errors=[str(exc)],
                 params=_diagnostic_params(context.params),
@@ -253,10 +254,11 @@ def run_pipeline(
     rows = len(result) if isinstance(result, Dataset) else None
     if not context.run_summary_recorded:
         run_log.record(
-            context.run_id,
+            context.pipeline_run_id,
             context.label,
             "run",
             "ok",
+            logical_run_id=context.logical_run_id,
             rows_in=rows,
             rows_out=rows,
             duration=time.perf_counter() - started,
@@ -406,30 +408,33 @@ def _handle_first_run(context: RunContext, requirement: Requirement) -> None:
     if requirement.first_run_policy == "warn":
         warn_hits = [f"{message}; allowing first run"]
     context.run_log.record(
-        context.run_id,
+        context.pipeline_run_id,
         context.label,
         "freshness",
         "ok",
+        logical_run_id=context.logical_run_id,
         warn_hits=warn_hits,
     )
 
 
 def _record_requirement_ok(context: RunContext) -> None:
     context.run_log.record(
-        context.run_id,
+        context.pipeline_run_id,
         context.label,
         "freshness",
         "ok",
+        logical_run_id=context.logical_run_id,
         warn_hits=[],
     )
 
 
 def _record_requirement_error(context: RunContext, message: str) -> None:
     context.run_log.record(
-        context.run_id,
+        context.pipeline_run_id,
         context.label,
         "freshness",
         "error",
+        logical_run_id=context.logical_run_id,
         errors=[message],
     )
 

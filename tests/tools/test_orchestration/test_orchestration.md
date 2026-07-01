@@ -203,7 +203,7 @@ def test_for_each_passes_per_item_context_with_derived_logical_run_id():
         "selection:2026-06-09:1:b",
     ]
     assert [context.load_date for context in contexts] == ["2026-06-09", "2026-06-09"]
-    assert contexts[0].execution_id != contexts[1].execution_id
+    assert contexts[0].pipeline_run_id != contexts[1].pipeline_run_id
 
 
 def test_for_each_context_supports_per_item_accumulate_by_run_writes(tmp_path):
@@ -231,7 +231,7 @@ def test_for_each_context_supports_per_item_accumulate_by_run_writes(tmp_path):
         "selection:2026-06-09:file-a",
         "selection:2026-06-09:file-b",
     }
-    assert frame.groupby("logical_run_id")["execution_id"].nunique().to_dict() == {
+    assert frame.groupby("logical_run_id")["pipeline_run_id"].nunique().to_dict() == {
         "selection:2026-06-09:file-a": 1,
         "selection:2026-06-09:file-b": 1,
     }

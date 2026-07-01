@@ -237,7 +237,7 @@ def _run_profiling_pipeline(log_path, dataset, *, name="cases", profiler=None):
     r = p.read(RecordingReader(dataset), name="read")
     p.profile(profiler or DataProfiler(), r, name="profile")
     p.run()
-    return p.run_id
+    return p.pipeline_run_id
 
 
 def test_profile_task_records_a_queryable_profile_on_the_run_log(tmp_path):
@@ -251,7 +251,7 @@ def test_profile_task_records_a_queryable_profile_on_the_run_log(tmp_path):
     registry.ingest(log_path)
 
     [record] = registry.records_for_address("cases.profile")
-    assert record["run_id"] == run_id
+    assert record["pipeline_run_id"] == run_id
     profile = DatasetProfile.from_record(record["profile"])
     assert profile.row_count == 3
     assert profile.column("amount").null_rate == pytest.approx(1 / 3)

@@ -188,7 +188,6 @@ def test_sharepoint_writer_composes_in_the_pipeline_builder(fixture_csv):
     assert dataset.columns == [
         "adviser_id",
         "name",
-        "run_id",
         "logical_run_id",
         "load_date",
     ]
@@ -231,8 +230,8 @@ def test_accumulate_by_run_stamps_survive_the_round_trip():
 
     landed = SharePointReader(site, "Selection", fetcher=backend).read()
     frame = landed.to_pandas()
-    assert landed.columns == ["case_ref", "run_id", "logical_run_id", "load_date"]
-    assert list(frame["run_id"]) == ["r1", "r2"]
+    assert landed.columns == ["case_ref", "logical_run_id", "load_date"]
+    assert list(frame["logical_run_id"]) == ["r1", "r2"]
 
 
 def test_selection_pool_is_delivered_to_a_per_case_type_list(tmp_path):

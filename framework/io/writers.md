@@ -57,8 +57,8 @@ def _frame_for_strategy(
         frame = _stamp_accumulate_frame(frame, strategy)
 
         existing = read_existing()
-        if len(existing) > 0 and "run_id" in existing.columns:
-            existing = existing[existing["run_id"] != strategy.run_id]
+        if len(existing) > 0 and "logical_run_id" in existing.columns:
+            existing = existing[existing["logical_run_id"] != strategy.logical_run_id]
         return pd.concat([existing, frame], ignore_index=True)
     if isinstance(strategy, InsertOrIgnore):
         # Files carry no table constraints, so every incoming row is appended —
@@ -73,10 +73,9 @@ def _frame_for_strategy(
 def _stamp_accumulate_frame(
     frame: pd.DataFrame, strategy: AccumulateByRun
 ) -> pd.DataFrame:
-    frame["run_id"] = strategy.run_id
-    frame["logical_run_id"] = strategy.run_id
-    if strategy.execution_id is not None:
-        frame["execution_id"] = strategy.execution_id
+    frame["logical_run_id"] = strategy.logical_run_id
+    if strategy.pipeline_run_id is not None:
+        frame["pipeline_run_id"] = strategy.pipeline_run_id
     frame["load_date"] = strategy.load_date
     return frame
 
@@ -233,15 +232,16 @@ class SqliteTruncateReloadWriter:
 class QuarantineWriter:
     """A Writer for the quarantine reject table.
 
-    Owns its target location (db_path + table). The pipeline stamps logical
-    ``run_id`` and ``load_date`` on the rejected dataset before calling
-    ``write()``, so this writer just does the idempotent delete-by-run_id +
+    Owns its target location (db_path + table). The pipeline stamps
+    ``logical_run_id`` and ``load_date`` on the rejected dataset before calling
+    ``write()``, so this writer just does the idempotent delete-by-logical-run +
     append that lets a re-driven run replace only its own prior rejects without
     touching other runs.
 
-    Unlike ``AccumulateByRunWriter``, this writer does NOT stamp ``run_id`` or
-    ``load_date`` — those come from the dataset (added by the pipeline at quarantine
-    time). The ``failed_rule`` column also arrives pre-stamped by the partitioner.
+    Unlike ``AccumulateByRunWriter``, this writer does NOT stamp ``logical_run_id``
+    or ``load_date`` — those come from the dataset (added by the pipeline at
+    quarantine time). The ``failed_rule`` column also arrives pre-stamped by the
+    partitioner.
     """
 
     def __init__(
@@ -259,12 +259,13 @@ class QuarantineWriter:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         con = connect(self._db_path, self._busy_timeout_ms)
         try:
-            if "run_id" in frame.columns:
-                run_id = frame["run_id"].iloc[0]
+            if "logical_run_id" in frame.columns:
+                logical_run_id = frame["logical_run_id"].iloc[0]
                 try:
                     con.execute(
-                        f"DELETE FROM {quote_identifier(self._table)} WHERE run_id = ?",
-                        (run_id,),
+                        f"DELETE FROM {quote_identifier(self._table)} "
+                        "WHERE logical_run_id = ?",
+                        (logical_run_id,),
                     )
                 except sqlite3.OperationalError:
                     pass  # table does not exist yet
@@ -523,45 +524,45 @@ class AccumulateByRunWriter:
 
     Owns its target location (a single layer db file + table). Used for the gold
     layer (the accumulating SelectionPool / Review Outcomes), whose history must
-    survive across runs. Each row is stamped with the logical ``run_id`` /
-    ``logical_run_id`` / ``load_date`` plus ``execution_id`` when the strategy
-    was derived from a RunContext. A re-driven logical run is idempotent via
-    delete-by-run then insert.
+    survive across runs. Each row is stamped with the ``logical_run_id`` /
+    ``load_date`` plus ``pipeline_run_id`` when the strategy was derived from a
+    RunContext. A re-driven logical run is idempotent via delete-by-logical-run
+    then insert.
     """
 
     def __init__(
         self,
         db_path: str | os.PathLike[str],
         table: str,
-        run_id: str,
+        logical_run_id: str,
         load_date: str,
-        execution_id: str | None = None,
+        pipeline_run_id: str | None = None,
         busy_timeout_ms: int = 5000,
     ) -> None:
         self._db_path = Path(db_path)
         self._table = table
-        self._run_id = run_id
+        self._logical_run_id = logical_run_id
         self._load_date = load_date
-        self._execution_id = execution_id
+        self._pipeline_run_id = pipeline_run_id
         self._busy_timeout_ms = busy_timeout_ms
 
     def write(self, dataset: Dataset) -> None:
         frame = dataset.to_pandas()
-        frame["run_id"] = self._run_id
-        frame["logical_run_id"] = self._run_id
-        if self._execution_id is not None:
-            frame["execution_id"] = self._execution_id
+        frame["logical_run_id"] = self._logical_run_id
+        if self._pipeline_run_id is not None:
+            frame["pipeline_run_id"] = self._pipeline_run_id
         frame["load_date"] = self._load_date
 
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         con = connect(self._db_path, self._busy_timeout_ms)
         try:
-            # Idempotent re-run: clear this run's prior rows, then append, so a
-            # re-driven day replaces only its own rows and never other runs'.
+            # Idempotent re-run: clear this logical run's prior rows, then append,
+            # so a re-driven day replaces only its own rows and never other runs'.
             try:
                 con.execute(
-                    f"DELETE FROM {quote_identifier(self._table)} WHERE run_id = ?",
-                    (self._run_id,),
+                    f"DELETE FROM {quote_identifier(self._table)} "
+                    "WHERE logical_run_id = ?",
+                    (self._logical_run_id,),
                 )
             except sqlite3.OperationalError:
                 pass  # table does not exist yet — nothing to clear

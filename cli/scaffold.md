@@ -56,6 +56,13 @@ _MAX_FEED_COLUMNS = 40
 _FEED_SAMPLE_ROWS = 50
 _TEST_SAMPLE_ROWS = 2
 
+# The sentinel column the feed template's structural-rejection tests feed to trip
+# the validators. When seeding from a feed file these blocks are reseeded with the
+# real sample rows minus one required column -- still structurally invalid, so the
+# negative tests keep raising, but shaped like the actual feed. Kept in sync with
+# the feed template.
+_INVALID_ROW_SENTINEL = "invalid_col"
+
 _TEMPLATE_DIR_CASE_TYPE = Path(__file__).parent / "scaffold_templates" / "case_type"
 _TEMPLATE_DIR = Path(__file__).parent / "scaffold_templates" / "feed"
 
@@ -306,11 +313,20 @@ def _render_pipeline(text: str, feed: str, spec: _FeedSpec) -> str:
     return text
 
 
-def _source_literal(spec: _FeedSpec) -> str:
+def _source_literal(spec: _FeedSpec, *, omit_last: bool = False) -> str:
+    """Render the feed's sample rows as a ``given_rows([...])`` literal.
+
+    With ``omit_last`` the last source column is dropped from every row, so the
+    rows are missing a required column -- structurally invalid, which is what the
+    negative structural-rejection tests need to trip the validators while still
+    being shaped like the real feed.
+    """
+    keep = len(spec.columns) - 1 if omit_last else len(spec.columns)
     lines = ["    reader = given_rows(["]
     for cells in spec.sample_cells:
         pairs = []
-        for i, column in enumerate(spec.columns):
+        for i in range(keep):
+            column = spec.columns[i]
             cell = cells[i] if i < len(cells) else ""
             pairs.append(f'"{_esc(column)}": {_literal(cell, spec.inferred[i])}')
         lines.append("        {" + ", ".join(pairs) + "},")
@@ -319,11 +335,23 @@ def _source_literal(spec: _FeedSpec) -> str:
 
 
 def _render_test(text: str, feed: str, spec: _FeedSpec) -> str:
-    """Seed the test's sample rows from the feed file; track the validator's columns."""
+    """Seed the test's sample rows from the feed file; track the validator's columns.
+
+    Every ``given_rows`` block is reseeded with the real feed columns. The
+    structural-rejection tests (identified by the ``_INVALID_ROW_SENTINEL`` the
+    template feeds them) get the rows minus their last required column, so they
+    stay structurally invalid and keep tripping the validators; the rest get the
+    full rows.
+    """
     cls = _pascal(feed) + "Row"
+
+    def seed(match: re.Match[str]) -> str:
+        invalid = _INVALID_ROW_SENTINEL in match.group(0)
+        return _source_literal(spec, omit_last=invalid)
+
     text = re.sub(
         r"(?ms)^    reader = given_rows\(\s*\[.*?\]\s*\)\n",
-        lambda _: _source_literal(spec),
+        seed,
         text,
     )
     if spec.needs_raw:
