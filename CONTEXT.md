@@ -18,22 +18,65 @@ _Avoid_: Review (ambiguous — "review" is the activity, not the thing)
 A **Case** with one or more applicable unanswered **Question Definitions**. Cannot be marked complete.
 
 **Completed Case**:
-A **Case** where every applicable **Question Definition** has an **Answer**. Has a `completedAt` timestamp on the SharePoint list row.
+A **Case** in the terminal `Completed` **status** with a `completedAt` timestamp. Reaching
+it requires every applicable **Question Definition** to have an **Answer** _and_ either no
+**Remediation Actions** exist (the Reviewer clicks **Complete Case** directly) or every
+sent action has been resolved on the **Remediation** Section (the actions path — see
+**Case Status** and **Reportable**, ADR-0023). Not the same as **Reportable**: on the
+actions path a Case is Reportable (its Answers frozen, Outcome snapshotted) at **Send
+Actions**, then only later Completed.
 _Avoid_: Closed, finished, done
 
-**QA Check**:
-A separate **Case** that references a **Completed Case** and records a meta-review of whether the original **Assigned Reviewer** conducted that Case properly. Has its own **Assigned Reviewer** (the QA reviewer), its own **Answers**, and its own **Outcome**. The original Case's **Answers** are read-only input, but a QA Check _may append_ **Answer Overrides** to the original Case row (the original's frozen fields stay frozen; overrides are additive — see **Answer Override**, ADR-0018). A QA Check is modeled as a distinct Case Type (e.g. `qa-{slug}`), not a mode on an existing Case. The Override editor is _embedded_ in the QA Check as a convenience surface so the **QA Reviewer** need not navigate to the original to override — but the Override remains a **single record on the original row** with authority resolved against the original (not the QA Check): the embedded editor performs a **cross-row, ETag-guarded write** to the original (ADR-0008/0018). An override authored during a QA Check stamps `sourceCaseId`; the same override could equally be authored on the original Case page with no QA Check. Only some Completed Cases are selected for QA Check; selection is manual and performed by a role not yet fully defined in the domain.
-_Avoid_: Re-review, audit (overloaded)
+**Case Status**:
+The lifecycle state on the Case row: **`In-progress`** → (**Send Actions** if any
+Remediation Actions exist) **`Actions In Progress`** → **`Completed`**, or `In-progress`
+→ (**Complete Case** when no actions) → `Completed` (ADR-0023). One button at the bottom
+of **Summary** drives the transition, labelled **"Send Actions"** when actions exist and
+**"Complete Case"** otherwise.
+_Avoid_: State (overloaded), phase
+
+**Reportable**:
+The milestone at which a Case's **Answers** freeze and its **Outcome** snapshots
+(`outcomeAtCompletion`, `hadRemediation`, `questionBankVersion` all stamped) — reached
+when actions are **sent** (`Actions In Progress`) or, with no actions, when the Case is
+**Completed**. Equivalently `status ∈ { Actions In Progress, Completed }`. Timestamped as
+`reportableAt`. Past this point a newly-applicable **Question Definition** no longer
+reopens the Case (ADR-0023). Distinct from `completedAt`, which marks final closure only.
+_Avoid_: Frozen (describes the effect, not the milestone), Locked
+
+**QA Check** _(shelved — see **Amended Outcome**)_:
+Former separate `qa-{slug}` **Case** that meta-reviewed a **Completed Case** and could
+append **Answer Overrides**. **Removed pre-go-live** (ADR-0026): QA is being re-designed
+later, so the QA Check Case Types, the embedded override editor, and the cross-row write
+are gone. Post-completion corrections are now the **Controls** role's case-level **Amended
+Outcome**. Kept here only to redirect old references.
+_Avoid_: reusing this in new work — there is no QA Check surface today.
 
 **Case Details**:
 The **Section** that displays the **Case Type**-specific descriptive fields that frame a Case — e.g. customer name, account numbers, relevant dates. The set of fields is declared per **Case Type**, so different types show different details. Read-only for every role and never hidden: visible to anyone who can open the Case. One of the six Sections (alongside Questions, Conversation, Notes, Remediation, Summary) and the default view on the case review page.
 _Avoid_: Metadata, header, summary (the latter is now a distinct Section — see **Summary**)
 
 **Section**:
-One of the role-gated areas of a Case — **Case Details**, Questions, Conversation, Notes, Remediation, **Summary**. Each Section has an access mode (`edit` / `read-only` / `hidden`) resolved per viewer-role (ADR-0011), and a **Case Type** declares per-Section config (membership + a `showInSummary` flag) — replacing the old plain `sections` allow-list. As of the Jun 2026 restructure the **Reviewer** sees seven tabs — **Case Details · Review · Issues · Summary · Remediation · Notes · Amend Outcome** — where "Review" is a UI label for the Questions Section, "Issues" for the Remediation-capture Section, and "Amend Outcome" for the **Answer Override** authoring surface (canonical home for overrides; the **QA Check** links to it). The standalone **Remediation** tab (a separate aggregate surface, _not_ per-Issue capture — #144) and the case-level direction of **Amend Outcome** (#145) are parked for dedicated grills. **Conversation** is a Section but not a tab — it stays a floating overlay (ADR-0014).
+One of the role-gated areas of a Case. Each Section has an access mode (`edit` /
+`read-only` / `hidden`) resolved per viewer-role (ADR-0011), and a **Case Type** declares
+per-Section config (membership + a `showInSummary` flag). As of the Jul 2026 workflow
+changes the Section set is: `details` · `questions` · `issues` · `summary` ·
+`remediation` · `notes` · `conversation` · `appealRequest` · `appealReview` ·
+`amendOutcome`. The **Reviewer**'s tab row is **Case Details · Review · Issues · Summary ·
+Remediation · Notes · Amend Outcome**, where "Review" is a UI label for the `questions`
+Section. Two Sections that used to be one (ADR-0024): **Issues** _captures_ failed-Answer
+detail + **Remediation Actions** (Reviewer-edit until **Reportable**); the standalone
+**Remediation** Section _tracks_ each sent action to `complete`/`cancelled` (resolves
+#144). **Amend Outcome** is the **Controls** surface for a case-level **Amended Outcome**
+(ADR-0026, resolves #145) — it is _not_ the retired **Answer Override**. **Appeal Request**
+and **Appeal Review** are the two ends of the **Appeal** flow (ADR-0027). Access modes are
+`edit` / `read-only` / `hidden` only — the `override` mode is removed. **Conversation** is a
+Section but not a tab — a floating overlay (ADR-0014). A Section that resolves to `hidden`
+renders no tab, so the visible tab set differs by role (e.g. the **Adviser** sees only
+Summary + Conversation).
 
 **Summary**:
-A read-only Section that rolls up the whole Case onto one page: the **Case Details** fields, pass/fail counts per question category, **Remediation Action** counts, each _failed_ **Answer** with its actions, key dates, and the computed **Outcome**. Composed from the other Sections by their per-Section `showInSummary` flag (**Notes** is excluded by default). Never editable — only `read-only` or `hidden`; inherits the old Outcome×**Responsible Party** gating (hidden from the Responsible Party while **In-progress**, visible read-only once **Completed**). Derivation is _hybrid_: live from current **Answers** while In-progress; once Completed, the Outcome block reads the frozen `outcomeAtCompletion` (ADR-0012) while counts and the failed-Answer list recompute from the Case's frozen Answers. **Outcome** is a block _within_ Summary, not its own Section or tab.
+A read-only Section that rolls up the whole Case onto one page: the **Case Details** fields, pass/fail counts per question category, **Remediation Action** counts, each _failed_ **Answer** with its actions, key dates, and the computed **Outcome**. Composed from the other Sections by their per-Section `showInSummary` flag (**Notes** is excluded by default; **Case Details** is folded in, so the **Adviser**/Responsible Party needs no separate Details tab — ADR-0016). Never editable — only `read-only` or `hidden`. **Responsible Party gating widened** (ADR-0023): hidden while **`In-progress`**, visible `read-only` once the Case is **Reportable** (`Actions In Progress` _or_ `Completed`), so the Adviser can see the Summary while remediation is underway. Derivation is _hybrid_ and freezes at **Reportable**: live from current **Answers** while In-progress; once Reportable, the Outcome block reads the **Current Outcome** (`amendedOutcome?.outcome ?? outcomeAtCompletion`, ADR-0012/0026) while counts and the failed-Answer list recompute from the Case's frozen Answers, showing each action's `status`/`cancelReason` and the **Remediation Due Date**. **Outcome** is a block _within_ Summary, not its own Section or tab.
 _Avoid_: Outcome (now a block inside Summary, not a standalone Section), Overview, Report
 
 ### Questions & answers
@@ -62,8 +105,24 @@ A **case-level** free-text box in the **Notes** Section: the **Reviewer**'s over
 _Avoid_: Justification (bare — ambiguous with Answer Justification)
 
 **Remediation Action**:
-A corrective action attached to a _failed_ **Answer**. A failed Answer can have many Remediation Actions. The **Section** that surfaces failed Answers and their actions is labelled **"Issues"** in the UI (the tab the **Reviewer** sees), but the domain concept and code remain _Remediation_ / _Remediation Action_. As of the capture-engine unification, the actions are captured through a **Issue Capture Field** of type `actions` inside a **Issue Capture Group** (e.g. Case Type A's "Issue Remediation" group, shown only when "Is remediation required?" = Yes) — the action widget and its stored shape are unchanged; only its declaration site moved into `captureGroups`.
-_Avoid_: Remediation (ambiguous — refers to the section, not the item)
+A corrective action attached to a _failed_ **Answer**. A failed Answer can have many
+Remediation Actions. Actions are _captured_ on the **Issues** Section through an **Issue
+Capture Field** of type `actions` inside a **Issue Capture Group**, and _tracked_ to
+resolution on the separate **Remediation** Section (ADR-0024). An action is a stateful
+record `{ id, text, status: 'pending' | 'complete' | 'cancelled', cancelReason? }` — no
+longer a bare string; `cancelReason` is required when `cancelled`. On **Send Actions** all
+of a Case's actions acquire the case-level **Remediation Due Date**; the **Reviewer** (not
+the **Responsible Party**) marks each `complete`/`cancelled` on the Remediation Section
+during `Actions In Progress`.
+_Avoid_: Remediation (ambiguous — refers to a Section, not the item)
+
+**Remediation Due Date**:
+A single **case-level** SLA date on the Case row (`remediationDueDate`), = **Reportable**
+date + **10 working days**, stamped once when the **Reviewer** clicks **Send Actions**
+(ADR-0024). Working days exclude weekends and public holidays from a maintained list
+(ADR-0025). One date per Case (all actions share it), not per action; never recomputed
+after it is set.
+_Avoid_: Deadline, SLA (bare — reserve for the policy, not the concrete date)
 
 **Issue**:
 UI-only term for a **failed Answer** (a question whose value meets its failure criteria). Not a separate entity: an "Issue" _is_ a failed Answer. The **"Issues"** tab lists the Case's failed Answers; selecting one shows that Issue's **Issue Capture Group**s — the per-**Case Type** configured, collapsible groups of **Issue Capture Field**s, which now subsume **Attributed Party** (a `person` field) and **Remediation Actions** (an `actions` field) alongside free-form fields. Used because "the Issues for this Case" reads more naturally to **Reviewer**s than "the failed Answers".
@@ -83,7 +142,12 @@ Former name for a single configurable extra capture field on a failed **Answer**
 ### People
 
 **Reviewer**:
-A SharePoint user in the Case Reviewers **SharePoint Group**. Eligible to be assigned **Cases** and produce **Answers**. Group membership alone does not grant edit access to any particular Case — that's the **Assigned Reviewer**.
+A SharePoint user with the Reviewer capability — held via the functional `Reviewers`
+group **or** any per-Case-Type `Reviewers - <type>` list-access group, which _implies_ it
+(ADR-0022). Eligible to be assigned **Cases** and produce **Answers**. Group membership
+alone does not grant edit access to any particular Case — that's the **Assigned
+Reviewer**. The reviewing side has a base role (**Reviewer**) and an elevated role
+(**Case Type Owner**), mirroring the frontline side (**Adviser** → **Journey Owner**).
 _Avoid_: Assessor, evaluator
 
 **Assigned Reviewer**:
@@ -91,8 +155,39 @@ The single **Reviewer** currently assigned to a specific **Case** (the Case row'
 _Avoid_: Owner (of the case), primary reviewer, lead
 
 **Responsible Party**:
-The SharePoint user whose work is being reviewed (e.g., the agent on a call being assessed). Distinct from the **Reviewer**. One per **Case**. Distinct from an **Attributed Party** (which is per-failure, not per-Case).
+The SharePoint user whose work is being reviewed (e.g., the agent on a call being
+assessed) — an **Adviser** by group membership, named on one specific **Case**. Distinct
+from the **Reviewer**. One per **Case**. Distinct from an **Attributed Party** (which is
+per-failure, not per-Case). The **Assigned Reviewer** _sets_ the Responsible Party in-app,
+at the bottom of the **Issues** Section, before **Send Actions**; it cannot be changed
+after send (ADR-0024). Once actions are sent the Responsible Party gains `read-only`
+**Summary** and `edit` **Conversation** access (the only two Sections they see), and does
+the remediation work off-system, communicating via the Conversation.
 _Avoid_: Subject, owner (ambiguous), reviewee
+
+**Adviser**:
+The **frontline base role** — a SharePoint user in the `Advisers` group, eligible to be
+named as a **Case**'s **Responsible Party** (ADR-0022). "Adviser" is the business word for
+this population; **Responsible Party** remains the per-Case role name (the Adviser
+_assigned to_ a Case), mirroring **Reviewer** vs **Assigned Reviewer**. Replaces the old
+`CR-ResponsibleParty` / `Frontline - Complaints` groups.
+_Avoid_: Responsible Party (that is the per-Case role, not the group), Agent (call-centre-specific)
+
+**Journey Owner**:
+The **elevated frontline role** for a **Case Type** — a SharePoint user in
+`JourneyOwner - <type>` (ADR-0022). Sees the **Summary** of _every_ Case of their case
+type(s) (a cross-case reach beyond a single Case's access, ADR-0027) and, where the Case
+Type configures `appeal.raisedBy: 'journeyOwner'`, raises **Appeals** on the **Appeal
+Request** Section. The frontline counterpart to the **Case Type Owner**. Not a Case Type
+Owner (does not edit the Question Bank).
+_Avoid_: Case Type Owner (the reviewing-side elevated role), Frontline Manager
+
+**Controls**:
+A SharePoint user in the `Controls` group. **Resolves Appeals** (agree/reject with
+rationale) on the **Appeal Review** Section and authors the case-level **Amended Outcome**
+on the **Amend Outcome** Section (ADR-0026/0027). **Replaces the QA Reviewer** for
+post-completion outcome changes; the QA Check / **Answer Override** machinery is retired.
+_Avoid_: QA Reviewer (retired), Auditor, Checker
 
 **Attributed Party**:
 The single SharePoint user identified as responsible for one specific _failed_ **Answer**. Optional and zero-or-one per failed Answer. Distinct from the **Responsible Party**: a Case has exactly one Responsible Party (whose work is under review), but multiple people may have had a hand in the process, and any single failure may be attributed to a different person. Stored inside the Answer as a bare account name plus a cached display name (`{ loginName, displayName }`); the claims prefix and AD domain are single constants reattached at lookup time. Resolved to an authoritative display name at page load via the User Profile read (`GetPropertiesFor`), with the cached name as fallback. Settable only by the **Assigned Reviewer**, only when the **Case Type** enables `attributeFailures`, and frozen once the Case is **Completed**. Stripped automatically when its Answer is no longer a failure. Does not affect the **Outcome**. As of the capture-engine unification, attribution is no longer a dedicated `attributedParty` Answer property: it is expressed as an **Issue Capture Field** of type `person` (optionally tagged `role: 'attributedParty'`), often shown conditionally via `showWhen` (e.g. Case Type A reveals it only when "Originator" = Distribution). The `{loginName, displayName}` storage and strip/freeze lifecycle are unchanged; only its declaration and storage location moved into `captureGroups` / `Answer.capture`.
@@ -107,24 +202,45 @@ A SharePoint user in the Responsible Party Managers **SharePoint Group** who man
 _Avoid_: Line Manager (overloaded), RP Manager (jargon abbreviation)
 
 **Case Type Owner**:
-A SharePoint group that "owns" a **Case Type** and sees aggregate dashboard stats for it (outstanding, overdue, completed today / last 7 days). Case Type Owners are also the **authors** of Question Bank changes — they propose additions, edits, and deprecations via the question bank editor. Maintainers act as implementors who confirm (publish) those changes; they do not author them.
+The **elevated reviewing role** for a **Case Type** — a SharePoint group `CaseTypeOwner -
+<type>` (ADR-0022) that "owns" the type and sees aggregate dashboard stats for it
+(outstanding, overdue, completed today / last 7 days). Case Type Owners are the **authors**
+of Question Bank changes — they propose additions, edits, and deprecations via the question
+bank editor; Maintainers confirm (publish) those changes but do not author them. The
+reviewing-side counterpart to the frontline-side **Journey Owner**; distinct from it (a
+Case Type Owner does not raise Appeals or see all cases' Summaries by that power).
 
-**QA Reviewer**:
-A SharePoint user in the **standalone** QA Reviewers **SharePoint Group** (not a superset of **Reviewer** — a distinct job; membership of Case Reviewers is not required). The single accountable authority for review-of-the-review: a QA Reviewer (1) selects **Completed Cases** for **QA Check** and is the **Assigned Reviewer** on the resulting `qa-{slug}` Case, (2) authors **Answer Overrides** on any Completed Case — with or without a QA Check — this being the _only_ role that may, and (3) resolves **Appeals** (agree/reject with rationale). The "different reviewer than the original" rule (a QA Reviewer should not QA or override their own Case as original **Assigned Reviewer**) is a **UX guard only**, not a hard boundary — per ADR-0010 client-side group checks are UX, and an ACL cannot express "anyone except this person." Resolves the previously-parked "who selects Cases for QA" role.
-_Avoid_: Auditor, Checker, QA (bare — ambiguous with QA Check the artefact), Reviewer (the original role)
+**QA Reviewer** _(retired — see **Controls**)_:
+Former standalone role that selected **Completed Cases** for **QA Check** and authored
+**Answer Overrides**. **Shelved pre-go-live** (ADR-0026): the QA Check and Answer Override
+machinery is removed and post-completion outcome changes are now the **Controls** role's
+**Amended Outcome**. QA will be re-designed later; this entry is kept only to redirect old
+references.
+_Avoid_: using this role in new work — use **Controls**.
 
 **Maintainer**:
 A platform administrator responsible for deploying and configuring the framework. When Question Bank changes are authored by a **Case Type Owner**, the Maintainer's role is to confirm (publish) the changes — not to author or approve them. Maintainers also handle SharePoint list/group provisioning and code deployments.
 _Avoid_: Admin (overloaded with SharePoint admin), developer
 
 **Visitor**:
-A SharePoint user who is authenticated (browser NTLM/Kerberos passes) but does not belong to any named Case Review **SharePoint Group** — not a **Reviewer**, **Reviewer Manager**, **Responsible Party**, **Responsible Party Manager**, **Case Type Owner**, or **Maintainer**. Cannot be an **Assigned Reviewer**, cannot produce **Answers**, has no ownership or management responsibilities. The `#/` landing page shows a Visitor a read-only explainer only — _no_ access-request affordance, because access is granted out-of-band via the team's centralised hierarchy record, outside this app; all other routes are inaccessible (enforced by SharePoint list ACLs, surfaced as UX by capability checks). Visitor is _derived_ from the absence of all other group memberships — there is no "Visitors" SharePoint group.
+A SharePoint user who is authenticated (browser NTLM/Kerberos passes) but does not belong to any named Case Review **SharePoint Group** — not a **Reviewer** (incl. any `Reviewers - <type>`), **Adviser**, **Reviewer Manager**, **Responsible Party Manager**, **Case Type Owner**, **Journey Owner**, **Controls**, or **Maintainer**. Cannot be an **Assigned Reviewer**, cannot produce **Answers**, has no ownership or management responsibilities. The `#/` landing page shows a Visitor a read-only explainer only — _no_ access-request affordance, because access is granted out-of-band via the team's centralised hierarchy record, outside this app; all other routes are inaccessible (enforced by SharePoint list ACLs, surfaced as UX by capability checks). Visitor is _derived_ from the absence of all other group memberships — there is no "Visitors" SharePoint group.
 _Avoid_: Guest (collides with SharePoint's external-guest concept), Unenrolled (jargon), Anonymous (the user _is_ authenticated)
 
 ### Review of the review
 
 **Appeal**:
-A case-level objection to a **Completed Case**'s **Current Outcome**, raised by the **Responsible Party** or their **Responsible Party Manager**, who disagree with the result of the review. Stored as an additive `appeals[]` JSON blob on the original Case row (ADR-0007); never mutates the frozen original. Lifecycle `raised → underReview → resolved`, where resolved is `agreed | rejected`. Carries the **appellant's rationale** (required on raise) and the **QA resolver's rationale** (required on resolve) — "reject or agree with rationale" for both ends. May _cite_ specific failed **Answers** in dispute to aim the reviewer, but does not itself set Answer values. **Agreeing** means QA accepts that the outcome was wrong and then authors the corrective **Answer Override**(s) (`source: 'appeal'`, linked to the Appeal id) _as QA sees fit_ — agreement is not adoption of the appellant's requested value. **Rejecting** records rationale and changes nothing. At most one open Appeal per Case at a time; after resolution a new Appeal may be raised (full history kept in the array). Independent of **QA Check** — an Appeal can exist on a Case that was never QA-checked, and is resolved by the QA team regardless.
+A case-level objection to a **Completed Case**'s **Current Outcome**. **Raised** by a
+_per-Case-Type-configured_ role (ADR-0027): the **Journey Owner** for Complaints
+(`appeal.raisedBy: 'journeyOwner'`), defaulting to the **Responsible Party Manager** for
+other types — via the **Appeal Request** Section. **Resolved** by **Controls** on the
+**Appeal Review** Section. Stored as an additive `appeals[]` JSON blob on the original Case
+row (ADR-0007); never mutates the frozen original. Lifecycle `raised → underReview →
+resolved`, where resolved is `agreed | rejected`. Carries the **appellant's rationale**
+(required on raise) and the **resolver's rationale** (required on resolve). May _cite_
+specific failed **Answers**, but does not itself set Answer values. **Agreeing** means
+Controls accepts the outcome was wrong and then authors a case-level **Amended Outcome**
+(linked to the Appeal id); **rejecting** records rationale and changes nothing. At most one
+open Appeal per Case; after resolution a new Appeal may be raised (full history kept).
 _Avoid_: Dispute, Complaint, Grievance, Challenge
 
 ### Communication
@@ -138,18 +254,43 @@ One entry in a **Conversation** — author, timestamp, body.
 ### Outcome
 
 **Outcome**:
-The computed verdict for a **Case**, derived by the **Case Type**'s algorithm from the Case's **Answers**. No longer has its own Section or tab — it is rendered as one block _within_ the **Summary** Section (the `computeOutcome` function and `cr-outcome` rendering survive; the standalone Outcome tab and its ADR-0011 matrix row do not). The _live_ Outcome is always re-derivable from Answers — it is not a stored entity. However, a **snapshot** (`outcomeAtCompletion`) is stamped onto the Case row at the moment the Case becomes a **Completed Case**, to support historical reporting. The snapshot is frozen: it is not updated if Question Definitions or the outcome function change afterwards. A pass Outcome implies no **Remediation Actions** were attached (Remediation Actions only attach to failed Answers, and a failing Answer cannot yield a pass Outcome). After completion, the Outcome may be displaced (not mutated) by one or more **Answer Overrides** — see **Answer Override** and **Current Outcome**.
+The computed verdict for a **Case**, derived by the **Case Type**'s algorithm from the Case's **Answers**. No longer has its own Section or tab — it is rendered as one block _within_ the **Summary** Section (the `computeOutcome` function and `cr-outcome` rendering survive; the standalone Outcome tab and its ADR-0011 matrix row do not). The _live_ Outcome is always re-derivable from Answers — it is not a stored entity. However, a **snapshot** (`outcomeAtCompletion`) is stamped onto the Case row at the moment the Case becomes a **Completed Case**, to support historical reporting. The snapshot is frozen: it is not updated if Question Definitions or the outcome function change afterwards. A pass Outcome implies no **Remediation Actions** were attached (Remediation Actions only attach to failed Answers, and a failing Answer cannot yield a pass Outcome). After completion, the Outcome may be displaced (not mutated) by a case-level **Amended Outcome** authored by **Controls** — see **Amended Outcome** and **Current Outcome**.
 
-**Answer Override**:
-A post-completion, per-**Answer** correction that _displaces_ the original Answer without mutating it. The original **Completed Case** stays immutable (its Answers, `outcomeAtCompletion`, attribution and actions are frozen); an Override is a separate record carrying a **replacement value** and, where the override changes the Answer's failure status, a **complete replacement set** of **Remediation Actions** / **Attributed Party** / **Remediation Details** (replace, never merge — ADR-0018), plus mandatory **reasoning** and provenance (who, when, and the source: **QA Check** or **Appeal**). An Override can flip an Answer fail→pass (the original's actions persist in the frozen record but vanish from the effective view), fail→still-fail-but-different (swap the action set), or pass→fail (add an action set that never existed). A pass→fail Override must satisfy the same completion gate the Case did (required Remediation Details, Attributed Party when the Case Type sets `attributeFailures`) for the Answers it touches. Override must work **without** a QA Check. Does not require a verdict-level override: the **Current Outcome** is _derived_ by re-running `computeOutcome` over the effective Answers (there is no hand-edited Outcome verdict).
-_Avoid_: Amendment, Correction, Revised Answer, Outcome Override (the verdict is never overridden directly — only Answers are)
+**Amended Outcome**:
+A post-completion, **case-level** correction of a **Completed Case**'s **Outcome**,
+authored by **Controls** on the **Amend Outcome** Section (ADR-0026, resolves #145).
+Unlike the retired **Answer Override**, this is an **explicit, hand-set verdict**: Controls
+chooses the new **Outcome** value directly, with a mandatory **justification**. Stored as
+`amendedOutcome: { outcome, justification, amendedBy, amendedAt } | null` on the Case row —
+additive, so the frozen `outcomeAtCompletion` and Answers are never mutated. `amendedBy` /
+`amendedAt` are captured explicitly for **audit** (not mined from SharePoint version
+history). Typically follows an **agreed Appeal** but does not require one. Drives the
+`effectiveOutcome` reporting column (ADR-0019). This deliberately relaxes the old "Outcome
+is always derived, never hand-set" rule — for amended Cases only.
+_Avoid_: Answer Override (retired), Outcome Override, Amendment (bare), Revised Outcome
+
+**Answer Override** _(retired — see **Amended Outcome**)_:
+Former per-**Answer** post-completion correction with the **Current Outcome** re-derived
+over **Effective Answers**. **Removed pre-go-live** (ADR-0026) together with the **QA
+Check**; replaced by the case-level **Amended Outcome**. Kept only to redirect old
+references.
+_Avoid_: using in new work — use **Amended Outcome**.
+
+**Effective Answers** _(retired)_:
+Former concept: the frozen **Answers** with **Answer Override**s applied, used to re-derive
+the **Current Outcome**. Gone with Answer Override (ADR-0026) — there is no per-Answer
+override layer now; the corrected verdict is the **Amended Outcome** directly.
+_Avoid_: using in new work.
 
 **Effective Answers**:
 The set of **Answers** for a **Case** with every **Answer Override** applied over the frozen original — the input to the **Current Outcome**. The original frozen Answers remain available alongside, so any view can show original-vs-override per question.
 
 **Current Outcome**:
-The Outcome derived by running `computeOutcome` over the **Effective Answers**. Where no Override exists it equals `outcomeAtCompletion`; where Overrides exist it takes precedence over the original Outcome. Within a **QA Check**'s read-only current summary, this precedence resolves _per question_ (each Answer shows original vs overridden, and the Outcome block recomputes from the effective set).
-_Avoid_: Overridden Outcome (the Outcome is derived, not overridden)
+The Outcome in force now: `amendedOutcome?.outcome ?? outcomeAtCompletion` (ADR-0026).
+Where no **Amended Outcome** exists it equals the frozen snapshot; where one exists, the
+Controls-set value takes precedence. Shown in the **Summary** Outcome block and carried by
+the `effectiveOutcome` reporting column.
+_Avoid_: Overridden Outcome, Amended Outcome (that is the _record_; Current Outcome is the effective value)
 
 ## Relationships
 
