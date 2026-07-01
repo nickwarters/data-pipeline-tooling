@@ -687,3 +687,64 @@ test('evaluateAccess: override Mode ranks between read-only and edit — edit st
     'override'
   );
 });
+
+// --- Conversation allowMessagesWhen ---
+
+test('evaluateAccess: conversation allowMessagesWhen restricts access to read-only for unlisted statuses', () => {
+  const cfg = makeConfig({
+    sections: {
+      conversation: { allowMessagesWhen: ['Actions In Progress'] },
+    },
+  });
+
+  const cInProgress = makeCase({ status: 'In-progress' });
+  const cActions = makeCase({ status: 'Actions In Progress' });
+  const cCompleted = makeCase({ status: 'Completed' });
+
+  // assignedReviewer
+  assert.equal(
+    evaluateAccess('conversation', ['assignedReviewer'], cInProgress, cfg),
+    'read-only'
+  );
+  assert.equal(
+    evaluateAccess('conversation', ['assignedReviewer'], cActions, cfg),
+    'edit'
+  );
+  assert.equal(
+    evaluateAccess('conversation', ['assignedReviewer'], cCompleted, cfg),
+    'read-only'
+  );
+
+  // responsibleParty
+  assert.equal(
+    evaluateAccess('conversation', ['responsibleParty'], cInProgress, cfg),
+    'read-only'
+  );
+  assert.equal(
+    evaluateAccess('conversation', ['responsibleParty'], cActions, cfg),
+    'edit'
+  );
+  assert.equal(
+    evaluateAccess('conversation', ['responsibleParty'], cCompleted, cfg),
+    'read-only'
+  );
+});
+
+test('evaluateAccess: conversation without allowMessagesWhen defaults to edit', () => {
+  const cfg = makeConfig({
+    sections: {
+      conversation: {},
+    },
+  });
+
+  const cInProgress = makeCase({ status: 'In-progress' });
+
+  assert.equal(
+    evaluateAccess('conversation', ['assignedReviewer'], cInProgress, cfg),
+    'edit'
+  );
+  assert.equal(
+    evaluateAccess('conversation', ['responsibleParty'], cInProgress, cfg),
+    'edit'
+  );
+});
