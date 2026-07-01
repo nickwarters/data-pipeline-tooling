@@ -278,7 +278,7 @@
  * `sections` object is the allow-list; `showInSummary` controls whether the
  * Section contributes a block to the read-only Summary Section.
  *
- * @typedef {{ showInSummary?: boolean }} SectionConfig
+ * @typedef {{ showInSummary?: boolean, allowMessagesWhen?: ('In-progress' | 'Actions In Progress' | 'Completed')[] }} SectionConfig
  */
 
 /**

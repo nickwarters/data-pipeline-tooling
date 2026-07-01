@@ -62,8 +62,8 @@ export function showInSummary(section, caseTypeConfig) {
 }
 
 /**
- * Default access matrix. Function-valued cells receive the CaseRow and return a Mode.
- * @type {Record<Section, Record<Role, Mode | ((c: CaseRow) => Mode)>>}
+ * Default access matrix. Function-valued cells receive the CaseRow and CaseTypeConfig and return a Mode.
+ * @type {Record<Section, Record<Role, Mode | ((c: CaseRow, config: CaseTypeConfig) => Mode)>>}
  */
 const MATRIX = {
   details: {
@@ -92,9 +92,17 @@ const MATRIX = {
   // Responsible Party (ADR-0011); a Responsible Party Manager is not a
   // participant, so they cannot post — not even read it.
   conversation: {
-    assignedReviewer: 'edit',
+    assignedReviewer: (c, config) => {
+      const allowed = config.sections?.conversation?.allowMessagesWhen;
+      if (allowed && !allowed.includes(c.status)) return 'read-only';
+      return 'edit';
+    },
     otherReviewer: 'read-only',
-    responsibleParty: 'edit',
+    responsibleParty: (c, config) => {
+      const allowed = config.sections?.conversation?.allowMessagesWhen;
+      if (allowed && !allowed.includes(c.status)) return 'read-only';
+      return 'edit';
+    },
     responsiblePartyManager: 'hidden',
     caseTypeOwner: 'read-only',
     qaReviewer: 'hidden',
@@ -213,7 +221,8 @@ export function evaluateAccess(section, roles, caseRow, caseTypeConfig) {
   let best = 'hidden';
   for (const role of roles) {
     const cell = MATRIX[section][role];
-    const mode = typeof cell === 'function' ? cell(caseRow) : cell;
+    const mode =
+      typeof cell === 'function' ? cell(caseRow, caseTypeConfig) : cell;
     if (RANK[mode] > RANK[best]) best = mode;
   }
   return best;

@@ -28,7 +28,7 @@ const config = {
   sections: {
     details: { showInSummary: true },
     questions: { showInSummary: true },
-    conversation: {},
+    conversation: { allowMessagesWhen: ['Actions In Progress'] },
     notes: { showInSummary: false },
     remediation: { showInSummary: true },
     summary: {},
