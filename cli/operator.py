@@ -19,9 +19,11 @@ to the module ``pipelines.orders.pipeline``, imported at runtime, whose
 imports the pipeline *by path at runtime*, never statically -- so ``pipelines/``
 depends on ``framework``, not the reverse.
 
-``orchestrate`` still knows the scheduled machinery but not *which* pipelines an
-application schedules, so it takes a required ``--app`` naming a module that
-exposes ``build_runner()`` and ``build_pipeline_sets()``.
+``orchestrate`` runs the *same* path-addressed pipelines on a schedule. It knows
+the scheduled machinery but not *which* pipelines an application schedules, so it
+takes a required ``--app`` naming a module that exposes ``build_pipeline_sets()``
+(the schedules); execution itself is by path, exactly as ``run`` does it, so no
+handler registry is wired up front.
 """
 
 from __future__ import annotations
@@ -34,7 +36,13 @@ import sys
 from pathlib import Path
 
 from framework.core import PipelineError, format_failure
-from framework.run import RunRegistry, dry_run_pipeline, run_pipeline
+from framework.run import (
+    RunRegistry,
+    UnknownPipelineError,
+    dry_run_pipeline,
+    load_pipeline,
+    run_pipeline,
+)
 from tools.calendar import WorkingDayCalendar
 from tools.environments import ENV_VAR, known_environments, resolve_base_dir
 from tools.orchestration import Orchestrator
@@ -46,10 +54,10 @@ _RUNS_RELPATH = "_runs"
 
 
 def _resolve_app(name: str):
-    """Import the application module that supplies the pipeline registry.
+    """Import the application module that supplies the orchestration schedules.
 
     A thin seam so the framework imports the app by name at runtime (keeping the
-    dependency one-way) and so tests can substitute a fake registry.
+    dependency one-way) and so tests can substitute a fake ``build_pipeline_sets``.
     """
     return importlib.import_module(name)
 
@@ -121,45 +129,19 @@ def _format_run(record: dict) -> str:
     return "  ".join(parts)
 
 
-def _load_pipeline_module(pipeline: str):
-    """Import the ``pipeline.py`` for a ``pipelines/<name>`` path, or report why not.
-
-    The pipeline's address *is* its location on disk: ``pipelines/orders`` maps to
-    the module ``pipelines.orders.pipeline``, which must expose a ``run(context)``
-    callable (and may declare an ``UPSTREAMS`` tuple of freshness requirements).
-    Returns the module, or ``None`` after printing a clear operator message.
-    """
-    module_path = pipeline.strip("/").replace("/", ".") + ".pipeline"
-    try:
-        module = importlib.import_module(module_path)
-    except ImportError:
-        print(
-            f"no pipeline at {pipeline!r}: cannot import {module_path!r} "
-            "(expected pipelines/<name>/pipeline.py, run from the repo root)",
-            file=sys.stderr,
-        )
-        return None
-    if not callable(getattr(module, "run", None)):
-        print(
-            f"pipeline {pipeline!r} ({module_path}) defines no run(context) callable",
-            file=sys.stderr,
-        )
-        return None
-    return module
-
-
 def _run(args: argparse.Namespace) -> int:
-    module = _load_pipeline_module(args.pipeline)
-    if module is None:
+    try:
+        loaded = load_pipeline(args.pipeline)
+    except UnknownPipelineError as exc:
+        print(str(exc), file=sys.stderr)
         return 1
     base_dir = _base_dir_or_report(args)
     if base_dir is None:
         return 1
-    name = args.pipeline.strip("/").split("/")[-1]
     if args.dry_run:
         report = dry_run_pipeline(
-            module.run,
-            name,
+            loaded.run,
+            loaded.name,
             base_dir,
             run_date=args.run_date,
             logical_run_id=args.logical_run_id,
@@ -172,10 +154,10 @@ def _run(args: argparse.Namespace) -> int:
         return 0
     try:
         run_pipeline(
-            module.run,
-            name,
+            loaded.run,
+            loaded.name,
             base_dir,
-            upstreams=tuple(getattr(module, "UPSTREAMS", ())),
+            upstreams=loaded.upstreams,
             run_date=args.run_date,
             logical_run_id=args.logical_run_id,
             params=dict(args.params),
@@ -194,7 +176,6 @@ def _orchestrate(args: argparse.Namespace) -> int:
     app = _resolve_app(args.app)
     try:
         orchestrator = Orchestrator(
-            app.build_runner(),
             app.build_pipeline_sets(),
             WorkingDayCalendar(),
         )
@@ -215,7 +196,7 @@ def _orchestrate(args: argparse.Namespace) -> int:
     for decision in decisions:
         line = (
             f"{decision.run_date.isoformat()}  {decision.set_name}  "
-            f"{decision.subject}/{decision.pipeline}  {decision.status}"
+            f"{decision.pipeline}  {decision.status}"
         )
         if decision.reason:
             line += f"  {decision.reason}"
@@ -372,7 +353,7 @@ def register(sub) -> None:
     orchestrate.add_argument(
         "--app",
         required=True,
-        help="application module exposing build_runner()/build_pipeline_sets()",
+        help="application module exposing build_pipeline_sets() (the schedules)",
     )
     orchestrate.set_defaults(func=_orchestrate)
 

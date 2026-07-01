@@ -12,6 +12,7 @@ Pipeline starts.
 from __future__ import annotations
 
 import datetime as dt
+import importlib
 import time
 import uuid
 from collections.abc import Mapping
@@ -266,6 +267,54 @@ def run_pipeline(
         context.mark_run_summary_recorded()
     run_registry.ingest(run_log_path)
     return result
+
+
+@dataclass(frozen=True)
+class LoadedPipeline:
+    """A path-addressed pipeline resolved to its runnable pieces.
+
+    ``run`` is the ``run(context)`` callable to execute; ``name`` is the leaf of
+    the ``pipelines/<name>`` path and doubles as the run-history label (the
+    identity ``status`` / ``runs`` / ``log`` key on); ``upstreams`` is the
+    module's optional ``UPSTREAMS`` freshness tuple.
+    """
+
+    name: str
+    run: Handler
+    upstreams: tuple[RunRequirement, ...]
+
+
+def load_pipeline(path: str) -> LoadedPipeline:
+    """Resolve a ``pipelines/<name>`` disk path to its runnable pipeline.
+
+    The pipeline's address *is* its location on disk: ``pipelines/orders`` maps
+    to the module ``pipelines.orders.pipeline``, imported *at runtime* (never a
+    static framework dependency, so ``pipelines/`` depends on ``framework`` and
+    not the reverse). The module must expose a ``run(context)`` callable and may
+    declare an ``UPSTREAMS`` tuple of freshness requirements.
+
+    Shared by the operator CLI's ``run`` command and the path-addressed
+    :class:`~tools.orchestration.Orchestrator`, so both resolve a scheduled or
+    requested pipeline by exactly the same rule. Raises
+    :class:`UnknownPipelineError` with an operator-readable message when the
+    module can't be imported or defines no ``run(context)`` callable.
+    """
+    address = path.strip("/")
+    module_path = address.replace("/", ".") + ".pipeline"
+    try:
+        module = importlib.import_module(module_path)
+    except ImportError as exc:
+        raise UnknownPipelineError(
+            f"no pipeline at {path!r}: cannot import {module_path!r} "
+            "(expected pipelines/<name>/pipeline.py, run from the repo root)"
+        ) from exc
+    handler = getattr(module, "run", None)
+    if not callable(handler):
+        raise UnknownPipelineError(
+            f"pipeline {path!r} ({module_path}) defines no run(context) callable"
+        )
+    name = address.split("/")[-1]
+    return LoadedPipeline(name, handler, tuple(getattr(module, "UPSTREAMS", ())))
 
 
 def dry_run_pipeline(
