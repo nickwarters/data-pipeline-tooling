@@ -540,13 +540,19 @@ class Pipeline:
         return "\n".join(lines)
 
     def run(self, context: RunContext | None = None) -> Any:
-        # Fall back to the ambient run context (set by a dry run, say) before
-        # minting a fresh default, so an author's bare ``p.run()`` inherits it.
-        context = (
-            context
-            or current_context()
-            or RunContext(pipeline=self._name, run_log=self._run_log)
-        )
+        # An explicit context wins. Otherwise inherit the ambient run context —
+        # set by the runner around a handler, or by a dry run — as a child, so a
+        # bare ``p.run()`` records under the attempt's shared ``pipeline_run_id``
+        # (and stamps the rows it writes with it) instead of minting a fresh id
+        # that would orphan this hop's records. With no ambient context at all
+        # (an author running a lone pipeline) mint a fresh default.
+        if context is None:
+            ambient = current_context()
+            context = (
+                ambient.for_nested_pipeline(self._name)
+                if ambient is not None
+                else RunContext(pipeline=self._name, run_log=self._run_log)
+            )
         run_log = (
             context.run_log if context.run_log is not NULL_RUN_LOG else self._run_log
         )
