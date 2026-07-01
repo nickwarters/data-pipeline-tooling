@@ -83,16 +83,50 @@ class RunContext:
             return f"{self.label}:{self.run_date.isoformat()}"
         return self.pipeline_run_id
 
+    def for_nested_pipeline(self, name: str) -> "RunContext":
+        """Derive a child context for a nested ``Pipeline.run()`` of one attempt.
+
+        A handler often runs several ``Pipeline`` hops (raw -> silver -> gold) in
+        one execution. Each ``p.run()`` inherits this context so every hop's
+        run-log records — and the rows its Writers stamp — carry the *same*
+        ``pipeline_run_id`` / ``logical_run_id``: the one correlating key the
+        three-tier scheme promises. Sharing the identity is the whole point; a
+        fresh id per hop would orphan the step records from the run summary and
+        the data they wrote.
+
+        The child keeps its **own** run-summary flag so recording a hop's summary
+        never marks *this* context recorded — the runner still writes the
+        pipeline-level summary its freshness history depends on. The dry-run
+        report is shared by reference so a preview accumulates every hop's steps.
+        """
+        child = RunContext(
+            run_date=self.run_date,
+            pipeline_run_id=self.pipeline_run_id,
+            logical_run_id=self.logical_run_id,
+            load_date=self.load_date,
+            run_log=self.run_log,
+            run_registry=self.run_registry,
+            base_dir=self.base_dir,
+            subject=self.subject,
+            pipeline=name,
+            freshness_days=self.freshness_days,
+            dry_run=self.dry_run,
+        )
+        # Share the parent's report so a dry-run preview captures nested hops.
+        child.dry_run_report = self.dry_run_report
+        return child
+
 
 def _date_text(value: dt.date | str) -> str:
     return value.isoformat() if isinstance(value, dt.date) else value
 
 
-# The ambient run context for the current call stack. A handler runs inside
-# ``active_context(ctx)``; a ``Pipeline.run()`` invoked with no explicit context
-# falls back to this. That makes a dry run safe even for the common
-# ``p.run()`` (no-arg) authoring style: the dry-run flag reaches every nested
-# pipeline without each call having to thread the context through by hand.
+# The ambient run context for the current call stack. The runner and a dry run
+# both execute their handler inside ``active_context(ctx)``; a ``Pipeline.run()``
+# invoked with no explicit context inherits it (as a child, via
+# ``for_nested_pipeline``). That means every bare ``p.run()`` hop of one attempt
+# shares its ``pipeline_run_id`` and run log — and a dry-run flag reaches every
+# nested pipeline — without each call having to thread the context by hand.
 _ACTIVE_CONTEXT: contextvars.ContextVar["RunContext | None"] = contextvars.ContextVar(
     "active_run_context", default=None
 )
