@@ -10,6 +10,7 @@ import { toBareAccount, toClaimsLogin } from './account-name.js';
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').ListCasesFilter} ListCasesFilter */
+/** @typedef {import('../sharepoint-client.js').CaseListOptions} CaseListOptions */
 /** @typedef {import('../sharepoint-client.js').PatchResult} PatchResult */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
@@ -106,8 +107,12 @@ export class HttpSharePointClient {
     return items.map(qDefFromItem);
   }
 
-  /** @param {ListCasesFilter} filter @returns {Promise<CaseRow[]>} */
-  async listCases(filter) {
+  /**
+   * @param {ListCasesFilter} filter
+   * @param {CaseListOptions} [opts]
+   * @returns {Promise<CaseRow[]>}
+   */
+  async listCases(filter, opts = {}) {
     /** @type {string[]} */
     const conds = [];
     if (filter.status) conds.push(`Status eq '${escapeOData(filter.status)}'`);
@@ -141,7 +146,8 @@ export class HttpSharePointClient {
     if (filter.outcomeOverridden !== undefined) {
       conds.push(`OutcomeOverridden eq ${filter.outcomeOverridden ? 1 : 0}`);
     }
-    let url = this._listItemsUrl(this._caseListName);
+    const listName = opts.listName ?? this._caseListName;
+    let url = this._listItemsUrl(listName);
     if (conds.length)
       url += `?$filter=${encodeURIComponent(conds.join(' and '))}`;
     const items = await this._getAllPages(url);

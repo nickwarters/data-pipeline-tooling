@@ -206,6 +206,7 @@
 
 /**
  * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean }} ListCasesFilter
+ * @typedef {{ listName?: string }} CaseListOptions
  */
 
 /**
@@ -255,7 +256,7 @@
  *   getCase: (id: string) => Promise<CaseRow|null>,
  *   patchCase: (id: string, fields: Partial<CaseRow>, etag: string) => Promise<PatchResult>,
  *   getQuestionDefinitions: (ids: string[]) => Promise<QuestionDefinition[]>,
- *   listCases: (filter: ListCasesFilter) => Promise<CaseRow[]>,
+ *   listCases: (filter: ListCasesFilter, opts?: CaseListOptions) => Promise<CaseRow[]>,
  *   getCurrentUserGroups: () => Promise<string[]>,
  *   getCurrentUser: () => Promise<CurrentUser>,
  *   searchPeople: (query: string) => Promise<PersonResult[]>,
@@ -291,6 +292,8 @@
  *   defaultOutcomeId?: string,
  *   labels?: Label[],
  *   eligibleGroups?: string[],
+ *   listName?: string,
+ *   reviewerGroup?: string,
  *   sections?: Partial<Record<'details'|'questions'|'conversation'|'notes'|'remediation'|'summary'|'appeal', SectionConfig>>,
  *   slaHours?: number,
  *   attributeFailures?: boolean,

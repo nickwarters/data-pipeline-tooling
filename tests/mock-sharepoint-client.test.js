@@ -223,6 +223,12 @@ test('MockSharePointClient: listCases with empty filter returns all Cases', asyn
   assert.equal(cases.length, 3);
 });
 
+test('MockSharePointClient: listCases accepts a listName option without changing the in-memory store', async () => {
+  const client = makeClient();
+  const cases = await client.listCases({}, { listName: 'complaints' });
+  assert.equal(cases.length, 3);
+});
+
 test('MockSharePointClient: listCases filters by assignedReviewer', async () => {
   const client = makeClient();
   const cases = await client.listCases({ assignedReviewer: 'user-2' });

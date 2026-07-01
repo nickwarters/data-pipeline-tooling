@@ -10,8 +10,10 @@
  *
  * @typedef {{
  *   reviewer: string,
+ *   reviewerComplaints: string,
  *   caseTypeOwners: Record<string, string>,
  *   responsibleParty: string,
+ *   frontlineComplaints: string,
  *   reviewerManager: string,
  *   responsiblePartyManager: string,
  *   maintainer: string,
@@ -38,10 +40,14 @@
 /** @type {PermissionsConfig} */
 export const permissions = {
   reviewer: 'Reviewers',
+  reviewerComplaints: 'Reviewers - Complaints',
   caseTypeOwners: {
-    'example-review': 'CaseTypeOwners-ExampleReview',
+    'example-review': 'CaseTypeOwner - Example Review',
+    journeyOwnerComplaints: 'JourneyOwner - Complaints',
+    caseTypeOwnerComplaints: 'CaseTypeOwner - Complaints',
   },
   responsibleParty: 'CR-ResponsibleParty',
+  frontlineComplaints: 'Frontline - Complaints',
   reviewerManager: 'Reviewer-Managers',
   // TBC: placeholder SharePoint group names — confirm with the platform owner.
   responsiblePartyManager: 'ResponsibleParty-Managers',

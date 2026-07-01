@@ -14,11 +14,15 @@ import {
 /** @type {import('../src/services/permissions.js').PermissionsConfig} */
 const sampleConfig = {
   reviewer: 'Reviewers',
+  reviewerComplaints: 'Reviewers - Complaints',
   caseTypeOwners: {
-    'example-review': 'CaseTypeOwners-ExampleReview',
+    'example-review': 'CaseTypeOwner - Example Review',
     'kyc-review': 'CaseTypeOwners-KycReview',
+    journeyOwnerComplaints: 'JourneyOwner - Complaints',
+    caseTypeOwnerComplaints: 'CaseTypeOwner - Complaints',
   },
   responsibleParty: 'CR-ResponsibleParty',
+  frontlineComplaints: 'Frontline - Complaints',
   reviewerManager: 'Reviewer-Managers',
   responsiblePartyManager: 'ResponsibleParty-Managers',
   maintainer: 'CR-Maintainers',
@@ -55,9 +59,15 @@ test('resolveCapabilities: reviewer group → isReviewer=true, no owned types', 
   assert.deepEqual(caps.ownedCaseTypes, []);
 });
 
+test('resolveCapabilities: complaints reviewer group is defined only, not active yet', () => {
+  const caps = resolveCapabilities(['Reviewers - Complaints'], sampleConfig);
+  assert.equal(caps.isReviewer, false);
+  assert.deepEqual(caps.ownedCaseTypes, []);
+});
+
 test('resolveCapabilities: owner group only → isReviewer=false, owned slug returned', () => {
   const caps = resolveCapabilities(
-    ['CaseTypeOwners-ExampleReview'],
+    ['CaseTypeOwner - Example Review'],
     sampleConfig
   );
   assert.equal(caps.isReviewer, false);
@@ -66,7 +76,7 @@ test('resolveCapabilities: owner group only → isReviewer=false, owned slug ret
 
 test('resolveCapabilities: admin (both groups) → reviewer + owned types', () => {
   const caps = resolveCapabilities(
-    ['Reviewers', 'CaseTypeOwners-ExampleReview'],
+    ['Reviewers', 'CaseTypeOwner - Example Review'],
     sampleConfig
   );
   assert.equal(caps.isReviewer, true);
@@ -75,12 +85,23 @@ test('resolveCapabilities: admin (both groups) → reviewer + owned types', () =
 
 test('resolveCapabilities: multiple ownership groups → all owned slugs returned', () => {
   const caps = resolveCapabilities(
-    ['CaseTypeOwners-ExampleReview', 'CaseTypeOwners-KycReview'],
+    ['CaseTypeOwner - Example Review', 'CaseTypeOwners-KycReview'],
     sampleConfig
   );
   assert.deepEqual(caps.ownedCaseTypes.sort(), [
     'example-review',
     'kyc-review',
+  ]);
+});
+
+test('resolveCapabilities: complaints owner groups → owned complaints types returned', () => {
+  const caps = resolveCapabilities(
+    ['JourneyOwner - Complaints', 'CaseTypeOwner - Complaints'],
+    sampleConfig
+  );
+  assert.deepEqual(caps.ownedCaseTypes.sort(), [
+    'caseTypeOwnerComplaints',
+    'journeyOwnerComplaints',
   ]);
 });
 
@@ -100,6 +121,13 @@ test('resolveCapabilities: responsible party group → isResponsibleParty=true',
   assert.deepEqual(caps.ownedCaseTypes, []);
 });
 
+test('resolveCapabilities: frontline complaints group is defined only, not active yet', () => {
+  const caps = resolveCapabilities(['Frontline - Complaints'], sampleConfig);
+  assert.equal(caps.isResponsibleParty, false);
+  assert.equal(caps.isReviewer, false);
+  assert.deepEqual(caps.ownedCaseTypes, []);
+});
+
 test('resolveCapabilities: no responsible party group → isResponsibleParty=false', () => {
   const caps = resolveCapabilities(['Reviewers'], sampleConfig);
   assert.equal(caps.isResponsibleParty, false);
@@ -114,7 +142,29 @@ test('resolveCapabilities: defaults to exported permissions config when none pas
 
 test('permissions: exported config has expected shape', () => {
   assert.equal(typeof permissions.reviewer, 'string');
+  assert.equal(typeof permissions.responsibleParty, 'string');
   assert.equal(typeof permissions.caseTypeOwners, 'object');
+});
+
+test('permissions: default config preserves core reviewer and responsible party groups', () => {
+  assert.equal(permissions.reviewer, 'Reviewers');
+  assert.equal(permissions.responsibleParty, 'CR-ResponsibleParty');
+});
+
+test('permissions: default config defines complaints reviewer and frontline groups', () => {
+  assert.equal(permissions.reviewerComplaints, 'Reviewers - Complaints');
+  assert.equal(permissions.frontlineComplaints, 'Frontline - Complaints');
+});
+
+test('permissions: default config includes complaints owner groups', () => {
+  assert.equal(
+    permissions.caseTypeOwners.journeyOwnerComplaints,
+    'JourneyOwner - Complaints'
+  );
+  assert.equal(
+    permissions.caseTypeOwners.caseTypeOwnerComplaints,
+    'CaseTypeOwner - Complaints'
+  );
 });
 
 test('resolveCapabilities: Reviewer-Managers group → isReviewerManager=true', () => {
@@ -162,6 +212,13 @@ test('resolveCapabilities: Reviewers → isVisitor=false', () => {
   );
 });
 
+test('resolveCapabilities: Reviewers - Complaints → isVisitor=true until wired', () => {
+  assert.equal(
+    resolveCapabilities(['Reviewers - Complaints'], sampleConfig).isVisitor,
+    true
+  );
+});
+
 test('resolveCapabilities: Reviewer-Managers → isVisitor=false', () => {
   assert.equal(
     resolveCapabilities(['Reviewer-Managers'], sampleConfig).isVisitor,
@@ -190,9 +247,16 @@ test('resolveCapabilities: CR-ResponsibleParty → isVisitor=false', () => {
   );
 });
 
+test('resolveCapabilities: Frontline - Complaints → isVisitor=true until wired', () => {
+  assert.equal(
+    resolveCapabilities(['Frontline - Complaints'], sampleConfig).isVisitor,
+    true
+  );
+});
+
 test('resolveCapabilities: owner of a Case Type → isVisitor=false', () => {
   assert.equal(
-    resolveCapabilities(['CaseTypeOwners-ExampleReview'], sampleConfig)
+    resolveCapabilities(['CaseTypeOwner - Example Review'], sampleConfig)
       .isVisitor,
     false
   );

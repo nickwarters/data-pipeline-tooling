@@ -7,7 +7,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { resolveEligibleCaseTypes } from '../src/setup/resolve-eligible-case-types.js';
+import {
+  resolveEligibleCaseSourcesFromCaseTypes,
+  resolveEligibleCaseTypes,
+} from '../src/setup/resolve-eligible-case-types.js';
 
 test('resolveEligibleCaseTypes: returns a Promise', async () => {
   const result = resolveEligibleCaseTypes([]);
@@ -52,4 +55,59 @@ test('resolveEligibleCaseTypes: Reviewer-Managers get all case types (needed for
     'example-review should be eligible for Reviewer-Managers'
   );
   assert.ok(result.length > 0, 'should return at least one case type');
+});
+
+test('resolveEligibleCaseSourcesFromCaseTypes: maps reviewer group to its case list source', () => {
+  const sources = resolveEligibleCaseSourcesFromCaseTypes(
+    ['Reviewers - Complaints'],
+    [
+      {
+        slug: 'complaints',
+        listName: 'complaints',
+        reviewerGroup: 'Reviewers - Complaints',
+        config: {
+          listName: 'complaints',
+          reviewerGroup: 'Reviewers - Complaints',
+          questions: [],
+          computeOutcome: () => ({ outcome: 'Pass' }),
+        },
+      },
+    ]
+  );
+
+  assert.deepEqual(
+    sources.map(({ slug, listName, reviewerGroup }) => ({
+      slug,
+      listName,
+      reviewerGroup,
+    })),
+    [
+      {
+        slug: 'complaints',
+        listName: 'complaints',
+        reviewerGroup: 'Reviewers - Complaints',
+      },
+    ]
+  );
+});
+
+test('resolveEligibleCaseSourcesFromCaseTypes: base Reviewers group does not imply complaints list access', () => {
+  const sources = resolveEligibleCaseSourcesFromCaseTypes(
+    ['Reviewers'],
+    [
+      {
+        slug: 'complaints',
+        listName: 'complaints',
+        reviewerGroup: 'Reviewers - Complaints',
+        config: {
+          listName: 'complaints',
+          reviewerGroup: 'Reviewers - Complaints',
+          questions: [],
+          computeOutcome: () => ({ outcome: 'Pass' }),
+        },
+      },
+    ]
+  );
+
+  assert.deepEqual(sources, []);
 });

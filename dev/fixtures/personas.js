@@ -7,8 +7,9 @@
 /**
  * Persona definitions for mock mode.
  * Activate via the ?asUser= URL param, e.g. ?asUser=reviewer (default).
- * Available keys: reviewer, owner, admin, responsible-party, reviewer-manager,
- * qa (a standalone QA Reviewer — opens QA Check Cases), visitor (no groups —
+ * Available keys: reviewer, owner, journey-owner-complaints,
+ * case-type-owner-complaints, admin, responsible-party, reviewer-manager, qa
+ * (a standalone QA Reviewer — opens QA Check Cases), visitor (no groups —
  * exercises the Visitor explainer-only branch).
  *
  * @type {Record<string, { userId: string, displayName: string, groups: string[] }>}
@@ -22,12 +23,22 @@ export const personas = {
   owner: {
     userId: 'user-owner',
     displayName: 'Sam Owner',
-    groups: ['CaseTypeOwners-ExampleReview'],
+    groups: ['CaseTypeOwner - Example Review'],
+  },
+  'journey-owner-complaints': {
+    userId: 'user-journey-owner-complaints',
+    displayName: 'Jules Journey Owner Complaints',
+    groups: ['JourneyOwner - Complaints'],
+  },
+  'case-type-owner-complaints': {
+    userId: 'user-case-type-owner-complaints',
+    displayName: 'Cam Case Type Owner Complaints',
+    groups: ['CaseTypeOwner - Complaints'],
   },
   admin: {
     userId: 'user-admin',
     displayName: 'Riley Admin',
-    groups: ['Reviewers', 'CaseTypeOwners-ExampleReview'],
+    groups: ['Reviewers', 'CaseTypeOwner - Example Review'],
   },
   'responsible-party': {
     userId: 'user-rp',

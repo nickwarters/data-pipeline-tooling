@@ -7,6 +7,7 @@
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').ListCasesFilter} ListCasesFilter */
+/** @typedef {import('../sharepoint-client.js').CaseListOptions} CaseListOptions */
 /** @typedef {import('../sharepoint-client.js').PatchResult} PatchResult */
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
 
@@ -100,9 +101,10 @@ export class MockSharePointClient {
 
   /**
    * @param {ListCasesFilter} filter
+   * @param {CaseListOptions} [_opts]
    * @returns {Promise<CaseRow[]>}
    */
-  async listCases(filter) {
+  async listCases(filter, _opts = {}) {
     return this._cases
       .filter((c) => {
         if (filter.status !== undefined && c.status !== filter.status)

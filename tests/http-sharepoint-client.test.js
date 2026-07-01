@@ -801,6 +801,50 @@ test('HttpSharePointClient: listCases applies status and assignedReviewer filter
   assert.ok(url.includes('user-1'), 'should filter on assigned reviewer id');
 });
 
+test('HttpSharePointClient: listCases uses default case list when no list override is supplied', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [] }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.listCases({});
+
+  assert.ok(
+    calls[0].url.includes("getbytitle('Cases-ExampleReview')"),
+    'should use the default case list'
+  );
+});
+
+test('HttpSharePointClient: listCases can target a supplied SharePoint list', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [] }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.listCases({ status: 'In-progress' }, { listName: 'complaints' });
+
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(
+    url.includes("getbytitle('complaints')"),
+    'should use the supplied list override'
+  );
+  assert.ok(url.includes("Status eq 'In-progress'"), 'should keep filters');
+});
+
 // --- getCase / getCurrentUser ---
 
 test('HttpSharePointClient: getCase returns null on 404', async () => {
