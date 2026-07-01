@@ -9,6 +9,22 @@
 > parked for dedicated grills. Counts in Summary are over **Applicable Questions**; "Not
 > applicable" = the explicit N/A _answer value_, not `showWhen`-excluded questions.
 
+> **Amended by the Jul 2026 workflow changes.** The two parked items are now resolved:
+> **Remediation** (#144) is a distinct *tracking* Section that feeds Summary
+> (`showInSummary: true`, showing each action's status + `cancelReason` and the case
+> `remediationDueDate`) — [ADR-0024]; **Amend Outcome** (#145) is a case-level Controls
+> record, and **Answer Override is retired** — [ADR-0026], so the Summary's "Outcome
+> block" now shows `amendedOutcome?.outcome ?? outcomeAtCompletion` (the **Current
+> Outcome**). Summary's **Responsible Party (Adviser) gate widens**: visible `read-only`
+> once the Case is **reportable** (`Actions In Progress` *or* `Completed`), not only when
+> `Completed` — [ADR-0023]. **Case Details is folded into Summary** for the Adviser, who
+> has no separate Details tab. Hybrid derivation freezes at the **reportable** milestone
+> rather than at `Completed`.
+>
+> [ADR-0023]: ./0023-case-lifecycle-and-reportable-milestone.md
+> [ADR-0024]: ./0024-remediation-tracking-tab.md
+> [ADR-0026]: ./0026-amend-outcome-case-level-and-qa-retirement.md
+
 The case-review tab row becomes **Details · Questions · Notes · Issues · Summary**. The **Remediation** Section is surfaced under the UI label **"Issues"** (an _Issue_ is just a failed **Answer** — not a new entity); the standalone **Outcome** tab is removed and its verdict becomes one block inside a new read-only **Summary** Section that rolls up the whole Case. This supersedes the tab row in ADR-0014 and the Section list in ADR-0011.
 
 ## What Summary is

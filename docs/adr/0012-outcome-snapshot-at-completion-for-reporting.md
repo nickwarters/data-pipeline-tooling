@@ -4,7 +4,15 @@ Date: 2026-05-17
 
 ## Status
 
-Accepted
+Accepted (amended by [ADR-0023], Jul 2026)
+
+> **Amendment ([ADR-0023]).** The snapshot (`outcomeAtCompletion` + `hadRemediation`) is
+> now stamped at the **reportable milestone** — Send Actions on the actions path, or
+> Complete Case on the no-actions path — not at final `Completed`. The field keeps its
+> name for storage compatibility; "at completion" now reads as "at reportable." The
+> freeze rationale is unchanged.
+>
+> [ADR-0023]: ./0023-case-lifecycle-and-reportable-milestone.md
 
 ## Context
 

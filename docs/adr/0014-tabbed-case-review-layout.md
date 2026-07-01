@@ -8,6 +8,20 @@
 > primitive, the Case Details default tab, and the persistent-chrome Complete button — still
 > holds.
 
+> **Further amended by the Jul 2026 workflow changes.** The **Remediation** tab is now a
+> distinct *tracking* Section (per-action complete/cancelled), split from **Issues**
+> capture ([ADR-0024]); **Amend Outcome** is a case-level Controls surface ([ADR-0026]);
+> two appeal tabs — **Appeal Request** and **Appeal Review** — are added ([ADR-0027]). The
+> persistent-chrome Complete button now flips label between **"Send Actions"** and
+> **"Complete Case"** per [ADR-0023]. Tabs a viewer can't access still render no tab
+> ([ADR-0011] matrix), so the visible tab set differs by role.
+>
+> [ADR-0011]: ./0011-section-level-role-based-access.md
+> [ADR-0023]: ./0023-case-lifecycle-and-reportable-milestone.md
+> [ADR-0024]: ./0024-remediation-tracking-tab.md
+> [ADR-0026]: ./0026-amend-outcome-case-level-and-qa-retirement.md
+> [ADR-0027]: ./0027-appeal-flow-journeyowner-controls.md
+
 The case review page presents its **Section**s as tabs instead of one long scroll. **Case Details** is a new sixth Section and the default tab; the tab row is **Details · Questions · Remediation · Outcome · Notes**. Tabs are rendered by a generic, domain-free `cr-tabs` primitive (label list + selected id + ARIA roles + arrow-key nav, emits `cr-tab-change`); `cr-case-review.js` owns the Section→tab mapping, the access-driven visibility, and the default/fallback selection.
 
 ## Two deliberate exclusions

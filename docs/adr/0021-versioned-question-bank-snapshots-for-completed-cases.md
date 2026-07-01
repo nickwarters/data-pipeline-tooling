@@ -4,7 +4,16 @@ Date: 2026-06-25
 
 ## Status
 
-Accepted
+Accepted (amended by [ADR-0023], Jul 2026)
+
+> **Amendment ([ADR-0023]).** `questionBankVersion` is stamped at the **reportable**
+> milestone (Send Actions, or Complete Case on the no-actions path) rather than at final
+> `Completed` — the freeze this ADR protects now begins when the Case becomes reportable
+> and its Answers freeze. "A Completed Case resolves its catalogue from the versioned
+> file" reads as "a **reportable** Case." Everything else (the hash contract, manifest,
+> miss/fallback behaviour) is unchanged.
+>
+> [ADR-0023]: ./0023-case-lifecycle-and-reportable-milestone.md
 
 ## Context
 

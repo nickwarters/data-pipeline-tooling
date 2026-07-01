@@ -4,7 +4,19 @@ Date: 2026-06-11
 
 ## Status
 
-Accepted (extends [ADR-0012])
+Accepted (extends [ADR-0012]; **feed changed by [ADR-0026]**, Jul 2026)
+
+> **Amendment ([ADR-0026]).** The `effectiveOutcome` / `effectiveHadRemediation` /
+> `outcomeOverridden` columns are **retained unchanged in shape and purpose**, but their
+> source is no longer **Answer Overrides** (retired). They are now re-stamped from the
+> case-level **Amended Outcome** record: the write that sets `amendedOutcome` sets
+> `effectiveOutcome = amendedOutcome.outcome` and `outcomeOverridden = true`. The
+> dual-audience contract (frozen `outcomeAtCompletion` for reviewer-quality, effective
+> column for true-result) stands. Initialisation now happens at the **reportable**
+> milestone ([ADR-0023]) rather than at `Completed`.
+>
+> [ADR-0023]: ./0023-case-lifecycle-and-reportable-milestone.md
+> [ADR-0026]: ./0026-amend-outcome-case-level-and-qa-retirement.md
 
 ## Context
 
