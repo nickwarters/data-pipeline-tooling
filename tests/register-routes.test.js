@@ -66,6 +66,16 @@ test('registerRoutes: registers #/conversation/:id route', () => {
   );
 });
 
+test('registerRoutes: registers source-key conversation route', () => {
+  const router = new Router();
+  router._container = /** @type {any} */ ({});
+  registerRoutes(router, makeContext());
+  assert.ok(
+    router._routes.some((r) => r.re.test('#/conversation/example-review/99')),
+    '#/conversation/:caseType/:id should be registered'
+  );
+});
+
 test('registerRoutes: registers #/question-bank route', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});
@@ -83,6 +93,16 @@ test('registerRoutes: registers #/case/:id route', () => {
   assert.ok(
     router._routes.some((r) => r.re.test('#/case/99')),
     '#/case/:id should be registered'
+  );
+});
+
+test('registerRoutes: registers source-key case route', () => {
+  const router = new Router();
+  router._container = /** @type {any} */ ({});
+  registerRoutes(router, makeContext());
+  assert.ok(
+    router._routes.some((r) => r.re.test('#/case/example-review/99')),
+    '#/case/:caseType/:id should be registered'
   );
 });
 

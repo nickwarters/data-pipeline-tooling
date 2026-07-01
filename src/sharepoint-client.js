@@ -253,8 +253,8 @@
  * and HttpSharePointClient satisfy it identically.
  *
  * @typedef {{
- *   getCase: (id: string) => Promise<CaseRow|null>,
- *   patchCase: (id: string, fields: Partial<CaseRow>, etag: string) => Promise<PatchResult>,
+ *   getCase: (id: string, opts?: CaseListOptions) => Promise<CaseRow|null>,
+ *   patchCase: (id: string, fields: Partial<CaseRow>, etag: string, opts?: CaseListOptions) => Promise<PatchResult>,
  *   getQuestionDefinitions: (ids: string[]) => Promise<QuestionDefinition[]>,
  *   listCases: (filter: ListCasesFilter, opts?: CaseListOptions) => Promise<CaseRow[]>,
  *   getCurrentUserGroups: () => Promise<string[]>,

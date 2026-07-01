@@ -57,6 +57,8 @@ export class CRCaseReview extends ShellElement {
     this.saveQueue = null;
     /** @type {string} */
     this.caseId = '';
+    /** @type {string | null} */
+    this.caseType = null;
     /** @type {string} */
     this.currentUserId = '';
     /** @type {Capabilities | null} */
@@ -118,7 +120,8 @@ export class CRCaseReview extends ShellElement {
       this.saveQueue,
       this.caseId,
       this.currentUserId,
-      this.capabilities
+      this.capabilities,
+      this.caseType
     );
 
     super.connectedCallback();
@@ -249,6 +252,7 @@ export class CRCaseReview extends ShellElement {
       client: clientArg ?? this.client,
       saveQueue: saveQueueArg ?? this.saveQueue,
       patchFields: patchFields ?? null,
+      opts: this.viewModel?.caseListOptions ?? {},
     });
   }
 

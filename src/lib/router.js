@@ -45,7 +45,7 @@ export class Router {
         /** @type {Record<string, string>} */
         const params = {};
         route.keys.forEach((key, i) => {
-          params[key] = m[i + 1];
+          params[key] = decodeURIComponent(m[i + 1]);
         });
         return { handler: route.handler, params };
       }

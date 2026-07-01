@@ -36,8 +36,10 @@ const BASE_ROW = {
  */
 function makeClient({ patchResponses = [], getCaseRow } = {}) {
   let idx = 0;
-  /** @type {{ fields: Partial<CaseRow>, etag: string }[]} */
+  /** @type {{ fields: Partial<CaseRow>, etag: string, opts?: import('../src/sharepoint-client.js').CaseListOptions }[]} */
   const patchCalls = [];
+  /** @type {{ id: string, opts?: import('../src/sharepoint-client.js').CaseListOptions }[]} */
+  const getCalls = [];
   let liveRow = { ...BASE_ROW };
 
   return {
@@ -52,16 +54,26 @@ function makeClient({ patchResponses = [], getCaseRow } = {}) {
      * @param {string} etag
      * @returns {Promise<PatchResult>}
      */
-    async patchCase(_id, fields, etag) {
-      patchCalls.push({ fields, etag });
+    async patchCase(
+      _id,
+      fields,
+      etag,
+      /** @type {import('../src/sharepoint-client.js').CaseListOptions | undefined} */ opts
+    ) {
+      patchCalls.push({ fields, etag, opts });
       if (idx < patchResponses.length) return patchResponses[idx++];
       const newEtag = `etag-ok-${patchCalls.length}`;
       liveRow = { ...liveRow, ...fields, etag: newEtag };
       return { ok: true, status: 200, data: { ...liveRow } };
     },
-    async getCase(/** @type {string} */ _id) {
+    async getCase(
+      /** @type {string} */ _id,
+      /** @type {import('../src/sharepoint-client.js').CaseListOptions | undefined} */ opts
+    ) {
+      getCalls.push({ id: _id, opts });
       return getCaseRow !== undefined ? getCaseRow : { ...liveRow };
     },
+    getCalls,
     async getQuestionDefinitions() {
       return [];
     },
@@ -606,4 +618,23 @@ test('SaveQueue: enqueueFields retries the whole field set after a 412 with no c
     'first attempt 412s, second carries the same fields'
   );
   assert.equal(client.patchCalls[1].fields.outcomeOverridden, true);
+});
+
+test('SaveQueue: writes and conflict refreshes use the Case list options captured at load', async () => {
+  const client = makeClient({
+    patchResponses: [{ ok: false, status: 412 }],
+    getCaseRow: { ...BASE_ROW, etag: 'etag-2' },
+  });
+  const q = new SaveQueue(client, { debounceMs: 0 });
+  q.loadCase(BASE_ROW, { listName: 'complaints' });
+
+  q.enqueue('c1', 'notes', 'updated');
+  await tick();
+
+  assert.deepEqual(client.patchCalls[0].opts, { listName: 'complaints' });
+  assert.deepEqual(client.getCalls[0], {
+    id: 'c1',
+    opts: { listName: 'complaints' },
+  });
+  assert.deepEqual(client.patchCalls[1].opts, { listName: 'complaints' });
 });

@@ -11,6 +11,7 @@ import { countConfiguredFailures } from '../src/evaluators/failure-evaluator.js'
 
 /** @type {CaseTypeConfig} */
 const config = {
+  listName: 'complaints',
   eligibleGroups: ['Reviewers'],
   attributeFailures: true,
   questions: [

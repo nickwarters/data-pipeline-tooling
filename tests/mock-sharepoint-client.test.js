@@ -563,6 +563,41 @@ test('MockSharePointClient: patchCase with questionBankVersion round-trips the f
   assert.equal(stored?.questionBankVersion, 'sha256:deadbeef');
 });
 
+test('MockSharePointClient: getCase and patchCase can target a supplied listName', async () => {
+  const complaints = {
+    ...CASES[0],
+    id: 'case-1',
+    caseType: 'product-sale-review',
+    title: 'Complaint Case',
+    etag: 'complaints-etag-1',
+  };
+  const client = new MockSharePointClient({
+    cases: CASES,
+    questionDefinitions: QUESTION_DEFS,
+    personas: PERSONAS,
+    lists: { complaints: [complaints] },
+  });
+
+  assert.equal((await client.getCase('case-1'))?.title, 'Example Review #1');
+  assert.equal(
+    (await client.getCase('case-1', { listName: 'complaints' }))?.title,
+    'Complaint Case'
+  );
+
+  const result = await client.patchCase(
+    'case-1',
+    { notes: 'complaint note' },
+    'complaints-etag-1',
+    { listName: 'complaints' }
+  );
+  assert.equal(result.ok, true);
+  assert.equal(
+    (await client.getCase('case-1', { listName: 'complaints' }))?.notes,
+    'complaint note'
+  );
+  assert.equal((await client.getCase('case-1'))?.notes, '');
+});
+
 // --- getVersionedExport (ADR-0021 Step 4) ---
 
 const VERSIONED_EXPORT = {

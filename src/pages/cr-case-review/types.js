@@ -10,6 +10,7 @@
  * @typedef {import('../../sharepoint-client.js').CurrentUser} CurrentUser
  * @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition
  * @typedef {import('../../sharepoint-client.js').SharePointClient} SharePointClient
+ * @typedef {import('../../sharepoint-client.js').CaseListOptions} CaseListOptions
  * @typedef {import('../../services/save-queue.js').SaveQueue} SaveQueue
  * @typedef {import('../../services/section-access.js').Mode} SectionMode
  * @typedef {import('../../services/section-access.js').Section} Section
@@ -72,6 +73,7 @@
  * @property {SharePointClient | null} client
  * @property {SaveQueue | null} saveQueue
  * @property {Partial<CaseRow> | null} patchFields
+ * @property {CaseListOptions} [opts]
  */
 
 export {};

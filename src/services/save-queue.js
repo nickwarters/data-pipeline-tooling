@@ -8,6 +8,7 @@
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../sharepoint-client.js').PatchResult} PatchResult */
+/** @typedef {import('../sharepoint-client.js').CaseListOptions} CaseListOptions */
 
 import { signal } from '../lib/signal.js';
 
@@ -16,6 +17,7 @@ import { signal } from '../lib/signal.js';
 /**
  * @typedef {{
  *   etag: string,
+ *   opts: CaseListOptions,
  *   baselineAnswers: Record<string, Answer> | null,
  *   pending: Record<string, { value: Partial<CaseRow>, timerId: ReturnType<typeof setTimeout> }>,
  *   inFlight: Set<Promise<boolean>>
@@ -51,11 +53,13 @@ export class SaveQueue {
    * Initialize ETag and baseline answers from a freshly-fetched CaseRow.
    * Call this after every successful getCase or patchCase.
    * @param {CaseRow} row
+   * @param {CaseListOptions} [opts]
    */
-  loadCase(row) {
+  loadCase(row, opts = {}) {
     const existing = this._state[row.id];
     this._state[row.id] = {
       etag: row.etag,
+      opts,
       baselineAnswers: row.answers ? { ...row.answers } : null,
       pending: existing?.pending ?? {},
       inFlight: existing?.inFlight ?? new Set(),
@@ -115,6 +119,7 @@ export class SaveQueue {
     if (!this._state[caseId]) {
       this._state[caseId] = {
         etag: '',
+        opts: {},
         baselineAnswers: null,
         pending: {},
         inFlight: new Set(),
@@ -193,7 +198,12 @@ export class SaveQueue {
     /** @type {PatchResult} */
     let result;
     try {
-      result = await this._client.patchCase(caseId, fields, state.etag);
+      result = await this._client.patchCase(
+        caseId,
+        fields,
+        state.etag,
+        state.opts
+      );
     } catch (_err) {
       result = { ok: false, status: 0 };
     }
@@ -230,7 +240,7 @@ export class SaveQueue {
    */
   async _handle412(caseId, fields, retryIdx) {
     const state = this._state[caseId];
-    const fresh = await this._client.getCase(caseId);
+    const fresh = await this._client.getCase(caseId, state.opts);
 
     if (!fresh) {
       this._statusSignal.set('conflict');

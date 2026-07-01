@@ -164,7 +164,7 @@ test('CRCaseTable: row contains a link to the case', () => {
   assert.equal(links.length, 1, 'should render one link');
   assert.equal(
     links[0].href,
-    '#/case/case-42',
+    '#/case/example-review/case-42',
     'link should point to case route'
   );
 });
@@ -187,7 +187,7 @@ test('CRCaseTable: free-text filter hides non-matching rows', () => {
 
   const rows = findAll(el, 'tr').filter((r) => r.className === 'cr-case-row');
   assert.equal(rows.length, 1, 'only the matching row should be visible');
-  assert.equal(findAll(rows[0], 'a')[0]?.href, '#/case/c1');
+  assert.equal(findAll(rows[0], 'a')[0]?.href, '#/case/example-review/c1');
 });
 
 test('CRCaseTable: free-text filter matches case type', () => {
@@ -206,7 +206,7 @@ test('CRCaseTable: free-text filter matches case type', () => {
 
   const rows = findAll(el, 'tr').filter((r) => r.className === 'cr-case-row');
   assert.equal(rows.length, 1, 'should match by case type');
-  assert.equal(findAll(rows[0], 'a')[0]?.href, '#/case/c2');
+  assert.equal(findAll(rows[0], 'a')[0]?.href, '#/case/goodbye-review/c2');
 });
 
 test('CRCaseTable: status filter shows only matching rows', () => {
@@ -227,7 +227,7 @@ test('CRCaseTable: status filter shows only matching rows', () => {
 
   const rows = findAll(el, 'tr').filter((r) => r.className === 'cr-case-row');
   assert.equal(rows.length, 1, 'only completed cases should be visible');
-  assert.equal(findAll(rows[0], 'a')[0]?.href, '#/case/c2');
+  assert.equal(findAll(rows[0], 'a')[0]?.href, '#/case/example-review/c2');
 });
 
 test('CRCaseTable: status filter cleared shows all rows', () => {
@@ -641,7 +641,7 @@ test('CRCaseTable: free-text filter matches by status field', () => {
 
   const rows = findAll(el, 'tr').filter((r) => r.className === 'cr-case-row');
   assert.equal(rows.length, 1, 'should match one row by status');
-  assert.equal(findAll(rows[0], 'a')[0]?.href, '#/case/c2');
+  assert.equal(findAll(rows[0], 'a')[0]?.href, '#/case/example-review/c2');
 });
 
 // --- overdue indicator ---

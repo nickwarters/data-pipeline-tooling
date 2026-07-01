@@ -52,6 +52,23 @@ test('Router: named param is extracted from hash pattern', () => {
   assert.deepEqual(captured, { id: 'abc-123' });
 });
 
+test('Router: named params are decoded from hash path segments', () => {
+  const router = new Router();
+  router._container = /** @type {any} */ ({});
+  /** @type {Record<string, string> | null} */
+  let captured = null;
+
+  router.register('#/case/:caseType/:id', {
+    mount: (_, params) => {
+      captured = params;
+    },
+    unmount: () => {},
+  });
+
+  router.navigate('#/case/product%20sale/case%2F123');
+  assert.deepEqual(captured, { caseType: 'product sale', id: 'case/123' });
+});
+
 test('Router: multiple named params are extracted', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});

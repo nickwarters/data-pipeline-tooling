@@ -3,6 +3,7 @@ import { ShellElement } from '../lib/view.js';
 import { signal, computed } from '../lib/signal.js';
 import { h } from '../lib/html.js';
 import { CRDataTable } from './cr-data-table.js';
+import { caseRouteFor } from '../lib/case-route-links.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('./cr-data-table.js').ColumnDef<CaseRow>} CaseColumn */
@@ -13,7 +14,7 @@ import { CRDataTable } from './cr-data-table.js';
  * `cr-case-open`. Behaviour matches the pre-refactor table when no custom
  * `columns` prop is supplied.
  *
- * @param {(caseId: string) => void} openCase
+ * @param {(row: CaseRow) => void} openCase
  * @returns {CaseColumn[]}
  */
 export function defaultCaseColumns(openCase) {
@@ -23,7 +24,7 @@ export function defaultCaseColumns(openCase) {
       label: 'Reference',
       sortable: true,
       getValue: (r) => r.title || r.id,
-      renderCell: (r) => h('a', { href: `#/case/${r.id}` }, r.title || r.id),
+      renderCell: (r) => h('a', { href: caseRouteFor(r) }, r.title || r.id),
     },
     {
       key: 'caseType',
@@ -65,7 +66,7 @@ export function defaultCaseColumns(openCase) {
             type: 'button',
             className: 'cr-case-open-btn',
             'aria-label': `Open ${r.title || r.id}`,
-            onclick: () => openCase(r.id),
+            onclick: () => openCase(r),
           },
           'Open'
         ),
@@ -120,7 +121,7 @@ export function CaseTableToolbar({ onFilterText, onStatusFilter }) {
  * @property {CRDataTable | null} inner
  * @property {(toolbar: HTMLElement) => void} onToolbar
  * @property {(inner: CRDataTable) => void} onInner
- * @property {(caseId: string) => void} onOpenCase
+ * @property {(row: CaseRow) => void} onOpenCase
  * @property {(text: string) => void} onFilterText
  * @property {(status: string) => void} onStatusFilter
  */
@@ -160,7 +161,7 @@ export function CaseTable({
       row.overdue ? 'cr-case-row cr-case-row--overdue' : 'cr-case-row';
   }
 
-  innerTable.onRowActivate = (/** @type {CaseRow} */ row) => onOpenCase(row.id);
+  innerTable.onRowActivate = (/** @type {CaseRow} */ row) => onOpenCase(row);
   if (initialSort) innerTable.sort = initialSort;
   innerTable.rows = rows;
 
@@ -270,7 +271,7 @@ export class CRCaseTable extends ShellElement {
       onInner: (inner) => {
         this._inner = inner;
       },
-      onOpenCase: (id) => this._openCase(id),
+      onOpenCase: (row) => this._openCase(row),
       onFilterText: (text) => this._filterText.set(text),
       onStatusFilter: (status) => this._statusFilter.set(status),
     });
@@ -283,10 +284,13 @@ export class CRCaseTable extends ShellElement {
     });
   }
 
-  /** @param {string} caseId */
-  _openCase(caseId) {
+  /** @param {CaseRow} row */
+  _openCase(row) {
     this.dispatchEvent(
-      new CustomEvent('cr-case-open', { detail: { caseId }, bubbles: true })
+      new CustomEvent('cr-case-open', {
+        detail: { caseId: row.id, caseRow: row },
+        bubbles: true,
+      })
     );
   }
 }

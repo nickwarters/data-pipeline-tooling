@@ -2,6 +2,10 @@
 import { ShellElement } from '../lib/view.js';
 import { signal } from '../lib/signal.js';
 import { h } from '../lib/html.js';
+import {
+  UnknownCaseTypeError,
+  loadCaseTypeConfig,
+} from '../../case-types/manifest.js';
 import '../components/cr-conversation.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
@@ -26,6 +30,8 @@ export class CRConversationView extends ShellElement {
     this.saveQueue = null;
     /** @type {string} */
     this.caseId = '';
+    /** @type {string | null} */
+    this.caseType = null;
     /** @type {CurrentUser | null} */
     this.currentUser = null;
 
@@ -36,8 +42,22 @@ export class CRConversationView extends ShellElement {
   async connectedCallback() {
     super.connectedCallback();
     if (!this.client || !this.caseId) return;
-    const caseRow = await this.client.getCase(this.caseId);
+    /** @type {import('../sharepoint-client.js').CaseListOptions} */
+    let opts = {};
+    if (this.caseType) {
+      try {
+        const config = await loadCaseTypeConfig(this.caseType);
+        opts = config.listName ? { listName: config.listName } : {};
+      } catch (error) {
+        if (error instanceof UnknownCaseTypeError) return;
+        throw error;
+      }
+    }
+    const caseRow = await this.client.getCase(this.caseId, opts);
     if (!caseRow) return;
+    if (typeof this.saveQueue?.loadCase === 'function') {
+      this.saveQueue.loadCase(caseRow, opts);
+    }
     this._caseRow.set(caseRow);
   }
 

@@ -2,6 +2,7 @@
 import { ShellElement } from '../lib/view.js';
 import { signal } from '../lib/signal.js';
 import { h } from '../lib/html.js';
+import { caseRouteFor, conversationRouteFor } from '../lib/case-route-links.js';
 import '../components/cr-case-table.js';
 import '../components/cr-allocation.js';
 import '../components/cr-owner-summary.js';
@@ -67,7 +68,7 @@ export class CRDashboard extends ShellElement {
         h('cr-case-table', {
           cases: this._cases.get(),
           'oncr-case-open': (/** @type {any} */ e) => {
-            location.hash = `#/case/${e.detail.caseId}`;
+            location.hash = caseRouteFor(e.detail.caseRow);
           },
         })
       );
@@ -97,7 +98,7 @@ export class CRDashboard extends ShellElement {
           client: this.client,
           currentUserId: this.currentUserId,
           'oncr-open-conversation': (/** @type {any} */ e) => {
-            location.hash = `#/conversation/${e.detail.caseId}`;
+            location.hash = conversationRouteFor(e.detail.caseRow);
           },
         })
       );

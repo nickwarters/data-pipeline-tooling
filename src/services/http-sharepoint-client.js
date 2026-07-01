@@ -53,9 +53,13 @@ export class HttpSharePointClient {
 
   // --- SharePointClient interface ------------------------------------------
 
-  /** @param {string} id @returns {Promise<CaseRow|null>} */
-  async getCase(id) {
-    const url = this._listItemUrl(this._caseListName, id);
+  /**
+   * @param {string} id
+   * @param {CaseListOptions} [opts]
+   * @returns {Promise<CaseRow|null>}
+   */
+  async getCase(id, opts = {}) {
+    const url = this._listItemUrl(opts.listName ?? this._caseListName, id);
     try {
       const body = await this._read(url);
       return rowFromItem(body, readEtag(body));
@@ -69,15 +73,16 @@ export class HttpSharePointClient {
    * @param {string} id
    * @param {Partial<CaseRow>} fields
    * @param {string} etag
+   * @param {CaseListOptions} [opts]
    * @returns {Promise<PatchResult>}
    */
-  async patchCase(id, fields, etag) {
-    const url = this._listItemUrl(this._caseListName, id);
+  async patchCase(id, fields, etag, opts = {}) {
+    const url = this._listItemUrl(opts.listName ?? this._caseListName, id);
     const body = JSON.stringify(itemFromRow(fields));
     try {
       const data = await this._write(url, 'PATCH', { 'If-Match': etag }, body);
       if (data === null) {
-        const row = await this.getCase(id);
+        const row = await this.getCase(id, opts);
         if (!row) return { ok: false, status: 404 };
         return { ok: true, status: 204, data: row };
       }

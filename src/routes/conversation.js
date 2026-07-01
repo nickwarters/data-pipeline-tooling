@@ -8,7 +8,8 @@
  * @param {import('../setup/register-routes.js').AppContext} context
  */
 export function register(router, context) {
-  router.register('#/conversation/:id', {
+  /** @type {import('../lib/router.js').RouteHandler} */
+  const handler = {
     mount(container, params) {
       const el =
         /** @type {import('../pages/cr-conversation-view.js').CRConversationView} */ (
@@ -17,9 +18,13 @@ export function register(router, context) {
       el.client = context.client;
       el.saveQueue = context.saveQueue;
       el.caseId = params.id;
+      el.caseType = params.caseType ?? null;
       el.currentUser = context.currentUser;
       container.replaceChildren(el);
     },
     unmount() {},
-  });
+  };
+
+  router.register('#/conversation/:caseType/:id', handler);
+  router.register('#/conversation/:id', handler);
 }

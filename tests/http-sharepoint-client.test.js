@@ -901,6 +901,42 @@ test('HttpSharePointClient: getCase parses Answers/Conversation JSON blobs and c
   assert.equal(row?.assignedReviewer, 'user-1');
 });
 
+test('HttpSharePointClient: getCase can target a supplied SharePoint list', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'Complaint Case',
+            Status: 'In-progress',
+            AssignedReviewerId: 'u1',
+            ResponsiblePartyId: 'u2',
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: '',
+            CompletedAt: null,
+            CaseType: 'product-sale-review',
+          }),
+          { status: 200, headers: { ETag: '"v1"' } }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const row = await client.getCase('case-1', { listName: 'complaints' });
+
+  assert.equal(row?.title, 'Complaint Case');
+  assert.ok(
+    calls[0].url.includes("getbytitle('complaints')"),
+    'GET should target the supplied list name'
+  );
+});
+
 test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async () => {
   const overrides = [
     {
@@ -1072,6 +1108,49 @@ test('HttpSharePointClient: patchCase handles 200 response with JSON body (no se
   assert.equal(result.ok, true);
   assert.equal(result.status, 200);
   assert.equal(result.data?.title, 'Updated');
+});
+
+test('HttpSharePointClient: patchCase can target a supplied SharePoint list', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'POST' && c.url.endsWith('/_api/contextinfo'),
+      respond: () => digestResponse('digest-1'),
+    },
+    {
+      when: (c) => c.method === 'PATCH',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'Complaint Case',
+            Status: 'In-progress',
+            AssignedReviewerId: 'u1',
+            ResponsiblePartyId: 'u2',
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: 'done',
+            CompletedAt: null,
+            CaseType: 'product-sale-review',
+          }),
+          { status: 200, headers: { ETag: '"v2"' } }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const result = await client.patchCase('case-1', { notes: 'done' }, '"v1"', {
+    listName: 'complaints',
+  });
+
+  assert.equal(result.ok, true);
+  const patchCall = calls.find((c) => c.method === 'PATCH');
+  assert.ok(
+    patchCall?.url.includes("getbytitle('complaints')"),
+    'PATCH should target the supplied list name'
+  );
 });
 
 // --- getQuestionDefinitions with non-empty ids ---

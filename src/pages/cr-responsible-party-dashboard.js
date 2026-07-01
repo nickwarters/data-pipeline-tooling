@@ -2,6 +2,7 @@
 import { ShellElement } from '../lib/view.js';
 import { signal } from '../lib/signal.js';
 import { h } from '../lib/html.js';
+import { caseRouteFor } from '../lib/case-route-links.js';
 import { CRCaseTable } from '../components/cr-case-table.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
@@ -260,7 +261,7 @@ export class CRResponsiblePartyDashboard extends ShellElement {
             label: 'Reference',
             getValue: (/** @type {CaseRow} */ r) => r.title || r.id,
             renderCell: (/** @type {CaseRow} */ r) =>
-              h('a', { href: `#/case/${r.id}` }, r.title || r.id),
+              h('a', { href: caseRouteFor(r) }, r.title || r.id),
           },
           {
             key: 'caseType',
@@ -291,7 +292,7 @@ export class CRResponsiblePartyDashboard extends ShellElement {
                   onclick: () => {
                     this.dispatchEvent(
                       new CustomEvent('cr-open-conversation', {
-                        detail: { caseId: r.id },
+                        detail: { caseId: r.id, caseRow: r },
                         bubbles: true,
                         composed: true,
                       })
@@ -307,7 +308,7 @@ export class CRResponsiblePartyDashboard extends ShellElement {
         'oncr-case-open': (/** @type {any} */ e) => {
           this.dispatchEvent(
             new CustomEvent('cr-open-conversation', {
-              detail: { caseId: e.detail.caseId },
+              detail: { caseId: e.detail.caseId, caseRow: e.detail.caseRow },
               bubbles: true,
             })
           );

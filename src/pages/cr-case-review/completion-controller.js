@@ -67,7 +67,7 @@ export class CompletionController {
  * @returns {Promise<void>}
  */
 export async function completeCase(request) {
-  const { caseId, client, saveQueue, patchFields } = request;
+  const { caseId, client, saveQueue, patchFields, opts } = request;
   if (!client || !saveQueue) return;
 
   const finalFields = patchFields || {
@@ -79,7 +79,7 @@ export async function completeCase(request) {
   if (!flushed) return;
 
   const etag = saveQueue.getEtag(caseId);
-  const result = await client.patchCase(caseId, finalFields, etag);
+  const result = await client.patchCase(caseId, finalFields, etag, opts ?? {});
   if (result.ok && typeof location !== 'undefined') {
     location.hash = '#/dashboard';
   }

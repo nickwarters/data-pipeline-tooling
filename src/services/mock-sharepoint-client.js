@@ -22,7 +22,8 @@ export class MockSharePointClient {
    *   persona?: string,
    *   people?: PersonResult[],
    *   exportHashes?: Record<string, string>,
-   *   versionedExports?: Record<string, VersionedExport>
+   *   versionedExports?: Record<string, VersionedExport>,
+   *   lists?: Record<string, CaseRow[]>
    * }} opts
    */
   constructor({
@@ -33,6 +34,7 @@ export class MockSharePointClient {
     people = [],
     exportHashes = /** @type {Record<string, string>} */ ({}),
     versionedExports = /** @type {Record<string, VersionedExport>} */ ({}),
+    lists = /** @type {Record<string, CaseRow[]>} */ ({}),
   }) {
     // Deep-clone cases so fixture arrays are not mutated across tests.
     this._cases = cases.map((c) => ({ ...c, answers: { ...c.answers } }));
@@ -42,6 +44,12 @@ export class MockSharePointClient {
     this._people = people.slice();
     this._exportHashes = exportHashes;
     this._versionedExports = versionedExports;
+    this._lists = Object.fromEntries(
+      Object.entries(lists).map(([listName, rows]) => [
+        listName,
+        rows.map((c) => ({ ...c, answers: { ...c.answers } })),
+      ])
+    );
     this._etagCounter = 1000;
     this._injectNext412 = false;
   }
@@ -53,10 +61,11 @@ export class MockSharePointClient {
 
   /**
    * @param {string} id
+   * @param {CaseListOptions} [opts]
    * @returns {Promise<CaseRow|null>}
    */
-  async getCase(id) {
-    const c = this._cases.find((c) => c.id === id);
+  async getCase(id, opts = {}) {
+    const c = this._caseStore(opts).find((c) => c.id === id);
     return c ? { ...c } : null;
   }
 
@@ -64,9 +73,10 @@ export class MockSharePointClient {
    * @param {string} id
    * @param {Partial<CaseRow>} fields
    * @param {string} etag
+   * @param {CaseListOptions} [opts]
    * @returns {Promise<PatchResult>}
    */
-  async patchCase(id, fields, etag) {
+  async patchCase(id, fields, etag, opts = {}) {
     console.log('MockSharePointClient.patchCase payload', {
       id,
       etag,
@@ -78,17 +88,23 @@ export class MockSharePointClient {
       return { ok: false, status: 412 };
     }
 
-    const idx = this._cases.findIndex((c) => c.id === id);
+    const cases = this._caseStore(opts);
+    const idx = cases.findIndex((c) => c.id === id);
     if (idx === -1) return { ok: false, status: 404 };
-    if (this._cases[idx].etag !== etag) return { ok: false, status: 412 };
+    if (cases[idx].etag !== etag) return { ok: false, status: 412 };
 
     const newEtag = String(++this._etagCounter);
-    this._cases[idx] = /** @type {CaseRow} */ ({
-      ...this._cases[idx],
+    cases[idx] = /** @type {CaseRow} */ ({
+      ...cases[idx],
       ...fields,
       etag: newEtag,
     });
-    return { ok: true, status: 200, data: { ...this._cases[idx] } };
+    return { ok: true, status: 200, data: { ...cases[idx] } };
+  }
+
+  /** @param {CaseListOptions} [opts] */
+  _caseStore(opts = {}) {
+    return opts.listName ? (this._lists[opts.listName] ?? []) : this._cases;
   }
 
   /**

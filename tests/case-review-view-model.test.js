@@ -115,6 +115,60 @@ test('CaseReviewViewModel.load() calls getExportHash with the case type slug and
   );
 });
 
+test('CaseReviewViewModel.load() resolves route caseType to listName for getCase and SaveQueue', async () => {
+  /** @type {any[]} */
+  const getCaseCalls = [];
+  /** @type {any[]} */
+  const loadCaseCalls = [];
+  const row = {
+    id: 'c1',
+    caseType: 'product-sale-review',
+    title: 'T',
+    status: 'In-progress',
+    assignedReviewer: 'u1',
+    responsibleParty: 'u2',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    etag: 'e1',
+  };
+  const vm = new CaseReviewViewModel(
+    /** @type {any} */ ({
+      getCase: async (
+        /** @type {string} */ id,
+        /** @type {import('../src/sharepoint-client.js').CaseListOptions | undefined} */ opts
+      ) => {
+        getCaseCalls.push({ id, opts });
+        return row;
+      },
+      getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
+      getExportHash: async () => null,
+      resolveUsers: async () => ({}),
+    }),
+    /** @type {any} */ ({
+      loadCase: (
+        /** @type {import('../src/sharepoint-client.js').CaseRow} */ row,
+        /** @type {import('../src/sharepoint-client.js').CaseListOptions | undefined} */ opts
+      ) => loadCaseCalls.push([row, opts]),
+      enqueue: () => {},
+    }),
+    'c1',
+    'u1',
+    null,
+    'product-sale-review'
+  );
+
+  await vm.load();
+
+  assert.deepEqual(getCaseCalls[0], {
+    id: 'c1',
+    opts: { listName: 'complaints' },
+  });
+  assert.deepEqual(loadCaseCalls[0], [row, { listName: 'complaints' }]);
+  assert.deepEqual(vm.caseListOptions, { listName: 'complaints' });
+});
+
 test('CaseReviewViewModel.load() stores null exportHash when getExportHash returns null', async () => {
   const vm = new CaseReviewViewModel(
     /** @type {any} */ ({

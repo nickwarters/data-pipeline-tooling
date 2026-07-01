@@ -331,10 +331,15 @@ test('CRDashboard: cr-open-conversation from RP section navigates to conversatio
     'cr-open-conversation'
   ]?.[0];
   assert.ok(handler, 'should have cr-open-conversation listener');
-  handler({ detail: { caseId: 'c-42' } });
+  handler({
+    detail: {
+      caseId: 'c-42',
+      caseRow: { id: 'c-42', caseType: 'example-review' },
+    },
+  });
   assert.equal(
     /** @type {any} */ (globalThis).location.hash,
-    '#/conversation/c-42'
+    '#/conversation/example-review/c-42'
   );
 });
 
@@ -436,13 +441,22 @@ test('CRDashboard: cr-case-open event on case table navigates to #/case/{id}', a
   const caseTable = findAll(el, 'cr-case-table')[0];
   assert.ok(caseTable, 'should have a case table');
 
-  const event = { type: 'cr-case-open', detail: { caseId: 'case-42' } };
+  const event = {
+    type: 'cr-case-open',
+    detail: {
+      caseId: 'case-42',
+      caseRow: { id: 'case-42', caseType: 'example-review' },
+    },
+  };
   for (const h of /** @type {any} */ (caseTable)._listeners['cr-case-open'] ??
     []) {
     h(event);
   }
 
-  assert.equal(/** @type {any} */ (globalThis).location.hash, '#/case/case-42');
+  assert.equal(
+    /** @type {any} */ (globalThis).location.hash,
+    '#/case/example-review/case-42'
+  );
 });
 
 // --- overdue flag ---

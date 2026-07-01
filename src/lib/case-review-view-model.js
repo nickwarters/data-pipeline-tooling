@@ -30,6 +30,7 @@ import {
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
 /** @typedef {import('../sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
+/** @typedef {import('../sharepoint-client.js').CaseListOptions} CaseListOptions */
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
 
 export class CaseReviewViewModel {
@@ -39,13 +40,24 @@ export class CaseReviewViewModel {
    * @param {string} caseId
    * @param {string} currentUserId
    * @param {import('../services/permissions.js').Capabilities | null} capabilities
+   * @param {string | null} [caseType]
    */
-  constructor(client, saveQueue, caseId, currentUserId, capabilities) {
+  constructor(
+    client,
+    saveQueue,
+    caseId,
+    currentUserId,
+    capabilities,
+    caseType = null
+  ) {
     this.client = client;
     this.saveQueue = saveQueue;
     this.caseId = caseId;
     this.currentUserId = currentUserId;
     this.capabilities = capabilities;
+    this.caseType = caseType;
+    /** @type {CaseListOptions} */
+    this.caseListOptions = {};
 
     this.loaded = signal(false);
     this.error = signal(/** @type {string | null} */ (null));
@@ -99,8 +111,27 @@ export class CaseReviewViewModel {
 
   async load() {
     const { client, saveQueue, caseId } = this;
+    /** @type {CaseTypeConfig | null} */
+    let routeConfig = null;
+    if (this.caseType) {
+      try {
+        routeConfig = await loadCaseTypeConfig(this.caseType);
+      } catch (error) {
+        if (error instanceof UnknownCaseTypeError) {
+          console.error(error);
+          this.error.set(
+            `This Case cannot be opened because its route Case Type is not supported. Ask a maintainer to add "${this.caseType}" to the Case Type manifest.`
+          );
+          return;
+        }
+        throw error;
+      }
+      this.caseListOptions = routeConfig.listName
+        ? { listName: routeConfig.listName }
+        : {};
+    }
     const [caseRow, currentUser] = await Promise.all([
-      client.getCase(caseId),
+      client.getCase(caseId, this.caseListOptions),
       client.getCurrentUser(),
     ]);
 
@@ -111,19 +142,19 @@ export class CaseReviewViewModel {
 
     this.caseRow = caseRow;
     this.currentUser = currentUser;
-    saveQueue.loadCase(caseRow);
+    saveQueue.loadCase(caseRow, this.caseListOptions);
 
     const versionHash =
       caseRow.status === 'Completed' && caseRow.questionBankVersion
         ? caseRow.questionBankVersion
         : null;
 
-    let config;
+    let config = routeConfig;
     let exportHash;
     let versionedExport;
     try {
       [config, exportHash, versionedExport] = await Promise.all([
-        loadCaseTypeConfig(caseRow.caseType),
+        config ? Promise.resolve(config) : loadCaseTypeConfig(caseRow.caseType),
         this.client.getExportHash(caseRow.caseType),
         versionHash
           ? this.client.getVersionedExport(caseRow.caseType, versionHash)
