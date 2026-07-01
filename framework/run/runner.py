@@ -231,9 +231,13 @@ def run_pipeline(
 
     started = time.perf_counter()
     try:
-        for requirement in upstreams:
-            guard.check(context, requirement)
-        result = handler(context)
+        # Make the context ambient so a handler's bare ``p.run()`` hops inherit
+        # this attempt's identity (one ``pipeline_run_id`` across every hop's
+        # run-log records and the rows they stamp) rather than minting fresh ids.
+        with active_context(context):
+            for requirement in upstreams:
+                guard.check(context, requirement)
+            result = handler(context)
     except Exception as exc:
         if not context.run_summary_recorded:
             run_log.record(

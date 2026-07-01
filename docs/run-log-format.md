@@ -55,9 +55,14 @@ Each ends in `_run_id`; the prefix names what it identifies.
 | `pipeline_run_id` | one **individual pipeline attempt** | the framework, per `.run()` (a fresh uuid) | no — fresh per attempt |
 | `logical_run_id` | the **business run / idempotency key** (`<label>:<run_date>`) | the caller / the default | **yes** — a re-drive of the same `run_date` reuses it |
 
-Run-log `pipeline_run_id` is the concrete attempt being observed. Ad hoc
-`Pipeline.run()` creates a fresh one and exposes it as `pipeline.pipeline_run_id`;
-`Pipeline.run(context=...)` uses the supplied `RunContext.pipeline_run_id`.
+Run-log `pipeline_run_id` is the concrete attempt being observed. A truly ad hoc
+`Pipeline.run()` (no runner, no ambient context) mints a fresh one and exposes it
+as `pipeline.pipeline_run_id`; `Pipeline.run(context=...)` uses the supplied
+`RunContext.pipeline_run_id`. A **bare** `p.run()` inside a runner handler (or a
+dry run) inherits the attempt's ambient id instead of minting its own, so a
+handler that runs several hops (raw → silver → gold) with bare `p.run()` calls
+records every hop — and stamps every row those hops write — under the *one*
+attempt-level `pipeline_run_id`, rather than orphaning each hop under a fresh id.
 **Every record of a single execution carries the same `pipeline_run_id`**, so the
 registry can group a run's steps and its summary. Every record *also* carries its
 `logical_run_id`, so the business run a re-drive belongs to is visible in the log

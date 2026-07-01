@@ -307,6 +307,50 @@ def test_runner_context_correlates_logs_registry_and_accumulated_rows(tmp_path):
     assert set(landed["load_date"]) == {"2026-05-29"}
 
 
+def test_bare_nested_run_hops_share_one_pipeline_run_id(tmp_path):
+    # A handler that runs several hops with a *bare* ``p.run()`` (no context
+    # threaded) must still correlate: every hop's run-log records and the rows it
+    # writes carry the one attempt-level pipeline_run_id, not a fresh id per hop
+    # that would orphan the step records from the run summary and the data.
+    runner = PipelineRunner()
+
+    def handler(context):
+        gold = medallion(StoreRegistry(context.base_dir), context.subject).gold
+        strategy = AccumulateByRun.from_context(context)
+        source = Dataset.from_pandas(pd.DataFrame({"case_ref": ["c1", "c2"]}))
+
+        raw = Pipeline(f"{context.subject}:raw", run_log=context.run_log)
+        r = raw.read(DatasetReader(source), name="read")
+        raw.write(gold.writer("raw_pool", strategy), r, name="write")
+        raw.run()  # bare: inherits the attempt's context
+
+        silver = Pipeline(f"{context.subject}:silver", run_log=context.run_log)
+        s = silver.read(gold.reader("raw_pool"), name="read")
+        silver.write(gold.writer("silver_pool", strategy), s, name="write")
+        return silver.run()  # bare again
+
+    runner.register("cases", "ingest", handler)
+    runner.run("cases", "ingest", tmp_path, run_date=dt.date(2026, 5, 29))
+
+    registry = RunRegistry(tmp_path / "_registry" / "runs.db")
+    # The runner still records the pipeline-level summary its freshness needs.
+    (summary,) = registry.query_runs(pipeline="cases/ingest")
+    attempt_id = summary["pipeline_run_id"]
+
+    # Both hops' rows are stamped with that one id.
+    for table in ("raw_pool", "silver_pool"):
+        landed = SqliteReader(tmp_path / "cases" / "gold.db", table).read().to_pandas()
+        assert set(landed["pipeline_run_id"]) == {attempt_id}
+
+    # And every hop's step records are reachable from that same id — the whole
+    # attempt is one correlated unit, not a scatter of orphaned per-hop ids.
+    records = registry.records_for_run(attempt_id)
+    assert {r["pipeline_run_id"] for r in records} == {attempt_id}
+    assert {"cases:raw", "cases:silver", "cases/ingest"} <= {
+        r["pipeline"] for r in records
+    }
+
+
 def test_runner_redrives_a_business_run_under_an_explicit_logical_run_id(tmp_path):
     # Re-driving a business run: two distinct executions sharing one
     # logical_run_id must replace the same rows (idempotent), each traceable by
