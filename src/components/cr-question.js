@@ -1,6 +1,4 @@
 // @ts-check
-import { normaliseConfiguredActions } from '../evaluators/configured-outcome.js';
-import { isFailure } from '../evaluators/failure-evaluator.js';
 import { h } from '../lib/html.js';
 
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
@@ -36,32 +34,7 @@ export function Question({ question, currentValue, access, onAnswer }) {
         ? renderMultiChoice({ question, currentValue, access, onAnswer })
         : renderSingleChoice({ question, currentValue, access, onAnswer })
     ),
-    renderRemediationPanel(question, currentValue),
-  ].filter((node) => node !== null);
-}
-
-/**
- * @param {QuestionDefinition} question
- * @param {string | string[]} currentValue
- * @returns {HTMLElement | null}
- */
-function renderRemediationPanel(question, currentValue) {
-  if (!question.remediationActions?.length) return null;
-  const answer = { value: currentValue };
-  if (!isFailure(question, answer)) return null;
-
-  return h(
-    'details',
-    { class: 'cr-remediation-panel', open: true },
-    h('summary', {}, 'Actions required'),
-    h(
-      'ul',
-      {},
-      normaliseConfiguredActions(question.remediationActions, question.id).map(
-        (action) => h('li', {}, action.text)
-      )
-    )
-  );
+  ];
 }
 
 /**

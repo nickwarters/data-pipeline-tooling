@@ -244,7 +244,7 @@ test('CRQuestion: multi-choice read-only access ignores changes', () => {
   assert.equal(events.length, 0);
 });
 
-test('CRQuestion: renders remediation panel for failure', () => {
+test('CRQuestion: renders no remediation panel for a failed answer (Review = questions only)', () => {
   const q = {
     ...Q_YES_NO,
     remediationActions: ['Action 1'],
@@ -255,10 +255,10 @@ test('CRQuestion: renders remediation panel for failure', () => {
   el.currentValue = 'No';
   el.connectedCallback();
 
-  // children: [fieldset, details]
-  assert.equal(/** @type {any} */ (el)._children.length, 2);
-  const panel = /** @type {any} */ (el)._children[1];
-  assert.equal(panel.className, 'cr-remediation-panel');
+  // Review tab shows the question fieldset only — no actions beneath the answer.
+  assert.equal(/** @type {any} */ (el)._children.length, 1);
+  const fieldset = /** @type {any} */ (el)._children[0];
+  assert.equal(fieldset.className, 'cr-question');
 });
 
 test('CRQuestion: renders single-choice with custom options', () => {
@@ -280,14 +280,7 @@ test('CRQuestion: renders single-choice with custom options', () => {
   assert.equal(span.textContent, ' Maybe');
 });
 
-test('CRQuestion: does not render remediation panel if no actions', () => {
-  const el = new CRQuestion();
-  el.question = { ...Q_YES_NO, remediationActions: [] };
-  el.connectedCallback();
-  assert.equal(/** @type {any} */ (el)._children.length, 1);
-});
-
-test('CRQuestion: does not render remediation panel if not a failure', () => {
+test('CRQuestion: renders no remediation panel for a passing answer', () => {
   const el = new CRQuestion();
   el.question = {
     ...Q_YES_NO,

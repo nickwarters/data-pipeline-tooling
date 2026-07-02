@@ -17,19 +17,19 @@ The standalone **Remediation** tab has been parked since the Jun 2026 restructur
 Tester feedback defines the Remediation tab's real purpose: after actions are **sent** to
 the Responsible Party ([ADR-0023] `Actions In Progress`), the Reviewer tracks each
 action to a resolution — **complete**, or **cancelled** with a justification. This is a
-*different activity* from capturing actions, so "Issues" and "Remediation" become **two
+_different activity_ from capturing actions, so "Issues" and "Remediation" become **two
 Sections**, and a Remediation Action grows from a plain string into a stateful record.
 
 ## Decision
 
 ### Two Sections
 
-- **`issues`** — *capture*. Failed Answers + their Issue Capture Groups/Fields
+- **`issues`** — _capture_. Failed Answers + their Issue Capture Groups/Fields
   ([ADR-0020]) + the Responsible Party selector (below). Reviewer-editable **until the
   Case is reportable** ([ADR-0023]). This is today's `remediation` Section, **renamed to
   `issues`** to match its UI label; CONTEXT.md's "Issues = the Remediation Section" claim
   is retired.
-- **`remediation`** — *tracking* (the new tab). Lists every **sent** Remediation Action
+- **`remediation`** — _tracking_ (the new tab). Lists every **sent** Remediation Action
   across the Case; the Reviewer sets each action's resolution. Meaningful only once
   actions have been sent.
 
@@ -82,7 +82,7 @@ the working-day calculation). All sent actions share it.
 Action `status`/`cancelReason` follow the failed-Answer lifecycle ([ADR-0020]/[ADR-0013]):
 **stripped** if the Answer stops being a failure (before reportable), **frozen** once the
 Case is reportable — except that the resolution fields (`status`, `cancelReason`) are the
-*only* part written **after** reportable, during `Actions In Progress`. They freeze at
+_only_ part written **after** reportable, during `Actions In Progress`. They freeze at
 final `Completed`.
 
 ## Considered options
@@ -97,6 +97,30 @@ final `Completed`.
   on the action object keeps one record per action.
 - **Let the Responsible Party mark their own actions done** — rejected (D10): the
   Reviewer owns the record of truth; the RP's channel is the Conversation.
+
+## Amend (2026-07-02): Review tab is questions only; actions live on Issues (#247)
+
+The **Review** tab previously rendered an "Actions required" panel directly beneath any
+failed **Answer** (`renderRemediationPanel` in `cr-question.js`), duplicating the
+configured **Remediation Action**s that the **Issues** Section already lists per failed
+Answer. This muddied the boundary this ADR draws between _answering_ and _capturing_.
+
+**Decision.** The Review tab is **literally just answering questions** — question text
+plus response controls, nothing about remediation beneath any Answer. The configured
+Remediation Actions for a failed Answer are surfaced **only** on the **Issues** Section
+([ADR-0020] capture engine), which is their natural home under the issues/remediation
+split above.
+
+- **No answer-time failure affordance stays on Review** — not even a subtle "this fails"
+  marker. Removing all feedback at answer-time is the deliberate, literal choice
+  (open question 1 of #247); failure is surfaced when the Reviewer moves to Issues.
+- **Materialization is unchanged.** _When_ configured actions attach to an Answer
+  (`materializeRemediationActions`, wired through `CaseReviewViewModel.handleAnswer`) is
+  untouched; #247 changes only _where_ actions render. This amend is a render-only
+  removal on the Review tab.
+
+The `renderRemediationPanel` helper and its call site are removed from `cr-question.js`;
+the `.cr-remediation-panel` style is retained solely for the styleguide demo.
 
 ## Consequences
 
