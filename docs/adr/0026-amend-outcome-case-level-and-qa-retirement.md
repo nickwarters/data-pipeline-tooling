@@ -10,7 +10,7 @@ Accepted (**supersedes [ADR-0018]**; resolves the parked #145; amends [ADR-0011]
 ## Context
 
 [ADR-0018] modelled post-completion corrections as **Answer Overrides**: per-Answer,
-additive records authored by a **QA Reviewer**, with the **Current Outcome** *re-derived*
+additive records authored by a **QA Reviewer**, with the **Current Outcome** _re-derived_
 by `computeOutcome` over the **Effective Answers** — deliberately never a hand-set
 verdict (CONTEXT.md avoid-lists "Outcome Override"). That machinery (QA Check `qa-{slug}`
 Case Types, the embedded cross-row override editor, ADR-0019's effective-outcome columns,
@@ -21,10 +21,10 @@ Two grill decisions change direction:
 
 - **D6/D8** — shelve QA Check and Answer-level Override entirely; the **QA Reviewer** role
   is retired and **Controls** takes over post-completion outcome changes. QA will be
-  *re-designed* later when its requirements are known.
+  _re-designed_ later when its requirements are known.
 - **D7** — the correction surface is the **Amend Outcome** tab, and it operates at the
   **Case level**: Controls picks the new Outcome **explicitly** with a justification —
-  a *hand-set verdict*, not a re-derivation. This is exactly what #145 asked for and what
+  a _hand-set verdict_, not a re-derivation. This is exactly what #145 asked for and what
   [ADR-0018] deliberately refused; with QA/Override shelved, that refusal no longer binds.
 
 ## Decision
@@ -45,7 +45,7 @@ A post-completion outcome change is a **single case-level record** on the Case r
 
 - **Explicit, hand-set verdict.** Controls selects the Outcome value directly. This
   overturns [ADR-0006]/[ADR-0018]'s "Outcome is always derived, never hand-edited" — for
-  an *amended* Case only. The frozen `outcomeAtCompletion` is never mutated; the amendment
+  an _amended_ Case only. The frozen `outcomeAtCompletion` is never mutated; the amendment
   is a separate, additive field ([ADR-0007] field-level PATCH, ETag-guarded).
 - **Audit is captured on the record, not mined from history.** `amendedBy` + `amendedAt`
   are stored explicitly (D7) — we do **not** rely on SharePoint item version history
@@ -69,10 +69,16 @@ A post-completion outcome change is a **single case-level record** on the Case r
 ### Access ([ADR-0011])
 
 - **`amendOutcome` Section** — `edit` for **Controls** on a `Completed` Case; `hidden`
-  otherwise (nothing to amend before completion). `read-only` for Assigned Reviewer,
-  Case Type Owner, Journey Owner (they can see an amendment happened); `hidden` for
-  everyone else. Typically reached after an Appeal is agreed ([ADR-0027]), but an
-  amendment does **not** require an Appeal.
+  otherwise (nothing to amend before completion). **Controls is the only role that sees
+  this tab** — every other role is `hidden`. Observers do not need it: the result of an
+  amendment surfaces as the **Current Outcome** in the read-only Summary. Typically
+  reached after an Appeal is agreed ([ADR-0027]), but an amendment does **not** require
+  an Appeal.
+
+  > _Refined post-acceptance:_ the Section was initially `read-only` for the Assigned
+  > Reviewer, Case Type Owner and Journey Owner so they could see that an amendment had
+  > happened; this was narrowed to **Controls-only**. Those roles read the amended
+  > Current Outcome through the Summary instead of a dedicated tab.
 
 ### What is removed
 

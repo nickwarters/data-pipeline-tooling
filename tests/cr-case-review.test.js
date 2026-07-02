@@ -211,11 +211,11 @@ test('CRCaseReview: renders a cr-tabs with Details · Review · Issues · Summar
   );
   // For the Assigned Reviewer on an In-progress case every Section is visible
   // except the Remediation *tracking* tab, which stays hidden until actions have
-  // been sent (ADR-0024).
+  // been sent (ADR-0024), and Amend Outcome, which is Controls-only (ADR-0026).
   const hidden = tabs
     .filter((/** @type {any} */ t) => t.hidden)
     .map((/** @type {any} */ t) => t.id);
-  assert.deepEqual(hidden, ['remediation']);
+  assert.deepEqual(hidden, ['remediation', 'amendOutcome']);
 });
 
 test('CRCaseReview: there is no standalone Outcome tab', async () => {

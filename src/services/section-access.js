@@ -295,15 +295,16 @@ const MATRIX = {
     none: 'hidden',
   },
   // Amend Outcome (ADR-0026) — the case-level corrective Outcome. **Controls**
-  // edits it on a `Completed` Case; the Assigned Reviewer, Case Type Owner and
-  // Journey Owner observe it read-only. Everyone else sees nothing.
+  // is the only role that sees this tab: `edit` on a `Completed` Case, `hidden`
+  // otherwise. Everyone else is `hidden` — observers see the resulting Current
+  // Outcome in the read-only Summary, not this tab.
   amendOutcome: {
-    assignedReviewer: 'read-only',
+    assignedReviewer: 'hidden',
     otherReviewer: 'hidden',
     responsibleParty: 'hidden',
     responsiblePartyManager: 'hidden',
-    caseTypeOwner: 'read-only',
-    journeyOwner: 'read-only',
+    caseTypeOwner: 'hidden',
+    journeyOwner: 'hidden',
     controls: (c) => (c.status === 'Completed' ? 'edit' : 'hidden'),
     none: 'hidden',
   },

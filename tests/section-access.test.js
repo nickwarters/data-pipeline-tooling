@@ -391,12 +391,12 @@ test('matrix — In-progress Case (no actions, default appeal config → respons
         none: 'hidden',
       },
       amendOutcome: {
-        assignedReviewer: 'read-only',
+        assignedReviewer: 'hidden',
         otherReviewer: 'hidden',
         responsibleParty: 'hidden',
         responsiblePartyManager: 'hidden',
-        caseTypeOwner: 'read-only',
-        journeyOwner: 'read-only',
+        caseTypeOwner: 'hidden',
+        journeyOwner: 'hidden',
         controls: 'hidden',
         none: 'hidden',
       },
@@ -491,14 +491,16 @@ test('matrix — Completed Case, journeyOwner raiser, no open Appeal', () => {
       appealReview: {
         controls: 'read-only',
       },
-      // Amend Outcome is Controls-edit on a Completed Case.
+      // Amend Outcome is Controls-only: edit on a Completed Case, hidden for
+      // every other role (ADR-0026, refined — observers read the Current Outcome
+      // in the Summary, not this tab).
       amendOutcome: {
-        assignedReviewer: 'read-only',
+        assignedReviewer: 'hidden',
         otherReviewer: 'hidden',
         responsibleParty: 'hidden',
         responsiblePartyManager: 'hidden',
-        caseTypeOwner: 'read-only',
-        journeyOwner: 'read-only',
+        caseTypeOwner: 'hidden',
+        journeyOwner: 'hidden',
         controls: 'edit',
         none: 'hidden',
       },
