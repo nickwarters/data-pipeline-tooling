@@ -581,6 +581,9 @@ function rowFromItem(item, etag) {
       item?.OutcomeOverridden != null
         ? Boolean(item.OutcomeOverridden)
         : undefined,
+    amendedOutcome: /** @type {CaseRow['amendedOutcome']} */ (
+      parseJsonField(item?.AmendedOutcome, null)
+    ),
     appeals: /** @type {CaseRow['appeals']} */ (
       parseJsonField(item?.Appeals, undefined)
     ),
@@ -622,6 +625,8 @@ function itemFromRow(fields) {
     out.EffectiveHadRemediation = fields.effectiveHadRemediation;
   if (fields.outcomeOverridden !== undefined)
     out.OutcomeOverridden = fields.outcomeOverridden;
+  if (fields.amendedOutcome !== undefined)
+    out.AmendedOutcome = JSON.stringify(fields.amendedOutcome);
   if (fields.appeals !== undefined)
     out.Appeals = JSON.stringify(fields.appeals);
   if (fields.dueDate !== undefined) out.DueDate = fields.dueDate;

@@ -191,6 +191,29 @@ test('CRSummary: reads the frozen outcomeAtCompletion snapshot once the Case is 
   );
 });
 
+test('CRSummary: the Outcome block shows the Current Outcome (amended) over the frozen snapshot (ADR-0026)', () => {
+  const el = new CRSummary();
+  el.caseRow = makeCase({
+    status: 'Completed',
+    outcomeAtCompletion: 'fail',
+    amendedOutcome: {
+      outcome: 'pass',
+      justification: 'Reviewer misread the call',
+      amendedBy: 'controls-1',
+      amendedAt: '2026-06-12T00:00:00Z',
+    },
+  });
+  el.connectedCallback();
+  el.update((/** @type {any} */ a) => makeComputeOutcome(a), {}, true);
+
+  const block = /** @type {any} */ (el)._children[1];
+  assert.equal(
+    block._updateArgs.a1().outcome,
+    'pass',
+    'the amended Outcome is rendered, not the frozen snapshot'
+  );
+});
+
 test('CRSummary: reads the frozen snapshot from the reportable milestone (Actions In Progress), ADR-0023', () => {
   const el = new CRSummary();
   el.caseRow = makeCase({

@@ -40,6 +40,14 @@ const config = {
   // Appeal flow (ADR-0027): this journey routes appeal-raising to the Journey
   // Owner, resolved by Controls.
   appeal: { raisedBy: 'journeyOwner', resolvedBy: 'controls' },
+  // Outcome vocabulary (ADR-0004). `computeOutcome` only yields pass/fail, but the
+  // hand-set Amend Outcome verdict (ADR-0026) lets Controls also pick `refer`, so
+  // the full set of selectable Outcomes is declared here.
+  outcomeOptions: [
+    { id: 'pass', wording: 'Pass' },
+    { id: 'refer', wording: 'Refer' },
+    { id: 'fail', wording: 'Fail' },
+  ],
   // Configurable per-failure capture fields (ADR-0017). One shared set applies
   // to every failed Answer; captured inline as Answer.remediationDetails. Legacy:
   // superseded by captureGroups below (ADR-0020) but kept while both coexist.

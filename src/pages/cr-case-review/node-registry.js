@@ -35,6 +35,8 @@ export class CaseReviewNodeRegistry {
     this.notes = null;
     /** @type {CaseReviewNodeRegistryShape['appeal']} */
     this.appeal = null;
+    /** @type {CaseReviewNodeRegistryShape['amendOutcome']} */
+    this.amendOutcome = null;
     /** @type {CaseReviewNodeRegistryShape['conversation']} */
     this.conversation = null;
     /** @type {CaseReviewNodeRegistryShape['banner']} */
@@ -61,6 +63,7 @@ export class CaseReviewNodeRegistry {
     this.summary ??= h('cr-summary');
     this.notes ??= h('cr-notes');
     this.appeal ??= h('cr-appeal');
+    this.amendOutcome ??= h('cr-amend-outcome');
     this.conversation ??= h('cr-conversation');
     this.banner ??= h('cr-status-banner');
     this.conversationToggle ??= /** @type {HTMLButtonElement} */ (

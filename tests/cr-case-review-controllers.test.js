@@ -81,6 +81,8 @@ const { bindRemediationPanel, updateRemediationPanel } =
   await import('../src/pages/cr-case-review/remediation-controller.js');
 const { updateSummaryNotesAppeal } =
   await import('../src/pages/cr-case-review/summary-notes-appeal-controller.js');
+const { updateAmendOutcome } =
+  await import('../src/pages/cr-case-review/amend-outcome-controller.js');
 const { createConversationPanelBinding } =
   await import('../src/pages/cr-case-review/conversation-controller.js');
 const {
@@ -379,6 +381,7 @@ function makeTabContext(opts = {}) {
     summary: new StubEl(),
     notes: new StubEl(),
     appeal: new StubEl(),
+    amendOutcome: new StubEl(),
     conversation: null,
     sourceCase: null,
     banner: null,
@@ -402,6 +405,7 @@ function makeTabContext(opts = {}) {
           summary: 'read-only',
           notes: 'edit',
           appealRequest: 'hidden',
+          amendOutcome: 'hidden',
         },
         activeTab: {
           get: () => opts.activeTab ?? 'questions',
@@ -680,6 +684,7 @@ test('CaseReviewNodeRegistry: creates and reuses the long-lived page nodes curre
     summary: first.summary,
     notes: first.notes,
     appeal: first.appeal,
+    amendOutcome: first.amendOutcome,
     conversation: first.conversation,
     banner: first.banner,
     conversationToggle: first.conversationToggle,
@@ -697,6 +702,7 @@ test('CaseReviewNodeRegistry: creates and reuses the long-lived page nodes curre
   assert.equal(firstNodes.summary?.tagName, 'CR-SUMMARY');
   assert.equal(firstNodes.notes?.tagName, 'CR-NOTES');
   assert.equal(firstNodes.appeal?.tagName, 'CR-APPEAL');
+  assert.equal(firstNodes.amendOutcome?.tagName, 'CR-AMEND-OUTCOME');
   assert.equal(firstNodes.conversation?.tagName, 'CR-CONVERSATION');
   assert.equal(firstNodes.banner?.tagName, 'CR-STATUS-BANNER');
   assert.equal(firstNodes.conversationToggle?.tagName, 'BUTTON');
@@ -719,6 +725,7 @@ test('CaseReviewNodeRegistry: creates and reuses the long-lived page nodes curre
   assert.equal(registry.summary, firstNodes.summary);
   assert.equal(registry.notes, firstNodes.notes);
   assert.equal(registry.appeal, firstNodes.appeal);
+  assert.equal(registry.amendOutcome, firstNodes.amendOutcome);
   assert.equal(registry.conversation, firstNodes.conversation);
   assert.equal(registry.banner, firstNodes.banner);
   assert.equal(registry.conversationToggle, firstNodes.conversationToggle);
@@ -736,6 +743,7 @@ test('CaseReviewTabController: maps section access into tabs in the current orde
       summary: 'read-only',
       notes: 'hidden',
       appealRequest: 'edit',
+      amendOutcome: 'read-only',
     },
   });
 
@@ -747,6 +755,7 @@ test('CaseReviewTabController: maps section access into tabs in the current orde
     { id: 'summary', label: 'Summary', hidden: false },
     { id: 'notes', label: 'Notes', hidden: true },
     { id: 'appealRequest', label: 'Appeal', hidden: false },
+    { id: 'amendOutcome', label: 'Amend Outcome', hidden: false },
   ]);
 });
 
@@ -768,6 +777,7 @@ test('updateCaseReviewTabs: assigns selected tab and panel nodes', () => {
       'summary:Summary:false',
       'notes:Notes:false',
       'appealRequest:Appeal:true',
+      'amendOutcome:Amend Outcome:true',
     ]
   );
   assert.deepEqual(/** @type {any} */ (tabs).panels, {
@@ -778,6 +788,7 @@ test('updateCaseReviewTabs: assigns selected tab and panel nodes', () => {
     summary: nodes.summary,
     notes: nodes.notes,
     appealRequest: nodes.appeal,
+    amendOutcome: nodes.amendOutcome,
   });
 });
 
@@ -966,6 +977,90 @@ test('updateSummaryNotesAppeal: assigns Summary, Notes, and Appeal tab props', (
   assert.equal(/** @type {any} */ (appeal).currentUser, currentUser);
   assert.equal(/** @type {any} */ (appeal).catalogue, QUESTIONS);
   assert.equal(/** @type {any} */ (appeal).answers, answers);
+});
+
+/**
+ * @param {Partial<{ access: string, outcomeOptions: any[] }>} [opts]
+ */
+function makeAmendOutcomeContext(opts = {}) {
+  const amendOutcome = new StubEl();
+  const saveQueue = { id: 'queue' };
+  const currentUser = { id: 'controls-1', displayName: 'Controls' };
+  const outcomeOptions = opts.outcomeOptions ?? [
+    { id: 'pass', wording: 'Pass' },
+  ];
+  const caseRow = {
+    id: 'case-1',
+    status: 'Completed',
+    outcomeAtCompletion: 'fail',
+  };
+  return {
+    amendOutcome,
+    saveQueue,
+    currentUser,
+    outcomeOptions,
+    caseRow,
+    context: {
+      viewModel: {
+        caseRow,
+        config: { outcomeOptions },
+        currentUser,
+        access: { amendOutcome: opts.access ?? 'edit' },
+        saveQueue,
+      },
+      nodes: { amendOutcome },
+      displayMode: (/** @type {any} */ mode) => mode,
+      completeCase: async () => {},
+      toggleConversationPanel: () => {},
+    },
+  };
+}
+
+test('updateAmendOutcome: assigns the Amend Outcome tab props from the view model', () => {
+  const {
+    context,
+    amendOutcome,
+    saveQueue,
+    currentUser,
+    outcomeOptions,
+    caseRow,
+  } = makeAmendOutcomeContext();
+
+  updateAmendOutcome(/** @type {any} */ (context));
+
+  assert.equal(/** @type {any} */ (amendOutcome).caseRow, caseRow);
+  assert.equal(/** @type {any} */ (amendOutcome).saveQueue, saveQueue);
+  assert.equal(/** @type {any} */ (amendOutcome).caseId, 'case-1');
+  assert.equal(/** @type {any} */ (amendOutcome).access, 'edit');
+  assert.equal(/** @type {any} */ (amendOutcome).currentUser, currentUser);
+  assert.equal(
+    /** @type {any} */ (amendOutcome).outcomeOptions,
+    outcomeOptions
+  );
+});
+
+test('updateAmendOutcome: defaults outcomeOptions to an empty array when the Case Type declares none', () => {
+  const { context, amendOutcome } = makeAmendOutcomeContext();
+  context.viewModel.config = /** @type {any} */ ({});
+  updateAmendOutcome(/** @type {any} */ (context));
+  assert.deepEqual(/** @type {any} */ (amendOutcome).outcomeOptions, []);
+});
+
+test('updateAmendOutcome: no-ops when the node or required view-model state is absent', () => {
+  const missingNode = makeAmendOutcomeContext();
+  missingNode.context.nodes.amendOutcome = /** @type {any} */ (null);
+  assert.doesNotThrow(() =>
+    updateAmendOutcome(/** @type {any} */ (missingNode.context))
+  );
+
+  const missingCase = makeAmendOutcomeContext();
+  missingCase.context.viewModel.caseRow = /** @type {any} */ (null);
+  updateAmendOutcome(/** @type {any} */ (missingCase.context));
+  assert.equal(
+    /** @type {any} */ (missingCase.amendOutcome).caseRow,
+    undefined,
+    'no props assigned without a Case row'
+  );
 });
 
 test('createConversationPanelBinding: preserves click and Alt+C conversation toggling', () => {

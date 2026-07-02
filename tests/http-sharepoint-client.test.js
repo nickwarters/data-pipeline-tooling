@@ -416,6 +416,12 @@ test('HttpSharePointClient: patchCase writes mutable CaseRow fields to SharePoin
       effectiveOutcome: 'pass',
       effectiveHadRemediation: false,
       outcomeOverridden: true,
+      amendedOutcome: {
+        outcome: 'pass',
+        justification: 'Corrected after appeal',
+        amendedBy: 'controls-1',
+        amendedAt: '2026-06-12T10:00:00.000Z',
+      },
       appeals: [appeal],
       dueDate: '2026-06-10T10:00:00.000Z',
       relatedDate: null,
@@ -440,6 +446,12 @@ test('HttpSharePointClient: patchCase writes mutable CaseRow fields to SharePoin
     EffectiveOutcome: 'pass',
     EffectiveHadRemediation: false,
     OutcomeOverridden: true,
+    AmendedOutcome: JSON.stringify({
+      outcome: 'pass',
+      justification: 'Corrected after appeal',
+      amendedBy: 'controls-1',
+      amendedAt: '2026-06-12T10:00:00.000Z',
+    }),
     Appeals: JSON.stringify([appeal]),
     DueDate: '2026-06-10T10:00:00.000Z',
     RelatedDate: null,
@@ -966,6 +978,12 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
             EffectiveOutcome: 'pass',
             EffectiveHadRemediation: false,
             OutcomeOverridden: true,
+            AmendedOutcome: JSON.stringify({
+              outcome: 'pass',
+              justification: 'Corrected after appeal',
+              amendedBy: 'controls-1',
+              amendedAt: '2026-06-12T10:00:00.000Z',
+            }),
             Appeals: JSON.stringify(appeals),
             DueDate: '2026-06-10T10:00:00.000Z',
             RelatedDate: '2026-06-04T10:00:00.000Z',
@@ -993,6 +1011,12 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
   assert.equal(row?.effectiveOutcome, 'pass');
   assert.equal(row?.effectiveHadRemediation, false);
   assert.equal(row?.outcomeOverridden, true);
+  assert.deepEqual(row?.amendedOutcome, {
+    outcome: 'pass',
+    justification: 'Corrected after appeal',
+    amendedBy: 'controls-1',
+    amendedAt: '2026-06-12T10:00:00.000Z',
+  });
   assert.deepEqual(row?.appeals, appeals);
   assert.equal(row?.dueDate, '2026-06-10T10:00:00.000Z');
   assert.equal(row?.relatedDate, '2026-06-04T10:00:00.000Z');

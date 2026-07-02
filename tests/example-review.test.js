@@ -168,6 +168,15 @@ test('example-review: sections is a per-Section config object enabling the amend
   ]);
 });
 
+test('example-review: declares the Outcome vocabulary for the hand-set Amend Outcome verdict (ADR-0026)', () => {
+  const ids = (config.outcomeOptions ?? []).map((o) => o.id);
+  // computeOutcome only yields pass/fail, but Controls may amend to refer too.
+  assert.deepEqual(ids, ['pass', 'refer', 'fail']);
+  for (const option of config.outcomeOptions ?? []) {
+    assert.ok(option.wording.length > 0, `${option.id} has wording`);
+  }
+});
+
 test('example-review: routes appeal-raising to the Journey Owner, resolved by Controls (ADR-0027)', () => {
   assert.deepEqual(config.appeal, {
     raisedBy: 'journeyOwner',

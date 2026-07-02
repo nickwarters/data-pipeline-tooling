@@ -21,6 +21,7 @@ import {
   updateRemediationTracking,
 } from './cr-case-review/remediation-tracking-controller.js';
 import { updateSummaryNotesAppeal } from './cr-case-review/summary-notes-appeal-controller.js';
+import { updateAmendOutcome } from './cr-case-review/amend-outcome-controller.js';
 import { createConversationPanelBinding } from './cr-case-review/conversation-controller.js';
 import {
   bindCompletion,
@@ -36,6 +37,7 @@ import '../components/cr-conversation.js';
 import '../components/cr-notes.js';
 import '../components/cr-summary.js';
 import '../components/cr-appeal.js';
+import '../components/cr-amend-outcome.js';
 import '../components/cr-status-banner.js';
 import '../components/cr-tabs.js';
 
@@ -98,6 +100,8 @@ export class CRCaseReview extends ShellElement {
     this._notesEl = null;
     /** @type {any} */
     this._appealEl = null;
+    /** @type {any} */
+    this._amendOutcomeEl = null;
     /** @type {any} */
     this._conversationEl = null;
     /** @type {any} */
@@ -193,6 +197,7 @@ export class CRCaseReview extends ShellElement {
           'summary',
           'notes',
           'appealRequest',
+          'amendOutcome',
         ].find((t) => opts.access[t] !== 'hidden') || '';
       this.viewModel = /** @type {any} */ ({
         loaded: { get: () => true },
@@ -402,6 +407,15 @@ export class CRCaseReview extends ShellElement {
       toggleConversationPanel: this._toggleConversationPanel.bind(this),
     });
 
+    updateAmendOutcome({
+      viewModel: vm,
+      nodes: this._controllerNodes(canToggleConversation),
+      displayMode,
+      completeCase: (caseId, client, saveQueue, patchFields) =>
+        this._completeCase(caseId, client, saveQueue, patchFields),
+      toggleConversationPanel: this._toggleConversationPanel.bind(this),
+    });
+
     this._conversationPanel.update({
       viewModel: vm,
       nodes: this._controllerNodes(canToggleConversation),
@@ -471,6 +485,7 @@ export class CRCaseReview extends ShellElement {
     this._summaryEl = this._nodeRegistry.summary;
     this._notesEl = this._nodeRegistry.notes;
     this._appealEl = this._nodeRegistry.appeal;
+    this._amendOutcomeEl = this._nodeRegistry.amendOutcome;
     this._conversationEl = this._nodeRegistry.conversation;
     this._bannerEl = this._nodeRegistry.banner;
     this._toggleBtn = this._nodeRegistry.conversationToggle;

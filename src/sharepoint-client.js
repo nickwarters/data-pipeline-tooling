@@ -113,6 +113,24 @@
  */
 
 /**
+ * A case-level **Amended Outcome** (ADR-0026): Controls' explicit, hand-set
+ * post-completion verdict on a Completed Case. Unlike the retired Answer Override
+ * this is a single additive record on the Case row — it never mutates the frozen
+ * `outcomeAtCompletion`. `outcome` is the new Outcome value chosen directly;
+ * `justification` is the mandatory rationale; `amendedBy` (bare account login) and
+ * `amendedAt` (ISO timestamp) are captured on the record for audit rather than
+ * mined from SharePoint version history. The **Current Outcome** is
+ * `amendedOutcome?.outcome ?? outcomeAtCompletion`.
+ *
+ * @typedef {{
+ *   outcome: string,
+ *   justification: string,
+ *   amendedBy: string,
+ *   amendedAt: string
+ * }} AmendedOutcome
+ */
+
+/**
  * A Case row. The lifecycle is `In-progress → Actions In Progress → Completed`
  * (ADR-0023); `reportableAt` is stamped at the **reportable** milestone (Send
  * Actions, or Complete Case on the no-actions path), where the Answers freeze and
@@ -147,6 +165,7 @@
  *   effectiveOutcome?: string,
  *   effectiveHadRemediation?: boolean,
  *   outcomeOverridden?: boolean,
+ *   amendedOutcome?: AmendedOutcome | null,
  *   appeals?: Appeal[],
  *   responsiblePartyManager?: string | null,
  *   dueDate?: string | null,

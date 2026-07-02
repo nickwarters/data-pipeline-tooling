@@ -4,6 +4,7 @@ import './cr-outcome.js';
 import { caseDetailFields } from './cr-case-details.js';
 import { buildSummaryModel } from '../evaluators/summary-model.js';
 import { isReportable } from '../lib/case-machine.js';
+import { currentOutcome } from '../evaluators/amended-outcome.js';
 import './cr-capture-groups.js';
 
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
@@ -35,13 +36,16 @@ export function Summary(props) {
   );
 
   // The Outcome snapshot is stamped at the reportable milestone (ADR-0023), so
-  // read the frozen value from reportable on — not only once Completed.
+  // read the frozen value from reportable on — not only once Completed. Once
+  // reportable, the block shows the **Current Outcome** (ADR-0026): the case-level
+  // Amended Outcome when Controls has amended it, otherwise the frozen snapshot.
   const reportable = isReportable(props.caseRow?.status ?? '');
-  const frozen = reportable ? props.caseRow?.outcomeAtCompletion : null;
-  if (frozen) {
+  const current =
+    reportable && props.caseRow ? currentOutcome(props.caseRow) : undefined;
+  if (current) {
     /** @type {OutcomeResult} */
     const result = {
-      outcome: frozen,
+      outcome: current,
     };
     outcomeEl.update(() => result, {}, true);
   } else if (props.computeOutcome) {

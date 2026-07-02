@@ -191,8 +191,9 @@ test('CRCaseReview: renders a cr-tabs with Details · Review · Issues · Summar
       'summary',
       'notes',
       'appealRequest',
+      'amendOutcome',
     ],
-    'tab order is Details · Review · Issues · Remediation · Summary · Notes · Appeal'
+    'tab order is Details · Review · Issues · Remediation · Summary · Notes · Appeal · Amend Outcome'
   );
   assert.deepEqual(
     tabs.map((/** @type {any} */ t) => t.label),
@@ -204,6 +205,7 @@ test('CRCaseReview: renders a cr-tabs with Details · Review · Issues · Summar
       'Summary',
       'Notes',
       'Appeal',
+      'Amend Outcome',
     ],
     'the Questions Section surfaces under "Review"; the capture tab under "Issues"; the tracking tab under "Remediation"'
   );
@@ -475,9 +477,13 @@ function buildLayoutWith(el, access) {
     applicableQuestions: /** @type {any} */ ({ get: () => [] }),
     allAnswered: /** @type {any} */ ({ get: () => false }),
     currentUser: { id: 'u1', displayName: 'User 1' },
-    // Appeal defaults to hidden so callers that only exercise the legacy Sections
-    // don't sprout an Appeal tab; a caller can override it explicitly.
-    access: /** @type {any} */ ({ appealRequest: 'hidden', ...access }),
+    // Appeal and Amend Outcome default to hidden so callers that only exercise the
+    // legacy Sections don't sprout those tabs; a caller can override explicitly.
+    access: /** @type {any} */ ({
+      appealRequest: 'hidden',
+      amendOutcome: 'hidden',
+      ...access,
+    }),
   });
 }
 
