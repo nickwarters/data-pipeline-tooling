@@ -29,7 +29,7 @@ export function updateCaseReviewTabs(context) {
       remediation: nodes.remediation,
       summary: nodes.summary,
       notes: nodes.notes,
-      appeal: nodes.appeal,
+      appealRequest: nodes.appeal,
     },
   });
 }
@@ -78,6 +78,10 @@ export function buildCaseReviewTabs(context) {
     },
     { id: 'summary', label: 'Summary', hidden: access.summary === 'hidden' },
     { id: 'notes', label: 'Notes', hidden: access.notes === 'hidden' },
-    { id: 'appeal', label: 'Appeal', hidden: access.appeal === 'hidden' },
+    {
+      id: 'appealRequest',
+      label: 'Appeal',
+      hidden: access.appealRequest === 'hidden',
+    },
   ];
 }

@@ -52,7 +52,7 @@ export function updateSummaryNotesAppeal(context) {
     caseRow,
     saveQueue: vm.saveQueue,
     caseId: caseRow.id,
-    access: context.displayMode(access.appeal),
+    access: context.displayMode(access.appealRequest),
     currentUser,
     catalogue,
     answers: caseRow.answers,

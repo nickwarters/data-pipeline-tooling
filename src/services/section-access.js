@@ -8,8 +8,8 @@
  * Section-level role-based access on the case page. UX-only per ADR-0010;
  * SharePoint list ACLs remain the real boundary. See ADR-0011 for design.
  *
- * @typedef {'details'|'questions'|'conversation'|'notes'|'issues'|'remediation'|'summary'|'appeal'} Section
- * @typedef {'assignedReviewer'|'otherReviewer'|'responsibleParty'|'responsiblePartyManager'|'caseTypeOwner'|'controls'|'none'} Role
+ * @typedef {'details'|'questions'|'issues'|'summary'|'remediation'|'notes'|'conversation'|'appealRequest'|'appealReview'|'amendOutcome'} Section
+ * @typedef {'assignedReviewer'|'otherReviewer'|'responsibleParty'|'responsiblePartyManager'|'caseTypeOwner'|'journeyOwner'|'controls'|'none'} Role
  * @typedef {'edit'|'read-only'|'hidden'} Mode
  */
 
@@ -42,13 +42,42 @@ export function isReportable(status) {
 export const SECTIONS = [
   'details',
   'questions',
-  'conversation',
-  'notes',
   'issues',
-  'remediation',
   'summary',
-  'appeal',
+  'remediation',
+  'notes',
+  'conversation',
+  'appealRequest',
+  'appealReview',
+  'amendOutcome',
 ];
+
+/**
+ * The role a Case Type routes appeal-raising to (ADR-0027, grill D5): the
+ * **Journey Owner** for Complaints-style journeys, otherwise the **Responsible
+ * Party Manager**. Declared per Case Type as `caseTypeConfig.appeal.raisedBy`;
+ * defaults to `responsiblePartyManager` when the Case Type does not configure an
+ * appeal flow. The `appealRequest` matrix cell reads this to decide which role
+ * gets `edit`.
+ *
+ * @param {CaseTypeConfig} config
+ * @returns {'journeyOwner' | 'responsiblePartyManager'}
+ */
+function appealRaiser(config) {
+  return config.appeal?.raisedBy ?? 'responsiblePartyManager';
+}
+
+/**
+ * Whether the Case currently has an unresolved Appeal (ADR-0027). Controls may
+ * only `edit` the Appeal Review Section while an Appeal is open; otherwise the
+ * Section is observed read-only.
+ *
+ * @param {CaseRow} caseRow
+ * @returns {boolean}
+ */
+function hasOpenAppeal(caseRow) {
+  return (caseRow.appeals ?? []).some((a) => a.state !== 'resolved');
+}
 
 /**
  * Whether the Case carries ≥1 **sent** Remediation Action across its Answers
@@ -102,31 +131,112 @@ export function showInSummary(section, caseTypeConfig) {
  * @type {Record<Section, Record<Role, Mode | ((c: CaseRow, config: CaseTypeConfig) => Mode)>>}
  */
 const MATRIX = {
+  // Case Details (ADR-0014). Observed read-only by the reviewing/owning/Controls
+  // roles; the Responsible Party (Adviser) and their Manager no longer see a
+  // standalone Details tab — those fields are folded into the Summary they read
+  // (ADR-0011 amend).
   details: {
     assignedReviewer: 'read-only',
     otherReviewer: 'read-only',
-    responsibleParty: 'read-only',
-    responsiblePartyManager: 'read-only',
+    responsibleParty: 'hidden',
+    responsiblePartyManager: 'hidden',
     caseTypeOwner: 'read-only',
+    journeyOwner: 'read-only',
     controls: 'read-only',
     none: 'hidden',
   },
-  // Controls (ADR-0022) observe the reviewed Answers read-only. Post-completion
-  // corrections are no longer per-Answer overrides (ADR-0026 retires QA Check +
-  // Answer Override); a case-level Amended Outcome will supply corrections via its
-  // own Section in a later slice.
+  // Review (the Questions Section). The Assigned Reviewer edits it until the Case
+  // is **reportable** (ADR-0023), after which the Answers freeze and it goes
+  // read-only. Controls, the Case Type Owner and the Journey Owner observe the
+  // reviewed Answers read-only; the Adviser and their Manager do not see it
+  // (ADR-0011 amend — QA Check + Answer Override retired, ADR-0026).
   questions: {
-    assignedReviewer: 'edit',
+    assignedReviewer: (c) => (isReportable(c.status) ? 'read-only' : 'edit'),
     otherReviewer: 'read-only',
-    responsibleParty: 'read-only',
-    responsiblePartyManager: 'read-only',
+    responsibleParty: 'hidden',
+    responsiblePartyManager: 'hidden',
     caseTypeOwner: 'read-only',
+    journeyOwner: 'read-only',
     controls: 'read-only',
+    none: 'hidden',
+  },
+  // Issues (ADR-0024) — *capture*: failed Answers + their Issue Capture
+  // Groups/Fields (ADR-0020) + the Responsible Party selector. Reviewer-editable
+  // until the Case is reportable, then read-only. Observed read-only by
+  // Controls, the Case Type Owner and the Journey Owner; hidden from the Adviser
+  // and their Manager.
+  issues: {
+    assignedReviewer: (c) => (isReportable(c.status) ? 'read-only' : 'edit'),
+    otherReviewer: 'read-only',
+    responsibleParty: 'hidden',
+    responsiblePartyManager: 'hidden',
+    caseTypeOwner: 'read-only',
+    journeyOwner: 'read-only',
+    controls: 'read-only',
+    none: 'hidden',
+  },
+  // Summary is never `edit` — only `read-only` or `hidden` (ADR-0016). It
+  // inherits the function-valued Outcome × Responsible Party gate that governed
+  // the removed Outcome Section: hidden from the Adviser while In-progress,
+  // read-only once **reportable** (ADR-0023), so they can see it while
+  // remediation is underway. Their Manager gets a narrower gate — read-only only
+  // once the Case is fully `Completed` (ADR-0011 amend). The Journey Owner reads
+  // every Summary of their case type(s) (ADR-0027), so `journeyOwner: read-only`
+  // makes the per-Case link resolve.
+  summary: {
+    assignedReviewer: 'read-only',
+    otherReviewer: 'read-only',
+    responsibleParty: (c) => (isReportable(c.status) ? 'read-only' : 'hidden'),
+    responsiblePartyManager: (c) =>
+      c.status === 'Completed' ? 'read-only' : 'hidden',
+    caseTypeOwner: 'read-only',
+    journeyOwner: 'read-only',
+    controls: 'read-only',
+    none: 'hidden',
+  },
+  // Remediation (ADR-0024) — *tracking*: lists every **sent** Remediation Action;
+  // the Assigned Reviewer resolves each. The tab is hidden entirely until actions
+  // have been sent, then `edit` while `Actions In Progress` and `read-only` once
+  // `Completed`. The Responsible Party (and their Manager) never see it — they do
+  // the work off-system and report back via the Conversation (D10). Other
+  // reviewers, the Case Type Owner, the Journey Owner and Controls observe it
+  // read-only.
+  remediation: {
+    assignedReviewer: (c, config) => {
+      if (!hasSentActions(c, config)) return 'hidden';
+      return c.status === 'Actions In Progress' ? 'edit' : 'read-only';
+    },
+    otherReviewer: (c, config) =>
+      hasSentActions(c, config) ? 'read-only' : 'hidden',
+    responsibleParty: 'hidden',
+    responsiblePartyManager: 'hidden',
+    caseTypeOwner: (c, config) =>
+      hasSentActions(c, config) ? 'read-only' : 'hidden',
+    journeyOwner: (c, config) =>
+      hasSentActions(c, config) ? 'read-only' : 'hidden',
+    controls: (c, config) =>
+      hasSentActions(c, config) ? 'read-only' : 'hidden',
+    none: 'hidden',
+  },
+  // Notes — reviewer working notes. The Assigned Reviewer edits them until the
+  // Case is `Completed`, then read-only. Other reviewers and the Case Type Owner
+  // observe them read-only; the Journey Owner and Controls do not see them, nor
+  // do the Adviser and their Manager (ADR-0011 amend).
+  notes: {
+    assignedReviewer: (c) => (c.status === 'Completed' ? 'read-only' : 'edit'),
+    otherReviewer: 'read-only',
+    responsibleParty: 'hidden',
+    responsiblePartyManager: 'hidden',
+    caseTypeOwner: 'read-only',
+    journeyOwner: 'hidden',
+    controls: 'hidden',
     none: 'hidden',
   },
   // The Conversation is the thread between the Assigned Reviewer and the Case's
-  // Responsible Party (ADR-0011); a Responsible Party Manager is not a
-  // participant, so they cannot post — not even read it.
+  // Responsible Party (Adviser) (ADR-0011); both post subject to the Case Type's
+  // `allowMessagesWhen` status gate. A Responsible Party Manager is not a
+  // participant, so they cannot see it. Other reviewers, the Case Type Owner, the
+  // Journey Owner and Controls observe it read-only (ADR-0011 amend).
   conversation: {
     assignedReviewer: (c, config) => {
       const allowed = config.sections?.conversation?.allowMessagesWhen;
@@ -141,86 +251,60 @@ const MATRIX = {
     },
     responsiblePartyManager: 'hidden',
     caseTypeOwner: 'read-only',
-    controls: 'hidden',
+    journeyOwner: 'read-only',
+    controls: 'read-only',
     none: 'hidden',
   },
-  notes: {
-    assignedReviewer: 'edit',
-    otherReviewer: 'read-only',
+  // Appeal Request (ADR-0027) — where a Completed Case's Outcome is appealed. The
+  // raiser is configured per Case Type (`appeal.raisedBy`): the Journey Owner for
+  // Complaints-style journeys, otherwise the Responsible Party Manager. Only that
+  // role gets `edit`, and only on a `Completed` Case. The Assigned Reviewer, Case
+  // Type Owner, Controls and a non-raiser Journey Owner observe it read-only; the
+  // Adviser, their non-raiser Manager and other reviewers see nothing.
+  appealRequest: {
+    assignedReviewer: 'read-only',
+    otherReviewer: 'hidden',
     responsibleParty: 'hidden',
-    responsiblePartyManager: 'hidden',
+    responsiblePartyManager: (c, config) =>
+      appealRaiser(config) === 'responsiblePartyManager' &&
+      c.status === 'Completed'
+        ? 'edit'
+        : 'hidden',
     caseTypeOwner: 'read-only',
-    controls: 'hidden',
+    journeyOwner: (c, config) =>
+      appealRaiser(config) === 'journeyOwner' && c.status === 'Completed'
+        ? 'edit'
+        : 'read-only',
+    controls: 'read-only',
     none: 'hidden',
   },
-  // Issues (ADR-0024, formerly the single `remediation` key) — *capture*: failed
-  // Answers + their Issue Capture Groups/Fields (ADR-0020) + the Responsible
-  // Party selector. Reviewer-editable until the Case is reportable; observed
-  // read-only by Controls (see `questions`).
-  issues: {
-    assignedReviewer: 'edit',
-    otherReviewer: 'read-only',
-    responsibleParty: 'read-only',
+  // Appeal Review (ADR-0027) — where **Controls** resolves an open Appeal on a
+  // `Completed` Case, then (on agree) authors the case-level Amended Outcome.
+  // Controls gets `edit` only while an Appeal is open; otherwise it, the Assigned
+  // Reviewer, the Case Type Owner, the Journey Owner and the raiser's Manager
+  // observe it read-only. The Adviser and other reviewers see nothing.
+  appealReview: {
+    assignedReviewer: 'read-only',
+    otherReviewer: 'hidden',
+    responsibleParty: 'hidden',
     responsiblePartyManager: 'read-only',
     caseTypeOwner: 'read-only',
-    controls: 'read-only',
+    journeyOwner: 'read-only',
+    controls: (c) =>
+      c.status === 'Completed' && hasOpenAppeal(c) ? 'edit' : 'read-only',
     none: 'hidden',
   },
-  // Remediation (ADR-0024) — *tracking*: lists every **sent** Remediation Action;
-  // the Assigned Reviewer resolves each. The tab is hidden entirely until actions
-  // have been sent, then `edit` while `Actions In Progress` and `read-only` once
-  // `Completed`. The Responsible Party (and their Manager) never see it — they do
-  // the work off-system and report back via the Conversation (D10). Other
-  // reviewers, the Case Type Owner and Controls observe it read-only.
-  remediation: {
-    assignedReviewer: (c, config) => {
-      if (!hasSentActions(c, config)) return 'hidden';
-      return c.status === 'Actions In Progress' ? 'edit' : 'read-only';
-    },
-    otherReviewer: (c, config) =>
-      hasSentActions(c, config) ? 'read-only' : 'hidden',
+  // Amend Outcome (ADR-0026) — the case-level corrective Outcome. **Controls**
+  // edits it on a `Completed` Case; the Assigned Reviewer, Case Type Owner and
+  // Journey Owner observe it read-only. Everyone else sees nothing.
+  amendOutcome: {
+    assignedReviewer: 'read-only',
+    otherReviewer: 'hidden',
     responsibleParty: 'hidden',
     responsiblePartyManager: 'hidden',
-    caseTypeOwner: (c, config) =>
-      hasSentActions(c, config) ? 'read-only' : 'hidden',
-    controls: (c, config) =>
-      hasSentActions(c, config) ? 'read-only' : 'hidden',
-    none: 'hidden',
-  },
-  // Summary is never `edit` — only `read-only` or `hidden` (ADR-0016). It
-  // inherits the function-valued Outcome × Responsible Party cell that
-  // previously governed the removed Outcome Section: hidden from the Responsible
-  // Party (and their Manager) while In-progress, read-only once the Case is
-  // reportable. ADR-0023 widened the gate from `Completed` to `reportable`, so
-  // the Adviser can see the Summary while remediation is underway (Actions In
-  // Progress), not only after the Case finally closes.
-  summary: {
-    assignedReviewer: 'read-only',
-    otherReviewer: 'read-only',
-    responsibleParty: (c) => (isReportable(c.status) ? 'read-only' : 'hidden'),
-    responsiblePartyManager: (c) =>
-      isReportable(c.status) ? 'read-only' : 'hidden',
     caseTypeOwner: 'read-only',
-    controls: 'read-only',
-    none: 'hidden',
-  },
-  // The Appeal Section (issue #132, ADR-0011): the Responsible Party or their
-  // Manager may raise a case-level Appeal, but only against a Completed Case —
-  // hidden while In-progress. Other reviewers, the Case Type Owner and Controls
-  // observe it read-only; everyone else sees nothing.
-  //
-  // Appeal *resolution* is parked: it previously ran through the retired QA
-  // Reviewer + Answer Override machinery (ADR-0018). Under ADR-0027 the resolver
-  // is Controls via a dedicated Appeal Review tab, rebuilt in a later slice — so
-  // Controls is read-only here for now rather than a resolver.
-  appeal: {
-    assignedReviewer: 'read-only',
-    otherReviewer: 'read-only',
-    responsibleParty: (c) => (c.status === 'Completed' ? 'edit' : 'hidden'),
-    responsiblePartyManager: (c) =>
-      c.status === 'Completed' ? 'edit' : 'hidden',
-    caseTypeOwner: 'read-only',
-    controls: 'read-only',
+    journeyOwner: 'read-only',
+    controls: (c) => (c.status === 'Completed' ? 'edit' : 'hidden'),
     none: 'hidden',
   },
 };
@@ -258,6 +342,12 @@ export function resolveRoles(caseRow, userId, capabilities) {
   }
   if (capabilities.ownedCaseTypes.includes(caseRow.caseType)) {
     roles.push('caseTypeOwner');
+  }
+  // The Journey Owner (ADR-0027) owns a Case Type's end-to-end journey; the role
+  // is resolved the same way as the Case Type Owner, from the per-Case-Type
+  // `JourneyOwner - <type>` group membership (capabilities.ownedJourneyCaseTypes).
+  if (capabilities.ownedJourneyCaseTypes.includes(caseRow.caseType)) {
+    roles.push('journeyOwner');
   }
   // The Controls group (ADR-0022) is a standalone functional role held
   // regardless of whether the user also reviewed or owns the Case Type.

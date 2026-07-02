@@ -192,7 +192,7 @@ export class CRCaseReview extends ShellElement {
           'remediation',
           'summary',
           'notes',
-          'appeal',
+          'appealRequest',
         ].find((t) => opts.access[t] !== 'hidden') || '';
       this.viewModel = /** @type {any} */ ({
         loaded: { get: () => true },

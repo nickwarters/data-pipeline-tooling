@@ -152,10 +152,12 @@ test('example-review: every select/radio capture field carries a non-empty optio
 
 // --- Section config (ADR-0016) ---
 
-test('example-review: sections is a per-Section config object enabling all eight Sections', () => {
+test('example-review: sections is a per-Section config object enabling the amended Section set', () => {
   const sections = config.sections ?? {};
   assert.deepEqual(Object.keys(sections).sort(), [
-    'appeal',
+    'amendOutcome',
+    'appealRequest',
+    'appealReview',
     'conversation',
     'details',
     'issues',
@@ -164,6 +166,13 @@ test('example-review: sections is a per-Section config object enabling all eight
     'remediation',
     'summary',
   ]);
+});
+
+test('example-review: routes appeal-raising to the Journey Owner, resolved by Controls (ADR-0027)', () => {
+  assert.deepEqual(config.appeal, {
+    raisedBy: 'journeyOwner',
+    resolvedBy: 'controls',
+  });
 });
 
 test('example-review: Notes opts out of the Summary while the other block Sections opt in', () => {

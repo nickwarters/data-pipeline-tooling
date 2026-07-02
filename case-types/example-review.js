@@ -33,8 +33,13 @@ const config = {
     issues: { showInSummary: true },
     remediation: { showInSummary: true },
     summary: {},
-    appeal: {},
+    appealRequest: {},
+    appealReview: {},
+    amendOutcome: {},
   },
+  // Appeal flow (ADR-0027): this journey routes appeal-raising to the Journey
+  // Owner, resolved by Controls.
+  appeal: { raisedBy: 'journeyOwner', resolvedBy: 'controls' },
   // Configurable per-failure capture fields (ADR-0017). One shared set applies
   // to every failed Answer; captured inline as Answer.remediationDetails. Legacy:
   // superseded by captureGroups below (ADR-0020) but kept while both coexist.

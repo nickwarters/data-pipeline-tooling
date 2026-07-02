@@ -401,7 +401,7 @@ function makeTabContext(opts = {}) {
           remediation: 'hidden',
           summary: 'read-only',
           notes: 'edit',
-          appeal: 'hidden',
+          appealRequest: 'hidden',
         },
         activeTab: {
           get: () => opts.activeTab ?? 'questions',
@@ -557,7 +557,7 @@ function makeSummaryNotesAppealContext(opts = {}) {
         currentUser,
         access: {
           notes: opts.notesAccess ?? 'edit',
-          appeal: opts.appealAccess ?? 'read-only',
+          appealRequest: opts.appealAccess ?? 'read-only',
         },
         summarySections,
         saveQueue,
@@ -735,7 +735,7 @@ test('CaseReviewTabController: maps section access into tabs in the current orde
       remediation: 'read-only',
       summary: 'read-only',
       notes: 'hidden',
-      appeal: 'edit',
+      appealRequest: 'edit',
     },
   });
 
@@ -746,7 +746,7 @@ test('CaseReviewTabController: maps section access into tabs in the current orde
     { id: 'remediation', label: 'Remediation', hidden: false },
     { id: 'summary', label: 'Summary', hidden: false },
     { id: 'notes', label: 'Notes', hidden: true },
-    { id: 'appeal', label: 'Appeal', hidden: false },
+    { id: 'appealRequest', label: 'Appeal', hidden: false },
   ]);
 });
 
@@ -767,7 +767,7 @@ test('updateCaseReviewTabs: assigns selected tab and panel nodes', () => {
       'remediation:Remediation:true',
       'summary:Summary:false',
       'notes:Notes:false',
-      'appeal:Appeal:true',
+      'appealRequest:Appeal:true',
     ]
   );
   assert.deepEqual(/** @type {any} */ (tabs).panels, {
@@ -777,7 +777,7 @@ test('updateCaseReviewTabs: assigns selected tab and panel nodes', () => {
     remediation: nodes.remediation,
     summary: nodes.summary,
     notes: nodes.notes,
-    appeal: nodes.appeal,
+    appealRequest: nodes.appeal,
   });
 });
 

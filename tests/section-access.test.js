@@ -17,6 +17,9 @@ import {
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../src/sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
 /** @typedef {import('../src/services/permissions.js').Capabilities} Capabilities */
+/** @typedef {import('../src/services/section-access.js').Section} Section */
+/** @typedef {import('../src/services/section-access.js').Role} Role */
+/** @typedef {import('../src/services/section-access.js').Mode} Mode */
 
 /** @returns {CaseRow} */
 function makeCase(overrides = {}) {
@@ -81,300 +84,631 @@ function makeCaseWithActions(overrides = {}) {
   });
 }
 
+/** @returns {import('../src/sharepoint-client.js').Appeal} */
+function openAppeal() {
+  return {
+    id: 'ap1',
+    appellant: 'someone',
+    at: '2026-07-01T00:00:00Z',
+    rationale: 'wrong outcome',
+    state: 'raised',
+  };
+}
+
+/** @returns {import('../src/sharepoint-client.js').Appeal} */
+function resolvedAppeal() {
+  return { ...openAppeal(), state: 'resolved' };
+}
+
+/**
+ * Build a Capabilities object with everything off by default.
+ * @param {Partial<Capabilities>} [overrides]
+ * @returns {Capabilities}
+ */
+function caps(overrides = {}) {
+  return {
+    isReviewer: false,
+    listAccessCaseTypes: [],
+    isAdviser: false,
+    ownedCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
+    isReviewerManager: false,
+    isResponsiblePartyManager: false,
+    isMaintainer: false,
+    isVisitor: false,
+    ...overrides,
+  };
+}
+
 // --- resolveRoles ---
 
 test('resolveRoles: assigned reviewer', () => {
-  const caps = {
-    isReviewer: true,
-    ownedCaseTypes: [],
-    isAdviser: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isVisitor: false,
-  };
-  const roles = resolveRoles(makeCase(), 'user-reviewer', caps);
-  assert.deepEqual(roles.sort(), ['assignedReviewer']);
+  const roles = resolveRoles(
+    makeCase(),
+    'user-reviewer',
+    caps({ isReviewer: true })
+  );
+  assert.deepEqual(roles, ['assignedReviewer']);
 });
 
 test('resolveRoles: other reviewer (in group but not assigned)', () => {
-  const caps = {
-    isReviewer: true,
-    ownedCaseTypes: [],
-    isAdviser: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isVisitor: false,
-  };
-  const roles = resolveRoles(makeCase(), 'user-other', caps);
+  const roles = resolveRoles(
+    makeCase(),
+    'user-other',
+    caps({ isReviewer: true })
+  );
   assert.deepEqual(roles, ['otherReviewer']);
 });
 
-test('resolveRoles: responsible party', () => {
-  const caps = {
-    isReviewer: false,
-    ownedCaseTypes: [],
-    isAdviser: true,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isVisitor: false,
-  };
-  const roles = resolveRoles(makeCase(), 'user-rp', caps);
+test('resolveRoles: responsible party (the Adviser named on the Case)', () => {
+  const roles = resolveRoles(makeCase(), 'user-rp', caps({ isAdviser: true }));
   assert.deepEqual(roles, ['responsibleParty']);
 });
 
 test('resolveRoles: case type owner', () => {
-  const caps = {
-    isReviewer: false,
-    ownedCaseTypes: ['example-review'],
-    isAdviser: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isVisitor: false,
-  };
-  const roles = resolveRoles(makeCase(), 'user-owner', caps);
+  const roles = resolveRoles(
+    makeCase(),
+    'user-owner',
+    caps({ ownedCaseTypes: ['example-review'] })
+  );
   assert.deepEqual(roles, ['caseTypeOwner']);
 });
 
-test('resolveRoles: none', () => {
-  const caps = {
-    isReviewer: false,
-    ownedCaseTypes: [],
-    isAdviser: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isVisitor: false,
-  };
-  const roles = resolveRoles(makeCase(), 'stranger', caps);
+test('resolveRoles: journey owner (from ownedJourneyCaseTypes, ADR-0027)', () => {
+  const roles = resolveRoles(
+    makeCase(),
+    'user-jo',
+    caps({ ownedJourneyCaseTypes: ['example-review'] })
+  );
+  assert.deepEqual(roles, ['journeyOwner']);
+});
+
+test('resolveRoles: journey owner of a different case type does not get the role', () => {
+  const roles = resolveRoles(
+    makeCase(),
+    'user-jo',
+    caps({ ownedJourneyCaseTypes: ['other-type'] })
+  );
   assert.deepEqual(roles, ['none']);
 });
 
-test('resolveRoles: multiple roles — assigned reviewer + owner', () => {
-  const caps = {
-    isReviewer: true,
-    ownedCaseTypes: ['example-review'],
-    isAdviser: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isVisitor: false,
-  };
-  const roles = resolveRoles(makeCase(), 'user-reviewer', caps);
-  assert.deepEqual(roles.sort(), ['assignedReviewer', 'caseTypeOwner']);
+test('resolveRoles: none', () => {
+  const roles = resolveRoles(makeCase(), 'stranger', caps());
+  assert.deepEqual(roles, ['none']);
 });
 
-test('resolveRoles: other reviewer + RP (case where reviewer is also the RP for someone else? edge)', () => {
-  // userId is RP of this case AND in reviewer group but not the assigned one.
-  const caps = {
-    isReviewer: true,
-    ownedCaseTypes: [],
-    isAdviser: true,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isVisitor: false,
-  };
-  const roles = resolveRoles(makeCase(), 'user-rp', caps);
+test('resolveRoles: multiple roles — assigned reviewer + owner + journey owner', () => {
+  const roles = resolveRoles(
+    makeCase(),
+    'user-reviewer',
+    caps({
+      isReviewer: true,
+      ownedCaseTypes: ['example-review'],
+      ownedJourneyCaseTypes: ['example-review'],
+    })
+  );
+  assert.deepEqual(roles.sort(), [
+    'assignedReviewer',
+    'caseTypeOwner',
+    'journeyOwner',
+  ]);
+});
+
+test('resolveRoles: other reviewer + RP (userId is RP and in reviewer group but not assigned)', () => {
+  const roles = resolveRoles(
+    makeCase(),
+    'user-rp',
+    caps({ isReviewer: true, isAdviser: true })
+  );
   assert.deepEqual(roles.sort(), ['otherReviewer', 'responsibleParty']);
 });
 
 test('resolveRoles: owner of a different case type does not get owner role', () => {
-  const caps = {
-    isReviewer: false,
-    ownedCaseTypes: ['other-case-type'],
-    isAdviser: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isVisitor: false,
-  };
-  const roles = resolveRoles(makeCase(), 'user-x', caps);
+  const roles = resolveRoles(
+    makeCase(),
+    'user-x',
+    caps({ ownedCaseTypes: ['other-case-type'] })
+  );
   assert.deepEqual(roles, ['none']);
 });
 
-// --- Appeal Section + Responsible Party Manager role (issue #132) ---
-
 test('resolveRoles: responsible party manager (matched via the row field)', () => {
-  const caps = {
-    isReviewer: false,
-    ownedCaseTypes: [],
-    isAdviser: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: true,
-    isMaintainer: false,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isVisitor: false,
-  };
   const roles = resolveRoles(
     makeCase({ responsiblePartyManager: 'user-rpm' }),
     'user-rpm',
-    caps
+    caps({ isResponsiblePartyManager: true })
   );
   assert.deepEqual(roles, ['responsiblePartyManager']);
 });
 
 test('resolveRoles: not the case row manager → no responsiblePartyManager role', () => {
-  const caps = {
-    isReviewer: false,
-    ownedCaseTypes: [],
-    isAdviser: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: true,
-    isMaintainer: false,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isVisitor: false,
-  };
   const roles = resolveRoles(
     makeCase({ responsiblePartyManager: 'someone-else' }),
     'user-rpm',
-    caps
+    caps({ isResponsiblePartyManager: true })
   );
   assert.deepEqual(roles, ['none']);
 });
 
-test('SECTIONS includes appeal', () => {
-  assert.ok(SECTIONS.includes('appeal'));
+test('resolveRoles: Controls capability → controls role', () => {
+  const roles = resolveRoles(
+    makeCase(),
+    'user-controls',
+    caps({ isControls: true })
+  );
+  assert.deepEqual(roles, ['controls']);
 });
 
-test('evaluateAccess: appeal — RP and RP-Manager edit only once Completed, else hidden', () => {
-  const cfg = makeConfig();
-  for (const role of /** @type {const} */ ([
-    'responsibleParty',
-    'responsiblePartyManager',
-  ])) {
-    assert.equal(
-      evaluateAccess(
-        'appeal',
-        [role],
-        makeCase({ status: 'In-progress' }),
-        cfg
-      ),
-      'hidden',
-      `${role} cannot appeal an In-progress Case`
-    );
-    assert.equal(
-      evaluateAccess('appeal', [role], makeCase({ status: 'Completed' }), cfg),
-      'edit',
-      `${role} can raise an Appeal on a Completed Case`
-    );
+test('resolveRoles: assigned reviewer who is also Controls gets both roles', () => {
+  const roles = resolveRoles(
+    makeCase(),
+    'user-reviewer',
+    caps({ isReviewer: true, isControls: true })
+  );
+  assert.deepEqual(roles.sort(), ['assignedReviewer', 'controls']);
+});
+
+// --- The Section set (ADR-0011 amend) ---
+
+test('SECTIONS is the amended ten-Section set (appeal split into request/review + amendOutcome)', () => {
+  assert.deepEqual(
+    [...SECTIONS],
+    [
+      'details',
+      'questions',
+      'issues',
+      'summary',
+      'remediation',
+      'notes',
+      'conversation',
+      'appealRequest',
+      'appealReview',
+      'amendOutcome',
+    ]
+  );
+  // The pre-amend keys are gone.
+  const asStrings = /** @type {string[]} */ (SECTIONS);
+  assert.ok(!asStrings.includes('appeal'));
+  assert.ok(!asStrings.includes('outcome'));
+});
+
+// --- Full matrix coverage: every ADR grid cell across representative states ---
+
+/**
+ * Assert `evaluateAccess` for every (section, role) pair in an expected grid.
+ * @param {Partial<Record<Section, Partial<Record<Role, Mode>>>>} grid
+ * @param {CaseRow} caseRow
+ * @param {CaseTypeConfig} config
+ */
+function assertGrid(grid, caseRow, config) {
+  for (const section of /** @type {Section[]} */ (Object.keys(grid))) {
+    const row = grid[section];
+    if (!row) continue;
+    for (const role of /** @type {Role[]} */ (Object.keys(row))) {
+      assert.equal(
+        evaluateAccess(section, [role], caseRow, config),
+        row[role],
+        `${section} × ${role}`
+      );
+    }
   }
+}
+
+test('matrix — In-progress Case (no actions, default appeal config → responsiblePartyManager raiser)', () => {
+  const cfg = makeConfig();
+  const c = makeCase({ status: 'In-progress' });
+  assertGrid(
+    {
+      details: {
+        assignedReviewer: 'read-only',
+        otherReviewer: 'read-only',
+        responsibleParty: 'hidden',
+        responsiblePartyManager: 'hidden',
+        caseTypeOwner: 'read-only',
+        journeyOwner: 'read-only',
+        controls: 'read-only',
+        none: 'hidden',
+      },
+      questions: {
+        assignedReviewer: 'edit',
+        otherReviewer: 'read-only',
+        responsibleParty: 'hidden',
+        responsiblePartyManager: 'hidden',
+        caseTypeOwner: 'read-only',
+        journeyOwner: 'read-only',
+        controls: 'read-only',
+        none: 'hidden',
+      },
+      issues: {
+        assignedReviewer: 'edit',
+        otherReviewer: 'read-only',
+        responsibleParty: 'hidden',
+        responsiblePartyManager: 'hidden',
+        caseTypeOwner: 'read-only',
+        journeyOwner: 'read-only',
+        controls: 'read-only',
+        none: 'hidden',
+      },
+      summary: {
+        assignedReviewer: 'read-only',
+        otherReviewer: 'read-only',
+        responsibleParty: 'hidden',
+        responsiblePartyManager: 'hidden',
+        caseTypeOwner: 'read-only',
+        journeyOwner: 'read-only',
+        controls: 'read-only',
+        none: 'hidden',
+      },
+      remediation: {
+        assignedReviewer: 'hidden',
+        otherReviewer: 'hidden',
+        responsibleParty: 'hidden',
+        responsiblePartyManager: 'hidden',
+        caseTypeOwner: 'hidden',
+        journeyOwner: 'hidden',
+        controls: 'hidden',
+        none: 'hidden',
+      },
+      notes: {
+        assignedReviewer: 'edit',
+        otherReviewer: 'read-only',
+        responsibleParty: 'hidden',
+        responsiblePartyManager: 'hidden',
+        caseTypeOwner: 'read-only',
+        journeyOwner: 'hidden',
+        controls: 'hidden',
+        none: 'hidden',
+      },
+      conversation: {
+        assignedReviewer: 'edit',
+        otherReviewer: 'read-only',
+        responsibleParty: 'edit',
+        responsiblePartyManager: 'hidden',
+        caseTypeOwner: 'read-only',
+        journeyOwner: 'read-only',
+        controls: 'read-only',
+        none: 'hidden',
+      },
+      appealRequest: {
+        assignedReviewer: 'read-only',
+        otherReviewer: 'hidden',
+        responsibleParty: 'hidden',
+        responsiblePartyManager: 'hidden',
+        caseTypeOwner: 'read-only',
+        journeyOwner: 'read-only',
+        controls: 'read-only',
+        none: 'hidden',
+      },
+      appealReview: {
+        assignedReviewer: 'read-only',
+        otherReviewer: 'hidden',
+        responsibleParty: 'hidden',
+        responsiblePartyManager: 'read-only',
+        caseTypeOwner: 'read-only',
+        journeyOwner: 'read-only',
+        controls: 'read-only',
+        none: 'hidden',
+      },
+      amendOutcome: {
+        assignedReviewer: 'read-only',
+        otherReviewer: 'hidden',
+        responsibleParty: 'hidden',
+        responsiblePartyManager: 'hidden',
+        caseTypeOwner: 'read-only',
+        journeyOwner: 'read-only',
+        controls: 'hidden',
+        none: 'hidden',
+      },
+    },
+    c,
+    cfg
+  );
 });
 
-test('evaluateAccess: appeal — reviewers and owner are read-only; none is hidden', () => {
+test('matrix — Actions In Progress Case with sent actions (reportable freeze)', () => {
+  const cfg = makeActionsConfig();
+  const c = makeCaseWithActions({ status: 'Actions In Progress' });
+  assertGrid(
+    {
+      // Reviewer-edit Sections have frozen to read-only at the reportable milestone.
+      questions: {
+        assignedReviewer: 'read-only',
+        caseTypeOwner: 'read-only',
+        journeyOwner: 'read-only',
+        controls: 'read-only',
+      },
+      issues: {
+        assignedReviewer: 'read-only',
+        controls: 'read-only',
+      },
+      // The Adviser can now see the Summary (reportable); their Manager cannot yet
+      // (Completed-gated).
+      summary: {
+        responsibleParty: 'read-only',
+        responsiblePartyManager: 'hidden',
+      },
+      // Remediation tracking is now visible: reviewer edits, everyone else observes.
+      remediation: {
+        assignedReviewer: 'edit',
+        otherReviewer: 'read-only',
+        responsibleParty: 'hidden',
+        responsiblePartyManager: 'hidden',
+        caseTypeOwner: 'read-only',
+        journeyOwner: 'read-only',
+        controls: 'read-only',
+        none: 'hidden',
+      },
+      // Notes stay editable for the reviewer until the Case is Completed.
+      notes: {
+        assignedReviewer: 'edit',
+      },
+      // Appeal/amend Sections remain Completed-only.
+      appealRequest: {
+        responsiblePartyManager: 'hidden',
+        journeyOwner: 'read-only',
+      },
+      appealReview: { controls: 'read-only' },
+      amendOutcome: { controls: 'hidden' },
+    },
+    c,
+    cfg
+  );
+});
+
+test('matrix — Completed Case, journeyOwner raiser, no open Appeal', () => {
+  const cfg = makeConfig({
+    appeal: { raisedBy: 'journeyOwner', resolvedBy: 'controls' },
+  });
+  const c = makeCase({ status: 'Completed' });
+  assertGrid(
+    {
+      // Notes freeze to read-only at Completed.
+      notes: {
+        assignedReviewer: 'read-only',
+        otherReviewer: 'read-only',
+        caseTypeOwner: 'read-only',
+        journeyOwner: 'hidden',
+        controls: 'hidden',
+      },
+      // Both the Adviser and their Manager can now read the Summary.
+      summary: {
+        responsibleParty: 'read-only',
+        responsiblePartyManager: 'read-only',
+      },
+      // The Journey Owner is the configured raiser → edit on Appeal Request.
+      appealRequest: {
+        assignedReviewer: 'read-only',
+        otherReviewer: 'hidden',
+        responsibleParty: 'hidden',
+        responsiblePartyManager: 'hidden',
+        caseTypeOwner: 'read-only',
+        journeyOwner: 'edit',
+        controls: 'read-only',
+        none: 'hidden',
+      },
+      // No open Appeal → Controls observes Appeal Review read-only.
+      appealReview: {
+        controls: 'read-only',
+      },
+      // Amend Outcome is Controls-edit on a Completed Case.
+      amendOutcome: {
+        assignedReviewer: 'read-only',
+        otherReviewer: 'hidden',
+        responsibleParty: 'hidden',
+        responsiblePartyManager: 'hidden',
+        caseTypeOwner: 'read-only',
+        journeyOwner: 'read-only',
+        controls: 'edit',
+        none: 'hidden',
+      },
+    },
+    c,
+    cfg
+  );
+});
+
+test('matrix — Completed Case, responsiblePartyManager raiser, open Appeal', () => {
+  const cfg = makeConfig({
+    appeal: { raisedBy: 'responsiblePartyManager', resolvedBy: 'controls' },
+  });
+  const c = makeCase({ status: 'Completed', appeals: [openAppeal()] });
+  assertGrid(
+    {
+      // The RP Manager is the configured raiser → edit on Appeal Request; a
+      // non-raiser Journey Owner observes read-only.
+      appealRequest: {
+        responsiblePartyManager: 'edit',
+        journeyOwner: 'read-only',
+      },
+      // Open Appeal + Completed → Controls resolves (edit).
+      appealReview: {
+        assignedReviewer: 'read-only',
+        otherReviewer: 'hidden',
+        responsibleParty: 'hidden',
+        responsiblePartyManager: 'read-only',
+        caseTypeOwner: 'read-only',
+        journeyOwner: 'read-only',
+        controls: 'edit',
+        none: 'hidden',
+      },
+    },
+    c,
+    cfg
+  );
+});
+
+// --- Appeal-config-conditional and status-conditional edge cells ---
+
+test('appealRequest: default config (no appeal block) routes raising to the RP Manager', () => {
+  // Exercises the `appealRaiser` default (`?? responsiblePartyManager`).
   const cfg = makeConfig();
   const c = makeCase({ status: 'Completed' });
   assert.equal(
-    evaluateAccess('appeal', ['assignedReviewer'], c, cfg),
-    'read-only'
+    evaluateAccess('appealRequest', ['responsiblePartyManager'], c, cfg),
+    'edit'
   );
   assert.equal(
-    evaluateAccess('appeal', ['otherReviewer'], c, cfg),
+    evaluateAccess('appealRequest', ['journeyOwner'], c, cfg),
     'read-only'
   );
-  assert.equal(
-    evaluateAccess('appeal', ['caseTypeOwner'], c, cfg),
-    'read-only'
-  );
-  assert.equal(evaluateAccess('appeal', ['none'], c, cfg), 'hidden');
 });
 
-test('evaluateAccess: appeal never resolves to edit for reviewers/owner even when Completed', () => {
-  const cfg = makeConfig();
-  const c = makeCase({ status: 'Completed' });
-  for (const role of /** @type {const} */ ([
-    'assignedReviewer',
-    'otherReviewer',
-    'caseTypeOwner',
-  ])) {
-    assert.notEqual(
-      evaluateAccess('appeal', [role], c, cfg),
-      'edit',
-      `appeal must never be edit for ${role}`
-    );
-  }
-});
-
-test('evaluateAccess: responsiblePartyManager — read-only on details/questions/remediation, hidden on conversation/notes', () => {
-  const cfg = makeConfig();
-  const c = makeCase({ status: 'Completed' });
+test('appealRequest: raiser gets edit only once Completed, hidden/read-only before', () => {
+  const rpmCfg = makeConfig({
+    appeal: { raisedBy: 'responsiblePartyManager', resolvedBy: 'controls' },
+  });
   assert.equal(
-    evaluateAccess('details', ['responsiblePartyManager'], c, cfg),
-    'read-only'
-  );
-  assert.equal(
-    evaluateAccess('questions', ['responsiblePartyManager'], c, cfg),
-    'read-only'
-  );
-  assert.equal(
-    evaluateAccess('issues', ['responsiblePartyManager'], c, cfg),
-    'read-only'
-  );
-  assert.equal(
-    evaluateAccess('conversation', ['responsiblePartyManager'], c, cfg),
+    evaluateAccess(
+      'appealRequest',
+      ['responsiblePartyManager'],
+      makeCase({ status: 'Actions In Progress' }),
+      rpmCfg
+    ),
     'hidden'
   );
+  const joCfg = makeConfig({
+    appeal: { raisedBy: 'journeyOwner', resolvedBy: 'controls' },
+  });
   assert.equal(
-    evaluateAccess('notes', ['responsiblePartyManager'], c, cfg),
-    'hidden'
+    evaluateAccess(
+      'appealRequest',
+      ['journeyOwner'],
+      makeCase({ status: 'Actions In Progress' }),
+      joCfg
+    ),
+    'read-only'
   );
 });
 
-test('evaluateAccess: responsiblePartyManager summary — hidden while in-progress, read-only once reportable (ADR-0023)', () => {
+test('appealReview: Controls edits only while an Appeal is open on a Completed Case', () => {
+  const cfg = makeConfig();
+  // Completed, appeals all resolved → read-only (no open appeal).
+  assert.equal(
+    evaluateAccess(
+      'appealReview',
+      ['controls'],
+      makeCase({ status: 'Completed', appeals: [resolvedAppeal()] }),
+      cfg
+    ),
+    'read-only'
+  );
+  // Completed, open appeal → edit.
+  assert.equal(
+    evaluateAccess(
+      'appealReview',
+      ['controls'],
+      makeCase({ status: 'Completed', appeals: [openAppeal()] }),
+      cfg
+    ),
+    'edit'
+  );
+  // Not Completed → read-only even with an open appeal.
+  assert.equal(
+    evaluateAccess(
+      'appealReview',
+      ['controls'],
+      makeCase({ status: 'Actions In Progress', appeals: [openAppeal()] }),
+      cfg
+    ),
+    'read-only'
+  );
+});
+
+test('amendOutcome: Controls edits on Completed, hidden otherwise', () => {
   const cfg = makeConfig();
   assert.equal(
     evaluateAccess(
-      'summary',
-      ['responsiblePartyManager'],
+      'amendOutcome',
+      ['controls'],
+      makeCase({ status: 'Completed' }),
+      cfg
+    ),
+    'edit'
+  );
+  assert.equal(
+    evaluateAccess(
+      'amendOutcome',
+      ['controls'],
       makeCase({ status: 'In-progress' }),
       cfg
     ),
     'hidden'
   );
+});
+
+test('summary: RP reportable-gated, RP Manager Completed-gated (ADR-0011 amend / ADR-0023)', () => {
+  const cfg = makeConfig();
+  // Actions In Progress: Adviser reads it; their Manager does not yet.
+  const actions = makeCase({ status: 'Actions In Progress' });
   assert.equal(
-    evaluateAccess(
-      'summary',
-      ['responsiblePartyManager'],
-      makeCase({ status: 'Actions In Progress' }),
-      cfg
-    ),
+    evaluateAccess('summary', ['responsibleParty'], actions, cfg),
     'read-only'
   );
   assert.equal(
+    evaluateAccess('summary', ['responsiblePartyManager'], actions, cfg),
+    'hidden'
+  );
+  // Completed: both read it.
+  const completed = makeCase({ status: 'Completed' });
+  assert.equal(
+    evaluateAccess('summary', ['responsibleParty'], completed, cfg),
+    'read-only'
+  );
+  assert.equal(
+    evaluateAccess('summary', ['responsiblePartyManager'], completed, cfg),
+    'read-only'
+  );
+});
+
+test('questions/issues: reviewer edits until reportable, then read-only', () => {
+  const cfg = makeConfig();
+  for (const section of /** @type {const} */ (['questions', 'issues'])) {
+    assert.equal(
+      evaluateAccess(
+        section,
+        ['assignedReviewer'],
+        makeCase({ status: 'In-progress' }),
+        cfg
+      ),
+      'edit'
+    );
+    assert.equal(
+      evaluateAccess(
+        section,
+        ['assignedReviewer'],
+        makeCase({ status: 'Actions In Progress' }),
+        cfg
+      ),
+      'read-only'
+    );
+    assert.equal(
+      evaluateAccess(
+        section,
+        ['assignedReviewer'],
+        makeCase({ status: 'Completed' }),
+        cfg
+      ),
+      'read-only'
+    );
+  }
+});
+
+test('notes: reviewer edits until Completed, then read-only', () => {
+  const cfg = makeConfig();
+  assert.equal(
     evaluateAccess(
-      'summary',
-      ['responsiblePartyManager'],
+      'notes',
+      ['assignedReviewer'],
+      makeCase({ status: 'Actions In Progress' }),
+      cfg
+    ),
+    'edit'
+  );
+  assert.equal(
+    evaluateAccess(
+      'notes',
+      ['assignedReviewer'],
       makeCase({ status: 'Completed' }),
       cfg
     ),
@@ -382,42 +716,9 @@ test('evaluateAccess: responsiblePartyManager summary — hidden while in-progre
   );
 });
 
-// --- evaluateAccess: default matrix ---
+// --- Remediation tracking visibility (ADR-0024) ---
 
-test('evaluateAccess: assigned reviewer gets edit on all editable sections', () => {
-  const cfg = makeConfig();
-  const c = makeCase();
-  assert.equal(
-    evaluateAccess('questions', ['assignedReviewer'], c, cfg),
-    'edit'
-  );
-  assert.equal(
-    evaluateAccess('conversation', ['assignedReviewer'], c, cfg),
-    'edit'
-  );
-  assert.equal(evaluateAccess('notes', ['assignedReviewer'], c, cfg), 'edit');
-  assert.equal(evaluateAccess('issues', ['assignedReviewer'], c, cfg), 'edit');
-  assert.equal(
-    evaluateAccess('summary', ['assignedReviewer'], c, cfg),
-    'read-only'
-  );
-});
-
-test('evaluateAccess: other reviewer is read-only everywhere', () => {
-  // The Remediation tracking Section is hidden until actions have been sent
-  // (ADR-0024), so use a config+Case that carries one to exercise its read-only.
-  const cfg = makeActionsConfig();
-  const c = makeCaseWithActions();
-  for (const s of SECTIONS) {
-    assert.equal(
-      evaluateAccess(s, ['otherReviewer'], c, cfg),
-      'read-only',
-      `section ${s}`
-    );
-  }
-});
-
-test('evaluateAccess: Remediation tracking Section is hidden for every viewer until actions are sent', () => {
+test('remediation: hidden for every viewer until actions are sent', () => {
   const cfg = makeActionsConfig();
   const c = makeCase();
   for (const role of /** @type {const} */ ([
@@ -426,6 +727,7 @@ test('evaluateAccess: Remediation tracking Section is hidden for every viewer un
     'responsibleParty',
     'responsiblePartyManager',
     'caseTypeOwner',
+    'journeyOwner',
     'controls',
     'none',
   ])) {
@@ -437,7 +739,7 @@ test('evaluateAccess: Remediation tracking Section is hidden for every viewer un
   }
 });
 
-test('evaluateAccess: Remediation tracking — assigned reviewer edits while Actions In Progress, read-only once Completed', () => {
+test('remediation: reviewer edits while Actions In Progress, read-only once Completed', () => {
   const cfg = makeActionsConfig();
   assert.equal(
     evaluateAccess(
@@ -459,186 +761,94 @@ test('evaluateAccess: Remediation tracking — assigned reviewer edits while Act
   );
 });
 
-test('evaluateAccess: Remediation tracking is hidden from the Responsible Party and their Manager (D10)', () => {
+test('remediation: observers see read-only once actions are sent', () => {
   const cfg = makeActionsConfig();
   const c = makeCaseWithActions({ status: 'Actions In Progress' });
-  assert.equal(
-    evaluateAccess('remediation', ['responsibleParty'], c, cfg),
-    'hidden'
-  );
-  assert.equal(
-    evaluateAccess('remediation', ['responsiblePartyManager'], c, cfg),
-    'hidden'
-  );
-});
-
-test('evaluateAccess: responsible party — questions R, conversation E, notes H, remediation R', () => {
-  const cfg = makeConfig();
-  const c = makeCase();
-  assert.equal(
-    evaluateAccess('questions', ['responsibleParty'], c, cfg),
-    'read-only'
-  );
-  assert.equal(
-    evaluateAccess('conversation', ['responsibleParty'], c, cfg),
-    'edit'
-  );
-  assert.equal(evaluateAccess('notes', ['responsibleParty'], c, cfg), 'hidden');
-  assert.equal(
-    evaluateAccess('issues', ['responsibleParty'], c, cfg),
-    'read-only'
-  );
-});
-
-test('evaluateAccess: RP summary — hidden while in-progress, read-only once reportable (ADR-0023)', () => {
-  const cfg = makeConfig();
-  assert.equal(
-    evaluateAccess(
-      'summary',
-      ['responsibleParty'],
-      makeCase({ status: 'In-progress' }),
-      cfg
-    ),
-    'hidden'
-  );
-  assert.equal(
-    evaluateAccess(
-      'summary',
-      ['responsibleParty'],
-      makeCase({ status: 'Actions In Progress' }),
-      cfg
-    ),
-    'read-only',
-    'the Adviser can see the Summary while remediation is underway'
-  );
-  assert.equal(
-    evaluateAccess(
-      'summary',
-      ['responsibleParty'],
-      makeCase({ status: 'Completed' }),
-      cfg
-    ),
-    'read-only'
-  );
-});
-
-test('SECTIONS includes summary and no longer includes outcome', () => {
-  assert.ok(SECTIONS.includes('summary'));
-  assert.ok(!(/** @type {string[]} */ (SECTIONS).includes('outcome')));
-});
-
-test('evaluateAccess: summary never resolves to edit for any role', () => {
-  const cfg = makeConfig();
-  /** @type {import('../src/services/section-access.js').Role[]} */
-  const roles = [
-    'assignedReviewer',
+  for (const role of /** @type {const} */ ([
     'otherReviewer',
-    'responsibleParty',
     'caseTypeOwner',
-    'none',
-  ];
-  for (const role of roles) {
-    for (const status of /** @type {const} */ (['In-progress', 'Completed'])) {
-      assert.notEqual(
-        evaluateAccess('summary', [role], makeCase({ status }), cfg),
-        'edit',
-        `summary must never be edit for ${role} (${status})`
-      );
-    }
-  }
-});
-
-test('evaluateAccess: case type owner read-only across the board', () => {
-  const cfg = makeActionsConfig();
-  const c = makeCaseWithActions();
-  for (const s of SECTIONS) {
+    'journeyOwner',
+    'controls',
+  ])) {
     assert.equal(
-      evaluateAccess(s, ['caseTypeOwner'], c, cfg),
+      evaluateAccess('remediation', [role], c, cfg),
       'read-only',
-      `section ${s}`
+      role
     );
   }
 });
 
-test('evaluateAccess: none role → hidden everywhere', () => {
+// --- Acceptance statements (issue #234) ---
+
+test('acceptance: the Adviser (Responsible Party) sees only Summary + Conversation', () => {
   const cfg = makeConfig();
-  const c = makeCase();
-  for (const s of SECTIONS) {
-    assert.equal(evaluateAccess(s, ['none'], c, cfg), 'hidden', `section ${s}`);
-  }
+  const c = makeCase({ status: 'Actions In Progress' });
+  const visible = SECTIONS.filter(
+    (s) => evaluateAccess(s, ['responsibleParty'], c, cfg) !== 'hidden'
+  );
+  assert.deepEqual(visible.sort(), ['conversation', 'summary']);
 });
 
-// --- Most-permissive wins ---
-
-test('evaluateAccess: most-permissive wins (RP + assignedReviewer → edit on notes)', () => {
+test('acceptance: Controls is the role that gets Appeal Review + Amend Outcome (edit)', () => {
   const cfg = makeConfig();
-  const c = makeCase();
+  const c = makeCase({ status: 'Completed', appeals: [openAppeal()] });
+  assert.equal(evaluateAccess('appealReview', ['controls'], c, cfg), 'edit');
+  assert.equal(evaluateAccess('amendOutcome', ['controls'], c, cfg), 'edit');
+});
+
+// --- Most-permissive wins across a viewer's roles ---
+
+test('most-permissive: RP + assignedReviewer → edit on notes', () => {
+  const cfg = makeConfig();
   assert.equal(
-    evaluateAccess('notes', ['responsibleParty', 'assignedReviewer'], c, cfg),
+    evaluateAccess(
+      'notes',
+      ['responsibleParty', 'assignedReviewer'],
+      makeCase(),
+      cfg
+    ),
     'edit'
   );
 });
 
-test('evaluateAccess: most-permissive wins (otherReviewer + RP → conversation edit)', () => {
+test('most-permissive: otherReviewer + RP → conversation edit', () => {
   const cfg = makeConfig();
-  const c = makeCase();
   assert.equal(
     evaluateAccess(
       'conversation',
       ['otherReviewer', 'responsibleParty'],
-      c,
+      makeCase(),
       cfg
     ),
     'edit'
   );
 });
 
-test('evaluateAccess: most-permissive wins (otherReviewer + RP → notes read-only beats hidden)', () => {
+test('most-permissive: Controls user who is also the Assigned Reviewer still edits questions', () => {
   const cfg = makeConfig();
-  const c = makeCase();
+  const c = makeCase({ status: 'In-progress' });
   assert.equal(
-    evaluateAccess('notes', ['otherReviewer', 'responsibleParty'], c, cfg),
+    evaluateAccess('questions', ['controls', 'assignedReviewer'], c, cfg),
+    'edit'
+  );
+  // Two read-only roles stay read-only.
+  assert.equal(
+    evaluateAccess('questions', ['controls', 'otherReviewer'], c, cfg),
     'read-only'
   );
 });
 
-// --- Case Details: read-only for every real role, never hidden per-role ---
+// --- none role ---
 
-test('SECTIONS includes details', () => {
-  assert.ok(SECTIONS.includes('details'));
-});
-
-test('evaluateAccess: details is read-only for every real role and never hidden', () => {
-  const cfg = makeConfig();
-  /** @type {import('../src/services/section-access.js').Role[]} */
-  const realRoles = [
-    'assignedReviewer',
-    'otherReviewer',
-    'responsibleParty',
-    'caseTypeOwner',
-  ];
-  for (const role of realRoles) {
-    assert.equal(
-      evaluateAccess(
-        'details',
-        [role],
-        makeCase({ status: 'In-progress' }),
-        cfg
-      ),
-      'read-only',
-      `role ${role} in-progress`
-    );
-    assert.equal(
-      evaluateAccess('details', [role], makeCase({ status: 'Completed' }), cfg),
-      'read-only',
-      `role ${role} completed`
-    );
+test('none role → hidden everywhere', () => {
+  const cfg = makeActionsConfig();
+  const c = makeCaseWithActions({
+    status: 'Completed',
+    appeals: [openAppeal()],
+  });
+  for (const s of SECTIONS) {
+    assert.equal(evaluateAccess(s, ['none'], c, cfg), 'hidden', `section ${s}`);
   }
-});
-
-test('evaluateAccess: details is hidden for the none role', () => {
-  const cfg = makeConfig();
-  assert.equal(evaluateAccess('details', ['none'], makeCase(), cfg), 'hidden');
 });
 
 // --- Case Type opt-out (per-Section config object, ADR-0016) ---
@@ -659,24 +869,82 @@ test('evaluateAccess: section omitted from the sections config object → hidden
   );
 });
 
-test('evaluateAccess: a section present in the config object (membership) keeps its role-based mode', () => {
+test('evaluateAccess: a section present in the config object keeps its role-based mode', () => {
   const cfg = makeConfig({ sections: { notes: { showInSummary: true } } });
-  const c = makeCase();
-  assert.equal(evaluateAccess('notes', ['assignedReviewer'], c, cfg), 'edit');
+  assert.equal(
+    evaluateAccess('notes', ['assignedReviewer'], makeCase(), cfg),
+    'edit'
+  );
 });
 
 test('evaluateAccess: sections undefined → defaults to all enabled', () => {
   const cfg = makeConfig();
+  assert.equal(
+    evaluateAccess('conversation', ['assignedReviewer'], makeCase(), cfg),
+    'edit'
+  );
+});
+
+test('evaluateAccess: empty sections object → all hidden', () => {
+  const cfg = makeConfig({ sections: {} });
   const c = makeCase();
+  for (const s of SECTIONS) {
+    assert.equal(
+      evaluateAccess(s, ['assignedReviewer'], c, cfg),
+      'hidden',
+      `section ${s}`
+    );
+  }
+});
+
+// --- Conversation allowMessagesWhen ---
+
+test('evaluateAccess: conversation allowMessagesWhen restricts to read-only for unlisted statuses', () => {
+  const cfg = makeConfig({
+    sections: { conversation: { allowMessagesWhen: ['Actions In Progress'] } },
+  });
+  const cInProgress = makeCase({ status: 'In-progress' });
+  const cActions = makeCase({ status: 'Actions In Progress' });
+  const cCompleted = makeCase({ status: 'Completed' });
+
+  for (const role of /** @type {const} */ ([
+    'assignedReviewer',
+    'responsibleParty',
+  ])) {
+    assert.equal(
+      evaluateAccess('conversation', [role], cInProgress, cfg),
+      'read-only',
+      role
+    );
+    assert.equal(
+      evaluateAccess('conversation', [role], cActions, cfg),
+      'edit',
+      role
+    );
+    assert.equal(
+      evaluateAccess('conversation', [role], cCompleted, cfg),
+      'read-only',
+      role
+    );
+  }
+});
+
+test('evaluateAccess: conversation without allowMessagesWhen defaults to edit', () => {
+  const cfg = makeConfig({ sections: { conversation: {} } });
+  const c = makeCase({ status: 'In-progress' });
   assert.equal(
     evaluateAccess('conversation', ['assignedReviewer'], c, cfg),
+    'edit'
+  );
+  assert.equal(
+    evaluateAccess('conversation', ['responsibleParty'], c, cfg),
     'edit'
   );
 });
 
 // --- showInSummary (ADR-0016) ---
 
-test('SUMMARY_SECTIONS lists the Sections that can appear as Summary blocks (not conversation/summary)', () => {
+test('SUMMARY_SECTIONS lists the Sections that can appear as Summary blocks', () => {
   assert.deepEqual(
     [...SUMMARY_SECTIONS],
     ['details', 'questions', 'issues', 'remediation', 'notes']
@@ -707,180 +975,5 @@ test('showInSummary: a Section absent from the config object is never in Summary
   const cfg = makeConfig({ sections: { questions: {} } });
   assert.equal(showInSummary('details', cfg), false);
   assert.equal(showInSummary('notes', cfg), false);
-  // present with no explicit flag → default (questions → true)
   assert.equal(showInSummary('questions', cfg), true);
-});
-
-test('evaluateAccess: empty sections object → all hidden', () => {
-  const cfg = makeConfig({ sections: {} });
-  const c = makeCase();
-  for (const s of SECTIONS) {
-    assert.equal(
-      evaluateAccess(s, ['assignedReviewer'], c, cfg),
-      'hidden',
-      `section ${s}`
-    );
-  }
-});
-
-// --- Controls role (ADR-0022; QA Check + Answer Override retired, ADR-0026) ---
-
-/** @returns {Capabilities} */
-function controlsCaps(extra = {}) {
-  return {
-    isReviewer: false,
-    ownedCaseTypes: [],
-    isAdviser: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: true,
-    isVisitor: false,
-    ...extra,
-  };
-}
-
-test('resolveRoles: Controls capability → controls role', () => {
-  const roles = resolveRoles(makeCase(), 'user-controls', controlsCaps());
-  assert.deepEqual(roles, ['controls']);
-});
-
-test('resolveRoles: assigned reviewer who is also Controls gets both roles', () => {
-  const roles = resolveRoles(
-    makeCase(),
-    'user-reviewer',
-    controlsCaps({ isReviewer: true })
-  );
-  assert.deepEqual(roles.sort(), ['assignedReviewer', 'controls']);
-});
-
-test('evaluateAccess: Controls observe questions/issues read-only on a Completed Case (no more override)', () => {
-  const cfg = makeConfig();
-  const c = makeCase({ status: 'Completed' });
-  assert.equal(evaluateAccess('questions', ['controls'], c, cfg), 'read-only');
-  assert.equal(evaluateAccess('issues', ['controls'], c, cfg), 'read-only');
-});
-
-test('evaluateAccess: Controls observe questions/issues read-only while In-progress too', () => {
-  const cfg = makeConfig();
-  const c = makeCase({ status: 'In-progress' });
-  assert.equal(evaluateAccess('questions', ['controls'], c, cfg), 'read-only');
-  assert.equal(evaluateAccess('issues', ['controls'], c, cfg), 'read-only');
-});
-
-test('evaluateAccess: Controls observe the Remediation tracking Section read-only once actions are sent', () => {
-  const cfg = makeActionsConfig();
-  const c = makeCaseWithActions({ status: 'Actions In Progress' });
-  assert.equal(
-    evaluateAccess('remediation', ['controls'], c, cfg),
-    'read-only'
-  );
-});
-
-test('evaluateAccess: Controls observe details/summary read-only, conversation/notes hidden', () => {
-  const cfg = makeConfig();
-  const c = makeCase({ status: 'Completed' });
-  assert.equal(evaluateAccess('details', ['controls'], c, cfg), 'read-only');
-  assert.equal(evaluateAccess('summary', ['controls'], c, cfg), 'read-only');
-  assert.equal(evaluateAccess('conversation', ['controls'], c, cfg), 'hidden');
-  assert.equal(evaluateAccess('notes', ['controls'], c, cfg), 'hidden');
-});
-
-test('evaluateAccess: appeal is read-only for Controls (resolution parked, ADR-0026/ADR-0027)', () => {
-  const cfg = makeConfig();
-  assert.equal(
-    evaluateAccess(
-      'appeal',
-      ['controls'],
-      makeCase({ status: 'Completed' }),
-      cfg
-    ),
-    'read-only'
-  );
-  assert.equal(
-    evaluateAccess(
-      'appeal',
-      ['controls'],
-      makeCase({ status: 'In-progress' }),
-      cfg
-    ),
-    'read-only'
-  );
-});
-
-test('evaluateAccess: edit still wins when a Controls user is also the Assigned Reviewer', () => {
-  const cfg = makeConfig();
-  const c = makeCase({ status: 'Completed' });
-  assert.equal(
-    evaluateAccess('questions', ['controls', 'assignedReviewer'], c, cfg),
-    'edit'
-  );
-  // Controls is read-only; a plain other-reviewer is also read-only.
-  assert.equal(
-    evaluateAccess('questions', ['controls', 'otherReviewer'], c, cfg),
-    'read-only'
-  );
-});
-
-// --- Conversation allowMessagesWhen ---
-
-test('evaluateAccess: conversation allowMessagesWhen restricts access to read-only for unlisted statuses', () => {
-  const cfg = makeConfig({
-    sections: {
-      conversation: { allowMessagesWhen: ['Actions In Progress'] },
-    },
-  });
-
-  const cInProgress = makeCase({ status: 'In-progress' });
-  const cActions = makeCase({ status: 'Actions In Progress' });
-  const cCompleted = makeCase({ status: 'Completed' });
-
-  // assignedReviewer
-  assert.equal(
-    evaluateAccess('conversation', ['assignedReviewer'], cInProgress, cfg),
-    'read-only'
-  );
-  assert.equal(
-    evaluateAccess('conversation', ['assignedReviewer'], cActions, cfg),
-    'edit'
-  );
-  assert.equal(
-    evaluateAccess('conversation', ['assignedReviewer'], cCompleted, cfg),
-    'read-only'
-  );
-
-  // responsibleParty
-  assert.equal(
-    evaluateAccess('conversation', ['responsibleParty'], cInProgress, cfg),
-    'read-only'
-  );
-  assert.equal(
-    evaluateAccess('conversation', ['responsibleParty'], cActions, cfg),
-    'edit'
-  );
-  assert.equal(
-    evaluateAccess('conversation', ['responsibleParty'], cCompleted, cfg),
-    'read-only'
-  );
-});
-
-test('evaluateAccess: conversation without allowMessagesWhen defaults to edit', () => {
-  const cfg = makeConfig({
-    sections: {
-      conversation: {},
-    },
-  });
-
-  const cInProgress = makeCase({ status: 'In-progress' });
-
-  assert.equal(
-    evaluateAccess('conversation', ['assignedReviewer'], cInProgress, cfg),
-    'edit'
-  );
-  assert.equal(
-    evaluateAccess('conversation', ['responsibleParty'], cInProgress, cfg),
-    'edit'
-  );
 });

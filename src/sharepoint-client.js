@@ -275,6 +275,15 @@
  */
 
 /**
+ * Per-Case-Type appeal flow configuration (ADR-0027, grill D5). `raisedBy` names
+ * the role that may raise an Appeal — the **Journey Owner** for Complaints-style
+ * journeys, otherwise the **Responsible Party Manager**. `resolvedBy` is always
+ * `controls` today, kept explicit so the Appeal Review gating stays data-driven.
+ *
+ * @typedef {{ raisedBy: 'journeyOwner' | 'responsiblePartyManager', resolvedBy: 'controls' }} AppealConfig
+ */
+
+/**
  * Shape every Case Type module must satisfy.
  *
  * @typedef {{
@@ -286,7 +295,8 @@
  *   eligibleGroups?: string[],
  *   listName?: string,
  *   reviewerGroup?: string,
- *   sections?: Partial<Record<'details'|'questions'|'conversation'|'notes'|'issues'|'remediation'|'summary'|'appeal', SectionConfig>>,
+ *   sections?: Partial<Record<'details'|'questions'|'issues'|'summary'|'remediation'|'notes'|'conversation'|'appealRequest'|'appealReview'|'amendOutcome', SectionConfig>>,
+ *   appeal?: AppealConfig,
  *   slaHours?: number,
  *   attributeFailures?: boolean,
  *   remediationFields?: RemediationField[],

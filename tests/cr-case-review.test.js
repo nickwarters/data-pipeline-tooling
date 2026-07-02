@@ -190,7 +190,7 @@ test('CRCaseReview: renders a cr-tabs with Details · Review · Issues · Summar
       'remediation',
       'summary',
       'notes',
-      'appeal',
+      'appealRequest',
     ],
     'tab order is Details · Review · Issues · Remediation · Summary · Notes · Appeal'
   );
@@ -333,7 +333,7 @@ test('CRCaseReview: appeal panel is wired with the Case row, access, user and ca
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const appeal = panelOf(el, 'appeal');
+  const appeal = panelOf(el, 'appealRequest');
   assert.equal(appeal.caseId, 'c1', 'appeal panel knows the Case id');
   assert.equal(
     appeal.access,
@@ -366,7 +366,7 @@ test('CRCaseReview: default selected tab is Details', async () => {
   assert.equal(tabsOf(el).selected, 'details', 'Details is the default tab');
 });
 
-test('CRCaseReview: a Section that resolves to hidden produces a hidden tab (RP: Notes + Summary while In-progress)', async () => {
+test('CRCaseReview: the Adviser (Responsible Party) has no content tabs while In-progress (ADR-0011 amend)', async () => {
   const el = new CRCaseReview();
   el.client = /** @type {any} */ (
     makeClient({
@@ -394,32 +394,24 @@ test('CRCaseReview: a Section that resolves to hidden produces a hidden tab (RP:
   };
   await el.connectedCallback();
 
-  assert.equal(
-    tabFor(el, 'notes').hidden,
-    true,
-    'Notes is hidden for the Responsible Party'
-  );
-  assert.equal(
-    tabFor(el, 'summary').hidden,
-    true,
-    'Summary is hidden for the RP on an In-progress case'
-  );
-  assert.equal(tabFor(el, 'details').hidden, false, 'Details stays visible');
-  assert.equal(
-    tabFor(el, 'questions').hidden,
-    false,
-    'Questions stays visible (read-only)'
-  );
-  assert.equal(
-    tabFor(el, 'issues').hidden,
-    false,
-    'Issues stays visible (read-only)'
-  );
-  assert.equal(
-    tabFor(el, 'remediation').hidden,
-    true,
-    'the Remediation tracking tab is hidden from the Responsible Party'
-  );
+  // The Adviser reads only the Summary (once reportable) and posts in the
+  // Conversation overlay. On an In-progress Case every tab resolves to hidden;
+  // Details/Questions/Issues are folded into the Summary they will later read.
+  for (const section of /** @type {const} */ ([
+    'details',
+    'questions',
+    'issues',
+    'remediation',
+    'summary',
+    'notes',
+    'appealRequest',
+  ])) {
+    assert.equal(
+      tabFor(el, section).hidden,
+      true,
+      `${section} tab is hidden for the Adviser while In-progress`
+    );
+  }
 });
 
 test('CRCaseReview: default tab falls back to the first visible Section when Details is absent', () => {
@@ -446,7 +438,7 @@ test('CRCaseReview: default tab falls back to the first visible Section when Det
       notes: 'edit',
       remediation: 'edit',
       summary: 'read-only',
-      appeal: 'hidden',
+      appealRequest: 'hidden',
     }),
   });
 
@@ -485,7 +477,7 @@ function buildLayoutWith(el, access) {
     currentUser: { id: 'u1', displayName: 'User 1' },
     // Appeal defaults to hidden so callers that only exercise the legacy Sections
     // don't sprout an Appeal tab; a caller can override it explicitly.
-    access: /** @type {any} */ ({ appeal: 'hidden', ...access }),
+    access: /** @type {any} */ ({ appealRequest: 'hidden', ...access }),
   });
 }
 

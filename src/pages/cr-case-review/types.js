@@ -19,7 +19,7 @@
 
 /**
  * @typedef {object} CaseReviewTab
- * @property {'details'|'questions'|'issues'|'remediation'|'summary'|'notes'|'appeal'} id
+ * @property {'details'|'questions'|'issues'|'remediation'|'summary'|'notes'|'appealRequest'} id
  * @property {string} label
  * @property {boolean} hidden
  */

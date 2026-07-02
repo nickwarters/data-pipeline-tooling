@@ -249,7 +249,7 @@ export class CaseReviewViewModel {
       { id: 'remediation', hidden: this.access.remediation === 'hidden' },
       { id: 'summary', hidden: this.access.summary === 'hidden' },
       { id: 'notes', hidden: this.access.notes === 'hidden' },
-      { id: 'appeal', hidden: this.access.appeal === 'hidden' },
+      { id: 'appealRequest', hidden: this.access.appealRequest === 'hidden' },
     ];
     const firstVisible = tabs.find((t) => !t.hidden);
     if (firstVisible) this.activeTab.set(firstVisible.id);
