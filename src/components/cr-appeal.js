@@ -24,11 +24,9 @@ import { buildCaptureControl } from '../lib/capture-engine.js';
  * at a time; once every Appeal is resolved a fresh one can be raised, with full
  * history kept.
  *
- * Appeal *resolution* is parked (ADR-0026 retires the QA Reviewer + Answer
- * Override machinery this Section used to resolve through). Under ADR-0027 the
- * resolver becomes Controls via a dedicated Appeal Review tab; that flow — and
- * the corrective Amend Outcome it drives — is rebuilt in a later slice. For now
- * this Section only raises and displays Appeals read-only.
+ * Appeal *resolution* is handled by the separate **Appeal Review** Section
+ * (`cr-appeal-review`, ADR-0027), where **Controls** agrees or rejects with a
+ * rationale. Agreeing also authors a linked Amended Outcome (ADR-0026).
  */
 /**
  * @typedef {object} AppealProps

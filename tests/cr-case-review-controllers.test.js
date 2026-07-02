@@ -83,6 +83,8 @@ const { updateSummaryNotesAppeal } =
   await import('../src/pages/cr-case-review/summary-notes-appeal-controller.js');
 const { updateAmendOutcome } =
   await import('../src/pages/cr-case-review/amend-outcome-controller.js');
+const { updateAppealReview } =
+  await import('../src/pages/cr-case-review/appeal-review-controller.js');
 const { createConversationPanelBinding } =
   await import('../src/pages/cr-case-review/conversation-controller.js');
 const {
@@ -381,6 +383,7 @@ function makeTabContext(opts = {}) {
     summary: new StubEl(),
     notes: new StubEl(),
     appeal: new StubEl(),
+    appealReview: new StubEl(),
     amendOutcome: new StubEl(),
     conversation: null,
     sourceCase: null,
@@ -405,6 +408,7 @@ function makeTabContext(opts = {}) {
           summary: 'read-only',
           notes: 'edit',
           appealRequest: 'hidden',
+          appealReview: 'hidden',
           amendOutcome: 'hidden',
         },
         activeTab: {
@@ -743,6 +747,7 @@ test('CaseReviewTabController: maps section access into tabs in the current orde
       summary: 'read-only',
       notes: 'hidden',
       appealRequest: 'edit',
+      appealReview: 'read-only',
       amendOutcome: 'read-only',
     },
   });
@@ -755,6 +760,7 @@ test('CaseReviewTabController: maps section access into tabs in the current orde
     { id: 'summary', label: 'Summary', hidden: false },
     { id: 'notes', label: 'Notes', hidden: true },
     { id: 'appealRequest', label: 'Appeal', hidden: false },
+    { id: 'appealReview', label: 'Appeal Review', hidden: false },
     { id: 'amendOutcome', label: 'Amend Outcome', hidden: false },
   ]);
 });
@@ -777,6 +783,7 @@ test('updateCaseReviewTabs: assigns selected tab and panel nodes', () => {
       'summary:Summary:false',
       'notes:Notes:false',
       'appealRequest:Appeal:true',
+      'appealReview:Appeal Review:true',
       'amendOutcome:Amend Outcome:true',
     ]
   );
@@ -788,6 +795,7 @@ test('updateCaseReviewTabs: assigns selected tab and panel nodes', () => {
     summary: nodes.summary,
     notes: nodes.notes,
     appealRequest: nodes.appeal,
+    appealReview: nodes.appealReview,
     amendOutcome: nodes.amendOutcome,
   });
 });
@@ -1058,6 +1066,90 @@ test('updateAmendOutcome: no-ops when the node or required view-model state is a
   updateAmendOutcome(/** @type {any} */ (missingCase.context));
   assert.equal(
     /** @type {any} */ (missingCase.amendOutcome).caseRow,
+    undefined,
+    'no props assigned without a Case row'
+  );
+});
+
+// --- updateAppealReview ---
+
+/**
+ * @param {Partial<{ access: string, outcomeOptions: any[] }>} [opts]
+ */
+function makeAppealReviewContext(opts = {}) {
+  const appealReview = new StubEl();
+  const saveQueue = { id: 'queue' };
+  const currentUser = { id: 'controls-1', displayName: 'Controls' };
+  const outcomeOptions = opts.outcomeOptions ?? [
+    { id: 'pass', wording: 'Pass' },
+  ];
+  const caseRow = {
+    id: 'case-1',
+    status: 'Completed',
+    outcomeAtCompletion: 'fail',
+    appeals: [],
+  };
+  return {
+    appealReview,
+    saveQueue,
+    currentUser,
+    outcomeOptions,
+    caseRow,
+    context: {
+      viewModel: {
+        caseRow,
+        config: { outcomeOptions },
+        currentUser,
+        access: { appealReview: opts.access ?? 'edit' },
+        saveQueue,
+      },
+      nodes: { appealReview },
+      displayMode: (/** @type {any} */ mode) => mode,
+      completeCase: async () => {},
+      toggleConversationPanel: () => {},
+    },
+  };
+}
+
+test('updateAppealReview: assigns the Appeal Review tab props from the view model', () => {
+  const {
+    context,
+    appealReview,
+    saveQueue,
+    currentUser,
+    outcomeOptions,
+    caseRow,
+  } = makeAppealReviewContext();
+
+  updateAppealReview(/** @type {any} */ (context));
+
+  assert.equal(/** @type {any} */ (appealReview).caseRow, caseRow);
+  assert.equal(/** @type {any} */ (appealReview).saveQueue, saveQueue);
+  assert.equal(/** @type {any} */ (appealReview).caseId, 'case-1');
+  assert.equal(/** @type {any} */ (appealReview).access, 'edit');
+  assert.equal(/** @type {any} */ (appealReview).currentUser, currentUser);
+  assert.equal(/** @type {any} */ (appealReview).outcomeOptions, outcomeOptions);
+});
+
+test('updateAppealReview: defaults outcomeOptions to an empty array when the Case Type declares none', () => {
+  const { context, appealReview } = makeAppealReviewContext();
+  context.viewModel.config = /** @type {any} */ ({});
+  updateAppealReview(/** @type {any} */ (context));
+  assert.deepEqual(/** @type {any} */ (appealReview).outcomeOptions, []);
+});
+
+test('updateAppealReview: no-ops when the node or required view-model state is absent', () => {
+  const missingNode = makeAppealReviewContext();
+  missingNode.context.nodes.appealReview = /** @type {any} */ (null);
+  assert.doesNotThrow(() =>
+    updateAppealReview(/** @type {any} */ (missingNode.context))
+  );
+
+  const missingCase = makeAppealReviewContext();
+  missingCase.context.viewModel.caseRow = /** @type {any} */ (null);
+  updateAppealReview(/** @type {any} */ (missingCase.context));
+  assert.equal(
+    /** @type {any} */ (missingCase.appealReview).caseRow,
     undefined,
     'no props assigned without a Case row'
   );

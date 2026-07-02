@@ -126,7 +126,8 @@
  *   outcome: string,
  *   justification: string,
  *   amendedBy: string,
- *   amendedAt: string
+ *   amendedAt: string,
+ *   fromAppealId?: string
  * }} AmendedOutcome
  */
 

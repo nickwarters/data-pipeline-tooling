@@ -191,9 +191,10 @@ test('CRCaseReview: renders a cr-tabs with Details · Review · Issues · Summar
       'summary',
       'notes',
       'appealRequest',
+      'appealReview',
       'amendOutcome',
     ],
-    'tab order is Details · Review · Issues · Remediation · Summary · Notes · Appeal · Amend Outcome'
+    'tab order is Details · Review · Issues · Remediation · Summary · Notes · Appeal · Appeal Review · Amend Outcome'
   );
   assert.deepEqual(
     tabs.map((/** @type {any} */ t) => t.label),
@@ -205,13 +206,14 @@ test('CRCaseReview: renders a cr-tabs with Details · Review · Issues · Summar
       'Summary',
       'Notes',
       'Appeal',
+      'Appeal Review',
       'Amend Outcome',
     ],
     'the Questions Section surfaces under "Review"; the capture tab under "Issues"; the tracking tab under "Remediation"'
   );
   // For the Assigned Reviewer on an In-progress case every Section is visible
-  // except the Remediation *tracking* tab, which stays hidden until actions have
-  // been sent (ADR-0024), and Amend Outcome, which is Controls-only (ADR-0026).
+  // except the Remediation *tracking* tab (hidden until actions sent, ADR-0024)
+  // and Amend Outcome (Controls-only, ADR-0026).
   const hidden = tabs
     .filter((/** @type {any} */ t) => t.hidden)
     .map((/** @type {any} */ t) => t.id);
@@ -527,6 +529,9 @@ test('CRCaseReview: when every tab-bearing Section is hidden, no tab is selected
     issues: 'hidden',
     remediation: 'hidden',
     summary: 'hidden',
+    appealRequest: 'hidden',
+    appealReview: 'hidden',
+    amendOutcome: 'hidden',
   });
   assert.equal(
     tabsOf(el).selected,
