@@ -27,9 +27,12 @@ import { normaliseConfiguredActions } from '../evaluators/configured-outcome.js'
  * @property {import('../sharepoint-client.js').CaptureGroup[]} captureGroups
  * @property {boolean} canCapture
  * @property {Map<string, import('./cr-capture-groups.js').CRCaptureGroups>} captureEls
+ * @property {boolean} canSelectRemediation
  * @property {(questionId: string, fieldKey: string, value: string) => void} dispatchCapture
  * @property {(questionId: string, key: string, value: string) => void} dispatchDetail
  * @property {(questionId: string, attributedParty: Party | null) => void} dispatchAttribute
+ * @property {(questionId: string, action: { id: string, text: string }, selected: boolean) => void} dispatchRemediationAction
+ * @property {(questionId: string, value: string) => void} dispatchRemediationFreeForm
  */
 
 /**
@@ -86,18 +89,126 @@ export function renderRemediationItem(props, q) {
     renderRemediationCapture(props, li, q);
   }
 
-  if (q.remediationActions?.length) {
+  renderRemediationActions(props, li, q);
+
+  return li;
+}
+
+/**
+ * Renders the reviewer-selectable **Remediation Actions** for a failed item
+ * (issue #250). Each configured action is an independent checkbox, unticked
+ * unless the reviewer has already selected it (i.e. its id is present on
+ * `answer.remediationActions`); ticking/unticking re-dispatches a bubbling
+ * `cr-remediation-action` so the page persists the selected subset onto the
+ * Answer. When the Question opts into free-form remediation, an extra text
+ * input lets the reviewer add their own action. Read-only viewers see only the
+ * selected canned actions and any captured free-form text, both as plain text.
+ *
+ * @param {RemediationSectionProps} props
+ * @param {HTMLElement} li
+ * @param {QuestionDefinition} q
+ */
+export function renderRemediationActions(props, li, q) {
+  const answer = props.answers[q.id];
+  const selectedIds = new Set(
+    (answer?.remediationActions ?? []).map((action) => action.id)
+  );
+  const configured = normaliseConfiguredActions(
+    q.remediationActions ?? [],
+    q.id
+  );
+  const editable = props.canSelectRemediation;
+  const visible = editable
+    ? configured
+    : configured.filter((action) => selectedIds.has(action.id));
+
+  if (visible.length) {
     const actions = h('ul', { class: 'cr-remediation-actions' });
-    for (const action of normaliseConfiguredActions(
-      q.remediationActions,
-      q.id
-    )) {
-      actions.appendChild(h('li', {}, action.text));
+    for (const action of visible) {
+      actions.appendChild(
+        editable
+          ? renderRemediationActionCheckbox(
+              props,
+              q,
+              action,
+              selectedIds.has(action.id)
+            )
+          : h('li', { class: 'cr-remediation-action' }, action.text)
+      );
     }
     li.appendChild(actions);
   }
 
-  return li;
+  if (q.allowFreeFormRemediation) {
+    renderRemediationFreeForm(props, li, q, answer?.freeFormRemediation ?? '');
+  }
+}
+
+/**
+ * @param {RemediationSectionProps} props
+ * @param {QuestionDefinition} q
+ * @param {import('../sharepoint-client.js').RemediationActionDefinition} action
+ * @param {boolean} checked
+ * @returns {HTMLElement}
+ */
+function renderRemediationActionCheckbox(props, q, action, checked) {
+  return h(
+    'li',
+    { class: 'cr-remediation-action' },
+    h(
+      'label',
+      {},
+      h('input', {
+        type: 'checkbox',
+        class: 'cr-remediation-action-checkbox',
+        checked,
+        onchange: (/** @type {any} */ event) => {
+          props.dispatchRemediationAction(
+            q.id,
+            { id: action.id, text: action.text },
+            event.target.checked
+          );
+        },
+      }),
+      h('span', {}, ` ${action.text}`)
+    )
+  );
+}
+
+/**
+ * @param {RemediationSectionProps} props
+ * @param {HTMLElement} li
+ * @param {QuestionDefinition} q
+ * @param {string} value
+ */
+function renderRemediationFreeForm(props, li, q, value) {
+  if (!props.canSelectRemediation) {
+    if (value) {
+      li.appendChild(h('p', { class: 'cr-remediation-freeform-value' }, value));
+    }
+    return;
+  }
+
+  li.appendChild(
+    h(
+      'div',
+      { class: 'cr-remediation-freeform' },
+      h(
+        'label',
+        { class: 'cr-remediation-freeform-label' },
+        'Free-form action'
+      ),
+      h('input', {
+        type: 'text',
+        class: 'cr-remediation-freeform-input',
+        value,
+        placeholder: 'Describe a remediation in your own words…',
+        onchange: (/** @type {any} */ event) => {
+          props.dispatchRemediationFreeForm(q.id, event.target.value);
+        },
+      })
+    )
+  );
 }
 
 /**
@@ -258,6 +369,13 @@ export class CRRemediationSection extends ShellElement {
      */
     this.canCapture = false;
     /**
+     * Whether the viewer may select which Remediation Actions apply to a failed
+     * Answer and add a free-form action (issue #250). Assigned Reviewer only, on
+     * a not-yet-reportable Case; read-only viewers see the selected subset.
+     * @type {boolean}
+     */
+    this.canSelectRemediation = false;
+    /**
      * Per-failed-Answer `cr-capture-groups` instances, keyed by question id and
      * reused across re-renders so each group's ephemeral collapse state survives
      * an autosave-triggered re-render (ADR-0020).
@@ -360,12 +478,17 @@ export class CRRemediationSection extends ShellElement {
       captureGroups: this.captureGroups,
       canCapture: this.canCapture,
       captureEls: this._captureEls,
+      canSelectRemediation: this.canSelectRemediation,
       dispatchCapture: (questionId, fieldKey, value) =>
         this._dispatchCapture(questionId, fieldKey, value),
       dispatchDetail: (questionId, key, value) =>
         this._dispatchDetail(questionId, key, value),
       dispatchAttribute: (questionId, attributedParty) =>
         this._dispatchAttribute(questionId, attributedParty),
+      dispatchRemediationAction: (questionId, action, selected) =>
+        this._dispatchRemediationAction(questionId, action, selected),
+      dispatchRemediationFreeForm: (questionId, value) =>
+        this._dispatchRemediationFreeForm(questionId, value),
     };
   }
 
@@ -405,6 +528,41 @@ export class CRRemediationSection extends ShellElement {
     this.dispatchEvent(
       new CustomEvent('cr-attribute', {
         detail: { questionId, attributedParty },
+        bubbles: true,
+      })
+    );
+  }
+
+  /**
+   * Re-dispatches a reviewer's Remediation Action tick/untick as a bubbling
+   * `cr-remediation-action` carrying the question id, the toggled action, and
+   * whether it is now selected (issue #250). Persistence is the page's job so
+   * the answers signal stays the single source of truth.
+   *
+   * @param {string} questionId
+   * @param {{ id: string, text: string }} action
+   * @param {boolean} selected
+   */
+  _dispatchRemediationAction(questionId, action, selected) {
+    this.dispatchEvent(
+      new CustomEvent('cr-remediation-action', {
+        detail: { questionId, action, selected },
+        bubbles: true,
+      })
+    );
+  }
+
+  /**
+   * Re-dispatches a reviewer's free-form Remediation entry as a bubbling
+   * `cr-remediation-freeform` carrying the question id and new text (issue #250).
+   *
+   * @param {string} questionId
+   * @param {string} value
+   */
+  _dispatchRemediationFreeForm(questionId, value) {
+    this.dispatchEvent(
+      new CustomEvent('cr-remediation-freeform', {
+        detail: { questionId, value },
         bubbles: true,
       })
     );

@@ -81,6 +81,17 @@ export class CaseMachine {
   }
 
   /**
+   * Whether the viewer may pick which configured Remediation Actions apply to a
+   * failed Answer and, when the Question allows it, add a free-form action
+   * (issue #250). Unlike `canAttribute`/`canCapture`, this is not gated on the
+   * Case Type opting into `attributeFailures`: any editor of the Issues tab
+   * (the Assigned Reviewer on a not-yet-reportable Case) may select actions.
+   */
+  get canSelectRemediation() {
+    return this.access.issues === 'edit' && !this.reportable;
+  }
+
+  /**
    * The final-complete gate (ADR-0024): once actions have been **sent**, an
    * `Actions In Progress` Case may close to `Completed` only when the Remediation
    * tracking tab is complete — every sent action `complete` or `cancelled` (with a

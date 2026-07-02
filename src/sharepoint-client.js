@@ -51,7 +51,7 @@
  */
 
 /**
- * @typedef {{ value: string | string[], justification?: string, remediationActions?: Array<{id: string, text: string, completed: boolean}>, attributedParty?: { loginName: string, displayName: string }, remediationDetails?: Record<string, string>, capture?: Record<string, string | { loginName: string, displayName: string } | Array<string | RemediationAction>> }} Answer
+ * @typedef {{ value: string | string[], justification?: string, remediationActions?: Array<{id: string, text: string, completed: boolean}>, freeFormRemediation?: string, attributedParty?: { loginName: string, displayName: string }, remediationDetails?: Record<string, string>, capture?: Record<string, string | { loginName: string, displayName: string } | Array<string | RemediationAction>> }} Answer
  */
 
 /**
@@ -212,6 +212,7 @@
  *   failureCriteria?: string,
  *   outcome?: { noActionOutcomeId?: string, noAction?: OutcomeDescriptor },
  *   remediationActions?: Array<string | RemediationActionDefinition>,
+ *   allowFreeFormRemediation?: boolean,
  *   deprecated: boolean
  * }} QuestionDefinition
  */

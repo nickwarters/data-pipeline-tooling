@@ -430,6 +430,7 @@ function makeTabContext(opts = {}) {
  *   attributeFailures: boolean,
  *   canAttribute: boolean,
  *   canCapture: boolean,
+ *   canSelectRemediation: boolean,
  * }>} [opts]
  */
 function makeRemediationContext(opts = {}) {
@@ -441,6 +442,10 @@ function makeRemediationContext(opts = {}) {
   const captureCalls = [];
   /** @type {any[]} */
   const attributeCalls = [];
+  /** @type {any[]} */
+  const remediationActionCalls = [];
+  /** @type {any[]} */
+  const remediationFreeFormCalls = [];
   return {
     remediation,
     answers,
@@ -448,6 +453,8 @@ function makeRemediationContext(opts = {}) {
     client,
     captureCalls,
     attributeCalls,
+    remediationActionCalls,
+    remediationFreeFormCalls,
     context: {
       viewModel: {
         caseRow: {
@@ -468,6 +475,7 @@ function makeRemediationContext(opts = {}) {
         machine: {
           canAttribute: opts.canAttribute ?? true,
           canCapture: opts.canCapture ?? true,
+          canSelectRemediation: opts.canSelectRemediation ?? true,
         },
         client,
         handleCapture(
@@ -482,6 +490,19 @@ function makeRemediationContext(opts = {}) {
           /** @type {any} */ attributedParty
         ) {
           attributeCalls.push({ questionId, attributedParty });
+        },
+        handleRemediationAction(
+          /** @type {string} */ questionId,
+          /** @type {any} */ action,
+          /** @type {boolean} */ selected
+        ) {
+          remediationActionCalls.push({ questionId, action, selected });
+        },
+        handleRemediationFreeForm(
+          /** @type {string} */ questionId,
+          /** @type {string} */ value
+        ) {
+          remediationFreeFormCalls.push({ questionId, value });
         },
       },
       nodes: {
@@ -909,6 +930,38 @@ test('bindRemediationPanel: forwards capture and attribution events', () => {
   assert.deepEqual(attributeCalls, [{ questionId: 'q-b', attributedParty }]);
 });
 
+test('bindRemediationPanel: forwards remediation action selection and free-form events (issue #250)', () => {
+  const {
+    context,
+    remediation,
+    remediationActionCalls,
+    remediationFreeFormCalls,
+  } = makeRemediationContext();
+
+  bindRemediationPanel(/** @type {any} */ (context));
+  remediation._listeners['cr-remediation-action'][0]({
+    detail: {
+      questionId: 'q-a',
+      action: { id: 'q-a-ra-0', text: 'Retrain' },
+      selected: true,
+    },
+  });
+  remediation._listeners['cr-remediation-freeform'][0]({
+    detail: { questionId: 'q-a', value: 'Escalate to legal' },
+  });
+
+  assert.deepEqual(remediationActionCalls, [
+    {
+      questionId: 'q-a',
+      action: { id: 'q-a-ra-0', text: 'Retrain' },
+      selected: true,
+    },
+  ]);
+  assert.deepEqual(remediationFreeFormCalls, [
+    { questionId: 'q-a', value: 'Escalate to legal' },
+  ]);
+});
+
 test('updateRemediationPanel: assigns Issues tab properties without changing capture behavior', () => {
   const { context, remediation, client, answers, captureGroups } =
     makeRemediationContext({
@@ -928,6 +981,11 @@ test('updateRemediationPanel: assigns Issues tab properties without changing cap
   });
   assert.equal(/** @type {any} */ (remediation).captureGroups, captureGroups);
   assert.equal(/** @type {any} */ (remediation).canCapture, true);
+  assert.equal(
+    /** @type {any} */ (remediation).canSelectRemediation,
+    true,
+    'the Issues section receives the action-selection gate'
+  );
   assert.equal(/** @type {any} */ (remediation).catalogue, QUESTIONS);
   assert.equal(/** @type {any} */ (remediation).answers, answers);
   assert.equal(/** @type {any} */ (remediation).attributeFailures, false);
@@ -1128,7 +1186,10 @@ test('updateAppealReview: assigns the Appeal Review tab props from the view mode
   assert.equal(/** @type {any} */ (appealReview).caseId, 'case-1');
   assert.equal(/** @type {any} */ (appealReview).access, 'edit');
   assert.equal(/** @type {any} */ (appealReview).currentUser, currentUser);
-  assert.equal(/** @type {any} */ (appealReview).outcomeOptions, outcomeOptions);
+  assert.equal(
+    /** @type {any} */ (appealReview).outcomeOptions,
+    outcomeOptions
+  );
 });
 
 test('updateAppealReview: defaults outcomeOptions to an empty array when the Case Type declares none', () => {

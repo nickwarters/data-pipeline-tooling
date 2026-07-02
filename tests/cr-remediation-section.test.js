@@ -19,6 +19,7 @@ class StubEl {
 
     // Dummy properties so `k in el` is true in `h()`
     this.value = undefined;
+    this.checked = undefined;
     this.client = undefined;
     this.attributedParty = undefined;
     this.responsibleParty = undefined;
@@ -225,7 +226,7 @@ test('CRRemediationSection: renders one item per failed answer with remediationA
   assert.equal(items.length, 2);
 });
 
-test('CRRemediationSection: renders question text, answer, and each remediation action', () => {
+test('CRRemediationSection: renders question text and answer for a failed item', () => {
   const el = new CRRemediationSection();
   el.catalogue = CATALOGUE;
   el.answers = { 'q-needs': { value: 'No' } };
@@ -236,13 +237,234 @@ test('CRRemediationSection: renders question text, answer, and each remediation 
 
   const ansText = findByClass(el, 'cr-remediation-answer');
   assert.equal(ansText.textContent, 'Answer: No');
+});
+
+test('CRRemediationSection: read-only viewer shows only the selected remediation actions as text', () => {
+  const el = new CRRemediationSection();
+  el.catalogue = CATALOGUE;
+  el.canSelectRemediation = false;
+  // Only the second configured action (q-needs-ra-1) is selected on the Answer.
+  el.answers = {
+    'q-needs': {
+      value: 'No',
+      remediationActions: [
+        { id: 'q-needs-ra-1', text: 'Update script.', completed: false },
+      ],
+    },
+  };
+  el.connectedCallback();
 
   const actions = findByClass(el, 'cr-remediation-actions');
-  assert.equal(actions._children.length, 2);
-  assert.deepEqual(
-    actions._children.map((/** @type {any} */ li) => li.textContent),
-    ['Retrain agent.', 'Update script.']
+  assert.equal(
+    actions._children.length,
+    1,
+    'only the selected action is shown'
   );
+  assert.equal(actions._children[0].textContent, 'Update script.');
+  assert.equal(
+    findByClass(el, 'cr-remediation-action-checkbox'),
+    null,
+    'read-only viewer sees no checkboxes'
+  );
+});
+
+test('CRRemediationSection: read-only viewer with no selected actions shows no actions list', () => {
+  const el = new CRRemediationSection();
+  el.catalogue = CATALOGUE;
+  el.canSelectRemediation = false;
+  el.answers = { 'q-needs': { value: 'No' } };
+  el.connectedCallback();
+
+  assert.equal(findByClass(el, 'cr-remediation-actions'), null);
+});
+
+test('CRRemediationSection: editable viewer renders an unticked checkbox per configured action', () => {
+  const el = new CRRemediationSection();
+  el.catalogue = CATALOGUE;
+  el.canSelectRemediation = true;
+  el.answers = { 'q-needs': { value: 'No' } };
+  el.connectedCallback();
+
+  const boxes = findAllByClass(el, 'cr-remediation-action-checkbox');
+  assert.equal(boxes.length, 2, 'one checkbox per configured action');
+  assert.deepEqual(
+    boxes.map((/** @type {any} */ b) => b.checked),
+    [false, false],
+    'actions default to unticked (not pre-applied)'
+  );
+});
+
+test('CRRemediationSection: editable viewer pre-ticks actions already selected on the Answer', () => {
+  const el = new CRRemediationSection();
+  el.catalogue = CATALOGUE;
+  el.canSelectRemediation = true;
+  el.answers = {
+    'q-needs': {
+      value: 'No',
+      remediationActions: [
+        { id: 'q-needs-ra-1', text: 'Update script.', completed: false },
+      ],
+    },
+  };
+  el.connectedCallback();
+
+  const boxes = findAllByClass(el, 'cr-remediation-action-checkbox');
+  assert.deepEqual(
+    boxes.map((/** @type {any} */ b) => b.checked),
+    [false, true],
+    'the selected action (q-needs-ra-1) is ticked'
+  );
+});
+
+test('CRRemediationSection: ticking an action dispatches a bubbling cr-remediation-action', () => {
+  const el = new CRRemediationSection();
+  el.catalogue = CATALOGUE;
+  el.canSelectRemediation = true;
+  el.answers = { 'q-needs': { value: 'No' } };
+  el.connectedCallback();
+
+  /** @type {any[]} */
+  const events = [];
+  el.addEventListener('cr-remediation-action', (/** @type {any} */ e) =>
+    events.push(e)
+  );
+
+  const box = findAllByClass(el, 'cr-remediation-action-checkbox')[0];
+  box.checked = true;
+  box._fire('change', { target: box });
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].bubbles, true);
+  assert.deepEqual(events[0].detail, {
+    questionId: 'q-needs',
+    action: { id: 'q-needs-ra-0', text: 'Retrain agent.' },
+    selected: true,
+  });
+});
+
+test('CRRemediationSection: unticking a selected action dispatches selected:false', () => {
+  const el = new CRRemediationSection();
+  el.catalogue = CATALOGUE;
+  el.canSelectRemediation = true;
+  el.answers = {
+    'q-needs': {
+      value: 'No',
+      remediationActions: [
+        { id: 'q-needs-ra-0', text: 'Retrain agent.', completed: false },
+      ],
+    },
+  };
+  el.connectedCallback();
+
+  /** @type {any[]} */
+  const events = [];
+  el.addEventListener('cr-remediation-action', (/** @type {any} */ e) =>
+    events.push(e)
+  );
+
+  const box = findAllByClass(el, 'cr-remediation-action-checkbox')[0];
+  box.checked = false;
+  box._fire('change', { target: box });
+
+  assert.equal(events.length, 1);
+  assert.deepEqual(events[0].detail, {
+    questionId: 'q-needs',
+    action: { id: 'q-needs-ra-0', text: 'Retrain agent.' },
+    selected: false,
+  });
+});
+
+// ===== Free-form remediation (issue #250) =====
+
+/** @type {QuestionDefinition[]} */
+const FREEFORM_CAT = [
+  {
+    id: 'q-free',
+    text: 'Followed process?',
+    responseType: 'yes-no-na',
+    failureCriteria: 'No',
+    remediationActions: ['Retrain agent.'],
+    allowFreeFormRemediation: true,
+    deprecated: false,
+  },
+];
+
+test('CRRemediationSection: no free-form input unless allowFreeFormRemediation is set', () => {
+  const el = new CRRemediationSection();
+  el.catalogue = CATALOGUE;
+  el.canSelectRemediation = true;
+  el.answers = { 'q-needs': { value: 'No' } };
+  el.connectedCallback();
+
+  assert.equal(findByClass(el, 'cr-remediation-freeform-input'), null);
+});
+
+test('CRRemediationSection: editable viewer renders a free-form input when the question allows it', () => {
+  const el = new CRRemediationSection();
+  el.catalogue = FREEFORM_CAT;
+  el.canSelectRemediation = true;
+  el.answers = {
+    'q-free': { value: 'No', freeFormRemediation: 'Escalate to legal' },
+  };
+  el.connectedCallback();
+
+  const input = findByClass(el, 'cr-remediation-freeform-input');
+  assert.ok(input, 'free-form input rendered');
+  assert.equal(
+    input.value,
+    'Escalate to legal',
+    'pre-filled with the stored value'
+  );
+});
+
+test('CRRemediationSection: editing free-form dispatches a bubbling cr-remediation-freeform', () => {
+  const el = new CRRemediationSection();
+  el.catalogue = FREEFORM_CAT;
+  el.canSelectRemediation = true;
+  el.answers = { 'q-free': { value: 'No' } };
+  el.connectedCallback();
+
+  /** @type {any[]} */
+  const events = [];
+  el.addEventListener('cr-remediation-freeform', (/** @type {any} */ e) =>
+    events.push(e)
+  );
+
+  const input = findByClass(el, 'cr-remediation-freeform-input');
+  input.value = 'Refer to compliance';
+  input._fire('change', { target: input });
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].bubbles, true);
+  assert.deepEqual(events[0].detail, {
+    questionId: 'q-free',
+    value: 'Refer to compliance',
+  });
+});
+
+test('CRRemediationSection: read-only viewer shows captured free-form as text, no input', () => {
+  const el = new CRRemediationSection();
+  el.catalogue = FREEFORM_CAT;
+  el.canSelectRemediation = false;
+  el.answers = {
+    'q-free': { value: 'No', freeFormRemediation: 'Escalate to legal' },
+  };
+  el.connectedCallback();
+
+  assert.equal(findByClass(el, 'cr-remediation-freeform-input'), null);
+  const value = findByClass(el, 'cr-remediation-freeform-value');
+  assert.ok(value);
+  assert.equal(value.textContent, 'Escalate to legal');
+});
+
+test('CRRemediationSection: read-only viewer with no free-form value renders nothing', () => {
+  const el = new CRRemediationSection();
+  el.catalogue = FREEFORM_CAT;
+  el.canSelectRemediation = false;
+  el.answers = { 'q-free': { value: 'No' } };
+  el.connectedCallback();
+
+  assert.equal(findByClass(el, 'cr-remediation-freeform-value'), null);
 });
 
 test('CRRemediationSection: renders category when defined on QuestionDefinition', () => {

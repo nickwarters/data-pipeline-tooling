@@ -146,6 +146,25 @@ test('materializeRemediationActions: strips remediationActions when answer becom
   assert.equal(out.value, 'Yes');
 });
 
+test('materializeRemediationActions: retains freeFormRemediation on a still-failing answer (issue #250)', () => {
+  const out = materializeRemediationActions(Q_FAIL_NO, {
+    value: 'No',
+    freeFormRemediation: 'Escalate to legal',
+  });
+  assert.equal(out.freeFormRemediation, 'Escalate to legal');
+});
+
+test('materializeRemediationActions: strips freeFormRemediation when answer becomes passing (issue #250)', () => {
+  const out = materializeRemediationActions(Q_FAIL_NO, {
+    value: 'Yes',
+    freeFormRemediation: 'Escalate to legal',
+    remediationActions: [{ id: 'q-needs-ra-0', text: 'old', completed: false }],
+  });
+  assert.equal(out.freeFormRemediation, undefined);
+  assert.equal(out.remediationActions, undefined);
+  assert.equal(out.value, 'Yes');
+});
+
 test('materializeRemediationActions: returns answer unchanged when question has no remediationActions defined', () => {
   /** @type {QuestionDefinition} */
   const q = {

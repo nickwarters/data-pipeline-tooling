@@ -351,6 +351,71 @@ export class CaseReviewViewModel {
   }
 
   /**
+   * Tick/untick a configured Remediation Action on a failed Answer (issue #250).
+   * Selection is stored as the reviewer-chosen subset on
+   * `answer.remediationActions`; only these feed the per-action outcome scoring
+   * in `computeConfiguredOutcome`. Gated on `canSelectRemediation` (Assigned
+   * Reviewer, not-yet-reportable). Persists via the autosave SaveQueue (ADR-0008).
+   *
+   * @param {string} questionId
+   * @param {{ id: string, text: string }} action
+   * @param {boolean} selected
+   */
+  handleRemediationAction(questionId, action, selected) {
+    if (!this.machine?.canSelectRemediation) return;
+    const current = this.answersSignal.get();
+    const existing = current[questionId];
+    if (!existing) return;
+
+    const list = existing.remediationActions ?? [];
+    let next;
+    if (selected) {
+      if (list.some((a) => a.id === action.id)) return;
+      next = [...list, { id: action.id, text: action.text, completed: false }];
+    } else {
+      if (!list.some((a) => a.id === action.id)) return;
+      next = list.filter((a) => a.id !== action.id);
+    }
+
+    let nextAnswer;
+    if (next.length) {
+      nextAnswer = { ...existing, remediationActions: next };
+    } else {
+      const { remediationActions: _drop, ...rest } = existing;
+      nextAnswer = rest;
+    }
+    const newAnswers = { ...current, [questionId]: nextAnswer };
+    this._withPreservedScroll(() => this.answersSignal.set(newAnswers));
+    this.saveQueue.enqueue(this.caseId, 'answers', newAnswers);
+  }
+
+  /**
+   * Capture a reviewer's free-form Remediation text on a failed Answer (issue
+   * #250), stored as `answer.freeFormRemediation`. An empty value clears the
+   * field. Shares the `canSelectRemediation` gate and the autosave lifecycle.
+   *
+   * @param {string} questionId
+   * @param {string} value
+   */
+  handleRemediationFreeForm(questionId, value) {
+    if (!this.machine?.canSelectRemediation) return;
+    const current = this.answersSignal.get();
+    const existing = current[questionId];
+    if (!existing) return;
+
+    let nextAnswer;
+    if (value) {
+      nextAnswer = { ...existing, freeFormRemediation: value };
+    } else {
+      const { freeFormRemediation: _drop, ...rest } = existing;
+      nextAnswer = rest;
+    }
+    const newAnswers = { ...current, [questionId]: nextAnswer };
+    this._withPreservedScroll(() => this.answersSignal.set(newAnswers));
+    this.saveQueue.enqueue(this.caseId, 'answers', newAnswers);
+  }
+
+  /**
    * Resolve a single sent Remediation Action on the Remediation tracking tab
    * (ADR-0024). Writes the new `status`/`cancelReason` back into the failed
    * Answer's `actions`-typed capture field, coercing any legacy string entries to

@@ -2543,6 +2543,22 @@ test('CaseMachine.canAttribute / canCapture are gated on the reportable predicat
   );
 });
 
+test('CaseMachine.canSelectRemediation follows Issues edit access, not attributeFailures (issue #250)', () => {
+  // Unlike canAttribute/canCapture, action selection does not require the Case
+  // Type to opt into attributeFailures — EMPTY_CASE_TYPE_CONFIG has none.
+  assert.equal(
+    machineForStatus('In-progress').canSelectRemediation,
+    true,
+    'the assigned Reviewer may select actions while the Case is editable'
+  );
+  assert.equal(
+    machineForStatus('Actions In Progress').canSelectRemediation,
+    false,
+    'selection freezes at the reportable milestone'
+  );
+  assert.equal(machineForStatus('Completed').canSelectRemediation, false);
+});
+
 /** @type {import('../src/sharepoint-client.js').CaseTypeConfig} */
 const ACTIONS_CONFIG = {
   questions: [],

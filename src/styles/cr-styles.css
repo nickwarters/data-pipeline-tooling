@@ -643,6 +643,34 @@ cr-attribute-menu {
   padding-left: var(--cr-space-5);
 }
 
+/* Reviewer-selectable Remediation Actions (issue #250): checkboxes replace the
+   old static list, so drop the bullet indent when a checkbox is present. */
+.cr-remediation-action {
+  list-style: none;
+  margin-left: calc(-1 * var(--cr-space-5));
+}
+
+.cr-remediation-action label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--cr-space-1);
+}
+
+.cr-remediation-freeform {
+  display: grid;
+  gap: var(--cr-space-1);
+  margin-top: var(--cr-space-2);
+}
+
+.cr-remediation-freeform-label {
+  font-size: var(--cr-font-size-sm);
+  color: var(--cr-color-text-muted);
+}
+
+.cr-remediation-freeform-value {
+  margin: var(--cr-space-2) 0 0;
+}
+
 .cr-remediation-empty {
   color: var(--cr-color-text-muted);
   font-style: italic;

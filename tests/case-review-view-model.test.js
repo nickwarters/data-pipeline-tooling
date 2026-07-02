@@ -77,6 +77,152 @@ test('handleCapture works (no throw) when window is absent', () => {
   assert.deepEqual(calls[0][2].q1.capture, { rootCause: 'x' });
 });
 
+// --- handleRemediationAction / handleRemediationFreeForm (issue #250) ---
+
+/**
+ * @param {(...args: any[]) => void} enqueue
+ * @param {any} [answer]
+ * @param {boolean} [canSelectRemediation]
+ */
+function makeSelectionVM(
+  enqueue,
+  answer = { value: 'No' },
+  canSelectRemediation = true
+) {
+  const vm = new CaseReviewViewModel({
+    client: /** @type {any} */ ({}),
+    saveQueue: /** @type {any} */ ({ enqueue }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: null,
+  });
+  vm.machine = /** @type {any} */ ({ canSelectRemediation });
+  vm.answersSignal = signal(/** @type {any} */ ({ q1: answer }));
+  return vm;
+}
+
+test('handleRemediationAction: ticking an action writes its id onto answer.remediationActions', () => {
+  /** @type {any[]} */
+  const calls = [];
+  const vm = makeSelectionVM((...a) => calls.push(a));
+  vm.handleRemediationAction('q1', { id: 'ra-0', text: 'Retrain' }, true);
+
+  assert.deepEqual(vm.answersSignal.get().q1.remediationActions, [
+    { id: 'ra-0', text: 'Retrain', completed: false },
+  ]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][1], 'answers');
+});
+
+test('handleRemediationAction: unticking removes the action, dropping the key when empty', () => {
+  /** @type {any[]} */
+  const calls = [];
+  const vm = makeSelectionVM((...a) => calls.push(a), {
+    value: 'No',
+    remediationActions: [{ id: 'ra-0', text: 'Retrain', completed: false }],
+  });
+  vm.handleRemediationAction('q1', { id: 'ra-0', text: 'Retrain' }, false);
+
+  assert.equal(
+    'remediationActions' in vm.answersSignal.get().q1,
+    false,
+    'the empty selection key is removed, not left as []'
+  );
+  assert.equal(calls.length, 1);
+});
+
+test('handleRemediationAction: ticking preserves other selected actions', () => {
+  const vm = makeSelectionVM(() => {}, {
+    value: 'No',
+    remediationActions: [{ id: 'ra-0', text: 'Retrain', completed: false }],
+  });
+  vm.handleRemediationAction('q1', { id: 'ra-1', text: 'Update script' }, true);
+
+  assert.deepEqual(vm.answersSignal.get().q1.remediationActions, [
+    { id: 'ra-0', text: 'Retrain', completed: false },
+    { id: 'ra-1', text: 'Update script', completed: false },
+  ]);
+});
+
+test('handleRemediationAction: re-ticking an already-selected action is a no-op', () => {
+  /** @type {any[]} */
+  const calls = [];
+  const vm = makeSelectionVM((...a) => calls.push(a), {
+    value: 'No',
+    remediationActions: [{ id: 'ra-0', text: 'Retrain', completed: false }],
+  });
+  vm.handleRemediationAction('q1', { id: 'ra-0', text: 'Retrain' }, true);
+  assert.equal(calls.length, 0, 'no redundant save');
+});
+
+test('handleRemediationAction: unticking an unselected action is a no-op', () => {
+  /** @type {any[]} */
+  const calls = [];
+  const vm = makeSelectionVM((...a) => calls.push(a));
+  vm.handleRemediationAction('q1', { id: 'ra-0', text: 'Retrain' }, false);
+  assert.equal(calls.length, 0);
+});
+
+test('handleRemediationAction: ignored when canSelectRemediation is false', () => {
+  /** @type {any[]} */
+  const calls = [];
+  const vm = makeSelectionVM((...a) => calls.push(a), { value: 'No' }, false);
+  vm.handleRemediationAction('q1', { id: 'ra-0', text: 'Retrain' }, true);
+  assert.equal(calls.length, 0);
+});
+
+test('handleRemediationAction: ignored when the Answer does not exist', () => {
+  /** @type {any[]} */
+  const calls = [];
+  const vm = makeSelectionVM((...a) => calls.push(a));
+  vm.handleRemediationAction('missing', { id: 'ra-0', text: 'Retrain' }, true);
+  assert.equal(calls.length, 0);
+});
+
+test('handleRemediationFreeForm: stores the value on the Answer', () => {
+  /** @type {any[]} */
+  const calls = [];
+  const vm = makeSelectionVM((...a) => calls.push(a));
+  vm.handleRemediationFreeForm('q1', 'Escalate to legal');
+
+  assert.equal(
+    vm.answersSignal.get().q1.freeFormRemediation,
+    'Escalate to legal'
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][1], 'answers');
+});
+
+test('handleRemediationFreeForm: an empty value clears the field', () => {
+  const vm = makeSelectionVM(() => {}, {
+    value: 'No',
+    freeFormRemediation: 'Old text',
+  });
+  vm.handleRemediationFreeForm('q1', '');
+
+  assert.equal(
+    'freeFormRemediation' in vm.answersSignal.get().q1,
+    false,
+    'clearing removes the key'
+  );
+});
+
+test('handleRemediationFreeForm: ignored when canSelectRemediation is false', () => {
+  /** @type {any[]} */
+  const calls = [];
+  const vm = makeSelectionVM((...a) => calls.push(a), { value: 'No' }, false);
+  vm.handleRemediationFreeForm('q1', 'x');
+  assert.equal(calls.length, 0);
+});
+
+test('handleRemediationFreeForm: ignored when the Answer does not exist', () => {
+  /** @type {any[]} */
+  const calls = [];
+  const vm = makeSelectionVM((...a) => calls.push(a));
+  vm.handleRemediationFreeForm('missing', 'x');
+  assert.equal(calls.length, 0);
+});
+
 // --- handleActionStatus: Remediation tracking (ADR-0024) ---
 
 /**

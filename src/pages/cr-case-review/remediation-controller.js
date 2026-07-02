@@ -24,6 +24,21 @@ export function bindRemediationPanel(context) {
       /** @type {any} */ (event).detail.attributedParty
     );
   });
+  remediation.addEventListener('cr-remediation-action', (ev) => {
+    const event = /** @type {CustomEvent} */ (ev);
+    vm.handleRemediationAction(
+      /** @type {any} */ (event).detail.questionId,
+      /** @type {any} */ (event).detail.action,
+      /** @type {any} */ (event).detail.selected
+    );
+  });
+  remediation.addEventListener('cr-remediation-freeform', (ev) => {
+    const event = /** @type {CustomEvent} */ (ev);
+    vm.handleRemediationFreeForm(
+      /** @type {any} */ (event).detail.questionId,
+      /** @type {any} */ (event).detail.value
+    );
+  });
 }
 
 /**
@@ -49,6 +64,7 @@ export function updateRemediationPanel(context) {
       : null,
     captureGroups: config.captureGroups ?? [],
     canCapture: machine.canCapture,
+    canSelectRemediation: machine.canSelectRemediation,
     catalogue,
     answers,
     attributeFailures,
