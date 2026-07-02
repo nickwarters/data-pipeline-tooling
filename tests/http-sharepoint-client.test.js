@@ -407,6 +407,7 @@ test('HttpSharePointClient: patchCase writes mutable CaseRow fields to SharePoin
     {
       caseJustification: 'documented rationale',
       reportableAt: '2026-05-30T10:00:00.000Z',
+      remediationDueDate: '2026-06-15',
       completedAt: '2026-06-01T10:00:00.000Z',
       outcome: 'fail',
       outcomeAtCompletion: 'fail',
@@ -430,6 +431,7 @@ test('HttpSharePointClient: patchCase writes mutable CaseRow fields to SharePoin
   assert.deepEqual(body, {
     CaseJustification: 'documented rationale',
     ReportableAt: '2026-05-30T10:00:00.000Z',
+    RemediationDueDate: '2026-06-15',
     CompletedAt: '2026-06-01T10:00:00.000Z',
     Outcome: 'fail',
     OutcomeAtCompletion: 'fail',
@@ -955,6 +957,7 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
             Notes: 'note',
             CaseJustification: 'documented rationale',
             ReportableAt: '2026-06-02T10:00:00.000Z',
+            RemediationDueDate: '2026-06-16',
             CompletedAt: '2026-06-03T10:00:00.000Z',
             Outcome: 'fail',
             OutcomeAtCompletion: 'refer',
@@ -982,6 +985,7 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
 
   assert.equal(row?.caseJustification, 'documented rationale');
   assert.equal(row?.reportableAt, '2026-06-02T10:00:00.000Z');
+  assert.equal(row?.remediationDueDate, '2026-06-16');
   assert.equal(row?.outcome, 'fail');
   assert.equal(row?.outcomeAtCompletion, 'refer');
   assert.equal(row?.questionBankVersion, 'hash-123');

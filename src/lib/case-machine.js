@@ -18,6 +18,12 @@ export { isReportable } from '../services/section-access.js';
 
 import { remediationTrackingComplete } from '../evaluators/remediation-actions.js';
 
+import { addWorkingDays } from './add-working-days.js';
+import {
+  ENGLAND_WALES_HOLIDAYS,
+  REMEDIATION_SLA_WORKING_DAYS,
+} from '../config/working-days.js';
+
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
 /** @typedef {import('../sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
@@ -141,9 +147,18 @@ export class CaseMachine {
    * @returns {Partial<CaseRow>}
    */
   transitionToActionsInProgress(computeOutcome, answers, questionBankVersion) {
+    const reportableAt = new Date().toISOString();
     return {
       status: 'Actions In Progress',
-      reportableAt: new Date().toISOString(),
+      reportableAt,
+      // Remediation SLA due date, computed **once** here at Send Actions and
+      // stored on the row — never recomputed on read (ADR-0025). The reportable
+      // moment is the SLA start; the due date is +10 working days from it.
+      remediationDueDate: addWorkingDays(
+        reportableAt,
+        REMEDIATION_SLA_WORKING_DAYS,
+        ENGLAND_WALES_HOLIDAYS
+      ),
       ...this._reportableSnapshot(computeOutcome, answers, questionBankVersion),
     };
   }

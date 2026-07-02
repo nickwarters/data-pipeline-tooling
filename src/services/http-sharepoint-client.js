@@ -552,6 +552,10 @@ function rowFromItem(item, etag) {
         : undefined,
     reportableAt:
       typeof item?.ReportableAt === 'string' ? item.ReportableAt : null,
+    remediationDueDate:
+      typeof item?.RemediationDueDate === 'string'
+        ? item.RemediationDueDate
+        : null,
     completedAt:
       typeof item?.CompletedAt === 'string' ? item.CompletedAt : null,
     outcome: item?.Outcome != null ? String(item.Outcome) : undefined,
@@ -602,6 +606,8 @@ function itemFromRow(fields) {
   if (fields.caseJustification !== undefined)
     out.CaseJustification = fields.caseJustification;
   if (fields.reportableAt !== undefined) out.ReportableAt = fields.reportableAt;
+  if (fields.remediationDueDate !== undefined)
+    out.RemediationDueDate = fields.remediationDueDate;
   if (fields.completedAt !== undefined) out.CompletedAt = fields.completedAt;
   if (fields.outcome !== undefined) out.Outcome = fields.outcome;
   if (fields.outcomeAtCompletion !== undefined)

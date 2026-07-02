@@ -2,6 +2,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CaseMachine, isReportable } from '../src/lib/case-machine.js';
+import { addWorkingDays } from '../src/lib/add-working-days.js';
+import {
+  ENGLAND_WALES_HOLIDAYS,
+  REMEDIATION_SLA_WORKING_DAYS,
+} from '../src/config/working-days.js';
 
 /** @type {import('../src/services/permissions.js').Capabilities} */
 const NO_CAPABILITIES = {
@@ -2617,6 +2622,22 @@ test('CaseMachine.transitionToActionsInProgress stamps the reportable snapshot w
 
   assert.equal(fields.status, 'Actions In Progress');
   assert.equal(typeof fields.reportableAt, 'string', 'reportableAt is stamped');
+  // The remediation SLA due date is stamped here, once, as reportableAt + 10
+  // working days (ADR-0025) — a plain YYYY-MM-DD ISO date on the Case row.
+  assert.match(
+    String(fields.remediationDueDate),
+    /^\d{4}-\d{2}-\d{2}$/,
+    'remediationDueDate is a YYYY-MM-DD ISO date'
+  );
+  assert.equal(
+    fields.remediationDueDate,
+    addWorkingDays(
+      String(fields.reportableAt),
+      REMEDIATION_SLA_WORKING_DAYS,
+      ENGLAND_WALES_HOLIDAYS
+    ),
+    'remediationDueDate = reportableAt + 10 working days'
+  );
   assert.equal(
     Object.hasOwn(fields, 'completedAt'),
     false,
@@ -2650,6 +2671,11 @@ test('CaseMachine.transitionToCompleted (no-actions path) stamps reportableAt an
   );
   assert.equal(fields.outcomeAtCompletion, 'pass', 'snapshot taken here');
   assert.equal(fields.hadRemediation, false);
+  assert.equal(
+    Object.hasOwn(fields, 'remediationDueDate'),
+    false,
+    'no remediation SLA due date on the no-actions path (ADR-0025)'
+  );
 });
 
 test('CaseMachine.transitionToFinalComplete closes without re-snapshotting (ADR-0023)', () => {
