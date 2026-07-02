@@ -14,7 +14,6 @@
 export const CASE_TYPE_IMPORTERS = {
   'example-review': () => import('./example-review.js'),
   'product-sale-review': () => import('./product-sale-review.js'),
-  'qa-example-review': () => import('./qa-example-review.js'),
   'stress-review': () => import('./stress-review.js'),
 };
 

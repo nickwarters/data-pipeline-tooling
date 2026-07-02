@@ -3,7 +3,6 @@ import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import { isFailure } from '../evaluators/failure-evaluator.js';
 import { buildCaptureControl } from '../lib/capture-engine.js';
-import './cr-override-editor.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').Appeal} Appeal */
@@ -20,9 +19,16 @@ import './cr-override-editor.js';
  * Answers — citing a disputed Answer aims the reviewer but sets no value.
  *
  * Access is resolved upstream (section-access, ADR-0011): `edit` only for the
- * appellant roles on a Completed Case, otherwise `read-only` (reviewers/owner) or
- * the Section is not rendered at all. At most one Appeal may be open at a time;
- * once every Appeal is resolved a fresh one can be raised, with full history kept.
+ * appellant roles on a Completed Case, otherwise `read-only` (reviewers/owner/
+ * Controls) or the Section is not rendered at all. At most one Appeal may be open
+ * at a time; once every Appeal is resolved a fresh one can be raised, with full
+ * history kept.
+ *
+ * Appeal *resolution* is parked (ADR-0026 retires the QA Reviewer + Answer
+ * Override machinery this Section used to resolve through). Under ADR-0027 the
+ * resolver becomes Controls via a dedicated Appeal Review tab; that flow — and
+ * the corrective Amend Outcome it drives — is rebuilt in a later slice. For now
+ * this Section only raises and displays Appeals read-only.
  */
 /**
  * @typedef {object} AppealProps
@@ -30,17 +36,10 @@ import './cr-override-editor.js';
  * @property {SaveQueue | null} saveQueue
  * @property {string} caseId
  * @property {'edit'|'read-only'|'hidden'} access
- * @property {boolean} canResolve
- * @property {string | null} authoringAppealId
- * @property {boolean} attributeFailures
- * @property {import('../sharepoint-client.js').RemediationField[]} remediationFields
- * @property {import('../sharepoint-client.js').SharePointClient | null} client
  * @property {CurrentUser | null} currentUser
  * @property {QuestionDefinition[]} catalogue
  * @property {Record<string, Answer>} answers
- * @property {((answers: Record<string, Answer>) => import('../sharepoint-client.js').OutcomeResult) | null} computeOutcome
  * @property {() => string} newAppealId
- * @property {(appealId: string | null) => void} setAuthoringAppealId
  * @property {() => void} render
  */
 
@@ -57,16 +56,7 @@ export function AppealSection(props) {
   }
 
   const openAppeal = openAppealFrom(props);
-  if (props.access === 'edit' && props.canResolve) {
-    if (openAppeal) {
-      children.push(renderAppealResolveForm(props, openAppeal));
-    } else if (appealsFrom(props).length === 0) {
-      children.push(renderAppealEmpty());
-    }
-    if (props.authoringAppealId) {
-      children.push(buildAppealOverrideEditor(props));
-    }
-  } else if (props.access === 'edit' && !openAppeal) {
+  if (props.access === 'edit' && !openAppeal) {
     children.push(renderAppealForm(props));
   } else if (props.access === 'edit' && openAppeal) {
     children.push(
@@ -222,104 +212,6 @@ export function raiseAppeal(props, rationaleEl, checkboxes, errorEl) {
   props.render();
 }
 
-/**
- * @param {AppealProps} props
- * @param {Appeal} appeal
- * @returns {HTMLElement}
- */
-export function renderAppealResolveForm(props, appeal) {
-  const rationale = /** @type {HTMLTextAreaElement} */ (
-    buildCaptureControl(
-      { key: 'rationale', type: 'textarea', label: 'Resolution rationale' },
-      '',
-      () => {},
-      'cr-appeal-resolution-rationale'
-    )
-  );
-  rationale.setAttribute('aria-label', 'Resolution rationale');
-  const error = h(
-    'p',
-    { className: 'cr-appeal-resolution-error', hidden: true },
-    'A rationale is required to resolve an Appeal.'
-  );
-
-  return h(
-    'section',
-    { className: 'cr-appeal-resolve' },
-    h('label', {}, 'How are you resolving this Appeal?'),
-    rationale,
-    error,
-    h(
-      'button',
-      {
-        className: 'cr-appeal-reject',
-        onClick: () =>
-          resolveAppeal(props, appeal, 'rejected', rationale, error),
-      },
-      'Reject Appeal'
-    ),
-    h(
-      'button',
-      {
-        className: 'cr-appeal-agree',
-        onClick: () => resolveAppeal(props, appeal, 'agreed', rationale, error),
-      },
-      'Agree with Appeal'
-    )
-  );
-}
-
-/**
- * @param {AppealProps} props
- * @param {Appeal} appeal
- * @param {'agreed' | 'rejected'} verdict
- * @param {{ value?: string }} rationaleEl
- * @param {HTMLElement} errorEl
- */
-export function resolveAppeal(props, appeal, verdict, rationaleEl, errorEl) {
-  const rationale = (rationaleEl.value ?? '').trim();
-  if (!rationale) {
-    errorEl.hidden = false;
-    return;
-  }
-
-  appeal.state = 'resolved';
-  appeal.resolution = {
-    verdict,
-    rationale,
-    resolver: props.currentUser?.id ?? '',
-    at: new Date().toISOString(),
-  };
-
-  const next = [...appealsFrom(props)];
-  if (props.caseRow) props.caseRow.appeals = next;
-  props.saveQueue?.enqueue(props.caseId, 'appeals', next);
-  props.setAuthoringAppealId(verdict === 'agreed' ? appeal.id : null);
-  props.render();
-}
-
-/**
- * @param {AppealProps} props
- * @returns {HTMLElement}
- */
-export function buildAppealOverrideEditor(props) {
-  const editor = h('cr-override-editor');
-  const ed = /** @type {any} */ (editor);
-  ed.caseRow = props.caseRow;
-  ed.saveQueue = props.saveQueue;
-  ed.caseId = props.caseId;
-  ed.access = 'override';
-  ed.currentUser = props.currentUser;
-  ed.catalogue = props.catalogue;
-  ed.attributeFailures = props.attributeFailures;
-  ed.remediationFields = props.remediationFields;
-  ed.computeOutcome = props.computeOutcome;
-  ed.client = props.client;
-  ed.source = 'appeal';
-  ed.sourceAppealId = props.authoringAppealId;
-  return editor;
-}
-
 export class CRAppeal extends ShellElement {
   constructor() {
     super();
@@ -331,27 +223,6 @@ export class CRAppeal extends ShellElement {
     this.caseId = '';
     /** @type {'edit'|'read-only'|'hidden'} */
     this.access = 'read-only';
-    /**
-     * Whether the viewer is a QA Reviewer who may *resolve* the open Appeal
-     * (issue #134), as opposed to an appellant who *raises* one. Both hold `edit`
-     * on a Completed Case, so this flag selects the resolution form over the raise
-     * form.
-     * @type {boolean}
-     */
-    this.canResolve = false;
-    /**
-     * Set to the Appeal id once the QA Reviewer *agrees* with it, which reveals
-     * the corrective Override editor (stamped `source: 'appeal'`). Transient
-     * authoring state, not persisted.
-     * @type {string | null}
-     */
-    this._authoringAppealId = null;
-    /** Whether the Case Type attributes failures to a person (ADR-0013). @type {boolean} */
-    this.attributeFailures = false;
-    /** The Case Type's configurable per-failure capture fields (ADR-0017). @type {import('../sharepoint-client.js').RemediationField[]} */
-    this.remediationFields = [];
-    /** Backs the embedded Override editor's people picker. @type {import('../sharepoint-client.js').SharePointClient | null} */
-    this.client = null;
     /** @type {CurrentUser | null} */
     this.currentUser = null;
     /**
@@ -362,111 +233,14 @@ export class CRAppeal extends ShellElement {
     this.catalogue = [];
     /** @type {Record<string, Answer>} */
     this.answers = {};
-    /**
-     * The Case Type's outcome function, forwarded to the corrective Override
-     * editor so an Appeal-sourced Override re-stamps the effective-outcome
-     * columns (ADR-0019).
-     * @type {((answers: Record<string, Answer>) => import('../sharepoint-client.js').OutcomeResult) | null}
-     */
-    this.computeOutcome = null;
-  }
-
-  /** @returns {Appeal[]} */
-  _appeals() {
-    return this.caseRow?.appeals ?? [];
-  }
-
-  /**
-   * The single open Appeal, if any. An Appeal is open until `resolved`; CONTEXT.md
-   * caps the Case at one open Appeal at a time.
-   * @returns {Appeal | null}
-   */
-  _openAppeal() {
-    return this._appeals().find((a) => a.state !== 'resolved') ?? null;
   }
 
   _render() {
-    const content = this.render();
-    if (content) {
-      if (Array.isArray(content)) this.replaceChildren(...content);
-      else this.replaceChildren(content);
-    } else {
-      this.replaceChildren();
-    }
+    this.replaceChildren(...this.render());
   }
 
   render() {
     return AppealSection(this._props());
-  }
-
-  /** @returns {HTMLElement} */
-  _renderEmpty() {
-    return renderAppealEmpty();
-  }
-
-  /**
-   * @param {Appeal} appeal
-   * @returns {HTMLElement}
-   */
-  _renderAppeal(appeal) {
-    return renderAppealItem(appeal);
-  }
-
-  /** @returns {HTMLElement} */
-  _renderForm() {
-    return renderAppealForm(this._props());
-  }
-
-  /**
-   * Validate, build the `raised` Appeal, and persist it additively via the
-   * SaveQueue (field-level PATCH of `appeals`, ETag-guarded by the queue).
-   *
-   * @param {{ value?: string }} rationaleEl
-   * @param {Array<{ checked?: boolean, value?: string }>} checkboxes
-   * @param {HTMLElement} errorEl
-   */
-  _raise(rationaleEl, checkboxes, errorEl) {
-    raiseAppeal(this._props(), rationaleEl, checkboxes, errorEl);
-  }
-
-  /**
-   * The QA Reviewer's resolution form for the single open Appeal (issue #134): a
-   * required resolver rationale plus the two verdicts. **Reject** records the
-   * rationale and changes nothing; **Agree** records it and reveals the corrective
-   * Override editor. The appellant's requested value is never auto-adopted —
-   * agreement is the QA Reviewer's correction as they see fit (ADR-0018).
-   *
-   * @param {Appeal} appeal
-   * @returns {HTMLElement}
-   */
-  _renderResolveForm(appeal) {
-    return renderAppealResolveForm(this._props(), appeal);
-  }
-
-  /**
-   * Validate the resolver rationale, stamp the verdict onto the Appeal, and
-   * persist `appeals` additively (ETag-guarded by the SaveQueue, ADR-0008). The
-   * frozen original Case is never touched: a **Reject** leaves the Current Outcome
-   * unchanged, and an **Agree** authorises a separate corrective Override rather
-   * than mutating anything here.
-   *
-   * @param {Appeal} appeal
-   * @param {'agreed' | 'rejected'} verdict
-   * @param {{ value?: string }} rationaleEl
-   * @param {HTMLElement} errorEl
-   */
-  _resolve(appeal, verdict, rationaleEl, errorEl) {
-    resolveAppeal(this._props(), appeal, verdict, rationaleEl, errorEl);
-  }
-
-  /**
-   * The reusable Answer Override editor (slice #133) configured to author the
-   * corrective Override(s) for an agreed Appeal: `source: 'appeal'` plus the
-   * `sourceAppealId` back-link. Writes target the original row's `overrides[]`.
-   * @returns {HTMLElement}
-   */
-  _buildOverrideEditor() {
-    return buildAppealOverrideEditor(this._props());
   }
 
   /**
@@ -485,19 +259,10 @@ export class CRAppeal extends ShellElement {
       saveQueue: this.saveQueue,
       caseId: this.caseId,
       access: this.access,
-      canResolve: this.canResolve,
-      authoringAppealId: this._authoringAppealId,
-      attributeFailures: this.attributeFailures,
-      remediationFields: this.remediationFields,
-      client: this.client,
       currentUser: this.currentUser,
       catalogue: this.catalogue,
       answers: this.answers,
-      computeOutcome: this.computeOutcome,
       newAppealId: () => this.newAppealId(),
-      setAuthoringAppealId: (appealId) => {
-        this._authoringAppealId = appealId;
-      },
       render: () => this._render(),
     };
   }

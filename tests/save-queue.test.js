@@ -540,8 +540,8 @@ test('SaveQueue: enqueueFields writes all fields in a single ETag-guarded PATCH 
   const q = new SaveQueue(client, { debounceMs: 0 });
   q.loadCase(BASE_ROW);
 
+  // The reporting columns an Amended Outcome re-stamps together (ADR-0019/0026).
   q.enqueueFields('c1', {
-    overrides: [/** @type {any} */ ({ answerKey: 'q1' })],
     effectiveOutcome: 'pass',
     effectiveHadRemediation: false,
     outcomeOverridden: true,
@@ -558,7 +558,6 @@ test('SaveQueue: enqueueFields writes all fields in a single ETag-guarded PATCH 
   assert.equal(fields.effectiveOutcome, 'pass');
   assert.equal(fields.effectiveHadRemediation, false);
   assert.equal(fields.outcomeOverridden, true);
-  assert.ok(Array.isArray(fields.overrides));
   assert.equal(q.status.get(), 'saved');
 });
 

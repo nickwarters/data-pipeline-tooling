@@ -354,15 +354,6 @@ test('HttpSharePointClient: PATCH sends If-Match header with the supplied ETag',
 });
 
 test('HttpSharePointClient: patchCase writes mutable CaseRow fields to SharePoint columns', async () => {
-  const override = {
-    source: /** @type {'appeal'} */ ('appeal'),
-    sourceAppealId: 'appeal-1',
-    author: 'qa-reviewer',
-    at: '2026-06-01T10:00:00.000Z',
-    answerKey: 'q-1',
-    value: 'Yes',
-    reasoning: 'Agreed',
-  };
   const appeal = {
     id: 'appeal-1',
     appellant: 'rp-1',
@@ -423,9 +414,7 @@ test('HttpSharePointClient: patchCase writes mutable CaseRow fields to SharePoin
       effectiveOutcome: 'pass',
       effectiveHadRemediation: false,
       outcomeOverridden: true,
-      overrides: [override],
       appeals: [appeal],
-      sourceCaseId: 'source-1',
       dueDate: '2026-06-10T10:00:00.000Z',
       relatedDate: null,
       assignedReviewerManager: null,
@@ -447,9 +436,7 @@ test('HttpSharePointClient: patchCase writes mutable CaseRow fields to SharePoin
     EffectiveOutcome: 'pass',
     EffectiveHadRemediation: false,
     OutcomeOverridden: true,
-    Overrides: JSON.stringify([override]),
     Appeals: JSON.stringify([appeal]),
-    SourceCaseId: 'source-1',
     DueDate: '2026-06-10T10:00:00.000Z',
     RelatedDate: null,
     AssignedReviewerManager: null,
@@ -938,17 +925,6 @@ test('HttpSharePointClient: getCase can target a supplied SharePoint list', asyn
 });
 
 test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async () => {
-  const overrides = [
-    {
-      source: 'qa',
-      sourceCaseId: 'qa-1',
-      author: 'qa-reviewer',
-      at: '2026-06-01T10:00:00.000Z',
-      answerKey: 'q-1',
-      value: 'Yes',
-      reasoning: 'Evidence supports pass',
-    },
-  ];
   const appeals = [
     {
       id: 'appeal-1',
@@ -984,9 +960,7 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
             EffectiveOutcome: 'pass',
             EffectiveHadRemediation: false,
             OutcomeOverridden: true,
-            Overrides: JSON.stringify(overrides),
             Appeals: JSON.stringify(appeals),
-            SourceCaseId: 'source-1',
             DueDate: '2026-06-10T10:00:00.000Z',
             RelatedDate: '2026-06-04T10:00:00.000Z',
             Created: '2026-06-01T09:00:00.000Z',
@@ -1011,9 +985,7 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
   assert.equal(row?.effectiveOutcome, 'pass');
   assert.equal(row?.effectiveHadRemediation, false);
   assert.equal(row?.outcomeOverridden, true);
-  assert.deepEqual(row?.overrides, overrides);
   assert.deepEqual(row?.appeals, appeals);
-  assert.equal(row?.sourceCaseId, 'source-1');
   assert.equal(row?.dueDate, '2026-06-10T10:00:00.000Z');
   assert.equal(row?.relatedDate, '2026-06-04T10:00:00.000Z');
   assert.equal(row?.created, '2026-06-01T09:00:00.000Z');

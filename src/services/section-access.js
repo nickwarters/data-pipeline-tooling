@@ -9,8 +9,8 @@
  * SharePoint list ACLs remain the real boundary. See ADR-0011 for design.
  *
  * @typedef {'details'|'questions'|'conversation'|'notes'|'remediation'|'summary'|'appeal'} Section
- * @typedef {'assignedReviewer'|'otherReviewer'|'responsibleParty'|'responsiblePartyManager'|'caseTypeOwner'|'qaReviewer'|'none'} Role
- * @typedef {'edit'|'override'|'read-only'|'hidden'} Mode
+ * @typedef {'assignedReviewer'|'otherReviewer'|'responsibleParty'|'responsiblePartyManager'|'caseTypeOwner'|'controls'|'none'} Role
+ * @typedef {'edit'|'read-only'|'hidden'} Mode
  */
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
@@ -72,20 +72,20 @@ const MATRIX = {
     responsibleParty: 'read-only',
     responsiblePartyManager: 'read-only',
     caseTypeOwner: 'read-only',
-    qaReviewer: 'read-only',
+    controls: 'read-only',
     none: 'hidden',
   },
-  // A QA Reviewer ("check the checker", ADR-0018) authors Answer Overrides on a
-  // Completed Case via the function-valued `override` Mode — read-only while the
-  // Case is still In-progress (nothing to correct yet). The Override appends to
-  // `overrides[]`; the frozen original Answers are never mutated.
+  // Controls (ADR-0022) observe the reviewed Answers read-only. Post-completion
+  // corrections are no longer per-Answer overrides (ADR-0026 retires QA Check +
+  // Answer Override); a case-level Amended Outcome will supply corrections via its
+  // own Section in a later slice.
   questions: {
     assignedReviewer: 'edit',
     otherReviewer: 'read-only',
     responsibleParty: 'read-only',
     responsiblePartyManager: 'read-only',
     caseTypeOwner: 'read-only',
-    qaReviewer: (c) => (c.status === 'Completed' ? 'override' : 'read-only'),
+    controls: 'read-only',
     none: 'hidden',
   },
   // The Conversation is the thread between the Assigned Reviewer and the Case's
@@ -105,7 +105,7 @@ const MATRIX = {
     },
     responsiblePartyManager: 'hidden',
     caseTypeOwner: 'read-only',
-    qaReviewer: 'hidden',
+    controls: 'hidden',
     none: 'hidden',
   },
   notes: {
@@ -114,18 +114,18 @@ const MATRIX = {
     responsibleParty: 'hidden',
     responsiblePartyManager: 'hidden',
     caseTypeOwner: 'read-only',
-    qaReviewer: 'hidden',
+    controls: 'hidden',
     none: 'hidden',
   },
-  // Remediation shares the QA Override path with questions: a fail→pass / pass→fail
-  // Override revises which Remediation Actions apply (replace, never merge).
+  // Remediation is observed read-only by Controls (see `questions`): the retired
+  // Answer Override path no longer revises which Remediation Actions apply.
   remediation: {
     assignedReviewer: 'edit',
     otherReviewer: 'read-only',
     responsibleParty: 'read-only',
     responsiblePartyManager: 'read-only',
     caseTypeOwner: 'read-only',
-    qaReviewer: (c) => (c.status === 'Completed' ? 'override' : 'read-only'),
+    controls: 'read-only',
     none: 'hidden',
   },
   // Summary is never `edit` — only `read-only` or `hidden` (ADR-0016). It
@@ -140,15 +140,18 @@ const MATRIX = {
     responsiblePartyManager: (c) =>
       c.status === 'Completed' ? 'read-only' : 'hidden',
     caseTypeOwner: 'read-only',
-    qaReviewer: 'read-only',
+    controls: 'read-only',
     none: 'hidden',
   },
   // The Appeal Section (issue #132, ADR-0011): the Responsible Party or their
   // Manager may raise a case-level Appeal, but only against a Completed Case —
-  // hidden while In-progress. The QA Reviewer resolves Appeals (issue #134) and
-  // so gets `edit` on a Completed Case (read-only while In-progress — nothing to
-  // appeal yet). Other reviewers and the Case Type Owner observe it read-only;
-  // everyone else sees nothing.
+  // hidden while In-progress. Other reviewers, the Case Type Owner and Controls
+  // observe it read-only; everyone else sees nothing.
+  //
+  // Appeal *resolution* is parked: it previously ran through the retired QA
+  // Reviewer + Answer Override machinery (ADR-0018). Under ADR-0027 the resolver
+  // is Controls via a dedicated Appeal Review tab, rebuilt in a later slice — so
+  // Controls is read-only here for now rather than a resolver.
   appeal: {
     assignedReviewer: 'read-only',
     otherReviewer: 'read-only',
@@ -156,18 +159,16 @@ const MATRIX = {
     responsiblePartyManager: (c) =>
       c.status === 'Completed' ? 'edit' : 'hidden',
     caseTypeOwner: 'read-only',
-    qaReviewer: (c) => (c.status === 'Completed' ? 'edit' : 'read-only'),
+    controls: 'read-only',
     none: 'hidden',
   },
 };
 
 /**
- * Most-permissive wins. `override` (ADR-0018 QA correction) sits between
- * `read-only` and `edit`: a QA Reviewer who is also the Assigned Reviewer keeps
- * full `edit`, but `override` outranks any plain read-only role.
+ * Most-permissive wins across a viewer's roles.
  * @type {Record<Mode, number>}
  */
-const RANK = { edit: 3, override: 2, 'read-only': 1, hidden: 0 };
+const RANK = { edit: 3, 'read-only': 1, hidden: 0 };
 
 /**
  * Resolve the viewer's roles for this specific Case.
@@ -197,11 +198,10 @@ export function resolveRoles(caseRow, userId, capabilities) {
   if (capabilities.ownedCaseTypes.includes(caseRow.caseType)) {
     roles.push('caseTypeOwner');
   }
-  // The Controls group (ADR-0022, replacing the retired QA Reviewer) is
-  // standalone: a Controls user authors Answer Overrides regardless of whether
-  // they also reviewed or own the Case Type.
+  // The Controls group (ADR-0022) is a standalone functional role held
+  // regardless of whether the user also reviewed or owns the Case Type.
   if (capabilities.isControls) {
-    roles.push('qaReviewer');
+    roles.push('controls');
   }
   return roles.length ? roles : ['none'];
 }

@@ -321,15 +321,11 @@ export const cases = [
     etag: 'etag-c13-v1',
   },
   {
-    // Completed, then corrected by a post-completion Answer Override (ADR-0018):
-    // the frozen Answers all passed (outcomeAtCompletion 'pass'), but a QA
-    // Reviewer overrode q-welcome to a failure, so the Current Outcome derives to
-    // 'fail'. Demonstrates the read-only Current Outcome differing from the
-    // snapshot. Completed two months ago so it sits outside the owner roll-up's
-    // 7-day window.
+    // A plain Completed example-review Case (all Answers passed). Completed two
+    // months ago so it sits outside the owner roll-up's 7-day window.
     id: 'case-14',
     caseType: 'example-review',
-    title: 'Example Review #14 (overridden)',
+    title: 'Example Review #14',
     status: 'Completed',
     assignedReviewer: 'user-reviewer',
     responsibleParty: 'user-rp',
@@ -338,55 +334,12 @@ export const cases = [
       'q-needs': { value: 'Yes' },
       'q-resolve': { value: 'Yes' },
     },
-    overrides: [
-      {
-        source: 'qa',
-        author: 'user-qa',
-        at: _twoMonthsAgo.toISOString(),
-        answerKey: 'q-welcome',
-        value: 'No',
-        remediationActions: [
-          {
-            id: 'ov-14-1',
-            text: 'Coach agent on opening greeting standards.',
-            completed: false,
-          },
-        ],
-        attributedParty: { loginName: 'agent-rp', displayName: 'Agent RP' },
-        remediationDetails: {
-          rootCause: 'Greeting omitted on the call recording',
-        },
-        reasoning:
-          'On review the recording shows no greeting was given; original Answer was wrong.',
-      },
-    ],
     conversation: [],
     notes: '',
     completedAt: _twoMonthsAgo.toISOString(),
     outcomeAtCompletion: 'pass',
     created: '2026-04-05T08:00:00Z',
     etag: 'etag-c14-v1',
-  },
-  {
-    // QA Check (issue #47): a qa-example-review Case meta-reviewing case-14 (a
-    // Completed example-review Case that already carries one Answer Override). The
-    // QA Reviewer (user-qa) is its Assigned Reviewer; opening it renders the
-    // standard shell with the QA questions plus a read-only source-Case panel
-    // (case-14's Effective Answers + Current Outcome) and the embedded Override
-    // editor, which writes cross-row to case-14's `overrides[]` (ADR-0018).
-    id: 'qa-case-1',
-    caseType: 'qa-example-review',
-    title: 'QA Check — Example Review #14',
-    status: 'In-progress',
-    assignedReviewer: 'user-qa',
-    responsibleParty: '',
-    sourceCaseId: 'case-14',
-    answers: {},
-    conversation: [],
-    notes: '',
-    completedAt: null,
-    created: '2026-06-11T08:00:00Z',
-    etag: 'etag-qa1-v1',
   },
   // --- Reviewer Manager (user-rm) report fixture cases ---
   {

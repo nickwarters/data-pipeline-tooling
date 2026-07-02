@@ -15,7 +15,6 @@ export function updateSummaryNotesAppeal(context) {
     allAnswered,
     currentUser,
     access,
-    roles,
     summarySections,
   } = vm;
   if (!summary || !notes || !appeal || !caseRow || !config || !currentUser)
@@ -45,16 +44,15 @@ export function updateSummaryNotesAppeal(context) {
     access: context.displayMode(access.notes),
   });
 
+  // Appeal *resolution* is parked (ADR-0026/ADR-0027): the raise + read-only
+  // history remain, but the retired QA Reviewer + Answer Override path is gone,
+  // so the resolver props (canResolve, computeOutcome, client, capture config)
+  // are no longer wired.
   Object.assign(appeal, {
     caseRow,
     saveQueue: vm.saveQueue,
     caseId: caseRow.id,
     access: context.displayMode(access.appeal),
-    canResolve: roles.includes('qaReviewer'),
-    attributeFailures: config.attributeFailures === true,
-    remediationFields: config.remediationFields ?? [],
-    computeOutcome: config.computeOutcome,
-    client: vm.client,
     currentUser,
     catalogue,
     answers: caseRow.answers,

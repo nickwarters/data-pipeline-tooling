@@ -3,10 +3,6 @@ import { h } from '../lib/html.js';
 import './cr-outcome.js';
 import { caseDetailFields } from './cr-case-details.js';
 import { buildSummaryModel } from '../evaluators/summary-model.js';
-import {
-  currentOutcome,
-  buildOverrideRows,
-} from '../evaluators/effective-answers.js';
 import './cr-capture-groups.js';
 
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
@@ -38,16 +34,8 @@ export function Summary(props) {
   );
 
   const completed = props.caseRow?.status === 'Completed';
-  const overrides = props.caseRow?.overrides ?? [];
   const frozen = completed ? props.caseRow?.outcomeAtCompletion : null;
-  if (completed && overrides.length && props.computeOutcome) {
-    const result = currentOutcome(
-      props.computeOutcome,
-      props.answers,
-      overrides
-    );
-    outcomeEl.update(() => result, {}, true);
-  } else if (frozen) {
+  if (frozen) {
     /** @type {OutcomeResult} */
     const result = {
       outcome: frozen,
@@ -65,10 +53,6 @@ export function Summary(props) {
 
   /** @type {Node[]} */
   const children = [heading, outcomeEl];
-
-  if (completed && overrides.length && props.caseRow) {
-    children.push(renderOverrides(props, overrides));
-  }
 
   if (props.caseRow) {
     children.push(renderKeyDates(props.caseRow));
@@ -113,44 +97,6 @@ function renderSectionBlock(props, section, caseRow) {
     );
   }
   return null;
-}
-
-/**
- * @param {SummaryProps} props
- * @param {import('../sharepoint-client.js').Override[]} overrides
- * @returns {HTMLElement}
- */
-function renderOverrides(props, overrides) {
-  return h(
-    'section',
-    { class: 'cr-summary-outcome-overrides' },
-    h('h3', {}, 'Outcome corrections'),
-    props.caseRow?.outcomeAtCompletion
-      ? h(
-          'p',
-          { class: 'cr-summary-outcome-original' },
-          `Outcome at completion: ${props.caseRow.outcomeAtCompletion}`
-        )
-      : null,
-    h(
-      'ul',
-      {},
-      ...buildOverrideRows(props.catalogue, props.answers, overrides).map(
-        (row) =>
-          h(
-            'li',
-            {},
-            h('p', {}, row.questionText),
-            h(
-              'p',
-              {},
-              `${row.originalValue} → ${row.overriddenValue} (${row.source})`
-            ),
-            h('p', {}, `Reason: ${row.reasoning}`)
-          )
-      )
-    )
-  );
 }
 
 /**

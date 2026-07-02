@@ -31,13 +31,11 @@
  * @property {HTMLElement | null} questionsPanel
  * @property {HTMLElement | null} questionList
  * @property {HTMLElement | null} progress
- * @property {HTMLElement | null} overrideEditor
  * @property {HTMLElement | null} remediation
  * @property {HTMLElement | null} summary
  * @property {HTMLElement | null} notes
  * @property {HTMLElement | null} appeal
  * @property {HTMLElement | null} conversation
- * @property {HTMLElement | null} sourceCase
  * @property {HTMLElement | null} banner
  * @property {HTMLButtonElement | null} conversationToggle
  * @property {HTMLElement | null} header
@@ -48,7 +46,7 @@
  * @typedef {object} CaseReviewShellContext
  * @property {CaseReviewViewModel} viewModel
  * @property {CaseReviewNodeRegistry} nodes
- * @property {(mode: SectionMode) => SectionMode | 'read-only'} displayMode
+ * @property {(mode: SectionMode) => SectionMode} displayMode
  * @property {(caseId: string, client?: SharePointClient | null, saveQueue?: SaveQueue | null, patchFields?: Partial<CaseRow>) => Promise<void>} completeCase
  * @property {() => void} toggleConversationPanel
  */

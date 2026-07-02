@@ -77,32 +77,6 @@
  */
 
 /**
- * A post-completion **Answer Override** (ADR-0018): an additive, per-Answer
- * correction that *displaces* the frozen original Answer without mutating it.
- *
- * `source` is `qa` (a QA Reviewer correction, with or without a QA Check) or
- * `appeal` (authored when an Appeal is agreed); `sourceCaseId` is stamped when
- * authored during a formal QA Check, `sourceAppealId` when it resolves an
- * Appeal. `value` plus the optional `remediationActions` / `attributedParty` /
- * `remediationDetails` form a *complete replacement set* for the Answer (replace,
- * never merge). `reasoning` is mandatory.
- *
- * @typedef {{
- *   source: 'qa' | 'appeal',
- *   sourceCaseId?: string,
- *   sourceAppealId?: string,
- *   author: string,
- *   at: string,
- *   answerKey: string,
- *   value: string | string[],
- *   remediationActions?: Array<{id: string, text: string, completed: boolean}>,
- *   attributedParty?: { loginName: string, displayName: string },
- *   remediationDetails?: Record<string, string>,
- *   reasoning: string
- * }} Override
- */
-
-/**
  * A case-level **Appeal** (issue #132, CONTEXT.md): an objection to a Completed
  * Case's Current Outcome raised by the Responsible Party or their Manager.
  * Stored additively in a `CaseRow.appeals[]` JSON blob (ADR-0007); it never
@@ -112,8 +86,8 @@
  * ISO timestamp; `rationale` (required on raise) is the appellant's argument.
  * `citedAnswerKeys` optionally aims the reviewer at the disputed *failed*
  * Answers but does not itself set Answer values — an Appeal is case-level. The
- * lifecycle is `raised → underReview → resolved`; `resolution` (the QA
- * resolver's `agreed | rejected` verdict plus rationale) is stamped on resolve.
+ * lifecycle is `raised → underReview → resolved`; `resolution` (the resolver's
+ * `agreed | rejected` verdict plus rationale) is stamped on resolve.
  *
  * @typedef {{
  *   id: string,
@@ -127,11 +101,11 @@
  */
 
 /**
- * A Case row. `sourceCaseId`, when present, links a **QA Check** Case
- * (`caseType: 'qa-{slug}'`, issue #47) to the original **Completed Case** it
- * meta-reviews; standard Cases leave it empty. The link only points *at* the
- * original — Answer Overrides authored from the QA Check are still written to the
- * original row's `overrides[]` (ADR-0018), not stored here.
+ * A Case row. `effectiveOutcome` / `effectiveHadRemediation` / `outcomeOverridden`
+ * carry the corrected result for the responsible-party-team report (ADR-0019); they
+ * initialise equal to the frozen `outcomeAtCompletion` / `hadRemediation` and are
+ * re-fed from a case-level **Amended Outcome** (ADR-0026), not from per-Answer
+ * overrides.
  *
  * @typedef {{
  *   id: string,
@@ -153,9 +127,7 @@
  *   effectiveOutcome?: string,
  *   effectiveHadRemediation?: boolean,
  *   outcomeOverridden?: boolean,
- *   overrides?: Override[],
  *   appeals?: Appeal[],
- *   sourceCaseId?: string,
  *   responsiblePartyManager?: string | null,
  *   dueDate?: string | null,
  *   relatedDate?: string | null,

@@ -44,7 +44,3 @@ export {
   completeCase,
   updateCompletion,
 } from './completion-controller.js';
-export {
-  SourceCaseController,
-  updateSourceCase,
-} from './source-case-controller.js';

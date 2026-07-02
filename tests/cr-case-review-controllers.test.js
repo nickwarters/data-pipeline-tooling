@@ -81,8 +81,6 @@ const { bindRemediationPanel, updateRemediationPanel } =
   await import('../src/pages/cr-case-review/remediation-controller.js');
 const { updateSummaryNotesAppeal } =
   await import('../src/pages/cr-case-review/summary-notes-appeal-controller.js');
-const { updateSourceCase } =
-  await import('../src/pages/cr-case-review/source-case-controller.js');
 const { createConversationPanelBinding } =
   await import('../src/pages/cr-case-review/conversation-controller.js');
 const { bindCompletion, completeCase, updateCompletion } =
@@ -525,9 +523,8 @@ function makeSummaryNotesAppealContext(opts = {}) {
         currentUser,
         access: {
           notes: opts.notesAccess ?? 'edit',
-          appeal: opts.appealAccess ?? 'override',
+          appeal: opts.appealAccess ?? 'read-only',
         },
-        roles: opts.roles ?? ['qaReviewer'],
         summarySections,
         saveQueue,
         client,
@@ -552,68 +549,6 @@ function makeSummaryNotesAppealContext(opts = {}) {
       },
       displayMode: (/** @type {any} */ mode) =>
         mode === 'override' ? 'read-only' : mode,
-      completeCase: async () => {},
-      toggleConversationPanel: () => {},
-    },
-  };
-}
-
-function makeSourceCaseContext() {
-  const sourceCaseNode = new StubEl();
-  const saveQueue = { id: 'queue' };
-  const client = { id: 'client' };
-  const currentUser = { id: 'user-1', displayName: 'QA Reviewer' };
-  const originalRow = {
-    id: 'original-1',
-    title: 'Original Case',
-    assignedReviewer: 'Alex Reviewer',
-  };
-  const computeOutcome = () => ({ outcome: 'pass' });
-  const remediationFields = [{ key: 'detail', label: 'Detail' }];
-  const sourceCase = {
-    originalRow,
-    catalogue: QUESTIONS,
-    computeOutcome,
-    attributeFailures: true,
-    remediationFields,
-    overrideAccess: 'override',
-    sourceCaseId: 'qa-check-1',
-  };
-  return {
-    sourceCaseNode,
-    saveQueue,
-    client,
-    currentUser,
-    sourceCase,
-    originalRow,
-    computeOutcome,
-    remediationFields,
-    context: {
-      viewModel: {
-        sourceCase,
-        saveQueue,
-        client,
-        currentUser,
-      },
-      nodes: {
-        tabs: null,
-        details: null,
-        questionsPanel: null,
-        questionList: null,
-        progress: null,
-        overrideEditor: null,
-        remediation: null,
-        summary: null,
-        notes: null,
-        appeal: null,
-        conversation: null,
-        sourceCase: sourceCaseNode,
-        banner: null,
-        conversationToggle: null,
-        header: null,
-        completeButton: null,
-      },
-      displayMode: (/** @type {any} */ mode) => mode,
       completeCase: async () => {},
       toggleConversationPanel: () => {},
     },
@@ -706,13 +641,11 @@ test('CaseReviewNodeRegistry: creates and reuses the long-lived page nodes curre
     questionsPanel: first.questionsPanel,
     questionList: first.questionList,
     progress: first.progress,
-    overrideEditor: first.overrideEditor,
     remediation: first.remediation,
     summary: first.summary,
     notes: first.notes,
     appeal: first.appeal,
     conversation: first.conversation,
-    sourceCase: first.sourceCase,
     banner: first.banner,
     conversationToggle: first.conversationToggle,
     header: first.header,
@@ -724,13 +657,11 @@ test('CaseReviewNodeRegistry: creates and reuses the long-lived page nodes curre
   assert.equal(firstNodes.questionsPanel?.tagName, 'SECTION');
   assert.equal(firstNodes.questionList?.tagName, 'CR-QUESTION-LIST');
   assert.equal(firstNodes.progress?.tagName, 'CR-SECTION-PROGRESS');
-  assert.equal(firstNodes.overrideEditor?.tagName, 'CR-OVERRIDE-EDITOR');
   assert.equal(firstNodes.remediation?.tagName, 'CR-REMEDIATION-SECTION');
   assert.equal(firstNodes.summary?.tagName, 'CR-SUMMARY');
   assert.equal(firstNodes.notes?.tagName, 'CR-NOTES');
   assert.equal(firstNodes.appeal?.tagName, 'CR-APPEAL');
   assert.equal(firstNodes.conversation?.tagName, 'CR-CONVERSATION');
-  assert.equal(firstNodes.sourceCase?.tagName, 'CR-SOURCE-CASE');
   assert.equal(firstNodes.banner?.tagName, 'CR-STATUS-BANNER');
   assert.equal(firstNodes.conversationToggle?.tagName, 'BUTTON');
   assert.equal(
@@ -747,13 +678,11 @@ test('CaseReviewNodeRegistry: creates and reuses the long-lived page nodes curre
   assert.equal(registry.questionsPanel, firstNodes.questionsPanel);
   assert.equal(registry.questionList, firstNodes.questionList);
   assert.equal(registry.progress, firstNodes.progress);
-  assert.equal(registry.overrideEditor, firstNodes.overrideEditor);
   assert.equal(registry.remediation, firstNodes.remediation);
   assert.equal(registry.summary, firstNodes.summary);
   assert.equal(registry.notes, firstNodes.notes);
   assert.equal(registry.appeal, firstNodes.appeal);
   assert.equal(registry.conversation, firstNodes.conversation);
-  assert.equal(registry.sourceCase, firstNodes.sourceCase);
   assert.equal(registry.banner, firstNodes.banner);
   assert.equal(registry.conversationToggle, firstNodes.conversationToggle);
   assert.equal(registry.header, firstNodes.header);
@@ -898,20 +827,6 @@ test('updateQuestionPanel: assigns question list and progress props', () => {
   assert.equal(questionsPanel._children[2], progress);
 });
 
-test('updateQuestionPanel: configures the override editor only in override mode', () => {
-  const { context, questionsPanel, overrideEditor, saveQueue, client } =
-    makeQuestionContext({ access: 'override' });
-
-  updateQuestionPanel(/** @type {any} */ (context));
-
-  assert.equal(questionsPanel._children[3], overrideEditor);
-  assert.equal(/** @type {any} */ (overrideEditor).caseId, 'case-1');
-  assert.equal(/** @type {any} */ (overrideEditor).access, 'override');
-  assert.equal(/** @type {any} */ (overrideEditor).saveQueue, saveQueue);
-  assert.equal(/** @type {any} */ (overrideEditor).client, client);
-  assert.equal(/** @type {any} */ (overrideEditor).attributeFailures, true);
-});
-
 test('bindRemediationPanel: forwards capture and attribution events', () => {
   const { context, remediation, captureCalls, attributeCalls } =
     makeRemediationContext();
@@ -1007,14 +922,6 @@ test('updateSummaryNotesAppeal: assigns Summary, Notes, and Appeal tab props', (
   assert.equal(/** @type {any} */ (appeal).saveQueue, saveQueue);
   assert.equal(/** @type {any} */ (appeal).caseId, 'case-1');
   assert.equal(/** @type {any} */ (appeal).access, 'read-only');
-  assert.equal(/** @type {any} */ (appeal).canResolve, true);
-  assert.equal(/** @type {any} */ (appeal).attributeFailures, true);
-  assert.equal(
-    /** @type {any} */ (appeal).remediationFields,
-    remediationFields
-  );
-  assert.equal(/** @type {any} */ (appeal).computeOutcome, computeOutcome);
-  assert.equal(/** @type {any} */ (appeal).client, client);
   assert.equal(/** @type {any} */ (appeal).currentUser, currentUser);
   assert.equal(/** @type {any} */ (appeal).catalogue, QUESTIONS);
   assert.equal(/** @type {any} */ (appeal).answers, answers);
@@ -1208,38 +1115,6 @@ test('completeCase: does not patch when required collaborators or flush success 
   });
 
   assert.equal(patchCount, 0);
-});
-
-test('updateSourceCase: assigns QA Check source case props without changing override provenance', () => {
-  const {
-    context,
-    sourceCaseNode,
-    saveQueue,
-    client,
-    currentUser,
-    originalRow,
-    computeOutcome,
-    remediationFields,
-  } = makeSourceCaseContext();
-
-  updateSourceCase(/** @type {any} */ (context));
-
-  assert.equal(/** @type {any} */ (sourceCaseNode).originalRow, originalRow);
-  assert.equal(/** @type {any} */ (sourceCaseNode).catalogue, QUESTIONS);
-  assert.equal(
-    /** @type {any} */ (sourceCaseNode).computeOutcome,
-    computeOutcome
-  );
-  assert.equal(/** @type {any} */ (sourceCaseNode).attributeFailures, true);
-  assert.equal(
-    /** @type {any} */ (sourceCaseNode).remediationFields,
-    remediationFields
-  );
-  assert.equal(/** @type {any} */ (sourceCaseNode).saveQueue, saveQueue);
-  assert.equal(/** @type {any} */ (sourceCaseNode).currentUser, currentUser);
-  assert.equal(/** @type {any} */ (sourceCaseNode).client, client);
-  assert.equal(/** @type {any} */ (sourceCaseNode).overrideAccess, 'override');
-  assert.equal(/** @type {any} */ (sourceCaseNode).sourceCaseId, 'qa-check-1');
 });
 
 test('updateCaseReviewHeader: preserves title, reviewer, conversation toggle placement, and banner wiring', () => {

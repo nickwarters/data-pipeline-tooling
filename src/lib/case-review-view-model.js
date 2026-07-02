@@ -105,9 +105,6 @@ export class CaseReviewViewModel {
     /** @type {import('../services/section-access.js').Section[]} */
     this.summarySections = [];
 
-    /** @type {any} */
-    this.sourceCase = null;
-
     this.activeTab = signal('');
     this.conversationHidden = signal(true);
   }
@@ -237,28 +234,6 @@ export class CaseReviewViewModel {
     this.summarySections = SUMMARY_SECTIONS.filter(
       (s) => this.access[s] !== 'hidden' && showInSummary(s, config)
     );
-
-    try {
-      this.sourceCase = caseRow.sourceCaseId
-        ? await this._resolveSourceCase(
-            caseRow.sourceCaseId,
-            caseRow.id,
-            client,
-            saveQueue,
-            actualUserId,
-            caps
-          )
-        : null;
-    } catch (error) {
-      if (error instanceof UnknownCaseTypeError) {
-        console.error(error);
-        this.error.set(
-          `This Case cannot be opened because its source Case Type is not supported. Ask a maintainer to add "${error.slug}" to the Case Type manifest.`
-        );
-        return;
-      }
-      throw error;
-    }
 
     const tabs = [
       { id: 'details', hidden: this.access.details === 'hidden' },
@@ -394,58 +369,5 @@ export class CaseReviewViewModel {
       }
     }
     if (changed) this.answersSignal.set(next);
-  }
-
-  /**
-   * @param {string} sourceCaseId
-   * @param {string} qaCaseId
-   * @param {SharePointClient} client
-   * @param {SaveQueue} saveQueue
-   * @param {string} currentUserId
-   * @param {Capabilities} capabilities
-   */
-  async _resolveSourceCase(
-    sourceCaseId,
-    qaCaseId,
-    client,
-    saveQueue,
-    currentUserId,
-    capabilities
-  ) {
-    const original = await client.getCase(sourceCaseId);
-    if (!original) {
-      return {
-        originalRow: null,
-        catalogue: [],
-        computeOutcome: null,
-        attributeFailures: false,
-        remediationFields: [],
-        overrideAccess: 'read-only',
-        sourceCaseId: qaCaseId,
-      };
-    }
-
-    saveQueue.loadCase(original);
-    const origConfig = await loadCaseTypeConfig(original.caseType);
-    const origCatalogue = origConfig.questions.filter((q) => !q.deprecated);
-
-    const origMachine = new CaseMachine(
-      original,
-      { id: currentUserId },
-      capabilities,
-      origConfig
-    );
-    const mode = origMachine.access.questions;
-    const overrideAccess = mode === 'override' ? 'override' : 'read-only';
-
-    return {
-      originalRow: original,
-      catalogue: origCatalogue,
-      computeOutcome: origConfig.computeOutcome,
-      attributeFailures: origConfig.attributeFailures === true,
-      remediationFields: origConfig.remediationFields ?? [],
-      overrideAccess,
-      sourceCaseId: qaCaseId,
-    };
   }
 }

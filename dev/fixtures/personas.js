@@ -8,8 +8,8 @@
  * Persona definitions for mock mode.
  * Activate via the ?asUser= URL param, e.g. ?asUser=reviewer (default).
  * Available keys: reviewer, owner, journey-owner-complaints,
- * case-type-owner-complaints, admin, responsible-party, reviewer-manager, qa
- * (a standalone QA Reviewer — opens QA Check Cases), visitor (no groups —
+ * case-type-owner-complaints, admin, responsible-party, reviewer-manager,
+ * controls (a standalone Controls user, ADR-0022), visitor (no groups —
  * exercises the Visitor explainer-only branch).
  *
  * @type {Record<string, { userId: string, displayName: string, groups: string[] }>}
@@ -50,10 +50,10 @@ export const personas = {
     displayName: 'Morgan Manager',
     groups: ['Reviewer-Managers'],
   },
-  qa: {
-    userId: 'user-qa',
-    displayName: 'Quinn QA',
-    groups: ['QA-Reviewers'],
+  controls: {
+    userId: 'user-controls',
+    displayName: 'Quinn Controls',
+    groups: ['Controls'],
   },
   visitor: {
     userId: 'user-visitor',

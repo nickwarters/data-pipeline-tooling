@@ -45,8 +45,7 @@ export function bindQuestionPanel(context) {
  */
 export function updateQuestionPanel(context) {
   const { viewModel: vm } = context;
-  const { questionList, progress, overrideEditor, questionsPanel } =
-    context.nodes;
+  const { questionList, progress, questionsPanel } = context.nodes;
   const { caseRow, catalogue, config, answersSignal, currentUser, access } = vm;
   if (
     !caseRow ||
@@ -84,21 +83,6 @@ export function updateQuestionPanel(context) {
   }
 
   const questionsChildren = [h('h2', {}, 'Questions'), questionList, progress];
-  if (access.questions === 'override' && overrideEditor) {
-    Object.assign(overrideEditor, {
-      caseRow,
-      saveQueue: vm.saveQueue,
-      caseId: caseRow.id,
-      access: 'override',
-      currentUser,
-      catalogue,
-      attributeFailures: config.attributeFailures === true,
-      remediationFields: config.remediationFields ?? [],
-      computeOutcome: config.computeOutcome,
-      client: vm.client,
-    });
-    questionsChildren.push(overrideEditor);
-  }
 
   if (typeof questionsPanel.replaceChildren === 'function') {
     questionsPanel.replaceChildren(...questionsChildren);

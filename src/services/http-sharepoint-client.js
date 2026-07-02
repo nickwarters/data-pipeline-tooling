@@ -575,14 +575,9 @@ function rowFromItem(item, etag) {
       item?.OutcomeOverridden != null
         ? Boolean(item.OutcomeOverridden)
         : undefined,
-    overrides: /** @type {CaseRow['overrides']} */ (
-      parseJsonField(item?.Overrides, undefined)
-    ),
     appeals: /** @type {CaseRow['appeals']} */ (
       parseJsonField(item?.Appeals, undefined)
     ),
-    sourceCaseId:
-      item?.SourceCaseId != null ? String(item.SourceCaseId) : undefined,
     dueDate: typeof item?.DueDate === 'string' ? item.DueDate : null,
     relatedDate:
       typeof item?.RelatedDate === 'string' ? item.RelatedDate : null,
@@ -618,11 +613,8 @@ function itemFromRow(fields) {
     out.EffectiveHadRemediation = fields.effectiveHadRemediation;
   if (fields.outcomeOverridden !== undefined)
     out.OutcomeOverridden = fields.outcomeOverridden;
-  if (fields.overrides !== undefined)
-    out.Overrides = JSON.stringify(fields.overrides);
   if (fields.appeals !== undefined)
     out.Appeals = JSON.stringify(fields.appeals);
-  if (fields.sourceCaseId !== undefined) out.SourceCaseId = fields.sourceCaseId;
   if (fields.dueDate !== undefined) out.DueDate = fields.dueDate;
   if (fields.relatedDate !== undefined) out.RelatedDate = fields.relatedDate;
   if (fields.assignedReviewer !== undefined)

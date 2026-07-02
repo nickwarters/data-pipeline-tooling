@@ -17,7 +17,6 @@ import {
   updateRemediationPanel,
 } from './cr-case-review/remediation-controller.js';
 import { updateSummaryNotesAppeal } from './cr-case-review/summary-notes-appeal-controller.js';
-import { updateSourceCase } from './cr-case-review/source-case-controller.js';
 import { createConversationPanelBinding } from './cr-case-review/conversation-controller.js';
 import {
   bindCompletion,
@@ -32,8 +31,6 @@ import '../components/cr-conversation.js';
 import '../components/cr-notes.js';
 import '../components/cr-summary.js';
 import '../components/cr-appeal.js';
-import '../components/cr-override-editor.js';
-import '../components/cr-source-case.js';
 import '../components/cr-status-banner.js';
 import '../components/cr-tabs.js';
 
@@ -87,8 +84,6 @@ export class CRCaseReview extends ShellElement {
     /** @type {any} */
     this._progressEl = null;
     /** @type {any} */
-    this._overrideEditor = null;
-    /** @type {any} */
     this._remediationSection = null;
     /** @type {any} */
     this._summaryEl = null;
@@ -98,8 +93,6 @@ export class CRCaseReview extends ShellElement {
     this._appealEl = null;
     /** @type {any} */
     this._conversationEl = null;
-    /** @type {any} */
-    this._sourceCaseEl = null;
     /** @type {any} */
     this._bannerEl = null;
     /** @type {any} */
@@ -213,7 +206,6 @@ export class CRCaseReview extends ShellElement {
         access: opts.access,
         roles: [],
         summarySections: [],
-        sourceCase: null,
         machine: {
           canAttribute: false,
           canCapture: false,
@@ -274,7 +266,7 @@ export class CRCaseReview extends ShellElement {
       );
     }
 
-    const { caseRow, config, currentUser, access, sourceCase, machine } = vm;
+    const { caseRow, config, currentUser, access, machine } = vm;
 
     if (!caseRow || !config || !machine || !currentUser) return;
 
@@ -287,7 +279,7 @@ export class CRCaseReview extends ShellElement {
     this.setAttribute('data-conversation-mode', panelMode);
 
     /** @param {import('../services/section-access.js').Mode} m */
-    const displayMode = (m) => (m === 'override' ? 'read-only' : m);
+    const displayMode = (m) => m;
 
     const canToggleConversation = machine.canToggleConversation;
 
@@ -402,15 +394,6 @@ export class CRCaseReview extends ShellElement {
       toggleConversationPanel: this._toggleConversationPanel.bind(this),
     });
 
-    updateSourceCase({
-      viewModel: vm,
-      nodes: this._controllerNodes(canToggleConversation),
-      displayMode,
-      completeCase: (caseId, client, saveQueue, patchFields) =>
-        this._completeCase(caseId, client, saveQueue, patchFields),
-      toggleConversationPanel: this._toggleConversationPanel.bind(this),
-    });
-
     updateCompletion({
       viewModel: vm,
       nodes: this._controllerNodes(canToggleConversation),
@@ -432,7 +415,6 @@ export class CRCaseReview extends ShellElement {
     return [
       this._bannerEl,
       this._headerEl,
-      sourceCase ? this._sourceCaseEl : null,
       this._tabsEl,
       this._conversationEl,
       this._btnEl,
@@ -458,13 +440,11 @@ export class CRCaseReview extends ShellElement {
     this._questionsPanel = this._nodeRegistry.questionsPanel;
     this._qList = this._nodeRegistry.questionList;
     this._progressEl = this._nodeRegistry.progress;
-    this._overrideEditor = this._nodeRegistry.overrideEditor;
     this._remediationSection = this._nodeRegistry.remediation;
     this._summaryEl = this._nodeRegistry.summary;
     this._notesEl = this._nodeRegistry.notes;
     this._appealEl = this._nodeRegistry.appeal;
     this._conversationEl = this._nodeRegistry.conversation;
-    this._sourceCaseEl = this._nodeRegistry.sourceCase;
     this._bannerEl = this._nodeRegistry.banner;
     this._toggleBtn = this._nodeRegistry.conversationToggle;
     this._headerEl = this._nodeRegistry.header;

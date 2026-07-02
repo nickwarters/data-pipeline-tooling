@@ -613,10 +613,10 @@ test('evaluateAccess: empty sections object → all hidden', () => {
   }
 });
 
-// --- QA Reviewer role + Answer Override Mode (issue #133, ADR-0018) ---
+// --- Controls role (ADR-0022; QA Check + Answer Override retired, ADR-0026) ---
 
 /** @returns {Capabilities} */
-function qaCaps(extra = {}) {
+function controlsCaps(extra = {}) {
   return {
     isReviewer: false,
     ownedCaseTypes: [],
@@ -632,81 +632,82 @@ function qaCaps(extra = {}) {
   };
 }
 
-test('resolveRoles: QA Reviewer capability → qaReviewer role', () => {
-  const roles = resolveRoles(makeCase(), 'user-qa', qaCaps());
-  assert.deepEqual(roles, ['qaReviewer']);
+test('resolveRoles: Controls capability → controls role', () => {
+  const roles = resolveRoles(makeCase(), 'user-controls', controlsCaps());
+  assert.deepEqual(roles, ['controls']);
 });
 
-test('resolveRoles: assigned reviewer who is also a QA Reviewer gets both roles', () => {
+test('resolveRoles: assigned reviewer who is also Controls gets both roles', () => {
   const roles = resolveRoles(
     makeCase(),
     'user-reviewer',
-    qaCaps({ isReviewer: true })
+    controlsCaps({ isReviewer: true })
   );
-  assert.deepEqual(roles.sort(), ['assignedReviewer', 'qaReviewer']);
+  assert.deepEqual(roles.sort(), ['assignedReviewer', 'controls']);
 });
 
-test('evaluateAccess: questions/remediation are override for a QA Reviewer on a Completed Case', () => {
+test('evaluateAccess: Controls observe questions/remediation read-only on a Completed Case (no more override)', () => {
   const cfg = makeConfig();
   const c = makeCase({ status: 'Completed' });
-  assert.equal(evaluateAccess('questions', ['qaReviewer'], c, cfg), 'override');
+  assert.equal(evaluateAccess('questions', ['controls'], c, cfg), 'read-only');
   assert.equal(
-    evaluateAccess('remediation', ['qaReviewer'], c, cfg),
-    'override'
-  );
-});
-
-test('evaluateAccess: questions/remediation are read-only for a QA Reviewer while In-progress', () => {
-  const cfg = makeConfig();
-  const c = makeCase({ status: 'In-progress' });
-  assert.equal(
-    evaluateAccess('questions', ['qaReviewer'], c, cfg),
-    'read-only'
-  );
-  assert.equal(
-    evaluateAccess('remediation', ['qaReviewer'], c, cfg),
+    evaluateAccess('remediation', ['controls'], c, cfg),
     'read-only'
   );
 });
 
-test('evaluateAccess: QA Reviewer observes details/summary read-only, conversation/notes hidden', () => {
-  const cfg = makeConfig();
-  const c = makeCase({ status: 'Completed' });
-  assert.equal(evaluateAccess('details', ['qaReviewer'], c, cfg), 'read-only');
-  assert.equal(evaluateAccess('summary', ['qaReviewer'], c, cfg), 'read-only');
-  assert.equal(
-    evaluateAccess('conversation', ['qaReviewer'], c, cfg),
-    'hidden'
-  );
-  assert.equal(evaluateAccess('notes', ['qaReviewer'], c, cfg), 'hidden');
-});
-
-test('evaluateAccess: appeal is edit for a QA Reviewer on a Completed Case (resolution path)', () => {
-  const cfg = makeConfig();
-  const c = makeCase({ status: 'Completed' });
-  // The QA Reviewer resolves Appeals (issue #134); read-only while In-progress
-  // (nothing to appeal yet).
-  assert.equal(evaluateAccess('appeal', ['qaReviewer'], c, cfg), 'edit');
-});
-
-test('evaluateAccess: appeal is read-only for a QA Reviewer while In-progress', () => {
+test('evaluateAccess: Controls observe questions/remediation read-only while In-progress too', () => {
   const cfg = makeConfig();
   const c = makeCase({ status: 'In-progress' });
-  assert.equal(evaluateAccess('appeal', ['qaReviewer'], c, cfg), 'read-only');
+  assert.equal(evaluateAccess('questions', ['controls'], c, cfg), 'read-only');
+  assert.equal(
+    evaluateAccess('remediation', ['controls'], c, cfg),
+    'read-only'
+  );
 });
 
-test('evaluateAccess: override Mode ranks between read-only and edit — edit still wins', () => {
+test('evaluateAccess: Controls observe details/summary read-only, conversation/notes hidden', () => {
   const cfg = makeConfig();
   const c = makeCase({ status: 'Completed' });
-  // A QA Reviewer who is also the Assigned Reviewer: edit beats override.
+  assert.equal(evaluateAccess('details', ['controls'], c, cfg), 'read-only');
+  assert.equal(evaluateAccess('summary', ['controls'], c, cfg), 'read-only');
+  assert.equal(evaluateAccess('conversation', ['controls'], c, cfg), 'hidden');
+  assert.equal(evaluateAccess('notes', ['controls'], c, cfg), 'hidden');
+});
+
+test('evaluateAccess: appeal is read-only for Controls (resolution parked, ADR-0026/ADR-0027)', () => {
+  const cfg = makeConfig();
   assert.equal(
-    evaluateAccess('questions', ['qaReviewer', 'assignedReviewer'], c, cfg),
+    evaluateAccess(
+      'appeal',
+      ['controls'],
+      makeCase({ status: 'Completed' }),
+      cfg
+    ),
+    'read-only'
+  );
+  assert.equal(
+    evaluateAccess(
+      'appeal',
+      ['controls'],
+      makeCase({ status: 'In-progress' }),
+      cfg
+    ),
+    'read-only'
+  );
+});
+
+test('evaluateAccess: edit still wins when a Controls user is also the Assigned Reviewer', () => {
+  const cfg = makeConfig();
+  const c = makeCase({ status: 'Completed' });
+  assert.equal(
+    evaluateAccess('questions', ['controls', 'assignedReviewer'], c, cfg),
     'edit'
   );
-  // override beats a plain read-only role.
+  // Controls is read-only; a plain other-reviewer is also read-only.
   assert.equal(
-    evaluateAccess('questions', ['qaReviewer', 'otherReviewer'], c, cfg),
-    'override'
+    evaluateAccess('questions', ['controls', 'otherReviewer'], c, cfg),
+    'read-only'
   );
 });
 

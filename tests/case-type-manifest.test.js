@@ -14,12 +14,7 @@ import {
 import { CaseReviewViewModel } from '../src/lib/case-review-view-model.js';
 
 test('case type manifest: known Case Type slugs resolve to their static import functions', async () => {
-  const knownSlugs = [
-    'example-review',
-    'product-sale-review',
-    'qa-example-review',
-    'stress-review',
-  ];
+  const knownSlugs = ['example-review', 'product-sale-review', 'stress-review'];
   assert.deepEqual(Object.keys(CASE_TYPE_IMPORTERS).sort(), knownSlugs);
 
   for (const slug of knownSlugs) {
@@ -39,9 +34,9 @@ test('case type manifest: unknown Case Type slugs reject with a developer-useful
       error.name === 'UnknownCaseTypeError' &&
       error.slug === slug &&
       error.knownSlugs.join(',') ===
-        'example-review,product-sale-review,qa-example-review,stress-review' &&
+        'example-review,product-sale-review,stress-review' &&
       error.message ===
-        `Unsupported Case Type slug "${slug}". Known Case Type slugs: example-review, product-sale-review, qa-example-review, stress-review.`
+        `Unsupported Case Type slug "${slug}". Known Case Type slugs: example-review, product-sale-review, stress-review.`
   );
 });
 
@@ -91,88 +86,6 @@ test('CaseReviewViewModel.load(): unknown primary Case Type slug sets a clear us
     assert.deepEqual(errors[0][0].knownSlugs, [
       'example-review',
       'product-sale-review',
-      'qa-example-review',
-      'stress-review',
-    ]);
-  } finally {
-    console.error = originalConsoleError;
-  }
-});
-
-test('CaseReviewViewModel._resolveSourceCase(): unknown QA source Case Type slug follows the same error path', async () => {
-  /** @type {any[]} */
-  const errors = [];
-  const originalConsoleError = console.error;
-  console.error = (...args) => errors.push(args);
-
-  try {
-    const vm = new CaseReviewViewModel({
-      client: /** @type {any} */ ({
-        getCase: async (/** @type {string} */ id) =>
-          id === 'source-1'
-            ? {
-                id: 'source-1',
-                caseType: '../unexpected-source',
-                title: 'Source',
-                status: 'Completed',
-                assignedReviewer: 'u1',
-                responsibleParty: 'u2',
-                answers: {},
-                conversation: [],
-                notes: '',
-                completedAt: '2026-01-01T00:00:00Z',
-                etag: 'source-etag',
-              }
-            : {
-                id: 'qa-1',
-                caseType: 'qa-example-review',
-                title: 'QA',
-                status: 'In-progress',
-                assignedReviewer: 'u1',
-                responsibleParty: '',
-                sourceCaseId: 'source-1',
-                answers: {},
-                conversation: [],
-                notes: '',
-                completedAt: null,
-                etag: 'qa-etag',
-              },
-        getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
-        getExportHash: async () => null,
-        resolveUsers: async () => ({}),
-      }),
-      saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
-      caseId: 'qa-1',
-      currentUserId: 'u1',
-      capabilities: {
-        isReviewer: true,
-        ownedCaseTypes: [],
-        isAdviser: false,
-        isReviewerManager: false,
-        isResponsiblePartyManager: false,
-        isMaintainer: false,
-        listAccessCaseTypes: [],
-        ownedJourneyCaseTypes: [],
-        isControls: true,
-        isVisitor: false,
-      },
-    });
-
-    await vm.load();
-
-    assert.equal(
-      vm.error.get(),
-      'This Case cannot be opened because its source Case Type is not supported. Ask a maintainer to add "../unexpected-source" to the Case Type manifest.'
-    );
-    assert.equal(vm.loaded.get(), false);
-    assert.equal(vm.sourceCase, null);
-    assert.equal(errors.length, 1);
-    assert.ok(errors[0][0] instanceof UnknownCaseTypeError);
-    assert.equal(errors[0][0].slug, '../unexpected-source');
-    assert.deepEqual(errors[0][0].knownSlugs, [
-      'example-review',
-      'product-sale-review',
-      'qa-example-review',
       'stress-review',
     ]);
   } finally {

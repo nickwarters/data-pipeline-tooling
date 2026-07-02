@@ -25,8 +25,6 @@ export class CaseReviewNodeRegistry {
     this.questionList = null;
     /** @type {CaseReviewNodeRegistryShape['progress']} */
     this.progress = null;
-    /** @type {CaseReviewNodeRegistryShape['overrideEditor']} */
-    this.overrideEditor = null;
     /** @type {CaseReviewNodeRegistryShape['remediation']} */
     this.remediation = null;
     /** @type {CaseReviewNodeRegistryShape['summary']} */
@@ -37,8 +35,6 @@ export class CaseReviewNodeRegistry {
     this.appeal = null;
     /** @type {CaseReviewNodeRegistryShape['conversation']} */
     this.conversation = null;
-    /** @type {CaseReviewNodeRegistryShape['sourceCase']} */
-    this.sourceCase = null;
     /** @type {CaseReviewNodeRegistryShape['banner']} */
     this.banner = null;
     /** @type {CaseReviewNodeRegistryShape['conversationToggle']} */
@@ -58,13 +54,11 @@ export class CaseReviewNodeRegistry {
     this.questionsPanel ??= h('section');
     this.questionList ??= h('cr-question-list');
     this.progress ??= h('cr-section-progress');
-    this.overrideEditor ??= h('cr-override-editor');
     this.remediation ??= h('cr-remediation-section');
     this.summary ??= h('cr-summary');
     this.notes ??= h('cr-notes');
     this.appeal ??= h('cr-appeal');
     this.conversation ??= h('cr-conversation');
-    this.sourceCase ??= h('cr-source-case');
     this.banner ??= h('cr-status-banner');
     this.conversationToggle ??= /** @type {HTMLButtonElement} */ (
       h('button', { class: 'cr-conversation-toggle-btn' })
