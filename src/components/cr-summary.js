@@ -88,8 +88,11 @@ function renderSectionBlock(props, section, caseRow) {
   if (section === 'questions') {
     return renderCounts(props);
   }
+  if (section === 'issues') {
+    return renderIssues(props);
+  }
   if (section === 'remediation') {
-    return renderRemediation(props);
+    return renderRemediationTracking(props);
   }
   if (section === 'notes') {
     return h(
@@ -103,13 +106,16 @@ function renderSectionBlock(props, section, caseRow) {
 }
 
 /**
+ * The **Issues** Summary block (ADR-0024, formerly `remediation`): failed Answers
+ * with their configured Remediation Actions and captured Issue detail.
  * @param {SummaryProps} props
  * @returns {HTMLElement}
  */
-function renderRemediation(props) {
+function renderIssues(props) {
   const { remediationActionCount, failures } = buildSummaryModel(
     props.catalogue,
-    props.answers
+    props.answers,
+    props.captureGroups
   );
 
   return h(
@@ -120,6 +126,66 @@ function renderRemediation(props) {
     failures.length === 0
       ? h('p', {}, 'No failures.')
       : h('ul', {}, ...failures.map((failure) => renderFailure(props, failure)))
+  );
+}
+
+/**
+ * The **Remediation** tracking Summary block (ADR-0024): the case-level
+ * `remediationDueDate` plus, per failed Answer, each *sent* Remediation Action's
+ * `status` (and `cancelReason` when cancelled).
+ * @param {SummaryProps} props
+ * @returns {HTMLElement}
+ */
+function renderRemediationTracking(props) {
+  const { failures } = buildSummaryModel(
+    props.catalogue,
+    props.answers,
+    props.captureGroups
+  );
+  const withActions = failures.filter((f) => f.sentActions.length > 0);
+  const dueDate = props.caseRow?.remediationDueDate;
+
+  return h(
+    'section',
+    { class: 'cr-summary-remediation-tracking' },
+    h('h3', {}, 'Remediation'),
+    h('p', {}, `Remediation due: ${dueDate ? dueDate : '—'}`),
+    withActions.length === 0
+      ? h('p', {}, 'No remediation actions sent.')
+      : h(
+          'ul',
+          {},
+          ...withActions.map((failure) => renderTrackedFailure(failure))
+        )
+  );
+}
+
+/**
+ * @param {import('../evaluators/summary-model.js').SummaryFailure} failure
+ * @returns {HTMLElement}
+ */
+function renderTrackedFailure(failure) {
+  return h(
+    'li',
+    {},
+    h(
+      'p',
+      {},
+      failure.category ? `${failure.category}: ${failure.text}` : failure.text
+    ),
+    h(
+      'ul',
+      {},
+      ...failure.sentActions.map((action) =>
+        h(
+          'li',
+          {},
+          action.status === 'cancelled' && action.cancelReason
+            ? `${action.text} — ${action.status} (${action.cancelReason})`
+            : `${action.text} — ${action.status}`
+        )
+      )
+    )
   );
 }
 

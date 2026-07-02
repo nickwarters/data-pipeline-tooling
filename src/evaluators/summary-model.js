@@ -7,13 +7,19 @@
 import { evaluate } from './applicability-evaluator.js';
 import { normaliseConfiguredActions } from './configured-outcome.js';
 import { isFailure } from './failure-evaluator.js';
+import {
+  actionFieldKeys,
+  coerceRemediationActions,
+} from './remediation-actions.js';
 
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
+/** @typedef {import('../sharepoint-client.js').CaptureGroup} CaptureGroup */
+/** @typedef {import('../sharepoint-client.js').RemediationAction} RemediationAction */
 
 /**
  * @typedef {{ category: string, pass: number, fail: number }} CategoryCount
- * @typedef {{ id: string, category: string | undefined, text: string, answer: string, actions: string[] }} SummaryFailure
+ * @typedef {{ id: string, category: string | undefined, text: string, answer: string, actions: string[], sentActions: RemediationAction[] }} SummaryFailure
  * @typedef {{ categoryCounts: CategoryCount[], remediationActionCount: number, failures: SummaryFailure[] }} SummaryModel
  */
 
@@ -26,9 +32,11 @@ import { isFailure } from './failure-evaluator.js';
  *
  * @param {QuestionDefinition[]} catalogue
  * @param {Record<string, Answer>} answers
+ * @param {CaptureGroup[]} [captureGroups] The Case Type's Issue Capture Groups,
+ *   used to read each failed Answer's *sent* Remediation Actions (ADR-0024).
  * @returns {SummaryModel}
  */
-export function buildSummaryModel(catalogue, answers) {
+export function buildSummaryModel(catalogue, answers, captureGroups = []) {
   const active = catalogue.filter((q) => !q.deprecated);
   const applicableIds = evaluate(active, answers);
   const applicable = active.filter((q) => applicableIds.has(q.id));
@@ -57,10 +65,20 @@ export function buildSummaryModel(catalogue, answers) {
     0
   );
 
+  const keys = actionFieldKeys(captureGroups);
+
   /** @type {SummaryFailure[]} */
   const failures = failedQuestions.map((q) => {
     // A failed question always has an Answer (isFailure is false without one).
-    const v = answers[q.id].value;
+    const answer = answers[q.id];
+    const v = answer.value;
+    /** @type {RemediationAction[]} */
+    const sentActions = [];
+    for (const key of keys) {
+      const raw = answer.capture?.[key];
+      if (Array.isArray(raw))
+        sentActions.push(...coerceRemediationActions(raw, key));
+    }
     return {
       id: q.id,
       category: q.category,
@@ -69,6 +87,7 @@ export function buildSummaryModel(catalogue, answers) {
       actions: normaliseConfiguredActions(q.remediationActions, q.id).map(
         (action) => action.text
       ),
+      sentActions,
     };
   });
 

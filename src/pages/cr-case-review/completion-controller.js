@@ -30,23 +30,32 @@ export function bindCompletion(context) {
     const target = /** @type {HTMLButtonElement} */ (event?.target || button);
     if (target.disabled) return;
     target.disabled = true;
-    // ≥1 Remediation Action ⇒ Send Actions (hand off, stay open); otherwise the
-    // no-actions Complete Case path closes the Case outright. Both stamp the
-    // reportable snapshot; only the actions path leaves `completedAt` unset.
-    const transition = hasRemediationActions(vm)
-      ? machine.transitionToActionsInProgress
-      : machine.transitionToCompleted;
-    const patchFields = transition
-      ? transition.call(
-          machine,
-          config.computeOutcome,
-          vm.answersSignal.get(),
-          vm.exportHash ?? null
-        )
-      : {
-          status: /** @type {'Completed'} */ ('Completed'),
-          completedAt: new Date().toISOString(),
-        };
+    // Three routes off the one bottom button (ADR-0023/ADR-0024):
+    //  - Actions In Progress + tracking complete ⇒ final close (stamp completedAt
+    //    only; the snapshot was already frozen at Send Actions).
+    //  - In-progress + ≥1 Remediation Action ⇒ Send Actions (hand off, stay open).
+    //  - In-progress + no actions ⇒ Complete Case outright.
+    // The first two stamp the reportable snapshot; the actions path leaves
+    // `completedAt` unset until final close.
+    let patchFields;
+    if (machine.canCompleteRemediation && machine.transitionToFinalComplete) {
+      patchFields = machine.transitionToFinalComplete();
+    } else {
+      const transition = hasRemediationActions(vm)
+        ? machine.transitionToActionsInProgress
+        : machine.transitionToCompleted;
+      patchFields = transition
+        ? transition.call(
+            machine,
+            config.computeOutcome,
+            vm.answersSignal.get(),
+            vm.exportHash ?? null
+          )
+        : {
+            status: /** @type {'Completed'} */ ('Completed'),
+            completedAt: new Date().toISOString(),
+          };
+    }
     context
       .completeCase(caseRow.id, vm.client, vm.saveQueue, patchFields)
       .finally(() => {
@@ -62,11 +71,21 @@ export function updateCompletion(context) {
   const { viewModel: vm, nodes } = context;
   const button = nodes.completeButton;
   if (!button || !vm.machine) return;
+  const machine = vm.machine;
 
-  button.hidden = !(vm.allAnswered.get() && vm.machine.canComplete);
-  button.textContent = hasRemediationActions(vm)
-    ? 'Send Actions'
-    : 'Complete Case';
+  // Before Send Actions the button appears only once the Case is completable and
+  // the Responsible Party has been set at the bottom of Issues (ADR-0023/ADR-0024).
+  const rpSet = !!vm.caseRow?.responsibleParty;
+  const readyToSend = vm.allAnswered.get() && machine.canComplete && rpSet;
+  // On the actions path the button reappears as "Complete Case" only once the
+  // Remediation tracking tab is complete (every sent action resolved).
+  const readyToClose = machine.canCompleteRemediation;
+
+  button.hidden = !(readyToSend || readyToClose);
+  button.textContent =
+    !readyToClose && hasRemediationActions(vm)
+      ? 'Send Actions'
+      : 'Complete Case';
 }
 
 /**

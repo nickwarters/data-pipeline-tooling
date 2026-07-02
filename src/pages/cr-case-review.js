@@ -16,6 +16,10 @@ import {
   bindRemediationPanel,
   updateRemediationPanel,
 } from './cr-case-review/remediation-controller.js';
+import {
+  bindRemediationTracking,
+  updateRemediationTracking,
+} from './cr-case-review/remediation-tracking-controller.js';
 import { updateSummaryNotesAppeal } from './cr-case-review/summary-notes-appeal-controller.js';
 import { createConversationPanelBinding } from './cr-case-review/conversation-controller.js';
 import {
@@ -27,6 +31,7 @@ import {
 import '../components/cr-question-list.js';
 import '../components/cr-section-progress.js';
 import '../components/cr-remediation-section.js';
+import '../components/cr-remediation-tracking.js';
 import '../components/cr-conversation.js';
 import '../components/cr-notes.js';
 import '../components/cr-summary.js';
@@ -85,6 +90,8 @@ export class CRCaseReview extends ShellElement {
     this._progressEl = null;
     /** @type {any} */
     this._remediationSection = null;
+    /** @type {any} */
+    this._remediationTrackingEl = null;
     /** @type {any} */
     this._summaryEl = null;
     /** @type {any} */
@@ -181,6 +188,7 @@ export class CRCaseReview extends ShellElement {
         [
           'details',
           'questions',
+          'issues',
           'remediation',
           'summary',
           'notes',
@@ -315,6 +323,15 @@ export class CRCaseReview extends ShellElement {
         toggleConversationPanel: this._toggleConversationPanel.bind(this),
       });
 
+      bindRemediationTracking({
+        viewModel: vm,
+        nodes: this._controllerNodes(canToggleConversation),
+        displayMode,
+        completeCase: (caseId, client, saveQueue, patchFields) =>
+          this._completeCase(caseId, client, saveQueue, patchFields),
+        toggleConversationPanel: this._toggleConversationPanel.bind(this),
+      });
+
       this._conversationPanel.bind({
         viewModel: vm,
         nodes: this._controllerNodes(canToggleConversation),
@@ -359,6 +376,15 @@ export class CRCaseReview extends ShellElement {
     });
 
     updateRemediationPanel({
+      viewModel: vm,
+      nodes: this._controllerNodes(canToggleConversation),
+      displayMode,
+      completeCase: (caseId, client, saveQueue, patchFields) =>
+        this._completeCase(caseId, client, saveQueue, patchFields),
+      toggleConversationPanel: this._toggleConversationPanel.bind(this),
+    });
+
+    updateRemediationTracking({
       viewModel: vm,
       nodes: this._controllerNodes(canToggleConversation),
       displayMode,
@@ -440,7 +466,8 @@ export class CRCaseReview extends ShellElement {
     this._questionsPanel = this._nodeRegistry.questionsPanel;
     this._qList = this._nodeRegistry.questionList;
     this._progressEl = this._nodeRegistry.progress;
-    this._remediationSection = this._nodeRegistry.remediation;
+    this._remediationSection = this._nodeRegistry.issues;
+    this._remediationTrackingEl = this._nodeRegistry.remediation;
     this._summaryEl = this._nodeRegistry.summary;
     this._notesEl = this._nodeRegistry.notes;
     this._appealEl = this._nodeRegistry.appeal;

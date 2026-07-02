@@ -369,7 +369,7 @@ test('CRSummary: renders a remediation block with the action count and each fail
   const el = new CRSummary();
   el.caseRow = makeCase();
   el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
-  el.summarySections = ['remediation'];
+  el.summarySections = ['issues'];
   el.connectedCallback();
   el.update(
     (/** @type {any} */ a) => makeComputeOutcome(a),
@@ -406,7 +406,7 @@ test('CRSummary: renders read-only capture groups for a failed Answer that has c
   el.caseRow = makeCase();
   el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
   el.captureGroups = SUMMARY_CAPTURE_GROUPS;
-  el.summarySections = ['remediation'];
+  el.summarySections = ['issues'];
   el.connectedCallback();
   el.update(
     (/** @type {any} */ a) => makeComputeOutcome(a),
@@ -436,7 +436,7 @@ test('CRSummary: renders no capture block when the Case Type declares no capture
   const el = new CRSummary();
   el.caseRow = makeCase();
   el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
-  el.summarySections = ['remediation'];
+  el.summarySections = ['issues'];
   el.connectedCallback();
   el.update(
     (/** @type {any} */ a) => makeComputeOutcome(a),
@@ -461,7 +461,7 @@ test('CRSummary: a failed Answer without a category renders just the question te
       deprecated: false,
     },
   ]);
-  el.summarySections = ['remediation'];
+  el.summarySections = ['issues'];
   el.connectedCallback();
   el.update(
     (/** @type {any} */ a) => makeComputeOutcome(a),
@@ -477,7 +477,7 @@ test('CRSummary: remediation block reports no failures when there are none', () 
   const el = new CRSummary();
   el.caseRow = makeCase();
   el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
-  el.summarySections = ['remediation'];
+  el.summarySections = ['issues'];
   el.connectedCallback();
   el.update(
     (/** @type {any} */ a) => makeComputeOutcome(a),
@@ -503,6 +503,82 @@ test('CRSummary: omits the remediation block when remediation is not opted in', 
     findByClass(/** @type {any} */ (el), 'cr-summary-remediation'),
     null
   );
+});
+
+/** @type {any} */
+const ACTIONS_GROUPS = [
+  {
+    key: 'g',
+    label: 'G',
+    fields: [{ key: 'acts', label: 'Actions', type: 'actions' }],
+  },
+];
+
+test('CRSummary: remediation tracking block shows the due date and each sent action status/reason (ADR-0024)', () => {
+  const el = new CRSummary();
+  el.caseRow = makeCase({ remediationDueDate: '2026-07-16' });
+  el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
+  el.captureGroups = ACTIONS_GROUPS;
+  el.summarySections = ['remediation'];
+  el.connectedCallback();
+  el.update(
+    (/** @type {any} */ a) => makeComputeOutcome(a),
+    {
+      'q-open': {
+        value: 'No',
+        capture: {
+          acts: [
+            { id: 'a1', text: 'Re-issue letter', status: 'complete' },
+            {
+              id: 'a2',
+              text: 'Refund fee',
+              status: 'cancelled',
+              cancelReason: 'Already refunded',
+            },
+          ],
+        },
+      },
+    },
+    true
+  );
+
+  const block = findByClass(
+    /** @type {any} */ (el),
+    'cr-summary-remediation-tracking'
+  );
+  assert.ok(block, 'remediation tracking block rendered');
+  const text = allText(block);
+  assert.ok(/Remediation due:\s*2026-07-16/.test(text), 'shows the due date');
+  assert.ok(text.includes('Re-issue letter') && text.includes('complete'));
+  assert.ok(
+    text.includes('Refund fee') &&
+      text.includes('cancelled') &&
+      text.includes('Already refunded'),
+    'shows a cancelled action with its reason'
+  );
+});
+
+test('CRSummary: remediation tracking block states none sent and an em-dash due date when there are no actions', () => {
+  const el = new CRSummary();
+  el.caseRow = makeCase();
+  el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
+  el.captureGroups = ACTIONS_GROUPS;
+  el.summarySections = ['remediation'];
+  el.connectedCallback();
+  el.update(
+    (/** @type {any} */ a) => makeComputeOutcome(a),
+    { 'q-open': { value: 'No' } },
+    true
+  );
+
+  const block = findByClass(
+    /** @type {any} */ (el),
+    'cr-summary-remediation-tracking'
+  );
+  assert.ok(block, 'tracking block rendered');
+  const text = allText(block);
+  assert.ok(/Remediation due:\s*—/.test(text), 'no due date shows an em-dash');
+  assert.ok(/no remediation actions sent/i.test(text));
 });
 
 test('CRSummary: renders a notes block with the Case notes only when notes is opted in', () => {

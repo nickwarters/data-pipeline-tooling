@@ -25,6 +25,8 @@ export class CaseReviewNodeRegistry {
     this.questionList = null;
     /** @type {CaseReviewNodeRegistryShape['progress']} */
     this.progress = null;
+    /** @type {CaseReviewNodeRegistryShape['issues']} */
+    this.issues = null;
     /** @type {CaseReviewNodeRegistryShape['remediation']} */
     this.remediation = null;
     /** @type {CaseReviewNodeRegistryShape['summary']} */
@@ -54,7 +56,8 @@ export class CaseReviewNodeRegistry {
     this.questionsPanel ??= h('section');
     this.questionList ??= h('cr-question-list');
     this.progress ??= h('cr-section-progress');
-    this.remediation ??= h('cr-remediation-section');
+    this.issues ??= h('cr-remediation-section');
+    this.remediation ??= h('cr-remediation-tracking');
     this.summary ??= h('cr-summary');
     this.notes ??= h('cr-notes');
     this.appeal ??= h('cr-appeal');

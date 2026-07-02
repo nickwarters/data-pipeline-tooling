@@ -19,7 +19,7 @@
 
 /**
  * @typedef {object} CaseReviewTab
- * @property {'details'|'questions'|'remediation'|'summary'|'notes'|'appeal'} id
+ * @property {'details'|'questions'|'issues'|'remediation'|'summary'|'notes'|'appeal'} id
  * @property {string} label
  * @property {boolean} hidden
  */
@@ -31,6 +31,7 @@
  * @property {HTMLElement | null} questionsPanel
  * @property {HTMLElement | null} questionList
  * @property {HTMLElement | null} progress
+ * @property {HTMLElement | null} issues
  * @property {HTMLElement | null} remediation
  * @property {HTMLElement | null} summary
  * @property {HTMLElement | null} notes

@@ -45,6 +45,42 @@ function makeConfig(overrides = {}) {
   };
 }
 
+/**
+ * A config declaring one `actions`-typed Issue Capture Field, so the Remediation
+ * *tracking* Section (ADR-0024) can become visible.
+ * @returns {CaseTypeConfig}
+ */
+function makeActionsConfig(overrides = {}) {
+  return makeConfig({
+    captureGroups: [
+      {
+        key: 'g',
+        label: 'G',
+        fields: [{ key: 'acts', label: 'Actions', type: 'actions' }],
+      },
+    ],
+    ...overrides,
+  });
+}
+
+/**
+ * A Case carrying one sent Remediation Action, so `hasSentActions` is true and the
+ * Remediation tracking Section is not hidden.
+ * @param {Partial<CaseRow>} [overrides]
+ * @returns {CaseRow}
+ */
+function makeCaseWithActions(overrides = {}) {
+  return makeCase({
+    answers: {
+      q1: {
+        value: 'No',
+        capture: { acts: [{ id: 'a', text: 'do', status: 'pending' }] },
+      },
+    },
+    ...overrides,
+  });
+}
+
 // --- resolveRoles ---
 
 test('resolveRoles: assigned reviewer', () => {
@@ -302,7 +338,7 @@ test('evaluateAccess: responsiblePartyManager — read-only on details/questions
     'read-only'
   );
   assert.equal(
-    evaluateAccess('remediation', ['responsiblePartyManager'], c, cfg),
+    evaluateAccess('issues', ['responsiblePartyManager'], c, cfg),
     'read-only'
   );
   assert.equal(
@@ -360,10 +396,7 @@ test('evaluateAccess: assigned reviewer gets edit on all editable sections', () 
     'edit'
   );
   assert.equal(evaluateAccess('notes', ['assignedReviewer'], c, cfg), 'edit');
-  assert.equal(
-    evaluateAccess('remediation', ['assignedReviewer'], c, cfg),
-    'edit'
-  );
+  assert.equal(evaluateAccess('issues', ['assignedReviewer'], c, cfg), 'edit');
   assert.equal(
     evaluateAccess('summary', ['assignedReviewer'], c, cfg),
     'read-only'
@@ -371,8 +404,10 @@ test('evaluateAccess: assigned reviewer gets edit on all editable sections', () 
 });
 
 test('evaluateAccess: other reviewer is read-only everywhere', () => {
-  const cfg = makeConfig();
-  const c = makeCase();
+  // The Remediation tracking Section is hidden until actions have been sent
+  // (ADR-0024), so use a config+Case that carries one to exercise its read-only.
+  const cfg = makeActionsConfig();
+  const c = makeCaseWithActions();
   for (const s of SECTIONS) {
     assert.equal(
       evaluateAccess(s, ['otherReviewer'], c, cfg),
@@ -380,6 +415,61 @@ test('evaluateAccess: other reviewer is read-only everywhere', () => {
       `section ${s}`
     );
   }
+});
+
+test('evaluateAccess: Remediation tracking Section is hidden for every viewer until actions are sent', () => {
+  const cfg = makeActionsConfig();
+  const c = makeCase();
+  for (const role of /** @type {const} */ ([
+    'assignedReviewer',
+    'otherReviewer',
+    'responsibleParty',
+    'responsiblePartyManager',
+    'caseTypeOwner',
+    'controls',
+    'none',
+  ])) {
+    assert.equal(
+      evaluateAccess('remediation', [role], c, cfg),
+      'hidden',
+      `remediation hidden for ${role} with no sent actions`
+    );
+  }
+});
+
+test('evaluateAccess: Remediation tracking — assigned reviewer edits while Actions In Progress, read-only once Completed', () => {
+  const cfg = makeActionsConfig();
+  assert.equal(
+    evaluateAccess(
+      'remediation',
+      ['assignedReviewer'],
+      makeCaseWithActions({ status: 'Actions In Progress' }),
+      cfg
+    ),
+    'edit'
+  );
+  assert.equal(
+    evaluateAccess(
+      'remediation',
+      ['assignedReviewer'],
+      makeCaseWithActions({ status: 'Completed' }),
+      cfg
+    ),
+    'read-only'
+  );
+});
+
+test('evaluateAccess: Remediation tracking is hidden from the Responsible Party and their Manager (D10)', () => {
+  const cfg = makeActionsConfig();
+  const c = makeCaseWithActions({ status: 'Actions In Progress' });
+  assert.equal(
+    evaluateAccess('remediation', ['responsibleParty'], c, cfg),
+    'hidden'
+  );
+  assert.equal(
+    evaluateAccess('remediation', ['responsiblePartyManager'], c, cfg),
+    'hidden'
+  );
 });
 
 test('evaluateAccess: responsible party — questions R, conversation E, notes H, remediation R', () => {
@@ -395,7 +485,7 @@ test('evaluateAccess: responsible party — questions R, conversation E, notes H
   );
   assert.equal(evaluateAccess('notes', ['responsibleParty'], c, cfg), 'hidden');
   assert.equal(
-    evaluateAccess('remediation', ['responsibleParty'], c, cfg),
+    evaluateAccess('issues', ['responsibleParty'], c, cfg),
     'read-only'
   );
 });
@@ -459,8 +549,8 @@ test('evaluateAccess: summary never resolves to edit for any role', () => {
 });
 
 test('evaluateAccess: case type owner read-only across the board', () => {
-  const cfg = makeConfig();
-  const c = makeCase();
+  const cfg = makeActionsConfig();
+  const c = makeCaseWithActions();
   for (const s of SECTIONS) {
     assert.equal(
       evaluateAccess(s, ['caseTypeOwner'], c, cfg),
@@ -589,7 +679,7 @@ test('evaluateAccess: sections undefined → defaults to all enabled', () => {
 test('SUMMARY_SECTIONS lists the Sections that can appear as Summary blocks (not conversation/summary)', () => {
   assert.deepEqual(
     [...SUMMARY_SECTIONS],
-    ['details', 'questions', 'remediation', 'notes']
+    ['details', 'questions', 'issues', 'remediation', 'notes']
   );
 });
 
@@ -597,6 +687,7 @@ test('showInSummary: defaults — notes off, every other block Section on, when 
   const cfg = makeConfig();
   assert.equal(showInSummary('details', cfg), true);
   assert.equal(showInSummary('questions', cfg), true);
+  assert.equal(showInSummary('issues', cfg), true);
   assert.equal(showInSummary('remediation', cfg), true);
   assert.equal(showInSummary('notes', cfg), false);
 });
@@ -665,20 +756,23 @@ test('resolveRoles: assigned reviewer who is also Controls gets both roles', () 
   assert.deepEqual(roles.sort(), ['assignedReviewer', 'controls']);
 });
 
-test('evaluateAccess: Controls observe questions/remediation read-only on a Completed Case (no more override)', () => {
+test('evaluateAccess: Controls observe questions/issues read-only on a Completed Case (no more override)', () => {
   const cfg = makeConfig();
   const c = makeCase({ status: 'Completed' });
   assert.equal(evaluateAccess('questions', ['controls'], c, cfg), 'read-only');
-  assert.equal(
-    evaluateAccess('remediation', ['controls'], c, cfg),
-    'read-only'
-  );
+  assert.equal(evaluateAccess('issues', ['controls'], c, cfg), 'read-only');
 });
 
-test('evaluateAccess: Controls observe questions/remediation read-only while In-progress too', () => {
+test('evaluateAccess: Controls observe questions/issues read-only while In-progress too', () => {
   const cfg = makeConfig();
   const c = makeCase({ status: 'In-progress' });
   assert.equal(evaluateAccess('questions', ['controls'], c, cfg), 'read-only');
+  assert.equal(evaluateAccess('issues', ['controls'], c, cfg), 'read-only');
+});
+
+test('evaluateAccess: Controls observe the Remediation tracking Section read-only once actions are sent', () => {
+  const cfg = makeActionsConfig();
+  const c = makeCaseWithActions({ status: 'Actions In Progress' });
   assert.equal(
     evaluateAccess('remediation', ['controls'], c, cfg),
     'read-only'

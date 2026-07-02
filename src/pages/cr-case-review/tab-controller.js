@@ -25,6 +25,7 @@ export function updateCaseReviewTabs(context) {
     panels: {
       details: nodes.details,
       questions: nodes.questionsPanel,
+      issues: nodes.issues,
       remediation: nodes.remediation,
       summary: nodes.summary,
       notes: nodes.notes,
@@ -66,8 +67,13 @@ export function buildCaseReviewTabs(context) {
       hidden: access.questions === 'hidden',
     },
     {
-      id: 'remediation',
+      id: 'issues',
       label: 'Issues',
+      hidden: access.issues === 'hidden',
+    },
+    {
+      id: 'remediation',
+      label: 'Remediation',
       hidden: access.remediation === 'hidden',
     },
     { id: 'summary', label: 'Summary', hidden: access.summary === 'hidden' },

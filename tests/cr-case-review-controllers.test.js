@@ -89,6 +89,8 @@ const {
   hasRemediationActions,
   updateCompletion,
 } = await import('../src/pages/cr-case-review/completion-controller.js');
+const { bindRemediationTracking, updateRemediationTracking } =
+  await import('../src/pages/cr-case-review/remediation-tracking-controller.js');
 
 /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
 const QUESTIONS = [
@@ -195,8 +197,11 @@ function makeQuestionContext(opts = {}) {
  * @param {Partial<{
  *   allAnswered: boolean,
  *   canComplete: boolean,
+ *   canCompleteRemediation: boolean,
  *   transitionToCompleted: Function | null,
  *   transitionToActionsInProgress: Function | null,
+ *   transitionToFinalComplete: Function,
+ *   responsibleParty: string | null,
  *   answers: Record<string, any>,
  *   completeCase: Function,
  * }>} [opts]
@@ -237,6 +242,10 @@ function makeCompletionContext(opts = {}) {
           id: 'case-1',
           title: 'Case One',
           assignedReviewer: 'Alex Reviewer',
+          responsibleParty:
+            opts.responsibleParty === undefined
+              ? 'rp@example.com'
+              : opts.responsibleParty,
         },
         config: {
           computeOutcome: () => ({ outcome: 'pass' }),
@@ -245,6 +254,10 @@ function makeCompletionContext(opts = {}) {
         exportHash: 'hash-1',
         machine: {
           canComplete: opts.canComplete ?? true,
+          canCompleteRemediation: opts.canCompleteRemediation ?? false,
+          transitionToFinalComplete:
+            opts.transitionToFinalComplete ??
+            (() => ({ status: 'Completed', completedAt: 'final-date' })),
           ...(transitionToCompleted ? { transitionToCompleted } : {}),
           ...(transitionToActionsInProgress
             ? { transitionToActionsInProgress }
@@ -361,6 +374,7 @@ function makeTabContext(opts = {}) {
     questionList: null,
     progress: null,
     overrideEditor: null,
+    issues: new StubEl(),
     remediation: new StubEl(),
     summary: new StubEl(),
     notes: new StubEl(),
@@ -383,7 +397,8 @@ function makeTabContext(opts = {}) {
         access: opts.access ?? {
           details: 'read-only',
           questions: 'edit',
-          remediation: 'edit',
+          issues: 'edit',
+          remediation: 'hidden',
           summary: 'read-only',
           notes: 'edit',
           appeal: 'hidden',
@@ -468,7 +483,7 @@ function makeRemediationContext(opts = {}) {
         questionList: null,
         progress: null,
         overrideEditor: null,
-        remediation,
+        issues: remediation,
         summary: null,
         notes: null,
         appeal: null,
@@ -660,6 +675,7 @@ test('CaseReviewNodeRegistry: creates and reuses the long-lived page nodes curre
     questionsPanel: first.questionsPanel,
     questionList: first.questionList,
     progress: first.progress,
+    issues: first.issues,
     remediation: first.remediation,
     summary: first.summary,
     notes: first.notes,
@@ -676,7 +692,8 @@ test('CaseReviewNodeRegistry: creates and reuses the long-lived page nodes curre
   assert.equal(firstNodes.questionsPanel?.tagName, 'SECTION');
   assert.equal(firstNodes.questionList?.tagName, 'CR-QUESTION-LIST');
   assert.equal(firstNodes.progress?.tagName, 'CR-SECTION-PROGRESS');
-  assert.equal(firstNodes.remediation?.tagName, 'CR-REMEDIATION-SECTION');
+  assert.equal(firstNodes.issues?.tagName, 'CR-REMEDIATION-SECTION');
+  assert.equal(firstNodes.remediation?.tagName, 'CR-REMEDIATION-TRACKING');
   assert.equal(firstNodes.summary?.tagName, 'CR-SUMMARY');
   assert.equal(firstNodes.notes?.tagName, 'CR-NOTES');
   assert.equal(firstNodes.appeal?.tagName, 'CR-APPEAL');
@@ -697,6 +714,7 @@ test('CaseReviewNodeRegistry: creates and reuses the long-lived page nodes curre
   assert.equal(registry.questionsPanel, firstNodes.questionsPanel);
   assert.equal(registry.questionList, firstNodes.questionList);
   assert.equal(registry.progress, firstNodes.progress);
+  assert.equal(registry.issues, firstNodes.issues);
   assert.equal(registry.remediation, firstNodes.remediation);
   assert.equal(registry.summary, firstNodes.summary);
   assert.equal(registry.notes, firstNodes.notes);
@@ -713,7 +731,8 @@ test('CaseReviewTabController: maps section access into tabs in the current orde
     access: {
       details: 'read-only',
       questions: 'hidden',
-      remediation: 'edit',
+      issues: 'edit',
+      remediation: 'read-only',
       summary: 'read-only',
       notes: 'hidden',
       appeal: 'edit',
@@ -723,7 +742,8 @@ test('CaseReviewTabController: maps section access into tabs in the current orde
   assert.deepEqual(buildCaseReviewTabs(/** @type {any} */ (context)), [
     { id: 'details', label: 'Details', hidden: false },
     { id: 'questions', label: 'Review', hidden: true },
-    { id: 'remediation', label: 'Issues', hidden: false },
+    { id: 'issues', label: 'Issues', hidden: false },
+    { id: 'remediation', label: 'Remediation', hidden: false },
     { id: 'summary', label: 'Summary', hidden: false },
     { id: 'notes', label: 'Notes', hidden: true },
     { id: 'appeal', label: 'Appeal', hidden: false },
@@ -743,7 +763,8 @@ test('updateCaseReviewTabs: assigns selected tab and panel nodes', () => {
     [
       'details:Details:false',
       'questions:Review:false',
-      'remediation:Issues:false',
+      'issues:Issues:false',
+      'remediation:Remediation:true',
       'summary:Summary:false',
       'notes:Notes:false',
       'appeal:Appeal:true',
@@ -752,6 +773,7 @@ test('updateCaseReviewTabs: assigns selected tab and panel nodes', () => {
   assert.deepEqual(/** @type {any} */ (tabs).panels, {
     details: nodes.details,
     questions: nodes.questionsPanel,
+    issues: nodes.issues,
     remediation: nodes.remediation,
     summary: nodes.summary,
     notes: nodes.notes,
@@ -1143,6 +1165,154 @@ test('bindCompletion: actions path falls back to default patch when the transiti
   assert.equal(completeCalls.length, 1);
   assert.equal(completeCalls[0].patchFields.status, 'Completed');
   assert.equal(typeof completeCalls[0].patchFields.completedAt, 'string');
+});
+
+test('updateCompletion: hidden until the Responsible Party is set at the bottom of Issues (ADR-0024)', () => {
+  const noRp = makeCompletionContext({
+    allAnswered: true,
+    canComplete: true,
+    responsibleParty: null,
+  });
+  updateCompletion(/** @type {any} */ (noRp.context));
+  assert.equal(noRp.completeButton.hidden, true, 'no RP ⇒ button hidden');
+});
+
+test('updateCompletion: on the actions path the button reappears as "Complete Case" once tracking is complete', () => {
+  const ready = makeCompletionContext({
+    allAnswered: false,
+    canComplete: false,
+    canCompleteRemediation: true,
+  });
+  updateCompletion(/** @type {any} */ (ready.context));
+  assert.equal(ready.completeButton.hidden, false);
+  assert.equal(ready.completeButton.textContent, 'Complete Case');
+});
+
+test('bindCompletion: final-complete path uses transitionToFinalComplete (ADR-0024)', () => {
+  const { context, completeButton, completeCalls } = makeCompletionContext({
+    canCompleteRemediation: true,
+  });
+
+  bindCompletion(/** @type {any} */ (context));
+  completeButton._listeners.click[0]({ target: completeButton });
+
+  assert.equal(completeCalls.length, 1);
+  assert.deepEqual(completeCalls[0].patchFields, {
+    status: 'Completed',
+    completedAt: 'final-date',
+  });
+});
+
+/**
+ * @param {Partial<{ access: string, answers: Record<string, any>, statusCalls: any[] }>} [opts]
+ */
+function makeTrackingContext(opts = {}) {
+  const tracking = new StubEl();
+  const answers = opts.answers ?? {
+    'q-a': {
+      value: 'No',
+      capture: { acts: [{ id: 'a1', text: 'x', status: 'pending' }] },
+    },
+  };
+  const captureGroups = [
+    {
+      key: 'g',
+      label: 'G',
+      fields: [{ key: 'acts', label: 'Acts', type: 'actions' }],
+    },
+  ];
+  /** @type {any[]} */
+  const statusCalls = [];
+  return {
+    tracking,
+    statusCalls,
+    context: {
+      viewModel: {
+        caseRow: { id: 'case-1' },
+        catalogue: QUESTIONS,
+        config: { captureGroups },
+        answersSignal: { get: () => answers },
+        access: { remediation: opts.access ?? 'edit' },
+        machine: { reportable: true },
+        handleActionStatus(
+          /** @type {string} */ questionId,
+          /** @type {string} */ fieldKey,
+          /** @type {string} */ actionId,
+          /** @type {string} */ status,
+          /** @type {string} */ cancelReason
+        ) {
+          statusCalls.push({
+            questionId,
+            fieldKey,
+            actionId,
+            status,
+            cancelReason,
+          });
+        },
+      },
+      nodes: { remediation: tracking },
+      displayMode: (/** @type {any} */ mode) => mode,
+      completeCase: async () => {},
+      toggleConversationPanel: () => {},
+    },
+  };
+}
+
+test('bindRemediationTracking: forwards cr-action-status to the view model', () => {
+  const { context, tracking, statusCalls } = makeTrackingContext();
+  bindRemediationTracking(/** @type {any} */ (context));
+  tracking._listeners['cr-action-status'][0]({
+    detail: {
+      questionId: 'q-a',
+      fieldKey: 'acts',
+      actionId: 'a1',
+      status: 'cancelled',
+      cancelReason: 'dup',
+    },
+  });
+  assert.deepEqual(statusCalls, [
+    {
+      questionId: 'q-a',
+      fieldKey: 'acts',
+      actionId: 'a1',
+      status: 'cancelled',
+      cancelReason: 'dup',
+    },
+  ]);
+});
+
+test('bindRemediationTracking: no-ops when the tracking node is absent', () => {
+  const { context } = makeTrackingContext();
+  context.nodes.remediation = /** @type {any} */ (null);
+  assert.doesNotThrow(() =>
+    bindRemediationTracking(/** @type {any} */ (context))
+  );
+});
+
+test('updateRemediationTracking: assigns captureGroups, canResolve, and updates', () => {
+  const { context, tracking } = makeTrackingContext({ access: 'edit' });
+  updateRemediationTracking(/** @type {any} */ (context));
+  assert.equal(/** @type {any} */ (tracking).canResolve, true);
+  assert.deepEqual(/** @type {any} */ (tracking).captureGroups, [
+    {
+      key: 'g',
+      label: 'G',
+      fields: [{ key: 'acts', label: 'Acts', type: 'actions' }],
+    },
+  ]);
+  assert.equal(tracking._updateArgs[0], QUESTIONS);
+});
+
+test('updateRemediationTracking: read-only viewer cannot resolve; no-ops without a node', () => {
+  const { context, tracking } = makeTrackingContext({ access: 'read-only' });
+  updateRemediationTracking(/** @type {any} */ (context));
+  assert.equal(/** @type {any} */ (tracking).canResolve, false);
+
+  const bare = makeTrackingContext();
+  bare.context.nodes.remediation = /** @type {any} */ (null);
+  assert.doesNotThrow(() =>
+    updateRemediationTracking(/** @type {any} */ (bare.context))
+  );
 });
 
 test('completeCase: flushes queued saves, patches with the stored ETag, and navigates on success', async () => {

@@ -13,6 +13,10 @@ import {
   findCaptureField,
 } from '../evaluators/issue-capture.js';
 import {
+  coerceRemediationActions,
+  setActionStatus,
+} from '../evaluators/remediation-actions.js';
+import {
   showInSummary,
   SECTIONS,
   SUMMARY_SECTIONS,
@@ -241,6 +245,7 @@ export class CaseReviewViewModel {
     const tabs = [
       { id: 'details', hidden: this.access.details === 'hidden' },
       { id: 'questions', hidden: this.access.questions === 'hidden' },
+      { id: 'issues', hidden: this.access.issues === 'hidden' },
       { id: 'remediation', hidden: this.access.remediation === 'hidden' },
       { id: 'summary', hidden: this.access.summary === 'hidden' },
       { id: 'notes', hidden: this.access.notes === 'hidden' },
@@ -341,6 +346,57 @@ export class CaseReviewViewModel {
       nextAnswer = rest;
     }
     const newAnswers = { ...current, [questionId]: nextAnswer };
+    this.answersSignal.set(newAnswers);
+    this.saveQueue.enqueue(this.caseId, 'answers', newAnswers);
+  }
+
+  /**
+   * Resolve a single sent Remediation Action on the Remediation tracking tab
+   * (ADR-0024). Writes the new `status`/`cancelReason` back into the failed
+   * Answer's `actions`-typed capture field, coercing any legacy string entries to
+   * object records in the same pass. A cancelled action needs a reason; an invalid
+   * change (cancelled without one) is dropped rather than persisted, leaving the
+   * reviewer to supply the reason.
+   *
+   * @param {string} questionId
+   * @param {string} fieldKey
+   * @param {string} actionId
+   * @param {'pending' | 'complete' | 'cancelled'} status
+   * @param {string} [cancelReason]
+   */
+  handleActionStatus(
+    questionId,
+    fieldKey,
+    actionId,
+    status,
+    cancelReason = ''
+  ) {
+    if (this.access.remediation !== 'edit') return;
+    const current = this.answersSignal.get();
+    const existing = current[questionId];
+    const raw = existing?.capture?.[fieldKey];
+    if (!Array.isArray(raw)) return;
+
+    let changed = false;
+    /** @type {import('../sharepoint-client.js').RemediationAction[]} */
+    let next;
+    try {
+      next = coerceRemediationActions(raw, fieldKey).map((action) => {
+        if (action.id !== actionId) return action;
+        changed = true;
+        return setActionStatus(action, status, cancelReason);
+      });
+    } catch {
+      // Cancelled without a reason — a hard validation (ADR-0024). Skip the write.
+      return;
+    }
+    if (!changed) return;
+
+    const newAnswer = {
+      ...existing,
+      capture: { ...existing.capture, [fieldKey]: next },
+    };
+    const newAnswers = { ...current, [questionId]: newAnswer };
     this.answersSignal.set(newAnswers);
     this.saveQueue.enqueue(this.caseId, 'answers', newAnswers);
   }

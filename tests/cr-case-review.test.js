@@ -155,7 +155,11 @@ const panelOf = (/** @type {any} */ el, /** @type {string} */ id) =>
 const tabFor = (/** @type {any} */ el, /** @type {string} */ id) =>
   tabsOf(el).tabs.find((/** @type {any} */ t) => t.id === id);
 const questionSectionOf = (/** @type {any} */ el) => panelOf(el, 'questions');
-const remediationOf = (/** @type {any} */ el) => panelOf(el, 'remediation');
+// The Issues capture tab keeps the `cr-remediation-section` node under the
+// `issues` panel key after the ADR-0024 split; `remediation` is the new tracking
+// tab (`cr-remediation-tracking`).
+const remediationOf = (/** @type {any} */ el) => panelOf(el, 'issues');
+const trackingOf = (/** @type {any} */ el) => panelOf(el, 'remediation');
 const summaryOf = (/** @type {any} */ el) => panelOf(el, 'summary');
 const notesOf = (/** @type {any} */ el) => panelOf(el, 'notes');
 const detailsOf = (/** @type {any} */ el) => panelOf(el, 'details');
@@ -174,20 +178,37 @@ test('CRCaseReview: renders a cr-tabs with Details · Review · Issues · Summar
   const tabs = tabsOf(el).tabs;
   assert.deepEqual(
     tabs.map((/** @type {any} */ t) => t.id),
-    ['details', 'questions', 'remediation', 'summary', 'notes', 'appeal'],
-    'tab order is Details · Review · Issues · Summary · Notes · Appeal (Review keeps the questions id, Issues the remediation id)'
+    [
+      'details',
+      'questions',
+      'issues',
+      'remediation',
+      'summary',
+      'notes',
+      'appeal',
+    ],
+    'tab order is Details · Review · Issues · Remediation · Summary · Notes · Appeal'
   );
   assert.deepEqual(
     tabs.map((/** @type {any} */ t) => t.label),
-    ['Details', 'Review', 'Issues', 'Summary', 'Notes', 'Appeal'],
-    'the Questions Section surfaces under the UI label "Review"; Remediation under "Issues"'
+    [
+      'Details',
+      'Review',
+      'Issues',
+      'Remediation',
+      'Summary',
+      'Notes',
+      'Appeal',
+    ],
+    'the Questions Section surfaces under "Review"; the capture tab under "Issues"; the tracking tab under "Remediation"'
   );
-  // For the Assigned Reviewer on an In-progress case every Section is visible —
-  // the Appeal Section is read-only (not hidden) for reviewers.
-  assert.ok(
-    tabs.every((/** @type {any} */ t) => !t.hidden),
-    'no Section is hidden for the assigned reviewer'
-  );
+  // For the Assigned Reviewer on an In-progress case every Section is visible
+  // except the Remediation *tracking* tab, which stays hidden until actions have
+  // been sent (ADR-0024).
+  const hidden = tabs
+    .filter((/** @type {any} */ t) => t.hidden)
+    .map((/** @type {any} */ t) => t.id);
+  assert.deepEqual(hidden, ['remediation']);
 });
 
 test('CRCaseReview: there is no standalone Outcome tab', async () => {
@@ -255,8 +276,8 @@ test('CRCaseReview: Summary receives the catalogue and the resolved summarySecti
   );
   assert.deepEqual(
     summaryEl.summarySections,
-    ['details', 'questions', 'remediation'],
-    'Notes is excluded from Summary by default; Conversation/Summary never appear as blocks'
+    ['details', 'questions', 'issues'],
+    'Notes excluded by default; the Remediation tracking block is dropped while its Section is hidden (no sent actions)'
   );
 });
 
@@ -385,9 +406,14 @@ test('CRCaseReview: a Section that resolves to hidden produces a hidden tab (RP:
     'Questions stays visible (read-only)'
   );
   assert.equal(
-    tabFor(el, 'remediation').hidden,
+    tabFor(el, 'issues').hidden,
     false,
     'Issues stays visible (read-only)'
+  );
+  assert.equal(
+    tabFor(el, 'remediation').hidden,
+    true,
+    'the Remediation tracking tab is hidden from the Responsible Party'
   );
 });
 
@@ -465,6 +491,7 @@ test('CRCaseReview: a hidden Questions or Remediation Section renders no tab', (
     questions: 'hidden',
     conversation: 'edit',
     notes: 'edit',
+    issues: 'hidden',
     remediation: 'hidden',
     summary: 'read-only',
   });
@@ -474,9 +501,9 @@ test('CRCaseReview: a hidden Questions or Remediation Section renders no tab', (
     'no Questions tab when that Section is hidden'
   );
   assert.equal(
-    tabFor(el, 'remediation').hidden,
+    tabFor(el, 'issues').hidden,
     true,
-    'no Issues tab when the Remediation Section is hidden'
+    'no Issues tab when the Issues Section is hidden'
   );
   assert.equal(
     tabsOf(el).selected,
@@ -494,6 +521,7 @@ test('CRCaseReview: when every tab-bearing Section is hidden, no tab is selected
     questions: 'hidden',
     conversation: 'edit',
     notes: 'hidden',
+    issues: 'hidden',
     remediation: 'hidden',
     summary: 'hidden',
   });
@@ -2504,6 +2532,67 @@ test('CaseMachine.canAttribute / canCapture are gated on the reportable predicat
   assert.equal(
     machineForStatus('Completed', ATTRIBUTE_CONFIG).canAttribute,
     false
+  );
+});
+
+/** @type {import('../src/sharepoint-client.js').CaseTypeConfig} */
+const ACTIONS_CONFIG = {
+  questions: [],
+  computeOutcome: () => ({ outcome: 'pass' }),
+  captureGroups: [
+    {
+      key: 'g',
+      label: 'G',
+      fields: [{ key: 'acts', label: 'Acts', type: 'actions' }],
+    },
+  ],
+};
+
+test('CaseMachine.canCompleteRemediation gates the final close on the tracking tab (ADR-0024)', () => {
+  const resolved = {
+    'q-a': {
+      value: 'No',
+      capture: { acts: [{ id: 'a', text: 'x', status: 'complete' }] },
+    },
+  };
+  const pending = {
+    'q-a': {
+      value: 'No',
+      capture: { acts: [{ id: 'a', text: 'x', status: 'pending' }] },
+    },
+  };
+  /**
+   * @param {'In-progress'|'Actions In Progress'|'Completed'} status
+   * @param {Record<string, any>} answers
+   * @param {string} [reviewer]
+   */
+  const make = (status, answers, reviewer = 'u1') =>
+    new CaseMachine(
+      { ...BASE_ROW, status, assignedReviewer: reviewer, answers },
+      { id: 'u1' },
+      NO_CAPABILITIES,
+      ACTIONS_CONFIG
+    );
+
+  assert.equal(
+    make('Actions In Progress', resolved).canCompleteRemediation,
+    true,
+    'reviewer may close once every sent action is resolved'
+  );
+  assert.equal(
+    make('Actions In Progress', pending).canCompleteRemediation,
+    false,
+    'blocked while an action is still pending'
+  );
+  assert.equal(
+    make('In-progress', resolved).canCompleteRemediation,
+    false,
+    'inert before actions are sent (the tracking tab is not editable)'
+  );
+  assert.equal(
+    make('Actions In Progress', resolved, 'other').canCompleteRemediation,
+    false,
+    'only the assigned reviewer closes it'
   );
 });
 

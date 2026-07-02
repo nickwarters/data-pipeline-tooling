@@ -6,7 +6,7 @@
  */
 export function bindRemediationPanel(context) {
   const { viewModel: vm, nodes } = context;
-  const remediation = nodes.remediation;
+  const remediation = nodes.issues;
   if (!remediation) return;
 
   remediation.addEventListener('cr-capture', (ev) => {
@@ -32,7 +32,7 @@ export function bindRemediationPanel(context) {
  */
 export function updateRemediationPanel(context) {
   const { viewModel: vm, nodes } = context;
-  const remediation = nodes.remediation;
+  const remediation = nodes.issues;
   const { caseRow, catalogue, config, answersSignal, machine } = vm;
   if (!remediation || !caseRow || !config || !machine) return;
 

@@ -39,7 +39,19 @@
  */
 
 /**
- * @typedef {{ value: string | string[], justification?: string, remediationActions?: Array<{id: string, text: string, completed: boolean}>, attributedParty?: { loginName: string, displayName: string }, remediationDetails?: Record<string, string>, capture?: Record<string, string | { loginName: string, displayName: string } | Array<{id: string, text: string, completed: boolean}>> }} Answer
+ * A **Remediation Action** as it lives on a Case (ADR-0024). Elevated from a plain
+ * string to a stateful record: `text` is the action wording, `status` tracks its
+ * resolution after the actions are sent to the Responsible Party, and
+ * `cancelReason` is required iff `status === 'cancelled'`. Stored in the ADR-0020
+ * `actions`-typed Issue Capture Field value (`Answer.capture[key]`), an array of
+ * these. Legacy string data is coerced to `{ id, text, status: 'pending' }` on
+ * read (see `evaluators/remediation-actions.js`).
+ *
+ * @typedef {{ id: string, text: string, status: 'pending' | 'complete' | 'cancelled', cancelReason?: string }} RemediationAction
+ */
+
+/**
+ * @typedef {{ value: string | string[], justification?: string, remediationActions?: Array<{id: string, text: string, completed: boolean}>, attributedParty?: { loginName: string, displayName: string }, remediationDetails?: Record<string, string>, capture?: Record<string, string | { loginName: string, displayName: string } | Array<string | RemediationAction>> }} Answer
  */
 
 /**
@@ -126,6 +138,7 @@
  *   notes: string,
  *   caseJustification?: string,
  *   reportableAt?: string | null,
+ *   remediationDueDate?: string | null,
  *   completedAt: string | null,
  *   outcome?: string | null,
  *   outcomeAtCompletion?: string,
@@ -273,7 +286,7 @@
  *   eligibleGroups?: string[],
  *   listName?: string,
  *   reviewerGroup?: string,
- *   sections?: Partial<Record<'details'|'questions'|'conversation'|'notes'|'remediation'|'summary'|'appeal', SectionConfig>>,
+ *   sections?: Partial<Record<'details'|'questions'|'conversation'|'notes'|'issues'|'remediation'|'summary'|'appeal', SectionConfig>>,
  *   slaHours?: number,
  *   attributeFailures?: boolean,
  *   remediationFields?: RemediationField[],

@@ -16,6 +16,8 @@ import {
 // reportable predicate alongside CaseMachine without a circular import.
 export { isReportable } from '../services/section-access.js';
 
+import { remediationTrackingComplete } from '../evaluators/remediation-actions.js';
+
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
 /** @typedef {import('../sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
@@ -63,13 +65,33 @@ export class CaseMachine {
   get canAttribute() {
     return (
       this.config.attributeFailures === true &&
-      this.access.remediation === 'edit' &&
+      this.access.issues === 'edit' &&
       !this.reportable
     );
   }
 
   get canCapture() {
     return this.canAttribute;
+  }
+
+  /**
+   * The final-complete gate (ADR-0024): once actions have been **sent**, an
+   * `Actions In Progress` Case may close to `Completed` only when the Remediation
+   * tracking tab is complete — every sent action `complete` or `cancelled` (with a
+   * reason). The Assigned Reviewer drives it. Inert on the no-actions path
+   * (`remediationTrackingComplete` is vacuously true), where completion happened
+   * outright at the reportable milestone instead.
+   */
+  get canCompleteRemediation() {
+    return (
+      this.access.remediation === 'edit' &&
+      this.caseRow.assignedReviewer === this.currentUser.id &&
+      this.caseRow.status === 'Actions In Progress' &&
+      remediationTrackingComplete(
+        this.caseRow.answers,
+        this.config.captureGroups
+      )
+    );
   }
 
   get canToggleConversation() {

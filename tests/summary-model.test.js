@@ -130,6 +130,7 @@ test('buildSummaryModel: failures list each applicable failed Answer with its ac
       text: 'Greeted?',
       answer: 'No',
       actions: [],
+      sentActions: [],
     },
     {
       id: 'q-resolve',
@@ -137,6 +138,7 @@ test('buildSummaryModel: failures list each applicable failed Answer with its ac
       text: 'Resolved?',
       answer: 'No',
       actions: ['Escalate.', 'Follow up.'],
+      sentActions: [],
     },
   ]);
 });
@@ -162,6 +164,47 @@ test('buildSummaryModel: failure with a multi-choice value joins selections for 
       text: 'Defects?',
       answer: 'A, B',
       actions: ['Fix B.'],
+      sentActions: [],
     },
+  ]);
+});
+
+test('buildSummaryModel: reads sent Remediation Actions from a failed Answer capture (ADR-0024)', () => {
+  /** @type {QuestionDefinition[]} */
+  const cat = [
+    {
+      id: 'q-prod',
+      text: 'Defects?',
+      responseType: 'yes-no-na',
+      failureCriteria: 'No',
+      deprecated: false,
+    },
+  ];
+  /** @type {import('../src/sharepoint-client.js').CaptureGroup[]} */
+  const captureGroups = [
+    {
+      key: 'g',
+      label: 'G',
+      fields: [{ key: 'acts', label: 'Actions', type: 'actions' }],
+    },
+  ];
+  const model = buildSummaryModel(
+    cat,
+    {
+      'q-prod': {
+        value: 'No',
+        capture: {
+          acts: [
+            'legacy action',
+            { id: 'a2', text: 'done', status: 'complete' },
+          ],
+        },
+      },
+    },
+    captureGroups
+  );
+  assert.deepEqual(model.failures[0].sentActions, [
+    { id: 'acts-0', text: 'legacy action', status: 'pending' },
+    { id: 'a2', text: 'done', status: 'complete' },
   ]);
 });

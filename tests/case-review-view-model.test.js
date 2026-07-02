@@ -77,6 +77,97 @@ test('handleCapture works (no throw) when window is absent', () => {
   assert.deepEqual(calls[0][2].q1.capture, { rootCause: 'x' });
 });
 
+// --- handleActionStatus: Remediation tracking (ADR-0024) ---
+
+/**
+ * @param {(...args: any[]) => void} enqueue
+ * @param {string} [access]
+ * @param {any} [acts]
+ */
+function makeTrackingVM(
+  enqueue,
+  access = 'edit',
+  acts = [{ id: 'a1', text: 'Do it', status: 'pending' }]
+) {
+  const vm = new CaseReviewViewModel({
+    client: /** @type {any} */ ({}),
+    saveQueue: /** @type {any} */ ({ enqueue }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: null,
+  });
+  vm.access = /** @type {any} */ ({ remediation: access });
+  vm.answersSignal = signal(
+    /** @type {any} */ ({ q1: { value: 'No', capture: { acts } } })
+  );
+  return vm;
+}
+
+test('handleActionStatus: resolves an action to complete and persists', () => {
+  /** @type {any[]} */
+  const calls = [];
+  const vm = makeTrackingVM((...a) => calls.push(a));
+  vm.handleActionStatus('q1', 'acts', 'a1', 'complete');
+  assert.equal(calls.length, 1);
+  assert.deepEqual(vm.answersSignal.get().q1.capture?.acts, [
+    { id: 'a1', text: 'Do it', status: 'complete' },
+  ]);
+});
+
+test('handleActionStatus: cancelling with a reason persists the reason', () => {
+  /** @type {any[]} */
+  const calls = [];
+  const vm = makeTrackingVM((...a) => calls.push(a));
+  vm.handleActionStatus('q1', 'acts', 'a1', 'cancelled', 'no longer needed');
+  assert.deepEqual(vm.answersSignal.get().q1.capture?.acts, [
+    {
+      id: 'a1',
+      text: 'Do it',
+      status: 'cancelled',
+      cancelReason: 'no longer needed',
+    },
+  ]);
+});
+
+test('handleActionStatus: cancelling without a reason is dropped (hard validation)', () => {
+  /** @type {any[]} */
+  const calls = [];
+  const vm = makeTrackingVM((...a) => calls.push(a));
+  vm.handleActionStatus('q1', 'acts', 'a1', 'cancelled');
+  assert.equal(calls.length, 0, 'invalid resolution is not persisted');
+  assert.deepEqual(vm.answersSignal.get().q1.capture?.acts, [
+    { id: 'a1', text: 'Do it', status: 'pending' },
+  ]);
+});
+
+test('handleActionStatus: coerces legacy string actions to objects on write', () => {
+  /** @type {any[]} */
+  const calls = [];
+  const vm = makeTrackingVM((...a) => calls.push(a), 'edit', ['legacy']);
+  vm.handleActionStatus('q1', 'acts', 'acts-0', 'complete');
+  assert.deepEqual(vm.answersSignal.get().q1.capture?.acts, [
+    { id: 'acts-0', text: 'legacy', status: 'complete' },
+  ]);
+});
+
+test('handleActionStatus: no-op when the viewer cannot resolve (read-only)', () => {
+  /** @type {any[]} */
+  const calls = [];
+  const vm = makeTrackingVM((...a) => calls.push(a), 'read-only');
+  vm.handleActionStatus('q1', 'acts', 'a1', 'complete');
+  assert.equal(calls.length, 0);
+});
+
+test('handleActionStatus: no-op for a missing answer, non-array field, or unknown action id', () => {
+  /** @type {any[]} */
+  const calls = [];
+  const vm = makeTrackingVM((...a) => calls.push(a));
+  vm.handleActionStatus('missing', 'acts', 'a1', 'complete');
+  vm.handleActionStatus('q1', 'notAnArray', 'a1', 'complete');
+  vm.handleActionStatus('q1', 'acts', 'nope', 'complete');
+  assert.equal(calls.length, 0);
+});
+
 // --- exportHash loading (ADR-0021 Step 3) ---
 
 test('CaseReviewViewModel.load() calls getExportHash with the case type slug and stores it as exportHash', async () => {

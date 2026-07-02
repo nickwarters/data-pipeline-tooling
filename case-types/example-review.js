@@ -30,6 +30,7 @@ const config = {
     questions: { showInSummary: true },
     conversation: { allowMessagesWhen: ['Actions In Progress'] },
     notes: { showInSummary: false },
+    issues: { showInSummary: true },
     remediation: { showInSummary: true },
     summary: {},
     appeal: {},

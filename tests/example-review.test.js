@@ -152,12 +152,13 @@ test('example-review: every select/radio capture field carries a non-empty optio
 
 // --- Section config (ADR-0016) ---
 
-test('example-review: sections is a per-Section config object enabling all seven Sections', () => {
+test('example-review: sections is a per-Section config object enabling all eight Sections', () => {
   const sections = config.sections ?? {};
   assert.deepEqual(Object.keys(sections).sort(), [
     'appeal',
     'conversation',
     'details',
+    'issues',
     'notes',
     'questions',
     'remediation',
@@ -174,6 +175,7 @@ test('example-review: Notes opts out of the Summary while the other block Sectio
   );
   assert.equal(sections.details?.showInSummary, true);
   assert.equal(sections.questions?.showInSummary, true);
+  assert.equal(sections.issues?.showInSummary, true);
   assert.equal(sections.remediation?.showInSummary, true);
 });
 
