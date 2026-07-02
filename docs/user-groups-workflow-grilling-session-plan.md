@@ -457,34 +457,27 @@ If we only get through five things in the grill, these are them:
 
 ---
 
-## Clarifications for Nick (deferred from the write-up — none blocked the docs)
+## Clarifications for Nick — RESOLVED 2026-07-01
 
-Small confirmations; I picked a sensible default for each and noted it, so nothing was
-blocked. Flag any you'd change:
+All confirmed. Answers folded into the docs where they change scope:
 
-1. **Working-day calendar jurisdiction.** ADR-0025 assumes **England & Wales public
-   holidays**, held as an **in-code array** (deploy to update) rather than a SharePoint
-   list. Correct jurisdiction? In-code vs list OK for September?
-2. **`outcomeAtCompletion` column name.** It now stamps at **reportable**, not final
-   completion. I **kept the name** (documented) to avoid a SharePoint column migration
-   mid-pre-go-live. OK, or do you want a rename to `outcomeAtReportable`?
-3. **Reverses existing ticket #40** ("RP can mark Remediation Actions complete").
-   Grill D10 puts remediation completion with the **Reviewer**. I've flagged #40 to be
-   **closed as superseded** — confirm the RP genuinely does *not* tick actions off.
-4. **Adviser vs Responsible Party wording.** I kept **Responsible Party** as the per-Case
-   role name and **Adviser** as the group/population word (mirroring Reviewer / Assigned
-   Reviewer). Happy with both words coexisting, or rename Responsible Party → Adviser
-   everywhere?
-5. **QA removal is a real deletion.** ADR-0026/#235 **delete** shipped QA code
-   (`qa-*` types, `cr-override-editor.js`, `overrides[]`) rather than leaving it dormant,
-   and supersede #43/#50/#51. Confirm you're happy losing that code (recoverable from git).
-6. **Journey Owner "all cases of type" Summary.** I scoped a **new Journey Owner view**
-   (#238) rather than folding into an existing owner dashboard. Preference?
-7. **Notifications on Send Actions.** Whether the Adviser gets an email/in-app nudge when
-   actions are sent is **out of scope** (no backend; SharePoint alerts are a Maintainer
-   config). Confirm that's fine for September.
-8. **Live Case Types for September.** The docs assume only **Example Review** + **Complaints**
-   are live (so only those groups/lists are provisioned). Any others?
+1. **Working-day calendar** — ✅ **in-code array**, holiday list as chosen (ADR-0025 unchanged).
+2. **`outcomeAtCompletion` name** — ✅ keep the name; no column rename.
+3. **#40 reversal** — ✅ confirmed: remediation completion is the **Reviewer**'s; **close #40
+   as superseded** when #232 lands.
+4. **Adviser vs Responsible Party** — ✅ both coexist (group/population word vs per-Case role).
+5. **QA removal** — ✅ confirmed as a real deletion (not dormant).
+6. **Journey Owner Summary** — ✅ a **new dedicated view** (#238).
+7. **Notifications** — ✅ **explicitly out of this frontend**: a **dedicated Python pipeline
+   in existing infra** handles Send-Actions/SLA notifications. No SharePoint-alert or in-app
+   nudge work here; the frontend just stamps `reportableAt` / `remediationDueDate` for that
+   pipeline to read.
+8. **Live Case Types for September** — ✅ **at least ~8** (Example Review + Complaints + ~6
+   more), where the ~6 are **structurally like Complaints**, so onboarding each is
+   **config + Question Bank + group/list wiring only** — no framework changes (ADR-0004's
+   "one module" promise). Provisioning (#239) and the appeal-raiser config (ADR-0027,
+   `appeal.raisedBy` — the Complaints-like types will typically set `'journeyOwner'`) must
+   cover all live types, not just two.
 
 ## 10. Parking lot (raise if time allows)
 

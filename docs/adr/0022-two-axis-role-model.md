@@ -96,7 +96,10 @@ three hand-written groups.
 
 - Journey Owner is a first-class capability, not a mis-filed Case Type Owner.
 - Adding a Case Type is still "one module": declare `slug` + `displayName`, provision
-  the derived groups.
+  the derived groups. **~8 Case Types are live for September** (Example Review, Complaints,
+  and ~6 more that are structurally like Complaints), so this "config + wiring only"
+  property is load-bearing — each new type is groups + list + Question Bank + module
+  config, no framework change (ADR-0004).
 - List access and capability are cleanly separable — the ACL boundary ([ADR-0010])
   stays authoritative while the UI gates on capability.
 

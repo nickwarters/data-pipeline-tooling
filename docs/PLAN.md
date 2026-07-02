@@ -317,6 +317,13 @@ provisions storage as each consumer needs it.
 (post-September):** QA **re**design/implementation (was #43/#50/#51), report solidification,
 root-cause analysis, and broader Case Type expansion.
 
+**~8 Case Types are live for September** — Example Review, Complaints, and ~6 more that are
+structurally like Complaints. The framework work above is built once; the extra types are
+**config + Question Bank + group/list wiring only** (ADR-0004). #239 (provisioning) and the
+appeal-raiser config (ADR-0027) must therefore cover **all** live types, not just two.
+**Notifications** (Send-Actions / SLA reminders to the Adviser) are **out of this frontend** —
+a dedicated Python pipeline in existing infra reads `reportableAt` / `remediationDueDate`.
+
 **Reverses #40** ("RP can mark Remediation Actions complete") — remediation completion is the
 Reviewer's, not the Responsible Party's (grill D10). Close #40 when #232 lands.
 
