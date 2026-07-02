@@ -48,11 +48,13 @@ const { CRHome } = await import('../src/pages/cr-home.js');
 const NONE = {
   isReviewer: false,
   ownedCaseTypes: /** @type {string[]} */ ([]),
-  isResponsibleParty: false,
+  isAdviser: false,
   isReviewerManager: false,
   isResponsiblePartyManager: false,
   isMaintainer: false,
-  isQaReviewer: false,
+  listAccessCaseTypes: [],
+  ownedJourneyCaseTypes: [],
+  isControls: false,
   isVisitor: false,
 };
 
@@ -146,7 +148,7 @@ test('CRHome: responsible party manager — links to responsible party team repo
 
 test('CRHome: responsible party — links to my cases', () => {
   const el = new CRHome();
-  el.capabilities = caps({ isResponsibleParty: true });
+  el.capabilities = caps({ isAdviser: true });
   el.connectedCallback();
 
   assert.deepEqual(sectionHeadings(el), ['Responsible Party']);
@@ -178,6 +180,8 @@ test('CRHome: multi-role — only matching sections, in documented order', () =>
     isResponsiblePartyManager: true,
     ownedCaseTypes: ['example-review'],
     isMaintainer: true,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
   });
   el.connectedCallback();
 
@@ -195,9 +199,11 @@ test('CRHome: full order — all roles render in documented order', () => {
     isReviewer: true,
     isReviewerManager: true,
     isResponsiblePartyManager: true,
-    isResponsibleParty: true,
+    isAdviser: true,
     ownedCaseTypes: ['example-review'],
     isMaintainer: true,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
     isVisitor: true,
   });
   el.connectedCallback();

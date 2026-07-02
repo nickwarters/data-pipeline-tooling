@@ -33,7 +33,7 @@ export function HomePage({ capabilities }) {
       )
     );
   }
-  if (capabilities.isResponsibleParty) {
+  if (capabilities.isAdviser) {
     sections.push(roleSection('Responsible Party', '#/my-cases'));
   }
   if (capabilities.ownedCaseTypes.length > 0) {

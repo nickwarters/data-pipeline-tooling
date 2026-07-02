@@ -147,11 +147,13 @@ test('CaseReviewViewModel._resolveSourceCase(): unknown QA source Case Type slug
       capabilities: {
         isReviewer: true,
         ownedCaseTypes: [],
-        isResponsibleParty: false,
+        isAdviser: false,
         isReviewerManager: false,
         isResponsiblePartyManager: false,
         isMaintainer: false,
-        isQaReviewer: true,
+        listAccessCaseTypes: [],
+        ownedJourneyCaseTypes: [],
+        isControls: true,
         isVisitor: false,
       },
     });

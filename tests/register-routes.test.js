@@ -158,11 +158,13 @@ test('registerRoutes: #/ mount renders home route directly (no redirect)', () =>
     context.capabilities = {
       isReviewer: false,
       ownedCaseTypes: [],
-      isResponsibleParty: false,
+      isAdviser: false,
       isReviewerManager: false,
       isResponsiblePartyManager: false,
       isMaintainer: false,
-      isQaReviewer: false,
+      listAccessCaseTypes: [],
+      ownedJourneyCaseTypes: [],
+      isControls: false,
       isVisitor: true,
     };
     context.appEl.replaceChildren = (/** @type {any[]} */ ...children) => {
@@ -306,11 +308,13 @@ test('registerRoutes: #/reports mount renders reports index directly', () => {
     context.capabilities = {
       isReviewer: false,
       ownedCaseTypes: [],
-      isResponsibleParty: false,
+      isAdviser: false,
       isReviewerManager: true,
       isResponsiblePartyManager: false,
       isMaintainer: false,
-      isQaReviewer: false,
+      listAccessCaseTypes: [],
+      ownedJourneyCaseTypes: [],
+      isControls: false,
       isVisitor: false,
     };
     registerRoutes(router, context);

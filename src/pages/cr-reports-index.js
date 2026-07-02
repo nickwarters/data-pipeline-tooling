@@ -14,12 +14,14 @@ export class CRReportsIndex extends ShellElement {
     /** @type {Capabilities} */
     this.capabilities = {
       isReviewer: false,
+      listAccessCaseTypes: [],
+      isAdviser: false,
       ownedCaseTypes: [],
-      isResponsibleParty: false,
+      ownedJourneyCaseTypes: [],
+      isControls: false,
       isReviewerManager: false,
       isResponsiblePartyManager: false,
       isMaintainer: false,
-      isQaReviewer: false,
       isVisitor: false,
     };
   }

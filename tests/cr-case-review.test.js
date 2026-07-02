@@ -7,11 +7,13 @@ import { CaseMachine } from '../src/lib/case-machine.js';
 const NO_CAPABILITIES = {
   isReviewer: false,
   ownedCaseTypes: [],
-  isResponsibleParty: false,
+  isAdviser: false,
   isReviewerManager: false,
   isResponsiblePartyManager: false,
   isMaintainer: false,
-  isQaReviewer: false,
+  listAccessCaseTypes: [],
+  ownedJourneyCaseTypes: [],
+  isControls: false,
   isVisitor: true,
 };
 
@@ -355,11 +357,13 @@ test('CRCaseReview: a Section that resolves to hidden produces a hidden tab (RP:
   el.capabilities = {
     isReviewer: false,
     ownedCaseTypes: [],
-    isResponsibleParty: true,
+    isAdviser: true,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   await el.connectedCallback();
@@ -673,11 +677,13 @@ test('CRCaseReview: connectedCallback handles access denied', async () => {
   el.capabilities = {
     isReviewer: false,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
 
@@ -1063,11 +1069,13 @@ test('CRCaseReview: remediation and conversation can be hidden', async () => {
   el.capabilities = {
     isReviewer: false,
     ownedCaseTypes: [],
-    isResponsibleParty: true,
+    isAdviser: true,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   const rpRow = {
@@ -1169,11 +1177,13 @@ test('CRCaseReview: cr-answer is ignored when questions access is read-only (RP 
   el.capabilities = {
     isReviewer: false,
     ownedCaseTypes: [],
-    isResponsibleParty: true,
+    isAdviser: true,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   await el.connectedCallback();
@@ -1215,11 +1225,13 @@ test('CRCaseReview: complete button stays hidden for a Completed case even when 
   el.capabilities = {
     isReviewer: true,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   await el.connectedCallback();
@@ -2201,11 +2213,13 @@ test('CRCaseReview: non-assigned viewer cannot attribute (read-only)', async () 
   el.capabilities = {
     isReviewer: false,
     ownedCaseTypes: [],
-    isResponsibleParty: true,
+    isAdviser: true,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   await el.connectedCallback();
@@ -2403,11 +2417,13 @@ function makeQaClient(/** @type {CaseRow} */ caseRow) {
 const QA_CAPS = {
   isReviewer: false,
   ownedCaseTypes: [],
-  isResponsibleParty: false,
+  isAdviser: false,
   isReviewerManager: false,
   isResponsiblePartyManager: false,
   isMaintainer: false,
-  isQaReviewer: true,
+  listAccessCaseTypes: [],
+  ownedJourneyCaseTypes: [],
+  isControls: true,
   isVisitor: false,
 };
 
@@ -2496,11 +2512,13 @@ test('CRCaseReview: an appellant on a Completed Case does not get the resolver f
   el.capabilities = {
     isReviewer: false,
     ownedCaseTypes: [],
-    isResponsibleParty: true,
+    isAdviser: true,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   await el.connectedCallback();

@@ -55,11 +55,10 @@ export function AppNav({ capabilities, hash }) {
 
   const itemsEl = h('div', { class: 'cr-app-nav-items', role: 'list' });
 
-  const { isReviewer, ownedCaseTypes, isResponsibleParty, isReviewerManager } =
+  const { isReviewer, ownedCaseTypes, isAdviser, isReviewerManager } =
     capabilities;
   const isOwner = ownedCaseTypes.length > 0;
-  const hasAnyRole =
-    isReviewer || isResponsibleParty || isReviewerManager || isOwner;
+  const hasAnyRole = isReviewer || isAdviser || isReviewerManager || isOwner;
 
   if (hasAnyRole) {
     itemsEl.appendChild(AppNavItem('Dashboard', '#/dashboard', navItems));
@@ -84,12 +83,14 @@ export class CRAppNav extends ShellElement {
     /** @type {Capabilities} */
     this.capabilities = {
       isReviewer: false,
+      listAccessCaseTypes: [],
+      isAdviser: false,
       ownedCaseTypes: [],
-      isResponsibleParty: false,
+      ownedJourneyCaseTypes: [],
+      isControls: false,
       isReviewerManager: false,
       isResponsiblePartyManager: false,
       isMaintainer: false,
-      isQaReviewer: false,
       isVisitor: false,
     };
     /** @type {Array<{el: any, href: string}>} */

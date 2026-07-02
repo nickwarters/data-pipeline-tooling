@@ -197,9 +197,10 @@ export function resolveRoles(caseRow, userId, capabilities) {
   if (capabilities.ownedCaseTypes.includes(caseRow.caseType)) {
     roles.push('caseTypeOwner');
   }
-  // The QA Reviewers group is standalone (ADR-0018): a QA Reviewer authors Answer
-  // Overrides regardless of whether they also reviewed or own the Case Type.
-  if (capabilities.isQaReviewer) {
+  // The Controls group (ADR-0022, replacing the retired QA Reviewer) is
+  // standalone: a Controls user authors Answer Overrides regardless of whether
+  // they also reviewed or own the Case Type.
+  if (capabilities.isControls) {
     roles.push('qaReviewer');
   }
   return roles.length ? roles : ['none'];

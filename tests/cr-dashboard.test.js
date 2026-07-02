@@ -106,11 +106,13 @@ test('CRDashboard: reviewer capability — outstanding Cases heading and allocat
   el.capabilities = {
     isReviewer: true,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   el.eligibleCaseTypes = ['example-review'];
@@ -141,11 +143,13 @@ test('CRDashboard: owner-only capability — owner summary visible, no outstandi
   el.capabilities = {
     isReviewer: false,
     ownedCaseTypes: ['example-review'],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   el.eligibleCaseTypes = [];
@@ -176,11 +180,13 @@ test('CRDashboard: admin capability — both reviewer and owner sections visible
   el.capabilities = {
     isReviewer: true,
     ownedCaseTypes: ['example-review'],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   el.eligibleCaseTypes = ['example-review'];
@@ -211,11 +217,13 @@ test('CRDashboard: reviewer with no ownedCaseTypes never renders owner section (
   el.capabilities = {
     isReviewer: true,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   el.eligibleCaseTypes = ['example-review'];
@@ -240,11 +248,13 @@ test('CRDashboard: RP-only capability — cr-responsible-party-dashboard rendere
   el.capabilities = {
     isReviewer: false,
     ownedCaseTypes: [],
-    isResponsibleParty: true,
+    isAdviser: true,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
 
@@ -279,11 +289,13 @@ test('CRDashboard: reviewer + RP capability — both reviewer and RP sections vi
   el.capabilities = {
     isReviewer: true,
     ownedCaseTypes: [],
-    isResponsibleParty: true,
+    isAdviser: true,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   el.eligibleCaseTypes = ['example-review'];
@@ -315,11 +327,13 @@ test('CRDashboard: cr-open-conversation from RP section navigates to conversatio
   el.capabilities = {
     isReviewer: false,
     ownedCaseTypes: [],
-    isResponsibleParty: true,
+    isAdviser: true,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
 
@@ -351,11 +365,13 @@ test('CRDashboard: RP section gets client and currentUserId set', async () => {
   el.capabilities = {
     isReviewer: false,
     ownedCaseTypes: [],
-    isResponsibleParty: true,
+    isAdviser: true,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
 
@@ -390,11 +406,13 @@ test('CRDashboard: cr-allocation element listens for cr-allocated and re-fetches
   el.capabilities = {
     isReviewer: true,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   el.eligibleCaseTypes = ['example-review'];
@@ -426,11 +444,13 @@ test('CRDashboard: cr-case-open event on case table navigates to #/case/{id}', a
   el.capabilities = {
     isReviewer: true,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   el.eligibleCaseTypes = [];
@@ -520,11 +540,13 @@ test('CRDashboard: stamps overdue:true on rows whose dueDate is in the past', as
   el.capabilities = {
     isReviewer: true,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   el.eligibleCaseTypes = [];

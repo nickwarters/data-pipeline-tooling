@@ -5,54 +5,76 @@
 // or lifecycle wiring to perform ordinary reads and writes.
 
 /**
- * Maps SharePoint group names onto framework capabilities. Edit this file to
- * add new Case Types or change the group → capability mapping.
+ * Maps SharePoint group names onto framework capabilities (ADR-0022). Groups
+ * fall on two orthogonal axes: functional capability (what you can do, anywhere)
+ * and per-Case-Type list access (which Case's list you can open). Edit this file
+ * to add new Case Types or change the group → capability mapping.
+ *
+ * @typedef {{ slug: string, displayName: string }} CaseTypeGroupSource
  *
  * @typedef {{
  *   reviewer: string,
- *   reviewerComplaints: string,
- *   caseTypeOwners: Record<string, string>,
- *   responsibleParty: string,
- *   frontlineComplaints: string,
+ *   adviser: string,
+ *   controls: string,
  *   reviewerManager: string,
  *   responsiblePartyManager: string,
  *   maintainer: string,
- *   qaReviewer: string
+ *   caseTypes: CaseTypeGroupSource[]
  * }} PermissionsConfig
  */
 
 /**
- * Resolved capabilities for the current user, derived from group membership.
- * `isVisitor` is DERIVED (not config-driven): true iff the user holds no role.
+ * Resolved capabilities for the current user, derived from group membership
+ * (ADR-0022). `isReviewer` is implied by any `Reviewers - <type>` list-access
+ * group as well as the standalone `Reviewers` functional group. `isVisitor` is
+ * DERIVED (not config-driven): true iff the user holds no role at all.
  *
  * @typedef {{
  *   isReviewer: boolean,
+ *   listAccessCaseTypes: string[],
+ *   isAdviser: boolean,
  *   ownedCaseTypes: string[],
- *   isResponsibleParty: boolean,
+ *   ownedJourneyCaseTypes: string[],
+ *   isControls: boolean,
  *   isReviewerManager: boolean,
  *   isResponsiblePartyManager: boolean,
  *   isMaintainer: boolean,
- *   isQaReviewer: boolean,
  *   isVisitor: boolean
  * }} Capabilities
  */
 
+/**
+ * The three per-Case-Type SharePoint group names, all composed from the Case
+ * Type's display name (ADR-0022 grill D3 keeps the `CaseTypeOwner - Example
+ * Review` naming). Deriving them here means provisioning a new type needs one
+ * display name, not three hand-written strings.
+ *
+ * @param {string} displayName
+ * @returns {{ listAccess: string, caseTypeOwner: string, journeyOwner: string }}
+ */
+export function caseTypeGroupNames(displayName) {
+  return {
+    listAccess: `Reviewers - ${displayName}`,
+    caseTypeOwner: `CaseTypeOwner - ${displayName}`,
+    journeyOwner: `JourneyOwner - ${displayName}`,
+  };
+}
+
 /** @type {PermissionsConfig} */
 export const permissions = {
   reviewer: 'Reviewers',
-  reviewerComplaints: 'Reviewers - Complaints',
-  caseTypeOwners: {
-    'example-review': 'CaseTypeOwner - Example Review',
-    journeyOwnerComplaints: 'JourneyOwner - Complaints',
-    caseTypeOwnerComplaints: 'CaseTypeOwner - Complaints',
-  },
-  responsibleParty: 'CR-ResponsibleParty',
-  frontlineComplaints: 'Frontline - Complaints',
+  adviser: 'Advisers',
+  controls: 'Controls',
   reviewerManager: 'Reviewer-Managers',
   // TBC: placeholder SharePoint group names — confirm with the platform owner.
   responsiblePartyManager: 'ResponsibleParty-Managers',
   maintainer: 'CR-Maintainers',
-  qaReviewer: 'QA-Reviewers',
+  // Per-Case-Type group names derive from `displayName` (ADR-0022): each entry
+  // yields `Reviewers - X`, `CaseTypeOwner - X`, and `JourneyOwner - X`.
+  caseTypes: [
+    { slug: 'example-review', displayName: 'Example Review' },
+    { slug: 'complaints', displayName: 'Complaints' },
+  ],
 };
 
 /**
@@ -64,33 +86,48 @@ export const permissions = {
  * @returns {Capabilities}
  */
 export function resolveCapabilities(userGroups, config = permissions) {
-  const isReviewer = userGroups.includes(config.reviewer);
-  const ownedCaseTypes = Object.entries(config.caseTypeOwners)
-    .filter(([, group]) => userGroups.includes(group))
-    .map(([slug]) => slug);
-  const isResponsibleParty = userGroups.includes(config.responsibleParty);
-  const isReviewerManager = userGroups.includes(config.reviewerManager);
-  const isResponsiblePartyManager = userGroups.includes(
-    config.responsiblePartyManager
-  );
-  const isMaintainer = userGroups.includes(config.maintainer);
-  const isQaReviewer = userGroups.includes(config.qaReviewer);
+  const has = (/** @type {string} */ group) => userGroups.includes(group);
+
+  /** @type {string[]} */
+  const listAccessCaseTypes = [];
+  /** @type {string[]} */
+  const ownedCaseTypes = [];
+  /** @type {string[]} */
+  const ownedJourneyCaseTypes = [];
+  for (const { slug, displayName } of config.caseTypes) {
+    const names = caseTypeGroupNames(displayName);
+    if (has(names.listAccess)) listAccessCaseTypes.push(slug);
+    if (has(names.caseTypeOwner)) ownedCaseTypes.push(slug);
+    if (has(names.journeyOwner)) ownedJourneyCaseTypes.push(slug);
+  }
+
+  // Axis 2 (list access) implies the reviewing function (ADR-0022, grill D2).
+  const isReviewer = has(config.reviewer) || listAccessCaseTypes.length > 0;
+  const isAdviser = has(config.adviser);
+  const isControls = has(config.controls);
+  const isReviewerManager = has(config.reviewerManager);
+  const isResponsiblePartyManager = has(config.responsiblePartyManager);
+  const isMaintainer = has(config.maintainer);
   const isVisitor =
     !isReviewer &&
+    !isAdviser &&
+    !isControls &&
     !isReviewerManager &&
     !isResponsiblePartyManager &&
     !isMaintainer &&
-    !isResponsibleParty &&
-    !isQaReviewer &&
-    ownedCaseTypes.length === 0;
+    ownedCaseTypes.length === 0 &&
+    ownedJourneyCaseTypes.length === 0;
+
   return {
     isReviewer,
+    listAccessCaseTypes,
+    isAdviser,
     ownedCaseTypes,
-    isResponsibleParty,
+    ownedJourneyCaseTypes,
+    isControls,
     isReviewerManager,
     isResponsiblePartyManager,
     isMaintainer,
-    isQaReviewer,
     isVisitor,
   };
 }

@@ -213,12 +213,14 @@ export class CaseReviewViewModel {
     const actualUserId = this.currentUserId || currentUser.id;
     const caps = this.capabilities || {
       isReviewer: true,
+      listAccessCaseTypes: [],
+      isAdviser: false,
       ownedCaseTypes: [],
-      isResponsibleParty: false,
+      ownedJourneyCaseTypes: [],
+      isControls: false,
       isReviewerManager: false,
       isResponsiblePartyManager: false,
       isMaintainer: false,
-      isQaReviewer: false,
       isVisitor: false,
     };
 

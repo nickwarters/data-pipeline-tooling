@@ -51,11 +51,13 @@ test('resolveRoles: assigned reviewer', () => {
   const caps = {
     isReviewer: true,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   const roles = resolveRoles(makeCase(), 'user-reviewer', caps);
@@ -66,11 +68,13 @@ test('resolveRoles: other reviewer (in group but not assigned)', () => {
   const caps = {
     isReviewer: true,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   const roles = resolveRoles(makeCase(), 'user-other', caps);
@@ -81,11 +85,13 @@ test('resolveRoles: responsible party', () => {
   const caps = {
     isReviewer: false,
     ownedCaseTypes: [],
-    isResponsibleParty: true,
+    isAdviser: true,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   const roles = resolveRoles(makeCase(), 'user-rp', caps);
@@ -96,11 +102,13 @@ test('resolveRoles: case type owner', () => {
   const caps = {
     isReviewer: false,
     ownedCaseTypes: ['example-review'],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   const roles = resolveRoles(makeCase(), 'user-owner', caps);
@@ -111,11 +119,13 @@ test('resolveRoles: none', () => {
   const caps = {
     isReviewer: false,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   const roles = resolveRoles(makeCase(), 'stranger', caps);
@@ -126,11 +136,13 @@ test('resolveRoles: multiple roles — assigned reviewer + owner', () => {
   const caps = {
     isReviewer: true,
     ownedCaseTypes: ['example-review'],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   const roles = resolveRoles(makeCase(), 'user-reviewer', caps);
@@ -142,11 +154,13 @@ test('resolveRoles: other reviewer + RP (case where reviewer is also the RP for 
   const caps = {
     isReviewer: true,
     ownedCaseTypes: [],
-    isResponsibleParty: true,
+    isAdviser: true,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   const roles = resolveRoles(makeCase(), 'user-rp', caps);
@@ -157,11 +171,13 @@ test('resolveRoles: owner of a different case type does not get owner role', () 
   const caps = {
     isReviewer: false,
     ownedCaseTypes: ['other-case-type'],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   const roles = resolveRoles(makeCase(), 'user-x', caps);
@@ -174,11 +190,13 @@ test('resolveRoles: responsible party manager (matched via the row field)', () =
   const caps = {
     isReviewer: false,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: true,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   const roles = resolveRoles(
@@ -193,11 +211,13 @@ test('resolveRoles: not the case row manager → no responsiblePartyManager role
   const caps = {
     isReviewer: false,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: true,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   const roles = resolveRoles(
@@ -600,11 +620,13 @@ function qaCaps(extra = {}) {
   return {
     isReviewer: false,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: true,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: true,
     isVisitor: false,
     ...extra,
   };

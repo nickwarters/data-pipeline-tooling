@@ -27,12 +27,14 @@ export class CRDashboard extends ShellElement {
     /** @type {Capabilities} */
     this.capabilities = {
       isReviewer: false,
+      listAccessCaseTypes: [],
+      isAdviser: false,
       ownedCaseTypes: [],
-      isResponsibleParty: false,
+      ownedJourneyCaseTypes: [],
+      isControls: false,
       isReviewerManager: false,
       isResponsiblePartyManager: false,
       isMaintainer: false,
-      isQaReviewer: false,
       isVisitor: false,
     };
     /** @type {string[]} */
@@ -92,7 +94,7 @@ export class CRDashboard extends ShellElement {
       );
     }
 
-    if (this.capabilities.isResponsibleParty) {
+    if (this.capabilities.isAdviser) {
       children.push(
         h('cr-responsible-party-dashboard', {
           client: this.client,

@@ -88,11 +88,13 @@ test('cr-app-nav: reviewer sees dashboard link', () => {
   el.capabilities = {
     isReviewer: true,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   el.connectedCallback();
@@ -107,11 +109,13 @@ test('cr-app-nav: reviewer does not see reports link', () => {
   el.capabilities = {
     isReviewer: true,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   el.connectedCallback();
@@ -127,11 +131,13 @@ test('cr-app-nav: reviewer manager sees dashboard and reports links', () => {
   el.capabilities = {
     isReviewer: false,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: true,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   el.connectedCallback();
@@ -150,11 +156,13 @@ test('cr-app-nav: reviewer manager does not see question bank link', () => {
   el.capabilities = {
     isReviewer: false,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: true,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   el.connectedCallback();
@@ -170,11 +178,13 @@ test('cr-app-nav: case type owner sees dashboard, reports, and question bank lin
   el.capabilities = {
     isReviewer: false,
     ownedCaseTypes: ['example-review'],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   el.connectedCallback();
@@ -197,11 +207,13 @@ test('cr-app-nav: responsible party sees dashboard link', () => {
   el.capabilities = {
     isReviewer: false,
     ownedCaseTypes: [],
-    isResponsibleParty: true,
+    isAdviser: true,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   el.connectedCallback();
@@ -226,11 +238,13 @@ test('cr-app-nav: visitor with no roles sees no nav links', () => {
   el.capabilities = {
     isReviewer: false,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   el.connectedCallback();
@@ -257,11 +271,13 @@ test('cr-app-nav: active item matches current hash exactly', () => {
   el.capabilities = {
     isReviewer: false,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: true,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   el.connectedCallback();
@@ -289,11 +305,13 @@ test('cr-app-nav: active item matches sub-route prefix', () => {
   el.capabilities = {
     isReviewer: false,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: true,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   el.connectedCallback();

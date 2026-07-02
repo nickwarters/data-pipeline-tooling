@@ -284,11 +284,13 @@ test('CRDashboard: connectedCallback calls listCases with In-progress and assign
   el.capabilities = {
     isReviewer: true,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   await el.connectedCallback();
@@ -307,11 +309,13 @@ test('CRDashboard: renders cr-case-table with cases from listCases', async () =>
   el.capabilities = {
     isReviewer: true,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   await el.connectedCallback();
@@ -336,11 +340,13 @@ test('CRDashboard: owner capability causes cr-owner-summary to be added to layou
   el.capabilities = {
     isReviewer: true,
     ownedCaseTypes: ['example-review'],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   await el.connectedCallback();
@@ -362,11 +368,13 @@ test('CRDashboard: reviewer-only capability does not show cr-owner-summary', asy
   el.capabilities = {
     isReviewer: true,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   await el.connectedCallback();
@@ -392,11 +400,13 @@ test('CRDashboard: layout includes a cr-allocation element at index 2 for review
   el.capabilities = {
     isReviewer: true,
     ownedCaseTypes: [],
-    isResponsibleParty: false,
+    isAdviser: false,
     isReviewerManager: false,
     isResponsiblePartyManager: false,
     isMaintainer: false,
-    isQaReviewer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
     isVisitor: false,
   };
   el.eligibleCaseTypes = ['example-review'];
