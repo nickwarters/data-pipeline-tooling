@@ -315,7 +315,7 @@ test('evaluateAccess: responsiblePartyManager — read-only on details/questions
   );
 });
 
-test('evaluateAccess: responsiblePartyManager summary — hidden while in-progress, read-only when completed', () => {
+test('evaluateAccess: responsiblePartyManager summary — hidden while in-progress, read-only once reportable (ADR-0023)', () => {
   const cfg = makeConfig();
   assert.equal(
     evaluateAccess(
@@ -325,6 +325,15 @@ test('evaluateAccess: responsiblePartyManager summary — hidden while in-progre
       cfg
     ),
     'hidden'
+  );
+  assert.equal(
+    evaluateAccess(
+      'summary',
+      ['responsiblePartyManager'],
+      makeCase({ status: 'Actions In Progress' }),
+      cfg
+    ),
+    'read-only'
   );
   assert.equal(
     evaluateAccess(
@@ -391,7 +400,7 @@ test('evaluateAccess: responsible party — questions R, conversation E, notes H
   );
 });
 
-test('evaluateAccess: RP summary — hidden while in-progress, read-only when completed', () => {
+test('evaluateAccess: RP summary — hidden while in-progress, read-only once reportable (ADR-0023)', () => {
   const cfg = makeConfig();
   assert.equal(
     evaluateAccess(
@@ -401,6 +410,16 @@ test('evaluateAccess: RP summary — hidden while in-progress, read-only when co
       cfg
     ),
     'hidden'
+  );
+  assert.equal(
+    evaluateAccess(
+      'summary',
+      ['responsibleParty'],
+      makeCase({ status: 'Actions In Progress' }),
+      cfg
+    ),
+    'read-only',
+    'the Adviser can see the Summary while remediation is underway'
   );
   assert.equal(
     evaluateAccess(

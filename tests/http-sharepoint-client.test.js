@@ -406,6 +406,7 @@ test('HttpSharePointClient: patchCase writes mutable CaseRow fields to SharePoin
     'case-1',
     {
       caseJustification: 'documented rationale',
+      reportableAt: '2026-05-30T10:00:00.000Z',
       completedAt: '2026-06-01T10:00:00.000Z',
       outcome: 'fail',
       outcomeAtCompletion: 'fail',
@@ -428,6 +429,7 @@ test('HttpSharePointClient: patchCase writes mutable CaseRow fields to SharePoin
   const body = JSON.parse(String(patch.body));
   assert.deepEqual(body, {
     CaseJustification: 'documented rationale',
+    ReportableAt: '2026-05-30T10:00:00.000Z',
     CompletedAt: '2026-06-01T10:00:00.000Z',
     Outcome: 'fail',
     OutcomeAtCompletion: 'fail',
@@ -952,6 +954,7 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
             Conversation: '[]',
             Notes: 'note',
             CaseJustification: 'documented rationale',
+            ReportableAt: '2026-06-02T10:00:00.000Z',
             CompletedAt: '2026-06-03T10:00:00.000Z',
             Outcome: 'fail',
             OutcomeAtCompletion: 'refer',
@@ -978,6 +981,7 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
   const row = await client.getCase('case-1');
 
   assert.equal(row?.caseJustification, 'documented rationale');
+  assert.equal(row?.reportableAt, '2026-06-02T10:00:00.000Z');
   assert.equal(row?.outcome, 'fail');
   assert.equal(row?.outcomeAtCompletion, 'refer');
   assert.equal(row?.questionBankVersion, 'hash-123');

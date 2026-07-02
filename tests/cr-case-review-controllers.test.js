@@ -83,8 +83,12 @@ const { updateSummaryNotesAppeal } =
   await import('../src/pages/cr-case-review/summary-notes-appeal-controller.js');
 const { createConversationPanelBinding } =
   await import('../src/pages/cr-case-review/conversation-controller.js');
-const { bindCompletion, completeCase, updateCompletion } =
-  await import('../src/pages/cr-case-review/completion-controller.js');
+const {
+  bindCompletion,
+  completeCase,
+  hasRemediationActions,
+  updateCompletion,
+} = await import('../src/pages/cr-case-review/completion-controller.js');
 
 /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
 const QUESTIONS = [
@@ -192,6 +196,8 @@ function makeQuestionContext(opts = {}) {
  *   allAnswered: boolean,
  *   canComplete: boolean,
  *   transitionToCompleted: Function | null,
+ *   transitionToActionsInProgress: Function | null,
+ *   answers: Record<string, any>,
  *   completeCase: Function,
  * }>} [opts]
  */
@@ -203,6 +209,10 @@ function makeCompletionContext(opts = {}) {
     status: 'Completed',
     completedAt: 'transition-date',
   };
+  const patchFromActionsTransition = {
+    status: 'Actions In Progress',
+    reportableAt: 'reportable-date',
+  };
   /** @type {any[]} */
   const completeCalls = [];
   const client = { id: 'client' };
@@ -211,10 +221,16 @@ function makeCompletionContext(opts = {}) {
     opts.transitionToCompleted === undefined
       ? () => patchFromTransition
       : opts.transitionToCompleted;
+  const transitionToActionsInProgress =
+    opts.transitionToActionsInProgress === undefined
+      ? () => patchFromActionsTransition
+      : opts.transitionToActionsInProgress;
+  const answers = opts.answers ?? { 'q-a': { value: 'Yes' } };
   return {
     completeButton,
     completeCalls,
     patchFromTransition,
+    patchFromActionsTransition,
     context: {
       viewModel: {
         caseRow: {
@@ -225,11 +241,14 @@ function makeCompletionContext(opts = {}) {
         config: {
           computeOutcome: () => ({ outcome: 'pass' }),
         },
-        answersSignal: { get: () => ({ 'q-a': { value: 'Yes' } }) },
+        answersSignal: { get: () => answers },
         exportHash: 'hash-1',
         machine: {
           canComplete: opts.canComplete ?? true,
           ...(transitionToCompleted ? { transitionToCompleted } : {}),
+          ...(transitionToActionsInProgress
+            ? { transitionToActionsInProgress }
+            : {}),
         },
         allAnswered: { get: () => opts.allAnswered ?? true },
         client,
@@ -1036,6 +1055,86 @@ test('bindCompletion: disables during submit, uses transition patch, and re-enab
 test('bindCompletion: falls back to default completion patch when no transition exists', () => {
   const { context, completeButton, completeCalls } = makeCompletionContext({
     transitionToCompleted: null,
+  });
+
+  bindCompletion(/** @type {any} */ (context));
+  completeButton._listeners.click[0]({ target: completeButton });
+
+  assert.equal(completeCalls.length, 1);
+  assert.equal(completeCalls[0].patchFields.status, 'Completed');
+  assert.equal(typeof completeCalls[0].patchFields.completedAt, 'string');
+});
+
+const ACTIONS_ANSWERS = {
+  'q-a': {
+    value: 'No',
+    remediationActions: [{ id: 'ra-0', text: 'Retrain.', completed: false }],
+  },
+};
+
+test('hasRemediationActions: true iff an Answer carries ≥1 Remediation Action', () => {
+  assert.equal(
+    hasRemediationActions(
+      /** @type {any} */ ({ answersSignal: { get: () => ACTIONS_ANSWERS } })
+    ),
+    true
+  );
+  assert.equal(
+    hasRemediationActions(
+      /** @type {any} */ ({
+        answersSignal: { get: () => ({ 'q-a': { value: 'Yes' } }) },
+      })
+    ),
+    false
+  );
+  assert.equal(
+    hasRemediationActions(/** @type {any} */ ({})),
+    false,
+    'no answers signal ⇒ no actions'
+  );
+});
+
+test('updateCompletion: button reads "Send Actions" when the Case carries Remediation Actions (ADR-0023)', () => {
+  const withActions = makeCompletionContext({
+    allAnswered: true,
+    canComplete: true,
+    answers: ACTIONS_ANSWERS,
+  });
+  updateCompletion(/** @type {any} */ (withActions.context));
+  assert.equal(withActions.completeButton.hidden, false);
+  assert.equal(withActions.completeButton.textContent, 'Send Actions');
+});
+
+test('bindCompletion: routes down the actions path (transitionToActionsInProgress) when actions exist', () => {
+  const { context, completeButton, completeCalls, patchFromActionsTransition } =
+    makeCompletionContext({ answers: ACTIONS_ANSWERS });
+
+  bindCompletion(/** @type {any} */ (context));
+  completeButton._listeners.click[0]({ target: completeButton });
+
+  assert.equal(completeCalls.length, 1);
+  assert.equal(
+    completeCalls[0].patchFields,
+    patchFromActionsTransition,
+    'the Send Actions transition supplies the reportable PATCH'
+  );
+});
+
+test('bindCompletion: no-actions path uses transitionToCompleted', () => {
+  const { context, completeButton, completeCalls, patchFromTransition } =
+    makeCompletionContext();
+
+  bindCompletion(/** @type {any} */ (context));
+  completeButton._listeners.click[0]({ target: completeButton });
+
+  assert.equal(completeCalls.length, 1);
+  assert.equal(completeCalls[0].patchFields, patchFromTransition);
+});
+
+test('bindCompletion: actions path falls back to default patch when the transition is absent', () => {
+  const { context, completeButton, completeCalls } = makeCompletionContext({
+    answers: ACTIONS_ANSWERS,
+    transitionToActionsInProgress: null,
   });
 
   bindCompletion(/** @type {any} */ (context));

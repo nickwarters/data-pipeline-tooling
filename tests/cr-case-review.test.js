@@ -1,7 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CaseMachine } from '../src/lib/case-machine.js';
+import { CaseMachine, isReportable } from '../src/lib/case-machine.js';
 
 /** @type {import('../src/services/permissions.js').Capabilities} */
 const NO_CAPABILITIES = {
@@ -2437,6 +2437,152 @@ test('CaseMachine.transitionToCompleted omits questionBankVersion when not provi
     Object.hasOwn(fields, 'questionBankVersion'),
     false,
     'no questionBankVersion key when argument absent'
+  );
+});
+
+// ===== Lifecycle & the reportable milestone (ADR-0023) =====
+
+test('isReportable: true from Actions In Progress and Completed, false while In-progress', () => {
+  assert.equal(isReportable('In-progress'), false);
+  assert.equal(isReportable('Actions In Progress'), true);
+  assert.equal(isReportable('Completed'), true);
+});
+
+/** @type {import('../src/sharepoint-client.js').CaseTypeConfig} */
+const ATTRIBUTE_CONFIG = {
+  questions: [],
+  computeOutcome: () => ({ outcome: 'pass' }),
+  attributeFailures: true,
+};
+
+/**
+ * @param {'In-progress'|'Actions In Progress'|'Completed'} status
+ * @param {import('../src/sharepoint-client.js').CaseTypeConfig} [config]
+ */
+const machineForStatus = (status, config = EMPTY_CASE_TYPE_CONFIG) =>
+  new CaseMachine(
+    { ...BASE_ROW, status },
+    { id: 'u1' },
+    NO_CAPABILITIES,
+    config
+  );
+
+test('CaseMachine.reportable mirrors the status milestone', () => {
+  assert.equal(machineForStatus('In-progress').reportable, false);
+  assert.equal(machineForStatus('Actions In Progress').reportable, true);
+  assert.equal(machineForStatus('Completed').reportable, true);
+});
+
+test('CaseMachine.canComplete is gated on the reportable predicate, not a hard-coded status', () => {
+  assert.equal(
+    machineForStatus('In-progress').canComplete,
+    true,
+    'the assigned Reviewer can complete while the Case is still editable'
+  );
+  assert.equal(
+    machineForStatus('Actions In Progress').canComplete,
+    false,
+    'a reportable Case is frozen — the Summary button no longer completes it'
+  );
+  assert.equal(machineForStatus('Completed').canComplete, false);
+});
+
+test('CaseMachine.canAttribute / canCapture are gated on the reportable predicate', () => {
+  assert.equal(
+    machineForStatus('In-progress', ATTRIBUTE_CONFIG).canAttribute,
+    true
+  );
+  assert.equal(
+    machineForStatus('In-progress', ATTRIBUTE_CONFIG).canCapture,
+    true
+  );
+  assert.equal(
+    machineForStatus('Actions In Progress', ATTRIBUTE_CONFIG).canAttribute,
+    false,
+    'attribution freezes at the reportable milestone (Send Actions)'
+  );
+  assert.equal(
+    machineForStatus('Completed', ATTRIBUTE_CONFIG).canAttribute,
+    false
+  );
+});
+
+test('CaseMachine.transitionToActionsInProgress stamps the reportable snapshot without completedAt (ADR-0023)', () => {
+  const answers = {
+    'q-needs': {
+      value: 'No',
+      remediationActions: [{ id: 'ra-0', text: 'Retrain.', completed: false }],
+    },
+  };
+  /** @param {Record<string, any>} a */
+  const computeOutcome = (a) =>
+    /** @type {any} */ ({
+      outcome: Object.values(a).some((x) => x.value === 'No') ? 'fail' : 'pass',
+    });
+
+  const fields = machineForStatus('In-progress').transitionToActionsInProgress(
+    computeOutcome,
+    answers,
+    'sha256:v1'
+  );
+
+  assert.equal(fields.status, 'Actions In Progress');
+  assert.equal(typeof fields.reportableAt, 'string', 'reportableAt is stamped');
+  assert.equal(
+    Object.hasOwn(fields, 'completedAt'),
+    false,
+    'completedAt is NOT stamped on the actions path — the Case is not yet closed'
+  );
+  assert.equal(
+    fields.outcomeAtCompletion,
+    'fail',
+    'outcome snapshot at reportable'
+  );
+  assert.equal(fields.hadRemediation, true);
+  assert.equal(fields.effectiveOutcome, 'fail');
+  assert.equal(fields.effectiveHadRemediation, true);
+  assert.equal(fields.outcomeOverridden, false);
+  assert.equal(fields.questionBankVersion, 'sha256:v1');
+});
+
+test('CaseMachine.transitionToCompleted (no-actions path) stamps reportableAt and completedAt together (ADR-0023)', () => {
+  const fields = machineForStatus('In-progress').transitionToCompleted(
+    () => ({ outcome: 'pass' }),
+    { 'q-welcome': { value: 'Yes' } },
+    null
+  );
+
+  assert.equal(fields.status, 'Completed');
+  assert.equal(typeof fields.reportableAt, 'string');
+  assert.equal(
+    fields.reportableAt,
+    fields.completedAt,
+    'on the no-actions path reportableAt === completedAt'
+  );
+  assert.equal(fields.outcomeAtCompletion, 'pass', 'snapshot taken here');
+  assert.equal(fields.hadRemediation, false);
+});
+
+test('CaseMachine.transitionToFinalComplete closes without re-snapshotting (ADR-0023)', () => {
+  const fields = machineForStatus(
+    'Actions In Progress'
+  ).transitionToFinalComplete();
+
+  assert.equal(fields.status, 'Completed');
+  assert.equal(
+    typeof fields.completedAt,
+    'string',
+    'completedAt stamped at final close'
+  );
+  assert.equal(
+    Object.hasOwn(fields, 'reportableAt'),
+    false,
+    'reportableAt was already stamped at Send Actions — not re-stamped'
+  );
+  assert.equal(
+    Object.hasOwn(fields, 'outcomeAtCompletion'),
+    false,
+    'the outcome was frozen at reportable — no re-snapshot at final complete'
   );
 });
 

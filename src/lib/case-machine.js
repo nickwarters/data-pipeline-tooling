@@ -6,9 +6,15 @@
 
 import {
   evaluateAccess,
+  isReportable,
   resolveRoles,
   SECTIONS,
 } from '../services/section-access.js';
+
+// Re-exported from its leaf home in section-access.js (the access matrix also
+// keys its freeze/gate cells off it) so lifecycle consumers can import the
+// reportable predicate alongside CaseMachine without a circular import.
+export { isReportable } from '../services/section-access.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
@@ -38,11 +44,19 @@ export class CaseMachine {
     }
   }
 
+  /**
+   * Whether the Case has reached the reportable freeze point (ADR-0023). Gates
+   * editability everywhere the old code hard-coded `status === 'In-progress'`.
+   */
+  get reportable() {
+    return isReportable(this.caseRow.status);
+  }
+
   get canComplete() {
     return (
       this.access.questions === 'edit' &&
       this.caseRow.assignedReviewer === this.currentUser.id &&
-      this.caseRow.status === 'In-progress'
+      !this.reportable
     );
   }
 
@@ -50,7 +64,7 @@ export class CaseMachine {
     return (
       this.config.attributeFailures === true &&
       this.access.remediation === 'edit' &&
-      this.caseRow.status === 'In-progress'
+      !this.reportable
     );
   }
 
@@ -63,17 +77,21 @@ export class CaseMachine {
   }
 
   /**
+   * The shared **reportable milestone** snapshot (ADR-0023): the single point at
+   * which a Case's Answers freeze and its Outcome is stamped for reporting. Used
+   * by both the "Send Actions" (→ `Actions In Progress`) and no-actions
+   * "Complete Case" (→ `Completed`) paths; each caller adds `status`, the
+   * `reportableAt` timestamp, and — on the actions path — the remediation due
+   * date (#233).
+   *
    * @param {((answers: Record<string, Answer>) => import('../sharepoint-client.js').OutcomeResult) | null | undefined} computeOutcome
    * @param {Record<string, Answer>} [answers]
    * @param {string | null} [questionBankVersion]
    * @returns {Partial<CaseRow>}
    */
-  transitionToCompleted(computeOutcome, answers, questionBankVersion) {
+  _reportableSnapshot(computeOutcome, answers, questionBankVersion) {
     /** @type {Partial<CaseRow>} */
-    const fields = {
-      status: 'Completed',
-      completedAt: new Date().toISOString(),
-    };
+    const fields = {};
     if (computeOutcome && answers) {
       fields.outcomeAtCompletion = computeOutcome(answers).outcome;
       fields.hadRemediation = Object.values(answers).some(
@@ -87,5 +105,60 @@ export class CaseMachine {
       fields.questionBankVersion = questionBankVersion;
     }
     return fields;
+  }
+
+  /**
+   * **Send Actions** (actions path): the Case has ≥1 Remediation Action, so it
+   * hands off to `Actions In Progress`. This is the reportable milestone — the
+   * snapshot is stamped here, `reportableAt` is set, but `completedAt` is not
+   * (the Case is not yet closed).
+   *
+   * @param {((answers: Record<string, Answer>) => import('../sharepoint-client.js').OutcomeResult) | null | undefined} computeOutcome
+   * @param {Record<string, Answer>} [answers]
+   * @param {string | null} [questionBankVersion]
+   * @returns {Partial<CaseRow>}
+   */
+  transitionToActionsInProgress(computeOutcome, answers, questionBankVersion) {
+    return {
+      status: 'Actions In Progress',
+      reportableAt: new Date().toISOString(),
+      ...this._reportableSnapshot(computeOutcome, answers, questionBankVersion),
+    };
+  }
+
+  /**
+   * No-actions **Complete Case**: the Case has no Remediation Actions, so it
+   * goes straight to `Completed`. This is both the reportable milestone and the
+   * final close, so `reportableAt` and `completedAt` coincide and the snapshot
+   * is stamped in the same PATCH.
+   *
+   * @param {((answers: Record<string, Answer>) => import('../sharepoint-client.js').OutcomeResult) | null | undefined} computeOutcome
+   * @param {Record<string, Answer>} [answers]
+   * @param {string | null} [questionBankVersion]
+   * @returns {Partial<CaseRow>}
+   */
+  transitionToCompleted(computeOutcome, answers, questionBankVersion) {
+    const now = new Date().toISOString();
+    return {
+      status: 'Completed',
+      reportableAt: now,
+      completedAt: now,
+      ...this._reportableSnapshot(computeOutcome, answers, questionBankVersion),
+    };
+  }
+
+  /**
+   * The **final complete** transition (actions path): once the Remediation tab
+   * is complete (#232), an `Actions In Progress` Case closes to `Completed`.
+   * The Answers and Outcome were already frozen at Send Actions, so this stamps
+   * `completedAt` only — no re-snapshot (ADR-0023).
+   *
+   * @returns {Partial<CaseRow>}
+   */
+  transitionToFinalComplete() {
+    return {
+      status: 'Completed',
+      completedAt: new Date().toISOString(),
+    };
   }
 }

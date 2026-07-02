@@ -204,7 +204,9 @@ test('CaseReviewViewModel.load() stores null exportHash when getExportHash retur
 
 /** Minimal stub client for Step 4 tests. */
 function makeStep4Client({
-  status = /** @type {'In-progress'|'Completed'} */ ('In-progress'),
+  status = /** @type {'In-progress'|'Actions In Progress'|'Completed'} */ (
+    'In-progress'
+  ),
   questionBankVersion = /** @type {string|undefined} */ (undefined),
   versionedExport = /** @type {any} */ (null),
 } = {}) {
@@ -282,6 +284,36 @@ test('CaseReviewViewModel.load() uses versioned catalogue for Completed Case wit
     'A question from version time',
     'text from versioned file'
   );
+});
+
+test('CaseReviewViewModel.load(): Actions In Progress Case freezes on the versioned catalogue — no reopen once reportable (ADR-0023)', async () => {
+  const vm = new CaseReviewViewModel({
+    client: makeStep4Client({
+      status: 'Actions In Progress',
+      questionBankVersion: 'sha256:abc123',
+      versionedExport: {
+        slug: 'example-review',
+        questions: versionedCatalogue,
+      },
+    }),
+    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: null,
+  });
+
+  await vm.load();
+
+  // The reportable milestone (ADR-0023) freezes the bank as-reviewed: an
+  // 'Actions In Progress' Case loads the versioned snapshot exactly like a
+  // Completed one, so a Question added to the live bank cannot reopen it.
+  const ids = new Set(vm.catalogue.map((q) => q.id));
+  assert.deepEqual([...ids], ['q-old'], 'frozen to the as-reviewed snapshot');
+  assert.ok(
+    !ids.has('q-welcome'),
+    'a live-bank Question does not reopen a reportable Case'
+  );
+  assert.equal(vm.versionWarning.get(), null, 'snapshot resolved, no warning');
 });
 
 test('CaseReviewViewModel.load(): versioned catalogue mapping normalises null optional fields to undefined', async () => {

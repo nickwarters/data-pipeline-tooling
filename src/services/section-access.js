@@ -17,6 +17,25 @@
 /** @typedef {import('../sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
 /** @typedef {import('./permissions.js').Capabilities} Capabilities */
 
+/**
+ * A Case is **reportable** (ADR-0023) once it has passed the freeze milestone:
+ * either the Reviewer has sent Remediation Actions (`'Actions In Progress'`) or
+ * the Case has been completed outright (`'Completed'`). Equivalently
+ * `reportable ⟺ status ∈ { 'Actions In Progress', 'Completed' }`.
+ *
+ * Before that (`'In-progress'`) the Answers are live: a newly-applicable
+ * Question Definition still applies and blocks completion. From reportable on,
+ * the Answers and Outcome snapshot are frozen and no new Question reopens the
+ * Case. Both the access matrix (freeze/gate cells below) and `CaseMachine` key
+ * off this predicate rather than a hard-coded status string.
+ *
+ * @param {string} status
+ * @returns {boolean}
+ */
+export function isReportable(status) {
+  return status === 'Actions In Progress' || status === 'Completed';
+}
+
 /** @type {Section[]} */
 export const SECTIONS = [
   'details',
@@ -131,14 +150,16 @@ const MATRIX = {
   // Summary is never `edit` — only `read-only` or `hidden` (ADR-0016). It
   // inherits the function-valued Outcome × Responsible Party cell that
   // previously governed the removed Outcome Section: hidden from the Responsible
-  // Party (and their Manager) while In-progress, read-only once Completed.
+  // Party (and their Manager) while In-progress, read-only once the Case is
+  // reportable. ADR-0023 widened the gate from `Completed` to `reportable`, so
+  // the Adviser can see the Summary while remediation is underway (Actions In
+  // Progress), not only after the Case finally closes.
   summary: {
     assignedReviewer: 'read-only',
     otherReviewer: 'read-only',
-    responsibleParty: (c) =>
-      c.status === 'Completed' ? 'read-only' : 'hidden',
+    responsibleParty: (c) => (isReportable(c.status) ? 'read-only' : 'hidden'),
     responsiblePartyManager: (c) =>
-      c.status === 'Completed' ? 'read-only' : 'hidden',
+      isReportable(c.status) ? 'read-only' : 'hidden',
     caseTypeOwner: 'read-only',
     controls: 'read-only',
     none: 'hidden',

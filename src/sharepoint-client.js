@@ -101,17 +101,23 @@
  */
 
 /**
- * A Case row. `effectiveOutcome` / `effectiveHadRemediation` / `outcomeOverridden`
+ * A Case row. The lifecycle is `In-progress → Actions In Progress → Completed`
+ * (ADR-0023); `reportableAt` is stamped at the **reportable** milestone (Send
+ * Actions, or Complete Case on the no-actions path), where the Answers freeze and
+ * the Outcome snapshot is taken. `completedAt` is stamped only at the final
+ * `Completed` transition, so on the actions path `reportableAt` precedes it.
+ *
+ * `effectiveOutcome` / `effectiveHadRemediation` / `outcomeOverridden`
  * carry the corrected result for the responsible-party-team report (ADR-0019); they
- * initialise equal to the frozen `outcomeAtCompletion` / `hadRemediation` and are
- * re-fed from a case-level **Amended Outcome** (ADR-0026), not from per-Answer
- * overrides.
+ * initialise equal to the frozen `outcomeAtCompletion` / `hadRemediation` (stamped
+ * at reportable, despite the `Completion` name) and are re-fed from a case-level
+ * **Amended Outcome** (ADR-0026), not from per-Answer overrides.
  *
  * @typedef {{
  *   id: string,
  *   caseType: string,
  *   title: string,
- *   status: 'In-progress' | 'Completed',
+ *   status: 'In-progress' | 'Actions In Progress' | 'Completed',
  *   assignedReviewer: string,
  *   responsibleParty: string,
  *   answers: Record<string, Answer>,
@@ -119,6 +125,7 @@
  *   details?: Record<string, string>,
  *   notes: string,
  *   caseJustification?: string,
+ *   reportableAt?: string | null,
  *   completedAt: string | null,
  *   outcome?: string | null,
  *   outcomeAtCompletion?: string,

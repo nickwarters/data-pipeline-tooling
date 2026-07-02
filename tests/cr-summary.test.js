@@ -191,6 +191,31 @@ test('CRSummary: reads the frozen outcomeAtCompletion snapshot once the Case is 
   );
 });
 
+test('CRSummary: reads the frozen snapshot from the reportable milestone (Actions In Progress), ADR-0023', () => {
+  const el = new CRSummary();
+  el.caseRow = makeCase({
+    status: 'Actions In Progress',
+    outcomeAtCompletion: 'fail',
+  });
+  el.connectedCallback();
+
+  // The snapshot is stamped at reportable, so an Actions-In-Progress Case shows
+  // the frozen outcome even though it is not yet Completed.
+  el.update((/** @type {any} */ a) => makeComputeOutcome(a), {}, true);
+
+  const block = /** @type {any} */ (el)._children[1];
+  assert.equal(
+    block._updateArgs.a3,
+    true,
+    'frozen outcome is treated as answered'
+  );
+  assert.equal(
+    block._updateArgs.a1().outcome,
+    'fail',
+    'the frozen outcome is rendered from the reportable snapshot'
+  );
+});
+
 test('CRSummary: falls back to live derivation when a Completed Case has no frozen snapshot', () => {
   const el = new CRSummary();
   el.caseRow = makeCase({ status: 'Completed' });

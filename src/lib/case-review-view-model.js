@@ -17,7 +17,7 @@ import {
   SECTIONS,
   SUMMARY_SECTIONS,
 } from '../services/section-access.js';
-import { CaseMachine } from './case-machine.js';
+import { CaseMachine, isReportable } from './case-machine.js';
 import {
   UnknownCaseTypeError,
   loadCaseTypeConfig,
@@ -144,8 +144,11 @@ export class CaseReviewViewModel {
     this.currentUser = currentUser;
     saveQueue.loadCase(caseRow, this.caseListOptions);
 
+    // A Case freezes at the reportable milestone (ADR-0023), not only at final
+    // completion: once reportable we load the as-reviewed bank snapshot so a
+    // newly-applicable Question Definition no longer reopens the Case.
     const versionHash =
-      caseRow.status === 'Completed' && caseRow.questionBankVersion
+      isReportable(caseRow.status) && caseRow.questionBankVersion
         ? caseRow.questionBankVersion
         : null;
 
@@ -176,7 +179,7 @@ export class CaseReviewViewModel {
     validateCaptureGroups(config.captureGroups);
 
     if (versionHash && versionedExport) {
-      // Completed Case with a published snapshot — freeze the catalogue as-reviewed.
+      // Reportable Case with a published snapshot — freeze the catalogue as-reviewed.
       this.catalogue = versionedExport.questions
         .filter((q) => !q.deprecated)
         .map((q) => ({

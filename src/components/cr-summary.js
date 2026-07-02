@@ -3,6 +3,7 @@ import { h } from '../lib/html.js';
 import './cr-outcome.js';
 import { caseDetailFields } from './cr-case-details.js';
 import { buildSummaryModel } from '../evaluators/summary-model.js';
+import { isReportable } from '../lib/case-machine.js';
 import './cr-capture-groups.js';
 
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
@@ -33,8 +34,10 @@ export function Summary(props) {
     h('cr-outcome')
   );
 
-  const completed = props.caseRow?.status === 'Completed';
-  const frozen = completed ? props.caseRow?.outcomeAtCompletion : null;
+  // The Outcome snapshot is stamped at the reportable milestone (ADR-0023), so
+  // read the frozen value from reportable on — not only once Completed.
+  const reportable = isReportable(props.caseRow?.status ?? '');
+  const frozen = reportable ? props.caseRow?.outcomeAtCompletion : null;
   if (frozen) {
     /** @type {OutcomeResult} */
     const result = {
@@ -226,8 +229,9 @@ function renderFieldBlock(className, title, rows) {
  * The read-only Summary Section (ADR-0016). It rolls the whole Case up onto one
  * page; this tracer-bullet shell renders only the Outcome block. Outcome
  * derivation is hybrid: while the Case is In-progress the outcome is computed
- * live from the current Answers, but once the Case is Completed it reads the
- * frozen `outcomeAtCompletion` snapshot (ADR-0012) rather than recomputing.
+ * live from the current Answers, but once the Case is reportable (Actions In
+ * Progress or Completed) it reads the frozen `outcomeAtCompletion` snapshot
+ * (ADR-0012/ADR-0023) rather than recomputing.
  *
  * Summary is never editable — only `read-only` or `hidden` (see section-access).
  */

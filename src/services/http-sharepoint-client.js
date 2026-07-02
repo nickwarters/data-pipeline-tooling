@@ -523,7 +523,7 @@ function rowFromItem(item, etag) {
     id: String(item?.Id ?? ''),
     caseType: String(item?.CaseType ?? ''),
     title: String(item?.Title ?? ''),
-    status: /** @type {'In-progress' | 'Completed'} */ (
+    status: /** @type {'In-progress' | 'Actions In Progress' | 'Completed'} */ (
       item?.Status ?? 'In-progress'
     ),
     assignedReviewer: String(item?.AssignedReviewerId ?? ''),
@@ -550,6 +550,8 @@ function rowFromItem(item, etag) {
       item?.CaseJustification != null
         ? String(item.CaseJustification)
         : undefined,
+    reportableAt:
+      typeof item?.ReportableAt === 'string' ? item.ReportableAt : null,
     completedAt:
       typeof item?.CompletedAt === 'string' ? item.CompletedAt : null,
     outcome: item?.Outcome != null ? String(item.Outcome) : undefined,
@@ -599,6 +601,7 @@ function itemFromRow(fields) {
   if (fields.notes !== undefined) out.Notes = fields.notes;
   if (fields.caseJustification !== undefined)
     out.CaseJustification = fields.caseJustification;
+  if (fields.reportableAt !== undefined) out.ReportableAt = fields.reportableAt;
   if (fields.completedAt !== undefined) out.CompletedAt = fields.completedAt;
   if (fields.outcome !== undefined) out.Outcome = fields.outcome;
   if (fields.outcomeAtCompletion !== undefined)

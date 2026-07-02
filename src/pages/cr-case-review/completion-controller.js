@@ -1,6 +1,23 @@
 // @ts-check
 
 /**
+ * Whether the Case carries ≥1 Remediation Action across its (failed) Answers.
+ * This drives the two-way Summary bottom button (ADR-0023): with actions it
+ * reads **Send Actions** and routes down the actions path (→ `Actions In
+ * Progress`); with none it reads **Complete Case** and closes outright. Mirrors
+ * the machine's `hadRemediation` snapshot so the label and the freeze agree.
+ *
+ * @param {import('./types.js').CaseReviewShellContext['viewModel']} vm
+ * @returns {boolean}
+ */
+export function hasRemediationActions(vm) {
+  const answers = vm.answersSignal?.get?.() ?? {};
+  return Object.values(answers).some(
+    (a) => (a.remediationActions?.length ?? 0) > 0
+  );
+}
+
+/**
  * @param {import('./types.js').CaseReviewShellContext} context
  */
 export function bindCompletion(context) {
@@ -13,8 +30,15 @@ export function bindCompletion(context) {
     const target = /** @type {HTMLButtonElement} */ (event?.target || button);
     if (target.disabled) return;
     target.disabled = true;
-    const patchFields = machine.transitionToCompleted
-      ? machine.transitionToCompleted(
+    // ≥1 Remediation Action ⇒ Send Actions (hand off, stay open); otherwise the
+    // no-actions Complete Case path closes the Case outright. Both stamp the
+    // reportable snapshot; only the actions path leaves `completedAt` unset.
+    const transition = hasRemediationActions(vm)
+      ? machine.transitionToActionsInProgress
+      : machine.transitionToCompleted;
+    const patchFields = transition
+      ? transition.call(
+          machine,
           config.computeOutcome,
           vm.answersSignal.get(),
           vm.exportHash ?? null
@@ -40,7 +64,9 @@ export function updateCompletion(context) {
   if (!button || !vm.machine) return;
 
   button.hidden = !(vm.allAnswered.get() && vm.machine.canComplete);
-  button.textContent = 'Complete Case';
+  button.textContent = hasRemediationActions(vm)
+    ? 'Send Actions'
+    : 'Complete Case';
 }
 
 /**
