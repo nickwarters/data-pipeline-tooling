@@ -16,6 +16,7 @@ async function boot() {
     import('./pages/cr-reviewer-team-report.js'),
     import('./pages/cr-responsible-party-dashboard.js'),
     import('./pages/cr-team-cases.js'),
+    import('./pages/cr-journey-cases.js'),
     import('./question-bank/cr-bank-editor.js'),
   ]);
 

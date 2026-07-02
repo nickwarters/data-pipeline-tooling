@@ -53,7 +53,7 @@ const NONE = {
   isResponsiblePartyManager: false,
   isMaintainer: false,
   listAccessCaseTypes: [],
-  ownedJourneyCaseTypes: [],
+  ownedJourneyCaseTypes: /** @type {string[]} */ ([]),
   isControls: false,
   isVisitor: false,
 };
@@ -164,6 +164,15 @@ test('CRHome: case type owner — links to question bank', () => {
   assert.deepEqual(sectionLinks(el), ['#/question-bank']);
 });
 
+test('CRHome: journey owner — links to journey cases', () => {
+  const el = new CRHome();
+  el.capabilities = caps({ ownedJourneyCaseTypes: ['complaints'] });
+  el.connectedCallback();
+
+  assert.deepEqual(sectionHeadings(el), ['Journey Owner']);
+  assert.deepEqual(sectionLinks(el), ['#/journey-cases']);
+});
+
 test('CRHome: maintainer — links to question bank', () => {
   const el = new CRHome();
   el.capabilities = caps({ isMaintainer: true });
@@ -203,7 +212,7 @@ test('CRHome: full order — all roles render in documented order', () => {
     ownedCaseTypes: ['example-review'],
     isMaintainer: true,
     listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
+    ownedJourneyCaseTypes: ['complaints'],
     isVisitor: true,
   });
   el.connectedCallback();
@@ -214,6 +223,7 @@ test('CRHome: full order — all roles render in documented order', () => {
     'Responsible Party Manager',
     'Responsible Party',
     'Case Type Owner',
+    'Journey Owner',
     'Maintainer',
     'Visitor',
   ]);

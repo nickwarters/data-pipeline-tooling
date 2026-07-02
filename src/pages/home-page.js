@@ -39,6 +39,9 @@ export function HomePage({ capabilities }) {
   if (capabilities.ownedCaseTypes.length > 0) {
     sections.push(roleSection('Case Type Owner', '#/question-bank'));
   }
+  if (capabilities.ownedJourneyCaseTypes.length > 0) {
+    sections.push(roleSection('Journey Owner', '#/journey-cases'));
+  }
   if (capabilities.isMaintainer) {
     sections.push(roleSection('Maintainer', '#/question-bank'));
   }

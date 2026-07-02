@@ -436,3 +436,13 @@ test('registerRoutes: registers #/my-cases route', () => {
     '#/my-cases should be registered'
   );
 });
+
+test('registerRoutes: registers #/journey-cases route', () => {
+  const router = new Router();
+  router._container = /** @type {any} */ ({});
+  registerRoutes(router, makeContext());
+  assert.ok(
+    router._routes.some((r) => r.re.test('#/journey-cases')),
+    '#/journey-cases should be registered'
+  );
+});

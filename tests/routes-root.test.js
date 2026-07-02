@@ -69,7 +69,11 @@ test('root route: mount renders HomePage sections with capabilities from context
       rendered.splice(0, rendered.length, ...children);
     },
   };
-  const capabilities = { isVisitor: true, ownedCaseTypes: [] };
+  const capabilities = {
+    isVisitor: true,
+    ownedCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+  };
 
   const hashes = /** @type {string[]} */ ([]);
   const origLocation = globalThis.location;
@@ -126,7 +130,10 @@ test('root route: unmount clears appEl', () => {
     router._container = /** @type {any} */ ({});
     register(
       router,
-      /** @type {any} */ ({ capabilities: { ownedCaseTypes: [] }, appEl })
+      /** @type {any} */ ({
+        capabilities: { ownedCaseTypes: [], ownedJourneyCaseTypes: [] },
+        appEl,
+      })
     );
     router.navigate('#/');
     // Navigating elsewhere triggers the root handler's unmount.

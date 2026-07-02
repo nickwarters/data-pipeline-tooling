@@ -11,6 +11,7 @@ import { register as registerCase } from '../routes/case.js';
 import { register as registerReports } from '../routes/reports.js';
 import { register as registerTeamCases } from '../routes/team-cases.js';
 import { register as registerMyCases } from '../routes/my-cases.js';
+import { register as registerJourneyCases } from '../routes/journey-cases.js';
 
 /**
  * @typedef {Object} AppContext
@@ -35,4 +36,5 @@ export function registerRoutes(router, context) {
   registerReports(router, context);
   registerTeamCases(router, context);
   registerMyCases(router, context);
+  registerJourneyCases(router, context);
 }
