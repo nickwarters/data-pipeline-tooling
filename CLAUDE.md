@@ -105,9 +105,11 @@ top-level `cli/`) is the single surface for authoring (`scaffold`) and operating
 by **its location on disk** — `python -m cli run pipelines/<name>` imports
 `pipelines.<name>.pipeline` and executes its `run(context)` callable (reading an
 optional `UPSTREAMS` freshness tuple), so the dependency stays one-way and the
-framework never statically depends on `pipelines/`. Only `orchestrate` still
-takes a required `--app` naming an application's registry module that exposes
-`build_runner()` / `build_pipeline_sets()`.
+framework never statically depends on `pipelines/`. `orchestrate` addresses
+pipelines the **same** way — each `ScheduledPipeline` names a `pipelines/<name>`
+path, run at its scheduled time by the same rule (no handler registry) — and
+takes a required `--app` naming an application's schedules module that exposes
+`build_pipeline_sets()`.
 
 Scaffold a new feed with `python -m cli scaffold <feed>`: it renders the
 feed code as a `pipelines/<feed>/` subpackage (schema, pipeline, sample fixture)

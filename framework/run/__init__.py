@@ -25,10 +25,12 @@ from framework.run.run_context import RunContext
 from framework.run.runner import (
     FreshnessError,
     FreshnessRequirement,
+    LoadedPipeline,
     PipelineRunner,
     Requirement,
     UnknownPipelineError,
     dry_run_pipeline,
+    load_pipeline,
     run_pipeline,
 )
 from tools.observability.run_log import RunLog
@@ -40,6 +42,8 @@ __all__ = [
     "RunAddressError",
     "PipelineRunner",
     "run_pipeline",
+    "load_pipeline",
+    "LoadedPipeline",
     "dry_run_pipeline",
     "DryRunReport",
     "RunContext",
