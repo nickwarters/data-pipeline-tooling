@@ -15,6 +15,7 @@ export const CASE_TYPE_IMPORTERS = {
   'example-review': () => import('./example-review.js'),
   'product-sale-review': () => import('./product-sale-review.js'),
   'stress-review': () => import('./stress-review.js'),
+  complaints: () => import('./complaints.js'),
 };
 
 export class UnknownCaseTypeError extends Error {

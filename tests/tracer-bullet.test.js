@@ -328,7 +328,7 @@ test('CRDashboard: renders cr-case-table with cases from listCases', async () =>
   );
   assert.equal(
     caseTableEl.cases.length,
-    10,
+    11,
     'one case per In-progress case assigned to reviewer'
   );
 });

@@ -45,6 +45,10 @@ const _twentyDaysAgo = new Date(
  *   rm-case-3 — In-progress, due next week (outstanding)
  *   rm-case-4 — In-progress, OVERDUE (dueDate=yesterday)
  *
+ * Complaints (Journey Owner raises appeals, Controls resolves — ADR-0027):
+ *   complaints-case-1 — In-progress, outstanding (assigned to user-reviewer)
+ *   complaints-case-2 — Completed, one failure → outcomeAtCompletion=refer
+ *
  * @type {CaseRow[]}
  */
 export const cases = [
@@ -447,6 +451,67 @@ export const cases = [
     dueDate: _yesterday.toISOString(),
     created: '2026-05-05T08:00:00Z',
     etag: 'etag-rm4-v1',
+  },
+  // --- complaints fixture cases (Complaints journey; appeals raised by the
+  // Journey Owner, resolved by Controls — ADR-0027) ---
+  {
+    // Outstanding: In-progress, assigned to the reviewer so it surfaces on the
+    // reviewer dashboard's "Outstanding Cases". Partially answered (root-cause is
+    // applicable via showWhen but unanswered), so it is not yet completable.
+    id: 'complaints-case-1',
+    caseType: 'complaints',
+    title: 'Complaint #1',
+    status: 'In-progress',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-agent-a',
+    answers: {
+      'q-cm-ack': { value: 'Yes' },
+      'q-cm-investigated': { value: 'Yes' },
+    },
+    conversation: [],
+    details: {
+      complaintRef: 'CMP-2026-0001',
+      customerName: 'Priya Nair',
+      complaintDate: '2026-06-18',
+    },
+    notes: '',
+    completedAt: null,
+    dueDate: _nextWeek.toISOString(),
+    created: '2026-06-18T08:00:00Z',
+    etag: 'etag-cm1-v1',
+  },
+  {
+    // Completed with exactly one failure (redress not offered) → outcome `refer`.
+    // Left un-amended so the Controls Amend Outcome flow (ADR-0026) and the
+    // Journey Owner → Controls appeal flow (ADR-0027) can both be exercised on it.
+    id: 'complaints-case-2',
+    caseType: 'complaints',
+    title: 'Complaint #2',
+    status: 'Completed',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-agent-b',
+    answers: {
+      'q-cm-ack': { value: 'Yes' },
+      'q-cm-investigated': { value: 'Yes' },
+      'q-cm-root-cause': { value: 'Yes' },
+      'q-cm-channel': { value: 'Letter' },
+      'q-cm-redress': {
+        value: 'No',
+        justification: 'Upheld complaint closed without offering redress.',
+      },
+      'q-cm-final-response': { value: 'Yes' },
+    },
+    conversation: [],
+    details: {
+      complaintRef: 'CMP-2026-0002',
+      customerName: 'Tomasz Kowalski',
+      complaintDate: '2026-05-02',
+    },
+    notes: '',
+    completedAt: _threeDaysAgo.toISOString(),
+    outcomeAtCompletion: 'refer',
+    created: '2026-05-02T08:00:00Z',
+    etag: 'etag-cm2-v1',
   },
   // --- product-sale-review fixture cases ---
   {
