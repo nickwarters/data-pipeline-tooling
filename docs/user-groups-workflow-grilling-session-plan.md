@@ -468,10 +468,10 @@ All confirmed. Answers folded into the docs where they change scope:
 4. **Adviser vs Responsible Party** — ✅ both coexist (group/population word vs per-Case role).
 5. **QA removal** — ✅ confirmed as a real deletion (not dormant).
 6. **Journey Owner Summary** — ✅ a **new dedicated view** (#238).
-7. **Notifications** — ✅ **explicitly out of this frontend**: a **dedicated Python pipeline
-   in existing infra** handles Send-Actions/SLA notifications. No SharePoint-alert or in-app
-   nudge work here; the frontend just stamps `reportableAt` / `remediationDueDate` for that
-   pipeline to read.
+7. **Notifications** — ✅ **out of scope, already handled by existing infra.** No
+   notification work in this frontend and no new coupling to build — nothing to design
+   around here. (`reportableAt` / `remediationDueDate` are stamped for the lifecycle and
+   reporting regardless.)
 8. **Live Case Types for September** — ✅ **at least ~8** (Example Review + Complaints + ~6
    more), where the ~6 are **structurally like Complaints**, so onboarding each is
    **config + Question Bank + group/list wiring only** — no framework changes (ADR-0004's
