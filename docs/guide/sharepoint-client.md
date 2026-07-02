@@ -52,17 +52,22 @@ The mock client operates entirely in memory. `patchCase` writes to its internal 
  *   id: string,
  *   caseType: string,
  *   title: string,
- *   status: 'In-progress' | 'Completed',
+ *   status: 'In-progress' | 'Actions In Progress' | 'Completed',
  *   assignedReviewer: string,
  *   responsibleParty: string,
  *   answers: Record<string, Answer>,
  *   conversation: Message[],
  *   notes: string,
+ *   reportableAt?: string | null,
+ *   remediationDueDate?: string | null,
  *   completedAt: string | null,
+ *   amendedOutcome?: AmendedOutcome | null,
  *   etag: string
  * }} CaseRow
  */
 ```
+
+The full shape (the `Effective*` reporting columns, `Appeals`, etc.) lives in `src/sharepoint-client.js`; the fields above are the storage-relevant subset. `status` widened to three values with the lifecycle change (ADR-0023); `reportableAt` / `remediationDueDate` are stamped at Send Actions (ADR-0023/0025); `amendedOutcome` carries Controls' post-completion verdict and **replaces the removed `overrides[]` blob** (ADR-0026). See the [provisioning runbook](provisioning-runbook.md) for the SharePoint columns behind each field.
 
 `answers` and `conversation` are stored as JSON blobs in the SharePoint list (ADR-0007). `HttpSharePointClient` handles the serialisation/deserialisation; consumers always receive and send parsed JS objects.
 
@@ -70,9 +75,11 @@ The mock client operates entirely in memory. `patchCase` writes to its internal 
 
 ```js
 /**
- * @typedef {{ value: string | string[], justification?: string, remediationActions?: Array<{id: string, text: string, completed: boolean}> }} Answer
+ * @typedef {{ value: string | string[], justification?: string, capture?: Record<string, string | { loginName: string, displayName: string } | Array<string | RemediationAction>> }} Answer
  */
 ```
+
+A **Remediation Action** on a Case is `{ id, text, status, cancelReason? }` (ADR-0024), stored in an `actions`-typed Issue Capture Field value (ADR-0020); legacy bare strings are coerced on read (`src/evaluators/remediation-actions.js`).
 
 `value` is a plain string for `yes-no-na` and `single-choice` questions; a `string[]` for `multi-choice`. An empty array means unanswered.
 

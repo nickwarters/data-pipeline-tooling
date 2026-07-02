@@ -1,0 +1,137 @@
+# Maintainer provisioning runbook
+
+What a Maintainer must provision in SharePoint to stand up a Case Type, and the
+recurring maintenance the framework depends on. This is the operational
+counterpart to the storage ADRs — [ADR-0007](../adr/0007-case-storage-shape.md)
+(what a Case row carries), [ADR-0022](../adr/0022-two-axis-role-model.md) (the
+group model), [ADR-0023](../adr/0023-case-lifecycle-and-reportable-milestone.md)
+(the lifecycle and `reportableAt`), [ADR-0025](../adr/0025-working-day-sla-due-dates.md)
+(the working-day holiday list), and [ADR-0026](../adr/0026-amend-outcome-case-level-and-qa-retirement.md)
+(the Amended Outcome).
+
+Provisioning a new Case Type is **config + wiring only** (ADR-0004): one module,
+one Question Bank, and the lists and groups below. No framework change per type.
+~8 Case Types are live for September (Example Review, Complaints, and ~6 more
+structurally like Complaints).
+
+---
+
+## 1. Per-Case-Type Cases list — `Cases-{CaseTypeSlug}`
+
+One SharePoint list per Case Type holds its Cases, one Case per row (ADR-0007).
+The list name is the Case Type's `listName` (falls back to the
+`HttpSharePointClient` default when a type declares none — see the Complaints
+note in `case-types/complaints.js`). The column **internal names** below are
+authoritative: they are exactly what `HttpSharePointClient`
+(`src/services/http-sharepoint-client.js`, `rowFromItem` / `itemFromRow`) reads
+and writes. Display names are free to differ.
+
+### Columns
+
+| Internal name             | SharePoint type                | Purpose                                                                                                                                                                                                                                              |
+| ------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Title`                   | Single line of text            | Case title.                                                                                                                                                                                                                                          |
+| `CaseType`                | Single line of text            | Case Type slug (`example-review`).                                                                                                                                                                                                                   |
+| `Status`                  | Choice                         | Lifecycle state — **`In-progress`, `Actions In Progress`, `Completed`** (ADR-0023). The middle value is new; existing lists must have the choice added.                                                                                              |
+| `AssignedReviewerId`      | Person or Group                | Current Reviewer. Reassignment history comes from list version history.                                                                                                                                                                              |
+| `ResponsiblePartyId`      | Person or Group                | Responsible Party — **written in-app by the Reviewer before Send Actions** (ADR-0024).                                                                                                                                                               |
+| `AssignedReviewerManager` | Single line of text            | Reviewer's manager (bare account), for the Reviewer-Manager report.                                                                                                                                                                                  |
+| `ResponsiblePartyManager` | Single line of text            | Responsible Party's manager (bare account).                                                                                                                                                                                                          |
+| `Answers`                 | Multiple lines of text (plain) | JSON blob of `{ Qid: Answer }` (ADR-0007). A **Remediation Action** inside it is `{ id, text, status, cancelReason? }` (ADR-0024); legacy bare strings are coerced on read.                                                                          |
+| `Conversation`            | Multiple lines of text (plain) | JSON array of `{ author, timestamp, body }`.                                                                                                                                                                                                         |
+| `Details`                 | Multiple lines of text (plain) | JSON blob of read-only Case Details fields (ADR-0014).                                                                                                                                                                                               |
+| `Notes`                   | Multiple lines of text (plain) | Free-form reviewer notes.                                                                                                                                                                                                                            |
+| `CaseJustification`       | Multiple lines of text (plain) | Case-level justification.                                                                                                                                                                                                                            |
+| `ReportableAt`            | Date and Time                  | **New (ADR-0023).** Stamped at the reportable milestone (Send Actions, or Complete on the no-actions path) — the freeze/snapshot moment. On the actions path it precedes `CompletedAt`.                                                              |
+| `RemediationDueDate`      | Date and Time                  | **New (ADR-0024/0025).** Case-level remediation SLA, computed **once** at Send Actions (+10 working days) and never recomputed on read.                                                                                                              |
+| `CompletedAt`             | Date and Time                  | Stamped only at the final `Completed` transition.                                                                                                                                                                                                    |
+| `Outcome`                 | Single line of text            | Working/current outcome value.                                                                                                                                                                                                                       |
+| `OutcomeAtCompletion`     | Single line of text            | Frozen Outcome snapshot for reporting (ADR-0012).                                                                                                                                                                                                    |
+| `QuestionBankVersion`     | Single line of text            | Content hash of the as-reviewed Question Bank export (ADR-0021).                                                                                                                                                                                     |
+| `HadRemediation`          | Yes/No                         | Whether the frozen Case carried remediation.                                                                                                                                                                                                         |
+| `EffectiveOutcome`        | Single line of text            | Corrected result for the Responsible-Party-team report (ADR-0019). **Index this column** — reports `$filter` on it. Re-fed from `AmendedOutcome`.                                                                                                    |
+| `EffectiveHadRemediation` | Yes/No                         | Corrected remediation flag (ADR-0019).                                                                                                                                                                                                               |
+| `OutcomeOverridden`       | Yes/No                         | Whether the effective result differs from the frozen one (ADR-0019). **Index this column.**                                                                                                                                                          |
+| `AmendedOutcome`          | Multiple lines of text (plain) | **New (ADR-0026).** JSON `{ outcome, justification, amendedBy, amendedAt, fromAppealId? }` or empty. Controls' post-completion verdict; feeds the `Effective*` columns. Replaces the **removed** `overrides[]` blob (ADR-0018, retired by ADR-0026). |
+| `Appeals`                 | Multiple lines of text (plain) | JSON array of Appeals (ADR-0027).                                                                                                                                                                                                                    |
+| `DueDate`                 | Date and Time                  | Review due date (drives `Overdue`).                                                                                                                                                                                                                  |
+| `RelatedDate`             | Date and Time                  | Case-relevant date (e.g. interaction date).                                                                                                                                                                                                          |
+
+`Created` is the SharePoint system column. **Removed:** the `Overrides` /
+`overrides[]` blob — do not provision it; corrected reporting now flows from
+`AmendedOutcome` into the `Effective*` columns.
+
+---
+
+## 2. Shared Question Definitions list — `QuestionDefinitions`
+
+One list shared across all Case Types (ADR-0004); live edits propagate to
+in-progress Cases. Read by `HttpSharePointClient.getQuestionDefinitions`
+(`qDefFromItem`).
+
+| Internal name        | SharePoint type                | Purpose                                                                     |
+| -------------------- | ------------------------------ | --------------------------------------------------------------------------- |
+| `QuestionId`         | Single line of text            | Stable question id.                                                         |
+| `QuestionText`       | Multiple lines of text         | Question wording.                                                           |
+| `ResponseType`       | Choice                         | `yes-no-na` / `single-choice` / `multi-choice`.                             |
+| `Options`            | Multiple lines of text (plain) | JSON array for choice questions.                                            |
+| `ShowWhen`           | Multiple lines of text (plain) | JSON applicability graph (ADR-0006).                                        |
+| `FailureCriteria`    | Single line of text            | Value that marks the Answer a failure.                                      |
+| `RemediationActions` | Multiple lines of text (plain) | JSON array of remediation-action definitions.                               |
+| `Outcome`            | Multiple lines of text (plain) | JSON per-question outcome config.                                           |
+| `Deprecated`         | Yes/No                         | Question Definitions are **never deleted** — deprecate instead (CLAUDE.md). |
+
+---
+
+## 3. Groups per Case Type
+
+SharePoint groups fall on two orthogonal axes (ADR-0022). For a Case Type whose
+display name is `X` (e.g. `Example Review`, **not** the slug), provision:
+
+### Per-type list-access group (the real ACL boundary)
+
+| Group           | Grants                                                                             |
+| --------------- | ---------------------------------------------------------------------------------- |
+| `Reviewers - X` | Access to the `Cases-{Slug}` list. Membership implies the `isReviewer` capability. |
+
+### Per-type elevated capability groups
+
+| Group               | Capability                                                                                                                                 |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CaseTypeOwner - X` | Elevated **reviewing** role — edits this type's Question Bank.                                                                             |
+| `JourneyOwner - X`  | Elevated **frontline** role — sees every Case's Summary and raises Appeals where the type configures it (ADR-0027). Not a Case Type Owner. |
+
+Group **display names** use the Case Type display name; code composes them from
+`slug → displayName` (declared on the Case Type module, ADR-0004), so a new type
+needs one name, not three hand-written strings.
+
+### Site-wide functional groups (provision once, not per type)
+
+`Reviewers` (base reviewing), `Advisers` (base frontline — eligible Responsible
+Party), `Controls` (resolves Appeals, authors Amended Outcomes — replaces the
+retired QA Reviewer). See ADR-0022 for the full capability matrix.
+
+---
+
+## 4. Recurring maintenance — the working-day holiday list
+
+The remediation SLA is **10 working days** after Send Actions (ADR-0024), which
+excludes weekends **and** public holidays. The holiday source is an **in-code
+array**, `ENGLAND_WALES_HOLIDAYS` in
+[`src/config/working-days.js`](../../src/config/working-days.js) (ADR-0025) —
+England & Wales public holidays as ISO `YYYY-MM-DD` dates.
+
+**This list is a maintenance burden the Maintainer owns.** Refresh it **annually**
+(or whenever holidays change): a stale list silently produces **early** due
+dates. Because `RemediationDueDate` is computed once at Send Actions and never
+recomputed, refreshing the list only affects Cases sent afterwards — it never
+retroactively moves an already-set due date.
+
+Switching the source to a maintainable SharePoint list later is a boot-time
+wiring change, not a logic change (`addWorkingDays` takes `holidays` as a
+parameter).
+
+> **Notifications are out of scope for this frontend.** Send-Actions / SLA
+> reminders are handled by a separate Python pipeline in existing infra that
+> reads `ReportableAt` / `RemediationDueDate`. This runbook only ensures those
+> columns are provisioned and stamped.

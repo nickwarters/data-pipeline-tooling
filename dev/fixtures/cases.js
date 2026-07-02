@@ -38,6 +38,7 @@ const _twentyDaysAgo = new Date(
  *   case-10 — In-progress, OVERDUE (dueDate=yesterday), responsibleParty=user-rp
  *   case-14 — Completed 2 months ago, fully answered, outcomeAtCompletion=pass
  *   case-15 — Completed 2 months ago, failed then Controls-amended to pass (ADR-0026)
+ *   case-16 — Actions In Progress: past Send Actions, reportableAt/remediationDueDate stamped (ADR-0023/0025)
  *
  * Reviewer Manager (user-rm) report cases:
  *   rm-case-1 — Completed 5 days ago (in 7-day tile)
@@ -388,6 +389,53 @@ export const cases = [
     effectiveHadRemediation: false,
     created: '2026-04-06T08:00:00Z',
     etag: 'etag-c15-v1',
+  },
+  {
+    // The third lifecycle status (ADR-0023): a Case past **Send Actions** but not
+    // yet closed. Exercises the storage fields stamped at the reportable milestone
+    // — `reportableAt`, the +10-working-day `remediationDueDate` (ADR-0025), the
+    // frozen Outcome snapshot — while `completedAt` is still null. The failed
+    // Answer carries its sent Remediation Actions in the ADR-0024 object shape
+    // (`{ id, text, status }`) inside the ADR-0020 `actions` capture value, with a
+    // legacy bare string alongside to exercise read-time coercion.
+    id: 'case-16',
+    caseType: 'example-review',
+    title: 'Example Review #16',
+    status: 'Actions In Progress',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-agent-i',
+    answers: {
+      'q-welcome': { value: 'Yes' },
+      'q-needs': {
+        value: 'No',
+        justification: 'Agent skipped the needs-identification step.',
+        capture: {
+          rootCause: 'Skipped the needs-identification step',
+          remediationActions: [
+            {
+              id: 'ra-16-1',
+              text: 'Retrain agent on needs-identification protocol.',
+              status: 'pending',
+            },
+            'Add needs-check prompt to the call script.',
+          ],
+        },
+      },
+      'q-channel': { value: 'Phone' },
+      'q-products': { value: ['Billing'] },
+    },
+    conversation: [],
+    notes: '',
+    reportableAt: _threeDaysAgo.toISOString(),
+    remediationDueDate: _nextWeek.toISOString(),
+    completedAt: null,
+    outcomeAtCompletion: 'fail',
+    hadRemediation: true,
+    effectiveOutcome: 'fail',
+    effectiveHadRemediation: true,
+    outcomeOverridden: false,
+    created: '2026-05-08T08:00:00Z',
+    etag: 'etag-c16-v1',
   },
   // --- Reviewer Manager (user-rm) report fixture cases ---
   {
