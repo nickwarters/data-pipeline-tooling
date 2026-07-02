@@ -36,6 +36,8 @@ const _twentyDaysAgo = new Date(
  *   case-8  — Completed today, responsibleParty=user-rp
  *   case-9  — Completed 2 months ago, responsibleParty=user-rp
  *   case-10 — In-progress, OVERDUE (dueDate=yesterday), responsibleParty=user-rp
+ *   case-14 — Completed 2 months ago, fully answered, outcomeAtCompletion=pass
+ *   case-15 — Completed 2 months ago, failed then Controls-amended to pass (ADR-0026)
  *
  * Reviewer Manager (user-rm) report cases:
  *   rm-case-1 — Completed 5 days ago (in 7-day tile)
@@ -333,6 +335,8 @@ export const cases = [
       'q-welcome': { value: 'Yes' },
       'q-needs': { value: 'Yes' },
       'q-resolve': { value: 'Yes' },
+      'q-channel': { value: 'Phone' },
+      'q-products': { value: ['Account'] },
     },
     conversation: [],
     notes: '',
@@ -340,6 +344,46 @@ export const cases = [
     outcomeAtCompletion: 'pass',
     created: '2026-04-05T08:00:00Z',
     etag: 'etag-c14-v1',
+  },
+  {
+    // A Completed example-review Case that FAILED at completion (q-needs = No)
+    // and was later corrected by Controls via a case-level Amended Outcome
+    // (ADR-0026): the hand-set verdict is `pass`, with the audit stamp and the
+    // re-derived ADR-0019 reporting columns. Demonstrates the observer's
+    // amendment-record view and the Current Outcome (`pass`) overriding the
+    // frozen `outcomeAtCompletion` (`fail`). Completed two months ago so it sits
+    // outside the owner roll-up's 7-day window.
+    id: 'case-15',
+    caseType: 'example-review',
+    title: 'Example Review #15',
+    status: 'Completed',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-agent-h',
+    answers: {
+      'q-welcome': { value: 'Yes' },
+      'q-needs': {
+        value: 'No',
+        justification: 'Agent skipped the needs-identification step.',
+      },
+      'q-channel': { value: 'Phone' },
+      'q-products': { value: ['Billing'] },
+    },
+    conversation: [],
+    notes: '',
+    completedAt: _twoMonthsAgo.toISOString(),
+    outcomeAtCompletion: 'fail',
+    amendedOutcome: {
+      outcome: 'pass',
+      justification:
+        'On review the missed needs check was immaterial to the resolution; the interaction met standard on all other measures.',
+      amendedBy: 'user-controls',
+      amendedAt: _twoMonthsAgo.toISOString(),
+    },
+    effectiveOutcome: 'pass',
+    outcomeOverridden: true,
+    effectiveHadRemediation: false,
+    created: '2026-04-06T08:00:00Z',
+    etag: 'etag-c15-v1',
   },
   // --- Reviewer Manager (user-rm) report fixture cases ---
   {

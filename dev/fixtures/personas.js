@@ -7,10 +7,10 @@
 /**
  * Persona definitions for mock mode.
  * Activate via the ?asUser= URL param, e.g. ?asUser=reviewer (default).
- * Available keys: reviewer, owner, journey-owner-complaints,
- * case-type-owner-complaints, admin, responsible-party, reviewer-manager,
- * controls (a standalone Controls user, ADR-0022), visitor (no groups —
- * exercises the Visitor explainer-only branch).
+ * Available keys: reviewer, owner, journey-owner-example-review,
+ * journey-owner-complaints, case-type-owner-complaints, admin,
+ * responsible-party, reviewer-manager, controls (a standalone Controls user,
+ * ADR-0022), visitor (no groups — exercises the Visitor explainer-only branch).
  *
  * @type {Record<string, { userId: string, displayName: string, groups: string[] }>}
  */
@@ -24,6 +24,11 @@ export const personas = {
     userId: 'user-owner',
     displayName: 'Sam Owner',
     groups: ['CaseTypeOwner - Example Review'],
+  },
+  'journey-owner-example-review': {
+    userId: 'user-journey-owner-example',
+    displayName: 'Frankie Journey Owner Example Review',
+    groups: ['JourneyOwner - Example Review'],
   },
   'journey-owner-complaints': {
     userId: 'user-journey-owner-complaints',
