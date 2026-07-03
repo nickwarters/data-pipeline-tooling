@@ -710,19 +710,23 @@ test('CRRemediationSection: editable failure renders an attribute menu wired wit
   el.canAttribute = true;
   el.update(FAIL_CAT, { q1: { value: 'No' } }, true);
 
-  const menu = findByTag(el, 'cr-attribute-menu');
-  assert.ok(menu, 'attribute menu rendered for an editable failure');
-  assert.equal(menu.client, client, 'menu receives the SharePointClient');
+  // The menu is now a plain function component rendered inline, so assert on
+  // its rendered surface rather than a custom-element instance.
+  assert.ok(
+    findByClass(el, 'cr-attribute-trigger'),
+    'attribute menu rendered for an editable failure'
+  );
+  const picker = findByTag(el, 'cr-people-picker');
+  assert.ok(picker, 'menu embeds a people picker');
+  assert.equal(picker.client, client, 'menu forwards the SharePointClient');
   assert.equal(
-    menu.attributedParty,
+    findByClass(el, 'cr-attribute-chip'),
     null,
-    'unattributed failure passes null to the menu'
+    'unattributed failure shows no chip'
   );
-  assert.deepEqual(
-    menu.responsibleParty,
-    { loginName: 'rparty', displayName: 'rparty' },
-    'menu receives the Responsible Party quick-pick'
-  );
+  const quick = findByClass(el, 'cr-attribute-responsible');
+  assert.ok(quick, 'menu offers the Responsible Party quick-pick');
+  assert.equal(quick.textContent, 'Responsible Party — rparty');
   // The standalone read-only line is replaced by the menu's own chip.
   assert.equal(findByClass(el, 'cr-remediation-attributed-party'), null);
 });
@@ -746,12 +750,9 @@ test('CRRemediationSection: editable failure with an attribution passes the part
     true
   );
 
-  const menu = findByTag(el, 'cr-attribute-menu');
-  assert.ok(menu, 'menu rendered');
-  assert.deepEqual(menu.attributedParty, {
-    loginName: 'jsmith',
-    displayName: 'Jane Smith',
-  });
+  const chip = findByClass(el, 'cr-attribute-chip');
+  assert.ok(chip, 'menu rendered its chip for the attributed party');
+  assert.equal(chip.textContent, 'Jane Smith');
 });
 
 test('CRRemediationSection: editable surface is suppressed when attributeFailures is off', () => {
@@ -771,7 +772,7 @@ test('CRRemediationSection: editable surface is suppressed when attributeFailure
   );
 });
 
-test('CRRemediationSection: menu cr-attribute-change re-dispatches as bubbling cr-attribute with the question id', () => {
+test('CRRemediationSection: the menu onChange re-dispatches as bubbling cr-attribute with the question id', () => {
   const el = new CRRemediationSection();
   el.client = /** @type {any} */ ({
     async searchPeople() {
@@ -785,11 +786,9 @@ test('CRRemediationSection: menu cr-attribute-change re-dispatches as bubbling c
   const events = [];
   el.addEventListener('cr-attribute', (/** @type {any} */ e) => events.push(e));
 
-  const menu = findByTag(el, 'cr-attribute-menu');
-  menu._fire('cr-attribute-change', {
-    detail: {
-      attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
-    },
+  // Picking someone in the embedded people picker invokes the menu's onChange.
+  findByTag(el, 'cr-people-picker')._fire('cr-person-selected', {
+    detail: { loginName: 'jsmith', displayName: 'Jane Smith' },
   });
 
   assert.equal(events.length, 1);
@@ -823,9 +822,8 @@ test('CRRemediationSection: a null cr-attribute-change re-dispatches cr-attribut
   const events = [];
   el.addEventListener('cr-attribute', (/** @type {any} */ e) => events.push(e));
 
-  findByTag(el, 'cr-attribute-menu')._fire('cr-attribute-change', {
-    detail: { attributedParty: null },
-  });
+  // Clearing the attribution invokes the menu's onChange with a null party.
+  findByClass(el, 'cr-attribute-clear')._fire('click');
 
   assert.equal(events.length, 1);
   assert.deepEqual(events[0].detail, {

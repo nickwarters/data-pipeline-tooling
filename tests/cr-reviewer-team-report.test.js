@@ -42,6 +42,10 @@ class StubEl {
 
 /** @type {any} */ (globalThis).HTMLElement = StubEl;
 /** @type {any} */ (globalThis).document = {
+  _active: null,
+  get activeElement() {
+    return this._active;
+  },
   createElement(/** @type {string} */ tag) {
     const el = new StubEl();
     el.tagName = tag.toUpperCase();
@@ -50,7 +54,7 @@ class StubEl {
 };
 /** @type {any} */ (globalThis).customElements = { define() {} };
 
-const { CRReviewerTeamReport } =
+const { ReviewerTeamReportPage } =
   await import('../src/pages/cr-reviewer-team-report.js');
 
 /** @param {any} node @param {string} text @returns {boolean} */
@@ -106,8 +110,6 @@ function findByClass(node, cls) {
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 
-const NOW = new Date(2026, 4, 17, 15, 0, 0);
-
 /** @param {CaseRow[]} cases @returns {any} */
 function makeClient(cases = []) {
   return {
@@ -136,28 +138,62 @@ function makeCase(overrides) {
   };
 }
 
-test('cr-reviewer-team-report: renders a heading', async () => {
-  const el = new CRReviewerTeamReport();
-  el.client = makeClient();
-  el.currentUser = { id: 'user-rm', displayName: 'Morgan Manager' };
-  el.eligibleCaseTypes = [];
-  await el.connectedCallback();
+/** Flush the microtask queue enough times for fetchData()'s awaits to settle. */
+async function flush() {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+test('ReviewerTeamReportPage: renders a heading', async () => {
+  const host = ReviewerTeamReportPage({
+    client: makeClient(),
+    currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
+    eligibleCaseTypes: [],
+  });
+  await flush();
   assert.ok(
-    hasText(el, 'Reviewer Team Performance'),
+    hasText(host, 'Reviewer Team Performance'),
     'should render a heading'
   );
 });
 
-test('cr-reviewer-team-report: renders a back link to #/reports', async () => {
-  const el = new CRReviewerTeamReport();
-  el.client = makeClient();
-  el.currentUser = { id: 'user-rm', displayName: 'Morgan Manager' };
-  el.eligibleCaseTypes = [];
-  await el.connectedCallback();
-  assert.ok(findLink(el, '#/reports'), 'should render back link to #/reports');
+test('ReviewerTeamReportPage: renders nothing extra when client is null', async () => {
+  const host = ReviewerTeamReportPage({
+    client: null,
+    currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
+    eligibleCaseTypes: [],
+  });
+  await flush();
+  assert.ok(hasText(host, 'Reviewer Team Performance'));
+  assert.equal(findByClass(host, 'cr-kpi-tile').length, 0);
 });
 
-test('cr-reviewer-team-report: renders 4 KPI tiles with correct counts', async () => {
+test('ReviewerTeamReportPage: renders nothing extra when currentUser is null', async () => {
+  const host = ReviewerTeamReportPage({
+    client: makeClient(),
+    currentUser: null,
+    eligibleCaseTypes: [],
+  });
+  await flush();
+  assert.ok(hasText(host, 'Reviewer Team Performance'));
+  assert.equal(findByClass(host, 'cr-kpi-tile').length, 0);
+});
+
+test('ReviewerTeamReportPage: renders a back link to #/reports', async () => {
+  const host = ReviewerTeamReportPage({
+    client: makeClient(),
+    currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
+    eligibleCaseTypes: [],
+  });
+  await flush();
+  assert.ok(
+    findLink(host, '#/reports'),
+    'should render back link to #/reports'
+  );
+});
+
+test('ReviewerTeamReportPage: renders 4 KPI tiles with correct counts', async () => {
   const cases = [
     makeCase({
       id: 'c1',
@@ -180,22 +216,23 @@ test('cr-reviewer-team-report: renders 4 KPI tiles with correct counts', async (
       dueDate: new Date(Date.now() - 3 * 86400000).toISOString(),
     }), // overdue
   ];
-  const el = new CRReviewerTeamReport();
-  el.client = makeClient(cases);
-  el.currentUser = { id: 'user-rm', displayName: 'Morgan Manager' };
-  el.eligibleCaseTypes = ['example-review'];
-  await el.connectedCallback();
+  const host = ReviewerTeamReportPage({
+    client: makeClient(cases),
+    currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
+    eligibleCaseTypes: ['example-review'],
+  });
+  await flush();
 
-  const tiles = findByClass(el, 'cr-kpi-tile');
+  const tiles = findByClass(host, 'cr-kpi-tile');
   assert.equal(tiles.length, 4, 'should render 4 KPI tiles');
-  assert.ok(hasText(el, '1'), 'should show count of 1 for completed-7d');
+  assert.ok(hasText(host, '1'), 'should show count of 1 for completed-7d');
   assert.ok(
-    hasText(el, '2'),
+    hasText(host, '2'),
     'should show count of 2 for completed-30d (includes 7d case)'
   );
 });
 
-test('cr-reviewer-team-report: renders breakdown table rows per case type', async () => {
+test('ReviewerTeamReportPage: renders breakdown table rows per case type', async () => {
   const cases = [
     makeCase({
       id: 'c1',
@@ -210,22 +247,26 @@ test('cr-reviewer-team-report: renders breakdown table rows per case type', asyn
       dueDate: new Date(Date.now() + 3 * 86400000).toISOString(),
     }),
   ];
-  const el = new CRReviewerTeamReport();
-  el.client = makeClient(cases);
-  el.currentUser = { id: 'user-rm', displayName: 'Morgan Manager' };
-  el.eligibleCaseTypes = ['example-review', 'product-sale-review'];
-  await el.connectedCallback();
+  const host = ReviewerTeamReportPage({
+    client: makeClient(cases),
+    currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
+    eligibleCaseTypes: ['example-review', 'product-sale-review'],
+  });
+  await flush();
 
-  const rows = findByClass(el, 'cr-breakdown-row');
+  const rows = findByClass(host, 'cr-breakdown-row');
   assert.equal(rows.length, 2, 'should render one row per case type with data');
-  assert.ok(hasText(el, 'example-review'), 'should include example-review row');
   assert.ok(
-    hasText(el, 'product-sale-review'),
+    hasText(host, 'example-review'),
+    'should include example-review row'
+  );
+  assert.ok(
+    hasText(host, 'product-sale-review'),
     'should include product-sale-review row'
   );
 });
 
-test('cr-reviewer-team-report: drill-through links navigate to #/team-cases with query params', async () => {
+test('ReviewerTeamReportPage: drill-through links navigate to #/team-cases with query params', async () => {
   const cases = [
     makeCase({
       id: 'c1',
@@ -234,14 +275,15 @@ test('cr-reviewer-team-report: drill-through links navigate to #/team-cases with
       dueDate: new Date(Date.now() + 3 * 86400000).toISOString(),
     }),
   ];
-  const el = new CRReviewerTeamReport();
-  el.client = makeClient(cases);
-  el.currentUser = { id: 'user-rm', displayName: 'Morgan Manager' };
-  el.eligibleCaseTypes = ['example-review'];
-  await el.connectedCallback();
+  const host = ReviewerTeamReportPage({
+    client: makeClient(cases),
+    currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
+    eligibleCaseTypes: ['example-review'],
+  });
+  await flush();
 
   const link = findLinkWhere(
-    el,
+    host,
     (href) =>
       href.startsWith('#/team-cases') &&
       href.includes('caseType=example-review') &&
@@ -253,16 +295,17 @@ test('cr-reviewer-team-report: drill-through links navigate to #/team-cases with
   );
 });
 
-test('cr-reviewer-team-report: empty state when no cases', async () => {
-  const el = new CRReviewerTeamReport();
-  el.client = makeClient([]);
-  el.currentUser = { id: 'user-rm', displayName: 'Morgan Manager' };
-  el.eligibleCaseTypes = ['example-review'];
-  await el.connectedCallback();
+test('ReviewerTeamReportPage: empty state when no cases', async () => {
+  const host = ReviewerTeamReportPage({
+    client: makeClient([]),
+    currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
+    eligibleCaseTypes: ['example-review'],
+  });
+  await flush();
 
-  const tiles = findByClass(el, 'cr-kpi-tile');
+  const tiles = findByClass(host, 'cr-kpi-tile');
   assert.equal(tiles.length, 4, 'should still render 4 tiles');
-  assert.ok(hasText(el, '0'), 'tiles should show 0 counts');
-  const rows = findByClass(el, 'cr-breakdown-row');
+  assert.ok(hasText(host, '0'), 'tiles should show 0 counts');
+  const rows = findByClass(host, 'cr-breakdown-row');
   assert.equal(rows.length, 0, 'breakdown table should have no rows');
 });

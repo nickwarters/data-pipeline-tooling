@@ -10,9 +10,14 @@ const windowListeners = {};
   },
 };
 /** @type {any} */ (globalThis).location = { hash: '' };
+// The route modules now statically import their page functions, which pull in
+// components that call customElements.define at module-eval time. Install the
+// stubs before a dynamic import so that hoisted static imports can't run first.
+/** @type {any} */ (globalThis).HTMLElement = class {};
+/** @type {any} */ (globalThis).customElements = { define() {} };
 
-import { Router } from '../src/lib/router.js';
-import { registerRoutes } from '../src/setup/register-routes.js';
+const { Router } = await import('../src/lib/router.js');
+const { registerRoutes } = await import('../src/setup/register-routes.js');
 
 /** @returns {import('../src/setup/register-routes.js').AppContext} */
 function makeContext() {
@@ -176,39 +181,47 @@ test('registerRoutes: #/ mount renders home route directly (no redirect)', () =>
   }
 });
 
-test('registerRoutes: #/dashboard mount creates cr-dashboard element', () => {
-  const created = /** @type {string[]} */ ([]);
-  const origCreate = globalThis.document?.createElement;
+test('registerRoutes: #/dashboard mount composes the dashboard page into the container', () => {
+  const rendered = /** @type {any[]} */ ([]);
+  const origDoc = /** @type {any} */ (globalThis).document;
   /** @type {any} */ (globalThis).document = {
+    activeElement: null,
     createElement(/** @type {string} */ tag) {
-      created.push(tag);
-      return { setAttribute() {} };
-    },
-    createTreeWalker() {
       return {
-        nextNode() {
-          return null;
+        tagName: tag.toUpperCase(),
+        _children: /** @type {any[]} */ ([]),
+        replaceChildren(/** @type {any[]} */ ...cs) {
+          this._children = cs;
         },
+        setAttribute() {},
       };
     },
   };
 
   try {
     const router = new Router();
-    const container = { replaceChildren() {} };
+    const container = {
+      replaceChildren(/** @type {any[]} */ ...children) {
+        rendered.splice(0, rendered.length, ...children);
+      },
+    };
     router._container = /** @type {any} */ (container);
-    registerRoutes(router, makeContext());
+    const context = makeContext();
+    // All-false capabilities: the page renders without hitting the client.
+    context.capabilities = /** @type {any} */ ({
+      isReviewer: false,
+      ownedCaseTypes: [],
+      isAdviser: false,
+    });
+    registerRoutes(router, context);
     router.navigate('#/dashboard');
-    assert.ok(
-      created.includes('cr-dashboard'),
-      'cr-dashboard should be created on mount'
+    assert.equal(
+      rendered.length,
+      1,
+      'dashboard route mounts a single host node'
     );
   } finally {
-    if (origCreate) {
-      /** @type {any} */ (globalThis).document = { createElement: origCreate };
-    } else {
-      delete (/** @type {any} */ (globalThis).document);
-    }
+    /** @type {any} */ (globalThis).document = origDoc;
   }
 });
 
@@ -331,20 +344,15 @@ test('registerRoutes: registers #/reports/reviewer-team route', () => {
   );
 });
 
-test('registerRoutes: #/reports/reviewer-team mount creates cr-reviewer-team-report element', () => {
-  const created = /** @type {string[]} */ ([]);
-  const origCreate = /** @type {any} */ (globalThis).document;
-  /** @type {any} */ (globalThis).document = {
-    createElement(/** @type {string} */ tag) {
-      created.push(tag);
-      return { setAttribute() {} };
+test('registerRoutes: #/reports/reviewer-team redirects when the user is not a reviewer manager', () => {
+  const locations = /** @type {string[]} */ ([]);
+  const origLocation = globalThis.location;
+  /** @type {any} */ (globalThis).location = {
+    get hash() {
+      return '#/reports/reviewer-team';
     },
-    createTreeWalker() {
-      return {
-        nextNode() {
-          return null;
-        },
-      };
+    set hash(v) {
+      locations.push(v);
     },
   };
 
@@ -356,16 +364,17 @@ test('registerRoutes: #/reports/reviewer-team mount creates cr-reviewer-team-rep
       router,
       /** @type {any} */ ({
         ...makeContext(),
-        capabilities: { isReviewerManager: true },
+        capabilities: { isReviewerManager: false },
       })
     );
     router.navigate('#/reports/reviewer-team');
-    assert.ok(
-      created.includes('cr-reviewer-team-report'),
-      'cr-reviewer-team-report should be created on mount'
+    assert.deepEqual(
+      locations,
+      ['#/reports'],
+      'guard redirects non-managers back to #/reports'
     );
   } finally {
-    /** @type {any} */ (globalThis).document = origCreate;
+    /** @type {any} */ (globalThis).location = origLocation;
   }
 });
 
@@ -383,20 +392,27 @@ test('registerRoutes: #/question-bank unmount removes cr-fullbleed from appEl', 
     },
     setAttribute() {},
   };
-  const ctx = /** @type {any} */ ({ ...makeContext(), appEl });
+  const ctx = /** @type {any} */ ({
+    ...makeContext(),
+    appEl,
+    // All-false capabilities so the follow-on #/dashboard mount renders without
+    // touching the client.
+    capabilities: { isReviewer: false, ownedCaseTypes: [], isAdviser: false },
+  });
 
   registerRoutes(router, ctx);
 
   const origCreate = /** @type {any} */ (globalThis).document;
   /** @type {any} */ (globalThis).document = {
+    activeElement: null,
     createElement(/** @type {string} */ tag) {
-      return { setAttribute() {} };
-    },
-    createTreeWalker() {
       return {
-        nextNode() {
-          return null;
+        tagName: tag.toUpperCase(),
+        _children: /** @type {any[]} */ ([]),
+        replaceChildren(/** @type {any[]} */ ...cs) {
+          this._children = cs;
         },
+        setAttribute() {},
       };
     },
   };

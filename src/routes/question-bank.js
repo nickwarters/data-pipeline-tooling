@@ -1,7 +1,6 @@
 // @ts-check
-// TODO(simplify-ui): Rework routing around route functions that compose
-// plain function components returning h() nodes. Keep custom elements only for
-// route/browser-integration shells, not as the unit every route has to create.
+// The Question Bank editor is a full-bleed browser-integration shell, so this
+// route legitimately mounts the `cr-bank-editor` custom element directly.
 
 /**
  * @param {import('../lib/router.js').Router} router

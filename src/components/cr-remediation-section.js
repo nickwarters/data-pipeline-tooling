@@ -4,7 +4,7 @@ import { h } from '../lib/html.js';
 import { evaluate } from '../evaluators/applicability-evaluator.js';
 import { isFailure } from '../evaluators/failure-evaluator.js';
 import { buildCaptureControl } from '../lib/capture-engine.js';
-import './cr-attribute-menu.js';
+import { AttributeMenu } from './cr-attribute-menu.js';
 import './cr-capture-groups.js';
 
 import { normaliseConfiguredActions } from '../evaluators/configured-outcome.js';
@@ -232,19 +232,14 @@ export function renderRemediationAttribution(props, li, q) {
     return;
   }
 
-  const menu = /** @type {import('./cr-attribute-menu.js').CRAttributeMenu} */ (
-    h('cr-attribute-menu', {
-      client: props.client,
-      responsibleParty: props.responsibleParty,
-      'oncr-attribute-change': (/** @type {any} */ ev) => {
-        const detail =
-          /** @type {CustomEvent<{ attributedParty: Party | null }>} */ (ev)
-            .detail;
-        props.dispatchAttribute(q.id, detail.attributedParty);
-      },
-    })
-  );
-  menu.attributedParty = attributedParty ?? null;
+  const menu = AttributeMenu({
+    client: props.client,
+    responsibleParty: props.responsibleParty,
+    attributedParty: attributedParty ?? null,
+    onChange: (/** @type {Party | null} */ party) => {
+      props.dispatchAttribute(q.id, party);
+    },
+  });
   li.appendChild(/** @type {any} */ (menu));
 }
 

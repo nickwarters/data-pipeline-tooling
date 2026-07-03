@@ -61,6 +61,7 @@ const docListeners = {};
 
 /** @type {any} */ (globalThis).HTMLElement = StubEl;
 /** @type {any} */ (globalThis).document = {
+  activeElement: null,
   /** @param {string} tag @returns {StubEl} */
   createElement(tag) {
     const el = new StubEl();
@@ -81,7 +82,7 @@ const docListeners = {};
 /** @type {any} */ (globalThis).CustomEvent = StubCustomEvent;
 
 // ===== IMPORTS (after stubs) =====
-const { CRAttributeMenu } =
+const { AttributeMenu } =
   await import('../src/components/cr-attribute-menu.js');
 
 // ===== HELPERS =====
@@ -114,297 +115,268 @@ function keyEvent(/** @type {string} */ key) {
 const RESPONSIBLE = { loginName: 'rparty', displayName: 'rparty' };
 const PERSON = { loginName: 'jsmith', displayName: 'Jane Smith' };
 
-// Each menu registers document-level listeners in connectedCallback; clear them
-// between tests so a prior test's (still-connected) menu can't fire on the
-// shared stub document and pollute the assertions below.
+/**
+ * @param {Parameters<typeof AttributeMenu>[0]} [props]
+ * @returns {{ host: any, changes: Array<any> }}
+ */
+function mount(props = {}) {
+  /** @type {any[]} */
+  const changes = [];
+  const host = AttributeMenu({
+    onChange: (party) => changes.push(party),
+    ...props,
+  });
+  return { host: /** @type {any} */ (host), changes };
+}
+
+// Each menu registers document-level listeners; clear them between tests so a
+// prior test's (still-connected) menu can't fire on the shared stub document
+// and pollute the assertions below.
 beforeEach(() => {
   for (const key of Object.keys(docListeners)) delete docListeners[key];
 });
 
 // ===== TESTS =====
 
-test('CRAttributeMenu: unset renders an Attribute trigger, no chip or clear, popover hidden', () => {
-  const el = new CRAttributeMenu();
-  el.connectedCallback();
+test('AttributeMenu: unset renders an Attribute trigger, no chip or clear, popover hidden', () => {
+  const { host } = mount();
 
-  assert.ok(findByClass(el, 'cr-attribute-trigger'), 'trigger button rendered');
+  assert.ok(
+    findByClass(host, 'cr-attribute-trigger'),
+    'trigger button rendered'
+  );
   assert.equal(
-    findByClass(el, 'cr-attribute-chip'),
+    findByClass(host, 'cr-attribute-chip'),
     null,
     'no chip when unset'
   );
   assert.equal(
-    findByClass(el, 'cr-attribute-clear'),
+    findByClass(host, 'cr-attribute-clear'),
     null,
     'no clear when unset'
   );
   assert.equal(
-    findByClass(el, 'cr-attribute-popover').hidden,
+    findByClass(host, 'cr-attribute-popover').hidden,
     true,
     'popover starts hidden'
   );
 });
 
-test('CRAttributeMenu: when set, renders a chip with the displayName and a clear button', () => {
-  const el = new CRAttributeMenu();
-  el.attributedParty = PERSON;
-  el.connectedCallback();
+test('AttributeMenu: when set, renders a chip with the displayName and a clear button', () => {
+  const { host } = mount({ attributedParty: PERSON });
 
-  const chip = findByClass(el, 'cr-attribute-chip');
+  const chip = findByClass(host, 'cr-attribute-chip');
   assert.ok(chip, 'chip rendered when attributed');
   assert.equal(chip.textContent, 'Jane Smith');
   assert.ok(
-    findByClass(el, 'cr-attribute-clear'),
+    findByClass(host, 'cr-attribute-clear'),
     'clear button rendered when attributed'
   );
   assert.equal(
-    findByClass(el, 'cr-attribute-trigger'),
+    findByClass(host, 'cr-attribute-trigger'),
     null,
     'plain trigger replaced by chip'
   );
 });
 
-test('CRAttributeMenu: clicking the chip opens the popover so the person can be changed', () => {
-  const el = new CRAttributeMenu();
-  el.attributedParty = PERSON;
-  el.connectedCallback();
+test('AttributeMenu: clicking the chip opens the popover so the person can be changed', () => {
+  const { host } = mount({ attributedParty: PERSON });
 
-  findByClass(el, 'cr-attribute-chip')._fire('click');
+  findByClass(host, 'cr-attribute-chip')._fire('click');
 
   assert.equal(
-    findByClass(el, 'cr-attribute-popover').hidden,
+    findByClass(host, 'cr-attribute-popover').hidden,
     false,
     'chip click opens the popover'
   );
   assert.equal(
-    findByClass(el, 'cr-attribute-chip').getAttribute('aria-expanded'),
+    findByClass(host, 'cr-attribute-chip').getAttribute('aria-expanded'),
     'true'
   );
 });
 
-test('CRAttributeMenu: clicking the trigger opens the popover and reflects aria-expanded', () => {
-  const el = new CRAttributeMenu();
-  el.connectedCallback();
+test('AttributeMenu: clicking the trigger opens the popover and reflects aria-expanded', () => {
+  const { host } = mount();
 
-  const trigger = findByClass(el, 'cr-attribute-trigger');
+  const trigger = findByClass(host, 'cr-attribute-trigger');
   assert.equal(trigger.getAttribute('aria-expanded'), 'false');
   trigger._fire('click');
 
   assert.equal(
-    findByClass(el, 'cr-attribute-popover').hidden,
+    findByClass(host, 'cr-attribute-popover').hidden,
     false,
     'popover shown after click'
   );
   assert.equal(
-    findByClass(el, 'cr-attribute-trigger').getAttribute('aria-expanded'),
+    findByClass(host, 'cr-attribute-trigger').getAttribute('aria-expanded'),
     'true'
   );
 });
 
-test('CRAttributeMenu: clicking the trigger again closes the popover', () => {
-  const el = new CRAttributeMenu();
-  el.connectedCallback();
+test('AttributeMenu: clicking the trigger again closes the popover', () => {
+  const { host } = mount();
 
-  findByClass(el, 'cr-attribute-trigger')._fire('click');
-  findByClass(el, 'cr-attribute-trigger')._fire('click');
+  findByClass(host, 'cr-attribute-trigger')._fire('click');
+  findByClass(host, 'cr-attribute-trigger')._fire('click');
 
   assert.equal(
-    findByClass(el, 'cr-attribute-popover').hidden,
+    findByClass(host, 'cr-attribute-popover').hidden,
     true,
     'popover hidden after second click'
   );
 });
 
-test('CRAttributeMenu: shows a Responsible Party quick-pick when responsibleParty is set', () => {
-  const el = new CRAttributeMenu();
-  el.responsibleParty = RESPONSIBLE;
-  el.connectedCallback();
+test('AttributeMenu: shows a Responsible Party quick-pick when responsibleParty is set', () => {
+  const { host } = mount({ responsibleParty: RESPONSIBLE });
 
-  const quick = findByClass(el, 'cr-attribute-responsible');
+  const quick = findByClass(host, 'cr-attribute-responsible');
   assert.ok(quick, 'responsible-party quick-pick rendered');
   assert.equal(quick.textContent, 'Responsible Party — rparty');
 });
 
-test('CRAttributeMenu: omits the Responsible Party quick-pick when none is set', () => {
-  const el = new CRAttributeMenu();
-  el.responsibleParty = null;
-  el.connectedCallback();
+test('AttributeMenu: omits the Responsible Party quick-pick when none is set', () => {
+  const { host } = mount({ responsibleParty: null });
 
-  assert.equal(findByClass(el, 'cr-attribute-responsible'), null);
+  assert.equal(findByClass(host, 'cr-attribute-responsible'), null);
 });
 
-test('CRAttributeMenu: choosing the Responsible Party emits cr-attribute-change and closes', () => {
-  const el = new CRAttributeMenu();
-  el.responsibleParty = RESPONSIBLE;
-  el.connectedCallback();
-  findByClass(el, 'cr-attribute-trigger')._fire('click');
+test('AttributeMenu: choosing the Responsible Party calls onChange and closes', () => {
+  const { host, changes } = mount({ responsibleParty: RESPONSIBLE });
+  findByClass(host, 'cr-attribute-trigger')._fire('click');
 
-  /** @type {any[]} */
-  const events = [];
-  el.addEventListener('cr-attribute-change', (/** @type {any} */ e) =>
-    events.push(e)
-  );
+  findByClass(host, 'cr-attribute-responsible')._fire('click');
 
-  findByClass(el, 'cr-attribute-responsible')._fire('click');
-
-  assert.equal(events.length, 1);
+  assert.equal(changes.length, 1);
+  assert.deepEqual(changes[0], RESPONSIBLE);
   assert.equal(
-    events[0].bubbles,
-    false,
-    'event does not bubble; parent re-dispatches with questionId'
-  );
-  assert.deepEqual(events[0].detail, { attributedParty: RESPONSIBLE });
-  assert.equal(
-    findByClass(el, 'cr-attribute-popover').hidden,
+    findByClass(host, 'cr-attribute-popover').hidden,
     true,
     'popover closes after choosing'
   );
 });
 
-test('CRAttributeMenu: embeds a people picker wired to the client', () => {
+test('AttributeMenu: embeds a people picker wired to the client', () => {
   const client = /** @type {any} */ ({
     async searchPeople() {
       return [];
     },
   });
-  const el = new CRAttributeMenu();
-  el.client = client;
-  el.connectedCallback();
+  const { host } = mount({ client });
 
-  const picker = findByTag(el, 'cr-people-picker');
+  const picker = findByTag(host, 'cr-people-picker');
   assert.ok(picker, 'people picker rendered');
   assert.equal(picker.client, client, 'picker receives the client');
 });
 
-test('CRAttributeMenu: selecting someone via search emits cr-attribute-change with that person', () => {
-  const el = new CRAttributeMenu();
-  el.client = /** @type {any} */ ({
-    async searchPeople() {
-      return [];
-    },
+test('AttributeMenu: selecting someone via search calls onChange with that person', () => {
+  const { host, changes } = mount({
+    client: /** @type {any} */ ({
+      async searchPeople() {
+        return [];
+      },
+    }),
   });
-  el.connectedCallback();
-  findByClass(el, 'cr-attribute-trigger')._fire('click');
+  findByClass(host, 'cr-attribute-trigger')._fire('click');
 
-  /** @type {any[]} */
-  const events = [];
-  el.addEventListener('cr-attribute-change', (/** @type {any} */ e) =>
-    events.push(e)
-  );
-
-  findByTag(el, 'cr-people-picker')._fire('cr-person-selected', {
+  findByTag(host, 'cr-people-picker')._fire('cr-person-selected', {
     detail: PERSON,
   });
 
-  assert.equal(events.length, 1);
-  assert.deepEqual(events[0].detail, { attributedParty: PERSON });
+  assert.equal(changes.length, 1);
+  assert.deepEqual(changes[0], PERSON);
 });
 
-test('CRAttributeMenu: clicking clear emits cr-attribute-change with a null party', () => {
-  const el = new CRAttributeMenu();
-  el.attributedParty = PERSON;
-  el.connectedCallback();
+test('AttributeMenu: clicking clear calls onChange with a null party', () => {
+  const { host, changes } = mount({ attributedParty: PERSON });
 
-  /** @type {any[]} */
-  const events = [];
-  el.addEventListener('cr-attribute-change', (/** @type {any} */ e) =>
-    events.push(e)
-  );
+  findByClass(host, 'cr-attribute-clear')._fire('click');
 
-  findByClass(el, 'cr-attribute-clear')._fire('click');
-
-  assert.equal(events.length, 1);
-  assert.deepEqual(events[0].detail, { attributedParty: null });
+  assert.equal(changes.length, 1);
+  assert.equal(changes[0], null);
 });
 
-test('CRAttributeMenu: Escape closes the popover when open', () => {
-  const el = new CRAttributeMenu();
-  el.connectedCallback();
-  findByClass(el, 'cr-attribute-trigger')._fire('click');
-  assert.equal(findByClass(el, 'cr-attribute-popover').hidden, false);
+test('AttributeMenu: Escape closes the popover when open', () => {
+  const { host } = mount();
+  findByClass(host, 'cr-attribute-trigger')._fire('click');
+  assert.equal(findByClass(host, 'cr-attribute-popover').hidden, false);
 
   /** @type {any} */ (globalThis).document._fire('keydown', keyEvent('Escape'));
 
   assert.equal(
-    findByClass(el, 'cr-attribute-popover').hidden,
+    findByClass(host, 'cr-attribute-popover').hidden,
     true,
     'Escape closes the popover'
   );
 });
 
-test('CRAttributeMenu: Escape is a no-op when the popover is closed', () => {
-  const el = new CRAttributeMenu();
-  el.connectedCallback();
+test('AttributeMenu: Escape is a no-op when the popover is closed', () => {
+  const { host } = mount();
 
   // Should not throw and should remain closed.
   /** @type {any} */ (globalThis).document._fire('keydown', keyEvent('Escape'));
-  assert.equal(findByClass(el, 'cr-attribute-popover').hidden, true);
+  assert.equal(findByClass(host, 'cr-attribute-popover').hidden, true);
 });
 
-test('CRAttributeMenu: non-Escape keys are ignored', () => {
-  const el = new CRAttributeMenu();
-  el.connectedCallback();
-  findByClass(el, 'cr-attribute-trigger')._fire('click');
+test('AttributeMenu: non-Escape keys are ignored', () => {
+  const { host } = mount();
+  findByClass(host, 'cr-attribute-trigger')._fire('click');
 
   /** @type {any} */ (globalThis).document._fire('keydown', keyEvent('Enter'));
   assert.equal(
-    findByClass(el, 'cr-attribute-popover').hidden,
+    findByClass(host, 'cr-attribute-popover').hidden,
     false,
     'popover stays open for other keys'
   );
 });
 
-test('CRAttributeMenu: an outside pointerdown closes an open popover', () => {
-  const el = new CRAttributeMenu();
-  el.connectedCallback();
-  el.contains = () => false;
-  findByClass(el, 'cr-attribute-trigger')._fire('click');
+test('AttributeMenu: an outside pointerdown closes an open popover', () => {
+  const { host } = mount();
+  host.contains = () => false;
+  findByClass(host, 'cr-attribute-trigger')._fire('click');
 
   /** @type {any} */ (globalThis).document._fire('mousedown', { target: {} });
   assert.equal(
-    findByClass(el, 'cr-attribute-popover').hidden,
+    findByClass(host, 'cr-attribute-popover').hidden,
     true,
     'outside click closes'
   );
 });
 
-test('CRAttributeMenu: a pointerdown inside the menu leaves it open', () => {
-  const el = new CRAttributeMenu();
-  el.connectedCallback();
-  el.contains = () => true;
-  findByClass(el, 'cr-attribute-trigger')._fire('click');
+test('AttributeMenu: a pointerdown inside the menu leaves it open', () => {
+  const { host } = mount();
+  host.contains = () => true;
+  findByClass(host, 'cr-attribute-trigger')._fire('click');
 
   /** @type {any} */ (globalThis).document._fire('mousedown', { target: {} });
   assert.equal(
-    findByClass(el, 'cr-attribute-popover').hidden,
+    findByClass(host, 'cr-attribute-popover').hidden,
     false,
     'inside click keeps it open'
   );
 });
 
-test('CRAttributeMenu: a pointerdown while closed is ignored', () => {
-  const el = new CRAttributeMenu();
-  el.connectedCallback();
-  el.contains = () => false;
+test('AttributeMenu: a pointerdown while closed is ignored', () => {
+  const { host } = mount();
+  host.contains = () => false;
 
   // Closed: the handler returns before touching contains/close.
   /** @type {any} */ (globalThis).document._fire('mousedown', { target: {} });
-  assert.equal(findByClass(el, 'cr-attribute-popover').hidden, true);
+  assert.equal(findByClass(host, 'cr-attribute-popover').hidden, true);
 });
 
-test('CRAttributeMenu: disconnectedCallback removes its document listeners', () => {
-  const el = new CRAttributeMenu();
-  el.connectedCallback();
-  findByClass(el, 'cr-attribute-trigger')._fire('click');
-  el.disconnectedCallback();
+test('AttributeMenu: disconnect removes its document listeners', () => {
+  const { host } = mount();
+  host.contains = () => false;
+  findByClass(host, 'cr-attribute-trigger')._fire('click');
+  // Grab the open popover before disconnect tears the view down.
+  const popover = findByClass(host, 'cr-attribute-popover');
+  assert.equal(popover.hidden, false);
 
-  // After disconnect, document events must not reach the (detached) element.
+  host.disconnectedCallback();
+
+  // After disconnect, document events must not reach the (detached) menu.
   /** @type {any} */ (globalThis).document._fire('keydown', keyEvent('Escape'));
   /** @type {any} */ (globalThis).document._fire('mousedown', { target: {} });
-  // popover ref is stale but its hidden state should not have been flipped closed
-  assert.equal(
-    findByClass(el, 'cr-attribute-popover').hidden,
-    false,
-    'listeners detached'
-  );
+  // The detached popover's state must not have been flipped by those events.
+  assert.equal(popover.hidden, false, 'listeners detached');
 });

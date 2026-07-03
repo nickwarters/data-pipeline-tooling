@@ -63,7 +63,7 @@ class StubEl {
 /** @type {any} */ (globalThis).location = { hash: '' };
 
 // ===== IMPORTS (after stubs) =====
-const { CRDashboard } = await import('../src/pages/cr-dashboard.js');
+const { DashboardPage } = await import('../src/pages/cr-dashboard.js');
 
 // ===== HELPERS =====
 function makeClient() {
@@ -72,6 +72,13 @@ function makeClient() {
       return [];
     },
   };
+}
+
+/** Flush a couple of microtask turns so post-fetch renders have happened. */
+async function flush() {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 /**
@@ -97,14 +104,14 @@ function hasOutstandingCasesHeading(root) {
   return findAll(root, 'h1').some((h) => h.textContent === 'Outstanding Cases');
 }
 
-// ===== TESTS =====
+/** @param {any} root @param {string} className */
+function findSection(root, className) {
+  return findAll(root, 'section').find((s) => s.className === className);
+}
 
-test('CRDashboard: reviewer capability — outstanding Cases heading and allocation visible, no owner summary', async () => {
-  const el = new CRDashboard();
-  el.client = /** @type {any} */ (makeClient());
-  el.currentUserId = 'user-reviewer';
-  el.capabilities = {
-    isReviewer: true,
+function defaultCapabilities(overrides = {}) {
+  return {
+    isReviewer: false,
     ownedCaseTypes: [],
     isAdviser: false,
     isReviewerManager: false,
@@ -114,284 +121,252 @@ test('CRDashboard: reviewer capability — outstanding Cases heading and allocat
     ownedJourneyCaseTypes: [],
     isControls: false,
     isVisitor: false,
+    ...overrides,
   };
-  el.eligibleCaseTypes = ['example-review'];
+}
 
-  await el.connectedCallback();
+// ===== TESTS =====
+
+test('DashboardPage: reviewer capability — outstanding Cases heading and allocation visible, no owner summary', async () => {
+  const host = DashboardPage({
+    client: /** @type {any} */ (makeClient()),
+    currentUserId: 'user-reviewer',
+    capabilities: defaultCapabilities({ isReviewer: true }),
+    eligibleCaseTypes: ['example-review'],
+  });
+  await flush();
 
   assert.equal(
-    hasOutstandingCasesHeading(el),
+    hasOutstandingCasesHeading(host),
     true,
     'should render Outstanding Cases heading'
   );
   assert.equal(
-    findAll(el, 'cr-allocation').length,
+    findAll(host, 'cr-allocation').length,
     1,
     'should render allocation button'
   );
   assert.equal(
-    findAll(el, 'cr-owner-summary').length,
+    findAll(host, 'cr-owner-summary').length,
     0,
     'should NOT render owner summary'
   );
 });
 
-test('CRDashboard: owner-only capability — owner summary visible, no outstanding Cases, no allocation', async () => {
-  const el = new CRDashboard();
-  el.client = /** @type {any} */ (makeClient());
-  el.currentUserId = 'user-owner';
-  el.capabilities = {
-    isReviewer: false,
-    ownedCaseTypes: ['example-review'],
-    isAdviser: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isVisitor: false,
-  };
-  el.eligibleCaseTypes = [];
-
-  await el.connectedCallback();
+test('DashboardPage: owner-only capability — owner summary visible, no outstanding Cases, no allocation', async () => {
+  const host = DashboardPage({
+    client: /** @type {any} */ (makeClient()),
+    currentUserId: 'user-owner',
+    capabilities: defaultCapabilities({ ownedCaseTypes: ['example-review'] }),
+    eligibleCaseTypes: [],
+  });
+  await flush();
 
   assert.equal(
-    hasOutstandingCasesHeading(el),
+    hasOutstandingCasesHeading(host),
     false,
     'should NOT render Outstanding Cases heading'
   );
   assert.equal(
-    findAll(el, 'cr-allocation').length,
+    findAll(host, 'cr-allocation').length,
     0,
     'should NOT render allocation button'
   );
   assert.equal(
-    findAll(el, 'cr-owner-summary').length,
+    findAll(host, 'cr-owner-summary').length,
     1,
     'should render owner summary'
   );
 });
 
-test('CRDashboard: admin capability — both reviewer and owner sections visible', async () => {
-  const el = new CRDashboard();
-  el.client = /** @type {any} */ (makeClient());
-  el.currentUserId = 'user-admin';
-  el.capabilities = {
-    isReviewer: true,
-    ownedCaseTypes: ['example-review'],
-    isAdviser: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isVisitor: false,
-  };
-  el.eligibleCaseTypes = ['example-review'];
-
-  await el.connectedCallback();
+test('DashboardPage: admin capability — both reviewer and owner sections visible', async () => {
+  const host = DashboardPage({
+    client: /** @type {any} */ (makeClient()),
+    currentUserId: 'user-admin',
+    capabilities: defaultCapabilities({
+      isReviewer: true,
+      ownedCaseTypes: ['example-review'],
+    }),
+    eligibleCaseTypes: ['example-review'],
+  });
+  await flush();
 
   assert.equal(
-    hasOutstandingCasesHeading(el),
+    hasOutstandingCasesHeading(host),
     true,
     'should render Outstanding Cases heading'
   );
   assert.equal(
-    findAll(el, 'cr-allocation').length,
+    findAll(host, 'cr-allocation').length,
     1,
     'should render allocation button'
   );
   assert.equal(
-    findAll(el, 'cr-owner-summary').length,
+    findAll(host, 'cr-owner-summary').length,
     1,
     'should render owner summary'
   );
 });
 
-test('CRDashboard: reviewer with no ownedCaseTypes never renders owner section (no error)', async () => {
-  const el = new CRDashboard();
-  el.client = /** @type {any} */ (makeClient());
-  el.currentUserId = 'user-reviewer';
-  el.capabilities = {
-    isReviewer: true,
-    ownedCaseTypes: [],
-    isAdviser: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isVisitor: false,
-  };
-  el.eligibleCaseTypes = ['example-review'];
-
+test('DashboardPage: reviewer with no ownedCaseTypes never renders owner section (no error)', async () => {
+  const host = DashboardPage({
+    client: /** @type {any} */ (makeClient()),
+    currentUserId: 'user-reviewer',
+    capabilities: defaultCapabilities({ isReviewer: true }),
+    eligibleCaseTypes: ['example-review'],
+  });
   // Must not throw.
-  await el.connectedCallback();
+  await flush();
 
-  assert.equal(findAll(el, 'cr-owner-summary').length, 0);
+  assert.equal(findAll(host, 'cr-owner-summary').length, 0);
 });
 
-test('CRDashboard: connectedCallback does nothing when client is null', async () => {
-  const el = new CRDashboard();
-  el.client = null;
-  await el.connectedCallback();
-  assert.equal(/** @type {any} */ (el)._children.length, 0);
+test('DashboardPage: renders nothing and does not throw when client is null and no capabilities are set', async () => {
+  const host = DashboardPage({
+    client: null,
+    currentUserId: '',
+    capabilities: defaultCapabilities(),
+    eligibleCaseTypes: [],
+  });
+  await flush();
+  assert.equal(/** @type {any} */ (host)._children.length, 0);
 });
 
-test('CRDashboard: RP-only capability — cr-responsible-party-dashboard rendered, reviewer sections absent', async () => {
-  const el = new CRDashboard();
-  el.client = /** @type {any} */ (makeClient());
-  el.currentUserId = 'user-rp';
-  el.capabilities = {
-    isReviewer: false,
-    ownedCaseTypes: [],
-    isAdviser: true,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isVisitor: false,
-  };
+test('DashboardPage: RP-only capability — responsible party dashboard rendered, reviewer sections absent', async () => {
+  const host = DashboardPage({
+    client: /** @type {any} */ (makeClient()),
+    currentUserId: 'user-rp',
+    capabilities: defaultCapabilities({ isAdviser: true }),
+    eligibleCaseTypes: [],
+  });
+  await flush();
 
-  await el.connectedCallback();
-
-  assert.equal(
-    findAll(el, 'cr-responsible-party-dashboard').length,
-    1,
-    'should render RP section'
+  assert.ok(
+    findSection(host, 'cr-rp-outcome-summary'),
+    'should render RP outcome summary section'
+  );
+  assert.ok(
+    findSection(host, 'cr-rp-remediation'),
+    'should render RP remediation section'
+  );
+  assert.ok(
+    findSection(host, 'cr-rp-messages'),
+    'should render RP messages section'
   );
   assert.equal(
-    hasOutstandingCasesHeading(el),
+    hasOutstandingCasesHeading(host),
     false,
     'should NOT render reviewer heading'
   );
   assert.equal(
-    findAll(el, 'cr-allocation').length,
+    findAll(host, 'cr-allocation').length,
     0,
     'should NOT render allocation button'
   );
   assert.equal(
-    findAll(el, 'cr-owner-summary').length,
+    findAll(host, 'cr-owner-summary').length,
     0,
     'should NOT render owner summary'
   );
 });
 
-test('CRDashboard: reviewer + RP capability — both reviewer and RP sections visible', async () => {
-  const el = new CRDashboard();
-  el.client = /** @type {any} */ (makeClient());
-  el.currentUserId = 'user-reviewer-rp';
-  el.capabilities = {
-    isReviewer: true,
-    ownedCaseTypes: [],
-    isAdviser: true,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isVisitor: false,
-  };
-  el.eligibleCaseTypes = ['example-review'];
-
-  await el.connectedCallback();
+test('DashboardPage: reviewer + RP capability — both reviewer and RP sections visible', async () => {
+  const host = DashboardPage({
+    client: /** @type {any} */ (makeClient()),
+    currentUserId: 'user-reviewer-rp',
+    capabilities: defaultCapabilities({ isReviewer: true, isAdviser: true }),
+    eligibleCaseTypes: ['example-review'],
+  });
+  await flush();
 
   assert.equal(
-    hasOutstandingCasesHeading(el),
+    hasOutstandingCasesHeading(host),
     true,
     'should render reviewer heading'
   );
   assert.equal(
-    findAll(el, 'cr-allocation').length,
+    findAll(host, 'cr-allocation').length,
     1,
     'should render allocation button'
   );
-  assert.equal(
-    findAll(el, 'cr-responsible-party-dashboard').length,
-    1,
+  assert.ok(
+    findSection(host, 'cr-rp-outcome-summary'),
     'should render RP section'
   );
 });
 
-test('CRDashboard: cr-open-conversation from RP section navigates to conversation hash', async () => {
-  /** @type {any} */ (globalThis).location.hash = '';
-  const el = new CRDashboard();
-  el.client = /** @type {any} */ (makeClient());
-  el.currentUserId = 'user-rp';
-  el.capabilities = {
-    isReviewer: false,
-    ownedCaseTypes: [],
-    isAdviser: true,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isVisitor: false,
-  };
-
-  await el.connectedCallback();
-
-  const rpEl = findAll(el, 'cr-responsible-party-dashboard')[0];
-  assert.ok(rpEl, 'RP element should exist');
-  const handler = /** @type {any} */ (rpEl)._listeners[
-    'cr-open-conversation'
-  ]?.[0];
-  assert.ok(handler, 'should have cr-open-conversation listener');
-  handler({
-    detail: {
-      caseId: 'c-42',
-      caseRow: { id: 'c-42', caseType: 'example-review' },
+test('DashboardPage: RP dashboard fetches cases with responsibleParty filter using currentUserId', async () => {
+  /** @type {any[]} */
+  const calls = [];
+  const client = {
+    async listCases(/** @type {any} */ f) {
+      calls.push(f);
+      return [];
     },
+  };
+  DashboardPage({
+    client: /** @type {any} */ (client),
+    currentUserId: 'user-rp',
+    capabilities: defaultCapabilities({ isAdviser: true }),
+    eligibleCaseTypes: [],
   });
+  await flush();
+
+  assert.ok(
+    calls.some(
+      (f) => f.responsibleParty === 'user-rp' && !('assignedReviewer' in f)
+    ),
+    'RP dashboard should list cases filtered by responsibleParty'
+  );
+});
+
+test('DashboardPage: open button in RP unread-messages section navigates to conversation hash via onOpenConversation', async () => {
+  /** @type {any} */ (globalThis).location.hash = '';
+  const caseRow = {
+    id: 'c-42',
+    caseType: 'example-review',
+    title: 'Case 42',
+    status: 'In-progress',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-rp',
+    answers: {},
+    conversation: [
+      { author: 'user-reviewer', timestamp: '2026-05-07T09:00:00Z', body: 'Q' },
+    ],
+    notes: '',
+    completedAt: null,
+    etag: 'e1',
+  };
+  const client = {
+    async listCases() {
+      return [caseRow];
+    },
+  };
+  const host = DashboardPage({
+    client: /** @type {any} */ (client),
+    currentUserId: 'user-rp',
+    capabilities: defaultCapabilities({ isAdviser: true }),
+    eligibleCaseTypes: [],
+  });
+  await flush();
+
+  const messagesSection = findSection(host, 'cr-rp-messages');
+  assert.ok(messagesSection, 'messages section should exist');
+  const messagesTable = findAll(messagesSection, 'cr-case-table')[0];
+  assert.ok(messagesTable, 'messages case table should exist');
+  for (const h of /** @type {any} */ (messagesTable)._listeners[
+    'cr-case-open'
+  ] ?? []) {
+    h({ detail: { caseRow } });
+  }
+
   assert.equal(
     /** @type {any} */ (globalThis).location.hash,
     '#/conversation/example-review/c-42'
   );
 });
 
-test('CRDashboard: RP section gets client and currentUserId set', async () => {
-  const client = makeClient();
-  const el = new CRDashboard();
-  el.client = /** @type {any} */ (client);
-  el.currentUserId = 'user-rp';
-  el.capabilities = {
-    isReviewer: false,
-    ownedCaseTypes: [],
-    isAdviser: true,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isVisitor: false,
-  };
-
-  await el.connectedCallback();
-
-  const rpEl = findAll(el, 'cr-responsible-party-dashboard')[0];
-  assert.ok(rpEl, 'RP element should exist');
-  assert.equal(
-    /** @type {any} */ (rpEl).client,
-    client,
-    'client should be passed through'
-  );
-  assert.equal(
-    /** @type {any} */ (rpEl).currentUserId,
-    'user-rp',
-    'currentUserId should be passed through'
-  );
-});
-
-test('CRDashboard: cr-allocation element listens for cr-allocated and re-fetches cases on allocation', async () => {
+test('DashboardPage: cr-allocation element listens for cr-allocated and re-fetches cases on allocation', async () => {
   let fetchCount = 0;
   const client = {
     async listCases() {
@@ -400,28 +375,16 @@ test('CRDashboard: cr-allocation element listens for cr-allocated and re-fetches
     },
   };
 
-  const el = new CRDashboard();
-  el.client = /** @type {any} */ (client);
-  el.currentUserId = 'user-reviewer';
-  el.capabilities = {
-    isReviewer: true,
-    ownedCaseTypes: [],
-    isAdviser: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isVisitor: false,
-  };
-  el.eligibleCaseTypes = ['example-review'];
-
-  await el.connectedCallback();
+  const host = DashboardPage({
+    client: /** @type {any} */ (client),
+    currentUserId: 'user-reviewer',
+    capabilities: defaultCapabilities({ isReviewer: true }),
+    eligibleCaseTypes: ['example-review'],
+  });
+  await flush();
   const initialFetchCount = fetchCount;
 
-  // Find the cr-allocation element and fire the cr-allocated event on it
-  const allocationEls = findAll(el, 'cr-allocation');
+  const allocationEls = findAll(host, 'cr-allocation');
   assert.equal(allocationEls.length, 1, 'should have allocation element');
 
   const allocEvent = { type: 'cr-allocated', detail: { caseId: 'c-new' } };
@@ -437,28 +400,17 @@ test('CRDashboard: cr-allocation element listens for cr-allocated and re-fetches
   );
 });
 
-test('CRDashboard: cr-case-open event on case table navigates to #/case/{id}', async () => {
-  const el = new CRDashboard();
-  el.client = /** @type {any} */ (makeClient());
-  el.currentUserId = 'user-reviewer';
-  el.capabilities = {
-    isReviewer: true,
-    ownedCaseTypes: [],
-    isAdviser: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isVisitor: false,
-  };
-  el.eligibleCaseTypes = [];
-
+test('DashboardPage: cr-case-open event on case table navigates to #/case/{id}', async () => {
   /** @type {any} */ (globalThis).location.hash = '';
-  await el.connectedCallback();
+  const host = DashboardPage({
+    client: /** @type {any} */ (makeClient()),
+    currentUserId: 'user-reviewer',
+    capabilities: defaultCapabilities({ isReviewer: true }),
+    eligibleCaseTypes: [],
+  });
+  await flush();
 
-  const caseTable = findAll(el, 'cr-case-table')[0];
+  const caseTable = findAll(host, 'cr-case-table')[0];
   assert.ok(caseTable, 'should have a case table');
 
   const event = {
@@ -481,7 +433,7 @@ test('CRDashboard: cr-case-open event on case table navigates to #/case/{id}', a
 
 // --- overdue flag ---
 
-test('CRDashboard: stamps overdue:true on rows whose dueDate is in the past', async () => {
+test('DashboardPage: stamps overdue:true on rows whose dueDate is in the past', async () => {
   const PAST = '2020-01-01T00:00:00Z';
   const FUTURE = '2099-01-01T00:00:00Z';
   /** @type {import('../src/sharepoint-client.js').CaseRow[]} */
@@ -534,25 +486,15 @@ test('CRDashboard: stamps overdue:true on rows whose dueDate is in the past', as
       return fetchedCases;
     },
   };
-  const el = new CRDashboard();
-  el.client = /** @type {any} */ (client);
-  el.currentUserId = 'u1';
-  el.capabilities = {
-    isReviewer: true,
-    ownedCaseTypes: [],
-    isAdviser: false,
-    isReviewerManager: false,
-    isResponsiblePartyManager: false,
-    isMaintainer: false,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-    isControls: false,
-    isVisitor: false,
-  };
-  el.eligibleCaseTypes = [];
-  await el.connectedCallback();
+  const host = DashboardPage({
+    client: /** @type {any} */ (client),
+    currentUserId: 'u1',
+    capabilities: defaultCapabilities({ isReviewer: true }),
+    eligibleCaseTypes: [],
+  });
+  await flush();
 
-  const caseTable = /** @type {any} */ (findAll(el, 'cr-case-table')[0]);
+  const caseTable = /** @type {any} */ (findAll(host, 'cr-case-table')[0]);
   const rows = /** @type {import('../src/sharepoint-client.js').CaseRow[]} */ (
     caseTable.cases
   );

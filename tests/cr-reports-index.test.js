@@ -51,8 +51,7 @@ class StubEl {
 /** @type {any} */ (globalThis).customElements = { define() {} };
 
 // ===== IMPORTS (after stubs) =====
-const { ReportsIndexPage, CRReportsIndex } =
-  await import('../src/pages/cr-reports-index.js');
+const { ReportsIndexPage } = await import('../src/pages/cr-reports-index.js');
 
 /** @returns {import('../src/services/permissions.js').Capabilities} */
 function managerCaps() {
@@ -140,15 +139,5 @@ test('ReportsIndexPage: non-manager does not see Reviewer Team Performance card'
   assert.ok(
     !hasText(root, 'Reviewer Team Performance'),
     'should not render card for non-manager'
-  );
-});
-
-test('CRReportsIndex: compatibility wrapper delegates to ReportsIndexPage', () => {
-  const el = new CRReportsIndex();
-  el.capabilities = nonManagerCaps();
-  el.connectedCallback();
-  assert.ok(
-    hasText(el, "You don't have access to any reports"),
-    'wrapper should render the same empty-state'
   );
 });

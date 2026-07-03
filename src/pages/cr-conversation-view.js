@@ -1,6 +1,6 @@
 // @ts-check
-import { ShellElement } from '../lib/view.js';
 import { signal } from '../lib/signal.js';
+import { reactive } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import {
   UnknownCaseTypeError,
@@ -16,81 +16,102 @@ import '../components/cr-conversation.js';
 /**
  * Lightweight conversation-only view for the Responsible Party.
  * Shows only the Conversation thread — no Q&A, Notes, or Reviewer identity.
+ *
+ * @param {{
+ *   client: SharePointClient | null,
+ *   saveQueue: SaveQueue | null,
+ *   caseId: string,
+ *   caseType: string | null,
+ *   currentUser: CurrentUser | null,
+ * }} props
+ * @returns {HTMLElement}
  */
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
-export class CRConversationView extends ShellElement {
-  constructor() {
-    super();
-    /** @type {SharePointClient | null} */
-    this.client = null;
-    /** @type {SaveQueue | null} */
-    this.saveQueue = null;
-    /** @type {string} */
-    this.caseId = '';
-    /** @type {string | null} */
-    this.caseType = null;
-    /** @type {CurrentUser | null} */
-    this.currentUser = null;
+export function ConversationView({
+  client,
+  saveQueue,
+  caseId,
+  caseType,
+  currentUser,
+}) {
+  /** @type {import('../lib/signal.js').Signal<CaseRow | null>} */
+  const caseRow = signal(/** @type {CaseRow | null} */ (null));
 
-    /** @type {import('../lib/signal.js').Signal<CaseRow | null>} */
-    this._caseRow = signal(/** @type {CaseRow | null} */ (null));
-  }
-
-  async connectedCallback() {
-    super.connectedCallback();
-    if (!this.client || !this.caseId) return;
+  async function fetchData() {
+    if (!client || !caseId) return;
     /** @type {import('../sharepoint-client.js').CaseListOptions} */
     let opts = {};
-    if (this.caseType) {
+    if (caseType) {
       try {
-        const config = await loadCaseTypeConfig(this.caseType);
+        const config = await loadCaseTypeConfig(caseType);
         opts = config.listName ? { listName: config.listName } : {};
       } catch (error) {
         if (error instanceof UnknownCaseTypeError) return;
         throw error;
       }
     }
-    const caseRow = await this.client.getCase(this.caseId, opts);
-    if (!caseRow) return;
-    if (typeof this.saveQueue?.loadCase === 'function') {
-      this.saveQueue.loadCase(caseRow, opts);
+    const row = await client.getCase(caseId, opts);
+    if (!row) return;
+    if (typeof saveQueue?.loadCase === 'function') {
+      saveQueue.loadCase(row, opts);
     }
-    this._caseRow.set(caseRow);
+    caseRow.set(row);
   }
 
-  render() {
-    const caseRow = this._caseRow.get();
-    if (!caseRow) return [];
-
-    return [
-      h(
-        'header',
-        { className: 'cr-conversation-view-header' },
-        h(
-          'button',
-          {
-            type: 'button',
-            className: 'cr-back-btn',
-            onclick: () => {
-              location.hash = '#/my-reviews';
-            },
-          },
-          '← My Reviews'
-        ),
-        h('h1', {}, caseRow.title || caseRow.id)
-      ),
-      h('cr-conversation', {
-        client: this.client,
-        saveQueue: this.saveQueue,
-        caseId: this.caseId,
-        currentUser: this.currentUser,
-        messages: caseRow.conversation,
-      }),
-    ];
-  }
+  const host = reactive(() =>
+    renderConversationView({
+      client,
+      saveQueue,
+      caseId,
+      currentUser,
+      caseRow: caseRow.get(),
+    })
+  );
+  fetchData();
+  return host;
 }
 
-customElements.define('cr-conversation-view', CRConversationView);
+/**
+ * @param {{
+ *   client: SharePointClient | null,
+ *   saveQueue: SaveQueue | null,
+ *   caseId: string,
+ *   currentUser: CurrentUser | null,
+ *   caseRow: CaseRow | null,
+ * }} args
+ * @returns {Node[]}
+ */
+function renderConversationView({
+  client,
+  saveQueue,
+  caseId,
+  currentUser,
+  caseRow,
+}) {
+  if (!caseRow) return [];
+
+  return [
+    h(
+      'header',
+      { className: 'cr-conversation-view-header' },
+      h(
+        'button',
+        {
+          type: 'button',
+          className: 'cr-back-btn',
+          onclick: () => {
+            location.hash = '#/my-reviews';
+          },
+        },
+        '← My Reviews'
+      ),
+      h('h1', {}, caseRow.title || caseRow.id)
+    ),
+    h('cr-conversation', {
+      client,
+      saveQueue,
+      caseId,
+      currentUser,
+      messages: caseRow.conversation,
+    }),
+  ];
+}

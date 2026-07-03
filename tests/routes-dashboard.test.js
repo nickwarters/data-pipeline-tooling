@@ -11,10 +11,69 @@ const windowListeners = {};
 };
 /** @type {any} */ (globalThis).location = { hash: '' };
 
-import { Router } from '../src/lib/router.js';
-import { register } from '../src/routes/dashboard.js';
+class StubEl {
+  constructor() {
+    /** @type {StubEl[]} */
+    this._children = [];
+    /** @type {Record<string, string>} */
+    this._attrs = {};
+    this.tagName = '';
+    this.textContent = '';
+    this.className = '';
+  }
+  replaceChildren(/** @type {StubEl[]} */ ...cs) {
+    this._children = cs;
+  }
+  appendChild(/** @type {StubEl} */ c) {
+    this._children.push(c);
+    return c;
+  }
+  addEventListener() {}
+  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
+    this._attrs[k] = v;
+  }
+  getAttribute(/** @type {string} */ k) {
+    return this._attrs[k] ?? null;
+  }
+}
+/** @type {any} */ (globalThis).HTMLElement = StubEl;
+/** @type {any} */ (globalThis).customElements = {
+  define() {},
+  get() {
+    return undefined;
+  },
+};
 
-test('dashboard route: register calls router.register with #/dashboard', () => {
+/** @type {any} */ (globalThis).document = {
+  activeElement: null,
+  createElement(/** @type {string} */ tag) {
+    const el = new StubEl();
+    el.tagName = tag.toUpperCase();
+    return el;
+  },
+  createTreeWalker() {
+    return {
+      nextNode() {
+        return null;
+      },
+    };
+  },
+};
+
+const { Router } = await import('../src/lib/router.js');
+const { register } = await import('../src/routes/dashboard.js');
+
+/** @param {any} node @param {string} tag @returns {any|null} */
+function findTag(node, tag) {
+  if (node.tagName === tag.toUpperCase()) return node;
+  for (const c of node._children ?? []) {
+    const f = findTag(c, tag);
+    if (f) return f;
+  }
+  return null;
+}
+
+test('routes-dashboard: registers #/dashboard route', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});
   register(
@@ -22,7 +81,11 @@ test('dashboard route: register calls router.register with #/dashboard', () => {
     /** @type {any} */ ({
       client: {},
       currentUser: { id: 'u1' },
-      capabilities: {},
+      capabilities: {
+        isReviewer: false,
+        ownedCaseTypes: [],
+        isAdviser: false,
+      },
       eligibleCaseTypes: [],
     })
   );
@@ -32,99 +95,102 @@ test('dashboard route: register calls router.register with #/dashboard', () => {
   );
 });
 
-test('dashboard route: mount creates and mounts cr-dashboard element', () => {
-  const created = /** @type {string[]} */ ([]);
-  const origDoc = /** @type {any} */ (globalThis).document;
-  /** @type {any} */ (globalThis).document = {
-    createElement(/** @type {string} */ tag) {
-      created.push(tag);
-      return { setAttribute() {} };
+test('routes-dashboard: mounts DashboardPage output for a reviewer', () => {
+  const client = /** @type {any} */ ({
+    async listCases() {
+      return [];
     },
-    createTreeWalker() {
-      return {
-        nextNode() {
-          return null;
-        },
-      };
+  });
+  const currentUser = { id: 'u1' };
+  const capabilities = /** @type {any} */ ({
+    isReviewer: true,
+    ownedCaseTypes: [],
+    isAdviser: false,
+  });
+  const eligibleCaseTypes = ['example-review'];
+
+  const router = new Router();
+  /** @type {any[]} */
+  let mounted = [];
+  const container = {
+    replaceChildren(/** @type {any} */ ...args) {
+      mounted = args;
     },
   };
+  router._container = /** @type {any} */ (container);
+  register(
+    router,
+    /** @type {any} */ ({
+      client,
+      currentUser,
+      capabilities,
+      eligibleCaseTypes,
+    })
+  );
+  router.navigate('#/dashboard');
 
-  try {
-    const router = new Router();
-    const replaced = /** @type {unknown[]} */ ([]);
-    const container = {
-      replaceChildren(/** @type {unknown[]} */ ...args) {
-        replaced.push(...args);
-      },
-    };
-    router._container = /** @type {any} */ (container);
-
-    register(
-      router,
-      /** @type {any} */ ({
-        client: {},
-        currentUser: { id: 'u1' },
-        capabilities: {},
-        eligibleCaseTypes: [],
-      })
-    );
-    router.navigate('#/dashboard');
-
-    assert.ok(
-      created.includes('cr-dashboard'),
-      'cr-dashboard element should be created'
-    );
-    assert.equal(replaced.length, 1, 'replaceChildren should be called once');
-  } finally {
-    /** @type {any} */ (globalThis).document = origDoc;
-  }
+  assert.equal(mounted.length, 1, 'should mount a single host element');
+  assert.ok(findTag(mounted[0], 'h1'), 'should render the page heading');
 });
 
-test('dashboard route: mount sets client, currentUserId, capabilities, eligibleCaseTypes on element', () => {
-  const client = { id: 'client' };
-  const capabilities = { canEditBank: true };
-  const eligibleCaseTypes = ['example-review'];
-  const currentUser = { id: 'u99' };
+test('routes-dashboard: unmount is a no-op (does not throw)', () => {
+  const router = new Router();
+  router._container = /** @type {any} */ ({});
+  register(
+    router,
+    /** @type {any} */ ({
+      client: {},
+      currentUser: { id: 'u1' },
+      capabilities: {
+        isReviewer: false,
+        ownedCaseTypes: [],
+        isAdviser: false,
+      },
+      eligibleCaseTypes: [],
+    })
+  );
+  const route = router._routes.find((r) => r.re.test('#/dashboard'));
+  assert.ok(route, 'route should exist');
+  assert.doesNotThrow(() => route.handler.unmount());
+});
 
-  const elements = /** @type {any[]} */ ([]);
-  const origDoc = /** @type {any} */ (globalThis).document;
-  /** @type {any} */ (globalThis).document = {
-    createElement(/** @type {string} */ tag) {
-      const el = /** @type {any} */ ({ tag, setAttribute() {} });
-      elements.push(el);
-      return el;
+test('routes-dashboard: passes currentUserId, capabilities, eligibleCaseTypes through to the page', () => {
+  const client = /** @type {any} */ ({
+    async listCases() {
+      return [];
     },
-    createTreeWalker() {
-      return {
-        nextNode() {
-          return null;
-        },
-      };
+  });
+  const currentUser = { id: 'u99' };
+  const capabilities = /** @type {any} */ ({
+    isReviewer: false,
+    ownedCaseTypes: ['example-review'],
+    isAdviser: false,
+  });
+  const eligibleCaseTypes = ['example-review'];
+
+  const router = new Router();
+  /** @type {any[]} */
+  let mounted = [];
+  const container = {
+    replaceChildren(/** @type {any} */ ...args) {
+      mounted = args;
     },
   };
+  router._container = /** @type {any} */ (container);
+  register(
+    router,
+    /** @type {any} */ ({
+      client,
+      currentUser,
+      capabilities,
+      eligibleCaseTypes,
+    })
+  );
+  router.navigate('#/dashboard');
 
-  try {
-    const router = new Router();
-    router._container = /** @type {any} */ ({ replaceChildren() {} });
-
-    register(
-      router,
-      /** @type {any} */ ({
-        client,
-        currentUser,
-        capabilities,
-        eligibleCaseTypes,
-      })
-    );
-    router.navigate('#/dashboard');
-
-    const el = elements.find((e) => e.tag === 'cr-dashboard');
-    assert.ok(el, 'cr-dashboard element should exist');
-    assert.equal(el.client, client);
-    assert.equal(el.currentUserId, 'u99');
-    assert.equal(el.capabilities, capabilities);
-    assert.equal(el.eligibleCaseTypes, eligibleCaseTypes);
-  } finally {
-    /** @type {any} */ (globalThis).document = origDoc;
-  }
+  assert.equal(mounted.length, 1, 'should mount a single host element');
+  assert.ok(
+    findTag(mounted[0], 'cr-owner-summary'),
+    'should render the owner summary for owned case types'
+  );
 });

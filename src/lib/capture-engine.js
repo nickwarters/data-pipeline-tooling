@@ -1,8 +1,7 @@
 // @ts-check
-// TODO(simplify-ui): Simplify this orchestration boundary into plain
-// state transition and binding functions that can be called from function
-// components. Avoid preserving controller/view-model objects as a second
-// framework layer around reactive().
+// Pure helper: builds an `h()` input control for a capture/remediation field.
+// No component instance, controller object, or lifecycle — just field config in,
+// element out — so function components can call it directly.
 
 import { h } from './html.js';
 

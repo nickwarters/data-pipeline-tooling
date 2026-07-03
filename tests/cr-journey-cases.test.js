@@ -47,6 +47,7 @@ class StubEl {
 };
 
 /** @type {any} */ (globalThis).document = {
+  activeElement: null,
   createElement(/** @type {string} */ tag) {
     const el = new StubEl();
     el.tagName = tag.toUpperCase();
@@ -61,7 +62,7 @@ class StubEl {
   },
 };
 
-const { CRJourneyCases } = await import('../src/pages/cr-journey-cases.js');
+const { JourneyCasesPage } = await import('../src/pages/cr-journey-cases.js');
 
 /** @param {any} node @param {string} text @returns {boolean} */
 function hasText(node, text) {
@@ -99,35 +100,43 @@ const row = (id, caseType) => ({
   etag: 'e',
 });
 
-test('cr-journey-cases: renders heading', async () => {
-  const el = new CRJourneyCases();
-  el.client = /** @type {any} */ ({
-    async listCases() {
-      return [];
-    },
-  });
-  el.ownedJourneyCaseTypes = ['complaints'];
+/** @returns {Promise<void>} flushes pending microtask fetch + reactive re-render */
+async function flush() {
+  await Promise.resolve();
+  await Promise.resolve();
+}
 
-  await el.connectedCallback();
-  assert.ok(hasText(el, 'Journey Cases'), 'should render heading');
+test('cr-journey-cases: renders heading', async () => {
+  const host = JourneyCasesPage({
+    client: /** @type {any} */ ({
+      async listCases() {
+        return [];
+      },
+    }),
+    ownedJourneyCaseTypes: ['complaints'],
+  });
+
+  await flush();
+  assert.ok(hasText(host, 'Journey Cases'), 'should render heading');
 });
 
 test('cr-journey-cases: renders empty state when no cases', async () => {
-  const el = new CRJourneyCases();
-  el.client = /** @type {any} */ ({
-    async listCases() {
-      return [];
-    },
+  const host = JourneyCasesPage({
+    client: /** @type {any} */ ({
+      async listCases() {
+        return [];
+      },
+    }),
+    ownedJourneyCaseTypes: ['complaints'],
   });
-  el.ownedJourneyCaseTypes = ['complaints'];
 
-  await el.connectedCallback();
+  await flush();
   assert.ok(
-    hasText(el, 'No cases of your Case Type(s) yet.'),
+    hasText(host, 'No cases of your Case Type(s) yet.'),
     'should render empty-state message'
   );
   assert.ok(
-    !findTag(el, 'cr-case-table'),
+    !findTag(host, 'cr-case-table'),
     'should not render table when empty'
   );
 });
@@ -136,34 +145,36 @@ test('cr-journey-cases: fans out across owned Case Types and lists cases', async
   /** @type {import('../src/sharepoint-client.js').ListCasesFilter[]} */
   const calls = [];
   const cases = [row('c1', 'complaints'), row('c2', 'example-review')];
-  const el = new CRJourneyCases();
-  el.client = /** @type {any} */ ({
-    async listCases(/** @type {any} */ f) {
-      calls.push(f);
-      return cases.filter((c) => c.caseType === f.caseType);
-    },
+  const host = JourneyCasesPage({
+    client: /** @type {any} */ ({
+      async listCases(/** @type {any} */ f) {
+        calls.push(f);
+        return cases.filter((c) => c.caseType === f.caseType);
+      },
+    }),
+    ownedJourneyCaseTypes: ['complaints', 'example-review'],
   });
-  el.ownedJourneyCaseTypes = ['complaints', 'example-review'];
 
-  await el.connectedCallback();
+  await flush();
   assert.equal(calls.length, 2, 'one bounded query per owned Case Type');
-  const table = findTag(el, 'cr-case-table');
+  const table = findTag(host, 'cr-case-table');
   assert.ok(table, 'should render cr-case-table');
   assert.equal(table.cases.length, 2);
   assert.strictEqual(table.toolbar, 'hidden', 'should hide toolbar');
 });
 
 test('cr-journey-cases: columns expose reference/caseType/status and Summary link', async () => {
-  const el = new CRJourneyCases();
-  el.client = /** @type {any} */ ({
-    async listCases() {
-      return [row('c1', 'complaints')];
-    },
+  const host = JourneyCasesPage({
+    client: /** @type {any} */ ({
+      async listCases() {
+        return [row('c1', 'complaints')];
+      },
+    }),
+    ownedJourneyCaseTypes: ['complaints'],
   });
-  el.ownedJourneyCaseTypes = ['complaints'];
 
-  await el.connectedCallback();
-  const table = findTag(el, 'cr-case-table');
+  await flush();
+  const table = findTag(host, 'cr-case-table');
   /** @param {string} key */
   const col = (key) =>
     table.columns.find((/** @type {any} */ c) => c.key === key);
@@ -179,16 +190,17 @@ test('cr-journey-cases: columns expose reference/caseType/status and Summary lin
 });
 
 test('cr-journey-cases: Reference falls back to id when title is empty', async () => {
-  const el = new CRJourneyCases();
-  el.client = /** @type {any} */ ({
-    async listCases() {
-      return [{ ...row('c9', 'complaints'), title: '' }];
-    },
+  const host = JourneyCasesPage({
+    client: /** @type {any} */ ({
+      async listCases() {
+        return [{ ...row('c9', 'complaints'), title: '' }];
+      },
+    }),
+    ownedJourneyCaseTypes: ['complaints'],
   });
-  el.ownedJourneyCaseTypes = ['complaints'];
 
-  await el.connectedCallback();
-  const table = findTag(el, 'cr-case-table');
+  await flush();
+  const table = findTag(host, 'cr-case-table');
   const refCol = table.columns.find(
     (/** @type {any} */ c) => c.key === 'reference'
   );
@@ -198,11 +210,12 @@ test('cr-journey-cases: Reference falls back to id when title is empty', async (
 });
 
 test('cr-journey-cases: renders heading without fetching when client is null', async () => {
-  const el = new CRJourneyCases();
-  el.client = null;
-  el.ownedJourneyCaseTypes = ['complaints'];
+  const host = JourneyCasesPage({
+    client: null,
+    ownedJourneyCaseTypes: ['complaints'],
+  });
 
-  await el.connectedCallback();
-  assert.ok(hasText(el, 'Journey Cases'), 'should still render heading');
-  assert.ok(!findTag(el, 'cr-case-table'), 'should not render table');
+  await flush();
+  assert.ok(hasText(host, 'Journey Cases'), 'should still render heading');
+  assert.ok(!findTag(host, 'cr-case-table'), 'should not render table');
 });

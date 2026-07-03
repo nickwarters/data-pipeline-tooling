@@ -50,6 +50,7 @@ class StubEl {
 /** @type {string[]} */
 const createdTags = [];
 /** @type {any} */ (globalThis).document = {
+  activeElement: null,
   createElement(/** @type {string} */ tag) {
     const el = new StubEl();
     el.tagName = tag.toUpperCase();
@@ -65,7 +66,7 @@ const createdTags = [];
   },
 };
 
-const { CRTeamCases } = await import('../src/pages/cr-team-cases.js');
+const { TeamCasesPage } = await import('../src/pages/cr-team-cases.js');
 
 /** @param {any} node @param {string} text @returns {boolean} */
 function hasText(node, text) {
@@ -103,57 +104,66 @@ const row = (id, caseType) => ({
   etag: 'e',
 });
 
-test('cr-team-cases: renders heading', async () => {
-  const el = new CRTeamCases();
-  el.client = /** @type {any} */ ({
-    async listCases() {
-      return [];
-    },
-  });
-  el.currentUser = { id: 'u1', displayName: 'U' };
-  el.eligibleCaseTypes = ['example-review'];
-  el.queryString = '?manager=me&role=reviewer-manager';
+/** @returns {Promise<void>} flushes pending microtask fetch + reactive re-render */
+async function flush() {
+  await Promise.resolve();
+  await Promise.resolve();
+}
 
-  await el.connectedCallback();
-  assert.ok(hasText(el, 'Team Cases'), 'should render "Team Cases" heading');
+test('cr-team-cases: renders heading', async () => {
+  const host = TeamCasesPage({
+    client: /** @type {any} */ ({
+      async listCases() {
+        return [];
+      },
+    }),
+    currentUser: { id: 'u1', displayName: 'U' },
+    eligibleCaseTypes: ['example-review'],
+    queryString: '?manager=me&role=reviewer-manager',
+  });
+
+  await flush();
+  assert.ok(hasText(host, 'Team Cases'), 'should render "Team Cases" heading');
 });
 
 test('cr-team-cases: renders empty state when no cases returned', async () => {
-  const el = new CRTeamCases();
-  el.client = /** @type {any} */ ({
-    async listCases() {
-      return [];
-    },
+  const host = TeamCasesPage({
+    client: /** @type {any} */ ({
+      async listCases() {
+        return [];
+      },
+    }),
+    currentUser: { id: 'u1', displayName: 'U' },
+    eligibleCaseTypes: ['example-review'],
+    queryString: '?manager=me&role=reviewer-manager',
   });
-  el.currentUser = { id: 'u1', displayName: 'U' };
-  el.eligibleCaseTypes = ['example-review'];
-  el.queryString = '?manager=me&role=reviewer-manager';
 
-  await el.connectedCallback();
+  await flush();
   assert.ok(
-    hasText(el, 'No cases match the selected filters.'),
+    hasText(host, 'No cases match the selected filters.'),
     'should render empty-state message'
   );
   assert.ok(
-    !findTag(el, 'cr-case-table'),
+    !findTag(host, 'cr-case-table'),
     'should not render cr-case-table when empty'
   );
 });
 
 test('cr-team-cases: renders cr-case-table with cases when results returned', async () => {
   const cases = [row('c1', 'example-review'), row('c2', 'example-review')];
-  const el = new CRTeamCases();
-  el.client = /** @type {any} */ ({
-    async listCases() {
-      return cases;
-    },
+  const host = TeamCasesPage({
+    client: /** @type {any} */ ({
+      async listCases() {
+        return cases;
+      },
+    }),
+    currentUser: { id: 'u1', displayName: 'U' },
+    eligibleCaseTypes: ['example-review'],
+    queryString: '?manager=me&role=reviewer-manager',
   });
-  el.currentUser = { id: 'u1', displayName: 'U' };
-  el.eligibleCaseTypes = ['example-review'];
-  el.queryString = '?manager=me&role=reviewer-manager';
 
-  await el.connectedCallback();
-  const table = findTag(el, 'cr-case-table');
+  await flush();
+  const table = findTag(host, 'cr-case-table');
   assert.ok(table, 'should render cr-case-table');
   assert.deepEqual(table.cases, cases, 'should pass cases to table');
   assert.strictEqual(table.toolbar, 'hidden', 'should hide toolbar');
@@ -162,50 +172,73 @@ test('cr-team-cases: renders cr-case-table with cases when results returned', as
 test('cr-team-cases: passes query-string params to fetcher (caseType scoping)', async () => {
   /** @type {import('../src/sharepoint-client.js').ListCasesFilter[]} */
   const calls = [];
-  const el = new CRTeamCases();
-  el.client = /** @type {any} */ ({
-    async listCases(/** @type {any} */ f) {
-      calls.push(f);
-      return [row('c1', 'example-review')];
-    },
+  const host = TeamCasesPage({
+    client: /** @type {any} */ ({
+      async listCases(/** @type {any} */ f) {
+        calls.push(f);
+        return [row('c1', 'example-review')];
+      },
+    }),
+    currentUser: { id: 'u1', displayName: 'U' },
+    eligibleCaseTypes: ['example-review', 'product-sale-review'],
+    queryString: '?manager=me&role=reviewer-manager&caseType=example-review',
   });
-  el.currentUser = { id: 'u1', displayName: 'U' };
-  el.eligibleCaseTypes = ['example-review', 'product-sale-review'];
-  el.queryString = '?manager=me&role=reviewer-manager&caseType=example-review';
 
-  await el.connectedCallback();
+  await flush();
   assert.equal(calls.length, 1, 'should query only the specified caseType');
   assert.equal(calls[0].caseType, 'example-review');
 });
 
 test('cr-team-cases: renders back link to #/reports', async () => {
-  const el = new CRTeamCases();
-  el.client = /** @type {any} */ ({
-    async listCases() {
-      return [];
-    },
+  const host = TeamCasesPage({
+    client: /** @type {any} */ ({
+      async listCases() {
+        return [];
+      },
+    }),
+    currentUser: { id: 'u1', displayName: 'U' },
+    eligibleCaseTypes: [],
+    queryString: '',
   });
-  el.currentUser = { id: 'u1', displayName: 'U' };
-  el.eligibleCaseTypes = [];
-  el.queryString = '';
 
-  await el.connectedCallback();
-  const link = findTag(el, 'a');
+  await flush();
+  const link = findTag(host, 'a');
   assert.ok(link, 'should render back link');
   assert.equal(link._attrs['href'], '#/reports');
 });
 
 test('cr-team-cases: renders heading and back link without fetching when client is null', async () => {
-  const el = new CRTeamCases();
-  el.client = null;
-  el.currentUser = { id: 'u1', displayName: 'U' };
-  el.eligibleCaseTypes = [];
-  el.queryString = '';
+  const host = TeamCasesPage({
+    client: null,
+    currentUser: { id: 'u1', displayName: 'U' },
+    eligibleCaseTypes: [],
+    queryString: '',
+  });
 
-  await el.connectedCallback();
-  assert.ok(hasText(el, 'Team Cases'), 'should still render heading');
+  await flush();
+  assert.ok(hasText(host, 'Team Cases'), 'should still render heading');
   assert.ok(
-    !findTag(el, 'cr-case-table'),
+    !findTag(host, 'cr-case-table'),
     'should not render table when no client'
+  );
+});
+
+test('cr-team-cases: renders heading and back link without fetching when currentUser is null', async () => {
+  const host = TeamCasesPage({
+    client: /** @type {any} */ ({
+      async listCases() {
+        return [];
+      },
+    }),
+    currentUser: null,
+    eligibleCaseTypes: [],
+    queryString: '',
+  });
+
+  await flush();
+  assert.ok(hasText(host, 'Team Cases'), 'should still render heading');
+  assert.ok(
+    !findTag(host, 'cr-case-table'),
+    'should not render table when no currentUser'
   );
 });

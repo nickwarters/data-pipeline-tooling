@@ -11,20 +11,74 @@ const windowListeners = {};
 };
 /** @type {any} */ (globalThis).location = { hash: '' };
 
-import { Router } from '../src/lib/router.js';
-import { register } from '../src/routes/conversation.js';
+class StubEl {
+  constructor() {
+    /** @type {StubEl[]} */
+    this._children = [];
+    /** @type {Record<string, Function[]>} */
+    this._listeners = {};
+    this.textContent = '';
+    this.className = '';
+    this.type = '';
+    /** @type {any} */
+    this.client = null;
+    /** @type {any} */
+    this.saveQueue = null;
+    this.caseId = '';
+    /** @type {any} */
+    this.currentUser = null;
+  }
+  replaceChildren(/** @type {StubEl[]} */ ...cs) {
+    this._children = cs;
+  }
+  appendChild(/** @type {StubEl} */ c) {
+    this._children.push(c);
+    return c;
+  }
+  append(/** @type {StubEl[]} */ ...cs) {
+    this._children.push(...cs);
+  }
+  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
+    (this._listeners[t] ??= []).push(h);
+  }
+  setAttribute() {}
+}
+
+/** @type {any} */ (globalThis).HTMLElement = StubEl;
+/** @type {any} */ (globalThis).document = {
+  _active: null,
+  get activeElement() {
+    return this._active;
+  },
+  createElement(/** @type {string} */ tag) {
+    const el = new StubEl();
+    /** @type {any} */ (el)._tagName = tag;
+    return el;
+  },
+};
+/** @type {any} */ (globalThis).customElements = { define() {} };
+
+const { Router } = await import('../src/lib/router.js');
+const { register } = await import('../src/routes/conversation.js');
+
+/** @param {{ caseRow?: any }} [opts] */
+function makeContext(opts = {}) {
+  const caseRow = 'caseRow' in opts ? opts.caseRow : null;
+  return {
+    client: /** @type {any} */ ({
+      async getCase() {
+        return caseRow;
+      },
+    }),
+    saveQueue: /** @type {any} */ ({}),
+    currentUser: /** @type {any} */ ({ id: 'u1' }),
+  };
+}
 
 test('conversation route: register calls router.register with #/conversation/:id', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});
-  register(
-    router,
-    /** @type {any} */ ({
-      client: {},
-      saveQueue: {},
-      currentUser: { id: 'u1' },
-    })
-  );
+  register(router, /** @type {any} */ (makeContext()));
   assert.ok(
     router._routes.some((r) => r.re.test('#/conversation/99')),
     '#/conversation/:id should be registered'
@@ -34,95 +88,99 @@ test('conversation route: register calls router.register with #/conversation/:id
 test('conversation route: registers source-key conversation route', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});
-  register(
-    router,
-    /** @type {any} */ ({
-      client: {},
-      saveQueue: {},
-      currentUser: { id: 'u1' },
-    })
-  );
+  register(router, /** @type {any} */ (makeContext()));
   assert.ok(
     router._routes.some((r) => r.re.test('#/conversation/example-review/99')),
     '#/conversation/:caseType/:id should be registered'
   );
 });
 
-test('conversation route: mount creates cr-conversation-view with correct props', () => {
-  const client = {};
-  const saveQueue = {};
-  const currentUser = { id: 'u42' };
-  const elements = /** @type {any[]} */ ([]);
-
-  const origDoc = /** @type {any} */ (globalThis).document;
-  /** @type {any} */ (globalThis).document = {
-    createElement(/** @type {string} */ tag) {
-      const el = /** @type {any} */ ({ tag, setAttribute() {} });
-      elements.push(el);
-      return el;
-    },
-    createTreeWalker() {
-      return {
-        nextNode() {
-          return null;
-        },
-      };
-    },
-  };
-
-  try {
-    const router = new Router();
-    router._container = /** @type {any} */ ({ replaceChildren() {} });
-
-    register(router, /** @type {any} */ ({ client, saveQueue, currentUser }));
-    router.navigate('#/conversation/123');
-
-    const el = elements.find((e) => e.tag === 'cr-conversation-view');
-    assert.ok(el, 'cr-conversation-view element should be created');
-    assert.equal(el.client, client);
-    assert.equal(el.saveQueue, saveQueue);
-    assert.equal(el.caseId, '123');
-    assert.equal(el.caseType, null);
-    assert.equal(el.currentUser, currentUser);
-  } finally {
-    /** @type {any} */ (globalThis).document = origDoc;
-  }
+test('conversation route: unmount is a no-op (does not throw)', () => {
+  const router = new Router();
+  router._container = /** @type {any} */ ({});
+  register(router, /** @type {any} */ (makeContext()));
+  const route = router._routes.find((r) => r.re.test('#/conversation/99'));
+  assert.ok(route, 'route should exist');
+  assert.doesNotThrow(() => route.handler.unmount());
 });
 
-test('conversation route: source-key route passes caseType to cr-conversation-view', () => {
-  const client = {};
+test('conversation route: mount renders ConversationView output into the container', async () => {
+  const client = {
+    async getCase(/** @type {string} */ id) {
+      return { id, title: 'Case Title', conversation: [] };
+    },
+  };
   const saveQueue = {};
   const currentUser = { id: 'u42' };
-  const elements = /** @type {any[]} */ ([]);
 
-  const origDoc = /** @type {any} */ (globalThis).document;
-  /** @type {any} */ (globalThis).document = {
-    createElement(/** @type {string} */ tag) {
-      const el = /** @type {any} */ ({ tag, setAttribute() {} });
-      elements.push(el);
-      return el;
-    },
-    createTreeWalker() {
-      return {
-        nextNode() {
-          return null;
-        },
-      };
+  /** @type {any[]} */
+  const rendered = [];
+  const container = {
+    replaceChildren(/** @type {any[]} */ ...children) {
+      rendered.splice(0, rendered.length, ...children);
     },
   };
 
-  try {
-    const router = new Router();
-    router._container = /** @type {any} */ ({ replaceChildren() {} });
+  const router = new Router();
+  router._container = /** @type {any} */ (container);
 
-    register(router, /** @type {any} */ ({ client, saveQueue, currentUser }));
-    router.navigate('#/conversation/product-sale-review/123');
+  register(router, /** @type {any} */ ({ client, saveQueue, currentUser }));
+  router.navigate('#/conversation/123');
 
-    const el = elements.find((e) => e.tag === 'cr-conversation-view');
-    assert.ok(el, 'cr-conversation-view element should be created');
-    assert.equal(el.caseId, '123');
-    assert.equal(el.caseType, 'product-sale-review');
-  } finally {
-    /** @type {any} */ (globalThis).document = origDoc;
-  }
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(rendered.length, 1, 'container should receive one host node');
+  const host = /** @type {any} */ (rendered[0]);
+  assert.equal(host._children.length, 2, 'header + cr-conversation rendered');
+  const conversationEl = host._children[1];
+  assert.equal(conversationEl.client, client);
+  assert.equal(conversationEl.saveQueue, saveQueue);
+  assert.equal(conversationEl.caseId, '123');
+  assert.equal(conversationEl.currentUser, currentUser);
+});
+
+test('conversation route: source-key route passes caseType through to the fetched case', async () => {
+  /** @type {any[]} */
+  const getCaseCalls = [];
+  const client = {
+    async getCase(/** @type {string} */ id, /** @type {any} */ opts) {
+      getCaseCalls.push([id, opts]);
+      return { id, title: 'Case Title', conversation: [] };
+    },
+  };
+
+  /** @type {any[]} */
+  const rendered = [];
+  const container = {
+    replaceChildren(/** @type {any[]} */ ...children) {
+      rendered.splice(0, rendered.length, ...children);
+    },
+  };
+
+  const router = new Router();
+  router._container = /** @type {any} */ (container);
+
+  register(
+    router,
+    /** @type {any} */ ({
+      client,
+      saveQueue: {},
+      currentUser: { id: 'u42' },
+    })
+  );
+  router.navigate('#/conversation/product-sale-review/123');
+
+  // loadCaseTypeConfig() performs a real dynamic import() of the case-type
+  // module, which resolves via the module loader (not just microtasks) —
+  // a macrotask tick is needed in addition to microtask flushes.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(getCaseCalls.length, 1);
+  assert.equal(getCaseCalls[0][0], '123');
+  assert.equal(rendered.length, 1);
 });

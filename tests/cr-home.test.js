@@ -42,7 +42,7 @@ class StubEl {
 /** @type {any} */ (globalThis).location = { hash: '' };
 
 // ===== IMPORTS (after stubs) =====
-const { CRHome } = await import('../src/pages/cr-home.js');
+const { HomePage } = await import('../src/pages/cr-home.js');
 
 // ===== HELPERS =====
 const NONE = {
@@ -61,6 +61,13 @@ const NONE = {
 /** @param {Partial<typeof NONE>} over */
 function caps(over) {
   return { ...NONE, ...over };
+}
+
+/** @param {Node[]} nodes @returns {StubEl} */
+function wrapNodes(nodes) {
+  const root = new StubEl();
+  root.append(.../** @type {StubEl[]} */ (/** @type {unknown} */ (nodes)));
+  return root;
 }
 
 /**
@@ -100,101 +107,98 @@ function sectionLinks(root) {
 
 // ===== TESTS =====
 
-test('CRHome: visitor only — renders single Visitor section, no other roles', () => {
-  const el = new CRHome();
-  el.capabilities = caps({ isVisitor: true });
-  el.connectedCallback();
-
-  assert.deepEqual(sectionHeadings(el), ['Visitor']);
+test('HomePage: visitor only — renders single Visitor section, no other roles', () => {
+  const root = wrapNodes(HomePage({ capabilities: caps({ isVisitor: true }) }));
+  assert.deepEqual(sectionHeadings(root), ['Visitor']);
 });
 
-test('CRHome: visitor section has explainer text and no links', () => {
-  const el = new CRHome();
-  el.capabilities = caps({ isVisitor: true });
-  el.connectedCallback();
+test('HomePage: visitor section has explainer text and no links', () => {
+  const root = wrapNodes(HomePage({ capabilities: caps({ isVisitor: true }) }));
 
   // explainer paragraph present
-  assert.ok(findAll(el, 'p').length >= 1, 'visitor explainer text present');
+  assert.ok(findAll(root, 'p').length >= 1, 'visitor explainer text present');
   // no anchors at all — access is managed out-of-band, no in-app affordance
-  assert.equal(findAll(el, 'a').length, 0, 'no anchors in visitor section');
+  assert.equal(findAll(root, 'a').length, 0, 'no anchors in visitor section');
 });
 
-test('CRHome: reviewer — single section linking to dashboard', () => {
-  const el = new CRHome();
-  el.capabilities = caps({ isReviewer: true });
-  el.connectedCallback();
+test('HomePage: reviewer — single section linking to dashboard', () => {
+  const root = wrapNodes(
+    HomePage({ capabilities: caps({ isReviewer: true }) })
+  );
 
-  assert.deepEqual(sectionHeadings(el), ['Reviewer']);
-  assert.deepEqual(sectionLinks(el), ['#/dashboard']);
+  assert.deepEqual(sectionHeadings(root), ['Reviewer']);
+  assert.deepEqual(sectionLinks(root), ['#/dashboard']);
 });
 
-test('CRHome: reviewer manager — links to reviewer team report', () => {
-  const el = new CRHome();
-  el.capabilities = caps({ isReviewerManager: true });
-  el.connectedCallback();
+test('HomePage: reviewer manager — links to reviewer team report', () => {
+  const root = wrapNodes(
+    HomePage({ capabilities: caps({ isReviewerManager: true }) })
+  );
 
-  assert.deepEqual(sectionHeadings(el), ['Reviewer Manager']);
-  assert.deepEqual(sectionLinks(el), ['#/reports/reviewer-team']);
+  assert.deepEqual(sectionHeadings(root), ['Reviewer Manager']);
+  assert.deepEqual(sectionLinks(root), ['#/reports/reviewer-team']);
 });
 
-test('CRHome: responsible party manager — links to responsible party team report', () => {
-  const el = new CRHome();
-  el.capabilities = caps({ isResponsiblePartyManager: true });
-  el.connectedCallback();
+test('HomePage: responsible party manager — links to responsible party team report', () => {
+  const root = wrapNodes(
+    HomePage({ capabilities: caps({ isResponsiblePartyManager: true }) })
+  );
 
-  assert.deepEqual(sectionHeadings(el), ['Responsible Party Manager']);
-  assert.deepEqual(sectionLinks(el), ['#/reports/responsible-party-team']);
+  assert.deepEqual(sectionHeadings(root), ['Responsible Party Manager']);
+  assert.deepEqual(sectionLinks(root), ['#/reports/responsible-party-team']);
 });
 
-test('CRHome: responsible party — links to my cases', () => {
-  const el = new CRHome();
-  el.capabilities = caps({ isAdviser: true });
-  el.connectedCallback();
+test('HomePage: responsible party — links to my cases', () => {
+  const root = wrapNodes(HomePage({ capabilities: caps({ isAdviser: true }) }));
 
-  assert.deepEqual(sectionHeadings(el), ['Responsible Party']);
-  assert.deepEqual(sectionLinks(el), ['#/my-cases']);
+  assert.deepEqual(sectionHeadings(root), ['Responsible Party']);
+  assert.deepEqual(sectionLinks(root), ['#/my-cases']);
 });
 
-test('CRHome: case type owner — links to question bank', () => {
-  const el = new CRHome();
-  el.capabilities = caps({ ownedCaseTypes: ['example-review'] });
-  el.connectedCallback();
+test('HomePage: case type owner — links to question bank', () => {
+  const root = wrapNodes(
+    HomePage({ capabilities: caps({ ownedCaseTypes: ['example-review'] }) })
+  );
 
-  assert.deepEqual(sectionHeadings(el), ['Case Type Owner']);
-  assert.deepEqual(sectionLinks(el), ['#/question-bank']);
+  assert.deepEqual(sectionHeadings(root), ['Case Type Owner']);
+  assert.deepEqual(sectionLinks(root), ['#/question-bank']);
 });
 
-test('CRHome: journey owner — links to journey cases', () => {
-  const el = new CRHome();
-  el.capabilities = caps({ ownedJourneyCaseTypes: ['complaints'] });
-  el.connectedCallback();
+test('HomePage: journey owner — links to journey cases', () => {
+  const root = wrapNodes(
+    HomePage({
+      capabilities: caps({ ownedJourneyCaseTypes: ['complaints'] }),
+    })
+  );
 
-  assert.deepEqual(sectionHeadings(el), ['Journey Owner']);
-  assert.deepEqual(sectionLinks(el), ['#/journey-cases']);
+  assert.deepEqual(sectionHeadings(root), ['Journey Owner']);
+  assert.deepEqual(sectionLinks(root), ['#/journey-cases']);
 });
 
-test('CRHome: maintainer — links to question bank', () => {
-  const el = new CRHome();
-  el.capabilities = caps({ isMaintainer: true });
-  el.connectedCallback();
+test('HomePage: maintainer — links to question bank', () => {
+  const root = wrapNodes(
+    HomePage({ capabilities: caps({ isMaintainer: true }) })
+  );
 
-  assert.deepEqual(sectionHeadings(el), ['Maintainer']);
-  assert.deepEqual(sectionLinks(el), ['#/question-bank']);
+  assert.deepEqual(sectionHeadings(root), ['Maintainer']);
+  assert.deepEqual(sectionLinks(root), ['#/question-bank']);
 });
 
-test('CRHome: multi-role — only matching sections, in documented order', () => {
-  const el = new CRHome();
-  el.capabilities = caps({
-    isReviewer: true,
-    isResponsiblePartyManager: true,
-    ownedCaseTypes: ['example-review'],
-    isMaintainer: true,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: [],
-  });
-  el.connectedCallback();
+test('HomePage: multi-role — only matching sections, in documented order', () => {
+  const root = wrapNodes(
+    HomePage({
+      capabilities: caps({
+        isReviewer: true,
+        isResponsiblePartyManager: true,
+        ownedCaseTypes: ['example-review'],
+        isMaintainer: true,
+        listAccessCaseTypes: [],
+        ownedJourneyCaseTypes: [],
+      }),
+    })
+  );
 
-  assert.deepEqual(sectionHeadings(el), [
+  assert.deepEqual(sectionHeadings(root), [
     'Reviewer',
     'Responsible Party Manager',
     'Case Type Owner',
@@ -202,22 +206,24 @@ test('CRHome: multi-role — only matching sections, in documented order', () =>
   ]);
 });
 
-test('CRHome: full order — all roles render in documented order', () => {
-  const el = new CRHome();
-  el.capabilities = caps({
-    isReviewer: true,
-    isReviewerManager: true,
-    isResponsiblePartyManager: true,
-    isAdviser: true,
-    ownedCaseTypes: ['example-review'],
-    isMaintainer: true,
-    listAccessCaseTypes: [],
-    ownedJourneyCaseTypes: ['complaints'],
-    isVisitor: true,
-  });
-  el.connectedCallback();
+test('HomePage: full order — all roles render in documented order', () => {
+  const root = wrapNodes(
+    HomePage({
+      capabilities: caps({
+        isReviewer: true,
+        isReviewerManager: true,
+        isResponsiblePartyManager: true,
+        isAdviser: true,
+        ownedCaseTypes: ['example-review'],
+        isMaintainer: true,
+        listAccessCaseTypes: [],
+        ownedJourneyCaseTypes: ['complaints'],
+        isVisitor: true,
+      }),
+    })
+  );
 
-  assert.deepEqual(sectionHeadings(el), [
+  assert.deepEqual(sectionHeadings(root), [
     'Reviewer',
     'Reviewer Manager',
     'Responsible Party Manager',
@@ -229,8 +235,7 @@ test('CRHome: full order — all roles render in documented order', () => {
   ]);
 });
 
-test('CRHome: no capabilities set — renders nothing without throwing', () => {
-  const el = new CRHome();
-  el.connectedCallback();
-  assert.deepEqual(sectionHeadings(el), []);
+test('HomePage: no capabilities set — renders nothing without throwing', () => {
+  const root = wrapNodes(HomePage({ capabilities: null }));
+  assert.deepEqual(sectionHeadings(root), []);
 });

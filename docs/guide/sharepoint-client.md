@@ -1,9 +1,10 @@
 # SharePointClient Interface
 
-> TODO(simplify-ui): Reframe client usage as explicit dependencies passed into
-> route shells and function components. The guide should avoid implying that
-> authors need class components or lifecycle callbacks to perform SharePoint
-> reads and writes.
+The `client` is an explicit dependency: a route passes it into a function
+component as a plain argument (`SomePage({ client, … })`), and the component
+calls `client.getCase(…)` / `client.patchCase(…)` directly. No class component,
+lifecycle callback, or custom element is needed to read or write SharePoint —
+just the function and the `client` it was handed.
 
 ## Quick reference
 

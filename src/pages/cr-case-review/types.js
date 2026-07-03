@@ -1,8 +1,7 @@
 // @ts-check
-// TODO(simplify-ui): Simplify this orchestration boundary into plain
-// state transition and binding functions that can be called from function
-// components. Avoid preserving controller/view-model objects as a second
-// framework layer around reactive().
+// Shared typedefs for the Case Review panel bindings. These describe the plain
+// context object the `bind*`/`update*` panel functions receive — no runtime
+// code, no controller classes.
 
 /**
  * @typedef {import('../../sharepoint-client.js').Answer} Answer

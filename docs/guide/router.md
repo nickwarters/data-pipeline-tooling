@@ -1,9 +1,9 @@
 # Router Integration
 
-> TODO(simplify-ui): Rewrite this guide around route functions that compose
-> plain function components with `h()`. Route examples should not teach
-> `document.createElement('cr-*')` or custom-element lifecycle wiring as the
-> default way to mount screens.
+A route is a plain `register(router, context)` function that composes **function
+components** — plain functions returning `h()` nodes — and mounts them with
+`container.replaceChildren(…)`. Routes do not create a custom element per screen;
+custom elements are reserved for route/browser-integration shells.
 
 ## Quick reference
 
@@ -54,7 +54,7 @@ The router is created once in `app.js` and passed (via `AppContext`) to every ro
 
 2. **Create the page function** under `src/pages/` if the route needs a dedicated view (see [Component authoring](component-authoring.md)).
 
-3. **Import what the route uses** — import the page function, or import a legacy shell module only when the route still creates a custom element.
+3. **Import what the route uses** — import the page function directly. Import a custom-element shell module only for a genuine route/browser-integration boundary, never as the default way to mount a screen.
 
 4. **Register the route** — import and call your `register` function in `src/setup/register-routes.js`.
 

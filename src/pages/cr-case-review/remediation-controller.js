@@ -77,17 +77,3 @@ export function updateRemediationPanel(context) {
     );
   }
 }
-
-// TODO(simplify-ui): Remove this compatibility wrapper after Case Review tests
-// and page code consume the function bindings directly.
-export class RemediationPanelController {
-  /** @param {import('./types.js').CaseReviewShellContext} context */
-  bind(context) {
-    bindRemediationPanel(context);
-  }
-
-  /** @param {import('./types.js').CaseReviewShellContext} context */
-  update(context) {
-    updateRemediationPanel(context);
-  }
-}

@@ -1,7 +1,7 @@
 // @ts-check
-// TODO(simplify-ui): Rework routing around route functions that compose
-// plain function components returning h() nodes. Keep custom elements only for
-// route/browser-integration shells, not as the unit every route has to create.
+// A route handler is a plain `{ mount, unmount }` pair. `mount` composes
+// function components and calls `container.replaceChildren(...)`; the router
+// never owns a custom element per route.
 
 /**
  * @typedef {{ mount: (el: Element, params: Record<string, string>) => void, unmount: () => void }} RouteHandler

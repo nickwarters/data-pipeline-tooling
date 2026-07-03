@@ -1,22 +1,16 @@
 // @ts-check
-// TODO(simplify-ui): Collapse bootstrapping around the function-component
-// model. The app shell should wire shared services/signals once, register only
-// route or browser-integration shells, and avoid ordinary custom-element
-// registration as the default rendering path.
+// The app shell wires shared services once and eagerly loads only the custom
+// elements that are genuine route/browser-integration shells (the nav, command
+// palette, Case Review page, and Question Bank editor). Ordinary screens are
+// plain function components that their route modules import directly, so they
+// need no custom-element registration here.
 
 /** @returns {Promise<void>} */
 async function boot() {
   await Promise.all([
     import('./components/cr-app-nav.js'),
     import('./components/cr-command-palette.js'),
-    import('./pages/cr-dashboard.js'),
     import('./pages/cr-case-review.js'),
-    import('./pages/cr-conversation-view.js'),
-    import('./pages/cr-reports-index.js'),
-    import('./pages/cr-reviewer-team-report.js'),
-    import('./pages/cr-responsible-party-dashboard.js'),
-    import('./pages/cr-team-cases.js'),
-    import('./pages/cr-journey-cases.js'),
     import('./question-bank/cr-bank-editor.js'),
   ]);
 

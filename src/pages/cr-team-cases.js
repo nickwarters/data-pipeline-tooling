@@ -1,6 +1,6 @@
 // @ts-check
-import { ShellElement } from '../lib/view.js';
 import { signal } from '../lib/signal.js';
+import { reactive } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import { parseTeamCasesParams } from '../services/team-cases-params.js';
 import { fetchTeamCases } from '../services/team-cases-fetcher.js';
@@ -8,62 +8,64 @@ import '../components/cr-case-table.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
+/** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
-export class CRTeamCases extends ShellElement {
-  constructor() {
-    super();
-    /** @type {SharePointClient|null} */
-    this.client = null;
-    /** @type {CurrentUser|null} */
-    this.currentUser = null;
-    /** @type {string[]} */
-    this.eligibleCaseTypes = [];
-    /** @type {string} */
-    this.queryString = '';
+/**
+ * @param {{
+ *   client: SharePointClient|null,
+ *   currentUser: CurrentUser|null,
+ *   eligibleCaseTypes: string[],
+ *   queryString: string,
+ * }} props
+ * @returns {HTMLElement}
+ */
+export function TeamCasesPage({
+  client,
+  currentUser,
+  eligibleCaseTypes,
+  queryString,
+}) {
+  /** @type {import('../lib/signal.js').Signal<CaseRow[] | null>} */
+  const cases = signal(/** @type {CaseRow[] | null} */ (null));
 
-    /** @type {import('../lib/signal.js').Signal<import('../sharepoint-client.js').CaseRow[] | null>} */
-    this._cases = signal(
-      /** @type {import('../sharepoint-client.js').CaseRow[] | null} */ (null)
-    );
-  }
-
-  async connectedCallback() {
-    super.connectedCallback();
-    await this._fetchData();
-  }
-
-  async _fetchData() {
-    if (!this.client || !this.currentUser) return;
-    const params = parseTeamCasesParams(this.queryString);
-    const cases = await fetchTeamCases(
-      this.client,
+  async function fetchData() {
+    if (!client || !currentUser) return;
+    const params = parseTeamCasesParams(queryString);
+    const result = await fetchTeamCases(
+      client,
       params,
-      this.currentUser.id,
-      this.eligibleCaseTypes
+      currentUser.id,
+      eligibleCaseTypes
     );
-    this._cases.set(cases);
+    cases.set(result);
   }
 
-  render() {
-    const h1 = h('h1', {}, 'Team Cases');
-    const back = h('a', { href: '#/reports' }, '← Back to Reports');
-
-    const cases = this._cases.get();
-
-    if (!this.client || !this.currentUser || !cases) {
-      return [h1, back];
-    }
-
-    if (cases.length === 0) {
-      return [h1, back, h('p', {}, 'No cases match the selected filters.')];
-    }
-
-    return [h1, back, h('cr-case-table', { cases: cases, toolbar: 'hidden' })];
-  }
+  const host = reactive(() =>
+    renderTeamCases({ client, currentUser, cases: cases.get() })
+  );
+  fetchData();
+  return host;
 }
 
-customElements.define('cr-team-cases', CRTeamCases);
+/**
+ * @param {{
+ *   client: SharePointClient|null,
+ *   currentUser: CurrentUser|null,
+ *   cases: CaseRow[] | null,
+ * }} props
+ * @returns {Node[]}
+ */
+function renderTeamCases({ client, currentUser, cases }) {
+  const h1 = h('h1', {}, 'Team Cases');
+  const back = h('a', { href: '#/reports' }, '← Back to Reports');
+
+  if (!client || !currentUser || !cases) {
+    return [h1, back];
+  }
+
+  if (cases.length === 0) {
+    return [h1, back, h('p', {}, 'No cases match the selected filters.')];
+  }
+
+  return [h1, back, h('cr-case-table', { cases: cases, toolbar: 'hidden' })];
+}

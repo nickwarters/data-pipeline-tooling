@@ -13,14 +13,28 @@ const windowListeners = {};
 
 class StubEl {
   constructor() {
-    /** @type {any} */ this.client = null;
-    /** @type {any} */ this.currentUser = null;
-    /** @type {string[]} */ this.eligibleCaseTypes = [];
-    /** @type {string} */ this.queryString = '';
+    /** @type {StubEl[]} */
+    this._children = [];
+    /** @type {Record<string, string>} */
+    this._attrs = {};
     this.tagName = '';
+    this.textContent = '';
+    this.className = '';
   }
-  replaceChildren() {}
-  setAttribute() {}
+  replaceChildren(/** @type {StubEl[]} */ ...cs) {
+    this._children = cs;
+  }
+  appendChild(/** @type {StubEl} */ c) {
+    this._children.push(c);
+    return c;
+  }
+  addEventListener() {}
+  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
+    this._attrs[k] = v;
+  }
+  getAttribute(/** @type {string} */ k) {
+    return this._attrs[k] ?? null;
+  }
 }
 /** @type {any} */ (globalThis).HTMLElement = StubEl;
 /** @type {any} */ (globalThis).customElements = {
@@ -30,13 +44,11 @@ class StubEl {
   },
 };
 
-/** @type {StubEl[]} */
-const elements = [];
 /** @type {any} */ (globalThis).document = {
+  activeElement: null,
   createElement(/** @type {string} */ tag) {
     const el = new StubEl();
     el.tagName = tag.toUpperCase();
-    elements.push(el);
     return el;
   },
   createTreeWalker() {
@@ -48,8 +60,18 @@ const elements = [];
   },
 };
 
-import { Router } from '../src/lib/router.js';
-import { register } from '../src/routes/team-cases.js';
+const { Router } = await import('../src/lib/router.js');
+const { register } = await import('../src/routes/team-cases.js');
+
+/** @param {any} node @param {string} tag @returns {any|null} */
+function findTag(node, tag) {
+  if (node.tagName === tag.toUpperCase()) return node;
+  for (const c of node._children ?? []) {
+    const f = findTag(c, tag);
+    if (f) return f;
+  }
+  return null;
+}
 
 test('routes-team-cases: registers #/team-cases route', () => {
   const router = new Router();
@@ -68,14 +90,23 @@ test('routes-team-cases: registers #/team-cases route', () => {
   );
 });
 
-test('routes-team-cases: mounts cr-team-cases with client, currentUser, eligibleCaseTypes', () => {
-  elements.length = 0;
-  const client = { id: 'mock' };
+test('routes-team-cases: mounts TeamCasesPage output with client, currentUser, eligibleCaseTypes', () => {
+  const client = /** @type {any} */ ({
+    async listCases() {
+      return [];
+    },
+  });
   const currentUser = { id: 'u1', displayName: 'U' };
   const eligibleCaseTypes = ['example-review'];
 
   const router = new Router();
-  const container = { replaceChildren(/** @type {any[]} */ ...args) {} };
+  /** @type {any[]} */
+  let mounted = [];
+  const container = {
+    replaceChildren(/** @type {any} */ ...args) {
+      mounted = args;
+    },
+  };
   router._container = /** @type {any} */ (container);
   register(
     router,
@@ -83,11 +114,8 @@ test('routes-team-cases: mounts cr-team-cases with client, currentUser, eligible
   );
   router.navigate('#/team-cases');
 
-  const el = elements.find((e) => e.tagName === 'CR-TEAM-CASES');
-  assert.ok(el, 'should create cr-team-cases element');
-  assert.equal(el.client, client);
-  assert.equal(el.currentUser, currentUser);
-  assert.deepEqual(el.eligibleCaseTypes, eligibleCaseTypes);
+  assert.equal(mounted.length, 1, 'should mount a single host element');
+  assert.ok(findTag(mounted[0], 'h1'), 'should render the page heading');
 });
 
 test('routes-team-cases: unmount is a no-op (does not throw)', () => {
@@ -106,32 +134,45 @@ test('routes-team-cases: unmount is a no-op (does not throw)', () => {
   assert.doesNotThrow(() => route.handler.unmount());
 });
 
-test('routes-team-cases: passes query string from location hash to element', () => {
-  elements.length = 0;
+test('routes-team-cases: passes query string from location hash to the page', async () => {
   /** @type {any} */ (globalThis).location = {
     hash: '#/team-cases?manager=me&status=overdue',
   };
 
+  /** @type {import('../src/sharepoint-client.js').ListCasesFilter[]} */
+  const calls = [];
+  const client = /** @type {any} */ ({
+    async listCases(/** @type {any} */ f) {
+      calls.push(f);
+      return [];
+    },
+  });
+
   const router = new Router();
-  const container = { replaceChildren(/** @type {any[]} */ ...args) {} };
+  /** @type {any[]} */
+  let mounted = [];
+  const container = {
+    replaceChildren(/** @type {any} */ ...args) {
+      mounted = args;
+    },
+  };
   router._container = /** @type {any} */ (container);
   register(
     router,
     /** @type {any} */ ({
-      client: {},
+      client,
       currentUser: { id: 'u1' },
-      eligibleCaseTypes: [],
+      eligibleCaseTypes: ['example-review'],
     })
   );
   router.navigate('#/team-cases?manager=me&status=overdue');
 
-  const el = elements.find((e) => e.tagName === 'CR-TEAM-CASES');
-  assert.ok(el, 'should create cr-team-cases element');
-  assert.ok(el.queryString.includes('manager=me'), 'should pass query string');
-  assert.ok(
-    el.queryString.includes('status=overdue'),
-    'should pass status param'
-  );
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(mounted.length, 1);
+  assert.equal(calls.length, 1, 'should fetch using the parsed query string');
+  assert.equal(calls[0].assignedReviewerManager, 'u1');
 
   /** @type {any} */ (globalThis).location = { hash: '' };
 });

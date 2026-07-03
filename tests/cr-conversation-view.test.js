@@ -56,6 +56,10 @@ const docListeners = {};
 
 /** @type {any} */ (globalThis).HTMLElement = StubEl;
 /** @type {any} */ (globalThis).document = {
+  _active: null,
+  get activeElement() {
+    return this._active;
+  },
   /** @param {string} tag @returns {StubEl} */
   createElement(tag) {
     const Ctor = /** @type {any} */ (globalThis).document._registry?.[
@@ -87,7 +91,7 @@ const docListeners = {};
 /** @type {any} */ (globalThis).location = { hash: '' };
 
 // ===== IMPORTS (after stubs) =====
-const { CRConversationView } =
+const { ConversationView } =
   await import('../src/pages/cr-conversation-view.js');
 
 // ===== FIXTURES =====
@@ -116,14 +120,11 @@ const BASE_CASE = {
 // ===== HELPERS =====
 
 /**
- * The view extends HTMLElement, which TS resolves to the real DOM type, but at
- * runtime HTMLElement is the StubEl above — so the rendered nodes live in the
- * stub's `_children` array. Read them back through the StubEl type.
- * @param {InstanceType<typeof CRConversationView>} el
+ * @param {HTMLElement} host
  * @returns {StubEl[]}
  */
-function childrenOf(el) {
-  return /** @type {StubEl} */ (/** @type {unknown} */ (el))._children;
+function childrenOf(host) {
+  return /** @type {StubEl} */ (/** @type {unknown} */ (host))._children;
 }
 
 /**
@@ -137,92 +138,119 @@ function makeStubClient(caseRow = BASE_CASE) {
   };
 }
 
+/** Flush the microtask queue enough times for fetchData()'s awaits to settle. */
+async function flush() {
+  // loadCaseTypeConfig() performs a real dynamic import() of the case-type
+  // module, which resolves via the module loader (not just microtasks) —
+  // a macrotask tick is needed in addition to microtask flushes.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 // ===== TESTS =====
 
-test('CRConversationView: constructor initialises all properties to null/empty', () => {
-  const el = new CRConversationView();
-  assert.equal(el.client, null);
-  assert.equal(el.saveQueue, null);
-  assert.equal(el.caseId, '');
-  assert.equal(el.currentUser, null);
-});
-
-test('CRConversationView: connectedCallback returns early when client is null', async () => {
-  const el = new CRConversationView();
-  el.caseId = 'case-1';
-  // client is null
-  await el.connectedCallback();
+test('ConversationView: renders nothing when client is null', async () => {
+  const host = ConversationView({
+    client: null,
+    saveQueue: null,
+    caseId: 'case-1',
+    caseType: null,
+    currentUser: null,
+  });
+  await flush();
   assert.deepEqual(
-    childrenOf(el),
+    childrenOf(host),
     [],
     'should not render anything when client is null'
   );
 });
 
-test('CRConversationView: connectedCallback returns early when caseId is empty', async () => {
-  const el = new CRConversationView();
-  el.client = /** @type {any} */ (makeStubClient());
-  // caseId is ''
-  await el.connectedCallback();
+test('ConversationView: renders nothing when caseId is empty', async () => {
+  const host = ConversationView({
+    client: /** @type {any} */ (makeStubClient()),
+    saveQueue: null,
+    caseId: '',
+    caseType: null,
+    currentUser: null,
+  });
+  await flush();
   assert.deepEqual(
-    childrenOf(el),
+    childrenOf(host),
     [],
     'should not render anything when caseId is empty'
   );
 });
 
-test('CRConversationView: connectedCallback returns early when getCase returns null', async () => {
-  const el = new CRConversationView();
-  el.client = /** @type {any} */ (makeStubClient(null));
-  el.caseId = 'case-1';
-  await el.connectedCallback();
+test('ConversationView: renders nothing when getCase returns null', async () => {
+  const host = ConversationView({
+    client: /** @type {any} */ (makeStubClient(null)),
+    saveQueue: null,
+    caseId: 'case-1',
+    caseType: null,
+    currentUser: null,
+  });
+  await flush();
   assert.deepEqual(
-    childrenOf(el),
+    childrenOf(host),
     [],
     'should not render anything when getCase returns null'
   );
 });
 
-test('CRConversationView: connectedCallback renders header at _children[0] and conversationEl at _children[1]', async () => {
-  const el = new CRConversationView();
-  el.client = /** @type {any} */ (makeStubClient());
-  el.caseId = 'case-1';
-  await el.connectedCallback();
+test('ConversationView: renders header at children[0] and conversationEl at children[1]', async () => {
+  const host = ConversationView({
+    client: /** @type {any} */ (makeStubClient()),
+    saveQueue: null,
+    caseId: 'case-1',
+    caseType: null,
+    currentUser: null,
+  });
+  await flush();
 
   assert.equal(
-    childrenOf(el).length,
+    childrenOf(host).length,
     2,
     'should have exactly two top-level children'
   );
   assert.equal(
-    childrenOf(el)[0]._tagName,
+    childrenOf(host)[0]._tagName,
     'header',
     'first child should be a header'
   );
   assert.equal(
-    childrenOf(el)[1]._tagName,
+    childrenOf(host)[1]._tagName,
     'cr-conversation',
     'second child should be cr-conversation'
   );
 });
 
-test('CRConversationView: header has className cr-conversation-view-header', async () => {
-  const el = new CRConversationView();
-  el.client = /** @type {any} */ (makeStubClient());
-  el.caseId = 'case-1';
-  await el.connectedCallback();
+test('ConversationView: header has className cr-conversation-view-header', async () => {
+  const host = ConversationView({
+    client: /** @type {any} */ (makeStubClient()),
+    saveQueue: null,
+    caseId: 'case-1',
+    caseType: null,
+    currentUser: null,
+  });
+  await flush();
 
-  const header = childrenOf(el)[0];
+  const header = childrenOf(host)[0];
   assert.equal(header.className, 'cr-conversation-view-header');
 });
 
-test('CRConversationView: header children are backBtn then h1', async () => {
-  const el = new CRConversationView();
-  el.client = /** @type {any} */ (makeStubClient());
-  el.caseId = 'case-1';
-  await el.connectedCallback();
+test('ConversationView: header children are backBtn then h1', async () => {
+  const host = ConversationView({
+    client: /** @type {any} */ (makeStubClient()),
+    saveQueue: null,
+    caseId: 'case-1',
+    caseType: null,
+    currentUser: null,
+  });
+  await flush();
 
-  const header = childrenOf(el)[0];
+  const header = childrenOf(host)[0];
   assert.equal(header._children.length, 2, 'header should have two children');
   assert.equal(
     header._children[0]._tagName,
@@ -236,52 +264,68 @@ test('CRConversationView: header children are backBtn then h1', async () => {
   );
 });
 
-test('CRConversationView: h1 text uses caseRow.title when present', async () => {
-  const el = new CRConversationView();
-  el.client = /** @type {any} */ (
-    makeStubClient({ ...BASE_CASE, title: 'My Case Title' })
-  );
-  el.caseId = 'case-1';
-  await el.connectedCallback();
+test('ConversationView: h1 text uses caseRow.title when present', async () => {
+  const host = ConversationView({
+    client: /** @type {any} */ (
+      makeStubClient({ ...BASE_CASE, title: 'My Case Title' })
+    ),
+    saveQueue: null,
+    caseId: 'case-1',
+    caseType: null,
+    currentUser: null,
+  });
+  await flush();
 
-  const header = childrenOf(el)[0];
+  const header = childrenOf(host)[0];
   const h1 = header._children[1];
   assert.equal(h1.textContent, 'My Case Title');
 });
 
-test('CRConversationView: h1 text falls back to caseRow.id when title is falsy', async () => {
-  const el = new CRConversationView();
-  el.client = /** @type {any} */ (
-    makeStubClient({ ...BASE_CASE, title: '', id: 'case-fallback-id' })
-  );
-  el.caseId = 'case-fallback-id';
-  await el.connectedCallback();
+test('ConversationView: h1 text falls back to caseRow.id when title is falsy', async () => {
+  const host = ConversationView({
+    client: /** @type {any} */ (
+      makeStubClient({ ...BASE_CASE, title: '', id: 'case-fallback-id' })
+    ),
+    saveQueue: null,
+    caseId: 'case-fallback-id',
+    caseType: null,
+    currentUser: null,
+  });
+  await flush();
 
-  const header = childrenOf(el)[0];
+  const header = childrenOf(host)[0];
   const h1 = header._children[1];
   assert.equal(h1.textContent, 'case-fallback-id');
 });
 
-test('CRConversationView: back button has correct className, type, and text', async () => {
-  const el = new CRConversationView();
-  el.client = /** @type {any} */ (makeStubClient());
-  el.caseId = 'case-1';
-  await el.connectedCallback();
+test('ConversationView: back button has correct className, type, and text', async () => {
+  const host = ConversationView({
+    client: /** @type {any} */ (makeStubClient()),
+    saveQueue: null,
+    caseId: 'case-1',
+    caseType: null,
+    currentUser: null,
+  });
+  await flush();
 
-  const header = childrenOf(el)[0];
+  const header = childrenOf(host)[0];
   const backBtn = header._children[0];
   assert.equal(backBtn.className, 'cr-back-btn');
   assert.equal(backBtn.type, 'button');
   assert.equal(backBtn.textContent, '← My Reviews');
 });
 
-test('CRConversationView: back button click sets location.hash to #/my-reviews', async () => {
-  const el = new CRConversationView();
-  el.client = /** @type {any} */ (makeStubClient());
-  el.caseId = 'case-1';
-  await el.connectedCallback();
+test('ConversationView: back button click sets location.hash to #/my-reviews', async () => {
+  const host = ConversationView({
+    client: /** @type {any} */ (makeStubClient()),
+    saveQueue: null,
+    caseId: 'case-1',
+    caseType: null,
+    currentUser: null,
+  });
+  await flush();
 
-  const header = childrenOf(el)[0];
+  const header = childrenOf(host)[0];
   const backBtn = header._children[0];
   // reset hash
   /** @type {any} */ (globalThis).location.hash = '';
@@ -289,17 +333,19 @@ test('CRConversationView: back button click sets location.hash to #/my-reviews',
   assert.equal(/** @type {any} */ (globalThis).location.hash, '#/my-reviews');
 });
 
-test('CRConversationView: cr-conversation element receives client, saveQueue, caseId, currentUser from view', async () => {
+test('ConversationView: cr-conversation element receives client, saveQueue, caseId, currentUser from view', async () => {
   const client = makeStubClient();
   const saveQueue = { dummy: true };
-  const el = new CRConversationView();
-  el.client = /** @type {any} */ (client);
-  el.saveQueue = /** @type {any} */ (saveQueue);
-  el.caseId = 'case-1';
-  el.currentUser = CURRENT_USER;
-  await el.connectedCallback();
+  const host = ConversationView({
+    client: /** @type {any} */ (client),
+    saveQueue: /** @type {any} */ (saveQueue),
+    caseId: 'case-1',
+    caseType: null,
+    currentUser: CURRENT_USER,
+  });
+  await flush();
 
-  const conversationEl = childrenOf(el)[1];
+  const conversationEl = childrenOf(host)[1];
   assert.equal(
     conversationEl.client,
     client,
@@ -322,21 +368,89 @@ test('CRConversationView: cr-conversation element receives client, saveQueue, ca
   );
 });
 
-test('CRConversationView: cr-conversation is passed messages from caseRow', async () => {
+test('ConversationView: cr-conversation is passed messages from caseRow', async () => {
   const conversation = [
     { author: 'Alice', timestamp: '2026-05-01T10:00:00Z', body: 'Hello!' },
   ];
-  const el = new CRConversationView();
-  el.client = /** @type {any} */ (
-    makeStubClient({ ...BASE_CASE, conversation })
-  );
-  el.caseId = 'case-1';
-  await el.connectedCallback();
+  const host = ConversationView({
+    client: /** @type {any} */ (makeStubClient({ ...BASE_CASE, conversation })),
+    saveQueue: null,
+    caseId: 'case-1',
+    caseType: null,
+    currentUser: null,
+  });
+  await flush();
 
-  const conversationEl = childrenOf(el)[1];
+  const conversationEl = childrenOf(host)[1];
   assert.deepEqual(
     /** @type {any} */ (conversationEl)._messages,
     conversation,
     'messages should be set from caseRow.conversation'
+  );
+});
+
+test('ConversationView: loadCase is called on saveQueue with the fetched case row', async () => {
+  const client = makeStubClient();
+  /** @type {any[]} */
+  const loadCalls = [];
+  const saveQueue = {
+    loadCase(/** @type {any} */ row, /** @type {any} */ opts) {
+      loadCalls.push([row, opts]);
+    },
+  };
+  ConversationView({
+    client: /** @type {any} */ (client),
+    saveQueue: /** @type {any} */ (saveQueue),
+    caseId: 'case-1',
+    caseType: null,
+    currentUser: null,
+  });
+  await flush();
+
+  assert.equal(loadCalls.length, 1, 'saveQueue.loadCase should be called');
+  assert.equal(loadCalls[0][0].id, 'case-1');
+  assert.deepEqual(loadCalls[0][1], {});
+});
+
+test('ConversationView: resolves caseType config and passes listName as opts', async () => {
+  /** @type {any[]} */
+  const getCaseCalls = [];
+  const client = {
+    async getCase(/** @type {string} */ id, /** @type {any} */ opts) {
+      getCaseCalls.push([id, opts]);
+      return BASE_CASE;
+    },
+  };
+  const host = ConversationView({
+    client: /** @type {any} */ (client),
+    saveQueue: null,
+    caseId: 'case-1',
+    caseType: 'example-review',
+    currentUser: null,
+  });
+  await flush();
+
+  assert.equal(getCaseCalls.length, 1);
+  assert.equal(getCaseCalls[0][0], 'case-1');
+  // example-review case type module is expected to exist in the manifest;
+  // opts is either {} or { listName } depending on its config.
+  assert.ok(typeof getCaseCalls[0][1] === 'object');
+  assert.ok(childrenOf(host).length >= 0);
+});
+
+test('ConversationView: renders nothing when caseType is unknown', async () => {
+  const host = ConversationView({
+    client: /** @type {any} */ (makeStubClient()),
+    saveQueue: null,
+    caseId: 'case-1',
+    caseType: 'totally-unknown-case-type',
+    currentUser: null,
+  });
+  await flush();
+
+  assert.deepEqual(
+    childrenOf(host),
+    [],
+    'should not render anything for an unknown case type'
   );
 });

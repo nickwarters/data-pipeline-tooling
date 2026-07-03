@@ -107,29 +107,3 @@ export function updateConversationPanel(context) {
     nodes.conversationToggle.textContent = 'Conversation';
   }
 }
-
-// TODO(simplify-ui): Remove this compatibility wrapper after all imports use
-// createConversationPanelBinding() and updateConversationPanel().
-export class ConversationPanelController {
-  constructor() {
-    this._binding = createConversationPanelBinding();
-  }
-
-  get keydownHandler() {
-    return this._binding.keydownHandler;
-  }
-
-  /** @param {import('./types.js').CaseReviewShellContext} context */
-  bind(context) {
-    this._binding.bind(context);
-  }
-
-  /** @param {import('./types.js').CaseReviewShellContext} context */
-  update(context) {
-    this._binding.update(context);
-  }
-
-  disconnect() {
-    this._binding.disconnect();
-  }
-}

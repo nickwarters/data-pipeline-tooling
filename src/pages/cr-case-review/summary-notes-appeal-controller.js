@@ -54,17 +54,3 @@ export function updateSummaryNotesAppeal(context) {
     answers: caseRow.answers,
   });
 }
-
-// TODO(simplify-ui): Remove this compatibility wrapper after Case Review tests
-// and page code consume updateSummaryNotesAppeal() directly.
-export class SummaryNotesAppealController {
-  /** @param {import('./types.js').CaseReviewShellContext} context */
-  bind(context) {
-    void context;
-  }
-
-  /** @param {import('./types.js').CaseReviewShellContext} context */
-  update(context) {
-    updateSummaryNotesAppeal(context);
-  }
-}

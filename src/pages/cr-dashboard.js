@@ -1,113 +1,127 @@
 // @ts-check
-import { ShellElement } from '../lib/view.js';
 import { signal } from '../lib/signal.js';
+import { reactive } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import { caseRouteFor, conversationRouteFor } from '../lib/case-route-links.js';
 import '../components/cr-case-table.js';
 import '../components/cr-allocation.js';
 import '../components/cr-owner-summary.js';
-import './cr-responsible-party-dashboard.js';
+import { ResponsiblePartyDashboard } from './cr-responsible-party-dashboard.js';
 import { isOverdue } from '../evaluators/overdue-evaluator.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
 
-// TODO(simplify-ui): Convert this class-backed custom element to the simpler
-// function-component model. The target shape is a plain function returning h()
-// nodes, wrapped in reactive() only when local signals need to re-render; keep
-// custom elements only for route or browser-integration shells.
-export class CRDashboard extends ShellElement {
-  constructor() {
-    super();
-    /** @type {SharePointClient | null} */
-    this.client = null;
-    /** @type {string} */
-    this.currentUserId = '';
-    /** @type {Capabilities} */
-    this.capabilities = {
-      isReviewer: false,
-      listAccessCaseTypes: [],
-      isAdviser: false,
-      ownedCaseTypes: [],
-      ownedJourneyCaseTypes: [],
-      isControls: false,
-      isReviewerManager: false,
-      isResponsiblePartyManager: false,
-      isMaintainer: false,
-      isVisitor: false,
-    };
-    /** @type {string[]} */
-    this.eligibleCaseTypes = [];
+/**
+ * Reviewer/owner/adviser landing dashboard. Self-fetches the current
+ * reviewer's outstanding cases when `capabilities.isReviewer` is set.
+ *
+ * @param {{
+ *   client: SharePointClient | null,
+ *   currentUserId: string,
+ *   capabilities: Capabilities,
+ *   eligibleCaseTypes: string[],
+ * }} props
+ * @returns {HTMLElement}
+ */
+export function DashboardPage({
+  client,
+  currentUserId,
+  capabilities,
+  eligibleCaseTypes,
+}) {
+  /** @type {import('../lib/signal.js').Signal<CaseRow[]>} */
+  const cases = signal(/** @type {CaseRow[]} */ ([]));
 
-    /** @type {import('../lib/signal.js').Signal<CaseRow[]>} */
-    this._cases = signal(/** @type {CaseRow[]} */ ([]));
-  }
-
-  async connectedCallback() {
-    super.connectedCallback();
-    await this._fetchData();
-  }
-
-  async _fetchData() {
-    if (!this.client) return;
-    if (this.capabilities.isReviewer) {
-      const raw = await this.client.listCases({
+  async function fetchData() {
+    if (!client) return;
+    if (capabilities.isReviewer) {
+      const raw = await client.listCases({
         status: 'In-progress',
-        assignedReviewer: this.currentUserId,
+        assignedReviewer: currentUserId,
       });
-      this._cases.set(raw.map((c) => ({ ...c, overdue: isOverdue(c) })));
+      cases.set(raw.map((c) => ({ ...c, overdue: isOverdue(c) })));
     }
   }
 
-  render() {
-    const children = [];
-
-    if (this.capabilities.isReviewer) {
-      children.push(h('h1', {}, 'Outstanding Cases'));
-
-      children.push(
-        h('cr-case-table', {
-          cases: this._cases.get(),
-          'oncr-case-open': (/** @type {any} */ e) => {
-            location.hash = caseRouteFor(e.detail.caseRow);
-          },
-        })
-      );
-
-      children.push(
-        h('cr-allocation', {
-          client: this.client,
-          currentUserId: this.currentUserId,
-          eligibleCaseTypes: this.eligibleCaseTypes,
-          'oncr-allocated': () => this._fetchData(),
-        })
-      );
-    }
-
-    if (this.capabilities.ownedCaseTypes.length > 0) {
-      children.push(
-        h('cr-owner-summary', {
-          client: this.client,
-          ownedCaseTypes: this.capabilities.ownedCaseTypes,
-        })
-      );
-    }
-
-    if (this.capabilities.isAdviser) {
-      children.push(
-        h('cr-responsible-party-dashboard', {
-          client: this.client,
-          currentUserId: this.currentUserId,
-          'oncr-open-conversation': (/** @type {any} */ e) => {
-            location.hash = conversationRouteFor(e.detail.caseRow);
-          },
-        })
-      );
-    }
-
-    return children;
-  }
+  const host = reactive(() =>
+    renderDashboard({
+      client,
+      currentUserId,
+      capabilities,
+      eligibleCaseTypes,
+      cases: cases.get(),
+      onAllocated: fetchData,
+    })
+  );
+  fetchData();
+  return host;
 }
 
-customElements.define('cr-dashboard', CRDashboard);
+/**
+ * @param {{
+ *   client: SharePointClient | null,
+ *   currentUserId: string,
+ *   capabilities: Capabilities,
+ *   eligibleCaseTypes: string[],
+ *   cases: CaseRow[],
+ *   onAllocated: () => void,
+ * }} args
+ * @returns {Node[]}
+ */
+function renderDashboard({
+  client,
+  currentUserId,
+  capabilities,
+  eligibleCaseTypes,
+  cases,
+  onAllocated,
+}) {
+  const children = [];
+
+  if (capabilities.isReviewer) {
+    children.push(h('h1', {}, 'Outstanding Cases'));
+
+    children.push(
+      h('cr-case-table', {
+        cases,
+        'oncr-case-open': (/** @type {any} */ e) => {
+          location.hash = caseRouteFor(e.detail.caseRow);
+        },
+      })
+    );
+
+    children.push(
+      h('cr-allocation', {
+        client,
+        currentUserId,
+        eligibleCaseTypes,
+        'oncr-allocated': () => onAllocated(),
+      })
+    );
+  }
+
+  if (capabilities.ownedCaseTypes.length > 0) {
+    children.push(
+      h('cr-owner-summary', {
+        client,
+        ownedCaseTypes: capabilities.ownedCaseTypes,
+      })
+    );
+  }
+
+  if (capabilities.isAdviser) {
+    children.push(
+      ResponsiblePartyDashboard({
+        client,
+        currentUserId,
+        onOpenConversation: (caseRow) => {
+          location.hash = conversationRouteFor(caseRow);
+        },
+      })
+    );
+  }
+
+  return children;
+}

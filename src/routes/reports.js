@@ -1,9 +1,6 @@
 // @ts-check
 import { ReportsIndexPage } from '../pages/reports-index-page.js';
-
-// TODO(simplify-ui): Rework routing around route functions that compose
-// plain function components returning h() nodes. Keep custom elements only for
-// route/browser-integration shells, not as the unit every route has to create.
+import { ReviewerTeamReportPage } from '../pages/cr-reviewer-team-report.js';
 
 /**
  * @param {import('../lib/router.js').Router} router
@@ -25,14 +22,13 @@ export function register(router, context) {
         location.hash = '#/reports';
         return;
       }
-      const el =
-        /** @type {import('../pages/cr-reviewer-team-report.js').CRReviewerTeamReport} */ (
-          document.createElement('cr-reviewer-team-report')
-        );
-      el.client = context.client;
-      el.currentUser = context.currentUser;
-      el.eligibleCaseTypes = context.eligibleCaseTypes;
-      container.replaceChildren(el);
+      container.replaceChildren(
+        ReviewerTeamReportPage({
+          client: context.client,
+          currentUser: context.currentUser,
+          eligibleCaseTypes: context.eligibleCaseTypes,
+        })
+      );
     },
     unmount() {},
   });

@@ -85,9 +85,12 @@ export const diffCounts = computed(() => {
  * @param {(types: Record<string, QuestionBank>) => void} mutator
  */
 export function commit(mutator) {
-  // TODO(simplify-ui): Replace this local focus-key snapshot/restore with
-  // captureFocus()/restoreFocus() from src/lib/view.js once reactive() render
-  // passes own focus preservation for function components.
+  // This is a non-reactive mutation-broadcast path (not a reactive() render), so
+  // it keeps its own focus-key snapshot/restore rather than the shared
+  // captureFocus()/restoreFocus() helpers: those gate on the active element
+  // being inside a specific root and always re-focus, whereas here we skip
+  // re-focusing when the same element is still active to avoid disturbing an
+  // untouched input during coarse-grained rebuilds.
   const doc = /** @type {any} */ (globalThis).document;
   const active = doc?.activeElement;
   const focusKey = active?.getAttribute?.('data-focus-key') ?? null;

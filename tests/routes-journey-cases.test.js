@@ -13,12 +13,28 @@ const windowListeners = {};
 
 class StubEl {
   constructor() {
-    /** @type {any} */ this.client = null;
-    /** @type {string[]} */ this.ownedJourneyCaseTypes = [];
+    /** @type {StubEl[]} */
+    this._children = [];
+    /** @type {Record<string, string>} */
+    this._attrs = {};
     this.tagName = '';
+    this.textContent = '';
+    this.className = '';
   }
-  replaceChildren() {}
-  setAttribute() {}
+  replaceChildren(/** @type {StubEl[]} */ ...cs) {
+    this._children = cs;
+  }
+  appendChild(/** @type {StubEl} */ c) {
+    this._children.push(c);
+    return c;
+  }
+  addEventListener() {}
+  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
+    this._attrs[k] = v;
+  }
+  getAttribute(/** @type {string} */ k) {
+    return this._attrs[k] ?? null;
+  }
 }
 /** @type {any} */ (globalThis).HTMLElement = StubEl;
 /** @type {any} */ (globalThis).customElements = {
@@ -28,13 +44,11 @@ class StubEl {
   },
 };
 
-/** @type {StubEl[]} */
-const elements = [];
 /** @type {any} */ (globalThis).document = {
+  activeElement: null,
   createElement(/** @type {string} */ tag) {
     const el = new StubEl();
     el.tagName = tag.toUpperCase();
-    elements.push(el);
     return el;
   },
   createTreeWalker() {
@@ -46,13 +60,28 @@ const elements = [];
   },
 };
 
-import { Router } from '../src/lib/router.js';
-import { register } from '../src/routes/journey-cases.js';
+const { Router } = await import('../src/lib/router.js');
+const { register } = await import('../src/routes/journey-cases.js');
+
+/** @param {any} node @param {string} tag @returns {any|null} */
+function findTag(node, tag) {
+  if (node.tagName === tag.toUpperCase()) return node;
+  for (const c of node._children ?? []) {
+    const f = findTag(c, tag);
+    if (f) return f;
+  }
+  return null;
+}
 
 /** @param {string[]} ownedJourneyCaseTypes */
 const ctx = (ownedJourneyCaseTypes) =>
   /** @type {any} */ ({
-    client: { id: 'mock' },
+    client: {
+      id: 'mock',
+      async listCases() {
+        return [];
+      },
+    },
     capabilities: { ownedJourneyCaseTypes },
   });
 
@@ -66,34 +95,39 @@ test('routes-journey-cases: registers #/journey-cases route', () => {
   );
 });
 
-test('routes-journey-cases: mounts cr-journey-cases with client and owned types', () => {
-  elements.length = 0;
+test('routes-journey-cases: mounts JourneyCasesPage output when owned types exist', () => {
   const router = new Router();
-  const container = { replaceChildren(/** @type {any[]} */ ...args) {} };
+  /** @type {any[]} */
+  let mounted = [];
+  const container = {
+    replaceChildren(/** @type {any} */ ...args) {
+      mounted = args;
+    },
+  };
   router._container = /** @type {any} */ (container);
   register(router, ctx(['complaints', 'example-review']));
   router.navigate('#/journey-cases');
 
-  const el = elements.find((e) => e.tagName === 'CR-JOURNEY-CASES');
-  assert.ok(el, 'should create cr-journey-cases element');
-  assert.equal(el.client.id, 'mock');
-  assert.deepEqual(el.ownedJourneyCaseTypes, ['complaints', 'example-review']);
+  assert.equal(mounted.length, 1, 'should mount a single host element');
+  assert.ok(findTag(mounted[0], 'h1'), 'should render the page heading');
 });
 
 test('routes-journey-cases: non-Journey-Owner is redirected to #/ and no view mounts', () => {
-  elements.length = 0;
   /** @type {any} */ (globalThis).location = { hash: '#/journey-cases' };
   const router = new Router();
-  const container = { replaceChildren(/** @type {any[]} */ ...args) {} };
+  /** @type {any[]} */
+  let mounted = [];
+  const container = {
+    replaceChildren(/** @type {any} */ ...args) {
+      mounted = args;
+    },
+  };
   router._container = /** @type {any} */ (container);
   register(router, ctx([]));
   router.navigate('#/journey-cases');
 
   assert.equal(location.hash, '#/', 'should redirect to home');
-  assert.ok(
-    !elements.find((e) => e.tagName === 'CR-JOURNEY-CASES'),
-    'should not mount the view'
-  );
+  assert.equal(mounted.length, 0, 'should not mount the view');
   /** @type {any} */ (globalThis).location = { hash: '' };
 });
 

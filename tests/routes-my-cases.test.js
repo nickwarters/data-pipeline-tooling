@@ -11,10 +11,69 @@ const windowListeners = {};
 };
 /** @type {any} */ (globalThis).location = { hash: '' };
 
-import { Router } from '../src/lib/router.js';
-import { register } from '../src/routes/my-cases.js';
+class StubEl {
+  constructor() {
+    /** @type {StubEl[]} */
+    this._children = [];
+    /** @type {Record<string, string>} */
+    this._attrs = {};
+    this.tagName = '';
+    this.textContent = '';
+    this.className = '';
+  }
+  replaceChildren(/** @type {StubEl[]} */ ...cs) {
+    this._children = cs;
+  }
+  appendChild(/** @type {StubEl} */ c) {
+    this._children.push(c);
+    return c;
+  }
+  addEventListener() {}
+  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
+    this._attrs[k] = v;
+  }
+  getAttribute(/** @type {string} */ k) {
+    return this._attrs[k] ?? null;
+  }
+}
+/** @type {any} */ (globalThis).HTMLElement = StubEl;
+/** @type {any} */ (globalThis).customElements = {
+  define() {},
+  get() {
+    return undefined;
+  },
+};
 
-test('my-cases route: register calls router.register with #/my-cases', () => {
+/** @type {any} */ (globalThis).document = {
+  activeElement: null,
+  createElement(/** @type {string} */ tag) {
+    const el = new StubEl();
+    el.tagName = tag.toUpperCase();
+    return el;
+  },
+  createTreeWalker() {
+    return {
+      nextNode() {
+        return null;
+      },
+    };
+  },
+};
+
+const { Router } = await import('../src/lib/router.js');
+const { register } = await import('../src/routes/my-cases.js');
+
+/** @param {any} node @param {string} tag @returns {any|null} */
+function findTag(node, tag) {
+  if (node.tagName === tag.toUpperCase()) return node;
+  for (const c of node._children ?? []) {
+    const f = findTag(c, tag);
+    if (f) return f;
+  }
+  return null;
+}
+
+test('routes-my-cases: registers #/my-cases route', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});
   register(
@@ -27,88 +86,72 @@ test('my-cases route: register calls router.register with #/my-cases', () => {
   );
 });
 
-test('my-cases route: mount creates and mounts cr-responsible-party-dashboard element', () => {
-  const created = /** @type {string[]} */ ([]);
-  const origDoc = /** @type {any} */ (globalThis).document;
-  /** @type {any} */ (globalThis).document = {
-    createElement(/** @type {string} */ tag) {
-      created.push(tag);
-      return { setAttribute() {} };
+test('routes-my-cases: mounts ResponsiblePartyDashboard output', async () => {
+  const client = /** @type {any} */ ({
+    async listCases() {
+      return [];
     },
-    createTreeWalker() {
-      return {
-        nextNode() {
-          return null;
-        },
-      };
+  });
+  const currentUser = { id: 'u1' };
+
+  const router = new Router();
+  /** @type {any[]} */
+  let mounted = [];
+  const container = {
+    replaceChildren(/** @type {any} */ ...args) {
+      mounted = args;
     },
   };
+  router._container = /** @type {any} */ (container);
+  register(router, /** @type {any} */ ({ client, currentUser }));
+  router.navigate('#/my-cases');
 
-  try {
-    const router = new Router();
-    const replaced = /** @type {unknown[]} */ ([]);
-    const container = {
-      replaceChildren(/** @type {unknown[]} */ ...args) {
-        replaced.push(...args);
-      },
-    };
-    router._container = /** @type {any} */ (container);
+  await Promise.resolve();
+  await Promise.resolve();
 
-    register(
-      router,
-      /** @type {any} */ ({ client: {}, currentUser: { id: 'u1' } })
-    );
-    router.navigate('#/my-cases');
-    // Re-navigate to exercise the (no-op) unmount of the current route.
-    router.navigate('#/my-cases');
-
-    assert.ok(
-      created.includes('cr-responsible-party-dashboard'),
-      'cr-responsible-party-dashboard element should be created'
-    );
-    assert.equal(
-      replaced.length,
-      2,
-      'replaceChildren should be called on each mount'
-    );
-  } finally {
-    /** @type {any} */ (globalThis).document = origDoc;
-  }
+  assert.equal(mounted.length, 1, 'should mount a single host element');
+  assert.ok(findTag(mounted[0], 'section'), 'should render the page sections');
 });
 
-test('my-cases route: mount sets client and currentUserId on element', () => {
-  const client = { id: 'client' };
+test('routes-my-cases: unmount is a no-op (does not throw)', () => {
+  const router = new Router();
+  router._container = /** @type {any} */ ({});
+  register(
+    router,
+    /** @type {any} */ ({ client: {}, currentUser: { id: 'u1' } })
+  );
+  const route = router._routes.find((r) => r.re.test('#/my-cases'));
+  assert.ok(route, 'route should exist');
+  assert.doesNotThrow(() => route.handler.unmount());
+});
+
+test('routes-my-cases: passes client and currentUserId through to the page without wiring onOpenConversation (matches previous behaviour)', async () => {
+  /** @type {any[]} */
+  const calls = [];
+  const client = /** @type {any} */ ({
+    async listCases(/** @type {any} */ filter) {
+      calls.push(filter);
+      return [];
+    },
+  });
   const currentUser = { id: 'u99' };
 
-  const elements = /** @type {any[]} */ ([]);
-  const origDoc = /** @type {any} */ (globalThis).document;
-  /** @type {any} */ (globalThis).document = {
-    createElement(/** @type {string} */ tag) {
-      const el = /** @type {any} */ ({ tag, setAttribute() {} });
-      elements.push(el);
-      return el;
-    },
-    createTreeWalker() {
-      return {
-        nextNode() {
-          return null;
-        },
-      };
+  const router = new Router();
+  /** @type {any[]} */
+  let mounted = [];
+  const container = {
+    replaceChildren(/** @type {any} */ ...args) {
+      mounted = args;
     },
   };
+  router._container = /** @type {any} */ (container);
+  register(router, /** @type {any} */ ({ client, currentUser }));
+  router.navigate('#/my-cases');
 
-  try {
-    const router = new Router();
-    router._container = /** @type {any} */ ({ replaceChildren() {} });
+  await Promise.resolve();
+  await Promise.resolve();
 
-    register(router, /** @type {any} */ ({ client, currentUser }));
-    router.navigate('#/my-cases');
-
-    const el = elements.find((e) => e.tag === 'cr-responsible-party-dashboard');
-    assert.ok(el, 'cr-responsible-party-dashboard element should exist');
-    assert.equal(el.client, client);
-    assert.equal(el.currentUserId, 'u99');
-  } finally {
-    /** @type {any} */ (globalThis).document = origDoc;
-  }
+  assert.equal(mounted.length, 1);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].responsibleParty, 'u99');
 });

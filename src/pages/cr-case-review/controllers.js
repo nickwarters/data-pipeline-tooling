@@ -1,8 +1,7 @@
 // @ts-check
-// TODO(simplify-ui): Simplify this orchestration boundary into plain
-// state transition and binding functions that can be called from function
-// components. Avoid preserving controller/view-model objects as a second
-// framework layer around reactive().
+// Barrel of the Case Review panel bindings: each panel is a pair of plain
+// `bind*`/`update*` functions (no per-panel controller objects layered over
+// reactive()).
 
 export {
   CaseReviewHeaderController,
@@ -25,16 +24,11 @@ export {
   updateQuestionPanel,
 } from './question-panel-controller.js';
 export {
-  RemediationPanelController,
   bindRemediationPanel,
   updateRemediationPanel,
 } from './remediation-controller.js';
+export { updateSummaryNotesAppeal } from './summary-notes-appeal-controller.js';
 export {
-  SummaryNotesAppealController,
-  updateSummaryNotesAppeal,
-} from './summary-notes-appeal-controller.js';
-export {
-  ConversationPanelController,
   createConversationPanelBinding,
   updateConversationPanel,
 } from './conversation-controller.js';

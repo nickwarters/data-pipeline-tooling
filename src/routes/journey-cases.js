@@ -1,7 +1,5 @@
 // @ts-check
-// TODO(simplify-ui): Rework routing around route functions that compose
-// plain function components returning h() nodes. Keep custom elements only for
-// route/browser-integration shells, not as the unit every route has to create.
+import { JourneyCasesPage } from '../pages/cr-journey-cases.js';
 
 /**
  * @param {import('../lib/router.js').Router} router
@@ -16,13 +14,12 @@ export function register(router, context) {
         location.hash = '#/';
         return;
       }
-      const el =
-        /** @type {import('../pages/cr-journey-cases.js').CRJourneyCases} */ (
-          document.createElement('cr-journey-cases')
-        );
-      el.client = context.client;
-      el.ownedJourneyCaseTypes = context.capabilities.ownedJourneyCaseTypes;
-      container.replaceChildren(el);
+      container.replaceChildren(
+        JourneyCasesPage({
+          client: context.client,
+          ownedJourneyCaseTypes: context.capabilities.ownedJourneyCaseTypes,
+        })
+      );
     },
     unmount() {},
   });

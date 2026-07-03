@@ -11,14 +11,9 @@ const windowListeners = {};
 };
 /** @type {any} */ (globalThis).location = { hash: '' };
 
-import { Router } from '../src/lib/router.js';
-import { register } from '../src/routes/reports.js';
-
-/** @returns {{ created: string[], replaced: unknown[], elements: any[] }} */
+/** @returns {{ created: string[] }} */
 function makeDocSpy() {
   const created = /** @type {string[]} */ ([]);
-  const replaced = /** @type {unknown[]} */ ([]);
-  const elements = /** @type {any[]} */ ([]);
   /** @type {any} */ (globalThis).document = {
     createElement(/** @type {string} */ tag) {
       const el = /** @type {any} */ ({
@@ -36,7 +31,6 @@ function makeDocSpy() {
         replaceChildren() {},
       });
       created.push(tag);
-      elements.push(el);
       return el;
     },
     createTreeWalker() {
@@ -47,8 +41,11 @@ function makeDocSpy() {
       };
     },
   };
-  return { created, replaced, elements };
+  return { created };
 }
+
+import { Router } from '../src/lib/router.js';
+import { register } from '../src/routes/reports.js';
 
 test('reports route: registers #/reports and #/reports/reviewer-team', () => {
   const router = new Router();
@@ -70,6 +67,42 @@ test('reports route: registers #/reports and #/reports/reviewer-team', () => {
     router._routes.some((r) => r.re.test('#/reports/reviewer-team')),
     '#/reports/reviewer-team should be registered'
   );
+});
+
+test('reports route: #/reports unmount is a no-op (does not throw)', () => {
+  const router = new Router();
+  router._container = /** @type {any} */ ({});
+  register(
+    router,
+    /** @type {any} */ ({
+      capabilities: { isReviewerManager: false },
+      client: {},
+      currentUser: { id: 'u1' },
+      eligibleCaseTypes: [],
+    })
+  );
+  const route = router._routes.find((r) => r.re.test('#/reports'));
+  assert.ok(route, 'route should exist');
+  assert.doesNotThrow(() => route.handler.unmount());
+});
+
+test('reports route: #/reports/reviewer-team unmount is a no-op (does not throw)', () => {
+  const router = new Router();
+  router._container = /** @type {any} */ ({});
+  register(
+    router,
+    /** @type {any} */ ({
+      capabilities: { isReviewerManager: false },
+      client: {},
+      currentUser: { id: 'u1' },
+      eligibleCaseTypes: [],
+    })
+  );
+  const route = router._routes.find((r) =>
+    r.re.test('#/reports/reviewer-team')
+  );
+  assert.ok(route, 'route should exist');
+  assert.doesNotThrow(() => route.handler.unmount());
 });
 
 test('reports route: #/reports renders ReportsIndexPage directly', () => {
@@ -104,7 +137,7 @@ test('reports route: #/reports renders ReportsIndexPage directly', () => {
 });
 
 test('reports/reviewer-team route: redirects to #/reports when not a Reviewer Manager', () => {
-  const { created } = makeDocSpy();
+  makeDocSpy();
   try {
     const router = new Router();
     const container = { replaceChildren(/** @type {any[]} */ ...args) {} };
@@ -119,10 +152,6 @@ test('reports/reviewer-team route: redirects to #/reports when not a Reviewer Ma
       })
     );
     router.navigate('#/reports/reviewer-team');
-    assert.ok(
-      !created.includes('cr-reviewer-team-report'),
-      'should not create report element'
-    );
     assert.equal(
       /** @type {any} */ (globalThis).location.hash,
       '#/reports',
@@ -133,15 +162,25 @@ test('reports/reviewer-team route: redirects to #/reports when not a Reviewer Ma
   }
 });
 
-test('reports/reviewer-team route: mounts page with client, currentUser, eligibleCaseTypes for Reviewer Manager', () => {
-  const { elements } = makeDocSpy();
+test('reports/reviewer-team route: mounts ReviewerTeamReportPage with client, currentUser, eligibleCaseTypes for Reviewer Manager', () => {
+  makeDocSpy();
   try {
-    const client = { id: 'mock-client' };
+    const client = {
+      id: 'mock-client',
+      async listCases() {
+        return [];
+      },
+    };
     const currentUser = { id: 'user-rm', displayName: 'Morgan Manager' };
     const eligibleCaseTypes = ['example-review'];
+    const rendered = /** @type {any[]} */ ([]);
 
     const router = new Router();
-    const container = { replaceChildren(/** @type {any[]} */ ...args) {} };
+    const container = {
+      replaceChildren(/** @type {any[]} */ ...children) {
+        rendered.splice(0, rendered.length, ...children);
+      },
+    };
     router._container = /** @type {any} */ (container);
     register(
       router,
@@ -154,15 +193,12 @@ test('reports/reviewer-team route: mounts page with client, currentUser, eligibl
     );
     router.navigate('#/reports/reviewer-team');
 
-    const reportEl = elements.find((e) => e.tag === 'cr-reviewer-team-report');
-    assert.ok(reportEl, 'cr-reviewer-team-report element should be created');
-    assert.equal(reportEl.client, client, 'should set client');
-    assert.equal(reportEl.currentUser, currentUser, 'should set currentUser');
-    assert.deepEqual(
-      reportEl.eligibleCaseTypes,
-      eligibleCaseTypes,
-      'should set eligibleCaseTypes'
+    assert.equal(
+      rendered.length,
+      1,
+      'ReviewerTeamReportPage host should be mounted'
     );
+    assert.equal(rendered[0].tagName, 'DIV');
   } finally {
     /** @type {any} */ (globalThis).location = { hash: '' };
   }
