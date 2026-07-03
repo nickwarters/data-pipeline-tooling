@@ -1374,7 +1374,7 @@ cr-bank-editor .dock-btn.primary:hover {
 cr-bank-editor .drawer-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(14, 14, 15, 0.5);
+  background: rgba(0, 0, 0, 0.5);
   z-index: 90;
   opacity: 0;
   pointer-events: none;

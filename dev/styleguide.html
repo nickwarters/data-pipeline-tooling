@@ -28,8 +28,8 @@
       body {
         margin: 0;
         font-family: 'Barlow', system-ui, 'Segoe UI', sans-serif;
-        background: var(--cr-color-bg, #f3f3f4);
-        color: var(--cr-color-on-surface, #0e0e0f);
+        background: var(--cr-color-bg, #f3f3f3);
+        color: var(--cr-color-on-surface, #333333);
       }
 
       /* Scoped [data-cr-root] wrapper for the whole page */
@@ -278,8 +278,8 @@
       }
 
       .sg-demo-dark {
-        background: #0c0c0d;
-        border-color: #2c2c33;
+        background: #101010;
+        border-color: #404040;
       }
 
       .sg-demo + .sg-token-label {
@@ -1168,11 +1168,21 @@
                 <div class="sg-swatch">
                   <div
                     class="sg-swatch-color"
-                    style="background: #b8000e"
+                    style="background: #ba1110"
                   ></div>
                   <div class="sg-swatch-info">
                     <div class="sg-swatch-name">--cr-color-accent-hover</div>
-                    <div class="sg-swatch-hex">#B8000E</div>
+                    <div class="sg-swatch-hex">#BA1110 · red-2</div>
+                  </div>
+                </div>
+                <div class="sg-swatch">
+                  <div
+                    class="sg-swatch-color"
+                    style="background: #730014"
+                  ></div>
+                  <div class="sg-swatch-info">
+                    <div class="sg-swatch-name">--cr-color-accent-active</div>
+                    <div class="sg-swatch-hex">#730014 · red-3</div>
                   </div>
                 </div>
                 <div class="sg-swatch">
@@ -1180,7 +1190,7 @@
                     class="sg-swatch-color"
                     style="
                       background: rgba(219, 0, 17, 0.09);
-                      border: 1px dashed #dcdce0;
+                      border: 1px dashed #d7d8d6;
                       margin: 1px;
                       width: calc(100% - 2px);
                       height: calc(3.5rem - 2px);
@@ -1191,20 +1201,20 @@
                     <div class="sg-swatch-hex">rgba(219,0,17,.09)</div>
                   </div>
                 </div>
-                <div class="sg-swatch" style="background: #0c0c0d">
+                <div class="sg-swatch" style="background: #101010">
                   <div
                     class="sg-swatch-color"
-                    style="background: #ff2233"
+                    style="background: #e31e22"
                   ></div>
                   <div
                     class="sg-swatch-info"
-                    style="background: #17171a; border-top: 1px solid #2c2c33"
+                    style="background: #1d1d1d; border-top: 1px solid #404040"
                   >
-                    <div class="sg-swatch-name" style="color: #888892">
+                    <div class="sg-swatch-name" style="color: #9b9b9b">
                       --cr-color-accent (dark)
                     </div>
-                    <div class="sg-swatch-hex" style="color: #eaeaec">
-                      #FF2233 · dark mode
+                    <div class="sg-swatch-hex" style="color: #f3f3f3">
+                      #E31E22 · red-1 · dark mode
                     </div>
                   </div>
                 </div>
@@ -1218,13 +1228,13 @@
                   <div
                     class="sg-swatch-color"
                     style="
-                      background: #f3f3f4;
-                      border-bottom: 1px solid #dcdce0;
+                      background: #f3f3f3;
+                      border-bottom: 1px solid #d7d8d6;
                     "
                   ></div>
                   <div class="sg-swatch-info">
                     <div class="sg-swatch-name">--cr-color-bg</div>
-                    <div class="sg-swatch-hex">#F3F3F4</div>
+                    <div class="sg-swatch-hex">#F3F3F3 · grey-1</div>
                   </div>
                 </div>
                 <div class="sg-swatch">
@@ -1232,42 +1242,42 @@
                     class="sg-swatch-color"
                     style="
                       background: #ffffff;
-                      border-bottom: 1px solid #dcdce0;
+                      border-bottom: 1px solid #d7d8d6;
                     "
                   ></div>
                   <div class="sg-swatch-info">
                     <div class="sg-swatch-name">--cr-color-surface</div>
-                    <div class="sg-swatch-hex">#FFFFFF</div>
+                    <div class="sg-swatch-hex">#FFFFFF · white</div>
                   </div>
                 </div>
                 <div class="sg-swatch">
                   <div
                     class="sg-swatch-color"
-                    style="background: #e9e9eb"
+                    style="background: #ededed"
                   ></div>
                   <div class="sg-swatch-info">
                     <div class="sg-swatch-name">--cr-color-surface-2</div>
-                    <div class="sg-swatch-hex">#E9E9EB</div>
+                    <div class="sg-swatch-hex">#EDEDED · grey-2</div>
                   </div>
                 </div>
                 <div class="sg-swatch">
                   <div
                     class="sg-swatch-color"
-                    style="background: #dcdce0"
+                    style="background: #d7d8d6"
                   ></div>
                   <div class="sg-swatch-info">
                     <div class="sg-swatch-name">--cr-color-border</div>
-                    <div class="sg-swatch-hex">#DCDCE0</div>
+                    <div class="sg-swatch-hex">#D7D8D6 · grey-3</div>
                   </div>
                 </div>
                 <div class="sg-swatch">
                   <div
                     class="sg-swatch-color"
-                    style="background: #b2b2b8"
+                    style="background: #b7b7b7"
                   ></div>
                   <div class="sg-swatch-info">
                     <div class="sg-swatch-name">--cr-color-border-strong</div>
-                    <div class="sg-swatch-hex">#B2B2B8</div>
+                    <div class="sg-swatch-hex">#B7B7B7 · grey-4</div>
                   </div>
                 </div>
               </div>
@@ -1279,31 +1289,31 @@
                 <div class="sg-swatch">
                   <div
                     class="sg-swatch-color"
-                    style="background: #0e0e0f"
+                    style="background: #333333"
                   ></div>
                   <div class="sg-swatch-info">
                     <div class="sg-swatch-name">--cr-color-on-surface</div>
-                    <div class="sg-swatch-hex">#0E0E0F · &gt;15:1 ✓</div>
+                    <div class="sg-swatch-hex">#333333 · grey-8 · &gt;12:1 ✓</div>
                   </div>
                 </div>
                 <div class="sg-swatch">
                   <div
                     class="sg-swatch-color"
-                    style="background: #5c5c65"
+                    style="background: #767676"
                   ></div>
                   <div class="sg-swatch-info">
                     <div class="sg-swatch-name">--cr-color-text-muted</div>
-                    <div class="sg-swatch-hex">#5C5C65 · 6.1:1 ✓</div>
+                    <div class="sg-swatch-hex">#767676 · grey-6 · 4.5:1 ✓</div>
                   </div>
                 </div>
                 <div class="sg-swatch">
                   <div
                     class="sg-swatch-color"
-                    style="background: #8c8c95"
+                    style="background: #9b9b9b"
                   ></div>
                   <div class="sg-swatch-info">
                     <div class="sg-swatch-name">--cr-color-text-subtle</div>
-                    <div class="sg-swatch-hex">#8C8C95 · large only</div>
+                    <div class="sg-swatch-hex">#9B9B9B · grey-5 · large only</div>
                   </div>
                 </div>
               </div>
@@ -2270,8 +2280,8 @@
                 class="sg-demo"
                 style="
                   padding: 0;
-                  background: #17171a;
-                  border-color: #2c2c33;
+                  background: #1d1d1d;
+                  border-color: #404040;
                   border-radius: 6px;
                   overflow: hidden;
                 "
@@ -2281,8 +2291,8 @@
                     display: flex;
                     align-items: center;
                     gap: 0;
-                    background: #17171a;
-                    border-bottom: 1px solid #2c2c33;
+                    background: #1d1d1d;
+                    border-bottom: 1px solid #404040;
                     padding: 0 24px;
                     height: 3.5rem;
                   "
@@ -2296,7 +2306,7 @@
                       font-family: 'Barlow Condensed', sans-serif;
                       font-size: 1.1rem;
                       font-weight: 700;
-                      color: #eaeaec;
+                      color: #f3f3f3;
                       margin-right: 32px;
                     "
                   >
@@ -2304,7 +2314,7 @@
                       style="
                         width: 1.75rem;
                         height: 1.75rem;
-                        background: #ff2233;
+                        background: #e31e22;
                         display: flex;
                         align-items: center;
                         justify-content: center;
@@ -2329,7 +2339,7 @@
                         padding: 0 16px;
                         font-size: 0.875rem;
                         font-weight: 500;
-                        color: #888892;
+                        color: #9b9b9b;
                         text-decoration: none;
                         border-bottom: 3px solid transparent;
                       "
@@ -2343,9 +2353,9 @@
                         padding: 0 16px;
                         font-size: 0.875rem;
                         font-weight: 600;
-                        color: #ff2233;
+                        color: #e31e22;
                         text-decoration: none;
-                        border-bottom: 3px solid #ff2233;
+                        border-bottom: 3px solid #e31e22;
                       "
                       >Cases</a
                     >
@@ -2357,7 +2367,7 @@
                         padding: 0 16px;
                         font-size: 0.875rem;
                         font-weight: 500;
-                        color: #888892;
+                        color: #9b9b9b;
                         text-decoration: none;
                         border-bottom: 3px solid transparent;
                       "
@@ -2371,7 +2381,7 @@
                         padding: 0 16px;
                         font-size: 0.875rem;
                         font-weight: 500;
-                        color: #888892;
+                        color: #9b9b9b;
                         text-decoration: none;
                         border-bottom: 3px solid transparent;
                       "

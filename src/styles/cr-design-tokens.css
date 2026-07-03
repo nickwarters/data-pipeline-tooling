@@ -16,13 +16,23 @@
  * Families: "Barlow Condensed" (600 700 800), "Barlow" (400 500 600 700 ital 400),
  *           "JetBrains Mono" (400 500)
  *
- * WCAG AA TARGETS
- *   --cr-color-text on --cr-color-bg       ≥ 7:1
- *   --cr-color-text on --cr-color-surface  ≥ 7:1
- *   --cr-color-text-muted on surface       ≥ 4.5:1 (light: 6.1:1 ✓)
- *   --cr-color-accent on surface           ≥ 4.5:1 (light: 5.3:1 ✓ / dark: verify #FF2233)
- *   --cr-color-success on bg               ≥ 4.5:1
- *   All button text (white on filled bg)   ≥ 4.5:1
+ * BRAND PALETTE (single source — do not introduce colours outside this set)
+ *   Brand           red #DB0011 · white #FFFFFF · black #000000
+ *   Complementary   red-1 #E31E22 · red-2 #BA1110 · red-3 #730014
+ *   Grey 1-8        #F3F3F3 #EDEDED #D7D8D6 #B7B7B7 #9B9B9B #767676 #545454 #333333
+ *                   (grey 1-5 bg → grey-8/black text; grey 6-8 bg → white text)
+ *   Dark-mode grey  #656565 #474747 #404040 #212121 #1D1D1D #101010
+ *                   (exclusive to dark mode — never used in light mode)
+ *
+ * WCAG / CONTRAST TARGETS
+ *   Light mode
+ *     --cr-color-text on bg / surface      ≥ 7:1  (grey-8 #333: ≥12:1 ✓)
+ *     --cr-color-text-muted on surface     ≥ 4.5:1 (grey-6 #767676: 4.5:1 ✓)
+ *     --cr-color-accent on surface         ≥ 4.5:1 (brand #DB0011: 5.3:1 ✓)
+ *   Dark mode — target ≥ 3:1 for all foreground/background pairs
+ *     --cr-color-accent on surface         ≥ 3:1  (red-1 #E31E22: 3.6:1 ✓)
+ *     brand red is limited to CTA / brand / danger; everything else is
+ *     white or grey (see the dark-mode blocks below).
  */
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -30,34 +40,34 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 [data-cr-root],
 [data-cr-root][data-cr-theme='light'] {
-  /* ── Accent ──────────────────────────────────────────────────────────── */
-  --cr-color-accent: #db0011; /* rgb(219,0,17) — brand red                */
-  --cr-color-accent-hover: #b8000e; /* -15% lightness                           */
-  --cr-color-accent-active: #96000b; /* -25% lightness                           */
+  /* ── Accent — brand red + complementary reds for interaction states ──── */
+  --cr-color-accent: #db0011; /* brand red · 5.3:1 on white               */
+  --cr-color-accent-hover: #ba1110; /* complementary red-2                      */
+  --cr-color-accent-active: #730014; /* complementary red-3                      */
   --cr-color-accent-muted: rgba(219, 0, 17, 0.09);
-  --cr-color-accent-on: #ffffff; /* text rendered on an accent fill          */
+  --cr-color-accent-on: #ffffff; /* white text rendered on an accent fill    */
 
-  /* ── Surface hierarchy ───────────────────────────────────────────────── */
-  --cr-color-bg: #f3f3f4; /* page canvas                              */
-  --cr-color-surface: #ffffff; /* card / panel / input fill                */
-  --cr-color-surface-2: #e9e9eb; /* recessed surface, hover cells            */
+  /* ── Surface hierarchy — brand greys 1-4 + white ─────────────────────── */
+  --cr-color-bg: #f3f3f3; /* grey-1 · page canvas                     */
+  --cr-color-surface: #ffffff; /* white · card / panel / input fill        */
+  --cr-color-surface-2: #ededed; /* grey-2 · recessed surface, hover cells   */
   --cr-color-surface-overlay: rgba(
     255,
     255,
     255,
     0.92
   ); /* floating panel tint       */
-  --cr-color-border: #dcdce0;
-  --cr-color-border-strong: #b2b2b8;
+  --cr-color-border: #d7d8d6; /* grey-3                                   */
+  --cr-color-border-strong: #b7b7b7; /* grey-4                                   */
 
-  /* ── Text ────────────────────────────────────────────────────────────── */
-  --cr-color-on-surface: #0e0e0f; /* primary text on any surface              */
-  --cr-color-text: #0e0e0f; /* alias — use --cr-color-on-surface        */
-  --cr-color-text-muted: #5c5c65; /* secondary labels, 6.1:1 on white ✓      */
-  --cr-color-text-subtle: #8c8c95; /* captions; large text / UI only           */
-  --cr-color-text-on-accent: #ffffff; /* text on accent-filled elements           */
+  /* ── Text — brand greys (grey-8/6/5) on light surfaces ───────────────── */
+  --cr-color-on-surface: #333333; /* grey-8 · primary text, ≥12:1 on white    */
+  --cr-color-text: #333333; /* alias — use --cr-color-on-surface        */
+  --cr-color-text-muted: #767676; /* grey-6 · secondary labels, 4.5:1 ✓      */
+  --cr-color-text-subtle: #9b9b9b; /* grey-5 · captions; large text / UI only  */
+  --cr-color-text-on-accent: #ffffff; /* white text on accent-filled elements     */
 
-  /* ── Semantic ────────────────────────────────────────────────────────── */
+  /* ── Semantic — danger tracks brand red; others are functional signals ─ */
   --cr-color-success: #006742;
   --cr-color-success-bg: rgba(0, 103, 66, 0.07);
   --cr-color-warning: #9b5d00;
@@ -83,35 +93,41 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 @media (prefers-color-scheme: dark) {
   [data-cr-root]:not([data-cr-theme='light']) {
-    --cr-color-accent: #ff2233; /* brightened — contrast ≥4.5:1 on dark bg  */
-    --cr-color-accent-hover: #e8001c;
-    --cr-color-accent-active: #cc0018;
-    --cr-color-accent-muted: rgba(255, 34, 51, 0.12);
+    /* Accent — brand red is limited to CTA / brand. Red-1 is the brightest
+       complementary red and clears 3:1 on the dark surface; states step
+       through the remaining brand reds. */
+    --cr-color-accent: #e31e22; /* complementary red-1 · 3.6:1 on surface   */
+    --cr-color-accent-hover: #db0011; /* brand red                                */
+    --cr-color-accent-active: #ba1110; /* complementary red-2                      */
+    --cr-color-accent-muted: rgba(227, 30, 34, 0.14);
     --cr-color-accent-on: #ffffff;
 
-    --cr-color-bg: #0c0c0d;
-    --cr-color-surface: #17171a;
-    --cr-color-surface-2: #212127;
-    --cr-color-surface-overlay: rgba(23, 23, 26, 0.94);
-    --cr-color-border: #2c2c33;
-    --cr-color-border-strong: #48484f;
+    /* Surfaces — dark-mode-exclusive greys, darkest canvas → lighter panels.
+       Already-dark backgrounds stay dark; no light layers introduced. */
+    --cr-color-bg: #101010; /* dark grey-6 · page canvas                */
+    --cr-color-surface: #1d1d1d; /* dark grey-5 · card / panel               */
+    --cr-color-surface-2: #212121; /* dark grey-4 · recessed / hover           */
+    --cr-color-surface-overlay: rgba(29, 29, 29, 0.94);
+    --cr-color-border: #404040; /* dark grey-3                              */
+    --cr-color-border-strong: #656565; /* dark grey-1                              */
 
-    --cr-color-on-surface: #eaeaec;
-    --cr-color-text: #eaeaec;
-    --cr-color-text-muted: #888892;
-    --cr-color-text-subtle: #585862;
+    /* Text — light greys / white replace red-tinted foregrounds. */
+    --cr-color-on-surface: #f3f3f3; /* grey-1 · primary text                    */
+    --cr-color-text: #f3f3f3;
+    --cr-color-text-muted: #9b9b9b; /* grey-5 · ~5.9:1 on surface ✓            */
+    --cr-color-text-subtle: #767676; /* grey-6 · large text / UI only            */
     --cr-color-text-on-accent: #ffffff;
 
     --cr-color-success: #00a368;
     --cr-color-success-bg: rgba(0, 163, 104, 0.12);
     --cr-color-warning: #d4820a;
     --cr-color-warning-bg: rgba(212, 130, 10, 0.12);
-    --cr-color-danger: #ff2233;
-    --cr-color-danger-bg: rgba(255, 34, 51, 0.1);
+    --cr-color-danger: #e31e22; /* == accent (brand-family red)             */
+    --cr-color-danger-bg: rgba(227, 30, 34, 0.12);
     --cr-color-info: #4d9eff;
     --cr-color-info-bg: rgba(77, 158, 255, 0.1);
 
-    --cr-focus-ring: 0 0 0 3px rgba(255, 34, 51, 0.38);
+    --cr-focus-ring: 0 0 0 3px rgba(227, 30, 34, 0.4);
 
     --cr-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
     --cr-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3);
@@ -124,35 +140,36 @@
    DARK MODE — forced via attribute
    ═══════════════════════════════════════════════════════════════════════════ */
 [data-cr-root][data-cr-theme='dark'] {
-  --cr-color-accent: #ff2233;
-  --cr-color-accent-hover: #e8001c;
-  --cr-color-accent-active: #cc0018;
-  --cr-color-accent-muted: rgba(255, 34, 51, 0.12);
+  /* Keep in sync with the prefers-color-scheme block above. */
+  --cr-color-accent: #e31e22; /* complementary red-1 · 3.6:1 on surface   */
+  --cr-color-accent-hover: #db0011; /* brand red                                */
+  --cr-color-accent-active: #ba1110; /* complementary red-2                      */
+  --cr-color-accent-muted: rgba(227, 30, 34, 0.14);
   --cr-color-accent-on: #ffffff;
 
-  --cr-color-bg: #0c0c0d;
-  --cr-color-surface: #17171a;
-  --cr-color-surface-2: #212127;
-  --cr-color-surface-overlay: rgba(23, 23, 26, 0.94);
-  --cr-color-border: #2c2c33;
-  --cr-color-border-strong: #48484f;
+  --cr-color-bg: #101010; /* dark grey-6                              */
+  --cr-color-surface: #1d1d1d; /* dark grey-5                              */
+  --cr-color-surface-2: #212121; /* dark grey-4                              */
+  --cr-color-surface-overlay: rgba(29, 29, 29, 0.94);
+  --cr-color-border: #404040; /* dark grey-3                              */
+  --cr-color-border-strong: #656565; /* dark grey-1                              */
 
-  --cr-color-on-surface: #eaeaec;
-  --cr-color-text: #eaeaec;
-  --cr-color-text-muted: #888892;
-  --cr-color-text-subtle: #585862;
+  --cr-color-on-surface: #f3f3f3; /* grey-1                                   */
+  --cr-color-text: #f3f3f3;
+  --cr-color-text-muted: #9b9b9b; /* grey-5                                   */
+  --cr-color-text-subtle: #767676; /* grey-6                                   */
   --cr-color-text-on-accent: #ffffff;
 
   --cr-color-success: #00a368;
   --cr-color-success-bg: rgba(0, 163, 104, 0.12);
   --cr-color-warning: #d4820a;
   --cr-color-warning-bg: rgba(212, 130, 10, 0.12);
-  --cr-color-danger: #ff2233;
-  --cr-color-danger-bg: rgba(255, 34, 51, 0.1);
+  --cr-color-danger: #e31e22;
+  --cr-color-danger-bg: rgba(227, 30, 34, 0.12);
   --cr-color-info: #4d9eff;
   --cr-color-info-bg: rgba(77, 158, 255, 0.1);
 
-  --cr-focus-ring: 0 0 0 3px rgba(255, 34, 51, 0.38);
+  --cr-focus-ring: 0 0 0 3px rgba(227, 30, 34, 0.4);
 
   --cr-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
   --cr-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3);
