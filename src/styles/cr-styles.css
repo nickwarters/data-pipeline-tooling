@@ -15,6 +15,83 @@
   box-sizing: border-box;
 }
 
+/* ── Scoped SharePoint SE reset (issue #268) ─────────────────────────────────
+   We embed via a Content Editor Web Part and render in light DOM (ADR-0003, no
+   Shadow DOM boundary), so SharePoint SE's global CSS (shipped from the master
+   page / core styles) cascades into our cr-* subtree and wins wherever its
+   selectors target an element directly — which beats our root-level inheritance
+   — or out-specify us. Re-establish our own baseline for the properties SP
+   actually leaks, scoped to our root so SharePoint's own chrome is left
+   untouched (keeps the cr- isolation contract, ADR-0003).
+
+   The [data-cr-root] prefix lifts these over SP's bare element selectors; the
+   :where() element lists stay at zero specificity so ordinary cr- component
+   rules still win without a fight — no !important needed for the common case.
+   Deliberately conservative: this restates *inherited* text properties and the
+   heavily-styled form controls, and does NOT blanket-reset list markers or
+   block margins, which several components rely on as UA defaults. Enumerate and
+   add further overrides here (with !important only where SP genuinely can't be
+   out-specified) as concrete offenders surface against a real SE page. */
+
+/* Text baseline: SP core styles set font/colour on generic elements (e.g. its
+   own `body`-scoped rules), and an element-level rule beats our inherited
+   baseline on [data-cr-root]. Restate the inherited properties on the subtree so
+   our fonts/colour win back. The token font stacks fall back to a system stack
+   (system-ui / Segoe UI), so on-prem SE with no Google Fonts CDN still renders
+   in a sensible face rather than SP's UI font. */
+[data-cr-root]
+  :where(
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    p,
+    span,
+    div,
+    li,
+    dt,
+    dd,
+    td,
+    th,
+    label,
+    legend,
+    small,
+    strong,
+    em
+  ) {
+  font-family: inherit;
+  color: inherit;
+}
+
+/* Form controls: SP heavily restyles inputs/buttons/selects/textareas (font,
+   colour, letter-spacing). UA defaults also drop inheritance here. Pull them
+   back to our inherited typography so controls don't render in SP's UI font. */
+[data-cr-root] :where(input, select, textarea, button, optgroup) {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+}
+
+/* Links: SP repaints anchors via `a:link` / `a:visited` (a pseudo-class rule
+   that beats plain inheritance). Restate our accent colour + no-underline
+   baseline at the root scope so links don't come through in SharePoint blue. */
+[data-cr-root] :where(a:link, a:visited) {
+  color: var(--cr-color-accent);
+  text-decoration: none;
+}
+
+/* Tables: SP core styling adds borders, backgrounds and cell padding. Reset the
+   collapse/spacing baseline; per-table rules (e.g. .cr-data-table) still layer
+   their own padding and colour on top. */
+[data-cr-root] :where(table) {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
 /* Reduced-motion: disable transitions / animations globally inside the app */
 @media (prefers-reduced-motion: reduce) {
   :where([data-cr-root]) * {
@@ -37,6 +114,28 @@
   line-height: var(--cr-line-height-base);
   color: var(--cr-color-on-surface);
   background: var(--cr-color-bg);
+}
+
+/* Full-viewport breakout (issue #268). Embedded via a Content Editor Web Part,
+   the app otherwise renders inside the SharePoint page's content well with the
+   suite bar, site header, nav and ribbon left visible around it — a normal web
+   page stuffed into a SharePoint content box. Promote the *real* app root to a
+   fixed, full-viewport layer so it sits over that chrome and the review UI reads
+   as a standalone web page (matches the README intent of removing SharePoint
+   branding). The root owns the vertical scroll and clips horizontal overflow so
+   the SharePoint page never scrolls — the app container does.
+
+   Scoped to `#app` (the id app.js sets on the mount element), NOT every
+   [data-cr-root]: the attribute doubles as a generic scoping/theming hook on
+   inline wrappers (styleguide demos, nested previews) that must stay in normal
+   flow. The id also raises specificity to sit over SP's own positioned chrome.
+   Verified target: Edge Chromium against a SharePoint SE page layout (ADR-0001). */
+#app[data-cr-root] {
+  position: fixed;
+  inset: 0;
+  z-index: var(--cr-z-app-root);
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 /* Centered content wrapper used by all standard routes */

@@ -253,4 +253,11 @@
   --cr-content-max-width-narrow: 56rem; /*  896px */
   --cr-nav-height: 3.5rem;
   --cr-sidebar-width: 15rem; /*  240px */
+
+  /* Full-viewport breakout layer (issue #268). The app root is promoted to a
+     fixed layer that must sit over every piece of SharePoint SE chrome (suite
+     bar, site header, ribbon, nav). SP's chrome uses modest z-indexes, but we
+     pick a deliberately extreme "always on top" value so the breakout is robust
+     against any host page without having to enumerate SP's own stack. */
+  --cr-z-app-root: 2147483000;
 }
