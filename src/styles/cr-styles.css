@@ -818,6 +818,162 @@ cr-attribute-menu {
   margin: var(--cr-space-2) 0 0;
 }
 
+/* ── Issues tab — fill-in fields & Issue Capture accordion ───────────────── */
+
+/* The capture / remediation-detail / free-form controls a Reviewer fills in on
+   a failed item. They previously fell back to browser defaults; give them the
+   app's shared input treatment (surface fill, hairline border, accent focus
+   ring) so they match the Notes and dashboard-filter controls. */
+[data-cr-root] .cr-capture-input,
+[data-cr-root] .cr-remediation-detail-input,
+[data-cr-root] .cr-remediation-freeform-input {
+  font: inherit;
+  width: 100%;
+  padding: var(--cr-space-2) var(--cr-space-3);
+  color: inherit;
+  background: var(--cr-color-surface);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-md);
+  transition: border-color var(--cr-duration-fast) var(--cr-easing-standard);
+}
+
+[data-cr-root] textarea.cr-capture-input,
+[data-cr-root] textarea.cr-remediation-detail-input {
+  min-height: 4rem;
+  resize: vertical;
+}
+
+[data-cr-root] select.cr-capture-input,
+[data-cr-root] select.cr-remediation-detail-input {
+  cursor: pointer;
+}
+
+[data-cr-root] .cr-capture-input:focus,
+[data-cr-root] .cr-remediation-detail-input:focus,
+[data-cr-root] .cr-remediation-freeform-input:focus {
+  outline: none;
+  border-color: var(--cr-color-accent);
+  box-shadow: var(--cr-focus-ring);
+}
+
+/* Field groups: a small-caps-ish label caption hugging its control. */
+[data-cr-root] .cr-capture-label,
+[data-cr-root] .cr-remediation-detail-label {
+  font-size: var(--cr-font-size-sm);
+  font-weight: var(--cr-font-weight-semibold);
+  color: var(--cr-color-text-muted);
+}
+
+[data-cr-root] .cr-remediation-detail-field {
+  display: grid;
+  gap: var(--cr-space-1);
+  margin-top: var(--cr-space-3);
+}
+
+/* Radio-typed capture fields: inline option chips rather than a stacked list. */
+[data-cr-root] .cr-capture-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cr-space-2) var(--cr-space-4);
+}
+
+[data-cr-root] .cr-capture-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cr-space-1);
+  cursor: pointer;
+}
+
+/* Each Issue Capture Group is a collapsible accordion section: a framed panel
+   with a full-width disclosure header and a padded body of fields. */
+[data-cr-root] .cr-capture-group {
+  margin-top: var(--cr-space-3);
+  background: var(--cr-color-surface);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-md);
+  overflow: hidden; /* clip the header fill to the rounded corners */
+}
+
+/* The header is a disclosure button, not a CTA. Override the global button
+   reset (which would paint it as a solid accent pill) with a quiet recessed
+   accordion header carrying a rotating disclosure triangle. */
+[data-cr-root] .cr-capture-group-header {
+  display: flex;
+  align-items: center;
+  gap: var(--cr-space-2);
+  width: 100%;
+  margin: 0;
+  padding: var(--cr-space-2) var(--cr-space-3);
+  font-family: var(--cr-font-display);
+  font-size: var(--cr-font-size-sm);
+  font-weight: var(--cr-font-weight-semibold);
+  letter-spacing: var(--cr-tracking-wide);
+  text-align: left;
+  color: var(--cr-color-on-surface);
+  background: var(--cr-color-surface-2);
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+[data-cr-root] .cr-capture-group-header:hover {
+  background: var(--cr-color-border);
+  color: var(--cr-color-on-surface);
+}
+
+/* Disclosure triangle: points right when collapsed, down when expanded. */
+[data-cr-root] .cr-capture-group-header::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 0;
+  height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform var(--cr-duration-fast) var(--cr-easing-standard);
+}
+
+[data-cr-root] .cr-capture-group-header[aria-expanded='true']::before {
+  transform: rotate(90deg);
+}
+
+[data-cr-root] .cr-capture-group-header:focus-visible {
+  outline: var(--cr-focus-outline);
+  outline-offset: calc(-1 * var(--cr-focus-offset));
+  box-shadow: none;
+}
+
+/* The fields the header discloses form the accordion body. There is no body
+   wrapper element, so pad each field and let the last one close the panel. */
+[data-cr-root] .cr-capture-field {
+  display: grid;
+  gap: var(--cr-space-1);
+  padding: var(--cr-space-3) var(--cr-space-3) 0;
+}
+
+[data-cr-root] .cr-capture-field:last-child {
+  padding-bottom: var(--cr-space-3);
+}
+
+/* Read-only capture rendering (Summary): heading + static label:value lines. */
+[data-cr-root] .cr-capture-group-heading {
+  margin: 0;
+  padding: var(--cr-space-2) var(--cr-space-3);
+  font-size: var(--cr-font-size-sm);
+  font-weight: var(--cr-font-weight-semibold);
+  color: var(--cr-color-text-muted);
+  background: var(--cr-color-surface-2);
+}
+
+[data-cr-root] .cr-capture-value {
+  margin: 0;
+  padding: var(--cr-space-2) var(--cr-space-3) 0;
+}
+
+[data-cr-root] .cr-capture-value:last-child {
+  padding-bottom: var(--cr-space-3);
+}
+
 /* Read-only selected-remediation mirror beneath a failed question on the Review
    tab (issue #250). Empty when nothing is selected. */
 .cr-question-remediation:not(:empty) {
