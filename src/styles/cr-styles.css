@@ -406,6 +406,48 @@ cr-status-banner {
   box-shadow: var(--cr-shadow-sm);
 }
 
+/* ── Dashboard table filter toolbar ──────────────────────────────────────── */
+
+/* The filter row above the case table (free-text filter + status select). Lay
+   the two controls out on one line and give them the app's shared input
+   treatment — surface fill, hairline border, accent focus ring — so they match
+   the people picker and the other form controls. */
+[data-cr-root] .cr-case-table-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cr-space-2);
+  margin: 0 0 var(--cr-space-3);
+}
+
+[data-cr-root] .cr-case-table-filter,
+[data-cr-root] .cr-case-table-status-filter {
+  font: inherit;
+  padding: var(--cr-space-2) var(--cr-space-3);
+  color: inherit;
+  background: var(--cr-color-surface);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-md);
+  transition: border-color var(--cr-duration-fast) var(--cr-easing-standard);
+}
+
+/* The free-text filter grows to fill the row; the status select stays compact. */
+[data-cr-root] .cr-case-table-filter {
+  flex: 1 1 16rem;
+  min-width: 12rem;
+}
+
+[data-cr-root] .cr-case-table-status-filter {
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+[data-cr-root] .cr-case-table-filter:focus,
+[data-cr-root] .cr-case-table-status-filter:focus {
+  outline: none;
+  border-color: var(--cr-color-accent);
+  box-shadow: var(--cr-focus-ring);
+}
+
 /* ── Dashboard table primitive ───────────────────────────────────────────── */
 
 [data-cr-root] .cr-data-table {
@@ -527,9 +569,14 @@ cr-status-banner {
 
 /* ── Question list ───────────────────────────────────────────────────────── */
 
+/* Review-tab question cards. Brought in line with the other Sections' card
+   language: a surface fill and the shared small elevation, so they read as
+   raised cards rather than flat outlined boxes on the page canvas. */
 .cr-question {
+  background: var(--cr-color-surface);
   border: 1px solid var(--cr-color-border);
   border-radius: var(--cr-radius-md);
+  box-shadow: var(--cr-shadow-sm);
   padding: var(--cr-space-3) var(--cr-space-4);
   margin: 0 0 var(--cr-space-3);
 }
@@ -575,6 +622,7 @@ cr-status-banner {
   background: var(--cr-color-surface);
   border: 1px solid var(--cr-color-border);
   border-radius: var(--cr-radius-md);
+  box-shadow: var(--cr-shadow-sm);
   padding: var(--cr-space-3) var(--cr-space-4);
 }
 
@@ -841,7 +889,8 @@ cr-attribute-menu {
 }
 
 .cr-conversation-input,
-.cr-notes-input {
+.cr-notes-input,
+.cr-case-justification-input {
   font: inherit;
   width: 100%;
   min-height: 5rem;
@@ -855,7 +904,8 @@ cr-attribute-menu {
 }
 
 .cr-conversation-input:focus,
-.cr-notes-input:focus {
+.cr-notes-input:focus,
+.cr-case-justification-input:focus {
   outline: none;
   border-color: var(--cr-color-accent);
   box-shadow: var(--cr-focus-ring);
@@ -863,6 +913,31 @@ cr-attribute-menu {
 
 .cr-conversation-send {
   justify-self: start;
+}
+
+/* ── Notes ───────────────────────────────────────────────────────────────── */
+
+/* The Notes tab renders a flat run of label/textarea pairs (Case notes, Case
+   Justification). Give it the same field rhythm as the other capture Sections:
+   the section title spaced above, each label a small emphasised caption hugging
+   its control, and a form-sized gap between the two field groups. */
+[data-cr-root] cr-notes > h2 {
+  margin: 0 0 var(--cr-space-4);
+}
+
+[data-cr-root] cr-notes > label {
+  display: block;
+  margin: 0 0 var(--cr-space-2);
+  font-size: var(--cr-font-size-sm);
+  font-weight: var(--cr-font-weight-semibold);
+}
+
+[data-cr-root] cr-notes > textarea {
+  margin: 0 0 var(--cr-space-5);
+}
+
+[data-cr-root] cr-notes > textarea:last-child {
+  margin-bottom: 0;
 }
 
 /* ── Outcome ─────────────────────────────────────────────────────────────── */
