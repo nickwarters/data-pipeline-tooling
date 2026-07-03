@@ -1,6 +1,9 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { installDom, StubEl } from './_dom-stub.js';
+
+installDom();
 
 // ===== DOM STUBS =====
 //
@@ -9,43 +12,6 @@ import assert from 'node:assert/strict';
 // when a matching `<option>` is already a child. Setting it before the options
 // exist is a no-op and the select falls back to its first option. This is what
 // made grouped capture selects render as the blank "—" after a re-render.
-
-class StubEl {
-  /** @param {string} tag */
-  constructor(tag) {
-    this._tagName = tag;
-    /** @type {StubEl[]} */
-    this._children = [];
-    /** @type {Record<string, Function[]>} */
-    this._listeners = {};
-    /** @type {Record<string, string>} */
-    this._attrs = {};
-    this.className = '';
-    this.textContent = '';
-    this.innerHTML = '';
-    this._value = '';
-    this.checked = false;
-  }
-  get value() {
-    return this._value;
-  }
-  set value(/** @type {string} */ v) {
-    this._value = v;
-  }
-  appendChild(/** @type {StubEl} */ c) {
-    this._children.push(c);
-    return c;
-  }
-  append(/** @type {StubEl[]} */ ...cs) {
-    this._children.push(...cs);
-  }
-  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    (this._listeners[t] ??= []).push(h);
-  }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
-    this._attrs[k] = v;
-  }
-}
 
 class StubSelect extends StubEl {
   constructor() {
@@ -72,17 +38,10 @@ class StubSelect extends StubEl {
   }
 }
 
-/** @type {any} */ (globalThis).document = {
-  /** @param {string} tag @returns {StubEl} */
-  createElement(tag) {
-    return tag === 'select' ? new StubSelect() : new StubEl(tag);
-  },
-  createTextNode(/** @type {string} */ s) {
-    const t = new StubEl('#text');
-    t.textContent = s;
-    return t;
-  },
-};
+const _doc = /** @type {any} */ (globalThis).document;
+const _baseCreate = _doc.createElement.bind(_doc);
+_doc.createElement = (/** @type {string} */ tag) =>
+  tag === 'select' ? new StubSelect() : _baseCreate(tag);
 
 const { h, unsafeHTML } = await import('../src/lib/html.js');
 

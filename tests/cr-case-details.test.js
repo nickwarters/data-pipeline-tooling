@@ -1,45 +1,11 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { installDom } from './_dom-stub.js';
+
+installDom();
 
 // DOM stubs must be in place before any src import
-class StubEl {
-  constructor() {
-    /** @type {StubEl[]} */
-    this._children = [];
-    /** @type {Record<string, Function[]>} */
-    this._listeners = {};
-    this.textContent = '';
-    this.className = '';
-    this.hidden = false;
-  }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) {
-    this._children = cs;
-  }
-  appendChild(/** @type {StubEl} */ c) {
-    this._children.push(c);
-    return c;
-  }
-  append(/** @type {StubEl[]} */ ...cs) {
-    this._children.push(...cs);
-  }
-  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    (this._listeners[t] ??= []).push(h);
-  }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
-    /** @type {any} */ (this)._attrs ??= {};
-    /** @type {any} */ (this)._attrs[k] = v;
-  }
-}
-
-/** @type {any} */ (globalThis).HTMLElement = StubEl;
-/** @type {any} */ (globalThis).document = {
-  /** @param {string} _tag @returns {StubEl} */
-  createElement(_tag) {
-    return new StubEl();
-  },
-};
-/** @type {any} */ (globalThis).customElements = { define() {} };
 
 const { CRCaseDetails, CaseDetails, caseDetailFields } =
   await import('../src/components/cr-case-details.js');

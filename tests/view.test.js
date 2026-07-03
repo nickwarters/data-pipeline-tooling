@@ -13,6 +13,9 @@ import {
   restoreFocus,
 } from '../src/lib/view.js';
 
+// This file deliberately keeps its own stub rather than using
+// tests/_dom-stub.js: the view() primitive is exercised against real
+// EventTarget dispatch semantics, which the shared StubEl does not model.
 class StubEl extends EventTarget {
   /** @param {string} tag */
   constructor(tag = '') {

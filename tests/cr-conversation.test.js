@@ -1,64 +1,11 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { installDom, findByClass, findAllByClass } from './_dom-stub.js';
 
-// ===== MINIMAL DOM STUBS =====
+installDom();
 
-class StubEl {
-  constructor() {
-    /** @type {StubEl[]} */
-    this._children = [];
-    /** @type {Record<string, Function[]>} */
-    this._listeners = {};
-    this.textContent = '';
-    this.className = '';
-    this.value = '';
-    this.hidden = false;
-    this.disabled = false;
-    this.type = '';
-    /** @type {string} */
-    this._tagName = '';
-  }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) {
-    this._children = cs;
-  }
-  appendChild(/** @type {StubEl} */ c) {
-    this._children.push(c);
-    return c;
-  }
-  append(/** @type {StubEl[]} */ ...cs) {
-    this._children.push(...cs);
-  }
-  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    (this._listeners[t] ??= []).push(h);
-  }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
-    /** @type {any} */ (this)._attrs ??= {};
-    /** @type {any} */ (this)._attrs[k] = v;
-  }
-}
-
-/** @type {Record<string, Function[]>} */
-const docListeners = {};
-
-/** @type {any} */ (globalThis).HTMLElement = StubEl;
-/** @type {any} */ (globalThis).document = {
-  /** @param {string} tag @returns {StubEl} */
-  createElement(tag) {
-    const el = new StubEl();
-    el._tagName = tag;
-    return el;
-  },
-  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    (docListeners[t] ??= []).push(h);
-  },
-  removeEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    if (docListeners[t])
-      docListeners[t] = docListeners[t].filter((fn) => fn !== h);
-  },
-  hidden: false,
-};
-/** @type {any} */ (globalThis).customElements = { define() {} };
+const docListeners = /** @type {any} */ (globalThis).document._listeners;
 
 // ===== IMPORTS (after stubs) =====
 const { CRConversation } = await import('../src/components/cr-conversation.js');
@@ -102,38 +49,6 @@ const BASE_CASE = {
 };
 
 // ===== HELPERS =====
-
-/**
- * @param {any} root
- * @param {string} cls
- * @returns {any}
- */
-function findByClass(root, cls) {
-  for (const c of root._children ?? []) {
-    if (c.className === cls) return c;
-    const nested = findByClass(c, cls);
-    if (nested) return nested;
-  }
-  return null;
-}
-
-/**
- * @param {any} root
- * @param {string} cls
- * @returns {any[]}
- */
-function findAllByClass(root, cls) {
-  /** @type {any[]} */
-  const out = [];
-  function walk(/** @type {any} */ node) {
-    for (const c of node._children ?? []) {
-      if (c.className === cls) out.push(c);
-      walk(c);
-    }
-  }
-  walk(root);
-  return out;
-}
 
 /**
  * @param {string} [etag]

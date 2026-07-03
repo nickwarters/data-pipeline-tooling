@@ -1,58 +1,15 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { installDom, StubEl, useElementClass } from './_dom-stub.js';
 
-// ===== MINIMAL DOM STUBS =====
-// Must be set before imports that create custom-element shell classes.
+installDom();
 
-class StubEl {
-  constructor() {
-    /** @type {StubEl[]} */
-    this._children = [];
-    /** @type {Record<string, Function[]>} */
-    this._listeners = {};
-    /** @type {Record<string, string>} */
-    this._attrs = {};
-    this.textContent = '';
-    this.className = '';
-    this.href = '';
-    this.hidden = false;
-    this.disabled = false;
-    this.type = '';
-    this.name = '';
-    this.value = '';
-    this.checked = false;
-    /** @type {any} */
+class RecordingEl extends StubEl {
+  constructor(tag = '') {
+    super(tag);
+    /** @type {{ a1: any, a2: any, a3: any } | null} */
     this._updateArgs = null;
-    /** @type {Record<string, string>} */
-    this.style = {};
-    this.client = null;
-    this.currentUserId = '';
-    this.eligibleCaseTypes = [];
-    this.ownedCaseTypes = [];
-    this.cases = null;
-  }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) {
-    this._children = cs;
-  }
-  appendChild(/** @type {StubEl} */ c) {
-    this._children.push(c);
-    return c;
-  }
-  append(/** @type {StubEl[]} */ ...cs) {
-    this._children.push(...cs);
-  }
-  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    (this._listeners[t] ??= []).push(h);
-  }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
-    this._attrs[k] = v;
-  }
-  getAttribute(/** @type {string} */ k) {
-    return this._attrs[k] ?? null;
-  }
-  focus() {
-    /** @type {any} */ (globalThis)._lastFocused = this;
   }
   // Stub for CRQuestionList.update / CRRemediationSection.update / CROutcome.update
   update(/** @type {any} */ a1, /** @type {any} */ a2, /** @type {any} */ a3) {
@@ -60,31 +17,9 @@ class StubEl {
   }
 }
 
-class StubCustomEvent {
-  /**
-   * @param {string} type
-   * @param {{ detail?: unknown, bubbles?: boolean }} [opts]
-   */
-  constructor(type, opts = {}) {
-    this.type = type;
-    this.detail = opts.detail ?? null;
-    this.bubbles = opts.bubbles ?? false;
-  }
-}
+useElementClass(RecordingEl);
 
-/** @type {any} */ (globalThis).HTMLElement = StubEl;
-/** @type {any} */ (globalThis).document = {
-  /** @param {string} _tag @returns {StubEl} */
-  createElement(_tag) {
-    return new StubEl();
-  },
-  addEventListener() {},
-  removeEventListener() {},
-  hidden: false,
-};
-/** @type {any} */ (globalThis).customElements = { define() {} };
-/** @type {any} */ (globalThis).location = { hash: '' };
-/** @type {any} */ (globalThis).CustomEvent = StubCustomEvent;
+// Must be set before imports that create custom-element shell classes.
 
 // ===== IMPORTS (after stubs are in place) =====
 const { allApplicableAnswered } =

@@ -1,48 +1,9 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { installDom } from './_dom-stub.js';
 
-// ===== MINIMAL DOM STUBS =====
-class StubEl {
-  constructor() {
-    /** @type {StubEl[]} */
-    this._children = [];
-    /** @type {Record<string, Function[]>} */
-    this._listeners = {};
-    this.textContent = '';
-    this.className = '';
-    this.href = '';
-    this.hidden = false;
-    /** @type {string[]} */
-    this.ownedCaseTypes = [];
-    /** @type {any} */
-    this.client = null;
-  }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) {
-    this._children = cs;
-  }
-  appendChild(/** @type {StubEl} */ c) {
-    this._children.push(c);
-    return c;
-  }
-  append(/** @type {StubEl[]} */ ...cs) {
-    this._children.push(...cs);
-  }
-  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    (this._listeners[t] ??= []).push(h);
-  }
-}
-
-/** @type {any} */ (globalThis).HTMLElement = StubEl;
-/** @type {any} */ (globalThis).document = {
-  /** @param {string} _tag @returns {StubEl} */
-  createElement(_tag) {
-    return new StubEl();
-  },
-  addEventListener() {},
-  removeEventListener() {},
-};
-/** @type {any} */ (globalThis).customElements = { define() {} };
+installDom();
 
 // ===== IMPORTS (after stubs) =====
 const { CROwnerSummary } =

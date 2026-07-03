@@ -1,39 +1,16 @@
 // @ts-check
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { installDom, StubEl, useElementClass } from './_dom-stub.js';
 
-class StubEl {
-  constructor() {
-    /** @type {StubEl[]} */
-    this._children = [];
-    /** @type {Record<string, string>} */
-    this._attrs = {};
-    this.textContent = '';
-    this.className = '';
-    this.tagName = '';
-    this.disabled = false;
-    this.hidden = false;
-    /** @type {Record<string, Function[]>} */
-    this._listeners = {};
+installDom();
+
+class RecordingEl extends StubEl {
+  constructor(tag = '') {
+    super(tag);
     /** @type {any[]} */
     this._updateArgs = [];
     this.scrolled = false;
-  }
-  replaceChildren(/** @type {StubEl[]} */ ...children) {
-    this._children = children;
-  }
-  appendChild(/** @type {StubEl} */ child) {
-    this._children.push(child);
-    return child;
-  }
-  setAttribute(/** @type {string} */ key, /** @type {string} */ value) {
-    this._attrs[key] = value;
-  }
-  getAttribute(/** @type {string} */ key) {
-    return this._attrs[key] ?? null;
-  }
-  addEventListener(/** @type {string} */ type, /** @type {Function} */ fn) {
-    (this._listeners[type] ??= []).push(fn);
   }
   update(/** @type {any[]} */ ...args) {
     this._updateArgs = args;
@@ -43,26 +20,10 @@ class StubEl {
   }
 }
 
-/** @type {any} */ (globalThis).HTMLElement = StubEl;
+useElementClass(RecordingEl);
+
 /** @type {any} */ (globalThis).HTMLButtonElement = StubEl;
-/** @type {Record<string, Function[]>} */
-const documentListeners = {};
-/** @type {any} */ (globalThis).document = {
-  /** @param {string} tag @returns {StubEl} */
-  createElement(tag) {
-    const el = new StubEl();
-    el.tagName = tag.toUpperCase();
-    return el;
-  },
-  addEventListener(/** @type {string} */ type, /** @type {Function} */ fn) {
-    (documentListeners[type] ??= []).push(fn);
-  },
-  removeEventListener(/** @type {string} */ type, /** @type {Function} */ fn) {
-    documentListeners[type] = (documentListeners[type] ?? []).filter(
-      (listener) => listener !== fn
-    );
-  },
-};
+const documentListeners = /** @type {any} */ (globalThis).document._listeners;
 
 const { updateCaseReviewHeader } =
   await import('../src/pages/cr-case-review/header-controller.js');
@@ -118,10 +79,10 @@ const QUESTIONS = [
  * }>} [opts]
  */
 function makeQuestionContext(opts = {}) {
-  const questionsPanel = new StubEl();
-  const questionList = new StubEl();
-  const progress = new StubEl();
-  const overrideEditor = new StubEl();
+  const questionsPanel = new RecordingEl();
+  const questionList = new RecordingEl();
+  const progress = new RecordingEl();
+  const overrideEditor = new RecordingEl();
   const saveQueue = { id: 'queue' };
   const client = { id: 'client' };
   /** @type {Array<{ questionId: string, value: string | string[] }>} */
@@ -206,7 +167,7 @@ function makeQuestionContext(opts = {}) {
  * }>} [opts]
  */
 function makeCompletionContext(opts = {}) {
-  const completeButton = new StubEl();
+  const completeButton = new RecordingEl();
   completeButton.disabled = false;
   completeButton.hidden = false;
   const patchFromTransition = {
@@ -311,10 +272,10 @@ function makeCompletionContext(opts = {}) {
  * @param {{ canToggleConversation?: boolean, toggle?: StubEl | null }} [opts]
  */
 function makeHeaderContext(opts = {}) {
-  const header = new StubEl();
-  const banner = new StubEl();
+  const header = new RecordingEl();
+  const banner = new RecordingEl();
   const toggle =
-    opts.toggle === undefined ? new StubEl() : (opts.toggle ?? null);
+    opts.toggle === undefined ? new RecordingEl() : (opts.toggle ?? null);
   const saveQueue = { id: 'queue' };
   return {
     header,
@@ -365,21 +326,21 @@ function makeHeaderContext(opts = {}) {
  * }>} [opts]
  */
 function makeTabContext(opts = {}) {
-  const tabs = new StubEl();
+  const tabs = new RecordingEl();
   const nodes = {
     tabs,
-    details: new StubEl(),
-    questionsPanel: new StubEl(),
+    details: new RecordingEl(),
+    questionsPanel: new RecordingEl(),
     questionList: null,
     progress: null,
     overrideEditor: null,
-    issues: new StubEl(),
-    remediation: new StubEl(),
-    summary: new StubEl(),
-    notes: new StubEl(),
-    appeal: new StubEl(),
-    appealReview: new StubEl(),
-    amendOutcome: new StubEl(),
+    issues: new RecordingEl(),
+    remediation: new RecordingEl(),
+    summary: new RecordingEl(),
+    notes: new RecordingEl(),
+    appeal: new RecordingEl(),
+    appealReview: new RecordingEl(),
+    amendOutcome: new RecordingEl(),
     conversation: null,
     sourceCase: null,
     banner: null,
@@ -429,7 +390,7 @@ function makeTabContext(opts = {}) {
  * }>} [opts]
  */
 function makeRemediationContext(opts = {}) {
-  const remediation = new StubEl();
+  const remediation = new RecordingEl();
   const client = { id: 'client' };
   const answers = { 'q-a': { value: 'No' } };
   const captureGroups = [{ key: 'group-1', label: 'Group 1', fields: [] }];
@@ -534,9 +495,9 @@ function makeRemediationContext(opts = {}) {
  * }>} [opts]
  */
 function makeSummaryNotesAppealContext(opts = {}) {
-  const summary = new StubEl();
-  const notes = new StubEl();
-  const appeal = new StubEl();
+  const summary = new RecordingEl();
+  const notes = new RecordingEl();
+  const appeal = new RecordingEl();
   const saveQueue = { id: 'queue' };
   const client = { id: 'client' };
   const currentUser = { id: 'user-1', displayName: 'QA Reviewer' };
@@ -622,8 +583,8 @@ function makeSummaryNotesAppealContext(opts = {}) {
  */
 function makeConversationContext(opts = {}) {
   documentListeners.keydown = [];
-  const conversation = new StubEl();
-  const toggle = new StubEl();
+  const conversation = new RecordingEl();
+  const toggle = new RecordingEl();
   const saveQueue = { id: 'queue' };
   const client = { id: 'client' };
   const currentUser = { id: 'user-1', displayName: 'Alex Reviewer' };
@@ -828,14 +789,14 @@ test('bindCaseReviewTabs: forwards cr-tab-change ids to activeTab', () => {
 test('bindQuestionPanel: forwards answer and jump events to the view model and visible questions', () => {
   const { context, questionsPanel, questionList, answerCalls } =
     makeQuestionContext();
-  const generalQuestionEl = new StubEl();
+  const generalQuestionEl = new RecordingEl();
   /** @type {any} */ (generalQuestionEl).question = { id: 'q-b' };
-  const unansweredQuestionEl = new StubEl();
+  const unansweredQuestionEl = new RecordingEl();
   /** @type {any} */ (unansweredQuestionEl).question = {
     id: 'q-c',
     category: 'Basics',
   };
-  const answeredQuestionEl = new StubEl();
+  const answeredQuestionEl = new RecordingEl();
   /** @type {any} */ (answeredQuestionEl).question = {
     id: 'q-a',
     category: 'Basics',
@@ -1044,7 +1005,7 @@ test('updateSummaryNotesAppeal: assigns Summary, Notes, and Appeal tab props', (
  * @param {Partial<{ access: string, outcomeOptions: any[] }>} [opts]
  */
 function makeAmendOutcomeContext(opts = {}) {
-  const amendOutcome = new StubEl();
+  const amendOutcome = new RecordingEl();
   const saveQueue = { id: 'queue' };
   const currentUser = { id: 'controls-1', displayName: 'Controls' };
   const outcomeOptions = opts.outcomeOptions ?? [
@@ -1130,7 +1091,7 @@ test('updateAmendOutcome: no-ops when the node or required view-model state is a
  * @param {Partial<{ access: string, outcomeOptions: any[] }>} [opts]
  */
 function makeAppealReviewContext(opts = {}) {
-  const appealReview = new StubEl();
+  const appealReview = new RecordingEl();
   const saveQueue = { id: 'queue' };
   const currentUser = { id: 'controls-1', displayName: 'Controls' };
   const outcomeOptions = opts.outcomeOptions ?? [
@@ -1450,7 +1411,7 @@ test('bindCompletion: final-complete path uses transitionToFinalComplete (ADR-00
  * @param {Partial<{ access: string, answers: Record<string, any>, statusCalls: any[] }>} [opts]
  */
 function makeTrackingContext(opts = {}) {
-  const tracking = new StubEl();
+  const tracking = new RecordingEl();
   const answers = opts.answers ?? {
     'q-a': {
       value: 'No',

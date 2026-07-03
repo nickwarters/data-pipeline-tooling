@@ -1,70 +1,9 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { installDom, findByClass, findAllByClass } from './_dom-stub.js';
 
-// ===== MINIMAL DOM STUBS =====
-
-class StubEl {
-  constructor() {
-    /** @type {StubEl[]} */
-    this._children = [];
-    /** @type {Record<string, Function[]>} */
-    this._listeners = {};
-    /** @type {Record<string, string>} */
-    this._attrs = {};
-    this.textContent = '';
-    this.className = '';
-    /** @type {string} */
-    this._tagName = '';
-    this.value = undefined;
-    this.hidden = false;
-  }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) {
-    this._children = cs;
-  }
-  appendChild(/** @type {StubEl} */ c) {
-    this._children.push(c);
-    return c;
-  }
-  append(/** @type {StubEl[]} */ ...cs) {
-    this._children.push(...cs);
-  }
-  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    (this._listeners[t] ??= []).push(h);
-  }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
-    this._attrs[k] = v;
-  }
-  dispatchEvent(/** @type {any} */ e) {
-    (this._listeners[e.type] ?? []).forEach((h) => h(e));
-    return true;
-  }
-  /** @param {string} ev @param {any} [payload] */
-  _fire(ev, payload) {
-    (this._listeners[ev] ?? []).forEach((h) => h(payload));
-  }
-}
-
-class StubCustomEvent {
-  /** @param {string} type @param {{ detail?: any, bubbles?: boolean }} [init] */
-  constructor(type, init) {
-    this.type = type;
-    this.detail = init?.detail ?? null;
-    this.bubbles = init?.bubbles ?? false;
-  }
-}
-
-/** @type {any} */ (globalThis).HTMLElement = StubEl;
-/** @type {any} */ (globalThis).document = {
-  /** @param {string} tag @returns {StubEl} */
-  createElement(tag) {
-    const el = new StubEl();
-    el._tagName = tag;
-    return el;
-  },
-};
-/** @type {any} */ (globalThis).customElements = { define() {} };
-/** @type {any} */ (globalThis).CustomEvent = StubCustomEvent;
+installDom();
 
 const { CRRemediationTracking } =
   await import('../src/components/cr-remediation-tracking.js');
@@ -99,28 +38,6 @@ const GROUPS = [
     fields: [{ key: 'acts', label: 'Actions', type: 'actions' }],
   },
 ];
-
-/** @param {any} root @param {string} cls @returns {any} */
-function findByClass(root, cls) {
-  for (const c of root._children ?? []) {
-    if (c.className === cls) return c;
-    /** @type {any} */
-    const nested = findByClass(c, cls);
-    if (nested) return nested;
-  }
-  return null;
-}
-
-/** @param {any} root @param {string} cls */
-function findAllByClass(root, cls) {
-  /** @type {any[]} */
-  const out = [];
-  for (const c of root._children ?? []) {
-    if (c.className === cls) out.push(c);
-    out.push(...findAllByClass(c, cls));
-  }
-  return out;
-}
 
 /** @param {any} el */
 function allText(el) {

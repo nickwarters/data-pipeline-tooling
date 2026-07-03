@@ -1,7 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom } from './_bank-dom-stub.js';
+import { installDom } from './_dom-stub.js';
 installDom();
 
 const { CRQuestionLabels, makeLabelId, DEFAULT_LABEL_COLOR } =

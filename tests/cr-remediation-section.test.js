@@ -1,83 +1,9 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { installDom, findByClass, findAllByClass } from './_dom-stub.js';
 
-// ===== MINIMAL DOM STUBS =====
-
-class StubEl {
-  constructor() {
-    /** @type {StubEl[]} */
-    this._children = [];
-    /** @type {Record<string, Function[]>} */
-    this._listeners = {};
-    /** @type {Record<string, string>} */
-    this._attrs = {};
-    this.textContent = '';
-    this.className = '';
-    /** @type {string} */
-    this._tagName = '';
-
-    // Dummy properties so `k in el` is true in `h()`
-    this.value = undefined;
-    this.checked = undefined;
-    this.client = undefined;
-    this.attributedParty = undefined;
-    this.responsibleParty = undefined;
-  }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) {
-    this._children = cs;
-  }
-  appendChild(/** @type {StubEl} */ c) {
-    this._children.push(c);
-    return c;
-  }
-  append(/** @type {StubEl[]} */ ...cs) {
-    this._children.push(...cs);
-  }
-  // Stand-in for a real cr-capture-groups: records the args the section forwards.
-  update(
-    /** @type {any} */ groups,
-    /** @type {any} */ capture,
-    /** @type {any} */ canCapture
-  ) {
-    /** @type {any} */ (this)._updateArgs = { groups, capture, canCapture };
-  }
-  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    (this._listeners[t] ??= []).push(h);
-  }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
-    this._attrs[k] = v;
-  }
-  dispatchEvent(/** @type {any} */ e) {
-    (this._listeners[e.type] ?? []).forEach((h) => h(e));
-    return true;
-  }
-  /** @param {string} ev fire a listener as if the user triggered it */
-  _fire(/** @type {string} */ ev, /** @type {any} */ payload) {
-    (this._listeners[ev] ?? []).forEach((h) => h(payload));
-  }
-}
-
-class StubCustomEvent {
-  /** @param {string} type @param {{ detail?: any, bubbles?: boolean }} [init] */
-  constructor(type, init) {
-    this.type = type;
-    this.detail = init?.detail ?? null;
-    this.bubbles = init?.bubbles ?? false;
-  }
-}
-
-/** @type {any} */ (globalThis).HTMLElement = StubEl;
-/** @type {any} */ (globalThis).document = {
-  /** @param {string} tag @returns {StubEl} */
-  createElement(tag) {
-    const el = new StubEl();
-    el._tagName = tag;
-    return el;
-  },
-};
-/** @type {any} */ (globalThis).customElements = { define() {} };
-/** @type {any} */ (globalThis).CustomEvent = StubCustomEvent;
+installDom();
 
 // ===== IMPORTS (after stubs) =====
 const { CRRemediationSection } =
@@ -118,38 +44,6 @@ const CATALOGUE = [
 ];
 
 // ===== HELPERS =====
-
-/**
- * @param {any} root
- * @param {string} cls
- * @returns {any}
- */
-function findByClass(root, cls) {
-  for (const c of root._children ?? []) {
-    if (c.className === cls) return c;
-    const nested = findByClass(c, cls);
-    if (nested) return nested;
-  }
-  return null;
-}
-
-/**
- * @param {any} root
- * @param {string} cls
- * @returns {any[]}
- */
-function findAllByClass(root, cls) {
-  /** @type {any[]} */
-  const out = [];
-  function walk(/** @type {any} */ node) {
-    for (const c of node._children ?? []) {
-      if (c.className === cls) out.push(c);
-      walk(c);
-    }
-  }
-  walk(root);
-  return out;
-}
 
 /**
  * @param {any} root

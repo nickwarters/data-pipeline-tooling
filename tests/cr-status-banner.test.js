@@ -2,52 +2,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-class StubEl {
-  constructor() {
-    /** @type {StubEl[]} */
-    this._children = [];
-    /** @type {Record<string, Function[]>} */
-    this._listeners = {};
-    this.textContent = '';
-    this.className = '';
-    this.role = '';
-    this.hidden = false;
-    /** @type {Record<string, string>} */
-    this._attrs = {};
-    /** @type {Record<string, string>} */
-    this.style = {};
-  }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) {
-    this._children = cs;
-  }
-  appendChild(/** @type {StubEl} */ c) {
-    this._children.push(c);
-    return c;
-  }
-  append(/** @type {StubEl[]} */ ...cs) {
-    this._children.push(...cs);
-  }
-  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    (this._listeners[t] ??= []).push(h);
-  }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
-    this._attrs[k] = v;
-  }
-  getAttribute(/** @type {string} */ k) {
-    return this._attrs[k] ?? null;
-  }
-}
+import { installDom } from './_dom-stub.js';
 
-/** @type {any} */ (globalThis).HTMLElement = StubEl;
-/** @type {any} */ (globalThis).document = {
-  /** @param {string} _tag @returns {StubEl} */
-  createElement(_tag) {
-    return new StubEl();
-  },
-  addEventListener() {},
-  removeEventListener() {},
-};
-/** @type {any} */ (globalThis).customElements = { define() {} };
+installDom();
 /** @type {any} */ (globalThis).location = {
   hash: '',
   reload() {

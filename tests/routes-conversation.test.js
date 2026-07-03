@@ -1,6 +1,9 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { installDom } from './_dom-stub.js';
+
+installDom();
 
 /** @type {Record<string, Function[]>} */
 const windowListeners = {};
@@ -9,54 +12,6 @@ const windowListeners = {};
     (windowListeners[t] ??= []).push(h);
   },
 };
-/** @type {any} */ (globalThis).location = { hash: '' };
-
-class StubEl {
-  constructor() {
-    /** @type {StubEl[]} */
-    this._children = [];
-    /** @type {Record<string, Function[]>} */
-    this._listeners = {};
-    this.textContent = '';
-    this.className = '';
-    this.type = '';
-    /** @type {any} */
-    this.client = null;
-    /** @type {any} */
-    this.saveQueue = null;
-    this.caseId = '';
-    /** @type {any} */
-    this.currentUser = null;
-  }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) {
-    this._children = cs;
-  }
-  appendChild(/** @type {StubEl} */ c) {
-    this._children.push(c);
-    return c;
-  }
-  append(/** @type {StubEl[]} */ ...cs) {
-    this._children.push(...cs);
-  }
-  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    (this._listeners[t] ??= []).push(h);
-  }
-  setAttribute() {}
-}
-
-/** @type {any} */ (globalThis).HTMLElement = StubEl;
-/** @type {any} */ (globalThis).document = {
-  _active: null,
-  get activeElement() {
-    return this._active;
-  },
-  createElement(/** @type {string} */ tag) {
-    const el = new StubEl();
-    /** @type {any} */ (el)._tagName = tag;
-    return el;
-  },
-};
-/** @type {any} */ (globalThis).customElements = { define() {} };
 
 const { Router } = await import('../src/lib/router.js');
 const { register } = await import('../src/routes/conversation.js');

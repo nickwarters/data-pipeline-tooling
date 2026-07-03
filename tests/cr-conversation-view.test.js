@@ -1,94 +1,10 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { installDom } from './_dom-stub.js';
+/** @typedef {import('./_dom-stub.js').StubEl} StubEl */
 
-// ===== MINIMAL DOM STUBS =====
-
-class StubEl {
-  constructor() {
-    /** @type {StubEl[]} */
-    this._children = [];
-    /** @type {Record<string, Function[]>} */
-    this._listeners = {};
-    this.textContent = '';
-    this.className = '';
-    this.value = '';
-    this.hidden = false;
-    this.disabled = false;
-    this.type = '';
-    /** @type {string} */
-    this._tagName = '';
-    // Properties that cr-conversation element needs
-    /** @type {any} */
-    this.client = null;
-    /** @type {any} */
-    this.saveQueue = null;
-    this.caseId = '';
-    /** @type {any} */
-    this.currentUser = null;
-    /** @type {any} */
-    this._updateArg = undefined;
-  }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) {
-    this._children = cs;
-  }
-  appendChild(/** @type {StubEl} */ c) {
-    this._children.push(c);
-    return c;
-  }
-  append(/** @type {StubEl[]} */ ...cs) {
-    this._children.push(...cs);
-  }
-  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    (this._listeners[t] ??= []).push(h);
-  }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
-    /** @type {any} */ (this)._attrs ??= {};
-    /** @type {any} */ (this)._attrs[k] = v;
-  }
-  update(/** @type {any} */ arg) {
-    this._updateArg = arg;
-  }
-}
-
-/** @type {Record<string, Function[]>} */
-const docListeners = {};
-
-/** @type {any} */ (globalThis).HTMLElement = StubEl;
-/** @type {any} */ (globalThis).document = {
-  _active: null,
-  get activeElement() {
-    return this._active;
-  },
-  /** @param {string} tag @returns {StubEl} */
-  createElement(tag) {
-    const Ctor = /** @type {any} */ (globalThis).document._registry?.[
-      tag.toLowerCase()
-    ];
-    const el = Ctor ? new Ctor() : new StubEl();
-    el._tagName = tag;
-    return el;
-  },
-  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    (docListeners[t] ??= []).push(h);
-  },
-  removeEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    if (docListeners[t])
-      docListeners[t] = docListeners[t].filter((fn) => fn !== h);
-  },
-  hidden: false,
-  _registry: {},
-};
-/** @type {any} */ (globalThis).customElements = {
-  define(
-    /** @type {string} */ tag,
-    /** @type {CustomElementConstructor} */ ctor
-  ) {
-    /** @type {any} */ (globalThis).document._registry[tag.toLowerCase()] =
-      ctor;
-  },
-};
-/** @type {any} */ (globalThis).location = { hash: '' };
+installDom();
 
 // ===== IMPORTS (after stubs) =====
 const { ConversationView } =
@@ -121,10 +37,12 @@ const BASE_CASE = {
 
 /**
  * @param {HTMLElement} host
- * @returns {StubEl[]}
+ * @returns {any[]}
  */
 function childrenOf(host) {
-  return /** @type {StubEl} */ (/** @type {unknown} */ (host))._children;
+  return /** @type {any[]} */ (
+    /** @type {StubEl} */ (/** @type {unknown} */ (host))._children
+  );
 }
 
 /**

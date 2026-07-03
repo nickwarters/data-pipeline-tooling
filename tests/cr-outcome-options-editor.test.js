@@ -1,7 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom } from './_bank-dom-stub.js';
+import { installDom } from './_dom-stub.js';
 installDom();
 
 const { CROutcomeOptionsEditor } =
@@ -76,10 +76,8 @@ test('CROutcomeOptionsEditor: renaming an outcome id updates question and action
   idInput._listeners.change[0]({ target: { value: 'fail-impact' } });
 
   assert.equal(bank.questions[0].outcome?.noActionOutcomeId, 'fail-impact');
-  assert.equal(
-    /** @type {any} */ (bank.questions[1].remediationActions?.[0]).outcomeId,
-    'fail-impact'
-  );
+  const [firstAction] = bank.questions[1].remediationActions ?? [];
+  assert.equal(/** @type {any} */ (firstAction).outcomeId, 'fail-impact');
   assert.equal(bank.defaultOutcomeId, 'fail-impact');
 });
 

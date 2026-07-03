@@ -1,70 +1,32 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import {
+  installDom,
+  StubEl,
+  useElementClass,
+  findByClass,
+  findAllByClass,
+} from './_dom-stub.js';
 
-// DOM stubs must be in place before any src import.
-class StubEl {
-  constructor() {
-    /** @type {StubEl[]} */
-    this._children = [];
+installDom();
+
+// Records the most recent update() call so tests can observe what Summary
+// forwarded to the Outcome block.
+class RecordingEl extends StubEl {
+  constructor(tag = '') {
+    super(tag);
     /** @type {{ a1: any, a2: any, a3: any } | null} */
     this._updateArgs = null;
-    this.textContent = '';
-    this.className = '';
-    this.hidden = false;
   }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) {
-    this._children = cs;
-  }
-  appendChild(/** @type {StubEl} */ c) {
-    this._children.push(c);
-    return c;
-  }
-  append(/** @type {StubEl[]} */ ...cs) {
-    this._children.push(...cs);
-  }
-  addEventListener() {}
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
-    /** @type {any} */ (this)._attrs ??= {};
-    /** @type {any} */ (this)._attrs[k] = v;
-  }
-  // Records the most recent update() call so tests can observe what Summary
-  // forwarded to the Outcome block.
   update(/** @type {any} */ a1, /** @type {any} */ a2, /** @type {any} */ a3) {
     this._updateArgs = { a1, a2, a3 };
   }
 }
 
-/**
- * Depth-first find of the first descendant whose className equals `cls`.
- * @param {any} el
- * @param {string} cls
- * @returns {any}
- */
-function findByClass(el, cls) {
-  for (const c of el._children) {
-    if (c.className === cls) return c;
-    const found = findByClass(c, cls);
-    if (found) return found;
-  }
-  return null;
-}
+useElementClass(RecordingEl);
 
-/**
- * Depth-first collect of all descendants whose className equals `cls`.
- * @param {any} el
- * @param {string} cls
- * @returns {any[]}
- */
-function findAllByClass(el, cls) {
-  /** @type {any[]} */
-  const out = [];
-  for (const c of el._children ?? []) {
-    if (c.className === cls) out.push(c);
-    out.push(...findAllByClass(c, cls));
-  }
-  return out;
-}
+// DOM stubs must be in place before any src import.
 
 /**
  * Flattens a subtree's text into one string for content assertions.
@@ -76,17 +38,6 @@ function allText(el) {
   for (const c of el._children ?? []) out += allText(c);
   return out;
 }
-
-/** @type {any} */ (globalThis).HTMLElement = StubEl;
-/** @type {any} */ (globalThis).document = {
-  /** @param {string} _tag @returns {StubEl} */
-  createElement(_tag) {
-    return new StubEl();
-  },
-  addEventListener() {},
-  removeEventListener() {},
-};
-/** @type {any} */ (globalThis).customElements = { define() {} };
 
 const { CRSummary, Summary } = await import('../src/components/cr-summary.js');
 

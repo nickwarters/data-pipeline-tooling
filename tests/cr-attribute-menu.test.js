@@ -1,101 +1,17 @@
 // @ts-check
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { installDom, findByClass } from './_dom-stub.js';
 
-// ===== MINIMAL DOM STUBS =====
+installDom();
 
-class StubEl {
-  constructor() {
-    /** @type {StubEl[]} */
-    this._children = [];
-    /** @type {Record<string, Function[]>} */
-    this._listeners = {};
-    /** @type {Record<string, string>} */
-    this._attrs = {};
-    this.textContent = '';
-    this.className = '';
-    this.hidden = false;
-    /** @type {string} */
-    this._tagName = '';
-  }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) {
-    this._children = cs;
-  }
-  appendChild(/** @type {StubEl} */ c) {
-    this._children.push(c);
-    return c;
-  }
-  append(/** @type {StubEl[]} */ ...cs) {
-    this._children.push(...cs);
-  }
-  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    (this._listeners[t] ??= []).push(h);
-  }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
-    this._attrs[k] = v;
-  }
-  getAttribute(/** @type {string} */ k) {
-    return this._attrs[k] ?? null;
-  }
-  dispatchEvent(/** @type {any} */ e) {
-    (this._listeners[e.type] ?? []).forEach((h) => h(e));
-    return true;
-  }
-  /** @param {string} ev fire a listener as if the user triggered it */
-  _fire(/** @type {string} */ ev, /** @type {any} */ payload) {
-    (this._listeners[ev] ?? []).forEach((h) => h(payload));
-  }
-}
-
-class StubCustomEvent {
-  /** @param {string} type @param {{ detail?: any, bubbles?: boolean }} [init] */
-  constructor(type, init) {
-    this.type = type;
-    this.detail = init?.detail ?? null;
-    this.bubbles = init?.bubbles ?? false;
-  }
-}
-
-/** @type {Record<string, Function[]>} */
-const docListeners = {};
-
-/** @type {any} */ (globalThis).HTMLElement = StubEl;
-/** @type {any} */ (globalThis).document = {
-  activeElement: null,
-  /** @param {string} tag @returns {StubEl} */
-  createElement(tag) {
-    const el = new StubEl();
-    el._tagName = tag;
-    return el;
-  },
-  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    (docListeners[t] ??= []).push(h);
-  },
-  removeEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    docListeners[t] = (docListeners[t] ?? []).filter((fn) => fn !== h);
-  },
-  _fire(/** @type {string} */ t, /** @type {any} */ ev) {
-    (docListeners[t] ?? []).forEach((h) => h(ev));
-  },
-};
-/** @type {any} */ (globalThis).customElements = { define() {} };
-/** @type {any} */ (globalThis).CustomEvent = StubCustomEvent;
+const docListeners = /** @type {any} */ (globalThis).document._listeners;
 
 // ===== IMPORTS (after stubs) =====
 const { AttributeMenu } =
   await import('../src/components/cr-attribute-menu.js');
 
 // ===== HELPERS =====
-
-/** @param {any} root @param {string} cls @returns {any} */
-function findByClass(root, cls) {
-  for (const c of root._children ?? []) {
-    if (c.className === cls) return c;
-    const nested = findByClass(c, cls);
-    if (nested) return nested;
-  }
-  return null;
-}
 
 /** @param {any} root @param {string} tag @returns {any} */
 function findByTag(root, tag) {

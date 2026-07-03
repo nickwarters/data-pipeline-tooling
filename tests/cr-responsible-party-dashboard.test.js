@@ -1,86 +1,11 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { installDom, ConnectingStubEl, useElementClass } from './_dom-stub.js';
+/** @typedef {import('./_dom-stub.js').StubEl} StubEl */
 
-// ===== MINIMAL DOM STUBS =====
-class StubEl {
-  constructor() {
-    /** @type {StubEl[]} */
-    this._children = [];
-    /** @type {Record<string, Function[]>} */
-    this._listeners = {};
-    /** @type {Record<string, string>} */
-    this._attrs = {};
-    /** @type {string} */
-    this.tagName = '';
-    this.textContent = '';
-    this.className = '';
-    this.href = '';
-    this.hidden = false;
-    this.disabled = false;
-    this.type = '';
-    this.value = '';
-  }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) {
-    this._children = cs;
-    cs.forEach((c) => /** @type {any} */ (c).connectedCallback?.());
-  }
-  appendChild(/** @type {StubEl} */ c) {
-    this._children.push(c);
-    /** @type {any} */ (c).connectedCallback?.();
-    return c;
-  }
-  append(/** @type {StubEl[]} */ ...cs) {
-    this._children.push(...cs);
-    cs.forEach((c) => /** @type {any} */ (c).connectedCallback?.());
-  }
-  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    (this._listeners[t] ??= []).push(h);
-  }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
-    this._attrs[k] = v;
-  }
-  getAttribute(/** @type {string} */ k) {
-    return this._attrs[k] ?? null;
-  }
-  dispatchEvent(/** @type {any} */ e) {
-    (this._listeners[e.type] ?? []).forEach((h) => h(e));
-    return true;
-  }
-}
-
-class StubCustomEvent {
-  /** @param {string} type @param {{ detail?: any, bubbles?: boolean }} [init] */
-  constructor(type, init) {
-    this.type = type;
-    this.detail = init?.detail ?? null;
-    this.bubbles = init?.bubbles ?? false;
-  }
-}
-
-/** @type {any} */ (globalThis).HTMLElement = StubEl;
-/** @type {any} */ (globalThis).document = {
-  _registry: {},
-  /** @param {string} tag @returns {StubEl} */
-  createElement(tag) {
-    const Ctor = this._registry[tag.toLowerCase()];
-    const el = Ctor ? new Ctor() : new StubEl();
-    el.tagName = tag.toUpperCase();
-    return el;
-  },
-  addEventListener() {},
-  removeEventListener() {},
-};
-/** @type {any} */ (globalThis).customElements = {
-  define(
-    /** @type {string} */ tag,
-    /** @type {CustomElementConstructor} */ ctor
-  ) {
-    /** @type {any} */ (globalThis).document._registry[tag.toLowerCase()] =
-      ctor;
-  },
-};
-/** @type {any} */ (globalThis).CustomEvent = StubCustomEvent;
+installDom();
+useElementClass(ConnectingStubEl, { registry: true });
 
 // ===== IMPORTS (after stubs) =====
 const { ResponsiblePartyDashboard } =

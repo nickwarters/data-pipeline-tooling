@@ -1,75 +1,10 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { installDom } from './_dom-stub.js';
+/** @typedef {import('./_dom-stub.js').StubEl} StubEl */
 
-// ===== MINIMAL DOM STUBS =====
-class StubEl {
-  constructor() {
-    /** @type {StubEl[]} */
-    this._children = [];
-    /** @type {Record<string, Function[]>} */
-    this._listeners = {};
-    /** @type {Record<string, string>} */
-    this._attrs = {};
-    /** @type {string} */
-    this.tagName = '';
-    this.textContent = '';
-    this.className = '';
-    this.href = '';
-    this.hidden = false;
-    this.disabled = false;
-    this.type = '';
-    this.value = '';
-  }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) {
-    this._children = cs;
-  }
-  appendChild(/** @type {StubEl} */ c) {
-    this._children.push(c);
-    return c;
-  }
-  append(/** @type {StubEl[]} */ ...cs) {
-    this._children.push(...cs);
-  }
-  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    (this._listeners[t] ??= []).push(h);
-  }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
-    this._attrs[k] = v;
-  }
-  getAttribute(/** @type {string} */ k) {
-    return this._attrs[k] ?? null;
-  }
-  dispatchEvent(/** @type {any} */ e) {
-    (this._listeners[e.type] ?? []).forEach((h) => h(e));
-    return true;
-  }
-  focus() {}
-}
-
-class StubCustomEvent {
-  /** @param {string} type @param {{ detail?: any, bubbles?: boolean }} [init] */
-  constructor(type, init) {
-    this.type = type;
-    this.detail = init?.detail ?? null;
-    this.bubbles = init?.bubbles ?? false;
-  }
-}
-
-/** @type {any} */ (globalThis).HTMLElement = StubEl;
-/** @type {any} */ (globalThis).document = {
-  /** @param {string} tag @returns {StubEl} */
-  createElement(tag) {
-    const el = new StubEl();
-    el.tagName = tag.toUpperCase();
-    return el;
-  },
-  addEventListener() {},
-  removeEventListener() {},
-};
-/** @type {any} */ (globalThis).customElements = { define() {} };
-/** @type {any} */ (globalThis).location = { hash: '' };
-/** @type {any} */ (globalThis).CustomEvent = StubCustomEvent;
+installDom();
 
 // ===== IMPORTS (after stubs) =====
 const { CRCaseTable } = await import('../src/components/cr-case-table.js');

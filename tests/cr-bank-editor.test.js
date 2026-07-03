@@ -1,7 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom, StubEl } from './_bank-dom-stub.js';
+import { installDom, StubEl } from './_dom-stub.js';
 installDom();
 
 await import('../src/question-bank/cr-bank-editor.js');

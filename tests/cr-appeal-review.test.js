@@ -1,59 +1,14 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { installDom, findByClass, findAllByClass } from './_dom-stub.js';
+
+installDom();
 
 // DOM stubs must be in place before any src import.
-class StubEl {
-  constructor() {
-    /** @type {StubEl[]} */
-    this._children = [];
-    /** @type {Record<string, Function[]>} */
-    this._listeners = {};
-    /** @type {Record<string, string>} */
-    this._attrs = {};
-    this.textContent = '';
-    this.className = '';
-    this.hidden = false;
-    this.value = '';
-    this.checked = false;
-    this.type = '';
-    this.name = '';
-  }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) {
-    this._children = cs;
-  }
-  appendChild(/** @type {StubEl} */ c) {
-    this._children.push(c);
-    return c;
-  }
-  append(/** @type {StubEl[]} */ ...cs) {
-    this._children.push(...cs);
-  }
-  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    (this._listeners[t] ??= []).push(h);
-  }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
-    this._attrs[k] = v;
-  }
-  getAttribute(/** @type {string} */ k) {
-    return this._attrs[k] ?? null;
-  }
-}
 
-/** @type {any} */ (globalThis).HTMLElement = StubEl;
-/** @type {any} */ (globalThis).document = {
-  /** @param {string} _tag @returns {StubEl} */
-  createElement(_tag) {
-    return new StubEl();
-  },
-  addEventListener() {},
-  removeEventListener() {},
-};
-/** @type {any} */ (globalThis).customElements = { define() {} };
-
-const { CRAppealReview, resolveAppeal } = await import(
-  '../src/components/cr-appeal-review.js'
-);
+const { CRAppealReview, resolveAppeal } =
+  await import('../src/components/cr-appeal-review.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../src/sharepoint-client.js').Appeal} Appeal */
@@ -123,32 +78,6 @@ function makeQueue() {
   };
 }
 
-/**
- * Depth-first find of the first descendant whose className equals `cls`.
- * @param {any} el
- * @param {string} cls
- * @returns {any}
- */
-function findByClass(el, cls) {
-  for (const c of el._children ?? []) {
-    if (c.className === cls) return c;
-    const found = findByClass(c, cls);
-    if (found) return found;
-  }
-  return null;
-}
-
-/** @param {any} el @param {string} cls @returns {any[]} */
-function findAllByClass(el, cls) {
-  /** @type {any[]} */
-  const out = [];
-  for (const c of el._children ?? []) {
-    if (c.className === cls) out.push(c);
-    out.push(...findAllByClass(c, cls));
-  }
-  return out;
-}
-
 /** Build a Controls-editable element with an open Appeal. */
 function makeEditable(caseOverrides = {}) {
   const queue = makeQueue();
@@ -179,17 +108,32 @@ function clickSubmit(/** @type {any} */ el) {
 test('CRAppealReview: renders an Appeal Review heading first', () => {
   const el = new CRAppealReview();
   el.connectedCallback();
-  assert.equal(/** @type {any} */ (el)._children[0].textContent, 'Appeal Review');
+  assert.equal(
+    /** @type {any} */ (el)._children[0].textContent,
+    'Appeal Review'
+  );
 });
 
 test('CRAppealReview: edit access with an open Appeal renders the resolve form', () => {
   const { el } = makeEditable();
   assert.ok(findByClass(el, 'cr-appeal-review-form'), 'resolve form present');
   assert.ok(findByClass(el, 'cr-appeal-review-verdict-agreed'), 'agree radio');
-  assert.ok(findByClass(el, 'cr-appeal-review-verdict-rejected'), 'reject radio');
-  assert.ok(findByClass(el, 'cr-appeal-review-rationale-input'), 'rationale textarea');
-  assert.ok(findByClass(el, 'cr-appeal-review-outcome-select'), 'outcome select');
-  assert.ok(findByClass(el, 'cr-appeal-review-amend-justification'), 'amendment justification');
+  assert.ok(
+    findByClass(el, 'cr-appeal-review-verdict-rejected'),
+    'reject radio'
+  );
+  assert.ok(
+    findByClass(el, 'cr-appeal-review-rationale-input'),
+    'rationale textarea'
+  );
+  assert.ok(
+    findByClass(el, 'cr-appeal-review-outcome-select'),
+    'outcome select'
+  );
+  assert.ok(
+    findByClass(el, 'cr-appeal-review-amend-justification'),
+    'amendment justification'
+  );
   assert.ok(findByClass(el, 'cr-appeal-review-submit'), 'submit button');
 });
 
@@ -198,7 +142,11 @@ test('CRAppealReview: edit access with no open Appeal shows no form', () => {
   el.caseRow = makeCase({ appeals: [resolvedAppeal()] });
   el.access = 'edit';
   el.connectedCallback();
-  assert.equal(findByClass(el, 'cr-appeal-review-form'), null, 'no form when all resolved');
+  assert.equal(
+    findByClass(el, 'cr-appeal-review-form'),
+    null,
+    'no form when all resolved'
+  );
 });
 
 test('CRAppealReview: read-only access shows no form', () => {
@@ -206,7 +154,11 @@ test('CRAppealReview: read-only access shows no form', () => {
   el.caseRow = makeCase({ appeals: [openAppeal()] });
   el.access = 'read-only';
   el.connectedCallback();
-  assert.equal(findByClass(el, 'cr-appeal-review-form'), null, 'no form for read-only');
+  assert.equal(
+    findByClass(el, 'cr-appeal-review-form'),
+    null,
+    'no form for read-only'
+  );
 });
 
 test('CRAppealReview: with no Appeals shows a placeholder', () => {
@@ -228,7 +180,10 @@ test('CRAppealReview: caseRow without an appeals property is treated as having n
     etag: 'e1',
   });
   el.connectedCallback();
-  assert.ok(findByClass(el, 'cr-appeal-review-empty'), 'placeholder shown when appeals is missing');
+  assert.ok(
+    findByClass(el, 'cr-appeal-review-empty'),
+    'placeholder shown when appeals is missing'
+  );
 });
 
 test('CRAppealReview: with no caseRow shows an empty placeholder', () => {
@@ -248,8 +203,14 @@ test('CRAppealReview: each Appeal renders a summary item with state and rational
   el.connectedCallback();
   const item = findByClass(el, 'cr-appeal-review-item');
   assert.ok(item, 'item rendered');
-  assert.ok(findByClass(item, 'cr-appeal-review-state').textContent.includes('raised'));
-  assert.ok(findByClass(item, 'cr-appeal-review-rationale').textContent.includes('The outcome was wrong.'));
+  assert.ok(
+    findByClass(item, 'cr-appeal-review-state').textContent.includes('raised')
+  );
+  assert.ok(
+    findByClass(item, 'cr-appeal-review-rationale').textContent.includes(
+      'The outcome was wrong.'
+    )
+  );
 });
 
 test('CRAppealReview: a resolved Appeal item shows the resolution verdict and rationale', () => {
@@ -287,7 +248,11 @@ test('CRAppealReview: submitting without a verdict or rationale shows error, doe
   clickSubmit(el);
   assert.equal(queue.enqueued.length, 0, 'nothing saved');
   assert.equal(queue.enqueuedFields.length, 0, 'no field write');
-  assert.equal(findByClass(el, 'cr-appeal-review-error').hidden, false, 'error visible');
+  assert.equal(
+    findByClass(el, 'cr-appeal-review-error').hidden,
+    false,
+    'error visible'
+  );
 });
 
 test('CRAppealReview: submitting with verdict but no rationale shows error and does not save', () => {
@@ -301,10 +266,15 @@ test('CRAppealReview: submitting with verdict but no rationale shows error and d
 test('CRAppealReview: agreeing without outcome or justification shows error and does not save', () => {
   const { el, queue } = makeEditable();
   findByClass(el, 'cr-appeal-review-verdict-agreed').checked = true;
-  findByClass(el, 'cr-appeal-review-rationale-input').value = 'This outcome was incorrect.';
+  findByClass(el, 'cr-appeal-review-rationale-input').value =
+    'This outcome was incorrect.';
   // outcome and justification left empty → should fail
   clickSubmit(el);
-  assert.equal(queue.enqueuedFields.length, 0, 'no field write when outcome missing');
+  assert.equal(
+    queue.enqueuedFields.length,
+    0,
+    'no field write when outcome missing'
+  );
   assert.equal(findByClass(el, 'cr-appeal-review-error').hidden, false);
 });
 
@@ -323,7 +293,8 @@ test('CRAppealReview: agreeing without justification (but with outcome) shows er
 test('CRAppealReview: reject resolves the appeal with rejected verdict and saves only appeals', () => {
   const { el, queue } = makeEditable();
   findByClass(el, 'cr-appeal-review-verdict-rejected').checked = true;
-  findByClass(el, 'cr-appeal-review-rationale-input').value = 'Outcome was correct.';
+  findByClass(el, 'cr-appeal-review-rationale-input').value =
+    'Outcome was correct.';
   clickSubmit(el);
 
   assert.equal(queue.enqueued.length, 1, 'one enqueue call');
@@ -340,7 +311,8 @@ test('CRAppealReview: reject resolves the appeal with rejected verdict and saves
 test('CRAppealReview: reject does not create an Amended Outcome', () => {
   const { el, queue } = makeEditable();
   findByClass(el, 'cr-appeal-review-verdict-rejected').checked = true;
-  findByClass(el, 'cr-appeal-review-rationale-input').value = 'No change needed.';
+  findByClass(el, 'cr-appeal-review-rationale-input').value =
+    'No change needed.';
   clickSubmit(el);
   assert.equal(el.caseRow?.amendedOutcome, undefined, 'no amendment authored');
 });
@@ -369,9 +341,11 @@ test('CRAppealReview: reject stamps resolver id and timestamp on the resolution'
 test('CRAppealReview: agree resolves the appeal and writes amendment fields in one enqueueFields call', () => {
   const { el, queue } = makeEditable();
   findByClass(el, 'cr-appeal-review-verdict-agreed').checked = true;
-  findByClass(el, 'cr-appeal-review-rationale-input').value = 'Outcome was wrong.';
+  findByClass(el, 'cr-appeal-review-rationale-input').value =
+    'Outcome was wrong.';
   findByClass(el, 'cr-appeal-review-outcome-select').value = 'pass';
-  findByClass(el, 'cr-appeal-review-amend-justification').value = 'Reviewer mis-assessed.';
+  findByClass(el, 'cr-appeal-review-amend-justification').value =
+    'Reviewer mis-assessed.';
   clickSubmit(el);
 
   assert.equal(queue.enqueued.length, 0, 'no separate enqueue call on agree');
@@ -390,13 +364,19 @@ test('CRAppealReview: agree resolves the appeal and writes amendment fields in o
 test('CRAppealReview: agree links the Amended Outcome to the Appeal id via fromAppealId', () => {
   const { el, queue } = makeEditable();
   findByClass(el, 'cr-appeal-review-verdict-agreed').checked = true;
-  findByClass(el, 'cr-appeal-review-rationale-input').value = 'Yes, outcome wrong.';
+  findByClass(el, 'cr-appeal-review-rationale-input').value =
+    'Yes, outcome wrong.';
   findByClass(el, 'cr-appeal-review-outcome-select').value = 'pass';
-  findByClass(el, 'cr-appeal-review-amend-justification').value = 'Correction needed.';
+  findByClass(el, 'cr-appeal-review-amend-justification').value =
+    'Correction needed.';
   clickSubmit(el);
 
   const { fields } = queue.enqueuedFields[0];
-  assert.equal(fields.amendedOutcome.fromAppealId, 'ap1', 'fromAppealId links the appeal');
+  assert.equal(
+    fields.amendedOutcome.fromAppealId,
+    'ap1',
+    'fromAppealId links the appeal'
+  );
 });
 
 test('CRAppealReview: agree also updates caseRow.amendedOutcome in memory', () => {
@@ -431,7 +411,11 @@ test('CRAppealReview: after agreeing, the form is replaced by the resolved item 
   findByClass(el, 'cr-appeal-review-amend-justification').value = 'Amended.';
   clickSubmit(el);
 
-  assert.equal(findByClass(el, 'cr-appeal-review-form'), null, 'form removed after resolve');
+  assert.equal(
+    findByClass(el, 'cr-appeal-review-form'),
+    null,
+    'form removed after resolve'
+  );
 });
 
 // --- One open appeal at a time ---
@@ -485,19 +469,30 @@ test('CRAppealReview: now() returns a non-empty ISO string', () => {
 test('CRAppealReview: a null rationale value is treated as empty (does not save)', () => {
   const { el, queue } = makeEditable();
   findByClass(el, 'cr-appeal-review-verdict-rejected').checked = true;
-  findByClass(el, 'cr-appeal-review-rationale-input').value = /** @type {any} */ (null);
+  findByClass(el, 'cr-appeal-review-rationale-input').value =
+    /** @type {any} */ (null);
   clickSubmit(el);
-  assert.equal(queue.enqueued.length, 0, 'null rationale treated as empty → validation fails');
+  assert.equal(
+    queue.enqueued.length,
+    0,
+    'null rationale treated as empty → validation fails'
+  );
 });
 
 test('CRAppealReview: null outcome value on agree treated as empty (validation fails)', () => {
   const { el, queue } = makeEditable();
   findByClass(el, 'cr-appeal-review-verdict-agreed').checked = true;
   findByClass(el, 'cr-appeal-review-rationale-input').value = 'Good rationale';
-  findByClass(el, 'cr-appeal-review-outcome-select').value = /** @type {any} */ (null);
-  findByClass(el, 'cr-appeal-review-amend-justification').value = 'Justification text';
+  findByClass(el, 'cr-appeal-review-outcome-select').value =
+    /** @type {any} */ (null);
+  findByClass(el, 'cr-appeal-review-amend-justification').value =
+    'Justification text';
   clickSubmit(el);
-  assert.equal(queue.enqueuedFields.length, 0, 'null outcome treated as empty → validation fails');
+  assert.equal(
+    queue.enqueuedFields.length,
+    0,
+    'null outcome treated as empty → validation fails'
+  );
 });
 
 test('CRAppealReview: null justification value on agree treated as empty (validation fails)', () => {
@@ -505,9 +500,14 @@ test('CRAppealReview: null justification value on agree treated as empty (valida
   findByClass(el, 'cr-appeal-review-verdict-agreed').checked = true;
   findByClass(el, 'cr-appeal-review-rationale-input').value = 'Good rationale';
   findByClass(el, 'cr-appeal-review-outcome-select').value = 'pass';
-  findByClass(el, 'cr-appeal-review-amend-justification').value = /** @type {any} */ (null);
+  findByClass(el, 'cr-appeal-review-amend-justification').value =
+    /** @type {any} */ (null);
   clickSubmit(el);
-  assert.equal(queue.enqueuedFields.length, 0, 'null justification treated as empty → validation fails');
+  assert.equal(
+    queue.enqueuedFields.length,
+    0,
+    'null justification treated as empty → validation fails'
+  );
 });
 
 test('CRAppealReview: agree with null caseRow enqueueFields only the appeals array (null guard branch)', () => {
@@ -527,13 +527,16 @@ test('CRAppealReview: agree with null caseRow enqueueFields only the appeals arr
       render: () => {},
     },
     appeal,
-    { checked: true },   // agreeRadio
-    { checked: false },  // rejectRadio
+    { checked: true }, // agreeRadio
+    { checked: false }, // rejectRadio
     { value: 'Outcome was wrong.' },
     { value: 'pass' },
     { value: 'Reviewer error.' },
     /** @type {any} */ ({ hidden: true })
   );
   assert.equal(queue.enqueuedFields.length, 1);
-  assert.ok(Array.isArray(queue.enqueuedFields[0].fields.appeals), 'appeals written as array');
+  assert.ok(
+    Array.isArray(queue.enqueuedFields[0].fields.appeals),
+    'appeals written as array'
+  );
 });

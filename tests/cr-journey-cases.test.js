@@ -1,66 +1,28 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { installDom, StubEl, useElementClass, flush } from './_dom-stub.js';
 
-class StubEl {
-  constructor() {
-    /** @type {StubEl[]} */
-    this._children = [];
-    /** @type {Record<string, string>} */
-    this._attrs = {};
-    this.tagName = '';
-    this.textContent = '';
-    this.className = '';
+installDom();
+
+class ChildStubEl extends StubEl {
+  constructor(tag = '') {
+    super(tag);
     /** @type {any} */
     this.cases = null;
     /** @type {any} */
     this.toolbar = null;
     /** @type {any} */
     this.columns = null;
+    /** @type {any} */
     this.client = null;
     /** @type {string[]} */
     this.ownedJourneyCaseTypes = [];
   }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) {
-    this._children = cs;
-  }
-  appendChild(/** @type {StubEl} */ c) {
-    this._children.push(c);
-    return c;
-  }
-  addEventListener() {}
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
-    this._attrs[k] = v;
-  }
-  getAttribute(/** @type {string} */ k) {
-    return this._attrs[k] ?? null;
-  }
   connectedCallback() {}
 }
 
-/** @type {any} */ (globalThis).HTMLElement = StubEl;
-/** @type {any} */ (globalThis).customElements = {
-  define() {},
-  get() {
-    return undefined;
-  },
-};
-
-/** @type {any} */ (globalThis).document = {
-  activeElement: null,
-  createElement(/** @type {string} */ tag) {
-    const el = new StubEl();
-    el.tagName = tag.toUpperCase();
-    return el;
-  },
-  createTreeWalker() {
-    return {
-      nextNode() {
-        return null;
-      },
-    };
-  },
-};
+useElementClass(ChildStubEl);
 
 const { JourneyCasesPage } = await import('../src/pages/cr-journey-cases.js');
 
@@ -99,12 +61,6 @@ const row = (id, caseType) => ({
   completedAt: null,
   etag: 'e',
 });
-
-/** @returns {Promise<void>} flushes pending microtask fetch + reactive re-render */
-async function flush() {
-  await Promise.resolve();
-  await Promise.resolve();
-}
 
 test('cr-journey-cases: renders heading', async () => {
   const host = JourneyCasesPage({

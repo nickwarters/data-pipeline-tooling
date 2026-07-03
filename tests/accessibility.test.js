@@ -1,28 +1,14 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { installDom, StubEl, useElementClass } from './_dom-stub.js';
 
-class StubEl {
-  constructor() {
-    /** @type {StubEl[]} */
-    this._children = [];
-    /** @type {Record<string, Function[]>} */
-    this._listeners = {};
-    /** @type {Record<string, string>} */
-    this._attrs = {};
-    this.textContent = '';
-    this.className = '';
-    this.id = '';
-    this.tagName = '';
-    this.type = '';
-    this.name = '';
-    this.value = '';
-    this.checked = false;
-    this.hidden = false;
+installDom();
+
+class A11yEl extends StubEl {
+  constructor(tag = '') {
+    super(tag);
     /** @type {any} */
-    this._focused = false;
-    /** @type {Record<string, string>} */
-    this.style = {};
     this.currentValue = undefined;
     /** @type {any} */
     this.question = undefined;
@@ -30,92 +16,16 @@ class StubEl {
     this.access = undefined;
   }
   replaceChildren(/** @type {StubEl[]} */ ...cs) {
-    this._children = cs;
+    super.replaceChildren(...cs);
     // Faithfully model the browser: mutating a subtree detaches (and therefore
     // blurs) whatever was focused inside it. activeElement falls back to "body"
     // (null here). This is exactly the behaviour that strands keyboard focus.
     const doc = /** @type {any} */ (globalThis).document;
     if (doc) doc._active = null;
   }
-  appendChild(/** @type {StubEl} */ c) {
-    this._children.push(c);
-    return c;
-  }
-  append(/** @type {StubEl[]} */ ...cs) {
-    this._children.push(...cs);
-  }
-  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    (this._listeners[t] ??= []).push(h);
-  }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
-    this._attrs[k] = v;
-  }
-  getAttribute(/** @type {string} */ k) {
-    return this._attrs[k] ?? null;
-  }
-  focus() {
-    this._focused = true;
-    /** @type {any} */ (globalThis)._lastFocused = this;
-    const doc = /** @type {any} */ (globalThis).document;
-    if (doc) doc._active = this;
-  }
-  /** @returns {StubEl | null} */
-  querySelector(/** @type {string} */ sel) {
-    const keyMatch = sel.startsWith('[data-focus-key=');
-    const wantKey = keyMatch ? sel.slice('[data-focus-key="'.length, -2) : null;
-    /** @param {StubEl} node @returns {StubEl | null} */
-    const walk = (node) => {
-      for (const c of node._children) {
-        if (keyMatch) {
-          if (c.getAttribute('data-focus-key') === wantKey) return c;
-        } else if (c.tagName && c.tagName.toLowerCase() === 'input') {
-          return c;
-        }
-        const found = walk(c);
-        if (found) return found;
-      }
-      return null;
-    };
-    return walk(this);
-  }
 }
 
-/** @type {any} */ (globalThis).HTMLElement = StubEl;
-/** @type {any} */ (globalThis).document = {
-  _active: /** @type {StubEl | null} */ (null),
-  get activeElement() {
-    return this._active;
-  },
-  /** @param {string} tag @returns {StubEl} */
-  createElement(tag) {
-    const cls = /** @type {any} */ (globalThis).customElements?._registry?.[
-      tag
-    ];
-    const el = cls ? new cls() : new StubEl();
-    el.tagName = tag;
-    return el;
-  },
-  addEventListener() {},
-  removeEventListener() {},
-};
-/** @type {any} */ (globalThis).customElements = {
-  /** @type {Record<string, any>} */
-  _registry: {},
-  define(/** @type {string} */ name, /** @type {any} */ cls) {
-    this._registry[name] = cls;
-  },
-};
-/** @type {any} */ (globalThis).CustomEvent = class {
-  /**
-   * @param {string} type
-   * @param {{ detail?: unknown, bubbles?: boolean }} [opts]
-   */
-  constructor(type, opts = {}) {
-    this.type = type;
-    this.detail = opts.detail ?? null;
-    this.bubbles = opts.bubbles ?? false;
-  }
-};
+useElementClass(A11yEl, { registry: true });
 
 const { CRQuestion } = await import('../src/components/cr-question.js');
 const { CRQuestionList } =
@@ -241,7 +151,7 @@ test('CRQuestionList: when a new question appears via update(), focus moves to i
   assert.ok(focused, 'a new question should be focused');
   assert.equal(
     focused.tagName,
-    'cr-question',
+    'CR-QUESTION',
     'focus should land on the cr-question host (which forwards to first input)'
   );
 });
@@ -367,7 +277,6 @@ test('CRQuestion: answer inputs carry a stable data-focus-key (multi-choice)', (
  */
 function focusInputOn(host, key) {
   const input = /** @type {any} */ (globalThis).document.createElement('input');
-  input.tagName = 'input';
   input.setAttribute('data-focus-key', key);
   host.appendChild(input);
   input.focus();

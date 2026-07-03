@@ -1,83 +1,12 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { installDom, StubEl } from './_dom-stub.js';
 
-// ===== MINIMAL DOM STUBS (installed before importing the component) =====
-class StubEl {
-  constructor() {
-    /** @type {StubEl[]} */
-    this._children = [];
-    /** @type {Record<string, Function[]>} */
-    this._listeners = {};
-    /** @type {Record<string, string>} */
-    this._attrs = {};
-    this.textContent = '';
-    this.className = '';
-    this.hidden = false;
-    this.tabIndex = 0;
-    this._focused = false;
-  }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) {
-    this._children = cs;
-  }
-  appendChild(/** @type {StubEl} */ c) {
-    this._children.push(c);
-    return c;
-  }
-  append(/** @type {StubEl[]} */ ...cs) {
-    this._children.push(...cs);
-  }
-  addEventListener(/** @type {string} */ t, /** @type {Function} */ h) {
-    (this._listeners[t] ??= []).push(h);
-  }
-  dispatchEvent(/** @type {any} */ e) {
-    (this._listeners[e.type] ?? []).forEach((h) => h(e));
-    return true;
-  }
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
-    this._attrs[k] = v;
-  }
-  getAttribute(/** @type {string} */ k) {
-    return this._attrs[k] ?? null;
-  }
-  removeAttribute(/** @type {string} */ k) {
-    delete this._attrs[k];
-  }
-  focus() {
-    this._focused = true;
-  }
-  /** Fire a registered listener as if the user triggered it. */
-  _fire(/** @type {string} */ ev, /** @type {any} */ payload) {
-    (this._listeners[ev] ?? []).forEach((h) => h(payload));
-  }
-}
+installDom();
 
-/** @type {any} */ (globalThis).HTMLElement = StubEl;
-/** @type {any} */ (globalThis).document = {
-  /** @param {string} _tag @returns {StubEl} */
-  createElement(_tag) {
-    return new StubEl();
-  },
-  addEventListener() {},
-  removeEventListener() {},
-};
 /** @type {Array<[string, any]>} */
-const definedElements = [];
-/** @type {any} */ (globalThis).customElements = {
-  define(/** @type {string} */ name, /** @type {any} */ ctor) {
-    definedElements.push([name, ctor]);
-  },
-};
-
-class StubCustomEvent {
-  /** @param {string} type @param {{ detail?: any, bubbles?: boolean }} [init] */
-  constructor(type, init) {
-    this.type = type;
-    this.detail = init?.detail ?? null;
-    this.bubbles = init?.bubbles ?? false;
-  }
-}
-/** @type {any} */ (globalThis).CustomEvent = StubCustomEvent;
+const definedElements = /** @type {any} */ (globalThis).customElements._defined;
 
 // ===== IMPORTS (after stubs) =====
 const { CRTabs, Tabs, activeTabId, visibleTabs } =

@@ -1,70 +1,36 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { installDom, StubEl, useElementClass, flush } from './_dom-stub.js';
 
-class StubEl {
-  constructor() {
-    /** @type {StubEl[]} */
-    this._children = [];
-    /** @type {Record<string, string>} */
-    this._attrs = {};
-    this.tagName = '';
-    this.textContent = '';
-    this.className = '';
+installDom();
+
+class ChildStubEl extends StubEl {
+  constructor(tag = '') {
+    super(tag);
     /** @type {any} */
     this.cases = null;
     /** @type {any} */
     this.toolbar = null;
     this.connectedCallbackCalled = false;
+    /** @type {any} */
     this.client = null;
+    /** @type {any} */
     this.currentUser = null;
+    /** @type {string[]} */
     this.eligibleCaseTypes = [];
     this.queryString = '';
     this.currentUserId = '';
   }
-  replaceChildren(/** @type {StubEl[]} */ ...cs) {
-    this._children = cs;
+  connectedCallback() {
+    this.connectedCallbackCalled = true;
   }
-  appendChild(/** @type {StubEl} */ c) {
-    this._children.push(c);
-    return c;
-  }
-  addEventListener() {}
-  setAttribute(/** @type {string} */ k, /** @type {string} */ v) {
-    this._attrs[k] = v;
-  }
-  getAttribute(/** @type {string} */ k) {
-    return this._attrs[k] ?? null;
-  }
-  connectedCallback() {}
 }
 
-/** @type {any} */ (globalThis).HTMLElement = StubEl;
-/** @type {any} */ (globalThis).customElements = {
-  define() {},
-  get() {
-    return undefined;
-  },
-};
+useElementClass(ChildStubEl);
 
 /** @type {string[]} */
 const createdTags = [];
-/** @type {any} */ (globalThis).document = {
-  activeElement: null,
-  createElement(/** @type {string} */ tag) {
-    const el = new StubEl();
-    el.tagName = tag.toUpperCase();
-    createdTags.push(tag);
-    return el;
-  },
-  createTreeWalker() {
-    return {
-      nextNode() {
-        return null;
-      },
-    };
-  },
-};
 
 const { TeamCasesPage } = await import('../src/pages/cr-team-cases.js');
 
@@ -103,12 +69,6 @@ const row = (id, caseType) => ({
   completedAt: null,
   etag: 'e',
 });
-
-/** @returns {Promise<void>} flushes pending microtask fetch + reactive re-render */
-async function flush() {
-  await Promise.resolve();
-  await Promise.resolve();
-}
 
 test('cr-team-cases: renders heading', async () => {
   const host = TeamCasesPage({
