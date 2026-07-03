@@ -159,11 +159,29 @@ export function renderAppealForm(props) {
     'A rationale is required to raise an Appeal.'
   );
 
+  // Introduce the disputed-Answer citations only when there are failed Answers
+  // to offer — otherwise the heading would sit above an empty list.
+  const citeIntro = citeWrappers.length
+    ? [
+        h(
+          'h3',
+          { className: 'cr-appeal-cite-heading' },
+          'Disputed question results'
+        ),
+        h(
+          'p',
+          { className: 'cr-appeal-cite-intro' },
+          'Select any question results you disagree with.'
+        ),
+      ]
+    : [];
+
   return h(
     'section',
     { className: 'cr-appeal-form' },
     h('label', {}, 'Why are you appealing this outcome?'),
     rationale,
+    ...citeIntro,
     ...citeWrappers,
     error,
     h(

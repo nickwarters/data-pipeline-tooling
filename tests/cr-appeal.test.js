@@ -187,6 +187,47 @@ test('CRAppeal: the form offers a citation checkbox only for failed Answers', ()
   );
 });
 
+test('CRAppeal: the citations list is introduced with a heading and guidance when there are failed Answers', () => {
+  const { el } = makeEditable();
+  el.catalogue = /** @type {any} */ (FAIL_CATALOGUE);
+  el.answers = { 'q-greet': { value: 'No' }, 'q-close': { value: 'No' } };
+  el.connectedCallback();
+  const heading = findByClass(el, 'cr-appeal-cite-heading');
+  const intro = findByClass(el, 'cr-appeal-cite-intro');
+  assert.ok(heading, 'a citations heading is rendered');
+  assert.ok(intro, 'guidance wording is rendered');
+  assert.match(intro.textContent, /disagree with/i);
+});
+
+test('CRAppeal: the citations heading sits between the rationale and the citation checkboxes', () => {
+  const { el } = makeEditable();
+  el.catalogue = /** @type {any} */ (FAIL_CATALOGUE);
+  el.answers = { 'q-greet': { value: 'No' }, 'q-close': { value: 'No' } };
+  el.connectedCallback();
+  const form = findByClass(el, 'cr-appeal-form');
+  const classes = form._children.map((/** @type {any} */ c) => c.className);
+  const rationaleIdx = classes.indexOf('cr-appeal-rationale');
+  const headingIdx = classes.indexOf('cr-appeal-cite-heading');
+  const firstCiteIdx = classes.indexOf('cr-appeal-cite');
+  assert.ok(
+    rationaleIdx > -1 && rationaleIdx < headingIdx,
+    'heading follows the rationale'
+  );
+  assert.ok(
+    headingIdx > -1 && headingIdx < firstCiteIdx,
+    'heading precedes the citation checkboxes'
+  );
+});
+
+test('CRAppeal: the citations heading and guidance are omitted when there are no failed Answers', () => {
+  const { el } = makeEditable();
+  el.catalogue = /** @type {any} */ (FAIL_CATALOGUE);
+  el.answers = { 'q-greet': { value: 'Yes' }, 'q-close': { value: 'Yes' } };
+  el.connectedCallback();
+  assert.equal(findByClass(el, 'cr-appeal-cite-heading'), null);
+  assert.equal(findByClass(el, 'cr-appeal-cite-intro'), null);
+});
+
 // --- Raise flow ---
 
 test('CRAppeal: raising with a rationale enqueues an additive appeals save with state raised', () => {

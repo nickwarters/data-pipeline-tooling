@@ -1135,6 +1135,19 @@ cr-attribute-menu {
   font-weight: var(--cr-font-weight-semibold);
 }
 
+/* Heading + guidance introducing the disputed-Answer citation checkboxes. The
+   heading titles the group; the guidance is muted supporting text that hugs it. */
+[data-cr-root] cr-appeal .cr-appeal-cite-heading {
+  margin: 0;
+  font-size: var(--cr-font-size-base);
+}
+
+[data-cr-root] cr-appeal .cr-appeal-cite-intro {
+  margin: calc(-1 * var(--cr-space-2)) 0 0;
+  color: var(--cr-color-text-muted);
+  font-size: var(--cr-font-size-sm);
+}
+
 /* Choice rows (cite checkboxes, Agree/Reject radios): inline control + text.
    Qualified with `label` so they out-rank the emphasised `> label` prompt rule
    above and read as plain, regular-weight options rather than field captions. */
