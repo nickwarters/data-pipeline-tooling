@@ -1,9 +1,4 @@
 // @ts-check
-// TODO(simplify-ui): Keep service access as explicit plain dependencies
-// passed into route shells/function components. The simplified UI should not
-// require component authors to understand service classes, global singletons,
-// or lifecycle wiring to perform ordinary reads and writes.
-
 /**
  * Instantiates the correct SharePointClient for the current environment.
  * Pass `?mock=1` to get a MockSharePointClient backed by dev fixtures.

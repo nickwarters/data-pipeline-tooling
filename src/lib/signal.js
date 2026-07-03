@@ -1,9 +1,4 @@
 // @ts-check
-// TODO(simplify-ui): Keep this primitive small and framework-light as the
-// rest of the UI migrates to function components. Do not grow component class
-// lifecycle behavior here; pair it with reactive() only where render tracking is
-// needed.
-
 /**
  * @typedef {{ run: () => void, deps: Set<Set<Observer>>, disposed?: boolean }} Observer
  */

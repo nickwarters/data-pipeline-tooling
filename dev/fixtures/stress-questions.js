@@ -1,9 +1,4 @@
 // @ts-check
-// TODO(simplify-ui): Keep dev fixtures as plain data inputs for the
-// simplified UI. Future examples and tests should feed these fixtures into
-// function components and pure helpers instead of custom-element lifecycle
-// setup.
-
 /** @typedef {import('../../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 
 /**

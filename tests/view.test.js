@@ -1,9 +1,4 @@
 // @ts-check
-// TODO(simplify-ui): Keep this test focused on the simple public seams as
-// the UI migrates. Where this behavior is consumed by screens, add coverage
-// through function components, h() output, reactive() updates, or thin route
-// shells rather than class lifecycle setup.
-
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { h } from '../src/lib/html.js';

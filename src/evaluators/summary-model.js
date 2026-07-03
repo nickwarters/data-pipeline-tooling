@@ -1,9 +1,4 @@
 // @ts-check
-// TODO(simplify-ui): Preserve this as a pure function/data boundary for the
-// simplified component model. Function components should pass data in and
-// render results with h(); evaluator modules should stay free of DOM, lifecycle,
-// or framework concerns.
-
 import { evaluate } from './applicability-evaluator.js';
 import { isFailure } from './failure-evaluator.js';
 import {

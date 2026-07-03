@@ -1,9 +1,4 @@
 // @ts-check
-// TODO(simplify-ui): Keep service access as explicit plain dependencies
-// passed into route shells/function components. The simplified UI should not
-// require component authors to understand service classes, global singletons,
-// or lifecycle wiring to perform ordinary reads and writes.
-
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */

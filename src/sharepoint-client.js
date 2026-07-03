@@ -1,9 +1,4 @@
 // @ts-check
-// TODO(simplify-ui): Keep service access as explicit plain dependencies
-// passed into route shells/function components. The simplified UI should not
-// require component authors to understand service classes, global singletons,
-// or lifecycle wiring to perform ordinary reads and writes.
-
 /**
  * The `value` is a string for `yes-no-na` and `single-choice` questions, and a
  * string[] for `multi-choice` questions. Empty array == unanswered.

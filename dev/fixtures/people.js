@@ -1,9 +1,4 @@
 // @ts-check
-// TODO(simplify-ui): Keep dev fixtures as plain data inputs for the
-// simplified UI. Future examples and tests should feed these fixtures into
-// function components and pure helpers instead of custom-element lifecycle
-// setup.
-
 /**
  * Directory people for mock mode, backing `searchPeople` (?mock=1).
  * Bare account names only (claims prefix + domain already stripped, per

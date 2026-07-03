@@ -1,8 +1,4 @@
 // @ts-check
-// TODO(simplify-ui): Keep this module as simple data transformation
-// plumbing for the function-component UI. It should expose plain functions and
-// avoid depending on custom elements, controllers, or DOM lifecycle hooks.
-
 /**
  * @typedef {{
  *   slug: string,

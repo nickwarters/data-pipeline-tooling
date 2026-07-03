@@ -1,9 +1,4 @@
 // @ts-check
-// TODO(simplify-ui): Keep case-type configuration as plain data for the
-// function-component UI. Screens should consume these definitions through
-// explicit props/signals, without custom-element lifecycle or controller wiring
-// leaking into configuration modules.
-
 /**
  * @typedef {() => Promise<{ default: import('../src/sharepoint-client.js').CaseTypeConfig }>} CaseTypeImporter
  */
