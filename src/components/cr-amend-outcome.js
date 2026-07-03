@@ -114,7 +114,11 @@ export function renderAmendForm(props) {
   const select = /** @type {HTMLSelectElement} */ (
     h(
       'select',
-      { className: 'cr-amend-outcome-select', value: existing?.outcome ?? '' },
+      {
+        id: 'cr-amend-outcome-select',
+        className: 'cr-amend-outcome-select',
+        value: existing?.outcome ?? '',
+      },
       h('option', { value: '' }, 'Select an outcome…'),
       ...props.outcomeOptions.map((option) =>
         h('option', { value: option.id }, option.wording)
@@ -125,7 +129,9 @@ export function renderAmendForm(props) {
 
   const justification = /** @type {HTMLTextAreaElement} */ (
     h('textarea', {
+      id: 'cr-amend-outcome-justification',
       className: 'cr-amend-outcome-justification',
+      rows: 4,
       value: existing?.justification ?? '',
     })
   );
@@ -140,10 +146,22 @@ export function renderAmendForm(props) {
   return h(
     'section',
     { className: 'cr-amend-outcome-form' },
-    h('label', {}, 'New Outcome'),
-    select,
-    h('label', {}, 'Why are you amending this outcome?'),
-    justification,
+    h(
+      'div',
+      { className: 'cr-amend-outcome-field' },
+      h('label', { htmlFor: 'cr-amend-outcome-select' }, 'New Outcome'),
+      select
+    ),
+    h(
+      'div',
+      { className: 'cr-amend-outcome-field' },
+      h(
+        'label',
+        { htmlFor: 'cr-amend-outcome-justification' },
+        'Why are you amending this outcome?'
+      ),
+      justification
+    ),
     error,
     h(
       'button',

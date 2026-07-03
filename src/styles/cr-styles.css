@@ -788,6 +788,100 @@ cr-attribute-menu {
   font-style: italic;
 }
 
+/* ── Amend Outcome ───────────────────────────────────────────────────────── */
+
+/* The Current Outcome line: quiet label, emphasised value carried by the text. */
+.cr-amend-outcome-current {
+  font-weight: var(--cr-font-weight-medium);
+  color: var(--cr-color-text-muted);
+}
+
+/* The Controls-only amend form. A card with stacked field groups so the two
+   controls no longer collapse onto one line — takes its spacing cue from the
+   Review tab's question cards. */
+.cr-amend-outcome-form {
+  display: grid;
+  gap: var(--cr-space-5);
+  max-width: 40rem;
+  margin-top: var(--cr-space-4);
+  padding: var(--cr-space-5);
+  background: var(--cr-color-surface);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-md);
+  box-shadow: var(--cr-shadow-sm);
+}
+
+/* Label hugs its control (small gap) while whole groups sit apart (form gap). */
+.cr-amend-outcome-field {
+  display: grid;
+  gap: var(--cr-space-2);
+}
+
+.cr-amend-outcome-field label {
+  font-size: var(--cr-font-size-sm);
+  font-weight: var(--cr-font-weight-semibold);
+}
+
+.cr-amend-outcome-select,
+.cr-amend-outcome-justification {
+  font: inherit;
+  width: 100%;
+  padding: var(--cr-space-2) var(--cr-space-3);
+  color: inherit;
+  background: var(--cr-color-surface);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-md);
+  transition: border-color var(--cr-duration-fast) var(--cr-easing-standard);
+}
+
+.cr-amend-outcome-justification {
+  min-height: 6rem;
+  resize: vertical;
+}
+
+.cr-amend-outcome-select:focus,
+.cr-amend-outcome-justification:focus {
+  outline: none;
+  border-color: var(--cr-color-accent);
+  box-shadow: var(--cr-focus-ring);
+}
+
+.cr-amend-outcome-error {
+  margin: 0;
+  font-size: var(--cr-font-size-sm);
+  color: var(--cr-color-danger);
+}
+
+/* Keep the CTA to its own width rather than stretching across the grid. */
+.cr-amend-outcome-submit {
+  justify-self: start;
+}
+
+/* Read-only view of an existing amendment, for the observing roles. */
+.cr-amend-outcome-record {
+  margin-top: var(--cr-space-4);
+  padding: var(--cr-space-4);
+  background: var(--cr-color-surface);
+  border: 1px solid var(--cr-color-border);
+  border-left: 3px solid var(--cr-color-accent);
+  border-radius: var(--cr-radius-md);
+}
+
+.cr-amend-outcome-record-justification {
+  margin: 0 0 var(--cr-space-2);
+}
+
+.cr-amend-outcome-record-audit {
+  margin: 0;
+  font-size: var(--cr-font-size-sm);
+  color: var(--cr-color-text-muted);
+}
+
+.cr-amend-outcome-empty {
+  color: var(--cr-color-text-muted);
+  font-style: italic;
+}
+
 /* ── Conversation toggle button ──────────────────────────────────────────── */
 
 [data-cr-root] .cr-conversation-toggle-btn {
