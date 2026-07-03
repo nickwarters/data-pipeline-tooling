@@ -483,6 +483,51 @@ test('CRCaseTable: status select has aria-label', () => {
   );
 });
 
+test('CRCaseTable: filtering does not replace the host subtree (keeps input focus + inner reactivity)', () => {
+  const el = new CRCaseTable();
+  el.cases = [
+    makeCase({ id: 'c1', title: 'Alpha' }),
+    makeCase({ id: 'c2', title: 'Beta' }),
+  ];
+
+  // Count how many times the shell replaces the host's children. A re-render on
+  // every keystroke would, in a real browser, disconnect/reconnect the inner
+  // <cr-data-table> (killing its reactivity) and blur the filter input. The
+  // shell must render its structure once and thereafter only feed rows.
+  let hostReplaceCount = 0;
+  const originalReplace = el.replaceChildren.bind(el);
+  el.replaceChildren = (/** @type {any[]} */ ...cs) => {
+    hostReplaceCount++;
+    return originalReplace(...cs);
+  };
+
+  el.connectedCallback();
+  const afterConnect = hostReplaceCount;
+  const inputBefore = findFirst(el, 'input');
+
+  // Simulate typing into the filter.
+  const filterInput = /** @type {any} */ (findFirst(el, 'input'));
+  filterInput.value = 'beta';
+  for (const h of filterInput._listeners['input'] ?? [])
+    h({ target: filterInput });
+
+  assert.equal(
+    hostReplaceCount,
+    afterConnect,
+    'filtering must not replace the host children (no shell re-render)'
+  );
+  assert.equal(
+    findFirst(el, 'input'),
+    inputBefore,
+    'the filter input node must survive filtering unchanged'
+  );
+
+  // …and the inner table must still react to the filter.
+  const rows = findAll(el, 'tr').filter((r) => r.className === 'cr-case-row');
+  assert.equal(rows.length, 1, 'only the matching row should remain');
+  assert.equal(findAll(rows[0], 'a')[0]?.textContent, 'Beta');
+});
+
 test('CRCaseTable: custom columns override defaults', () => {
   const el = new CRCaseTable();
   /** @type {any} */ (el).columns = [

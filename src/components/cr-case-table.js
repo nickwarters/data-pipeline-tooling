@@ -1,6 +1,6 @@
 // @ts-check
 import { ShellElement } from '../lib/view.js';
-import { signal, computed } from '../lib/signal.js';
+import { signal, computed, effect } from '../lib/signal.js';
 import { h } from '../lib/html.js';
 import { CRDataTable } from './cr-data-table.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
@@ -211,6 +211,8 @@ export class CRCaseTable extends ShellElement {
     this._inner = null;
     /** @type {HTMLElement | null} */
     this._toolbar = null;
+    /** @type {(() => void) | null} */
+    this._rowsFeed = null;
   }
 
   /** @param {CaseRow[]} cases */
@@ -246,6 +248,29 @@ export class CRCaseTable extends ShellElement {
     if (this._inner) {
       this._inner.connectedCallback();
     }
+    // Feed the filtered/sorted rows into the inner table through a dedicated
+    // effect rather than by reading `_filtered` inside render(). If render()
+    // depended on the filter signals, every keystroke would re-run the shell's
+    // render effect, which replaces the host's children — re-inserting the inner
+    // <cr-data-table>. In a real browser that fires disconnected/connected on
+    // the inner element (its reconnect is a no-op guarded by `_mounted`), which
+    // silently kills the inner table's reactivity AND blurs the filter input on
+    // every keystroke. Keeping the structure static and pushing only rows into
+    // the already-mounted inner table avoids both.
+    if (!this._rowsFeed) {
+      this._rowsFeed = effect(() => {
+        const rows = this._filtered.get();
+        if (this._inner) this._inner.rows = rows;
+      });
+    }
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this._rowsFeed) {
+      this._rowsFeed();
+      this._rowsFeed = null;
+    }
   }
 
   render() {
@@ -258,7 +283,11 @@ export class CRCaseTable extends ShellElement {
     }
 
     return CaseTable({
-      rows: this._filtered.get(),
+      // Rows are pushed into the inner table by the _rowsFeed effect set up in
+      // connectedCallback; render() intentionally does not read `_filtered` so
+      // the shell renders its structure once and never tears it down on filter
+      // changes. The inner table starts empty and is populated by that effect.
+      rows: [],
       customColumns: this._customColumns,
       customRowClass: this._customRowClass,
       toolbarMode: this._toolbarMode,
