@@ -882,6 +882,50 @@ cr-attribute-menu {
   font-style: italic;
 }
 
+/* ── Case Details ────────────────────────────────────────────────────────── */
+
+/* The Case Details Section renders a semantic <dl> of label/value pairs. With no
+   styling it fell back to the browser's indented definition-list default. Lay it
+   out instead as an aligned two-column panel: a shaded label column and a value
+   column, each row divided by a hairline — scannable like the dashboard tables,
+   card-framed like the other Sections. */
+.cr-case-details-list {
+  display: grid;
+  grid-template-columns: minmax(8rem, max-content) 1fr;
+  margin: var(--cr-space-4) 0 0;
+  max-width: 48rem;
+  background: var(--cr-color-surface);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-md);
+  box-shadow: var(--cr-shadow-sm);
+  overflow: hidden; /* clip the shaded label column to the rounded corners */
+}
+
+.cr-case-details-label,
+.cr-case-details-value {
+  margin: 0;
+  padding: var(--cr-space-3) var(--cr-space-4);
+  border-top: 1px solid var(--cr-color-border);
+}
+
+/* The first row (first dt + its dd) carries no divider above it. */
+.cr-case-details-label:first-child,
+.cr-case-details-label:first-child + .cr-case-details-value {
+  border-top: none;
+}
+
+.cr-case-details-label {
+  font-size: var(--cr-font-size-sm);
+  font-weight: var(--cr-font-weight-semibold);
+  color: var(--cr-color-text-muted);
+  background: var(--cr-color-surface-2);
+}
+
+.cr-case-details-value {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere; /* long values (ids, emails) wrap rather than overflow */
+}
+
 /* ── Conversation toggle button ──────────────────────────────────────────── */
 
 [data-cr-root] .cr-conversation-toggle-btn {
