@@ -671,6 +671,29 @@ cr-attribute-menu {
   margin: var(--cr-space-2) 0 0;
 }
 
+/* Read-only selected-remediation mirror beneath a failed question on the Review
+   tab (issue #250). Empty when nothing is selected. */
+.cr-question-remediation:not(:empty) {
+  margin-top: var(--cr-space-2);
+  padding-left: var(--cr-space-3);
+  border-left: 2px solid var(--cr-color-border);
+}
+
+.cr-question-remediation-label {
+  margin: 0 0 var(--cr-space-1);
+  font-size: var(--cr-font-size-sm);
+  color: var(--cr-color-text-muted);
+}
+
+.cr-question-remediation-actions {
+  margin: 0;
+  padding-left: var(--cr-space-5);
+}
+
+.cr-question-remediation-freeform {
+  margin: var(--cr-space-1) 0 0;
+}
+
 .cr-remediation-empty {
   color: var(--cr-color-text-muted);
   font-style: italic;

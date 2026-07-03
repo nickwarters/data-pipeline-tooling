@@ -396,7 +396,17 @@ test('CRSummary: renders a remediation block with the action count and each fail
   el.connectedCallback();
   el.update(
     (/** @type {any} */ a) => makeComputeOutcome(a),
-    { 'q-open': { value: 'No' }, 'q-needs': { value: 'No' } },
+    {
+      'q-open': { value: 'No' },
+      // q-needs fails and the Reviewer selected its 'Retrain.' action (issue #250);
+      // only selected actions surface in the Summary.
+      'q-needs': {
+        value: 'No',
+        remediationActions: [
+          { id: 'q-needs-ra-0', text: 'Retrain.', completed: false },
+        ],
+      },
+    },
     true
   );
 
@@ -405,13 +415,16 @@ test('CRSummary: renders a remediation block with the action count and each fail
   const text = allText(block);
   assert.ok(
     /Remediation Actions?:?\s*1/i.test(text),
-    'shows the remediation action count (1)'
+    'shows the selected remediation action count (1)'
   );
   assert.ok(
     text.includes('Greeted?') && text.includes('Needs found?'),
     'lists both failed questions'
   );
-  assert.ok(text.includes('Retrain.'), 'lists the failed Answer’s action');
+  assert.ok(
+    text.includes('Retrain.'),
+    'lists the failed Answer’s selected action'
+  );
 });
 
 /** @type {any} */

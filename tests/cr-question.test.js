@@ -244,7 +244,7 @@ test('CRQuestion: multi-choice read-only access ignores changes', () => {
   assert.equal(events.length, 0);
 });
 
-test('CRQuestion: renders no remediation panel for a failed answer (Review = questions only)', () => {
+test('CRQuestion: failed answer with no selected actions shows an empty remediation container (issue #250)', () => {
   const q = {
     ...Q_YES_NO,
     remediationActions: ['Action 1'],
@@ -255,10 +255,60 @@ test('CRQuestion: renders no remediation panel for a failed answer (Review = que
   el.currentValue = 'No';
   el.connectedCallback();
 
-  // Review tab shows the question fieldset only — no actions beneath the answer.
-  assert.equal(/** @type {any} */ (el)._children.length, 1);
-  const fieldset = /** @type {any} */ (el)._children[0];
-  assert.equal(fieldset.className, 'cr-question');
+  // The Review tab mirrors only *selected* actions; with none selected it shows
+  // the question fieldset plus an empty remediation container (no action list).
+  const children = /** @type {any} */ (el)._children;
+  assert.equal(children.length, 2);
+  assert.equal(children[0].className, 'cr-question');
+  assert.equal(children[1].className, 'cr-question-remediation');
+  assert.equal(children[1]._children.length, 0, 'no selected actions shown');
+});
+
+test('CRQuestion: renders the selected actions + free-form read-only beneath a failed answer (issue #250)', () => {
+  const el = new CRQuestion();
+  el.question = { ...Q_YES_NO, failureCriteria: 'No' };
+  el.currentValue = 'No';
+  el.selectedActions = ['Retrain agent.', 'Update script.'];
+  el.freeFormRemediation = 'Escalate to legal';
+  el.connectedCallback();
+
+  const rem = /** @type {any} */ (el)._children[1];
+  assert.equal(rem.className, 'cr-question-remediation');
+  const label = rem._children[0];
+  assert.equal(label.className, 'cr-question-remediation-label');
+  const list = rem._children[1];
+  assert.equal(list.className, 'cr-question-remediation-actions');
+  assert.deepEqual(
+    list._children.map((/** @type {any} */ li) => li.textContent),
+    ['Retrain agent.', 'Update script.']
+  );
+  const free = rem._children[2];
+  assert.equal(free.className, 'cr-question-remediation-freeform');
+  assert.equal(free.textContent, 'Escalate to legal');
+});
+
+test('CRQuestion: syncRemediation refreshes the read-only display without rebuilding inputs (issue #250)', () => {
+  const el = new CRQuestion();
+  el.question = { ...Q_YES_NO, failureCriteria: 'No' };
+  el.currentValue = 'No';
+  el.connectedCallback();
+
+  const fieldsetBefore = /** @type {any} */ (el)._children[0];
+  el.syncRemediation(['Retrain agent.'], '');
+  const fieldsetAfter = /** @type {any} */ (el)._children[0];
+  assert.equal(
+    fieldsetAfter,
+    fieldsetBefore,
+    'the question inputs are not rebuilt'
+  );
+
+  const rem = /** @type {any} */ (el)._children[1];
+  assert.equal(rem._children[1].className, 'cr-question-remediation-actions');
+  assert.equal(rem._children[1]._children[0].textContent, 'Retrain agent.');
+
+  // Clearing the selection empties the container in place.
+  el.syncRemediation([], '');
+  assert.equal(/** @type {any} */ (el)._children[1]._children.length, 0);
 });
 
 test('CRQuestion: renders single-choice with custom options', () => {
@@ -280,7 +330,7 @@ test('CRQuestion: renders single-choice with custom options', () => {
   assert.equal(span.textContent, ' Maybe');
 });
 
-test('CRQuestion: renders no remediation panel for a passing answer', () => {
+test('CRQuestion: a passing answer shows an empty remediation container', () => {
   const el = new CRQuestion();
   el.question = {
     ...Q_YES_NO,
@@ -288,8 +338,12 @@ test('CRQuestion: renders no remediation panel for a passing answer', () => {
     failureCriteria: 'No',
   };
   el.currentValue = 'Yes';
+  el.selectedActions = [];
   el.connectedCallback();
-  assert.equal(/** @type {any} */ (el)._children.length, 1);
+  const children = /** @type {any} */ (el)._children;
+  assert.equal(children.length, 2);
+  assert.equal(children[1].className, 'cr-question-remediation');
+  assert.equal(children[1]._children.length, 0);
 });
 
 test('CRQuestion: _renderSingleChoice handles non-string currentValue', () => {

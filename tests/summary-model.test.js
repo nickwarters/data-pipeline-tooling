@@ -98,13 +98,20 @@ test('buildSummaryModel: excludes deprecated questions and unanswered scorable q
   assert.deepEqual(model.categoryCounts, [{ category: 'A', pass: 1, fail: 0 }]);
 });
 
-test('buildSummaryModel: remediationActionCount sums declared actions across applicable failed questions', () => {
+test('buildSummaryModel: remediationActionCount sums selected actions + free-form across failed answers (issue #250)', () => {
   const answers = /** @type {Record<string, Answer>} */ ({
-    'q-open': { value: 'No' }, // failed, but no remediationActions → 0
-    'q-needs': { value: 'No' }, // failed → 1 action (q-resolve is now not applicable)
+    // failed, nothing selected but a free-form action → 1
+    'q-open': { value: 'No', freeFormRemediation: 'Apologise to customer' },
+    // failed with one selected canned action → 1 (q-resolve is now not applicable)
+    'q-needs': {
+      value: 'No',
+      remediationActions: [
+        { id: 'q-needs-ra-0', text: 'Retrain agent.', completed: false },
+      ],
+    },
   });
   const model = buildSummaryModel(catalogue, answers);
-  assert.equal(model.remediationActionCount, 1);
+  assert.equal(model.remediationActionCount, 2);
 });
 
 test('buildSummaryModel: remediationActionCount is 0 when there are no failures', () => {
@@ -116,11 +123,17 @@ test('buildSummaryModel: remediationActionCount is 0 when there are no failures'
   assert.equal(buildSummaryModel(catalogue, answers).remediationActionCount, 0);
 });
 
-test('buildSummaryModel: failures list each applicable failed Answer with its actions and stringified value', () => {
+test('buildSummaryModel: failures list each failed Answer with its selected actions + free-form (issue #250)', () => {
   const answers = /** @type {Record<string, Answer>} */ ({
-    'q-open': { value: 'No' },
+    'q-open': { value: 'No' }, // failed, nothing selected → no actions
     'q-needs': { value: 'Yes' },
-    'q-resolve': { value: 'No' },
+    'q-resolve': {
+      value: 'No',
+      remediationActions: [
+        { id: 'q-resolve-ra-0', text: 'Escalate.', completed: false },
+      ],
+      freeFormRemediation: 'Call back within 24h',
+    },
   });
   const model = buildSummaryModel(catalogue, answers);
   assert.deepEqual(model.failures, [
@@ -137,7 +150,9 @@ test('buildSummaryModel: failures list each applicable failed Answer with its ac
       category: 'Discovery',
       text: 'Resolved?',
       answer: 'No',
-      actions: ['Escalate.', 'Follow up.'],
+      // Only the selected canned action, then the free-form entry — not the
+      // question's full ['Escalate.', 'Follow up.'] catalogue.
+      actions: ['Escalate.', 'Call back within 24h'],
       sentActions: [],
     },
   ]);
@@ -156,7 +171,14 @@ test('buildSummaryModel: failure with a multi-choice value joins selections for 
       deprecated: false,
     },
   ];
-  const model = buildSummaryModel(cat, { 'q-prod': { value: ['A', 'B'] } });
+  const model = buildSummaryModel(cat, {
+    'q-prod': {
+      value: ['A', 'B'],
+      remediationActions: [
+        { id: 'q-prod-ra-0', text: 'Fix B.', completed: false },
+      ],
+    },
+  });
   assert.deepEqual(model.failures, [
     {
       id: 'q-prod',

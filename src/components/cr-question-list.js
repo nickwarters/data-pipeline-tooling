@@ -1,6 +1,7 @@
 // @ts-check
 import { captureFocus, restoreFocus } from '../lib/view.js';
 import { CRQuestion } from './cr-question.js';
+import { isFailure } from '../evaluators/failure-evaluator.js';
 
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
@@ -29,9 +30,21 @@ export function QuestionList({ questions, answers, access, existing = [] }) {
   }
 
   return questions.map((question) => {
-    const answerValue = answers[question.id]?.value;
+    const answer = answers[question.id];
+    const answerValue = answer?.value;
     const currentValue =
       answerValue ?? (question.responseType === 'multi-choice' ? [] : '');
+
+    // The Review tab mirrors — read-only — only the Remediation Actions the
+    // Reviewer selected on the Issues tab (issue #250), never the full configured
+    // catalogue. Only a still-failing Answer carries a selection.
+    const failing = isFailure(question, answer);
+    const selectedActions = failing
+      ? (answer?.remediationActions ?? []).map((action) => action.text)
+      : [];
+    const freeFormRemediation = failing
+      ? (answer?.freeFormRemediation ?? '')
+      : '';
 
     const existingElement = existingById.get(question.id);
     const element =
@@ -42,7 +55,10 @@ export function QuestionList({ questions, answers, access, existing = [] }) {
     element.question = question;
     element.access = access;
     element.currentValue = currentValue;
+    element.selectedActions = selectedActions;
+    element.freeFormRemediation = freeFormRemediation;
     if (!existingElement) element._render();
+    else element.syncRemediation(selectedActions, freeFormRemediation);
     return element;
   });
 }

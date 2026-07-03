@@ -5,7 +5,6 @@
 // or framework concerns.
 
 import { evaluate } from './applicability-evaluator.js';
-import { normaliseConfiguredActions } from './configured-outcome.js';
 import { isFailure } from './failure-evaluator.js';
 import {
   actionFieldKeys,
@@ -60,10 +59,15 @@ export function buildSummaryModel(catalogue, answers, captureGroups = []) {
   }
 
   const failedQuestions = applicable.filter((q) => isFailure(q, answers[q.id]));
-  const remediationActionCount = failedQuestions.reduce(
-    (total, q) => total + (q.remediationActions?.length ?? 0),
-    0
-  );
+  // The Summary reflects only what the Reviewer *selected* on each failed Answer
+  // (issue #250) — the chosen canned actions plus any free-form entry — not the
+  // question's full configured catalogue.
+  const remediationActionCount = failedQuestions.reduce((total, q) => {
+    const answer = answers[q.id];
+    const selected = answer?.remediationActions?.length ?? 0;
+    const free = answer?.freeFormRemediation ? 1 : 0;
+    return total + selected + free;
+  }, 0);
 
   const keys = actionFieldKeys(captureGroups);
 
@@ -79,14 +83,18 @@ export function buildSummaryModel(catalogue, answers, captureGroups = []) {
       if (Array.isArray(raw))
         sentActions.push(...coerceRemediationActions(raw, key));
     }
+    // Selected canned actions (issue #250), plus any free-form action, shown as
+    // read-only text. Falls back to nothing when the Reviewer selected none.
+    const actions = (answer.remediationActions ?? []).map(
+      (action) => action.text
+    );
+    if (answer.freeFormRemediation) actions.push(answer.freeFormRemediation);
     return {
       id: q.id,
       category: q.category,
       text: q.text,
       answer: Array.isArray(v) ? v.join(', ') : v,
-      actions: normaliseConfiguredActions(q.remediationActions, q.id).map(
-        (action) => action.text
-      ),
+      actions,
       sentActions,
     };
   });
