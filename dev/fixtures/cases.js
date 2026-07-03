@@ -49,6 +49,10 @@ const _twentyDaysAgo = new Date(
  * Complaints (Journey Owner raises appeals, Controls resolves — ADR-0027):
  *   complaints-case-1 — In-progress, outstanding (assigned to user-reviewer)
  *   complaints-case-2 — Completed, one failure → outcomeAtCompletion=refer
+ *   complaints-case-3 — Completed, every applicable question failed, no appeal
+ *                       (Journey Owner can still raise one; Controls sees none)
+ *   complaints-case-4 — Completed, two failures with Remediation Actions and an
+ *                       open (raised) appeal → ready for Controls to resolve
  *
  * @type {CaseRow[]}
  */
@@ -560,6 +564,114 @@ export const cases = [
     outcomeAtCompletion: 'refer',
     created: '2026-05-02T08:00:00Z',
     etag: 'etag-cm2-v1',
+  },
+  {
+    // Every applicable failable question failed → outcome `fail`, and no appeal
+    // has been raised. Exercises the "no appeal" state on both appeal Sections:
+    // the Journey Owner sees the empty Appeal Section with the Raise Appeal form,
+    // and Controls sees the Appeal Review empty state (nothing to resolve).
+    // (q-cm-root-cause is hidden because q-cm-investigated failed, so the four
+    // remaining failable questions are all failed; q-cm-channel is informational.)
+    id: 'complaints-case-3',
+    caseType: 'complaints',
+    title: 'Complaint #3',
+    status: 'Completed',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-agent-a',
+    answers: {
+      'q-cm-ack': {
+        value: 'No',
+        justification: 'No acknowledgement was sent to the customer.',
+      },
+      'q-cm-investigated': {
+        value: 'No',
+        justification: 'The complaint was closed without any investigation.',
+      },
+      'q-cm-channel': { value: 'Letter' },
+      'q-cm-redress': {
+        value: 'No',
+        justification: 'Upheld complaint closed without offering redress.',
+      },
+      'q-cm-final-response': {
+        value: 'No',
+        justification: 'No final response was issued to the customer.',
+      },
+    },
+    conversation: [],
+    details: {
+      complaintRef: 'CMP-2026-0003',
+      customerName: 'Amara Okafor',
+      complaintDate: '2026-05-06',
+    },
+    notes: '',
+    completedAt: _threeDaysAgo.toISOString(),
+    outcomeAtCompletion: 'fail',
+    created: '2026-05-06T08:00:00Z',
+    etag: 'etag-cm3-v1',
+  },
+  {
+    // Two failures (acknowledgement + redress), each with a selected Remediation
+    // Action, and an appeal the Journey Owner has already raised. The appeal is
+    // still open (`state: 'raised'`), so Controls lands straight on the Appeal
+    // Review resolve form (agree → linked Amended Outcome, or reject). The Journey
+    // Owner sees their raised appeal plus the "already open" note.
+    id: 'complaints-case-4',
+    caseType: 'complaints',
+    title: 'Complaint #4',
+    status: 'Completed',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-agent-b',
+    answers: {
+      'q-cm-ack': {
+        value: 'No',
+        justification: 'Acknowledgement was sent four working days late.',
+        remediationActions: [
+          {
+            id: 'q-cm-ack-ra-0',
+            text: 'Acknowledge the complaint in writing within the regulatory timeframe.',
+            completed: false,
+          },
+        ],
+      },
+      'q-cm-investigated': { value: 'Yes' },
+      'q-cm-root-cause': { value: 'Yes' },
+      'q-cm-channel': { value: 'Email' },
+      'q-cm-redress': {
+        value: 'No',
+        justification:
+          'Redress was not recalculated after the upheld decision.',
+        remediationActions: [
+          {
+            id: 'q-cm-redress-ra-0',
+            text: 'Recalculate and offer appropriate redress to the customer.',
+            completed: false,
+          },
+        ],
+      },
+      'q-cm-final-response': { value: 'Yes' },
+    },
+    conversation: [],
+    details: {
+      complaintRef: 'CMP-2026-0004',
+      customerName: 'Tomasz Kowalski',
+      complaintDate: '2026-05-09',
+    },
+    notes: '',
+    completedAt: _fiveDaysAgo.toISOString(),
+    outcomeAtCompletion: 'fail',
+    appeals: [
+      {
+        id: 'appeal-cm4-1',
+        appellant: 'user-journey-owner-complaints',
+        at: _threeDaysAgo.toISOString(),
+        rationale:
+          'The acknowledgement was delayed only by a same-day system outage on our side, and redress had already been paid to the customer directly outside this review. Please reconsider the Fail outcome.',
+        citedAnswerKeys: ['q-cm-ack', 'q-cm-redress'],
+        state: 'raised',
+      },
+    ],
+    created: '2026-05-09T08:00:00Z',
+    etag: 'etag-cm4-v1',
   },
   // --- product-sale-review fixture cases ---
   {
