@@ -60,6 +60,40 @@ test('createSharePointClient: mock client defaults to reviewer persona when asUs
   assert.ok(user.id, 'should return a user from the default reviewer persona');
 });
 
+test('createSharePointClient: mock client serves list-backed Case Types (issue #249)', async () => {
+  const client = await createSharePointClient(new URLSearchParams('mock=1'));
+
+  // product-sale-review is the only fixture Case Type declaring a separate
+  // list (listName: 'complaints'). Its Cases must be readable list-scoped.
+  const listScoped = await client.getCase('psr-case-1', {
+    listName: 'complaints',
+  });
+  assert.ok(listScoped, 'list-backed Case is readable via its listName');
+  assert.equal(listScoped?.caseType, 'product-sale-review');
+
+  // …and are partitioned OUT of the default store, matching production where
+  // a list-backed Case Type's rows live only in its own list.
+  const defaultRead = await client.getCase('psr-case-1');
+  assert.equal(
+    defaultRead,
+    null,
+    'list-backed Case is not served from the default store'
+  );
+
+  // …but still surface through listCases so dashboards can reach them.
+  const all = await client.listCases({});
+  assert.ok(
+    all.some((c) => c.id === 'psr-case-1'),
+    'list-backed Case still appears in listCases'
+  );
+
+  // Non-list-backed Case Types remain in the default store.
+  assert.ok(
+    await client.getCase('case-1'),
+    'default-store Case still readable'
+  );
+});
+
 test('createSharePointClient: mock client searchPeople is backed by the people fixture', async () => {
   const { people } = await import('../dev/fixtures/people.js');
   const client = await createSharePointClient(new URLSearchParams('mock=1'));

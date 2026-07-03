@@ -121,7 +121,12 @@ export class MockSharePointClient {
    * @returns {Promise<CaseRow[]>}
    */
   async listCases(filter, _opts = {}) {
-    return this._cases
+    // Aggregate the default store with every list-scoped store so list-backed
+    // Case Types (which are partitioned into `_lists` — issue #249) still
+    // surface to unscoped callers such as the reviewer dashboard. Reads/writes
+    // of an individual Case remain list-scoped via `_caseStore`.
+    return [this._cases, ...Object.values(this._lists)]
+      .flat()
       .filter((c) => {
         if (filter.status !== undefined && c.status !== filter.status)
           return false;

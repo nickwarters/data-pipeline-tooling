@@ -229,6 +229,32 @@ test('MockSharePointClient: listCases accepts a listName option without changing
   assert.equal(cases.length, 3);
 });
 
+test('MockSharePointClient: listCases aggregates Cases from list-scoped stores', async () => {
+  const listCase = /** @type {CaseRow} */ ({
+    ...CASES[0],
+    id: 'psr-1',
+    caseType: 'product-sale-review',
+    assignedReviewer: 'user-1',
+    status: 'In-progress',
+  });
+  const client = new MockSharePointClient({
+    cases: CASES,
+    questionDefinitions: QUESTION_DEFS,
+    personas: PERSONAS,
+    lists: { complaints: [listCase] },
+  });
+
+  // A list-backed Case surfaces through listCases (the dashboard entry point)
+  // even though it lives in a list-scoped store rather than the default one.
+  const all = await client.listCases({});
+  assert.equal(all.length, CASES.length + 1);
+  assert.ok(all.some((c) => c.id === 'psr-1'));
+
+  // Filters still apply across the aggregated stores.
+  const forReviewer = await client.listCases({ assignedReviewer: 'user-1' });
+  assert.ok(forReviewer.some((c) => c.id === 'psr-1'));
+});
+
 test('MockSharePointClient: listCases filters by assignedReviewer', async () => {
   const client = makeClient();
   const cases = await client.listCases({ assignedReviewer: 'user-2' });
