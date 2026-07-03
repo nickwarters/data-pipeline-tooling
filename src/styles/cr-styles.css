@@ -926,6 +926,132 @@ cr-attribute-menu {
   overflow-wrap: anywhere; /* long values (ids, emails) wrap rather than overflow */
 }
 
+/* ── Summary ─────────────────────────────────────────────────────────────── */
+
+/* The Summary rolls the whole Case onto one page as a stack of heterogeneous
+   blocks (Outcome, dates, details, question counts, issues, remediation, notes).
+   Unstyled they ran together as one undifferentiated stream. Lay them out as an
+   even-gapped column of surface cards — the same card language as the Review tab
+   and the other refined Sections — so each block reads as its own panel. */
+[data-cr-root] cr-summary {
+  display: grid;
+  gap: var(--cr-space-5);
+  align-content: start;
+}
+
+/* The page-level "Summary" title: let the grid gap own the rhythm below it. */
+[data-cr-root] cr-summary > h2 {
+  margin: 0;
+}
+
+/* The Outcome is the headline verdict: a card with the heading demoted to a
+   quiet label above an enlarged verdict line (colour comes from .cr-outcome-*). */
+[data-cr-root] cr-summary > cr-outcome {
+  display: block;
+  padding: var(--cr-space-4) var(--cr-space-5);
+  background: var(--cr-color-surface);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-md);
+  box-shadow: var(--cr-shadow-sm);
+}
+
+[data-cr-root] cr-summary > cr-outcome h2 {
+  font-family: var(--cr-font-body);
+  font-size: var(--cr-font-size-sm);
+  font-weight: var(--cr-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--cr-tracking-wider);
+  color: var(--cr-color-text-muted);
+  margin: 0 0 var(--cr-space-1);
+}
+
+[data-cr-root] cr-summary > cr-outcome > p {
+  font-size: var(--cr-font-size-lg);
+  margin: 0;
+}
+
+/* Each Summary Section as a surface card with a divider under its heading. */
+[data-cr-root] cr-summary > section {
+  margin: 0;
+  padding: var(--cr-space-4) var(--cr-space-5);
+  background: var(--cr-color-surface);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-md);
+  box-shadow: var(--cr-shadow-sm);
+}
+
+[data-cr-root] cr-summary > section > h3 {
+  margin: 0 0 var(--cr-space-3);
+  padding-bottom: var(--cr-space-2);
+  border-bottom: 1px solid var(--cr-color-border);
+}
+
+/* Key dates and Case Details render a <dl>; align it as label/value columns
+   instead of the browser's indented definition-list default. */
+[data-cr-root] cr-summary dl {
+  display: grid;
+  grid-template-columns: minmax(7rem, max-content) 1fr;
+  gap: var(--cr-space-2) var(--cr-space-4);
+  margin: 0;
+}
+
+[data-cr-root] cr-summary dt {
+  color: var(--cr-color-text-muted);
+  font-weight: var(--cr-font-weight-medium);
+}
+
+[data-cr-root] cr-summary dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* The Questions counts: a plain bulleted list, kept tidy with row spacing. */
+[data-cr-root] cr-summary .cr-summary-counts ul {
+  margin: 0;
+  padding-left: var(--cr-space-5);
+  display: grid;
+  gap: var(--cr-space-1);
+}
+
+/* The count/due lines that sit directly under an Issues / Remediation heading. */
+[data-cr-root] cr-summary .cr-summary-remediation > p,
+[data-cr-root] cr-summary .cr-summary-remediation-tracking > p {
+  color: var(--cr-color-text-muted);
+  font-size: var(--cr-font-size-sm);
+}
+
+/* Failed-Answer entries: drop the list marker and set each out as a left-accented
+   block so the failures are individually scannable within the card. */
+[data-cr-root] cr-summary .cr-summary-remediation > ul,
+[data-cr-root] cr-summary .cr-summary-remediation-tracking > ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 0;
+  display: grid;
+  gap: var(--cr-space-3);
+}
+
+[data-cr-root] cr-summary .cr-summary-remediation > ul > li,
+[data-cr-root] cr-summary .cr-summary-remediation-tracking > ul > li {
+  padding-left: var(--cr-space-3);
+  border-left: 2px solid var(--cr-color-border);
+}
+
+[data-cr-root] cr-summary .cr-summary-remediation li p,
+[data-cr-root] cr-summary .cr-summary-remediation-tracking li p {
+  margin: 0 0 var(--cr-space-1);
+}
+
+/* The Answer line and configured/sent action lists read as supporting detail. */
+[data-cr-root] cr-summary .cr-summary-remediation li ul,
+[data-cr-root] cr-summary .cr-summary-remediation-tracking li ul {
+  margin: var(--cr-space-1) 0 0;
+  padding-left: var(--cr-space-5);
+  color: var(--cr-color-text-muted);
+  font-size: var(--cr-font-size-sm);
+}
+
 /* ── Conversation toggle button ──────────────────────────────────────────── */
 
 [data-cr-root] .cr-conversation-toggle-btn {
