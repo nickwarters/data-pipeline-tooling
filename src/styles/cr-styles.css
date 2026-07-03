@@ -1052,6 +1052,161 @@ cr-attribute-menu {
   font-size: var(--cr-font-size-sm);
 }
 
+/* ── Appeal & Appeal Review ──────────────────────────────────────────────── */
+
+/* Both Sections render an <h2>, a run of read-only record cards, and (for the
+   appellant / Controls) a capture form. Unstyled, the forms collapsed onto
+   shared inline rows — label, control and button ran together — and the records
+   were an undifferentiated paragraph stream. Lay both out as an even-gapped
+   column and adopt the same card + form language as Amend Outcome / Summary. */
+[data-cr-root] cr-appeal,
+[data-cr-root] cr-appeal-review {
+  display: grid;
+  gap: var(--cr-space-5);
+  align-content: start;
+}
+
+[data-cr-root] cr-appeal > h2,
+[data-cr-root] cr-appeal-review > h2 {
+  margin: 0;
+}
+
+/* Each Appeal / resolution record as a surface card, accented on the leading
+   edge to read as an audit entry (cf. .cr-amend-outcome-record). */
+[data-cr-root] cr-appeal .cr-appeal-item,
+[data-cr-root] cr-appeal-review .cr-appeal-review-item {
+  display: grid;
+  gap: var(--cr-space-2);
+  margin: 0;
+  padding: var(--cr-space-4) var(--cr-space-5);
+  background: var(--cr-color-surface);
+  border: 1px solid var(--cr-color-border);
+  border-left: 3px solid var(--cr-color-accent);
+  border-radius: var(--cr-radius-md);
+  box-shadow: var(--cr-shadow-sm);
+}
+
+/* State is the card's eyebrow: a quiet uppercase label above the rationale. */
+[data-cr-root] cr-appeal .cr-appeal-state,
+[data-cr-root] cr-appeal-review .cr-appeal-review-state {
+  margin: 0;
+  font-size: var(--cr-font-size-sm);
+  font-weight: var(--cr-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--cr-tracking-wider);
+  color: var(--cr-color-text-muted);
+}
+
+/* The rationale carries the card — plain body text. */
+[data-cr-root] cr-appeal .cr-appeal-item-rationale,
+[data-cr-root] cr-appeal-review .cr-appeal-review-rationale {
+  margin: 0;
+}
+
+/* Cited Answers and the resolution line read as supporting detail. */
+[data-cr-root] cr-appeal .cr-appeal-item-cited,
+[data-cr-root] cr-appeal .cr-appeal-resolution,
+[data-cr-root] cr-appeal-review .cr-appeal-review-resolution {
+  margin: 0;
+  font-size: var(--cr-font-size-sm);
+  color: var(--cr-color-text-muted);
+}
+
+/* The capture form: a card of stacked field groups so controls no longer
+   collapse onto one line — same frame as .cr-amend-outcome-form. */
+[data-cr-root] cr-appeal .cr-appeal-form,
+[data-cr-root] cr-appeal-review .cr-appeal-review-form {
+  display: grid;
+  gap: var(--cr-space-4);
+  max-width: 40rem;
+  margin: 0;
+  padding: var(--cr-space-5);
+  background: var(--cr-color-surface);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-md);
+  box-shadow: var(--cr-shadow-sm);
+}
+
+/* Standalone prompt labels sit as small, emphasised captions above their field. */
+[data-cr-root] cr-appeal .cr-appeal-form > label,
+[data-cr-root] cr-appeal-review .cr-appeal-review-form > label {
+  margin-bottom: calc(-1 * var(--cr-space-2)); /* hug the control below it */
+  font-size: var(--cr-font-size-sm);
+  font-weight: var(--cr-font-weight-semibold);
+}
+
+/* Choice rows (cite checkboxes, Agree/Reject radios): inline control + text.
+   Qualified with `label` so they out-rank the emphasised `> label` prompt rule
+   above and read as plain, regular-weight options rather than field captions. */
+[data-cr-root] cr-appeal label.cr-appeal-cite,
+[data-cr-root] cr-appeal-review label.cr-appeal-review-agree-label,
+[data-cr-root] cr-appeal-review label.cr-appeal-review-reject-label {
+  display: flex;
+  align-items: center;
+  gap: var(--cr-space-2);
+  margin-bottom: 0;
+  font-size: inherit;
+  font-weight: var(--cr-font-weight-regular);
+}
+
+/* Keep Agree and Reject together as one pair rather than a full form gap apart. */
+[data-cr-root] cr-appeal-review label.cr-appeal-review-reject-label {
+  margin-top: calc(-1 * var(--cr-space-2));
+}
+
+/* Text controls fill the card and pick up the shared focus treatment. */
+[data-cr-root] cr-appeal .cr-appeal-rationale,
+[data-cr-root] cr-appeal-review .cr-appeal-review-rationale-input,
+[data-cr-root] cr-appeal-review .cr-appeal-review-outcome-select,
+[data-cr-root] cr-appeal-review .cr-appeal-review-amend-justification {
+  font: inherit;
+  width: 100%;
+  padding: var(--cr-space-2) var(--cr-space-3);
+  color: inherit;
+  background: var(--cr-color-surface);
+  border: 1px solid var(--cr-color-border);
+  border-radius: var(--cr-radius-md);
+  transition: border-color var(--cr-duration-fast) var(--cr-easing-standard);
+}
+
+[data-cr-root] cr-appeal .cr-appeal-rationale,
+[data-cr-root] cr-appeal-review .cr-appeal-review-rationale-input,
+[data-cr-root] cr-appeal-review .cr-appeal-review-amend-justification {
+  min-height: 6rem;
+  resize: vertical;
+}
+
+[data-cr-root] cr-appeal .cr-appeal-rationale:focus,
+[data-cr-root] cr-appeal-review .cr-appeal-review-rationale-input:focus,
+[data-cr-root] cr-appeal-review .cr-appeal-review-outcome-select:focus,
+[data-cr-root] cr-appeal-review .cr-appeal-review-amend-justification:focus {
+  outline: none;
+  border-color: var(--cr-color-accent);
+  box-shadow: var(--cr-focus-ring);
+}
+
+[data-cr-root] cr-appeal .cr-appeal-error,
+[data-cr-root] cr-appeal-review .cr-appeal-review-error {
+  margin: 0;
+  font-size: var(--cr-font-size-sm);
+  color: var(--cr-color-danger);
+}
+
+/* Keep the CTA to its own width rather than stretching across the grid. */
+[data-cr-root] cr-appeal .cr-appeal-submit,
+[data-cr-root] cr-appeal-review .cr-appeal-review-submit {
+  justify-self: start;
+}
+
+/* Empty / already-open notices: muted, italic, matching the other Sections. */
+[data-cr-root] cr-appeal .cr-appeal-empty,
+[data-cr-root] cr-appeal .cr-appeal-open-note,
+[data-cr-root] cr-appeal-review .cr-appeal-review-empty {
+  margin: 0;
+  color: var(--cr-color-text-muted);
+  font-style: italic;
+}
+
 /* ── Conversation toggle button ──────────────────────────────────────────── */
 
 [data-cr-root] .cr-conversation-toggle-btn {
