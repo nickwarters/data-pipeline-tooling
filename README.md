@@ -12,6 +12,20 @@ files are injected into Content Editor sections in SharePoint pages.
 SharePoint pages are restrictive and clunky. This framework removes all sharepoint "branding" and makes
 the page look like a normal web page.
 
+## Deploying to SharePoint
+
+`scripts/deploy_to_sharepoint.py` syncs the runtime tree (`src/`, `case-types/`, and the production
+host page `host/index.html`) to `Style Library/CODE/CORA` — the Style Library is minimally cached and
+serves fresh files most consistently. Run `python3 scripts/deploy_to_sharepoint.py --site-url <url> --dry-run`
+to preview the add/update/delete plan.
+
+The Content Editor's "Content Link" should point at the deployed
+`host/index.html` (`…/Style Library/CODE/CORA/host/index.html`). That page references the CSS/JS with
+**absolute** server-relative URLs, because a Content Editor resolves relative URLs against the hosting
+`.aspx` page rather than the Style Library — relative paths 404. The host page keeps its asset URLs as a
+`{{CORA_BASE}}` token that the deploy script expands to the target's server-relative base at upload time.
+For local development use `dev/index.html` (relative paths, `?mock=1`), not the host page.
+
 ## Main Components
 
 ### Dashboard page

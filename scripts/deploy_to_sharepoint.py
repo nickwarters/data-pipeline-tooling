@@ -29,6 +29,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Callable, Iterable, Optional, Protocol, runtime_checkable
+from urllib.parse import urlsplit
 
 
 SCRIPT_ROOT = Path(__file__).resolve().parents[1]
@@ -41,11 +42,21 @@ DEFAULT_TARGET_FOLDER = "CODE/CORA"
 # The deployable runtime tree. There is no build step, so source JS is deployed
 # JS (ADR-0001/0005). These roots deliberately exclude dev/, tests/, docs/,
 # node_modules/, and config/dotfiles — they simply live outside the roots.
-DEFAULT_INCLUDE_ROOTS = ("src", "case-types")
+# `host/` holds the production Content Editor host page (host/index.html).
+DEFAULT_INCLUDE_ROOTS = ("src", "case-types", "host")
 
 # Only ship browser-loadable assets. A stray tool artefact under an include root
 # (e.g. a generated .map or an editor backup) is not deployed.
 DEFAULT_INCLUDE_SUFFIXES = (".js", ".css", ".html", ".aspx")
+
+# Suffixes whose content is templated at deploy time (see HOST_BASE_TOKEN).
+TEMPLATED_SUFFIXES = (".html", ".aspx")
+
+# Placeholder in host HTML for the deploy target's server-relative base. A
+# Content Editor resolves relative URLs against the hosting .aspx page, not the
+# Style Library, so host asset references must be absolute server-relative URLs —
+# and the base embeds the site name, which is only known at deploy time.
+HOST_BASE_TOKEN = "{{CORA_BASE}}"
 
 
 # --------------------------------------------------------------------------- #
@@ -154,6 +165,39 @@ class DeployPlan:
             f"{len(self.updates)} to update, "
             f"{len(self.deletes)} to delete"
         )
+
+
+def server_relative_base(site_url: str, library: str, target_folder: str) -> str:
+    """Compute the server-relative base URL of the deploy target.
+
+    ``https://sp.example.com/sites/cora`` + ``Style Library`` + ``CODE/CORA``
+    -> ``/sites/cora/Style Library/CODE/CORA``. Spaces are kept literal (as in
+    the working hand-deploy); the leading site path may be empty for a root-site
+    URL. This is what :data:`HOST_BASE_TOKEN` expands to in host HTML.
+    """
+    site_path = urlsplit(site_url).path.strip("/")
+    segments = [seg for seg in (site_path, library, target_folder) if seg]
+    return "/" + "/".join(seg.strip("/") for seg in segments)
+
+
+def render_templated_files(
+    files: dict[str, "LocalFile"], cora_base: str
+) -> dict[str, "LocalFile"]:
+    """Return ``files`` with :data:`HOST_BASE_TOKEN` expanded in host HTML.
+
+    The substitution happens *before* hashing and comparison so the local hash
+    reflects exactly the bytes uploaded — keeping re-runs idempotent against the
+    rendered content stored remotely. Non-templated files pass through unchanged.
+    """
+    token = HOST_BASE_TOKEN.encode("utf-8")
+    base = cora_base.encode("utf-8")
+    rendered: dict[str, LocalFile] = {}
+    for rel, local_file in files.items():
+        if PurePosixPath(rel).suffix in TEMPLATED_SUFFIXES and token in local_file.content:
+            rendered[rel] = LocalFile(rel, local_file.content.replace(token, base))
+        else:
+            rendered[rel] = local_file
+    return rendered
 
 
 def collect_local_files(
@@ -337,9 +381,11 @@ def build_client(opts: DeployOptions) -> SharePointDeployClient:
 
 def run(opts: DeployOptions, client_factory=build_client, log=print) -> int:
     target = f"{opts.library}/{opts.target_folder}"
+    cora_base = server_relative_base(opts.site_url, opts.library, opts.target_folder)
     log(f"Deploy target: {opts.site_url} -> {target}")
+    log(f"Host asset base ({HOST_BASE_TOKEN}): {cora_base}")
 
-    local = collect_local_files(opts.root)
+    local = render_templated_files(collect_local_files(opts.root), cora_base)
     if not local:
         log("No deployable files found. Nothing to do.")
         return 1
