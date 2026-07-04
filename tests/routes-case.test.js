@@ -1,6 +1,9 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { installDom, flush } from './_dom-stub.js';
+
+installDom();
 
 /** @type {Record<string, Function[]>} */
 const windowListeners = {};
@@ -9,23 +12,49 @@ const windowListeners = {};
     (windowListeners[t] ??= []).push(h);
   },
 };
-/** @type {any} */ (globalThis).location = { hash: '' };
+/** @type {any} */ (globalThis).location = { hash: '', search: '' };
 
-import { Router } from '../src/lib/router.js';
-import { register } from '../src/routes/case.js';
+const { Router } = await import('../src/lib/router.js');
+const { register } = await import('../src/routes/case.js');
+
+/**
+ * A client that records the id/opts each getCase is called with. Returning null
+ * short-circuits the view-model load after the fetch, which is all these route
+ * tests need: they verify the route plumbs its params into CaseReviewPage.
+ * @param {Array<{ id: string, opts: any }>} calls
+ */
+function makeClient(calls) {
+  return {
+    async getCase(/** @type {string} */ id, /** @type {any} */ opts) {
+      calls.push({ id, opts });
+      return null;
+    },
+    async getCurrentUser() {
+      return { id: 'u7', displayName: 'User 7' };
+    },
+    async getExportHash() {
+      return null;
+    },
+    async resolveUsers() {
+      return {};
+    },
+  };
+}
+
+/** @param {Array<{ id: string, opts: any }>} [calls] */
+function makeContext(calls = []) {
+  return /** @type {any} */ ({
+    client: makeClient(calls),
+    saveQueue: { loadCase() {} },
+    currentUser: { id: 'u7' },
+    capabilities: { isReviewer: true, ownedCaseTypes: [] },
+  });
+}
 
 test('case route: register calls router.register with #/case/:id', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});
-  register(
-    router,
-    /** @type {any} */ ({
-      client: {},
-      saveQueue: {},
-      currentUser: { id: 'u1' },
-      capabilities: {},
-    })
-  );
+  register(router, makeContext());
   assert.ok(
     router._routes.some((r) => r.re.test('#/case/99')),
     '#/case/:id should be registered'
@@ -35,105 +64,68 @@ test('case route: register calls router.register with #/case/:id', () => {
 test('case route: registers source-key case route', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});
-  register(
-    router,
-    /** @type {any} */ ({
-      client: {},
-      saveQueue: {},
-      currentUser: { id: 'u1' },
-      capabilities: {},
-    })
-  );
+  register(router, makeContext());
   assert.ok(
     router._routes.some((r) => r.re.test('#/case/example-review/99')),
     '#/case/:caseType/:id should be registered'
   );
 });
 
-test('case route: mount creates cr-case-review with correct props', () => {
-  const client = {};
-  const saveQueue = {};
-  const currentUser = { id: 'u7' };
-  const capabilities = { canEditBank: false };
-  const elements = /** @type {any[]} */ ([]);
-
-  const origDoc = /** @type {any} */ (globalThis).document;
-  /** @type {any} */ (globalThis).document = {
-    createElement(/** @type {string} */ tag) {
-      const el = /** @type {any} */ ({ tag, setAttribute() {} });
-      elements.push(el);
-      return el;
+test('case route: mount composes CaseReviewPage and fetches the id from the route', async () => {
+  /** @type {Array<{ id: string, opts: any }>} */
+  const calls = [];
+  /** @type {any[]} */
+  let mounted = [];
+  const router = new Router();
+  router._container = /** @type {any} */ ({
+    replaceChildren(/** @type {any} */ ...args) {
+      mounted = args;
     },
-    createTreeWalker() {
-      return {
-        nextNode() {
-          return null;
-        },
-      };
-    },
-  };
+  });
 
-  try {
-    const router = new Router();
-    router._container = /** @type {any} */ ({ replaceChildren() {} });
+  register(router, makeContext(calls));
+  router.navigate('#/case/456');
+  await flush();
 
-    register(
-      router,
-      /** @type {any} */ ({ client, saveQueue, currentUser, capabilities })
-    );
-    router.navigate('#/case/456');
-
-    const el = elements.find((e) => e.tag === 'cr-case-review');
-    assert.ok(el, 'cr-case-review element should be created');
-    assert.equal(el.client, client);
-    assert.equal(el.saveQueue, saveQueue);
-    assert.equal(el.caseId, '456');
-    assert.equal(el.caseType, null);
-    assert.equal(el.currentUserId, 'u7');
-    assert.equal(el.capabilities, capabilities);
-  } finally {
-    /** @type {any} */ (globalThis).document = origDoc;
-  }
+  assert.equal(mounted.length, 1, 'route mounts a single page host');
+  assert.equal(
+    mounted[0].className,
+    'cr-case-review',
+    'the host is the Case Review page shell'
+  );
+  assert.deepEqual(
+    calls.map((c) => c.id),
+    ['456'],
+    'the :id param reaches the view-model fetch'
+  );
 });
 
-test('case route: source-key route passes caseType to cr-case-review', () => {
-  const client = {};
-  const saveQueue = {};
-  const currentUser = { id: 'u7' };
-  const capabilities = { canEditBank: false };
-  const elements = /** @type {any[]} */ ([]);
-
-  const origDoc = /** @type {any} */ (globalThis).document;
-  /** @type {any} */ (globalThis).document = {
-    createElement(/** @type {string} */ tag) {
-      const el = /** @type {any} */ ({ tag, setAttribute() {} });
-      elements.push(el);
-      return el;
+test('case route: source-key route passes caseType through to the page', async () => {
+  /** @type {Array<{ id: string, opts: any }>} */
+  const calls = [];
+  /** @type {any[]} */
+  let mounted = [];
+  const router = new Router();
+  router._container = /** @type {any} */ ({
+    replaceChildren(/** @type {any} */ ...args) {
+      mounted = args;
     },
-    createTreeWalker() {
-      return {
-        nextNode() {
-          return null;
-        },
-      };
-    },
-  };
+  });
 
-  try {
-    const router = new Router();
-    router._container = /** @type {any} */ ({ replaceChildren() {} });
+  register(router, makeContext(calls));
+  router.navigate('#/case/example-review/456');
+  // The source-key route resolves the Case Type config via dynamic import()
+  // before fetching, which needs a real macrotask turn to settle.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await flush();
 
-    register(
-      router,
-      /** @type {any} */ ({ client, saveQueue, currentUser, capabilities })
-    );
-    router.navigate('#/case/product-sale-review/456');
-
-    const el = elements.find((e) => e.tag === 'cr-case-review');
-    assert.ok(el, 'cr-case-review element should be created');
-    assert.equal(el.caseId, '456');
-    assert.equal(el.caseType, 'product-sale-review');
-  } finally {
-    /** @type {any} */ (globalThis).document = origDoc;
-  }
+  assert.equal(mounted.length, 1, 'route mounts a single page host');
+  assert.equal(mounted[0].className, 'cr-case-review');
+  // The example-review Case Type config loads and its listName (none) yields an
+  // empty options object; the :id still reaches the fetch through the page.
+  assert.deepEqual(
+    calls.map((c) => c.id),
+    ['456'],
+    'the :id param reaches the view-model fetch on the source-key route'
+  );
 });

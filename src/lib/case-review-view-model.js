@@ -1,8 +1,10 @@
 // @ts-check
-// TODO(simplify-ui): Simplify this orchestration boundary into plain
-// state transition and binding functions that can be called from function
-// components. Avoid preserving controller/view-model objects as a second
-// framework layer around reactive().
+// CaseReviewViewModel is the Case Review page's state model: it loads the Case,
+// catalogue, roles and access, exposes them as signals/computeds, and holds the
+// answer-mutation handlers that persist through the SaveQueue. The page
+// (CaseReviewPage) is a plain function component that reads these signals inside
+// reactive(); the view-model owns state, not rendering, so it is the single
+// state layer reactive() reads — not a controller framework wrapped around it.
 
 import { signal, computed } from './signal.js';
 import { evaluate } from '../evaluators/applicability-evaluator.js';

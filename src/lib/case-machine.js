@@ -1,8 +1,10 @@
 // @ts-check
-// TODO(simplify-ui): Simplify this orchestration boundary into plain
-// state transition and binding functions that can be called from function
-// components. Avoid preserving controller/view-model objects as a second
-// framework layer around reactive().
+// CaseMachine is a pure state model: given a Case row, the current user, their
+// capabilities and the Case Type config, it derives roles, the section access
+// matrix, and the lifecycle transition PATCH fields (ADR-0023/0024). It holds
+// no DOM and no signals — the function-component page (CaseReviewPage) reads it
+// through the view-model, so it is plain domain state, not a UI orchestration
+// layer around reactive().
 
 import {
   evaluateAccess,

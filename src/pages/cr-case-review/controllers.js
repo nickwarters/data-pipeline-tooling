@@ -7,10 +7,7 @@ export {
   CaseReviewHeaderController,
   updateCaseReviewHeader,
 } from './header-controller.js';
-export {
-  CaseReviewNodeRegistry,
-  createCaseReviewNodeRegistry,
-} from './node-registry.js';
+export { createCaseReviewNodeRegistry } from './node-registry.js';
 export {
   CaseReviewTabController,
   bindCaseReviewTabs,

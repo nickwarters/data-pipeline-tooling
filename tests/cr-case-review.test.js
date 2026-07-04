@@ -47,10 +47,69 @@ const EMPTY_CASE_TYPE_CONFIG = {
 };
 
 // ===== IMPORTS =====
-const { CRCaseReview } = await import('../src/pages/cr-case-review.js');
+const { CaseReviewPage } = await import('../src/pages/cr-case-review.js');
 const { SaveQueue } = await import('../src/services/save-queue.js');
 const { completeCase } =
   await import('../src/pages/cr-case-review/completion-controller.js');
+
+/**
+ * Settle the CaseReviewPage async load: getCase/getCurrentUser, the dynamic
+ * import() of the Case Type config, and the attributed-party resolution round
+ * all resolve across a few macrotask turns.
+ */
+async function settle() {
+  for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 0));
+}
+
+/**
+ * Thin test harness around the CaseReviewPage function component. The page is a
+ * plain function returning a reactive() host; this adapter keeps the historic
+ * "set fields, then connect" ergonomics (and proxies the observable host) so
+ * the behaviour assertions below read against rendered output, not page
+ * internals. `_children`, `getAttribute`, and `disconnectedCallback` are the
+ * reactive host's own.
+ */
+class CaseReviewHarness {
+  constructor() {
+    /** @type {any} */
+    this.client = null;
+    /** @type {any} */
+    this.saveQueue = null;
+    this.caseId = '';
+    /** @type {string | null} */
+    this.caseType = null;
+    this.currentUserId = '';
+    /** @type {any} */
+    this.capabilities = null;
+    /** @type {any} */
+    this._host = null;
+  }
+
+  async connectedCallback() {
+    this._host = CaseReviewPage({
+      client: this.client,
+      saveQueue: this.saveQueue,
+      caseId: this.caseId,
+      caseType: this.caseType,
+      currentUserId: this.currentUserId,
+      capabilities: this.capabilities,
+    });
+    await settle();
+  }
+
+  get _children() {
+    return this._host ? this._host._children : [];
+  }
+
+  /** @param {string} name */
+  getAttribute(name) {
+    return this._host ? this._host.getAttribute(name) : null;
+  }
+
+  disconnectedCallback() {
+    this._host?.disconnectedCallback?.();
+  }
+}
 
 // ===== HELPERS =====
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
@@ -127,7 +186,7 @@ const detailsOf = (/** @type {any} */ el) => panelOf(el, 'details');
 // ===== TABBED LAYOUT (ADR-0014, #106) =====
 
 test('CRCaseReview: renders a cr-tabs with Details · Review · Issues · Summary · Notes in order', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -174,7 +233,7 @@ test('CRCaseReview: renders a cr-tabs with Details · Review · Issues · Summar
 });
 
 test('CRCaseReview: there is no standalone Outcome tab', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -208,7 +267,7 @@ test('CRCaseReview: the Summary panel reads the frozen outcomeAtCompletion on a 
   const saveQueue = new SaveQueue(/** @type {any} */ (client));
   saveQueue.loadCase(completedRow);
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -224,7 +283,7 @@ test('CRCaseReview: the Summary panel reads the frozen outcomeAtCompletion on a 
 });
 
 test('CRCaseReview: Summary receives the catalogue and the resolved summarySections (Notes excluded by default)', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -244,7 +303,7 @@ test('CRCaseReview: Summary receives the catalogue and the resolved summarySecti
 });
 
 test('CRCaseReview: each tab panel carries the matching Section content node', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -273,7 +332,7 @@ test('CRCaseReview: notes panel receives notes and Case Justification from the C
     notes: 'general note',
     caseJustification: 'why this case passes',
   };
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient({ caseRow: row }));
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -284,7 +343,7 @@ test('CRCaseReview: notes panel receives notes and Case Justification from the C
 });
 
 test('CRCaseReview: appeal panel is wired with the Case row, access, user and catalogue', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -314,7 +373,7 @@ test('CRCaseReview: appeal panel is wired with the Case row, access, user and ca
 });
 
 test('CRCaseReview: default selected tab is Details', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -324,7 +383,7 @@ test('CRCaseReview: default selected tab is Details', async () => {
 });
 
 test('CRCaseReview: the Adviser (Responsible Party) has no content tabs while In-progress (ADR-0011 amend)', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (
     makeClient({
       caseRow: {
@@ -376,7 +435,7 @@ test('CRCaseReview: no tab is selected when every tab-bearing Section is hidden'
   // only the Conversation overlay — so this is not the all-Sections-hidden
   // short-circuit, yet no tab-bearing Section is visible and selection resolves
   // to none. This exercises the view model's first-visible fallback observably.
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (
     makeClient({
       caseRow: {
@@ -411,7 +470,7 @@ test('CRCaseReview: no tab is selected when every tab-bearing Section is hidden'
 });
 
 test('CRCaseReview: the selected tab updates on cr-tab-change, never the URL', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -441,7 +500,7 @@ test('CRCaseReview: switching tabs does not refetch the Case and preserves the l
     getCaseCalls++;
     return BASE_ROW;
   };
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = new SaveQueue(/** @type {any} */ (client));
   el.caseId = 'c1';
@@ -477,7 +536,7 @@ test('CRCaseReview: persistent chrome (banner, conversation toggle, complete but
     },
   };
   client.getCase = async () => completableRow;
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = new SaveQueue(/** @type {any} */ (client));
   el.saveQueue.loadCase(completableRow);
@@ -507,7 +566,7 @@ test('CRCaseReview: persistent chrome (banner, conversation toggle, complete but
 });
 
 test('CRCaseReview: Conversation is a floating overlay (direct child), not a tab panel', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -528,7 +587,7 @@ test('CRCaseReview: Conversation is a floating overlay (direct child), not a tab
 });
 
 test('CRCaseReview: constructor initializes with nulls/empty', () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   assert.equal(el.client, null);
   assert.equal(el.saveQueue, null);
   assert.equal(el.caseId, '');
@@ -537,14 +596,14 @@ test('CRCaseReview: constructor initializes with nulls/empty', () => {
 });
 
 test('CRCaseReview: connectedCallback returns early if missing deps', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   // No client, saveQueue, or caseId
   await el.connectedCallback();
   assert.equal(/** @type {any} */ (el)._children.length, 0);
 });
 
 test('CRCaseReview: connectedCallback handles case not found', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ ({
     async getCase() {
       return null;
@@ -562,7 +621,7 @@ test('CRCaseReview: connectedCallback handles case not found', async () => {
 });
 
 test('CRCaseReview: connectedCallback handles access denied', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (
     makeClient({
       caseRow: { ...BASE_ROW, assignedReviewer: 'someone-else' },
@@ -835,7 +894,7 @@ test('CRCaseReview: complete button feeds the live answers + computeOutcome into
   const saveQueue = new SaveQueue(/** @type {any} */ (client));
   saveQueue.loadCase(completableRow);
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -942,7 +1001,7 @@ test('completeCase: flushes pending answers before stamping Completed', async ()
 
 test('CRCaseReview: no inline cr-save-status paragraph in rendered children', async () => {
   const client = makeClient();
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = new SaveQueue(/** @type {any} */ (client));
   el.caseId = 'c1';
@@ -958,7 +1017,7 @@ test('CRCaseReview: no inline cr-save-status paragraph in rendered children', as
 });
 
 test('CRCaseReview: remediation and conversation can be hidden', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (
     makeClient({
       caseRow: { ...BASE_ROW, assignedReviewer: 'u1' },
@@ -1008,7 +1067,7 @@ test('CRCaseReview: cr-answer handles unmapped question', async () => {
     enqueued.push(args);
   };
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -1033,7 +1092,7 @@ test('CRCaseReview: cr-answer clears answers for questions that become non-appli
     enqueued.push(args);
   };
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -1073,7 +1132,7 @@ test('CRCaseReview: cr-answer is ignored when questions access is read-only (RP 
     enqueued.push(args);
   };
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -1121,7 +1180,7 @@ test('CRCaseReview: complete button stays hidden for a Completed case even when 
   const saveQueue = new SaveQueue(/** @type {any} */ (client));
   saveQueue.loadCase(completedRow);
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -1168,7 +1227,7 @@ test('CRCaseReview: complete button click is no-op when button is already disabl
   client.getCase = async () => completableRow;
   saveQueue.loadCase(completableRow);
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -1207,7 +1266,7 @@ test('CRCaseReview: complete button click drives the completion PATCH', async ()
   client.getCase = async () => completableRow;
   saveQueue.loadCase(completableRow);
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -1228,7 +1287,7 @@ test('CRCaseReview: complete button click drives the completion PATCH', async ()
 // ===== SECTION PROGRESS INTEGRATION =====
 
 test('CRCaseReview: cr-section-progress is mounted inside the question section', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -1248,7 +1307,7 @@ test('CRCaseReview: cr-section-progress is mounted inside the question section',
 });
 
 test('CRCaseReview: cr-section-progress.update is called with section data on initial render', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -1286,7 +1345,7 @@ test('CRCaseReview: cr-section-progress.update is called with section data on in
 });
 
 test('CRCaseReview: cr-section-progress.update answered count increases after cr-answer', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -1314,7 +1373,7 @@ test('CRCaseReview: cr-section-progress.update answered count increases after cr
 });
 
 test('CRCaseReview: cr-section-progress receives unanswered applicable questions list', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -1344,7 +1403,7 @@ test('CRCaseReview: cr-section-progress receives unanswered applicable questions
 });
 
 test('CRCaseReview: cr-section-jump event on section scrolls first question of that section', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -1366,7 +1425,7 @@ test('CRCaseReview: cr-section-jump event on section scrolls first question of t
 });
 
 test('CRCaseReview: cr-jump-unanswered event scrolls to first unanswered applicable question', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -1386,7 +1445,7 @@ test('CRCaseReview: cr-jump-unanswered event scrolls to first unanswered applica
 // ===== CONVERSATION PANEL TOGGLE =====
 
 test('CRCaseReview: conversation panel starts hidden by default', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -1401,7 +1460,7 @@ test('CRCaseReview: conversation panel starts hidden by default', async () => {
 });
 
 test('CRCaseReview: layout includes a cr-case-details element with the Case row and read-only access', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -1426,7 +1485,7 @@ test('CRCaseReview: layout includes a cr-case-details element with the Case row 
 });
 
 test('CRCaseReview: toggle button is in the header when conversation access is not hidden', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -1445,7 +1504,7 @@ test('CRCaseReview: toggle button is in the header when conversation access is n
 });
 
 test('CRCaseReview: toggle button click shows then hides conversation', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -1475,7 +1534,7 @@ test('CRCaseReview: toggle button click shows then hides conversation', async ()
 });
 
 test('CRCaseReview: data-conversation-mode defaults to popover', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -1486,7 +1545,7 @@ test('CRCaseReview: data-conversation-mode defaults to popover', async () => {
 
 test('CRCaseReview: data-conversation-mode reads sidebar from location.search', async () => {
   /** @type {any} */ (globalThis).location.search = '?conversation=sidebar';
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -1496,13 +1555,35 @@ test('CRCaseReview: data-conversation-mode reads sidebar from location.search', 
   assert.equal(el.getAttribute('data-conversation-mode'), 'sidebar');
 });
 
-// Alt+C keyboard toggling, its no-op on other keys, and document-listener
-// teardown on disconnect are owned by the conversation panel binding and are
-// covered end-to-end in tests/cr-case-review-controllers.test.js
-// (createConversationPanelBinding). Here we only assert the page shell tears
-// the binding down cleanly when it disconnects.
+// The Alt+C shortcut is registered by the page shell through on(document,
+// 'keydown', …); the binding's Alt+C/other-key handling in isolation is covered
+// in tests/cr-case-review-controllers.test.js (createConversationPanelBinding).
+test('CRCaseReview: an Alt+C keydown on the document toggles the conversation panel', async () => {
+  const el = new CaseReviewHarness();
+  el.client = /** @type {any} */ (makeClient());
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  await el.connectedCallback();
+
+  const conversationEl = conversationOf(el);
+  assert.equal(conversationEl.hidden, true, 'conversation starts hidden');
+
+  /** @type {any} */ (globalThis).document._fire('keydown', {
+    altKey: true,
+    code: 'KeyC',
+  });
+
+  assert.equal(
+    conversationEl.hidden,
+    false,
+    'Alt+C on the document shows the panel via the page-registered listener'
+  );
+});
+
+// The page shell tears its reactive view (and the on() document listener) down
+// cleanly when it disconnects.
 test('CRCaseReview: disconnectedCallback tears down the conversation binding without throwing', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -1512,7 +1593,7 @@ test('CRCaseReview: disconnectedCallback tears down the conversation binding wit
 });
 
 test('CRCaseReview: cr-jump-unanswered handler calls scrollIntoView on first unanswered question element', async () => {
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
@@ -1576,7 +1657,7 @@ test('CRCaseReview: Assigned Reviewer can set an Attributed Party, persisting vi
     enqueued.push(args);
   };
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -1620,7 +1701,7 @@ test("CRCaseReview: forwards the Case's Responsible Party to the remediation sec
   const client = makeClient({ caseRow: failRow });
   const saveQueue = new SaveQueue(/** @type {any} */ (client));
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -1645,7 +1726,7 @@ test('CRCaseReview: forwards a null Responsible Party when the Case has none', a
   const client = makeClient({ caseRow: failRow });
   const saveQueue = new SaveQueue(/** @type {any} */ (client));
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -1675,7 +1756,7 @@ test('CRCaseReview: clearing an Attributed Party strips it from the Answer and p
     enqueued.push(args);
   };
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -1711,7 +1792,7 @@ test('CRCaseReview: cr-attribute is ignored when the referenced Answer is missin
     enqueued.push(args);
   };
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -1744,7 +1825,7 @@ test('CRCaseReview: passes the Case Type captureGroups to the remediation sectio
   const client = makeClient({ caseRow: failRow });
   const saveQueue = new SaveQueue(/** @type {any} */ (client));
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -1777,7 +1858,7 @@ test('CRCaseReview: a cr-capture event records the value into Answer.capture and
     enqueued.push(args);
   };
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -1814,7 +1895,7 @@ test('CRCaseReview: a cr-capture for an unknown field key is ignored', async () 
     enqueued.push(args);
   };
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -1852,7 +1933,7 @@ test('CRCaseReview: capture is frozen (ignored) on a Completed case', async () =
     enqueued.push(args);
   };
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -1887,7 +1968,7 @@ test('CRCaseReview: attribution is frozen (read-only) on a Completed case', asyn
     enqueued.push(args);
   };
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -1929,7 +2010,7 @@ test('CRCaseReview: non-assigned viewer cannot attribute (read-only)', async () 
     enqueued.push(args);
   };
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -1992,7 +2073,7 @@ test('CRCaseReview: resolves stored Attributed Party names to authoritative disp
   });
   const saveQueue = new SaveQueue(/** @type {any} */ (client));
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -2038,7 +2119,7 @@ test('CRCaseReview: collects unique Attributed Party accounts across answers bef
   });
   const saveQueue = new SaveQueue(/** @type {any} */ (client));
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -2069,7 +2150,7 @@ test('CRCaseReview: keeps the cached Attributed Party name when resolution retur
   });
   const saveQueue = new SaveQueue(/** @type {any} */ (client));
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -2099,7 +2180,7 @@ test('CRCaseReview: does not resolve users when no Answer carries an Attributed 
   });
   const saveQueue = new SaveQueue(/** @type {any} */ (client));
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';
@@ -2433,7 +2514,7 @@ test('CRCaseReview: complete button passes exportHash as questionBankVersion to 
   const saveQueue = new SaveQueue(/** @type {any} */ (client));
   saveQueue.loadCase(completableRow);
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = 'c1';

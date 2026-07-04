@@ -27,9 +27,52 @@ const { allApplicableAnswered } =
 const { MockSharePointClient } =
   await import('../src/services/mock-sharepoint-client.js');
 const { SaveQueue } = await import('../src/services/save-queue.js');
-const { CRCaseReview } = await import('../src/pages/cr-case-review.js');
+const { CaseReviewPage } = await import('../src/pages/cr-case-review.js');
 const { completeCase } =
   await import('../src/pages/cr-case-review/completion-controller.js');
+
+/** Settle the CaseReviewPage async load across a few macrotask turns. */
+async function settle() {
+  for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 0));
+}
+
+/**
+ * Thin test harness around the CaseReviewPage function component: keeps the
+ * "set fields, then connect" ergonomics and proxies the reactive host so these
+ * end-to-end assertions read against rendered output.
+ */
+class CaseReviewHarness {
+  constructor() {
+    /** @type {any} */
+    this.client = null;
+    /** @type {any} */
+    this.saveQueue = null;
+    this.caseId = '';
+    /** @type {string | null} */
+    this.caseType = null;
+    this.currentUserId = '';
+    /** @type {any} */
+    this.capabilities = null;
+    /** @type {any} */
+    this._host = null;
+  }
+
+  async connectedCallback() {
+    this._host = CaseReviewPage({
+      client: this.client,
+      saveQueue: this.saveQueue,
+      caseId: this.caseId,
+      caseType: this.caseType,
+      currentUserId: this.currentUserId,
+      capabilities: this.capabilities,
+    });
+    await settle();
+  }
+
+  get _children() {
+    return this._host ? this._host._children : [];
+  }
+}
 const { cases } = await import('../dev/fixtures/cases.js');
 const { questionDefinitions } =
   await import('../dev/fixtures/question-definitions.js');
@@ -228,7 +271,7 @@ test('CRCaseReview: connectedCallback calls getCase and saveQueue.loadCase', asy
     return origLoad(row);
   };
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = caseCompletable.id;
@@ -246,7 +289,7 @@ test('CRCaseReview: complete button is hidden when not all applicable questions 
     debounceMs: 0,
   });
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = caseUntouched.id;
@@ -263,7 +306,7 @@ test('CRCaseReview: complete button is visible when all applicable questions ans
     debounceMs: 0,
   });
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = caseCompletable.id;
@@ -318,7 +361,7 @@ test('CRCaseReview: cr-answer with failing value does not auto-select remediatio
     return origEnqueue(id, field, val);
   };
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = caseUntouched.id;
@@ -369,7 +412,7 @@ test('CRCaseReview: changing a failed Answer to a passing value strips remediati
     return origEnqueue(id, f, v);
   };
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = failed.id;
@@ -404,7 +447,7 @@ test('CRCaseReview: hiding a conditional question clears its previous Answer', a
     return origEnqueue(id, f, v);
   };
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = caseUntouched.id;
@@ -447,7 +490,7 @@ test('CRCaseReview: re-showing a conditional question after hide reveals it blan
     return origEnqueue(id, f, v);
   };
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = caseUntouched.id;
@@ -475,7 +518,7 @@ test('CRCaseReview: layout includes a cr-remediation-section', async () => {
     debounceMs: 0,
   });
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = caseUntouched.id;
@@ -496,7 +539,7 @@ test('CRCaseReview: layout includes a cr-conversation element with case messages
     debounceMs: 0,
   });
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = cases[1].id;
@@ -514,7 +557,7 @@ test('CRCaseReview: layout includes a cr-notes element with case notes value', a
     debounceMs: 0,
   });
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = cases[2].id;
@@ -532,7 +575,7 @@ test('CRCaseReview: Summary panel is updated with computeOutcome (Outcome block 
     debounceMs: 0,
   });
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = caseUntouched.id;
@@ -563,7 +606,7 @@ test('CRCaseReview: Summary panel receives allAnswered=true when all applicable 
     debounceMs: 0,
   });
 
-  const el = new CRCaseReview();
+  const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (client);
   el.saveQueue = saveQueue;
   el.caseId = caseCompletable.id;

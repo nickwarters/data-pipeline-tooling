@@ -1184,8 +1184,14 @@ test('createConversationPanelBinding: preserves click and Alt+C conversation tog
   controller.bind(/** @type {any} */ (context));
   controller.update(/** @type {any} */ (context));
   toggle._listeners.click[0]();
-  documentListeners.keydown[0]({ altKey: true, code: 'KeyC' });
-  documentListeners.keydown[0]({ altKey: false, code: 'KeyC' });
+  // The route shell wires handleKeydown through on(document, 'keydown', …);
+  // here we drive the handler directly. Alt+C toggles; other keys are inert.
+  controller.handleKeydown(/** @type {any} */ ({ altKey: true, code: 'KeyC' }));
+  controller.handleKeydown(
+    /** @type {any} */ ({ altKey: false, code: 'KeyC' })
+  );
+  // Alt+other-key does not toggle (the code guard, not just the modifier).
+  controller.handleKeydown(/** @type {any} */ ({ altKey: true, code: 'KeyD' }));
 
   assert.equal(setup.toggleCalls, 2);
   assert.equal(toggle.getAttribute('aria-expanded'), 'true');
@@ -1210,19 +1216,25 @@ test('createConversationPanelBinding: preserves click and Alt+C conversation tog
   );
 });
 
-test('createConversationPanelBinding: removes document-level listeners on disconnect', () => {
-  const setup = makeConversationContext();
+test('createConversationPanelBinding: Alt+C is inert until bound and when toggling is disallowed', () => {
+  // Before bind() captures the toggle callback, the handler is a no-op.
+  const unbound = makeConversationContext();
   const controller = createConversationPanelBinding();
+  controller.handleKeydown(/** @type {any} */ ({ altKey: true, code: 'KeyC' }));
+  assert.equal(unbound.toggleCalls, 0, 'no toggle before bind');
 
-  controller.bind(/** @type {any} */ (setup.context));
-  const handler = controller.keydownHandler;
-  assert.ok(handler);
-  assert.equal(documentListeners.keydown.includes(handler), true);
+  // A Case that disallows toggling never captures the callback, so Alt+C stays
+  // inert even after bind().
+  const disallowed = makeConversationContext({ canToggleConversation: false });
+  controller.bind(/** @type {any} */ (disallowed.context));
+  controller.handleKeydown(/** @type {any} */ ({ altKey: true, code: 'KeyC' }));
+  assert.equal(disallowed.toggleCalls, 0, 'no toggle when disallowed');
 
-  controller.disconnect();
-
-  assert.equal(controller.keydownHandler, null);
-  assert.equal(documentListeners.keydown.includes(handler), false);
+  // Once bound to a toggle-capable Case, Alt+C toggles.
+  const allowed = makeConversationContext();
+  controller.bind(/** @type {any} */ (allowed.context));
+  controller.handleKeydown(/** @type {any} */ ({ altKey: true, code: 'KeyC' }));
+  assert.equal(allowed.toggleCalls, 1, 'Alt+C toggles once bound');
 });
 
 test('updateCompletion: preserves completion button visibility and label', () => {

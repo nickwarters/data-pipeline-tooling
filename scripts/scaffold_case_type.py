@@ -89,11 +89,6 @@ def insert_after_match(content: str, pattern: str, insertion: str, file_path: Pa
 def case_type_module(opts: ScaffoldOptions) -> str:
     prefix = question_prefix(opts.slug)
     return f"""// @ts-check
-// TODO(simplify-ui): Keep case-type configuration as plain data for the
-// function-component UI. Screens should consume these definitions through
-// explicit props/signals, without custom-element lifecycle or controller wiring
-// leaking into configuration modules.
-
 /** @typedef {{import('../src/sharepoint-client.js').CaseTypeConfig}} CaseTypeConfig */
 /** @typedef {{import('../src/sharepoint-client.js').Answer}} Answer */
 

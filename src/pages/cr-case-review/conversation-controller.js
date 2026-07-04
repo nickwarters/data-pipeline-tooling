@@ -2,37 +2,32 @@
 
 /**
  * @typedef {{
- *   keydownHandler: ((event: KeyboardEvent) => void) | null,
  *   bind: (context: import('./types.js').CaseReviewShellContext) => void,
+ *   handleKeydown: (event: KeyboardEvent) => void,
  *   update: (context: import('./types.js').CaseReviewShellContext) => void,
- *   disconnect: () => void,
  * }} ConversationPanelBinding
  */
 
 /**
- * Owns conversation panel toggling, keyboard shortcuts, and element assignment.
+ * Owns conversation panel toggling, its Alt+C keyboard shortcut, and element
+ * assignment. The document-level keydown listener is not managed here: the
+ * Case Review route shell registers `handleKeydown` through `on(document,
+ * 'keydown', …)` from src/lib/view.js, so teardown rides the shell's reactive
+ * lifecycle instead of a hand-rolled add/removeEventListener pair.
+ *
  * @returns {ConversationPanelBinding}
  */
 export function createConversationPanelBinding() {
-  /** @type {((event: KeyboardEvent) => void) | null} */
-  let keydownHandler = null;
   /** @type {(() => void) | null} */
   let togglePanel = null;
   /** @type {boolean} */
   let clickBound = false;
 
   const binding = {
-    get keydownHandler() {
-      return keydownHandler;
-    },
-
     /** @param {import('./types.js').CaseReviewShellContext} context */
     bind(context) {
       const { viewModel: vm, nodes } = context;
-      if (!vm.machine?.canToggleConversation) {
-        binding.disconnect();
-        return;
-      }
+      if (!vm.machine?.canToggleConversation) return;
 
       togglePanel = context.toggleConversationPanel;
       const toggle = nodes.conversationToggle;
@@ -40,36 +35,20 @@ export function createConversationPanelBinding() {
         toggle.addEventListener('click', () => togglePanel?.());
         clickBound = true;
       }
+    },
 
-      if (!keydownHandler) {
-        keydownHandler = (event) => {
-          if (event.altKey && event.code === 'KeyC') {
-            togglePanel?.();
-          }
-        };
-        // TODO(simplify-ui): Replace this manual document listener lifecycle
-        // with on(document, 'keydown', handler) from src/lib/view.js once
-        // conversation event binding moves behind a route shell lifecycle.
-        if (typeof document !== 'undefined' && document.addEventListener) {
-          document.addEventListener('keydown', keydownHandler);
-        }
-      }
+    /**
+     * Alt+C toggles the conversation panel. Inert until `bind` has captured the
+     * toggle callback (i.e. when the Case allows toggling).
+     * @param {KeyboardEvent} event
+     */
+    handleKeydown(event) {
+      if (event.altKey && event.code === 'KeyC') togglePanel?.();
     },
 
     /** @param {import('./types.js').CaseReviewShellContext} context */
     update(context) {
       updateConversationPanel(context);
-    },
-
-    disconnect() {
-      if (
-        keydownHandler &&
-        typeof document !== 'undefined' &&
-        document.removeEventListener
-      ) {
-        document.removeEventListener('keydown', keydownHandler);
-      }
-      keydownHandler = null;
     },
   };
 

@@ -1576,7 +1576,7 @@ cr-attribute-menu {
 /* Floating panel; sits above the content on the right side of the viewport. */
 
 [data-cr-root]
-  cr-case-review[data-conversation-mode='popover']
+  .cr-case-review[data-conversation-mode='popover']
   > cr-conversation:not([hidden]) {
   position: fixed;
   top: var(--cr-space-5);
@@ -1596,11 +1596,11 @@ cr-attribute-menu {
 /* ── Conversation panel — sidebar mode ───────────────────────────────────── */
 /* Full-height panel anchored to the right viewport edge; more "attached" feel
    than the floating popover. Content is not pushed — sidebar overlaps at
-   narrower viewports. A layout-restructuring pass (CSS grid on cr-case-review)
+   narrower viewports. A layout-restructuring pass (CSS grid on .cr-case-review)
    can add true push behaviour if the sidebar wins the A/B. */
 
 [data-cr-root]
-  cr-case-review[data-conversation-mode='sidebar']
+  .cr-case-review[data-conversation-mode='sidebar']
   > cr-conversation:not([hidden]) {
   position: fixed;
   top: 0;

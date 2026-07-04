@@ -1,88 +1,69 @@
 // @ts-check
 import { h } from '../../lib/html.js';
 
-/** @typedef {import('./types.js').CaseReviewNodeRegistry} CaseReviewNodeRegistryShape */
-
+/** @typedef {import('./types.js').CaseReviewNodeRegistry} CaseReviewNodeRegistry */
 /**
- * Owns long-lived nodes for the Case Review page shell.
- *
- * TODO(issue-198): Move the existing CRCaseReview node reuse here without
- * changing element identity expectations that current tests depend on.
+ * The node registry plus its idempotent `ensure()` materializer.
+ * @typedef {CaseReviewNodeRegistry & { ensure: () => EnsurableNodeRegistry }} EnsurableNodeRegistry
  */
-// TODO(simplify-ui): Collapse this controller class into plain action and
-// binding functions as the Case Review page moves to function components plus
-// reactive() for local-signal UI. Avoid preserving controller classes as a
-// second DOM orchestration layer.
-export class CaseReviewNodeRegistry {
-  constructor() {
-    /** @type {CaseReviewNodeRegistryShape['tabs']} */
-    this.tabs = null;
-    /** @type {CaseReviewNodeRegistryShape['details']} */
-    this.details = null;
-    /** @type {CaseReviewNodeRegistryShape['questionsPanel']} */
-    this.questionsPanel = null;
-    /** @type {CaseReviewNodeRegistryShape['questionList']} */
-    this.questionList = null;
-    /** @type {CaseReviewNodeRegistryShape['progress']} */
-    this.progress = null;
-    /** @type {CaseReviewNodeRegistryShape['issues']} */
-    this.issues = null;
-    /** @type {CaseReviewNodeRegistryShape['remediation']} */
-    this.remediation = null;
-    /** @type {CaseReviewNodeRegistryShape['summary']} */
-    this.summary = null;
-    /** @type {CaseReviewNodeRegistryShape['notes']} */
-    this.notes = null;
-    /** @type {CaseReviewNodeRegistryShape['appeal']} */
-    this.appeal = null;
-    /** @type {CaseReviewNodeRegistryShape['appealReview']} */
-    this.appealReview = null;
-    /** @type {CaseReviewNodeRegistryShape['amendOutcome']} */
-    this.amendOutcome = null;
-    /** @type {CaseReviewNodeRegistryShape['conversation']} */
-    this.conversation = null;
-    /** @type {CaseReviewNodeRegistryShape['banner']} */
-    this.banner = null;
-    /** @type {CaseReviewNodeRegistryShape['conversationToggle']} */
-    this.conversationToggle = null;
-    /** @type {CaseReviewNodeRegistryShape['header']} */
-    this.header = null;
-    /** @type {CaseReviewNodeRegistryShape['completeButton']} */
-    this.completeButton = null;
-  }
-
-  /**
-   * @returns {CaseReviewNodeRegistry}
-   */
-  ensure() {
-    this.tabs ??= h('cr-tabs');
-    this.details ??= h('cr-case-details');
-    this.questionsPanel ??= h('section');
-    this.questionList ??= h('cr-question-list');
-    this.progress ??= h('cr-section-progress');
-    this.issues ??= h('cr-remediation-section');
-    this.remediation ??= h('cr-remediation-tracking');
-    this.summary ??= h('cr-summary');
-    this.notes ??= h('cr-notes');
-    this.appeal ??= h('cr-appeal');
-    this.appealReview ??= h('cr-appeal-review');
-    this.amendOutcome ??= h('cr-amend-outcome');
-    this.conversation ??= h('cr-conversation');
-    this.banner ??= h('cr-status-banner');
-    this.conversationToggle ??= /** @type {HTMLButtonElement} */ (
-      h('button', { class: 'cr-conversation-toggle-btn' })
-    );
-    this.header ??= h('header');
-    this.completeButton ??= /** @type {HTMLButtonElement} */ (
-      h('button', { class: 'cr-complete-btn' })
-    );
-    return this;
-  }
-}
 
 /**
- * @returns {CaseReviewNodeRegistry}
+ * Create the long-lived node registry for a Case Review page instance. The
+ * nodes are reused across re-renders so element identity (and the event
+ * listeners bound to it) survives a reactive() render pass; `ensure()` is
+ * idempotent and returns the registry so a render can lazily materialize the
+ * nodes on first paint.
+ *
+ * This is a plain factory, not a controller class — the Case Review page is a
+ * function component (CaseReviewPage) and the panel wiring is a set of plain
+ * bind/update functions, so there is no second DOM orchestration layer.
+ *
+ * @returns {EnsurableNodeRegistry}
  */
 export function createCaseReviewNodeRegistry() {
-  return new CaseReviewNodeRegistry();
+  /** @type {EnsurableNodeRegistry} */
+  const registry = {
+    tabs: null,
+    details: null,
+    questionsPanel: null,
+    questionList: null,
+    progress: null,
+    issues: null,
+    remediation: null,
+    summary: null,
+    notes: null,
+    appeal: null,
+    appealReview: null,
+    amendOutcome: null,
+    conversation: null,
+    banner: null,
+    conversationToggle: null,
+    header: null,
+    completeButton: null,
+    ensure() {
+      registry.tabs ??= h('cr-tabs');
+      registry.details ??= h('cr-case-details');
+      registry.questionsPanel ??= h('section');
+      registry.questionList ??= h('cr-question-list');
+      registry.progress ??= h('cr-section-progress');
+      registry.issues ??= h('cr-remediation-section');
+      registry.remediation ??= h('cr-remediation-tracking');
+      registry.summary ??= h('cr-summary');
+      registry.notes ??= h('cr-notes');
+      registry.appeal ??= h('cr-appeal');
+      registry.appealReview ??= h('cr-appeal-review');
+      registry.amendOutcome ??= h('cr-amend-outcome');
+      registry.conversation ??= h('cr-conversation');
+      registry.banner ??= h('cr-status-banner');
+      registry.conversationToggle ??= /** @type {HTMLButtonElement} */ (
+        h('button', { class: 'cr-conversation-toggle-btn' })
+      );
+      registry.header ??= h('header');
+      registry.completeButton ??= /** @type {HTMLButtonElement} */ (
+        h('button', { class: 'cr-complete-btn' })
+      );
+      return registry;
+    },
+  };
+  return registry;
 }
