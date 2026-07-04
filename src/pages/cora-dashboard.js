@@ -9,6 +9,8 @@ import '../components/cora-owner-summary.js';
 import '../components/cora-kpi-strip.js';
 import { ResponsiblePartyDashboard } from './cora-responsible-party-dashboard.js';
 import { ControlsDashboard } from './cora-controls-dashboard.js';
+import { ActionCentre } from './cora-action-centre.js';
+import { reasonsForCapabilities } from '../services/action-centre-model.js';
 import { isOverdue } from '../evaluators/overdue-evaluator.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
@@ -95,6 +97,21 @@ function renderDashboard({
         currentUserId,
         capabilities,
         eligibleCaseTypes,
+      })
+    );
+  }
+
+  // The unified worklist (issue #287): the per-role reason tables merged into
+  // one reason-grouped, count-driven list. Rendered above the legacy sections
+  // for anyone who holds a worklist reason (Reviewer / Controls / Owner).
+  if (reasonsForCapabilities(capabilities).length > 0) {
+    children.push(
+      ActionCentre({
+        client,
+        capabilities,
+        onOpenCase: (caseRow) => {
+          location.hash = caseRouteFor(caseRow);
+        },
       })
     );
   }

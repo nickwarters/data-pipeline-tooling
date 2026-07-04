@@ -180,6 +180,37 @@ test('DashboardPage: admin capability — both reviewer and owner sections visib
   );
 });
 
+test('DashboardPage: a worklist role renders the Action Centre worklist (issue #287)', async () => {
+  const host = DashboardPage({
+    client: /** @type {any} */ (makeClient()),
+    currentUserId: 'user-reviewer',
+    capabilities: defaultCapabilities({ isReviewer: true }),
+    eligibleCaseTypes: ['example-review'],
+  });
+  await flush();
+
+  assert.ok(
+    findSection(host, 'cora-action-centre'),
+    'should render the Action Centre section'
+  );
+});
+
+test('DashboardPage: an adviser-only user gets no Action Centre (no worklist reason)', async () => {
+  const host = DashboardPage({
+    client: /** @type {any} */ (makeClient()),
+    currentUserId: 'user-rp',
+    capabilities: defaultCapabilities({ isAdviser: true }),
+    eligibleCaseTypes: [],
+  });
+  await flush();
+
+  assert.equal(
+    findSection(host, 'cora-action-centre'),
+    undefined,
+    'advisers have no Action Centre worklist'
+  );
+});
+
 test('DashboardPage: reviewer with no ownedCaseTypes never renders owner section (no error)', async () => {
   const host = DashboardPage({
     client: /** @type {any} */ (makeClient()),
@@ -589,4 +620,60 @@ test('DashboardPage: stamps overdue:true on rows whose dueDate is in the past', 
     false,
     'no-dueDate row should not be overdue'
   );
+});
+
+test('DashboardPage: opening a case from the Action Centre routes to the case (issue #287)', async () => {
+  const overdue = {
+    id: 'od-1',
+    caseType: 'complaints',
+    title: 'Overdue One',
+    status: 'In-progress',
+    assignedReviewer: 'rev',
+    responsibleParty: 'rp',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    dueDate: '2020-01-01T00:00:00Z',
+    overdue: true,
+    etag: 'e-od-1',
+  };
+  const worklistClient = {
+    async listCases(/** @type {any} */ filter) {
+      return filter && filter.overdue ? [overdue] : [];
+    },
+    async countCases(/** @type {any} */ filter) {
+      return filter && filter.overdue ? 1 : 0;
+    },
+  };
+
+  const originalHash = globalThis.location.hash;
+  const host = DashboardPage({
+    client: /** @type {any} */ (worklistClient),
+    currentUserId: 'user-reviewer',
+    capabilities: defaultCapabilities({ isReviewer: true }),
+    eligibleCaseTypes: ['complaints'],
+  });
+  for (let i = 0; i < 25; i++) await Promise.resolve();
+
+  /** @type {any} */
+  let openBtn = null;
+  /** @param {any} n */
+  const findOpen = (n) => {
+    if (n.className === 'cora-ac-open') openBtn = n;
+    for (const c of n._children) findOpen(c);
+  };
+  findOpen(host);
+  assert.ok(
+    openBtn,
+    'the Action Centre renders an Open button for the overdue row'
+  );
+
+  openBtn._fire('click');
+  assert.notEqual(
+    globalThis.location.hash,
+    originalHash,
+    'navigates to the case'
+  );
+  assert.ok(globalThis.location.hash.includes('od-1'));
 });

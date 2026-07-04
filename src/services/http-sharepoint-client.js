@@ -113,48 +113,51 @@ export class HttpSharePointClient {
    * @returns {Promise<CaseRow[]>}
    */
   async listCases(filter, opts = {}) {
-    /** @type {string[]} */
-    const conds = [];
-    if (filter.status) conds.push(`Status eq '${escapeOData(filter.status)}'`);
-    if (filter.assignedReviewer) {
-      conds.push(
-        `AssignedReviewerId eq '${escapeOData(filter.assignedReviewer)}'`
-      );
-    }
-    if (filter.responsibleParty) {
-      conds.push(
-        `ResponsiblePartyId eq '${escapeOData(filter.responsibleParty)}'`
-      );
-    }
-    if (filter.assignedReviewerManager) {
-      conds.push(
-        `AssignedReviewerManager eq '${escapeOData(filter.assignedReviewerManager)}'`
-      );
-    }
-    if (filter.overdue === true) {
-      conds.push(`DueDate lt '${new Date().toISOString()}'`);
-      conds.push(`Status eq 'In-progress'`);
-    }
-    // Bounded server-side report query by the corrected result (ADR-0019). The
-    // column is indexed, so the RP-team / true-result reports stay one $filter
-    // per Case Type with no full-row fetch.
-    if (filter.effectiveOutcome) {
-      conds.push(
-        `EffectiveOutcome eq '${escapeOData(filter.effectiveOutcome)}'`
-      );
-    }
-    if (filter.outcomeOverridden !== undefined) {
-      conds.push(`OutcomeOverridden eq ${filter.outcomeOverridden ? 1 : 0}`);
-    }
     const listName = opts.listName ?? this._caseListName;
+    /** @type {string[]} */
+    const query = [];
+    const expr = buildFilterExpr(filter);
+    if (expr) query.push(`$filter=${encodeURIComponent(expr)}`);
+    if (opts.orderBy) {
+      const dir = opts.orderDir === 'desc' ? ' desc' : '';
+      query.push(`$orderby=${encodeURIComponent(opts.orderBy + dir)}`);
+    }
+    if (opts.top !== undefined) query.push(`$top=${opts.top}`);
+    if (opts.skip !== undefined) query.push(`$skip=${opts.skip}`);
+
     let url = this._listItemsUrl(listName);
-    if (conds.length)
-      url += `?$filter=${encodeURIComponent(conds.join(' and '))}`;
-    const items = await this._getAllPages(url);
+    if (query.length) url += `?${query.join('&')}`;
+
+    // A paged read (`$top`) fetches exactly the requested window — following
+    // `odata.nextLink` would defeat paging and pull the whole backlog. An
+    // unpaged read keeps the historical walk-every-page behaviour.
+    const items =
+      opts.top !== undefined
+        ? await this._readPage(url)
+        : await this._getAllPages(url);
     return items.map((raw) => {
       const item = /** @type {Record<string, unknown>} */ (raw);
       return rowFromItem(item, readEtag(item));
     });
+  }
+
+  /**
+   * Count-only query (issue #287): the OData `$count` companion to `listCases`.
+   * The endpoint returns a bare integer, so a group-header or KPI count never
+   * pulls a single Case row across the wire.
+   *
+   * @param {ListCasesFilter} filter
+   * @param {CaseListOptions} [opts]
+   * @returns {Promise<number>}
+   */
+  async countCases(filter, opts = {}) {
+    const listName = opts.listName ?? this._caseListName;
+    const expr = buildFilterExpr(filter);
+    let url = this._listItemsUrl(listName) + '/$count';
+    if (expr) url += `?$filter=${encodeURIComponent(expr)}`;
+    const body = await this._read(url);
+    const n = Number(body);
+    return Number.isFinite(n) ? n : 0;
   }
 
   /** @returns {Promise<string[]>} */
@@ -337,6 +340,21 @@ export class HttpSharePointClient {
   }
 
   /**
+   * Reads a single response page's `value` array without following
+   * `odata.nextLink` — the paged-read counterpart to `_getAllPages`.
+   * @param {string} url
+   * @returns {Promise<unknown[]>}
+   */
+  async _readPage(url) {
+    const body = await this._read(url);
+    return Array.isArray(body?.value)
+      ? body.value
+      : Array.isArray(/** @type {any} */ (body?.d)?.results)
+        ? /** @type {any} */ (body.d).results
+        : [];
+  }
+
+  /**
    * Walks `odata.nextLink` (or legacy `__next`) until exhausted.
    * @param {string} initialUrl
    * @returns {Promise<unknown[]>}
@@ -489,6 +507,71 @@ function escapeOData(s) {
 }
 
 /**
+ * Build the OData `$filter` expression for a `ListCasesFilter` (issue #287).
+ * Shared by `listCases` and `countCases` so a paged read and its count are
+ * always the same server-side query. Scalar fields AND together; `anyOf` ORs
+ * each (parenthesised) sub-expression for the deduped headline count. Every
+ * predicate targets an indexed column so the query stays cheap at scale.
+ *
+ * @param {ListCasesFilter} filter
+ * @returns {string}
+ */
+function buildFilterExpr(filter) {
+  /** @type {string[]} */
+  const conds = [];
+  if (filter.status) conds.push(`Status eq '${escapeOData(filter.status)}'`);
+  if (filter.assignedReviewer) {
+    conds.push(
+      `AssignedReviewerId eq '${escapeOData(filter.assignedReviewer)}'`
+    );
+  }
+  if (filter.responsibleParty) {
+    conds.push(
+      `ResponsiblePartyId eq '${escapeOData(filter.responsibleParty)}'`
+    );
+  }
+  if (filter.assignedReviewerManager) {
+    conds.push(
+      `AssignedReviewerManager eq '${escapeOData(filter.assignedReviewerManager)}'`
+    );
+  }
+  if (filter.overdue === true) {
+    conds.push(`DueDate lt '${new Date().toISOString()}'`);
+    conds.push(`Status eq 'In-progress'`);
+  }
+  // Action Centre reason flags — indexed boolean columns hoisted onto the Case
+  // row (issue #287) so a reason count is a cheap `$count`, never a blob parse.
+  if (filter.awaitingResponsibleParty !== undefined) {
+    conds.push(
+      `AwaitingResponsibleParty eq ${filter.awaitingResponsibleParty ? 1 : 0}`
+    );
+  }
+  if (filter.hasOpenAppeal !== undefined) {
+    conds.push(`HasOpenAppeal eq ${filter.hasOpenAppeal ? 1 : 0}`);
+  }
+  if (filter.reopened !== undefined) {
+    conds.push(`Reopened eq ${filter.reopened ? 1 : 0}`);
+  }
+  // Bounded server-side report query by the corrected result (ADR-0019). The
+  // column is indexed, so the RP-team / true-result reports stay one $filter
+  // per Case Type with no full-row fetch.
+  if (filter.effectiveOutcome) {
+    conds.push(`EffectiveOutcome eq '${escapeOData(filter.effectiveOutcome)}'`);
+  }
+  if (filter.outcomeOverridden !== undefined) {
+    conds.push(`OutcomeOverridden eq ${filter.outcomeOverridden ? 1 : 0}`);
+  }
+  if (filter.anyOf !== undefined) {
+    const ors = filter.anyOf
+      .map(buildFilterExpr)
+      .filter(Boolean)
+      .map((e) => `(${e})`);
+    if (ors.length) conds.push(`(${ors.join(' or ')})`);
+  }
+  return conds.join(' and ');
+}
+
+/**
  * Map a people-picker entity to a bare-account PersonResult.
  * @param {any} e
  * @returns {PersonResult}
@@ -587,6 +670,18 @@ function rowFromItem(item, etag) {
       typeof item?.RelatedDate === 'string' ? item.RelatedDate : null,
     created: item?.Created != null ? String(item.Created) : undefined,
     overdue: item?.Overdue != null ? Boolean(item.Overdue) : undefined,
+    awaitingResponsibleParty:
+      item?.AwaitingResponsibleParty != null
+        ? Boolean(item.AwaitingResponsibleParty)
+        : undefined,
+    awaitingSince:
+      typeof item?.AwaitingSince === 'string' ? item.AwaitingSince : null,
+    hasOpenAppeal:
+      item?.HasOpenAppeal != null ? Boolean(item.HasOpenAppeal) : undefined,
+    appealRaisedAt:
+      typeof item?.AppealRaisedAt === 'string' ? item.AppealRaisedAt : null,
+    reopened: item?.Reopened != null ? Boolean(item.Reopened) : undefined,
+    reopenedAt: typeof item?.ReopenedAt === 'string' ? item.ReopenedAt : null,
     etag,
   };
 }

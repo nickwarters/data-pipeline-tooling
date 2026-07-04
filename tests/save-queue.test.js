@@ -75,6 +75,9 @@ function makeClient({ patchResponses = [], getCaseRow } = {}) {
     async listCases() {
       return [];
     },
+    async countCases() {
+      return 0;
+    },
     async getCurrentUserGroups() {
       return [];
     },

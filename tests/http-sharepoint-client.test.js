@@ -1480,6 +1480,255 @@ test('HttpSharePointClient: listCases with assignedReviewerManager filters serve
   );
 });
 
+// --- Action Centre: countCases, paging, reason flags (issue #287) ---
+
+test('HttpSharePointClient: countCases hits the $count endpoint and returns a bare integer', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () => new Response('23', { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const n = await client.countCases({ overdue: true });
+
+  assert.equal(n, 23);
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(url.includes('/items/$count'), 'should use the $count endpoint');
+  assert.ok(url.includes("Status eq 'In-progress'"), 'should carry the filter');
+  assert.equal(
+    calls.filter((c) => c.url.includes('$skip')).length,
+    0,
+    'a count never pages'
+  );
+});
+
+test('HttpSharePointClient: countCases with no filter omits $filter and defaults non-numeric bodies to 0', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () => new Response(JSON.stringify(null), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const n = await client.countCases({});
+  assert.equal(n, 0);
+  assert.ok(!calls[0].url.includes('$filter'), 'no filter in the URL');
+  assert.ok(calls[0].url.endsWith('/items/$count'));
+});
+
+test('HttpSharePointClient: countCases maps the reason flags to indexed boolean columns', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () => new Response('4', { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.countCases({
+    awaitingResponsibleParty: true,
+    hasOpenAppeal: false,
+    reopened: true,
+  });
+
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(url.includes('AwaitingResponsibleParty eq 1'));
+  assert.ok(url.includes('HasOpenAppeal eq 0'));
+  assert.ok(url.includes('Reopened eq 1'));
+});
+
+test('HttpSharePointClient: countCases with anyOf builds an OR of parenthesised sub-filters', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () => new Response('7', { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.countCases({
+    anyOf: [
+      { overdue: true },
+      { awaitingResponsibleParty: true },
+      {}, // empty sub-filter contributes nothing and is dropped
+    ],
+  });
+
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(url.includes('(DueDate lt'), 'first sub-filter is parenthesised');
+  assert.ok(url.includes(' or '), 'sub-filters are ORed');
+  assert.ok(url.includes('AwaitingResponsibleParty eq 1'));
+});
+
+test('HttpSharePointClient: listCases with top/skip pages a single window without following nextLink', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            value: [{ Id: 'c1', Title: 'C1', Status: 'In-progress' }],
+            'odata.nextLink': `${WEB_URL}/should-not-follow`,
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const rows = await client.listCases(
+    { awaitingResponsibleParty: true },
+    { top: 4, skip: 8, orderBy: 'awaitingSince', orderDir: 'asc' }
+  );
+
+  assert.equal(rows.length, 1);
+  assert.equal(calls.length, 1, 'a paged read does not follow nextLink');
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(url.includes('$top=4'));
+  assert.ok(url.includes('$skip=8'));
+  assert.ok(url.includes('$orderby=awaitingSince'));
+});
+
+test('HttpSharePointClient: a paged read parses the legacy verbose { d: { results } } shape', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({ d: { results: [{ Id: 'c9', Title: 'C9' }] } }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const rows = await client.listCases({}, { top: 5 });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].id, 'c9');
+});
+
+test('HttpSharePointClient: a paged read of an unrecognised body yields no rows', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ nothing: true }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  assert.deepEqual(await client.listCases({}, { top: 5 }), []);
+});
+
+test('HttpSharePointClient: listCases orderBy desc appends the desc direction', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [] }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.listCases({}, { top: 1, orderBy: 'dueDate', orderDir: 'desc' });
+
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(url.includes('$orderby=dueDate desc'));
+});
+
+test('HttpSharePointClient: listCases maps the reason columns from SP into the CaseRow', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                Id: 'c1',
+                Title: 'C1',
+                Status: 'In-progress',
+                AwaitingResponsibleParty: true,
+                AwaitingSince: '2026-06-01T00:00:00Z',
+                HasOpenAppeal: false,
+                AppealRaisedAt: '2026-06-02T00:00:00Z',
+                Reopened: true,
+                ReopenedAt: '2026-06-03T00:00:00Z',
+              },
+            ],
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const [row] = await client.listCases({}, { top: 10 });
+  assert.equal(row.awaitingResponsibleParty, true);
+  assert.equal(row.awaitingSince, '2026-06-01T00:00:00Z');
+  assert.equal(row.hasOpenAppeal, false);
+  assert.equal(row.appealRaisedAt, '2026-06-02T00:00:00Z');
+  assert.equal(row.reopened, true);
+  assert.equal(row.reopenedAt, '2026-06-03T00:00:00Z');
+});
+
+test('HttpSharePointClient: listCases leaves reason columns undefined/null when SP omits them', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            value: [{ Id: 'c1', Title: 'C1', Status: 'In-progress' }],
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const [row] = await client.listCases({}, { top: 10 });
+  assert.equal(row.awaitingResponsibleParty, undefined);
+  assert.equal(row.awaitingSince, null);
+  assert.equal(row.hasOpenAppeal, undefined);
+  assert.equal(row.appealRaisedAt, null);
+  assert.equal(row.reopened, undefined);
+  assert.equal(row.reopenedAt, null);
+});
+
 test('HttpSharePointClient: getCase maps AssignedReviewerManager and ResponsiblePartyManager from SP columns', async () => {
   const { fetch } = makeFetch([
     {

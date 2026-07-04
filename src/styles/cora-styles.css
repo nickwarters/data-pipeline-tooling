@@ -766,6 +766,274 @@ cora-status-banner {
   font-variant-numeric: tabular-nums;
 }
 
+/* ── Action Centre worklist (issue #287) ─────────────────────────────────────
+   One reason-grouped, count-driven worklist replacing the stack of per-role
+   tables. Each reason carries a tone (mirrors its KPI tile) used for the dot,
+   the count badge and the breached "waiting" age. `appeal` has no semantic
+   token, so a fixed accessible purple is declared here with a dark variant. */
+
+.cora-action-centre {
+  --cora-ac-overdue: var(--cora-color-danger);
+  --cora-ac-awaiting: var(--cora-color-info);
+  --cora-ac-appeal: #6d3fbf;
+  --cora-ac-reopened: var(--cora-color-warning);
+  display: block;
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+  margin-bottom: var(--cora-space-6);
+  overflow: hidden;
+}
+
+@media (prefers-color-scheme: dark) {
+  .cora-action-centre {
+    --cora-ac-appeal: #b18cf0;
+  }
+}
+
+:root[data-theme='dark'] .cora-action-centre {
+  --cora-ac-appeal: #b18cf0;
+}
+
+:root[data-theme='light'] .cora-action-centre {
+  --cora-ac-appeal: #6d3fbf;
+}
+
+.cora-ac-header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--cora-space-2) var(--cora-space-3);
+  padding: var(--cora-space-4);
+  border-bottom: 1px solid var(--cora-color-border);
+}
+
+.cora-ac-title {
+  margin: 0;
+  font-size: var(--cora-font-size-md);
+}
+
+.cora-ac-subtitle {
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-sm);
+}
+
+.cora-ac-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  background: var(--cora-color-surface-2);
+  border-radius: var(--cora-radius-pill);
+  padding: var(--cora-space-0-5);
+}
+
+/* The Action Centre's controls are <button>s, so they must out-specify the
+   `[data-cora-root] button` reset (0,1,1) that otherwise paints them solid
+   accent. Scoping each under [data-cora-root] lifts them to 0,2,0, and the
+   hover/focus states are re-declared so the reset's `button:hover` cannot win
+   them back (same technique as the tabs). */
+[data-cora-root] .cora-ac-toggle-btn,
+[data-cora-root] .cora-ac-toggle-btn:hover {
+  border: 0;
+  background: transparent;
+  color: var(--cora-color-text-muted);
+  font: inherit;
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-medium);
+  padding: var(--cora-space-1) var(--cora-space-3);
+  border-radius: var(--cora-radius-pill);
+  cursor: pointer;
+}
+
+[data-cora-root] .cora-ac-toggle-btn--on,
+[data-cora-root] .cora-ac-toggle-btn--on:hover {
+  background: var(--cora-color-on-surface);
+  color: var(--cora-color-surface);
+  font-weight: var(--cora-font-weight-semibold);
+}
+
+.cora-ac-empty {
+  padding: var(--cora-space-5);
+  color: var(--cora-color-text-muted);
+  text-align: center;
+}
+
+.cora-ac-group {
+  border-top: 1px solid var(--cora-color-border);
+}
+
+.cora-ac-group:first-of-type {
+  border-top: 0;
+}
+
+[data-cora-root] .cora-ac-group-header,
+[data-cora-root] .cora-ac-group-header:hover {
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+  width: 100%;
+  border: 0;
+  background: var(--cora-color-surface-2);
+  color: var(--cora-color-on-surface);
+  font: inherit;
+  font-weight: var(--cora-font-weight-regular);
+  text-align: left;
+  padding: var(--cora-space-2) var(--cora-space-4);
+  cursor: pointer;
+}
+
+.cora-ac-caret {
+  color: var(--cora-color-text-muted);
+  width: 1em;
+}
+
+.cora-ac-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: var(--cora-radius-pill);
+  flex: none;
+}
+
+.cora-ac-dot--overdue {
+  background: var(--cora-ac-overdue);
+}
+.cora-ac-dot--awaiting {
+  background: var(--cora-ac-awaiting);
+}
+.cora-ac-dot--appeal {
+  background: var(--cora-ac-appeal);
+}
+.cora-ac-dot--reopened {
+  background: var(--cora-ac-reopened);
+}
+
+.cora-ac-group-label {
+  font-weight: var(--cora-font-weight-semibold);
+}
+
+.cora-ac-count {
+  color: var(--cora-color-text-on-accent);
+  font-size: var(--cora-font-size-xs);
+  font-weight: var(--cora-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  border-radius: var(--cora-radius-pill);
+  padding: 0 var(--cora-space-2);
+  min-width: 1.5rem;
+  text-align: center;
+}
+
+.cora-ac-count--overdue {
+  background: var(--cora-ac-overdue);
+}
+.cora-ac-count--awaiting {
+  background: var(--cora-ac-awaiting);
+}
+.cora-ac-count--appeal {
+  background: var(--cora-ac-appeal);
+}
+.cora-ac-count--reopened {
+  background: var(--cora-ac-reopened);
+}
+
+.cora-ac-peek {
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-sm);
+  margin-left: var(--cora-space-2);
+}
+
+.cora-ac-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cora-ac-row {
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-3);
+  padding: var(--cora-space-3) var(--cora-space-4);
+  border-top: 1px solid var(--cora-color-border);
+}
+
+.cora-ac-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.cora-ac-row-ref {
+  font-weight: var(--cora-font-weight-semibold);
+}
+
+.cora-ac-row-sub {
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-sm);
+}
+
+.cora-ac-chip {
+  background: var(--cora-color-surface-2);
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-xs);
+  border-radius: var(--cora-radius-sm);
+  padding: var(--cora-space-0-5) var(--cora-space-2);
+  white-space: nowrap;
+}
+
+.cora-ac-wait {
+  font-size: var(--cora-font-size-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cora-ac-wait--overdue {
+  color: var(--cora-ac-overdue);
+  font-weight: var(--cora-font-weight-semibold);
+}
+.cora-ac-wait--awaiting {
+  color: var(--cora-ac-awaiting);
+  font-weight: var(--cora-font-weight-semibold);
+}
+.cora-ac-wait--appeal {
+  color: var(--cora-ac-appeal);
+  font-weight: var(--cora-font-weight-semibold);
+}
+.cora-ac-wait--reopened {
+  color: var(--cora-ac-reopened);
+  font-weight: var(--cora-font-weight-semibold);
+}
+
+[data-cora-root] .cora-ac-open {
+  border: 1px solid var(--cora-color-border-strong);
+  background: var(--cora-color-surface);
+  color: var(--cora-color-accent);
+  font: inherit;
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+  border-radius: var(--cora-radius-md);
+  padding: var(--cora-space-1) var(--cora-space-3);
+  cursor: pointer;
+}
+
+[data-cora-root] .cora-ac-open:hover {
+  background: var(--cora-color-surface-2);
+  border-color: var(--cora-color-border-strong);
+}
+
+.cora-ac-more-row {
+  padding: var(--cora-space-3) var(--cora-space-4);
+  border-top: 1px solid var(--cora-color-border);
+  text-align: center;
+}
+
+[data-cora-root] .cora-ac-more,
+[data-cora-root] .cora-ac-more:hover {
+  border: 0;
+  background: transparent;
+  color: var(--cora-color-accent);
+  font: inherit;
+  font-weight: var(--cora-font-weight-semibold);
+  cursor: pointer;
+}
+
 /* ── Question list ───────────────────────────────────────────────────────── */
 
 /* Review-tab question cards. Brought in line with the other Sections' card

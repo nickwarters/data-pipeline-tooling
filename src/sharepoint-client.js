@@ -168,6 +168,12 @@
  *   relatedDate?: string | null,
  *   created?: string,
  *   overdue?: boolean,
+ *   awaitingResponsibleParty?: boolean,
+ *   awaitingSince?: string | null,
+ *   hasOpenAppeal?: boolean,
+ *   appealRaisedAt?: string | null,
+ *   reopened?: boolean,
+ *   reopenedAt?: string | null,
  *   assignedReviewerManager?: string | null,
  *   etag: string
  * }} CaseRow
@@ -213,8 +219,18 @@
  */
 
 /**
- * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean }} ListCasesFilter
- * @typedef {{ listName?: string }} CaseListOptions
+ * A server-side Case query (issue #287). Every scalar field is an ANDed
+ * equality on an **indexed** Case column so a filtered `$count`/`$top` stays
+ * cheap past the 5000-item threshold (ties to ADR-0007: reason-defining data is
+ * hoisted onto queryable columns, never mined from the `Answers`/`appeals`
+ * blobs). `awaitingResponsibleParty`, `hasOpenAppeal` and `reopened` are the
+ * Action Centre reason flags. `anyOf` is an OR-of-filters (each sub-filter is
+ * itself ANDed, then the sub-filters are ORed) used for the server-deduped
+ * "N cases need you" headline, whose count is deliberately *not* the sum of the
+ * per-reason group counts.
+ *
+ * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, hasOpenAppeal?: boolean, reopened?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, anyOf?: ListCasesFilter[] }} ListCasesFilter
+ * @typedef {{ listName?: string, top?: number, skip?: number, orderBy?: string, orderDir?: 'asc' | 'desc' }} CaseListOptions
  */
 
 /**
@@ -265,6 +281,7 @@
  *   patchCase: (id: string, fields: Partial<CaseRow>, etag: string, opts?: CaseListOptions) => Promise<PatchResult>,
  *   getQuestionDefinitions: (ids: string[]) => Promise<QuestionDefinition[]>,
  *   listCases: (filter: ListCasesFilter, opts?: CaseListOptions) => Promise<CaseRow[]>,
+ *   countCases: (filter: ListCasesFilter, opts?: CaseListOptions) => Promise<number>,
  *   getCurrentUserGroups: () => Promise<string[]>,
  *   getCurrentUser: () => Promise<CurrentUser>,
  *   searchPeople: (query: string) => Promise<PersonResult[]>,

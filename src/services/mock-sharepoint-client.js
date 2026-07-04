@@ -111,55 +111,120 @@ export class MockSharePointClient {
   }
 
   /**
+   * Every Case across the default store and every list-scoped store. Aggregated
+   * so list-backed Case Types (partitioned into `_lists` — issue #249) still
+   * surface to unscoped callers such as the dashboard. Reads/writes of an
+   * individual Case remain list-scoped via `_caseStore`.
+   *
+   * @returns {CaseRow[]}
+   */
+  _allCases() {
+    return [this._cases, ...Object.values(this._lists)].flat();
+  }
+
+  /**
+   * A predicate for one `ListCasesFilter`. Scalar fields are ANDed equalities;
+   * `overdue` is the In-progress + past-due derivation; `anyOf` ORs sub-filters
+   * (issue #287). Shared by `listCases` and `countCases` so a filtered count and
+   * its paged rows can never drift apart within a single point-in-time read.
+   *
    * @param {ListCasesFilter} filter
-   * @param {CaseListOptions} [_opts]
+   * @returns {(c: CaseRow) => boolean}
+   */
+  _predicate(filter) {
+    return (c) => {
+      if (filter.status !== undefined && c.status !== filter.status)
+        return false;
+      if (
+        filter.assignedReviewer !== undefined &&
+        c.assignedReviewer !== filter.assignedReviewer
+      )
+        return false;
+      if (filter.caseType !== undefined && c.caseType !== filter.caseType)
+        return false;
+      if (
+        filter.responsibleParty !== undefined &&
+        c.responsibleParty !== filter.responsibleParty
+      )
+        return false;
+      if (
+        filter.assignedReviewerManager !== undefined &&
+        c.assignedReviewerManager !== filter.assignedReviewerManager
+      )
+        return false;
+      if (
+        filter.effectiveOutcome !== undefined &&
+        c.effectiveOutcome !== filter.effectiveOutcome
+      )
+        return false;
+      if (
+        filter.outcomeOverridden !== undefined &&
+        c.outcomeOverridden !== filter.outcomeOverridden
+      )
+        return false;
+      if (
+        filter.awaitingResponsibleParty !== undefined &&
+        Boolean(c.awaitingResponsibleParty) !== filter.awaitingResponsibleParty
+      )
+        return false;
+      if (
+        filter.hasOpenAppeal !== undefined &&
+        Boolean(c.hasOpenAppeal) !== filter.hasOpenAppeal
+      )
+        return false;
+      if (
+        filter.reopened !== undefined &&
+        Boolean(c.reopened) !== filter.reopened
+      )
+        return false;
+      if (filter.overdue === true) {
+        if (c.status === 'Completed') return false;
+        if (!c.dueDate) return false;
+        if (new Date(c.dueDate) >= new Date()) return false;
+      }
+      if (filter.anyOf !== undefined) {
+        if (!filter.anyOf.some((sub) => this._predicate(sub)(c))) return false;
+      }
+      return true;
+    };
+  }
+
+  /**
+   * @param {ListCasesFilter} filter
+   * @param {CaseListOptions} [opts]
    * @returns {Promise<CaseRow[]>}
    */
-  async listCases(filter, _opts = {}) {
-    // Aggregate the default store with every list-scoped store so list-backed
-    // Case Types (which are partitioned into `_lists` — issue #249) still
-    // surface to unscoped callers such as the reviewer dashboard. Reads/writes
-    // of an individual Case remain list-scoped via `_caseStore`.
-    return [this._cases, ...Object.values(this._lists)]
-      .flat()
-      .filter((c) => {
-        if (filter.status !== undefined && c.status !== filter.status)
-          return false;
-        if (
-          filter.assignedReviewer !== undefined &&
-          c.assignedReviewer !== filter.assignedReviewer
-        )
-          return false;
-        if (filter.caseType !== undefined && c.caseType !== filter.caseType)
-          return false;
-        if (
-          filter.responsibleParty !== undefined &&
-          c.responsibleParty !== filter.responsibleParty
-        )
-          return false;
-        if (
-          filter.assignedReviewerManager !== undefined &&
-          c.assignedReviewerManager !== filter.assignedReviewerManager
-        )
-          return false;
-        if (
-          filter.effectiveOutcome !== undefined &&
-          c.effectiveOutcome !== filter.effectiveOutcome
-        )
-          return false;
-        if (
-          filter.outcomeOverridden !== undefined &&
-          c.outcomeOverridden !== filter.outcomeOverridden
-        )
-          return false;
-        if (filter.overdue === true) {
-          if (c.status === 'Completed') return false;
-          if (!c.dueDate) return false;
-          if (new Date(c.dueDate) >= new Date()) return false;
-        }
-        return true;
-      })
-      .map((c) => ({ ...c }));
+  async listCases(filter, opts = {}) {
+    let rows = this._allCases().filter(this._predicate(filter));
+
+    if (opts.orderBy) {
+      const key = /** @type {keyof CaseRow} */ (opts.orderBy);
+      const dir = opts.orderDir === 'desc' ? -1 : 1;
+      rows = rows.slice().sort((a, b) => {
+        const av = a[key] ?? '';
+        const bv = b[key] ?? '';
+        if (av < bv) return -1 * dir;
+        if (av > bv) return 1 * dir;
+        return 0;
+      });
+    }
+
+    const skip = opts.skip ?? 0;
+    const end = opts.top !== undefined ? skip + opts.top : undefined;
+    return rows.slice(skip, end).map((c) => ({ ...c }));
+  }
+
+  /**
+   * Count-only query (issue #287): the cheap `$count` companion to `listCases`.
+   * Drives every Action Centre group-header count and the deduped headline
+   * without ever holding the matched rows in memory.
+   *
+   * @param {ListCasesFilter} filter
+   * @param {CaseListOptions} [_opts]
+   * @returns {Promise<number>}
+   */
+  async countCases(filter, _opts = {}) {
+    return this._allCases().filter(this._predicate(filter)).length;
   }
 
   /** @returns {Promise<string[]>} */

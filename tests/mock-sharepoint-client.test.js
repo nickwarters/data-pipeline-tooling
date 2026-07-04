@@ -671,3 +671,193 @@ test('MockSharePointClient: getVersionedExport returns null when no versionedExp
   );
   assert.equal(result, null);
 });
+
+// --- Action Centre: countCases, paging, ordering, reason flags (issue #287) ---
+
+/**
+ * @param {string} id
+ * @param {Partial<CaseRow>} [over]
+ * @returns {CaseRow}
+ */
+function reasonCase(id, over = {}) {
+  return /** @type {CaseRow} */ ({
+    id,
+    caseType: 'complaints',
+    title: id,
+    status: 'In-progress',
+    assignedReviewer: '',
+    responsibleParty: '',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    etag: `etag-${id}`,
+    ...over,
+  });
+}
+
+function makeReasonClient() {
+  return new MockSharePointClient({
+    cases: [
+      reasonCase('await-1', {
+        awaitingResponsibleParty: true,
+        awaitingSince: '2026-06-01T00:00:00Z',
+      }),
+      reasonCase('await-2', {
+        awaitingResponsibleParty: true,
+        awaitingSince: '2026-06-20T00:00:00Z',
+      }),
+      reasonCase('appeal-1', {
+        status: 'Completed',
+        hasOpenAppeal: true,
+        appealRaisedAt: '2026-06-15T00:00:00Z',
+        completedAt: '2026-06-10T00:00:00Z',
+      }),
+      reasonCase('reopened-1', {
+        reopened: true,
+        reopenedAt: '2026-06-25T00:00:00Z',
+      }),
+      reasonCase('plain-1', {}),
+    ],
+    questionDefinitions: [],
+    personas: PERSONAS,
+  });
+}
+
+test('MockSharePointClient: listCases filters by assignedReviewerManager', async () => {
+  const client = new MockSharePointClient({
+    cases: [
+      reasonCase('m-1', { assignedReviewerManager: 'mgr-a' }),
+      reasonCase('m-2', { assignedReviewerManager: 'mgr-b' }),
+    ],
+    questionDefinitions: [],
+    personas: PERSONAS,
+  });
+  const rows = await client.listCases({ assignedReviewerManager: 'mgr-a' });
+  assert.deepEqual(
+    rows.map((c) => c.id),
+    ['m-1']
+  );
+});
+
+test('MockSharePointClient: countCases returns the count of matching cases', async () => {
+  const client = makeReasonClient();
+  assert.equal(await client.countCases({ awaitingResponsibleParty: true }), 2);
+  assert.equal(await client.countCases({ hasOpenAppeal: true }), 1);
+  assert.equal(await client.countCases({ reopened: true }), 1);
+  assert.equal(await client.countCases({}), 5);
+});
+
+test('MockSharePointClient: countCases ignores listName option but still counts', async () => {
+  const client = makeReasonClient();
+  assert.equal(
+    await client.countCases({ reopened: true }, { listName: 'anything' }),
+    1
+  );
+});
+
+test('MockSharePointClient: filters treat a missing reason flag as false', async () => {
+  const client = makeReasonClient();
+  const notAwaiting = await client.listCases({
+    awaitingResponsibleParty: false,
+  });
+  assert.equal(notAwaiting.length, 3);
+  assert.ok(!notAwaiting.some((c) => c.id.startsWith('await')));
+});
+
+test('MockSharePointClient: listCases pages with top and skip', async () => {
+  const client = makeReasonClient();
+  const first = await client.listCases({}, { top: 2, skip: 0 });
+  assert.equal(first.length, 2);
+  const second = await client.listCases({}, { top: 2, skip: 2 });
+  assert.equal(second.length, 2);
+  assert.notDeepEqual(
+    first.map((c) => c.id),
+    second.map((c) => c.id)
+  );
+});
+
+test('MockSharePointClient: listCases orders by a column ascending and descending', async () => {
+  const client = makeReasonClient();
+  const asc = await client.listCases(
+    { awaitingResponsibleParty: true },
+    { orderBy: 'awaitingSince', orderDir: 'asc' }
+  );
+  assert.deepEqual(
+    asc.map((c) => c.id),
+    ['await-1', 'await-2']
+  );
+  const desc = await client.listCases(
+    { awaitingResponsibleParty: true },
+    { orderBy: 'awaitingSince', orderDir: 'desc' }
+  );
+  assert.deepEqual(
+    desc.map((c) => c.id),
+    ['await-2', 'await-1']
+  );
+});
+
+test('MockSharePointClient: listCases orderBy defaults to ascending', async () => {
+  const client = makeReasonClient();
+  const rows = await client.listCases(
+    { awaitingResponsibleParty: true },
+    { orderBy: 'awaitingSince' }
+  );
+  assert.deepEqual(
+    rows.map((c) => c.id),
+    ['await-1', 'await-2']
+  );
+});
+
+test('MockSharePointClient: orderBy sorts ties stably and treats a missing key as earliest', async () => {
+  const client = new MockSharePointClient({
+    cases: [
+      reasonCase('tie-a', { reopenedAt: '2026-06-01T00:00:00Z' }),
+      reasonCase('tie-b', { reopenedAt: '2026-06-01T00:00:00Z' }),
+      reasonCase('no-key', {}), // no reopenedAt → sorts first ascending
+    ],
+    questionDefinitions: [],
+    personas: PERSONAS,
+  });
+  const rows = await client.listCases({}, { orderBy: 'reopenedAt' });
+  assert.deepEqual(
+    rows.map((c) => c.id),
+    ['no-key', 'tie-a', 'tie-b']
+  );
+});
+
+test('MockSharePointClient: countCases with anyOf ORs sub-filters, deduped across reasons', async () => {
+  const client = new MockSharePointClient({
+    cases: [
+      // Qualifies for two reasons — must be counted once by an OR-count.
+      reasonCase('multi', {
+        awaitingResponsibleParty: true,
+        reopened: true,
+      }),
+      reasonCase('await-only', { awaitingResponsibleParty: true }),
+      reasonCase('none', {}),
+    ],
+    questionDefinitions: [],
+    personas: PERSONAS,
+  });
+
+  const orCount = await client.countCases({
+    anyOf: [{ awaitingResponsibleParty: true }, { reopened: true }],
+  });
+  assert.equal(orCount, 2, 'the two-reason case is counted once');
+
+  const sumOfGroups =
+    (await client.countCases({ awaitingResponsibleParty: true })) +
+    (await client.countCases({ reopened: true }));
+  assert.equal(sumOfGroups, 3, 'summing groups double-counts the overlap');
+});
+
+test('MockSharePointClient: anyOf combines with a base filter (AND of base, OR of anyOf)', async () => {
+  const client = makeReasonClient();
+  const completedAppealsOrReopened = await client.countCases({
+    status: 'Completed',
+    anyOf: [{ hasOpenAppeal: true }, { reopened: true }],
+  });
+  // Only appeal-1 is Completed; reopened-1 is In-progress and excluded by base.
+  assert.equal(completedAppealsOrReopened, 1);
+});
