@@ -5,7 +5,7 @@ import { installDom } from './_dom-stub.js';
 installDom();
 
 const { CORAQuestionList, QuestionList } =
-  await import('../src/components/cora-question-list.js');
+  await import('../src/components/collections/cora-question-list.js');
 
 test('QuestionList: composes question hosts in catalogue order', () => {
   const questions = [

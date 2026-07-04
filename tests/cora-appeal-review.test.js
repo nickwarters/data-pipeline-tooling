@@ -8,7 +8,7 @@ installDom();
 // DOM stubs must be in place before any src import.
 
 const { CORAAppealReview, resolveAppeal } =
-  await import('../src/components/cora-appeal-review.js');
+  await import('../src/components/collections/cora-appeal-review.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../src/sharepoint-client.js').Appeal} Appeal */
@@ -117,7 +117,10 @@ test('CORAAppealReview: renders an Appeal Review heading first', () => {
 test('CORAAppealReview: edit access with an open Appeal renders the resolve form', () => {
   const { el } = makeEditable();
   assert.ok(findByClass(el, 'cora-appeal-review-form'), 'resolve form present');
-  assert.ok(findByClass(el, 'cora-appeal-review-verdict-agreed'), 'agree radio');
+  assert.ok(
+    findByClass(el, 'cora-appeal-review-verdict-agreed'),
+    'agree radio'
+  );
   assert.ok(
     findByClass(el, 'cora-appeal-review-verdict-rejected'),
     'reject radio'
@@ -281,7 +284,8 @@ test('CORAAppealReview: agreeing without outcome or justification shows error an
 test('CORAAppealReview: agreeing without justification (but with outcome) shows error', () => {
   const { el, queue } = makeEditable();
   findByClass(el, 'cora-appeal-review-verdict-agreed').checked = true;
-  findByClass(el, 'cora-appeal-review-rationale-input').value = 'Valid rationale';
+  findByClass(el, 'cora-appeal-review-rationale-input').value =
+    'Valid rationale';
   findByClass(el, 'cora-appeal-review-outcome-select').value = 'pass';
   // justification left empty
   clickSubmit(el);
@@ -322,7 +326,11 @@ test('CORAAppealReview: after rejecting, the form is replaced by the resolved it
   findByClass(el, 'cora-appeal-review-verdict-rejected').checked = true;
   findByClass(el, 'cora-appeal-review-rationale-input').value = 'No change.';
   clickSubmit(el);
-  assert.equal(findByClass(el, 'cora-appeal-review-form'), null, 'form removed');
+  assert.equal(
+    findByClass(el, 'cora-appeal-review-form'),
+    null,
+    'form removed'
+  );
   assert.ok(findByClass(el, 'cora-appeal-review-item'), 'resolved item shown');
 });
 
@@ -382,9 +390,11 @@ test('CORAAppealReview: agree links the Amended Outcome to the Appeal id via fro
 test('CORAAppealReview: agree also updates caseRow.amendedOutcome in memory', () => {
   const { el } = makeEditable();
   findByClass(el, 'cora-appeal-review-verdict-agreed').checked = true;
-  findByClass(el, 'cora-appeal-review-rationale-input').value = 'Wrong outcome.';
+  findByClass(el, 'cora-appeal-review-rationale-input').value =
+    'Wrong outcome.';
   findByClass(el, 'cora-appeal-review-outcome-select').value = 'pass';
-  findByClass(el, 'cora-appeal-review-amend-justification').value = 'Correction.';
+  findByClass(el, 'cora-appeal-review-amend-justification').value =
+    'Correction.';
   clickSubmit(el);
 
   assert.equal(el.caseRow?.amendedOutcome?.outcome, 'pass');
@@ -482,7 +492,8 @@ test('CORAAppealReview: a null rationale value is treated as empty (does not sav
 test('CORAAppealReview: null outcome value on agree treated as empty (validation fails)', () => {
   const { el, queue } = makeEditable();
   findByClass(el, 'cora-appeal-review-verdict-agreed').checked = true;
-  findByClass(el, 'cora-appeal-review-rationale-input').value = 'Good rationale';
+  findByClass(el, 'cora-appeal-review-rationale-input').value =
+    'Good rationale';
   findByClass(el, 'cora-appeal-review-outcome-select').value =
     /** @type {any} */ (null);
   findByClass(el, 'cora-appeal-review-amend-justification').value =
@@ -498,7 +509,8 @@ test('CORAAppealReview: null outcome value on agree treated as empty (validation
 test('CORAAppealReview: null justification value on agree treated as empty (validation fails)', () => {
   const { el, queue } = makeEditable();
   findByClass(el, 'cora-appeal-review-verdict-agreed').checked = true;
-  findByClass(el, 'cora-appeal-review-rationale-input').value = 'Good rationale';
+  findByClass(el, 'cora-appeal-review-rationale-input').value =
+    'Good rationale';
   findByClass(el, 'cora-appeal-review-outcome-select').value = 'pass';
   findByClass(el, 'cora-appeal-review-amend-justification').value =
     /** @type {any} */ (null);

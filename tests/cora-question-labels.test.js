@@ -5,7 +5,7 @@ import { installDom } from './_dom-stub.js';
 installDom();
 
 const { CORAQuestionLabels, makeLabelId, DEFAULT_LABEL_COLOR } =
-  await import('../src/components/cora-question-labels.js');
+  await import('../src/components/base/cora-question-labels.js');
 const { _resetStore, cases, activeSlug } =
   await import('../src/question-bank/question-bank-store.js');
 

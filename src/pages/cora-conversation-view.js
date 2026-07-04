@@ -6,7 +6,7 @@ import {
   UnknownCaseTypeError,
   loadCaseTypeConfig,
 } from '../../case-types/manifest.js';
-import '../components/cora-conversation.js';
+import '../components/sections/cora-conversation.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */

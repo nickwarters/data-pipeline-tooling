@@ -6,7 +6,7 @@ import { installDom, findByClass, findAllByClass } from './_dom-stub.js';
 installDom();
 
 const { CORARemediationTracking } =
-  await import('../src/components/cora-remediation-tracking.js');
+  await import('../src/components/sections/cora-remediation-tracking.js');
 
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */

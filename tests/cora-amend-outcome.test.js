@@ -8,7 +8,7 @@ installDom();
 // DOM stubs must be in place before any src import.
 
 const { CORAAmendOutcome } =
-  await import('../src/components/cora-amend-outcome.js');
+  await import('../src/components/sections/cora-amend-outcome.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 
@@ -253,7 +253,9 @@ test('CORAAmendOutcome: a missing outcome blocks the write and reveals an error'
 
 test('CORAAmendOutcome: a null outcome selection is treated as empty', () => {
   const { el, queue } = makeEditable();
-  findByClass(el, 'cora-amend-outcome-select').value = /** @type {any} */ (null);
+  findByClass(el, 'cora-amend-outcome-select').value = /** @type {any} */ (
+    null
+  );
   findByClass(el, 'cora-amend-outcome-justification').value = 'has a reason';
   findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
   assert.equal(queue.enqueued.length, 0);
@@ -262,9 +264,8 @@ test('CORAAmendOutcome: a null outcome selection is treated as empty', () => {
 test('CORAAmendOutcome: a null justification value is treated as empty', () => {
   const { el, queue } = makeEditable();
   findByClass(el, 'cora-amend-outcome-select').value = 'pass';
-  findByClass(el, 'cora-amend-outcome-justification').value = /** @type {any} */ (
-    null
-  );
+  findByClass(el, 'cora-amend-outcome-justification').value =
+    /** @type {any} */ (null);
   findByClass(el, 'cora-amend-outcome-submit')._listeners['click'][0]();
   assert.equal(queue.enqueued.length, 0);
 });

@@ -5,7 +5,7 @@ import { installDom } from './_dom-stub.js';
 installDom();
 
 const { CORAWordingEditor, WordingEditor } =
-  await import('../src/components/cora-wording-editor.js');
+  await import('../src/components/sections/cora-wording-editor.js');
 const { _resetStore, cases, activeSlug, commit } =
   await import('../src/question-bank/question-bank-store.js');
 

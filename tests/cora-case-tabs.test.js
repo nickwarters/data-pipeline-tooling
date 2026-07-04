@@ -5,7 +5,7 @@ import { installDom } from './_dom-stub.js';
 installDom();
 
 const { CORACaseTabs, CaseTabs } =
-  await import('../src/components/cora-case-tabs.js');
+  await import('../src/components/collections/cora-case-tabs.js');
 const {
   _resetStore,
   activeSlug,

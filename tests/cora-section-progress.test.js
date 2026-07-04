@@ -7,7 +7,7 @@ installDom();
 
 // ===== IMPORTS =====
 const { CORASectionProgress, SectionProgress } =
-  await import('../src/components/cora-section-progress.js');
+  await import('../src/components/base/cora-section-progress.js');
 
 /** @typedef {import('../src/evaluators/section-progress.js').SectionProgress} SectionProgress */
 

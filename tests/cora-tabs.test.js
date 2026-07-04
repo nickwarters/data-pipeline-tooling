@@ -10,7 +10,7 @@ const definedElements = /** @type {any} */ (globalThis).customElements._defined;
 
 // ===== IMPORTS (after stubs) =====
 const { CORATabs, Tabs, activeTabId, visibleTabs } =
-  await import('../src/components/cora-tabs.js');
+  await import('../src/components/base/cora-tabs.js');
 
 /**
  * Build a configured cora-tabs element and connect it.

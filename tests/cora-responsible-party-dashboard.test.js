@@ -10,7 +10,8 @@ useElementClass(ConnectingStubEl, { registry: true });
 // ===== IMPORTS (after stubs) =====
 const { ResponsiblePartyDashboard } =
   await import('../src/pages/cora-responsible-party-dashboard.js');
-const { CORACaseTable } = await import('../src/components/cora-case-table.js');
+const { CORACaseTable } =
+  await import('../src/components/collections/cora-case-table.js');
 
 /**
  * Find CORACaseTable instances by walking _children (custom-element tagNames

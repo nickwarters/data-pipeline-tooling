@@ -2783,7 +2783,7 @@ Agent did not check the fraud alert flag before discussing account balance.</tex
     <script type="module">
       import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js';
       import { people } from './fixtures/people.js';
-      import { CORAPeoplePicker } from '../src/components/cora-people-picker.js';
+      import { CORAPeoplePicker } from '../src/components/base/cora-people-picker.js';
 
       const client = new MockSharePointClient({
         cases: [],
@@ -2803,7 +2803,7 @@ Agent did not check the fraud alert flag before discussing account balance.</tex
       });
 
       // ── cora-tabs demo ──────────────────────────────────────────────────────
-      import('../src/components/cora-tabs.js').then(() => {
+      import('../src/components/base/cora-tabs.js').then(() => {
         const tabs = document.getElementById('sg-tabs');
 
         const panel = (text) => {

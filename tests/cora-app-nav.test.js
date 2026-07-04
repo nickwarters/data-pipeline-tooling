@@ -8,7 +8,8 @@ installDom();
 /** @type {any} */ (globalThis).location = { hash: '#/dashboard' };
 
 // ===== IMPORTS (after stubs) =====
-const { CORAAppNav } = await import('../src/components/cora-app-nav.js');
+const { CORAAppNav } =
+  await import('../src/components/sections/cora-app-nav.js');
 
 /**
  * Find a nav item (<a class="cora-app-nav-item">) with the given href.

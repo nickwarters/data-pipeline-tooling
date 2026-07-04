@@ -7,7 +7,8 @@ installDom();
 
 // DOM stubs must be in place before any src import
 
-const { CORAOutcome, Outcome } = await import('../src/components/cora-outcome.js');
+const { CORAOutcome, Outcome } =
+  await import('../src/components/sections/cora-outcome.js');
 
 /** @param {Record<string, import('../src/sharepoint-client.js').Answer>} answers */
 function makeComputeOutcome(answers) {

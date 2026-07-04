@@ -4,7 +4,7 @@ import { reactive } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import { parseTeamCasesParams } from '../services/team-cases-params.js';
 import { fetchTeamCases } from '../services/team-cases-fetcher.js';
-import '../components/cora-case-table.js';
+import '../components/collections/cora-case-table.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */

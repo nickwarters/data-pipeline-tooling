@@ -7,7 +7,7 @@ installDom();
 
 // ===== IMPORTS =====
 const { CORAQuestion, Question } =
-  await import('../src/components/cora-question.js');
+  await import('../src/components/sections/cora-question.js');
 
 // ===== TESTS =====
 

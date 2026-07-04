@@ -6,7 +6,7 @@ import { installDom, findByClass, findAllByClass, flush } from './_dom-stub.js';
 installDom();
 
 const { CORAKpiStrip, renderKpiStrip } =
-  await import('../src/components/cora-kpi-strip.js');
+  await import('../src/components/sections/cora-kpi-strip.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 

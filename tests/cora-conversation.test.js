@@ -8,7 +8,8 @@ installDom();
 const docListeners = /** @type {any} */ (globalThis).document._listeners;
 
 // ===== IMPORTS (after stubs) =====
-const { CORAConversation } = await import('../src/components/cora-conversation.js');
+const { CORAConversation } =
+  await import('../src/components/sections/cora-conversation.js');
 
 /** @typedef {import('../src/sharepoint-client.js').Message} Message */
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */

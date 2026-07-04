@@ -7,7 +7,7 @@ installDom();
 
 // ===== IMPORTS (after stubs) =====
 const { CORAOwnerSummary } =
-  await import('../src/components/cora-owner-summary.js');
+  await import('../src/components/sections/cora-owner-summary.js');
 
 // ===== HELPERS =====
 const now = new Date();

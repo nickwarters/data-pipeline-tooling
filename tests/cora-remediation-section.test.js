@@ -7,7 +7,7 @@ installDom();
 
 // ===== IMPORTS (after stubs) =====
 const { CORARemediationSection } =
-  await import('../src/components/cora-remediation-section.js');
+  await import('../src/components/sections/cora-remediation-section.js');
 
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
@@ -678,7 +678,9 @@ test('CORARemediationSection: the menu onChange re-dispatches as bubbling cora-a
 
   /** @type {any[]} */
   const events = [];
-  el.addEventListener('cora-attribute', (/** @type {any} */ e) => events.push(e));
+  el.addEventListener('cora-attribute', (/** @type {any} */ e) =>
+    events.push(e)
+  );
 
   // Picking someone in the embedded people picker invokes the menu's onChange.
   findByTag(el, 'cora-people-picker')._fire('cora-person-selected', {
@@ -714,7 +716,9 @@ test('CORARemediationSection: a null cora-attribute-change re-dispatches cora-at
 
   /** @type {any[]} */
   const events = [];
-  el.addEventListener('cora-attribute', (/** @type {any} */ e) => events.push(e));
+  el.addEventListener('cora-attribute', (/** @type {any} */ e) =>
+    events.push(e)
+  );
 
   // Clearing the attribution invokes the menu's onChange with a null party.
   findByClass(el, 'cora-attribute-clear')._fire('click');

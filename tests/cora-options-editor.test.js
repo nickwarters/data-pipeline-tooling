@@ -5,7 +5,7 @@ import { installDom } from './_dom-stub.js';
 installDom();
 
 const { CORAOptionsEditor, OptionsEditor } =
-  await import('../src/components/cora-options-editor.js');
+  await import('../src/components/base/cora-options-editor.js');
 
 test('OptionsEditor: plain function renders nothing when no question set', () => {
   assert.equal(

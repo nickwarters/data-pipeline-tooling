@@ -9,7 +9,7 @@ const docListeners = /** @type {any} */ (globalThis).document._listeners;
 
 // ===== IMPORTS (after stubs) =====
 const { AttributeMenu } =
-  await import('../src/components/cora-attribute-menu.js');
+  await import('../src/components/sections/cora-attribute-menu.js');
 
 // ===== HELPERS =====
 

@@ -8,8 +8,8 @@
 /** @returns {Promise<void>} */
 async function boot() {
   await Promise.all([
-    import('./components/cora-app-nav.js'),
-    import('./components/cora-command-palette.js'),
+    import('./components/sections/cora-app-nav.js'),
+    import('./components/sections/cora-command-palette.js'),
     import('./pages/cora-case-review.js'),
     import('./question-bank/cora-bank-editor.js'),
   ]);
@@ -39,9 +39,10 @@ async function boot() {
   const appEl = /** @type {Element} */ (document.getElementById('app'));
   appEl.setAttribute('data-cora-root', '');
 
-  const nav = /** @type {import('./components/cora-app-nav.js').CORAAppNav} */ (
-    document.createElement('cora-app-nav')
-  );
+  const nav =
+    /** @type {import('./components/sections/cora-app-nav.js').CORAAppNav} */ (
+      document.createElement('cora-app-nav')
+    );
   nav.capabilities = capabilities;
   appEl.appendChild(nav);
   document.body.appendChild(document.createElement('cora-command-palette'));

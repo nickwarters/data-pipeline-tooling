@@ -5,7 +5,7 @@ import { installDom, findByClass, findAllByClass } from './_dom-stub.js';
 
 installDom();
 
-await import('../src/components/cora-capture-groups.js');
+await import('../src/components/sections/cora-capture-groups.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaptureGroup} CaptureGroup */
 

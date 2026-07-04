@@ -58,29 +58,46 @@ src/
     signal.js                   # home-grown signal/computed/effect (~50 LOC)
     router.js                   # hash-based SPA router
 
-  components/                   # reusable cora-* custom elements
-    cora-element.js               # base class
-    cora-allocation.js
-    cora-case-tabs.js
-    cora-compile-drawer.js
-    cora-conversation.js
-    cora-data-table.js
-    cora-case-table.js
-    cora-notes.js
-    cora-options-editor.js
-    cora-outcome.js
-    cora-owner-summary.js
-    cora-question.js
-    cora-question-list.js
-    cora-question-card.js
-    cora-remediation-editor.js
-    cora-remediation-section.js
-    cora-showwhen-editor.js
-    cora-showwhen-group.js
-    cora-showwhen-leaf.js
-    cora-status-banner.js
-    cora-toast.js
-    cora-wording-editor.js
+  components/                   # reusable cora-* custom elements, layered by dependency
+    base/                       # leaf primitives — compose no other component (cf. lib/signal.js)
+      cora-data-table.js
+      cora-options-editor.js
+      cora-people-picker.js
+      cora-question-labels.js
+      cora-section-progress.js
+      cora-showwhen-leaf.js
+      cora-status-banner.js
+      cora-tabs.js
+      cora-toast.js
+    sections/                   # domain-feature units: take config, wire base components together
+      cora-allocation.js
+      cora-amend-outcome.js
+      cora-app-nav.js
+      cora-appeal.js
+      cora-attribute-menu.js
+      cora-capture-groups.js
+      cora-case-details.js
+      cora-command-palette.js
+      cora-conversation.js
+      cora-kpi-strip.js
+      cora-notes.js
+      cora-outcome.js
+      cora-owner-summary.js
+      cora-question.js
+      cora-question-card.js
+      cora-remediation-editor.js
+      cora-remediation-section.js
+      cora-remediation-tracking.js
+      cora-showwhen-editor.js
+      cora-showwhen-group.js
+      cora-summary.js
+      cora-wording-editor.js
+    collections/                # page/tab-level assemblies mounted directly by pages
+      cora-appeal-review.js
+      cora-case-table.js
+      cora-case-tabs.js
+      cora-compile-drawer.js
+      cora-question-list.js
 
   pages/                        # top-level view components (one per route)
     cora-case-review.js
@@ -132,5 +149,6 @@ case-types/                     # one module per Case Type (lazy-loaded by cora-
 dev/
   fixtures/                     # mock data used by MockSharePointClient (?mock=1)
 
-tests/                          # node:test unit tests (mirror src/ file names)
+tests/                          # node:test unit tests — flat, one file per subject by filename
+                                # (e.g. cora-toast.test.js imports components/base/cora-toast.js)
 ```

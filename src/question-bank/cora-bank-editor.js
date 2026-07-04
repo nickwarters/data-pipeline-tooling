@@ -4,21 +4,21 @@ import { h } from '../lib/html.js';
 import { drawerOpen, railOpen } from './question-bank-store.js';
 
 // Side-effect imports: register all child custom elements.
-import '../components/cora-case-tabs.js';
+import '../components/collections/cora-case-tabs.js';
 import './cora-bank-rail.js';
 import './cora-bank-list.js';
 import './cora-outcome-options-editor.js';
-import '../components/cora-question-card.js';
-import '../components/cora-question-labels.js';
-import '../components/cora-wording-editor.js';
-import '../components/cora-options-editor.js';
-import '../components/cora-showwhen-editor.js';
-import '../components/cora-showwhen-group.js';
-import '../components/cora-showwhen-leaf.js';
-import '../components/cora-remediation-editor.js';
+import '../components/sections/cora-question-card.js';
+import '../components/base/cora-question-labels.js';
+import '../components/sections/cora-wording-editor.js';
+import '../components/base/cora-options-editor.js';
+import '../components/sections/cora-showwhen-editor.js';
+import '../components/sections/cora-showwhen-group.js';
+import '../components/base/cora-showwhen-leaf.js';
+import '../components/sections/cora-remediation-editor.js';
 import './cora-bank-dock.js';
-import '../components/cora-compile-drawer.js';
-import '../components/cora-toast.js';
+import '../components/collections/cora-compile-drawer.js';
+import '../components/base/cora-toast.js';
 
 /**
  * @returns {Node[]}

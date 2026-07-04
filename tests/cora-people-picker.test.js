@@ -7,7 +7,7 @@ installDom();
 
 // ===== IMPORTS (after stubs) =====
 const { CORAPeoplePicker } =
-  await import('../src/components/cora-people-picker.js');
+  await import('../src/components/base/cora-people-picker.js');
 
 /**
  * Build a fake client whose searchPeople resolves to `results` and records queries.

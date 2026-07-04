@@ -7,7 +7,8 @@ import { installDom } from './_dom-stub.js';
 installDom();
 
 // ===== IMPORTS =====
-const { CORADataTable } = await import('../src/components/cora-data-table.js');
+const { CORADataTable } =
+  await import('../src/components/base/cora-data-table.js');
 
 // ===== HELPERS =====
 

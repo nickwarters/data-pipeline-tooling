@@ -8,7 +8,7 @@ installDom();
 // DOM stubs must be in place before any src import
 
 const { CORACaseDetails, CaseDetails, caseDetailFields } =
-  await import('../src/components/cora-case-details.js');
+  await import('../src/components/sections/cora-case-details.js');
 
 /** @returns {import('../src/sharepoint-client.js').CaseRow} */
 function makeCase(overrides = {}) {

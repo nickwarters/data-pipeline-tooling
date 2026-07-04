@@ -7,7 +7,8 @@ installDom();
 
 // DOM stubs must be in place before any src import.
 
-const { CORAAppeal } = await import('../src/components/cora-appeal.js');
+const { CORAAppeal } =
+  await import('../src/components/sections/cora-appeal.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 
@@ -68,7 +69,10 @@ test('CORAAppeal: renders an Appeal heading first', () => {
 test('CORAAppeal: edit access on a Completed Case shows the raise form', () => {
   const { el } = makeEditable();
   assert.ok(findByClass(el, 'cora-appeal-form'), 'raise form rendered');
-  assert.ok(findByClass(el, 'cora-appeal-rationale'), 'rationale input rendered');
+  assert.ok(
+    findByClass(el, 'cora-appeal-rationale'),
+    'rationale input rendered'
+  );
   assert.ok(findByClass(el, 'cora-appeal-submit'), 'submit button rendered');
 });
 
@@ -238,7 +242,9 @@ test('CORAAppeal: citing disputed failed Answers records their keys on the Appea
   el.connectedCallback();
 
   findByClass(el, 'cora-appeal-rationale').value = 'both wrong';
-  const boxes = findAllByClass(el, 'cora-appeal-cite').map((w) => w._children[0]);
+  const boxes = findAllByClass(el, 'cora-appeal-cite').map(
+    (w) => w._children[0]
+  );
   boxes[0].checked = true; // cite q-greet only
   findByClass(el, 'cora-appeal-submit')._listeners['click'][0]();
 

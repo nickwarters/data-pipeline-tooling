@@ -5,7 +5,7 @@ import { installDom } from './_dom-stub.js';
 installDom();
 
 const { CORACompileDrawer } =
-  await import('../src/components/cora-compile-drawer.js');
+  await import('../src/components/collections/cora-compile-drawer.js');
 const { _resetStore, drawerOpen, baseline, cases, toastMsg, commit } =
   await import('../src/question-bank/question-bank-store.js');
 

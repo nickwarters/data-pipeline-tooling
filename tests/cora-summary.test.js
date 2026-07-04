@@ -39,7 +39,8 @@ function allText(el) {
   return out;
 }
 
-const { CORASummary, Summary } = await import('../src/components/cora-summary.js');
+const { CORASummary, Summary } =
+  await import('../src/components/sections/cora-summary.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 
@@ -336,7 +337,10 @@ test('CORASummary: omits the counts block when questions is not opted in', () =>
   el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
   el.summarySections = [];
   el.connectedCallback();
-  assert.equal(findByClass(/** @type {any} */ (el), 'cora-summary-counts'), null);
+  assert.equal(
+    findByClass(/** @type {any} */ (el), 'cora-summary-counts'),
+    null
+  );
 });
 
 test('CORASummary: renders a remediation block with the action count and each failed Answer + its actions', () => {
@@ -361,7 +365,10 @@ test('CORASummary: renders a remediation block with the action count and each fa
     true
   );
 
-  const block = findByClass(/** @type {any} */ (el), 'cora-summary-remediation');
+  const block = findByClass(
+    /** @type {any} */ (el),
+    'cora-summary-remediation'
+  );
   assert.ok(block, 'remediation block rendered');
   const text = allText(block);
   assert.ok(
@@ -456,7 +463,10 @@ test('CORASummary: a failed Answer without a category renders just the question 
     true
   );
 
-  const block = findByClass(/** @type {any} */ (el), 'cora-summary-remediation');
+  const block = findByClass(
+    /** @type {any} */ (el),
+    'cora-summary-remediation'
+  );
   assert.ok(allText(block).includes('No category?'));
 });
 
@@ -472,7 +482,10 @@ test('CORASummary: remediation block reports no failures when there are none', (
     true
   );
 
-  const block = findByClass(/** @type {any} */ (el), 'cora-summary-remediation');
+  const block = findByClass(
+    /** @type {any} */ (el),
+    'cora-summary-remediation'
+  );
   assert.ok(block, 'remediation block still rendered when opted in');
   assert.ok(
     /no failures/i.test(allText(block)),
@@ -592,5 +605,8 @@ test('CORASummary: notes block is omitted by default (notes absent from summaryS
   el.caseRow = makeCase({ notes: 'Reviewer notes here.' });
   el.summarySections = ['details', 'questions', 'remediation'];
   el.connectedCallback();
-  assert.equal(findByClass(/** @type {any} */ (el), 'cora-summary-notes'), null);
+  assert.equal(
+    findByClass(/** @type {any} */ (el), 'cora-summary-notes'),
+    null
+  );
 });

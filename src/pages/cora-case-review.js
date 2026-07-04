@@ -30,18 +30,18 @@ import {
   updateCompletion,
 } from './cora-case-review/completion-controller.js';
 
-import '../components/cora-question-list.js';
-import '../components/cora-section-progress.js';
-import '../components/cora-remediation-section.js';
-import '../components/cora-remediation-tracking.js';
-import '../components/cora-conversation.js';
-import '../components/cora-notes.js';
-import '../components/cora-summary.js';
-import '../components/cora-appeal.js';
-import '../components/cora-appeal-review.js';
-import '../components/cora-amend-outcome.js';
-import '../components/cora-status-banner.js';
-import '../components/cora-tabs.js';
+import '../components/collections/cora-question-list.js';
+import '../components/base/cora-section-progress.js';
+import '../components/sections/cora-remediation-section.js';
+import '../components/sections/cora-remediation-tracking.js';
+import '../components/sections/cora-conversation.js';
+import '../components/sections/cora-notes.js';
+import '../components/sections/cora-summary.js';
+import '../components/sections/cora-appeal.js';
+import '../components/collections/cora-appeal-review.js';
+import '../components/sections/cora-amend-outcome.js';
+import '../components/base/cora-status-banner.js';
+import '../components/base/cora-tabs.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../services/save-queue.js').SaveQueue} SaveQueue */

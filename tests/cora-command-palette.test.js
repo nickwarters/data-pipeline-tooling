@@ -32,7 +32,7 @@ function fireKeydown(ev) {
 }
 
 const { CORACommandPalette } =
-  await import('../src/components/cora-command-palette.js');
+  await import('../src/components/sections/cora-command-palette.js');
 const { register, actions, isOpen, query, openPalette, closePalette } =
   await import('../src/services/command-palette-store.js');
 

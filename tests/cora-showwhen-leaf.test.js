@@ -5,7 +5,7 @@ import { installDom } from './_dom-stub.js';
 installDom();
 
 const { CORAShowwhenLeaf } =
-  await import('../src/components/cora-showwhen-leaf.js');
+  await import('../src/components/base/cora-showwhen-leaf.js');
 const { _resetStore, cases } =
   await import('../src/question-bank/question-bank-store.js');
 

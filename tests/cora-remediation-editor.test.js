@@ -5,7 +5,7 @@ import { installDom } from './_dom-stub.js';
 installDom();
 
 const { CORARemediationEditor } =
-  await import('../src/components/cora-remediation-editor.js');
+  await import('../src/components/sections/cora-remediation-editor.js');
 const { _resetStore } =
   await import('../src/question-bank/question-bank-store.js');
 

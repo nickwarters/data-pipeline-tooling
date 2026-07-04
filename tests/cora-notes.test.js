@@ -7,7 +7,7 @@ installDom();
 
 // DOM stubs must be in place before any src import
 
-const { CORANotes } = await import('../src/components/cora-notes.js');
+const { CORANotes } = await import('../src/components/sections/cora-notes.js');
 
 /**
  * @param {string} [caseId]

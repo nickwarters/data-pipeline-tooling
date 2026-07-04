@@ -4,7 +4,7 @@ import { reactive } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import { fetchJourneyCases } from '../services/journey-cases-fetcher.js';
-import '../components/cora-case-table.js';
+import '../components/collections/cora-case-table.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */

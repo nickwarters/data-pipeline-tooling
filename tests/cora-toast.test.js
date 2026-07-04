@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 installDom();
 
-const { CORAToast } = await import('../src/components/cora-toast.js');
+const { CORAToast } = await import('../src/components/base/cora-toast.js');
 const { toastMsg } =
   await import('../src/question-bank/question-bank-store.js');
 

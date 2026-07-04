@@ -6,7 +6,8 @@ import { installDom } from './_dom-stub.js';
 installDom();
 
 // ===== IMPORTS (after stubs) =====
-const { CORAAllocation } = await import('../src/components/cora-allocation.js');
+const { CORAAllocation } =
+  await import('../src/components/sections/cora-allocation.js');
 
 // ===== HELPERS =====
 
@@ -293,7 +294,11 @@ test('CORAAllocation: _requestNextCase does not navigate and dispatches cora-all
     '',
     'should NOT navigate away from dashboard'
   );
-  assert.equal(dispatched.length, 1, 'should dispatch cora-allocated event once');
+  assert.equal(
+    dispatched.length,
+    1,
+    'should dispatch cora-allocated event once'
+  );
   assert.equal(
     dispatched[0].detail.caseId,
     'c-nav',

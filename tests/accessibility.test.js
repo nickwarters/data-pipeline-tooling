@@ -27,13 +27,15 @@ class A11yEl extends StubEl {
 
 useElementClass(A11yEl, { registry: true });
 
-const { CORAQuestion } = await import('../src/components/cora-question.js');
+const { CORAQuestion } =
+  await import('../src/components/sections/cora-question.js');
 const { CORAQuestionList } =
-  await import('../src/components/cora-question-list.js');
-const { CORANotes } = await import('../src/components/cora-notes.js');
-const { CORAConversation } = await import('../src/components/cora-conversation.js');
+  await import('../src/components/collections/cora-question-list.js');
+const { CORANotes } = await import('../src/components/sections/cora-notes.js');
+const { CORAConversation } =
+  await import('../src/components/sections/cora-conversation.js');
 const { CORAStatusBanner } =
-  await import('../src/components/cora-status-banner.js');
+  await import('../src/components/base/cora-status-banner.js');
 const { signal } = await import('../src/lib/signal.js');
 
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */

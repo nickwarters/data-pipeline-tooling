@@ -5,7 +5,7 @@ import { installDom } from './_dom-stub.js';
 installDom();
 
 const { CORAQuestionCard } =
-  await import('../src/components/cora-question-card.js');
+  await import('../src/components/sections/cora-question-card.js');
 const { _resetStore, cases, activeSlug, filters, isDirty } =
   await import('../src/question-bank/question-bank-store.js');
 

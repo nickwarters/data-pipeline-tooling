@@ -15,7 +15,7 @@ let reloadCalls = 0;
 
 const { signal } = await import('../src/lib/signal.js');
 const { CORAStatusBanner, StatusBanner } =
-  await import('../src/components/cora-status-banner.js');
+  await import('../src/components/base/cora-status-banner.js');
 
 /**
  * @param {'saved'|'saving'|'reconnecting'|'conflict'} initial

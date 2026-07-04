@@ -7,7 +7,8 @@ import { installDom } from './_dom-stub.js';
 installDom();
 
 // ===== IMPORTS (after stubs) =====
-const { CORACaseTable } = await import('../src/components/cora-case-table.js');
+const { CORACaseTable } =
+  await import('../src/components/collections/cora-case-table.js');
 
 // ===== HELPERS =====
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */

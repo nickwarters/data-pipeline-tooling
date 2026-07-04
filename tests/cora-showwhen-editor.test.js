@@ -5,7 +5,7 @@ import { installDom } from './_dom-stub.js';
 installDom();
 
 const { CORAShowwhenEditor } =
-  await import('../src/components/cora-showwhen-editor.js');
+  await import('../src/components/sections/cora-showwhen-editor.js');
 const { _resetStore, cases } =
   await import('../src/question-bank/question-bank-store.js');
 
