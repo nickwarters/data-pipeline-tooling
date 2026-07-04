@@ -496,12 +496,20 @@ cora-status-banner {
   text-transform: inherit;
 }
 
-[data-cora-root] .cora-data-table thead th[aria-sort='ascending'] button::after {
+[data-cora-root]
+  .cora-data-table
+  thead
+  th[aria-sort='ascending']
+  button::after {
   content: ' ▲';
   color: var(--cora-color-accent);
 }
 
-[data-cora-root] .cora-data-table thead th[aria-sort='descending'] button::after {
+[data-cora-root]
+  .cora-data-table
+  thead
+  th[aria-sort='descending']
+  button::after {
   content: ' ▼';
   color: var(--cora-color-accent);
 }
@@ -572,6 +580,12 @@ cora-status-banner {
 
 .cora-owner-overdue {
   color: var(--cora-color-danger);
+}
+
+/* ── Controls: outstanding appeals ───────────────────────────────────────── */
+
+.cora-controls-appeals {
+  margin-top: var(--cora-space-7);
 }
 
 /* ── Question list ───────────────────────────────────────────────────────── */
@@ -1529,7 +1543,9 @@ cora-attribute-menu {
 [data-cora-root] cora-appeal .cora-appeal-rationale:focus,
 [data-cora-root] cora-appeal-review .cora-appeal-review-rationale-input:focus,
 [data-cora-root] cora-appeal-review .cora-appeal-review-outcome-select:focus,
-[data-cora-root] cora-appeal-review .cora-appeal-review-amend-justification:focus {
+[data-cora-root]
+  cora-appeal-review
+  .cora-appeal-review-amend-justification:focus {
   outline: none;
   border-color: var(--cora-color-accent);
   box-shadow: var(--cora-focus-ring);

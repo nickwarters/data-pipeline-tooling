@@ -7,6 +7,7 @@ import '../components/cora-case-table.js';
 import '../components/cora-allocation.js';
 import '../components/cora-owner-summary.js';
 import { ResponsiblePartyDashboard } from './cora-responsible-party-dashboard.js';
+import { ControlsDashboard } from './cora-controls-dashboard.js';
 import { isOverdue } from '../evaluators/overdue-evaluator.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
@@ -118,6 +119,17 @@ function renderDashboard({
         currentUserId,
         onOpenConversation: (caseRow) => {
           location.hash = conversationRouteFor(caseRow);
+        },
+      })
+    );
+  }
+
+  if (capabilities.isControls) {
+    children.push(
+      ControlsDashboard({
+        client,
+        onOpenCase: (caseRow) => {
+          location.hash = caseRouteFor(caseRow);
         },
       })
     );

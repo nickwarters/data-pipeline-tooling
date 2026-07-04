@@ -214,6 +214,104 @@ test('DashboardPage: RP-only capability — responsible party dashboard rendered
   );
 });
 
+test('DashboardPage: Controls capability — outstanding appeals section visible, reviewer/owner/RP sections absent', async () => {
+  const host = DashboardPage({
+    client: /** @type {any} */ (makeClient()),
+    currentUserId: 'user-controls',
+    capabilities: defaultCapabilities({ isControls: true }),
+    eligibleCaseTypes: [],
+  });
+  await flush();
+
+  assert.ok(
+    findSection(host, 'cora-controls-appeals'),
+    'should render the outstanding appeals section'
+  );
+  assert.equal(
+    hasOutstandingCasesHeading(host),
+    false,
+    'should NOT render reviewer heading'
+  );
+  assert.equal(
+    findAll(host, 'cora-owner-summary').length,
+    0,
+    'should NOT render owner summary'
+  );
+  assert.equal(
+    findSection(host, 'cora-rp-outcome-summary'),
+    undefined,
+    'should NOT render RP section'
+  );
+});
+
+test('DashboardPage: non-Controls user never sees the outstanding appeals section', async () => {
+  const host = DashboardPage({
+    client: /** @type {any} */ (makeClient()),
+    currentUserId: 'user-reviewer',
+    capabilities: defaultCapabilities({ isReviewer: true }),
+    eligibleCaseTypes: ['example-review'],
+  });
+  await flush();
+
+  assert.equal(
+    findSection(host, 'cora-controls-appeals'),
+    undefined,
+    'should NOT render the outstanding appeals section'
+  );
+});
+
+test('DashboardPage: Controls open button navigates to the case hash', async () => {
+  /** @type {any} */ (globalThis).location.hash = '';
+  const caseRow = {
+    id: 'c-appeal',
+    caseType: 'complaints',
+    title: 'Appealed Case',
+    status: 'Completed',
+    assignedReviewer: 'rev',
+    responsibleParty: 'adv',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: '2026-05-30T00:00:00Z',
+    appeals: [
+      {
+        id: 'a1',
+        appellant: 'jo.owner',
+        at: '2026-06-01T09:00:00Z',
+        rationale: 'Too harsh',
+        state: 'raised',
+      },
+    ],
+    etag: 'e1',
+  };
+  const client = {
+    async listCases() {
+      return [caseRow];
+    },
+  };
+  const host = DashboardPage({
+    client: /** @type {any} */ (client),
+    currentUserId: 'user-controls',
+    capabilities: defaultCapabilities({ isControls: true }),
+    eligibleCaseTypes: [],
+  });
+  await flush();
+
+  const section = findSection(host, 'cora-controls-appeals');
+  assert.ok(section, 'appeals section should exist');
+  const table = findAll(section, 'cora-case-table')[0];
+  for (const listener of /** @type {any} */ (table)._listeners[
+    'cora-case-open'
+  ] ?? []) {
+    listener({ detail: { caseRow } });
+  }
+
+  assert.equal(
+    /** @type {any} */ (globalThis).location.hash,
+    '#/case/complaints/c-appeal'
+  );
+});
+
 test('DashboardPage: reviewer + RP capability — both reviewer and RP sections visible', async () => {
   const host = DashboardPage({
     client: /** @type {any} */ (makeClient()),
