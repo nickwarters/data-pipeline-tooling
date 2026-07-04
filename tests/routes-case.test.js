@@ -90,7 +90,7 @@ test('case route: mount composes CaseReviewPage and fetches the id from the rout
   assert.equal(mounted.length, 1, 'route mounts a single page host');
   assert.equal(
     mounted[0].className,
-    'cr-case-review',
+    'cora-case-review',
     'the host is the Case Review page shell'
   );
   assert.deepEqual(
@@ -120,7 +120,7 @@ test('case route: source-key route passes caseType through to the page', async (
   await flush();
 
   assert.equal(mounted.length, 1, 'route mounts a single page host');
-  assert.equal(mounted[0].className, 'cr-case-review');
+  assert.equal(mounted[0].className, 'cora-case-review');
   // The example-review Case Type config loads and its listName (none) yields an
   // empty options object; the :id still reaches the fetch through the page.
   assert.deepEqual(

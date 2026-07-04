@@ -4,7 +4,7 @@
 > is now seven tabs: **Case Details · Review · Issues · Summary · Remediation · Notes · Amend
 > Outcome** (see ADR-0016's amend note and `docs/refinement-grilling-session-plan.md`).
 > "Review" relabels the Questions Section; "Issues" / "Amend Outcome" are UI labels. The rest
-> of this ADR — Conversation as a non-tab overlay, tab state held off the URL, the `cr-tabs`
+> of this ADR — Conversation as a non-tab overlay, tab state held off the URL, the `cora-tabs`
 > primitive, the Case Details default tab, and the persistent-chrome Complete button — still
 > holds.
 
@@ -22,7 +22,7 @@
 > [ADR-0026]: ./0026-amend-outcome-case-level-and-qa-retirement.md
 > [ADR-0027]: ./0027-appeal-flow-journeyowner-controls.md
 
-The case review page presents its **Section**s as tabs instead of one long scroll. **Case Details** is a new sixth Section and the default tab; the tab row is **Details · Questions · Remediation · Outcome · Notes**. Tabs are rendered by a generic, domain-free `cr-tabs` primitive (label list + selected id + ARIA roles + arrow-key nav, emits `cr-tab-change`); `cr-case-review.js` owns the Section→tab mapping, the access-driven visibility, and the default/fallback selection.
+The case review page presents its **Section**s as tabs instead of one long scroll. **Case Details** is a new sixth Section and the default tab; the tab row is **Details · Questions · Remediation · Outcome · Notes**. Tabs are rendered by a generic, domain-free `cora-tabs` primitive (label list + selected id + ARIA roles + arrow-key nav, emits `cora-tab-change`); `cora-case-review.js` owns the Section→tab mapping, the access-driven visibility, and the default/fallback selection.
 
 ## Two deliberate exclusions
 
@@ -37,7 +37,7 @@ A Section that resolves to `hidden` for the viewer (ADR-0011) renders **no tab**
 
 - **Conversation as a tab, like every other Section.** Rejected: uniform but breaks the answer-while-reading loop the popover was built for.
 - **URL-driven tabs** (`#/case/:id/:tab` or `?tab=`). Rejected for this slice: would require changing the router to treat a same-`:id` change as an in-place update rather than a remount — a deviation from ADR-0002 with its own trade-off. Revisit if deep-linkable tabs are wanted.
-- **A review-specific `cr-case-tabs` component.** Rejected: name already taken (Question Bank's Case Type switcher) and it would bury access/visibility logic in the tab widget. Domain logic stays in the page; the tab primitive stays dumb and reusable.
+- **A review-specific `cora-case-tabs` component.** Rejected: name already taken (Question Bank's Case Type switcher) and it would bury access/visibility logic in the tab widget. Domain logic stays in the page; the tab primitive stays dumb and reusable.
 
 ## Scope
 

@@ -13,8 +13,8 @@
 
       Why the paths are absolute: a Content Editor resolves relative URLs against
       the hosting .aspx page, not against this file's location in the Style
-      Library, so relative hrefs 404. cr-styles.css's own relative @import of
-      cr-design-tokens.css is fine — it resolves against the stylesheet's
+      Library, so relative hrefs 404. cora-styles.css's own relative @import of
+      cora-design-tokens.css is fine — it resolves against the stylesheet's
       deployed URL, not the page.
 
       Full-viewport breakout (hiding the surrounding SharePoint chrome) is tracked
@@ -22,14 +22,14 @@
 
       For local development use dev/index.html (relative paths, ?mock=1).
     -->
-    <link rel="stylesheet" href="{{CORA_BASE}}/src/styles/cr-styles.css" />
+    <link rel="stylesheet" href="{{CORA_BASE}}/src/styles/cora-styles.css" />
     <link
       rel="stylesheet"
-      href="{{CORA_BASE}}/src/question-bank/cr-question-bank-editor.css"
+      href="{{CORA_BASE}}/src/question-bank/cora-question-bank-editor.css"
     />
   </head>
   <body>
-    <div id="app" data-cr-root></div>
+    <div id="app" data-cora-root></div>
     <script type="module" src="{{CORA_BASE}}/src/app.js"></script>
   </body>
 </html>

@@ -85,7 +85,7 @@ A post-completion outcome change is a **single case-level record** on the Case r
 - The **`qaReviewer`** capability and `QA-Reviewers` group ([ADR-0022] already omits it).
 - The **`override`** access Mode and its `RANK` entry ([ADR-0011]) — modes are back to
   `edit | read-only | hidden`.
-- `overrides[]` storage, the embedded override editor (`cr-override-editor.js`), and the
+- `overrides[]` storage, the embedded override editor (`cora-override-editor.js`), and the
   QA Check Case Types (`qa-*`, e.g. `qa-example-review.js`).
 - CONTEXT.md's **Answer Override**, **Effective Answers**, and **QA Reviewer** entries are
   superseded (see the CONTEXT.md revision); **Current Outcome** is redefined against

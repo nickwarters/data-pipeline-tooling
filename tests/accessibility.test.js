@@ -27,27 +27,27 @@ class A11yEl extends StubEl {
 
 useElementClass(A11yEl, { registry: true });
 
-const { CRQuestion } = await import('../src/components/cr-question.js');
-const { CRQuestionList } =
-  await import('../src/components/cr-question-list.js');
-const { CRNotes } = await import('../src/components/cr-notes.js');
-const { CRConversation } = await import('../src/components/cr-conversation.js');
-const { CRStatusBanner } =
-  await import('../src/components/cr-status-banner.js');
+const { CORAQuestion } = await import('../src/components/cora-question.js');
+const { CORAQuestionList } =
+  await import('../src/components/cora-question-list.js');
+const { CORANotes } = await import('../src/components/cora-notes.js');
+const { CORAConversation } = await import('../src/components/cora-conversation.js');
+const { CORAStatusBanner } =
+  await import('../src/components/cora-status-banner.js');
 const { signal } = await import('../src/lib/signal.js');
 
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 
-// ---- cr-question accessibility ----
+// ---- cora-question accessibility ----
 
-test('CRQuestion: yes-no-na renders fieldset with role=radiogroup and aria-required=true', () => {
+test('CORAQuestion: yes-no-na renders fieldset with role=radiogroup and aria-required=true', () => {
   const q = /** @type {QuestionDefinition} */ ({
     id: 'q1',
     text: 'Q1?',
     responseType: 'yes-no-na',
     deprecated: false,
   });
-  const el = new CRQuestion();
+  const el = new CORAQuestion();
   el.question = q;
   el.currentValue = '';
   el.connectedCallback();
@@ -57,7 +57,7 @@ test('CRQuestion: yes-no-na renders fieldset with role=radiogroup and aria-requi
   assert.equal(fieldset._attrs['aria-required'], 'true');
 });
 
-test('CRQuestion: single-choice fieldset has role=radiogroup', () => {
+test('CORAQuestion: single-choice fieldset has role=radiogroup', () => {
   const q = /** @type {QuestionDefinition} */ ({
     id: 'q1',
     text: 'Channel',
@@ -65,7 +65,7 @@ test('CRQuestion: single-choice fieldset has role=radiogroup', () => {
     options: ['A', 'B'],
     deprecated: false,
   });
-  const el = new CRQuestion();
+  const el = new CORAQuestion();
   el.question = q;
   el.currentValue = '';
   el.connectedCallback();
@@ -74,7 +74,7 @@ test('CRQuestion: single-choice fieldset has role=radiogroup', () => {
   assert.equal(fieldset._attrs['role'], 'radiogroup');
 });
 
-test('CRQuestion: multi-choice fieldset has role=group (not radiogroup)', () => {
+test('CORAQuestion: multi-choice fieldset has role=group (not radiogroup)', () => {
   const q = /** @type {QuestionDefinition} */ ({
     id: 'q1',
     text: 'Products',
@@ -82,7 +82,7 @@ test('CRQuestion: multi-choice fieldset has role=group (not radiogroup)', () => 
     options: ['A', 'B'],
     deprecated: false,
   });
-  const el = new CRQuestion();
+  const el = new CORAQuestion();
   el.question = q;
   el.currentValue = [];
   el.connectedCallback();
@@ -91,26 +91,26 @@ test('CRQuestion: multi-choice fieldset has role=group (not radiogroup)', () => 
   assert.equal(fieldset._attrs['role'], 'group');
 });
 
-test('CRQuestion: fieldset has stable id derived from question id (focus target)', () => {
+test('CORAQuestion: fieldset has stable id derived from question id (focus target)', () => {
   const q = /** @type {QuestionDefinition} */ ({
     id: 'q-needs',
     text: 'Needs?',
     responseType: 'yes-no-na',
     deprecated: false,
   });
-  const el = new CRQuestion();
+  const el = new CORAQuestion();
   el.question = q;
   el.currentValue = '';
   el.connectedCallback();
 
   const fieldset = /** @type {any} */ (el)._children[0];
-  assert.equal(fieldset.id, 'cr-q-q-needs');
+  assert.equal(fieldset.id, 'cora-q-q-needs');
 });
 
-// ---- cr-question-list focus management ----
+// ---- cora-question-list focus management ----
 
-test('CRQuestionList: initial render does not steal focus', () => {
-  const list = new CRQuestionList();
+test('CORAQuestionList: initial render does not steal focus', () => {
+  const list = new CORAQuestionList();
   list.questions = /** @type {QuestionDefinition[]} */ ([
     { id: 'q1', text: 'Q1?', responseType: 'yes-no-na', deprecated: false },
   ]);
@@ -124,8 +124,8 @@ test('CRQuestionList: initial render does not steal focus', () => {
   );
 });
 
-test('CRQuestionList: when a new question appears via update(), focus moves to its first input', () => {
-  const list = new CRQuestionList();
+test('CORAQuestionList: when a new question appears via update(), focus moves to its first input', () => {
+  const list = new CORAQuestionList();
   /** @type {QuestionDefinition[]} */
   const initial = [
     { id: 'q1', text: 'Q1?', responseType: 'yes-no-na', deprecated: false },
@@ -151,13 +151,13 @@ test('CRQuestionList: when a new question appears via update(), focus moves to i
   assert.ok(focused, 'a new question should be focused');
   assert.equal(
     focused.tagName,
-    'CR-QUESTION',
-    'focus should land on the cr-question host (which forwards to first input)'
+    'CORA-QUESTION',
+    'focus should land on the cora-question host (which forwards to first input)'
   );
 });
 
-test('CRQuestionList: removing a question does not trigger focus change', () => {
-  const list = new CRQuestionList();
+test('CORAQuestionList: removing a question does not trigger focus change', () => {
+  const list = new CORAQuestionList();
   /** @type {QuestionDefinition[]} */
   const initial = [
     { id: 'q1', text: 'Q1?', responseType: 'yes-no-na', deprecated: false },
@@ -176,8 +176,8 @@ test('CRQuestionList: removing a question does not trigger focus change', () => 
   );
 });
 
-test('CRQuestionList: update with same questions (no new) does not trigger focus change', () => {
-  const list = new CRQuestionList();
+test('CORAQuestionList: update with same questions (no new) does not trigger focus change', () => {
+  const list = new CORAQuestionList();
   /** @type {QuestionDefinition[]} */
   const questions = [
     { id: 'q1', text: 'Q1?', responseType: 'yes-no-na', deprecated: false },
@@ -196,8 +196,8 @@ test('CRQuestionList: update with same questions (no new) does not trigger focus
   );
 });
 
-test('CRQuestionList: update reuses existing cr-question DOM elements to prevent focus/scroll jumps', () => {
-  const list = new CRQuestionList();
+test('CORAQuestionList: update reuses existing cora-question DOM elements to prevent focus/scroll jumps', () => {
+  const list = new CORAQuestionList();
   /** @type {QuestionDefinition[]} */
   const questions = [
     { id: 'q1', text: 'Q1?', responseType: 'yes-no-na', deprecated: false },
@@ -216,16 +216,16 @@ test('CRQuestionList: update reuses existing cr-question DOM elements to prevent
   assert.equal(
     list.questionElements[0],
     initialQ1,
-    'existing cr-question element for q1 should be reused'
+    'existing cora-question element for q1 should be reused'
   );
   assert.equal(
     list.questionElements[1],
     initialQ2,
-    'existing cr-question element for q2 should be reused'
+    'existing cora-question element for q2 should be reused'
   );
 });
 
-test('CRQuestion: answer inputs carry a stable data-focus-key (single-choice)', () => {
+test('CORAQuestion: answer inputs carry a stable data-focus-key (single-choice)', () => {
   const q = /** @type {QuestionDefinition} */ ({
     id: 'q-chan',
     text: 'Channel?',
@@ -233,7 +233,7 @@ test('CRQuestion: answer inputs carry a stable data-focus-key (single-choice)', 
     options: ['Phone', 'Email'],
     deprecated: false,
   });
-  const el = new CRQuestion();
+  const el = new CORAQuestion();
   el.question = q;
   el.currentValue = '';
   el.connectedCallback();
@@ -246,7 +246,7 @@ test('CRQuestion: answer inputs carry a stable data-focus-key (single-choice)', 
   assert.equal(secondInput._attrs['data-focus-key'], 'answer:q-chan:1');
 });
 
-test('CRQuestion: answer inputs carry a stable data-focus-key (multi-choice)', () => {
+test('CORAQuestion: answer inputs carry a stable data-focus-key (multi-choice)', () => {
   const q = /** @type {QuestionDefinition} */ ({
     id: 'q-prod',
     text: 'Products?',
@@ -254,7 +254,7 @@ test('CRQuestion: answer inputs carry a stable data-focus-key (multi-choice)', (
     options: ['A', 'B'],
     deprecated: false,
   });
-  const el = new CRQuestion();
+  const el = new CORAQuestion();
   el.question = q;
   el.currentValue = [];
   el.connectedCallback();
@@ -264,12 +264,12 @@ test('CRQuestion: answer inputs carry a stable data-focus-key (multi-choice)', (
   assert.equal(firstInput._attrs['data-focus-key'], 'answer:q-prod:0');
 });
 
-// ---- cr-question-list focus PRESERVATION (regression: changing an answer near
+// ---- cora-question-list focus PRESERVATION (regression: changing an answer near
 //      the end of the list must not strand keyboard focus at the top) ----
 
 /**
  * Attaches a fake answer input (carrying the same data-focus-key that
- * CRQuestion would render) to a reused cr-question host and marks it focused,
+ * CORAQuestion would render) to a reused cora-question host and marks it focused,
  * mirroring a keyboard user sitting on that radio.
  * @param {any} host
  * @param {string} key
@@ -283,8 +283,8 @@ function focusInputOn(host, key) {
   return input;
 }
 
-test('CRQuestionList: changing an answer restores focus after the list rebuilds', () => {
-  const list = new CRQuestionList();
+test('CORAQuestionList: changing an answer restores focus after the list rebuilds', () => {
+  const list = new CORAQuestionList();
   /** @type {QuestionDefinition[]} */
   const questions = [
     { id: 'q1', text: 'Q1?', responseType: 'yes-no-na', deprecated: false },
@@ -310,8 +310,8 @@ test('CRQuestionList: changing an answer restores focus after the list rebuilds'
   );
 });
 
-test('CRQuestionList: focus is preserved without a redundant re-focus when nothing rebuilds', () => {
-  const list = new CRQuestionList();
+test('CORAQuestionList: focus is preserved without a redundant re-focus when nothing rebuilds', () => {
+  const list = new CORAQuestionList();
   /** @type {QuestionDefinition[]} */
   const questions = [
     { id: 'q1', text: 'Q1?', responseType: 'yes-no-na', deprecated: false },
@@ -338,8 +338,8 @@ test('CRQuestionList: focus is preserved without a redundant re-focus when nothi
   );
 });
 
-test('CRQuestionList: focus is not forced elsewhere when the focused question is removed', () => {
-  const list = new CRQuestionList();
+test('CORAQuestionList: focus is not forced elsewhere when the focused question is removed', () => {
+  const list = new CORAQuestionList();
   /** @type {QuestionDefinition[]} */
   const questions = [
     { id: 'q1', text: 'Q1?', responseType: 'yes-no-na', deprecated: false },
@@ -362,8 +362,8 @@ test('CRQuestionList: focus is not forced elsewhere when the focused question is
   );
 });
 
-test('CRQuestionList: swapping a question (same count, different id) rebuilds the list', () => {
-  const list = new CRQuestionList();
+test('CORAQuestionList: swapping a question (same count, different id) rebuilds the list', () => {
+  const list = new CORAQuestionList();
   /** @type {QuestionDefinition[]} */
   const initial = [
     { id: 'q1', text: 'Q1?', responseType: 'yes-no-na', deprecated: false },
@@ -388,8 +388,8 @@ test('CRQuestionList: swapping a question (same count, different id) rebuilds th
   assert.equal(list.questionElements[1].question?.id, 'q3', 'q3 host is fresh');
 });
 
-test('CRQuestionList: multi-choice question with no answer initialises currentValue to empty array', () => {
-  const list = new CRQuestionList();
+test('CORAQuestionList: multi-choice question with no answer initialises currentValue to empty array', () => {
+  const list = new CORAQuestionList();
   /** @type {QuestionDefinition[]} */
   const questions = [
     {
@@ -412,23 +412,23 @@ test('CRQuestionList: multi-choice question with no answer initialises currentVa
   );
 });
 
-// ---- cr-notes / cr-conversation labelling ----
+// ---- cora-notes / cora-conversation labelling ----
 
-test('CRNotes: textarea has aria-label="Case notes"', () => {
-  const el = new CRNotes();
+test('CORANotes: textarea has aria-label="Case notes"', () => {
+  const el = new CORANotes();
   el.notes = '';
   el.saveQueue = /** @type {any} */ ({ enqueue() {} });
   el.caseId = 'case-1';
   el.connectedCallback();
 
   const textarea = /** @type {any} */ (el)._children.find(
-    (/** @type {any} */ c) => c.className === 'cr-notes-input'
+    (/** @type {any} */ c) => c.className === 'cora-notes-input'
   );
   assert.equal(textarea._attrs['aria-label'], 'Case notes');
 });
 
-test('CRNotes: Case Justification textarea has aria-label="Case Justification"', () => {
-  const el = new CRNotes();
+test('CORANotes: Case Justification textarea has aria-label="Case Justification"', () => {
+  const el = new CORANotes();
   el.notes = '';
   el.caseJustification = '';
   el.saveQueue = /** @type {any} */ ({ enqueue() {} });
@@ -436,13 +436,13 @@ test('CRNotes: Case Justification textarea has aria-label="Case Justification"',
   el.connectedCallback();
 
   const textarea = /** @type {any} */ (el)._children.find(
-    (/** @type {any} */ c) => c.className === 'cr-case-justification-input'
+    (/** @type {any} */ c) => c.className === 'cora-case-justification-input'
   );
   assert.equal(textarea._attrs['aria-label'], 'Case Justification');
 });
 
-test('CRConversation: compose textarea has aria-label="Message to Responsible Party"', () => {
-  const el = new CRConversation();
+test('CORAConversation: compose textarea has aria-label="Message to Responsible Party"', () => {
+  const el = new CORAConversation();
   el._messages = [];
   el.connectedCallback();
 
@@ -452,8 +452,8 @@ test('CRConversation: compose textarea has aria-label="Message to Responsible Pa
   assert.equal(textarea._attrs['aria-label'], 'Message to Responsible Party');
 });
 
-test('CRConversation: send button has aria-label even when textarea is empty', () => {
-  const el = new CRConversation();
+test('CORAConversation: send button has aria-label even when textarea is empty', () => {
+  const el = new CORAConversation();
   el._messages = [];
   el.connectedCallback();
 
@@ -464,9 +464,9 @@ test('CRConversation: send button has aria-label even when textarea is empty', (
 
 // ---- status banner regression ----
 
-test('CRStatusBanner: saving banner has role=status and polite', () => {
+test('CORAStatusBanner: saving banner has role=status and polite', () => {
   const s = signal(/** @type {'saving'} */ ('saving'));
-  const el = new CRStatusBanner();
+  const el = new CORAStatusBanner();
   el.saveQueue = /** @type {any} */ ({ status: s });
   el.connectedCallback();
   const node = /** @type {any} */ (el)._children[0];

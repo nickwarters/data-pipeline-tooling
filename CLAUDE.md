@@ -17,7 +17,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 ## Architecture in one screen
 
 - **SPA shell, hash routing** (ADR-0002). One `.aspx` host page, one Content Editor, one `app.js`. Views like `#/dashboard`, `#/case/{id}` swap via dynamic `import()`.
-- **Web Components in light DOM + home-grown signal primitive** (ADR-0003). Custom elements (`<cr-*>`) are the unit of UI; `signal()`/`computed()`/`effect()` (~50 LOC) drive fine-grained reactivity. Light DOM (not Shadow DOM) for form ergonomics; `cr-` CSS prefix for SharePoint isolation.
+- **Web Components in light DOM + home-grown signal primitive** (ADR-0003). Custom elements (`<cora-*>`) are the unit of UI; `signal()`/`computed()`/`effect()` (~50 LOC) drive fine-grained reactivity. Light DOM (not Shadow DOM) for form ergonomics; `cora-` CSS prefix for SharePoint isolation.
 - **Case Type config as JS modules** (ADR-0004). One module per Case Type under `case-types/{slug}.js`, lazy-loaded. **Question Definitions in a shared SharePoint list** (live-edit propagates to in-progress cases).
 - **JSDoc + `tsc --checkJs` for types** (ADR-0005). No `.ts` files; the deployed JS is the source JS. CI runs `tsc --noEmit --checkJs --allowJs`.
 - **Per-Case-Type `showWhen` graph + `outcome` function** (ADR-0006). Applicability is data (declarative `showWhen`); outcome is code (exported function). Same module, one place to look.
@@ -32,7 +32,7 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 - **No build step at runtime.** Source JS is deployed JS.
 - **Components never call `fetch()` directly** — always through the `SharePointClient` interface. This is what makes mock-first dev work.
 - **No `innerHTML` for user data.** XSS prevention; also preserves input state.
-- **Custom elements use the `cr-` prefix** (also the CSS namespace).
+- **Custom elements use the `cora-` prefix** (also the CSS namespace).
 - **Question Definitions are never deleted** — use a `deprecated` flag (avoids dangling references from Case Type modules).
 
 ## Test discipline: Red-Green-Refactor, 100% coverage
@@ -58,43 +58,43 @@ src/
     signal.js                   # home-grown signal/computed/effect (~50 LOC)
     router.js                   # hash-based SPA router
 
-  components/                   # reusable cr-* custom elements
-    cr-element.js               # base class
-    cr-allocation.js
-    cr-case-tabs.js
-    cr-compile-drawer.js
-    cr-conversation.js
-    cr-data-table.js
-    cr-case-table.js
-    cr-notes.js
-    cr-options-editor.js
-    cr-outcome.js
-    cr-owner-summary.js
-    cr-question.js
-    cr-question-list.js
-    cr-question-card.js
-    cr-remediation-editor.js
-    cr-remediation-section.js
-    cr-showwhen-editor.js
-    cr-showwhen-group.js
-    cr-showwhen-leaf.js
-    cr-status-banner.js
-    cr-toast.js
-    cr-wording-editor.js
+  components/                   # reusable cora-* custom elements
+    cora-element.js               # base class
+    cora-allocation.js
+    cora-case-tabs.js
+    cora-compile-drawer.js
+    cora-conversation.js
+    cora-data-table.js
+    cora-case-table.js
+    cora-notes.js
+    cora-options-editor.js
+    cora-outcome.js
+    cora-owner-summary.js
+    cora-question.js
+    cora-question-list.js
+    cora-question-card.js
+    cora-remediation-editor.js
+    cora-remediation-section.js
+    cora-showwhen-editor.js
+    cora-showwhen-group.js
+    cora-showwhen-leaf.js
+    cora-status-banner.js
+    cora-toast.js
+    cora-wording-editor.js
 
   pages/                        # top-level view components (one per route)
-    cr-case-review.js
-    cr-conversation-view.js
-    cr-dashboard.js
-    cr-responsible-party-dashboard.js
+    cora-case-review.js
+    cora-conversation-view.js
+    cora-dashboard.js
+    cora-responsible-party-dashboard.js
 
   question-bank/                # question bank editor subsystem
-    cr-bank-dock.js
-    cr-bank-dom.js
-    cr-bank-editor.js
-    cr-bank-list.js
-    cr-bank-rail.js
-    cr-question-bank-editor.css
+    cora-bank-dock.js
+    cora-bank-dom.js
+    cora-bank-editor.js
+    cora-bank-list.js
+    cora-bank-rail.js
+    cora-question-bank-editor.css
     question-bank-compile.js
     question-bank-store.js
     question-bank-tree.js
@@ -124,9 +124,9 @@ src/
     resolve-eligible-case-types.js
 
   styles/
-    cr-styles.css
+    cora-styles.css
 
-case-types/                     # one module per Case Type (lazy-loaded by cr-case-review)
+case-types/                     # one module per Case Type (lazy-loaded by cora-case-review)
   example-review.js
 
 dev/

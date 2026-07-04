@@ -101,7 +101,7 @@ final `Completed`.
 ## Amend (2026-07-02): Review tab is questions only; actions live on Issues (#247)
 
 The **Review** tab previously rendered an "Actions required" panel directly beneath any
-failed **Answer** (`renderRemediationPanel` in `cr-question.js`), duplicating the
+failed **Answer** (`renderRemediationPanel` in `cora-question.js`), duplicating the
 configured **Remediation Action**s that the **Issues** Section already lists per failed
 Answer. This muddied the boundary this ADR draws between _answering_ and _capturing_.
 
@@ -119,8 +119,8 @@ split above.
   untouched; #247 changes only _where_ actions render. This amend is a render-only
   removal on the Review tab.
 
-The `renderRemediationPanel` helper and its call site are removed from `cr-question.js`;
-the `.cr-remediation-panel` style is retained solely for the styleguide demo.
+The `renderRemediationPanel` helper and its call site are removed from `cora-question.js`;
+the `.cora-remediation-panel` style is retained solely for the styleguide demo.
 
 ## Consequences
 

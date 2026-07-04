@@ -143,7 +143,7 @@ test('routes-dashboard: passes currentUserId, capabilities, eligibleCaseTypes th
 
   assert.equal(mounted.length, 1, 'should mount a single host element');
   assert.ok(
-    findTag(mounted[0], 'cr-owner-summary'),
+    findTag(mounted[0], 'cora-owner-summary'),
     'should render the owner summary for owned case types'
   );
 });

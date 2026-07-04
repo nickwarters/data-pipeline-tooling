@@ -13,7 +13,7 @@ The framework is built once, against a stand-in. Real Case Types are added later
 These have **deliberately not** been decided up-front because they're better answered with code in hand:
 
 - **Question Definitions SharePoint list schema** — concrete column names and types. Deferred to **Slice 2**, when we first integrate against real SharePoint and have used the mock schema in anger.
-- **CSS naming, reset, design tokens** — `cr-` prefix is decided (ADR-0003); the rest is detail. Deferred to **Slice 9** (visual polish).
+- **CSS naming, reset, design tokens** — `cora-` prefix is decided (ADR-0003); the rest is detail. Deferred to **Slice 9** (visual polish).
 - **Module/directory layout** — emerges from Slice 1 as primitives are written. Document the convention once it stabilises.
 - **Conflict-resolution UI** — the SaveQueue handles the _logic_ in Slice 1; the _UI_ surface is Slice 9.
 - **Network failure simulation in mock client** — defer to Slice 9 unless reviewers hit issues earlier.
@@ -45,13 +45,13 @@ These have **deliberately not** been decided up-front because they're better ans
 
 **Two views**
 
-- `<cr-dashboard>` — lists outstanding example cases from fixtures, each row links to `#/case/{id}`
-- `<cr-case-review>` — header (case ID + assigned reviewer name) + Questions section only
+- `<cora-dashboard>` — lists outstanding example cases from fixtures, each row links to `#/case/{id}`
+- `<cora-case-review>` — header (case ID + assigned reviewer name) + Questions section only
 
 **One section component**
 
-- `<cr-question-list>` rendering N `<cr-question>` instances
-- `<cr-question>` — Yes/No/NA radio group, dispatches changes to SaveQueue via the case state signal
+- `<cora-question-list>` rendering N `<cora-question>` instances
+- `<cora-question>` — Yes/No/NA radio group, dispatches changes to SaveQueue via the case state signal
 
 **Status logic**
 
@@ -140,10 +140,10 @@ These have **deliberately not** been decided up-front because they're better ans
 
 **In:**
 
-- `<cr-question>` extended for `single-choice` (radio with N options) and `multi-choice` (checkboxes with N options)
+- `<cora-question>` extended for `single-choice` (radio with N options) and `multi-choice` (checkboxes with N options)
 - Question Definition schema includes options array
 - Remediation Action UI on failed answers (collapsible: "this question failed; add corrective actions")
-- `<cr-remediation-section>` summarising all failed answers + their actions across the case
+- `<cora-remediation-section>` summarising all failed answers + their actions across the case
 
 **Validation:**
 
@@ -159,9 +159,9 @@ These have **deliberately not** been decided up-front because they're better ans
 
 **In:**
 
-- `<cr-conversation>` — message thread, send-on-button, polling on focus, JSON-array PATCH semantics
-- `<cr-notes>` — multi-line text field, debounced save
-- `<cr-outcome>` — invokes Case Type's `outcome` function on the current Answers, displays the verdict + summary; updates reactively as Answers change
+- `<cora-conversation>` — message thread, send-on-button, polling on focus, JSON-array PATCH semantics
+- `<cora-notes>` — multi-line text field, debounced save
+- `<cora-outcome>` — invokes Case Type's `outcome` function on the current Answers, displays the verdict + summary; updates reactively as Answers change
 
 **Validation:**
 
@@ -177,7 +177,7 @@ These have **deliberately not** been decided up-front because they're better ans
 **In:**
 
 - Cross-case REST queries (count by status, completed today, completed last 7 days, overdue)
-- `<cr-owner-summary>` per Case Type the user owns
+- `<cora-owner-summary>` per Case Type the user owns
 - Dashboard composition shows owner cards alongside reviewer outstanding-cases card
 
 **Validation:**
@@ -194,7 +194,7 @@ These have **deliberately not** been decided up-front because they're better ans
 **In:**
 
 - Allocation rules per Case Type (declared in the Case Type module — e.g., "any unassigned case where reviewer is in group X")
-- `<cr-allocation>` button that calls a framework allocation function
+- `<cora-allocation>` button that calls a framework allocation function
 - Allocation function: queries unassigned cases, picks one (FIFO by `Created`), PATCHes `AssignedReviewer`, returns the case
 
 **Validation:**
@@ -247,7 +247,7 @@ These have **deliberately not** been decided up-front because they're better ans
 
 - 500-question stress test (perf, focus management, scroll, virtualization if needed)
 - Accessibility audit (keyboard nav, screen reader labels, focus order)
-- Visual design pass — `cr-` prefixed CSS, design tokens, theme
+- Visual design pass — `cora-` prefixed CSS, design tokens, theme
 - Conflict-resolution UI surface (the "case was edited elsewhere" banner)
 - Network failure simulation in mock client + manual test scripts
 - Case Type onboarding documentation for adding new types

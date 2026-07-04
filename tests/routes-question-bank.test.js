@@ -25,7 +25,7 @@ test('question-bank route: register calls router.register with #/question-bank',
   );
 });
 
-test('question-bank route: mount adds cr-fullbleed to appEl', () => {
+test('question-bank route: mount adds cora-fullbleed to appEl', () => {
   const added = /** @type {string[]} */ ([]);
   const appEl = {
     classList: {
@@ -56,15 +56,15 @@ test('question-bank route: mount adds cr-fullbleed to appEl', () => {
     register(router, /** @type {any} */ ({ appEl }));
     router.navigate('#/question-bank');
     assert.ok(
-      added.includes('cr-fullbleed'),
-      'cr-fullbleed should be added on mount'
+      added.includes('cora-fullbleed'),
+      'cora-fullbleed should be added on mount'
     );
   } finally {
     /** @type {any} */ (globalThis).document = origDoc;
   }
 });
 
-test('question-bank route: unmount removes cr-fullbleed from appEl', () => {
+test('question-bank route: unmount removes cora-fullbleed from appEl', () => {
   const removed = /** @type {string[]} */ ([]);
   const appEl = {
     classList: {
@@ -101,15 +101,15 @@ test('question-bank route: unmount removes cr-fullbleed from appEl', () => {
     router2.navigate('#/question-bank');
     router2.navigate('#/dashboard');
     assert.ok(
-      removed.includes('cr-fullbleed'),
-      'cr-fullbleed should be removed on unmount'
+      removed.includes('cora-fullbleed'),
+      'cora-fullbleed should be removed on unmount'
     );
   } finally {
     /** @type {any} */ (globalThis).document = origDoc;
   }
 });
 
-test('question-bank route: mount creates cr-bank-editor element', () => {
+test('question-bank route: mount creates cora-bank-editor element', () => {
   const created = /** @type {string[]} */ ([]);
   const appEl = { classList: { add() {}, remove() {} } };
 
@@ -134,8 +134,8 @@ test('question-bank route: mount creates cr-bank-editor element', () => {
     register(router, /** @type {any} */ ({ appEl }));
     router.navigate('#/question-bank');
     assert.ok(
-      created.includes('cr-bank-editor'),
-      'cr-bank-editor should be created on mount'
+      created.includes('cora-bank-editor'),
+      'cora-bank-editor should be created on mount'
     );
   } finally {
     /** @type {any} */ (globalThis).document = origDoc;

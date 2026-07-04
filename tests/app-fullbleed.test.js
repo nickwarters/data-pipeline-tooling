@@ -16,9 +16,9 @@ import { Router } from '../src/lib/router.js';
 
 /**
  * Simulate what app.js does for the #/question-bank route:
- * mount adds 'cr-fullbleed' to appEl; unmount removes it.
+ * mount adds 'cora-fullbleed' to appEl; unmount removes it.
  */
-test('app: cr-fullbleed is added to appEl when #/question-bank mounts', () => {
+test('app: cora-fullbleed is added to appEl when #/question-bank mounts', () => {
   const appEl = { classList: new Set() };
   const container = /** @type {any} */ ({});
   const router = new Router();
@@ -26,21 +26,21 @@ test('app: cr-fullbleed is added to appEl when #/question-bank mounts', () => {
 
   router.register('#/question-bank', {
     mount() {
-      appEl.classList.add('cr-fullbleed');
+      appEl.classList.add('cora-fullbleed');
     },
     unmount() {
-      appEl.classList.delete('cr-fullbleed');
+      appEl.classList.delete('cora-fullbleed');
     },
   });
 
   router.navigate('#/question-bank');
   assert.ok(
-    appEl.classList.has('cr-fullbleed'),
-    'cr-fullbleed should be present on mount'
+    appEl.classList.has('cora-fullbleed'),
+    'cora-fullbleed should be present on mount'
   );
 });
 
-test('app: cr-fullbleed is removed from appEl when navigating away from #/question-bank', () => {
+test('app: cora-fullbleed is removed from appEl when navigating away from #/question-bank', () => {
   const appEl = { classList: new Set() };
   const container = /** @type {any} */ ({});
   const router = new Router();
@@ -48,10 +48,10 @@ test('app: cr-fullbleed is removed from appEl when navigating away from #/questi
 
   router.register('#/question-bank', {
     mount() {
-      appEl.classList.add('cr-fullbleed');
+      appEl.classList.add('cora-fullbleed');
     },
     unmount() {
-      appEl.classList.delete('cr-fullbleed');
+      appEl.classList.delete('cora-fullbleed');
     },
   });
   router.register('#/dashboard', {
@@ -60,16 +60,16 @@ test('app: cr-fullbleed is removed from appEl when navigating away from #/questi
   });
 
   router.navigate('#/question-bank');
-  assert.ok(appEl.classList.has('cr-fullbleed'));
+  assert.ok(appEl.classList.has('cora-fullbleed'));
 
   router.navigate('#/dashboard');
   assert.ok(
-    !appEl.classList.has('cr-fullbleed'),
-    'cr-fullbleed should be removed on unmount'
+    !appEl.classList.has('cora-fullbleed'),
+    'cora-fullbleed should be removed on unmount'
   );
 });
 
-test('app: other routes do not add cr-fullbleed to appEl', () => {
+test('app: other routes do not add cora-fullbleed to appEl', () => {
   const appEl = { classList: new Set() };
   const container = /** @type {any} */ ({});
   const router = new Router();
@@ -82,7 +82,7 @@ test('app: other routes do not add cr-fullbleed to appEl', () => {
 
   router.navigate('#/dashboard');
   assert.ok(
-    !appEl.classList.has('cr-fullbleed'),
-    'cr-fullbleed should not be present for other routes'
+    !appEl.classList.has('cora-fullbleed'),
+    'cora-fullbleed should not be present for other routes'
   );
 });

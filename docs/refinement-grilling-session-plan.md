@@ -266,7 +266,7 @@ If we only get through five things in the grill, these are them:
 
 - [ ] Conditional capture groups/fields (`showWhen` on a field) — needed now or later?
 - [ ] Per-Reviewer persistence of expand/collapse state.
-- [ ] Accessibility of collapsible groups (keyboard, ARIA) — matches `cr-` patterns?
+- [ ] Accessibility of collapsible groups (keyboard, ARIA) — matches `cora-` patterns?
 - [ ] Field ordering / reordering in the Case Type Owner authoring flow (question bank
       editor) — do Owners author capture groups too, or Maintainers only?
 - [ ] Validation UX: where do required-but-empty errors surface (Issues drawer vs

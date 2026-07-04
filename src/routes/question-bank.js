@@ -1,6 +1,6 @@
 // @ts-check
 // The Question Bank editor is a full-bleed browser-integration shell, so this
-// route legitimately mounts the `cr-bank-editor` custom element directly.
+// route legitimately mounts the `cora-bank-editor` custom element directly.
 
 /**
  * @param {import('../lib/router.js').Router} router
@@ -9,12 +9,12 @@
 export function register(router, context) {
   router.register('#/question-bank', {
     mount(container) {
-      context.appEl.classList.add('cr-fullbleed');
-      const el = document.createElement('cr-bank-editor');
+      context.appEl.classList.add('cora-fullbleed');
+      const el = document.createElement('cora-bank-editor');
       container.replaceChildren(el);
     },
     unmount() {
-      context.appEl.classList.remove('cr-fullbleed');
+      context.appEl.classList.remove('cora-fullbleed');
     },
   });
 }

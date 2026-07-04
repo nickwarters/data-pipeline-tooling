@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * Shared DOM stub for tests of `cr-*` components and route modules.
+ * Shared DOM stub for tests of `cora-*` components and route modules.
  *
  * Each test file should:
  *   1. `import { installDom, StubEl } from './_dom-stub.js';`
@@ -9,7 +9,7 @@
  *
  * The stub is intentionally minimal — enough for the components under test
  * to render and handle events, not a full DOM emulation. Tests that need
- * extra typed properties on an element (e.g. a fake `<cr-case-table>` with a
+ * extra typed properties on an element (e.g. a fake `<cora-case-table>` with a
  * `client` property) should declare a local subclass of `StubEl`.
  */
 
@@ -307,7 +307,7 @@ export async function flush() {
  * subclass, for tests that need extra behaviour on every created element
  * (e.g. recording `update()` calls from a parent component). Every created
  * element uses the subclass — by default registered custom element
- * constructors are ignored, so child `cr-*` tags render as inert stubs;
+ * constructors are ignored, so child `cora-*` tags render as inert stubs;
  * pass `{ registry: true }` to keep instantiating registered constructors.
  * Call after `installDom()` and before importing component modules.
  * @param {typeof StubEl} cls

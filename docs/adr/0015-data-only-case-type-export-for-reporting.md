@@ -79,7 +79,7 @@ of that Case Type's **Question Bank**, intended as the contract for external
   `outcomeAtCompletion` snapshot ([ADR-0012]) rather than re-deriving.
 
 > **Dependency note.** [ADR-0012] is Accepted but **not yet implemented**: the
-> completion write (`cr-case-review.js`, `_completeCase`) currently stamps only
+> completion write (`cora-case-review.js`, `_completeCase`) currently stamps only
 > `status` + `completedAt`, not `outcomeAtCompletion` / `hadRemediation`. The
 > per-question failure reporting this ADR enables works today; _case-level_ verdict
 > reporting is blocked until ADR-0012 lands. This export deliberately carries no

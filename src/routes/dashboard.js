@@ -1,5 +1,5 @@
 // @ts-check
-import { DashboardPage } from '../pages/cr-dashboard.js';
+import { DashboardPage } from '../pages/cora-dashboard.js';
 
 /**
  * @param {import('../lib/router.js').Router} router

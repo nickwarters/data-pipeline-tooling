@@ -17,8 +17,8 @@ function read(path) {
   return readFileSync(new URL(path, ROOT), 'utf8');
 }
 
-const styles = read('src/styles/cr-styles.css');
-const tokens = read('src/styles/cr-design-tokens.css');
+const styles = read('src/styles/cora-styles.css');
+const tokens = read('src/styles/cora-design-tokens.css');
 
 /**
  * Extract the declaration block for the first rule whose selector list matches
@@ -36,7 +36,7 @@ function ruleBody(css, selector) {
 }
 
 test('breakout: #app is promoted to a fixed full-viewport layer', () => {
-  const body = ruleBody(styles, '#app[data-cr-root] {');
+  const body = ruleBody(styles, '#app[data-cora-root] {');
   assert.match(
     body,
     /position:\s*fixed/,
@@ -45,13 +45,13 @@ test('breakout: #app is promoted to a fixed full-viewport layer', () => {
   assert.match(body, /inset:\s*0/, 'inset:0 makes the layer fill the viewport');
   assert.match(
     body,
-    /z-index:\s*var\(--cr-z-app-root\)/,
+    /z-index:\s*var\(--cora-z-app-root\)/,
     'the layer must carry the app-root z-index so it sits over SP chrome'
   );
 });
 
 test('breakout: the app root owns vertical scroll and clips horizontal overflow', () => {
-  const body = ruleBody(styles, '#app[data-cr-root] {');
+  const body = ruleBody(styles, '#app[data-cora-root] {');
   assert.match(
     body,
     /overflow-y:\s*auto/,
@@ -61,29 +61,29 @@ test('breakout: the app root owns vertical scroll and clips horizontal overflow'
 });
 
 test('breakout: the app-root z-index token exists and is high enough to cover SP chrome', () => {
-  const match = tokens.match(/--cr-z-app-root:\s*(\d+)/);
-  assert.ok(match, '--cr-z-app-root must be defined in the design tokens');
+  const match = tokens.match(/--cora-z-app-root:\s*(\d+)/);
+  assert.ok(match, '--cora-z-app-root must be defined in the design tokens');
   assert.ok(
     Number(match[1]) >= 1_000_000,
     'the breakout must out-stack SharePoint SE chrome'
   );
 });
 
-test('breakout: fixed positioning is scoped to #app, not every [data-cr-root]', () => {
+test('breakout: fixed positioning is scoped to #app, not every [data-cora-root]', () => {
   // The generic layout-shell rule must stay in normal flow so inline scoping
   // wrappers (styleguide demos, nested previews) are not turned into overlays.
-  const shell = ruleBody(styles, '[data-cr-root] {');
+  const shell = ruleBody(styles, '[data-cora-root] {');
   assert.doesNotMatch(
     shell,
     /position:\s*fixed/,
-    'the bare [data-cr-root] shell must not be fixed-positioned'
+    'the bare [data-cora-root] shell must not be fixed-positioned'
   );
 });
 
 test("reset: form controls inherit our typography rather than SharePoint's UI font", () => {
   const body = ruleBody(
     styles,
-    '[data-cr-root] :where(input, select, textarea, button, optgroup) {'
+    '[data-cora-root] :where(input, select, textarea, button, optgroup) {'
   );
   assert.match(body, /font-family:\s*inherit/);
   assert.match(body, /font-size:\s*inherit/);
@@ -91,13 +91,13 @@ test("reset: form controls inherit our typography rather than SharePoint's UI fo
 });
 
 test('reset: links are repainted in our accent colour, not SharePoint blue', () => {
-  const body = ruleBody(styles, '[data-cr-root] :where(a:link, a:visited) {');
-  assert.match(body, /color:\s*var\(--cr-color-accent\)/);
+  const body = ruleBody(styles, '[data-cora-root] :where(a:link, a:visited) {');
+  assert.match(body, /color:\s*var\(--cora-color-accent\)/);
   assert.match(body, /text-decoration:\s*none/);
 });
 
 test('reset: tables collapse their borders, neutralising SP core table styling', () => {
-  const body = ruleBody(styles, '[data-cr-root] :where(table) {');
+  const body = ruleBody(styles, '[data-cora-root] :where(table) {');
   assert.match(body, /border-collapse:\s*collapse/);
 });
 

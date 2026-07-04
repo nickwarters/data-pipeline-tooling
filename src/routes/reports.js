@@ -1,6 +1,6 @@
 // @ts-check
 import { ReportsIndexPage } from '../pages/reports-index-page.js';
-import { ReviewerTeamReportPage } from '../pages/cr-reviewer-team-report.js';
+import { ReviewerTeamReportPage } from '../pages/cora-reviewer-team-report.js';
 
 /**
  * @param {import('../lib/router.js').Router} router

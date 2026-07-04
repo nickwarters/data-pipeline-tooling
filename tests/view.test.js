@@ -249,7 +249,7 @@ test('reactive: lifecycle helpers clean up listeners on re-render and disconnect
 });
 
 test('defineView: remains available for custom-element shell boundaries', () => {
-  defineView('cr-test-shell', {
+  defineView('cora-test-shell', {
     props: { label: 'Default' },
     render({ props }) {
       return h('p', {}, props.label);
@@ -258,7 +258,7 @@ test('defineView: remains available for custom-element shell boundaries', () => 
 
   const el =
     /** @type {StubEl & { label: string, connectedCallback: () => void }} */ (
-      /** @type {unknown} */ (document.createElement('cr-test-shell'))
+      /** @type {unknown} */ (document.createElement('cora-test-shell'))
     );
   el.label = 'Route shell';
   el.connectedCallback();

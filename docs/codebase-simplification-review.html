@@ -579,13 +579,13 @@
             <article class="finding" data-priority="p1">
               <h3><span class="tag">P1</span> Case Review shell overload</h3>
               <p>
-                <code>CRCaseReview</code> owns route setup, view-model creation,
+                <code>CORACaseReview</code> owns route setup, view-model creation,
                 stable node identity, controller orchestration, event binding,
                 compatibility shims, and rendering. Changes here require broad
                 knowledge of ordering and lifecycle.
               </p>
-              <a class="code-ref" href="../src/pages/cr-case-review.js"
-                >src/pages/cr-case-review.js</a
+              <a class="code-ref" href="../src/pages/cora-case-review.js"
+                >src/pages/cora-case-review.js</a
               >
             </article>
 
@@ -610,8 +610,8 @@
                 reviewed, but authors still need to remember the pattern: create
                 handler, store it, add listener, remove listener on disconnect.
               </p>
-              <a class="code-ref" href="../src/question-bank/cr-bank-editor.js"
-                >src/question-bank/cr-bank-editor.js</a
+              <a class="code-ref" href="../src/question-bank/cora-bank-editor.js"
+                >src/question-bank/cora-bank-editor.js</a
               >
             </article>
 
@@ -625,8 +625,8 @@
                 should be a framework-level render concern rather than a pattern
                 each feature area has to rediscover.
               </p>
-              <a class="code-ref" href="../src/components/cr-question-list.js"
-                >src/components/cr-question-list.js</a
+              <a class="code-ref" href="../src/components/cora-question-list.js"
+                >src/components/cora-question-list.js</a
               >
             </article>
 
@@ -743,9 +743,9 @@
               <div>
                 <h3>Convert simple leaf components</h3>
                 <p>
-                  Start with <code>cr-toast</code>,
-                  <code>cr-status-banner</code>, <code>cr-outcome</code>,
-                  <code>cr-notes</code>, and <code>cr-section-progress</code>.
+                  Start with <code>cora-toast</code>,
+                  <code>cora-status-banner</code>, <code>cora-outcome</code>,
+                  <code>cora-notes</code>, and <code>cora-section-progress</code>.
                   These should become examples for new authors.
                 </p>
               </div>
@@ -775,7 +775,7 @@
 
             <article class="slice">
               <div>
-                <h3>Collapse <code>CRCaseReview</code></h3>
+                <h3>Collapse <code>CORACaseReview</code></h3>
                 <p>
                   Keep a route shell, but move page rendering to
                   <code>renderCaseReview(vm)</code> and event behavior to named

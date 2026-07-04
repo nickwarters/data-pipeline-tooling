@@ -24,7 +24,7 @@ export function buildCaptureControl(
   fieldConfig,
   currentValue,
   onChange,
-  className = 'cr-capture-input',
+  className = 'cora-capture-input',
   namePrefix = ''
 ) {
   const onChangeHandler = (/** @type {Event} */ ev) => {
@@ -38,11 +38,11 @@ export function buildCaptureControl(
   if (fieldConfig.type === 'radio') {
     return h(
       'div',
-      { className: 'cr-capture-radio-group' },
+      { className: 'cora-capture-radio-group' },
       ...(fieldConfig.options ?? []).map((opt) =>
         h(
           'label',
-          { className: 'cr-capture-radio' },
+          { className: 'cora-capture-radio' },
           h('input', {
             type: 'radio',
             name: `${namePrefix}${fieldConfig.key}`,

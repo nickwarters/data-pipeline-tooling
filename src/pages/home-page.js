@@ -60,7 +60,7 @@ export function HomePage({ capabilities }) {
 function roleSection(roleName, href) {
   return h(
     'section',
-    { className: 'cr-home__role' },
+    { className: 'cora-home__role' },
     h('h2', {}, roleName),
     h('a', { href }, roleName)
   );
@@ -70,7 +70,7 @@ function roleSection(roleName, href) {
 function visitorSection() {
   return h(
     'section',
-    { className: 'cr-home__role' },
+    { className: 'cora-home__role' },
     h('h2', {}, 'Visitor'),
     h(
       'p',

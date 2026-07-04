@@ -1,0 +1,263 @@
+/*
+ * Case Review Platform — Design Tokens
+ * Single source of truth for all visual variables.
+ *
+ * Scoped to [data-cora-root] to avoid leaking into SharePoint chrome (ADR-0003).
+ * All component CSS must reference these tokens; no hard-coded colours or sizes.
+ *
+ * DARK MODE
+ * Follows prefers-color-scheme automatically.
+ * Styleguide and test overrides may set data-cora-theme="light" | "dark"
+ * on the [data-cora-root] element to force a mode.
+ *
+ * FONT SELF-HOSTING
+ * Production deployments must serve the three typefaces from SharePoint Site Assets.
+ * The styleguide loads from Google Fonts for convenience.
+ * Families: "Barlow Condensed" (600 700 800), "Barlow" (400 500 600 700 ital 400),
+ *           "JetBrains Mono" (400 500)
+ *
+ * BRAND PALETTE (single source — do not introduce colours outside this set)
+ *   Brand           red #DB0011 · white #FFFFFF · black #000000
+ *   Complementary   red-1 #E31E22 · red-2 #BA1110 · red-3 #730014
+ *   Grey 1-8        #F3F3F3 #EDEDED #D7D8D6 #B7B7B7 #9B9B9B #767676 #545454 #333333
+ *                   (grey 1-5 bg → grey-8/black text; grey 6-8 bg → white text)
+ *   Dark-mode grey  #656565 #474747 #404040 #212121 #1D1D1D #101010
+ *                   (exclusive to dark mode — never used in light mode)
+ *
+ * WCAG / CONTRAST TARGETS
+ *   Light mode
+ *     --cora-color-text on bg / surface      ≥ 7:1  (grey-8 #333: ≥12:1 ✓)
+ *     --cora-color-text-muted on surface     ≥ 4.5:1 (grey-6 #767676: 4.5:1 ✓)
+ *     --cora-color-accent on surface         ≥ 4.5:1 (brand #DB0011: 5.3:1 ✓)
+ *   Dark mode — target ≥ 3:1 for all foreground/background pairs
+ *     --cora-color-accent on surface         ≥ 3:1  (red-1 #E31E22: 3.6:1 ✓)
+ *     brand red is limited to CTA / brand / danger; everything else is
+ *     white or grey (see the dark-mode blocks below).
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LIGHT MODE (default)
+   ═══════════════════════════════════════════════════════════════════════════ */
+[data-cora-root],
+[data-cora-root][data-cora-theme='light'] {
+  /* ── Accent — brand red + complementary reds for interaction states ──── */
+  --cora-color-accent: #db0011; /* brand red · 5.3:1 on white               */
+  --cora-color-accent-hover: #ba1110; /* complementary red-2                      */
+  --cora-color-accent-active: #730014; /* complementary red-3                      */
+  --cora-color-accent-muted: rgba(219, 0, 17, 0.09);
+  --cora-color-accent-on: #ffffff; /* white text rendered on an accent fill    */
+
+  /* ── Surface hierarchy — brand greys 1-4 + white ─────────────────────── */
+  --cora-color-bg: #f3f3f3; /* grey-1 · page canvas                     */
+  --cora-color-surface: #ffffff; /* white · card / panel / input fill        */
+  --cora-color-surface-2: #ededed; /* grey-2 · recessed surface, hover cells   */
+  --cora-color-surface-overlay: rgba(
+    255,
+    255,
+    255,
+    0.92
+  ); /* floating panel tint       */
+  --cora-color-border: #d7d8d6; /* grey-3                                   */
+  --cora-color-border-strong: #b7b7b7; /* grey-4                                   */
+
+  /* ── Text — brand greys (grey-8/6/5) on light surfaces ───────────────── */
+  --cora-color-on-surface: #333333; /* grey-8 · primary text, ≥12:1 on white    */
+  --cora-color-text: #333333; /* alias — use --cora-color-on-surface        */
+  --cora-color-text-muted: #767676; /* grey-6 · secondary labels, 4.5:1 ✓      */
+  --cora-color-text-subtle: #9b9b9b; /* grey-5 · captions; large text / UI only  */
+  --cora-color-text-on-accent: #ffffff; /* white text on accent-filled elements     */
+
+  /* ── Semantic — danger tracks brand red; others are functional signals ─ */
+  --cora-color-success: #006742;
+  --cora-color-success-bg: rgba(0, 103, 66, 0.07);
+  --cora-color-warning: #9b5d00;
+  --cora-color-warning-bg: rgba(155, 93, 0, 0.08);
+  --cora-color-danger: #db0011; /* intentionally == --cora-color-accent       */
+  --cora-color-danger-bg: rgba(219, 0, 17, 0.06);
+  --cora-color-info: #004cb5;
+  --cora-color-info-bg: rgba(0, 76, 181, 0.07);
+
+  /* ── Focus ───────────────────────────────────────────────────────────── */
+  --cora-focus-outline: 2px solid var(--cora-color-accent);
+  --cora-focus-offset: 3px;
+  --cora-focus-ring: 0 0 0 3px rgba(219, 0, 17, 0.28);
+
+  /* ── Elevation ───────────────────────────────────────────────────────── */
+  --cora-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --cora-shadow-md: 0 2px 6px rgba(0, 0, 0, 0.09), 0 1px 2px rgba(0, 0, 0, 0.05);
+  --cora-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.1), 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DARK MODE — system preference
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (prefers-color-scheme: dark) {
+  [data-cora-root]:not([data-cora-theme='light']) {
+    /* Accent — brand red is limited to CTA / brand. Red-1 is the brightest
+       complementary red and clears 3:1 on the dark surface; states step
+       through the remaining brand reds. */
+    --cora-color-accent: #e31e22; /* complementary red-1 · 3.6:1 on surface   */
+    --cora-color-accent-hover: #db0011; /* brand red                                */
+    --cora-color-accent-active: #ba1110; /* complementary red-2                      */
+    --cora-color-accent-muted: rgba(227, 30, 34, 0.14);
+    --cora-color-accent-on: #ffffff;
+
+    /* Surfaces — dark-mode-exclusive greys, darkest canvas → lighter panels.
+       Already-dark backgrounds stay dark; no light layers introduced. */
+    --cora-color-bg: #101010; /* dark grey-6 · page canvas                */
+    --cora-color-surface: #1d1d1d; /* dark grey-5 · card / panel               */
+    --cora-color-surface-2: #212121; /* dark grey-4 · recessed / hover           */
+    --cora-color-surface-overlay: rgba(29, 29, 29, 0.94);
+    --cora-color-border: #404040; /* dark grey-3                              */
+    --cora-color-border-strong: #656565; /* dark grey-1                              */
+
+    /* Text — light greys / white replace red-tinted foregrounds. */
+    --cora-color-on-surface: #f3f3f3; /* grey-1 · primary text                    */
+    --cora-color-text: #f3f3f3;
+    --cora-color-text-muted: #9b9b9b; /* grey-5 · ~5.9:1 on surface ✓            */
+    --cora-color-text-subtle: #767676; /* grey-6 · large text / UI only            */
+    --cora-color-text-on-accent: #ffffff;
+
+    --cora-color-success: #00a368;
+    --cora-color-success-bg: rgba(0, 163, 104, 0.12);
+    --cora-color-warning: #d4820a;
+    --cora-color-warning-bg: rgba(212, 130, 10, 0.12);
+    --cora-color-danger: #e31e22; /* == accent (brand-family red)             */
+    --cora-color-danger-bg: rgba(227, 30, 34, 0.12);
+    --cora-color-info: #4d9eff;
+    --cora-color-info-bg: rgba(77, 158, 255, 0.1);
+
+    --cora-focus-ring: 0 0 0 3px rgba(227, 30, 34, 0.4);
+
+    --cora-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --cora-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3);
+    --cora-shadow-lg:
+      0 8px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DARK MODE — forced via attribute
+   ═══════════════════════════════════════════════════════════════════════════ */
+[data-cora-root][data-cora-theme='dark'] {
+  /* Keep in sync with the prefers-color-scheme block above. */
+  --cora-color-accent: #e31e22; /* complementary red-1 · 3.6:1 on surface   */
+  --cora-color-accent-hover: #db0011; /* brand red                                */
+  --cora-color-accent-active: #ba1110; /* complementary red-2                      */
+  --cora-color-accent-muted: rgba(227, 30, 34, 0.14);
+  --cora-color-accent-on: #ffffff;
+
+  --cora-color-bg: #101010; /* dark grey-6                              */
+  --cora-color-surface: #1d1d1d; /* dark grey-5                              */
+  --cora-color-surface-2: #212121; /* dark grey-4                              */
+  --cora-color-surface-overlay: rgba(29, 29, 29, 0.94);
+  --cora-color-border: #404040; /* dark grey-3                              */
+  --cora-color-border-strong: #656565; /* dark grey-1                              */
+
+  --cora-color-on-surface: #f3f3f3; /* grey-1                                   */
+  --cora-color-text: #f3f3f3;
+  --cora-color-text-muted: #9b9b9b; /* grey-5                                   */
+  --cora-color-text-subtle: #767676; /* grey-6                                   */
+  --cora-color-text-on-accent: #ffffff;
+
+  --cora-color-success: #00a368;
+  --cora-color-success-bg: rgba(0, 163, 104, 0.12);
+  --cora-color-warning: #d4820a;
+  --cora-color-warning-bg: rgba(212, 130, 10, 0.12);
+  --cora-color-danger: #e31e22;
+  --cora-color-danger-bg: rgba(227, 30, 34, 0.12);
+  --cora-color-info: #4d9eff;
+  --cora-color-info-bg: rgba(77, 158, 255, 0.1);
+
+  --cora-focus-ring: 0 0 0 3px rgba(227, 30, 34, 0.4);
+
+  --cora-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --cora-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --cora-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TYPOGRAPHY — shared across modes
+   ═══════════════════════════════════════════════════════════════════════════ */
+[data-cora-root] {
+  /* Font families -------------------------------------------------------- */
+  --cora-font-display: 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif;
+  --cora-font-body: 'Barlow', system-ui, 'Segoe UI', sans-serif;
+  --cora-font-mono:
+    'JetBrains Mono', 'Fira Code', Consolas, 'Courier New', monospace;
+
+  /* Numeric scale — 1.25 ratio, base 16px ------------------------------- */
+  --cora-font-size-2xs: 0.6875rem; /*  11px */
+  --cora-font-size-xs: 0.75rem; /*  12px */
+  --cora-font-size-sm: 0.875rem; /*  14px */
+  --cora-font-size-base: 1rem; /*  16px */
+  --cora-font-size-md: 1.125rem; /*  18px */
+  --cora-font-size-lg: 1.375rem; /*  22px */
+  --cora-font-size-xl: 1.75rem; /*  28px */
+  --cora-font-size-2xl: 2.25rem; /*  36px */
+  --cora-font-size-3xl: 3rem; /*  48px */
+
+  /* Weights ------------------------------------------------------------- */
+  --cora-font-weight-regular: 400;
+  --cora-font-weight-medium: 500;
+  --cora-font-weight-semibold: 600;
+  --cora-font-weight-bold: 700;
+  --cora-font-weight-black: 800;
+
+  /* Line heights -------------------------------------------------------- */
+  --cora-line-height-tight: 1.2;
+  --cora-line-height-snug: 1.375;
+  --cora-line-height: 1.5; /* legacy alias → base */
+  --cora-line-height-base: 1.5;
+  --cora-line-height-loose: 1.75;
+
+  /* Letter spacing ------------------------------------------------------ */
+  --cora-tracking-tight: -0.025em;
+  --cora-tracking-base: 0em;
+  --cora-tracking-wide: 0.04em;
+  --cora-tracking-wider: 0.08em;
+  --cora-tracking-widest: 0.12em;
+
+  /* ═══ SPACING — 4pt grid ═══════════════════════════════════════════════ */
+  --cora-space-px: 1px;
+  --cora-space-0-5: 0.125rem; /*  2px */
+  --cora-space-1: 0.25rem; /*  4px */
+  --cora-space-2: 0.5rem; /*  8px */
+  --cora-space-3: 0.75rem; /* 12px */
+  --cora-space-4: 1rem; /* 16px */
+  --cora-space-5: 1.5rem; /* 24px */
+  --cora-space-6: 2rem; /* 32px */
+  --cora-space-7: 2.5rem; /* 40px */
+  --cora-space-8: 3rem; /* 48px */
+  --cora-space-10: 4rem; /* 64px */
+  --cora-space-12: 6rem; /* 96px */
+
+  /* ═══ BORDER RADIUS ════════════════════════════════════════════════════ */
+  --cora-radius-none: 0;
+  --cora-radius-sm: 2px;
+  --cora-radius-md: 4px;
+  --cora-radius: 4px; /* default / legacy alias */
+  --cora-radius-lg: 8px;
+  --cora-radius-pill: 9999px;
+
+  /* ═══ MOTION ════════════════════════════════════════════════════════════ */
+  --cora-duration-fast: 100ms;
+  --cora-duration-base: 200ms;
+  --cora-duration-slow: 350ms;
+  --cora-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --cora-easing-enter: cubic-bezier(0, 0, 0.2, 1);
+  --cora-easing-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  /* ═══ LAYOUT ════════════════════════════════════════════════════════════ */
+  --cora-content-max-width: 80rem; /* 1280px */
+  --cora-content-max-width-narrow: 56rem; /*  896px */
+  --cora-nav-height: 3.5rem;
+  --cora-sidebar-width: 15rem; /*  240px */
+
+  /* Full-viewport breakout layer (issue #268). The app root is promoted to a
+     fixed layer that must sit over every piece of SharePoint SE chrome (suite
+     bar, site header, ribbon, nav). SP's chrome uses modest z-indexes, but we
+     pick a deliberately extreme "always on top" value so the breakout is robust
+     against any host page without having to enumerate SP's own stack. */
+  --cora-z-app-root: 2147483000;
+}

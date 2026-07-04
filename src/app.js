@@ -8,10 +8,10 @@
 /** @returns {Promise<void>} */
 async function boot() {
   await Promise.all([
-    import('./components/cr-app-nav.js'),
-    import('./components/cr-command-palette.js'),
-    import('./pages/cr-case-review.js'),
-    import('./question-bank/cr-bank-editor.js'),
+    import('./components/cora-app-nav.js'),
+    import('./components/cora-command-palette.js'),
+    import('./pages/cora-case-review.js'),
+    import('./question-bank/cora-bank-editor.js'),
   ]);
 
   const { createSharePointClient } =
@@ -37,17 +37,17 @@ async function boot() {
   const eligibleCaseTypes = await resolveEligibleCaseTypes(userGroups);
 
   const appEl = /** @type {Element} */ (document.getElementById('app'));
-  appEl.setAttribute('data-cr-root', '');
+  appEl.setAttribute('data-cora-root', '');
 
-  const nav = /** @type {import('./components/cr-app-nav.js').CRAppNav} */ (
-    document.createElement('cr-app-nav')
+  const nav = /** @type {import('./components/cora-app-nav.js').CORAAppNav} */ (
+    document.createElement('cora-app-nav')
   );
   nav.capabilities = capabilities;
   appEl.appendChild(nav);
-  document.body.appendChild(document.createElement('cr-command-palette'));
+  document.body.appendChild(document.createElement('cora-command-palette'));
 
   const routerContainer = document.createElement('div');
-  routerContainer.className = 'cr-page-content';
+  routerContainer.className = 'cora-page-content';
   appEl.appendChild(routerContainer);
 
   const { registerRoutes } = await import('./setup/register-routes.js');

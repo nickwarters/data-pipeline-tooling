@@ -11,7 +11,7 @@ class RecordingEl extends StubEl {
     /** @type {{ a1: any, a2: any, a3: any } | null} */
     this._updateArgs = null;
   }
-  // Stub for CRQuestionList.update / CRRemediationSection.update / CROutcome.update
+  // Stub for CORAQuestionList.update / CORARemediationSection.update / CORAOutcome.update
   update(/** @type {any} */ a1, /** @type {any} */ a2, /** @type {any} */ a3) {
     this._updateArgs = { a1, a2, a3 };
   }
@@ -27,9 +27,9 @@ const { allApplicableAnswered } =
 const { MockSharePointClient } =
   await import('../src/services/mock-sharepoint-client.js');
 const { SaveQueue } = await import('../src/services/save-queue.js');
-const { CaseReviewPage } = await import('../src/pages/cr-case-review.js');
+const { CaseReviewPage } = await import('../src/pages/cora-case-review.js');
 const { completeCase } =
-  await import('../src/pages/cr-case-review/completion-controller.js');
+  await import('../src/pages/cora-case-review/completion-controller.js');
 
 /** Settle the CaseReviewPage async load across a few macrotask turns. */
 async function settle() {
@@ -90,8 +90,8 @@ const CATALOGUE = questionDefinitions; // q-welcome, q-needs, q-resolve(conditio
 
 // ===== TABBED-LAYOUT ACCESSORS (ADR-0014) =====
 // Persistent chrome is rendered as direct children: banner(0), header(1),
-// cr-tabs(2), conversation overlay(3), complete button(4). The five Section
-// panels hang off cr-tabs via its `panels` map; locate them by id rather than
+// cora-tabs(2), conversation overlay(3), complete button(4). The five Section
+// panels hang off cora-tabs via its `panels` map; locate them by id rather than
 // by raw index.
 const tabsOf = (/** @type {any} */ el) => el._children[2];
 const conversationOf = (/** @type {any} */ el) => el._children[3];
@@ -228,9 +228,9 @@ test('SaveQueue: getEtag returns empty string for unregistered caseId', () => {
   assert.equal(q.getEtag('no-such-case'), '');
 });
 
-// ===== TESTS: CRCaseReview =====
+// ===== TESTS: CORACaseReview =====
 
-test('CRCaseReview: connectedCallback calls getCase and saveQueue.loadCase', async () => {
+test('CORACaseReview: connectedCallback calls getCase and saveQueue.loadCase', async () => {
   const getCalls = /** @type {string[]} */ ([]);
   const loadCalls = /** @type {CaseRow[]} */ ([]);
 
@@ -283,7 +283,7 @@ test('CRCaseReview: connectedCallback calls getCase and saveQueue.loadCase', asy
   assert.equal(loadCalls[0].id, caseCompletable.id);
 });
 
-test('CRCaseReview: complete button is hidden when not all applicable questions answered', async () => {
+test('CORACaseReview: complete button is hidden when not all applicable questions answered', async () => {
   const client = makeStubClient({ getRow: caseUntouched });
   const saveQueue = new SaveQueue(/** @type {any} */ (client), {
     debounceMs: 0,
@@ -300,7 +300,7 @@ test('CRCaseReview: complete button is hidden when not all applicable questions 
   assert.equal(completeBtn.hidden, true);
 });
 
-test('CRCaseReview: complete button is visible when all applicable questions answered', async () => {
+test('CORACaseReview: complete button is visible when all applicable questions answered', async () => {
   const client = makeStubClient({ getRow: caseCompletable });
   const saveQueue = new SaveQueue(/** @type {any} */ (client), {
     debounceMs: 0,
@@ -343,7 +343,7 @@ test('completeCase: patches status:Completed with completedAt using stored ETag'
   assert.equal(client.patchCalls[0].etag, caseCompletable.etag);
 });
 
-test('CRCaseReview: cr-answer with failing value does not auto-select remediationActions', async () => {
+test('CORACaseReview: cora-answer with failing value does not auto-select remediationActions', async () => {
   const client = makeStubClient({ getRow: caseUntouched });
   const saveQueue = new SaveQueue(/** @type {any} */ (client), {
     debounceMs: 0,
@@ -367,10 +367,10 @@ test('CRCaseReview: cr-answer with failing value does not auto-select remediatio
   el.caseId = caseUntouched.id;
   await el.connectedCallback();
 
-  // Find the section element and dispatch a cr-answer for q-needs = No
+  // Find the section element and dispatch a cora-answer for q-needs = No
   // (a failure with available, but not selected, remediationActions).
   const section = questionSectionOf(el);
-  const handler = section._listeners['cr-answer'][0];
+  const handler = section._listeners['cora-answer'][0];
   handler({ detail: { questionId: 'q-needs', value: 'No' } });
 
   assert.equal(enqueued.length, 1);
@@ -383,7 +383,7 @@ test('CRCaseReview: cr-answer with failing value does not auto-select remediatio
   );
 });
 
-test('CRCaseReview: changing a failed Answer to a passing value strips remediationActions', async () => {
+test('CORACaseReview: changing a failed Answer to a passing value strips remediationActions', async () => {
   const failed = /** @type {CaseRow} */ ({
     ...caseUntouched,
     answers: {
@@ -419,7 +419,7 @@ test('CRCaseReview: changing a failed Answer to a passing value strips remediati
   await el.connectedCallback();
 
   const section = questionSectionOf(el);
-  section._listeners['cr-answer'][0]({
+  section._listeners['cora-answer'][0]({
     detail: { questionId: 'q-needs', value: 'Yes' },
   });
 
@@ -429,7 +429,7 @@ test('CRCaseReview: changing a failed Answer to a passing value strips remediati
   assert.equal(saved['q-needs'].remediationActions, undefined);
 });
 
-test('CRCaseReview: hiding a conditional question clears its previous Answer', async () => {
+test('CORACaseReview: hiding a conditional question clears its previous Answer', async () => {
   const client = makeStubClient({ getRow: caseUntouched });
   const saveQueue = new SaveQueue(/** @type {any} */ (client), {
     debounceMs: 0,
@@ -454,7 +454,7 @@ test('CRCaseReview: hiding a conditional question clears its previous Answer', a
   await el.connectedCallback();
 
   const section = questionSectionOf(el);
-  const handler = section._listeners['cr-answer'][0];
+  const handler = section._listeners['cora-answer'][0];
 
   // 1. q-needs = Yes → q-resolve becomes applicable
   handler({ detail: { questionId: 'q-needs', value: 'Yes' } });
@@ -472,7 +472,7 @@ test('CRCaseReview: hiding a conditional question clears its previous Answer', a
   );
 });
 
-test('CRCaseReview: re-showing a conditional question after hide reveals it blank', async () => {
+test('CORACaseReview: re-showing a conditional question after hide reveals it blank', async () => {
   const client = makeStubClient({ getRow: caseUntouched });
   const saveQueue = new SaveQueue(/** @type {any} */ (client), {
     debounceMs: 0,
@@ -497,7 +497,7 @@ test('CRCaseReview: re-showing a conditional question after hide reveals it blan
   await el.connectedCallback();
 
   const section = questionSectionOf(el);
-  const handler = section._listeners['cr-answer'][0];
+  const handler = section._listeners['cora-answer'][0];
 
   handler({ detail: { questionId: 'q-needs', value: 'Yes' } });
   handler({ detail: { questionId: 'q-resolve', value: 'No' } });
@@ -512,7 +512,7 @@ test('CRCaseReview: re-showing a conditional question after hide reveals it blan
   );
 });
 
-test('CRCaseReview: layout includes a cr-remediation-section', async () => {
+test('CORACaseReview: layout includes a cora-remediation-section', async () => {
   const client = makeStubClient({ getRow: caseUntouched });
   const saveQueue = new SaveQueue(/** @type {any} */ (client), {
     debounceMs: 0,
@@ -533,7 +533,7 @@ test('CRCaseReview: layout includes a cr-remediation-section', async () => {
   );
 });
 
-test('CRCaseReview: layout includes a cr-conversation element with case messages', async () => {
+test('CORACaseReview: layout includes a cora-conversation element with case messages', async () => {
   const client = makeStubClient({ getRow: cases[1] }); // case-2 has 2 conversation messages
   const saveQueue = new SaveQueue(/** @type {any} */ (client), {
     debounceMs: 0,
@@ -551,7 +551,7 @@ test('CRCaseReview: layout includes a cr-conversation element with case messages
   assert.equal(conversationEl._messages.length, 2);
 });
 
-test('CRCaseReview: layout includes a cr-notes element with case notes value', async () => {
+test('CORACaseReview: layout includes a cora-notes element with case notes value', async () => {
   const client = makeStubClient({ getRow: cases[2] }); // case-3 has a non-empty notes value
   const saveQueue = new SaveQueue(/** @type {any} */ (client), {
     debounceMs: 0,
@@ -569,7 +569,7 @@ test('CRCaseReview: layout includes a cr-notes element with case notes value', a
   assert.equal(notesEl.caseId, cases[2].id);
 });
 
-test('CRCaseReview: Summary panel is updated with computeOutcome (Outcome block reused inside Summary)', async () => {
+test('CORACaseReview: Summary panel is updated with computeOutcome (Outcome block reused inside Summary)', async () => {
   const client = makeStubClient({ getRow: caseUntouched });
   const saveQueue = new SaveQueue(/** @type {any} */ (client), {
     debounceMs: 0,
@@ -600,7 +600,7 @@ test('CRCaseReview: Summary panel is updated with computeOutcome (Outcome block 
   );
 });
 
-test('CRCaseReview: Summary panel receives allAnswered=true when all applicable questions answered', async () => {
+test('CORACaseReview: Summary panel receives allAnswered=true when all applicable questions answered', async () => {
   const client = makeStubClient({ getRow: caseCompletable });
   const saveQueue = new SaveQueue(/** @type {any} */ (client), {
     debounceMs: 0,

@@ -1,5 +1,5 @@
 // @ts-check
-import { TeamCasesPage } from '../pages/cr-team-cases.js';
+import { TeamCasesPage } from '../pages/cora-team-cases.js';
 
 /**
  * @param {import('../lib/router.js').Router} router

@@ -51,7 +51,7 @@ The Attributed Party is stored on the failed Answer as
 Resolution and search go behind the `SharePointClient` interface (two new
 methods, both mocked for `?mock=1`):
 
-- **`searchPeople(query)`** — backs the standalone `cr-people-picker` type-ahead.
+- **`searchPeople(query)`** — backs the standalone `cora-people-picker` type-ahead.
   Wraps the people-picker REST endpoint, querying the directory/claims provider
   (so it finds users not yet added to the site), and strips each result's `Key`
   to a bare account before returning `{ loginName, displayName, email? }`. A
@@ -89,7 +89,7 @@ The Attributed Party is pure metadata: it never feeds `computeOutcome`.
   side-effect at attribution time. Bulk-provisioning those users is deferred and
   decoupled.
 - Claims/domain encoding is confined to the service layer; components and the
-  `cr-people-picker` only ever see bare accounts. Consistent with [ADR-0009].
+  `cora-people-picker` only ever see bare accounts. Consistent with [ADR-0009].
 
 **Negative**
 

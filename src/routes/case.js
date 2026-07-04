@@ -1,5 +1,5 @@
 // @ts-check
-import { CaseReviewPage } from '../pages/cr-case-review.js';
+import { CaseReviewPage } from '../pages/cora-case-review.js';
 
 /**
  * @param {import('../lib/router.js').Router} router

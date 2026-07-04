@@ -2,7 +2,7 @@
 /**
  * Claims/domain encoding for this single-farm, single-domain SharePoint SE
  * deployment (ADR-0013). This is the one place the encoding lives: components
- * and the `cr-people-picker` only ever see bare account names; the claims
+ * and the `cora-people-picker` only ever see bare account names; the claims
  * prefix and AD domain are stripped here at the service boundary.
  */
 

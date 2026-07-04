@@ -88,7 +88,7 @@ test('conversation route: mount renders ConversationView output into the contain
 
   assert.equal(rendered.length, 1, 'container should receive one host node');
   const host = /** @type {any} */ (rendered[0]);
-  assert.equal(host._children.length, 2, 'header + cr-conversation rendered');
+  assert.equal(host._children.length, 2, 'header + cora-conversation rendered');
   const conversationEl = host._children[1];
   assert.equal(conversationEl.client, client);
   assert.equal(conversationEl.saveQueue, saveQueue);

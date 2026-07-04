@@ -12,7 +12,7 @@ export function ReportsIndexPage({ capabilities }) {
     return [
       h(
         'div',
-        { className: 'cr-report-card' },
+        { className: 'cora-report-card' },
         h('h2', {}, 'Reviewer Team Performance'),
         h('a', { href: '#/reports/reviewer-team' }, 'View report')
       ),

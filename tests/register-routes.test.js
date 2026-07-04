@@ -225,7 +225,7 @@ test('registerRoutes: #/dashboard mount composes the dashboard page into the con
   }
 });
 
-test('registerRoutes: #/question-bank mount adds cr-fullbleed to appEl', () => {
+test('registerRoutes: #/question-bank mount adds cora-fullbleed to appEl', () => {
   const router = new Router();
   const container = { replaceChildren() {} };
   router._container = /** @type {any} */ (container);
@@ -259,8 +259,8 @@ test('registerRoutes: #/question-bank mount adds cr-fullbleed to appEl', () => {
   try {
     router.navigate('#/question-bank');
     assert.ok(
-      appEl.classList.added.includes('cr-fullbleed'),
-      'cr-fullbleed added on mount'
+      appEl.classList.added.includes('cora-fullbleed'),
+      'cora-fullbleed added on mount'
     );
   } finally {
     /** @type {any} */ (globalThis).document = origCreate;
@@ -378,7 +378,7 @@ test('registerRoutes: #/reports/reviewer-team redirects when the user is not a r
   }
 });
 
-test('registerRoutes: #/question-bank unmount removes cr-fullbleed from appEl', () => {
+test('registerRoutes: #/question-bank unmount removes cora-fullbleed from appEl', () => {
   const router = new Router();
   const container = { replaceChildren() {} };
   router._container = /** @type {any} */ (container);
@@ -420,8 +420,8 @@ test('registerRoutes: #/question-bank unmount removes cr-fullbleed from appEl', 
     router.navigate('#/question-bank');
     router.navigate('#/dashboard');
     assert.ok(
-      removed.includes('cr-fullbleed'),
-      'cr-fullbleed removed on unmount'
+      removed.includes('cora-fullbleed'),
+      'cora-fullbleed removed on unmount'
     );
   } finally {
     /** @type {any} */ (globalThis).document = origCreate;

@@ -52,7 +52,7 @@ Recorded as we go; the numbered sections below carry the detail.
   (CONTEXT.md / ADR-0018) for the amended case. **Current Outcome** = amended record if
   present, else `outcomeAtCompletion`.
 - **D8. Rip QA out now** (not leave dormant): remove `qaReviewer` role, `qa-*` Case
-  Types (`qa-example-review.js`), `cr-override-editor.js`, and mark ADR-0018/0021
+  Types (`qa-example-review.js`), `cora-override-editor.js`, and mark ADR-0018/0021
   **superseded**. QA is redesigned later, closer to when its requirements are known.
 - **D9. Remediation Action becomes an object** — elevate from plain string to
   `{ id, text, status: 'pending'|'complete'|'cancelled', cancelReason? }`. The **due
@@ -275,7 +275,7 @@ Resolve, in order:
       wiring** — but confirm.
 - [ ] **Does `Controls` replace `QA Reviewer` for resolution?** And does the
       **QA Reviewer / QA Check / Answer Override** machinery (ADR-0018, ADR-0021,
-      `qa-example-review.js`, `cr-override-editor.js`) **survive at all** for
+      `qa-example-review.js`, `cora-override-editor.js`) **survive at all** for
       September, or is it out of scope / superseded? (Big blast radius — decide
       before touching the matrix.)
 - [ ] **"Amend Outcome" ownership.** Today Amend Outcome is the canonical **Answer

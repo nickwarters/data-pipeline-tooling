@@ -1,5 +1,5 @@
 // @ts-check
-import { ResponsiblePartyDashboard } from '../pages/cr-responsible-party-dashboard.js';
+import { ResponsiblePartyDashboard } from '../pages/cora-responsible-party-dashboard.js';
 
 /**
  * @param {import('../lib/router.js').Router} router
@@ -9,8 +9,8 @@ export function register(router, context) {
   router.register('#/my-cases', {
     mount(container) {
       // Note: no onOpenConversation is wired here, matching the previous
-      // behaviour where the element's 'cr-open-conversation' event had no
-      // listener on this route (only cr-dashboard listened for it).
+      // behaviour where the element's 'cora-open-conversation' event had no
+      // listener on this route (only cora-dashboard listened for it).
       container.replaceChildren(
         ResponsiblePartyDashboard({
           client: context.client,

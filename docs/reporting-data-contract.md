@@ -196,7 +196,7 @@ reporting-relevant fields:
 > `outcomeAtCompletion`, `outcomeOverridden` ⇒ `false`).
 
 > **Case-verdict snapshot.** ADR-0012 is implemented: the completion write
-> (`cr-case-review.js`, `_completeCase`) runs the outcome function over the
+> (`cora-case-review.js`, `_completeCase`) runs the outcome function over the
 > answers at completion time and stamps `outcomeAtCompletion` + `hadRemediation`
 > in the same ETag-guarded PATCH as `status` / `completedAt`. The snapshot is
 > frozen — later edits to the Question Bank, the outcome function, or the answers

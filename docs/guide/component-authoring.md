@@ -19,7 +19,7 @@ export function Counter({ initial = 0 } = {}) {
   return reactive(() =>
     h(
       'div',
-      { class: 'cr-counter' },
+      { class: 'cora-counter' },
       h('span', {}, count.get()),
       h(
         'button',

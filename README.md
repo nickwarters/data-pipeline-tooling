@@ -1,7 +1,9 @@
 # Case Review Frontend Framework
 
 This project is a Vanilla JavaScript, HTML and CSS framework for building the frontend
-layer of a Case Review Platform
+layer of **CORA**, a Case Review Platform. The `cora-` prefix on every custom element,
+CSS class, and design token throughout the codebase is the platform's branding (see
+[ADR-0029](docs/adr/0029-cora-branding-and-cr-prefix-rename.md)).
 
 ## Why is this being created
 

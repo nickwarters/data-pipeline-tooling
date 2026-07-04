@@ -1,5 +1,5 @@
 // @ts-check
-import { ConversationView } from '../pages/cr-conversation-view.js';
+import { ConversationView } from '../pages/cora-conversation-view.js';
 
 /**
  * @param {import('../lib/router.js').Router} router

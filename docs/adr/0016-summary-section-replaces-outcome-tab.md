@@ -53,5 +53,5 @@ This is faithful in the common case — a Completed Case's Answers don't change 
 
 - The **Complete Case** button stays in persistent chrome (ADR-0014 unchanged); Summary carries no action.
 - **Conversation** remains a Section but not a tab — still a floating overlay (ADR-0014).
-- `cr-outcome` survives as a component rendered _inside_ Summary; the Outcome Section/tab and its dedicated matrix row are removed.
+- `cora-outcome` survives as a component rendered _inside_ Summary; the Outcome Section/tab and its dedicated matrix row are removed.
 - ADR-0011 and ADR-0014 are amended (see their "superseded in part" notes).

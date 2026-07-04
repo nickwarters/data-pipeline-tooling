@@ -21,7 +21,7 @@ import {
  * Pure roll-up derivation for the read-only Summary Section (ADR-0016). Computed
  * from whatever Answers are supplied — live while In-progress, the Case's frozen
  * Answers once Completed (editing is disabled, so the two coincide). Outcome is
- * derived separately by `cr-summary` because a Completed Case reads the frozen
+ * derived separately by `cora-summary` because a Completed Case reads the frozen
  * `outcomeAtCompletion` snapshot rather than recomputing (ADR-0012).
  *
  * @param {QuestionDefinition[]} catalogue

@@ -37,7 +37,7 @@ This design also makes mock-first development work: in test and `?mock=1` mode, 
 
 ### ETag concurrency
 
-Every PATCH is sent with an `If-Match` header containing the current ETag. If the server returns `412 Precondition Failed`, `SaveQueue` fetches the latest row and checks whether the remote answers have changed since the last save. If the remote answers match the baseline (i.e., a concurrent writer only changed a different field), `SaveQueue` refreshes the ETag and retries automatically. If answers differ, it sets status to `'conflict'` and stops — the component (or a `<cr-status-banner>`) must prompt the Reviewer to reload.
+Every PATCH is sent with an `If-Match` header containing the current ETag. If the server returns `412 Precondition Failed`, `SaveQueue` fetches the latest row and checks whether the remote answers have changed since the last save. If the remote answers match the baseline (i.e., a concurrent writer only changed a different field), `SaveQueue` refreshes the ETag and retries automatically. If answers differ, it sets status to `'conflict'` and stops — the component (or a `<cora-status-banner>`) must prompt the Reviewer to reload.
 
 ### Retry backoff
 
@@ -45,7 +45,7 @@ Non-412 errors (network timeouts, throttling) trigger exponential backoff using 
 
 ### Status signal
 
-`saveQueue.status` is a read-only signal. Subscribe to it in `<cr-status-banner>` or any component that needs to display save state.
+`saveQueue.status` is a read-only signal. Subscribe to it in `<cora-status-banner>` or any component that needs to display save state.
 
 ---
 
