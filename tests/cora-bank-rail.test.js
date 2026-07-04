@@ -5,7 +5,7 @@ import { installDom } from './_dom-stub.js';
 installDom();
 
 const { CORABankRail } = await import('../src/question-bank/cora-bank-rail.js');
-const { _resetStore, filters, cases, isDirty } =
+const { _resetStore, filters, cases, isDirty, railOpen } =
   await import('../src/question-bank/question-bank-store.js');
 
 test('CORABankRail: renders 4 sections: stat, categories, view, legend', () => {
@@ -161,6 +161,47 @@ test('CORABankRail: category move buttons reorder category blocks and mark dirty
   e.disconnectedCallback();
 });
 
+test('CORABankRail: category move-down reorders category blocks and marks dirty', () => {
+  _resetStore();
+  cases.set({
+    'example-review': {
+      label: 'L',
+      slug: 'example-review',
+      eligibleGroups: [],
+      questions: [
+        {
+          id: 'a1',
+          text: 'A1',
+          category: 'A',
+          responseType: 'yes-no-na',
+          deprecated: false,
+        },
+        {
+          id: 'b1',
+          text: 'B1',
+          category: 'B',
+          responseType: 'yes-no-na',
+          deprecated: false,
+        },
+      ],
+    },
+  });
+  const e = new CORABankRail();
+  e.connectedCallback();
+  const catList = /** @type {any} */ (e)._children[0]._children[1]._children[1];
+  const aMeta = catList._children[1]._children[1];
+  const moveDown = aMeta._children[2];
+  assert.equal(moveDown.disabled, false);
+
+  moveDown._listeners.click[0]({ stopPropagation() {} });
+  assert.deepEqual(
+    cases.get()['example-review'].questions.map((q) => q.id),
+    ['b1', 'a1']
+  );
+  assert.equal(isDirty.get(), true);
+  e.disconnectedCallback();
+});
+
 test('CORABankRail: first and last category move controls are disabled', () => {
   _resetStore();
   const e = new CORABankRail();
@@ -173,5 +214,90 @@ test('CORABankRail: first and last category move controls are disabled', () => {
 
   assert.equal(firstCatMeta._children[1].disabled, true);
   assert.equal(lastCatMeta._children[2].disabled, true);
+  e.disconnectedCallback();
+});
+
+test('CORABankRail: renders a pop-over toggle button and backdrop', () => {
+  _resetStore();
+  const e = new CORABankRail();
+  e.connectedCallback();
+  const toggle = /** @type {any} */ (e)._children[1];
+  const backdrop = /** @type {any} */ (e)._children[2];
+  assert.equal(toggle.className, 'rail-toggle');
+  assert.equal(toggle.getAttribute('aria-controls'), 'bank-rail-panel');
+  assert.equal(backdrop.className, 'rail-backdrop');
+  e.disconnectedCallback();
+});
+
+test('CORABankRail: toggle button opens the pop-over and reflects aria-expanded', () => {
+  _resetStore();
+  const e = new CORABankRail();
+  e.connectedCallback();
+  let toggle = /** @type {any} */ (e)._children[1];
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(/** @type {any} */ (e)._children[0].className, 'rail');
+
+  toggle._listeners.click[0]();
+  assert.equal(railOpen.get(), true);
+  // Re-rendered: aside now carries the open class, aria-expanded flips.
+  toggle = /** @type {any} */ (e)._children[1];
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  assert.equal(/** @type {any} */ (e)._children[0].className, 'rail open');
+
+  // Toggling again closes it.
+  toggle._listeners.click[0]();
+  assert.equal(railOpen.get(), false);
+  e.disconnectedCallback();
+});
+
+test('CORABankRail: backdrop click closes the pop-over', () => {
+  _resetStore();
+  railOpen.set(true);
+  const e = new CORABankRail();
+  e.connectedCallback();
+  const backdrop = /** @type {any} */ (e)._children[2];
+  assert.equal(backdrop.className, 'rail-backdrop open');
+  backdrop._listeners.click[0]();
+  assert.equal(railOpen.get(), false);
+  e.disconnectedCallback();
+});
+
+test('CORABankRail: backdrop click is a no-op when already closed', () => {
+  _resetStore();
+  const e = new CORABankRail();
+  e.connectedCallback();
+  const backdrop = /** @type {any} */ (e)._children[2];
+  backdrop._listeners.click[0]();
+  assert.equal(railOpen.get(), false);
+  e.disconnectedCallback();
+});
+
+test('CORABankRail: selecting a category closes the pop-over', () => {
+  _resetStore();
+  railOpen.set(true);
+  const e = new CORABankRail();
+  e.connectedCallback();
+  const catList = /** @type {any} */ (e)._children[0]._children[1]._children[1];
+  const firstCat = catList._children[1];
+  firstCat._listeners.click[0]();
+  assert.ok(filters.get().category);
+  assert.equal(railOpen.get(), false);
+  e.disconnectedCallback();
+});
+
+test('CORABankRail: the "All" chip also closes the pop-over', () => {
+  _resetStore();
+  filters.set({
+    category: 'Opening',
+    showDeprecated: true,
+    conditionalOnly: false,
+  });
+  railOpen.set(true);
+  const e = new CORABankRail();
+  e.connectedCallback();
+  const catList = /** @type {any} */ (e)._children[0]._children[1]._children[1];
+  catList._children[0]._listeners.click[0]();
+  assert.equal(filters.get().category, null);
+  assert.equal(railOpen.get(), false);
   e.disconnectedCallback();
 });

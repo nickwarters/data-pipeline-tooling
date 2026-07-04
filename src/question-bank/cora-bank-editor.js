@@ -1,7 +1,7 @@
 // @ts-check
 import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
-import { drawerOpen } from './question-bank-store.js';
+import { drawerOpen, railOpen } from './question-bank-store.js';
 
 // Side-effect imports: register all child custom elements.
 import '../components/cora-case-tabs.js';
@@ -73,7 +73,10 @@ export function bindBankEditorKeys(target) {
       e.preventDefault?.();
       drawerOpen.set(true);
     }
-    if (e.key === 'Escape') drawerOpen.set(false);
+    if (e.key === 'Escape') {
+      drawerOpen.set(false);
+      railOpen.set(false);
+    }
   };
   target.addEventListener('keydown', key);
   return () => target.removeEventListener('keydown', key);

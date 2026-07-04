@@ -366,6 +366,14 @@ cora-bank-editor .rail-legend .swatch.conditional {
   background: var(--cora-color-warning);
 }
 
+/* ── Rail pop-over trigger + backdrop ─────────────────────────────────── */
+/* Hidden on wide viewports, where the rail is a static grid column. Both are
+   surfaced only under the narrow-viewport media query at the end of this file. */
+cora-bank-editor .rail-toggle,
+cora-bank-editor .rail-backdrop {
+  display: none;
+}
+
 /* ── Editor pane ──────────────────────────────────────────────────────── */
 cora-bank-editor .editor {
   padding: var(--cora-space-6) var(--cora-space-7)
@@ -1586,4 +1594,85 @@ cora-bank-editor .empty h3 {
   font-size: var(--cora-font-size-lg);
   color: var(--cora-color-text-muted);
   margin-bottom: var(--cora-space-2);
+}
+
+/* ── Narrow viewport: rail collapses to a pop-over ────────────────────── */
+/*
+ * At half-screen widths (split side-by-side) the 240px rail + editor grid no
+ * longer fits and the editor gets clipped with no way to scroll to it. Below
+ * this breakpoint the grid collapses to a single column, the rail slides in
+ * from the left as an off-canvas pop-over, and a `☰ Filters` button surfaces
+ * it. `minmax(0, 1fr)` lets the editor column shrink so its own overflow-x
+ * scroll containers (e.g. .code-block) work instead of overflowing the page.
+ */
+@media (max-width: 60rem) {
+  cora-bank-editor .bank-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  cora-bank-editor .rail-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cora-space-2);
+    margin: var(--cora-space-4) var(--cora-space-5) 0;
+    padding: var(--cora-space-2) var(--cora-space-4);
+    background: var(--cora-color-surface);
+    border: 1px solid var(--cora-color-border-strong);
+    border-radius: var(--cora-radius-md);
+    font-family: var(--cora-font-body);
+    font-size: var(--cora-font-size-sm);
+    font-weight: var(--cora-font-weight-semibold);
+    color: var(--cora-color-on-surface);
+    cursor: pointer;
+    transition:
+      background var(--cora-duration-fast) var(--cora-easing-standard),
+      border-color var(--cora-duration-fast) var(--cora-easing-standard);
+  }
+  cora-bank-editor .rail-toggle:hover {
+    background: var(--cora-color-surface-2);
+    border-color: var(--cora-color-accent);
+    color: var(--cora-color-accent);
+  }
+
+  cora-bank-editor aside.rail {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    height: 100vh;
+    width: min(20rem, 85vw);
+    z-index: 95;
+    transform: translateX(-100%);
+    visibility: hidden;
+    box-shadow: var(--cora-shadow-lg);
+    transition:
+      transform var(--cora-duration-base) var(--cora-easing-standard),
+      visibility var(--cora-duration-base) var(--cora-easing-standard);
+  }
+  cora-bank-editor aside.rail.open {
+    transform: translateX(0);
+    visibility: visible;
+  }
+
+  cora-bank-editor .rail-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 94;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--cora-duration-base) var(--cora-easing-standard);
+  }
+  cora-bank-editor .rail-backdrop.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  cora-bank-editor aside.rail,
+  cora-bank-editor .rail-backdrop {
+    transition: none;
+  }
 }

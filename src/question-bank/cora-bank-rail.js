@@ -6,6 +6,7 @@ import {
   commit,
   currentBank,
   filters,
+  railOpen,
   setFilters,
 } from './question-bank-store.js';
 import {
@@ -16,12 +17,18 @@ import {
 } from './question-bank-order.js';
 
 /**
- * @param {{ bank: any, filters: any, setFilters: (patch: any) => void, moveCategory: (name: string, direction: -1 | 1) => void }} props
- * @returns {HTMLElement}
+ * @param {{ bank: any, filters: any, railOpen: boolean, setFilters: (patch: any) => void, moveCategory: (name: string, direction: -1 | 1) => void, onToggleRail: () => void, onCloseRail: () => void }} props
+ * @returns {Node[]}
  */
 export function BankRail(props) {
   const bank = props.bank;
   const f = props.filters;
+  // Selecting a category is the primary navigation action, so on narrow
+  // viewports it dismisses the pop-over to reveal the filtered list.
+  const selectCategory = (/** @type {string|null} */ category) => {
+    props.setFilters({ category });
+    props.onCloseRail();
+  };
   const order = categoryOrder(bank.questions);
   /** @type {Map<string, number>} */
   const cats = new Map(order.map((name) => [name, 0]));
@@ -35,7 +42,7 @@ export function BankRail(props) {
       'div',
       {
         className: 'filter-chip' + (f.category === null ? ' active' : ''),
-        onClick: () => props.setFilters({ category: null }),
+        onClick: () => selectCategory(null),
       },
       h('span', {}, 'All'),
       h('span', { className: 'chip-count' }, String(bank.questions.length))
@@ -48,7 +55,7 @@ export function BankRail(props) {
         'div',
         {
           className: 'filter-chip' + (f.category === name ? ' active' : ''),
-          onClick: () => props.setFilters({ category: name }),
+          onClick: () => selectCategory(name),
         },
         h('span', {}, name),
         h(
@@ -98,9 +105,12 @@ export function BankRail(props) {
     onClick: () => props.setFilters({ conditionalOnly: !f.conditionalOnly }),
   });
 
-  return h(
+  const aside = h(
     'aside',
-    { className: 'rail' },
+    {
+      id: 'bank-rail-panel',
+      className: 'rail' + (props.railOpen ? ' open' : ''),
+    },
     h(
       'div',
       { className: 'rail-section' },
@@ -158,6 +168,31 @@ export function BankRail(props) {
       )
     )
   );
+
+  // The toggle button and backdrop only surface on narrow viewports (CSS
+  // media query); on wide viewports they are hidden and the aside is a static
+  // grid column. `data-focus-key` keeps focus on the toggle across the rail's
+  // re-render when it flips the pop-over open/closed.
+  const toggle = h(
+    'button',
+    {
+      type: 'button',
+      className: 'rail-toggle',
+      'data-focus-key': 'bank-rail-toggle',
+      'aria-expanded': props.railOpen ? 'true' : 'false',
+      'aria-controls': 'bank-rail-panel',
+      onClick: props.onToggleRail,
+    },
+    props.railOpen ? '✕ Filters' : '☰ Filters'
+  );
+
+  const backdrop = h('div', {
+    className: 'rail-backdrop' + (props.railOpen ? ' open' : ''),
+    'aria-hidden': 'true',
+    onClick: props.onCloseRail,
+  });
+
+  return [aside, toggle, backdrop];
 }
 
 export class CORABankRail extends ShellElement {
@@ -165,11 +200,16 @@ export class CORABankRail extends ShellElement {
     return BankRail({
       bank: currentBank.get(),
       filters: filters.get(),
+      railOpen: railOpen.get(),
       setFilters,
       moveCategory: (name, direction) =>
         commit((types) =>
           moveCategory(types[activeSlug.get()].questions, name, direction)
         ),
+      onToggleRail: () => railOpen.set(!railOpen.get()),
+      onCloseRail: () => {
+        if (railOpen.get()) railOpen.set(false);
+      },
     });
   }
 }

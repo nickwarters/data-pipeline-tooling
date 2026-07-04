@@ -58,6 +58,29 @@ test('cora-bank-editor: mounts shell and registers keydown handler', () => {
   inst.disconnectedCallback();
 });
 
+test('cora-bank-editor: Escape closes both the drawer and the rail pop-over', async () => {
+  const { bindBankEditorKeys } =
+    await import('../src/question-bank/cora-bank-editor.js');
+  const { drawerOpen, railOpen, _resetStore } =
+    await import('../src/question-bank/question-bank-store.js');
+  _resetStore();
+  drawerOpen.set(true);
+  railOpen.set(true);
+  /** @type {any[]} */
+  const handlers = [];
+  const target = {
+    addEventListener: (/** @type {string} */ t, /** @type {Function} */ h) => {
+      if (t === 'keydown') handlers.push(h);
+    },
+    removeEventListener: () => {},
+  };
+  const off = bindBankEditorKeys(target);
+  handlers[0]({ key: 'Escape' });
+  assert.equal(drawerOpen.get(), false);
+  assert.equal(railOpen.get(), false);
+  off();
+});
+
 test('cora-bank-editor: disconnectedCallback with no key handler is safe', () => {
   const Cls = G.customElements._registry['cora-bank-editor'];
   const inst = new Cls();

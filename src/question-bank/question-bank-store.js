@@ -42,6 +42,12 @@ export const filters = signal(
   })
 );
 export const drawerOpen = signal(false);
+/**
+ * Whether the left rail is surfaced as a pop-over. Only has a visual effect
+ * on narrow viewports (half-screen split view); on wide viewports the rail is
+ * a static grid column and this flag is inert. See cora-bank-rail.js.
+ */
+export const railOpen = signal(false);
 export const toastMsg = signal('');
 
 // ── Derived ────────────────────────────────────────────────────────────────
@@ -157,5 +163,6 @@ export function _resetStore() {
   activeSlug.set('example-review');
   filters.set({ category: null, showDeprecated: true, conditionalOnly: false });
   drawerOpen.set(false);
+  railOpen.set(false);
   toastMsg.set('');
 }
