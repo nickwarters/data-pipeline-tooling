@@ -435,6 +435,24 @@ test('CRCaptureGroups: a structural change to the groups rebuilds rather than sy
   );
 });
 
+test('CRCaptureGroups: toggling a group keeps focus on its header so the scroll is anchored', () => {
+  const el = mount(GROUPS, {}, true);
+  const header = findAllByClass(el, 'cr-capture-group-header')[1]; // Grading
+  assert.ok(
+    header.getAttribute('data-focus-key'),
+    'header carries a focus key'
+  );
+  header.focus(); // clicking a header focuses it in Edge Chromium
+  header._fire('click'); // expand — rebuilds the element
+
+  const rebuiltHeader = findAllByClass(el, 'cr-capture-group-header')[1];
+  assert.equal(
+    rebuiltHeader._focused,
+    true,
+    'focus is restored to the rebuilt header, holding the page scroll'
+  );
+});
+
 test('CRCaptureGroups: expanding a group builds its controls', () => {
   const el = mount(GROUPS, {}, true);
   // Grading starts collapsed -> no Severity control.

@@ -120,6 +120,10 @@ function editableGroup(
       {
         className: 'cr-capture-group-header',
         'aria-expanded': collapsedNow ? 'false' : 'true',
+        // Toggling rebuilds this element; keying the header (which the click
+        // focuses) lets the framework refocus it afterwards and hold the page
+        // scroll instead of jumping to the top.
+        'data-focus-key': `capture-group:${namePrefix}${group.key}`,
         onclick: () => onToggle(group.key, !collapsedNow),
       },
       group.label
