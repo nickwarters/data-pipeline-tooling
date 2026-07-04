@@ -6,6 +6,7 @@ import { caseRouteFor, conversationRouteFor } from '../lib/case-route-links.js';
 import '../components/cora-case-table.js';
 import '../components/cora-allocation.js';
 import '../components/cora-owner-summary.js';
+import '../components/cora-kpi-strip.js';
 import { ResponsiblePartyDashboard } from './cora-responsible-party-dashboard.js';
 import { ControlsDashboard } from './cora-controls-dashboard.js';
 import { isOverdue } from '../evaluators/overdue-evaluator.js';
@@ -80,6 +81,23 @@ function renderDashboard({
   onAllocated,
 }) {
   const children = [];
+
+  // Role-scoped KPI strip (issue #286): a one-glance summary of what needs the
+  // user, in each role they hold. Sits above the per-role sections below.
+  if (
+    capabilities.isReviewer ||
+    capabilities.isControls ||
+    capabilities.ownedCaseTypes.length > 0
+  ) {
+    children.push(
+      h('cora-kpi-strip', {
+        client,
+        currentUserId,
+        capabilities,
+        eligibleCaseTypes,
+      })
+    );
+  }
 
   if (capabilities.isReviewer) {
     children.push(h('h1', {}, 'Outstanding Cases'));

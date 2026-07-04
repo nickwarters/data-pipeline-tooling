@@ -97,6 +97,34 @@ test('DashboardPage: reviewer capability — outstanding Cases heading and alloc
   );
 });
 
+test('DashboardPage: reviewer capability — renders the role-scoped KPI strip', async () => {
+  const host = DashboardPage({
+    client: /** @type {any} */ (makeClient()),
+    currentUserId: 'user-reviewer',
+    capabilities: defaultCapabilities({ isReviewer: true }),
+    eligibleCaseTypes: ['example-review'],
+  });
+  await flush();
+
+  assert.equal(
+    findAll(host, 'cora-kpi-strip').length,
+    1,
+    'should render the KPI strip'
+  );
+});
+
+test('DashboardPage: visitor capability — no KPI strip is rendered', async () => {
+  const host = DashboardPage({
+    client: /** @type {any} */ (makeClient()),
+    currentUserId: 'user-visitor',
+    capabilities: defaultCapabilities({ isVisitor: true }),
+    eligibleCaseTypes: [],
+  });
+  await flush();
+
+  assert.equal(findAll(host, 'cora-kpi-strip').length, 0);
+});
+
 test('DashboardPage: owner-only capability — owner summary visible, no outstanding Cases, no allocation', async () => {
   const host = DashboardPage({
     client: /** @type {any} */ (makeClient()),

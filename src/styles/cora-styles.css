@@ -588,6 +588,161 @@ cora-status-banner {
   margin-top: var(--cora-space-7);
 }
 
+/* ── Dashboard: role-scoped KPI strip (issue #286) ───────────────────────── */
+
+.cora-kpi-strip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cora-space-4);
+  margin: 0 0 var(--cora-space-6);
+}
+
+.cora-kpi-lane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cora-space-3);
+}
+
+.cora-kpi-lane__header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--cora-space-2);
+  width: 100%;
+  padding: var(--cora-space-1) 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+
+.cora-kpi-caret {
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-xs);
+}
+
+.cora-kpi-lane__role {
+  font-size: var(--cora-font-size-sm);
+  font-weight: var(--cora-font-weight-semibold);
+  letter-spacing: var(--cora-tracking-wider);
+  text-transform: uppercase;
+}
+
+.cora-kpi-lane__scope {
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-sm);
+}
+
+.cora-kpi-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cora-space-3);
+}
+
+.cora-kpi-tile {
+  display: block;
+  min-width: 12rem;
+  padding: var(--cora-space-3) var(--cora-space-4);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-left: 4px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  box-shadow: var(--cora-shadow-sm);
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+
+button.cora-kpi-tile {
+  cursor: pointer;
+}
+
+.cora-kpi-tile__face {
+  display: flex;
+  align-items: baseline;
+  gap: var(--cora-space-2);
+}
+
+.cora-kpi-tile__count {
+  font-size: var(--cora-font-size-xl);
+  font-weight: var(--cora-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.cora-kpi-tile__label {
+  color: var(--cora-color-text-muted);
+}
+
+.cora-kpi-tile__caret {
+  margin-left: auto;
+  color: var(--cora-color-text-muted);
+  font-size: var(--cora-font-size-xs);
+}
+
+/* Tone accents — the left border keys each worklist to its role/reason. */
+.cora-kpi-tile--overdue {
+  border-left-color: var(--cora-color-danger);
+}
+.cora-kpi-tile--awaiting {
+  border-left-color: var(--cora-color-accent);
+}
+.cora-kpi-tile--progress {
+  border-left-color: var(--cora-color-border);
+}
+.cora-kpi-tile--appeals {
+  border-left-color: var(--cora-color-controls, #7c3aed);
+}
+.cora-kpi-tile--at-risk {
+  border-left-color: var(--cora-color-warning);
+}
+.cora-kpi-tile--unassigned {
+  border-left-color: var(--cora-color-success);
+}
+
+.cora-kpi-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cora-space-1);
+  margin-top: var(--cora-space-3);
+  padding-top: var(--cora-space-3);
+  border-top: 1px dashed var(--cora-color-border);
+}
+
+.cora-kpi-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--cora-space-3);
+}
+
+.cora-kpi-row--caseType {
+  grid-template-columns: auto 1fr auto;
+}
+
+.cora-kpi-row__label {
+  color: var(--cora-color-text-muted);
+}
+
+.cora-kpi-row__track {
+  height: 0.4rem;
+  background: var(--cora-color-surface-2, var(--cora-color-border));
+  border-radius: var(--cora-radius-sm);
+  overflow: hidden;
+}
+
+.cora-kpi-row__bar {
+  display: block;
+  height: 100%;
+  background: var(--cora-color-accent);
+}
+
+.cora-kpi-row__count {
+  font-weight: var(--cora-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Question list ───────────────────────────────────────────────────────── */
 
 /* Review-tab question cards. Brought in line with the other Sections' card
