@@ -136,6 +136,13 @@
   z-index: var(--cora-z-app-root);
   overflow-x: hidden;
   overflow-y: auto;
+  /* Reserve the vertical scrollbar's gutter so it doesn't come and go as route
+     content grows and shrinks (e.g. filtering the case table down to a few
+     rows). Without this the scrollbar disappears on short pages, the scroll
+     container widens by the scrollbar width, and centred .cora-page-content
+     re-centres — headings and content nudge sideways (issue #271). Edge/Chromium
+     baseline (ADR-0001) supports scrollbar-gutter. */
+  scrollbar-gutter: stable;
 }
 
 /* Centered content wrapper used by all standard routes */
