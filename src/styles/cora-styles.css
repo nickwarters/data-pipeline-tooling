@@ -588,22 +588,28 @@ cora-status-banner {
   margin-top: var(--cora-space-7);
 }
 
-/* ── Dashboard: role-scoped KPI strip (issue #286) ───────────────────────── */
+/* ── Dashboard: role-scoped KPI strip (issue #286) ───────────────────────────
+   Every rule is scoped under `.cora-kpi-strip` so it out-specifies the global
+   `[data-cora-root] button` accent styling (lanes and tiles are <button>s and
+   must NOT become solid accent bars) and does not collide with the unrelated
+   `.cora-kpi-tile` grid tiles elsewhere in this sheet. Tone colour is an accent
+   only — a left border on each tile — never a fill behind text. */
 
-.cora-kpi-strip {
+[data-cora-root] .cora-kpi-strip {
   display: flex;
   flex-direction: column;
   gap: var(--cora-space-4);
   margin: 0 0 var(--cora-space-6);
 }
 
-.cora-kpi-lane {
+[data-cora-root] .cora-kpi-strip .cora-kpi-lane {
   display: flex;
   flex-direction: column;
   gap: var(--cora-space-3);
 }
 
-.cora-kpi-lane__header {
+/* A quiet text toggle — not the app's solid accent button. */
+[data-cora-root] .cora-kpi-strip .cora-kpi-lane__header {
   display: flex;
   align-items: baseline;
   gap: var(--cora-space-2);
@@ -611,97 +617,114 @@ cora-status-banner {
   padding: var(--cora-space-1) 0;
   background: none;
   border: none;
+  border-radius: 0;
+  box-shadow: none;
   cursor: pointer;
   text-align: left;
-  color: inherit;
-  font: inherit;
+  color: var(--cora-color-on-surface);
 }
 
-.cora-kpi-caret {
+[data-cora-root] .cora-kpi-strip .cora-kpi-lane__header:hover {
+  background: none;
+  color: var(--cora-color-accent);
+}
+
+[data-cora-root] .cora-kpi-strip .cora-kpi-caret {
   color: var(--cora-color-text-muted);
   font-size: var(--cora-font-size-xs);
 }
 
-.cora-kpi-lane__role {
+[data-cora-root] .cora-kpi-strip .cora-kpi-lane__role {
   font-size: var(--cora-font-size-sm);
   font-weight: var(--cora-font-weight-semibold);
   letter-spacing: var(--cora-tracking-wider);
   text-transform: uppercase;
 }
 
-.cora-kpi-lane__scope {
+[data-cora-root] .cora-kpi-strip .cora-kpi-lane__scope {
   color: var(--cora-color-text-muted);
   font-size: var(--cora-font-size-sm);
+  font-weight: normal;
+  letter-spacing: normal;
+  text-transform: none;
 }
 
-.cora-kpi-tiles {
+[data-cora-root] .cora-kpi-strip .cora-kpi-tiles {
   display: flex;
   flex-wrap: wrap;
   gap: var(--cora-space-3);
 }
 
-.cora-kpi-tile {
+/* A plain surface card — the tone accent is the left border, set below. */
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile {
+  --cora-kpi-tone: var(--cora-color-border);
   display: block;
   min-width: 12rem;
   padding: var(--cora-space-3) var(--cora-space-4);
   background: var(--cora-color-surface);
+  color: var(--cora-color-on-surface);
   border: 1px solid var(--cora-color-border);
-  border-left: 4px solid var(--cora-color-border);
+  border-left: 4px solid var(--cora-kpi-tone);
   border-radius: var(--cora-radius-md);
   box-shadow: var(--cora-shadow-sm);
   text-align: left;
-  color: inherit;
-  font: inherit;
 }
 
-button.cora-kpi-tile {
+[data-cora-root] .cora-kpi-strip button.cora-kpi-tile {
   cursor: pointer;
 }
 
-.cora-kpi-tile__face {
+[data-cora-root] .cora-kpi-strip button.cora-kpi-tile:hover {
+  background: var(--cora-color-surface);
+  border-color: var(--cora-color-border);
+  border-left-color: var(--cora-kpi-tone);
+  box-shadow: var(--cora-shadow-md, var(--cora-shadow-sm));
+}
+
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile__face {
   display: flex;
   align-items: baseline;
   gap: var(--cora-space-2);
 }
 
-.cora-kpi-tile__count {
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile__count {
   font-size: var(--cora-font-size-xl);
   font-weight: var(--cora-font-weight-bold);
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
 
-.cora-kpi-tile__label {
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile__label {
   color: var(--cora-color-text-muted);
 }
 
-.cora-kpi-tile__caret {
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile__caret {
   margin-left: auto;
   color: var(--cora-color-text-muted);
   font-size: var(--cora-font-size-xs);
 }
 
 /* Tone accents — the left border keys each worklist to its role/reason. */
-.cora-kpi-tile--overdue {
-  border-left-color: var(--cora-color-danger);
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile--overdue {
+  --cora-kpi-tone: var(--cora-color-danger);
 }
-.cora-kpi-tile--awaiting {
-  border-left-color: var(--cora-color-accent);
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile--awaiting {
+  --cora-kpi-tone: var(--cora-color-accent);
 }
-.cora-kpi-tile--progress {
-  border-left-color: var(--cora-color-border);
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile--progress {
+  --cora-kpi-tone: var(--cora-color-border);
 }
-.cora-kpi-tile--appeals {
-  border-left-color: var(--cora-color-controls, #7c3aed);
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile--appeals {
+  --cora-kpi-tone: var(--cora-color-controls, #7c3aed);
 }
-.cora-kpi-tile--at-risk {
-  border-left-color: var(--cora-color-warning);
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile--at-risk {
+  --cora-kpi-tone: var(--cora-color-warning);
 }
-.cora-kpi-tile--unassigned {
-  border-left-color: var(--cora-color-success);
+[data-cora-root] .cora-kpi-strip .cora-kpi-tile--unassigned {
+  --cora-kpi-tone: var(--cora-color-success);
 }
 
-.cora-kpi-breakdown {
+[data-cora-root] .cora-kpi-strip .cora-kpi-breakdown {
   display: flex;
   flex-direction: column;
   gap: var(--cora-space-1);
@@ -710,35 +733,35 @@ button.cora-kpi-tile {
   border-top: 1px dashed var(--cora-color-border);
 }
 
-.cora-kpi-row {
+[data-cora-root] .cora-kpi-strip .cora-kpi-row {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: var(--cora-space-3);
 }
 
-.cora-kpi-row--caseType {
+[data-cora-root] .cora-kpi-strip .cora-kpi-row--caseType {
   grid-template-columns: auto 1fr auto;
 }
 
-.cora-kpi-row__label {
+[data-cora-root] .cora-kpi-strip .cora-kpi-row__label {
   color: var(--cora-color-text-muted);
 }
 
-.cora-kpi-row__track {
+[data-cora-root] .cora-kpi-strip .cora-kpi-row__track {
   height: 0.4rem;
   background: var(--cora-color-surface-2, var(--cora-color-border));
   border-radius: var(--cora-radius-sm);
   overflow: hidden;
 }
 
-.cora-kpi-row__bar {
+[data-cora-root] .cora-kpi-strip .cora-kpi-row__bar {
   display: block;
   height: 100%;
-  background: var(--cora-color-accent);
+  background: var(--cora-kpi-tone, var(--cora-color-accent));
 }
 
-.cora-kpi-row__count {
+[data-cora-root] .cora-kpi-strip .cora-kpi-row__count {
   font-weight: var(--cora-font-weight-semibold);
   font-variant-numeric: tabular-nums;
 }
