@@ -5,8 +5,7 @@ import { installDom, findByClass, findAllByClass } from './_dom-stub.js';
 
 installDom();
 
-const { CRCaptureGroups } =
-  await import('../src/components/cr-capture-groups.js');
+await import('../src/components/cr-capture-groups.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaptureGroup} CaptureGroup */
 
@@ -42,6 +41,22 @@ const GROUPS = [
   },
 ];
 
+/**
+ * Create the `<cr-capture-groups>` element, seed its inputs and mount it — the
+ * lifecycle a real parent drives when it appends the element to the DOM.
+ * @param {any} groups @param {any} capture @param {boolean} canCapture
+ */
+function mount(groups, capture, canCapture) {
+  const el = /** @type {any} */ (
+    globalThis.document.createElement('cr-capture-groups')
+  );
+  el.groups = groups;
+  el.capture = capture;
+  el.canCapture = canCapture;
+  el.connectedCallback();
+  return el;
+}
+
 /** @param {any} root @param {string} tag @returns {any[]} */
 function findAllByTag(root, tag) {
   /** @type {any[]} */
@@ -59,8 +74,7 @@ function findAllByTag(root, tag) {
 // ===== TESTS =====
 
 test('CRCaptureGroups: editable mode renders a header per group', () => {
-  const el = new CRCaptureGroups();
-  el.update(GROUPS, {}, true);
+  const el = mount(GROUPS, {}, true);
   const headers = findAllByClass(el, 'cr-capture-group-header');
   assert.deepEqual(
     headers.map((h) => h.textContent),
@@ -69,8 +83,7 @@ test('CRCaptureGroups: editable mode renders a header per group', () => {
 });
 
 test('CRCaptureGroups: an expanded group renders its field controls; a collapsed group hides them', () => {
-  const el = new CRCaptureGroups();
-  el.update(GROUPS, {}, true);
+  const el = mount(GROUPS, {}, true);
   // GROUPS[0] (Cause) collapsed:false -> fields shown; GROUPS[1] (Grading) collapsed:true -> hidden.
   const fields = findAllByClass(el, 'cr-capture-field');
   const labels = findAllByClass(el, 'cr-capture-label').map(
@@ -81,8 +94,7 @@ test('CRCaptureGroups: an expanded group renders its field controls; a collapsed
 });
 
 test('CRCaptureGroups: clicking a collapsed group header expands it (ephemeral)', () => {
-  const el = new CRCaptureGroups();
-  el.update(GROUPS, {}, true);
+  const el = mount(GROUPS, {}, true);
   const gradingHeader = findAllByClass(el, 'cr-capture-group-header')[1];
   gradingHeader._fire('click');
   const labels = findAllByClass(el, 'cr-capture-label').map(
@@ -92,8 +104,7 @@ test('CRCaptureGroups: clicking a collapsed group header expands it (ephemeral)'
 });
 
 test('CRCaptureGroups: clicking an expanded group header collapses it', () => {
-  const el = new CRCaptureGroups();
-  el.update(GROUPS, {}, true);
+  const el = mount(GROUPS, {}, true);
   const causeHeader = findAllByClass(el, 'cr-capture-group-header')[0];
   causeHeader._fire('click');
   const labels = findAllByClass(el, 'cr-capture-label').map(
@@ -104,8 +115,7 @@ test('CRCaptureGroups: clicking an expanded group header collapses it', () => {
 });
 
 test('CRCaptureGroups: collapse state survives a re-render via update()', () => {
-  const el = new CRCaptureGroups();
-  el.update(GROUPS, {}, true);
+  const el = mount(GROUPS, {}, true);
   findAllByClass(el, 'cr-capture-group-header')[1]._fire('click'); // expand Grading
   el.update(GROUPS, { severity: 'High' }, true); // autosave-style re-render
   const labels = findAllByClass(el, 'cr-capture-label').map(
@@ -118,8 +128,7 @@ test('CRCaptureGroups: collapse state survives a re-render via update()', () => 
 });
 
 test('CRCaptureGroups: text and textarea controls reflect the current capture value', () => {
-  const el = new CRCaptureGroups();
-  el.update(GROUPS, { rootCause: 'Rushed', detail: 'Long note' }, true);
+  const el = mount(GROUPS, { rootCause: 'Rushed', detail: 'Long note' }, true);
   const inputs = findAllByClass(el, 'cr-capture-input');
   assert.equal(inputs[0]._tagName, 'input');
   assert.equal(inputs[0].value, 'Rushed');
@@ -128,8 +137,7 @@ test('CRCaptureGroups: text and textarea controls reflect the current capture va
 });
 
 test('CRCaptureGroups: select renders a blank plus the options and reflects current value', () => {
-  const el = new CRCaptureGroups();
-  el.update(GROUPS, { severity: 'Med' }, true);
+  const el = mount(GROUPS, { severity: 'Med' }, true);
   findAllByClass(el, 'cr-capture-group-header')[1]._fire('click'); // expand Grading
   const select = findAllByTag(el, 'select')[0];
   const opts = findAllByTag(select, 'option').map((o) => o.value);
@@ -138,8 +146,7 @@ test('CRCaptureGroups: select renders a blank plus the options and reflects curr
 });
 
 test('CRCaptureGroups: radio renders one input per option with the current one checked', () => {
-  const el = new CRCaptureGroups();
-  el.update(GROUPS, { repeat: 'No' }, true);
+  const el = mount(GROUPS, { repeat: 'No' }, true);
   findAllByClass(el, 'cr-capture-group-header')[1]._fire('click'); // expand Grading
   const radios = findAllByTag(el, 'input').filter((i) => i.type === 'radio');
   assert.deepEqual(
@@ -153,11 +160,8 @@ test('CRCaptureGroups: radio renders one input per option with the current one c
 });
 
 test('CRCaptureGroups: radio names are scoped per instance so separate Answers are independent groups', () => {
-  const a = new CRCaptureGroups();
-  const b = new CRCaptureGroups();
-  a.update(GROUPS, {}, true);
-  b.update(GROUPS, {}, true);
-  /** @type {any} */ (a)._fire('click'); // no-op safety
+  const a = mount(GROUPS, {}, true);
+  const b = mount(GROUPS, {}, true);
   findAllByClass(a, 'cr-capture-group-header')[1]._fire('click'); // expand Grading
   findAllByClass(b, 'cr-capture-group-header')[1]._fire('click');
 
@@ -183,8 +187,7 @@ test('CRCaptureGroups: radio names are scoped per instance so separate Answers a
 });
 
 test('CRCaptureGroups: changing a text control dispatches a bubbling cr-capture', () => {
-  const el = new CRCaptureGroups();
-  el.update(GROUPS, {}, true);
+  const el = mount(GROUPS, {}, true);
   /** @type {any[]} */
   const events = [];
   el.addEventListener('cr-capture', (/** @type {any} */ e) => events.push(e));
@@ -200,8 +203,7 @@ test('CRCaptureGroups: changing a text control dispatches a bubbling cr-capture'
 });
 
 test('CRCaptureGroups: selecting a radio option dispatches cr-capture with that option', () => {
-  const el = new CRCaptureGroups();
-  el.update(GROUPS, {}, true);
+  const el = mount(GROUPS, {}, true);
   findAllByClass(el, 'cr-capture-group-header')[1]._fire('click');
   /** @type {any[]} */
   const events = [];
@@ -214,8 +216,7 @@ test('CRCaptureGroups: selecting a radio option dispatches cr-capture with that 
 });
 
 test('CRCaptureGroups: read-only mode shows only populated fields as static text, no inputs', () => {
-  const el = new CRCaptureGroups();
-  el.update(GROUPS, { rootCause: 'Rushed', severity: 'High' }, false);
+  const el = mount(GROUPS, { rootCause: 'Rushed', severity: 'High' }, false);
   assert.equal(
     findByClass(el, 'cr-capture-input'),
     null,
@@ -228,8 +229,7 @@ test('CRCaptureGroups: read-only mode shows only populated fields as static text
 });
 
 test('CRCaptureGroups: read-only mode omits a group with no populated fields', () => {
-  const el = new CRCaptureGroups();
-  el.update(GROUPS, { rootCause: 'Rushed' }, false);
+  const el = mount(GROUPS, { rootCause: 'Rushed' }, false);
   const headings = findAllByClass(el, 'cr-capture-group-heading').map(
     (h) => h.textContent
   );
@@ -240,22 +240,12 @@ test('CRCaptureGroups: read-only mode omits a group with no populated fields', (
   );
 });
 
-test('CRCaptureGroups: connectedCallback renders from properties', () => {
-  const el = new CRCaptureGroups();
-  el.groups = GROUPS;
-  el.capture = {};
-  el.canCapture = true;
-  el.connectedCallback();
-  assert.equal(findAllByClass(el, 'cr-capture-group-header').length, 2);
-});
-
 test('CRCaptureGroups: a group without an explicit collapsed flag defaults to expanded', () => {
-  const el = new CRCaptureGroups();
   /** @type {any} */
   const groups = [
     { key: 'g', label: 'G', fields: [{ key: 'a', label: 'A', type: 'text' }] },
   ];
-  el.update(groups, {}, true);
+  const el = mount(groups, {}, true);
   assert.deepEqual(
     findAllByClass(el, 'cr-capture-label').map((l) => l.textContent),
     ['A']
@@ -263,19 +253,17 @@ test('CRCaptureGroups: a group without an explicit collapsed flag defaults to ex
 });
 
 test('CRCaptureGroups: a non-string captured value renders as empty and is omitted read-only', () => {
-  const el = new CRCaptureGroups();
   /** @type {any} */
   const capture = { rootCause: { loginName: 'jsmith', displayName: 'Jane' } };
   // Editable: the text control falls back to empty rather than rendering an object.
-  el.update(GROUPS, capture, true);
-  assert.equal(findAllByClass(el, 'cr-capture-input')[0].value, '');
+  const editable = mount(GROUPS, capture, true);
+  assert.equal(findAllByClass(editable, 'cr-capture-input')[0].value, '');
   // Read-only: a non-string value is not "populated", so the group is omitted.
-  el.update(GROUPS, capture, false);
-  assert.equal(findByClass(el, 'cr-capture-value'), null);
+  const readOnly = mount(GROUPS, capture, false);
+  assert.equal(findByClass(readOnly, 'cr-capture-value'), null);
 });
 
 test('CRCaptureGroups: a select field declared without options still renders the blank option', () => {
-  const el = new CRCaptureGroups();
   /** @type {any} */
   const groups = [
     {
@@ -285,13 +273,12 @@ test('CRCaptureGroups: a select field declared without options still renders the
       fields: [{ key: 's', label: 'S', type: 'select' }],
     },
   ];
-  el.update(groups, {}, true);
+  const el = mount(groups, {}, true);
   const opts = findAllByTag(el, 'option').map((o) => o.value);
   assert.deepEqual(opts, ['']);
 });
 
 test('CRCaptureGroups: a radio field declared without options renders no inputs', () => {
-  const el = new CRCaptureGroups();
   /** @type {any} */
   const groups = [
     {
@@ -301,53 +288,80 @@ test('CRCaptureGroups: a radio field declared without options renders no inputs'
       fields: [{ key: 'r', label: 'R', type: 'radio' }],
     },
   ];
-  el.update(groups, {}, true);
+  const el = mount(groups, {}, true);
   assert.equal(
     findAllByTag(el, 'input').filter((i) => i.type === 'radio').length,
     0
   );
 });
 
-// ===== node reuse on value-only updates (scroll/focus preservation) =====
-// An autosave-driven re-render that only changes field values must NOT tear down
-// the controls: rebuilding detaches the control the Reviewer is editing, which
-// loses focus and resets page scroll (the "thrown back to the top" bug).
-
-test('CRCaptureGroups: a value-only update reuses the same control node and reflects the new value', () => {
-  const el = new CRCaptureGroups();
-  el.update(GROUPS, { rootCause: 'First' }, true);
-  const before = findAllByClass(el, 'cr-capture-input')[0];
-  assert.equal(before.value, 'First');
-
-  el.update(GROUPS, { rootCause: 'Second' }, true);
-  const after = findAllByClass(el, 'cr-capture-input')[0];
-  assert.strictEqual(after, before, 'text control reused, not recreated');
-  assert.equal(after.value, 'Second', 'reused control shows the new value');
+test('CRCaptureGroups: update() before mount seeds the props the first render reads', () => {
+  const el = /** @type {any} */ (
+    globalThis.document.createElement('cr-capture-groups')
+  );
+  // Parent order: assign + update() run before the element is appended (mounted).
+  el.update(GROUPS, { rootCause: 'Seed' }, true);
+  el.connectedCallback();
+  assert.equal(findAllByClass(el, 'cr-capture-group-header').length, 2);
+  assert.equal(findAllByClass(el, 'cr-capture-input')[0].value, 'Seed');
 });
 
-test('CRCaptureGroups: a value-only update syncs radio checked state in place', () => {
-  const el = new CRCaptureGroups();
-  el.update(GROUPS, {}, true);
-  findAllByClass(el, 'cr-capture-group-header')[1]._fire('click'); // expand Grading
-  const radiosBefore = findAllByTag(el, 'input').filter(
-    (i) => i.type === 'radio'
+// ===== focus / scroll preservation on value-only updates =====
+// An autosave-driven re-render that only changes field values must not lose the
+// Reviewer's place. The old component hand-rolled node reuse; the element now
+// leans on the framework's data-focus-key restoration, so a rebuilt control
+// still ends up focused and showing the new value (which is what keeps browser
+// scroll anchoring from throwing the page back to the top).
+
+test('CRCaptureGroups: capture controls carry a stable per-field data-focus-key', () => {
+  const el = mount(GROUPS, {}, true);
+  const rootCause = findAllByClass(el, 'cr-capture-input')[0];
+  const key = rootCause.getAttribute('data-focus-key');
+  assert.ok(
+    typeof key === 'string' && key.endsWith('rootCause'),
+    'text control is keyed by its field'
   );
 
-  el.update(GROUPS, { repeat: 'Yes' }, true);
-  const radiosAfter = findAllByTag(el, 'input').filter(
-    (i) => i.type === 'radio'
+  el.update(GROUPS, { rootCause: 'x' }, true);
+  const rebuilt = findAllByClass(el, 'cr-capture-input')[0];
+  assert.equal(
+    rebuilt.getAttribute('data-focus-key'),
+    key,
+    'the key is stable across a re-render so focus can be restored'
   );
-  assert.strictEqual(radiosAfter[0], radiosBefore[0], 'radio inputs reused');
+});
+
+test('CRCaptureGroups: a value-only update restores focus to the control and shows the new value', () => {
+  const el = mount(GROUPS, { rootCause: 'First' }, true);
+  const before = findAllByClass(el, 'cr-capture-input')[0];
+  before.focus(); // Reviewer is editing this control
+
+  el.update(GROUPS, { rootCause: 'Second' }, true);
+
+  const after = findAllByClass(el, 'cr-capture-input')[0];
+  assert.equal(after.value, 'Second', 'reflects the new value');
+  assert.equal(
+    after._focused,
+    true,
+    'focus is restored to the keyed control after the rebuild'
+  );
+});
+
+test('CRCaptureGroups: a value-only update reflects new radio checked state in place', () => {
+  const el = mount(GROUPS, {}, true);
+  findAllByClass(el, 'cr-capture-group-header')[1]._fire('click'); // expand Grading
+
+  el.update(GROUPS, { repeat: 'Yes' }, true);
+  const radios = findAllByTag(el, 'input').filter((i) => i.type === 'radio');
   assert.deepEqual(
-    radiosAfter.map((r) => r.checked),
+    radios.map((r) => r.checked),
     [true, false],
-    'reused radios reflect the new value'
+    'radios reflect the new value after the re-render'
   );
 });
 
 test('CRCaptureGroups: a structural change (edit→read-only) still rebuilds', () => {
-  const el = new CRCaptureGroups();
-  el.update(GROUPS, { rootCause: 'X' }, true);
+  const el = mount(GROUPS, { rootCause: 'X' }, true);
   assert.ok(findByClass(el, 'cr-capture-input'), 'editable controls present');
 
   el.update(GROUPS, { rootCause: 'X' }, false);
@@ -358,9 +372,8 @@ test('CRCaptureGroups: a structural change (edit→read-only) still rebuilds', (
   );
 });
 
-test('CRCaptureGroups: expanding a group rebuilds (structure changed, not a value-only sync)', () => {
-  const el = new CRCaptureGroups();
-  el.update(GROUPS, {}, true);
+test('CRCaptureGroups: expanding a group builds its controls', () => {
+  const el = mount(GROUPS, {}, true);
   // Grading starts collapsed -> no Severity control.
   assert.equal(
     findAllByTag(el, 'select').length,
