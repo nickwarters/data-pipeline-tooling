@@ -99,6 +99,15 @@ function renderDashboard({
     );
   }
 
+  if (capabilities.ownedCaseTypes.length > 0) {
+    children.push(
+      h('cora-owner-summary', {
+        client,
+        ownedCaseTypes: capabilities.ownedCaseTypes,
+      })
+    );
+  }
+
   if (capabilities.isReviewer) {
     children.push(h('h1', {}, 'Outstanding Cases'));
 
@@ -117,15 +126,6 @@ function renderDashboard({
         currentUserId,
         eligibleCaseTypes,
         'oncora-allocated': () => onAllocated(),
-      })
-    );
-  }
-
-  if (capabilities.ownedCaseTypes.length > 0) {
-    children.push(
-      h('cora-owner-summary', {
-        client,
-        ownedCaseTypes: capabilities.ownedCaseTypes,
       })
     );
   }
