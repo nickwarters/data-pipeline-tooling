@@ -307,11 +307,11 @@ test('CRCaptureGroups: update() before mount seeds the props the first render re
 });
 
 // ===== focus / scroll preservation on value-only updates =====
-// An autosave-driven re-render that only changes field values must not lose the
-// Reviewer's place. The old component hand-rolled node reuse; the element now
-// leans on the framework's data-focus-key restoration, so a rebuilt control
-// still ends up focused and showing the new value (which is what keeps browser
-// scroll anchoring from throwing the page back to the top).
+// An autosave-driven re-render that only changes field values must NOT tear down
+// the controls: rebuilding detaches the control the Reviewer is editing, which
+// loses focus and — because it breaks the browser's scroll anchoring — throws
+// the page back to the top on every capture edit. So a value-only update syncs
+// values into the existing control nodes in place.
 
 test('CRCaptureGroups: capture controls carry a stable per-field data-focus-key', () => {
   const el = mount(GROUPS, {}, true);
@@ -321,46 +321,72 @@ test('CRCaptureGroups: capture controls carry a stable per-field data-focus-key'
     typeof key === 'string' && key.endsWith('rootCause'),
     'text control is keyed by its field'
   );
-
-  el.update(GROUPS, { rootCause: 'x' }, true);
-  const rebuilt = findAllByClass(el, 'cr-capture-input')[0];
-  assert.equal(
-    rebuilt.getAttribute('data-focus-key'),
-    key,
-    'the key is stable across a re-render so focus can be restored'
-  );
 });
 
-test('CRCaptureGroups: a value-only update restores focus to the control and shows the new value', () => {
+test('CRCaptureGroups: a value-only update reuses the same control node and reflects the new value', () => {
   const el = mount(GROUPS, { rootCause: 'First' }, true);
   const before = findAllByClass(el, 'cr-capture-input')[0];
   before.focus(); // Reviewer is editing this control
+  assert.equal(before.value, 'First');
 
   el.update(GROUPS, { rootCause: 'Second' }, true);
 
   const after = findAllByClass(el, 'cr-capture-input')[0];
-  assert.equal(after.value, 'Second', 'reflects the new value');
-  assert.equal(
-    after._focused,
-    true,
-    'focus is restored to the keyed control after the rebuild'
-  );
+  assert.strictEqual(after, before, 'text control reused, not recreated');
+  assert.equal(after.value, 'Second', 'reused control shows the new value');
+  assert.equal(after._focused, true, 'focus is never lost');
 });
 
-test('CRCaptureGroups: a value-only update reflects new radio checked state in place', () => {
+test('CRCaptureGroups: a value-only update syncs radio checked state in place', () => {
   const el = mount(GROUPS, {}, true);
   findAllByClass(el, 'cr-capture-group-header')[1]._fire('click'); // expand Grading
+  const radiosBefore = findAllByTag(el, 'input').filter(
+    (i) => i.type === 'radio'
+  );
 
   el.update(GROUPS, { repeat: 'Yes' }, true);
-  const radios = findAllByTag(el, 'input').filter((i) => i.type === 'radio');
+  const radiosAfter = findAllByTag(el, 'input').filter(
+    (i) => i.type === 'radio'
+  );
+  assert.strictEqual(radiosAfter[0], radiosBefore[0], 'radio inputs reused');
   assert.deepEqual(
-    radios.map((r) => r.checked),
+    radiosAfter.map((r) => r.checked),
     [true, false],
-    'radios reflect the new value after the re-render'
+    'reused radios reflect the new value'
   );
 });
 
-test('CRCaptureGroups: a structural change (edit→read-only) still rebuilds', () => {
+test('CRCaptureGroups: a value-only update leaves a collapsed group untouched', () => {
+  // GROUPS[1] (Grading) is collapsed, so it has no live controls; the value-only
+  // sync must skip it without error and not surface its fields.
+  const el = mount(GROUPS, { rootCause: 'First' }, true);
+  el.update(GROUPS, { rootCause: 'Second', severity: 'High' }, true);
+  const labels = findAllByClass(el, 'cr-capture-label').map(
+    (l) => l.textContent
+  );
+  assert.deepEqual(labels, ['Root cause', 'Detail']);
+});
+
+test('CRCaptureGroups: a value-only update tolerates an optionless radio', () => {
+  /** @type {any} */
+  const groups = [
+    {
+      key: 'g',
+      label: 'G',
+      collapsed: false,
+      fields: [{ key: 'r', label: 'R', type: 'radio' }],
+    },
+  ];
+  const el = mount(groups, {}, true);
+  // No inputs to sync — the update must be a no-op, not a crash.
+  el.update(groups, { r: 'anything' }, true);
+  assert.equal(
+    findAllByTag(el, 'input').filter((i) => i.type === 'radio').length,
+    0
+  );
+});
+
+test('CRCaptureGroups: a structural change (edit→read-only) rebuilds', () => {
   const el = mount(GROUPS, { rootCause: 'X' }, true);
   assert.ok(findByClass(el, 'cr-capture-input'), 'editable controls present');
 
@@ -369,6 +395,43 @@ test('CRCaptureGroups: a structural change (edit→read-only) still rebuilds', (
     findByClass(el, 'cr-capture-input'),
     null,
     'read-only rebuild replaces controls with static text'
+  );
+});
+
+test('CRCaptureGroups: read-only → editable via update() rebuilds the controls', () => {
+  const el = mount(GROUPS, { rootCause: 'X' }, false);
+  assert.equal(findByClass(el, 'cr-capture-input'), null, 'starts read-only');
+
+  el.update(GROUPS, { rootCause: 'X' }, true);
+  assert.ok(
+    findByClass(el, 'cr-capture-input'),
+    'editable controls built when canCapture flips on'
+  );
+});
+
+test('CRCaptureGroups: a structural change to the groups rebuilds rather than syncing', () => {
+  const el = mount(GROUPS, {}, true);
+  /** @type {any} */
+  const extended = [
+    {
+      key: 'cause',
+      label: 'Cause',
+      collapsed: false,
+      fields: [
+        { key: 'rootCause', label: 'Root cause', type: 'text' },
+        { key: 'detail', label: 'Detail', type: 'textarea' },
+        { key: 'extra', label: 'Extra', type: 'text' },
+      ],
+    },
+  ];
+  el.update(extended, {}, true);
+  const labels = findAllByClass(el, 'cr-capture-label').map(
+    (l) => l.textContent
+  );
+  assert.deepEqual(
+    labels,
+    ['Root cause', 'Detail', 'Extra'],
+    'the new field is rendered, so a rebuild happened'
   );
 });
 
