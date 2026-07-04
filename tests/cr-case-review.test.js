@@ -1,7 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom, StubEl, useElementClass } from './_dom-stub.js';
+import { installDom, StubEl, useElementClass, flush } from './_dom-stub.js';
 
 installDom();
 
@@ -49,6 +49,8 @@ const EMPTY_CASE_TYPE_CONFIG = {
 // ===== IMPORTS =====
 const { CRCaseReview } = await import('../src/pages/cr-case-review.js');
 const { SaveQueue } = await import('../src/services/save-queue.js');
+const { completeCase } =
+  await import('../src/pages/cr-case-review/completion-controller.js');
 
 // ===== HELPERS =====
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
@@ -369,134 +371,46 @@ test('CRCaseReview: the Adviser (Responsible Party) has no content tabs while In
   }
 });
 
-test('CRCaseReview: default tab falls back to the first visible Section when Details is absent', () => {
+test('CRCaseReview: no tab is selected when every tab-bearing Section is hidden', async () => {
+  // The Adviser (Responsible Party) on an In-progress Case sees no content tab —
+  // only the Conversation overlay — so this is not the all-Sections-hidden
+  // short-circuit, yet no tab-bearing Section is visible and selection resolves
+  // to none. This exercises the view model's first-visible fallback observably.
   const el = new CRCaseReview();
-  const fakeClient = makeClient();
-  const fakeSaveQueue = new SaveQueue(/** @type {any} */ (fakeClient));
-  fakeSaveQueue.loadCase(BASE_ROW);
-  el.subscribe = (/** @type {any} */ _sig, /** @type {any} */ _cb) => {};
-
-  el._buildLayout({
-    caseRow: BASE_ROW,
-    catalogue: [],
-    computeOutcome: () => ({ outcome: 'pass' }),
-    client: /** @type {any} */ (fakeClient),
-    saveQueue: /** @type {any} */ (fakeSaveQueue),
-    answersSignal: /** @type {any} */ ({ get: () => ({}), set: () => {} }),
-    applicableQuestions: /** @type {any} */ ({ get: () => [] }),
-    allAnswered: /** @type {any} */ ({ get: () => false }),
-    currentUser: { id: 'u1', displayName: 'User 1' },
-    access: /** @type {any} */ ({
-      details: 'hidden',
-      questions: 'edit',
-      conversation: 'edit',
-      notes: 'edit',
-      remediation: 'edit',
-      summary: 'read-only',
-      appealRequest: 'hidden',
-    }),
-  });
-
-  assert.equal(
-    tabFor(el, 'details').hidden,
-    true,
-    'no Details tab when the Case Type omits it'
+  el.client = /** @type {any} */ (
+    makeClient({
+      caseRow: {
+        ...BASE_ROW,
+        responsibleParty: 'u1',
+        assignedReviewer: 'other',
+      },
+    })
   );
-  assert.equal(
-    tabsOf(el).selected,
-    'questions',
-    'falls back to the first visible tab in Section order'
-  );
-});
+  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
+  el.caseId = 'c1';
+  el.currentUserId = 'u1';
+  el.capabilities = {
+    isReviewer: false,
+    ownedCaseTypes: [],
+    isAdviser: true,
+    isReviewerManager: false,
+    isResponsiblePartyManager: false,
+    isMaintainer: false,
+    listAccessCaseTypes: [],
+    ownedJourneyCaseTypes: [],
+    isControls: false,
+    isVisitor: false,
+  };
+  await el.connectedCallback();
 
-/**
- * Drive _buildLayout directly with an arbitrary access matrix so the Section→tab
- * mapping can be exercised for combinations no fixed role produces.
- * @param {import('../src/pages/cr-case-review.js').CRCaseReview} el
- * @param {Record<string, string>} access
- */
-function buildLayoutWith(el, access) {
-  const fakeClient = makeClient();
-  const fakeSaveQueue = new SaveQueue(/** @type {any} */ (fakeClient));
-  fakeSaveQueue.loadCase(BASE_ROW);
-  el.subscribe = (/** @type {any} */ _sig, /** @type {any} */ _cb) => {};
-  el._buildLayout({
-    caseRow: BASE_ROW,
-    catalogue: [],
-    computeOutcome: () => /** @type {any} */ ({ outcome: 'pass' }),
-    client: /** @type {any} */ (fakeClient),
-    saveQueue: /** @type {any} */ (fakeSaveQueue),
-    answersSignal: /** @type {any} */ ({ get: () => ({}), set: () => {} }),
-    applicableQuestions: /** @type {any} */ ({ get: () => [] }),
-    allAnswered: /** @type {any} */ ({ get: () => false }),
-    currentUser: { id: 'u1', displayName: 'User 1' },
-    // Appeal and Amend Outcome default to hidden so callers that only exercise the
-    // legacy Sections don't sprout those tabs; a caller can override explicitly.
-    access: /** @type {any} */ ({
-      appealRequest: 'hidden',
-      amendOutcome: 'hidden',
-      ...access,
-    }),
-  });
-}
-
-test('CRCaseReview: a hidden Questions or Remediation Section renders no tab', () => {
-  const el = new CRCaseReview();
-  buildLayoutWith(el, {
-    details: 'edit',
-    questions: 'hidden',
-    conversation: 'edit',
-    notes: 'edit',
-    issues: 'hidden',
-    remediation: 'hidden',
-    summary: 'read-only',
-  });
-  assert.equal(
-    tabFor(el, 'questions').hidden,
-    true,
-    'no Questions tab when that Section is hidden'
-  );
-  assert.equal(
-    tabFor(el, 'issues').hidden,
-    true,
-    'no Issues tab when the Issues Section is hidden'
-  );
-  assert.equal(
-    tabsOf(el).selected,
-    'details',
-    'Details remains the default among the visible tabs'
-  );
-});
-
-test('CRCaseReview: when every tab-bearing Section is hidden, no tab is selected', () => {
-  const el = new CRCaseReview();
-  // Conversation stays visible so this is not the all-Sections-hidden short-circuit,
-  // yet none of the five tab-bearing Sections is visible — selection resolves to none.
-  buildLayoutWith(el, {
-    details: 'hidden',
-    questions: 'hidden',
-    conversation: 'edit',
-    notes: 'hidden',
-    issues: 'hidden',
-    remediation: 'hidden',
-    summary: 'hidden',
-    appealRequest: 'hidden',
-    appealReview: 'hidden',
-    amendOutcome: 'hidden',
-  });
   assert.equal(
     tabsOf(el).selected,
     '',
     'no tab is selected when no tab-bearing Section is visible'
   );
-  assert.equal(
-    /** @type {any} */ (el)._activeTab.get(),
-    '',
-    'the in-component active-tab signal is empty'
-  );
 });
 
-test('CRCaseReview: active tab is in-component state updated on cr-tab-change, never the URL', async () => {
+test('CRCaseReview: the selected tab updates on cr-tab-change, never the URL', async () => {
   const el = new CRCaseReview();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
@@ -504,18 +418,14 @@ test('CRCaseReview: active tab is in-component state updated on cr-tab-change, n
   /** @type {any} */ (globalThis).location.hash = '';
   await el.connectedCallback();
 
-  assert.equal(
-    /** @type {any} */ (el)._activeTab.get(),
-    'details',
-    'starts on the default tab'
-  );
+  assert.equal(tabsOf(el).selected, 'details', 'starts on the default tab');
 
   tabsOf(el)._listeners['cr-tab-change'][0]({ detail: { id: 'notes' } });
 
   assert.equal(
-    /** @type {any} */ (el)._activeTab.get(),
+    tabsOf(el).selected,
     'notes',
-    'cr-tab-change updates the in-component signal'
+    'cr-tab-change updates the selected tab'
   );
   assert.equal(
     /** @type {any} */ (globalThis).location.hash,
@@ -680,39 +590,47 @@ test('CRCaseReview: connectedCallback handles access denied', async () => {
   assert.equal(panel.className, 'cr-access-denied');
 });
 
-test('CRCaseReview: _completeCase returns early if client or saveQueue missing', async () => {
-  const el = new CRCaseReview();
-  // @ts-ignore
-  await el._completeCase('c1', null, null);
+test('completeCase: returns early if client or saveQueue missing', async () => {
+  /** @type {any} */ (globalThis).location.hash = '';
+  await completeCase({
+    caseId: 'c1',
+    client: null,
+    saveQueue: null,
+    patchFields: null,
+    opts: {},
+  });
   assert.equal(/** @type {any} */ (globalThis).location.hash, '');
 });
 
-test('CRCaseReview: _completeCase uses this.client if arg missing', async () => {
+test('completeCase: navigates to the dashboard on a successful PATCH', async () => {
   const client = makeClient();
-  const el = new CRCaseReview();
-  el.client = /** @type {any} */ (client);
-  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
-  el.saveQueue.loadCase(BASE_ROW);
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  saveQueue.loadCase(BASE_ROW);
 
   /** @type {any} */ (globalThis).location.hash = '';
-  // @ts-ignore
-  await el._completeCase('c1', undefined, undefined);
+  await completeCase({
+    caseId: 'c1',
+    client: /** @type {any} */ (client),
+    saveQueue,
+    patchFields: null,
+    opts: {},
+  });
   assert.equal(/** @type {any} */ (globalThis).location.hash, '#/dashboard');
 });
 
-test('CRCaseReview: _completeCase does not navigate on failure', async () => {
+test('completeCase: does not navigate on failure', async () => {
   const client = makeClient({ patchOk: false });
-  const el = new CRCaseReview();
-  el.client = /** @type {any} */ (client);
-  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
-  el.saveQueue.loadCase(BASE_ROW);
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  saveQueue.loadCase(BASE_ROW);
 
   /** @type {any} */ (globalThis).location.hash = 'keep-me';
-  await el._completeCase(
-    'c1',
-    el.client ?? undefined,
-    el.saveQueue ?? undefined
-  );
+  await completeCase({
+    caseId: 'c1',
+    client: /** @type {any} */ (client),
+    saveQueue,
+    patchFields: null,
+    opts: {},
+  });
   assert.equal(/** @type {any} */ (globalThis).location.hash, 'keep-me');
 });
 
@@ -754,12 +672,10 @@ function makeRecordingClient({ patchOk = true } = {}) {
   };
 }
 
-test('CRCaseReview: _completeCase stamps the frozen outcome snapshot in the same PATCH as status/completedAt', async () => {
+test('completeCase: stamps the frozen outcome snapshot in the same PATCH as status/completedAt', async () => {
   const client = makeRecordingClient();
-  const el = new CRCaseReview();
-  el.client = /** @type {any} */ (client);
-  el.saveQueue = new SaveQueue(/** @type {any} */ (client));
-  el.saveQueue.loadCase(BASE_ROW);
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  saveQueue.loadCase(BASE_ROW);
 
   // A failing Answer carrying a Remediation Action.
   const answers = {
@@ -781,12 +697,13 @@ test('CRCaseReview: _completeCase stamps the frozen outcome snapshot in the same
     EMPTY_CASE_TYPE_CONFIG
   );
   const patchFields = machine.transitionToCompleted(computeOutcome, answers);
-  await el._completeCase(
-    'c1',
-    el.client ?? undefined,
-    el.saveQueue ?? undefined,
-    patchFields
-  );
+  await completeCase({
+    caseId: 'c1',
+    client: /** @type {any} */ (client),
+    saveQueue,
+    patchFields,
+    opts: {},
+  });
 
   assert.equal(
     client.patches.length,
@@ -808,12 +725,10 @@ test('CRCaseReview: _completeCase stamps the frozen outcome snapshot in the same
   );
 });
 
-test('CRCaseReview: _completeCase initialises the effective-outcome columns equal to the frozen snapshot (ADR-0019)', async () => {
+test('completeCase: initialises the effective-outcome columns equal to the frozen snapshot (ADR-0019)', async () => {
   const client = makeRecordingClient();
-  const el = new CRCaseReview();
-  el.client = /** @type {any} */ (client);
-  el.saveQueue = new SaveQueue(/** @type {any} */ (client));
-  el.saveQueue.loadCase(BASE_ROW);
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  saveQueue.loadCase(BASE_ROW);
 
   const answers = {
     'q-needs': {
@@ -834,12 +749,13 @@ test('CRCaseReview: _completeCase initialises the effective-outcome columns equa
     EMPTY_CASE_TYPE_CONFIG
   );
   const patchFields = machine.transitionToCompleted(computeOutcome, answers);
-  await el._completeCase(
-    'c1',
-    el.client ?? undefined,
-    el.saveQueue ?? undefined,
-    patchFields
-  );
+  await completeCase({
+    caseId: 'c1',
+    client: /** @type {any} */ (client),
+    saveQueue,
+    patchFields,
+    opts: {},
+  });
 
   const { fields } = client.patches[0];
   assert.equal(
@@ -859,12 +775,10 @@ test('CRCaseReview: _completeCase initialises the effective-outcome columns equa
   );
 });
 
-test('CRCaseReview: hadRemediation=true is mutually exclusive with outcomeAtCompletion=pass', async () => {
+test('completeCase: hadRemediation=true is mutually exclusive with outcomeAtCompletion=pass', async () => {
   const client = makeRecordingClient();
-  const el = new CRCaseReview();
-  el.client = /** @type {any} */ (client);
-  el.saveQueue = new SaveQueue(/** @type {any} */ (client));
-  el.saveQueue.loadCase(BASE_ROW);
+  const saveQueue = new SaveQueue(/** @type {any} */ (client));
+  saveQueue.loadCase(BASE_ROW);
 
   // A passing Answer set: no failures, so no Remediation Actions attach.
   const answers = { 'q-welcome': { value: 'Yes' } };
@@ -881,12 +795,13 @@ test('CRCaseReview: hadRemediation=true is mutually exclusive with outcomeAtComp
     EMPTY_CASE_TYPE_CONFIG
   );
   const patchFields = machine.transitionToCompleted(computeOutcome, answers);
-  await el._completeCase(
-    'c1',
-    el.client ?? undefined,
-    el.saveQueue ?? undefined,
-    patchFields
-  );
+  await completeCase({
+    caseId: 'c1',
+    client: /** @type {any} */ (client),
+    saveQueue,
+    patchFields,
+    opts: {},
+  });
 
   const { fields } = client.patches[0];
   assert.equal(fields.outcomeAtCompletion, 'pass');
@@ -897,8 +812,16 @@ test('CRCaseReview: hadRemediation=true is mutually exclusive with outcomeAtComp
   );
 });
 
-test('CRCaseReview: complete button feeds the live answers + computeOutcome into _completeCase', async () => {
+test('CRCaseReview: complete button feeds the live answers + computeOutcome into the completion PATCH', async () => {
   const client = makeClient();
+  /** @type {any[]} */
+  const patches = [];
+  client.patchCase = /** @type {any} */ (
+    async (/** @type {string} */ _id, /** @type {any} */ fields) => {
+      patches.push(fields);
+      return { ok: true, status: 200 };
+    }
+  );
   const completableRow = {
     ...BASE_ROW,
     answers: {
@@ -918,30 +841,29 @@ test('CRCaseReview: complete button feeds the live answers + computeOutcome into
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  /** @type {any} */
-  let captured = null;
-  el._completeCase = async (caseId, client, saveQueue, patchFields) => {
-    captured = patchFields;
-  };
-
   completeBtnOf(el)._listeners['click'][0]();
-  await Promise.resolve();
+  await flush();
 
-  assert.ok(captured, '_completeCase was invoked from the button');
+  assert.equal(
+    patches.length,
+    1,
+    'the button drives a single completion PATCH'
+  );
+  const captured = patches[0];
   assert.equal(captured.status, 'Completed', 'sets status Completed');
   assert.equal(
     captured.outcomeAtCompletion,
     'fail',
-    'computed outcome is passed as patch field'
+    'computed outcome is written as a patch field'
   );
   assert.equal(
     captured.hadRemediation,
     false,
-    'hadRemediation is computed and passed'
+    'hadRemediation is computed and written'
   );
 });
 
-test('CRCaseReview: _completeCase flushes pending answers before stamping Completed', async () => {
+test('completeCase: flushes pending answers before stamping Completed', async () => {
   const answers = {
     'q-welcome': { value: 'Yes' },
     'q-needs': { value: 'No' },
@@ -981,10 +903,6 @@ test('CRCaseReview: _completeCase flushes pending answers before stamping Comple
     debounceMs: 5000,
   });
   saveQueue.loadCase(liveRow);
-
-  const el = new CRCaseReview();
-  el.client = /** @type {any} */ (client);
-  el.saveQueue = saveQueue;
   saveQueue.enqueue('c1', 'answers', answers);
 
   const machine = new CaseMachine(
@@ -998,7 +916,13 @@ test('CRCaseReview: _completeCase flushes pending answers before stamping Comple
     answers
   );
 
-  await el._completeCase('c1', el.client, saveQueue, patchFields);
+  await completeCase({
+    caseId: 'c1',
+    client: /** @type {any} */ (client),
+    saveQueue,
+    patchFields,
+    opts: {},
+  });
 
   assert.equal(patches.length, 2);
   assert.deepEqual(
@@ -1043,16 +967,9 @@ test('CRCaseReview: remediation and conversation can be hidden', async () => {
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
   el.currentUserId = 'u1';
-  // Use RP capability but case is not assigned to us as RP -> conversation might be hidden or read-only
-  // Actually let's just force all hidden via a mock capability/role if possible,
-  // but evaluateAccess depends on fixed SECTIONS.
-  // RP role: questions R, conversation E, notes H, remediation R.
-  // If we are 'none' role we get Access Denied.
-
-  // Let's test the 'hidden' branches in _buildLayout directly by providing specific roles
-  // but those are hardcoded in resolveRoles.
-
-  // Instead, I can test if sections are hidden for an RP (Notes should be hidden).
+  // Drive a real Responsible Party (Adviser) role: the access matrix hides Notes
+  // for the RP, so its tab resolves to hidden. This exercises the Section→tab
+  // hidden mapping through user-observable access rather than a synthetic matrix.
   el.capabilities = {
     isReviewer: false,
     ownedCaseTypes: [],
@@ -1233,6 +1150,11 @@ test('CRCaseReview: complete button stays hidden for a Completed case even when 
 
 test('CRCaseReview: complete button click is no-op when button is already disabled', async () => {
   const client = makeClient();
+  let patchCalled = false;
+  client.patchCase = async () => {
+    patchCalled = true;
+    return { ok: true, status: 200 };
+  };
   const saveQueue = new SaveQueue(/** @type {any} */ (client));
   const completableRow = {
     ...BASE_ROW,
@@ -1255,21 +1177,22 @@ test('CRCaseReview: complete button click is no-op when button is already disabl
   const completeBtn = completeBtnOf(el);
   completeBtn.disabled = true; // pre-disable
 
-  let completeCalled = false;
-  el._completeCase = async () => {
-    completeCalled = true;
-  };
-
   completeBtn._listeners['click'][0]();
+  await flush();
   assert.equal(
-    completeCalled,
+    patchCalled,
     false,
-    'disabled button click must not invoke _completeCase'
+    'disabled button click must not drive a completion PATCH'
   );
 });
 
-test('CRCaseReview: complete button click invokes _completeCase', async () => {
+test('CRCaseReview: complete button click drives the completion PATCH', async () => {
   const client = makeClient();
+  let patchCalled = false;
+  client.patchCase = async () => {
+    patchCalled = true;
+    return { ok: true, status: 200 };
+  };
   const saveQueue = new SaveQueue(/** @type {any} */ (client));
   // Provide all answers so button is visible
   const completableRow = {
@@ -1293,13 +1216,13 @@ test('CRCaseReview: complete button click invokes _completeCase', async () => {
   const completeBtn = completeBtnOf(el);
   assert.equal(completeBtn.hidden, false, 'Complete button should be visible');
 
-  let completeCalled = false;
-  el._completeCase = async () => {
-    completeCalled = true;
-  };
-
   completeBtn._listeners['click'][0]();
-  assert.equal(completeCalled, true);
+  await flush();
+  assert.equal(
+    patchCalled,
+    true,
+    'clicking the button drives a completion PATCH'
+  );
 });
 
 // ===== SECTION PROGRESS INTEGRATION =====
@@ -1502,44 +1425,6 @@ test('CRCaseReview: layout includes a cr-case-details element with the Case row 
   );
 });
 
-test('CRCaseReview: _buildLayout renders no Details tab when access.details is hidden', () => {
-  const el = new CRCaseReview();
-  const fakeClient = makeClient();
-  const fakeSaveQueue = new SaveQueue(/** @type {any} */ (fakeClient));
-  fakeSaveQueue.loadCase(BASE_ROW);
-
-  const answersSignal = { get: () => ({}), set: (/** @type {any} */ _v) => {} };
-  const applicableQuestions = { get: () => [] };
-  const allAnswered = { get: () => false };
-  el.subscribe = (/** @type {any} */ _sig, /** @type {any} */ _cb) => {};
-
-  el._buildLayout({
-    caseRow: BASE_ROW,
-    catalogue: [],
-    computeOutcome: () => ({ outcome: 'pass' }),
-    client: /** @type {any} */ (fakeClient),
-    saveQueue: /** @type {any} */ (fakeSaveQueue),
-    answersSignal: /** @type {any} */ (answersSignal),
-    applicableQuestions: /** @type {any} */ (applicableQuestions),
-    allAnswered: /** @type {any} */ (allAnswered),
-    currentUser: { id: 'u1', displayName: 'User 1' },
-    access: /** @type {any} */ ({
-      details: 'hidden',
-      questions: 'edit',
-      conversation: 'edit',
-      notes: 'edit',
-      remediation: 'edit',
-      summary: 'read-only',
-    }),
-  });
-
-  assert.equal(
-    tabFor(el, 'details').hidden,
-    true,
-    'no Details tab when access.details is hidden'
-  );
-});
-
 test('CRCaseReview: toggle button is in the header when conversation access is not hidden', async () => {
   const el = new CRCaseReview();
   el.client = /** @type {any} */ (makeClient());
@@ -1611,167 +1496,19 @@ test('CRCaseReview: data-conversation-mode reads sidebar from location.search', 
   assert.equal(el.getAttribute('data-conversation-mode'), 'sidebar');
 });
 
-test('CRCaseReview: Alt+C via _handleKeydown opens then closes the panel', async () => {
+// Alt+C keyboard toggling, its no-op on other keys, and document-listener
+// teardown on disconnect are owned by the conversation panel binding and are
+// covered end-to-end in tests/cr-case-review-controllers.test.js
+// (createConversationPanelBinding). Here we only assert the page shell tears
+// the binding down cleanly when it disconnects.
+test('CRCaseReview: disconnectedCallback tears down the conversation binding without throwing', async () => {
   const el = new CRCaseReview();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const conversationEl = conversationOf(el);
-  assert.equal(conversationEl.hidden, true);
-
-  el._handleKeydown(/** @type {any} */ ({ altKey: true, code: 'KeyC' }));
-  assert.equal(
-    conversationEl.hidden,
-    false,
-    'Alt/Option+C should open the panel'
-  );
-
-  el._handleKeydown(/** @type {any} */ ({ altKey: true, code: 'KeyC' }));
-  assert.equal(
-    conversationEl.hidden,
-    true,
-    'Alt/Option+C again should close the panel'
-  );
-});
-
-test('CRCaseReview: _handleKeydown ignores keys that are not Alt+C', async () => {
-  const el = new CRCaseReview();
-  el.client = /** @type {any} */ (makeClient());
-  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
-  el.caseId = 'c1';
-  await el.connectedCallback();
-
-  const conversationEl = conversationOf(el);
-  el._handleKeydown(/** @type {any} */ ({ altKey: false, code: 'KeyC' }));
-  assert.equal(conversationEl.hidden, true, 'bare C must not toggle');
-  el._handleKeydown(/** @type {any} */ ({ altKey: true, code: 'KeyK' }));
-  assert.equal(conversationEl.hidden, true, 'Alt+K must not toggle');
-});
-
-test('CRCaseReview: disconnectedCallback nulls _keydownHandler', async () => {
-  const el = new CRCaseReview();
-  el.client = /** @type {any} */ (makeClient());
-  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
-  el.caseId = 'c1';
-  await el.connectedCallback();
-
-  assert.ok(
-    /** @type {any} */ (el)._keydownHandler !== null,
-    'handler should be set after connect'
-  );
-  el.disconnectedCallback();
-  assert.equal(
-    /** @type {any} */ (el)._keydownHandler,
-    null,
-    'handler should be nulled after disconnect'
-  );
-});
-
-// ===== DEFENSIVE BRANCH COVERAGE =====
-
-test('CRCaseReview: _toggleConversationPanel returns early when _conversationEl is null', () => {
-  const el = new CRCaseReview();
-  // _conversationEl is null by default — should not throw
-  assert.doesNotThrow(() => el._toggleConversationPanel());
-});
-
-test('CRCaseReview: _toggleConversationPanel toggles element when _conversationToggleBtn is null', () => {
-  const el = new CRCaseReview();
-  const fakeEl = new StubEl();
-  fakeEl.hidden = false;
-  /** @type {any} */ (el)._conversationEl = fakeEl;
-  // _conversationToggleBtn remains null — setAttribute path must not throw
-  assert.doesNotThrow(() => el._toggleConversationPanel());
-  assert.equal(fakeEl.hidden, true, 'hidden should be toggled to true');
-});
-
-test('CRCaseReview: disconnectedCallback is safe when _keydownHandler is already null', () => {
-  const el = new CRCaseReview();
-  // _keydownHandler starts as null — calling disconnectedCallback must not throw
-  assert.equal(/** @type {any} */ (el)._keydownHandler, null);
   assert.doesNotThrow(() => el.disconnectedCallback());
-  assert.equal(
-    /** @type {any} */ (el)._keydownHandler,
-    null,
-    'handler remains null'
-  );
-});
-
-test('CRCaseReview: _buildLayout with access.conversation=hidden omits toggle button and leaves _keydownHandler null', () => {
-  const el = new CRCaseReview();
-
-  // Minimal stubs required by _buildLayout
-  const fakeClient = makeClient();
-  const fakeSaveQueue = new SaveQueue(/** @type {any} */ (fakeClient));
-  fakeSaveQueue.loadCase(BASE_ROW);
-
-  const { signal: signalFn, computed: computedFn } = /** @type {any} */ (
-    // Re-use the already-imported signal module by grabbing it from the live module.
-    // We reconstruct minimal stubs using plain objects since signal is already loaded.
-    EMPTY_CASE_TYPE_CONFIG
-  );
-
-  // Build the minimal signal stubs _buildLayout needs
-  const answersSignal = { get: () => ({}), set: (/** @type {any} */ _v) => {} };
-  const applicableQuestions = { get: () => [] };
-  const allAnswered = { get: () => false };
-  const viewState = {
-    get: () => ({ questions: [], answers: {}, allAnswered: false }),
-  };
-
-  // Patch subscribe to avoid real effect execution
-  /** @type {any[]} */
-  const subscribeCalls = [];
-  el.subscribe = (/** @type {any} */ _sig, /** @type {any} */ _cb) => {
-    subscribeCalls.push(_sig);
-  };
-
-  /** @type {import('../src/services/section-access.js').Mode} */
-  const hidden = 'hidden';
-  /** @type {import('../src/services/section-access.js').Mode} */
-  const edit = 'edit';
-
-  el._buildLayout({
-    caseRow: BASE_ROW,
-    catalogue: [],
-    computeOutcome: () => ({ outcome: 'pass' }),
-    client: /** @type {any} */ (fakeClient),
-    saveQueue: /** @type {any} */ (fakeSaveQueue),
-    answersSignal: /** @type {any} */ (answersSignal),
-    applicableQuestions: /** @type {any} */ (applicableQuestions),
-    allAnswered: /** @type {any} */ (allAnswered),
-    currentUser: { id: 'u1', displayName: 'User 1' },
-    access: /** @type {any} */ ({
-      questions: edit,
-      conversation: hidden,
-      notes: edit,
-      remediation: edit,
-      summary: edit,
-    }),
-  });
-
-  // No toggle button should appear in the header
-  const header = headerOf(el);
-  const toggleBtn = /** @type {any} */ (header)._children.find(
-    (/** @type {any} */ c) => c.className === 'cr-conversation-toggle-btn'
-  );
-  assert.equal(
-    toggleBtn,
-    undefined,
-    'toggle button must not be in header when conversation is hidden'
-  );
-  assert.equal(
-    /** @type {any} */ (el)._keydownHandler,
-    null,
-    '_keydownHandler must remain null'
-  );
-  assert.equal(
-    /** @type {any} */ (el)._conversationToggleBtn,
-    null,
-    '_conversationToggleBtn must remain null'
-  );
 });
 
 test('CRCaseReview: cr-jump-unanswered handler calls scrollIntoView on first unanswered question element', async () => {
@@ -2685,6 +2422,14 @@ test('CRCaseReview: complete button passes exportHash as questionBankVersion to 
   };
   client.getCase = async () => completableRow;
   client.getExportHash = async () => HASH;
+  /** @type {any[]} */
+  const patches = [];
+  client.patchCase = /** @type {any} */ (
+    async (/** @type {string} */ _id, /** @type {any} */ fields) => {
+      patches.push(fields);
+      return { ok: true, status: 200 };
+    }
+  );
   const saveQueue = new SaveQueue(/** @type {any} */ (client));
   saveQueue.loadCase(completableRow);
 
@@ -2694,17 +2439,11 @@ test('CRCaseReview: complete button passes exportHash as questionBankVersion to 
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  /** @type {any} */
-  let captured = null;
-  el._completeCase = async (caseId, client, saveQueue, patchFields) => {
-    captured = patchFields;
-  };
-
   completeBtnOf(el)._listeners['click'][0]();
-  await Promise.resolve();
+  await flush();
 
   assert.equal(
-    captured?.questionBankVersion,
+    patches[0]?.questionBankVersion,
     HASH,
     'questionBankVersion from the export hash is included in the completion PATCH'
   );

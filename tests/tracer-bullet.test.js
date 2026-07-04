@@ -28,6 +28,8 @@ const { MockSharePointClient } =
   await import('../src/services/mock-sharepoint-client.js');
 const { SaveQueue } = await import('../src/services/save-queue.js');
 const { CRCaseReview } = await import('../src/pages/cr-case-review.js');
+const { completeCase } =
+  await import('../src/pages/cr-case-review/completion-controller.js');
 const { cases } = await import('../dev/fixtures/cases.js');
 const { questionDefinitions } =
   await import('../dev/fixtures/question-definitions.js');
@@ -272,20 +274,21 @@ test('CRCaseReview: complete button is visible when all applicable questions ans
   assert.equal(completeBtn.hidden, false);
 });
 
-test('CRCaseReview: _completeCase patches status:Completed with completedAt using stored ETag', async () => {
+test('completeCase: patches status:Completed with completedAt using stored ETag', async () => {
   const client = makeStubClient();
   const saveQueue = new SaveQueue(/** @type {any} */ (client), {
     debounceMs: 0,
   });
   saveQueue.loadCase(caseCompletable);
 
-  const el = new CRCaseReview();
-  el.client = /** @type {any} */ (client);
-  el.saveQueue = saveQueue;
-  el.caseId = caseCompletable.id;
-
   /** @type {any} */ (globalThis).location.hash = '';
-  await el._completeCase(caseCompletable.id);
+  await completeCase({
+    caseId: caseCompletable.id,
+    client: /** @type {any} */ (client),
+    saveQueue,
+    patchFields: null,
+    opts: {},
+  });
 
   assert.equal(client.patchCalls.length, 1);
   assert.equal(client.patchCalls[0].id, caseCompletable.id);
@@ -575,20 +578,21 @@ test('CRCaseReview: Summary panel receives allAnswered=true when all applicable 
   );
 });
 
-test('CRCaseReview: _completeCase navigates to #/dashboard on success', async () => {
+test('completeCase: navigates to #/dashboard on success', async () => {
   const client = makeStubClient();
   const saveQueue = new SaveQueue(/** @type {any} */ (client), {
     debounceMs: 0,
   });
   saveQueue.loadCase(caseCompletable);
 
-  const el = new CRCaseReview();
-  el.client = /** @type {any} */ (client);
-  el.saveQueue = saveQueue;
-  el.caseId = caseCompletable.id;
-
   /** @type {any} */ (globalThis).location.hash = '';
-  await el._completeCase(caseCompletable.id);
+  await completeCase({
+    caseId: caseCompletable.id,
+    client: /** @type {any} */ (client),
+    saveQueue,
+    patchFields: null,
+    opts: {},
+  });
 
   assert.equal(/** @type {any} */ (globalThis).location.hash, '#/dashboard');
 });
