@@ -546,6 +546,9 @@ function buildFilterExpr(filter) {
       `AwaitingResponsibleParty eq ${filter.awaitingResponsibleParty ? 1 : 0}`
     );
   }
+  if (filter.reviewRequired !== undefined) {
+    conds.push(`ReviewRequired eq ${filter.reviewRequired ? 1 : 0}`);
+  }
   if (filter.hasOpenAppeal !== undefined) {
     conds.push(`HasOpenAppeal eq ${filter.hasOpenAppeal ? 1 : 0}`);
   }
@@ -676,6 +679,8 @@ function rowFromItem(item, etag) {
         : undefined,
     awaitingSince:
       typeof item?.AwaitingSince === 'string' ? item.AwaitingSince : null,
+    reviewRequired:
+      item?.ReviewRequired != null ? Boolean(item.ReviewRequired) : undefined,
     hasOpenAppeal:
       item?.HasOpenAppeal != null ? Boolean(item.HasOpenAppeal) : undefined,
     appealRaisedAt:

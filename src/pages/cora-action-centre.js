@@ -5,6 +5,7 @@ import { h } from '../lib/html.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import {
   reasonsForCapabilities,
+  visibleReasons,
   activeFilter,
   headlineFilter,
   worstFirstOrder,
@@ -114,7 +115,9 @@ function Row(row, reason, now, onOpenCase) {
  * @returns {HTMLElement}
  */
 function Group(reason, state, handlers) {
-  const count = state.counts[reason.id];
+  // A group revealed by the "All" toggle renders once before its count has
+  // loaded, so fall back to 0 rather than flash "undefined".
+  const count = state.counts[reason.id] ?? 0;
   const isOpen = state.expanded.has(reason.id);
   const rows = state.pages[reason.id] ?? [];
   const peek = state.peeks[reason.id];
@@ -256,6 +259,7 @@ export function ActionCentreView(state, handlers) {
  * @param {{
  *   client: SharePointClient | null,
  *   capabilities: Capabilities,
+ *   currentUserId?: string,
  *   onOpenCase?: (row: CaseRow) => void,
  *   now?: Date,
  * }} props
@@ -264,12 +268,16 @@ export function ActionCentreView(state, handlers) {
 export function ActionCentre({
   client,
   capabilities,
+  currentUserId = '',
   onOpenCase,
   now = new Date(),
 }) {
-  const reasons = reasonsForCapabilities(capabilities);
+  const allReasons = reasonsForCapabilities(capabilities);
 
   const needsActionNow = signal(true);
+
+  /** Reasons shown under the current toggle (hides the within-SLA tail). */
+  const currentReasons = () => visibleReasons(allReasons, needsActionNow.get());
   /** @type {import('../lib/signal.js').Signal<Record<string, number>>} */
   const counts = signal({});
   const headline = signal(0);
@@ -283,14 +291,14 @@ export function ActionCentre({
   /** Load every group count, the worst-item peeks, and the deduped headline. */
   async function loadCounts() {
     if (!client) return;
-    const on = needsActionNow.get();
+    const reasons = currentReasons();
     /** @type {Record<string, number>} */
     const nextCounts = {};
     /** @type {Record<string, CaseRow | null>} */
     const nextPeeks = {};
     await Promise.all(
       reasons.map(async (reason) => {
-        const filter = activeFilter(reason, on);
+        const filter = activeFilter(reason, currentUserId);
         nextCounts[reason.id] = await client.countCases(filter);
         const [worst] = await client.listCases(filter, {
           ...worstFirstOrder(reason),
@@ -299,7 +307,9 @@ export function ActionCentre({
         nextPeeks[reason.id] = worst ?? null;
       })
     );
-    headline.set(await client.countCases(headlineFilter(reasons, on)));
+    headline.set(
+      await client.countCases(headlineFilter(reasons, currentUserId))
+    );
     counts.set(nextCounts);
     peeks.set(nextPeeks);
   }
@@ -314,14 +324,11 @@ export function ActionCentre({
    */
   async function loadPage(reason, skip) {
     const sp = /** @type {SharePointClient} */ (client);
-    const rows = await sp.listCases(
-      activeFilter(reason, needsActionNow.get()),
-      {
-        ...worstFirstOrder(reason),
-        top: PAGE_SIZE,
-        skip,
-      }
-    );
+    const rows = await sp.listCases(activeFilter(reason, currentUserId), {
+      ...worstFirstOrder(reason),
+      top: PAGE_SIZE,
+      skip,
+    });
     const current = pages.get();
     const existing = skip === 0 ? [] : current[reason.id];
     const merged = [...existing, ...rows];
@@ -355,7 +362,7 @@ export function ActionCentre({
     needsActionNow.set(value);
     pages.set({});
     await loadCounts();
-    for (const reason of reasons) {
+    for (const reason of currentReasons()) {
       if (expanded.get().has(reason.id)) loadPage(reason, 0);
     }
   }
@@ -363,7 +370,7 @@ export function ActionCentre({
   const host = reactive(() =>
     ActionCentreView(
       {
-        reasons,
+        reasons: currentReasons(),
         counts: counts.get(),
         headline: headline.get(),
         peeks: peeks.get(),
@@ -384,7 +391,8 @@ export function ActionCentre({
   async function init() {
     if (!client || typeof client.countCases !== 'function') return;
     await loadCounts();
-    if (reasons.length > 0) toggleGroup(reasons[0]);
+    const [first] = currentReasons();
+    if (first) toggleGroup(first);
   }
 
   init();

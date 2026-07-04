@@ -40,6 +40,7 @@ function textOf(node) {
 
 const NOW = new Date('2026-07-04T00:00:00Z');
 const PAST = '2020-01-01T00:00:00Z';
+const ME = 'me';
 
 /** @param {string} id @param {Partial<CaseRow>} [over] @returns {CaseRow} */
 function caseRow(id, over = {}) {
@@ -48,7 +49,7 @@ function caseRow(id, over = {}) {
     caseType: 'complaints',
     title: id,
     status: 'In-progress',
-    assignedReviewer: '',
+    assignedReviewer: ME,
     responsibleParty: '',
     answers: {},
     conversation: [],
@@ -77,9 +78,10 @@ function caps(over = {}) {
 }
 
 /**
- * Reviewer fixture: 5 overdue-only, one overdue+awaiting ("both"), two
- * awaiting-only cases. `both` sorts worst (earliest dueDate) so it lands on the
- * overdue group's first page.
+ * Reviewer fixture (all assigned to ME unless noted): 5 overdue-only, one
+ * overdue+awaiting ("both", worst dueDate), two awaiting-only, two
+ * review-required, and one overdue case assigned to another reviewer that must
+ * never surface on ME's worklist.
  * @returns {CaseRow[]}
  */
 function reviewerCases() {
@@ -87,7 +89,6 @@ function reviewerCases() {
     caseRow(`od-${n}`, {
       dueDate: `2020-01-0${n}T00:00:00Z`,
       responsibleParty: `RP-${n}`,
-      assignedReviewer: `REV-${n}`,
     })
   );
   const both = caseRow('both-1', {
@@ -106,7 +107,15 @@ function reviewerCases() {
       awaitingSince: '2026-06-20T00:00:00Z',
     }),
   ];
-  return [...overdueOnly, both, ...awaitingOnly];
+  const reviewRequired = [
+    caseRow('rr-1', { reviewRequired: true, created: '2026-06-25T00:00:00Z' }),
+    caseRow('rr-2', { reviewRequired: true, created: '2026-07-01T00:00:00Z' }),
+  ];
+  const othersCase = caseRow('od-other', {
+    assignedReviewer: 'someone-else',
+    dueDate: PAST,
+  });
+  return [...overdueOnly, both, ...awaitingOnly, ...reviewRequired, othersCase];
 }
 
 /** @param {CaseRow[]} cases */
@@ -118,10 +127,30 @@ function makeClient(cases) {
   });
 }
 
+/** @param {Capabilities} [capabilities] @param {CaseRow[]} [cases] */
+function mount(
+  capabilities = caps({ isReviewer: true }),
+  cases = reviewerCases()
+) {
+  return ActionCentre({
+    client: makeClient(cases),
+    capabilities,
+    currentUserId: ME,
+    now: NOW,
+  });
+}
+
 /** @param {any} root @param {string} reasonId */
 function group(root, reasonId) {
   return findAllByClass(root, 'cora-ac-group').find(
     (g) => g.getAttribute('data-reason') === reasonId
+  );
+}
+
+/** @param {any} root */
+function groupIds(root) {
+  return findAllByClass(root, 'cora-ac-group').map((g) =>
+    g.getAttribute('data-reason')
   );
 }
 
@@ -132,99 +161,88 @@ function rowRefs(root) {
 
 // ===== TESTS =====
 
-test('ActionCentre: reviewer sees a header, toggle, and both reviewer groups', async () => {
-  const host = ActionCentre({
-    client: makeClient(reviewerCases()),
-    capabilities: caps({ isReviewer: true }),
-    now: NOW,
-  });
+test('ActionCentre: reviewer sees the two needs-action groups by default (tail hidden)', async () => {
+  const host = mount();
   await settle();
 
-  assert.ok(findByClass(host, 'cora-action-centre'), 'renders the section');
+  assert.ok(findByClass(host, 'cora-action-centre'));
   assert.equal(
     findByClass(host, 'cora-ac-title')?.textContent,
     'Action Centre'
   );
-  assert.equal(host.querySelectorAll('.cora-ac-toggle-btn').length, 2);
-
-  const groups = findAllByClass(host, 'cora-ac-group').map((g) =>
-    g.getAttribute('data-reason')
-  );
-  assert.deepEqual(groups, ['overdue', 'awaitingRp']);
+  assert.equal(q(host, '.cora-ac-toggle-btn').length, 2);
+  assert.deepEqual(groupIds(host), ['overdue', 'awaitingFrontline']);
 });
 
-test('ActionCentre: group headers show the server-side count', async () => {
-  const host = ActionCentre({
-    client: makeClient(reviewerCases()),
-    capabilities: caps({ isReviewer: true }),
-    now: NOW,
-  });
+test('ActionCentre: group headers show reviewer-scoped server-side counts', async () => {
+  const host = mount();
   await settle();
 
-  const overdueCount = group(host, 'overdue').querySelector(
-    '.cora-ac-count--overdue'
+  assert.equal(
+    group(host, 'overdue').querySelector('.cora-ac-count--overdue').textContent,
+    '6',
+    'od-1..5 + both, all mine'
   );
-  assert.equal(overdueCount.textContent, '6', 'od-1..5 + both = 6');
-  // Needs-action-now narrows Awaiting RP to the overdue-and-awaiting case.
-  const awaitingCount = group(host, 'awaitingRp').querySelector(
-    '.cora-ac-count--awaiting'
+  assert.equal(
+    group(host, 'awaitingFrontline').querySelector('.cora-ac-count--awaiting')
+      .textContent,
+    '3',
+    'both + aw-1 + aw-2'
   );
-  assert.equal(awaitingCount.textContent, '1');
+});
+
+test('ActionCentre: another reviewer’s case never appears on my worklist', async () => {
+  const host = mount();
+  await settle();
+  assert.ok(
+    !rowRefs(group(host, 'overdue')).includes('od-other'),
+    'od-other belongs to someone else'
+  );
+  // The count would be 7 if scoping leaked; it is 6.
+  assert.equal(
+    group(host, 'overdue').querySelector('.cora-ac-count--overdue').textContent,
+    '6'
+  );
 });
 
 test('ActionCentre: the top-priority group auto-expands and pages worst-first', async () => {
-  const host = ActionCentre({
-    client: makeClient(reviewerCases()),
-    capabilities: caps({ isReviewer: true }),
-    now: NOW,
-  });
+  const host = mount();
   await settle();
 
-  // First page is PAGE_SIZE rows, oldest dueDate first (both-1 is worst).
   const refs = rowRefs(group(host, 'overdue'));
   assert.equal(refs.length, PAGE_SIZE);
   assert.deepEqual(refs, ['both-1', 'od-1', 'od-2', 'od-3']);
 });
 
 test('ActionCentre: a two-reason row notes its secondary reason inline', async () => {
-  const host = ActionCentre({
-    client: makeClient(reviewerCases()),
-    capabilities: caps({ isReviewer: true }),
-    now: NOW,
-  });
+  const host = mount();
   await settle();
 
   const subs = findAllByClass(group(host, 'overdue'), 'cora-ac-row-sub').map(
     (d) => d.textContent
   );
   assert.ok(
-    subs.some((s) => s.includes('RP-Both') && s.includes('also Awaiting RP')),
-    `expected an "also Awaiting RP" note, got: ${JSON.stringify(subs)}`
+    subs.some(
+      (s) => s.includes('RP-Both') && s.includes('also Awaiting Frontline')
+    ),
+    `expected an "also Awaiting Frontline" note, got: ${JSON.stringify(subs)}`
   );
 });
 
 test('ActionCentre: overdue rows carry the breached waiting style', async () => {
-  const host = ActionCentre({
-    client: makeClient(reviewerCases()),
-    capabilities: caps({ isReviewer: true }),
-    now: NOW,
-  });
+  const host = mount();
   await settle();
 
   const waits = findAllByClass(
     group(host, 'overdue'),
     'cora-ac-wait cora-ac-wait--overdue'
   );
-  assert.ok(waits.length > 0, 'overdue is breached by definition');
+  assert.ok(waits.length > 0);
   assert.ok(waits[0].textContent.includes('over'));
 });
 
-test('ActionCentre: "Show N more" pages the rest and corrects the count on the final page', async () => {
-  const host = ActionCentre({
-    client: makeClient(reviewerCases()),
-    capabilities: caps({ isReviewer: true }),
-    now: NOW,
-  });
+test('ActionCentre: "Show N more" pages the rest and corrects the count', async () => {
+  const host = mount();
   await settle();
 
   const more = findByClass(group(host, 'overdue'), 'cora-ac-more');
@@ -233,109 +251,129 @@ test('ActionCentre: "Show N more" pages the rest and corrects the count on the f
   more._fire('click');
   await settle();
 
-  const refs = rowRefs(group(host, 'overdue'));
-  assert.equal(refs.length, 6, 'all overdue rows are now in the DOM');
-  assert.equal(
-    findByClass(group(host, 'overdue'), 'cora-ac-more'),
-    null,
-    'pager gone once fully paged'
-  );
+  assert.equal(rowRefs(group(host, 'overdue')).length, 6);
+  assert.equal(findByClass(group(host, 'overdue'), 'cora-ac-more'), null);
 });
 
 test('ActionCentre: collapsed groups show a worst-item peek', async () => {
-  const host = ActionCentre({
-    client: makeClient(reviewerCases()),
-    capabilities: caps({ isReviewer: true }),
-    now: NOW,
-  });
+  const host = mount();
   await settle();
 
-  // Awaiting RP is collapsed by default; its peek is the one overdue+awaiting case.
-  const peek = findByClass(group(host, 'awaitingRp'), 'cora-ac-peek');
-  assert.ok(peek, 'collapsed group has a peek');
-  assert.ok(textOf(peek).includes('both-1'));
+  const peek = findByClass(group(host, 'awaitingFrontline'), 'cora-ac-peek');
+  assert.ok(peek);
+  assert.ok(textOf(peek).includes('aw-1'), 'aw-1 is the oldest awaiting case');
   assert.ok(textOf(peek).includes('no reply'));
 });
 
 test('ActionCentre: toggling a group header collapses and re-expands it', async () => {
-  const host = ActionCentre({
-    client: makeClient(reviewerCases()),
-    capabilities: caps({ isReviewer: true }),
-    now: NOW,
-  });
+  const host = mount();
   await settle();
 
   const header = () =>
     findByClass(group(host, 'overdue'), 'cora-ac-group-header');
-  assert.ok(findByClass(group(host, 'overdue'), 'cora-ac-rows'), 'starts open');
+  assert.ok(findByClass(group(host, 'overdue'), 'cora-ac-rows'));
 
   header()._fire('click');
   await settle();
-  assert.equal(
-    findByClass(group(host, 'overdue'), 'cora-ac-rows'),
-    null,
-    'collapsed'
-  );
+  assert.equal(findByClass(group(host, 'overdue'), 'cora-ac-rows'), null);
 
   header()._fire('click');
   await settle();
-  assert.ok(findByClass(group(host, 'overdue'), 'cora-ac-rows'), 're-expanded');
+  assert.ok(findByClass(group(host, 'overdue'), 'cora-ac-rows'));
 });
 
 test('ActionCentre: expanding a second group loads its rows', async () => {
-  const host = ActionCentre({
-    client: makeClient(reviewerCases()),
-    capabilities: caps({ isReviewer: true }),
-    now: NOW,
-  });
+  const host = mount();
   await settle();
 
-  assert.equal(findByClass(group(host, 'awaitingRp'), 'cora-ac-rows'), null);
-  findByClass(group(host, 'awaitingRp'), 'cora-ac-group-header')._fire('click');
+  assert.equal(
+    findByClass(group(host, 'awaitingFrontline'), 'cora-ac-rows'),
+    null
+  );
+  findByClass(group(host, 'awaitingFrontline'), 'cora-ac-group-header')._fire(
+    'click'
+  );
   await settle();
 
-  assert.deepEqual(rowRefs(group(host, 'awaitingRp')), ['both-1']);
+  const refs = rowRefs(group(host, 'awaitingFrontline'));
+  assert.equal(refs.length, 3);
+  assert.ok(refs.includes('aw-1'));
 });
 
-test('ActionCentre: the All toggle broadens the counts, and back again', async () => {
-  const host = ActionCentre({
-    client: makeClient(reviewerCases()),
-    capabilities: caps({ isReviewer: true }),
-    now: NOW,
-  });
+test('ActionCentre: the All toggle reveals the Review Required tail and grows the headline', async () => {
+  const host = mount();
   await settle();
 
-  const allBtn = q(host, '.cora-ac-toggle-btn')[1];
-  allBtn._fire('click');
+  assert.equal(group(host, 'reviewRequired'), undefined, 'hidden by default');
+  const headlineBefore = findByClass(host, 'cora-ac-subtitle').textContent;
+  assert.ok(headlineBefore.startsWith('8 cases'), headlineBefore);
+
+  q(host, '.cora-ac-toggle-btn')[1]._fire('click'); // "All"
   await settle();
 
+  assert.deepEqual(groupIds(host), [
+    'overdue',
+    'awaitingFrontline',
+    'reviewRequired',
+  ]);
   assert.equal(
-    group(host, 'awaitingRp').querySelector('.cora-ac-count--awaiting')
+    group(host, 'reviewRequired').querySelector('.cora-ac-count--review')
       .textContent,
-    '3',
-    'All shows every awaiting case, not just the overdue ones'
+    '2'
   );
+  assert.ok(
+    findByClass(host, 'cora-ac-subtitle').textContent.startsWith('10 cases'),
+    'headline OR-count now includes the review-required tail'
+  );
+});
 
-  // Toggling back to the same value is a no-op; toggling to needs-action restores.
-  const needsBtn = q(host, '.cora-ac-toggle-btn')[0];
-  needsBtn._fire('click');
+test('ActionCentre: the Review Required rows use the "open" clock and review tone', async () => {
+  const host = mount();
   await settle();
-  assert.equal(
-    group(host, 'awaitingRp').querySelector('.cora-ac-count--awaiting')
-      .textContent,
-    '1'
+  q(host, '.cora-ac-toggle-btn')[1]._fire('click'); // "All"
+  await settle();
+
+  findByClass(group(host, 'reviewRequired'), 'cora-ac-group-header')._fire(
+    'click'
   );
+  await settle();
+
+  const refs = rowRefs(group(host, 'reviewRequired'));
+  assert.deepEqual(refs, ['rr-1', 'rr-2'], 'oldest created first');
+  const waits = findAllByClass(
+    group(host, 'reviewRequired'),
+    'cora-ac-wait'
+  ).concat(
+    findAllByClass(
+      group(host, 'reviewRequired'),
+      'cora-ac-wait cora-ac-wait--review'
+    )
+  );
+  assert.ok(
+    waits.some((w) => w.textContent.includes('open')),
+    'review-required age reads as "N days open"'
+  );
+  assert.ok(
+    group(host, 'reviewRequired').querySelector('.cora-ac-dot--review')
+  );
+});
+
+test('ActionCentre: switching back to Needs action now hides the tail again', async () => {
+  const host = mount();
+  await settle();
+  q(host, '.cora-ac-toggle-btn')[1]._fire('click'); // All
+  await settle();
+  assert.ok(group(host, 'reviewRequired'));
+
+  q(host, '.cora-ac-toggle-btn')[0]._fire('click'); // Needs action now
+  await settle();
+  assert.equal(group(host, 'reviewRequired'), undefined);
 });
 
 test('ActionCentre: re-clicking the active toggle is a no-op', async () => {
-  const host = ActionCentre({
-    client: makeClient(reviewerCases()),
-    capabilities: caps({ isReviewer: true }),
-    now: NOW,
-  });
+  const host = mount();
   await settle();
 
-  // "Needs action now" is already active — clicking it must not change counts.
   q(host, '.cora-ac-toggle-btn')[0]._fire('click');
   await settle();
   assert.equal(
@@ -350,6 +388,7 @@ test('ActionCentre: Open dispatches the case to onOpenCase', async () => {
   const host = ActionCentre({
     client: makeClient(reviewerCases()),
     capabilities: caps({ isReviewer: true }),
+    currentUserId: ME,
     onOpenCase: (row) => {
       opened = row;
     },
@@ -362,45 +401,31 @@ test('ActionCentre: Open dispatches the case to onOpenCase', async () => {
 });
 
 test('ActionCentre: Open without an onOpenCase handler does not throw', async () => {
-  const host = ActionCentre({
-    client: makeClient(reviewerCases()),
-    capabilities: caps({ isReviewer: true }),
-    now: NOW,
-  });
+  const host = mount();
   await settle();
-
   assert.doesNotThrow(() =>
     findByClass(group(host, 'overdue'), 'cora-ac-open')._fire('click')
   );
 });
 
 test('ActionCentre: a row without a title falls back to its id', async () => {
-  const host = ActionCentre({
-    client: makeClient([
-      caseRow('od-x', { title: '', dueDate: PAST, responsibleParty: 'RP' }),
-    ]),
-    capabilities: caps({ isReviewer: true }),
-    now: NOW,
-  });
+  const host = mount(caps({ isReviewer: true }), [
+    caseRow('od-x', { title: '', dueDate: PAST, responsibleParty: 'RP' }),
+  ]);
   await settle();
-
   assert.deepEqual(rowRefs(group(host, 'overdue')), ['od-x']);
 });
 
 test('ActionCentre: an empty worklist shows a friendly note', async () => {
-  const host = ActionCentre({
-    client: makeClient([
-      caseRow('done', {
-        status: 'Completed',
-        completedAt: '2026-01-01T00:00:00Z',
-      }),
-    ]),
-    capabilities: caps({ isReviewer: true }),
-    now: NOW,
-  });
+  const host = mount(caps({ isReviewer: true }), [
+    caseRow('done', {
+      status: 'Completed',
+      completedAt: '2026-01-01T00:00:00Z',
+    }),
+  ]);
   await settle();
 
-  assert.ok(findByClass(host, 'cora-ac-empty'), 'shows the empty note');
+  assert.ok(findByClass(host, 'cora-ac-empty'));
   assert.equal(findAllByClass(host, 'cora-ac-group').length, 0);
 });
 
@@ -408,10 +433,10 @@ test('ActionCentre: a client without countCases degrades to the empty note', asy
   const host = ActionCentre({
     client: /** @type {any} */ ({ listCases: async () => [] }),
     capabilities: caps({ isReviewer: true }),
+    currentUserId: ME,
     now: NOW,
   });
   await settle();
-
   assert.ok(findByClass(host, 'cora-ac-empty'));
 });
 
@@ -419,30 +444,25 @@ test('ActionCentre: a null client renders the empty note and its toggle stays in
   const host = ActionCentre({
     client: null,
     capabilities: caps({ isReviewer: true }),
+    currentUserId: ME,
     now: NOW,
   });
   await settle();
   assert.ok(findByClass(host, 'cora-ac-empty'));
 
-  // The header/toggle still render; clicking must not throw with no client.
   assert.doesNotThrow(() => q(host, '.cora-ac-toggle-btn')[1]._fire('click'));
   await settle();
-  assert.ok(findByClass(host, 'cora-ac-empty'), 'still inert after toggling');
+  assert.ok(findByClass(host, 'cora-ac-empty'));
 });
 
 test('ActionCentre: a visitor with no worklist reasons shows the empty note', async () => {
-  const host = ActionCentre({
-    client: makeClient(reviewerCases()),
-    capabilities: caps({ isVisitor: true }),
-    now: NOW,
-  });
+  const host = mount(caps({ isVisitor: true }));
   await settle();
-
   assert.ok(findByClass(host, 'cora-ac-empty'));
   assert.equal(findAllByClass(host, 'cora-ac-group').length, 0);
 });
 
-test('ActionCentre: multi-role user sees all four reason groups', async () => {
+test('ActionCentre: multi-role user sees every non-tail reason by default', async () => {
   const cases = [
     caseRow('od-1', { dueDate: PAST }),
     caseRow('ap-1', {
@@ -453,47 +473,36 @@ test('ActionCentre: multi-role user sees all four reason groups', async () => {
     }),
     caseRow('re-1', { reopened: true, reopenedAt: '2026-06-29T00:00:00Z' }),
   ];
-  const host = ActionCentre({
-    client: makeClient(cases),
-    capabilities: caps({
+  const host = mount(
+    caps({
       isReviewer: true,
       isControls: true,
       ownedCaseTypes: ['complaints'],
     }),
-    now: NOW,
-  });
+    cases
+  );
   await settle();
 
-  assert.deepEqual(
-    findAllByClass(host, 'cora-ac-group').map((g) =>
-      g.getAttribute('data-reason')
-    ),
-    ['overdue', 'awaitingRp', 'appeals', 'reopened']
-  );
+  assert.deepEqual(groupIds(host), [
+    'overdue',
+    'awaitingFrontline',
+    'appeals',
+    'reopened',
+  ]);
 });
 
 test('ActionCentre: reopened within SLA is not styled as breached', async () => {
-  const host = ActionCentre({
-    client: makeClient([
-      caseRow('re-late', {
-        reopened: true,
-        reopenedAt: '2026-06-28T00:00:00Z',
-      }), // 6 days
-      caseRow('re-fresh', {
-        reopened: true,
-        reopenedAt: '2026-07-02T00:00:00Z',
-      }), // 2 days
-    ]),
-    capabilities: caps({ ownedCaseTypes: ['complaints'] }),
-    now: NOW,
-  });
+  const host = mount(caps({ ownedCaseTypes: ['complaints'] }), [
+    caseRow('re-late', { reopened: true, reopenedAt: '2026-06-28T00:00:00Z' }),
+    caseRow('re-fresh', { reopened: true, reopenedAt: '2026-07-02T00:00:00Z' }),
+  ]);
   await settle();
 
   const g = group(host, 'reopened');
   const breached = findAllByClass(g, 'cora-ac-wait cora-ac-wait--reopened');
   const within = findAllByClass(g, 'cora-ac-wait');
-  assert.equal(breached.length, 1, 're-late (6d) is breached');
-  assert.equal(within.length, 1, 're-fresh (2d) is plain');
+  assert.equal(breached.length, 1);
+  assert.equal(within.length, 1);
 });
 
 // ===== Pure view tests (branches awkward to reach via the orchestrator) =====
@@ -510,8 +519,9 @@ const stubReason = {
   clockField: 'dueDate',
   flagField: 'overdue',
   filter: { overdue: true },
-  needsActionFilter: { overdue: true },
   slaDays: 0,
+  reviewerScoped: true,
+  tailOnly: false,
   requires: () => true,
   waitingLabel: (/** @type {number} */ d) => `${d} days over`,
   subLine: () => '',
@@ -560,9 +570,8 @@ test('ActionCentreView: the All state marks the All button pressed', () => {
       onOpenCase() {},
     }
   );
-  const [needs, all] = findAllByClass(view, 'cora-ac-toggle-btn').length
-    ? [walkFind(view, 'Needs action now'), walkFind(view, 'All')]
-    : [];
+  const needs = walkFind(view, 'Needs action now');
+  const all = walkFind(view, 'All');
   assert.equal(needs.getAttribute('aria-pressed'), 'false');
   assert.equal(all.getAttribute('aria-pressed'), 'true');
   assert.ok(all.className.includes('cora-ac-toggle-btn--on'));
@@ -572,6 +581,8 @@ test('ActionCentreView: a two-reason row with an empty sub-line omits the leadin
   const row = caseRow('multi', {
     overdue: true,
     awaitingResponsibleParty: true,
+    responsibleParty: '',
+    assignedReviewer: '',
   });
   const view = ActionCentreView(
     {
@@ -593,7 +604,7 @@ test('ActionCentreView: a two-reason row with an empty sub-line omits the leadin
   );
   assert.equal(
     findByClass(view, 'cora-ac-row-sub').textContent,
-    'also Awaiting RP'
+    'also Awaiting Frontline'
   );
 });
 

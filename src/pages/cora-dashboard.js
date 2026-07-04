@@ -109,6 +109,7 @@ function renderDashboard({
       ActionCentre({
         client,
         capabilities,
+        currentUserId,
         onOpenCase: (caseRow) => {
           location.hash = caseRouteFor(caseRow);
         },

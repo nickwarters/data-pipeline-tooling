@@ -5,6 +5,7 @@ import {
   ACTION_CENTRE_REASONS,
   reasonById,
   reasonsForCapabilities,
+  visibleReasons,
   activeFilter,
   headlineFilter,
   worstFirstOrder,
@@ -65,18 +66,28 @@ function reason(id) {
 
 const NOW = new Date('2026-07-04T00:00:00Z');
 
-test('ACTION_CENTRE_REASONS: fixed priority order and labels', () => {
+test('ACTION_CENTRE_REASONS: fixed priority order, labels, roles, tones', () => {
   assert.deepEqual(
     ACTION_CENTRE_REASONS.map((r) => r.id),
-    ['overdue', 'awaitingRp', 'appeals', 'reopened']
+    ['overdue', 'awaitingFrontline', 'reviewRequired', 'appeals', 'reopened']
   );
   assert.deepEqual(
     ACTION_CENTRE_REASONS.map((r) => r.label),
-    ['Overdue', 'Awaiting RP', 'Appeals to work', 'Reopened']
+    [
+      'Overdue',
+      'Awaiting Frontline',
+      'Review Required',
+      'Appeals to work',
+      'Reopened',
+    ]
   );
   assert.deepEqual(
     ACTION_CENTRE_REASONS.map((r) => r.role),
-    ['Reviewer', 'Reviewer', 'Controls', 'Owner']
+    ['Reviewer', 'Reviewer', 'Reviewer', 'Controls', 'Owner']
+  );
+  assert.deepEqual(
+    ACTION_CENTRE_REASONS.map((r) => r.tone),
+    ['overdue', 'awaiting', 'review', 'appeal', 'reopened']
   );
 });
 
@@ -85,11 +96,11 @@ test('reasonById: found and not found', () => {
   assert.equal(reasonById('nope'), undefined);
 });
 
-test('reasonsForCapabilities: reviewer sees overdue + awaiting RP', () => {
+test('reasonsForCapabilities: reviewer sees the three reviewer reasons', () => {
   const ids = reasonsForCapabilities(caps({ isReviewer: true })).map(
     (r) => r.id
   );
-  assert.deepEqual(ids, ['overdue', 'awaitingRp']);
+  assert.deepEqual(ids, ['overdue', 'awaitingFrontline', 'reviewRequired']);
 });
 
 test('reasonsForCapabilities: controls sees appeals', () => {
@@ -110,43 +121,57 @@ test('reasonsForCapabilities: multi-role user sees the union', () => {
   const ids = reasonsForCapabilities(
     caps({ isReviewer: true, isControls: true, ownedCaseTypes: ['complaints'] })
   ).map((r) => r.id);
-  assert.deepEqual(ids, ['overdue', 'awaitingRp', 'appeals', 'reopened']);
+  assert.deepEqual(ids, [
+    'overdue',
+    'awaitingFrontline',
+    'reviewRequired',
+    'appeals',
+    'reopened',
+  ]);
 });
 
 test('reasonsForCapabilities: a visitor sees no reasons', () => {
   assert.deepEqual(reasonsForCapabilities(caps({ isVisitor: true })), []);
 });
 
-test('activeFilter: awaiting RP narrows to overdue under Needs-action-now', () => {
-  const awaiting =
-    /** @type {import('../src/services/action-centre-model.js').Reason} */ (
-      reason('awaitingRp')
-    );
-  assert.deepEqual(activeFilter(awaiting, false), {
-    awaitingResponsibleParty: true,
-  });
-  assert.deepEqual(activeFilter(awaiting, true), {
-    awaitingResponsibleParty: true,
+test('visibleReasons: "Needs action now" hides the tail-only Review Required', () => {
+  const reasons = reasonsForCapabilities(caps({ isReviewer: true }));
+  assert.deepEqual(
+    visibleReasons(reasons, true).map((r) => r.id),
+    ['overdue', 'awaitingFrontline'],
+    'the within-SLA backlog is hidden'
+  );
+  assert.deepEqual(
+    visibleReasons(reasons, false).map((r) => r.id),
+    ['overdue', 'awaitingFrontline', 'reviewRequired'],
+    'All reveals Review Required'
+  );
+});
+
+test('activeFilter: reviewer reasons are scoped to the current reviewer', () => {
+  assert.deepEqual(activeFilter(reason('overdue'), 'u1'), {
     overdue: true,
+    assignedReviewer: 'u1',
+  });
+  assert.deepEqual(activeFilter(reason('reviewRequired'), 'u1'), {
+    reviewRequired: true,
+    assignedReviewer: 'u1',
   });
 });
 
-test('headlineFilter: ORs each visible reason under the active toggle', () => {
-  const reasons = reasonsForCapabilities(
-    caps({ isReviewer: true, isControls: true })
-  );
-  assert.deepEqual(headlineFilter(reasons, false), {
-    anyOf: [
-      { overdue: true },
-      { awaitingResponsibleParty: true },
-      { hasOpenAppeal: true },
-    ],
+test('activeFilter: Controls/Owner reasons stay unscoped', () => {
+  assert.deepEqual(activeFilter(reason('appeals'), 'u1'), {
+    hasOpenAppeal: true,
   });
-  assert.deepEqual(headlineFilter(reasons, true), {
+  assert.deepEqual(activeFilter(reason('reopened'), 'u1'), { reopened: true });
+});
+
+test('headlineFilter: ORs each visible reason under the current reviewer', () => {
+  const reasons = [reason('overdue'), reason('awaitingFrontline')];
+  assert.deepEqual(headlineFilter(reasons, 'u1'), {
     anyOf: [
-      { overdue: true },
-      { awaitingResponsibleParty: true, overdue: true },
-      { hasOpenAppeal: true },
+      { overdue: true, assignedReviewer: 'u1' },
+      { awaitingResponsibleParty: true, assignedReviewer: 'u1' },
     ],
   });
 });
@@ -156,70 +181,79 @@ test('worstFirstOrder: oldest on the reason clock first', () => {
     orderBy: 'dueDate',
     orderDir: 'asc',
   });
+  assert.deepEqual(worstFirstOrder(reason('reviewRequired')), {
+    orderBy: 'created',
+    orderDir: 'asc',
+  });
 });
 
 test('daysWaiting: whole days from the reason clock', () => {
-  const overdue = reason('overdue');
   const c = caseRow({ dueDate: '2026-06-25T00:00:00Z' });
-  assert.equal(daysWaiting(c, overdue, NOW), 9);
+  assert.equal(daysWaiting(c, reason('overdue'), NOW), 9);
 });
 
 test('daysWaiting: missing clock reads as 0', () => {
-  const overdue = reason('overdue');
-  assert.equal(daysWaiting(caseRow({ dueDate: null }), overdue, NOW), 0);
+  assert.equal(
+    daysWaiting(caseRow({ dueDate: null }), reason('overdue'), NOW),
+    0
+  );
 });
 
 test('daysWaiting: a future clock never goes negative', () => {
-  const overdue = reason('overdue');
   const c = caseRow({ dueDate: '2026-08-01T00:00:00Z' });
-  assert.equal(daysWaiting(c, overdue, NOW), 0);
+  assert.equal(daysWaiting(c, reason('overdue'), NOW), 0);
 });
 
 test('waitingInfo: overdue label and always-breached (slaDays 0)', () => {
-  const overdue = reason('overdue');
   const info = waitingInfo(
     caseRow({ dueDate: '2026-06-25T00:00:00Z' }),
-    overdue,
+    reason('overdue'),
     NOW
   );
   assert.deepEqual(info, { days: 9, label: '9 days over', breached: true });
 });
 
 test('waitingInfo: reopened breaches at its SLA, not before', () => {
-  const reopened = reason('reopened');
   const breached = waitingInfo(
     caseRow({ reopenedAt: '2026-06-29T00:00:00Z' }),
-    reopened,
+    reason('reopened'),
     NOW
   );
   assert.deepEqual(breached, { days: 5, label: '5 days', breached: true });
 
   const within = waitingInfo(
     caseRow({ reopenedAt: '2026-07-02T00:00:00Z' }),
-    reopened,
+    reason('reopened'),
     NOW
   );
   assert.deepEqual(within, { days: 2, label: '2 days', breached: false });
 });
 
 test('waitingInfo: singular day is not pluralised', () => {
-  const reopened = reason('reopened');
   const info = waitingInfo(
     caseRow({ reopenedAt: '2026-07-03T00:00:00Z' }),
-    reopened,
+    reason('reopened'),
     NOW
   );
   assert.equal(info.label, '1 day');
 });
 
-test('waitingLabel: awaiting RP and appeals phrasing', () => {
+test('waitingLabel: awaiting frontline, review required, and appeals phrasing', () => {
   assert.equal(
     waitingInfo(
       caseRow({ awaitingSince: '2026-06-22T00:00:00Z' }),
-      reason('awaitingRp'),
+      reason('awaitingFrontline'),
       NOW
     ).label,
     '12 days no reply'
+  );
+  assert.equal(
+    waitingInfo(
+      caseRow({ created: '2026-06-30T00:00:00Z' }),
+      reason('reviewRequired'),
+      NOW
+    ).label,
+    '4 days open'
   );
   assert.equal(
     waitingInfo(
@@ -232,9 +266,8 @@ test('waitingLabel: awaiting RP and appeals phrasing', () => {
 });
 
 test('subLine: reviewer sub-line shows RP and assignee', () => {
-  const overdue = reason('overdue');
   assert.equal(
-    overdue.subLine(
+    reason('overdue').subLine(
       caseRow({ responsibleParty: 'A. Bello', assignedReviewer: 'J. Okoro' })
     ),
     'A. Bello · assigned to J. Okoro'
@@ -242,9 +275,8 @@ test('subLine: reviewer sub-line shows RP and assignee', () => {
 });
 
 test('subLine: reviewer sub-line drops the empty RP part', () => {
-  const overdue = reason('overdue');
   assert.equal(
-    overdue.subLine(
+    reason('overdue').subLine(
       caseRow({ responsibleParty: '', assignedReviewer: 'M. Diallo' })
     ),
     'assigned to M. Diallo'
@@ -252,9 +284,8 @@ test('subLine: reviewer sub-line drops the empty RP part', () => {
 });
 
 test('subLine: reviewer sub-line with no assignee shows only the RP', () => {
-  const overdue = reason('overdue');
   assert.equal(
-    overdue.subLine(
+    reason('overdue').subLine(
       caseRow({ responsibleParty: 'A. Bello', assignedReviewer: '' })
     ),
     'A. Bello'
@@ -269,21 +300,24 @@ test('subLine: reopened is a static note', () => {
 });
 
 test('matchedReasonIds: reads the hoisted flags in priority order', () => {
-  const c = caseRow({ overdue: true, reopened: true });
-  assert.deepEqual(matchedReasonIds(c), ['overdue', 'reopened']);
+  const c = caseRow({ overdue: true, reviewRequired: true, reopened: true });
+  assert.deepEqual(matchedReasonIds(c), [
+    'overdue',
+    'reviewRequired',
+    'reopened',
+  ]);
   assert.deepEqual(matchedReasonIds(caseRow()), []);
 });
 
 test('secondaryReasons: the other reasons a case qualifies for', () => {
   const c = caseRow({ overdue: true, awaitingResponsibleParty: true });
-  const secondary = secondaryReasons(c, 'awaitingRp');
   assert.deepEqual(
-    secondary.map((r) => r.id),
+    secondaryReasons(c, 'awaitingFrontline').map((r) => r.id),
     ['overdue']
   );
   assert.deepEqual(
     secondaryReasons(c, 'overdue').map((r) => r.id),
-    ['awaitingRp']
+    ['awaitingFrontline']
   );
   assert.deepEqual(secondaryReasons(caseRow({ overdue: true }), 'overdue'), []);
 });

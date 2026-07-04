@@ -170,6 +170,7 @@
  *   overdue?: boolean,
  *   awaitingResponsibleParty?: boolean,
  *   awaitingSince?: string | null,
+ *   reviewRequired?: boolean,
  *   hasOpenAppeal?: boolean,
  *   appealRaisedAt?: string | null,
  *   reopened?: boolean,
@@ -229,7 +230,7 @@
  * "N cases need you" headline, whose count is deliberately *not* the sum of the
  * per-reason group counts.
  *
- * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, hasOpenAppeal?: boolean, reopened?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, anyOf?: ListCasesFilter[] }} ListCasesFilter
+ * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, reviewRequired?: boolean, hasOpenAppeal?: boolean, reopened?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, anyOf?: ListCasesFilter[] }} ListCasesFilter
  * @typedef {{ listName?: string, top?: number, skip?: number, orderBy?: string, orderDir?: 'asc' | 'desc' }} CaseListOptions
  */
 

@@ -748,6 +748,24 @@ test('MockSharePointClient: countCases returns the count of matching cases', asy
   assert.equal(await client.countCases({}), 5);
 });
 
+test('MockSharePointClient: filters by the reviewRequired flag', async () => {
+  const client = new MockSharePointClient({
+    cases: [
+      reasonCase('rr-1', { reviewRequired: true }),
+      reasonCase('rr-2', { reviewRequired: true }),
+      reasonCase('plain', {}),
+    ],
+    questionDefinitions: [],
+    personas: PERSONAS,
+  });
+  assert.equal(await client.countCases({ reviewRequired: true }), 2);
+  const rows = await client.listCases({ reviewRequired: false });
+  assert.deepEqual(
+    rows.map((c) => c.id),
+    ['plain']
+  );
+});
+
 test('MockSharePointClient: countCases ignores listName option but still counts', async () => {
   const client = makeReasonClient();
   assert.equal(

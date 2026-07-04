@@ -1539,12 +1539,14 @@ test('HttpSharePointClient: countCases maps the reason flags to indexed boolean 
 
   await client.countCases({
     awaitingResponsibleParty: true,
+    reviewRequired: true,
     hasOpenAppeal: false,
     reopened: true,
   });
 
   const url = decodeURIComponent(calls[0].url);
   assert.ok(url.includes('AwaitingResponsibleParty eq 1'));
+  assert.ok(url.includes('ReviewRequired eq 1'));
   assert.ok(url.includes('HasOpenAppeal eq 0'));
   assert.ok(url.includes('Reopened eq 1'));
 });
@@ -1677,6 +1679,7 @@ test('HttpSharePointClient: listCases maps the reason columns from SP into the C
                 Status: 'In-progress',
                 AwaitingResponsibleParty: true,
                 AwaitingSince: '2026-06-01T00:00:00Z',
+                ReviewRequired: true,
                 HasOpenAppeal: false,
                 AppealRaisedAt: '2026-06-02T00:00:00Z',
                 Reopened: true,
@@ -1696,6 +1699,7 @@ test('HttpSharePointClient: listCases maps the reason columns from SP into the C
   const [row] = await client.listCases({}, { top: 10 });
   assert.equal(row.awaitingResponsibleParty, true);
   assert.equal(row.awaitingSince, '2026-06-01T00:00:00Z');
+  assert.equal(row.reviewRequired, true);
   assert.equal(row.hasOpenAppeal, false);
   assert.equal(row.appealRaisedAt, '2026-06-02T00:00:00Z');
   assert.equal(row.reopened, true);
@@ -1723,6 +1727,7 @@ test('HttpSharePointClient: listCases leaves reason columns undefined/null when 
   const [row] = await client.listCases({}, { top: 10 });
   assert.equal(row.awaitingResponsibleParty, undefined);
   assert.equal(row.awaitingSince, null);
+  assert.equal(row.reviewRequired, undefined);
   assert.equal(row.hasOpenAppeal, undefined);
   assert.equal(row.appealRaisedAt, null);
   assert.equal(row.reopened, undefined);

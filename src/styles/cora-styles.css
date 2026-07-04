@@ -775,6 +775,7 @@ cora-status-banner {
 .cora-action-centre {
   --cora-ac-overdue: var(--cora-color-danger);
   --cora-ac-awaiting: var(--cora-color-info);
+  --cora-ac-review: #0b7285;
   --cora-ac-appeal: #6d3fbf;
   --cora-ac-reopened: var(--cora-color-warning);
   display: block;
@@ -788,15 +789,18 @@ cora-status-banner {
 
 @media (prefers-color-scheme: dark) {
   .cora-action-centre {
+    --cora-ac-review: #4bb3c9;
     --cora-ac-appeal: #b18cf0;
   }
 }
 
 :root[data-theme='dark'] .cora-action-centre {
+  --cora-ac-review: #4bb3c9;
   --cora-ac-appeal: #b18cf0;
 }
 
 :root[data-theme='light'] .cora-action-centre {
+  --cora-ac-review: #0b7285;
   --cora-ac-appeal: #6d3fbf;
 }
 
@@ -900,6 +904,9 @@ cora-status-banner {
 .cora-ac-dot--awaiting {
   background: var(--cora-ac-awaiting);
 }
+.cora-ac-dot--review {
+  background: var(--cora-ac-review);
+}
 .cora-ac-dot--appeal {
   background: var(--cora-ac-appeal);
 }
@@ -927,6 +934,9 @@ cora-status-banner {
 }
 .cora-ac-count--awaiting {
   background: var(--cora-ac-awaiting);
+}
+.cora-ac-count--review {
+  background: var(--cora-ac-review);
 }
 .cora-ac-count--appeal {
   background: var(--cora-ac-appeal);
@@ -990,6 +1000,10 @@ cora-status-banner {
 }
 .cora-ac-wait--awaiting {
   color: var(--cora-ac-awaiting);
+  font-weight: var(--cora-font-weight-semibold);
+}
+.cora-ac-wait--review {
+  color: var(--cora-ac-review);
   font-weight: var(--cora-font-weight-semibold);
 }
 .cora-ac-wait--appeal {

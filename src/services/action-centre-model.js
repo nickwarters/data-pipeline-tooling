@@ -2,17 +2,23 @@
 /**
  * Reason model for the dashboard **Action Centre** worklist (issue #287).
  *
- * The Action Centre merges the per-role dashboard tables (Overdue, Awaiting RP,
- * Appeals to work, Reopened, …) into one urgency-ranked, reason-grouped list.
- * This module is the pure, data-only core: an ordered table of **reasons**, plus
- * the helpers that turn a Case row into its reason chip, role tag, "waiting" age
- * and sub-line. It performs no I/O — the component wires these to the
- * `SharePointClient` `countCases` / paged `listCases` methods.
+ * The Action Centre merges the per-role dashboard tables (Overdue, Awaiting
+ * Frontline, Review Required, Appeals to work, Reopened, …) into one
+ * urgency-ranked, reason-grouped list. This module is the pure, data-only core:
+ * an ordered table of **reasons**, plus the helpers that turn a Case row into
+ * its reason chip, role tag, "waiting" age and sub-line. It performs no I/O —
+ * the component wires these to the `SharePointClient` `countCases` / paged
+ * `listCases` methods.
  *
  * Every reason is defined by an **indexed** `ListCasesFilter` so its group-header
  * count is a cheap `$count` and never a blob parse (ties to ADR-0007). Each
  * reason measures its own clock from a queryable date column (`clockField`), so
  * groups sort independently and no cross-reason ranking is needed.
+ *
+ * Reviewer reasons are **scoped to the current reviewer** (`reviewerScoped`), so
+ * a reviewer's worklist shows only their own assigned Cases; Controls/Owner
+ * reasons stay unscoped. The `tailOnly` reasons (Review Required) are the
+ * within-SLA backlog and are hidden by the "Needs action now" toggle.
  *
  * @typedef {import('../sharepoint-client.js').CaseRow} CaseRow
  * @typedef {import('../sharepoint-client.js').ListCasesFilter} ListCasesFilter
@@ -25,12 +31,13 @@
  *   id: string,
  *   label: string,
  *   role: string,
- *   tone: 'overdue' | 'awaiting' | 'appeal' | 'reopened',
- *   clockField: 'dueDate' | 'awaitingSince' | 'appealRaisedAt' | 'reopenedAt',
- *   flagField: 'overdue' | 'awaitingResponsibleParty' | 'hasOpenAppeal' | 'reopened',
+ *   tone: 'overdue' | 'awaiting' | 'review' | 'appeal' | 'reopened',
+ *   clockField: 'dueDate' | 'awaitingSince' | 'created' | 'appealRaisedAt' | 'reopenedAt',
+ *   flagField: 'overdue' | 'awaitingResponsibleParty' | 'reviewRequired' | 'hasOpenAppeal' | 'reopened',
  *   filter: ListCasesFilter,
- *   needsActionFilter: ListCasesFilter,
  *   slaDays: number,
+ *   reviewerScoped: boolean,
+ *   tailOnly: boolean,
  *   requires: (capabilities: Capabilities) => boolean,
  *   waitingLabel: (days: number) => string,
  *   subLine: (caseRow: CaseRow) => string,
@@ -67,10 +74,9 @@ function assigneeSubLine(caseRow) {
 }
 
 /**
- * The reason table, in fixed priority order (Overdue → Awaiting RP → Appeals →
- * Reopened). Group ordering is this fixed priority; the primary reason of a
- * multi-reason case is the earliest match here (ADR-open-decision resolved to a
- * stable reason priority rather than most-overdue-group-first).
+ * The reason table, in fixed priority order (Overdue → Awaiting Frontline →
+ * Review Required → Appeals → Reopened). Group ordering is this fixed priority;
+ * the primary reason of a multi-reason case is the earliest match here.
  *
  * @type {Reason[]}
  */
@@ -83,27 +89,43 @@ export const ACTION_CENTRE_REASONS = [
     clockField: 'dueDate',
     flagField: 'overdue',
     filter: { overdue: true },
-    // Overdue is breach by definition, so "Needs action now" is the same set.
-    needsActionFilter: { overdue: true },
     slaDays: 0,
+    reviewerScoped: true,
+    tailOnly: false,
     requires: (c) => c.isReviewer,
     waitingLabel: (days) => `${dayCount(days)} over`,
     subLine: assigneeSubLine,
   },
   {
-    id: 'awaitingRp',
-    label: 'Awaiting RP',
+    id: 'awaitingFrontline',
+    label: 'Awaiting Frontline',
     role: 'Reviewer',
     tone: 'awaiting',
     clockField: 'awaitingSince',
     flagField: 'awaitingResponsibleParty',
     filter: { awaitingResponsibleParty: true },
-    // The within-SLA tail is the still-recently-chased cases; "Needs action now"
-    // keeps only the ones that have also gone overdue.
-    needsActionFilter: { awaitingResponsibleParty: true, overdue: true },
     slaDays: 7,
+    reviewerScoped: true,
+    tailOnly: false,
     requires: (c) => c.isReviewer,
     waitingLabel: (days) => `${dayCount(days)} no reply`,
+    subLine: assigneeSubLine,
+  },
+  {
+    id: 'reviewRequired',
+    label: 'Review Required',
+    role: 'Reviewer',
+    tone: 'review',
+    clockField: 'created',
+    flagField: 'reviewRequired',
+    filter: { reviewRequired: true },
+    slaDays: 14,
+    reviewerScoped: true,
+    // The within-SLA backlog: the reviewer's remaining in-flight Cases that
+    // aren't overdue or awaiting a reply. Hidden until the "All" toggle.
+    tailOnly: true,
+    requires: (c) => c.isReviewer,
+    waitingLabel: (days) => `${dayCount(days)} open`,
     subLine: assigneeSubLine,
   },
   {
@@ -114,8 +136,9 @@ export const ACTION_CENTRE_REASONS = [
     clockField: 'appealRaisedAt',
     flagField: 'hasOpenAppeal',
     filter: { hasOpenAppeal: true },
-    needsActionFilter: { hasOpenAppeal: true },
     slaDays: 5,
+    reviewerScoped: false,
+    tailOnly: false,
     requires: (c) => c.isControls,
     waitingLabel: (days) => `raised ${dayCount(days)} ago`,
     subLine: assigneeSubLine,
@@ -128,8 +151,9 @@ export const ACTION_CENTRE_REASONS = [
     clockField: 'reopenedAt',
     flagField: 'reopened',
     filter: { reopened: true },
-    needsActionFilter: { reopened: true },
     slaDays: 3,
+    reviewerScoped: false,
+    tailOnly: false,
     requires: (c) => c.ownedCaseTypes.length > 0,
     waitingLabel: (days) => dayCount(days),
     subLine: () => 'appeal upheld · back under review',
@@ -158,15 +182,30 @@ export function reasonsForCapabilities(capabilities) {
 }
 
 /**
- * The filter to query for a reason under the current toggle: the breach-only
- * `needsActionFilter` when "Needs action now" is on, else the whole group.
+ * The reasons visible under the current toggle. "Needs action now" hides the
+ * `tailOnly` within-SLA backlog (Review Required); "All" shows everything.
+ *
+ * @param {Reason[]} reasons
+ * @param {boolean} needsActionNow
+ * @returns {Reason[]}
+ */
+export function visibleReasons(reasons, needsActionNow) {
+  return needsActionNow ? reasons.filter((r) => !r.tailOnly) : reasons;
+}
+
+/**
+ * The filter to query for a reason. A `reviewerScoped` reason is narrowed to the
+ * current reviewer's own Cases so a reviewer never sees another reviewer's work;
+ * Controls/Owner reasons are returned unscoped.
  *
  * @param {Reason} reason
- * @param {boolean} needsActionNow
+ * @param {string} currentUserId
  * @returns {ListCasesFilter}
  */
-export function activeFilter(reason, needsActionNow) {
-  return needsActionNow ? reason.needsActionFilter : reason.filter;
+export function activeFilter(reason, currentUserId) {
+  return reason.reviewerScoped
+    ? { ...reason.filter, assignedReviewer: currentUserId }
+    : reason.filter;
 }
 
 /**
@@ -175,11 +214,11 @@ export function activeFilter(reason, needsActionNow) {
  * headline only once. Deliberately not the sum of per-group counts.
  *
  * @param {Reason[]} reasons
- * @param {boolean} needsActionNow
+ * @param {string} currentUserId
  * @returns {ListCasesFilter}
  */
-export function headlineFilter(reasons, needsActionNow) {
-  return { anyOf: reasons.map((r) => activeFilter(r, needsActionNow)) };
+export function headlineFilter(reasons, currentUserId) {
+  return { anyOf: reasons.map((r) => activeFilter(r, currentUserId)) };
 }
 
 /**
@@ -239,9 +278,9 @@ export function waitingInfo(caseRow, reason, now = new Date()) {
  * @returns {string[]}
  */
 export function matchedReasonIds(caseRow) {
-  return ACTION_CENTRE_REASONS.filter(
-    (r) => Boolean(caseRow[r.flagField]) === true
-  ).map((r) => r.id);
+  return ACTION_CENTRE_REASONS.filter((r) => Boolean(caseRow[r.flagField])).map(
+    (r) => r.id
+  );
 }
 
 /**
