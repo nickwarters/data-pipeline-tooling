@@ -519,6 +519,15 @@ function escapeOData(s) {
 function buildFilterExpr(filter) {
   /** @type {string[]} */
   const conds = [];
+  // Windowed CompletedAt range leads (ADR-0031 §2) so the indexed date column
+  // does the narrowing before Status: `Status eq 'Completed'` alone matches the
+  // whole cumulative backlog and is not selective past the List View Threshold.
+  if (filter.completedAfter) {
+    conds.push(`CompletedAt ge '${escapeOData(filter.completedAfter)}'`);
+  }
+  if (filter.completedBefore) {
+    conds.push(`CompletedAt lt '${escapeOData(filter.completedBefore)}'`);
+  }
   if (filter.status) conds.push(`Status eq '${escapeOData(filter.status)}'`);
   if (filter.assignedReviewer) {
     conds.push(

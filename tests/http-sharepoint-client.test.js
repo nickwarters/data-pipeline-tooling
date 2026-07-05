@@ -1602,6 +1602,88 @@ test('HttpSharePointClient: listCases with assignedReviewerManager filters serve
   );
 });
 
+// --- CompletedAt window filter (ADR-0031 §2) ---
+
+test('HttpSharePointClient: listCases with a CompletedAt window leads with the indexed date column', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [] }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.listCases({
+    status: 'Completed',
+    completedAfter: '2026-07-02T00:00:00.000Z',
+    completedBefore: '2026-07-03T00:00:00.000Z',
+  });
+
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(
+    url.includes("CompletedAt ge '2026-07-02T00:00:00.000Z'"),
+    'inclusive lower bound'
+  );
+  assert.ok(
+    url.includes("CompletedAt lt '2026-07-03T00:00:00.000Z'"),
+    'exclusive upper bound'
+  );
+  const filterExpr = url.slice(url.indexOf('$filter='));
+  assert.ok(
+    filterExpr.indexOf('CompletedAt') < filterExpr.indexOf('Status eq'),
+    'the selective CompletedAt predicate leads Status (ADR-0031 §2)'
+  );
+});
+
+test('HttpSharePointClient: countCases sums a bounded CompletedAt day-slice via $count', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () => new Response('42', { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const n = await client.countCases({
+    caseType: 'example-review',
+    status: 'Completed',
+    completedAfter: '2026-07-02T00:00:00.000Z',
+    completedBefore: '2026-07-03T00:00:00.000Z',
+  });
+
+  assert.equal(n, 42);
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(url.includes('/items/$count'), 'a windowed count uses $count');
+  assert.ok(url.includes("CompletedAt ge '2026-07-02T00:00:00.000Z'"));
+  assert.ok(url.includes("CompletedAt lt '2026-07-03T00:00:00.000Z'"));
+});
+
+test('HttpSharePointClient: listCases without a CompletedAt window omits the CompletedAt condition', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [] }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.listCases({ status: 'In-progress' });
+
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(!url.includes('CompletedAt'), 'no CompletedAt when unbounded');
+});
+
 // --- Action Centre: countCases, paging, reason flags (issue #287) ---
 
 test('HttpSharePointClient: countCases hits the $count endpoint and returns a bare integer', async () => {

@@ -187,6 +187,16 @@ export class MockSharePointClient {
         if (!c.dueDate) return false;
         if (new Date(c.dueDate) >= new Date()) return false;
       }
+      // CompletedAt window (ADR-0031 §2): inclusive lower, exclusive upper, so
+      // adjacent per-day slices sum without double-counting a boundary Case.
+      if (filter.completedAfter !== undefined) {
+        if (!c.completedAt || c.completedAt < filter.completedAfter)
+          return false;
+      }
+      if (filter.completedBefore !== undefined) {
+        if (!c.completedAt || c.completedAt >= filter.completedBefore)
+          return false;
+      }
       if (filter.anyOf !== undefined) {
         if (!filter.anyOf.some((sub) => this._predicate(sub)(c))) return false;
       }

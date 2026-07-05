@@ -16,15 +16,58 @@ const sevenDaysAgo = new Date(todayStart.getTime() - 7 * 24 * 60 * 60 * 1000);
 const threeDaysAgo = new Date(todayStart.getTime() - 3 * 24 * 60 * 60 * 1000);
 const tenDaysAgo = new Date(todayStart.getTime() - 10 * 24 * 60 * 60 * 1000);
 
-/** @param {import('../src/sharepoint-client.js').CaseRow[]} casesForType */
-function makeClient(casesForType) {
+/**
+ * A filter-honouring stand-in for a SharePointClient. `listCases` and
+ * `countCases` apply the same server-side predicate the real clients do for the
+ * fields the summary leads with: caseType, status, and the CompletedAt window.
+ *
+ * @param {import('../src/sharepoint-client.js').CaseRow[]} allCases
+ */
+function makeClient(allCases) {
+  /** @param {import('../src/sharepoint-client.js').ListCasesFilter} f */
+  const predicate =
+    (f) => (/** @type {import('../src/sharepoint-client.js').CaseRow} */ c) => {
+      if (f.caseType !== undefined && c.caseType !== f.caseType) return false;
+      if (f.status !== undefined && c.status !== f.status) return false;
+      if (f.completedAfter !== undefined) {
+        if (!c.completedAt || c.completedAt < f.completedAfter) return false;
+      }
+      if (f.completedBefore !== undefined) {
+        if (!c.completedAt || c.completedAt >= f.completedBefore) return false;
+      }
+      return true;
+    };
   return {
-    async listCases(
-      /** @type {import('../src/sharepoint-client.js').ListCasesFilter} */ _filter
-    ) {
-      return casesForType.map((c) => ({ ...c }));
+    /** @param {import('../src/sharepoint-client.js').ListCasesFilter} f */
+    async listCases(f) {
+      return allCases.filter(predicate(f)).map((c) => ({ ...c }));
+    },
+    /** @param {import('../src/sharepoint-client.js').ListCasesFilter} f */
+    async countCases(f) {
+      return allCases.filter(predicate(f)).length;
     },
   };
+}
+
+/**
+ * @param {Partial<import('../src/sharepoint-client.js').CaseRow>} over
+ * @returns {import('../src/sharepoint-client.js').CaseRow}
+ */
+function caseRow(over) {
+  return /** @type {import('../src/sharepoint-client.js').CaseRow} */ ({
+    id: 'c',
+    caseType: 'example-review',
+    title: 'C',
+    status: 'In-progress',
+    assignedReviewer: '',
+    responsibleParty: 'rp',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    etag: 'e',
+    ...over,
+  });
 }
 
 // ===== TESTS =====
@@ -45,23 +88,71 @@ test('CORAOwnerSummary: connectedCallback does nothing when client is null', asy
   assert.equal(/** @type {any} */ (el)._children.length, 0);
 });
 
-test('CORAOwnerSummary: calls listCases with caseType filter for each owned type', async () => {
+test('CORAOwnerSummary: leads with an In-progress, per-Case-Type listCases (no whole-type fetch)', async () => {
   /** @type {import('../src/sharepoint-client.js').ListCasesFilter[]} */
-  const calls = [];
+  const listCalls = [];
   const el = new CORAOwnerSummary();
   el.client = /** @type {any} */ ({
     async listCases(
       /** @type {import('../src/sharepoint-client.js').ListCasesFilter} */ f
     ) {
-      calls.push(f);
+      listCalls.push(f);
       return [];
+    },
+    async countCases() {
+      return 0;
     },
   });
   el.ownedCaseTypes = ['example-review', 'audit-review'];
   await el.connectedCallback();
-  assert.equal(calls.length, 2);
-  assert.deepEqual(calls[0], { caseType: 'example-review' });
-  assert.deepEqual(calls[1], { caseType: 'audit-review' });
+  assert.equal(listCalls.length, 2);
+  assert.deepEqual(listCalls[0], {
+    caseType: 'example-review',
+    status: 'In-progress',
+  });
+  assert.deepEqual(listCalls[1], {
+    caseType: 'audit-review',
+    status: 'In-progress',
+  });
+});
+
+test('CORAOwnerSummary: completed metrics come from bounded CompletedAt-window counts (ADR-0031)', async () => {
+  /** @type {import('../src/sharepoint-client.js').ListCasesFilter[]} */
+  const countCalls = [];
+  const el = new CORAOwnerSummary();
+  el.client = /** @type {any} */ ({
+    async listCases() {
+      return [];
+    },
+    async countCases(
+      /** @type {import('../src/sharepoint-client.js').ListCasesFilter} */ f
+    ) {
+      countCalls.push(f);
+      return 0;
+    },
+  });
+  el.ownedCaseTypes = ['example-review'];
+  await el.connectedCallback();
+
+  // 8 per-day slices (today + 7 prior days), each a bounded Completed window.
+  assert.equal(countCalls.length, 8);
+  for (const f of countCalls) {
+    assert.equal(f.caseType, 'example-review');
+    assert.equal(f.status, 'Completed');
+    assert.ok(f.completedAfter, 'every slice bounds CompletedAt from below');
+    assert.ok(f.completedBefore, 'every slice bounds CompletedAt from above');
+  }
+  // Slices are adjacent (each slice's upper bound is the next slice's lower
+  // bound) and cover exactly [todayStart - 7 days, now].
+  assert.equal(countCalls[0].completedAfter, todayStart.toISOString());
+  assert.equal(countCalls[7].completedAfter, sevenDaysAgo.toISOString());
+  for (let k = 1; k < countCalls.length; k++) {
+    assert.equal(
+      countCalls[k].completedBefore,
+      countCalls[k - 1].completedAfter,
+      'slice upper bound meets the previous slice lower bound'
+    );
+  }
 });
 
 test('CORAOwnerSummary: stores summaries on _summaries after _refresh', async () => {
@@ -75,34 +166,9 @@ test('CORAOwnerSummary: stores summaries on _summaries after _refresh', async ()
 });
 
 test('CORAOwnerSummary: outstanding count = unassigned in-progress cases', async () => {
-  /** @type {import('../src/sharepoint-client.js').CaseRow[]} */
   const fixtureCases = [
-    {
-      id: 'c1',
-      caseType: 'example-review',
-      title: 'C1',
-      status: 'In-progress',
-      assignedReviewer: '',
-      responsibleParty: 'rp',
-      answers: {},
-      conversation: [],
-      notes: '',
-      completedAt: null,
-      etag: 'e1',
-    },
-    {
-      id: 'c2',
-      caseType: 'example-review',
-      title: 'C2',
-      status: 'In-progress',
-      assignedReviewer: 'user-x',
-      responsibleParty: 'rp',
-      answers: {},
-      conversation: [],
-      notes: '',
-      completedAt: null,
-      etag: 'e2',
-    },
+    caseRow({ id: 'c1', assignedReviewer: '' }),
+    caseRow({ id: 'c2', assignedReviewer: 'user-x' }),
   ];
   const el = new CORAOwnerSummary();
   el.client = /** @type {any} */ (makeClient(fixtureCases));
@@ -112,47 +178,10 @@ test('CORAOwnerSummary: outstanding count = unassigned in-progress cases', async
 });
 
 test('CORAOwnerSummary: assigned count = in-progress cases with an assigned reviewer', async () => {
-  /** @type {import('../src/sharepoint-client.js').CaseRow[]} */
   const fixtureCases = [
-    {
-      id: 'c1',
-      caseType: 'example-review',
-      title: 'C1',
-      status: 'In-progress',
-      assignedReviewer: '',
-      responsibleParty: 'rp',
-      answers: {},
-      conversation: [],
-      notes: '',
-      completedAt: null,
-      etag: 'e1',
-    },
-    {
-      id: 'c2',
-      caseType: 'example-review',
-      title: 'C2',
-      status: 'In-progress',
-      assignedReviewer: 'user-x',
-      responsibleParty: 'rp',
-      answers: {},
-      conversation: [],
-      notes: '',
-      completedAt: null,
-      etag: 'e2',
-    },
-    {
-      id: 'c3',
-      caseType: 'example-review',
-      title: 'C3',
-      status: 'In-progress',
-      assignedReviewer: 'user-y',
-      responsibleParty: 'rp',
-      answers: {},
-      conversation: [],
-      notes: '',
-      completedAt: null,
-      etag: 'e3',
-    },
+    caseRow({ id: 'c1', assignedReviewer: '' }),
+    caseRow({ id: 'c2', assignedReviewer: 'user-x' }),
+    caseRow({ id: 'c3', assignedReviewer: 'user-y' }),
   ];
   const el = new CORAOwnerSummary();
   el.client = /** @type {any} */ (makeClient(fixtureCases));
@@ -162,34 +191,19 @@ test('CORAOwnerSummary: assigned count = in-progress cases with an assigned revi
 });
 
 test('CORAOwnerSummary: completedToday count = completed cases with completedAt today', async () => {
-  /** @type {import('../src/sharepoint-client.js').CaseRow[]} */
   const fixtureCases = [
-    {
+    caseRow({
       id: 'c1',
-      caseType: 'example-review',
-      title: 'C1',
       status: 'Completed',
       assignedReviewer: 'u',
-      responsibleParty: 'rp',
-      answers: {},
-      conversation: [],
-      notes: '',
       completedAt: todayStart.toISOString(),
-      etag: 'e1',
-    },
-    {
+    }),
+    caseRow({
       id: 'c2',
-      caseType: 'example-review',
-      title: 'C2',
       status: 'Completed',
       assignedReviewer: 'u',
-      responsibleParty: 'rp',
-      answers: {},
-      conversation: [],
-      notes: '',
       completedAt: threeDaysAgo.toISOString(),
-      etag: 'e2',
-    },
+    }),
   ];
   const el = new CORAOwnerSummary();
   el.client = /** @type {any} */ (makeClient(fixtureCases));
@@ -198,48 +212,26 @@ test('CORAOwnerSummary: completedToday count = completed cases with completedAt 
   assert.equal(el._summaries[0].completedToday, 1);
 });
 
-test('CORAOwnerSummary: completedLast7Days includes cases from within 7 days', async () => {
-  /** @type {import('../src/sharepoint-client.js').CaseRow[]} */
+test('CORAOwnerSummary: completedLast7Days sums the per-day slices within 7 days', async () => {
   const fixtureCases = [
-    {
+    caseRow({
       id: 'c1',
-      caseType: 'example-review',
-      title: 'C1',
       status: 'Completed',
       assignedReviewer: 'u',
-      responsibleParty: 'rp',
-      answers: {},
-      conversation: [],
-      notes: '',
       completedAt: todayStart.toISOString(),
-      etag: 'e1',
-    },
-    {
+    }),
+    caseRow({
       id: 'c2',
-      caseType: 'example-review',
-      title: 'C2',
       status: 'Completed',
       assignedReviewer: 'u',
-      responsibleParty: 'rp',
-      answers: {},
-      conversation: [],
-      notes: '',
       completedAt: threeDaysAgo.toISOString(),
-      etag: 'e2',
-    },
-    {
+    }),
+    caseRow({
       id: 'c3',
-      caseType: 'example-review',
-      title: 'C3',
       status: 'Completed',
       assignedReviewer: 'u',
-      responsibleParty: 'rp',
-      answers: {},
-      conversation: [],
-      notes: '',
       completedAt: tenDaysAgo.toISOString(),
-      etag: 'e3',
-    },
+    }),
   ];
   const el = new CORAOwnerSummary();
   el.client = /** @type {any} */ (makeClient(fixtureCases));
@@ -259,49 +251,10 @@ test('CORAOwnerSummary: overdue count = in-progress cases with dueDate in the pa
   const tomorrow = new Date(
     todayStart.getTime() + 24 * 60 * 60 * 1000
   ).toISOString();
-  /** @type {import('../src/sharepoint-client.js').CaseRow[]} */
   const fixtureCases = [
-    {
-      id: 'c1',
-      caseType: 'example-review',
-      title: 'C1',
-      status: 'In-progress',
-      assignedReviewer: 'u',
-      responsibleParty: 'rp',
-      answers: {},
-      conversation: [],
-      notes: '',
-      completedAt: null,
-      dueDate: yesterday,
-      etag: 'e1',
-    },
-    {
-      id: 'c2',
-      caseType: 'example-review',
-      title: 'C2',
-      status: 'In-progress',
-      assignedReviewer: 'u',
-      responsibleParty: 'rp',
-      answers: {},
-      conversation: [],
-      notes: '',
-      completedAt: null,
-      dueDate: tomorrow,
-      etag: 'e2',
-    },
-    {
-      id: 'c3',
-      caseType: 'example-review',
-      title: 'C3',
-      status: 'In-progress',
-      assignedReviewer: 'u',
-      responsibleParty: 'rp',
-      answers: {},
-      conversation: [],
-      notes: '',
-      completedAt: null,
-      etag: 'e3',
-    },
+    caseRow({ id: 'c1', assignedReviewer: 'u', dueDate: yesterday }),
+    caseRow({ id: 'c2', assignedReviewer: 'u', dueDate: tomorrow }),
+    caseRow({ id: 'c3', assignedReviewer: 'u' }),
   ];
   const el = new CORAOwnerSummary();
   el.client = /** @type {any} */ (makeClient(fixtureCases));
@@ -312,11 +265,7 @@ test('CORAOwnerSummary: overdue count = in-progress cases with dueDate in the pa
 
 test('CORAOwnerSummary: renders heading and one card per owned case type', async () => {
   const el = new CORAOwnerSummary();
-  el.client = /** @type {any} */ ({
-    async listCases() {
-      return [];
-    },
-  });
+  el.client = /** @type {any} */ (makeClient([]));
   el.ownedCaseTypes = ['example-review', 'audit-review'];
   await el.connectedCallback();
   // _children: [h2, card-0, card-1]
@@ -326,15 +275,7 @@ test('CORAOwnerSummary: renders heading and one card per owned case type', async
 test('CORAOwnerSummary: renders correct counts for example-review fixture data', async () => {
   const { cases } = await import('../dev/fixtures/cases.js');
   const el = new CORAOwnerSummary();
-  el.client = /** @type {any} */ ({
-    async listCases(
-      /** @type {import('../src/sharepoint-client.js').ListCasesFilter} */ filter
-    ) {
-      return cases
-        .filter((c) => c.caseType === filter.caseType)
-        .map((c) => ({ ...c }));
-    },
-  });
+  el.client = /** @type {any} */ (makeClient(cases));
   el.ownedCaseTypes = ['example-review'];
   await el.connectedCallback();
 

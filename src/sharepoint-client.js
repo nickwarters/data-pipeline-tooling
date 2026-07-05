@@ -230,7 +230,14 @@
  * "N cases need you" headline, whose count is deliberately *not* the sum of the
  * per-reason group counts.
  *
- * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, reviewRequired?: boolean, hasOpenAppeal?: boolean, reopened?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, anyOf?: ListCasesFilter[] }} ListCasesFilter
+ * `completedAfter` (inclusive) and `completedBefore` (exclusive) bound a read to a
+ * `CompletedAt` window on the indexed date column (ADR-0031 §2). They exist so a
+ * windowed completion metric leads with the selective date column and — for a
+ * window that could itself exceed the List View Threshold (e.g. "completed in the
+ * last 7 days" on the busy Case Type) — is summed from sub-threshold per-day
+ * `$count` slices rather than one large fetch.
+ *
+ * @typedef {{ status?: string, assignedReviewer?: string, caseType?: string, responsibleParty?: string, overdue?: boolean, awaitingResponsibleParty?: boolean, reviewRequired?: boolean, hasOpenAppeal?: boolean, reopened?: boolean, assignedReviewerManager?: string, effectiveOutcome?: string, outcomeOverridden?: boolean, completedAfter?: string, completedBefore?: string, anyOf?: ListCasesFilter[] }} ListCasesFilter
  * @typedef {{ listName?: string, top?: number, skip?: number, orderBy?: string, orderDir?: 'asc' | 'desc' }} CaseListOptions
  */
 

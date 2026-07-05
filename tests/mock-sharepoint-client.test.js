@@ -457,6 +457,112 @@ test('MockSharePointClient: listCases with overdue:false returns all cases (no o
   assert.equal(sameWithFalse.length, all.length);
 });
 
+// --- listCases / countCases CompletedAt window (ADR-0031 §2) ---
+
+/**
+ * @param {string} id
+ * @param {string | null} completedAt
+ * @returns {CaseRow}
+ */
+function completedCase(id, completedAt) {
+  return /** @type {CaseRow} */ ({
+    id,
+    caseType: 'example-review',
+    title: id,
+    status: completedAt ? 'Completed' : 'In-progress',
+    assignedReviewer: 'u',
+    responsibleParty: 'rp',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt,
+    etag: `etag-${id}`,
+  });
+}
+
+test('MockSharePointClient: completedAfter is an inclusive CompletedAt lower bound', async () => {
+  const client = new MockSharePointClient({
+    cases: [
+      completedCase('a', '2026-07-01T00:00:00.000Z'),
+      completedCase('b', '2026-07-02T00:00:00.000Z'),
+      completedCase('c', '2026-07-03T00:00:00.000Z'),
+    ],
+    questionDefinitions: [],
+    personas: PERSONAS,
+  });
+  const rows = await client.listCases({
+    completedAfter: '2026-07-02T00:00:00.000Z',
+  });
+  assert.deepEqual(
+    rows.map((r) => r.id).sort(),
+    ['b', 'c'],
+    'includes the boundary Case, excludes earlier'
+  );
+});
+
+test('MockSharePointClient: completedBefore is an exclusive CompletedAt upper bound', async () => {
+  const client = new MockSharePointClient({
+    cases: [
+      completedCase('a', '2026-07-01T00:00:00.000Z'),
+      completedCase('b', '2026-07-02T00:00:00.000Z'),
+      completedCase('c', '2026-07-03T00:00:00.000Z'),
+    ],
+    questionDefinitions: [],
+    personas: PERSONAS,
+  });
+  const rows = await client.listCases({
+    completedBefore: '2026-07-02T00:00:00.000Z',
+  });
+  assert.deepEqual(
+    rows.map((r) => r.id),
+    ['a'],
+    'excludes the boundary Case so adjacent slices never double-count'
+  );
+});
+
+test('MockSharePointClient: a never-completed Case is excluded from any CompletedAt window', async () => {
+  const client = new MockSharePointClient({
+    cases: [
+      completedCase('open', null),
+      completedCase('done', '2026-07-02T00:00:00.000Z'),
+    ],
+    questionDefinitions: [],
+    personas: PERSONAS,
+  });
+  const afterOnly = await client.listCases({
+    completedAfter: '2026-07-01T00:00:00.000Z',
+  });
+  assert.deepEqual(
+    afterOnly.map((r) => r.id),
+    ['done']
+  );
+  const beforeOnly = await client.listCases({
+    completedBefore: '2026-07-03T00:00:00.000Z',
+  });
+  assert.deepEqual(
+    beforeOnly.map((r) => r.id),
+    ['done']
+  );
+});
+
+test('MockSharePointClient: countCases counts a bounded CompletedAt day-slice', async () => {
+  const client = new MockSharePointClient({
+    cases: [
+      completedCase('a', '2026-07-02T08:00:00.000Z'),
+      completedCase('b', '2026-07-02T20:00:00.000Z'),
+      completedCase('c', '2026-07-03T00:00:00.000Z'),
+    ],
+    questionDefinitions: [],
+    personas: PERSONAS,
+  });
+  const n = await client.countCases({
+    status: 'Completed',
+    completedAfter: '2026-07-02T00:00:00.000Z',
+    completedBefore: '2026-07-03T00:00:00.000Z',
+  });
+  assert.equal(n, 2, 'both 2 Jul completions, not the 3 Jul one');
+});
+
 // --- searchPeople ---
 
 /** @type {Array<{ loginName: string, displayName: string, email?: string }>} */
