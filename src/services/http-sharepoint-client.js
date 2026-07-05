@@ -672,7 +672,14 @@ function rowFromItem(item, etag) {
     relatedDate:
       typeof item?.RelatedDate === 'string' ? item.RelatedDate : null,
     created: item?.Created != null ? String(item.Created) : undefined,
-    overdue: item?.Overdue != null ? Boolean(item.Overdue) : undefined,
+    // Derived, never read from a stored/calculated column (ADR-0030): a Case is
+    // overdue when it is still In-progress and its DueDate has passed — the same
+    // rule as the overdue `$filter` above, so the group filter and the "also
+    // overdue" chip can never disagree.
+    overdue:
+      item?.Status === 'In-progress' &&
+      typeof item?.DueDate === 'string' &&
+      new Date(item.DueDate).getTime() < Date.now(),
     awaitingResponsibleParty:
       item?.AwaitingResponsibleParty != null
         ? Boolean(item.AwaitingResponsibleParty)

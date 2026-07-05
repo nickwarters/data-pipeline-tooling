@@ -983,7 +983,6 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
             DueDate: '2026-06-10T10:00:00.000Z',
             RelatedDate: '2026-06-04T10:00:00.000Z',
             Created: '2026-06-01T09:00:00.000Z',
-            Overdue: false,
           }),
           { status: 200, headers: { ETag: '"v7"' } }
         ),
@@ -1017,6 +1016,65 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
   assert.equal(row?.relatedDate, '2026-06-04T10:00:00.000Z');
   assert.equal(row?.created, '2026-06-01T09:00:00.000Z');
   assert.equal(row?.overdue, false);
+});
+
+// --- overdue is derived from Status + DueDate, never a stored column (ADR-0030) ---
+
+/**
+ * getCase against a stub row carrying just Status/DueDate, returning the
+ * derived `overdue` flag.
+ *
+ * @param {{ Status?: string, DueDate?: string }} fields
+ * @returns {Promise<boolean | undefined>}
+ */
+async function overdueFor(fields) {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ Id: 'c', ...fields }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+  const row = await client.getCase('c');
+  return row?.overdue;
+}
+
+test('HttpSharePointClient: overdue is true for an In-progress case past its DueDate', async () => {
+  assert.equal(
+    await overdueFor({
+      Status: 'In-progress',
+      DueDate: '2020-01-01T00:00:00.000Z',
+    }),
+    true
+  );
+});
+
+test('HttpSharePointClient: overdue is false for an In-progress case with a future DueDate', async () => {
+  assert.equal(
+    await overdueFor({
+      Status: 'In-progress',
+      DueDate: '2999-01-01T00:00:00.000Z',
+    }),
+    false
+  );
+});
+
+test('HttpSharePointClient: overdue is false for an In-progress case with no DueDate', async () => {
+  assert.equal(await overdueFor({ Status: 'In-progress' }), false);
+});
+
+test('HttpSharePointClient: overdue is false for a non-In-progress case even when past due', async () => {
+  assert.equal(
+    await overdueFor({
+      Status: 'Completed',
+      DueDate: '2020-01-01T00:00:00.000Z',
+    }),
+    false
+  );
 });
 
 test('HttpSharePointClient: getCurrentUser returns id and displayName', async () => {
