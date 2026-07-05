@@ -741,6 +741,22 @@ function itemFromRow(fields) {
     out.AssignedReviewerManager = fields.assignedReviewerManager;
   if (fields.responsiblePartyManager !== undefined)
     out.ResponsiblePartyManager = fields.responsiblePartyManager;
+  // Action Centre state reason flags + paired clocks (ADR-0030 §2, issue #291).
+  // Plain app-written columns — the write counterpart to their reads in
+  // `rowFromItem`. Without these an app-set flag would be silently dropped on
+  // PATCH, leaving the reason group empty/stale against the real backend.
+  if (fields.awaitingResponsibleParty !== undefined)
+    out.AwaitingResponsibleParty = fields.awaitingResponsibleParty;
+  if (fields.awaitingSince !== undefined)
+    out.AwaitingSince = fields.awaitingSince;
+  if (fields.reviewRequired !== undefined)
+    out.ReviewRequired = fields.reviewRequired;
+  if (fields.hasOpenAppeal !== undefined)
+    out.HasOpenAppeal = fields.hasOpenAppeal;
+  if (fields.appealRaisedAt !== undefined)
+    out.AppealRaisedAt = fields.appealRaisedAt;
+  if (fields.reopened !== undefined) out.Reopened = fields.reopened;
+  if (fields.reopenedAt !== undefined) out.ReopenedAt = fields.reopenedAt;
   if (fields.answers !== undefined)
     out.Answers = JSON.stringify(fields.answers);
   if (fields.conversation !== undefined)

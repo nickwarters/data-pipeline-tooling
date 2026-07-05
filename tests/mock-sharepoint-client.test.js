@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MockSharePointClient } from '../src/services/mock-sharepoint-client.js';
+import { reasonFlagFields } from '../src/services/action-centre-flags.js';
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
@@ -878,4 +879,34 @@ test('MockSharePointClient: anyOf combines with a base filter (AND of base, OR o
   });
   // Only appeal-1 is Completed; reopened-1 is In-progress and excluded by base.
   assert.equal(completedAppealsOrReopened, 1);
+});
+
+// --- Action Centre state flag writes (issue #291) ---
+
+test('MockSharePointClient: a reasonFlagFields write persists and is queryable', async () => {
+  const client = makeClient();
+  const before = await client.countCases({ awaitingResponsibleParty: true });
+  assert.equal(before, 0);
+
+  const fresh = await client.getCase('case-1');
+  const res = await client.patchCase(
+    'case-1',
+    reasonFlagFields('awaitingFrontline', true, '2026-07-05T09:00:00Z'),
+    /** @type {string} */ (fresh?.etag)
+  );
+
+  assert.equal(res.ok, true);
+  assert.equal(res.data?.awaitingResponsibleParty, true);
+  assert.equal(res.data?.awaitingSince, '2026-07-05T09:00:00Z');
+  assert.equal(await client.countCases({ awaitingResponsibleParty: true }), 1);
+
+  // Clearing the flag drops it back out of the reason group.
+  const cleared = await client.patchCase(
+    'case-1',
+    reasonFlagFields('awaitingFrontline', false),
+    /** @type {string} */ (res.data?.etag)
+  );
+  assert.equal(cleared.data?.awaitingResponsibleParty, false);
+  assert.equal(cleared.data?.awaitingSince, null);
+  assert.equal(await client.countCases({ awaitingResponsibleParty: true }), 0);
 });

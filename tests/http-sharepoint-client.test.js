@@ -455,6 +455,70 @@ test('HttpSharePointClient: patchCase writes mutable CaseRow fields to SharePoin
   });
 });
 
+test('HttpSharePointClient: patchCase writes Action Centre state flags + clocks to SP columns', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () => digestResponse('d'),
+    },
+    {
+      when: (c) => c.method === 'PATCH',
+      respond: () =>
+        new Response(null, { status: 204, headers: { ETag: '"v2"' } }),
+    },
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'T',
+            Status: 'In-progress',
+            AssignedReviewerId: 'u1',
+            ResponsiblePartyId: 'u2',
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: 'n',
+            CompletedAt: null,
+            CaseType: 'example-review',
+          }),
+          { status: 200, headers: { ETag: '"v2"' } }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.patchCase(
+    'case-1',
+    {
+      awaitingResponsibleParty: true,
+      awaitingSince: '2026-07-05T09:00:00.000Z',
+      reviewRequired: false,
+      hasOpenAppeal: true,
+      appealRaisedAt: '2026-07-05T10:00:00.000Z',
+      reopened: false,
+      reopenedAt: null,
+    },
+    '"v1"'
+  );
+
+  const patch = calls.find((c) => c.method === 'PATCH');
+  assert.ok(patch, 'PATCH was issued');
+  const body = JSON.parse(String(patch.body));
+  assert.deepEqual(body, {
+    AwaitingResponsibleParty: true,
+    AwaitingSince: '2026-07-05T09:00:00.000Z',
+    ReviewRequired: false,
+    HasOpenAppeal: true,
+    AppealRaisedAt: '2026-07-05T10:00:00.000Z',
+    Reopened: false,
+    ReopenedAt: null,
+  });
+});
+
 test('HttpSharePointClient: patchCase result.data.etag reflects the new ETag from the response', async () => {
   const { fetch } = makeFetch([
     {
