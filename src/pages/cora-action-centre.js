@@ -395,6 +395,11 @@ export function ActionCentre({
     if (first) toggleGroup(first);
   }
 
-  init();
+  // Defer the first fetch to a microtask so its synchronous signal reads (e.g.
+  // `needsActionNow` via currentReasons()) don't run inside — and leak a
+  // dependency to — an enclosing render effect such as the dashboard's. Without
+  // this, toggling the Action Centre would re-render the whole dashboard and
+  // rebuild a fresh Action Centre, discarding the toggle.
+  queueMicrotask(init);
   return host;
 }

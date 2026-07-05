@@ -5,7 +5,9 @@
  * Available keys: reviewer, owner, journey-owner-example-review,
  * journey-owner-complaints, case-type-owner-complaints, admin,
  * responsible-party, reviewer-manager, controls (a standalone Controls user,
- * ADR-0022), visitor (no groups — exercises the Visitor explainer-only branch).
+ * ADR-0022), action-centre (multi-role Reviewer+Controls+Owner, for seeing
+ * every Action Centre reason group at once — issue #287), visitor (no groups —
+ * exercises the Visitor explainer-only branch).
  *
  * @type {Record<string, { userId: string, displayName: string, groups: string[] }>}
  */
@@ -54,6 +56,15 @@ export const personas = {
     userId: 'user-controls',
     displayName: 'Quinn Controls',
     groups: ['Controls'],
+  },
+  // Multi-role user (Reviewer + Controls + Owner) reusing user-reviewer's id so
+  // the reviewer-scoped Action Centre groups pick up their assigned fixtures.
+  // Shows all five reason groups: Overdue, Awaiting Frontline, Review Required
+  // (under "All"), Appeals to work, Reopened.
+  'action-centre': {
+    userId: 'user-reviewer',
+    displayName: 'Dana Multi-role',
+    groups: ['Reviewers', 'Controls', 'CaseTypeOwner - Example Review'],
   },
   visitor: {
     userId: 'user-visitor',

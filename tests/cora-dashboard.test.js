@@ -677,3 +677,107 @@ test('DashboardPage: opening a case from the Action Centre routes to the case (i
   );
   assert.ok(globalThis.location.hash.includes('od-1'));
 });
+
+test('DashboardPage: the Action Centre "All" toggle survives the dashboard render (issue #287)', async () => {
+  // Reason-flagged rows: one overdue (default group) and one review-required
+  // (tail group, revealed only by "All"), both assigned to the current user.
+  const rows = [
+    {
+      id: 'od-1',
+      caseType: 'complaints',
+      title: 'Overdue',
+      status: 'In-progress',
+      assignedReviewer: 'me',
+      responsibleParty: 'rp',
+      answers: {},
+      conversation: [],
+      notes: '',
+      completedAt: null,
+      dueDate: '2020-01-01T00:00:00Z',
+      overdue: true,
+      reviewRequired: false,
+      etag: 'e1',
+    },
+    {
+      id: 'rr-1',
+      caseType: 'complaints',
+      title: 'Review required',
+      status: 'In-progress',
+      assignedReviewer: 'me',
+      responsibleParty: 'rp',
+      answers: {},
+      conversation: [],
+      notes: '',
+      completedAt: null,
+      reviewRequired: true,
+      created: '2026-06-01T00:00:00Z',
+      etag: 'e2',
+    },
+  ];
+  /** @param {any} filter */
+  const matches = (filter) => (/** @type {any} */ c) => {
+    if (
+      filter.assignedReviewer &&
+      c.assignedReviewer !== filter.assignedReviewer
+    )
+      return false;
+    if (
+      filter.reviewRequired !== undefined &&
+      !!c.reviewRequired !== filter.reviewRequired
+    )
+      return false;
+    if (filter.overdue === true && !c.overdue) return false;
+    return true;
+  };
+  const client = {
+    async listCases(/** @type {any} */ filter, /** @type {any} */ opts = {}) {
+      let out = rows.filter(matches(filter));
+      if (filter.anyOf)
+        out = rows.filter((c) =>
+          filter.anyOf.some((/** @type {any} */ f) => matches(f)(c))
+        );
+      return opts.top !== undefined
+        ? out.slice(opts.skip ?? 0, (opts.skip ?? 0) + opts.top)
+        : out;
+    },
+    async countCases(/** @type {any} */ filter) {
+      if (filter.anyOf)
+        return rows.filter((c) =>
+          filter.anyOf.some((/** @type {any} */ f) => matches(f)(c))
+        ).length;
+      return rows.filter(matches(filter)).length;
+    },
+  };
+
+  const host = DashboardPage({
+    client: /** @type {any} */ (client),
+    currentUserId: 'me',
+    capabilities: defaultCapabilities({ isReviewer: true }),
+    eligibleCaseTypes: ['complaints'],
+  });
+  for (let i = 0; i < 60; i++) await Promise.resolve();
+
+  const reasonIds = () =>
+    findAll(host, 'section')
+      .filter((s) => s.className === 'cora-ac-group')
+      .map((s) => s.getAttribute('data-reason'));
+
+  assert.ok(
+    !reasonIds().includes('reviewRequired'),
+    'Review Required hidden under the default Needs-action-now toggle'
+  );
+
+  const toggleBtns = /** @type {any} */ (
+    host.querySelectorAll('.cora-ac-toggle-btn')
+  );
+  const allBtn = toggleBtns.find(
+    (/** @type {any} */ b) => b.textContent === 'All'
+  );
+  allBtn._fire('click');
+  for (let i = 0; i < 60; i++) await Promise.resolve();
+
+  assert.ok(
+    reasonIds().includes('reviewRequired'),
+    'clicking All reveals Review Required without the dashboard discarding the toggle'
+  );
+});

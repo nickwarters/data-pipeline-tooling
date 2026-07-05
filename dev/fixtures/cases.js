@@ -19,6 +19,12 @@ const _twentyDaysAgo = new Date(
   _todayStart.getTime() - 20 * 24 * 60 * 60 * 1000
 );
 
+// Action Centre demo clocks (issue #287): reason ages for the ?asUser=action-centre persona.
+const _twoDaysAgo = new Date(_todayStart.getTime() - 2 * 24 * 60 * 60 * 1000);
+const _fourDaysAgo = new Date(_todayStart.getTime() - 4 * 24 * 60 * 60 * 1000);
+const _sixDaysAgo = new Date(_todayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
+const _nineDaysAgo = new Date(_todayStart.getTime() - 9 * 24 * 60 * 60 * 1000);
+
 /**
  * example-review Cases:
  *   case-1  — untouched (no Answers, assigned)
@@ -735,5 +741,127 @@ export const cases = [
     completedAt: null,
     created: '2026-05-12T08:00:00Z',
     etag: 'etag-psr3-v1',
+  },
+
+  // ── Action Centre demo cases (issue #287) ────────────────────────────────
+  // Carry the hoisted reason flags/clocks the real backend would compute, so
+  // the ?asUser=action-centre persona sees every reason group populated. The
+  // reviewer reasons are assigned to user-reviewer (the persona's id); Appeals
+  // and Reopened are role-scoped, not reviewer-scoped.
+  {
+    id: 'ac-overdue-1',
+    caseType: 'complaints',
+    title: 'Direct debit dispute',
+    status: 'In-progress',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-agent-a',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    dueDate: _yesterday.toISOString(),
+    overdue: true,
+    created: _nineDaysAgo.toISOString(),
+    etag: 'etag-ac-od1',
+  },
+  {
+    id: 'ac-await-1',
+    caseType: 'complaints',
+    title: 'Fees not refunded',
+    status: 'In-progress',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-agent-b',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    dueDate: _nextWeek.toISOString(),
+    awaitingResponsibleParty: true,
+    awaitingSince: _nineDaysAgo.toISOString(),
+    created: _nineDaysAgo.toISOString(),
+    etag: 'etag-ac-aw1',
+  },
+  {
+    id: 'ac-await-2',
+    caseType: 'complaints',
+    title: 'Late gift declaration',
+    status: 'In-progress',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-agent-c',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    dueDate: _nextWeek.toISOString(),
+    awaitingResponsibleParty: true,
+    awaitingSince: _fiveDaysAgo.toISOString(),
+    created: _fiveDaysAgo.toISOString(),
+    etag: 'etag-ac-aw2',
+  },
+  {
+    id: 'ac-review-1',
+    caseType: 'complaints',
+    title: 'Affordability recheck',
+    status: 'In-progress',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-agent-a',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    dueDate: _nextWeek.toISOString(),
+    reviewRequired: true,
+    created: _fourDaysAgo.toISOString(),
+    etag: 'etag-ac-rr1',
+  },
+  {
+    id: 'ac-review-2',
+    caseType: 'complaints',
+    title: 'Income evidence',
+    status: 'In-progress',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-agent-b',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    dueDate: _nextWeek.toISOString(),
+    reviewRequired: true,
+    created: _twoDaysAgo.toISOString(),
+    etag: 'etag-ac-rr2',
+  },
+  {
+    id: 'ac-appeal-1',
+    caseType: 'complaints',
+    title: 'Interest miscalc',
+    status: 'Completed',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-agent-c',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: _twentyDaysAgo.toISOString(),
+    outcomeAtCompletion: 'refer',
+    hasOpenAppeal: true,
+    appealRaisedAt: _sixDaysAgo.toISOString(),
+    created: _twentyDaysAgo.toISOString(),
+    etag: 'etag-ac-ap1',
+  },
+  {
+    id: 'ac-reopened-1',
+    caseType: 'complaints',
+    title: 'Outside business interest',
+    status: 'In-progress',
+    assignedReviewer: 'user-reviewer',
+    responsibleParty: 'user-agent-a',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    dueDate: _nextWeek.toISOString(),
+    reopened: true,
+    reopenedAt: _fiveDaysAgo.toISOString(),
+    created: _twentyDaysAgo.toISOString(),
+    etag: 'etag-ac-re1',
   },
 ];
