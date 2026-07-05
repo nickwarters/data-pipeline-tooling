@@ -36,9 +36,23 @@ generates the standard Section set and relies on the existing role x Section
 matrix rather than creating per-type matrix rows. Per-type overrides should be a
 deliberate follow-up design decision, not hidden scaffolding behavior.
 
+The scaffold covers only the application config. The remaining
+SharePoint-side provisioning — creating the `Cases-{slug}` list, adding its
+columns, **indexing the required columns while the list is still empty**
+(ADR-0031 §1), and creating the per-Case-Type groups — is a standing checklist,
+not tribal knowledge. It lives in the maintainer-facing
+[Case Type onboarding checklist](../case-type-onboarding.md), which also carries
+the documented `Cases-{slug}` column schema (all columns, which are indexed, and
+app-writes-it provenance).
+
 ## Consequences
 
 - Maintainers get a runnable first slice before SharePoint list-backing exists.
+- List provisioning is doc-driven via the
+  [Case Type onboarding checklist](../case-type-onboarding.md): the required
+  indexed columns must be created on the *empty* list, because a SharePoint
+  index cannot be added past the List View Threshold (ADR-0031 §1) — an
+  irreversible timing trap.
 - The generated module includes TODO markers for the Question Bank, Outcome
   vocabulary, appeal raiser, Case Details fields, and SLA hours.
 - The generated mock personas exercise the derived `Reviewers - X`,

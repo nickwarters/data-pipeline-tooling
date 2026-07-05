@@ -120,7 +120,10 @@ re-derive report rules, or the two will drift.
 
 - **Index-at-creation is an irreversible timing trap.** A Case Type list created *without*
   its indexes cannot be fixed once it passes the threshold — provisioning must get this
-  right up front. Captured as a Case Type onboarding checklist item.
+  right up front. Captured as a standing step in the
+[Case Type onboarding checklist](../case-type-onboarding.md), which also
+documents the full `Cases-{slug}` column schema and the max-20-indexes/list
+limit.
 - **The tier-1 offenders must actually be fixed.** Several [issue #286]/[issue #287] reads
   currently fetch a whole result set and filter in JS (KPI strip Controls & Owner lanes,
   `cora-owner-summary`, `cora-controls-dashboard`, the journey/team fetchers). These break
