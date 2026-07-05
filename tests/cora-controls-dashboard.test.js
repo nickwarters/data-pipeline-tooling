@@ -7,8 +7,10 @@ import { installDom } from './_dom-stub.js';
 installDom();
 
 // ===== IMPORTS (after stubs) =====
-const { ControlsDashboard, hasOpenAppeal, openAppealOf } =
+const { ControlsDashboard, PAGE_SIZE, openAppealOf } =
   await import('../src/pages/cora-controls-dashboard.js');
+const { MockSharePointClient } =
+  await import('../src/services/mock-sharepoint-client.js');
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../src/sharepoint-client.js').Appeal} Appeal */
@@ -81,31 +83,6 @@ function completedCase(overrides = {}) {
 
 // ===== PREDICATE TESTS =====
 
-test('hasOpenAppeal: true when a case has a raised appeal', () => {
-  assert.equal(hasOpenAppeal(completedCase({ appeals: [appeal()] })), true);
-});
-
-test('hasOpenAppeal: true when a case has an underReview appeal', () => {
-  assert.equal(
-    hasOpenAppeal(
-      completedCase({ appeals: [appeal({ state: 'underReview' })] })
-    ),
-    true
-  );
-});
-
-test('hasOpenAppeal: false when the only appeal is resolved', () => {
-  assert.equal(
-    hasOpenAppeal(completedCase({ appeals: [appeal({ state: 'resolved' })] })),
-    false
-  );
-});
-
-test('hasOpenAppeal: false when there are no appeals', () => {
-  assert.equal(hasOpenAppeal(completedCase()), false);
-  assert.equal(hasOpenAppeal(completedCase({ appeals: [] })), false);
-});
-
 test('openAppealOf: returns the open appeal, ignoring resolved ones', () => {
   const open = appeal({ id: 'open', state: 'raised' });
   const c = completedCase({
@@ -120,19 +97,13 @@ test('openAppealOf: returns null when nothing is open', () => {
 
 // ===== COMPONENT TESTS =====
 
-test('ControlsDashboard: fetches Completed cases and shows only those with an open appeal', async () => {
+test('ControlsDashboard: reads the indexed open-appeal set server-side, oldest raised first, with no full-Completed fetch', async () => {
   /** @type {any[]} */
   const calls = [];
-  const withOpen = completedCase({ id: 'c-open', appeals: [appeal()] });
-  const withResolved = completedCase({
-    id: 'c-resolved',
-    appeals: [appeal({ state: 'resolved' })],
-  });
-  const noAppeal = completedCase({ id: 'c-none' });
   const client = {
-    async listCases(/** @type {any} */ f) {
-      calls.push(f);
-      return [withOpen, withResolved, noAppeal];
+    async listCases(/** @type {any} */ f, /** @type {any} */ opts) {
+      calls.push({ filter: f, opts });
+      return [completedCase({ id: 'c-open', appeals: [appeal()] })];
     },
   };
 
@@ -142,10 +113,24 @@ test('ControlsDashboard: fetches Completed cases and shows only those with an op
   });
   await flush();
 
-  assert.ok(
-    calls.some((f) => f.status === 'Completed'),
-    'should list Completed cases'
-  );
+  assert.ok(calls.length >= 1, 'should query the case list');
+  for (const { filter } of calls) {
+    assert.equal(
+      filter.hasOpenAppeal,
+      true,
+      'must lead with the indexed hasOpenAppeal flag'
+    );
+    assert.equal(
+      filter.status,
+      undefined,
+      'must not fetch the full Completed set'
+    );
+  }
+  const [{ opts }] = calls;
+  assert.equal(opts.orderBy, 'appealRaisedAt', 'orders by appealRaisedAt');
+  assert.equal(opts.orderDir, 'asc', 'oldest raised first');
+  assert.equal(opts.top, PAGE_SIZE, 'pages the read');
+  assert.equal(opts.skip, 0, 'first page starts at zero');
 
   const section = findSection(host, 'cora-controls-appeals');
   assert.ok(section, 'should render the outstanding appeals section');
@@ -155,8 +140,57 @@ test('ControlsDashboard: fetches Completed cases and shows only those with an op
   const rows = /** @type {CaseRow[]} */ (table.cases);
   assert.deepEqual(
     rows.map((r) => r.id),
-    ['c-open'],
-    'only the case with an open appeal should appear'
+    ['c-open']
+  );
+});
+
+test('ControlsDashboard: pages until a short page, accumulating every open appeal (MockSharePointClient)', async () => {
+  // One more open-appeal case than a single page holds, so the loop must fetch
+  // a second page and stop on the short tail — proving no full-list fetch and
+  // that paging accumulates the whole worklist.
+  /** @type {CaseRow[]} */
+  const cases = [];
+  for (let i = 0; i < PAGE_SIZE + 1; i++) {
+    cases.push(
+      completedCase({
+        id: `c-${i}`,
+        hasOpenAppeal: true,
+        // Oldest raised first: ascending ids share ascending timestamps.
+        appealRaisedAt: `2026-06-${String(i + 1).padStart(2, '0')}T00:00:00Z`,
+        appeals: [
+          appeal({ at: `2026-06-${String(i + 1).padStart(2, '0')}T00:00:00Z` }),
+        ],
+      })
+    );
+  }
+  // A resolved-only Completed case must be excluded server-side (no flag).
+  cases.push(completedCase({ id: 'c-resolved', hasOpenAppeal: false }));
+
+  const client = new MockSharePointClient({
+    cases,
+    questionDefinitions: [],
+    personas: {},
+  });
+
+  const host = ControlsDashboard({
+    client: /** @type {any} */ (client),
+    onOpenCase: () => {},
+  });
+  await flush();
+  await flush();
+
+  const section = findSection(host, 'cora-controls-appeals');
+  const table = /** @type {any} */ (findAll(section, 'cora-case-table')[0]);
+  const rows = /** @type {CaseRow[]} */ (table.cases);
+  assert.equal(rows.length, PAGE_SIZE + 1, 'accumulates both pages');
+  assert.ok(
+    rows.every((r) => r.id !== 'c-resolved'),
+    'the case without an open appeal is filtered out server-side'
+  );
+  assert.deepEqual(
+    rows.map((r) => r.id),
+    cases.slice(0, PAGE_SIZE + 1).map((c) => c.id),
+    'rows arrive oldest-raised first'
   );
 });
 

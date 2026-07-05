@@ -10,6 +10,14 @@ import '../components/collections/cora-case-table.js';
 /** @typedef {import('../sharepoint-client.js').Appeal} Appeal */
 
 /**
+ * How many rows a page pulls from the indexed open-Appeal set. The worklist
+ * shows every open Appeal, so pages accumulate until a short final page — the
+ * point is never to fetch an unbounded result set (ADR-0031 §2), not to cap the
+ * table.
+ */
+export const PAGE_SIZE = 50;
+
+/**
  * The single open **Appeal** on a Case, or null. An Appeal is "open" — i.e. not
  * yet worked by **Controls** — while its `state` is anything other than
  * `resolved` (`raised` or `underReview`). At most one Appeal is open at a time
@@ -23,21 +31,13 @@ export function openAppealOf(caseRow) {
 }
 
 /**
- * Whether a Case carries an open (unresolved) **Appeal** that Controls still
- * needs to work.
- *
- * @param {CaseRow} caseRow
- * @returns {boolean}
- */
-export function hasOpenAppeal(caseRow) {
-  return openAppealOf(caseRow) !== null;
-}
-
-/**
- * Controls landing section: every Completed Case with an open **Appeal** that
- * Controls has not yet resolved (ADR-0027). Controls is not scoped to a single
- * Case Type, so this self-fetches all Completed Cases and keeps the ones with an
- * open Appeal, oldest raised first.
+ * Controls landing section: every Case with an open **Appeal** that Controls has
+ * not yet resolved (ADR-0027). Controls is not scoped to a single Case Type, so
+ * this reads the whole list — but leads with the indexed `hasOpenAppeal` flag
+ * and pages oldest-raised-first (`appealRaisedAt asc`) rather than fetching all
+ * Completed Cases and filtering in JS, which breaks past the List View Threshold
+ * on the busy Case Type (ADR-0031 §2, issue #296). The matched set is bounded by
+ * open work, so it stays sub-threshold for the life of the list.
  *
  * @param {{
  *   client: SharePointClient | null,
@@ -51,8 +51,17 @@ export function ControlsDashboard({ client, onOpenCase }) {
 
   async function fetchData() {
     if (!client) return;
-    const completed = await client.listCases({ status: 'Completed' });
-    appealCases.set(completed.filter(hasOpenAppeal));
+    /** @type {CaseRow[]} */
+    const all = [];
+    for (let skip = 0; ; skip += PAGE_SIZE) {
+      const page = await client.listCases(
+        { hasOpenAppeal: true },
+        { top: PAGE_SIZE, skip, orderBy: 'appealRaisedAt', orderDir: 'asc' }
+      );
+      all.push(...page);
+      if (page.length < PAGE_SIZE) break;
+    }
+    appealCases.set(all);
   }
 
   const host = reactive(() => {
