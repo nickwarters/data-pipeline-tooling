@@ -92,17 +92,6 @@ function lastMessageAuthor(caseRow) {
 }
 
 /**
- * A Completed Case Controls still has to work (an open, unresolved Appeal).
- * Reimplemented locally so this pure evaluator does not import a page module.
- *
- * @param {CaseRow} caseRow
- * @returns {boolean}
- */
-function hasOpenAppeal(caseRow) {
-  return (caseRow.appeals ?? []).some((appeal) => appeal.state !== 'resolved');
-}
-
-/**
  * Join Case Type slugs into a display scope label ("Complaints, Conduct").
  *
  * @param {string[]} slugs
@@ -241,22 +230,38 @@ async function buildReviewerLane({
 }
 
 /**
+ * The Controls lane is a single actionable count — open Appeals still to work —
+ * so it reads a `$count` bounded by the indexed `HasOpenAppeal` column rather
+ * than fetching the whole Completed set to filter in JS (ADR-0031 §2: open work
+ * never grows with cumulative volume, so this stays under the List View
+ * Threshold for the life of the list). Built directly (not via `assembleLane`,
+ * which folds a matched-Case array): with only a count there are no rows to
+ * split, so the tile carries no breakdown.
+ *
  * @param {{ client: SharePointClient }} ctx
  * @returns {Promise<KpiLane>}
  */
 async function buildControlsLane({ client }) {
-  const completed = await client.listCases({ status: 'Completed' });
-  const matched = completed.filter(hasOpenAppeal);
+  const count = await client.countCases({ hasOpenAppeal: true });
 
-  return assembleLane({
+  return {
     role: 'controls',
     label: 'As Controls',
     scopeLabel: 'all case types',
-    expandTiles: false,
-    specs: [
-      { key: 'appeals', label: 'Appeals to work', tone: 'appeals', matched },
+    isPrimary: false,
+    defaultOpen: true,
+    totalItems: count,
+    tiles: [
+      {
+        key: 'appeals',
+        label: 'Appeals to work',
+        tone: 'appeals',
+        count,
+        defaultExpanded: false,
+        breakdown: null,
+      },
     ],
-  });
+  };
 }
 
 /**
@@ -265,10 +270,13 @@ async function buildControlsLane({ client }) {
  */
 async function buildOwnerLane({ client, capabilities, now }) {
   const owned = capabilities.ownedCaseTypes;
+  // Lead each read with the indexed Case Type + Status columns so the working
+  // set is bounded by In-progress work, never the whole (unbounded) Case Type
+  // history (ADR-0031 §2). The In-progress pool is what the tiles derive from.
   const fetched = await Promise.all(
-    owned.map((ct) => client.listCases({ caseType: ct }))
+    owned.map((ct) => client.listCases({ caseType: ct, status: 'In-progress' }))
   );
-  const pool = fetched.flat().filter((c) => c.status === 'In-progress');
+  const pool = fetched.flat();
 
   const atRisk = pool.filter(
     (c) => isOverdue(c, undefined, now) || isBreachingWithin24h(c, now)

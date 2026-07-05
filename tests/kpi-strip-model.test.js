@@ -51,14 +51,45 @@ function defaultCapabilities(overrides = {}) {
 }
 
 /**
- * A client that returns rows keyed by the filter it receives.
+ * Apply the server-side `ListCasesFilter` fields this suite exercises, so the
+ * fake client filters like the real mock/http clients do (issue #295: the KPI
+ * lanes now lead with indexed columns rather than fetch-and-filter in JS).
+ * @param {CaseRow[]} rows @param {any} filter
+ */
+function applyFilter(rows, filter) {
+  return rows.filter((c) => {
+    if (filter.status !== undefined && c.status !== filter.status) return false;
+    if (
+      filter.assignedReviewer !== undefined &&
+      c.assignedReviewer !== filter.assignedReviewer
+    )
+      return false;
+    if (filter.caseType !== undefined && c.caseType !== filter.caseType)
+      return false;
+    if (
+      filter.hasOpenAppeal !== undefined &&
+      Boolean(c.hasOpenAppeal) !== filter.hasOpenAppeal
+    )
+      return false;
+    return true;
+  });
+}
+
+/**
+ * A client that returns rows keyed by the filter it receives. `listCases` and
+ * `countCases` share the same point-in-time filtering so a count and its rows
+ * never drift.
  * @param {(filter: any) => CaseRow[]} handler
  */
 function makeClient(handler) {
   return {
     /** @param {any} filter */
     async listCases(filter) {
-      return handler(filter).map((c) => ({ ...c }));
+      return applyFilter(handler(filter), filter).map((c) => ({ ...c }));
+    },
+    /** @param {any} filter */
+    async countCases(filter) {
+      return applyFilter(handler(filter), filter).length;
     },
   };
 }
@@ -260,43 +291,22 @@ test('loadKpiModel: reviewer lane sends an assignedReviewer + In-progress filter
 
 // ===== Controls lane =====
 
-test('loadKpiModel: controls lane counts only Completed cases with an open appeal', async () => {
+test('loadKpiModel: controls lane counts Completed cases with an open appeal via the indexed flag', async () => {
   const rows = [
     caseRow({
       id: 'ap1',
       status: 'Completed',
       caseType: 'complaints',
-      appeals: [
-        { id: 'a', appellant: 'jo', at: PAST, rationale: 'x', state: 'raised' },
-      ],
+      hasOpenAppeal: true,
     }),
     caseRow({
       id: 'ap2',
       status: 'Completed',
       caseType: 'conduct',
-      appeals: [
-        {
-          id: 'b',
-          appellant: 'jo',
-          at: PAST,
-          rationale: 'x',
-          state: 'underReview',
-        },
-      ],
+      hasOpenAppeal: true,
     }),
-    caseRow({
-      id: 'resolved',
-      status: 'Completed',
-      appeals: [
-        {
-          id: 'c',
-          appellant: 'jo',
-          at: PAST,
-          rationale: 'x',
-          state: 'resolved',
-        },
-      ],
-    }),
+    // resolved appeal: the indexed flag is cleared, so it is not open work
+    caseRow({ id: 'resolved', status: 'Completed', hasOpenAppeal: false }),
     caseRow({ id: 'none', status: 'Completed' }),
   ];
   const lanes = await loadKpiModel({
@@ -310,28 +320,32 @@ test('loadKpiModel: controls lane counts only Completed cases with an open appea
   assert.equal(controls.scopeLabel, 'all case types');
   const appeals = tile(controls, 'appeals');
   assert.equal(appeals.count, 2);
-  assert.equal(appeals.breakdown.axis, 'caseType');
-  assert.equal(appeals.breakdown.rows.length, 2);
+  assert.equal(appeals.defaultExpanded, false);
+  // count-only lane: no rows to split, so no breakdown
+  assert.equal(appeals.breakdown, null);
+  assert.equal(controls.totalItems, 2);
 });
 
-test('loadKpiModel: controls appeals tile has no breakdown when appeals share one Case Type', async () => {
-  const rows = [
-    caseRow({
-      id: 'ap1',
-      status: 'Completed',
-      caseType: 'complaints',
-      appeals: [
-        { id: 'a', appellant: 'jo', at: PAST, rationale: 'x', state: 'raised' },
-      ],
-    }),
-  ];
+test('loadKpiModel: controls lane derives its count via countCases({ hasOpenAppeal: true }) and never lists', async () => {
+  /** @type {any[]} */
+  const countFilters = [];
+  // No `listCases` on the client: a full-Completed fetch would throw here, so
+  // this proves the lane leads with `countCases` alone (issue #295).
+  const client = {
+    /** @param {any} f */
+    async countCases(f) {
+      countFilters.push(f);
+      return 3;
+    },
+  };
   const lanes = await loadKpiModel({
-    client: /** @type {any} */ (makeClient(() => rows)),
+    client: /** @type {any} */ (client),
     currentUserId: 'me',
     capabilities: defaultCapabilities({ isControls: true }),
     now: NOW,
   });
-  assert.equal(tile(lane(lanes, 'controls'), 'appeals').breakdown, null);
+  assert.deepEqual(countFilters, [{ hasOpenAppeal: true }]);
+  assert.equal(tile(lane(lanes, 'controls'), 'appeals').count, 3);
 });
 
 // ===== Owner lane =====
@@ -412,6 +426,51 @@ test('loadKpiModel: owner with multiple Case Types splits At risk by Case Type',
   const atRisk = tile(lane(lanes, 'owner'), 'at-risk');
   assert.equal(atRisk.breakdown.axis, 'caseType');
   assert.equal(atRisk.breakdown.rows.length, 2);
+});
+
+test('loadKpiModel: owner lane fetches only In-progress cases per owned Case Type server-side', async () => {
+  /** @type {any[]} */
+  const calls = [];
+  await loadKpiModel({
+    client: /** @type {any} */ (
+      makeClient((f) => {
+        calls.push(f);
+        return [];
+      })
+    ),
+    currentUserId: 'me',
+    capabilities: defaultCapabilities({
+      ownedCaseTypes: ['lending', 'mortgages'],
+    }),
+    now: NOW,
+  });
+  assert.deepEqual(calls, [
+    { caseType: 'lending', status: 'In-progress' },
+    { caseType: 'mortgages', status: 'In-progress' },
+  ]);
+});
+
+test('loadKpiModel: owner lane ignores a server that leaks a non-In-progress row', async () => {
+  // Faithful clients never return it, but the pool must not rely on a JS
+  // re-filter — the server-side status predicate is the boundary (issue #295).
+  const rows = [
+    caseRow({ id: 'ip', caseType: 'lending', dueDate: PAST }),
+    caseRow({
+      id: 'done',
+      caseType: 'lending',
+      status: 'Completed',
+      dueDate: PAST,
+    }),
+  ];
+  const lanes = await loadKpiModel({
+    client: /** @type {any} */ (
+      makeClient((f) => rows.filter((r) => r.caseType === f.caseType))
+    ),
+    currentUserId: 'me',
+    capabilities: defaultCapabilities({ ownedCaseTypes: ['lending'] }),
+    now: NOW,
+  });
+  assert.equal(tile(lane(lanes, 'owner'), 'at-risk').count, 1);
 });
 
 // ===== Lane defaults: primary / open =====
