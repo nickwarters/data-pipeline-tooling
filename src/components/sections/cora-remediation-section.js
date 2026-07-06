@@ -414,10 +414,10 @@ export class CORARemediationSection extends ShellElement {
 
   /**
    * Renders the Attributed Party surface on a failed item (ADR-0013). Read-only
-   * viewers see just the cached displayName. Editors get the compact
-   * `cora-attribute-menu` (icon/chip + popover) instead, which offers the
-   * Responsible Party quick-pick and people search; its `cora-attribute-change`
-   * is re-dispatched here as a bubbling `cora-attribute` carrying the question id.
+   * viewers see just the cached displayName. Editors get the inline
+   * `cora-attribute-menu`, always visible, offering the Responsible Party
+   * quick-pick and people search; its `cora-attribute-change` is re-dispatched
+   * here as a bubbling `cora-attribute` carrying the question id.
    * Persistence is the page's responsibility so the answers signal stays the
    * single source of truth.
    *

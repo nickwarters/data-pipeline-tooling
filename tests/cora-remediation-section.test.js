@@ -607,16 +607,16 @@ test('CORARemediationSection: editable failure renders an attribute menu wired w
   // The menu is now a plain function component rendered inline, so assert on
   // its rendered surface rather than a custom-element instance.
   assert.ok(
-    findByClass(el, 'cora-attribute-trigger'),
-    'attribute menu rendered for an editable failure'
+    findByClass(el, 'cora-attribute-title'),
+    'attribute menu rendered inline for an editable failure'
   );
   const picker = findByTag(el, 'cora-people-picker');
   assert.ok(picker, 'menu embeds a people picker');
   assert.equal(picker.client, client, 'menu forwards the SharePointClient');
   assert.equal(
-    findByClass(el, 'cora-attribute-chip'),
+    findByClass(el, 'cora-attribute-current'),
     null,
-    'unattributed failure shows no chip'
+    'unattributed failure shows no current-party chip'
   );
   const quick = findByClass(el, 'cora-attribute-responsible');
   assert.ok(quick, 'menu offers the Responsible Party quick-pick');
@@ -644,8 +644,8 @@ test('CORARemediationSection: editable failure with an attribution passes the pa
     true
   );
 
-  const chip = findByClass(el, 'cora-attribute-chip');
-  assert.ok(chip, 'menu rendered its chip for the attributed party');
+  const chip = findByClass(el, 'cora-attribute-current');
+  assert.ok(chip, 'menu named the attributed party inline');
   assert.equal(chip.textContent, 'Jane Smith');
 });
 

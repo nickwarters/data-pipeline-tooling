@@ -1135,68 +1135,48 @@ cora-status-banner {
 
 /* ── Attribute menu (compact icon/chip + popover) ─────────────────────────── */
 
+/* Inline failure-attribution control (ADR-0013): always visible under a failed
+   Answer's remediation — no disclosure button, no floating popover. */
 cora-attribute-menu {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--cora-space-1);
+  display: block;
+  margin: var(--cora-space-2) 0;
+  padding: var(--cora-space-3);
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+}
+
+.cora-attribute-title {
   margin: 0 0 var(--cora-space-2);
-}
-
-/* Collapsed, unset: a quiet icon-led trigger. */
-.cora-attribute-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--cora-space-1);
-  padding: var(--cora-space-1) var(--cora-space-2);
-  font: inherit;
   font-size: var(--cora-font-size-xs);
-  font-weight: var(--cora-font-weight-medium);
+  font-weight: var(--cora-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--cora-color-text-muted);
-  background: transparent;
-  border: 1px dashed var(--cora-color-border);
-  border-radius: var(--cora-radius-sm);
-  cursor: pointer;
-  transition:
-    border-color var(--cora-duration-fast) var(--cora-easing-standard),
-    color var(--cora-duration-fast) var(--cora-easing-standard);
 }
 
-.cora-attribute-trigger::before {
-  content: '\1F464'; /* 👤 */
+/* Set: the attributed person named, with a clear button to re-attribute. */
+.cora-attribute-selected {
+  display: flex;
+  align-items: center;
+  gap: var(--cora-space-2);
 }
 
-.cora-attribute-trigger:hover,
-.cora-attribute-trigger:focus-visible {
-  color: var(--cora-color-text);
-  border-color: var(--cora-color-accent);
-  outline: none;
-}
-
-/* Collapsed, set: a solid chip naming the attributed person. */
-.cora-attribute-chip {
+.cora-attribute-current {
   display: inline-flex;
   align-items: center;
   gap: var(--cora-space-1);
   padding: var(--cora-space-1) var(--cora-space-3);
-  font: inherit;
-  font-size: var(--cora-font-size-xs);
+  font-size: var(--cora-font-size-sm);
   font-weight: var(--cora-font-weight-medium);
   color: var(--cora-color-on-surface);
   background: var(--cora-color-surface-2);
   border: 1px solid var(--cora-color-border);
   border-radius: var(--cora-radius-pill, 999px);
-  cursor: pointer;
 }
 
-.cora-attribute-chip::before {
+.cora-attribute-current::before {
   content: '\1F464'; /* 👤 */
-}
-
-.cora-attribute-chip:hover,
-.cora-attribute-chip:focus-visible {
-  border-color: var(--cora-color-accent);
-  outline: none;
 }
 
 .cora-attribute-clear {
@@ -1216,32 +1196,6 @@ cora-attribute-menu {
 .cora-attribute-clear:focus-visible {
   color: var(--cora-color-danger);
   outline: none;
-}
-
-.cora-attribute-popover {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + var(--cora-space-1));
-  left: 0;
-  min-width: 16rem;
-  padding: var(--cora-space-3);
-  background: var(--cora-color-surface);
-  border: 1px solid var(--cora-color-border);
-  border-radius: var(--cora-radius-md);
-  box-shadow: var(--cora-shadow-md, var(--cora-shadow-sm));
-}
-
-.cora-attribute-popover[hidden] {
-  display: none;
-}
-
-.cora-attribute-popover-title {
-  margin: 0 0 var(--cora-space-2);
-  font-size: var(--cora-font-size-xs);
-  font-weight: var(--cora-font-weight-semibold);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--cora-color-text-muted);
 }
 
 .cora-attribute-responsible {

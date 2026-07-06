@@ -1,6 +1,4 @@
 // @ts-check
-import { signal } from '../../lib/signal.js';
-import { reactive, on } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import '../base/cora-people-picker.js';
 
@@ -8,16 +6,17 @@ import '../base/cora-people-picker.js';
 /** @typedef {{ loginName: string, displayName: string }} Party */
 
 /**
- * Compact, icon-triggered attribution control (ADR-0013). Collapsed, it shows a
- * single "Attribute" button (unset) or a chip with the attributed person's name
- * plus a clear button (set). Opening it reveals a popover offering a one-click
- * quick-pick of the Case's Responsible Party — the common case — alongside the
- * `cora-people-picker` for everyone else.
+ * Inline attribution control (ADR-0013). Rendered directly under a failed
+ * Answer's remediation, it is always visible — no button to disclose it, no
+ * floating popover. Unset, it offers a one-click quick-pick of the Case's
+ * Responsible Party (the common case) alongside the `cora-people-picker` for
+ * everyone else. Once set, it collapses to the attributed person's name plus a
+ * clear button; clearing re-reveals the pickers so the reviewer can re-attribute.
  *
- * Owns no state of its own beyond open/closed: choosing a person or clearing
- * invokes `onChange` with the new party (or `null`). The caller
- * (cora-remediation-section) is responsible for persistence so the answers signal
- * stays the single source of truth.
+ * Owns no state of its own: choosing a person or clearing invokes `onChange`
+ * with the new party (or `null`). The caller (cora-remediation-section) persists
+ * the change and re-renders this control, so the answers signal stays the single
+ * source of truth.
  *
  * @param {{
  *   client?: SharePointClient | null,
@@ -33,55 +32,24 @@ export function AttributeMenu({
   responsibleParty = null,
   onChange,
 }) {
-  const open = signal(false);
-
   /** @param {Party | null} party */
-  const select = (party) => {
-    open.set(false);
-    onChange?.(party);
-  };
+  const select = (party) => onChange?.(party);
 
-  /** @type {HTMLElement} */
-  const host = reactive(() => {
-    if (
-      typeof document !== 'undefined' &&
-      typeof document.addEventListener === 'function'
-    ) {
-      on(document, 'keydown', (/** @type {any} */ e) => {
-        if (e.key === 'Escape' && open.get()) open.set(false);
-      });
-      on(document, 'mousedown', (/** @type {any} */ e) => {
-        if (!open.get()) return;
-        if (typeof host.contains === 'function' && host.contains(e.target)) {
-          return;
-        }
-        open.set(false);
-      });
-    }
-    return renderMenu();
-  });
+  /** @type {Node[]} */
+  const children = [
+    h('p', { className: 'cora-attribute-title' }, 'Attribute failure to'),
+  ];
 
-  /** @returns {Node[]} */
-  function renderMenu() {
-    /** @type {Node[]} */
-    const children = [];
-
-    if (attributedParty) {
-      children.push(
+  if (attributedParty) {
+    children.push(
+      h(
+        'div',
+        { className: 'cora-attribute-selected' },
         h(
-          'button',
-          {
-            className: 'cora-attribute-chip',
-            type: 'button',
-            'aria-haspopup': 'true',
-            'aria-expanded': String(open.get()),
-            onClick: () => open.set(!open.get()),
-          },
+          'span',
+          { className: 'cora-attribute-current' },
           attributedParty.displayName
-        )
-      );
-
-      children.push(
+        ),
         h(
           'button',
           {
@@ -92,39 +60,9 @@ export function AttributeMenu({
           },
           '✕'
         )
-      );
-    } else {
-      children.push(
-        h(
-          'button',
-          {
-            className: 'cora-attribute-trigger',
-            type: 'button',
-            'aria-haspopup': 'true',
-            'aria-expanded': String(open.get()),
-            onClick: () => open.set(!open.get()),
-          },
-          'Attribute'
-        )
-      );
-    }
-
-    children.push(renderPopover());
-    return children;
-  }
-
-  /** @returns {HTMLElement} */
-  function renderPopover() {
-    /** @type {Node[]} */
-    const children = [];
-    children.push(
-      h(
-        'p',
-        { className: 'cora-attribute-popover-title' },
-        'Attribute failure to'
       )
     );
-
+  } else {
     if (responsibleParty) {
       const rp = responsibleParty;
       children.push(
@@ -154,17 +92,7 @@ export function AttributeMenu({
       }
     );
     children.push(picker);
-
-    return h(
-      'div',
-      {
-        className: 'cora-attribute-popover',
-        role: 'dialog',
-        hidden: !open.get(),
-      },
-      children
-    );
   }
 
-  return host;
+  return h('cora-attribute-menu', {}, ...children);
 }
