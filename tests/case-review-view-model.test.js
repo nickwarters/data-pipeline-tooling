@@ -62,6 +62,59 @@ test('handleCapture restores window scroll after the re-render shifts it', () =>
   }
 });
 
+test('handleCapture restores the app scroll container, not the (unscrolled) window', () => {
+  // In the real app the root #app[data-cora-root] is position:fixed with its own
+  // overflow-y:auto, so the window never scrolls — window.scrollTo is a no-op and
+  // the Issues re-render throws the Reviewer around. The scroll must be preserved
+  // on the app container instead.
+  let containerTop = 500;
+  const container = {
+    getAttribute: () => '',
+    get scrollTop() {
+      return containerTop;
+    },
+    set scrollTop(v) {
+      containerTop = v;
+    },
+    scrollLeft: 0,
+  };
+  let windowScrollY = 0;
+  /** @type {any} */ (globalThis).window = {
+    scrollX: 0,
+    get scrollY() {
+      return windowScrollY;
+    },
+    scrollTo(/** @type {number} */ _x, /** @type {number} */ y) {
+      windowScrollY = y;
+    },
+  };
+  /** @type {any} */ (globalThis).document = {
+    querySelector: (/** @type {string} */ sel) =>
+      sel === '#app[data-cora-root]' ? container : null,
+  };
+  try {
+    const vm = makeVM(() => {});
+    // The re-render churns the container scroll (as a real DOM teardown does).
+    let first = true;
+    effect(() => {
+      vm.answersSignal.get();
+      if (!first) containerTop = 0;
+      first = false;
+    });
+
+    vm.handleCapture('q1', 'rootCause', 'Agent rushed');
+
+    assert.equal(
+      containerTop,
+      500,
+      'app container scroll restored after the jump'
+    );
+  } finally {
+    delete (/** @type {any} */ (globalThis).window);
+    delete (/** @type {any} */ (globalThis).document);
+  }
+});
+
 test('handleCapture works (no throw) when window is absent', () => {
   assert.equal(typeof globalThis.window, 'undefined');
   /** @type {any[]} */
