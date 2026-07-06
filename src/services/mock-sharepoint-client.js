@@ -49,6 +49,24 @@ export class MockSharePointClient {
     this._injectNext412 = false;
   }
 
+  /**
+   * Return a deep-cloned snapshot of the mutable Case stores. Intended for
+   * file-backed workflow tests that need to persist the resulting list state.
+   *
+   * @returns {{ cases: CaseRow[], lists: Record<string, CaseRow[]> }}
+   */
+  snapshot() {
+    return {
+      cases: this._cases.map(cloneCase),
+      lists: Object.fromEntries(
+        Object.entries(this._lists).map(([listName, rows]) => [
+          listName,
+          rows.map(cloneCase),
+        ])
+      ),
+    };
+  }
+
   /** Make the next call to patchCase return 412 without writing. */
   inject412() {
     this._injectNext412 = true;
@@ -313,4 +331,9 @@ export class MockSharePointClient {
   async getVersionedExport(_slug, hash) {
     return this._versionedExports[hash] ?? null;
   }
+}
+
+/** @param {CaseRow} row */
+function cloneCase(row) {
+  return structuredClone(row);
 }
