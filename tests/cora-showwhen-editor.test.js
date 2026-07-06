@@ -13,6 +13,12 @@ const { _resetStore, cases } =
 const wrapOf = (el) => el._children[0];
 /** @param {any} el @returns {any} */
 const selectOf = (el) => wrapOf(el)._children[0]._children[1];
+/** Fire a change on the mode select. @param {any} el @param {string} value */
+function selectMode(el, value) {
+  const select = selectOf(el);
+  select.value = value;
+  select.dispatchEvent({ type: 'change', target: select });
+}
 
 /** Mount an editor over a store-backed question. */
 function mount(/** @type {any} */ q) {
@@ -46,71 +52,44 @@ test('CORAShowwhenEditor: question with conditions defaults to Conditional and s
   assert.equal(selectOf(e).value, 'conditional');
 });
 
-test('CORAShowwhenEditor: explicit showWhenMode override wins over the derived default', () => {
-  _resetStore();
-  // conditions present, but curator toggled to Always → section hidden
-  const q = {
-    ...cases.get()['example-review'].questions[2],
-    showWhenMode: 'always',
-  };
-  const e = mount(q);
-  assert.equal(wrapOf(e)._children.length, 1);
-  assert.equal(selectOf(e).value, 'always');
-
-  // no conditions, but curator toggled to Conditional → section revealed
-  const q2 = {
-    id: 'q-empty',
-    text: '',
-    responseType: 'yes-no-na',
-    deprecated: false,
-    showWhenMode: 'conditional',
-  };
-  const e2 = mount(q2);
-  const wrap2 = wrapOf(e2);
-  assert.equal(wrap2._children.length, 3); // header + empty-state + group
-  assert.equal(wrap2._children[1].className, 'showwhen-empty');
-});
-
-test('CORAShowwhenEditor: selecting Conditional on an empty question records the deviating intent', () => {
+test('CORAShowwhenEditor: selecting Conditional on an empty question reveals the section', () => {
   _resetStore();
   const q = cases.get()['example-review'].questions[0]; // no conditions
   const e = mount(q);
 
-  const select = selectOf(e);
-  select.value = 'conditional';
-  select.dispatchEvent({ type: 'change', target: select });
+  selectMode(e, 'conditional');
 
-  // conditional deviates from the derived "always" default → persisted
-  assert.equal(q.showWhenMode, 'conditional');
+  const wrap = wrapOf(e);
+  // header + empty-state note + group
+  assert.equal(wrap._children.length, 3);
+  assert.equal(wrap._children[1].className, 'showwhen-empty');
+  assert.equal(selectOf(e).value, 'conditional');
 });
 
-test('CORAShowwhenEditor: selecting Always retains showWhen but records the intent', () => {
+test('CORAShowwhenEditor: selecting Always clears the conditions and hides the section', () => {
   _resetStore();
   const q = cases.get()['example-review'].questions[2]; // has showWhen
-  const before = JSON.stringify(q.showWhen);
   const e = mount(q);
 
-  const select = selectOf(e);
-  select.value = 'always';
-  select.dispatchEvent({ type: 'change', target: select });
+  selectMode(e, 'always');
 
-  assert.equal(q.showWhenMode, 'always'); // deviates from derived "conditional"
-  assert.equal(JSON.stringify(q.showWhen), before); // conditions untouched
+  assert.equal('showWhen' in q, false); // conditions cleared outright
+  const wrap = wrapOf(e);
+  assert.equal(wrap._children.length, 1); // section hidden
+  assert.equal(selectOf(e).value, 'always');
 });
 
-test('CORAShowwhenEditor: selecting the derived default clears any recorded intent', () => {
+test('CORAShowwhenEditor: toggling Conditional then back to Always hides an empty section again', () => {
   _resetStore();
-  const q = {
-    ...cases.get()['example-review'].questions[2],
-    showWhenMode: 'always',
-  };
+  const q = cases.get()['example-review'].questions[0]; // no conditions
   const e = mount(q);
 
-  const select = selectOf(e);
-  select.value = 'conditional'; // matches derived default (conditions present)
-  select.dispatchEvent({ type: 'change', target: select });
+  selectMode(e, 'conditional');
+  assert.equal(wrapOf(e)._children.length, 3);
 
-  assert.equal('showWhenMode' in q, false);
+  selectMode(e, 'always');
+  assert.equal(wrapOf(e)._children.length, 1);
+  assert.equal('showWhen' in q, false);
 });
 
 test('CORAShowwhenEditor: nested tree reports depth in header desc when conditional', () => {

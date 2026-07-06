@@ -101,45 +101,6 @@ test('CORACompileDrawer: Send for Review snapshots baseline + closes', () => {
   e.disconnectedCallback();
 });
 
-test('CORACompileDrawer: Send bakes Always questions (clears showWhen) and drops showWhenMode', () => {
-  _resetStore();
-  commit((t) => {
-    t['example-review'].questions = [
-      {
-        id: 'q-always',
-        text: 'A',
-        responseType: 'yes-no-na',
-        showWhen: { q0: { equals: 'Yes' } },
-        showWhenMode: 'always',
-        deprecated: false,
-      },
-      {
-        id: 'q-cond',
-        text: 'C',
-        responseType: 'yes-no-na',
-        showWhen: { q0: { equals: 'Yes' } },
-        showWhenMode: 'conditional',
-        deprecated: false,
-      },
-    ];
-  });
-  drawerOpen.set(true);
-  const e = new CORACompileDrawer();
-  e.connectedCallback();
-  const drawer = /** @type {any} */ (e)._children[1];
-  const sendBtn = drawer._children[2]._children[1]._children[1];
-  sendBtn._listeners.click[0]();
-
-  const qs = cases.get()['example-review'].questions;
-  // Always question: conditions cleared for good, intent field dropped
-  assert.equal('showWhen' in qs[0], false);
-  assert.equal('showWhenMode' in qs[0], false);
-  // Conditional question: conditions kept, intent field still dropped
-  assert.deepEqual(qs[1].showWhen, { q0: { equals: 'Yes' } });
-  assert.equal('showWhenMode' in qs[1], false);
-  e.disconnectedCallback();
-});
-
 test('CORACompileDrawer: diff cards render added / changed / removed counts', () => {
   _resetStore();
   commit((t) => {

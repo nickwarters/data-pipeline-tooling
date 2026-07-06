@@ -181,21 +181,15 @@ export function commitTreeFor(q) {
 }
 
 /**
- * The effective Show-When mode for a Draft Question: the curator's explicit
- * `showWhenMode` choice when set, otherwise derived from whether the question
- * currently carries any conditions. This is the single source of truth shared
- * by the editor toggle, the compile projection, and the Send-for-Review bake:
- * `always` means "treat as ungated" even when a `showWhen` is retained under the
- * hood.
+ * Clears every condition from `q`, deleting its `showWhen`. Empties the cached
+ * tree in place then re-serialises (an empty group serialises to null, so the
+ * field is removed), keeping the WeakMap cache and the `showWhen` field in step.
  *
- * @param {{ showWhen?: Record<string, unknown>, showWhenMode?: 'always' | 'conditional' }} q
- * @returns {'always' | 'conditional'}
+ * @param {{ showWhen?: Record<string, unknown> }} q
  */
-export function effectiveShowWhenMode(q) {
-  if (q.showWhenMode === 'always' || q.showWhenMode === 'conditional') {
-    return q.showWhenMode;
-  }
-  return countLeaves(ensureTree(q)) > 0 ? 'conditional' : 'always';
+export function clearConditions(q) {
+  ensureTree(q).children.length = 0;
+  commitTreeFor(q);
 }
 
 /** Test-only: clear the per-question tree cache. */

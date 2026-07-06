@@ -144,36 +144,6 @@ test('compileBank: includes showWhen when present', () => {
   assert.ok(out.includes('showWhen:'));
 });
 
-test('compileBank: omits showWhen when the question is toggled to Always', () => {
-  const out = compileBank(
-    bank({
-      id: 'q1',
-      text: 'T',
-      responseType: 'yes-no-na',
-      showWhen: { q0: { equals: 'Yes' } },
-      showWhenMode: 'always',
-      deprecated: false,
-    })
-  );
-  assert.ok(!out.includes('showWhen:'));
-  // the transient UI-intent field never leaks into the compiled module
-  assert.ok(!out.includes('showWhenMode'));
-});
-
-test('compileBank: keeps showWhen when explicitly toggled to Conditional', () => {
-  const out = compileBank(
-    bank({
-      id: 'q1',
-      text: 'T',
-      responseType: 'yes-no-na',
-      showWhen: { q0: { equals: 'Yes' } },
-      showWhenMode: 'conditional',
-      deprecated: false,
-    })
-  );
-  assert.ok(out.includes('showWhen:'));
-});
-
 test('compileBank: includes failureCriteria when present', () => {
   const out = compileBank(
     bank({
@@ -729,22 +699,6 @@ test('compileExport: showWhen is carried through when present', async () => {
   };
   const result = await compileExport(bankWithShowWhen);
   assert.deepEqual(result.questions[0].showWhen, { q0: { equals: 'Yes' } });
-});
-
-test('compileExport: showWhen exports as null when toggled to Always', async () => {
-  const bankWithAlways = {
-    ...exportBank,
-    questions: [
-      {
-        ...exportBank.questions[0],
-        showWhen: { q0: { equals: 'Yes' } },
-        showWhenMode: /** @type {const} */ ('always'),
-      },
-      exportBank.questions[1],
-    ],
-  };
-  const result = await compileExport(bankWithAlways);
-  assert.equal(result.questions[0].showWhen, null);
 });
 
 test('compileExport: deprecated true is preserved', async () => {

@@ -13,6 +13,7 @@ import {
   treeDepth,
   ensureTree,
   commitTreeFor,
+  clearConditions,
   _resetTreeCache,
 } from '../src/question-bank/question-bank-tree.js';
 
@@ -375,6 +376,21 @@ test('commitTreeFor: no-op when there is no cached tree', () => {
   const q = /** @type {any} */ ({});
   commitTreeFor(q);
   assert.deepEqual(q, {});
+});
+
+test('clearConditions: empties the tree and deletes showWhen', () => {
+  const q = /** @type {any} */ ({
+    showWhen: { $or: [{ q1: { equals: 'A' } }, { q2: { equals: 'B' } }] },
+  });
+  clearConditions(q);
+  assert.equal('showWhen' in q, false);
+  assert.equal(countLeaves(ensureTree(q)), 0);
+});
+
+test('clearConditions: no-op on a question that has no conditions', () => {
+  const q = /** @type {any} */ ({});
+  clearConditions(q);
+  assert.equal('showWhen' in q, false);
 });
 
 test('_resetTreeCache: callable (documented no-op)', () => {

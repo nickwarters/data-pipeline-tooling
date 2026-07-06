@@ -61,10 +61,7 @@ export function compileBank(bank) {
       lines.push(`      labelIds: ${JSON.stringify(q.labelIds)},`);
     lines.push(`      responseType: ${JSON.stringify(q.responseType)},`);
     if (q.options) lines.push(`      options: ${JSON.stringify(q.options)},`);
-    // A question toggled to "Always" (showWhenMode === 'always') keeps its
-    // showWhen under the hood in the draft but compiles as ungated — the drawer
-    // preview matches exactly what Send-for-Review bakes out.
-    if (q.showWhen && q.showWhenMode !== 'always')
+    if (q.showWhen)
       lines.push(`      showWhen: ${JSON.stringify(q.showWhen)},`);
     if (q.failureCriteria)
       lines.push(
@@ -208,9 +205,7 @@ export async function compileExport(bank) {
       category: q.category ?? null,
       responseType: q.responseType,
       options: q.options ?? null,
-      // "Always" questions export as ungated (see compileBank), so the export
-      // hash and downstream reports match the drawer preview.
-      showWhen: q.showWhenMode === 'always' ? null : (q.showWhen ?? null),
+      showWhen: q.showWhen ?? null,
       failureCriteria: q.failureCriteria ?? null,
       outcome: q.outcome ?? null,
       remediationActions: q.remediationActions
