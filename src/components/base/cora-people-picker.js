@@ -142,11 +142,7 @@ export class CORAPeoplePicker extends ShellElement {
   }
 
   _render() {
-    const content = this.render();
-    if (content !== undefined) {
-      if (Array.isArray(content)) this.replaceChildren(...content);
-      else this.replaceChildren(content);
-    }
+    this.replaceChildren(...this.render());
   }
 
   render() {
