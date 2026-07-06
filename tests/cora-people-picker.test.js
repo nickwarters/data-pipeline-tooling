@@ -171,6 +171,32 @@ test('CORAPeoplePicker: input with a null target value is treated as empty strin
   );
 });
 
+test('CORAPeoplePicker: results arriving preserve the focused input node (no focus loss while typing)', async () => {
+  const client = makeClient([
+    { loginName: 'jsmith', displayName: 'John Smith' },
+  ]);
+  const el = mount(client);
+  const before = input(el);
+  before.focus();
+  assert.equal(before._focused, true);
+
+  // A background search resolving must not rebuild the input the user is typing
+  // into — only the results list changes.
+  await el._search('smith');
+
+  assert.equal(
+    input(el),
+    before,
+    'input node is preserved across a results update'
+  );
+  assert.equal(
+    input(el)._focused,
+    true,
+    'focus is retained when results arrive'
+  );
+  assert.equal(results(el)._children.length, 1, 'results still update');
+});
+
 test('CORAPeoplePicker: honours a custom placeholder', () => {
   const el = new CORAPeoplePicker();
   el.placeholder = 'Attribute to…';

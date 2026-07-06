@@ -16,26 +16,40 @@ import { h } from '../../lib/html.js';
  */
 
 /**
+ * Build the result option nodes for a query: one per match, or a single
+ * raw-account fallback when a non-empty query returns nothing.
+ *
+ * @param {PersonResult[]} people
+ * @param {string} query
+ * @param {(person: { loginName: string, displayName: string }) => void} onSelect
+ * @returns {HTMLElement[]}
+ */
+export function peoplePickerOptions(people, query, onSelect) {
+  const items = people.map((p) =>
+    peoplePickerOption(
+      { loginName: p.loginName, displayName: p.displayName },
+      `${p.displayName} — ${p.loginName}`,
+      onSelect
+    )
+  );
+  if (people.length === 0 && query !== '') {
+    items.push(
+      peoplePickerOption(
+        { loginName: query, displayName: query },
+        `Use “${query}” as account`,
+        onSelect
+      )
+    );
+  }
+  return items;
+}
+
+/**
  * @param {PeoplePickerProps} props
  * @returns {Node[]}
  */
 export function PeoplePicker(props) {
-  const items = props.people.map((p) =>
-    peoplePickerOption(
-      { loginName: p.loginName, displayName: p.displayName },
-      `${p.displayName} — ${p.loginName}`,
-      props.onSelect
-    )
-  );
-  if (props.people.length === 0 && props.query !== '') {
-    items.push(
-      peoplePickerOption(
-        { loginName: props.query, displayName: props.query },
-        `Use “${props.query}” as account`,
-        props.onSelect
-      )
-    );
-  }
+  const items = peoplePickerOptions(props.people, props.query, props.onSelect);
 
   const inputEl = h('input', {
     class: 'cora-people-picker-input',
@@ -173,13 +187,25 @@ export class CORAPeoplePicker extends ShellElement {
   }
 
   /**
+   * Refresh only the results list, leaving the search input untouched. A
+   * background search resolving must not rebuild the input the reviewer is
+   * typing into — replacing that node would drop focus and the caret
+   * (issue: focus lost while typing).
+   *
+   * `connectedCallback` renders once before any search or selection can run, so
+   * `_results` is always present here.
+   *
    * @param {PersonResult[]} people
    * @param {string} query
    */
   _renderResults(people, query) {
     this._people = people;
     this._query = query;
-    this._render();
+    const options = peoplePickerOptions(people, query, (person) =>
+      this._select(person)
+    );
+    /** @type {any} */ (this._results).replaceChildren(...options);
+    /** @type {any} */ (this._results).hidden = options.length === 0;
   }
 
   /** @param {{ loginName: string, displayName: string }} person */
@@ -194,6 +220,9 @@ export class CORAPeoplePicker extends ShellElement {
       })
     );
     this._inputValue = '';
+    if (this._input) {
+      /** @type {HTMLInputElement} */ (this._input).value = '';
+    }
     this._renderResults([], '');
   }
 
