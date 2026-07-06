@@ -1,9 +1,10 @@
 // @ts-check
 import { ShellElement } from '../../lib/view.js';
-import { signal } from '../../lib/signal.js';
 import { h } from '../../lib/html.js';
+import { commit } from '../../question-bank/question-bank-store.js';
 import {
   countLeaves,
+  effectiveShowWhenMode,
   ensureTree,
   treeDepth,
 } from '../../question-bank/question-bank-tree.js';
@@ -31,6 +32,7 @@ export function ShowwhenEditor(props) {
         className: 'showwhen-mode',
         value: props.mode,
         'aria-label': 'Show when',
+        'data-focus-key': `showwhen-mode-${q.id}`,
         onChange: (/** @type {any} */ e) => {
           const v = e.target.value === 'conditional' ? 'conditional' : 'always';
           props.onModeChange(v);
@@ -78,36 +80,36 @@ export class CORAShowwhenEditor extends ShellElement {
     super();
     /** @type {any} */
     this.question = null;
-    /** @type {import('../../lib/signal.js').Signal<'always' | 'conditional'> | null} */
-    this._mode = null;
-  }
-
-  /**
-   * Local view state for whether the condition editor is revealed. Defaults to
-   * `conditional` when the question already carries a `showWhen`, so existing
-   * gating stays visible; otherwise `always`, keeping the editor decluttered
-   * until a Reviewer opts into conditions. Purely presentational — switching to
-   * `always` never discards the question's conditions.
-   *
-   * @returns {import('../../lib/signal.js').Signal<'always' | 'conditional'>}
-   */
-  _modeSignal() {
-    if (!this._mode) {
-      const tree = ensureTree(this.question);
-      this._mode = signal(tree.children.length > 0 ? 'conditional' : 'always');
-    }
-    return this._mode;
   }
 
   render() {
-    if (!this.question) return undefined;
-    const mode = this._modeSignal();
+    const q = this.question;
+    if (!q) return undefined;
     return ShowwhenEditor({
-      question: this.question,
-      mode: mode.get(),
-      onModeChange: (next) => mode.set(next),
+      question: q,
+      mode: effectiveShowWhenMode(q),
+      onModeChange: (next) => setShowWhenMode(q, next),
     });
   }
+}
+
+/**
+ * Persist the curator's Show-When mode choice. The mode is only recorded when
+ * it *deviates* from the derived default (conditions present ⇒ conditional,
+ * absent ⇒ always), so the common cases stay flag-free and the diff stays
+ * quiet. Crucially, switching to `always` records the intent without touching
+ * the question's `showWhen`, so the conditions are retained under the hood and
+ * recoverable until Send-for-Review bakes them out.
+ *
+ * @param {any} q
+ * @param {'always' | 'conditional'} next
+ */
+function setShowWhenMode(q, next) {
+  commit(() => {
+    const derived = countLeaves(ensureTree(q)) > 0 ? 'conditional' : 'always';
+    if (next === derived) delete q.showWhenMode;
+    else q.showWhenMode = next;
+  });
 }
 
 customElements.define('cora-showwhen-editor', CORAShowwhenEditor);

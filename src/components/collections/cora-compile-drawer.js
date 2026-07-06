@@ -4,6 +4,7 @@ import { h, unsafeHTML } from '../../lib/html.js';
 import {
   baseline,
   cases,
+  commit,
   currentBank,
   diffCounts,
   drawerOpen,
@@ -103,6 +104,7 @@ export function CompileDrawer() {
             {
               class: 'pill-btn primary',
               onclick: () => {
+                bakeShowWhenModes();
                 baseline.set(structuredClone(cases.get()));
                 drawerOpen.set(false);
                 showToast('Submitted for review');
@@ -114,6 +116,24 @@ export function CompileDrawer() {
       )
     ),
   ];
+}
+
+/**
+ * Bake Show-When mode intent into the draft at Send-for-Review time: questions
+ * toggled to "Always" have their retained `showWhen` cleared for good, and the
+ * transient `showWhenMode` field is dropped from every question (it is UI
+ * intent, never part of the published artifact). Runs across all banks to match
+ * the whole-workbench baseline snapshot taken on Send.
+ */
+function bakeShowWhenModes() {
+  commit((types) => {
+    for (const slug in types) {
+      for (const q of types[slug].questions) {
+        if (q.showWhenMode === 'always') delete q.showWhen;
+        delete q.showWhenMode;
+      }
+    }
+  });
 }
 
 export const CORACompileDrawer = defineView('cora-compile-drawer', {

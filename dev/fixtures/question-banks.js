@@ -37,6 +37,7 @@
  *   responseType: 'yes-no-na' | 'single-choice' | 'multi-choice',
  *   options?: string[],
  *   showWhen?: Record<string, unknown>,
+ *   showWhenMode?: 'always' | 'conditional',
  *   failureCriteria?: string,
  *   outcome?: { noActionOutcomeId?: string, noAction?: OutcomeDescriptor },
  *   remediationActions?: Array<string | RemediationActionDefinition>,
