@@ -19,17 +19,17 @@
       }
 
       :root {
-        --bg: #080b10;
-        --surface: #0e1520;
-        --border: #1e2d45;
-        --signal: #f59e0b;
-        --signal-glow: rgba(245, 158, 11, 0.25);
-        --computed: #22d3ee;
-        --computed-glow: rgba(34, 211, 238, 0.2);
-        --effect: #a78bfa;
-        --effect-glow: rgba(167, 139, 250, 0.2);
-        --text: #c8d6e8;
-        --muted: #4a6080;
+        --bg: #101010;
+        --surface: #1d1d1d;
+        --border: #404040;
+        --signal: #d4820a;
+        --signal-glow: rgba(212, 130, 10, 0.25);
+        --computed: #4d9eff;
+        --computed-glow: rgba(77, 158, 255, 0.2);
+        --effect: #e31e22;
+        --effect-glow: rgba(227, 30, 34, 0.2);
+        --text: #f3f3f3;
+        --muted: #9b9b9b;
         --pulse-dur: 0.6s;
       }
 
@@ -47,7 +47,7 @@
         content: '';
         position: fixed;
         inset: 0;
-        background-image: radial-gradient(circle, #1a2a3f 1px, transparent 1px);
+        background-image: radial-gradient(circle, #212121 1px, transparent 1px);
         background-size: 28px 28px;
         opacity: 0.4;
         pointer-events: none;
@@ -69,9 +69,9 @@
         line-height: 1;
         background: linear-gradient(
           135deg,
-          #f59e0b 0%,
-          #22d3ee 60%,
-          #a78bfa 100%
+          #d4820a 0%,
+          #4d9eff 60%,
+          #e31e22 100%
         );
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
@@ -451,23 +451,23 @@
       }
 
       .kw {
-        color: #f59e0b;
+        color: #d4820a;
       } /* keyword / signal color */
       .fn {
-        color: #22d3ee;
+        color: #4d9eff;
       } /* function / computed color */
       .ef {
-        color: #a78bfa;
+        color: #e31e22;
       } /* effect color */
       .str {
-        color: #86efac;
+        color: #00c47f;
       } /* string */
       .cmt {
-        color: #3d5470;
+        color: #767676;
         font-style: italic;
       }
       .num {
-        color: #fb923c;
+        color: #4d9eff;
       }
 
       /* ─── TRACE LOG ───────────────────────────────────────────────── */
@@ -724,7 +724,7 @@
       .wt-tab.active {
         border-color: var(--signal);
         color: var(--signal);
-        background: rgba(245, 158, 11, 0.07);
+        background: rgba(212, 130, 10, 0.07);
       }
 
       .wt-layout {
@@ -771,7 +771,7 @@
       }
 
       .wt-code-line.hl {
-        background: rgba(245, 158, 11, 0.1);
+        background: rgba(212, 130, 10, 0.1);
         color: var(--text);
         border-left-color: var(--signal);
         padding-left: 6px;
@@ -802,11 +802,11 @@
 
       .wt-current-effect.active {
         border-color: var(--effect);
-        box-shadow: 0 0 14px rgba(167, 139, 250, 0.18);
+        box-shadow: 0 0 14px rgba(227, 30, 34, 0.18);
       }
       .wt-current-effect.active-computed {
         border-color: var(--computed);
-        box-shadow: 0 0 14px rgba(34, 211, 238, 0.18);
+        box-shadow: 0 0 14px rgba(77, 158, 255, 0.18);
       }
 
       .wt-ce-label {
@@ -856,13 +856,13 @@
       }
 
       .wt-node.signal-node {
-        border-color: rgba(245, 158, 11, 0.25);
+        border-color: rgba(212, 130, 10, 0.25);
       }
       .wt-node.computed-node {
-        border-color: rgba(34, 211, 238, 0.25);
+        border-color: rgba(77, 158, 255, 0.25);
       }
       .wt-node.effect-node {
-        border-color: rgba(167, 139, 250, 0.25);
+        border-color: rgba(227, 30, 34, 0.25);
       }
 
       .wt-node.lit.signal-node {
@@ -938,13 +938,13 @@
 
       .sub-chip.effect-chip {
         color: var(--effect);
-        border-color: rgba(167, 139, 250, 0.4);
-        background: rgba(167, 139, 250, 0.08);
+        border-color: rgba(227, 30, 34, 0.4);
+        background: rgba(227, 30, 34, 0.08);
       }
       .sub-chip.computed-chip {
         color: var(--computed);
-        border-color: rgba(34, 211, 238, 0.4);
-        background: rgba(34, 211, 238, 0.08);
+        border-color: rgba(77, 158, 255, 0.4);
+        background: rgba(77, 158, 255, 0.08);
       }
       .sub-chip.empty-chip {
         color: var(--muted);

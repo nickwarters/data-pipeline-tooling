@@ -19,21 +19,21 @@
       }
 
       :root {
-        --bg: #080b10;
-        --surface: #0e1520;
-        --border: #1e2d45;
-        --signal: #f59e0b;
-        --signal-glow: rgba(245, 158, 11, 0.22);
-        --computed: #22d3ee;
-        --computed-glow: rgba(34, 211, 238, 0.18);
-        --effect: #a78bfa;
-        --effect-glow: rgba(167, 139, 250, 0.18);
-        --text: #c8d6e8;
-        --muted: #4a6080;
-        --saved: #4ade80;
-        --saving: #f59e0b;
-        --reconnecting: #fb923c;
-        --conflict: #f87171;
+        --bg: #101010;
+        --surface: #1d1d1d;
+        --border: #404040;
+        --signal: #d4820a;
+        --signal-glow: rgba(212, 130, 10, 0.22);
+        --computed: #4d9eff;
+        --computed-glow: rgba(77, 158, 255, 0.18);
+        --effect: #e31e22;
+        --effect-glow: rgba(227, 30, 34, 0.18);
+        --text: #f3f3f3;
+        --muted: #9b9b9b;
+        --saved: #00a368;
+        --saving: #d4820a;
+        --reconnecting: #4d9eff;
+        --conflict: #e31e22;
       }
 
       html,
@@ -49,7 +49,7 @@
         content: '';
         position: fixed;
         inset: 0;
-        background-image: radial-gradient(circle, #1a2a3f 1px, transparent 1px);
+        background-image: radial-gradient(circle, #212121 1px, transparent 1px);
         background-size: 28px 28px;
         opacity: 0.4;
         pointer-events: none;
@@ -70,9 +70,9 @@
         line-height: 1;
         background: linear-gradient(
           135deg,
-          #f59e0b 0%,
-          #22d3ee 55%,
-          #a78bfa 100%
+          #d4820a 0%,
+          #4d9eff 55%,
+          #e31e22 100%
         );
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
@@ -228,11 +228,11 @@
         color: var(--computed);
       }
       .cmt {
-        color: #3d5470;
+        color: #767676;
         font-style: italic;
       }
       .str {
-        color: #86efac;
+        color: #00c47f;
       }
 
       /* ── DEBOUNCE DEMO ──────────────────────────────────────── */
@@ -346,24 +346,24 @@
       }
       .status-badge.saved {
         color: var(--saved);
-        border-color: rgba(74, 222, 128, 0.4);
-        background: rgba(74, 222, 128, 0.08);
+        border-color: rgba(0, 163, 104, 0.4);
+        background: rgba(0, 163, 104, 0.08);
       }
       .status-badge.saving {
         color: var(--saving);
-        border-color: rgba(245, 158, 11, 0.4);
-        background: rgba(245, 158, 11, 0.08);
+        border-color: rgba(212, 130, 10, 0.4);
+        background: rgba(212, 130, 10, 0.08);
         animation: badge-pulse 1s ease infinite;
       }
       .status-badge.reconnecting {
         color: var(--reconnecting);
-        border-color: rgba(251, 146, 60, 0.4);
-        background: rgba(251, 146, 60, 0.08);
+        border-color: rgba(77, 158, 255, 0.4);
+        background: rgba(77, 158, 255, 0.08);
       }
       .status-badge.conflict {
         color: var(--conflict);
-        border-color: rgba(248, 113, 113, 0.4);
-        background: rgba(248, 113, 113, 0.08);
+        border-color: rgba(227, 30, 34, 0.4);
+        background: rgba(227, 30, 34, 0.08);
       }
 
       @keyframes badge-pulse {
@@ -466,7 +466,7 @@
       .wt-tab.active {
         border-color: var(--computed);
         color: var(--computed);
-        background: rgba(34, 211, 238, 0.07);
+        background: rgba(77, 158, 255, 0.07);
       }
 
       .wt-layout {
@@ -505,7 +505,7 @@
           opacity 0.2s;
       }
       .wt-code-line.hl {
-        background: rgba(34, 211, 238, 0.09);
+        background: rgba(77, 158, 255, 0.09);
         color: var(--text);
         border-left-color: var(--computed);
         padding-left: 6px;
@@ -540,18 +540,18 @@
 
       .seq-actor.component .seq-actor-badge {
         color: var(--signal);
-        border-color: rgba(245, 158, 11, 0.4);
-        background: rgba(245, 158, 11, 0.08);
+        border-color: rgba(212, 130, 10, 0.4);
+        background: rgba(212, 130, 10, 0.08);
       }
       .seq-actor.savequeue .seq-actor-badge {
         color: var(--computed);
-        border-color: rgba(34, 211, 238, 0.4);
-        background: rgba(34, 211, 238, 0.08);
+        border-color: rgba(77, 158, 255, 0.4);
+        background: rgba(77, 158, 255, 0.08);
       }
       .seq-actor.sharepoint .seq-actor-badge {
         color: var(--effect);
-        border-color: rgba(167, 139, 250, 0.4);
-        background: rgba(167, 139, 250, 0.08);
+        border-color: rgba(227, 30, 34, 0.4);
+        background: rgba(227, 30, 34, 0.08);
       }
 
       .seq-diagram-body {
@@ -678,19 +678,19 @@
       }
       .seq-arrow.to-queue .seq-label-chip {
         color: var(--signal);
-        border-color: rgba(245, 158, 11, 0.3);
+        border-color: rgba(212, 130, 10, 0.3);
       }
       .seq-arrow.to-server .seq-label-chip {
         color: var(--computed);
-        border-color: rgba(34, 211, 238, 0.3);
+        border-color: rgba(77, 158, 255, 0.3);
       }
       .seq-arrow.from-server .seq-label-chip {
         color: var(--effect);
-        border-color: rgba(167, 139, 250, 0.3);
+        border-color: rgba(227, 30, 34, 0.3);
       }
       .seq-arrow.err-arrow .seq-label-chip {
         color: var(--conflict);
-        border-color: rgba(248, 113, 113, 0.3);
+        border-color: rgba(227, 30, 34, 0.3);
       }
 
       .seq-note {
@@ -708,23 +708,23 @@
       }
       .seq-note-inner.n-queue {
         color: var(--computed);
-        border-color: rgba(34, 211, 238, 0.3);
-        background: rgba(34, 211, 238, 0.04);
+        border-color: rgba(77, 158, 255, 0.3);
+        background: rgba(77, 158, 255, 0.04);
       }
       .seq-note-inner.n-ok {
         color: var(--saved);
-        border-color: rgba(74, 222, 128, 0.3);
-        background: rgba(74, 222, 128, 0.04);
+        border-color: rgba(0, 163, 104, 0.3);
+        background: rgba(0, 163, 104, 0.04);
       }
       .seq-note-inner.n-warn {
         color: var(--reconnecting);
-        border-color: rgba(251, 146, 60, 0.3);
-        background: rgba(251, 146, 60, 0.04);
+        border-color: rgba(77, 158, 255, 0.3);
+        background: rgba(77, 158, 255, 0.04);
       }
       .seq-note-inner.n-conflict {
         color: var(--conflict);
-        border-color: rgba(248, 113, 113, 0.3);
-        background: rgba(248, 113, 113, 0.04);
+        border-color: rgba(227, 30, 34, 0.3);
+        background: rgba(227, 30, 34, 0.04);
       }
 
       /* State box */
@@ -923,10 +923,10 @@
           box-shadow 0.4s;
       }
       .etag-box.flash {
-        background: rgba(34, 211, 238, 0.12);
-        border-color: rgba(34, 211, 238, 0.6);
+        background: rgba(77, 158, 255, 0.12);
+        border-color: rgba(77, 158, 255, 0.6);
         box-shadow:
-          0 0 0 1px rgba(34, 211, 238, 0.25),
+          0 0 0 1px rgba(77, 158, 255, 0.25),
           0 0 18px -6px var(--computed-glow);
       }
       .etag-label {
@@ -988,11 +988,11 @@
       }
 
       .slot-block.active {
-        background: rgba(245, 158, 11, 0.08);
-        border-color: rgba(245, 158, 11, 0.5);
+        background: rgba(212, 130, 10, 0.08);
+        border-color: rgba(212, 130, 10, 0.5);
         color: var(--text);
         box-shadow:
-          0 0 0 1px rgba(245, 158, 11, 0.18),
+          0 0 0 1px rgba(212, 130, 10, 0.18),
           0 4px 14px -6px var(--signal-glow);
         animation: block-pop 0.22s ease;
       }
@@ -1059,8 +1059,8 @@
         padding: 7px 10px;
         border-radius: 5px;
         font-size: 0.66rem;
-        background: rgba(34, 211, 238, 0.08);
-        border: 1px solid rgba(34, 211, 238, 0.5);
+        background: rgba(77, 158, 255, 0.08);
+        border: 1px solid rgba(77, 158, 255, 0.5);
         color: var(--text);
         animation: fly-across 0.9s cubic-bezier(0.4, 0, 0.2, 1) forwards;
       }
@@ -1091,8 +1091,8 @@
         padding: 7px 10px;
         border-radius: 5px;
         font-size: 0.66rem;
-        background: rgba(74, 222, 128, 0.07);
-        border: 1px solid rgba(74, 222, 128, 0.4);
+        background: rgba(0, 163, 104, 0.07);
+        border: 1px solid rgba(0, 163, 104, 0.4);
         color: var(--text);
         animation: land 0.3s ease forwards;
       }
@@ -2309,7 +2309,7 @@
           if (steps[upTo].banner) {
             var b = document.createElement('div');
             b.style.cssText =
-              'margin-top:8px;padding:9px 13px;border:1px solid rgba(248,113,113,0.4);border-radius:6px;background:rgba(248,113,113,0.06);font-size:0.67rem;color:#f87171;animation:seq-in 0.3s ease forwards;opacity:0';
+              'margin-top:8px;padding:9px 13px;border:1px solid rgba(227,30,34,0.4);border-radius:6px;background:rgba(227,30,34,0.06);font-size:0.67rem;color:#e31e22;animation:seq-in 0.3s ease forwards;opacity:0';
             b.textContent =
               '⚠  Case was edited elsewhere — reload to see the latest.';
             container.appendChild(b);
