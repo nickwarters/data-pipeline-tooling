@@ -44,6 +44,7 @@ const NO_CAPABILITIES = {
 const EMPTY_CASE_TYPE_CONFIG = {
   questions: [],
   computeOutcome: () => ({ outcome: 'pass' }),
+  outcomeOptions: [{ id: 'pass', wording: 'Pass' }],
 };
 
 // ===== IMPORTS =====
@@ -1008,7 +1009,9 @@ test('CORACaseReview: no inline cora-save-status paragraph in rendered children'
   await el.connectedCallback();
 
   const children = /** @type {any[]} */ (/** @type {any} */ (el)._children);
-  const hasStatusPara = children.some((c) => c.className === 'cora-save-status');
+  const hasStatusPara = children.some(
+    (c) => c.className === 'cora-save-status'
+  );
   assert.equal(
     hasStatusPara,
     false,
@@ -2257,6 +2260,7 @@ test('isReportable: true from Actions In Progress and Completed, false while In-
 const ATTRIBUTE_CONFIG = {
   questions: [],
   computeOutcome: () => ({ outcome: 'pass' }),
+  outcomeOptions: [{ id: 'pass', wording: 'Pass' }],
   attributeFailures: true,
 };
 
@@ -2332,6 +2336,7 @@ test('CaseMachine.canSelectRemediation follows Issues edit access, not attribute
 const ACTIONS_CONFIG = {
   questions: [],
   computeOutcome: () => ({ outcome: 'pass' }),
+  outcomeOptions: [{ id: 'pass', wording: 'Pass' }],
   captureGroups: [
     {
       key: 'g',

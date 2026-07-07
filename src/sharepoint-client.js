@@ -330,7 +330,7 @@
  * @typedef {{
  *   questions: QuestionDefinition[],
  *   computeOutcome: (answers: Record<string, Answer>) => OutcomeResult,
- *   outcomeOptions?: OutcomeOption[],
+ *   outcomeOptions: OutcomeOption[],
  *   defaultOutcomeId?: string,
  *   labels?: Label[],
  *   eligibleGroups?: string[],

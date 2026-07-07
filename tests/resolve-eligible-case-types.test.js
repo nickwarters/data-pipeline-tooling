@@ -65,6 +65,7 @@ test('resolveEligibleCaseSourcesFromCaseTypes: maps reviewer group to its case l
           reviewerGroup: 'Reviewers - Complaints',
           questions: [],
           computeOutcome: () => ({ outcome: 'Pass' }),
+          outcomeOptions: [{ id: 'Pass', wording: 'Pass' }],
         },
       },
     ]
@@ -99,6 +100,7 @@ test('resolveEligibleCaseSourcesFromCaseTypes: base Reviewers group does not imp
           reviewerGroup: 'Reviewers - Complaints',
           questions: [],
           computeOutcome: () => ({ outcome: 'Pass' }),
+          outcomeOptions: [{ id: 'Pass', wording: 'Pass' }],
         },
       },
     ]

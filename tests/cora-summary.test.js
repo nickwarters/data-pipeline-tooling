@@ -85,6 +85,7 @@ test('Summary: plain function renders heading and outcome block', () => {
     summarySections: [],
     captureGroups: [],
     detailFields: [],
+    outcomeOptions: [],
   });
 
   assert.equal(/** @type {any} */ (nodes[0]).textContent, 'Summary');

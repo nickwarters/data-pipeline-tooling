@@ -15,6 +15,12 @@ import { countConfiguredFailures } from '../src/evaluators/failure-evaluator.js'
 const config = {
   eligibleGroups: ['Reviewers'],
   questions: stressQuestions,
+  // Outcome vocabulary (ADR-0004): required even for this perf harness so the
+  // Outcome block resolves wording from config rather than a built-in fallback.
+  outcomeOptions: [
+    { id: 'pass', wording: 'Pass' },
+    { id: 'fail', wording: 'Fail' },
+  ],
 
   /** @param {Record<string, Answer>} answers */
   computeOutcome(answers) {

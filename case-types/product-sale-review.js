@@ -107,6 +107,14 @@ const config = {
     },
   ],
 
+  // Outcome vocabulary (ADR-0004). `computeOutcome` yields pass/refer/fail by
+  // failure count; the wording shown to Reviewers is resolved from here.
+  outcomeOptions: [
+    { id: 'pass', wording: 'Pass' },
+    { id: 'refer', wording: 'Refer' },
+    { id: 'fail', wording: 'Fail' },
+  ],
+
   /** @param {Record<string, Answer>} answers */
   computeOutcome(answers) {
     const failures = countConfiguredFailures(config.questions, answers);

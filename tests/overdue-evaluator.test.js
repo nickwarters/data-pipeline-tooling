@@ -33,6 +33,7 @@ function baseConfig() {
     slaHours: 48,
     questions: [],
     computeOutcome: () => ({ outcome: 'pass' }),
+    outcomeOptions: [{ id: 'pass', wording: 'Pass' }],
   };
 }
 

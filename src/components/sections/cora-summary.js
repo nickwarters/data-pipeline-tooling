@@ -23,6 +23,7 @@ import './cora-capture-groups.js';
  * @property {Section[]} summarySections
  * @property {import('../../sharepoint-client.js').CaptureGroup[]} captureGroups
  * @property {import('../../sharepoint-client.js').CaseDetailField[]} detailFields
+ * @property {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions
  */
 
 /**
@@ -47,14 +48,20 @@ export function Summary(props) {
     const result = {
       outcome: current,
     };
-    outcomeEl.update(() => result, {}, true);
+    outcomeEl.update(() => result, {}, true, props.outcomeOptions);
   } else if (props.computeOutcome) {
-    outcomeEl.update(props.computeOutcome, props.answers, props.allAnswered);
+    outcomeEl.update(
+      props.computeOutcome,
+      props.answers,
+      props.allAnswered,
+      props.outcomeOptions
+    );
   } else {
     outcomeEl.update(
       () => /** @type {OutcomeResult} */ ({ outcome: 'pass' }),
       {},
-      false
+      false,
+      props.outcomeOptions
     );
   }
 
@@ -343,6 +350,13 @@ export class CORASummary extends HTMLElement {
      * @type {import('../../sharepoint-client.js').CaseDetailField[]}
      */
     this.detailFields = [];
+    /**
+     * The Case Type's configured Outcome vocabulary (ADR-0004), used to resolve
+     * the Outcome block's wording. Empty when the Case Type declares none, in
+     * which case the Outcome block shows a "not configured" state.
+     * @type {import('../../sharepoint-client.js').OutcomeOption[]}
+     */
+    this.outcomeOptions = [];
   }
 
   connectedCallback() {
@@ -372,6 +386,7 @@ export class CORASummary extends HTMLElement {
         summarySections: this.summarySections,
         captureGroups: this.captureGroups,
         detailFields: this.detailFields,
+        outcomeOptions: this.outcomeOptions,
       })
     );
   }
@@ -386,6 +401,7 @@ export class CORASummary extends HTMLElement {
       summarySections: this.summarySections,
       captureGroups: this.captureGroups,
       detailFields: this.detailFields,
+      outcomeOptions: this.outcomeOptions,
     });
   }
 }

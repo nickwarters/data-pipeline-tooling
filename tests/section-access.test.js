@@ -39,6 +39,7 @@ function makeConfig(overrides = {}) {
   return {
     questions: [],
     computeOutcome: () => ({ outcome: 'pass' }),
+    outcomeOptions: [{ id: 'pass', wording: 'Pass' }],
     ...overrides,
   };
 }

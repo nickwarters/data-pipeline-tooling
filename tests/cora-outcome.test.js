@@ -10,6 +10,13 @@ installDom();
 const { CORAOutcome, Outcome } =
   await import('../src/components/sections/cora-outcome.js');
 
+/** @type {import('../src/sharepoint-client.js').OutcomeOption[]} */
+const OUTCOME_OPTIONS = [
+  { id: 'pass', wording: 'Pass' },
+  { id: 'refer', wording: 'Refer' },
+  { id: 'fail', wording: 'Fail' },
+];
+
 /** @param {Record<string, import('../src/sharepoint-client.js').Answer>} answers */
 function makeComputeOutcome(answers) {
   const hasNo = Object.values(answers).some((a) => a.value === 'No');
@@ -21,6 +28,7 @@ test('Outcome: plain function renders heading and indeterminate state', () => {
     computeOutcome: null,
     answers: {},
     allAnswered: false,
+    outcomeOptions: OUTCOME_OPTIONS,
   });
 
   assert.equal(/** @type {any} */ (nodes[0]).textContent, 'Outcome');
@@ -50,7 +58,7 @@ test('CORAOutcome: shows indeterminate state on initial render (no update called
 test('CORAOutcome: shows indeterminate state when allAnswered is false', () => {
   const el = new CORAOutcome();
   el.connectedCallback();
-  el.update(() => ({ outcome: 'pass' }), {}, false);
+  el.update(() => ({ outcome: 'pass' }), {}, false, OUTCOME_OPTIONS);
 
   const outcome = /** @type {any} */ (el)._children[1];
   assert.equal(outcome.className, 'cora-outcome-indeterminate');
@@ -64,7 +72,7 @@ test('CORAOutcome: shows pass outcome when allAnswered is true and no No answers
   };
   const el = new CORAOutcome();
   el.connectedCallback();
-  el.update((a) => makeComputeOutcome(a), answers, true);
+  el.update((a) => makeComputeOutcome(a), answers, true, OUTCOME_OPTIONS);
 
   const outcome = /** @type {any} */ (el)._children[1];
   assert.equal(outcome.className, 'cora-outcome-pass');
@@ -75,31 +83,65 @@ test('CORAOutcome: shows fail outcome when allAnswered is true and any answer is
   const answers = { 'q-welcome': { value: 'Yes' }, 'q-needs': { value: 'No' } };
   const el = new CORAOutcome();
   el.connectedCallback();
-  el.update((a) => makeComputeOutcome(a), answers, true);
+  el.update((a) => makeComputeOutcome(a), answers, true, OUTCOME_OPTIONS);
 
   const outcome = /** @type {any} */ (el)._children[1];
   assert.equal(outcome.className, 'cora-outcome-fail');
   assert.equal(outcome.textContent, 'Fail');
 });
 
-test('CORAOutcome: renders configured wording while styling by outcome id', () => {
+test('CORAOutcome: renders the configured wording for the outcome id', () => {
   const el = new CORAOutcome();
   el.connectedCallback();
-  el.update(
-    () => ({ outcome: 'pass', wording: 'Pass with feedback' }),
-    {},
-    true
-  );
+  el.update(() => ({ outcome: 'pass' }), {}, true, [
+    { id: 'pass', wording: 'Pass with feedback' },
+  ]);
 
   const outcome = /** @type {any} */ (el)._children[1];
   assert.equal(outcome.className, 'cora-outcome-pass');
   assert.equal(outcome.textContent, 'Pass with feedback');
 });
 
-test('CORAOutcome: supports refer fallback wording', () => {
+test('CORAOutcome: resolves wording from config, ignoring any wording on the result', () => {
   const el = new CORAOutcome();
   el.connectedCallback();
-  el.update(() => ({ outcome: 'refer' }), {}, true);
+  // The result carries a stray wording; the configured option is authoritative.
+  el.update(() => ({ outcome: 'pass', wording: 'Stray wording' }), {}, true, [
+    { id: 'pass', wording: 'Compliant' },
+  ]);
+
+  const outcome = /** @type {any} */ (el)._children[1];
+  assert.equal(outcome.className, 'cora-outcome-pass');
+  assert.equal(outcome.textContent, 'Compliant');
+});
+
+test('CORAOutcome: shows a "not configured" state when the outcome id has no configured option', () => {
+  const el = new CORAOutcome();
+  el.connectedCallback();
+  el.update(() => ({ outcome: 'refer' }), {}, true, [
+    { id: 'pass', wording: 'Pass' },
+    { id: 'fail', wording: 'Fail' },
+  ]);
+
+  const outcome = /** @type {any} */ (el)._children[1];
+  assert.equal(outcome.className, 'cora-outcome-indeterminate');
+  assert.equal(outcome.textContent, 'Outcome not configured');
+});
+
+test('CORAOutcome: shows a "not configured" state when no outcomeOptions are supplied', () => {
+  const el = new CORAOutcome();
+  el.connectedCallback();
+  el.update(() => ({ outcome: 'pass' }), {}, true);
+
+  const outcome = /** @type {any} */ (el)._children[1];
+  assert.equal(outcome.className, 'cora-outcome-indeterminate');
+  assert.equal(outcome.textContent, 'Outcome not configured');
+});
+
+test('CORAOutcome: supports configured refer wording', () => {
+  const el = new CORAOutcome();
+  el.connectedCallback();
+  el.update(() => ({ outcome: 'refer' }), {}, true, OUTCOME_OPTIONS);
 
   const outcome = /** @type {any} */ (el)._children[1];
   assert.equal(outcome.className, 'cora-outcome-refer');
@@ -111,14 +153,24 @@ test('CORAOutcome: updates outcome reactively when update() is called again', ()
   el.connectedCallback();
 
   const passingAnswers = { 'q-welcome': { value: 'Yes' } };
-  el.update((a) => makeComputeOutcome(a), passingAnswers, true);
+  el.update(
+    (a) => makeComputeOutcome(a),
+    passingAnswers,
+    true,
+    OUTCOME_OPTIONS
+  );
   assert.equal(
     /** @type {any} */ (el)._children[1].className,
     'cora-outcome-pass'
   );
 
   const failingAnswers = { 'q-welcome': { value: 'No' } };
-  el.update((a) => makeComputeOutcome(a), failingAnswers, true);
+  el.update(
+    (a) => makeComputeOutcome(a),
+    failingAnswers,
+    true,
+    OUTCOME_OPTIONS
+  );
   assert.equal(
     /** @type {any} */ (el)._children[1].className,
     'cora-outcome-fail'
@@ -129,7 +181,7 @@ test('CORAOutcome: transitions from indeterminate to pass when all questions ans
   const el = new CORAOutcome();
   el.connectedCallback();
 
-  el.update(() => ({ outcome: 'pass' }), {}, false);
+  el.update(() => ({ outcome: 'pass' }), {}, false, OUTCOME_OPTIONS);
   assert.equal(
     /** @type {any} */ (el)._children[1].className,
     'cora-outcome-indeterminate'
@@ -138,7 +190,8 @@ test('CORAOutcome: transitions from indeterminate to pass when all questions ans
   el.update(
     () => ({ outcome: 'pass' }),
     { 'q-welcome': { value: 'Yes' } },
-    true
+    true,
+    OUTCOME_OPTIONS
   );
   assert.equal(
     /** @type {any} */ (el)._children[1].className,
@@ -151,6 +204,11 @@ test('CORAOutcome: always renders exactly two children (h2 + outcome p)', () => 
   el.connectedCallback();
   assert.equal(/** @type {any} */ (el)._children.length, 2);
 
-  el.update(() => ({ outcome: 'fail' }), { 'q-x': { value: 'No' } }, true);
+  el.update(
+    () => ({ outcome: 'fail' }),
+    { 'q-x': { value: 'No' } },
+    true,
+    OUTCOME_OPTIONS
+  );
   assert.equal(/** @type {any} */ (el)._children.length, 2);
 });
