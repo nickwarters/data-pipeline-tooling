@@ -292,6 +292,116 @@ test('CORANotes: read-only Case Justification input does not enqueue a save', ()
   assert.equal(saveQueue.enqueued.length, 0);
 });
 
+// --- Typed text survives a re-render (issue #317) ---
+
+/**
+ * Minimal Case row carrying the two Notes fields (the single source of truth).
+ * @param {{ notes?: string, caseJustification?: string }} [over]
+ */
+function makeCaseRow({ notes = '', caseJustification = '' } = {}) {
+  return { id: 'case-1', notes, caseJustification };
+}
+
+test('CORANotes: renders general note from caseRow when provided', () => {
+  const el = new CORANotes();
+  el.caseRow = /** @type {any} */ (makeCaseRow({ notes: 'from row' }));
+  el.saveQueue = /** @type {any} */ (makeQueue());
+  el.caseId = 'case-1';
+  el.connectedCallback();
+
+  assert.equal(noteInput(el).value, 'from row');
+});
+
+test('CORANotes: input writes the typed value back onto the caseRow', () => {
+  const caseRow = makeCaseRow({ notes: 'loaded' });
+  const el = new CORANotes();
+  el.caseRow = /** @type {any} */ (caseRow);
+  el.saveQueue = /** @type {any} */ (makeQueue());
+  el.caseId = 'case-1';
+  el.connectedCallback();
+
+  const textarea = noteInput(el);
+  textarea.value = 'typed';
+  textarea._listeners['input'][0]({ target: textarea });
+
+  assert.equal(caseRow.notes, 'typed');
+});
+
+test('CORANotes: typed general note survives a re-render (tab switch)', () => {
+  const caseRow = makeCaseRow({ notes: 'loaded' });
+  const saveQueue = makeQueue('case-1');
+  const el = new CORANotes();
+  el.caseRow = /** @type {any} */ (caseRow);
+  el.saveQueue = /** @type {any} */ (saveQueue);
+  el.caseId = 'case-1';
+  el.connectedCallback();
+
+  const textarea = noteInput(el);
+  textarea.value = 'typed but not yet saved';
+  textarea._listeners['input'][0]({ target: textarea });
+
+  // A tab switch reconnects the element, which re-renders it.
+  el.connectedCallback();
+
+  assert.equal(noteInput(el).value, 'typed but not yet saved');
+  // Autosave semantics unchanged: the edit was still enqueued.
+  assert.equal(saveQueue.enqueued.length, 1);
+  assert.equal(saveQueue.enqueued[0].field, 'notes');
+});
+
+test('CORANotes: typed Case Justification survives a re-render (tab switch)', () => {
+  const caseRow = makeCaseRow({ caseJustification: 'loaded' });
+  const el = new CORANotes();
+  el.caseRow = /** @type {any} */ (caseRow);
+  el.saveQueue = /** @type {any} */ (makeQueue());
+  el.caseId = 'case-1';
+  el.connectedCallback();
+
+  const textarea = justificationInput(el);
+  textarea.value = 'typed justification';
+  textarea._listeners['input'][0]({ target: textarea });
+
+  el.connectedCallback();
+
+  assert.equal(justificationInput(el).value, 'typed justification');
+});
+
+test('CORANotes: typed note survives a controller re-assign from the same caseRow', () => {
+  const caseRow = makeCaseRow({ notes: 'loaded' });
+  const el = new CORANotes();
+  el.caseRow = /** @type {any} */ (caseRow);
+  el.saveQueue = /** @type {any} */ (makeQueue());
+  el.caseId = 'case-1';
+  el.connectedCallback();
+
+  const textarea = noteInput(el);
+  textarea.value = 'typed';
+  textarea._listeners['input'][0]({ target: textarea });
+
+  // A full page re-render re-runs the controller, which re-assigns from the
+  // (now mutated) caseRow before re-rendering.
+  Object.assign(el, { notes: caseRow.notes, caseRow });
+  el.connectedCallback();
+
+  assert.equal(noteInput(el).value, 'typed');
+});
+
+test('CORANotes: read-only input does not mutate the caseRow', () => {
+  const caseRow = makeCaseRow({ notes: 'loaded' });
+  const el = new CORANotes();
+  el.caseRow = /** @type {any} */ (caseRow);
+  el.saveQueue = /** @type {any} */ (makeQueue());
+  el.caseId = 'case-1';
+  el.access = 'read-only';
+  el.connectedCallback();
+
+  const textarea = noteInput(el);
+  textarea.value = 'changed';
+  textarea._listeners['input'][0]({ target: textarea });
+
+  assert.equal(caseRow.notes, 'loaded');
+});
+
 test('CORANotes: each box has a visible label element', () => {
   const el = new CORANotes();
   el.notes = '';

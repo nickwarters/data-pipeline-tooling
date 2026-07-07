@@ -3,6 +3,7 @@ import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 
 /** @typedef {import('../../services/save-queue.js').SaveQueue} SaveQueue */
+/** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 
 /**
  * @typedef {object} NotesProps
@@ -11,6 +12,7 @@ import { h } from '../../lib/html.js';
  * @property {SaveQueue | null} saveQueue
  * @property {string} caseId
  * @property {'edit'|'read-only'|'hidden'} access
+ * @property {CaseRow | null} [caseRow]
  */
 
 /**
@@ -43,7 +45,15 @@ export function Notes(props) {
  * Build a labelled textarea bound to a single Case-row field. The textarea
  * autosaves through the SaveQueue (field-level PATCH) and honours the Notes
  * Section access mode.
- * @param {{ label: string, className: string, placeholder: string, value: string, fieldName: string, props: NotesProps }} opts
+ *
+ * On input it mirrors the typed value back onto the `caseRow` (the single
+ * source of truth this Section renders from, mirroring `cora-appeal`) *as well
+ * as* enqueuing the field-level PATCH. Without the in-memory write-back, a
+ * re-render — e.g. a tab switch reconnecting the element, or the case-review
+ * shell repainting on any signal change — would repaint the textarea from the
+ * last saved/loaded value and discard uncommitted input (issue #317). Autosave
+ * semantics are unchanged: still a debounced, ETag-guarded PATCH (ADR-0008).
+ * @param {{ label: string, className: string, placeholder: string, value: string, fieldName: 'notes' | 'caseJustification', props: NotesProps }} opts
  * @returns {Node[]}
  */
 export function notesBox({
@@ -67,8 +77,9 @@ export function notesBox({
       readonly: isReadOnly ? 'readonly' : undefined,
       oninput: (/** @type {Event} */ ev) => {
         if (props.access === 'read-only') return;
-        if (!props.saveQueue || !props.caseId) return;
         const val = /** @type {any} */ (ev.target).value ?? '';
+        if (props.caseRow) props.caseRow[fieldName] = val;
+        if (!props.saveQueue || !props.caseId) return;
         props.saveQueue.enqueue(props.caseId, fieldName, val);
       },
     }),
@@ -88,15 +99,26 @@ export class CORANotes extends ShellElement {
     this.caseId = '';
     /** @type {'edit'|'read-only'|'hidden'} */
     this.access = 'edit';
+    /**
+     * The Case row this Section renders from and writes edits back onto — the
+     * single source of truth (issue #317). When absent, rendering falls back to
+     * the `notes` / `caseJustification` string props.
+     * @type {CaseRow | null}
+     */
+    this.caseRow = null;
   }
 
   render() {
+    const caseRow = this.caseRow;
     return Notes({
-      notes: this.notes,
-      caseJustification: this.caseJustification,
+      notes: caseRow ? caseRow.notes : this.notes,
+      caseJustification: caseRow
+        ? (caseRow.caseJustification ?? '')
+        : this.caseJustification,
       saveQueue: this.saveQueue,
       caseId: this.caseId,
       access: this.access,
+      caseRow,
     });
   }
 }

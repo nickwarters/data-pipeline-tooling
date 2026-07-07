@@ -565,7 +565,8 @@ test('CORACaseReview: layout includes a cora-notes element with case notes value
 
   const notesEl = notesOf(el);
   assert.ok(notesEl, 'notes element should exist');
-  assert.equal(notesEl.notes, cases[2].notes);
+  // Notes renders from the Case row (the single source of truth, issue #317).
+  assert.equal(notesEl.caseRow.notes, cases[2].notes);
   assert.equal(notesEl.caseId, cases[2].id);
 });
 

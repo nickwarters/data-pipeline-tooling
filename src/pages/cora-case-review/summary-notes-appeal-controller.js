@@ -38,8 +38,7 @@ export function updateSummaryNotesAppeal(context) {
   }
 
   Object.assign(notes, {
-    notes: caseRow.notes,
-    caseJustification: caseRow.caseJustification ?? '',
+    caseRow,
     saveQueue: vm.saveQueue,
     caseId: caseRow.id,
     access: context.displayMode(access.notes),

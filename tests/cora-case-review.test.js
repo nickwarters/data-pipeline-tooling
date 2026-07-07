@@ -339,8 +339,10 @@ test('CORACaseReview: notes panel receives notes and Case Justification from the
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  assert.equal(notesOf(el).notes, 'general note');
-  assert.equal(notesOf(el).caseJustification, 'why this case passes');
+  // Notes renders from the Case row (the single source of truth, issue #317).
+  const notes = notesOf(el);
+  assert.equal(notes.caseRow.notes, 'general note');
+  assert.equal(notes.caseRow.caseJustification, 'why this case passes');
 });
 
 test('CORACaseReview: appeal panel is wired with the Case row, access, user and catalogue', async () => {

@@ -983,11 +983,8 @@ test('updateSummaryNotesAppeal: assigns Summary, Notes, and Appeal tab props', (
   assert.equal(/** @type {any} */ (summary).captureGroups, captureGroups);
   assert.deepEqual(summary._updateArgs, [computeOutcome, answers, true]);
 
-  assert.equal(/** @type {any} */ (notes).notes, 'Reviewer notes');
-  assert.equal(
-    /** @type {any} */ (notes).caseJustification,
-    'Because evidence'
-  );
+  // Notes renders from and writes edits back onto the Case row (issue #317).
+  assert.equal(/** @type {any} */ (notes).caseRow, caseRow);
   assert.equal(/** @type {any} */ (notes).saveQueue, saveQueue);
   assert.equal(/** @type {any} */ (notes).caseId, 'case-1');
   assert.equal(/** @type {any} */ (notes).access, 'edit');
