@@ -223,7 +223,7 @@ test('computeConfiguredOutcome: outcome options without severity default to zero
   ];
 
   const result = computeConfiguredOutcome(questions, { q1: { value: 'No' } }, [
-    { id: 'fail', wording: 'Fail' },
+    { id: 'fail', wording: 'Fail', severity: 100 },
   ]);
 
   assert.deepEqual(result, { outcome: 'fail', wording: 'Fail' });

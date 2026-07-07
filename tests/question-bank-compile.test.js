@@ -460,7 +460,7 @@ test('compileExport: different slug → different hash', async () => {
 test('compileExport: outcomeOptions affect the hash', async () => {
   const bankA = {
     ...exportBank,
-    outcomeOptions: [{ id: 'fail', wording: 'Fail' }],
+    outcomeOptions: [{ id: 'fail', wording: 'Fail', severity: 100 }],
   };
   const bankB = {
     ...exportBank,
@@ -468,6 +468,7 @@ test('compileExport: outcomeOptions affect the hash', async () => {
       {
         id: 'fail',
         wording: 'Fail with impact',
+        severity: 100,
       },
     ],
   };
@@ -481,12 +482,12 @@ test('compileExport: outcomeOptions affect the hash', async () => {
 test('compileExport: defaultOutcomeId affects the hash', async () => {
   const bankA = {
     ...exportBank,
-    outcomeOptions: [{ id: 'good', wording: 'Good Outcome' }],
+    outcomeOptions: [{ id: 'good', wording: 'Good Outcome', severity: 0 }],
     defaultOutcomeId: 'good',
   };
   const bankB = {
     ...exportBank,
-    outcomeOptions: [{ id: 'good', wording: 'Good Outcome' }],
+    outcomeOptions: [{ id: 'good', wording: 'Good Outcome', severity: 0 }],
     defaultOutcomeId: null,
   };
   const [a, b] = await Promise.all([
@@ -499,7 +500,7 @@ test('compileExport: defaultOutcomeId affects the hash', async () => {
 test('compileExport: carries defaultOutcomeId in the envelope', async () => {
   const result = await compileExport({
     ...exportBank,
-    outcomeOptions: [{ id: 'good', wording: 'Good Outcome' }],
+    outcomeOptions: [{ id: 'good', wording: 'Good Outcome', severity: 0 }],
     defaultOutcomeId: 'good',
   });
 

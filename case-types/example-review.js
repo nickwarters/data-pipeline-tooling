@@ -39,9 +39,9 @@ const config = {
   // hand-set Amend Outcome verdict (ADR-0026) lets Controls also pick `refer`, so
   // the full set of selectable Outcomes is declared here.
   outcomeOptions: [
-    { id: 'pass', wording: 'Pass' },
-    { id: 'refer', wording: 'Refer' },
-    { id: 'fail', wording: 'Fail' },
+    { id: 'pass', wording: 'Pass', severity: 0 },
+    { id: 'refer', wording: 'Refer', severity: 50 },
+    { id: 'fail', wording: 'Fail', severity: 100 },
   ],
   // Configurable per-failure capture fields (ADR-0017). One shared set applies
   // to every failed Answer; captured inline as Answer.remediationDetails. Legacy:

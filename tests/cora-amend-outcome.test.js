@@ -44,9 +44,9 @@ function makeQueue() {
 }
 
 const OUTCOME_OPTIONS = [
-  { id: 'pass', wording: 'Pass' },
-  { id: 'refer', wording: 'Refer' },
-  { id: 'fail', wording: 'Fail' },
+  { id: 'pass', wording: 'Pass', severity: 0 },
+  { id: 'refer', wording: 'Refer', severity: 50 },
+  { id: 'fail', wording: 'Fail', severity: 100 },
 ];
 
 /** @param {any} el @returns {string} */

@@ -91,8 +91,8 @@ function makeEditable(caseOverrides = {}) {
   el.access = 'edit';
   el.currentUser = { id: 'u-controls', displayName: 'Controls' };
   el.outcomeOptions = [
-    { id: 'pass', wording: 'Pass' },
-    { id: 'fail', wording: 'Fail' },
+    { id: 'pass', wording: 'Pass', severity: 0 },
+    { id: 'fail', wording: 'Fail', severity: 100 },
   ];
   el.connectedCallback();
   return { el, queue };
@@ -463,7 +463,7 @@ test('CORAAppealReview: agreeing without caseRow does not throw', () => {
   el.caseRow = makeCase({ appeals: [openAppeal()] });
   el.saveQueue = null;
   el.currentUser = null;
-  el.outcomeOptions = [{ id: 'pass', wording: 'Pass' }];
+  el.outcomeOptions = [{ id: 'pass', wording: 'Pass', severity: 0 }];
   el.connectedCallback();
   findByClass(el, 'cora-appeal-review-verdict-agreed').checked = true;
   findByClass(el, 'cora-appeal-review-rationale-input').value = 'Wrong.';
@@ -534,7 +534,7 @@ test('CORAAppealReview: agree with null caseRow enqueueFields only the appeals a
       caseId: 'c1',
       access: 'edit',
       currentUser: { id: 'u-controls', displayName: 'Controls' },
-      outcomeOptions: [{ id: 'pass', wording: 'Pass' }],
+      outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
       now: () => '2026-07-01T00:00:00Z',
       render: () => {},
     },

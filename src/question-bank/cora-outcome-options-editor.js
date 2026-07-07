@@ -124,9 +124,10 @@ export class CORAOutcomeOptionsEditor extends ShellElement {
         }),
       setSeverity: (option, severity) =>
         commit(() => {
+          // Severity is required (it is the outcome sort key), so a blank/invalid
+          // entry coerces to 0 rather than clearing the field.
           const parsed = Number(severity);
-          if (Number.isFinite(parsed)) option.severity = parsed;
-          else delete option.severity;
+          option.severity = Number.isFinite(parsed) ? parsed : 0;
         }),
       removeOutcome: (option, index) =>
         commit((types) => {

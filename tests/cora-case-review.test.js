@@ -44,7 +44,7 @@ const NO_CAPABILITIES = {
 const EMPTY_CASE_TYPE_CONFIG = {
   questions: [],
   computeOutcome: () => ({ outcome: 'pass' }),
-  outcomeOptions: [{ id: 'pass', wording: 'Pass' }],
+  outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
 };
 
 // ===== IMPORTS =====
@@ -2260,7 +2260,7 @@ test('isReportable: true from Actions In Progress and Completed, false while In-
 const ATTRIBUTE_CONFIG = {
   questions: [],
   computeOutcome: () => ({ outcome: 'pass' }),
-  outcomeOptions: [{ id: 'pass', wording: 'Pass' }],
+  outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
   attributeFailures: true,
 };
 
@@ -2336,7 +2336,7 @@ test('CaseMachine.canSelectRemediation follows Issues edit access, not attribute
 const ACTIONS_CONFIG = {
   questions: [],
   computeOutcome: () => ({ outcome: 'pass' }),
-  outcomeOptions: [{ id: 'pass', wording: 'Pass' }],
+  outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
   captureGroups: [
     {
       key: 'g',

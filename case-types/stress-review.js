@@ -18,8 +18,8 @@ const config = {
   // Outcome vocabulary (ADR-0004): required even for this perf harness so the
   // Outcome block resolves wording from config rather than a built-in fallback.
   outcomeOptions: [
-    { id: 'pass', wording: 'Pass' },
-    { id: 'fail', wording: 'Fail' },
+    { id: 'pass', wording: 'Pass', severity: 0 },
+    { id: 'fail', wording: 'Fail', severity: 100 },
   ],
 
   /** @param {Record<string, Answer>} answers */

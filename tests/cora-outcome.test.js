@@ -12,9 +12,9 @@ const { CORAOutcome, Outcome } =
 
 /** @type {import('../src/sharepoint-client.js').OutcomeOption[]} */
 const OUTCOME_OPTIONS = [
-  { id: 'pass', wording: 'Pass' },
-  { id: 'refer', wording: 'Refer' },
-  { id: 'fail', wording: 'Fail' },
+  { id: 'pass', wording: 'Pass', severity: 0 },
+  { id: 'refer', wording: 'Refer', severity: 50 },
+  { id: 'fail', wording: 'Fail', severity: 100 },
 ];
 
 /** @param {Record<string, import('../src/sharepoint-client.js').Answer>} answers */
@@ -94,7 +94,7 @@ test('CORAOutcome: renders the configured wording for the outcome id', () => {
   const el = new CORAOutcome();
   el.connectedCallback();
   el.update(() => ({ outcome: 'pass' }), {}, true, [
-    { id: 'pass', wording: 'Pass with feedback' },
+    { id: 'pass', wording: 'Pass with feedback', severity: 0 },
   ]);
 
   const outcome = /** @type {any} */ (el)._children[1];
@@ -107,7 +107,7 @@ test('CORAOutcome: resolves wording from config, ignoring any wording on the res
   el.connectedCallback();
   // The result carries a stray wording; the configured option is authoritative.
   el.update(() => ({ outcome: 'pass', wording: 'Stray wording' }), {}, true, [
-    { id: 'pass', wording: 'Compliant' },
+    { id: 'pass', wording: 'Compliant', severity: 0 },
   ]);
 
   const outcome = /** @type {any} */ (el)._children[1];
@@ -119,8 +119,8 @@ test('CORAOutcome: shows a "not configured" state when the outcome id has no con
   const el = new CORAOutcome();
   el.connectedCallback();
   el.update(() => ({ outcome: 'refer' }), {}, true, [
-    { id: 'pass', wording: 'Pass' },
-    { id: 'fail', wording: 'Fail' },
+    { id: 'pass', wording: 'Pass', severity: 0 },
+    { id: 'fail', wording: 'Fail', severity: 100 },
   ]);
 
   const outcome = /** @type {any} */ (el)._children[1];

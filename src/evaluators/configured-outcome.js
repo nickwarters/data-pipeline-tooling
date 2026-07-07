@@ -60,7 +60,7 @@ function outcomeOptionMap(outcomeOptions = []) {
       {
         outcome: option.id,
         wording: option.wording,
-        severity: option.severity ?? 0,
+        severity: option.severity,
       },
     ])
   );

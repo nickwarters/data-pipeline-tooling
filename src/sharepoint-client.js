@@ -24,9 +24,11 @@
 
 /**
  * A case-type-level outcome option. Questions and actions select these by id so
- * wording is configured once per Case Type.
+ * wording is configured once per Case Type. `severity` is the sort key that
+ * orders outcomes (higher = worse); it is required so ordering is driven wholly
+ * by config rather than inferred from a built-in default.
  *
- * @typedef {{ id: string, wording: string, severity?: number }} OutcomeOption
+ * @typedef {{ id: string, wording: string, severity: number }} OutcomeOption
  */
 
 /**
