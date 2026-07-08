@@ -15,7 +15,7 @@ test('CORAQuestionCard: no question → nothing renders', () => {
   assert.equal(/** @type {any} */ (e)._children.length, 0);
 });
 
-test('CORAQuestionCard: yes-no-na shows failure-criteria field + no options', () => {
+test('CORAQuestionCard: yes-no-na shows failure-criteria field + fixed-option outcome mapping', () => {
   _resetStore();
   const q = cases.get()['example-review'].questions[0];
   const e = new CORAQuestionCard();
@@ -24,12 +24,29 @@ test('CORAQuestionCard: yes-no-na shows failure-criteria field + no options', ()
   e.connectedCallback();
   const head = /** @type {any} */ (e)._children[1];
   const body = head._children[1];
-  // body kids: wording-editor, grid, labels-editor, showwhen-editor,
-  // remediation-editor (no options-editor for yes-no-na)
-  assert.equal(body._children.length, 5);
+  // body kids: wording-editor, grid, options-editor (fixed Yes/No/NA outcome
+  // mapping), labels-editor, showwhen-editor, remediation-editor
+  assert.equal(body._children.length, 6);
   // grid has 3 fields: category, response-type, failure-criteria
   const grid = body._children[1];
   assert.equal(grid._children.length, 3);
+});
+
+test('CORAQuestionCard: outcome response type derives read-only options, drops stored options', () => {
+  _resetStore();
+  const q = cases.get()['example-review'].questions[3]; // q-channel single-choice
+  const e = new CORAQuestionCard();
+  e.question = q;
+  e.questionIndex = 3;
+  e.connectedCallback();
+  const body = /** @type {any} */ (e)._children[1]._children[1];
+  const grid = body._children[1];
+  const responseTypeField = grid._children[1];
+  const select = responseTypeField._children[1];
+  select._listeners.change[0]({ target: { value: 'outcome' } });
+  assert.equal(q.responseType, 'outcome');
+  assert.equal('options' in q, false);
+  assert.equal('optionOutcomes' in q, false);
 });
 
 test('CORAQuestionCard: single-choice renders options-editor + no failure-criteria', () => {

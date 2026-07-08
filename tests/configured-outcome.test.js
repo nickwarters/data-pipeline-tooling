@@ -5,170 +5,116 @@ import assert from 'node:assert/strict';
 import {
   computeConfiguredOutcome,
   normaliseConfiguredActions,
+  normaliseOutcome,
+  defaultWordingFor,
+  outcomeResponseOptions,
+  DEFAULT_OUTCOME_SEVERITY,
 } from '../src/evaluators/configured-outcome.js';
 
-test('computeConfiguredOutcome: uses question no-action outcome when failed answer has no selected actions', () => {
+const PASS_REFER_FAIL = [
+  { id: 'pass', wording: 'Pass', severity: 0 },
+  { id: 'refer', wording: 'Refer', severity: 50 },
+  { id: 'fail', wording: 'Fail', severity: 100 },
+];
+
+test('computeConfiguredOutcome: built-in Pass when nothing is answered', () => {
   /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
   const questions = [
     {
       id: 'q1',
       text: 'Was disclosure made?',
       responseType: /** @type {const} */ ('yes-no-na'),
-      failureCriteria: 'No',
-      outcome: {
-        noActionOutcomeId: 'fail',
-      },
+      optionOutcomes: { No: 'fail' },
+      deprecated: false,
+    },
+  ];
+
+  const result = computeConfiguredOutcome(questions, {}, PASS_REFER_FAIL);
+
+  assert.deepEqual(result, { outcome: 'pass', wording: 'Pass' });
+});
+
+test('computeConfiguredOutcome: a selected option maps to its configured outcome', () => {
+  /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
+  const questions = [
+    {
+      id: 'q1',
+      text: 'Was disclosure made?',
+      responseType: /** @type {const} */ ('yes-no-na'),
+      optionOutcomes: { Yes: 'pass', No: 'fail' },
       deprecated: false,
     },
   ];
 
   const result = computeConfiguredOutcome(
     questions,
-    {
-      q1: { value: 'No', remediationActions: [] },
-    },
-    [{ id: 'fail', wording: 'Fail', severity: 100 }]
+    { q1: { value: 'No' } },
+    PASS_REFER_FAIL
   );
 
   assert.deepEqual(result, { outcome: 'fail', wording: 'Fail' });
 });
 
-test('computeConfiguredOutcome: uses selected action outcome wording', () => {
+test('computeConfiguredOutcome: highest-scoring applicable outcome wins across questions', () => {
   /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
   const questions = [
     {
       id: 'q1',
-      text: 'Was disclosure made?',
+      text: 'Q1',
+      responseType: /** @type {const} */ ('single-choice'),
+      options: ['Ok', 'Minor'],
+      optionOutcomes: { Ok: 'pass', Minor: 'refer' },
+      deprecated: false,
+    },
+    {
+      id: 'q2',
+      text: 'Q2',
       responseType: /** @type {const} */ ('yes-no-na'),
-      failureCriteria: 'No',
-      outcome: {
-        noActionOutcomeId: 'fail',
-      },
-      remediationActions: [
-        {
-          id: 'impact',
-          text: 'Customer impact identified',
-          outcomeId: 'impact',
-        },
-        {
-          id: 'feedback',
-          text: 'Coaching feedback only',
-          outcomeId: 'feedback',
-        },
-      ],
+      options: ['Yes', 'No', 'NA'],
+      optionOutcomes: { No: 'fail' },
       deprecated: false,
     },
   ];
 
   const result = computeConfiguredOutcome(
     questions,
-    {
-      q1: {
-        value: 'No',
-        remediationActions: [
-          { id: 'feedback', text: 'Coaching feedback only', completed: false },
-        ],
-      },
-    },
-    [
-      { id: 'fail', wording: 'Fail', severity: 100 },
-      { id: 'impact', wording: 'Fail with impact', severity: 120 },
-      {
-        id: 'feedback',
-        wording: 'Pass with feedback',
-        severity: 20,
-      },
-    ]
+    { q1: { value: 'Minor' }, q2: { value: 'No' } },
+    PASS_REFER_FAIL
   );
 
-  assert.deepEqual(result, {
-    outcome: 'feedback',
-    wording: 'Pass with feedback',
-  });
+  assert.deepEqual(result, { outcome: 'fail', wording: 'Fail' });
 });
 
-test('computeConfiguredOutcome: chooses highest severity selected action outcome', () => {
+test('computeConfiguredOutcome: multi-choice scores every selected option', () => {
   /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
   const questions = [
     {
       id: 'q1',
-      text: 'Was disclosure made?',
-      responseType: /** @type {const} */ ('yes-no-na'),
-      failureCriteria: 'No',
-      remediationActions: [
-        {
-          id: 'feedback',
-          text: 'Coaching feedback only',
-          outcomeId: 'feedback',
-        },
-        {
-          id: 'impact',
-          text: 'Customer impact identified',
-          outcomeId: 'impact',
-        },
-      ],
+      text: 'Which breaches occurred?',
+      responseType: /** @type {const} */ ('multi-choice'),
+      options: ['Late', 'Missing disclosure'],
+      optionOutcomes: { Late: 'refer', 'Missing disclosure': 'fail' },
       deprecated: false,
     },
   ];
 
   const result = computeConfiguredOutcome(
     questions,
-    {
-      q1: {
-        value: 'No',
-        remediationActions: [
-          { id: 'feedback', text: 'Coaching feedback only', completed: false },
-          {
-            id: 'impact',
-            text: 'Customer impact identified',
-            completed: false,
-          },
-        ],
-      },
-    },
-    [
-      {
-        id: 'feedback',
-        wording: 'Pass with feedback',
-        severity: 20,
-      },
-      { id: 'impact', wording: 'Fail with impact', severity: 120 },
-    ]
+    { q1: { value: ['Late', 'Missing disclosure'] } },
+    PASS_REFER_FAIL
   );
 
-  assert.deepEqual(result, {
-    outcome: 'impact',
-    wording: 'Fail with impact',
-  });
+  assert.deepEqual(result, { outcome: 'fail', wording: 'Fail' });
 });
 
-test('computeConfiguredOutcome: ignores questions with no failureCriteria', () => {
-  /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
-  const questions = [
-    {
-      id: 'q-info',
-      text: 'Was context reviewed?',
-      category: 'General',
-      responseType: /** @type {const} */ ('yes-no-na'),
-      deprecated: false,
-    },
-  ];
-
-  const result = computeConfiguredOutcome(questions, {
-    'q-info': { value: 'No' },
-  });
-
-  assert.deepEqual(result, { outcome: 'pass', wording: 'Pass' });
-});
-
-test('computeConfiguredOutcome: uses configured default outcome when nothing fails', () => {
+test('computeConfiguredOutcome: uses the configured default outcome as the baseline', () => {
   /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
   const questions = [
     {
       id: 'q1',
-      text: 'Was disclosure made?',
+      text: 'Q1',
       responseType: /** @type {const} */ ('yes-no-na'),
-      failureCriteria: 'No',
+      optionOutcomes: { No: 'fail' },
       deprecated: false,
     },
   ];
@@ -183,15 +129,14 @@ test('computeConfiguredOutcome: uses configured default outcome when nothing fai
   assert.deepEqual(result, { outcome: 'good', wording: 'Good Outcome' });
 });
 
-test('computeConfiguredOutcome: failed outcomes can override the configured default by severity', () => {
+test('computeConfiguredOutcome: a mapped response overrides the default by severity', () => {
   /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
   const questions = [
     {
       id: 'q1',
-      text: 'Was disclosure made?',
+      text: 'Q1',
       responseType: /** @type {const} */ ('yes-no-na'),
-      failureCriteria: 'No',
-      outcome: { noActionOutcomeId: 'fail' },
+      optionOutcomes: { No: 'fail' },
       deprecated: false,
     },
   ];
@@ -209,68 +154,134 @@ test('computeConfiguredOutcome: failed outcomes can override the configured defa
   assert.deepEqual(result, { outcome: 'fail', wording: 'Fail' });
 });
 
-test('computeConfiguredOutcome: outcome options without severity default to zero', () => {
+test('computeConfiguredOutcome: ignores questions without an option-outcome mapping', () => {
   /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
   const questions = [
     {
-      id: 'q1',
-      text: 'Was disclosure made?',
-      responseType: /** @type {const} */ ('yes-no-na'),
-      failureCriteria: 'No',
-      outcome: { noActionOutcomeId: 'fail' },
+      id: 'q-info',
+      text: 'Which channel?',
+      responseType: /** @type {const} */ ('single-choice'),
+      options: ['Phone', 'Email'],
       deprecated: false,
     },
   ];
 
-  const result = computeConfiguredOutcome(questions, { q1: { value: 'No' } }, [
-    { id: 'fail', wording: 'Fail', severity: 100 },
-  ]);
+  const result = computeConfiguredOutcome(
+    questions,
+    { 'q-info': { value: 'Phone' } },
+    PASS_REFER_FAIL
+  );
 
-  assert.deepEqual(result, { outcome: 'fail', wording: 'Fail' });
+  assert.deepEqual(result, { outcome: 'pass', wording: 'Pass' });
 });
 
-test('computeConfiguredOutcome: falls back to legacy embedded descriptors', () => {
+test('computeConfiguredOutcome: ignores options mapped to an unknown outcome id or unmapped value', () => {
   /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
   const questions = [
     {
       id: 'q1',
-      text: 'Was disclosure made?',
-      responseType: /** @type {const} */ ('yes-no-na'),
-      failureCriteria: 'No',
-      outcome: {
-        noAction: { outcome: 'fail', wording: 'Fail', severity: 100 },
-      },
+      text: 'Q1',
+      responseType: /** @type {const} */ ('single-choice'),
+      options: ['A', 'B'],
+      // A → unknown id, B → unmapped (absent)
+      optionOutcomes: { A: 'ghost' },
       deprecated: false,
     },
   ];
 
-  const result = computeConfiguredOutcome(questions, {
-    q1: { value: 'No' },
+  assert.deepEqual(
+    computeConfiguredOutcome(
+      questions,
+      { q1: { value: 'A' } },
+      PASS_REFER_FAIL
+    ),
+    { outcome: 'pass', wording: 'Pass' }
+  );
+  assert.deepEqual(
+    computeConfiguredOutcome(
+      questions,
+      { q1: { value: 'B' } },
+      PASS_REFER_FAIL
+    ),
+    { outcome: 'pass', wording: 'Pass' }
+  );
+});
+
+test('computeConfiguredOutcome: falls back to built-in Pass wording/severity without options', () => {
+  const result = computeConfiguredOutcome([], {});
+  assert.deepEqual(result, { outcome: 'pass', wording: 'Pass' });
+  assert.equal(DEFAULT_OUTCOME_SEVERITY.pass, 0);
+});
+
+test('outcomeResponseOptions: derives read-only labels and mapping from the outcome vocabulary', () => {
+  assert.deepEqual(outcomeResponseOptions(PASS_REFER_FAIL), {
+    options: ['Pass', 'Refer', 'Fail'],
+    optionOutcomes: { Pass: 'pass', Refer: 'refer', Fail: 'fail' },
   });
-
-  assert.deepEqual(result, { outcome: 'fail', wording: 'Fail' });
+  assert.deepEqual(outcomeResponseOptions(), {
+    options: [],
+    optionOutcomes: {},
+  });
 });
 
-test('normaliseConfiguredActions: preserves object actions and adds legacy ids', () => {
+test('computeConfiguredOutcome: an outcome-type response drives the outcome', () => {
+  const { options, optionOutcomes } = outcomeResponseOptions(PASS_REFER_FAIL);
+  /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
+  const questions = [
+    {
+      id: 'q1',
+      text: 'Overall assessment',
+      responseType: /** @type {const} */ ('outcome'),
+      options,
+      optionOutcomes,
+      deprecated: false,
+    },
+  ];
+
+  const result = computeConfiguredOutcome(
+    questions,
+    { q1: { value: 'Refer' } },
+    PASS_REFER_FAIL
+  );
+
+  assert.deepEqual(result, { outcome: 'refer', wording: 'Refer' });
+});
+
+test('normaliseOutcome: fills wording and severity defaults', () => {
+  assert.deepEqual(normaliseOutcome({ outcome: 'refer' }), {
+    outcome: 'refer',
+    wording: 'Refer',
+    severity: 0,
+  });
+  assert.deepEqual(
+    normaliseOutcome({ outcome: 'custom', wording: 'Custom', severity: 7 }),
+    { outcome: 'custom', wording: 'Custom', severity: 7 }
+  );
+});
+
+test('defaultWordingFor: known ids get titles, unknown passes through', () => {
+  assert.equal(defaultWordingFor('pass'), 'Pass');
+  assert.equal(defaultWordingFor('refer'), 'Refer');
+  assert.equal(defaultWordingFor('fail'), 'Fail');
+  assert.equal(defaultWordingFor('bespoke'), 'bespoke');
+});
+
+test('normaliseConfiguredActions: coerces strings and strips any legacy outcome', () => {
   assert.deepEqual(
     normaliseConfiguredActions(
-      [
+      /** @type {any} */ ([
         'Legacy action',
         {
           id: 'stable',
           text: 'Stable action',
           outcome: { outcome: 'refer', wording: 'Refer', severity: 50 },
         },
-      ],
+      ]),
       'q1'
     ),
     [
       { id: 'q1-ra-0', text: 'Legacy action' },
-      {
-        id: 'stable',
-        text: 'Stable action',
-        outcome: { outcome: 'refer', wording: 'Refer', severity: 50 },
-      },
+      { id: 'stable', text: 'Stable action' },
     ]
   );
 });

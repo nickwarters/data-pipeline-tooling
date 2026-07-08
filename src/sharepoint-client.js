@@ -32,7 +32,11 @@
  */
 
 /**
- * @typedef {{ id: string, text: string, outcomeId?: string, outcome?: OutcomeDescriptor }} RemediationActionDefinition
+ * A configured **Remediation Action** attached to a question in the Question
+ * Bank. Actions attach to questions and are captured against failed Answers, but
+ * they do **not** drive the Outcome — the response does (question bank redesign).
+ *
+ * @typedef {{ id: string, text: string }} RemediationActionDefinition
  */
 
 /**
@@ -202,6 +206,15 @@
  */
 
 /**
+ * `responseType` is one of `yes-no-na` | `single-choice` | `multi-choice` |
+ * `outcome`. `yes-no-na` is single-choice with the fixed options `Yes`/`No`/`NA`;
+ * `outcome` is single-choice whose options are the Case Type's configured
+ * Outcomes (read-only). `optionOutcomes` maps each response option label to a
+ * configured Outcome id (`OutcomeOption.id`); it is what drives the Outcome —
+ * the highest-scoring applicable mapped Outcome wins. `failureCriteria` is
+ * unrelated to the Outcome: it flags a failed Answer for the Issues/Remediation
+ * flow.
+ *
  * `labelIds` references the owning Case Type's `labels` by id (ADR-0015). It is
  * reporting metadata only and does not affect how a question is presented.
  *
@@ -210,11 +223,11 @@
  *   text: string,
  *   category?: string,
  *   labelIds?: string[],
- *   responseType: 'yes-no-na' | 'single-choice' | 'multi-choice',
+ *   responseType: 'yes-no-na' | 'single-choice' | 'multi-choice' | 'outcome',
  *   options?: string[],
+ *   optionOutcomes?: Record<string, string>,
  *   showWhen?: Record<string, unknown>,
  *   failureCriteria?: string,
- *   outcome?: { noActionOutcomeId?: string, noAction?: OutcomeDescriptor },
  *   remediationActions?: Array<string | RemediationActionDefinition>,
  *   allowFreeFormRemediation?: boolean,
  *   deprecated: boolean
@@ -270,9 +283,9 @@
  *     category: string | null,
  *     responseType: string,
  *     options: string[] | null,
+ *     optionOutcomes?: Record<string, string> | null,
  *     showWhen: Record<string, unknown> | null,
  *     failureCriteria: string | null,
- *     outcome?: { noActionOutcomeId?: string, noAction?: OutcomeDescriptor } | null,
  *     remediationActions?: Array<RemediationActionDefinition> | null,
  *     deprecated: boolean,
  *     labelIds?: string[],

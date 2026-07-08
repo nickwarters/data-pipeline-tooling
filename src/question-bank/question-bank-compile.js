@@ -14,6 +14,37 @@
 /** @typedef {import('../../dev/fixtures/question-banks.js').QuestionBank} QuestionBank */
 /** @typedef {import('../../dev/fixtures/question-banks.js').DraftQuestion} DraftQuestion */
 
+import { outcomeResponseOptions } from '../evaluators/configured-outcome.js';
+
+/**
+ * Resolves the response options and their Outcome mapping for a compiled/exported
+ * question. `outcome`-type questions derive both from the Case Type's Outcomes
+ * (read-only); other types carry their own. Empty mappings collapse to `null` so
+ * the caller can omit them.
+ *
+ * @param {DraftQuestion} q
+ * @param {import('../sharepoint-client.js').OutcomeOption[]} outcomeOptions
+ * @returns {{ options: string[] | null, optionOutcomes: Record<string, string> | null }}
+ */
+export function resolveCompiledOptions(q, outcomeOptions = []) {
+  if (q.responseType === 'outcome') {
+    const derived = outcomeResponseOptions(outcomeOptions);
+    return {
+      options: derived.options.length ? derived.options : null,
+      optionOutcomes: Object.keys(derived.optionOutcomes).length
+        ? derived.optionOutcomes
+        : null,
+    };
+  }
+  return {
+    options: q.options ?? null,
+    optionOutcomes:
+      q.optionOutcomes && Object.keys(q.optionOutcomes).length
+        ? q.optionOutcomes
+        : null,
+  };
+}
+
 /**
  * @param {QuestionBank} bank
  * @returns {string}
@@ -60,14 +91,19 @@ export function compileBank(bank) {
     if (q.labelIds && q.labelIds.length)
       lines.push(`      labelIds: ${JSON.stringify(q.labelIds)},`);
     lines.push(`      responseType: ${JSON.stringify(q.responseType)},`);
-    if (q.options) lines.push(`      options: ${JSON.stringify(q.options)},`);
+    const resolved = resolveCompiledOptions(q, bank.outcomeOptions ?? []);
+    if (resolved.options)
+      lines.push(`      options: ${JSON.stringify(resolved.options)},`);
+    if (resolved.optionOutcomes)
+      lines.push(
+        `      optionOutcomes: ${JSON.stringify(resolved.optionOutcomes)},`
+      );
     if (q.showWhen)
       lines.push(`      showWhen: ${JSON.stringify(q.showWhen)},`);
     if (q.failureCriteria)
       lines.push(
         `      failureCriteria: ${JSON.stringify(q.failureCriteria)},`
       );
-    if (q.outcome) lines.push(`      outcome: ${JSON.stringify(q.outcome)},`);
     if (q.remediationActions) {
       lines.push(`      remediationActions: [`);
       for (const r of q.remediationActions)
@@ -168,7 +204,7 @@ function canonicalise(value) {
  * Returns the function-free projection of the bank: slug, label, generatedAt,
  * a full SHA-256 hash (stable over questions+slug only, including labelIds),
  * a questions array that carries id/text/category/responseType/options/
- * showWhen/failureCriteria/outcome/remediationActions/labelIds/deprecated,
+ * optionOutcomes/showWhen/failureCriteria/remediationActions/labelIds/deprecated,
  * case-type outcomeOptions/defaultOutcomeId, and a labels table. Excluded: computeOutcome,
  * allowFreeFormRemediation, eligibleGroups.
  *
@@ -184,9 +220,9 @@ function canonicalise(value) {
  *     category: string | null,
  *     responseType: string,
  *     options: string[] | null,
+ *     optionOutcomes: Record<string, string> | null,
  *     showWhen: Record<string, unknown> | null,
  *     failureCriteria: string | null,
- *     outcome: { noActionOutcomeId?: string, noAction?: import('../sharepoint-client.js').OutcomeDescriptor } | null,
  *     remediationActions: Array<import('../sharepoint-client.js').RemediationActionDefinition> | null,
  *     deprecated: boolean,
  *     labelIds?: string[],
@@ -197,22 +233,24 @@ function canonicalise(value) {
  * }>}
  */
 export async function compileExport(bank) {
+  const outcomeOptions = bank.outcomeOptions ?? [];
   const questions = bank.questions.map((q) => {
-    /** @type {{ id: string, text: string, category: string|null, responseType: string, options: string[]|null, showWhen: Record<string,unknown>|null, failureCriteria: string|null, outcome: { noActionOutcomeId?: string, noAction?: import('../sharepoint-client.js').OutcomeDescriptor }|null, remediationActions: Array<import('../sharepoint-client.js').RemediationActionDefinition>|null, deprecated: boolean, labelIds?: string[] }} */
+    const resolved = resolveCompiledOptions(q, outcomeOptions);
+    /** @type {{ id: string, text: string, category: string|null, responseType: string, options: string[]|null, optionOutcomes: Record<string, string>|null, showWhen: Record<string,unknown>|null, failureCriteria: string|null, remediationActions: Array<import('../sharepoint-client.js').RemediationActionDefinition>|null, deprecated: boolean, labelIds?: string[] }} */
     const out = {
       id: q.id,
       text: q.text,
       category: q.category ?? null,
       responseType: q.responseType,
-      options: q.options ?? null,
+      options: resolved.options,
+      optionOutcomes: resolved.optionOutcomes,
       showWhen: q.showWhen ?? null,
       failureCriteria: q.failureCriteria ?? null,
-      outcome: q.outcome ?? null,
       remediationActions: q.remediationActions
         ? q.remediationActions.map((action, index) =>
             typeof action === 'string'
               ? { id: `${q.id}-ra-${index}`, text: action }
-              : action
+              : { id: action.id, text: action.text }
           )
         : null,
       deprecated: q.deprecated,
@@ -221,7 +259,6 @@ export async function compileExport(bank) {
     return out;
   });
 
-  const outcomeOptions = bank.outcomeOptions ?? [];
   const canonical = canonicalise({
     slug: bank.slug,
     questions,

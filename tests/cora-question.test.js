@@ -27,6 +27,37 @@ const Q_MULTI = /** @type {QuestionDefinition} */ ({
   deprecated: false,
 });
 
+// `outcome`-type questions render as a single-choice radio group whose options
+// are the configured Outcome wordings (compiled onto the question).
+const Q_OUTCOME = /** @type {QuestionDefinition} */ ({
+  id: 'q3',
+  text: 'Overall assessment',
+  responseType: 'outcome',
+  options: ['Pass', 'Refer', 'Fail'],
+  optionOutcomes: { Pass: 'pass', Refer: 'refer', Fail: 'fail' },
+  deprecated: false,
+});
+
+test('Question: outcome-type renders a radiogroup of outcome options and emits the selection', () => {
+  /** @type {any[]} */
+  const answers = [];
+  const nodes = Question({
+    question: Q_OUTCOME,
+    currentValue: 'Refer',
+    access: 'edit',
+    onAnswer: (detail) => answers.push(detail),
+  });
+  const fieldset = /** @type {any} */ (nodes[0]);
+  assert.equal(fieldset.role, 'radiogroup');
+  // legend + 3 option labels
+  assert.equal(fieldset._children.length, 4);
+  const referRadio = fieldset._children[2]._children[0];
+  assert.equal(referRadio.checked, true);
+  const failRadio = fieldset._children[3]._children[0];
+  failRadio._listeners.change[0]();
+  assert.deepEqual(answers.at(-1), { questionId: 'q3', value: 'Fail' });
+});
+
 test('CORAQuestion: renders nothing if question is missing', () => {
   const el = new CORAQuestion();
   el.connectedCallback();

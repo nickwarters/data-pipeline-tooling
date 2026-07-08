@@ -80,6 +80,7 @@ definitions — see **Label resolution** below.
   "category": "Analysis",
   "responseType": "yes-no-na",
   "options": null,
+  "optionOutcomes": { "No": "fail" },
   "showWhen": {
     "$and": [
       { "q-acknowledged": { "equals": "Yes" } },
@@ -97,17 +98,18 @@ definitions — see **Label resolution** below.
 }
 ```
 
-| Field             | Type                                             | Use in reporting                                                                                                        |
-| ----------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| `id`              | string                                           | Key into the Case row's `answers` map.                                                                                  |
-| `text`            | string                                           | Display label for the report.                                                                                           |
-| `category`        | string \| absent                                 | Group / roll up (e.g. failure rate per section).                                                                        |
-| `responseType`    | `yes-no-na` \| `single-choice` \| `multi-choice` | **Selects the failure test** (scalar equality vs array-includes).                                                       |
-| `options`         | string[] \| absent                               | Valid choices; useful for labelling, not required for failure.                                                          |
-| `showWhen`        | object \| absent                                 | Applicability rule. Only needed for _denominators_ (see below); not for counting failures.                              |
-| `failureCriteria` | string \| absent                                 | The value that marks a failure. **Absent ⇒ the question cannot fail.**                                                  |
-| `labelIds`        | string[] \| absent                               | IDs of labels assigned to this question (frozen in versioned files). Resolve to names via `labels` in the current file. |
-| `deprecated`      | boolean                                          | Question retired from the bank; may still appear on older Cases — label or exclude as your report requires.             |
+| Field             | Type                                                          | Use in reporting                                                                                                                                                                |
+| ----------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`              | string                                                        | Key into the Case row's `answers` map.                                                                                                                                          |
+| `text`            | string                                                        | Display label for the report.                                                                                                                                                   |
+| `category`        | string \| absent                                              | Group / roll up (e.g. failure rate per section).                                                                                                                                |
+| `responseType`    | `yes-no-na` \| `single-choice` \| `multi-choice` \| `outcome` | **Selects the failure test** (scalar equality vs array-includes). `outcome` is single-choice over the Case Type's Outcomes.                                                     |
+| `options`         | string[] \| absent                                            | Valid choices; useful for labelling, not required for failure.                                                                                                                  |
+| `optionOutcomes`  | object \| null                                                | Maps each response option label to a configured Outcome id. **Drives the case verdict** — the highest-scoring applicable mapped Outcome wins. Independent of `failureCriteria`. |
+| `showWhen`        | object \| absent                                              | Applicability rule. Only needed for _denominators_ (see below); not for counting failures.                                                                                      |
+| `failureCriteria` | string \| absent                                              | The value that marks a failed Answer for the **Issues/Remediation** flow. **Absent ⇒ the question raises no Issue.** Does not by itself drive the Outcome.                      |
+| `labelIds`        | string[] \| absent                                            | IDs of labels assigned to this question (frozen in versioned files). Resolve to names via `labels` in the current file.                                                         |
+| `deprecated`      | boolean                                                       | Question retired from the bank; may still appear on older Cases — label or exclude as your report requires.                                                                     |
 
 Maintainers can use this to add informational Question Bank questions. For
 example, a required `General` yes/no question with no `failureCriteria` still

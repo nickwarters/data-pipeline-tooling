@@ -239,10 +239,13 @@ export class CaseReviewViewModel {
           text: q.text,
           ...(q.category !== null ? { category: q.category } : {}),
           responseType:
-            /** @type {'yes-no-na'|'single-choice'|'multi-choice'} */ (
+            /** @type {'yes-no-na'|'single-choice'|'multi-choice'|'outcome'} */ (
               q.responseType
             ),
           ...(q.options !== null ? { options: q.options } : {}),
+          ...(q.optionOutcomes != null
+            ? { optionOutcomes: q.optionOutcomes }
+            : {}),
           ...(q.showWhen !== null ? { showWhen: q.showWhen } : {}),
           ...(q.failureCriteria !== null
             ? { failureCriteria: q.failureCriteria }

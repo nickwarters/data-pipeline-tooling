@@ -164,13 +164,10 @@ export class CORAOutcomeOptionsEditor extends ShellElement {
    */
   _renameOutcomeReferences(bank, previousId, nextId) {
     for (const question of bank.questions) {
-      if (question.outcome?.noActionOutcomeId === previousId) {
-        question.outcome.noActionOutcomeId = nextId;
-      }
-      for (const action of question.remediationActions ?? []) {
-        if (typeof action !== 'string' && action.outcomeId === previousId) {
-          action.outcomeId = nextId;
-        }
+      const map = question.optionOutcomes;
+      if (!map) continue;
+      for (const key of Object.keys(map)) {
+        if (map[key] === previousId) map[key] = nextId;
       }
     }
     if (bank.defaultOutcomeId === previousId) bank.defaultOutcomeId = nextId;
@@ -182,15 +179,12 @@ export class CORAOutcomeOptionsEditor extends ShellElement {
    */
   _clearOutcomeReferences(bank, outcomeId) {
     for (const question of bank.questions) {
-      if (question.outcome?.noActionOutcomeId === outcomeId) {
-        delete question.outcome.noActionOutcomeId;
-        if (!Object.keys(question.outcome).length) delete question.outcome;
+      const map = question.optionOutcomes;
+      if (!map) continue;
+      for (const key of Object.keys(map)) {
+        if (map[key] === outcomeId) delete map[key];
       }
-      for (const action of question.remediationActions ?? []) {
-        if (typeof action !== 'string' && action.outcomeId === outcomeId) {
-          delete action.outcomeId;
-        }
-      }
+      if (!Object.keys(map).length) delete question.optionOutcomes;
     }
     if (bank.defaultOutcomeId === outcomeId) delete bank.defaultOutcomeId;
   }

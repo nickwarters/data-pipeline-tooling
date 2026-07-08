@@ -1,14 +1,16 @@
 // @ts-check
 import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
-import {
-  commit,
-  currentBank,
-} from '../../question-bank/question-bank-store.js';
+import { commit } from '../../question-bank/question-bank-store.js';
 import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.js';
 
 /**
- * @param {{ question: any, outcomeOptions: import('../../sharepoint-client.js').OutcomeOption[], ensureActionObjects: (q: any) => void, nextActionId: (q: any) => string }} props
+ * Editor for a question's attached **Remediation Actions**. Actions attach to
+ * the question and are surfaced against failed Answers, but they do **not** drive
+ * the Outcome — the response does (question bank redesign) — so there is no
+ * per-action or no-action Outcome selector here.
+ *
+ * @param {{ question: any, ensureActionObjects: (q: any) => void, nextActionId: (q: any) => string }} props
  * @returns {HTMLElement | undefined}
  */
 export function RemediationEditor(props) {
@@ -55,10 +57,6 @@ export function RemediationEditor(props) {
     freeRow
   );
 
-  if (q.failureCriteria) {
-    wrap.appendChild(renderNoActionOutcome(q, props.outcomeOptions));
-  }
-
   if (q.allowFreeFormRemediation) {
     wrap.appendChild(
       h(
@@ -95,9 +93,6 @@ export function RemediationEditor(props) {
           'div',
           { class: 'rem-item' },
           inp,
-          renderActionOutcome(q, action, idx, props.outcomeOptions, () =>
-            props.ensureActionObjects(q)
-          ),
           h(
             'span',
             {
@@ -162,39 +157,9 @@ export class CORARemediationEditor extends ShellElement {
   render() {
     return RemediationEditor({
       question: this.question,
-      outcomeOptions: currentBank.get()?.outcomeOptions ?? [],
       ensureActionObjects: (q) => this._ensureActionObjects(q),
       nextActionId: (q) => this._nextActionId(q),
     });
-  }
-
-  /** @param {any} q */
-  _renderNoActionOutcome(q) {
-    return renderNoActionOutcome(q, currentBank.get()?.outcomeOptions ?? []);
-  }
-
-  /**
-   * @param {any} q
-   * @param {any} action
-   * @param {number} idx
-   */
-  _renderActionOutcome(q, action, idx) {
-    return renderActionOutcome(
-      q,
-      action,
-      idx,
-      currentBank.get()?.outcomeOptions ?? [],
-      () => this._ensureActionObjects(q)
-    );
-  }
-
-  /**
-   * @param {string} value
-   * @param {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions
-   * @param {(id: string) => void} onChange
-   */
-  _outcomeSelect(value, outcomeOptions, onChange) {
-    return outcomeSelect(value, outcomeOptions, onChange);
   }
 
   /** @param {any} q */
@@ -220,72 +185,6 @@ export class CORARemediationEditor extends ShellElement {
     }
     return id;
   }
-}
-
-/** @param {any} q @param {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions */
-export function renderNoActionOutcome(q, outcomeOptions) {
-  return h(
-    'div',
-    { class: 'rem-outcome-block' },
-    h('h5', {}, 'Default outcome when no action is selected'),
-    outcomeSelect(q.outcome?.noActionOutcomeId ?? '', outcomeOptions, (id) =>
-      commit(() => {
-        q.outcome ??= {};
-        if (id) q.outcome.noActionOutcomeId = id;
-        else delete q.outcome.noActionOutcomeId;
-        delete q.outcome.noAction;
-        if (!Object.keys(q.outcome).length) delete q.outcome;
-      })
-    )
-  );
-}
-
-/** @param {any} q @param {any} action @param {number} idx @param {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions @param {() => void} ensureActionObjects */
-export function renderActionOutcome(
-  q,
-  action,
-  idx,
-  outcomeOptions,
-  ensureActionObjects
-) {
-  return h(
-    'div',
-    { class: 'rem-action-outcome' },
-    outcomeSelect(action.outcomeId ?? '', outcomeOptions, (id) =>
-      commit(() => {
-        ensureActionObjects();
-        const configured = q.remediationActions[idx];
-        if (id) configured.outcomeId = id;
-        else delete configured.outcomeId;
-        delete configured.outcome;
-      })
-    )
-  );
-}
-
-/**
- * @param {string} value
- * @param {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions
- * @param {(id: string) => void} onChange
- */
-export function outcomeSelect(value, outcomeOptions, onChange) {
-  return h(
-    'select',
-    {
-      className: 'rem-outcome-select',
-      value,
-      onchange: (/** @type {any} */ e) => onChange(e.target.value),
-      disabled: outcomeOptions.length === 0,
-    },
-    h(
-      'option',
-      { value: '' },
-      outcomeOptions.length ? '—' : 'No outcomes configured'
-    ),
-    ...outcomeOptions.map((option) =>
-      h('option', { value: option.id }, option.wording)
-    )
-  );
 }
 
 customElements.define('cora-remediation-editor', CORARemediationEditor);

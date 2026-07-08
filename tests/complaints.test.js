@@ -129,39 +129,41 @@ test('complaints: declares Case Details fields, each with a stable key and label
   }
 });
 
-// --- computeOutcome (pass / refer / fail by failure count) ---
+// --- computeOutcome (response-driven: highest-scoring applicable outcome) ---
 
 test('complaints computeOutcome: empty answers → pass', () => {
-  assert.deepStrictEqual(config.computeOutcome({}), { outcome: 'pass' });
+  assert.deepStrictEqual(config.computeOutcome({}).outcome, 'pass');
 });
 
-test('complaints computeOutcome: no failures → pass', () => {
+test('complaints computeOutcome: no mapped responses → pass', () => {
   const answers = Object.fromEntries(
     config.questions.map((q) => [q.id, ans('Yes')])
   );
-  assert.deepStrictEqual(config.computeOutcome(answers), { outcome: 'pass' });
+  assert.deepStrictEqual(config.computeOutcome(answers).outcome, 'pass');
 });
 
-test('complaints computeOutcome: exactly one failure → refer', () => {
-  const q = config.questions.find((q) => q.failureCriteria != null);
-  assert.ok(q, 'expected at least one question with failureCriteria');
+test('complaints computeOutcome: a response mapped to refer yields refer', () => {
+  // A "No" on redress is configured to score `refer`.
   assert.deepStrictEqual(
-    config.computeOutcome({
-      [q.id]: ans(/** @type {string} */ (q.failureCriteria)),
-    }),
-    { outcome: 'refer' }
+    config.computeOutcome({ 'q-cm-redress': ans('No') }).outcome,
+    'refer'
   );
 });
 
-test('complaints computeOutcome: two or more failures → fail', () => {
-  const failing = config.questions.filter((q) => q.failureCriteria != null);
-  assert.ok(failing.length >= 2, 'expected at least two failing questions');
-  const answers = Object.fromEntries(
-    failing
-      .slice(0, 2)
-      .map((q) => [q.id, ans(/** @type {string} */ (q.failureCriteria))])
+test('complaints computeOutcome: a response mapped to fail yields fail', () => {
+  // A "No" on acknowledgement is configured to score `fail`.
+  assert.deepStrictEqual(
+    config.computeOutcome({ 'q-cm-ack': ans('No') }).outcome,
+    'fail'
   );
-  assert.deepStrictEqual(config.computeOutcome(answers), { outcome: 'fail' });
+});
+
+test('complaints computeOutcome: the highest-scoring applicable outcome wins', () => {
+  const answers = {
+    'q-cm-redress': ans('No'), // refer
+    'q-cm-ack': ans('No'), // fail
+  };
+  assert.deepStrictEqual(config.computeOutcome(answers).outcome, 'fail');
 });
 
 // --- fixtures ---

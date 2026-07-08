@@ -59,7 +59,7 @@ export function QuestionCard(props) {
     questionCardField(
       'Response Type',
       questionCardSelect(
-        ['yes-no-na', 'single-choice', 'multi-choice'],
+        ['yes-no-na', 'single-choice', 'multi-choice', 'outcome'],
         q.responseType,
         (/** @type {string} */ v) => setQuestionResponseType(q, v)
       )
@@ -78,15 +78,17 @@ export function QuestionCard(props) {
     );
   }
 
-  const bodyChildren = [wording, grid];
-  if (q.responseType !== 'yes-no-na') {
-    bodyChildren.push(h('cora-options-editor', { question: q }));
-  }
-  bodyChildren.push(
+  // Every response type maps its options to Outcomes (the response drives the
+  // Outcome), so the options editor renders for all types — read-only for
+  // `outcome`, fixed-option for `yes-no-na`, editable for single/multi-choice.
+  const bodyChildren = [
+    wording,
+    grid,
+    h('cora-options-editor', { question: q }),
     h('cora-question-labels', { question: q }),
     h('cora-showwhen-editor', { question: q }),
-    h('cora-remediation-editor', { question: q })
-  );
+    h('cora-remediation-editor', { question: q }),
+  ];
 
   const body = h('div', { class: 'card-body' }, ...bodyChildren);
 
@@ -245,8 +247,13 @@ export function setQuestionCategory(q, category) {
 export function setQuestionResponseType(q, responseType) {
   commit(() => {
     q.responseType = responseType;
-    if (responseType === 'yes-no-na') delete q.options;
+    // `yes-no-na` (fixed Yes/No/NA) and `outcome` (derived from the Case Type's
+    // Outcomes) don't carry their own option list; single/multi-choice do.
+    if (responseType === 'yes-no-na' || responseType === 'outcome')
+      delete q.options;
     else if (!q.options) q.options = ['Option A', 'Option B'];
+    // `outcome`-type option→Outcome mapping is derived read-only, never stored.
+    if (responseType === 'outcome') delete q.optionOutcomes;
   });
 }
 

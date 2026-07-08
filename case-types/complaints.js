@@ -2,7 +2,7 @@
 /** @typedef {import('../src/sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
 
-import { countConfiguredFailures } from '../src/evaluators/failure-evaluator.js';
+import { computeConfiguredOutcome } from '../src/evaluators/configured-outcome.js';
 
 /**
  * The **Complaints** Case Type — a Complaints-style journey (ADR-0027) whose
@@ -49,19 +49,23 @@ const config = {
   // Appeal flow (ADR-0027): a Complaints journey routes appeal-raising to the
   // Journey Owner, resolved by Controls.
   appeal: { raisedBy: 'journeyOwner', resolvedBy: 'controls' },
-  // Outcome vocabulary (ADR-0004). `computeOutcome` yields pass/refer/fail by
-  // failure count; Controls may hand-set any of these via Amend Outcome (ADR-0026).
+  // Outcome vocabulary (ADR-0004). The Outcome is driven wholly by the responses
+  // (question bank redesign): each mapped response option scores a configured
+  // Outcome and the highest-scoring applicable Outcome wins, defaulting to
+  // `pass`. Controls may still hand-set any of these via Amend Outcome (ADR-0026).
   outcomeOptions: [
     { id: 'pass', wording: 'Pass', severity: 0 },
     { id: 'refer', wording: 'Refer', severity: 50 },
     { id: 'fail', wording: 'Fail', severity: 100 },
   ],
+  defaultOutcomeId: 'pass',
   questions: [
     {
       id: 'q-cm-ack',
       text: 'Was the complaint acknowledged within the required timeframe?',
       category: 'Acknowledgement',
       responseType: 'yes-no-na',
+      optionOutcomes: { No: 'fail' },
       failureCriteria: 'No',
       remediationActions: [
         'Acknowledge the complaint in writing within the regulatory timeframe.',
@@ -73,6 +77,7 @@ const config = {
       text: 'Was the complaint fully investigated?',
       category: 'Investigation',
       responseType: 'yes-no-na',
+      optionOutcomes: { No: 'fail' },
       failureCriteria: 'No',
       remediationActions: [
         'Complete a full investigation covering every point the customer raised.',
@@ -85,6 +90,7 @@ const config = {
       category: 'Investigation',
       responseType: 'yes-no-na',
       showWhen: { 'q-cm-investigated': { equals: 'Yes' } },
+      optionOutcomes: { No: 'refer' },
       failureCriteria: 'No',
       deprecated: false,
     },
@@ -101,6 +107,7 @@ const config = {
       text: 'Where the complaint was upheld, was appropriate redress offered?',
       category: 'Resolution',
       responseType: 'yes-no-na',
+      optionOutcomes: { No: 'refer' },
       failureCriteria: 'No',
       remediationActions: [
         'Recalculate and offer appropriate redress to the customer.',
@@ -112,6 +119,7 @@ const config = {
       text: 'Was a final response issued to the customer?',
       category: 'Communication',
       responseType: 'yes-no-na',
+      optionOutcomes: { No: 'refer' },
       failureCriteria: 'No',
       deprecated: false,
     },
@@ -119,10 +127,12 @@ const config = {
 
   /** @param {Record<string, Answer>} answers */
   computeOutcome(answers) {
-    const failures = countConfiguredFailures(config.questions, answers);
-    if (failures === 0) return { outcome: 'pass' };
-    if (failures === 1) return { outcome: 'refer' };
-    return { outcome: 'fail' };
+    return computeConfiguredOutcome(
+      config.questions,
+      answers,
+      config.outcomeOptions,
+      config.defaultOutcomeId
+    );
   },
 };
 

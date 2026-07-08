@@ -58,13 +58,11 @@ test('CORAOutcomeOptionsEditor: edits severity on the shared outcome option', ()
   assert.equal(cases.get()['example-review'].outcomeOptions?.[0].severity, 25);
 });
 
-test('CORAOutcomeOptionsEditor: renaming an outcome id updates question and action references', () => {
+test('CORAOutcomeOptionsEditor: renaming an outcome id updates option-outcome mappings and the default', () => {
   _resetStore();
   const bank = cases.get()['example-review'];
-  bank.questions[0].outcome = { noActionOutcomeId: 'fail' };
-  bank.questions[1].remediationActions = [
-    { id: 'impact', text: 'Impact', outcomeId: 'fail' },
-  ];
+  bank.questions[0].optionOutcomes = { No: 'fail' };
+  bank.questions[1].optionOutcomes = { No: 'fail', 'N/A': 'pass' };
   bank.defaultOutcomeId = 'fail';
   const e = new CORAOutcomeOptionsEditor();
   e.connectedCallback();
@@ -75,9 +73,9 @@ test('CORAOutcomeOptionsEditor: renaming an outcome id updates question and acti
 
   idInput._listeners.change[0]({ target: { value: 'fail-impact' } });
 
-  assert.equal(bank.questions[0].outcome?.noActionOutcomeId, 'fail-impact');
-  const [firstAction] = bank.questions[1].remediationActions ?? [];
-  assert.equal(/** @type {any} */ (firstAction).outcomeId, 'fail-impact');
+  assert.equal(bank.questions[0].optionOutcomes?.No, 'fail-impact');
+  assert.equal(bank.questions[1].optionOutcomes?.No, 'fail-impact');
+  assert.equal(bank.questions[1].optionOutcomes?.['N/A'], 'pass');
   assert.equal(bank.defaultOutcomeId, 'fail-impact');
 });
 
@@ -101,7 +99,8 @@ test('CORAOutcomeOptionsEditor: adds an outcome option to the active case type',
 test('CORAOutcomeOptionsEditor: removes an outcome option', () => {
   _resetStore();
   const bank = cases.get()['example-review'];
-  bank.questions[0].outcome = { noActionOutcomeId: 'pass' };
+  bank.questions[0].optionOutcomes = { No: 'pass' };
+  bank.questions[1].optionOutcomes = { No: 'pass', 'N/A': 'fail' };
   bank.defaultOutcomeId = 'pass';
   const e = new CORAOutcomeOptionsEditor();
   e.connectedCallback();
@@ -113,6 +112,9 @@ test('CORAOutcomeOptionsEditor: removes an outcome option', () => {
   remove._listeners.click[0]();
 
   assert.equal(cases.get()['example-review'].outcomeOptions?.length, 1);
-  assert.equal(bank.questions[0].outcome, undefined);
+  // The sole mapping to the removed outcome is dropped, emptying the map.
+  assert.equal(bank.questions[0].optionOutcomes, undefined);
+  // A question that also mapped another option keeps that one.
+  assert.deepEqual(bank.questions[1].optionOutcomes, { 'N/A': 'fail' });
   assert.equal(bank.defaultOutcomeId, undefined);
 });

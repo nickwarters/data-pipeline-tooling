@@ -52,11 +52,16 @@ test('compileBank: emits header, eligibleGroups, computeOutcome, export', () => 
   assert.ok(out.endsWith('export default config;'));
 });
 
-test('compileBank: default outcome is driven by failureCriteria, not raw No answers', async () => {
+test('compileBank: compiled outcome is driven by per-option outcome mappings', async () => {
   const out = compileBank({
     label: 'L',
     slug: 's',
     eligibleGroups: ['Reviewers'],
+    outcomeOptions: [
+      { id: 'pass', wording: 'Pass', severity: 0 },
+      { id: 'fail', wording: 'Fail', severity: 100 },
+    ],
+    defaultOutcomeId: 'pass',
     questions: [
       {
         id: 'q-general-info',
@@ -69,6 +74,7 @@ test('compileBank: default outcome is driven by failureCriteria, not raw No answ
         id: 'q-required-check',
         text: 'Was the required check completed?',
         responseType: 'yes-no-na',
+        optionOutcomes: { No: 'fail' },
         failureCriteria: 'No',
         deprecated: false,
       },
@@ -84,12 +90,14 @@ test('compileBank: default outcome is driven by failureCriteria, not raw No answ
   )}`;
   const { default: compiledConfig } = await import(moduleUrl);
 
+  // An answer with no mapped outcome contributes nothing → default pass.
   assert.deepStrictEqual(
     compiledConfig.computeOutcome({
       'q-general-info': { value: 'No' },
     }),
     { outcome: 'pass', wording: 'Pass' }
   );
+  // A mapped "No" scores fail.
   assert.deepStrictEqual(
     compiledConfig.computeOutcome({
       'q-required-check': { value: 'No' },
@@ -172,39 +180,47 @@ test('compileBank: emits remediationActions array when present', () => {
   assert.ok(out.includes('"Action 2"'));
 });
 
-test('compileBank: emits shared outcome options and selected outcome ids', () => {
+test('compileBank: emits shared outcome options and per-option outcome mappings', () => {
   const out = compileBank({
     ...bank({
       id: 'q1',
       text: 'T',
       responseType: 'yes-no-na',
       failureCriteria: 'No',
-      outcome: { noActionOutcomeId: 'fail' },
-      remediationActions: [
-        {
-          id: 'impact',
-          text: 'Customer impact identified',
-          outcomeId: 'impact',
-        },
-      ],
+      optionOutcomes: { No: 'fail' },
+      remediationActions: ['Customer impact identified'],
       deprecated: false,
     }),
     outcomeOptions: [
       { id: 'good', wording: 'Good Outcome', severity: 0 },
       { id: 'fail', wording: 'Fail', severity: 100 },
-      {
-        id: 'impact',
-        wording: 'Fail with impact',
-        severity: 120,
-      },
     ],
     defaultOutcomeId: 'good',
   });
   assert.ok(out.includes('outcomeOptions: ['));
   assert.ok(out.includes('defaultOutcomeId: "good"'));
-  assert.ok(out.includes('outcome: {"noActionOutcomeId":"fail"}'));
-  assert.ok(out.includes('"id":"impact"'));
-  assert.ok(out.includes('"outcomeId":"impact"'));
+  assert.ok(out.includes('optionOutcomes: {"No":"fail"}'));
+  // The response drives the outcome — actions no longer carry outcome ids.
+  assert.ok(!out.includes('outcomeId'));
+  assert.ok(!out.includes('noActionOutcomeId'));
+});
+
+test('compileBank: outcome-type question derives read-only options and mapping', () => {
+  const out = compileBank({
+    ...bank({
+      id: 'q1',
+      text: 'Overall assessment',
+      responseType: 'outcome',
+      deprecated: false,
+    }),
+    outcomeOptions: [
+      { id: 'pass', wording: 'Pass', severity: 0 },
+      { id: 'fail', wording: 'Fail', severity: 100 },
+    ],
+  });
+  assert.ok(out.includes('responseType: "outcome"'));
+  assert.ok(out.includes('options: ["Pass","Fail"]'));
+  assert.ok(out.includes('optionOutcomes: {"Pass":"pass","Fail":"fail"}'));
 });
 
 test('compileBank: emits allowFreeFormRemediation when truthy', () => {
@@ -535,14 +551,11 @@ test('compileExport: excludes computeOutcome, allowFreeFormRemediation, eligible
     questions: [
       {
         ...exportBank.questions[0],
-        outcome: {
-          noActionOutcomeId: 'fail',
-        },
+        optionOutcomes: { No: 'fail' },
         remediationActions: [
           {
             id: 'fix-it',
             text: 'Fix it',
-            outcomeId: 'refer',
           },
         ],
         allowFreeFormRemediation: true,
@@ -574,14 +587,12 @@ test('compileExport: excludes computeOutcome, allowFreeFormRemediation, eligible
   for (const q of result.questions) {
     assert.ok(!('allowFreeFormRemediation' in q));
   }
-  assert.deepEqual(result.questions[0].outcome, {
-    noActionOutcomeId: 'fail',
-  });
+  assert.deepEqual(result.questions[0].optionOutcomes, { No: 'fail' });
+  // Actions carry only id/text — the response drives the outcome, not actions.
   assert.deepEqual(result.questions[0].remediationActions, [
     {
       id: 'fix-it',
       text: 'Fix it',
-      outcomeId: 'refer',
     },
   ]);
   assert.deepEqual(result.outcomeOptions, [
@@ -675,9 +686,9 @@ test('compileExport: absent optional question fields are emitted as null', async
   const q = result.questions[0];
   assert.equal(q.category, null);
   assert.equal(q.options, null);
+  assert.equal(q.optionOutcomes, null);
   assert.equal(q.showWhen, null);
   assert.equal(q.failureCriteria, null);
-  assert.equal(q.outcome, null);
   assert.equal(q.remediationActions, null);
 });
 

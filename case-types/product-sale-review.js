@@ -2,7 +2,7 @@
 /** @typedef {import('../src/sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
 
-import { countConfiguredFailures } from '../src/evaluators/failure-evaluator.js';
+import { computeConfiguredOutcome } from '../src/evaluators/configured-outcome.js';
 
 /** @type {CaseTypeConfig} */
 const config = {
@@ -16,6 +16,7 @@ const config = {
       text: "Was the customer's identity verified before proceeding?",
       category: 'Customer Verification',
       responseType: 'yes-no-na',
+      optionOutcomes: { No: 'refer' },
       failureCriteria: 'No',
       remediationActions: [
         'Re-verify customer identity using an approved verification method before continuing.',
@@ -43,6 +44,7 @@ const config = {
       text: "Were the customer's financial needs assessed before making a recommendation?",
       category: 'Product Suitability',
       responseType: 'yes-no-na',
+      optionOutcomes: { No: 'fail' },
       failureCriteria: 'No',
       remediationActions: [
         'Complete a full needs assessment before recommending any product.',
@@ -63,6 +65,7 @@ const config = {
       category: 'Product Suitability',
       responseType: 'yes-no-na',
       showWhen: { 'q-ps-needs': { equals: 'Yes' } },
+      optionOutcomes: { No: 'fail' },
       failureCriteria: 'No',
       remediationActions: [
         'Review suitability criteria and document why the selected product meets customer needs.',
@@ -74,6 +77,7 @@ const config = {
       text: 'Was the recommendation and its rationale documented in the case notes?',
       category: 'Product Suitability',
       responseType: 'yes-no-na',
+      optionOutcomes: { No: 'fail' },
       failureCriteria: 'No',
       deprecated: false,
     },
@@ -83,6 +87,7 @@ const config = {
       text: 'Were all required product disclosures made to the customer?',
       category: 'Compliance',
       responseType: 'yes-no-na',
+      optionOutcomes: { No: 'fail' },
       failureCriteria: 'No',
       remediationActions: [
         'Deliver missing disclosures and record customer acknowledgement.',
@@ -94,6 +99,7 @@ const config = {
       text: 'Was customer consent recorded prior to processing the sale?',
       category: 'Compliance',
       responseType: 'yes-no-na',
+      optionOutcomes: { No: 'fail' },
       failureCriteria: 'No',
       deprecated: false,
     },
@@ -107,21 +113,25 @@ const config = {
     },
   ],
 
-  // Outcome vocabulary (ADR-0004). `computeOutcome` yields pass/refer/fail by
-  // failure count; the wording shown to Reviewers is resolved from here, and
+  // Outcome vocabulary (ADR-0004). The Outcome is driven wholly by the responses
+  // (question bank redesign): each mapped response option scores a configured
+  // Outcome and the highest-scoring applicable Outcome wins, defaulting to `pass`.
   // `severity` orders the outcomes (higher = worse).
   outcomeOptions: [
     { id: 'pass', wording: 'Pass', severity: 0 },
     { id: 'refer', wording: 'Refer', severity: 50 },
     { id: 'fail', wording: 'Fail', severity: 100 },
   ],
+  defaultOutcomeId: 'pass',
 
   /** @param {Record<string, Answer>} answers */
   computeOutcome(answers) {
-    const failures = countConfiguredFailures(config.questions, answers);
-    if (failures === 0) return { outcome: 'pass' };
-    if (failures === 1) return { outcome: 'refer' };
-    return { outcome: 'fail' };
+    return computeConfiguredOutcome(
+      config.questions,
+      answers,
+      config.outcomeOptions,
+      config.defaultOutcomeId
+    );
   },
 };
 

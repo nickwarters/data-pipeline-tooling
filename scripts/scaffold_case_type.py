@@ -92,7 +92,7 @@ def case_type_module(opts: ScaffoldOptions) -> str:
 /** @typedef {{import('../src/sharepoint-client.js').CaseTypeConfig}} CaseTypeConfig */
 /** @typedef {{import('../src/sharepoint-client.js').Answer}} Answer */
 
-import {{ countConfiguredFailures }} from '../src/evaluators/failure-evaluator.js';
+import {{ computeConfiguredOutcome }} from '../src/evaluators/configured-outcome.js';
 
 /**
  * The **{opts.display_name}** Case Type scaffold. Its per-Case-Type groups derive
@@ -131,18 +131,23 @@ const config = {{
   // TODO(case-type): Confirm who raises appeals for this Case Type.
   appeal: {{ raisedBy: 'responsiblePartyManager', resolvedBy: 'controls' }},
   // TODO(case-type): Replace the starter Outcome vocabulary with business wording.
+  // `severity` orders the Outcomes (higher = worse); it drives the scoring.
   outcomeOptions: [
-    {{ id: 'pass', wording: 'Pass' }},
-    {{ id: 'refer', wording: 'Refer' }},
-    {{ id: 'fail', wording: 'Fail' }},
+    {{ id: 'pass', wording: 'Pass', severity: 0 }},
+    {{ id: 'refer', wording: 'Refer', severity: 50 }},
+    {{ id: 'fail', wording: 'Fail', severity: 100 }},
   ],
+  defaultOutcomeId: 'pass',
   // TODO(case-type): Replace starter questions with the first real Question Bank export.
+  // Each response option maps to a configured Outcome via `optionOutcomes`; the
+  // highest-scoring applicable Outcome wins (the response drives the Outcome).
   questions: [
     {{
       id: 'q-{prefix}-evidence',
       text: 'Was the required evidence present?',
       category: 'Evidence',
       responseType: 'yes-no-na',
+      optionOutcomes: {{ No: 'fail' }},
       failureCriteria: 'No',
       remediationActions: ['Provide the missing evidence and record the source.'],
       deprecated: false,
@@ -152,6 +157,7 @@ const config = {{
       text: 'Was the case rationale clearly documented?',
       category: 'Decisioning',
       responseType: 'yes-no-na',
+      optionOutcomes: {{ No: 'refer' }},
       failureCriteria: 'No',
       remediationActions: ['Document the rationale for the case decision.'],
       deprecated: false,
@@ -168,10 +174,12 @@ const config = {{
 
   /** @param {{Record<string, Answer>}} answers */
   computeOutcome(answers) {{
-    const failures = countConfiguredFailures(config.questions, answers);
-    if (failures === 0) return {{ outcome: 'pass' }};
-    if (failures === 1) return {{ outcome: 'refer' }};
-    return {{ outcome: 'fail' }};
+    return computeConfiguredOutcome(
+      config.questions,
+      answers,
+      config.outcomeOptions,
+      config.defaultOutcomeId
+    );
   }},
 }};
 
@@ -243,22 +251,27 @@ test('{opts.slug}: declares Case Details fields with stable keys and labels', ()
 }});
 
 test('{opts.slug} computeOutcome: empty answers -> pass', () => {{
-  assert.deepStrictEqual(config.computeOutcome({{}}), {{ outcome: 'pass' }});
+  assert.equal(config.computeOutcome({{}}).outcome, 'pass');
 }});
 
-test('{opts.slug} computeOutcome: exactly one failure -> refer', () => {{
-  assert.deepStrictEqual(config.computeOutcome({{ 'q-{prefix}-evidence': ans('No') }}), {{
-    outcome: 'refer',
-  }});
+test('{opts.slug} computeOutcome: a mapped response scores its outcome', () => {{
+  assert.equal(
+    config.computeOutcome({{ 'q-{prefix}-rationale': ans('No') }}).outcome,
+    'refer'
+  );
+  assert.equal(
+    config.computeOutcome({{ 'q-{prefix}-evidence': ans('No') }}).outcome,
+    'fail'
+  );
 }});
 
-test('{opts.slug} computeOutcome: two failures -> fail', () => {{
-  assert.deepStrictEqual(
+test('{opts.slug} computeOutcome: the highest-scoring applicable outcome wins', () => {{
+  assert.equal(
     config.computeOutcome({{
       'q-{prefix}-evidence': ans('No'),
       'q-{prefix}-rationale': ans('No'),
-    }}),
-    {{ outcome: 'fail' }}
+    }}).outcome,
+    'fail'
   );
 }});
 

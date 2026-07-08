@@ -31,6 +31,7 @@ export function generateStressQuestions(count) {
         text: `Stress question ${i}: yes-no-na anchor`,
         category: 'Stress',
         responseType: 'yes-no-na',
+        optionOutcomes: { No: 'fail' },
         failureCriteria: 'No',
         deprecated: false,
       });
@@ -41,6 +42,7 @@ export function generateStressQuestions(count) {
         text: `Stress question ${i}: follow-up to ${prevAnchor}`,
         category: 'Stress',
         responseType: 'yes-no-na',
+        optionOutcomes: { No: 'fail' },
         failureCriteria: 'No',
         showWhen: { [prevAnchor]: { equals: 'Yes' } },
         remediationActions: [`Document remediation for ${id}.`],
@@ -70,6 +72,7 @@ export function generateStressQuestions(count) {
         text: `Stress question ${i}: gated by q-stress-0`,
         category: 'Stress',
         responseType: 'yes-no-na',
+        optionOutcomes: { No: 'fail' },
         failureCriteria: 'No',
         showWhen: { 'q-stress-0': { equals: 'Yes' } },
         deprecated: false,

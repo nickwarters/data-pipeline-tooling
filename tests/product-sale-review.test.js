@@ -82,14 +82,14 @@ test('product-sale-review: no cycles in showWhen graph', () => {
 // --- computeOutcome ---
 
 test('product-sale-review computeOutcome: empty answers → pass', () => {
-  assert.deepStrictEqual(config.computeOutcome({}), { outcome: 'pass' });
+  assert.deepStrictEqual(config.computeOutcome({}).outcome, 'pass');
 });
 
 test('product-sale-review computeOutcome: no failures → pass', () => {
   const answers = Object.fromEntries(
     config.questions.map((q) => [q.id, ans('Yes')])
   );
-  assert.deepStrictEqual(config.computeOutcome(answers), { outcome: 'pass' });
+  assert.deepStrictEqual(config.computeOutcome(answers).outcome, 'pass');
 });
 
 test('product-sale-review computeOutcome: two or more failures → fail', () => {
@@ -103,7 +103,7 @@ test('product-sale-review computeOutcome: two or more failures → fail', () => 
       .slice(0, 2)
       .map((q) => [q.id, ans(/** @type {string} */ (q.failureCriteria))])
   );
-  assert.deepStrictEqual(config.computeOutcome(answers), { outcome: 'fail' });
+  assert.deepStrictEqual(config.computeOutcome(answers).outcome, 'fail');
 });
 
 test('product-sale-review computeOutcome: exactly one failure → refer', () => {
@@ -112,8 +112,8 @@ test('product-sale-review computeOutcome: exactly one failure → refer', () => 
   assert.deepStrictEqual(
     config.computeOutcome({
       [q.id]: ans(/** @type {string} */ (q.failureCriteria)),
-    }),
-    { outcome: 'refer' }
+    }).outcome,
+    'refer'
   );
 });
 
@@ -131,8 +131,8 @@ test('product-sale-review computeOutcome: informational General question without
     assert.deepStrictEqual(
       config.computeOutcome({
         [infoQuestion.id]: ans('No'),
-      }),
-      { outcome: 'pass' }
+      }).outcome,
+      'pass'
     );
   } finally {
     config.questions.pop();

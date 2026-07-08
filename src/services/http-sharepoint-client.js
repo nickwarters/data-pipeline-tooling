@@ -797,20 +797,26 @@ function qDefFromItem(raw) {
   const item = /** @type {Record<string, unknown>} */ (raw);
   const responseType =
     item?.ResponseType === 'single-choice' ||
-    item?.ResponseType === 'multi-choice'
+    item?.ResponseType === 'multi-choice' ||
+    item?.ResponseType === 'outcome'
       ? item.ResponseType
       : 'yes-no-na';
   const opts = parseJsonField(item?.Options, undefined);
   const showWhen = parseJsonField(item?.ShowWhen, undefined);
   const remediation = parseJsonField(item?.RemediationActions, undefined);
-  const outcome = parseJsonField(item?.Outcome, undefined);
+  const optionOutcomes = parseJsonField(item?.OptionOutcomes, undefined);
   return {
     id: String(item?.QuestionId ?? item?.Id ?? ''),
     text: String(item?.QuestionText ?? item?.Title ?? ''),
-    responseType: /** @type {'yes-no-na'|'single-choice'|'multi-choice'} */ (
-      responseType
-    ),
+    responseType:
+      /** @type {'yes-no-na'|'single-choice'|'multi-choice'|'outcome'} */ (
+        responseType
+      ),
     options: Array.isArray(opts) ? /** @type {string[]} */ (opts) : undefined,
+    optionOutcomes:
+      optionOutcomes && typeof optionOutcomes === 'object'
+        ? /** @type {Record<string, string>} */ (optionOutcomes)
+        : undefined,
     showWhen:
       showWhen && typeof showWhen === 'object'
         ? /** @type {Record<string, unknown>} */ (showWhen)
@@ -824,12 +830,6 @@ function qDefFromItem(raw) {
           remediation
         )
       : undefined,
-    outcome:
-      outcome && typeof outcome === 'object'
-        ? /** @type {import('../sharepoint-client.js').QuestionDefinition['outcome']} */ (
-            outcome
-          )
-        : undefined,
     deprecated: Boolean(item?.Deprecated ?? false),
   };
 }

@@ -6,8 +6,6 @@ installDom();
 
 const { CORARemediationEditor } =
   await import('../src/components/sections/cora-remediation-editor.js');
-const { _resetStore } =
-  await import('../src/question-bank/question-bank-store.js');
 
 test('CORARemediationEditor: no question → renders nothing', () => {
   const e = new CORARemediationEditor();
@@ -93,7 +91,7 @@ test('CORARemediationEditor: × removes action; deletes field when empty', () =>
   e.connectedCallback();
   const wrap = /** @type {any} */ (e)._children[0];
   const item = wrap._children[2];
-  const x = item._children[2];
+  const x = item._children[1];
   x._listeners.click[0]();
   assert.equal('remediationActions' in q, false);
 });
@@ -112,8 +110,7 @@ test('CORARemediationEditor: + canned action initialises array if missing', () =
   ]);
 });
 
-test('CORARemediationEditor: configures no-action outcome for failed questions', () => {
-  _resetStore();
+test('CORARemediationEditor: failed questions get no Outcome selector (response drives outcome)', () => {
   /** @type {any} */
   const q = {
     id: 'q',
@@ -126,18 +123,13 @@ test('CORARemediationEditor: configures no-action outcome for failed questions',
   e.question = q;
   e.connectedCallback();
   const wrap = /** @type {any} */ (e)._children[0];
-  const outcomeBlock = wrap._children[2];
-  const select = outcomeBlock._children[1];
-
-  select._listeners.change[0]({ target: { value: 'fail' } });
-
-  assert.deepEqual(q.outcome, {
-    noActionOutcomeId: 'fail',
-  });
+  // h4, free-row, empty hint, add button — no Outcome block.
+  assert.equal(wrap._children.length, 4);
+  assert.equal(wrap._children[2].className, 'rem-empty');
+  assert.equal('outcome' in q, false);
 });
 
-test('CORARemediationEditor: configures action-level outcome selection', () => {
-  _resetStore();
+test('CORARemediationEditor: an action row is just its text input and remove control', () => {
   /** @type {any} */
   const q = {
     id: 'q',
@@ -151,15 +143,5 @@ test('CORARemediationEditor: configures action-level outcome selection', () => {
   e.connectedCallback();
   const wrap = /** @type {any} */ (e)._children[0];
   const item = wrap._children[2];
-  const select = item._children[1]._children[0];
-
-  select._listeners.change[0]({ target: { value: 'fail' } });
-
-  assert.deepEqual(q.remediationActions, [
-    {
-      id: 'q-ra-0',
-      text: 'Legacy action',
-      outcomeId: 'fail',
-    },
-  ]);
+  assert.equal(item._children.length, 2);
 });

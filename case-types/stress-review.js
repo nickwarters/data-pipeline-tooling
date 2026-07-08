@@ -3,7 +3,7 @@
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
 
 import { stressQuestions } from '../dev/fixtures/stress-questions.js';
-import { countConfiguredFailures } from '../src/evaluators/failure-evaluator.js';
+import { computeConfiguredOutcome } from '../src/evaluators/configured-outcome.js';
 
 /**
  * Stress-test Case Type — 500 generated questions.
@@ -21,11 +21,16 @@ const config = {
     { id: 'pass', wording: 'Pass', severity: 0 },
     { id: 'fail', wording: 'Fail', severity: 100 },
   ],
+  defaultOutcomeId: 'pass',
 
   /** @param {Record<string, Answer>} answers */
   computeOutcome(answers) {
-    const failures = countConfiguredFailures(config.questions, answers);
-    return { outcome: failures > 0 ? 'fail' : 'pass' };
+    return computeConfiguredOutcome(
+      config.questions,
+      answers,
+      config.outcomeOptions,
+      config.defaultOutcomeId
+    );
   },
 };
 

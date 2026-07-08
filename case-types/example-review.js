@@ -2,7 +2,7 @@
 /** @typedef {import('../src/sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
 
-import { countConfiguredFailures } from '../src/evaluators/failure-evaluator.js';
+import { computeConfiguredOutcome } from '../src/evaluators/configured-outcome.js';
 
 /** @type {CaseTypeConfig} */
 const config = {
@@ -43,6 +43,10 @@ const config = {
     { id: 'refer', wording: 'Refer', severity: 50 },
     { id: 'fail', wording: 'Fail', severity: 100 },
   ],
+  // The Outcome is driven wholly by the responses (question bank redesign): each
+  // mapped response option scores a configured Outcome and the highest-scoring
+  // applicable Outcome wins, defaulting to `pass`.
+  defaultOutcomeId: 'pass',
   // Configurable per-failure capture fields (ADR-0017). One shared set applies
   // to every failed Answer; captured inline as Answer.remediationDetails. Legacy:
   // superseded by captureGroups below (ADR-0020) but kept while both coexist.
@@ -153,6 +157,7 @@ const config = {
       text: 'Was the customer greeted professionally?',
       category: 'Opening',
       responseType: 'yes-no-na',
+      optionOutcomes: { No: 'fail' },
       failureCriteria: 'No',
       deprecated: false,
     },
@@ -161,6 +166,7 @@ const config = {
       text: "Were the customer's needs identified before proceeding?",
       category: 'Discovery',
       responseType: 'yes-no-na',
+      optionOutcomes: { No: 'fail' },
       failureCriteria: 'No',
       remediationActions: ['Retrain agent on needs-identification protocol.'],
       deprecated: false,
@@ -171,6 +177,7 @@ const config = {
       category: 'Resolution',
       responseType: 'yes-no-na',
       showWhen: { 'q-needs': { equals: 'Yes' } },
+      optionOutcomes: { No: 'fail' },
       failureCriteria: 'No',
       remediationActions: ['Escalate unresolved case to senior agent.'],
       deprecated: false,
@@ -193,8 +200,12 @@ const config = {
 
   /** @param {Record<string, Answer>} answers */
   computeOutcome(answers) {
-    const failures = countConfiguredFailures(config.questions, answers);
-    return { outcome: failures > 0 ? 'fail' : 'pass' };
+    return computeConfiguredOutcome(
+      config.questions,
+      answers,
+      config.outcomeOptions,
+      config.defaultOutcomeId
+    );
   },
 };
 

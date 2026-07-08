@@ -15,9 +15,9 @@ test('CORABankList: renders dirty pill + question cards + add button', () => {
   const section = /** @type {any} */ (e)._children[0];
   // editor-head, outcome-options, listRoot, add-card
   assert.equal(section._children.length, 4);
-  // example-review fixture has 5 questions; with default filters all visible
+  // example-review fixture has 6 questions; with default filters all visible
   const listRoot = section._children[2];
-  assert.equal(listRoot._children.length, 5);
+  assert.equal(listRoot._children.length, 6);
   e.disconnectedCallback();
 });
 
