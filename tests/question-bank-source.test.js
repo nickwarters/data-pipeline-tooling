@@ -7,6 +7,7 @@ import {
   loadQuestionBanks,
   questionBanks,
 } from '../src/question-bank/question-bank-source.js';
+import { compileBank } from '../src/question-bank/question-bank-compile.js';
 
 test('bankFromCaseTypeConfig: projects case type config into editable bank shape', () => {
   const config =
@@ -137,6 +138,83 @@ test('bankFromCaseTypeConfig: deep-clones editable arrays', () => {
       deprecated: false,
     },
   ]);
+});
+
+test('bankFromCaseTypeConfig: keeps runtime case type fields out of the editable bank', () => {
+  const bank = bankFromCaseTypeConfig(
+    'ops-review',
+    /** @type {any} */ ({
+      eligibleGroups: ['Reviewers'],
+      questions: [],
+      labels: [],
+      outcomeOptions: [],
+      defaultOutcomeId: 'pass',
+      computeOutcome: () => ({ outcome: 'pass' }),
+      sections: [{ id: 'summary', label: 'Summary' }],
+      listName: 'Cases',
+      slaHours: 72,
+      captureGroups: ['Intake'],
+      detailFields: [{ id: 'customer', label: 'Customer' }],
+      appeal: { enabled: true },
+      attributeFailures: true,
+    })
+  );
+
+  assert.deepEqual(Object.keys(bank).sort(), [
+    'defaultOutcomeId',
+    'eligibleGroups',
+    'label',
+    'labels',
+    'outcomeOptions',
+    'questions',
+    'slug',
+  ]);
+  assert.equal('computeOutcome' in bank, false);
+  assert.equal('sections' in bank, false);
+  assert.equal('listName' in bank, false);
+  assert.equal('slaHours' in bank, false);
+  assert.equal('captureGroups' in bank, false);
+  assert.equal('detailFields' in bank, false);
+  assert.equal('appeal' in bank, false);
+  assert.equal('attributeFailures' in bank, false);
+});
+
+test('bankFromCaseTypeConfig: projects compileBank output back to the editable bank contract', async () => {
+  const sourceBank =
+    /** @type {import('../src/question-bank/question-bank-source.js').QuestionBank} */ ({
+      label: 'Compiled Review',
+      slug: 'compiled-review',
+      eligibleGroups: ['Reviewers'],
+      labels: [{ id: 'lbl-a', name: 'Alpha', color: '#111111' }],
+      outcomeOptions: [
+        { id: 'pass', wording: 'Pass', severity: 0 },
+        { id: 'fail', wording: 'Fail', severity: 100 },
+      ],
+      defaultOutcomeId: 'pass',
+      questions: [
+        {
+          id: 'q-a',
+          text: 'A?',
+          category: 'General',
+          labelIds: ['lbl-a'],
+          responseType: 'yes-no-na',
+          optionOutcomes: { No: 'fail' },
+          failureCriteria: 'No',
+          deprecated: false,
+        },
+      ],
+    });
+  const compiledSource = compileBank(sourceBank).replace(
+    `../src/evaluators/configured-outcome.js`,
+    new URL('../src/evaluators/configured-outcome.js', import.meta.url).href
+  );
+  const { default: compiledConfig } = await import(
+    `data:text/javascript,${encodeURIComponent(compiledSource)}`
+  );
+
+  const roundTripped = bankFromCaseTypeConfig(sourceBank.slug, compiledConfig);
+
+  assert.deepEqual(roundTripped, sourceBank);
 });
 
 test('loadQuestionBanks: builds the bank map from importer entries', async () => {

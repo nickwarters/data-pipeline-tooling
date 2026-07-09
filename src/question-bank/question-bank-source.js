@@ -5,6 +5,12 @@
  * The editor should reflect the live Case Type configs, not a parallel fixture
  * bank. These projections keep the workbench's editable shape while taking the
  * actual question definitions and Case Type metadata from case-types/.
+ *
+ * This is an interim adapter, not a replacement for ADR-0021's standalone,
+ * versioned Question Bank artifact. Keep this projection limited to fields that
+ * belong to the editable bank, plus eligibleGroups while compileBank still emits
+ * case-types/{slug}.js modules. Runtime Case Type config fields must not become
+ * editor source fields here.
  */
 
 import { CASE_TYPE_IMPORTERS } from '../../case-types/manifest.js';
