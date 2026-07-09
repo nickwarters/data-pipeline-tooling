@@ -41,7 +41,9 @@ test('CORACaseTabs: one tab per case type; clicking switches activeSlug', () => 
   const nav = /** @type {any} */ (e)._children[0];
   const tabsContainer = nav._children[1];
   assert.equal(tabsContainer._children.length, 4);
-  tabsContainer._children[1]._listeners.click[0]();
+  const complaintsIndex = Object.keys(cases.get()).indexOf('complaints');
+  assert.notEqual(complaintsIndex, -1);
+  tabsContainer._children[complaintsIndex]._listeners.click[0]();
   assert.equal(activeSlug.get(), 'complaints');
   e.disconnectedCallback();
 });

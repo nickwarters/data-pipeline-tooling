@@ -17,6 +17,7 @@ import { register as registerJourneyCases } from '../routes/journey-cases.js';
  * @property {import('../services/permissions.js').Capabilities} capabilities
  * @property {string[]} eligibleCaseTypes
  * @property {Element} appEl
+ * @property {() => Promise<unknown>} [loadQuestionBankEditor]
  */
 
 /**

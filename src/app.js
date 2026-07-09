@@ -1,9 +1,10 @@
 // @ts-check
 // The app shell wires shared services once and eagerly loads only the custom
 // elements that are genuine route/browser-integration shells (the nav, command
-// palette, Case Review page, and Question Bank editor). Ordinary screens are
-// plain function components that their route modules import directly, so they
-// need no custom-element registration here.
+// palette, and Case Review page). The Question Bank editor is route-loaded
+// because it imports every Case Type config to build the editable bank map.
+// Ordinary screens are plain function components that their route modules import
+// directly, so they need no custom-element registration here.
 
 /** @returns {Promise<void>} */
 async function boot() {
@@ -11,7 +12,6 @@ async function boot() {
     import('./components/sections/cora-app-nav.js'),
     import('./components/sections/cora-command-palette.js'),
     import('./pages/cora-case-review.js'),
-    import('./question-bank/cora-bank-editor.js'),
   ]);
 
   const { createSharePointClient } =

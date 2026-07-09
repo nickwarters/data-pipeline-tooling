@@ -10,8 +10,13 @@ export function register(router, context) {
   router.register('#/question-bank', {
     mount(container) {
       context.appEl.classList.add('cora-fullbleed');
-      const el = document.createElement('cora-bank-editor');
-      container.replaceChildren(el);
+      const loadEditor =
+        context.loadQuestionBankEditor ??
+        (() => import('../question-bank/cora-bank-editor.js'));
+      loadEditor().then(() => {
+        const el = document.createElement('cora-bank-editor');
+        container.replaceChildren(el);
+      });
     },
     unmount() {
       context.appEl.classList.remove('cora-fullbleed');

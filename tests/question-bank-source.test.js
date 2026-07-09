@@ -2,7 +2,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { bankFromCaseTypeConfig } from '../src/question-bank/question-bank-source.js';
+import {
+  bankFromCaseTypeConfig,
+  loadQuestionBanks,
+} from '../src/question-bank/question-bank-source.js';
 
 test('bankFromCaseTypeConfig: projects case type config into editable bank shape', () => {
   const config =
@@ -133,4 +136,46 @@ test('bankFromCaseTypeConfig: deep-clones editable arrays', () => {
       deprecated: false,
     },
   ]);
+});
+
+test('loadQuestionBanks: builds the bank map from importer entries', async () => {
+  const banks = await loadQuestionBanks({
+    alpha: async () => ({
+      default:
+        /** @type {import('../src/sharepoint-client.js').CaseTypeConfig} */ ({
+          eligibleGroups: ['Reviewers'],
+          outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
+          questions: [
+            {
+              id: 'q-alpha',
+              text: 'Alpha?',
+              responseType: 'yes-no-na',
+              deprecated: false,
+            },
+          ],
+          computeOutcome: () => ({ outcome: 'pass' }),
+        }),
+    }),
+    beta: async () => ({
+      default:
+        /** @type {import('../src/sharepoint-client.js').CaseTypeConfig} */ ({
+          eligibleGroups: ['Owners'],
+          outcomeOptions: [{ id: 'fail', wording: 'Fail', severity: 100 }],
+          questions: [
+            {
+              id: 'q-beta',
+              text: 'Beta?',
+              responseType: 'single-choice',
+              options: ['A', 'B'],
+              deprecated: false,
+            },
+          ],
+          computeOutcome: () => ({ outcome: 'fail' }),
+        }),
+    }),
+  });
+
+  assert.deepEqual(Object.keys(banks), ['alpha', 'beta']);
+  assert.equal(banks.alpha.questions[0].id, 'q-alpha');
+  assert.equal(banks.beta.eligibleGroups[0], 'Owners');
 });

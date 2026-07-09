@@ -7,10 +7,7 @@
  * actual question definitions and Case Type metadata from case-types/.
  */
 
-import exampleReview from '../../case-types/example-review.js';
-import complaints from '../../case-types/complaints.js';
-import productSaleReview from '../../case-types/product-sale-review.js';
-import stressReview from '../../case-types/stress-review.js';
+import { CASE_TYPE_IMPORTERS } from '../../case-types/manifest.js';
 
 /**
  * A reporting label that can be assigned to Question Definitions from the
@@ -75,16 +72,22 @@ export function bankFromCaseTypeConfig(slug, config) {
   };
 }
 
+/**
+ * @param {Record<string, () => Promise<{ default: import('../sharepoint-client.js').CaseTypeConfig }>>} [importers]
+ * @returns {Promise<Record<string, QuestionBank>>}
+ */
+export async function loadQuestionBanks(importers = CASE_TYPE_IMPORTERS) {
+  const entries = await Promise.all(
+    Object.entries(importers).map(async ([slug, importer]) => {
+      const mod = await importer();
+      return [slug, bankFromCaseTypeConfig(slug, mod.default)];
+    })
+  );
+  return Object.fromEntries(entries);
+}
+
 /** @type {Record<string, QuestionBank>} */
-export const questionBanks = {
-  'example-review': bankFromCaseTypeConfig('example-review', exampleReview),
-  complaints: bankFromCaseTypeConfig('complaints', complaints),
-  'product-sale-review': bankFromCaseTypeConfig(
-    'product-sale-review',
-    productSaleReview
-  ),
-  'stress-review': bankFromCaseTypeConfig('stress-review', stressReview),
-};
+export const questionBanks = await loadQuestionBanks();
 
 /**
  * @param {string} slug

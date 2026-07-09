@@ -14,6 +14,11 @@ const windowListeners = {};
 import { Router } from '../src/lib/router.js';
 import { register } from '../src/routes/question-bank.js';
 
+/** @returns {Promise<void>} */
+async function tick() {
+  await Promise.resolve();
+}
+
 test('question-bank route: register calls router.register with #/question-bank', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});
@@ -25,7 +30,7 @@ test('question-bank route: register calls router.register with #/question-bank',
   );
 });
 
-test('question-bank route: mount adds cora-fullbleed to appEl', () => {
+test('question-bank route: mount adds cora-fullbleed to appEl', async () => {
   const added = /** @type {string[]} */ ([]);
   const appEl = {
     classList: {
@@ -53,8 +58,15 @@ test('question-bank route: mount adds cora-fullbleed to appEl', () => {
   try {
     const router = new Router();
     router._container = /** @type {any} */ ({ replaceChildren() {} });
-    register(router, /** @type {any} */ ({ appEl }));
+    register(
+      router,
+      /** @type {any} */ ({
+        appEl,
+        loadQuestionBankEditor: () => Promise.resolve(),
+      })
+    );
     router.navigate('#/question-bank');
+    await tick();
     assert.ok(
       added.includes('cora-fullbleed'),
       'cora-fullbleed should be added on mount'
@@ -64,7 +76,7 @@ test('question-bank route: mount adds cora-fullbleed to appEl', () => {
   }
 });
 
-test('question-bank route: unmount removes cora-fullbleed from appEl', () => {
+test('question-bank route: unmount removes cora-fullbleed from appEl', async () => {
   const removed = /** @type {string[]} */ ([]);
   const appEl = {
     classList: {
@@ -90,15 +102,18 @@ test('question-bank route: unmount removes cora-fullbleed from appEl', () => {
   };
 
   try {
-    const router = new Router();
-    router._container = /** @type {any} */ ({ replaceChildren() {} });
-    register(router, /** @type {any} */ ({ appEl }));
-    register(router, /** @type {any} */ ({ appEl })); // register a second route to navigate away to
     const router2 = new Router();
     router2._container = /** @type {any} */ ({ replaceChildren() {} });
-    register(router2, /** @type {any} */ ({ appEl }));
+    register(
+      router2,
+      /** @type {any} */ ({
+        appEl,
+        loadQuestionBankEditor: () => Promise.resolve(),
+      })
+    );
     router2.register('#/dashboard', { mount() {}, unmount() {} });
     router2.navigate('#/question-bank');
+    await tick();
     router2.navigate('#/dashboard');
     assert.ok(
       removed.includes('cora-fullbleed'),
@@ -109,7 +124,7 @@ test('question-bank route: unmount removes cora-fullbleed from appEl', () => {
   }
 });
 
-test('question-bank route: mount creates cora-bank-editor element', () => {
+test('question-bank route: mount creates cora-bank-editor element', async () => {
   const created = /** @type {string[]} */ ([]);
   const appEl = { classList: { add() {}, remove() {} } };
 
@@ -131,8 +146,15 @@ test('question-bank route: mount creates cora-bank-editor element', () => {
   try {
     const router = new Router();
     router._container = /** @type {any} */ ({ replaceChildren() {} });
-    register(router, /** @type {any} */ ({ appEl }));
+    register(
+      router,
+      /** @type {any} */ ({
+        appEl,
+        loadQuestionBankEditor: () => Promise.resolve(),
+      })
+    );
     router.navigate('#/question-bank');
+    await tick();
     assert.ok(
       created.includes('cora-bank-editor'),
       'cora-bank-editor should be created on mount'
