@@ -149,7 +149,7 @@ test('CORACompileDrawer: code preview uses explicit highlighted HTML that escape
   e.connectedCallback();
   const drawer = /** @type {any} */ (e)._children[1];
   const body = drawer._children[1];
-  const codeBlock = body._children[2];
+  const codeBlock = body._children[1];
 
   assert.ok(codeBlock.innerHTML.includes('&lt;img src=x onerror=alert(1)&gt;'));
   assert.ok(!codeBlock.innerHTML.includes('<img src=x'));
@@ -164,17 +164,48 @@ function allText(/** @type {any} */ el) {
   return out;
 }
 
-test('CORACompileDrawer: simulate panel shows empty state without sample Cases', () => {
+/** Run `fn` with the simulator URL flag (?simulate=1) switched on. */
+function withSimulatorFlag(/** @type {() => void} */ fn) {
+  const loc = /** @type {any} */ (globalThis).location;
+  const origSearch = loc.search;
+  loc.search = '?simulate=1';
+  try {
+    fn();
+  } finally {
+    loc.search = origSearch;
+  }
+}
+
+test('CORACompileDrawer: simulate panel is hidden without the ?simulate=1 flag', () => {
   _resetStore();
+  setSampleCases('example-review', [
+    { id: 'case-1', title: 'First Case', answers: {} },
+  ]);
   drawerOpen.set(true);
   const e = new CORACompileDrawer();
   e.connectedCallback();
   const body = /** @type {any} */ (e)._children[1]._children[1];
-  const panel = body._children[1];
-  assert.equal(panel.className, 'sim-panel');
-  assert.ok(allText(panel).includes('Impact simulation'));
-  assert.ok(allText(panel).includes('No sample Cases loaded yet'));
+  assert.ok(
+    body._children.every(
+      (/** @type {any} */ child) => child.className !== 'sim-panel'
+    )
+  );
   e.disconnectedCallback();
+});
+
+test('CORACompileDrawer: simulate panel shows empty state without sample Cases', () => {
+  _resetStore();
+  drawerOpen.set(true);
+  withSimulatorFlag(() => {
+    const e = new CORACompileDrawer();
+    e.connectedCallback();
+    const body = /** @type {any} */ (e)._children[1]._children[1];
+    const panel = body._children[1];
+    assert.equal(panel.className, 'sim-panel');
+    assert.ok(allText(panel).includes('Impact simulation'));
+    assert.ok(allText(panel).includes('No sample Cases loaded yet'));
+    e.disconnectedCallback();
+  });
 });
 
 test('CORACompileDrawer: simulate panel reports impact per sample Case', () => {
@@ -197,16 +228,18 @@ test('CORACompileDrawer: simulate panel reports impact per sample Case', () => {
     q.optionOutcomes = { NA: 'fail' };
   });
   drawerOpen.set(true);
-  const e = new CORACompileDrawer();
-  e.connectedCallback();
-  const body = /** @type {any} */ (e)._children[1]._children[1];
-  const panel = body._children[1];
-  const text = allText(panel);
-  assert.ok(text.includes('1 of 2 sample Cases affected'));
-  assert.ok(text.includes('First Case'));
-  assert.ok(text.includes('New Issue: q-welcome (caused by q-welcome)'));
-  assert.ok(!text.includes('Second Case'));
-  e.disconnectedCallback();
+  withSimulatorFlag(() => {
+    const e = new CORACompileDrawer();
+    e.connectedCallback();
+    const body = /** @type {any} */ (e)._children[1]._children[1];
+    const panel = body._children[1];
+    const text = allText(panel);
+    assert.ok(text.includes('1 of 2 sample Cases affected'));
+    assert.ok(text.includes('First Case'));
+    assert.ok(text.includes('New Issue: q-welcome (caused by q-welcome)'));
+    assert.ok(!text.includes('Second Case'));
+    e.disconnectedCallback();
+  });
 });
 
 test('CORACompileDrawer: simulate panel with samples but no changes says so', () => {
@@ -215,12 +248,14 @@ test('CORACompileDrawer: simulate panel with samples but no changes says so', ()
     { id: 'case-1', title: 'First Case', answers: {} },
   ]);
   drawerOpen.set(true);
-  const e = new CORACompileDrawer();
-  e.connectedCallback();
-  const body = /** @type {any} */ (e)._children[1]._children[1];
-  const panel = body._children[1];
-  assert.ok(allText(panel).includes('No sample Case is affected.'));
-  e.disconnectedCallback();
+  withSimulatorFlag(() => {
+    const e = new CORACompileDrawer();
+    e.connectedCallback();
+    const body = /** @type {any} */ (e)._children[1]._children[1];
+    const panel = body._children[1];
+    assert.ok(allText(panel).includes('No sample Case is affected.'));
+    e.disconnectedCallback();
+  });
 });
 
 test('CORACompileDrawer: simulate panel reports Outcome changes with attribution', () => {
@@ -241,10 +276,12 @@ test('CORACompileDrawer: simulate panel reports Outcome changes with attribution
     q.optionOutcomes = {};
   });
   drawerOpen.set(true);
-  const e = new CORACompileDrawer();
-  e.connectedCallback();
-  const body = /** @type {any} */ (e)._children[1]._children[1];
-  const text = allText(body._children[1]);
-  assert.ok(text.includes('Outcome: fail → pass (caused by q-welcome)'));
-  e.disconnectedCallback();
+  withSimulatorFlag(() => {
+    const e = new CORACompileDrawer();
+    e.connectedCallback();
+    const body = /** @type {any} */ (e)._children[1]._children[1];
+    const text = allText(body._children[1]);
+    assert.ok(text.includes('Outcome: fail → pass (caused by q-welcome)'));
+    e.disconnectedCallback();
+  });
 });

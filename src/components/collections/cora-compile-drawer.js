@@ -17,6 +17,7 @@ import {
   highlight,
 } from '../../question-bank/question-bank-compile.js';
 import { simulateBankImpact } from '../../question-bank/question-bank-simulate.js';
+import { simulatorEnabled } from '../../question-bank/question-bank-flags.js';
 
 /**
  * Slide-out drawer showing the compiled current Question Bank JSON. Reads the shared
@@ -83,11 +84,13 @@ export function CompileDrawer() {
           diffCard('diff-card changed', String(d.changed), 'Changed'),
           diffCard('diff-card removed', String(d.deprecated), 'Deprecated')
         ),
-        SimulatePanel(
-          baselineBank.get(),
-          bank,
-          sampleCases.get()[bank.slug] ?? []
-        ),
+        simulatorEnabled()
+          ? SimulatePanel(
+              baselineBank.get(),
+              bank,
+              sampleCases.get()[bank.slug] ?? []
+            )
+          : null,
         h('div', { class: 'code-block' }, unsafeHTML(highlight(code)))
       ),
       h(

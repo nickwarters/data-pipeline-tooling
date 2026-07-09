@@ -181,6 +181,9 @@ test('question-bank route: mount loads simulator sample cases after the editor',
     },
   };
 
+  const origSearch = /** @type {any} */ (globalThis).location.search;
+  /** @type {any} */ (globalThis).location.search = '?simulate=1';
+
   try {
     let samplesLoaded = 0;
     const router = new Router();
@@ -201,5 +204,96 @@ test('question-bank route: mount loads simulator sample cases after the editor',
     assert.equal(samplesLoaded, 1);
   } finally {
     /** @type {any} */ (globalThis).document = origDoc;
+    /** @type {any} */ (globalThis).location.search = origSearch;
+  }
+});
+
+test('question-bank route: sample cases are not loaded without ?simulate=1', async () => {
+  const appEl = { classList: { add() {}, remove() {} } };
+
+  const origDoc = /** @type {any} */ (globalThis).document;
+  /** @type {any} */ (globalThis).document = {
+    createElement() {
+      return { setAttribute() {} };
+    },
+    createTreeWalker() {
+      return {
+        nextNode() {
+          return null;
+        },
+      };
+    },
+  };
+
+  try {
+    let samplesLoaded = 0;
+    const router = new Router();
+    router._container = /** @type {any} */ ({ replaceChildren() {} });
+    register(
+      router,
+      /** @type {any} */ ({
+        appEl,
+        loadQuestionBankEditor: () => Promise.resolve(),
+        loadQuestionBankSamples: () => {
+          samplesLoaded++;
+          return Promise.resolve();
+        },
+      })
+    );
+    router.navigate('#/question-bank');
+    await tick();
+    assert.equal(samplesLoaded, 0);
+  } finally {
+    /** @type {any} */ (globalThis).document = origDoc;
+  }
+});
+
+test('question-bank route: default sample loader fetches through context.client', async () => {
+  const appEl = { classList: { add() {}, remove() {} } };
+
+  const origDoc = /** @type {any} */ (globalThis).document;
+  /** @type {any} */ (globalThis).document = {
+    createElement() {
+      return { setAttribute() {} };
+    },
+    createTreeWalker() {
+      return {
+        nextNode() {
+          return null;
+        },
+      };
+    },
+  };
+  const origSearch = /** @type {any} */ (globalThis).location.search;
+  /** @type {any} */ (globalThis).location.search = '?simulate=1';
+
+  try {
+    /** @type {string[]} */
+    const asked = [];
+    const client = {
+      async listCases(/** @type {any} */ filter) {
+        asked.push(filter.caseType);
+        return [];
+      },
+    };
+    const router = new Router();
+    router._container = /** @type {any} */ ({ replaceChildren() {} });
+    register(
+      router,
+      /** @type {any} */ ({
+        appEl,
+        client,
+        loadQuestionBankEditor: () => Promise.resolve(),
+      })
+    );
+    router.navigate('#/question-bank');
+    // Let the dynamic import + listCases round-trips settle.
+    for (let i = 0; i < 20 && asked.length === 0; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.ok(asked.includes('example-review'));
+  } finally {
+    /** @type {any} */ (globalThis).document = origDoc;
+    /** @type {any} */ (globalThis).location.search = origSearch;
   }
 });
