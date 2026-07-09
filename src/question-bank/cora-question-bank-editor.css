@@ -1620,6 +1620,48 @@ cora-bank-editor .diff-card.removed .n {
   color: var(--cora-color-danger);
 }
 
+cora-bank-editor .sim-panel {
+  background: var(--cora-color-surface);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-md);
+  padding: var(--cora-space-3) var(--cora-space-4);
+  margin-bottom: var(--cora-space-4);
+}
+cora-bank-editor .sim-panel h4 {
+  font-family: var(--cora-font-mono);
+  font-size: var(--cora-font-size-2xs);
+  letter-spacing: var(--cora-tracking-wider);
+  text-transform: uppercase;
+  color: var(--cora-color-text-muted);
+  margin: 0 0 var(--cora-space-2);
+}
+cora-bank-editor .sim-summary {
+  font-size: var(--cora-font-size-sm);
+  margin: 0 0 var(--cora-space-2);
+}
+cora-bank-editor .sim-empty {
+  font-size: var(--cora-font-size-sm);
+  color: var(--cora-color-text-muted);
+  margin: 0;
+}
+cora-bank-editor .sim-cases {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--cora-space-2);
+}
+cora-bank-editor .sim-case {
+  border-top: 1px solid var(--cora-color-border);
+  padding-top: var(--cora-space-2);
+  font-size: var(--cora-font-size-sm);
+}
+cora-bank-editor .sim-case ul {
+  margin: var(--cora-space-1) 0 0;
+  padding-left: var(--cora-space-5);
+  color: var(--cora-color-text-muted);
+}
+
 cora-bank-editor .code-block {
   background: #0e0e0f;
   color: #eaeaec;

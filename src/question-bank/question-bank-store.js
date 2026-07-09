@@ -49,6 +49,14 @@ export const drawerOpen = signal(false);
  */
 export const railOpen = signal(false);
 export const toastMsg = signal('');
+/**
+ * Sample Cases for the impact simulator, keyed by bank slug. Populated by the
+ * question-bank route from `SharePointClient.listCases` (read-only); empty
+ * until loaded, in which case the drawer shows its empty state.
+ *
+ * @type {import('../lib/signal.js').Signal<Record<string, import('./question-bank-simulate.js').SampleCase[]>>}
+ */
+export const sampleCases = signal({});
 
 // ── Derived ────────────────────────────────────────────────────────────────
 
@@ -126,6 +134,14 @@ export function commit(mutator) {
   }
 }
 
+/**
+ * @param {string} slug
+ * @param {import('./question-bank-simulate.js').SampleCase[]} list
+ */
+export function setSampleCases(slug, list) {
+  sampleCases.set({ ...sampleCases.get(), [slug]: list });
+}
+
 /** @param {Partial<Filters>} patch */
 export function setFilters(patch) {
   filters.set({ ...filters.get(), ...patch });
@@ -165,4 +181,5 @@ export function _resetStore() {
   drawerOpen.set(false);
   railOpen.set(false);
   toastMsg.set('');
+  sampleCases.set({});
 }

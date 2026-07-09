@@ -13,9 +13,18 @@ export function register(router, context) {
       const loadEditor =
         context.loadQuestionBankEditor ??
         (() => import('../question-bank/cora-bank-editor.js'));
+      const loadSamples =
+        context.loadQuestionBankSamples ??
+        (() =>
+          import('../question-bank/question-bank-samples.js').then((m) =>
+            m.loadSampleCases(context.client)
+          ));
       loadEditor().then(() => {
         const el = document.createElement('cora-bank-editor');
         container.replaceChildren(el);
+        // Read-only sample fetch for the impact simulator; the editor is
+        // usable while (or if never) it resolves.
+        loadSamples();
       });
     },
     unmount() {

@@ -18,6 +18,7 @@ import { register as registerJourneyCases } from '../routes/journey-cases.js';
  * @property {string[]} eligibleCaseTypes
  * @property {Element} appEl
  * @property {() => Promise<unknown>} [loadQuestionBankEditor]
+ * @property {() => Promise<unknown>} [loadQuestionBankSamples]
  */
 
 /**

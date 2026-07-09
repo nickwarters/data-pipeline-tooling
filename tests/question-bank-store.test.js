@@ -39,6 +39,8 @@ const {
   commit,
   setFilters,
   showToast,
+  sampleCases,
+  setSampleCases,
   _resetStore,
 } = await import('../src/question-bank/question-bank-store.js');
 
@@ -293,4 +295,23 @@ test('cases signal exported for downstream re-emit', () => {
   const v = cases.get();
   cases.set(v);
   assert.ok(cases.get() === v);
+});
+
+test('sampleCases: starts empty and is populated per slug', () => {
+  _resetStore();
+  assert.deepEqual(sampleCases.get(), {});
+  setSampleCases('example-review', [{ id: 'case-1', answers: {} }]);
+  setSampleCases('complaints', [{ id: 'case-2', answers: {} }]);
+  assert.deepEqual(Object.keys(sampleCases.get()), [
+    'example-review',
+    'complaints',
+  ]);
+  assert.equal(sampleCases.get()['example-review'][0].id, 'case-1');
+});
+
+test('sampleCases: _resetStore clears loaded samples', () => {
+  _resetStore();
+  setSampleCases('example-review', [{ id: 'case-1', answers: {} }]);
+  _resetStore();
+  assert.deepEqual(sampleCases.get(), {});
 });

@@ -163,3 +163,43 @@ test('question-bank route: mount creates cora-bank-editor element', async () => 
     /** @type {any} */ (globalThis).document = origDoc;
   }
 });
+
+test('question-bank route: mount loads simulator sample cases after the editor', async () => {
+  const appEl = { classList: { add() {}, remove() {} } };
+
+  const origDoc = /** @type {any} */ (globalThis).document;
+  /** @type {any} */ (globalThis).document = {
+    createElement() {
+      return { setAttribute() {} };
+    },
+    createTreeWalker() {
+      return {
+        nextNode() {
+          return null;
+        },
+      };
+    },
+  };
+
+  try {
+    let samplesLoaded = 0;
+    const router = new Router();
+    router._container = /** @type {any} */ ({ replaceChildren() {} });
+    register(
+      router,
+      /** @type {any} */ ({
+        appEl,
+        loadQuestionBankEditor: () => Promise.resolve(),
+        loadQuestionBankSamples: () => {
+          samplesLoaded++;
+          return Promise.resolve();
+        },
+      })
+    );
+    router.navigate('#/question-bank');
+    await tick();
+    assert.equal(samplesLoaded, 1);
+  } finally {
+    /** @type {any} */ (globalThis).document = origDoc;
+  }
+});

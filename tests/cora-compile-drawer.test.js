@@ -6,8 +6,15 @@ installDom();
 
 const { CORACompileDrawer } =
   await import('../src/components/collections/cora-compile-drawer.js');
-const { _resetStore, drawerOpen, baseline, cases, toastMsg, commit } =
-  await import('../src/question-bank/question-bank-store.js');
+const {
+  _resetStore,
+  drawerOpen,
+  baseline,
+  cases,
+  toastMsg,
+  commit,
+  setSampleCases,
+} = await import('../src/question-bank/question-bank-store.js');
 
 /** @type {any} */ (globalThis).setTimeout = () => 0;
 
@@ -142,10 +149,102 @@ test('CORACompileDrawer: code preview uses explicit highlighted HTML that escape
   e.connectedCallback();
   const drawer = /** @type {any} */ (e)._children[1];
   const body = drawer._children[1];
-  const codeBlock = body._children[1];
+  const codeBlock = body._children[2];
 
   assert.ok(codeBlock.innerHTML.includes('&lt;img src=x onerror=alert(1)&gt;'));
   assert.ok(!codeBlock.innerHTML.includes('<img src=x'));
   assert.equal(codeBlock._children.length, 0);
+  e.disconnectedCallback();
+});
+
+/** Recursively collect all text in a stub element tree. */
+function allText(/** @type {any} */ el) {
+  let out = el.textContent || '';
+  for (const child of el._children ?? []) out += ' ' + allText(child);
+  return out;
+}
+
+test('CORACompileDrawer: simulate panel shows empty state without sample Cases', () => {
+  _resetStore();
+  drawerOpen.set(true);
+  const e = new CORACompileDrawer();
+  e.connectedCallback();
+  const body = /** @type {any} */ (e)._children[1]._children[1];
+  const panel = body._children[1];
+  assert.equal(panel.className, 'sim-panel');
+  assert.ok(allText(panel).includes('Impact simulation'));
+  assert.ok(allText(panel).includes('No sample Cases loaded yet'));
+  e.disconnectedCallback();
+});
+
+test('CORACompileDrawer: simulate panel reports impact per sample Case', () => {
+  _resetStore();
+  setSampleCases('example-review', [
+    {
+      id: 'case-1',
+      title: 'First Case',
+      answers: { 'q-welcome': { value: 'NA' } },
+    },
+    { id: 'case-2', title: 'Second Case', answers: {} },
+  ]);
+  commit((t) => {
+    const q = /** @type {any} */ (
+      t['example-review'].questions.find(
+        (/** @type {any} */ x) => x.id === 'q-welcome'
+      )
+    );
+    q.failureCriteria = 'NA';
+    q.optionOutcomes = { NA: 'fail' };
+  });
+  drawerOpen.set(true);
+  const e = new CORACompileDrawer();
+  e.connectedCallback();
+  const body = /** @type {any} */ (e)._children[1]._children[1];
+  const panel = body._children[1];
+  const text = allText(panel);
+  assert.ok(text.includes('1 of 2 sample Cases affected'));
+  assert.ok(text.includes('First Case'));
+  assert.ok(text.includes('New Issue: q-welcome (caused by q-welcome)'));
+  assert.ok(!text.includes('Second Case'));
+  e.disconnectedCallback();
+});
+
+test('CORACompileDrawer: simulate panel with samples but no changes says so', () => {
+  _resetStore();
+  setSampleCases('example-review', [
+    { id: 'case-1', title: 'First Case', answers: {} },
+  ]);
+  drawerOpen.set(true);
+  const e = new CORACompileDrawer();
+  e.connectedCallback();
+  const body = /** @type {any} */ (e)._children[1]._children[1];
+  const panel = body._children[1];
+  assert.ok(allText(panel).includes('No sample Case is affected.'));
+  e.disconnectedCallback();
+});
+
+test('CORACompileDrawer: simulate panel reports Outcome changes with attribution', () => {
+  _resetStore();
+  setSampleCases('example-review', [
+    {
+      id: 'case-1',
+      title: 'First Case',
+      answers: { 'q-welcome': { value: 'No' } },
+    },
+  ]);
+  commit((t) => {
+    const q = /** @type {any} */ (
+      t['example-review'].questions.find(
+        (/** @type {any} */ x) => x.id === 'q-welcome'
+      )
+    );
+    q.optionOutcomes = {};
+  });
+  drawerOpen.set(true);
+  const e = new CORACompileDrawer();
+  e.connectedCallback();
+  const body = /** @type {any} */ (e)._children[1]._children[1];
+  const text = allText(body._children[1]);
+  assert.ok(text.includes('Outcome: fail → pass (caused by q-welcome)'));
   e.disconnectedCallback();
 });
