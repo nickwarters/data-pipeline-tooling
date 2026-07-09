@@ -28,6 +28,9 @@
     ],
     "*.{json,css,md}": [
       "prettier --write"
+    ],
+    "case-types/banks/*.txt": [
+      "prettier --write"
     ]
   }
 }
