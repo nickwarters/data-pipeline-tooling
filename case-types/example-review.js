@@ -45,8 +45,8 @@ const config = {
   labels: bank.labels,
   // The Outcome is driven wholly by the responses (question bank redesign): each
   // mapped response option scores a configured Outcome and the highest-scoring
-  // applicable Outcome wins, defaulting to `pass`.
-  defaultOutcomeId: bank.defaultOutcomeId,
+  // applicable Outcome wins from the required configured default.
+  defaultOutcomeId: bank.defaultOutcomeId ?? '',
   // Configurable per-failure capture fields. One shared set applies
   // to every failed Answer; captured inline as Answer.remediationDetails. Legacy:
   // superseded by captureGroups below but kept while both coexist.

@@ -40,6 +40,7 @@ function makeConfig(overrides = {}) {
     questions: [],
     computeOutcome: () => ({ outcome: 'pass' }),
     outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
+    defaultOutcomeId: 'pass',
     ...overrides,
   };
 }

@@ -45,6 +45,7 @@ const EMPTY_CASE_TYPE_CONFIG = {
   questions: [],
   computeOutcome: () => ({ outcome: 'pass' }),
   outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
+  defaultOutcomeId: 'pass',
 };
 
 // ===== IMPORTS =====
@@ -2263,6 +2264,7 @@ const ATTRIBUTE_CONFIG = {
   questions: [],
   computeOutcome: () => ({ outcome: 'pass' }),
   outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
+  defaultOutcomeId: 'pass',
   attributeFailures: true,
 };
 
@@ -2339,6 +2341,7 @@ const ACTIONS_CONFIG = {
   questions: [],
   computeOutcome: () => ({ outcome: 'pass' }),
   outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
+  defaultOutcomeId: 'pass',
   captureGroups: [
     {
       key: 'g',

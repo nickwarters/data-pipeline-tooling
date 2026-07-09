@@ -17,10 +17,11 @@ const config = {
 
   // Outcome vocabulary. The Outcome is driven wholly by the responses
   // (question bank redesign): each mapped response option scores a configured
-  // Outcome and the highest-scoring applicable Outcome wins, defaulting to `pass`.
+  // Outcome and the highest-scoring applicable Outcome wins from the required
+  // configured default.
   // `severity` orders the outcomes (higher = worse).
   outcomeOptions: bank.outcomeOptions ?? [],
-  defaultOutcomeId: bank.defaultOutcomeId,
+  defaultOutcomeId: bank.defaultOutcomeId ?? '',
 
   /** @param {Record<string, Answer>} answers */
   computeOutcome(answers) {

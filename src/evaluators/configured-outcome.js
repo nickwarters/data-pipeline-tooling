@@ -1,49 +1,13 @@
 // @ts-check
 /** @typedef {import('../sharepoint-client.js').Answer} Answer */
-/** @typedef {import('../sharepoint-client.js').OutcomeDescriptor} OutcomeDescriptor */
 /** @typedef {import('../sharepoint-client.js').OutcomeOption} OutcomeOption */
 /** @typedef {import('../sharepoint-client.js').OutcomeResult} OutcomeResult */
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').RemediationActionDefinition} RemediationActionDefinition */
 
-export const DEFAULT_OUTCOME_SEVERITY = {
-  pass: 0,
-  refer: 50,
-  fail: 100,
-};
-
-const FALLBACK_PASS = /** @type {const} */ ({
-  outcome: 'pass',
-  wording: 'Pass',
-  severity: DEFAULT_OUTCOME_SEVERITY.pass,
-});
-
-/**
- * @param {string} outcome
- * @returns {string}
- */
-export function defaultWordingFor(outcome) {
-  if (outcome === 'pass') return 'Pass';
-  if (outcome === 'refer') return 'Refer';
-  if (outcome === 'fail') return 'Fail';
-  return outcome;
-}
-
-/**
- * @param {{ outcome: string, wording?: string, severity?: number }} descriptor
- * @returns {{ outcome: string, wording: string, severity: number }}
- */
-export function normaliseOutcome(descriptor) {
-  return {
-    outcome: descriptor.outcome,
-    wording: descriptor.wording || defaultWordingFor(descriptor.outcome),
-    severity: descriptor.severity ?? 0,
-  };
-}
-
 /**
  * @param {OutcomeOption[]} outcomeOptions
- * @returns {Map<string, { outcome: string, wording: string, severity: number }>}
+ * @returns {Map<string, { outcome: string, severity: number }>}
  */
 function outcomeOptionMap(outcomeOptions = []) {
   return new Map(
@@ -51,11 +15,79 @@ function outcomeOptionMap(outcomeOptions = []) {
       option.id,
       {
         outcome: option.id,
-        wording: option.wording,
         severity: option.severity,
       },
     ])
   );
+}
+
+export class OutcomeConfigurationError extends Error {
+  /** @param {string} message */
+  constructor(message) {
+    super(`Case Type outcome configuration is invalid: ${message}`);
+    this.name = 'OutcomeConfigurationError';
+  }
+}
+
+/**
+ * @param {QuestionDefinition[]} questions
+ * @param {OutcomeOption[]} outcomeOptions
+ * @param {string} defaultOutcomeId
+ */
+export function validateConfiguredOutcomeConfig(
+  questions,
+  outcomeOptions,
+  defaultOutcomeId
+) {
+  if (!Array.isArray(outcomeOptions) || !outcomeOptions.length) {
+    throw new OutcomeConfigurationError(
+      'outcomeOptions must contain at least one option.'
+    );
+  }
+  const optionIds = new Set();
+  for (const option of outcomeOptions) {
+    if (!option || typeof option.id !== 'string' || !option.id) {
+      throw new OutcomeConfigurationError(
+        'each outcome option requires an id.'
+      );
+    }
+    if (optionIds.has(option.id)) {
+      throw new OutcomeConfigurationError(
+        `duplicate outcome id "${option.id}" is not allowed.`
+      );
+    }
+    optionIds.add(option.id);
+    if (typeof option.wording !== 'string' || !option.wording) {
+      throw new OutcomeConfigurationError(
+        `outcome option "${option.id}" requires wording.`
+      );
+    }
+    if (!Number.isFinite(option.severity)) {
+      throw new OutcomeConfigurationError(
+        `outcome option "${option.id}" requires a finite severity.`
+      );
+    }
+  }
+  if (!defaultOutcomeId) {
+    throw new OutcomeConfigurationError('defaultOutcomeId is required.');
+  }
+
+  const optionById = outcomeOptionMap(outcomeOptions);
+  if (!optionById.has(defaultOutcomeId)) {
+    throw new OutcomeConfigurationError(
+      `defaultOutcomeId "${defaultOutcomeId}" is not configured.`
+    );
+  }
+
+  for (const question of questions) {
+    for (const outcomeId of Object.values(question.optionOutcomes ?? {})) {
+      if (!optionById.has(outcomeId)) {
+        throw new OutcomeConfigurationError(
+          `question "${question.id}" maps to unknown outcome id "${outcomeId}".`
+        );
+      }
+    }
+  }
 }
 
 /**
@@ -101,14 +133,14 @@ function selectedValues(answer) {
  * current Answers (the case review view-model prunes non-applicable Answers), so
  * only answered questions contribute.
  *
- * The baseline is the configured `defaultOutcomeId` (or a built-in Pass when no
- * default is set); any mapped response Outcome with severity `>=` the current
- * best replaces it, so ties resolve to the later, more-specific mapping.
+ * The baseline is the configured `defaultOutcomeId`; any mapped response
+ * Outcome with severity `>=` the current best replaces it, so ties resolve to
+ * the later, more-specific mapping.
  *
  * @param {QuestionDefinition[]} questions
  * @param {Record<string, Answer>} answers
- * @param {OutcomeOption[]} [outcomeOptions]
- * @param {string} [defaultOutcomeId]
+ * @param {OutcomeOption[]} outcomeOptions
+ * @param {string} defaultOutcomeId
  * @returns {OutcomeResult}
  */
 export function computeConfiguredOutcome(
@@ -117,13 +149,11 @@ export function computeConfiguredOutcome(
   outcomeOptions = [],
   defaultOutcomeId = ''
 ) {
+  validateConfiguredOutcomeConfig(questions, outcomeOptions, defaultOutcomeId);
   const optionById = outcomeOptionMap(outcomeOptions);
-  let best =
-    defaultOutcomeId && optionById.has(defaultOutcomeId)
-      ? /** @type {{ outcome: string, wording: string, severity: number }} */ (
-          optionById.get(defaultOutcomeId)
-        )
-      : normaliseOutcome(FALLBACK_PASS);
+  let best = /** @type {{ outcome: string, severity: number }} */ (
+    optionById.get(defaultOutcomeId)
+  );
 
   for (const question of questions) {
     const mapping = question.optionOutcomes;
@@ -137,7 +167,7 @@ export function computeConfiguredOutcome(
     }
   }
 
-  return { outcome: best.outcome, wording: best.wording };
+  return { outcome: best.outcome };
 }
 
 /**

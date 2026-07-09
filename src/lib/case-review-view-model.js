@@ -25,6 +25,7 @@ import {
 } from '../services/section-access.js';
 import { CaseMachine, isReportable } from './case-machine.js';
 import {
+  InvalidCaseTypeConfigError,
   UnknownCaseTypeError,
   loadCaseTypeConfig,
 } from '../../case-types/manifest.js';
@@ -83,6 +84,23 @@ function writeScroll(target, left, top) {
     return;
   }
   target.scrollTo(left, top);
+}
+
+/**
+ * @param {unknown} error
+ * @param {string} caseType
+ * @param {boolean} isRouteCaseType
+ * @returns {string | null}
+ */
+function caseTypeLoadErrorMessage(error, caseType, isRouteCaseType) {
+  if (error instanceof UnknownCaseTypeError) {
+    const subject = isRouteCaseType ? 'route Case Type' : 'Case Type';
+    return `This Case cannot be opened because its ${subject} is not supported. Ask a maintainer to add "${caseType}" to the Case Type manifest.`;
+  }
+  if (error instanceof InvalidCaseTypeConfigError) {
+    return 'This Case cannot be opened because its Case Type outcome configuration is invalid. Ask a maintainer to correct it.';
+  }
+  return null;
 }
 
 /**
@@ -169,11 +187,10 @@ export class CaseReviewViewModel {
       try {
         routeConfig = await loadCaseTypeConfig(this.caseType);
       } catch (error) {
-        if (error instanceof UnknownCaseTypeError) {
+        const message = caseTypeLoadErrorMessage(error, this.caseType, true);
+        if (message) {
           console.error(error);
-          this.error.set(
-            `This Case cannot be opened because its route Case Type is not supported. Ask a maintainer to add "${this.caseType}" to the Case Type manifest.`
-          );
+          this.error.set(message);
           return;
         }
         throw error;
@@ -216,11 +233,10 @@ export class CaseReviewViewModel {
           : Promise.resolve(null),
       ]);
     } catch (error) {
-      if (error instanceof UnknownCaseTypeError) {
+      const message = caseTypeLoadErrorMessage(error, caseRow.caseType, false);
+      if (message) {
         console.error(error);
-        this.error.set(
-          `This Case cannot be opened because its Case Type is not supported. Ask a maintainer to add "${caseRow.caseType}" to the Case Type manifest.`
-        );
+        this.error.set(message);
         return;
       }
       throw error;

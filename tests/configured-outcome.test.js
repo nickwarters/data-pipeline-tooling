@@ -5,10 +5,7 @@ import assert from 'node:assert/strict';
 import {
   computeConfiguredOutcome,
   normaliseConfiguredActions,
-  normaliseOutcome,
-  defaultWordingFor,
   outcomeResponseOptions,
-  DEFAULT_OUTCOME_SEVERITY,
 } from '../src/evaluators/configured-outcome.js';
 
 const PASS_REFER_FAIL = [
@@ -17,7 +14,7 @@ const PASS_REFER_FAIL = [
   { id: 'fail', wording: 'Fail', severity: 100 },
 ];
 
-test('computeConfiguredOutcome: built-in Pass when nothing is answered', () => {
+test('computeConfiguredOutcome: returns only the configured default outcome id when nothing is answered', () => {
   /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
   const questions = [
     {
@@ -29,9 +26,14 @@ test('computeConfiguredOutcome: built-in Pass when nothing is answered', () => {
     },
   ];
 
-  const result = computeConfiguredOutcome(questions, {}, PASS_REFER_FAIL);
+  const result = computeConfiguredOutcome(
+    questions,
+    {},
+    PASS_REFER_FAIL,
+    'pass'
+  );
 
-  assert.deepEqual(result, { outcome: 'pass', wording: 'Pass' });
+  assert.deepEqual(result, { outcome: 'pass' });
 });
 
 test('computeConfiguredOutcome: a selected option maps to its configured outcome', () => {
@@ -49,10 +51,11 @@ test('computeConfiguredOutcome: a selected option maps to its configured outcome
   const result = computeConfiguredOutcome(
     questions,
     { q1: { value: 'No' } },
-    PASS_REFER_FAIL
+    PASS_REFER_FAIL,
+    'pass'
   );
 
-  assert.deepEqual(result, { outcome: 'fail', wording: 'Fail' });
+  assert.deepEqual(result, { outcome: 'fail' });
 });
 
 test('computeConfiguredOutcome: highest-scoring applicable outcome wins across questions', () => {
@@ -79,10 +82,11 @@ test('computeConfiguredOutcome: highest-scoring applicable outcome wins across q
   const result = computeConfiguredOutcome(
     questions,
     { q1: { value: 'Minor' }, q2: { value: 'No' } },
-    PASS_REFER_FAIL
+    PASS_REFER_FAIL,
+    'pass'
   );
 
-  assert.deepEqual(result, { outcome: 'fail', wording: 'Fail' });
+  assert.deepEqual(result, { outcome: 'fail' });
 });
 
 test('computeConfiguredOutcome: multi-choice scores every selected option', () => {
@@ -101,10 +105,11 @@ test('computeConfiguredOutcome: multi-choice scores every selected option', () =
   const result = computeConfiguredOutcome(
     questions,
     { q1: { value: ['Late', 'Missing disclosure'] } },
-    PASS_REFER_FAIL
+    PASS_REFER_FAIL,
+    'pass'
   );
 
-  assert.deepEqual(result, { outcome: 'fail', wording: 'Fail' });
+  assert.deepEqual(result, { outcome: 'fail' });
 });
 
 test('computeConfiguredOutcome: uses the configured default outcome as the baseline', () => {
@@ -114,7 +119,6 @@ test('computeConfiguredOutcome: uses the configured default outcome as the basel
       id: 'q1',
       text: 'Q1',
       responseType: /** @type {const} */ ('yes-no-na'),
-      optionOutcomes: { No: 'fail' },
       deprecated: false,
     },
   ];
@@ -126,7 +130,7 @@ test('computeConfiguredOutcome: uses the configured default outcome as the basel
     'good'
   );
 
-  assert.deepEqual(result, { outcome: 'good', wording: 'Good Outcome' });
+  assert.deepEqual(result, { outcome: 'good' });
 });
 
 test('computeConfiguredOutcome: a mapped response overrides the default by severity', () => {
@@ -151,7 +155,7 @@ test('computeConfiguredOutcome: a mapped response overrides the default by sever
     'good'
   );
 
-  assert.deepEqual(result, { outcome: 'fail', wording: 'Fail' });
+  assert.deepEqual(result, { outcome: 'fail' });
 });
 
 test('computeConfiguredOutcome: ignores questions without an option-outcome mapping', () => {
@@ -169,13 +173,14 @@ test('computeConfiguredOutcome: ignores questions without an option-outcome mapp
   const result = computeConfiguredOutcome(
     questions,
     { 'q-info': { value: 'Phone' } },
-    PASS_REFER_FAIL
+    PASS_REFER_FAIL,
+    'pass'
   );
 
-  assert.deepEqual(result, { outcome: 'pass', wording: 'Pass' });
+  assert.deepEqual(result, { outcome: 'pass' });
 });
 
-test('computeConfiguredOutcome: ignores options mapped to an unknown outcome id or unmapped value', () => {
+test('computeConfiguredOutcome: rejects question mappings to unknown outcome ids', () => {
   /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
   const questions = [
     {
@@ -189,28 +194,28 @@ test('computeConfiguredOutcome: ignores options mapped to an unknown outcome id 
     },
   ];
 
-  assert.deepEqual(
-    computeConfiguredOutcome(
-      questions,
-      { q1: { value: 'A' } },
-      PASS_REFER_FAIL
-    ),
-    { outcome: 'pass', wording: 'Pass' }
-  );
-  assert.deepEqual(
-    computeConfiguredOutcome(
-      questions,
-      { q1: { value: 'B' } },
-      PASS_REFER_FAIL
-    ),
-    { outcome: 'pass', wording: 'Pass' }
+  assert.throws(
+    () =>
+      computeConfiguredOutcome(
+        questions,
+        { q1: { value: 'A' } },
+        PASS_REFER_FAIL,
+        'pass'
+      ),
+    /unknown outcome id "ghost"/
   );
 });
 
-test('computeConfiguredOutcome: falls back to built-in Pass wording/severity without options', () => {
-  const result = computeConfiguredOutcome([], {});
-  assert.deepEqual(result, { outcome: 'pass', wording: 'Pass' });
-  assert.equal(DEFAULT_OUTCOME_SEVERITY.pass, 0);
+test('computeConfiguredOutcome: rejects missing outcome configuration instead of falling back', () => {
+  assert.throws(() => computeConfiguredOutcome([], {}), /outcomeOptions/);
+  assert.throws(
+    () => computeConfiguredOutcome([], {}, PASS_REFER_FAIL),
+    /defaultOutcomeId/
+  );
+  assert.throws(
+    () => computeConfiguredOutcome([], {}, PASS_REFER_FAIL, 'ghost'),
+    /defaultOutcomeId "ghost"/
+  );
 });
 
 test('outcomeResponseOptions: derives read-only labels and mapping from the outcome vocabulary', () => {
@@ -241,29 +246,11 @@ test('computeConfiguredOutcome: an outcome-type response drives the outcome', ()
   const result = computeConfiguredOutcome(
     questions,
     { q1: { value: 'Refer' } },
-    PASS_REFER_FAIL
+    PASS_REFER_FAIL,
+    'pass'
   );
 
-  assert.deepEqual(result, { outcome: 'refer', wording: 'Refer' });
-});
-
-test('normaliseOutcome: fills wording and severity defaults', () => {
-  assert.deepEqual(normaliseOutcome({ outcome: 'refer' }), {
-    outcome: 'refer',
-    wording: 'Refer',
-    severity: 0,
-  });
-  assert.deepEqual(
-    normaliseOutcome({ outcome: 'custom', wording: 'Custom', severity: 7 }),
-    { outcome: 'custom', wording: 'Custom', severity: 7 }
-  );
-});
-
-test('defaultWordingFor: known ids get titles, unknown passes through', () => {
-  assert.equal(defaultWordingFor('pass'), 'Pass');
-  assert.equal(defaultWordingFor('refer'), 'Refer');
-  assert.equal(defaultWordingFor('fail'), 'Fail');
-  assert.equal(defaultWordingFor('bespoke'), 'bespoke');
+  assert.deepEqual(result, { outcome: 'refer' });
 });
 
 test('normaliseConfiguredActions: coerces strings and strips any legacy outcome', () => {

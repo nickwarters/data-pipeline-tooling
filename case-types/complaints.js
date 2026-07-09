@@ -54,11 +54,11 @@ const config = {
   appeal: { raisedBy: 'journeyOwner', resolvedBy: 'controls' },
   // Outcome vocabulary. The Outcome is driven wholly by the responses
   // (question bank redesign): each mapped response option scores a configured
-  // Outcome and the highest-scoring applicable Outcome wins, defaulting to
-  // `pass`. Controls may still hand-set any of these via Amend Outcome.
+  // Outcome and the highest-scoring applicable Outcome wins from the required
+  // configured default. Controls may still hand-set any of these via Amend Outcome.
   outcomeOptions: bank.outcomeOptions ?? [],
   labels: bank.labels,
-  defaultOutcomeId: bank.defaultOutcomeId,
+  defaultOutcomeId: bank.defaultOutcomeId ?? '',
   questions: bank.questions,
 
   /** @param {Record<string, Answer>} answers */

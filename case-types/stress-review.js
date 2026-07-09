@@ -21,7 +21,7 @@ const config = {
   // Outcome vocabulary: required even for this perf harness so the
   // Outcome block resolves wording from config rather than a built-in fallback.
   outcomeOptions: bank.outcomeOptions ?? [],
-  defaultOutcomeId: bank.defaultOutcomeId,
+  defaultOutcomeId: bank.defaultOutcomeId ?? '',
 
   /** @param {Record<string, Answer>} answers */
   computeOutcome(answers) {

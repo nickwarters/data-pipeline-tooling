@@ -1,28 +1,5 @@
 // @ts-check
 /**
- * The `value` is a string for `yes-no-na` and `single-choice` questions, and a
- * string[] for `multi-choice` questions. Empty array == unanswered.
- *
- * The optional `attributedParty` records the single person responsible for a
- * *failed* Answer: a bare account `loginName` plus a cached
- * `displayName`. Only present when the Case Type enables `attributeFailures`.
- *
- * The optional `remediationDetails` holds the Case Type's configurable
- * per-failure capture fields, keyed by `RemediationField.key`. Like
- * `attributedParty` it lives only while the Answer is a failure: stripped when
- * the Answer stops failing, and frozen once the Case is Completed.
- *
- * The optional `capture` is the unified **Issue Capture** map: every
- * value captured against a *failed* Answer, keyed by `CaptureField.key`. It
- * supersedes `attributedParty` + `remediationDetails`, widening the value type to
- * also carry a `person` `{loginName,displayName}` or an `actions` array. It
- * shares the same lifecycle — stripped when the Answer stops failing, frozen once
- * the Case is Completed.
- *
- * @typedef {{ outcome: string, wording: string, severity?: number }} OutcomeDescriptor
- */
-
-/**
  * A case-type-level outcome option. Questions and actions select these by id so
  * wording is configured once per Case Type. `severity` is the sort key that
  * orders outcomes (higher = worse); it is required so ordering is driven wholly
@@ -319,7 +296,7 @@
  */
 
 /**
- * @typedef {{ outcome: string, wording?: string }} OutcomeResult
+ * @typedef {{ outcome: string }} OutcomeResult
  */
 
 /**
@@ -346,7 +323,7 @@
  * questions: QuestionDefinition[],
  * computeOutcome: (answers: Record<string, Answer>) => OutcomeResult,
  * outcomeOptions: OutcomeOption[],
- * defaultOutcomeId?: string,
+ * defaultOutcomeId: string,
  * labels?: Label[],
  * eligibleGroups?: string[],
  * listName?: string,

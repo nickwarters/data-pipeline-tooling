@@ -5,6 +5,10 @@
  */
 
 import { loadBank } from './load-bank.js';
+import {
+  OutcomeConfigurationError,
+  validateConfiguredOutcomeConfig,
+} from '../src/evaluators/configured-outcome.js';
 
 /**
  * @type {Record<string, CaseTypeImporter>}
@@ -50,12 +54,30 @@ export class UnknownCaseTypeError extends Error {
   }
 }
 
+export class InvalidCaseTypeConfigError extends Error {
+  /**
+   * @param {string} slug
+   * @param {OutcomeConfigurationError} cause
+   */
+  constructor(slug, cause) {
+    super(
+      `Case Type "${slug}" has invalid outcome configuration: ${cause.message}`
+    );
+    this.name = 'InvalidCaseTypeConfigError';
+    this.slug = slug;
+  }
+}
+
 /**
  * @param {string} slug
+ * @param {Record<string, CaseTypeImporter>} [importers]
  * @returns {Promise<import('../src/sharepoint-client.js').CaseTypeConfig>}
  */
-export async function loadCaseTypeConfig(slug) {
-  const importer = CASE_TYPE_IMPORTERS[slug];
+export async function loadCaseTypeConfig(
+  slug,
+  importers = CASE_TYPE_IMPORTERS
+) {
+  const importer = importers[slug];
   if (!importer) {
     throw new UnknownCaseTypeError(
       slug,
@@ -63,5 +85,17 @@ export async function loadCaseTypeConfig(slug) {
     );
   }
   const mod = await importer();
+  try {
+    validateConfiguredOutcomeConfig(
+      mod.default.questions,
+      mod.default.outcomeOptions,
+      mod.default.defaultOutcomeId
+    );
+  } catch (error) {
+    if (error instanceof OutcomeConfigurationError) {
+      throw new InvalidCaseTypeConfigError(slug, error);
+    }
+    throw error;
+  }
   return mod.default;
 }

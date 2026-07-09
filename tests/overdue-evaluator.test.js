@@ -34,6 +34,7 @@ function baseConfig() {
     questions: [],
     computeOutcome: () => ({ outcome: 'pass' }),
     outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
+    defaultOutcomeId: 'pass',
   };
 }
 
