@@ -43,6 +43,10 @@ const config = {
     { id: 'refer', wording: 'Refer', severity: 50 },
     { id: 'fail', wording: 'Fail', severity: 100 },
   ],
+  labels: [
+    { id: 'lbl-coaching', name: 'Coaching', color: '#2563eb' },
+    { id: 'lbl-regulatory', name: 'Regulatory', color: '#b91c1c' },
+  ],
   // The Outcome is driven wholly by the responses (question bank redesign): each
   // mapped response option scores a configured Outcome and the highest-scoring
   // applicable Outcome wins, defaulting to `pass`.
@@ -156,6 +160,7 @@ const config = {
       id: 'q-welcome',
       text: 'Was the customer greeted professionally?',
       category: 'Opening',
+      labelIds: ['lbl-coaching'],
       responseType: 'yes-no-na',
       optionOutcomes: { No: 'fail' },
       failureCriteria: 'No',
@@ -165,6 +170,7 @@ const config = {
       id: 'q-needs',
       text: "Were the customer's needs identified before proceeding?",
       category: 'Discovery',
+      labelIds: ['lbl-coaching', 'lbl-regulatory'],
       responseType: 'yes-no-na',
       optionOutcomes: { No: 'fail' },
       failureCriteria: 'No',
@@ -175,6 +181,7 @@ const config = {
       id: 'q-resolve',
       text: "Was the issue resolved to the customer's satisfaction?",
       category: 'Resolution',
+      labelIds: ['lbl-regulatory'],
       responseType: 'yes-no-na',
       showWhen: { 'q-needs': { equals: 'Yes' } },
       optionOutcomes: { No: 'fail' },

@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import {
   bankFromCaseTypeConfig,
   loadQuestionBanks,
+  questionBanks,
 } from '../src/question-bank/question-bank-source.js';
 
 test('bankFromCaseTypeConfig: projects case type config into editable bank shape', () => {
@@ -178,4 +179,27 @@ test('loadQuestionBanks: builds the bank map from importer entries', async () =>
   assert.deepEqual(Object.keys(banks), ['alpha', 'beta']);
   assert.equal(banks.alpha.questions[0].id, 'q-alpha');
   assert.equal(banks.beta.eligibleGroups[0], 'Owners');
+});
+
+test('questionBanks: every live case type carries label definitions', () => {
+  for (const [slug, bank] of Object.entries(questionBanks)) {
+    assert.ok(
+      (bank.labels ?? []).length > 0,
+      `${slug} should define reporting labels`
+    );
+  }
+});
+
+test('questionBanks: every question labelId resolves within its case type', () => {
+  for (const [slug, bank] of Object.entries(questionBanks)) {
+    const labelIds = new Set((bank.labels ?? []).map((label) => label.id));
+    for (const question of bank.questions) {
+      for (const labelId of question.labelIds ?? []) {
+        assert.ok(
+          labelIds.has(labelId),
+          `${slug}/${question.id} references missing label ${labelId}`
+        );
+      }
+    }
+  }
 });

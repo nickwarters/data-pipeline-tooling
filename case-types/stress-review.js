@@ -14,7 +14,14 @@ import { computeConfiguredOutcome } from '../src/evaluators/configured-outcome.j
  */
 const config = {
   eligibleGroups: ['Reviewers'],
-  questions: stressQuestions,
+  labels: [
+    { id: 'lbl-performance', name: 'Performance', color: '#0f766e' },
+    { id: 'lbl-conditional', name: 'Conditional logic', color: '#7c3aed' },
+  ],
+  questions: stressQuestions.map((question) => ({
+    ...question,
+    labelIds: question.showWhen ? ['lbl-conditional'] : ['lbl-performance'],
+  })),
   // Outcome vocabulary: required even for this perf harness so the
   // Outcome block resolves wording from config rather than a built-in fallback.
   outcomeOptions: [
