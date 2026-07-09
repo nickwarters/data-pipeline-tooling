@@ -68,6 +68,16 @@ test('initial state: example-review is active, not dirty, no diffs', () => {
   assert.ok(baselineBank.get().label);
 });
 
+test('initial state: question bank questions come from case type configs', async () => {
+  _resetStore();
+  const { default: exampleReview } =
+    await import('../case-types/example-review.js');
+  assert.deepEqual(
+    currentBank.get().questions.map((q) => q.text),
+    exampleReview.questions.map((q) => q.text)
+  );
+});
+
 test('commit: mutates cases and marks dirty', () => {
   _resetStore();
   commit((types) => {
@@ -275,8 +285,8 @@ test('drawerOpen signal: settable', () => {
 
 test('baselineBank: reflects the active slug', () => {
   _resetStore();
-  activeSlug.set('complaint-review');
-  assert.equal(baselineBank.get().slug, 'complaint-review');
+  activeSlug.set('complaints');
+  assert.equal(baselineBank.get().slug, 'complaints');
 });
 
 test('cases signal exported for downstream re-emit', () => {

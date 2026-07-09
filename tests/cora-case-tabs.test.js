@@ -40,9 +40,9 @@ test('CORACaseTabs: one tab per case type; clicking switches activeSlug', () => 
   e.connectedCallback();
   const nav = /** @type {any} */ (e)._children[0];
   const tabsContainer = nav._children[1];
-  assert.equal(tabsContainer._children.length, 2); // example-review + complaint-review
+  assert.equal(tabsContainer._children.length, 4);
   tabsContainer._children[1]._listeners.click[0]();
-  assert.equal(activeSlug.get(), 'complaint-review');
+  assert.equal(activeSlug.get(), 'complaints');
   e.disconnectedCallback();
 });
 

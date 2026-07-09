@@ -11,8 +11,8 @@
  * orchestrates these in response to signal changes.
  */
 
-/** @typedef {import('../../dev/fixtures/question-banks.js').QuestionBank} QuestionBank */
-/** @typedef {import('../../dev/fixtures/question-banks.js').DraftQuestion} DraftQuestion */
+/** @typedef {import('./question-bank-source.js').QuestionBank} QuestionBank */
+/** @typedef {import('./question-bank-source.js').DraftQuestion} DraftQuestion */
 
 import { outcomeResponseOptions } from '../evaluators/configured-outcome.js';
 

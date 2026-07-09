@@ -134,9 +134,19 @@ test('CORAShowwhenGroup: non-root shows × group button', () => {
 
 test('CORAShowwhenGroup: × group on non-root removes self from parent tree', async () => {
   _resetStore();
-  // Use complaint-review's q-rootcause which already has a nested tree.
   const storeMod = await import('../src/question-bank/question-bank-store.js');
-  const q = storeMod.cases.get()['complaint-review'].questions[2];
+  const q = storeMod.cases.get()['complaints'].questions[2];
+  q.showWhen = {
+    $and: [
+      { 'q-cm-investigated': { equals: 'Yes' } },
+      {
+        $or: [
+          { 'q-cm-ack': { equals: 'Yes' } },
+          { 'q-cm-channel': { equals: 'Phone' } },
+        ],
+      },
+    ],
+  };
   const { ensureTree } =
     await import('../src/question-bank/question-bank-tree.js');
   const root = ensureTree(q);

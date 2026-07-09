@@ -11,7 +11,17 @@ const { _resetStore, cases, activeSlug } =
 
 /** The active bank's labels, cast to `any[]` (the typedef makes them optional). */
 function labels() {
-  return /** @type {any[]} */ (cases.get()['example-review'].labels);
+  return /** @type {any[]} */ (cases.get()['example-review'].labels ?? []);
+}
+
+function seedLabels() {
+  const bank = cases.get()['example-review'];
+  bank.labels = [
+    { id: 'lbl-coaching', name: 'Coaching', color: '#2563eb' },
+    { id: 'lbl-regulatory', name: 'Regulatory', color: '#b91c1c' },
+  ];
+  bank.questions[0].labelIds = ['lbl-coaching'];
+  bank.questions[1].labelIds = ['lbl-coaching', 'lbl-regulatory'];
 }
 
 /** Mount a labels editor bound to a question from the active bank. */
@@ -41,6 +51,7 @@ test('CORAQuestionLabels: no question → nothing renders', () => {
 test('CORAQuestionLabels: renders a pill per assigned label', () => {
   _resetStore();
   activeSlug.set('example-review');
+  seedLabels();
   const q = cases.get()['example-review'].questions[1]; // two labels
   const e = mount(q);
   const { pillRow } = parts(e);
@@ -85,6 +96,7 @@ test('CORAQuestionLabels: shows an empty hint when no labels assigned', () => {
 test('CORAQuestionLabels: an unassigned bank label shows as an add chip', () => {
   _resetStore();
   activeSlug.set('example-review');
+  seedLabels();
   const q = cases.get()['example-review'].questions[0]; // only lbl-coaching
   const e = mount(q);
   const { addRow } = parts(e);
@@ -102,6 +114,7 @@ test('CORAQuestionLabels: an unassigned bank label shows as an add chip', () => 
 test('CORAQuestionLabels: pill × unassigns and drops empty labelIds', () => {
   _resetStore();
   activeSlug.set('example-review');
+  seedLabels();
   const q = cases.get()['example-review'].questions[0]; // single label
   const e = mount(q);
   const { pillRow } = parts(e);
@@ -113,6 +126,7 @@ test('CORAQuestionLabels: pill × unassigns and drops empty labelIds', () => {
 test('CORAQuestionLabels: editing a pill colour recolours the shared label', () => {
   _resetStore();
   activeSlug.set('example-review');
+  seedLabels();
   const q = cases.get()['example-review'].questions[1];
   const e = mount(q);
   const { pillRow } = parts(e);

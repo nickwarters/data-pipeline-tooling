@@ -50,7 +50,7 @@ export function QuestionLabels({ question: q }) {
   const bank = currentBank.get();
   const labels = bank?.labels ?? [];
   const assignedIds = q.labelIds ?? [];
-  /** @type {Record<string, import('../../../dev/fixtures/question-banks.js').Label>} */
+  /** @type {Record<string, import('../../question-bank/question-bank-source.js').Label>} */
   const byId = Object.fromEntries(
     labels.map((/** @type {any} */ l) => [l.id, l])
   );
@@ -108,7 +108,7 @@ export function QuestionLabels({ question: q }) {
 
 /**
  * @param {any} q
- * @param {import('../../../dev/fixtures/question-banks.js').Label} label
+ * @param {import('../../question-bank/question-bank-source.js').Label} label
  */
 function pill(q, label) {
   const color = /** @type {any} */ (

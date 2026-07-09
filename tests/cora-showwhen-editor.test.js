@@ -94,7 +94,18 @@ test('CORAShowwhenEditor: toggling Conditional then back to Always hides an empt
 
 test('CORAShowwhenEditor: nested tree reports depth in header desc when conditional', () => {
   _resetStore();
-  const q = cases.get()['complaint-review'].questions[2]; // 2-level deep tree
+  const q = cases.get()['complaints'].questions[2];
+  q.showWhen = {
+    $and: [
+      { 'q-cm-investigated': { equals: 'Yes' } },
+      {
+        $or: [
+          { 'q-cm-ack': { equals: 'Yes' } },
+          { 'q-cm-channel': { equals: 'Phone' } },
+        ],
+      },
+    ],
+  };
   const e = mount(q);
   const header = wrapOf(e)._children[0];
   const desc = header._children[2];

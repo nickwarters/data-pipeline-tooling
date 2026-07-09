@@ -4,7 +4,7 @@ import { h } from '../lib/html.js';
 import { activeSlug, commit, currentBank } from './question-bank-store.js';
 
 /**
- * @param {{ bank: import('../../dev/fixtures/question-banks.js').QuestionBank, addOutcome: () => void, setDefaultOutcome: (id: string) => void, renameOutcome: (option: import('../sharepoint-client.js').OutcomeOption, id: string) => void, setWording: (option: import('../sharepoint-client.js').OutcomeOption, wording: string) => void, setSeverity: (option: import('../sharepoint-client.js').OutcomeOption, severity: string) => void, removeOutcome: (option: import('../sharepoint-client.js').OutcomeOption, index: number) => void }} props
+ * @param {{ bank: import('./question-bank-source.js').QuestionBank, addOutcome: () => void, setDefaultOutcome: (id: string) => void, renameOutcome: (option: import('../sharepoint-client.js').OutcomeOption, id: string) => void, setWording: (option: import('../sharepoint-client.js').OutcomeOption, wording: string) => void, setSeverity: (option: import('../sharepoint-client.js').OutcomeOption, severity: string) => void, removeOutcome: (option: import('../sharepoint-client.js').OutcomeOption, index: number) => void }} props
  * @returns {HTMLElement}
  */
 export function OutcomeOptionsEditor(props) {
@@ -139,7 +139,7 @@ export class CORAOutcomeOptionsEditor extends ShellElement {
   }
 
   /**
-   * @param {import('../../dev/fixtures/question-banks.js').QuestionBank} bank
+   * @param {import('./question-bank-source.js').QuestionBank} bank
    * @returns {import('../sharepoint-client.js').OutcomeOption}
    */
   _newOutcomeOption(bank) {
@@ -158,7 +158,7 @@ export class CORAOutcomeOptionsEditor extends ShellElement {
   }
 
   /**
-   * @param {import('../../dev/fixtures/question-banks.js').QuestionBank} bank
+   * @param {import('./question-bank-source.js').QuestionBank} bank
    * @param {string} previousId
    * @param {string} nextId
    */
@@ -174,7 +174,7 @@ export class CORAOutcomeOptionsEditor extends ShellElement {
   }
 
   /**
-   * @param {import('../../dev/fixtures/question-banks.js').QuestionBank} bank
+   * @param {import('./question-bank-source.js').QuestionBank} bank
    * @param {string} outcomeId
    */
   _clearOutcomeReferences(bank, outcomeId) {

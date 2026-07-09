@@ -14,10 +14,10 @@
  */
 
 import { signal, computed } from '../lib/signal.js';
-import { questionBanks } from '../../dev/fixtures/question-banks.js';
+import { questionBanks } from './question-bank-source.js';
 
-/** @typedef {import('../../dev/fixtures/question-banks.js').QuestionBank} QuestionBank */
-/** @typedef {import('../../dev/fixtures/question-banks.js').DraftQuestion} DraftQuestion */
+/** @typedef {import('./question-bank-source.js').QuestionBank} QuestionBank */
+/** @typedef {import('./question-bank-source.js').DraftQuestion} DraftQuestion */
 
 /**
  * @typedef {{ category: string|null, showDeprecated: boolean, conditionalOnly: boolean }} Filters

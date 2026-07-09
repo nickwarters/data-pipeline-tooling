@@ -15,7 +15,10 @@ test('CORAOutcomeOptionsEditor: renders one row per case-type outcome option', (
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
   const list = section._children[2];
-  assert.equal(list._children.length, 2);
+  assert.equal(
+    list._children.length,
+    cases.get()['example-review'].outcomeOptions?.length
+  );
 });
 
 test('CORAOutcomeOptionsEditor: edits the case-type default outcome', () => {
@@ -68,7 +71,9 @@ test('CORAOutcomeOptionsEditor: renaming an outcome id updates option-outcome ma
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
   const list = section._children[2];
-  const failRow = list._children[1];
+  const failIndex = bank.outcomeOptions?.findIndex((o) => o.id === 'fail');
+  assert.notEqual(failIndex, -1);
+  const failRow = list._children[/** @type {number} */ (failIndex)];
   const idInput = failRow._children[0]._children[1];
 
   idInput._listeners.change[0]({ target: { value: 'fail-impact' } });
@@ -99,6 +104,7 @@ test('CORAOutcomeOptionsEditor: adds an outcome option to the active case type',
 test('CORAOutcomeOptionsEditor: removes an outcome option', () => {
   _resetStore();
   const bank = cases.get()['example-review'];
+  const before = bank.outcomeOptions?.length ?? 0;
   bank.questions[0].optionOutcomes = { No: 'pass' };
   bank.questions[1].optionOutcomes = { No: 'pass', 'N/A': 'fail' };
   bank.defaultOutcomeId = 'pass';
@@ -111,7 +117,10 @@ test('CORAOutcomeOptionsEditor: removes an outcome option', () => {
 
   remove._listeners.click[0]();
 
-  assert.equal(cases.get()['example-review'].outcomeOptions?.length, 1);
+  assert.equal(
+    cases.get()['example-review'].outcomeOptions?.length,
+    before - 1
+  );
   // The sole mapping to the removed outcome is dropped, emptying the map.
   assert.equal(bank.questions[0].optionOutcomes, undefined);
   // A question that also mapped another option keeps that one.
