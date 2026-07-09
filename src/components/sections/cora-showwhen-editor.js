@@ -48,8 +48,10 @@ export function ShowwhenEditor(props) {
     'div',
     { className: 'showwhen-header' },
     h('span', {}, '◆ Show when'),
-    modeSelect,
-    conditional ? h('span', { className: 'showwhen-desc' }, desc) : null
+    // Keep the mode control last so the description's auto margin leaves it
+    // anchored to the header's right edge in both Always and Conditional modes.
+    conditional ? h('span', { className: 'showwhen-desc' }, desc) : null,
+    modeSelect
   );
 
   if (!conditional) {

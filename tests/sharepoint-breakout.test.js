@@ -18,6 +18,9 @@ function read(path) {
 }
 
 const styles = read('src/styles/cora-styles.css');
+const questionBankStyles = read(
+  'src/question-bank/cora-question-bank-editor.css'
+);
 const tokens = read('src/styles/cora-design-tokens.css');
 
 /**
@@ -94,6 +97,23 @@ test('reset: links are repainted in our accent colour, not SharePoint blue', () 
   const body = ruleBody(styles, '[data-cora-root] :where(a:link, a:visited) {');
   assert.match(body, /color:\s*var\(--cora-color-accent\)/);
   assert.match(body, /text-decoration:\s*none/);
+});
+
+test('reset: H2 headings keep the CORA surface colour over SharePoint theme styles', () => {
+  const body = ruleBody(styles, '[data-cora-root] h2 {');
+  assert.match(
+    body,
+    /color:\s*var\(--cora-color-on-surface\)\s*!important/,
+    'the concrete heading colour must win over SharePoint direct heading rules'
+  );
+});
+
+test('Question Bank: field selects use the theme surface rather than a native white fill', () => {
+  const body = ruleBody(
+    questionBankStyles,
+    '}\ncora-bank-editor .field-select {'
+  );
+  assert.match(body, /background-color:\s*var\(--cora-color-surface\)/);
 });
 
 test('reset: tables collapse their borders, neutralising SP core table styling', () => {

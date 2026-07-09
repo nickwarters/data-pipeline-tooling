@@ -12,7 +12,10 @@ const { _resetStore, cases } =
 /** @param {any} el @returns {any} */
 const wrapOf = (el) => el._children[0];
 /** @param {any} el @returns {any} */
-const selectOf = (el) => wrapOf(el)._children[0]._children[1];
+const selectOf = (el) =>
+  wrapOf(el)._children[0]._children.find(
+    (/** @type {any} */ child) => child.className === 'showwhen-mode'
+  );
 /** Fire a change on the mode select. @param {any} el @param {string} value */
 function selectMode(el, value) {
   const select = selectOf(el);
@@ -108,8 +111,15 @@ test('CORAShowwhenEditor: nested tree reports depth in header desc when conditio
   };
   const e = mount(q);
   const header = wrapOf(e)._children[0];
-  const desc = header._children[2];
+  const desc = header._children.find(
+    (/** @type {any} */ child) => child.className === 'showwhen-desc'
+  );
   const txt = desc._children[0]?.textContent ?? desc.textContent;
   assert.ok(txt.includes('conditions'));
   assert.ok(txt.includes('levels'));
+  assert.equal(
+    header._children.at(-1),
+    selectOf(e),
+    'the mode select stays at the header end when a conditional description is shown'
+  );
 });

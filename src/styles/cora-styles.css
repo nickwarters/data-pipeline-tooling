@@ -177,6 +177,10 @@
   font-weight: var(--cora-font-weight-bold);
   line-height: var(--cora-line-height-snug);
   letter-spacing: var(--cora-tracking-tight);
+  /* SharePoint SE targets headings directly with high-specificity theme
+     selectors. A concrete, scoped declaration is required here rather than
+     relying on the generic inherited-text reset above. */
+  color: var(--cora-color-on-surface) !important;
   margin: var(--cora-space-6) 0 var(--cora-space-3);
 }
 
