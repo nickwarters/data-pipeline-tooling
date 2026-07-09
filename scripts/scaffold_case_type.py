@@ -96,7 +96,7 @@ import {{ computeConfiguredOutcome }} from '../src/evaluators/configured-outcome
 
 /**
  * The **{opts.display_name}** Case Type scaffold. Its per-Case-Type groups derive
- * from the `{opts.display_name}` display name (ADR-0022):
+ * from the `{opts.display_name}` display name:
  * `Reviewers - {opts.display_name}`, `CaseTypeOwner - {opts.display_name}`,
  * `JourneyOwner - {opts.display_name}`.
  *
@@ -107,10 +107,10 @@ import {{ computeConfiguredOutcome }} from '../src/evaluators/configured-outcome
  */
 const config = {{
   eligibleGroups: ['Reviewers'],
-  // TODO(case-type): Confirm the SLA hours before production use.
+ // TODO(case-type): Confirm the SLA hours before production use.
   slaHours: 72,
   attributeFailures: true,
-  // TODO(case-type): Replace starter Case Details fields with this Case Type's source fields.
+ // TODO(case-type): Replace starter Case Details fields with this Case Type's source fields.
   detailFields: [
     {{ key: 'reference', label: '{opts.display_name} reference' }},
     {{ key: 'customerName', label: 'Customer name' }},
@@ -128,19 +128,19 @@ const config = {{
     appealReview: {{}},
     amendOutcome: {{}},
   }},
-  // TODO(case-type): Confirm who raises appeals for this Case Type.
+ // TODO(case-type): Confirm who raises appeals for this Case Type.
   appeal: {{ raisedBy: 'responsiblePartyManager', resolvedBy: 'controls' }},
-  // TODO(case-type): Replace the starter Outcome vocabulary with business wording.
-  // `severity` orders the Outcomes (higher = worse); it drives the scoring.
+ // TODO(case-type): Replace the starter Outcome vocabulary with business wording.
+ // `severity` orders the Outcomes (higher = worse); it drives the scoring.
   outcomeOptions: [
     {{ id: 'pass', wording: 'Pass', severity: 0 }},
     {{ id: 'refer', wording: 'Refer', severity: 50 }},
     {{ id: 'fail', wording: 'Fail', severity: 100 }},
   ],
   defaultOutcomeId: 'pass',
-  // TODO(case-type): Replace starter questions with the first real Question Bank export.
-  // Each response option maps to a configured Outcome via `optionOutcomes`; the
-  // highest-scoring applicable Outcome wins (the response drives the Outcome).
+ // TODO(case-type): Replace starter questions with the first real Question Bank export.
+ // Each response option maps to a configured Outcome via `optionOutcomes`; the
+ // highest-scoring applicable Outcome wins (the response drives the Outcome).
   questions: [
     {{
       id: 'q-{prefix}-evidence',
@@ -172,7 +172,7 @@ const config = {{
     }},
   ],
 
-  /** @param {{Record<string, Answer>}} answers */
+ /** @param {{Record<string, Answer>}} answers */
   computeOutcome(answers) {{
     return computeConfiguredOutcome(
       config.questions,
@@ -345,7 +345,7 @@ def fixture_cases(opts: ScaffoldOptions) -> str:
 
 
 def adr(opts: ScaffoldOptions) -> str:
-    return f"""# ADR-0028: Case Type scaffolding contract
+    return f"""# Case Type scaffolding contract
 
 ## Status
 

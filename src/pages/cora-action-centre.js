@@ -20,7 +20,7 @@ import {
 
 /**
  * How many rows a group holds per page. "Show N more" fetches the next page, so
- * the DOM holds a page — not the whole backlog (issue #287).
+ * the DOM holds a page — not the whole backlog.
  */
 export const PAGE_SIZE = 4;
 
@@ -36,21 +36,21 @@ function caseWord(n) {
 
 /**
  * @typedef {{
- *   reasons: Reason[],
- *   counts: Record<string, number>,
- *   headline: number,
- *   peeks: Record<string, CaseRow | null>,
- *   expanded: Set<string>,
- *   pages: Record<string, CaseRow[]>,
- *   needsActionNow: boolean,
- *   now: Date,
+ * reasons: Reason[],
+ * counts: Record<string, number>,
+ * headline: number,
+ * peeks: Record<string, CaseRow | null>,
+ * expanded: Set<string>,
+ * pages: Record<string, CaseRow[]>,
+ * needsActionNow: boolean,
+ * now: Date,
  * }} ActionCentreState
  *
  * @typedef {{
- *   onToggleNeedsAction: (needsActionNow: boolean) => void,
- *   onToggleGroup: (reason: Reason) => void,
- *   onShowMore: (reason: Reason) => void,
- *   onOpenCase: (row: CaseRow) => void,
+ * onToggleNeedsAction: (needsActionNow: boolean) => void,
+ * onToggleGroup: (reason: Reason) => void,
+ * onShowMore: (reason: Reason) => void,
+ * onOpenCase: (row: CaseRow) => void,
  * }} ActionCentreHandlers
  */
 
@@ -248,7 +248,7 @@ export function ActionCentreView(state, handlers) {
 }
 
 /**
- * The dashboard **Action Centre** worklist (issue #287): the per-role dashboard
+ * The dashboard **Action Centre** worklist: the per-role dashboard
  * tables merged into one reason-grouped, count-driven, server-paged list.
  *
  * Counts (group headers + deduped headline) come from `countCases`; a group's
@@ -257,11 +257,11 @@ export function ActionCentreView(state, handlers) {
  * client predates `countCases`.
  *
  * @param {{
- *   client: SharePointClient | null,
- *   capabilities: Capabilities,
- *   currentUserId?: string,
- *   onOpenCase?: (row: CaseRow) => void,
- *   now?: Date,
+ * client: SharePointClient | null,
+ * capabilities: Capabilities,
+ * currentUserId?: string,
+ * onOpenCase?: (row: CaseRow) => void,
+ * now?: Date,
  * }} props
  * @returns {HTMLElement}
  */

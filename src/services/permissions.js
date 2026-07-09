@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * Maps SharePoint group names onto framework capabilities (ADR-0022). Groups
+ * Maps SharePoint group names onto framework capabilities. Groups
  * fall on two orthogonal axes: functional capability (what you can do, anywhere)
  * and per-Case-Type list access (which Case's list you can open). Edit this file
  * to add new Case Types or change the group → capability mapping.
@@ -8,39 +8,39 @@
  * @typedef {{ slug: string, displayName: string }} CaseTypeGroupSource
  *
  * @typedef {{
- *   reviewer: string,
- *   adviser: string,
- *   controls: string,
- *   reviewerManager: string,
- *   responsiblePartyManager: string,
- *   maintainer: string,
- *   caseTypes: CaseTypeGroupSource[]
+ * reviewer: string,
+ * adviser: string,
+ * controls: string,
+ * reviewerManager: string,
+ * responsiblePartyManager: string,
+ * maintainer: string,
+ * caseTypes: CaseTypeGroupSource[]
  * }} PermissionsConfig
  */
 
 /**
  * Resolved capabilities for the current user, derived from group membership
- * (ADR-0022). `isReviewer` is implied by any `Reviewers - <type>` list-access
+ *. `isReviewer` is implied by any `Reviewers - <type>` list-access
  * group as well as the standalone `Reviewers` functional group. `isVisitor` is
  * DERIVED (not config-driven): true iff the user holds no role at all.
  *
  * @typedef {{
- *   isReviewer: boolean,
- *   listAccessCaseTypes: string[],
- *   isAdviser: boolean,
- *   ownedCaseTypes: string[],
- *   ownedJourneyCaseTypes: string[],
- *   isControls: boolean,
- *   isReviewerManager: boolean,
- *   isResponsiblePartyManager: boolean,
- *   isMaintainer: boolean,
- *   isVisitor: boolean
+ * isReviewer: boolean,
+ * listAccessCaseTypes: string[],
+ * isAdviser: boolean,
+ * ownedCaseTypes: string[],
+ * ownedJourneyCaseTypes: string[],
+ * isControls: boolean,
+ * isReviewerManager: boolean,
+ * isResponsiblePartyManager: boolean,
+ * isMaintainer: boolean,
+ * isVisitor: boolean
  * }} Capabilities
  */
 
 /**
  * The three per-Case-Type SharePoint group names, all composed from the Case
- * Type's display name (ADR-0022 grill D3 keeps the `CaseTypeOwner - Example
+ * Type's display name (the architecture decision grill D3 keeps the `CaseTypeOwner - Example
  * Review` naming). Deriving them here means provisioning a new type needs one
  * display name, not three hand-written strings.
  *
@@ -64,7 +64,7 @@ export const permissions = {
   // TBC: placeholder SharePoint group names — confirm with the platform owner.
   responsiblePartyManager: 'ResponsibleParty-Managers',
   maintainer: 'CR-Maintainers',
-  // Per-Case-Type group names derive from `displayName` (ADR-0022): each entry
+  // Per-Case-Type group names derive from `displayName`: each entry
   // yields `Reviewers - X`, `CaseTypeOwner - X`, and `JourneyOwner - X`.
   caseTypes: [
     { slug: 'example-review', displayName: 'Example Review' },
@@ -96,7 +96,7 @@ export function resolveCapabilities(userGroups, config = permissions) {
     if (has(names.journeyOwner)) ownedJourneyCaseTypes.push(slug);
   }
 
-  // Axis 2 (list access) implies the reviewing function (ADR-0022, grill D2).
+  // Axis 2 (list access) implies the reviewing function.
   const isReviewer = has(config.reviewer) || listAccessCaseTypes.length > 0;
   const isAdviser = has(config.adviser);
   const isControls = has(config.controls);

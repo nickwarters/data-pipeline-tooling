@@ -16,7 +16,7 @@ export function unsafeHTML(html) {
  * A lightweight hyperscript-style element builder to replace manual document.createElement.
  * @param {string} tag
  * @param {Record<string, any>} [props]
- * @param  {...VNode} children
+ * @param {...VNode} children
  * @returns {HTMLElement}
  */
 export function h(tag, props = {}, ...children) {
@@ -94,7 +94,7 @@ export function h(tag, props = {}, ...children) {
 /**
  * Fragment primitive for returning multiple elements
  * @param {Record<string, any>} _props
- * @param  {...VNode} children
+ * @param {...VNode} children
  * @returns {DocumentFragment}
  */
 export function Fragment(_props, ...children) {

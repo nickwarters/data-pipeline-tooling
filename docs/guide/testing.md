@@ -11,10 +11,10 @@ testing a browser/custom-element boundary.
 ## Quick Reference
 
 ```sh
-node --test                              # run all tests
-node --test tests/view.test.js           # single file
+node --test # run all tests
+node --test tests/view.test.js # single file
 node --test --experimental-test-coverage # with coverage
-node --test --watch                      # re-run on file change
+node --test --watch # re-run on file change
 ```
 
 ## Function Component Tests

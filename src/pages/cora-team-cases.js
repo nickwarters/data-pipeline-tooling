@@ -12,10 +12,10 @@ import '../components/collections/cora-case-table.js';
 
 /**
  * @param {{
- *   client: SharePointClient|null,
- *   currentUser: CurrentUser|null,
- *   eligibleCaseTypes: string[],
- *   queryString: string,
+ * client: SharePointClient|null,
+ * currentUser: CurrentUser|null,
+ * eligibleCaseTypes: string[],
+ * queryString: string,
  * }} props
  * @returns {HTMLElement}
  */
@@ -49,9 +49,9 @@ export function TeamCasesPage({
 
 /**
  * @param {{
- *   client: SharePointClient|null,
- *   currentUser: CurrentUser|null,
- *   cases: CaseRow[] | null,
+ * client: SharePointClient|null,
+ * currentUser: CurrentUser|null,
+ * cases: CaseRow[] | null,
  * }} props
  * @returns {Node[]}
  */

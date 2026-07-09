@@ -1,7 +1,7 @@
 // @ts-check
 // CaseMachine is a pure state model: given a Case row, the current user, their
 // capabilities and the Case Type config, it derives roles, the section access
-// matrix, and the lifecycle transition PATCH fields (ADR-0023/0024). It holds
+// matrix, and the lifecycle transition PATCH fields. It holds
 // no DOM and no signals — the function-component page (CaseReviewPage) reads it
 // through the view-model, so it is plain domain state, not a UI orchestration
 // layer around reactive().
@@ -55,7 +55,7 @@ export class CaseMachine {
   }
 
   /**
-   * Whether the Case has reached the reportable freeze point (ADR-0023). Gates
+   * Whether the Case has reached the reportable freeze point. Gates
    * editability everywhere the old code hard-coded `status === 'In-progress'`.
    */
   get reportable() {
@@ -85,7 +85,7 @@ export class CaseMachine {
   /**
    * Whether the viewer may pick which configured Remediation Actions apply to a
    * failed Answer and, when the Question allows it, add a free-form action
-   * (issue #250). Unlike `canAttribute`/`canCapture`, this is not gated on the
+   *. Unlike `canAttribute`/`canCapture`, this is not gated on the
    * Case Type opting into `attributeFailures`: any editor of the Issues tab
    * (the Assigned Reviewer on a not-yet-reportable Case) may select actions.
    */
@@ -94,7 +94,7 @@ export class CaseMachine {
   }
 
   /**
-   * The final-complete gate (ADR-0024): once actions have been **sent**, an
+   * The final-complete gate: once actions have been **sent**, an
    * `Actions In Progress` Case may close to `Completed` only when the Remediation
    * tracking tab is complete — every sent action `complete` or `cancelled` (with a
    * reason). The Assigned Reviewer drives it. Inert on the no-actions path
@@ -118,12 +118,12 @@ export class CaseMachine {
   }
 
   /**
-   * The shared **reportable milestone** snapshot (ADR-0023): the single point at
+   * The shared **reportable milestone** snapshot: the single point at
    * which a Case's Answers freeze and its Outcome is stamped for reporting. Used
    * by both the "Send Actions" (→ `Actions In Progress`) and no-actions
    * "Complete Case" (→ `Completed`) paths; each caller adds `status`, the
    * `reportableAt` timestamp, and — on the actions path — the remediation due
-   * date (#233).
+   * date.
    *
    * @param {((answers: Record<string, Answer>) => import('../sharepoint-client.js').OutcomeResult) | null | undefined} computeOutcome
    * @param {Record<string, Answer>} [answers]
@@ -165,7 +165,7 @@ export class CaseMachine {
       status: 'Actions In Progress',
       reportableAt,
       // Remediation SLA due date, computed **once** here at Send Actions and
-      // stored on the row — never recomputed on read (ADR-0025). The reportable
+      // stored on the row — never recomputed on read. The reportable
       // moment is the SLA start; the due date is +10 working days from it.
       remediationDueDate: addWorkingDays(
         reportableAt,
@@ -199,9 +199,9 @@ export class CaseMachine {
 
   /**
    * The **final complete** transition (actions path): once the Remediation tab
-   * is complete (#232), an `Actions In Progress` Case closes to `Completed`.
+   * is complete, an `Actions In Progress` Case closes to `Completed`.
    * The Answers and Outcome were already frozen at Send Actions, so this stamps
-   * `completedAt` only — no re-snapshot (ADR-0023).
+   * `completedAt` only — no re-snapshot.
    *
    * @returns {Partial<CaseRow>}
    */

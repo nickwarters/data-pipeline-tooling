@@ -3,7 +3,7 @@
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 
 /**
- * Journey Owner's cross-case reach (ADR-0022/0027): fan out across every Case
+ * Journey Owner's cross-case reach: fan out across every Case
  * Type the user owns as a Journey Owner (`ownedJourneyCaseTypes`), one bounded
  * server-side `$filter` per Case Type list, and merge the rows. This is a
  * *list-scope* capability beyond the per-Case access matrix — a Journey Owner

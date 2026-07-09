@@ -10,14 +10,14 @@ just the function and the `client` it was handed.
 
 ```js
 // The interface (src/sharepoint-client.js):
-// getCase(id)                          → Promise<CaseRow | null>
-// patchCase(id, fields, etag)          → Promise<PatchResult>
-// getQuestionDefinitions(ids)          → Promise<QuestionDefinition[]>
-// listCases(filter)                    → Promise<CaseRow[]>
-// getCurrentUser()                     → Promise<CurrentUser>
-// getCurrentUserGroups()               → Promise<string[]>
+// getCase(id) → Promise<CaseRow | null>
+// patchCase(id, fields, etag) → Promise<PatchResult>
+// getQuestionDefinitions(ids) → Promise<QuestionDefinition[]>
+// listCases(filter) → Promise<CaseRow[]>
+// getCurrentUser() → Promise<CurrentUser>
+// getCurrentUserGroups() → Promise<string[]>
 
-// Switch to mock mode:  ?mock=1 in the URL
+// Switch to mock mode: ?mock=1 in the URL
 // Add a new method: typedef → HttpSharePointClient → MockSharePointClient → fixture
 ```
 
@@ -27,7 +27,7 @@ just the function and the `client` it was handed.
 
 Every REST consumer in the framework codes against the `SharePointClient` typedef defined in `src/sharepoint-client.js`. Both `HttpSharePointClient` (real HTTP) and `MockSharePointClient` (in-memory fixture) implement it identically. Components receive a `client` property; they never know or care which implementation is behind it.
 
-This is what makes the mock-first dev loop work (ADR-0009): the same component code runs against real SharePoint in production and against fixture data in development and tests.
+This is what makes the mock-first dev loop work: the same component code runs against real SharePoint in production and against fixture data in development and tests.
 
 ---
 
@@ -50,27 +50,27 @@ The mock client operates entirely in memory. `patchCase` writes to its internal 
 ```js
 /**
  * @typedef {{
- *   id: string,
- *   caseType: string,
- *   title: string,
- *   status: 'In-progress' | 'Actions In Progress' | 'Completed',
- *   assignedReviewer: string,
- *   responsibleParty: string,
- *   answers: Record<string, Answer>,
- *   conversation: Message[],
- *   notes: string,
- *   reportableAt?: string | null,
- *   remediationDueDate?: string | null,
- *   completedAt: string | null,
- *   amendedOutcome?: AmendedOutcome | null,
- *   etag: string
+ * id: string,
+ * caseType: string,
+ * title: string,
+ * status: 'In-progress' | 'Actions In Progress' | 'Completed',
+ * assignedReviewer: string,
+ * responsibleParty: string,
+ * answers: Record<string, Answer>,
+ * conversation: Message[],
+ * notes: string,
+ * reportableAt?: string | null,
+ * remediationDueDate?: string | null,
+ * completedAt: string | null,
+ * amendedOutcome?: AmendedOutcome | null,
+ * etag: string
  * }} CaseRow
  */
 ```
 
-The full shape (the `Effective*` reporting columns, `Appeals`, etc.) lives in `src/sharepoint-client.js`; the fields above are the storage-relevant subset. `status` widened to three values with the lifecycle change (ADR-0023); `reportableAt` / `remediationDueDate` are stamped at Send Actions (ADR-0023/0025); `amendedOutcome` carries Controls' post-completion verdict and **replaces the removed `overrides[]` blob** (ADR-0026). See the [provisioning runbook](provisioning-runbook.md) for the SharePoint columns behind each field.
+The full shape (the `Effective*` reporting columns, `Appeals`, etc.) lives in `src/sharepoint-client.js`; the fields above are the storage-relevant subset. `status` widened to three values with the lifecycle change; `reportableAt` / `remediationDueDate` are stamped at Send Actions; `amendedOutcome` carries Controls' post-completion verdict and **replaces the removed `overrides[]` blob**. See the [provisioning runbook](provisioning-runbook.md) for the SharePoint columns behind each field.
 
-`answers` and `conversation` are stored as JSON blobs in the SharePoint list (ADR-0007). `HttpSharePointClient` handles the serialisation/deserialisation; consumers always receive and send parsed JS objects.
+`answers` and `conversation` are stored as JSON blobs in the SharePoint list. `HttpSharePointClient` handles the serialisation/deserialisation; consumers always receive and send parsed JS objects.
 
 ### `Answer`
 
@@ -80,7 +80,7 @@ The full shape (the `Effective*` reporting columns, `Appeals`, etc.) lives in `s
  */
 ```
 
-A **Remediation Action** on a Case is `{ id, text, status, cancelReason? }` (ADR-0024), stored in an `actions`-typed Issue Capture Field value (ADR-0020); legacy bare strings are coerced on read (`src/evaluators/remediation-actions.js`).
+A **Remediation Action** on a Case is `{ id, text, status, cancelReason? }`, stored in an `actions`-typed Issue Capture Field value; legacy bare strings are coerced on read (`src/evaluators/remediation-actions.js`).
 
 `value` is a plain string for `yes-no-na` and `single-choice` questions; a `string[]` for `multi-choice`. An empty array means unanswered.
 
@@ -95,8 +95,8 @@ Follow these four steps:
 ```js
 /**
  * @typedef {{
- *   …existing methods…,
- *   getMyNewThing: (arg: string) => Promise<MyThing | null>
+ * …existing methods…,
+ * getMyNewThing: (arg: string) => Promise<MyThing | null>
  * }} SharePointClient
  */
 ```
@@ -109,12 +109,12 @@ Add a corresponding `@typedef` for `MyThing` in the same file if it is a new sha
 // src/services/http-sharepoint-client.js
 /** @param {string} arg @returns {Promise<MyThing | null>} */
 async getMyNewThing(arg) {
-  const url = this._listItemUrl('MyList', arg);
-  const res = await this._read(url);
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`getMyNewThing ${arg} failed: ${res.status}`);
-  const body = /** @type {Record<string, unknown>} */ (await res.json());
-  return myThingFromItem(body);
+ const url = this._listItemUrl('MyList', arg);
+ const res = await this._read(url);
+ if (res.status === 404) return null;
+ if (!res.ok) throw new Error(`getMyNewThing ${arg} failed: ${res.status}`);
+ const body = /** @type {Record<string, unknown>} */ (await res.json());
+ return myThingFromItem(body);
 }
 ```
 
@@ -126,8 +126,8 @@ Use `this._read(url)` for GETs and `this._write(url, 'PATCH', headers, body)` fo
 // src/services/mock-sharepoint-client.js
 /** @param {string} arg @returns {Promise<MyThing | null>} */
 async getMyNewThing(arg) {
-  const item = this._myThings.find(t => t.id === arg);
-  return item ? { ...item } : null;
+ const item = this._myThings.find(t => t.id === arg);
+ return item ? {...item }: null;
 }
 ```
 
@@ -142,24 +142,24 @@ Add representative records to the appropriate file under `dev/fixtures/` and wir
 ## Worked example: adding `listMyThings`
 
 ```js
-// src/sharepoint-client.js  (new typedef)
+// src/sharepoint-client.js (new typedef)
 /**
  * @typedef {{ id: string, label: string }} MyThing
  */
 
 // Add to the SharePointClient typedef:
-//   listMyThings: () => Promise<MyThing[]>
+// listMyThings: () => Promise<MyThing[]>
 ```
 
 ```js
 // src/services/http-sharepoint-client.js
 /** @returns {Promise<import('../sharepoint-client.js').MyThing[]>} */
 async listMyThings() {
-  const items = await this._getAllPages(this._listItemsUrl('MyThings'));
-  return items.map(raw => {
-    const item = /** @type {Record<string, unknown>} */ (raw);
-    return { id: String(item.Id ?? ''), label: String(item.Title ?? '') };
-  });
+ const items = await this._getAllPages(this._listItemsUrl('MyThings'));
+ return items.map(raw => {
+ const item = /** @type {Record<string, unknown>} */ (raw);
+ return { id: String(item.Id ?? ''), label: String(item.Title ?? '') };
+ });
 }
 ```
 
@@ -167,7 +167,7 @@ async listMyThings() {
 // src/services/mock-sharepoint-client.js
 /** @returns {Promise<import('../sharepoint-client.js').MyThing[]>} */
 async listMyThings() {
-  return this._myThings.map(t => ({ ...t }));
+ return this._myThings.map(t => ({...t }));
 }
 ```
 

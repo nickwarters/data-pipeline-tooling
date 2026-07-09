@@ -1,12 +1,12 @@
 // @ts-check
 /**
  * @typedef {{
- *   manager: 'me' | null,
- *   role: 'reviewer-manager' | 'responsible-party-manager' | null,
- *   caseType: string | null,
- *   status: 'overdue' | 'outstanding' | 'completed' | null,
- *   completedSince: string | null,
- *   completedUntil: string | null,
+ * manager: 'me' | null,
+ * role: 'reviewer-manager' | 'responsible-party-manager' | null,
+ * caseType: string | null,
+ * status: 'overdue' | 'outstanding' | 'completed' | null,
+ * completedSince: string | null,
+ * completedUntil: string | null,
  * }} TeamCasesParams
  */
 

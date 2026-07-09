@@ -12,21 +12,21 @@ import { buildCaptureControl } from '../../lib/capture-engine.js';
 /** @typedef {import('../../services/save-queue.js').SaveQueue} SaveQueue */
 
 /**
- * The Appeal Section (issue #132). Lets the Responsible Party or their Manager
+ * The Appeal Section. Lets the Responsible Party or their Manager
  * raise a case-level **Appeal** objecting to a Completed Case's Current Outcome
  * (CONTEXT.md). The Appeal is additive: it appends to the Case row's `appeals[]`
- * JSON blob via the SaveQueue (ADR-0007, ADR-0008) and never touches the frozen
+ * JSON blob via the SaveQueue and never touches the frozen
  * Answers — citing a disputed Answer aims the reviewer but sets no value.
  *
- * Access is resolved upstream (section-access, ADR-0011): `edit` only for the
+ * Access is resolved upstream (section-access, the architecture decision): `edit` only for the
  * appellant roles on a Completed Case, otherwise `read-only` (reviewers/owner/
  * Controls) or the Section is not rendered at all. At most one Appeal may be open
  * at a time; once every Appeal is resolved a fresh one can be raised, with full
  * history kept.
  *
  * Appeal *resolution* is handled by the separate **Appeal Review** Section
- * (`cora-appeal-review`, ADR-0027), where **Controls** agrees or rejects with a
- * rationale. Agreeing also authors a linked Amended Outcome (ADR-0026).
+ * (`cora-appeal-review`, the architecture decision), where **Controls** agrees or rejects with a
+ * rationale. Agreeing also authors a linked Amended Outcome.
  */
 /**
  * @typedef {object} AppealProps

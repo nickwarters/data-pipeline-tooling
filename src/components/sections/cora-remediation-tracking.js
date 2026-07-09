@@ -30,7 +30,7 @@ import {
  */
 
 /**
- * The **Remediation tracking** tab (ADR-0024): lists every *sent* Remediation
+ * The **Remediation tracking** tab: lists every *sent* Remediation
  * Action across the Case's failed Answers and lets the Assigned Reviewer resolve
  * each — `complete`, or `cancelled` with a required reason. Read-only viewers see
  * each action's status and (when cancelled) its reason. Persistence is the page's

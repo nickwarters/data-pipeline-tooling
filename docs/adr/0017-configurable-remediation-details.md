@@ -1,16 +1,16 @@
 # Configurable per-failure Remediation Details
 
-> **Superseded by ADR-0020.** The flat `remediationFields` / `remediationDetails:
+> The flat `remediationFields` / `remediationDetails:
 Record<string,string>` model is replaced by the unified **Issue Capture** engine
 > (grouped, typed `Issue Capture Field`s incl. first-class `person`/`actions`, intra-group
 > `showWhen`, `Answer.capture`). The completion-gate and master–detail-drawer ideas below
-> carry forward into ADR-0020; the storage and declaration shapes do not.
+> carry forward into the architecture decision; the storage and declaration shapes do not.
 
-A **Case Type** can declare extra capture fields recorded against each _failed_ **Answer**, beyond its **Attributed Party** (ADR-0013) and **Remediation Actions** — e.g. a free-text "root cause" or a "severity" select. Some Case Types need only attribution; others need more. These **Remediation Details** are declared once per Case Type and captured in the **Issues** Section.
+A **Case Type** can declare extra capture fields recorded against each _failed_ **Answer**, beyond its **Attributed Party** and **Remediation Actions** — e.g. a free-text "root cause" or a "severity" select. Some Case Types need only attribution; others need more. These **Remediation Details** are declared once per Case Type and captured in the **Issues** Section.
 
 ## Declaration (per Case Type)
 
-The Case Type module declares one shared field set (ADR-0004):
+The Case Type module declares one shared field set:
 
 ```js
 remediationFields: [
@@ -28,11 +28,11 @@ The set applies to **every** failed Answer in that Case Type; a Case Type needin
 
 ## Storage (inline on the Answer)
 
-Values are stored inline as `Answer.remediationDetails: Record<string,string>` in the Answers JSON blob (ADR-0007), mirroring `attributedParty` (ADR-0013). They share that lifecycle: **stripped automatically when the Answer is no longer a failure, and frozen once the Case is Completed.** No new column or second source of truth (a separate blob was considered and rejected for the sync burden).
+Values are stored inline as `Answer.remediationDetails: Record<string,string>` in the Answers JSON blob, mirroring `attributedParty`. They share that lifecycle: **stripped automatically when the Answer is no longer a failure, and frozen once the Case is Completed.** No new column or second source of truth (a separate blob was considered and rejected for the sync burden).
 
 ## Required fields extend the completion gate
 
-A field marked `required: true` participates in completeness: a Case cannot be **Completed** until every required Remediation Detail on every failed Answer is filled, alongside the existing "all **Applicable Question**s answered" rule (ADR-0011's `canCompleteCase`). The Issues drawer flags what is missing, mirroring the unanswered-question jump affordance. **Attribution itself stays optional** (ADR-0013 defines it as zero-or-one) and does not gate completion unless that ADR is later amended.
+A field marked `required: true` participates in completeness: a Case cannot be **Completed** until every required Remediation Detail on every failed Answer is filled, alongside the existing "all **Applicable Question**s answered" rule. The Issues drawer flags what is missing, mirroring the unanswered-question jump affordance. **Attribution itself stays optional** and does not gate completion unless that ADR is later amended.
 
 ## UI: master–detail drawer
 

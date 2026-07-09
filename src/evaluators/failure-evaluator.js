@@ -38,11 +38,11 @@ export function countConfiguredFailures(questions, answers) {
 
 /**
  * Reconciles an Answer's failure-derived metadata with whether it is still a
- * failure (ADR-0013). Configured remediation actions are available choices, not
+ * failure. Configured remediation actions are available choices, not
  * selected choices, so a still-failing Answer keeps only the actions the
- * reviewer has selected onto the Answer (issue #250). When the Answer is no
+ * reviewer has selected onto the Answer. When the Answer is no
  * longer a failure, any stale `remediationActions`, `freeFormRemediation`,
- * `attributedParty`, `remediationDetails`, and `capture` (ADR-0020) are
+ * `attributedParty`, `remediationDetails`, and `capture` are
  * stripped, so passing answers never carry leftover failure metadata. The
  * `attributedParty`, `remediationDetails`, and `capture` are kept on a
  * still-failing Answer even when the question defines no remediationActions.
@@ -62,21 +62,21 @@ export function materializeRemediationActions(question, answer) {
     result = rest;
   }
 
-  // Remediation Details (ADR-0017) share the Attributed Party lifecycle: they
+  // Remediation Details share the Attributed Party lifecycle: they
   // only survive while the Answer is a failure.
   if (!failing && result.remediationDetails) {
     const { remediationDetails: _dropDetails, ...rest } = result;
     result = rest;
   }
 
-  // Issue Capture (ADR-0020) shares the same lifecycle: the unified capture map
+  // Issue Capture shares the same lifecycle: the unified capture map
   // only survives while the Answer is a failure.
   if (!failing && result.capture) {
     const { capture: _dropCapture, ...rest } = result;
     result = rest;
   }
 
-  // A reviewer's free-form remediation (issue #250) shares the failure
+  // A reviewer's free-form remediation shares the failure
   // lifecycle: it only survives while the Answer is a failure.
   if (!failing && result.freeFormRemediation !== undefined) {
     const { freeFormRemediation: _dropFree, ...rest } = result;

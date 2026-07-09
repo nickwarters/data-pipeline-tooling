@@ -2,7 +2,7 @@
 
 /**
  * Whether the Case carries ≥1 Remediation Action across its (failed) Answers.
- * This drives the two-way Summary bottom button (ADR-0023): with actions it
+ * This drives the two-way Summary bottom button: with actions it
  * reads **Send Actions** and routes down the actions path (→ `Actions In
  * Progress`); with none it reads **Complete Case** and closes outright. Mirrors
  * the machine's `hadRemediation` snapshot so the label and the freeze agree.
@@ -30,11 +30,11 @@ export function bindCompletion(context) {
     const target = /** @type {HTMLButtonElement} */ (event?.target || button);
     if (target.disabled) return;
     target.disabled = true;
-    // Three routes off the one bottom button (ADR-0023/ADR-0024):
-    //  - Actions In Progress + tracking complete ⇒ final close (stamp completedAt
-    //    only; the snapshot was already frozen at Send Actions).
-    //  - In-progress + ≥1 Remediation Action ⇒ Send Actions (hand off, stay open).
-    //  - In-progress + no actions ⇒ Complete Case outright.
+    // Three routes off the one bottom button:
+    // - Actions In Progress + tracking complete ⇒ final close (stamp completedAt
+    // only; the snapshot was already frozen at Send Actions).
+    // - In-progress + ≥1 Remediation Action ⇒ Send Actions (hand off, stay open).
+    // - In-progress + no actions ⇒ Complete Case outright.
     // The first two stamp the reportable snapshot; the actions path leaves
     // `completedAt` unset until final close.
     let patchFields;
@@ -74,7 +74,7 @@ export function updateCompletion(context) {
   const machine = vm.machine;
 
   // Before Send Actions the button appears only once the Case is completable and
-  // the Responsible Party has been set at the bottom of Issues (ADR-0023/ADR-0024).
+  // the Responsible Party has been set at the bottom of Issues.
   const rpSet = !!vm.caseRow?.responsibleParty;
   const readyToSend = vm.allAnswered.get() && machine.canComplete && rpSet;
   // On the actions path the button reappears as "Complete Case" only once the

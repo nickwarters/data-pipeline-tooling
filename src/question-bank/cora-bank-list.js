@@ -112,7 +112,8 @@ export class CORABankList extends ShellElement {
     const raf = /** @type {any} */ (globalThis).requestAnimationFrame;
     const scroll = () => {
       const cards =
-        /** @type {any} */ (this).querySelectorAll?.('cora-question-card') ?? [];
+        /** @type {any} */ (this).querySelectorAll?.('cora-question-card') ??
+        [];
       cards[cards.length - 1]?.scrollIntoView?.({
         behavior: 'smooth',
         block: 'center',

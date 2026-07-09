@@ -1,17 +1,17 @@
 // @ts-check
 
 /**
- * The remediation SLA: **10 working days after Send Actions** (ADR-0024). The
+ * The remediation SLA: **10 working days after Send Actions**. The
  * due date is computed once at the reportable milestone and stored on the Case
- * row (ADR-0025); it is never recomputed on read.
+ * row; it is never recomputed on read.
  */
 export const REMEDIATION_SLA_WORKING_DAYS = 10;
 
 /**
  * England & Wales public holidays — the default in-code holiday source for the
- * working-day SLA calculation (ADR-0025). ISO `YYYY-MM-DD` dates.
+ * working-day SLA calculation. ISO `YYYY-MM-DD` dates.
  *
- * **Maintenance burden (ADR-0025):** this list must be refreshed annually, or
+ * **Maintenance burden:** this list must be refreshed annually, or
  * whenever holidays change. A stale list silently produces *early* due dates.
  * The Maintainer runbook owns keeping it current. Switching the source to a
  * SharePoint list later is a boot-time wiring change (the `addWorkingDays`

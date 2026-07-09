@@ -10,7 +10,7 @@ import '../components/collections/cora-case-table.js';
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 
 /**
- * Journey Owner cross-case Summary view (ADR-0022/0027). Lists every Case of
+ * Journey Owner cross-case Summary view. Lists every Case of
  * the Journey Owner's Case Type(s) (`ownedJourneyCaseTypes`), each row linking
  * into that Case's read-only Summary. The per-Case `summary` matrix cell grants
  * `journeyOwner: read-only`, so the links resolve without any per-Case ACL row.

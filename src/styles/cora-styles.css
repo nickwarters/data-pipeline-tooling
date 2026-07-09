@@ -2,7 +2,7 @@
  * Case Review framework styles.
  * Design tokens are declared in cora-design-tokens.css (imported below).
  * All selectors scoped to [data-cora-root] so they cannot leak into
- * surrounding SharePoint chrome (ADR-0003: light DOM + cora- prefix).
+ * surrounding SharePoint chrome.
  */
 
 @import url('./cora-design-tokens.css');
@@ -15,14 +15,14 @@
   box-sizing: border-box;
 }
 
-/* ── Scoped SharePoint SE reset (issue #268) ─────────────────────────────────
-   We embed via a Content Editor Web Part and render in light DOM (ADR-0003, no
+/* ── Scoped SharePoint SE reset ──────────────────────────────────────────────
+   We embed via a Content Editor Web Part and render in light DOM, with no
    Shadow DOM boundary), so SharePoint SE's global CSS (shipped from the master
    page / core styles) cascades into our cora-* subtree and wins wherever its
    selectors target an element directly — which beats our root-level inheritance
    — or out-specify us. Re-establish our own baseline for the properties SP
    actually leaks, scoped to our root so SharePoint's own chrome is left
-   untouched (keeps the cora- isolation contract, ADR-0003).
+   untouched and keeps the cora- isolation contract.
 
    The [data-cora-root] prefix lifts these over SP's bare element selectors; the
    :where() element lists stay at zero specificity so ordinary cora- component
@@ -116,7 +116,7 @@
   background: var(--cora-color-bg);
 }
 
-/* Full-viewport breakout (issue #268). Embedded via a Content Editor Web Part,
+/* Full-viewport breakout. Embedded via a Content Editor Web Part,
    the app otherwise renders inside the SharePoint page's content well with the
    suite bar, site header, nav and ribbon left visible around it — a normal web
    page stuffed into a SharePoint content box. Promote the *real* app root to a
@@ -129,7 +129,7 @@
    [data-cora-root]: the attribute doubles as a generic scoping/theming hook on
    inline wrappers (styleguide demos, nested previews) that must stay in normal
    flow. The id also raises specificity to sit over SP's own positioned chrome.
-   Verified target: Edge Chromium against a SharePoint SE page layout (ADR-0001). */
+   Verified target: Edge Chromium against a SharePoint SE page layout. */
 #app[data-cora-root] {
   position: fixed;
   inset: 0;
@@ -140,8 +140,8 @@
      content grows and shrinks (e.g. filtering the case table down to a few
      rows). Without this the scrollbar disappears on short pages, the scroll
      container widens by the scrollbar width, and centred .cora-page-content
-     re-centres — headings and content nudge sideways (issue #271). Edge/Chromium
-     baseline (ADR-0001) supports scrollbar-gutter. */
+     re-centres — headings and content nudge sideways. Edge/Chromium
+     supports scrollbar-gutter. */
   scrollbar-gutter: stable;
 }
 
@@ -588,7 +588,7 @@ cora-status-banner {
   margin-top: var(--cora-space-7);
 }
 
-/* ── Dashboard: role-scoped KPI strip (issue #286) ───────────────────────────
+/* ── Dashboard: role-scoped KPI strip ────────────────────────────────────────
    Every rule is scoped under `.cora-kpi-strip` so it out-specifies the global
    `[data-cora-root] button` accent styling (lanes and tiles are <button>s and
    must NOT become solid accent bars) and does not collide with the unrelated
@@ -766,7 +766,7 @@ cora-status-banner {
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Action Centre worklist (issue #287) ─────────────────────────────────────
+/* ── Action Centre worklist ──────────────────────────────────────────────────
    One reason-grouped, count-driven worklist replacing the stack of per-role
    tables. Each reason carries a tone (mirrors its KPI tile) used for the dot,
    the count badge and the breached "waiting" age. `appeal` has no semantic
@@ -1135,7 +1135,7 @@ cora-status-banner {
 
 /* ── Attribute menu (compact icon/chip + popover) ─────────────────────────── */
 
-/* Inline failure-attribution control (ADR-0013): always visible under a failed
+/* Inline failure-attribution control: always visible under a failed
    Answer's remediation — no disclosure button, no floating popover. */
 cora-attribute-menu {
   display: block;
@@ -1225,7 +1225,7 @@ cora-attribute-menu {
   padding-left: var(--cora-space-5);
 }
 
-/* Reviewer-selectable Remediation Actions (issue #250): checkboxes replace the
+/* Reviewer-selectable Remediation Actions: checkboxes replace the
    old static list, so drop the bullet indent when a checkbox is present. */
 .cora-remediation-action {
   list-style: none;
@@ -1410,7 +1410,7 @@ cora-attribute-menu {
 }
 
 /* Read-only selected-remediation mirror beneath a failed question on the Review
-   tab (issue #250). Empty when nothing is selected. */
+   tab. Empty when nothing is selected. */
 .cora-question-remediation:not(:empty) {
   margin-top: var(--cora-space-2);
   padding-left: var(--cora-space-3);

@@ -2,7 +2,7 @@
  * Case Review Platform — Design Tokens
  * Single source of truth for all visual variables.
  *
- * Scoped to [data-cora-root] to avoid leaking into SharePoint chrome (ADR-0003).
+ * Scoped to [data-cora-root] to avoid leaking into SharePoint chrome.
  * All component CSS must reference these tokens; no hard-coded colours or sizes.
  *
  * DARK MODE
@@ -84,8 +84,10 @@
 
   /* ── Elevation ───────────────────────────────────────────────────────── */
   --cora-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
-  --cora-shadow-md: 0 2px 6px rgba(0, 0, 0, 0.09), 0 1px 2px rgba(0, 0, 0, 0.05);
-  --cora-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.1), 0 2px 6px rgba(0, 0, 0, 0.06);
+  --cora-shadow-md:
+    0 2px 6px rgba(0, 0, 0, 0.09), 0 1px 2px rgba(0, 0, 0, 0.05);
+  --cora-shadow-lg:
+    0 8px 24px rgba(0, 0, 0, 0.1), 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -130,7 +132,8 @@
     --cora-focus-ring: 0 0 0 3px rgba(227, 30, 34, 0.4);
 
     --cora-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
-    --cora-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3);
+    --cora-shadow-md:
+      0 2px 8px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3);
     --cora-shadow-lg:
       0 8px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35);
   }
@@ -173,7 +176,8 @@
 
   --cora-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
   --cora-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3);
-  --cora-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --cora-shadow-lg:
+    0 8px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -254,7 +258,7 @@
   --cora-nav-height: 3.5rem;
   --cora-sidebar-width: 15rem; /*  240px */
 
-  /* Full-viewport breakout layer (issue #268). The app root is promoted to a
+  /* Full-viewport breakout layer. The app root is promoted to a
      fixed layer that must sit over every piece of SharePoint SE chrome (suite
      bar, site header, ribbon, nav). SP's chrome uses modest z-indexes, but we
      pick a deliberately extreme "always on top" value so the breakout is robust

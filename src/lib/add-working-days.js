@@ -15,7 +15,7 @@ function isWorkingDay(date, holidaySet) {
 }
 
 /**
- * Add `n` working days to a date, skipping weekends and holidays (ADR-0025).
+ * Add `n` working days to a date, skipping weekends and holidays.
  *
  * A pure, dependency-free framework primitive with no domain knowledge. It
  * steps forward one calendar day at a time from `fromISO`; each day that is not
@@ -29,10 +29,10 @@ function isWorkingDay(date, holidaySet) {
  * day. `n === 0` returns `fromISO`'s own date unchanged.
  *
  * @param {string} fromISO - ISO date or datetime, e.g. `'2026-07-02'` or
- *   `'2026-07-02T09:00:00.000Z'`.
+ * `'2026-07-02T09:00:00.000Z'`.
  * @param {number} n - Number of working days to add (non-negative integer).
  * @param {readonly string[]} [holidays] - ISO `YYYY-MM-DD` dates to treat as
- *   non-working, in addition to weekends.
+ * non-working, in addition to weekends.
  * @returns {string} The resulting date as `'YYYY-MM-DD'`.
  */
 export function addWorkingDays(fromISO, n, holidays = []) {

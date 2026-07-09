@@ -6,12 +6,12 @@ import { h } from '../../lib/html.js';
 /**
  * @template Row
  * @typedef {{
- *   key: string,
- *   label: string,
- *   sortable?: boolean,
- *   getValue?: (row: Row) => string | number | null,
- *   renderCell?: (row: Row) => any,
- *   ariaLabel?: string,
+ * key: string,
+ * label: string,
+ * sortable?: boolean,
+ * getValue?: (row: Row) => string | number | null,
+ * renderCell?: (row: Row) => any,
+ * ariaLabel?: string,
  * }} ColumnDef
  */
 

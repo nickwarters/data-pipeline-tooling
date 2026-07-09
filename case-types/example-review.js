@@ -9,7 +9,7 @@ const config = {
   eligibleGroups: ['Reviewers'],
   slaHours: 48,
   attributeFailures: true,
-  // Case Type-specific Case Details fields (ADR-0014, issue #213). Values live
+  // Case Type-specific Case Details fields. Values live
   // in the CaseRow.details JSON blob keyed by `key`; the Case Details and
   // Summary Sections render them read-only after the common Case-row fields.
   detailFields: [
@@ -17,7 +17,7 @@ const config = {
     { key: 'accountNumber', label: 'Account number' },
     { key: 'interactionDate', label: 'Interaction date' },
   ],
-  // Per-Section config object (ADR-0016): membership is the allow-list, and
+  // Per-Section config object: membership is the allow-list, and
   // showInSummary controls each Section's block in the read-only Summary. Notes
   // is deliberately excluded from Summary (Case Justification + general note).
   sections: {
@@ -32,11 +32,11 @@ const config = {
     appealReview: {},
     amendOutcome: {},
   },
-  // Appeal flow (ADR-0027): this journey routes appeal-raising to the Journey
+  // Appeal flow: this journey routes appeal-raising to the Journey
   // Owner, resolved by Controls.
   appeal: { raisedBy: 'journeyOwner', resolvedBy: 'controls' },
-  // Outcome vocabulary (ADR-0004). `computeOutcome` only yields pass/fail, but the
-  // hand-set Amend Outcome verdict (ADR-0026) lets Controls also pick `refer`, so
+  // Outcome vocabulary. `computeOutcome` only yields pass/fail, but the
+  // hand-set Amend Outcome verdict lets Controls also pick `refer`, so
   // the full set of selectable Outcomes is declared here.
   outcomeOptions: [
     { id: 'pass', wording: 'Pass', severity: 0 },
@@ -47,9 +47,9 @@ const config = {
   // mapped response option scores a configured Outcome and the highest-scoring
   // applicable Outcome wins, defaulting to `pass`.
   defaultOutcomeId: 'pass',
-  // Configurable per-failure capture fields (ADR-0017). One shared set applies
+  // Configurable per-failure capture fields. One shared set applies
   // to every failed Answer; captured inline as Answer.remediationDetails. Legacy:
-  // superseded by captureGroups below (ADR-0020) but kept while both coexist.
+  // superseded by captureGroups below but kept while both coexist.
   remediationFields: [
     { key: 'rootCause', label: 'Root cause', type: 'text', required: true },
     {
@@ -59,7 +59,7 @@ const config = {
       options: ['Low', 'Med', 'High'],
     },
   ],
-  // Unified Issue Capture engine (ADR-0020): everything captured against a failed
+  // Unified Issue Capture engine: everything captured against a failed
   // Answer, as ordered, collapsible groups of typed fields. This slice exercises
   // the four string field types; person/actions arrive in their own slices.
   captureGroups: [

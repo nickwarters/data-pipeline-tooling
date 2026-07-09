@@ -17,11 +17,11 @@ import { toBareAccount, toClaimsLogin } from './account-name.js';
 
 /**
  * @typedef {{
- *   webUrl?: string,
- *   caseListName?: string,
- *   questionDefinitionsListName?: string,
- *   fetchImpl?: FetchImpl,
- *   sleep?: (ms: number) => Promise<void>
+ * webUrl?: string,
+ * caseListName?: string,
+ * questionDefinitionsListName?: string,
+ * fetchImpl?: FetchImpl,
+ * sleep?: (ms: number) => Promise<void>
  * }} HttpSharePointClientOptions
  */
 
@@ -34,7 +34,7 @@ export class HttpSharePointClient {
   constructor(opts = {}) {
     this._webUrl = (opts.webUrl ?? '').replace(/\/+$/, '');
     // List names are placeholders until the SharePoint list schema is decided
-    // (deferred per docs/PLAN.md slice 2). Constructor opts let deployers override.
+    // Constructor opts let deployers override the default list and web URL.
     this._caseListName = opts.caseListName ?? 'Cases-ExampleReview';
     this._qDefListName =
       opts.questionDefinitionsListName ?? 'QuestionDefinitions';
@@ -142,7 +142,7 @@ export class HttpSharePointClient {
   }
 
   /**
-   * Count-only query (issue #287): the OData `$count` companion to `listCases`.
+   * Count-only query: the OData `$count` companion to `listCases`.
    * The endpoint returns a bare integer, so a group-header or KPI count never
    * pulls a single Case row across the wire.
    *
@@ -185,7 +185,7 @@ export class HttpSharePointClient {
    * people-picker REST endpoint with `PrincipalSource: 15` (all sources,
    * including the claims/directory provider) so users not yet added to this
    * site are still found. Each result's claims `Key` is reduced to a bare
-   * account before returning (ADR-0013).
+   * account before returning.
    *
    * @param {string} query
    * @returns {Promise<PersonResult[]>}
@@ -220,7 +220,7 @@ export class HttpSharePointClient {
 
   /**
    * Resolve stored bare account names to authoritative display names at page
-   * load (ADR-0013). Each unique account is expanded back to a full claims login
+   * load. Each unique account is expanded back to a full claims login
    * (prefix + domain) and read via the User Profile Service `GetPropertiesFor`.
    * Reads are deduped and run in parallel. An account that cannot be resolved
    * (failed read, or no `DisplayName`) maps to `null` so callers fall back to the
@@ -260,7 +260,7 @@ export class HttpSharePointClient {
 
   /**
    * Reads the content-hash from the current `{slug}.json` export envelope
-   * (ADR-0021). Returns null when the file is absent or carries no `hash` field
+   *. Returns null when the file is absent or carries no `hash` field
    * — never hard-fails so a missing export does not block completion.
    *
    * @param {string} slug
@@ -280,7 +280,7 @@ export class HttpSharePointClient {
   }
 
   /**
-   * Fetches the immutable versioned export `{slug}.{hash}.json` (ADR-0021
+   * Fetches the immutable versioned export `{slug}.{hash}.json` (the architecture decision
    * Step 4). Returns the parsed object on success, null on any error
    * (404, network failure) — never hard-fails so a missing file triggers the
    * live-fallback path in the view model.
@@ -507,7 +507,7 @@ function escapeOData(s) {
 }
 
 /**
- * Build the OData `$filter` expression for a `ListCasesFilter` (issue #287).
+ * Build the OData `$filter` expression for a `ListCasesFilter`.
  * Shared by `listCases` and `countCases` so a paged read and its count are
  * always the same server-side query. Scalar fields AND together; `anyOf` ORs
  * each (parenthesised) sub-expression for the deduped headline count. Every
@@ -519,7 +519,7 @@ function escapeOData(s) {
 function buildFilterExpr(filter) {
   /** @type {string[]} */
   const conds = [];
-  // Windowed CompletedAt range leads (ADR-0031 §2) so the indexed date column
+  // Windowed CompletedAt range leads so the indexed date column
   // does the narrowing before Status: `Status eq 'Completed'` alone matches the
   // whole cumulative backlog and is not selective past the List View Threshold.
   if (filter.completedAfter) {
@@ -549,7 +549,7 @@ function buildFilterExpr(filter) {
     conds.push(`Status eq 'In-progress'`);
   }
   // Action Centre reason flags — indexed boolean columns hoisted onto the Case
-  // row (issue #287) so a reason count is a cheap `$count`, never a blob parse.
+  // row so a reason count is a cheap `$count`, never a blob parse.
   if (filter.awaitingResponsibleParty !== undefined) {
     conds.push(
       `AwaitingResponsibleParty eq ${filter.awaitingResponsibleParty ? 1 : 0}`
@@ -564,7 +564,7 @@ function buildFilterExpr(filter) {
   if (filter.reopened !== undefined) {
     conds.push(`Reopened eq ${filter.reopened ? 1 : 0}`);
   }
-  // Bounded server-side report query by the corrected result (ADR-0019). The
+  // Bounded server-side report query by the corrected result. The
   // column is indexed, so the RP-team / true-result reports stay one $filter
   // per Case Type with no full-row fetch.
   if (filter.effectiveOutcome) {
@@ -681,7 +681,7 @@ function rowFromItem(item, etag) {
     relatedDate:
       typeof item?.RelatedDate === 'string' ? item.RelatedDate : null,
     created: item?.Created != null ? String(item.Created) : undefined,
-    // Derived, never read from a stored/calculated column (ADR-0030): a Case is
+    // Derived, never read from a stored/calculated column: a Case is
     // overdue when it is still In-progress and its DueDate has passed — the same
     // rule as the overdue `$filter` above, so the group filter and the "also
     // overdue" chip can never disagree.
@@ -750,7 +750,7 @@ function itemFromRow(fields) {
     out.AssignedReviewerManager = fields.assignedReviewerManager;
   if (fields.responsiblePartyManager !== undefined)
     out.ResponsiblePartyManager = fields.responsiblePartyManager;
-  // Action Centre state reason flags + paired clocks (ADR-0030 §2, issue #291).
+  // Action Centre state reason flags + paired clocks.
   // Plain app-written columns — the write counterpart to their reads in
   // `rowFromItem`. Without these an app-set flag would be silently dropped on
   // PATCH, leaving the reason group empty/stale against the real backend.

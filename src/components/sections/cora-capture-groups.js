@@ -26,7 +26,7 @@ function currentString(capture, key) {
 
 /**
  * A group's collapse state: an ephemeral per-group override (never persisted,
- * ADR-0020) falling back to the group's declared default.
+ * the architecture decision) falling back to the group's declared default.
  *
  * @param {Map<string, boolean>} collapsed
  * @param {CaptureGroup} group
@@ -40,13 +40,13 @@ function isCollapsed(collapsed, group) {
 }
 
 /**
- * Renders the **Issue Capture Group**s of a single *failed* Answer (ADR-0020)
+ * Renders the **Issue Capture Group**s of a single *failed* Answer
  * as a plain array of `h()` nodes — a pure function of its inputs plus two
  * callbacks, wrapped for the DOM by the `<cora-capture-groups>` element below.
  *
  * In editable mode (`canCapture`) each group is a collapsible section — its
  * default collapse comes from `group.collapsed`, and the Reviewer can toggle it
- * via `onToggle`; the override is ephemeral (never persisted, ADR-0020). Each
+ * via `onToggle`; the override is ephemeral (never persisted, the architecture decision). Each
  * field renders its typed control (this slice: `text`/`textarea`/`select`/
  * `radio`) carrying a stable `data-focus-key` so the framework restores the
  * Reviewer's focus and scroll across an autosave-driven re-render, and reports
@@ -56,13 +56,13 @@ function isCollapsed(collapsed, group) {
  * `label: value` text, every group expanded — this is what the Summary renders.
  *
  * @param {{
- *   groups: CaptureGroup[],
- *   capture: NonNullable<Answer['capture']>,
- *   canCapture: boolean,
- *   namePrefix: string,
- *   collapsed: Map<string, boolean>,
- *   onToggle: (groupKey: string, collapsed: boolean) => void,
- *   onCapture: (fieldKey: string, value: string) => void,
+ * groups: CaptureGroup[],
+ * capture: NonNullable<Answer['capture']>,
+ * canCapture: boolean,
+ * namePrefix: string,
+ * collapsed: Map<string, boolean>,
+ * onToggle: (groupKey: string, collapsed: boolean) => void,
+ * onCapture: (fieldKey: string, value: string) => void,
  * }} props
  * @returns {HTMLElement[]}
  */
@@ -287,14 +287,14 @@ function syncValues(host, groups, capture, namePrefix, collapsed) {
  * the element constructor below is a separate value so the two never clash.
  *
  * @typedef {HTMLElement & {
- *   groups: CaptureGroup[],
- *   capture: NonNullable<Answer['capture']>,
- *   canCapture: boolean,
- *   update: (
- *     groups: CaptureGroup[],
- *     capture: NonNullable<Answer['capture']>,
- *     canCapture: boolean
- *   ) => void,
+ * groups: CaptureGroup[],
+ * capture: NonNullable<Answer['capture']>,
+ * canCapture: boolean,
+ * update: (
+ * groups: CaptureGroup[],
+ * capture: NonNullable<Answer['capture']>,
+ * canCapture: boolean
+ *) => void,
  * }} CORACaptureGroups
  */
 

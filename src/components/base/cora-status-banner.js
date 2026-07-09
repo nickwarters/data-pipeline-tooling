@@ -7,10 +7,10 @@ import { defineView } from '../../lib/view.js';
 
 /**
  * Surfaces the SaveQueue status as user-visible UI:
- *   saved        -> no banner
- *   saving       -> polite "Saving…" indicator
- *   reconnecting -> gentle "Reconnecting…" indicator (auto-clears on saved)
- *   conflict     -> persistent assertive banner with a Reload button
+ * saved -> no banner
+ * saving -> polite "Saving…" indicator
+ * reconnecting -> gentle "Reconnecting…" indicator (auto-clears on saved)
+ * conflict -> persistent assertive banner with a Reload button
  *
  * @param {{ saveQueue: SaveQueue | null }} props
  * @returns {HTMLElement | HTMLElement[]}

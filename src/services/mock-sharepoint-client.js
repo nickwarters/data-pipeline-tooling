@@ -11,14 +11,14 @@
 export class MockSharePointClient {
   /**
    * @param {{
-   *   cases: CaseRow[],
-   *   questionDefinitions: QuestionDefinition[],
-   *   personas: Record<string, { groups: string[], userId?: string, displayName?: string }>,
-   *   persona?: string,
-   *   people?: PersonResult[],
-   *   exportHashes?: Record<string, string>,
-   *   versionedExports?: Record<string, VersionedExport>,
-   *   lists?: Record<string, CaseRow[]>
+   * cases: CaseRow[],
+   * questionDefinitions: QuestionDefinition[],
+   * personas: Record<string, { groups: string[], userId?: string, displayName?: string }>,
+   * persona?: string,
+   * people?: PersonResult[],
+   * exportHashes?: Record<string, string>,
+   * versionedExports?: Record<string, VersionedExport>,
+   * lists?: Record<string, CaseRow[]>
    * }} opts
    */
   constructor({
@@ -130,7 +130,7 @@ export class MockSharePointClient {
 
   /**
    * Every Case across the default store and every list-scoped store. Aggregated
-   * so list-backed Case Types (partitioned into `_lists` — issue #249) still
+   * so list-backed Case Types partitioned into `_lists` still
    * surface to unscoped callers such as the dashboard. Reads/writes of an
    * individual Case remain list-scoped via `_caseStore`.
    *
@@ -143,7 +143,7 @@ export class MockSharePointClient {
   /**
    * A predicate for one `ListCasesFilter`. Scalar fields are ANDed equalities;
    * `overdue` is the In-progress + past-due derivation; `anyOf` ORs sub-filters
-   * (issue #287). Shared by `listCases` and `countCases` so a filtered count and
+   *. Shared by `listCases` and `countCases` so a filtered count and
    * its paged rows can never drift apart within a single point-in-time read.
    *
    * @param {ListCasesFilter} filter
@@ -205,7 +205,7 @@ export class MockSharePointClient {
         if (!c.dueDate) return false;
         if (new Date(c.dueDate) >= new Date()) return false;
       }
-      // CompletedAt window (ADR-0031 §2): inclusive lower, exclusive upper, so
+      // CompletedAt window: inclusive lower, exclusive upper, so
       // adjacent per-day slices sum without double-counting a boundary Case.
       if (filter.completedAfter !== undefined) {
         if (!c.completedAt || c.completedAt < filter.completedAfter)
@@ -248,7 +248,7 @@ export class MockSharePointClient {
   }
 
   /**
-   * Count-only query (issue #287): the cheap `$count` companion to `listCases`.
+   * Count-only query: the cheap `$count` companion to `listCases`.
    * Drives every Action Centre group-header count and the deduped headline
    * without ever holding the matched rows in memory.
    *
@@ -283,7 +283,7 @@ export class MockSharePointClient {
 
   /**
    * Resolve bare account names to authoritative display names from the fixture
-   * directory (ADR-0013). Dedupes input; an account with no directory match
+   * directory. Dedupes input; an account with no directory match
    * resolves to `null` so callers fall back to the cached displayName.
    *
    * @param {string[]} accountNames
@@ -311,7 +311,7 @@ export class MockSharePointClient {
 
   /**
    * Returns the content hash for the current {slug}.json export envelope, or
-   * null when no hash is configured for this slug (ADR-0021).
+   * null when no hash is configured for this slug.
    *
    * @param {string} slug
    * @returns {Promise<string | null>}
@@ -322,7 +322,7 @@ export class MockSharePointClient {
 
   /**
    * Returns the versioned export for the given slug+hash, or null when no
-   * matching export is configured (ADR-0021 Step 4).
+   * matching export is configured.
    *
    * @param {string} _slug
    * @param {string} hash

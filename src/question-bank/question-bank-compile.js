@@ -2,10 +2,10 @@
 /**
  * Compile pipeline for the Question Bank curator workbench.
  *
- *   compileBank(bank)  → string of a case-types/{slug}.js module body
- *   highlight(code)    → HTML with syntax-coloured spans
- *   escapeHtml(s)      → HTML-safe text
- *   hashStr(s)         → first 6 bytes of SHA-256, hex (browser crypto)
+ * compileBank(bank) → string of a case-types/{slug}.js module body
+ * highlight(code) → HTML with syntax-coloured spans
+ * escapeHtml(s) → HTML-safe text
+ * hashStr(s) → first 6 bytes of SHA-256, hex (browser crypto)
  *
  * Everything here is pure (no DOM, no signals). The drawer component
  * orchestrates these in response to signal changes.
@@ -199,7 +199,7 @@ function canonicalise(value) {
 }
 
 /**
- * Data-only JSON export envelope for external reporting (ADR-0015, ADR-0021).
+ * Data-only JSON export envelope for external reporting.
  *
  * Returns the function-free projection of the bank: slug, label, generatedAt,
  * a full SHA-256 hash (stable over questions+slug only, including labelIds),
@@ -210,26 +210,26 @@ function canonicalise(value) {
  *
  * @param {QuestionBank} bank
  * @returns {Promise<{
- *   slug: string,
- *   label: string,
- *   generatedAt: string,
- *   hash: string,
- *   questions: Array<{
- *     id: string,
- *     text: string,
- *     category: string | null,
- *     responseType: string,
- *     options: string[] | null,
- *     optionOutcomes: Record<string, string> | null,
- *     showWhen: Record<string, unknown> | null,
- *     failureCriteria: string | null,
- *     remediationActions: Array<import('../sharepoint-client.js').RemediationActionDefinition> | null,
- *     deprecated: boolean,
- *     labelIds?: string[],
- *   }>,
- *   labels: Array<{ id: string, name: string, color: string }>,
- *   outcomeOptions: import('../sharepoint-client.js').OutcomeOption[],
- *   defaultOutcomeId: string | null,
+ * slug: string,
+ * label: string,
+ * generatedAt: string,
+ * hash: string,
+ * questions: Array<{
+ * id: string,
+ * text: string,
+ * category: string | null,
+ * responseType: string,
+ * options: string[] | null,
+ * optionOutcomes: Record<string, string> | null,
+ * showWhen: Record<string, unknown> | null,
+ * failureCriteria: string | null,
+ * remediationActions: Array<import('../sharepoint-client.js').RemediationActionDefinition> | null,
+ * deprecated: boolean,
+ * labelIds?: string[],
+ * }>,
+ * labels: Array<{ id: string, name: string, color: string }>,
+ * outcomeOptions: import('../sharepoint-client.js').OutcomeOption[],
+ * defaultOutcomeId: string | null,
  * }>}
  */
 export async function compileExport(bank) {
@@ -288,12 +288,12 @@ export async function compileExport(bank) {
  */
 
 /**
- * Builds the versioned publish artifacts for ADR-0021 Step 2.
+ * Builds the versioned publish artifacts for the architecture decision Step 2.
  *
  * Given an export envelope (from `compileExport`) and the existing manifest
  * (or null on first publish), returns:
  * - `versionedJson`: JSON string for `{slug}.{hash}.json`; null when this hash
- *   already exists in the manifest (idempotent re-publish — no write needed).
+ * already exists in the manifest (idempotent re-publish — no write needed).
  * - `currentJson`: JSON string for `{slug}.json` (current-pointer, always updated).
  * - `manifest`: updated `{slug}.history.json` object with the new entry appended.
  * - `isNew`: false when the hash was already in the manifest.
@@ -301,19 +301,19 @@ export async function compileExport(bank) {
  * The caller is responsible for writing these artifacts to the Style Library.
  *
  * @param {{
- *   slug: string,
- *   label: string,
- *   generatedAt: string,
- *   hash: string,
- *   questions: unknown[],
- *   labels?: unknown[],
+ * slug: string,
+ * label: string,
+ * generatedAt: string,
+ * hash: string,
+ * questions: unknown[],
+ * labels?: unknown[],
  * }} exportEnvelope
  * @param {VersionManifest | null} existingManifest
  * @returns {{
- *   versionedJson: string | null,
- *   currentJson: string,
- *   manifest: VersionManifest,
- *   isNew: boolean,
+ * versionedJson: string | null,
+ * currentJson: string,
+ * manifest: VersionManifest,
+ * isNew: boolean,
  * }}
  */
 export function buildPublishArtifacts(exportEnvelope, existingManifest) {
@@ -329,7 +329,7 @@ export function buildPublishArtifacts(exportEnvelope, existingManifest) {
   const currentJson = JSON.stringify(exportEnvelope, null, 2);
   // Versioned file omits the labels table: label name/color is "presentation"
   // resolved from the current file so renames apply consistently across all
-  // historical reports (ADR-0021 §Reporting). labelIds per question are kept.
+  // historical reports. labelIds per question are kept.
   const { labels: _labels, ...versionedEnvelope } = exportEnvelope;
   return {
     versionedJson: isNew ? JSON.stringify(versionedEnvelope, null, 2) : null,

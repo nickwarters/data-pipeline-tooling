@@ -8,7 +8,7 @@ import { JourneyCasesPage } from '../pages/cora-journey-cases.js';
 export function register(router, context) {
   router.register('#/journey-cases', {
     mount(container) {
-      // List-scope Journey Owner capability (ADR-0022/0027): only a user who
+      // List-scope Journey Owner capability: only a user who
       // owns at least one Case Type as a Journey Owner may see this view.
       if (context.capabilities.ownedJourneyCaseTypes.length === 0) {
         location.hash = '#/';

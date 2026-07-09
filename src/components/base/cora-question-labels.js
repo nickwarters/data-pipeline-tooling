@@ -32,7 +32,7 @@ export function makeLabelId(name, existingIds) {
 }
 
 /**
- * Reporting-label editor for a single Question Definition (ADR-0015).
+ * Reporting-label editor for a single Question Definition.
  *
  * Labels are a bank-side concept: they are assigned here and rendered as colour
  * pills, but they never travel to a Case and have no effect on how a question is

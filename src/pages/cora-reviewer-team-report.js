@@ -11,9 +11,9 @@ import { computeTimeWindows } from '../evaluators/time-windows.js';
 
 /**
  * @param {{
- *   client: SharePointClient | null,
- *   currentUser: CurrentUser | null,
- *   eligibleCaseTypes: string[],
+ * client: SharePointClient | null,
+ * currentUser: CurrentUser | null,
+ * eligibleCaseTypes: string[],
  * }} props
  * @returns {HTMLElement}
  */
@@ -56,8 +56,8 @@ export function ReviewerTeamReportPage({
 
 /**
  * @param {{
- *   data: import('../evaluators/reviewer-team-aggregator.js').AggregateResult | null,
- *   windows: import('../evaluators/time-windows.js').TimeWindows | null,
+ * data: import('../evaluators/reviewer-team-aggregator.js').AggregateResult | null,
+ * windows: import('../evaluators/time-windows.js').TimeWindows | null,
  * }} args
  * @returns {Node[]}
  */

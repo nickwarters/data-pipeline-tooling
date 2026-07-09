@@ -1,10 +1,10 @@
 // @ts-check
 /**
  * @typedef {{
- *   slug: string,
- *   listName: string,
- *   reviewerGroup?: string,
- *   config: import('../sharepoint-client.js').CaseTypeConfig
+ * slug: string,
+ * listName: string,
+ * reviewerGroup?: string,
+ * config: import('../sharepoint-client.js').CaseTypeConfig
  * }} CaseTypeSource
  */
 
@@ -13,10 +13,7 @@
  * @param {CaseTypeSource[]} caseTypes
  * @returns {CaseTypeSource[]}
  */
-export function resolveEligibleCaseSourcesFromCaseTypes(
-  userGroups,
-  caseTypes
-) {
+export function resolveEligibleCaseSourcesFromCaseTypes(userGroups, caseTypes) {
   // Reviewer Managers need all case types for fan-out reporting queries.
   if (userGroups.includes('Reviewer-Managers')) {
     return caseTypes;

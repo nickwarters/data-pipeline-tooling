@@ -4,26 +4,26 @@ Date: 2026-05-17
 
 ## Status
 
-Accepted (amended by [ADR-0023], Jul 2026)
+Accepted
 
-> **Amendment ([ADR-0023]).** The snapshot (`outcomeAtCompletion` + `hadRemediation`) is
+> **Amendment ([the architecture decision]).** The snapshot (`outcomeAtCompletion` + `hadRemediation`) is
 > now stamped at the **reportable milestone** — Send Actions on the actions path, or
 > Complete Case on the no-actions path — not at final `Completed`. The field keeps its
 > name for storage compatibility; "at completion" now reads as "at reportable." The
 > freeze rationale is unchanged.
 >
-> [ADR-0023]: ./0023-case-lifecycle-and-reportable-milestone.md
+> [the architecture decision]: ./0023-case-lifecycle-and-reportable-milestone.md
 
 ## Context
 
 Management reporting (the `#/reports` feature group) needs to aggregate Cases by
 their **Outcome** — e.g. "how many of my team's Cases passed in the last 12
-months?". Per [ADR-0006] and CONTEXT.md, Outcome is a _computed_ property of a
+months?". Per [the architecture decision] and CONTEXT.md, Outcome is a _computed_ property of a
 Case, derived by running the Case Type's outcome function over the Case's
 Answers. It is not stored as a column on the Case row.
 
 The reporting feature fans out across one SharePoint list per eligible Case Type
-([ADR-0004], [ADR-0007]) and filters server-side via `$filter`. To filter or
+([the architecture decision], [the architecture decision]) and filters server-side via `$filter`. To filter or
 aggregate by Outcome this way, Outcome must exist as a queryable column on the
 row. The alternatives — pulling every Case row in the date range and re-deriving
 the Outcome client-side — break the bounded-query model: a 12-month RP-manager
@@ -67,11 +67,11 @@ to its live computed form.
 - Historical numbers are stable across Question Definition edits — matches the
   reporting intent.
 - No new list or sync job: the snapshot lives on the existing Case row,
-  consistent with [ADR-0007].
+  consistent with [the architecture decision].
 
 **Negative**
 
-- Mild conflict with [ADR-0006]'s "outcome is code, not data" framing — partly
+- Mild conflict with [the architecture decision]'s "outcome is code, not data" framing — partly
   resolved by treating the snapshot as a _historical record_ distinct from the
   live Outcome, but readers will need to understand both exist.
 - Provisioning every Case Type list now requires two extra indexed columns;
@@ -80,6 +80,6 @@ to its live computed form.
   bug in. A future "rebuild snapshots" tool may eventually be needed — out of
   scope here.
 
-[ADR-0004]: ./0004-case-type-config-as-js-modules.md
-[ADR-0006]: ./0006-applicability-graph-and-outcome-function.md
-[ADR-0007]: ./0007-case-storage-shape.md
+[the architecture decision]: ./0004-case-type-config-as-js-modules.md
+[the architecture decision]: ./0006-applicability-graph-and-outcome-function.md
+[the architecture decision]: ./0007-case-storage-shape.md

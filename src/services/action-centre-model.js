@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * Reason model for the dashboard **Action Centre** worklist (issue #287).
+ * Reason model for the dashboard **Action Centre** worklist.
  *
  * The Action Centre merges the per-role dashboard tables (Overdue, Awaiting
  * Frontline, Review Required, Appeals to work, Reopened, …) into one
@@ -11,7 +11,7 @@
  * `listCases` methods.
  *
  * Every reason is defined by an **indexed** `ListCasesFilter` so its group-header
- * count is a cheap `$count` and never a blob parse (ties to ADR-0007). Each
+ * count is a cheap `$count` and never a blob parse (ties to the architecture decision). Each
  * reason measures its own clock from a queryable date column (`clockField`), so
  * groups sort independently and no cross-reason ranking is needed.
  *
@@ -28,19 +28,19 @@
 
 /**
  * @typedef {{
- *   id: string,
- *   label: string,
- *   role: string,
- *   tone: 'overdue' | 'awaiting' | 'review' | 'appeal' | 'reopened',
- *   clockField: 'dueDate' | 'awaitingSince' | 'created' | 'appealRaisedAt' | 'reopenedAt',
- *   flagField: 'overdue' | 'awaitingResponsibleParty' | 'reviewRequired' | 'hasOpenAppeal' | 'reopened',
- *   filter: ListCasesFilter,
- *   slaDays: number,
- *   reviewerScoped: boolean,
- *   tailOnly: boolean,
- *   requires: (capabilities: Capabilities) => boolean,
- *   waitingLabel: (days: number) => string,
- *   subLine: (caseRow: CaseRow) => string,
+ * id: string,
+ * label: string,
+ * role: string,
+ * tone: 'overdue' | 'awaiting' | 'review' | 'appeal' | 'reopened',
+ * clockField: 'dueDate' | 'awaitingSince' | 'created' | 'appealRaisedAt' | 'reopenedAt',
+ * flagField: 'overdue' | 'awaitingResponsibleParty' | 'reviewRequired' | 'hasOpenAppeal' | 'reopened',
+ * filter: ListCasesFilter,
+ * slaDays: number,
+ * reviewerScoped: boolean,
+ * tailOnly: boolean,
+ * requires: (capabilities: Capabilities) => boolean,
+ * waitingLabel: (days: number) => string,
+ * subLine: (caseRow: CaseRow) => string,
  * }} Reason
  */
 

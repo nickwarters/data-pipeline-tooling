@@ -5,7 +5,7 @@
 
 /**
  * Load-time check that every `CaptureField.key` is unique across all groups of a
- * Case Type (ADR-0020) — keys double as storage keys and `showWhen` references,
+ * Case Type — keys double as storage keys and `showWhen` references,
  * so duplicates would be ambiguous. Throws on the first collision.
  *
  * @param {CaptureGroup[] | undefined} groups
@@ -27,7 +27,7 @@ export function validateCaptureGroups(groups) {
 
 /**
  * Finds a `CaptureField` by key across all of a Case Type's capture groups
- * (ADR-0020). Field keys are unique (see `validateCaptureGroups`), so the first
+ *. Field keys are unique (see `validateCaptureGroups`), so the first
  * match is authoritative.
  *
  * @param {CaptureGroup[]} groups
@@ -44,9 +44,9 @@ export function findCaptureField(groups, key) {
 }
 
 /**
- * Records a single Issue Capture value against an Answer (ADR-0020), returning a
+ * Records a single Issue Capture value against an Answer, returning a
  * fresh Answer with the value stored inline under `capture[field.key]`. Mirrors
- * the ADR-0017 remediation-detail capture, generalised to the unified engine.
+ * the the architecture decision remediation-detail capture, generalised to the unified engine.
  *
  * @param {Answer} answer
  * @param {CaptureField} field

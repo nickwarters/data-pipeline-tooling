@@ -187,13 +187,13 @@
         letter-spacing: 0.05em;
         margin-bottom: 8px;
       }
-      .c-leaf .concept-name {
+      .c-leaf.concept-name {
         color: var(--signal);
       }
-      .c-combo .concept-name {
+      .c-combo.concept-name {
         color: var(--computed);
       }
-      .c-always .concept-name {
+      .c-always.concept-name {
         color: var(--effect);
       }
       .concept-desc {
@@ -284,10 +284,10 @@
         color: var(--muted);
         margin-bottom: 4px;
       }
-      .q-always .q-id {
+      .q-always.q-id {
         color: var(--signal);
       }
-      .q-node:not(.q-always) .q-id {
+      .q-node:not(.q-always).q-id {
         color: var(--computed);
       }
       .q-text {
@@ -327,7 +327,7 @@
         color: var(--bg);
         font-weight: 700;
       }
-      .q-always .q-radio.selected {
+      .q-always.q-radio.selected {
         background: var(--signal);
         border-color: var(--signal);
       }
@@ -602,10 +602,10 @@
         text-align: center;
         font-weight: 700;
       }
-      .cat-row.current .cat-marker {
+      .cat-row.current.cat-marker {
         color: var(--computed);
       }
-      .cat-row.done .cat-marker {
+      .cat-row.done.cat-marker {
         color: var(--saved);
       }
 
@@ -1342,7 +1342,7 @@
 
         function evalConditionTrace(cond, ans, trace, depth) {
           depth = depth || 0;
-          var pad = '  '.repeat(depth);
+          var pad = ' '.repeat(depth);
           if ('$and' in cond) {
             trace.push(pad + '$and: every child must pass');
             return cond.$and.every(function (c) {
@@ -1432,40 +1432,40 @@
       (function () {
         var CODE = [
           'function evaluate(catalogue, answers) {' /* 0 */,
-          '  const applicable = new Set();' /* 1 */,
+          ' const applicable = new Set();' /* 1 */,
           '' /* 2 */,
-          '  for (const q of catalogue) {' /* 3 */,
-          '    if (!q.showWhen) {                  // no condition → always in' /* 4 */,
-          '      applicable.add(q.id);' /* 5 */,
-          '      continue;' /* 6 */,
-          '    }' /* 7 */,
-          '    if (evalCondition(q.showWhen, answers)) {' /* 8 */,
-          '      applicable.add(q.id);             // condition passed' /* 9 */,
-          '    }' /* 10 */,
-          '    // else: question stays hidden' /* 11 */,
-          '  }' /* 12 */,
-          '  return applicable;' /* 13 */,
+          ' for (const q of catalogue) {' /* 3 */,
+          ' if (!q.showWhen) { // no condition → always in' /* 4 */,
+          ' applicable.add(q.id);' /* 5 */,
+          ' continue;' /* 6 */,
+          ' }' /* 7 */,
+          ' if (evalCondition(q.showWhen, answers)) {' /* 8 */,
+          ' applicable.add(q.id); // condition passed' /* 9 */,
+          ' }' /* 10 */,
+          ' // else: question stays hidden' /* 11 */,
+          ' }' /* 12 */,
+          ' return applicable;' /* 13 */,
           '}' /* 14 */,
           '' /* 15 */,
           'function evalCondition(cond, answers) {' /* 16 */,
-          "  if ('$and' in cond)" /* 17 */,
-          '    return cond.$and.every(c => evalCondition(c, answers));' /* 18 */,
-          "  if ('$or'  in cond)" /* 19 */,
-          '    return cond.$or.some(c  => evalCondition(c, answers));' /* 20 */,
+          " if ('$and' in cond)" /* 17 */,
+          ' return cond.$and.every(c => evalCondition(c, answers));' /* 18 */,
+          " if ('$or' in cond)" /* 19 */,
+          ' return cond.$or.some(c => evalCondition(c, answers));' /* 20 */,
           '' /* 21 */,
-          '  // leaf: { questionId: { operator } }' /* 22 */,
-          '  for (const [qId, op] of Object.entries(cond)) {' /* 23 */,
-          '    if (!evalOp(op, answers[qId])) return false;' /* 24 */,
-          '  }' /* 25 */,
-          '  return true;' /* 26 */,
+          ' // leaf: { questionId: { operator } }' /* 22 */,
+          ' for (const [qId, op] of Object.entries(cond)) {' /* 23 */,
+          ' if (!evalOp(op, answers[qId])) return false;' /* 24 */,
+          ' }' /* 25 */,
+          ' return true;' /* 26 */,
           '}' /* 27 */,
           '' /* 28 */,
           'function evalOp(op, answer) {' /* 29 */,
-          "  const value = answer?.value ?? '';" /* 30 */,
-          "  if ('equals'   in op) return value === op.equals;" /* 31 */,
-          "  if ('in'       in op) return op.in.includes(value);" /* 32 */,
-          "  if ('answered' in op) return value !== '';" /* 33 */,
-          '  return false;' /* 34 */,
+          " const value = answer?.value ?? '';" /* 30 */,
+          " if ('equals' in op) return value === op.equals;" /* 31 */,
+          " if ('in' in op) return op.in.includes(value);" /* 32 */,
+          " if ('answered' in op) return value !== '';" /* 33 */,
+          ' return false;' /* 34 */,
           '}' /* 35 */,
         ];
 
@@ -1631,7 +1631,7 @@
                   ? '✓'
                   : '·';
             var sw = q.showWhen
-              ? '  showWhen: { q-needs: { equals: "Yes" } }'
+              ? ' showWhen: { q-needs: { equals: "Yes" } }'
               : '';
             row.innerHTML =
               '<span class="cat-marker">' +
@@ -1722,35 +1722,35 @@
       /* ══ CYCLE DETECTION WALKTHROUGH ══════════════════════════════════ */
       var CYC_CODE = [
         'function detectCycles(catalogue) {' /* 0 */,
-        '  const deps = buildDepsMap(catalogue);' /* 1 */,
-        '  // { id → Set<referencedIds> }' /* 2 */,
+        ' const deps = buildDepsMap(catalogue);' /* 1 */,
+        ' // { id → Set<referencedIds> }' /* 2 */,
         '' /* 3 */,
-        '  const WHITE = 0, GRAY = 1, BLACK = 2;' /* 4 */,
-        '  const color = new Map();   // all start WHITE' /* 5 */,
+        ' const WHITE = 0, GRAY = 1, BLACK = 2;' /* 4 */,
+        ' const color = new Map(); // all start WHITE' /* 5 */,
         '' /* 6 */,
-        '  function dfs(id) {' /* 7 */,
-        '    color.set(id, GRAY);              // visiting' /* 8 */,
-        '    for (const dep of deps.get(id)) {' /* 9 */,
-        '      if (color.get(dep) === GRAY) return true;' /* 10 */,
-        '      //                       ↑ back edge = cycle!' /* 11 */,
-        '      if (color.get(dep) === WHITE && dfs(dep))' /* 12 */,
-        '        return true;' /* 13 */,
-        '    }' /* 14 */,
-        '    color.set(id, BLACK);             // done' /* 15 */,
-        '    return false;' /* 16 */,
-        '  }' /* 17 */,
+        ' function dfs(id) {' /* 7 */,
+        ' color.set(id, GRAY); // visiting' /* 8 */,
+        ' for (const dep of deps.get(id)) {' /* 9 */,
+        ' if (color.get(dep) === GRAY) return true;' /* 10 */,
+        ' // ↑ back edge = cycle!' /* 11 */,
+        ' if (color.get(dep) === WHITE && dfs(dep))' /* 12 */,
+        ' return true;' /* 13 */,
+        ' }' /* 14 */,
+        ' color.set(id, BLACK); // done' /* 15 */,
+        ' return false;' /* 16 */,
+        ' }' /* 17 */,
         '' /* 18 */,
-        '  for (const id of deps.keys()) {' /* 19 */,
-        '    if (color.get(id) === WHITE && dfs(id))' /* 20 */,
-        '      return true;' /* 21 */,
-        '  }' /* 22 */,
-        '  return false;' /* 23 */,
+        ' for (const id of deps.keys()) {' /* 19 */,
+        ' if (color.get(id) === WHITE && dfs(id))' /* 20 */,
+        ' return true;' /* 21 */,
+        ' }' /* 22 */,
+        ' return false;' /* 23 */,
         '}' /* 24 */,
       ];
 
       (function () {
         // Two scenarios over a 3- or 4-node graph.
-        // Cycle:  A → B → C → A  (A.showWhen refs C, B refs A, C refs B)
+        // Cycle: A → B → C → A (A.showWhen refs C, B refs A, C refs B)
         // No cycle: A → B → C, plus D isolated. (A refs none; B refs A; C refs B; D refs none)
 
         var NODES_CYC = [
@@ -1766,7 +1766,7 @@
           { id: 'D', cx: 360, cy: 50, refs: [] },
         ];
 
-        // edges drawn from referrer → referenced  (e.g. B refs A → edge B → A)
+        // edges drawn from referrer → referenced (e.g. B refs A → edge B → A)
         // Each step: { title, desc, hl, color: {id: 'white'|'gray'|'black'}, edges: { 'B→A': 'visited'|'back'|'' }, banner }
         var SCENARIOS = {
           cycle: {
@@ -1815,7 +1815,7 @@
               },
               {
                 title: '⑥ Framework refuses to mount',
-                desc: 'Per ADR-0006: a cyclic showWhen graph is rejected at load time. The Case Type module throws — there is no recovery path, no partial-mount fallback. Fix the data and ship a new Case Type version.',
+                desc: 'Per the architecture decision: a cyclic showWhen graph is rejected at load time. The Case Type module throws — there is no recovery path, no partial-mount fallback. Fix the data and ship a new Case Type version.',
                 hl: [21, 23],
                 color: { A: 'gray', B: 'gray', C: 'gray' },
                 edges: { 'A→C': 'visited', 'C→B': 'visited', 'B→A': 'back' },

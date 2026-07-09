@@ -96,7 +96,7 @@ export function renderRemediationItem(props, q) {
 
 /**
  * Renders the reviewer-selectable **Remediation Actions** for a failed item
- * (issue #250). Each configured action is an independent checkbox, unticked
+ *. Each configured action is an independent checkbox, unticked
  * unless the reviewer has already selected it (i.e. its id is present on
  * `answer.remediationActions`); ticking/unticking re-dispatches a bubbling
  * `cora-remediation-action` so the page persists the selected subset onto the
@@ -329,19 +329,19 @@ export class CORARemediationSection extends ShellElement {
     this.client = null;
     /**
      * The Case's Responsible Party, offered as a one-click quick-pick in each
-     * attribute menu. `null` when the Case has none. ADR-0013.
+     * attribute menu. `null` when the Case has none. the architecture decision.
      * @type {Party | null}
      */
     this.responsibleParty = null;
     /**
      * Whether the viewer may set/change/clear the Attributed Party: Assigned
      * Reviewer only, on an In-progress Case (frozen at completion). UX-only per
-     * ADR-0010/0011; the server ACL is the real boundary.
+     * the architecture decision/0011; the server ACL is the real boundary.
      * @type {boolean}
      */
     this.canAttribute = false;
     /**
-     * The Case Type's configurable per-failure capture fields (ADR-0017). One
+     * The Case Type's configurable per-failure capture fields. One
      * shared set applies to every failed Answer; empty when the Case Type
      * declares none.
      * @type {import('../../sharepoint-client.js').RemediationField[]}
@@ -354,8 +354,8 @@ export class CORARemediationSection extends ShellElement {
      */
     this.canCaptureDetails = false;
     /**
-     * The Case Type's unified **Issue Capture Group**s (ADR-0020). Empty when the
-     * Case Type declares none. Supersedes `remediationFields`; both may coexist.
+     * The Case Type's unified **Issue Capture Group**s. Empty when the
+     * Case Type declares none. Both `captureGroups` and `remediationFields` may coexist.
      * @type {import('../../sharepoint-client.js').CaptureGroup[]}
      */
     this.captureGroups = [];
@@ -367,7 +367,7 @@ export class CORARemediationSection extends ShellElement {
     this.canCapture = false;
     /**
      * Whether the viewer may select which Remediation Actions apply to a failed
-     * Answer and add a free-form action (issue #250). Assigned Reviewer only, on
+     * Answer and add a free-form action. Assigned Reviewer only, on
      * a not-yet-reportable Case; read-only viewers see the selected subset.
      * @type {boolean}
      */
@@ -375,7 +375,7 @@ export class CORARemediationSection extends ShellElement {
     /**
      * Per-failed-Answer `cora-capture-groups` instances, keyed by question id and
      * reused across re-renders so each group's ephemeral collapse state survives
-     * an autosave-triggered re-render (ADR-0020).
+     * an autosave-triggered re-render.
      * @type {Map<string, import('./cora-capture-groups.js').CORACaptureGroups>}
      */
     this._captureEls = new Map();
@@ -413,7 +413,7 @@ export class CORARemediationSection extends ShellElement {
   }
 
   /**
-   * Renders the Attributed Party surface on a failed item (ADR-0013). Read-only
+   * Renders the Attributed Party surface on a failed item. Read-only
    * viewers see just the cached displayName. Editors get the inline
    * `cora-attribute-menu`, always visible, offering the Responsible Party
    * quick-pick and people search; its `cora-attribute-change` is re-dispatched
@@ -430,7 +430,7 @@ export class CORARemediationSection extends ShellElement {
 
   /**
    * Renders the configurable Remediation Details surface on a failed item
-   * (ADR-0017). This slice is a minimal capture surface: editors get one control
+   *. This slice is a minimal capture surface: editors get one control
    * per declared field (text input or select); read-only viewers see only the
    * fields that already carry a captured value. Persistence is the page's
    * responsibility (it owns the answers signal), so each change is re-dispatched
@@ -445,7 +445,7 @@ export class CORARemediationSection extends ShellElement {
   }
 
   /**
-   * Renders the unified **Issue Capture Group**s for a failed item (ADR-0020)
+   * Renders the unified **Issue Capture Group**s for a failed item
    * via the `cora-capture-groups` component. The instance is reused per question id
    * so each group's ephemeral collapse state survives autosave re-renders. The
    * component's bubbling `cora-capture` (field key + value) is caught here and
@@ -533,7 +533,7 @@ export class CORARemediationSection extends ShellElement {
   /**
    * Re-dispatches a reviewer's Remediation Action tick/untick as a bubbling
    * `cora-remediation-action` carrying the question id, the toggled action, and
-   * whether it is now selected (issue #250). Persistence is the page's job so
+   * whether it is now selected. Persistence is the page's job so
    * the answers signal stays the single source of truth.
    *
    * @param {string} questionId
@@ -551,7 +551,7 @@ export class CORARemediationSection extends ShellElement {
 
   /**
    * Re-dispatches a reviewer's free-form Remediation entry as a bubbling
-   * `cora-remediation-freeform` carrying the question id and new text (issue #250).
+   * `cora-remediation-freeform` carrying the question id and new text.
    *
    * @param {string} questionId
    * @param {string} value

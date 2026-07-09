@@ -13,15 +13,15 @@ import {
 /** @typedef {import('../../services/save-queue.js').SaveQueue} SaveQueue */
 
 /**
- * The **Amend Outcome** Section (ADR-0026). Lets **Controls** author a case-level
+ * The **Amend Outcome** Section. Lets **Controls** author a case-level
  * **Amended Outcome** on a Completed Case: an explicit, hand-set verdict with a
  * mandatory justification. The write is additive — the frozen `outcomeAtCompletion`
  * is never touched — and is a single ETag-guarded PATCH (`SaveQueue.enqueueFields`,
- * ADR-0008) that carries the record *and* re-stamps the ADR-0019 reporting columns
+ * the architecture decision) that carries the record *and* re-stamps the the architecture decision reporting columns
  * (`effectiveOutcome` / `outcomeOverridden` / `effectiveHadRemediation`) together
  * so a partial write cannot desync them.
  *
- * Access is resolved upstream (section-access, ADR-0011): `edit` only for Controls
+ * Access is resolved upstream (section-access, the architecture decision): `edit` only for Controls
  * on a Completed Case; `read-only` for the Assigned Reviewer, Case Type Owner and
  * Journey Owner (they can see an amendment happened); otherwise the Section is not
  * rendered at all. A re-amendment overwrites the single record.
@@ -176,7 +176,7 @@ export function renderAmendForm(props) {
 
 /**
  * Validate, build the transactional field set and enqueue the single ETag-guarded
- * write (ADR-0026/ADR-0019). Both an Outcome and a justification are required.
+ * write. Both an Outcome and a justification are required.
  * @param {AmendOutcomeProps} props
  * @param {{ value?: string }} selectEl
  * @param {{ value?: string }} justificationEl
@@ -229,7 +229,7 @@ export class CORAAmendOutcome extends ShellElement {
     /** @type {CurrentUser | null} */
     this.currentUser = null;
     /**
-     * The Case Type's Outcome options (ADR-0004), offered as the hand-set verdict
+     * The Case Type's Outcome options, offered as the hand-set verdict
      * choices. Empty when the Case Type declares none.
      * @type {OutcomeOption[]}
      */

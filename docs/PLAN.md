@@ -13,11 +13,11 @@ The framework is built once, against a stand-in. Real Case Types are added later
 These have **deliberately not** been decided up-front because they're better answered with code in hand:
 
 - **Question Definitions SharePoint list schema** — concrete column names and types. Deferred to **Slice 2**, when we first integrate against real SharePoint and have used the mock schema in anger.
-- **CSS naming, reset, design tokens** — `cora-` prefix is decided (ADR-0003); the rest is detail. Deferred to **Slice 9** (visual polish).
+- **CSS naming, reset, design tokens** — `cora-` prefix is decided; the rest is detail. Deferred to **Slice 9** (visual polish).
 - **Module/directory layout** — emerges from Slice 1 as primitives are written. Document the convention once it stabilises.
 - **Conflict-resolution UI** — the SaveQueue handles the _logic_ in Slice 1; the _UI_ surface is Slice 9.
 - **Network failure simulation in mock client** — defer to Slice 9 unless reviewers hit issues earlier.
-- **`localStorage` queue persistence** — explicitly out for v1 (ADR-0008). Reconsider only if real outage data shows it's needed.
+- **`localStorage` queue persistence** — explicitly out for v1. Reconsider only if real outage data shows it's needed.
 
 ## Slice 1 — "Example Case" (tracer bullet)
 
@@ -38,10 +38,10 @@ These have **deliberately not** been decided up-front because they're better ans
 **One Case Type**
 
 - `case-types/example-review.js` — exports `default` Case Type config:
-  - 3 Question Definitions (Yes/No/NA only)
-  - One question with a `showWhen` rule (proves the applicability evaluator works)
-  - One question with a remediation action attached on failure (proves the data shape, even if remediation UI is deferred)
-  - Tiny `outcome` function (e.g., "fail if any No, else pass")
+- 3 Question Definitions (Yes/No/NA only)
+- One question with a `showWhen` rule (proves the applicability evaluator works)
+- One question with a remediation action attached on failure (proves the data shape, even if remediation UI is deferred)
+- Tiny `outcome` function (e.g., "fail if any No, else pass")
 
 **Two views**
 
@@ -259,21 +259,11 @@ These have **deliberately not** been decided up-front because they're better ans
 
 **Goal:** realize the Case Type Owners' workshopped consolidation — a canonical tab skeleton and a single, flexible **Issue Capture** engine that absorbs attribution, remediation actions, and free-form fields into one per-Case-Type-configurable model. Demo-driven: the next demo must show the Owners _their_ requirements (a real Case Type configured end-to-end), not just a renamed tab bar.
 
-**Decisions:** [ADR-0020](./adr/0020-unified-issue-capture-engine.md) (supersedes ADR-0017, amends ADR-0013/0014/0016). Domain language: **Issue Capture Group** / **Issue Capture Field** in [`../CONTEXT.md`](../CONTEXT.md). Full grill record: [`refinement-grilling-session-plan.md`](./refinement-grilling-session-plan.md).
+**Decisions:** use the unified **Issue Capture Group** / **Issue Capture Field** model in [`../CONTEXT.md`](../CONTEXT.md). Full grill record: [`refinement-grilling-session-plan.md`](./refinement-grilling-session-plan.md).
 
-Built as seven tracer-bullet issues (each cuts config → storage → Issues UI → autosave → Summary):
+The implementation cuts through the tab skeleton, `captureGroups`, `Answer.capture`, the supported field types (`text`/`textarea`/`select`/`radio`/`person`/`actions`), collapsible groups, intra-group `showWhen`, visible-only `required`, autosave, Summary rendering, and Case Type configuration.
 
-1. **#146** — Tab skeleton: relabel Questions→"Review", reorder Summary to 4th. _AFK · no blockers._
-2. **#147** — Issue Capture engine foundation: `captureGroups` + `Answer.capture` + the four string field types (`text`/`textarea`/`select`/`radio`) + collapsible groups + strip/freeze + Summary. _AFK · no blockers (the spine)._
-3. **#148** — `person` Capture Field — absorb Attributed Party. _AFK · blocked by #147._
-4. **#149** — `actions` Capture Field — absorb Remediation Actions. _AFK · blocked by #147._
-5. **#150** — Intra-group `showWhen` (+ strip-on-hide, empty-on-reshow). _AFK · blocked by #147._
-6. **#151** — Visible-only `required` completion gate. _AFK · blocked by #147, #150._
-7. **#152** — Case Type A config + retire legacy `remediationFields`/`remediationDetails`/`attributedParty` path. _HITL (Owner demo review) · blocked by #148, #149, #150, #151._
-
-**Suggested order:** #146 and #147 in parallel immediately; #148/#149/#150 fan out from #147; #151 after #150; #152 lands last as the Owner-facing demo.
-
-**Parked for dedicated grills (out of this slice):** the standalone **Remediation** tab's purpose (#144) and moving the override from per-Answer to **Case level** via the **Amend Outcome** tab (#145, contradicts ADR-0018 — see CONTEXT.md). #152 only _flags_ the Answer Override replacement-set typedef for #145; it does not rework it.
+The standalone **Remediation** tab is the tracking surface for sent actions. **Amend Outcome** is a case-level Controls surface.
 
 ---
 
@@ -285,29 +275,21 @@ multi-stage case lifecycle with a **remediation loop**, a redefined **Remediatio
 subsystem. Grilled 2026-07-01; full decision record in
 [`user-groups-workflow-grilling-session-plan.md`](./user-groups-workflow-grilling-session-plan.md).
 
-**Decisions:** [ADR-0022](./adr/0022-two-axis-role-model.md) (roles),
-[ADR-0023](./adr/0023-case-lifecycle-and-reportable-milestone.md) (lifecycle + **reportable**),
-[ADR-0024](./adr/0024-remediation-tracking-tab.md) (Remediation tab, resolves #144),
-[ADR-0025](./adr/0025-working-day-sla-due-dates.md) (due dates),
-[ADR-0026](./adr/0026-amend-outcome-case-level-and-qa-retirement.md) (Amend Outcome + QA
-retirement, resolves #145, supersedes ADR-0018),
-[ADR-0027](./adr/0027-appeal-flow-journeyowner-controls.md) (appeals). Amends ADR-0007/
-0010/0011/0012/0014/0016/0019/0021. Domain language: **Adviser · Journey Owner · Controls ·
+**Decisions:** two-axis roles, lifecycle with **reportable**, Remediation tracking, working-day due dates, Amend Outcome with QA retirement, and Appeals. Domain language: **Adviser · Journey Owner · Controls ·
 Amended Outcome · Reportable** in [`../CONTEXT.md`](../CONTEXT.md).
 
-Tracked as epic **#229** with ten sub-issues (each cuts config → storage → UI → autosave →
-tests, 100% coverage per CLAUDE.md):
+Each slice cuts config → storage → UI → autosave → tests, 100% coverage per CLAUDE.md:
 
-1. **#230** — Two-axis role model & permissions rework (ADR-0022). _Foundation._
-2. **#235** — Rip out QA Check & Answer Override (ADR-0026). _Clears the matrix/storage._
-3. **#231** — Case lifecycle & the reportable milestone (ADR-0023). _The spine._
-4. **#232** — Split Issues/Remediation Sections + per-action model (ADR-0024, resolves #144).
-5. **#233** — Working-day SLA due dates (ADR-0025).
-6. **#234** — Rebuild the section access matrix (ADR-0011 amend). _Blocked by #230, #232._
-7. **#236** — Amend Outcome tab (ADR-0026, resolves #145). _Blocked by #235, #234._
-8. **#237** — Appeal flow: Appeal Request / Appeal Review (ADR-0027). _Blocked by #234, #236._
-9. **#238** — Journey Owner cross-case Summary view (ADR-0022/0027). _Blocked by #230._
-10. **#239** — Storage & SharePoint provisioning updates (ADR-0007 amend). _Threaded through._
+1. **#230** — Two-axis role model & permissions rework. _Foundation._
+2. **#235** — Rip out QA Check & Answer Override. _Clears the matrix/storage._
+3. **#231** — Case lifecycle & the reportable milestone. _The spine._
+4. **#232** — Split Issues/Remediation Sections + per-action model.
+5. **#233** — Working-day SLA due dates.
+6. **#234** — Rebuild the section access matrix. _Blocked by #230, #232._
+7. **#236** — Amend Outcome tab. _Blocked by #235, #234._
+8. **#237** — Appeal flow: Appeal Request / Appeal Review. _Blocked by #234, #236._
+9. **#238** — Journey Owner cross-case Summary view. _Blocked by #230._
+10. **#239** — Storage & SharePoint provisioning updates. _Threaded through._
 
 **Suggested order:** #230 + #235 first (they clear the way); then #231 / #232 / #233 in
 parallel; #234 once #230 + #232 land; #236 → #237 after the matrix; #238 alongside; #239
@@ -319,8 +301,8 @@ root-cause analysis, and broader Case Type expansion.
 
 **~8 Case Types are live for September** — Example Review, Complaints, and ~6 more that are
 structurally like Complaints. The framework work above is built once; the extra types are
-**config + Question Bank + group/list wiring only** (ADR-0004). #239 (provisioning) and the
-appeal-raiser config (ADR-0027) must therefore cover **all** live types, not just two.
+**config + Question Bank + group/list wiring only**. #239 (provisioning) and the
+appeal-raiser config must therefore cover **all** live types, not just two.
 **Notifications** (Send-Actions / SLA reminders to the Adviser) are **out of scope — already
 handled by existing infra.** No notification work and no new coupling in this frontend.
 

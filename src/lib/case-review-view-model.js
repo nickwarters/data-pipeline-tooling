@@ -196,7 +196,7 @@ export class CaseReviewViewModel {
     this.currentUser = currentUser;
     saveQueue.loadCase(caseRow, this.caseListOptions);
 
-    // A Case freezes at the reportable milestone (ADR-0023), not only at final
+    // A Case freezes at the reportable milestone, not only at final
     // completion: once reportable we load the as-reviewed bank snapshot so a
     // newly-applicable Question Definition no longer reopens the Case.
     const versionHash =
@@ -417,11 +417,11 @@ export class CaseReviewViewModel {
   }
 
   /**
-   * Tick/untick a configured Remediation Action on a failed Answer (issue #250).
+   * Tick/untick a configured Remediation Action on a failed Answer.
    * Selection is stored as the reviewer-chosen subset on
    * `answer.remediationActions`; only these feed the per-action outcome scoring
    * in `computeConfiguredOutcome`. Gated on `canSelectRemediation` (Assigned
-   * Reviewer, not-yet-reportable). Persists via the autosave SaveQueue (ADR-0008).
+   * Reviewer, not-yet-reportable). Persists via the autosave SaveQueue.
    *
    * @param {string} questionId
    * @param {{ id: string, text: string }} action
@@ -483,7 +483,7 @@ export class CaseReviewViewModel {
 
   /**
    * Resolve a single sent Remediation Action on the Remediation tracking tab
-   * (ADR-0024). Writes the new `status`/`cancelReason` back into the failed
+   *. Writes the new `status`/`cancelReason` back into the failed
    * Answer's `actions`-typed capture field, coercing any legacy string entries to
    * object records in the same pass. A cancelled action needs a reason; an invalid
    * change (cancelled without one) is dropped rather than persisted, leaving the
@@ -518,7 +518,7 @@ export class CaseReviewViewModel {
         return setActionStatus(action, status, cancelReason);
       });
     } catch {
-      // Cancelled without a reason — a hard validation (ADR-0024). Skip the write.
+      // Cancelled without a reason — a hard validation. Skip the write.
       return;
     }
     if (!changed) return;

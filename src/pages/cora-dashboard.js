@@ -22,10 +22,10 @@ import { isOverdue } from '../evaluators/overdue-evaluator.js';
  * reviewer's outstanding cases when `capabilities.isReviewer` is set.
  *
  * @param {{
- *   client: SharePointClient | null,
- *   currentUserId: string,
- *   capabilities: Capabilities,
- *   eligibleCaseTypes: string[],
+ * client: SharePointClient | null,
+ * currentUserId: string,
+ * capabilities: Capabilities,
+ * eligibleCaseTypes: string[],
  * }} props
  * @returns {HTMLElement}
  */
@@ -65,12 +65,12 @@ export function DashboardPage({
 
 /**
  * @param {{
- *   client: SharePointClient | null,
- *   currentUserId: string,
- *   capabilities: Capabilities,
- *   eligibleCaseTypes: string[],
- *   cases: CaseRow[],
- *   onAllocated: () => void,
+ * client: SharePointClient | null,
+ * currentUserId: string,
+ * capabilities: Capabilities,
+ * eligibleCaseTypes: string[],
+ * cases: CaseRow[],
+ * onAllocated: () => void,
  * }} args
  * @returns {Node[]}
  */
@@ -84,7 +84,7 @@ function renderDashboard({
 }) {
   const children = [];
 
-  // Role-scoped KPI strip (issue #286): a one-glance summary of what needs the
+  // Role-scoped KPI strip: a one-glance summary of what needs the
   // user, in each role they hold. Sits above the per-role sections below.
   if (
     capabilities.isReviewer ||
@@ -101,7 +101,7 @@ function renderDashboard({
     );
   }
 
-  // The unified worklist (issue #287): the per-role reason tables merged into
+  // The unified worklist: the per-role reason tables merged into
   // one reason-grouped, count-driven list. Rendered above the legacy sections
   // for anyone who holds a worklist reason (Reviewer / Controls / Owner).
   if (reasonsForCapabilities(capabilities).length > 0) {

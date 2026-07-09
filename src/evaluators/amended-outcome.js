@@ -4,7 +4,7 @@
 /** @typedef {import('../sharepoint-client.js').AmendedOutcome} AmendedOutcome */
 
 /**
- * The **Current Outcome** (ADR-0026): the case-level Amended Outcome when Controls
+ * The **Current Outcome**: the case-level Amended Outcome when Controls
  * has amended it, otherwise the frozen reviewer snapshot `outcomeAtCompletion`.
  * Where no amendment exists it equals the snapshot; where one exists it takes
  * precedence. Undefined before the reportable milestone (no snapshot stamped yet).
@@ -17,9 +17,9 @@ export function currentOutcome(caseRow) {
 }
 
 /**
- * Build the transactional field set for a case-level Outcome amendment (ADR-0026).
+ * Build the transactional field set for a case-level Outcome amendment.
  * The amendment is additive — the frozen `outcomeAtCompletion` is never touched —
- * and the **same ETag-guarded write** re-stamps the ADR-0019 reporting columns
+ * and the **same ETag-guarded write** re-stamps the the architecture decision reporting columns
  * from the hand-set verdict: `effectiveOutcome` carries the amended value and
  * `outcomeOverridden` flips true so the responsible-party-team report reads the
  * corrected result. `effectiveHadRemediation` carries the frozen `hadRemediation`:

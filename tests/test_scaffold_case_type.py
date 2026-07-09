@@ -38,7 +38,7 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
                 str(SCRIPT_PATH),
                 "--root",
                 str(root),
-                *args,
+ *args,
             ],
             cwd=REPO_ROOT,
             check=True,
@@ -107,7 +107,7 @@ class ScaffoldCaseTypeTest(unittest.TestCase):
         adr = (root / "docs/adr/0028-case-type-scaffolding.md").read_text(
             encoding="utf-8"
         )
-        self.assertIn("# ADR-0028: Case Type scaffolding contract", adr)
+        self.assertIn("# Case Type scaffolding contract", adr)
         self.assertIn("refuses to overwrite an existing Case Type slug", adr)
 
     def test_refuses_to_overwrite_an_existing_slug(self) -> None:

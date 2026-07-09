@@ -36,7 +36,7 @@ export function QuestionList({ questions, answers, access, existing = [] }) {
       answerValue ?? (question.responseType === 'multi-choice' ? [] : '');
 
     // The Review tab mirrors — read-only — only the Remediation Actions the
-    // Reviewer selected on the Issues tab (issue #250), never the full configured
+    // Reviewer selected on the Issues tab, never the full configured
     // catalogue. Only a still-failing Answer carries a selection.
     const failing = isFailure(question, answer);
     const selectedActions = failing

@@ -1,7 +1,7 @@
 // @ts-check
 
 /**
- * Owns property assignment for the Amend Outcome tab (ADR-0026). Controls authors
+ * Owns property assignment for the Amend Outcome tab. Controls authors
  * the case-level Amended Outcome here; the Section renders read-only for the other
  * observing roles. Access is resolved upstream (section-access); the component
  * only consumes the resolved mode.

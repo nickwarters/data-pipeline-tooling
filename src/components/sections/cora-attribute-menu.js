@@ -6,7 +6,7 @@ import '../base/cora-people-picker.js';
 /** @typedef {{ loginName: string, displayName: string }} Party */
 
 /**
- * Inline attribution control (ADR-0013). Rendered directly under a failed
+ * Inline attribution control. Rendered directly under a failed
  * Answer's remediation, it is always visible — no button to disclose it, no
  * floating popover. Unset, it offers a one-click quick-pick of the Case's
  * Responsible Party (the common case) alongside the `cora-people-picker` for
@@ -19,10 +19,10 @@ import '../base/cora-people-picker.js';
  * source of truth.
  *
  * @param {{
- *   client?: SharePointClient | null,
- *   attributedParty?: Party | null,
- *   responsibleParty?: Party | null,
- *   onChange?: (party: Party | null) => void,
+ * client?: SharePointClient | null,
+ * attributedParty?: Party | null,
+ * responsibleParty?: Party | null,
+ * onChange?: (party: Party | null) => void,
  * }} props
  * @returns {HTMLElement}
  */

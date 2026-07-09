@@ -26,11 +26,11 @@ export async function createSharePointClient(params) {
       import('../../dev/fixtures/people.js'),
     ]);
 
-    // A Case Type may declare its own SharePoint list (ADR-0007) via `listName`;
+    // A Case Type may declare its own SharePoint list via `listName`;
     // its Cases are then read/written list-scoped. Partition the flat fixture
     // array by each Case Type's `listName` so list-backed Cases land in the
     // mock client's per-list stores instead of 404-ing in the mock dev loop
-    // (issue #249). Cases whose Case Type declares no list stay in the default
+    //. Cases whose Case Type declares no list stay in the default
     // store.
     const { cases: defaultCases, lists } = await partitionCasesByList(
       cases,
@@ -54,7 +54,7 @@ export async function createSharePointClient(params) {
 /**
  * Split a flat fixture Case array into the default store plus per-list stores,
  * keyed by each Case Type's declared `listName`. Used to hydrate the mock
- * client so list-backed Case Types are openable under `?mock=1` (issue #249).
+ * client so list-backed Case Types are openable under `?mock=1`.
  *
  * @param {import('../sharepoint-client.js').CaseRow[]} cases
  * @param {(slug: string) => Promise<import('../sharepoint-client.js').CaseTypeConfig>} loadCaseTypeConfig

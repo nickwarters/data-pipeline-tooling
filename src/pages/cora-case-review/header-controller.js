@@ -34,8 +34,7 @@ export class CaseReviewHeaderController {
    * @param {import('./types.js').CaseReviewShellContext} context
    */
   bind(context) {
-    // Deviation from the scaffold TODO: there is no header-owned event wiring
-    // yet. Conversation toggle clicks remain with the page until
+    // Conversation toggle clicks remain with the page until
     // ConversationPanelController is wired.
     void context;
   }

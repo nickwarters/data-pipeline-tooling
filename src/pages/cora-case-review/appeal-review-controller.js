@@ -1,7 +1,7 @@
 // @ts-check
 
 /**
- * Owns property assignment for the Appeal Review tab (ADR-0027). Controls
+ * Owns property assignment for the Appeal Review tab. Controls
  * resolves open Appeals here (agree → linked Amended Outcome, reject → rationale
  * only). Access is resolved upstream (section-access); the component only consumes
  * the resolved mode.

@@ -113,7 +113,7 @@ const config = {
     },
   ],
 
-  // Outcome vocabulary (ADR-0004). The Outcome is driven wholly by the responses
+  // Outcome vocabulary. The Outcome is driven wholly by the responses
   // (question bank redesign): each mapped response option scores a configured
   // Outcome and the highest-scoring applicable Outcome wins, defaulting to `pass`.
   // `severity` orders the outcomes (higher = worse).

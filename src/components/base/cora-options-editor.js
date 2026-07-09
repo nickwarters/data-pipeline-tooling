@@ -11,10 +11,10 @@ const YES_NO_NA = ['Yes', 'No', 'NA'];
 /**
  * Resolves the effective response options for a question plus whether the option
  * list and its Outcome mapping are editable:
- *  - `yes-no-na`  → fixed `Yes`/`No`/`NA`; outcome mapping editable.
- *  - `outcome`    → the Case Type's configured Outcomes (read-only), each mapped
- *                   to itself (read-only).
- *  - single/multi → the question's own `options`; both list and mapping editable.
+ * - `yes-no-na` → fixed `Yes`/`No`/`NA`; outcome mapping editable.
+ * - `outcome` → the Case Type's configured Outcomes (read-only), each mapped
+ * to itself (read-only).
+ * - single/multi → the question's own `options`; both list and mapping editable.
  *
  * @param {any} question
  * @param {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions

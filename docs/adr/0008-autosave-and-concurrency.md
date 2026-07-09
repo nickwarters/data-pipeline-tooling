@@ -19,7 +19,7 @@ The framework auto-saves Case mutations through a single `SaveQueue` primitive �
 
 ### Network failure
 
-**In-memory retry queue, exponential backoff** (1s, 2s, 4s, ... capped ~30s). UI indicator: `Saved` / `Saving…` / `Reconnecting…` / `Conflict — reload`. **No `localStorage` persistence in v1** — the complexity (per-case keys, eviction, stale merges) outweighs the rare benefit on a corporate intranet.
+**In-memory retry queue, exponential backoff** (1s, 2s, 4s,... capped ~30s). UI indicator: `Saved` / `Saving…` / `Reconnecting…` / `Conflict — reload`. **No `localStorage` persistence in v1** — the complexity (per-case keys, eviction, stale merges) outweighs the rare benefit on a corporate intranet.
 
 ### Status transitions
 

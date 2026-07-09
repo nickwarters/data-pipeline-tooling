@@ -18,11 +18,11 @@ import '../components/sections/cora-conversation.js';
  * Shows only the Conversation thread — no Q&A, Notes, or Reviewer identity.
  *
  * @param {{
- *   client: SharePointClient | null,
- *   saveQueue: SaveQueue | null,
- *   caseId: string,
- *   caseType: string | null,
- *   currentUser: CurrentUser | null,
+ * client: SharePointClient | null,
+ * saveQueue: SaveQueue | null,
+ * caseId: string,
+ * caseType: string | null,
+ * currentUser: CurrentUser | null,
  * }} props
  * @returns {HTMLElement}
  */
@@ -72,11 +72,11 @@ export function ConversationView({
 
 /**
  * @param {{
- *   client: SharePointClient | null,
- *   saveQueue: SaveQueue | null,
- *   caseId: string,
- *   currentUser: CurrentUser | null,
- *   caseRow: CaseRow | null,
+ * client: SharePointClient | null,
+ * saveQueue: SaveQueue | null,
+ * caseId: string,
+ * currentUser: CurrentUser | null,
+ * caseRow: CaseRow | null,
  * }} args
  * @returns {Node[]}
  */

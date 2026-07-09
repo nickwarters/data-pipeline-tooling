@@ -4,16 +4,16 @@
 /** @typedef {import('../sharepoint-client.js').RemediationAction} RemediationAction */
 
 /**
- * The **Remediation tracking** model (ADR-0024). A Remediation Action grew from a
+ * The **Remediation tracking** model. A Remediation Action grew from a
  * plain string to a stateful `{ id, text, status, cancelReason? }` record. Actions
- * are stored where ADR-0020 puts them — the value of an `actions`-typed Issue
+ * are stored where the architecture decision puts them — the value of an `actions`-typed Issue
  * Capture Field on a failed Answer (`Answer.capture[key]`), now an array of these
  * records. This module is the single place that reads/normalises that store,
  * validates the cancel-reason rule, and derives the completion gate.
  */
 
 /**
- * Coerce a stored Remediation Action into the ADR-0024 object shape. Pre-existing
+ * Coerce a stored Remediation Action into the the architecture decision object shape. Pre-existing
  * data stored a plain `string` (the action text alone); it is read as a *pending*
  * action carrying `fallbackId`. An already-object action passes through, its
  * `status` defaulting to `'pending'` when absent or unrecognised and its
@@ -55,7 +55,7 @@ export function coerceRemediationActions(list, keyPrefix = 'ra') {
 }
 
 /**
- * Hard field validation (ADR-0024): a `cancelled` action must carry a non-empty
+ * Hard field validation: a `cancelled` action must carry a non-empty
  * cancellation reason. Throws otherwise; a no-op for other statuses.
  *
  * @param {RemediationAction} action
@@ -85,7 +85,7 @@ export function isActionResolved(action) {
 
 /**
  * Apply a resolution to an action, returning a fresh record. Enforces the
- * cancel-reason rule (ADR-0024) and drops a stale `cancelReason` whenever the new
+ * cancel-reason rule and drops a stale `cancelReason` whenever the new
  * status is not `cancelled`.
  *
  * @param {RemediationAction} action
@@ -102,7 +102,7 @@ export function setActionStatus(action, status, cancelReason = '') {
 }
 
 /**
- * The keys of every `actions`-typed Issue Capture Field (ADR-0020) a Case Type
+ * The keys of every `actions`-typed Issue Capture Field a Case Type
  * declares, across all capture groups — the fields whose Answer values hold
  * Remediation Actions.
  *
@@ -141,7 +141,7 @@ export function sentActionsForAnswer(answer, keys) {
 }
 
 /**
- * Every sent Remediation Action across all of a Case's Answers (ADR-0024) — the
+ * Every sent Remediation Action across all of a Case's Answers — the
  * flat list the Remediation tracking tab renders and gates on.
  *
  * @param {Record<string, Answer>} answers
@@ -160,7 +160,7 @@ export function allSentActions(answers, captureGroups) {
 }
 
 /**
- * The Remediation tracking completion gate (ADR-0024): the tab is complete once
+ * The Remediation tracking completion gate: the tab is complete once
  * **every** sent action is resolved (`complete`, or `cancelled` with a reason).
  * Vacuously true when no actions were sent — on the no-actions path there is no
  * tracking content, so the gate is inert and never blocks completion.

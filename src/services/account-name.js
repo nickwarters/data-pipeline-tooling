@@ -1,7 +1,7 @@
 // @ts-check
 /**
  * Claims/domain encoding for this single-farm, single-domain SharePoint SE
- * deployment (ADR-0013). This is the one place the encoding lives: components
+ * deployment. This is the one place the encoding lives: components
  * and the `cora-people-picker` only ever see bare account names; the claims
  * prefix and AD domain are stripped here at the service boundary.
  */
@@ -9,13 +9,13 @@
 /** The on-prem AD claims provider prefix, e.g. `i:0#.w|CONTOSO\jsmith`. */
 export const CLAIMS_PREFIX = 'i:0#.w|';
 
-/** The single AD domain for this farm (ADR-0013). */
+/** The single AD domain for this farm. */
 export const AD_DOMAIN = 'CONTOSO';
 
 /**
  * Reattach the claims prefix and AD domain to a bare account name, producing the
  * full claims login string the SharePoint/User Profile API expects. The inverse
- * of {@link toBareAccount} for this single-domain farm (ADR-0013).
+ * of {@link toBareAccount} for this single-domain farm.
  *
  * @param {string} account
  * @returns {string}

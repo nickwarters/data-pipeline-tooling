@@ -579,10 +579,10 @@
             <article class="finding" data-priority="p1">
               <h3><span class="tag">P1</span> Case Review shell overload</h3>
               <p>
-                <code>CORACaseReview</code> owns route setup, view-model creation,
-                stable node identity, controller orchestration, event binding,
-                compatibility shims, and rendering. Changes here require broad
-                knowledge of ordering and lifecycle.
+                <code>CORACaseReview</code> owns route setup, view-model
+                creation, stable node identity, controller orchestration, event
+                binding, compatibility shims, and rendering. Changes here
+                require broad knowledge of ordering and lifecycle.
               </p>
               <a class="code-ref" href="../src/pages/cora-case-review.js"
                 >src/pages/cora-case-review.js</a
@@ -610,7 +610,9 @@
                 reviewed, but authors still need to remember the pattern: create
                 handler, store it, add listener, remove listener on disconnect.
               </p>
-              <a class="code-ref" href="../src/question-bank/cora-bank-editor.js"
+              <a
+                class="code-ref"
+                href="../src/question-bank/cora-bank-editor.js"
                 >src/question-bank/cora-bank-editor.js</a
               >
             </article>
@@ -671,26 +673,26 @@
             </div>
             <div class="target">
               <pre><code>export function Question(props) {
-  const response = signal(props.response ?? '');
+ const response = signal(props.response ?? '');
 
-  return reactive(() =>
-    h('fieldset', {},
-      h('legend', {}, props.text),
-      props.options.map((option) =>
-        h('label', {},
-          h('input', {
-            type: 'radio',
-            checked: response.get() === option,
-            onchange: () => {
-              response.set(option);
-              props.onAnswer?.(option);
-            },
-          }),
-          option
-        )
-      )
-    )
-  );
+ return reactive(() =>
+ h('fieldset', {},
+ h('legend', {}, props.text),
+ props.options.map((option) =>
+ h('label', {},
+ h('input', {
+ type: 'radio',
+ checked: response.get() === option,
+ onchange: () => {
+ response.set(option);
+ props.onAnswer?.(option);
+ },
+ }),
+ option
+)
+)
+)
+);
 }</code></pre>
               <div class="callout">
                 <strong>What authors stop writing</strong>
@@ -745,8 +747,9 @@
                 <p>
                   Start with <code>cora-toast</code>,
                   <code>cora-status-banner</code>, <code>cora-outcome</code>,
-                  <code>cora-notes</code>, and <code>cora-section-progress</code>.
-                  These should become examples for new authors.
+                  <code>cora-notes</code>, and
+                  <code>cora-section-progress</code>. These should become
+                  examples for new authors.
                 </p>
               </div>
             </article>

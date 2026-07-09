@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Sync the deployable runtime tree to SharePoint (issue #253).
+"""Sync the deployable runtime tree to SharePoint.
 
 Uploads the framework's runtime source files to a SharePoint document library
-under ``Style Library/CODE/CORA`` (see issue #253 and the README hosting model:
+under ``Style Library/CODE/CORA`` (see the README hosting model:
 the Style Library is minimally cached and serves fresh files most consistently).
 
 The deploy is a **sync**, not a blind copy:
@@ -40,7 +40,7 @@ DEFAULT_LIBRARY = "Style Library"
 DEFAULT_TARGET_FOLDER = "CODE/CORA"
 
 # The deployable runtime tree. There is no build step, so source JS is deployed
-# JS (ADR-0001/0005). These roots deliberately exclude dev/, tests/, docs/,
+# JS. These roots deliberately exclude dev/, tests/, docs/,
 # node_modules/, and config/dotfiles — they simply live outside the roots.
 # `host/` holds the production Content Editor host page (host/index.html).
 DEFAULT_INCLUDE_ROOTS = ("src", "case-types", "host")
@@ -368,8 +368,8 @@ def parse_args(argv: list[str]) -> DeployOptions:
 def build_client(opts: DeployOptions) -> SharePointDeployClient:
     """Construct the concrete client for ``opts``.
 
-    Implemented separately (issue #253): wire up the SharePoint SE auth
-    handshake (browser NTLM/Kerberos per ADR-0010) and REST transport here, then
+    Implemented separately: wire up the SharePoint SE auth
+    handshake (browser NTLM/Kerberos) and REST transport here, then
     delete this guard.
     """
     raise NotImplementedError(

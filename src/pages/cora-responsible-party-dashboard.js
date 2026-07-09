@@ -10,9 +10,9 @@ import '../components/collections/cora-case-table.js';
 
 /**
  * @typedef {{
- *   totalCompleted: number,
- *   byOutcome: Record<string, number>,
- *   byMonth: Array<{ month: string, counts: Record<string, number> }>
+ * totalCompleted: number,
+ * byOutcome: Record<string, number>,
+ * byMonth: Array<{ month: string, counts: Record<string, number> }>
  * }} OutcomeSummary
  */
 
@@ -21,9 +21,9 @@ import '../components/collections/cora-case-table.js';
  * outstanding remediation actions, and cases with unread reviewer messages.
  *
  * @param {{
- *   client: SharePointClient | null,
- *   currentUserId: string,
- *   onOpenConversation?: (caseRow: CaseRow) => void,
+ * client: SharePointClient | null,
+ * currentUserId: string,
+ * onOpenConversation?: (caseRow: CaseRow) => void,
  * }} props
  * @returns {HTMLElement}
  */

@@ -50,7 +50,7 @@ import '../components/base/cora-tabs.js';
 /** @typedef {import('./cora-case-review/types.js').CaseReviewShellContext} CaseReviewShellContext */
 
 /**
- * Case Review route shell (ADR-0014). A plain function component: it owns the
+ * Case Review route shell. A plain function component: it owns the
  * view-model, a registry of long-lived Section nodes, and the panel bindings,
  * and returns a reactive() host that re-composes `h()` nodes whenever the
  * view-model's signals change. Custom elements survive only as the leaf Section
@@ -58,12 +58,12 @@ import '../components/base/cora-tabs.js';
  * class-backed page element and no per-render controller layer.
  *
  * @param {{
- *   client: SharePointClient | null,
- *   saveQueue: SaveQueue | null,
- *   caseId: string,
- *   caseType?: string | null,
- *   currentUserId?: string,
- *   capabilities?: Capabilities | null,
+ * client: SharePointClient | null,
+ * saveQueue: SaveQueue | null,
+ * caseId: string,
+ * caseType?: string | null,
+ * currentUserId?: string,
+ * capabilities?: Capabilities | null,
  * }} props
  * @returns {HTMLElement}
  */

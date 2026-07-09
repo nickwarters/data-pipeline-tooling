@@ -3,7 +3,7 @@
 /** @typedef {import('../sharepoint-client.js').RemediationField} RemediationField */
 
 /**
- * Records a single Remediation Detail value against an Answer (ADR-0017),
+ * Records a single Remediation Detail value against an Answer,
  * returning a fresh Answer with the value stored inline under
  * `remediationDetails[field.key]`.
  *

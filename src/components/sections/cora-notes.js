@@ -51,8 +51,8 @@ export function Notes(props) {
  * as* enqueuing the field-level PATCH. Without the in-memory write-back, a
  * re-render — e.g. a tab switch reconnecting the element, or the case-review
  * shell repainting on any signal change — would repaint the textarea from the
- * last saved/loaded value and discard uncommitted input (issue #317). Autosave
- * semantics are unchanged: still a debounced, ETag-guarded PATCH (ADR-0008).
+ * last saved/loaded value and discard uncommitted input. Autosave
+ * semantics are unchanged: still a debounced, ETag-guarded PATCH.
  * @param {{ label: string, className: string, placeholder: string, value: string, fieldName: 'notes' | 'caseJustification', props: NotesProps }} opts
  * @returns {Node[]}
  */
@@ -101,7 +101,7 @@ export class CORANotes extends ShellElement {
     this.access = 'edit';
     /**
      * The Case row this Section renders from and writes edits back onto — the
-     * single source of truth (issue #317). When absent, rendering falls back to
+     * single source of truth. When absent, rendering falls back to
      * the `notes` / `caseJustification` string props.
      * @type {CaseRow | null}
      */

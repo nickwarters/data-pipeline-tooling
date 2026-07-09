@@ -15,7 +15,7 @@ import { computeConfiguredOutcome } from '../src/evaluators/configured-outcome.j
 const config = {
   eligibleGroups: ['Reviewers'],
   questions: stressQuestions,
-  // Outcome vocabulary (ADR-0004): required even for this perf harness so the
+  // Outcome vocabulary: required even for this perf harness so the
   // Outcome block resolves wording from config rather than a built-in fallback.
   outcomeOptions: [
     { id: 'pass', wording: 'Pass', severity: 0 },

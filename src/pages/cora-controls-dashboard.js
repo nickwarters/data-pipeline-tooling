@@ -12,7 +12,7 @@ import '../components/collections/cora-case-table.js';
 /**
  * How many rows a page pulls from the indexed open-Appeal set. The worklist
  * shows every open Appeal, so pages accumulate until a short final page — the
- * point is never to fetch an unbounded result set (ADR-0031 §2), not to cap the
+ * point is never to fetch an unbounded result set, not to cap the
  * table.
  */
 export const PAGE_SIZE = 50;
@@ -32,16 +32,16 @@ export function openAppealOf(caseRow) {
 
 /**
  * Controls landing section: every Case with an open **Appeal** that Controls has
- * not yet resolved (ADR-0027). Controls is not scoped to a single Case Type, so
+ * not yet resolved. Controls is not scoped to a single Case Type, so
  * this reads the whole list — but leads with the indexed `hasOpenAppeal` flag
  * and pages oldest-raised-first (`appealRaisedAt asc`) rather than fetching all
  * Completed Cases and filtering in JS, which breaks past the List View Threshold
- * on the busy Case Type (ADR-0031 §2, issue #296). The matched set is bounded by
+ * on the busy Case Type. The matched set is bounded by
  * open work, so it stays sub-threshold for the life of the list.
  *
  * @param {{
- *   client: SharePointClient | null,
- *   onOpenCase?: (caseRow: CaseRow) => void,
+ * client: SharePointClient | null,
+ * onOpenCase?: (caseRow: CaseRow) => void,
  * }} props
  * @returns {HTMLElement}
  */

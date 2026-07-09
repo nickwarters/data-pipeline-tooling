@@ -1,4 +1,4 @@
-# ADR-0028: Case Type scaffolding contract
+# the architecture decision: Case Type scaffolding contract
 
 ## Status
 
@@ -39,7 +39,7 @@ deliberate follow-up design decision, not hidden scaffolding behavior.
 The scaffold covers only the application config. The remaining
 SharePoint-side provisioning — creating the `Cases-{slug}` list, adding its
 columns, **indexing the required columns while the list is still empty**
-(ADR-0031 §1), and creating the per-Case-Type groups — is a standing checklist,
+, and creating the per-Case-Type groups — is a standing checklist,
 not tribal knowledge. It lives in the maintainer-facing
 [Case Type onboarding checklist](../case-type-onboarding.md), which also carries
 the documented `Cases-{slug}` column schema (all columns, which are indexed, and
@@ -50,12 +50,12 @@ app-writes-it provenance).
 - Maintainers get a runnable first slice before SharePoint list-backing exists.
 - List provisioning is doc-driven via the
   [Case Type onboarding checklist](../case-type-onboarding.md): the required
-  indexed columns must be created on the *empty* list, because a SharePoint
-  index cannot be added past the List View Threshold (ADR-0031 §1) — an
+  indexed columns must be created on the _empty_ list, because a SharePoint
+  index cannot be added past the List View Threshold — an
   irreversible timing trap.
 - The generated module includes TODO markers for the Question Bank, Outcome
   vocabulary, appeal raiser, Case Details fields, and SLA hours.
 - The generated mock personas exercise the derived `Reviewers - X`,
-  `CaseTypeOwner - X`, and `JourneyOwner - X` groups from ADR-0022.
+  `CaseTypeOwner - X`, and `JourneyOwner - X` groups from the architecture decision.
 - Re-running with an existing slug is a hard error to avoid overwriting operator
   edits.

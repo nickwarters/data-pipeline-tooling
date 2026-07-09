@@ -8,4 +8,4 @@ Fine-grained reactivity (rather than rebuilding sections on every state change) 
 
 ## Amendment (2026-07)
 
-The isolation prefix described above was originally `cr-`. It was renamed to `cora-` when the platform was branded **CORA**. The mechanism is unchanged — any single, unique prefix satisfies the SharePoint CSS-isolation requirement; nothing tied it specifically to `cr-`. See [ADR-0029](0029-cora-branding-and-cr-prefix-rename.md).
+The isolation prefix described above was originally `cr-`. It was renamed to `cora-` when the platform was branded **CORA**. The mechanism is unchanged — any single, unique prefix satisfies the SharePoint CSS-isolation requirement; nothing tied it specifically to `cr-`. See.

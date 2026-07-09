@@ -11,15 +11,15 @@ import { buildAmendmentFields } from '../../evaluators/amended-outcome.js';
 /** @typedef {import('../../services/save-queue.js').SaveQueue} SaveQueue */
 
 /**
- * The **Appeal Review** Section (ADR-0027). Lets **Controls** resolve an open
+ * The **Appeal Review** Section. Lets **Controls** resolve an open
  * Appeal on a Completed Case: either agree (outcome was wrong, author an Amended
  * Outcome linked to the Appeal id) or reject (record rationale only). Access is
- * resolved upstream (`section-access`, ADR-0011): `edit` only for Controls on a
+ * resolved upstream (`section-access`, the architecture decision): `edit` only for Controls on a
  * Completed Case with an open Appeal; `read-only` for other observers; otherwise
  * the Section is not rendered at all. At most one Appeal may be open at a time.
  *
  * Agreeing triggers a transactional write: the Appeal is resolved *and* an Amended
- * Outcome (ADR-0026) carrying `fromAppealId` is authored in the same
+ * Outcome carrying `fromAppealId` is authored in the same
  * `SaveQueue.enqueueFields` call. Rejecting writes only the updated `appeals[]`.
  *
  * @typedef {object} AppealReviewProps
@@ -201,7 +201,7 @@ export function renderResolveForm(props, appeal) {
 
 /**
  * Validate and commit the resolution. On agree, also authors a linked Amended
- * Outcome (ADR-0026/ADR-0027) in the same transactional field write.
+ * Outcome in the same transactional field write.
  * @param {AppealReviewProps} props
  * @param {Appeal} appeal
  * @param {{ checked?: boolean }} agreeRadio

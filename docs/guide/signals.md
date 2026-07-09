@@ -51,10 +51,10 @@ const firstName = signal('Alice');
 const lastName = signal('Smith');
 const fullName = computed(() => `${firstName.get()} ${lastName.get()}`);
 
-fullName.get(); // 'Alice Smith'  — fn() runs once
-fullName.get(); // 'Alice Smith'  — cached, fn() does NOT run again
+fullName.get(); // 'Alice Smith' — fn() runs once
+fullName.get(); // 'Alice Smith' — cached, fn() does NOT run again
 firstName.set('Bob');
-fullName.get(); // 'Bob Smith'    — cache invalidated, fn() runs again
+fullName.get(); // 'Bob Smith' — cache invalidated, fn() runs again
 ```
 
 Use `computed` when you derive a value from other signals and want:

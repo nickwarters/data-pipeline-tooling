@@ -18,16 +18,16 @@ import {
  */
 
 /**
- * Pure roll-up derivation for the read-only Summary Section (ADR-0016). Computed
+ * Pure roll-up derivation for the read-only Summary Section. Computed
  * from whatever Answers are supplied — live while In-progress, the Case's frozen
  * Answers once Completed (editing is disabled, so the two coincide). Outcome is
  * derived separately by `cora-summary` because a Completed Case reads the frozen
- * `outcomeAtCompletion` snapshot rather than recomputing (ADR-0012).
+ * `outcomeAtCompletion` snapshot rather than recomputing.
  *
  * @param {QuestionDefinition[]} catalogue
  * @param {Record<string, Answer>} answers
  * @param {CaptureGroup[]} [captureGroups] The Case Type's Issue Capture Groups,
- *   used to read each failed Answer's *sent* Remediation Actions (ADR-0024).
+ * used to read each failed Answer's *sent* Remediation Actions.
  * @returns {SummaryModel}
  */
 export function buildSummaryModel(catalogue, answers, captureGroups = []) {
@@ -55,7 +55,7 @@ export function buildSummaryModel(catalogue, answers, captureGroups = []) {
 
   const failedQuestions = applicable.filter((q) => isFailure(q, answers[q.id]));
   // The Summary reflects only what the Reviewer *selected* on each failed Answer
-  // (issue #250) — the chosen canned actions plus any free-form entry — not the
+  // — the chosen canned actions plus any free-form entry — not the
   // question's full configured catalogue.
   const remediationActionCount = failedQuestions.reduce((total, q) => {
     const answer = answers[q.id];
@@ -78,7 +78,7 @@ export function buildSummaryModel(catalogue, answers, captureGroups = []) {
       if (Array.isArray(raw))
         sentActions.push(...coerceRemediationActions(raw, key));
     }
-    // Selected canned actions (issue #250), plus any free-form action, shown as
+    // Selected canned actions, plus any free-form action, shown as
     // read-only text. Falls back to nothing when the Reviewer selected none.
     const actions = (answer.remediationActions ?? []).map(
       (action) => action.text

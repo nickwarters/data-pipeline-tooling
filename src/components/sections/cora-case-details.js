@@ -5,13 +5,13 @@ import { h } from '../../lib/html.js';
 /** @typedef {import('../../sharepoint-client.js').CaseDetailField} CaseDetailField */
 
 /**
- * The Case Details fields shown on the Case (ADR-0014), in display order. Shared
- * by the Case Details Section and the Summary Section's Details block (ADR-0016)
+ * The Case Details fields shown on the Case, in display order. Shared
+ * by the Case Details Section and the Summary Section's Details block
  * so the field list and em-dash fallback live in one place. `display` is the
  * presentation-ready string (em dash for empty values); `value` is the raw field.
  *
  * The common Case-row fields come first, followed by the Case Type-specific
- * fields declared in `detailFields` (issue #213), whose values are read from the
+ * fields declared in `detailFields`, whose values are read from the
  * `CaseRow.details` JSON blob keyed by `CaseDetailField.key`.
  *
  * @param {CaseRow} caseRow
@@ -42,10 +42,10 @@ export function caseDetailFields(caseRow, detailFields = []) {
 }
 
 /**
- * The Case Details Section (ADR-0014). Read-only for every role and never
+ * The Case Details Section. Read-only for every role and never
  * hidden per-role (see section-access.js). Renders the common Case-row fields
  * (title, assigned reviewer, status, dates) followed by the Case Type-specific
- * detail fields declared in `detailFields` (issue #213), whose values come from
+ * detail fields declared in `detailFields`, whose values come from
  * the `CaseRow.details` blob.
  */
 /**
@@ -89,7 +89,7 @@ export class CORACaseDetails extends HTMLElement {
     /** @type {'edit'|'read-only'|'hidden'} */
     this.access = 'read-only';
     /**
-     * The Case Type's declared Case Details fields (issue #213), rendered after
+     * The Case Type's declared Case Details fields, rendered after
      * the common Case-row fields. Empty when the Case Type declares none.
      * @type {CaseDetailField[]}
      */

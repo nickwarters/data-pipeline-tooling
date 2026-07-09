@@ -49,8 +49,8 @@ A leaf condition names exactly one question ID and one operator.
 
 ```js
 showWhen: { $and: [
-  { 'q-needs': { equals: 'Yes' } },
-  { 'q-channel': { in: ['Phone'] } }
+ { 'q-needs': { equals: 'Yes' } },
+ { 'q-channel': { in: ['Phone'] } }
 ]}
 showWhen: { $or: [...] }
 ```
@@ -78,11 +78,11 @@ Render a node graph where:
 **Node layout** for example-review questions:
 
 ```
-[q-welcome]   [q-needs]   [q-channel]   [q-products]
-                  │
-                  ↓
-              [q-resolve]
-              showWhen: q-needs equals 'Yes'
+[q-welcome] [q-needs] [q-channel] [q-products]
+ │
+ ↓
+ [q-resolve]
+ showWhen: q-needs equals 'Yes'
 ```
 
 `q-resolve` has an edge FROM `q-needs`. The other four have no `showWhen`
@@ -264,33 +264,33 @@ Serve with `python3 -m http.server 7777` from the repo root and open
 
 ```
 <header>
-  <h1>Applicability Graph</h1>
-  <p>showWhen · evaluate() · detectCycles() — src/applicability-evaluator.js</p>
-  <legend> always-applicable | conditional | hidden | cycle </legend>
+ <h1>Applicability Graph</h1>
+ <p>showWhen · evaluate() · detectCycles() — src/applicability-evaluator.js</p>
+ <legend> always-applicable | conditional | hidden | cycle </legend>
 </header>
 
 <main>
-  <!-- Section 1 -->
-  <section class="concepts">  <!-- 3 concept cards: leaf ops, $and/$or, no-showWhen -->
+ <!-- Section 1 -->
+ <section class="concepts"> <!-- 3 concept cards: leaf ops, $and/$or, no-showWhen -->
 
-  <!-- Section 2 -->
-  <section class="scene" id="scene-graph">
-    <h2>Interactive Dependency Graph</h2>
-    <!-- example-review 5-question graph, live answer toggles, applicable Set badge -->
+ <!-- Section 2 -->
+ <section class="scene" id="scene-graph">
+ <h2>Interactive Dependency Graph</h2>
+ <!-- example-review 5-question graph, live answer toggles, applicable Set badge -->
 
-  <!-- Section 3 -->
-  <section class="scene" id="scene-evaluate">
-    <h2>How evaluate() Walks the Catalogue</h2>
-    <!-- wt-tabs: one tab only (or two: "with match" / "without match") -->
-    <!-- wt-layout: code left, state right (catalogue index, applicable Set) -->
-    <!-- Prev/Next/Play nav -->
+ <!-- Section 3 -->
+ <section class="scene" id="scene-evaluate">
+ <h2>How evaluate() Walks the Catalogue</h2>
+ <!-- wt-tabs: one tab only (or two: "with match" / "without match") -->
+ <!-- wt-layout: code left, state right (catalogue index, applicable Set) -->
+ <!-- Prev/Next/Play nav -->
 
-  <!-- Section 4 -->
-  <section class="scene" id="scene-cycles">
-    <h2>Cycle Detection — DFS at Load Time</h2>
-    <!-- wt-tabs: "Cycle detected" | "No cycle" -->
-    <!-- Node graph with DFS coloring per step + code panel -->
-    <!-- Prev/Next/Play nav -->
+ <!-- Section 4 -->
+ <section class="scene" id="scene-cycles">
+ <h2>Cycle Detection — DFS at Load Time</h2>
+ <!-- wt-tabs: "Cycle detected" | "No cycle" -->
+ <!-- Node graph with DFS coloring per step + code panel -->
+ <!-- Prev/Next/Play nav -->
 
 </main>
 <footer>
@@ -312,7 +312,7 @@ Serve with `python3 -m http.server 7777` from the repo root and open
 **eval walkthrough (Section 3):**
 
 - Pre-compute all steps statically; no live evaluation during step transitions
-- Each step object: `{ hl, title, desc, applicable: ['q-welcome', ...], currentQ: 'q-resolve', highlight: 'evalOp' }`
+- Each step object: `{ hl, title, desc, applicable: ['q-welcome',...], currentQ: 'q-resolve', highlight: 'evalOp' }`
 - Right panel shows: catalogue list (current item highlighted), growing applicable Set chips, call-stack depth indicator when inside nested evalCondition
 
 **Cycle walkthrough (Section 4):**

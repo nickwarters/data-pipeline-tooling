@@ -5,16 +5,16 @@
 import { computeConfiguredOutcome } from '../src/evaluators/configured-outcome.js';
 
 /**
- * The **Complaints** Case Type — a Complaints-style journey (ADR-0027) whose
+ * The **Complaints** Case Type — a Complaints-style journey whose
  * appeals are raised by the **Journey Owner** and resolved by **Controls**. Its
- * per-Case-Type groups derive from the `Complaints` display name (ADR-0022):
+ * per-Case-Type groups derive from the `Complaints` display name:
  * `Reviewers - Complaints`, `CaseTypeOwner - Complaints`,
  * `JourneyOwner - Complaints`.
  *
  * NOTE (dev/mock): deliberately declares **no `listName`**, so its Cases live in
  * the default mock store and are openable via `?mock=1`. A production Complaints
  * list can be added once list-backed Case Types are wired into the mock client
- * (issue #249); until then a `listName` here would 404 every Complaints Case in
+ *; until then a `listName` here would 404 every Complaints Case in
  * the mock dev loop.
  *
  * @type {CaseTypeConfig}
@@ -23,16 +23,16 @@ const config = {
   eligibleGroups: ['Reviewers'],
   slaHours: 72,
   attributeFailures: true,
-  // Case Type-specific Case Details fields (ADR-0014). Values live in the
+  // Case Type-specific Case Details fields. Values live in the
   // CaseRow.details JSON blob keyed by `key`.
   detailFields: [
     { key: 'complaintRef', label: 'Complaint reference' },
     { key: 'customerName', label: 'Customer name' },
     { key: 'complaintDate', label: 'Complaint date' },
   ],
-  // Per-Section config object (ADR-0016). Mirrors the amended Section set: the
+  // Per-Section config object. Mirrors the amended Section set: the
   // block Sections opt in/out of the Summary, and the appeal/amend Sections are
-  // enabled so the Complaints appeal flow (ADR-0027) and Amend Outcome (ADR-0026)
+  // enabled so the Complaints appeal flow and Amend Outcome
   // are available.
   sections: {
     details: { showInSummary: true },
@@ -46,13 +46,13 @@ const config = {
     appealReview: {},
     amendOutcome: {},
   },
-  // Appeal flow (ADR-0027): a Complaints journey routes appeal-raising to the
+  // Appeal flow: a Complaints journey routes appeal-raising to the
   // Journey Owner, resolved by Controls.
   appeal: { raisedBy: 'journeyOwner', resolvedBy: 'controls' },
-  // Outcome vocabulary (ADR-0004). The Outcome is driven wholly by the responses
+  // Outcome vocabulary. The Outcome is driven wholly by the responses
   // (question bank redesign): each mapped response option scores a configured
   // Outcome and the highest-scoring applicable Outcome wins, defaulting to
-  // `pass`. Controls may still hand-set any of these via Amend Outcome (ADR-0026).
+  // `pass`. Controls may still hand-set any of these via Amend Outcome.
   outcomeOptions: [
     { id: 'pass', wording: 'Pass', severity: 0 },
     { id: 'refer', wording: 'Refer', severity: 50 },

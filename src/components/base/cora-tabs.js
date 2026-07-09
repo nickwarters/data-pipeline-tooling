@@ -4,8 +4,8 @@ import { h } from '../../lib/html.js';
 
 /**
  * @typedef {object} Tab
- * @property {string} id       Stable identifier for the tab and its panel.
- * @property {string} label    Visible text on the tab button.
+ * @property {string} id Stable identifier for the tab and its panel.
+ * @property {string} label Visible text on the tab button.
  * @property {boolean} [hidden] When true, the tab renders neither a button nor a panel.
  */
 
@@ -124,11 +124,11 @@ export function Tabs({
  * the `panels` map keyed by tab id.
  *
  * @example
- *   const tabs = document.createElement('cora-tabs');
- *   tabs.tabs = [{ id: 'one', label: 'One' }, { id: 'two', label: 'Two' }];
- *   tabs.panels = { one: nodeA, two: nodeB };
- *   tabs.selected = 'one';
- *   tabs.addEventListener('cora-tab-change', e => console.log(e.detail.id));
+ * const tabs = document.createElement('cora-tabs');
+ * tabs.tabs = [{ id: 'one', label: 'One' }, { id: 'two', label: 'Two' }];
+ * tabs.panels = { one: nodeA, two: nodeB };
+ * tabs.selected = 'one';
+ * tabs.addEventListener('cora-tab-change', e => console.log(e.detail.id));
  */
 export class CORATabs extends ShellElement {
   constructor() {

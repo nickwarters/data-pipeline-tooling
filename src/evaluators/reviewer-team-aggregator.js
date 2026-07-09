@@ -4,10 +4,10 @@
 
 /**
  * @typedef {{
- *   completedLast7d: number,
- *   completedLast30d: number,
- *   outstanding: number,
- *   overdue: number
+ * completedLast7d: number,
+ * completedLast30d: number,
+ * outstanding: number,
+ * overdue: number
  * }} TeamCounts
  */
 

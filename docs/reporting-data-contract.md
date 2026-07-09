@@ -6,8 +6,8 @@ modified yesterday," and similar.
 
 This is a _consumer_ guide. The reporting code itself is out of scope; this
 document specifies the **format** it reads and the **algorithm** it must apply.
-The decisions behind it are [ADR-0015](./adr/0015-data-only-case-type-export-for-reporting.md)
-and [ADR-0021](./adr/0021-versioned-question-bank-snapshots-for-completed-cases.md).
+The decisions behind it are
+and.
 
 ## TL;DR
 
@@ -123,7 +123,7 @@ Intentionally **absent**: `computeOutcome` (code), `remediationActions` /
 lives on the Answer, below), and Case-Type config (`eligibleGroups`, `slaHours`,
 `attributeFailures`).
 
-### Label resolution (ADR-0021)
+### Label resolution
 
 Labels follow a **frozen-structure / current-presentation** split:
 
@@ -154,20 +154,20 @@ If a `labelId` from a versioned file is not present in the current `labels` tabl
 Read Case rows from the per-Case-Type SharePoint list (one list per Case Type). The
 reporting-relevant fields:
 
-| Field                     | Type                         | Notes                                                                                                                             |
-| ------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                      | string                       | Case identifier.                                                                                                                  |
-| `caseType`                | string                       | Slug — join to `{caseType}.json`.                                                                                                 |
-| `status`                  | `In-progress` \| `Completed` | Most reports filter to `Completed`.                                                                                               |
-| `answers`                 | object (JSON blob)           | `{ [questionId]: Answer }`. See shape below.                                                                                      |
-| `completedAt`             | ISO-8601 \| null             | Use for date-range filters ("modified yesterday").                                                                                |
-| `outcomeAtCompletion`     | string \| null               | **Frozen reviewer verdict** (ADR-0012). Use this, never recompute.                                                                |
-| `hadRemediation`          | boolean                      | Frozen at completion: any Answer carried a Remediation Action.                                                                    |
-| `effectiveOutcome`        | string \| null               | **Corrected case verdict** (ADR-0019). Re-stamped on every Answer Override; equals `outcomeAtCompletion` when no Override exists. |
-| `effectiveHadRemediation` | boolean                      | The Effective-Answers counterpart of `hadRemediation`, re-derived alongside `effectiveOutcome`.                                   |
-| `outcomeOverridden`       | boolean                      | `true` once an Answer Override has been authored — flags/segments corrected Cases.                                                |
+| Field                     | Type                         | Notes                                                                                                                  |
+| ------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `id`                      | string                       | Case identifier.                                                                                                       |
+| `caseType`                | string                       | Slug — join to `{caseType}.json`.                                                                                      |
+| `status`                  | `In-progress` \| `Completed` | Most reports filter to `Completed`.                                                                                    |
+| `answers`                 | object (JSON blob)           | `{ [questionId]: Answer }`. See shape below.                                                                           |
+| `completedAt`             | ISO-8601 \| null             | Use for date-range filters ("modified yesterday").                                                                     |
+| `outcomeAtCompletion`     | string \| null               | **Frozen reviewer verdict**. Use this, never recompute.                                                                |
+| `hadRemediation`          | boolean                      | Frozen at completion: any Answer carried a Remediation Action.                                                         |
+| `effectiveOutcome`        | string \| null               | **Corrected case verdict**. Re-stamped on every Answer Override; equals `outcomeAtCompletion` when no Override exists. |
+| `effectiveHadRemediation` | boolean                      | The Effective-Answers counterpart of `hadRemediation`, re-derived alongside `effectiveOutcome`.                        |
+| `outcomeOverridden`       | boolean                      | `true` once an Answer Override has been authored — flags/segments corrected Cases.                                     |
 
-> **Which verdict column to read (ADR-0019).** Two frozen-vs-corrected columns
+> **Which verdict column to read.** Two frozen-vs-corrected columns
 > serve two report audiences from the same row, and one column cannot serve both
 > honestly:
 >
@@ -183,8 +183,8 @@ reporting-relevant fields:
 > `outcomeOverridden` stays server-side and bounded — no full-row fetch, no
 > client-side re-derivation. Never recompute either verdict.
 
-> **Provisioning (Maintainers).** On top of ADR-0012's two columns, every
-> per-Case-Type list now needs three more (ADR-0019), added when the Case Type
+> **Provisioning (Maintainers).** On top of the architecture decision's two columns, every
+> per-Case-Type list now needs three more, added when the Case Type
 > list is provisioned:
 >
 > - `EffectiveOutcome` — Single line of text, **indexed**.
@@ -193,11 +193,11 @@ reporting-relevant fields:
 >
 > The framework filters on `EffectiveOutcome` and `OutcomeOverridden`
 > server-side (`http-sharepoint-client.js`, `listCases`), so both must be indexed
-> for the bounded report query. Rows completed before ADR-0019 landed may have
+> for the bounded report query. Rows completed before the architecture decision landed may have
 > these absent/null; treat them as un-corrected (`effectiveOutcome` ⇒ fall back to
 > `outcomeAtCompletion`, `outcomeOverridden` ⇒ `false`).
 
-> **Case-verdict snapshot.** ADR-0012 is implemented: the completion write
+> **Case-verdict snapshot.** the architecture decision is implemented: the completion write
 > (`cora-case-review.js`, `_completeCase`) runs the outcome function over the
 > answers at completion time and stamps `outcomeAtCompletion` + `hadRemediation`
 > in the same ETag-guarded PATCH as `status` / `completedAt`. The snapshot is
@@ -237,15 +237,15 @@ export, find the Answer by `id` → apply the failure test. This replicates
 
 ```python
 def is_failure(question, answer):
-    fc = question.get("failureCriteria")
-    if fc is None:            # question can never fail
-        return False
-    if answer is None:        # unanswered
-        return False
-    value = answer["value"]
-    if isinstance(value, list):           # multi-choice
-        return fc in value                # array-includes
-    return value == fc                    # scalar equality
+ fc = question.get("failureCriteria")
+ if fc is None: # question can never fail
+ return False
+ if answer is None: # unanswered
+ return False
+ value = answer["value"]
+ if isinstance(value, list): # multi-choice
+ return fc in value # array-includes
+ return value == fc # scalar equality
 ```
 
 > **The branch on `responseType` is implicit in `value`'s type**, but keep
@@ -256,36 +256,36 @@ def is_failure(question, answer):
 ### Worked example — "top failed questions"
 
 ```python
-for case in cases_modified_yesterday:           # filter on completedAt
-    version = case.get("questionBankVersion")
-    if version:                                 # ADR-0021: use the versioned file
-        export = load_json(f"case-types/{slug}.{version}.json")
-    else:
-        export = load_json(f"case-types/{case['caseType']}.json")
-    by_id  = {q["id"]: q for q in export["questions"]}
-    for qid, answer in case["answers"].items():
-        q = by_id.get(qid)
-        if q and is_failure(q, answer):
-            tally[(case["caseType"], qid, q["text"], q.get("category"))] += 1
+for case in cases_modified_yesterday: # filter on completedAt
+ version = case.get("questionBankVersion")
+ if version: # the architecture decision: use the versioned file
+ export = load_json(f"case-types/{slug}.{version}.json")
+ else:
+ export = load_json(f"case-types/{case['caseType']}.json")
+ by_id = {q["id"]: q for q in export["questions"]}
+ for qid, answer in case["answers"].items():
+ q = by_id.get(qid)
+ if q and is_failure(q, answer):
+ tally[(case["caseType"], qid, q["text"], q.get("category"))] += 1
 
 # tally, sorted descending, is your "top failed questions" report
 ```
 
 ## Caveats — read these
 
-1. **Use versioned exports for Completed Cases (ADR-0021).** When a Case row
+1. **Use versioned exports for Completed Cases.** When a Case row
    carries a `questionBankVersion`, fetch `{slug}.{hash}.json` for that hash
    instead of `{slug}.json`. This gives you the exact questions, wording, and
    `failureCriteria` that were in force at review time. Cases completed before
-   ADR-0021 was deployed have no `questionBankVersion`; fall back to the current
+   the architecture decision was deployed have no `questionBankVersion`; fall back to the current
    `{slug}.json` for those (same behaviour as before).
 
 2. **Case verdicts are different — and stable.** The _case-level_ pass/refer/fail
    is **not** re-derived from answers. Read `outcomeAtCompletion` straight off the
-   row; it is frozen at completion (ADR-0012) and immune to later bank edits.
+   row; it is frozen at completion and immune to later bank edits.
    Never recompute it. The completion path stamps it in the same PATCH as
    `status` + `completedAt`, so it is present on every Case completed after
-   ADR-0012 landed (older rows may carry a null — treat those as un-snapshotted).
+   the architecture decision landed (older rows may carry a null — treat those as un-snapshotted).
 
 3. **Applicability (`showWhen`).** Counting _failures_ needs no `showWhen` — a
    failed answer was, by definition, shown and answered. You only need `showWhen`

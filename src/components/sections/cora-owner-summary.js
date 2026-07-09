@@ -7,12 +7,12 @@ import { h } from '../../lib/html.js';
 
 /**
  * @typedef {{
- *   caseType: string,
- *   outstanding: number,
- *   assigned: number,
- *   overdue: number,
- *   completedToday: number,
- *   completedLast7Days: number
+ * caseType: string,
+ * outstanding: number,
+ * assigned: number,
+ * overdue: number,
+ * completedToday: number,
+ * completedLast7Days: number
  * }} OwnerSummary
  */
 
@@ -20,9 +20,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * @param {{
- *   client: SharePointClient,
- *   ownedCaseTypes: string[],
- *   now?: Date
+ * client: SharePointClient,
+ * ownedCaseTypes: string[],
+ * now?: Date
  * }} props
  * @returns {Promise<OwnerSummary[]>}
  */
@@ -38,7 +38,7 @@ export async function loadOwnerSummaries({ client, ownedCaseTypes, now }) {
   // Per-day slices covering [todayStart − 7 days, now]: slice 0 is today so far,
   // slices 1..7 are the seven prior calendar days. Each slice is one day on the
   // busy Case Type (< List View Threshold), so summing their `$count`s yields the
-  // last-7-days total without a single >5000-row window fetch (ADR-0031 §2).
+  // last-7-days total without a single >5000-row window fetch.
   const slices = Array.from({ length: 8 }, (_, k) => ({
     after: new Date(todayStart.getTime() - k * DAY_MS).toISOString(),
     before:
@@ -50,7 +50,7 @@ export async function loadOwnerSummaries({ client, ownedCaseTypes, now }) {
   return Promise.all(
     ownedCaseTypes.map(async (caseType) => {
       // In-progress: bounded by open work and led by the indexed Status column
-      // (ADR-0031 §2), so the outstanding/assigned/overdue derivation never
+      //, so the outstanding/assigned/overdue derivation never
       // fetches the cumulative backlog.
       const inProgress = await client.listCases({
         caseType,

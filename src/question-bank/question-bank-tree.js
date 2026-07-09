@@ -3,7 +3,7 @@
  * Editable in-memory representation of a Question Definition's `showWhen`.
  *
  * The on-disk schema (see applicability-evaluator.js) is JSON: leaves shaped
- * like `{qId: {equals|in|answered: ...}}`, with optional `$and`/`$or` groups
+ * like `{qId: {equals|in|answered:...}}`, with optional `$and`/`$or` groups
  * and an implicit-AND shorthand when a node is a flat object. This module
  * lifts that into a uniform `{type: 'group'|'leaf'}` tree that the editor UI
  * can mutate directly, then serialises back to the canonical JSON shape.

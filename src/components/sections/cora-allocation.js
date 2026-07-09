@@ -25,8 +25,8 @@ export function Allocation({ isEmpty, onRequestNextCase }) {
 
 /**
  * @param {{
- *   client: SharePointClient | null,
- *   eligibleCaseTypes: string[]
+ * client: SharePointClient | null,
+ * eligibleCaseTypes: string[]
  * }} props
  * @returns {Promise<CaseRow[]>}
  */

@@ -36,9 +36,9 @@ export function Summary(props) {
     h('cora-outcome')
   );
 
-  // The Outcome snapshot is stamped at the reportable milestone (ADR-0023), so
+  // The Outcome snapshot is stamped at the reportable milestone, so
   // read the frozen value from reportable on — not only once Completed. Once
-  // reportable, the block shows the **Current Outcome** (ADR-0026): the case-level
+  // reportable, the block shows the **Current Outcome**: the case-level
   // Amended Outcome when Controls has amended it, otherwise the frozen snapshot.
   const reportable = isReportable(props.caseRow?.status ?? '');
   const current =
@@ -117,7 +117,7 @@ function renderSectionBlock(props, section, caseRow) {
 }
 
 /**
- * The **Issues** Summary block (ADR-0024, formerly `remediation`): failed Answers
+ * The **Issues** Summary block: failed Answers
  * with their configured Remediation Actions and captured Issue detail.
  * @param {SummaryProps} props
  * @returns {HTMLElement}
@@ -141,7 +141,7 @@ function renderIssues(props) {
 }
 
 /**
- * The **Remediation** tracking Summary block (ADR-0024): the case-level
+ * The **Remediation** tracking Summary block: the case-level
  * `remediationDueDate` plus, per failed Answer, each *sent* Remediation Action's
  * `status` (and `cancelReason` when cancelled).
  * @param {SummaryProps} props
@@ -304,12 +304,12 @@ function renderFieldBlock(className, title, rows) {
 }
 
 /**
- * The read-only Summary Section (ADR-0016). It rolls the whole Case up onto one
+ * The read-only Summary Section. It rolls the whole Case up onto one
  * page; this tracer-bullet shell renders only the Outcome block. Outcome
  * derivation is hybrid: while the Case is In-progress the outcome is computed
  * live from the current Answers, but once the Case is reportable (Actions In
  * Progress or Completed) it reads the frozen `outcomeAtCompletion` snapshot
- * (ADR-0012/ADR-0023) rather than recomputing.
+ * rather than recomputing.
  *
  * Summary is never editable — only `read-only` or `hidden` (see section-access).
  */
@@ -332,26 +332,26 @@ export class CORASummary extends HTMLElement {
     this.catalogue = [];
     /**
      * The Sections to render as Summary blocks, already filtered by membership,
-     * `showInSummary`, and the viewer's access (ADR-0016). Rendered in the given
+     * `showInSummary`, and the viewer's access. Rendered in the given
      * order. The page resolves this; the component just renders it.
      * @type {Section[]}
      */
     this.summarySections = [];
     /**
-     * The Case Type's unified **Issue Capture Group**s (ADR-0020), rendered
+     * The Case Type's unified **Issue Capture Group**s, rendered
      * read-only (expanded, populated-only) under each failed Answer. Empty when
      * the Case Type declares none.
      * @type {import('../../sharepoint-client.js').CaptureGroup[]}
      */
     this.captureGroups = [];
     /**
-     * The Case Type's declared Case Details fields (issue #213), appended to the
+     * The Case Type's declared Case Details fields, appended to the
      * Summary's Case Details block. Empty when the Case Type declares none.
      * @type {import('../../sharepoint-client.js').CaseDetailField[]}
      */
     this.detailFields = [];
     /**
-     * The Case Type's configured Outcome vocabulary (ADR-0004), used to resolve
+     * The Case Type's configured Outcome vocabulary, used to resolve
      * the Outcome block's wording. Empty when the Case Type declares none, in
      * which case the Outcome block shows a "not configured" state.
      * @type {import('../../sharepoint-client.js').OutcomeOption[]}

@@ -15,7 +15,7 @@ import { h } from '../../lib/html.js';
 
 /**
  * Renders the Outcome verdict. Wording is always resolved from the Case Type's
- * configured `outcomeOptions` (ADR-0004) — there is no built-in Pass/Refer/Fail
+ * configured `outcomeOptions` — there is no built-in Pass/Refer/Fail
  * fallback. A computed outcome with no matching option is surfaced as a
  * "not configured" state so the misconfiguration is visible rather than silently
  * papered over.

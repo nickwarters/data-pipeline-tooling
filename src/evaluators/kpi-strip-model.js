@@ -18,22 +18,22 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * @typedef {{ axis: 'caseType' | 'reason', rows: BreakdownRow[] }} Breakdown
  *
  * @typedef {{
- *   key: string,
- *   label: string,
- *   tone: string,
- *   count: number,
- *   defaultExpanded: boolean,
- *   breakdown: Breakdown | null
+ * key: string,
+ * label: string,
+ * tone: string,
+ * count: number,
+ * defaultExpanded: boolean,
+ * breakdown: Breakdown | null
  * }} KpiTile
  *
  * @typedef {{
- *   role: 'reviewer' | 'controls' | 'owner',
- *   label: string,
- *   scopeLabel: string,
- *   isPrimary: boolean,
- *   defaultOpen: boolean,
- *   totalItems: number,
- *   tiles: KpiTile[]
+ * role: 'reviewer' | 'controls' | 'owner',
+ * label: string,
+ * scopeLabel: string,
+ * isPrimary: boolean,
+ * defaultOpen: boolean,
+ * totalItems: number,
+ * tiles: KpiTile[]
  * }} KpiLane
  *
  * @typedef {{ label: string, matches: (caseRow: CaseRow) => boolean }} SubReason
@@ -42,7 +42,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  */
 
 /**
- * Resolve a Case Type slug to its human display name (ADR-0022 naming). Falls
+ * Resolve a Case Type slug to its human display name. Falls
  * back to a title-cased slug for Case Types not present in the permissions
  * config, so the strip degrades gracefully rather than showing a raw slug.
  *
@@ -103,7 +103,7 @@ function scopeLabelOf(slugs) {
 
 /**
  * Build a single tile from its matched Cases. The headline `count` is deduped by
- * Case. The breakdown axis is decided by data (ADR-0006 spirit — applicability
+ * Case. The breakdown axis is decided by data (the architecture decision spirit — applicability
  * is data): split by Case Type when the matched Cases span more than one,
  * otherwise fall back to the tile's sub-reasons. Zero rows are suppressed.
  *
@@ -150,11 +150,11 @@ function buildTile({ key, label, tone, matched, subReasons, expandByDefault }) {
  * the union of every tile's matched Cases, deduped by Case.
  *
  * @param {{
- *   role: 'reviewer' | 'controls' | 'owner',
- *   label: string,
- *   scopeLabel: string,
- *   specs: TileSpec[],
- *   expandTiles: boolean
+ * role: 'reviewer' | 'controls' | 'owner',
+ * label: string,
+ * scopeLabel: string,
+ * specs: TileSpec[],
+ * expandTiles: boolean
  * }} args
  * @returns {KpiLane}
  */
@@ -232,7 +232,7 @@ async function buildReviewerLane({
 /**
  * The Controls lane is a single actionable count — open Appeals still to work —
  * so it reads a `$count` bounded by the indexed `HasOpenAppeal` column rather
- * than fetching the whole Completed set to filter in JS (ADR-0031 §2: open work
+ * than fetching the whole Completed set to filter in JS (the architecture decision §2: open work
  * never grows with cumulative volume, so this stays under the List View
  * Threshold for the life of the list). Built directly (not via `assembleLane`,
  * which folds a matched-Case array): with only a count there are no rows to
@@ -272,7 +272,7 @@ async function buildOwnerLane({ client, capabilities, now }) {
   const owned = capabilities.ownedCaseTypes;
   // Lead each read with the indexed Case Type + Status columns so the working
   // set is bounded by In-progress work, never the whole (unbounded) Case Type
-  // history (ADR-0031 §2). The In-progress pool is what the tiles derive from.
+  // history. The In-progress pool is what the tiles derive from.
   const fetched = await Promise.all(
     owned.map((ct) => client.listCases({ caseType: ct, status: 'In-progress' }))
   );
@@ -316,20 +316,20 @@ async function buildOwnerLane({ client, capabilities, now }) {
 }
 
 /**
- * Build the role-scoped KPI strip model for the current user (issue #286). One
+ * Build the role-scoped KPI strip model for the current user. One
  * lane per role the user holds — Reviewer, Controls, Owner — each with
  * role-scoped tiles whose numbers are actionable counts (accountability), not
- * everything visible (access, ADR-0010). The first lane the user holds is the
+ * everything visible (access, the architecture decision). The first lane the user holds is the
  * primary and opens by default; other lanes open too, except a secondary Owner
  * lane which folds to a headline (owners think per Case Type, so their split is
- * tall). All data flows through the `SharePointClient` (ADR-0009).
+ * tall). All data flows through the `SharePointClient`.
  *
  * @param {{
- *   client: SharePointClient | null,
- *   currentUserId: string,
- *   capabilities: Capabilities,
- *   eligibleCaseTypes?: string[],
- *   now?: Date
+ * client: SharePointClient | null,
+ * currentUserId: string,
+ * capabilities: Capabilities,
+ * eligibleCaseTypes?: string[],
+ * now?: Date
  * }} args
  * @returns {Promise<KpiLane[]>}
  */

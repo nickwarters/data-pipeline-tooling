@@ -1,4 +1,4 @@
-# ADR-0029: CORA branding and the `cr-` → `cora-` prefix rename
+# the architecture decision: CORA branding and the `cr-` → `cora-` prefix rename
 
 ## Status
 
@@ -6,10 +6,10 @@ Accepted
 
 ## Context
 
-The platform is now named **CORA**. Since ADR-0003, every custom element tag,
+The platform is now named **CORA**. Since the architecture decision, every custom element tag,
 CSS class, CSS custom property, `data-*` scoping attribute, internal custom
 event, and the backing JS class names carried a `cr-` (or `CR`) prefix. That
-prefix existed for one reason: CSS isolation from SharePoint chrome (ADR-0003)
+prefix existed for one reason: CSS isolation from SharePoint chrome
 needs a single unique namespace so the framework's styles cannot leak into — or
 be clobbered by — the surrounding SharePoint page. Nothing about the isolation
 mechanism depends on the specific letters `cr`; any consistent, unique prefix
@@ -41,17 +41,17 @@ Rename the prefix everywhere it appears in the codebase, `cr-` → `cora-` and
 - **Docs / prose / UI copy** — README, CONTEXT, ADRs, and the nav brand.
 
 This is a pure branding substitution with no behavioural change. It is landed as
-its own PR, separate from the component directory-layering work (issue #276), so
+its own PR, separate from the component directory-layering work, so
 neither diff simultaneously renames and moves 100+ files.
 
 ### Explicitly not renamed
 
 - **`CR-Maintainers`** (`src/services/permissions.js`) is a **SharePoint
-  security group name**, not a framework token. Per ADR-0010 the real
+  security group name**, not a framework token. Per the architecture decision the real
   authorization boundary is SharePoint's group/ACL configuration; renaming this
   string would rebind the app to a differently-named group that does not exist
   in the SharePoint environment. Changing it is an operations decision (rename
-  the SharePoint group *and* the code together), out of scope for a branding
+  the SharePoint group _and_ the code together), out of scope for a branding
   sweep.
 - The GitHub repository name `case-review-frontend-framework` and any external
   URLs/identifiers outside this codebase.
@@ -59,7 +59,7 @@ neither diff simultaneously renames and moves 100+ files.
 
 ## Consequences
 
-- ADR-0003 is amended to describe the prefix as `cora-`, with a pointer here for
+- the architecture decision is amended to describe the prefix as `cora-`, with a pointer here for
   the history.
 - The CLAUDE.md hard rule ("Custom elements use the `cora-` prefix") and the
   documented directory tree use `cora-*`.

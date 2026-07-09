@@ -16,68 +16,68 @@ import {
 
 /**
  * @typedef {{
- *   cases?: CaseRow[],
- *   lists?: Record<string, CaseRow[]>,
- *   questionDefinitions?: QuestionDefinition[],
- *   personas?: Record<string, { groups: string[], userId?: string, displayName?: string }>,
- *   people?: PersonResult[],
- *   exportHashes?: Record<string, string>,
- *   versionedExports?: Record<string, VersionedExport>
+ * cases?: CaseRow[],
+ * lists?: Record<string, CaseRow[]>,
+ * questionDefinitions?: QuestionDefinition[],
+ * personas?: Record<string, { groups: string[], userId?: string, displayName?: string }>,
+ * people?: PersonResult[],
+ * exportHashes?: Record<string, string>,
+ * versionedExports?: Record<string, VersionedExport>
  * }} InMemoryListState
  *
  * @typedef {{
- *   type: 'loadCasePage',
- *   caseId: string,
- *   caseType?: string,
- *   currentUserId?: string,
- *   capabilities?: Capabilities | null
+ * type: 'loadCasePage',
+ * caseId: string,
+ * caseType?: string,
+ * currentUserId?: string,
+ * capabilities?: Capabilities | null
  * } | {
- *   type: 'answer',
- *   questionId: string,
- *   value: string | string[]
+ * type: 'answer',
+ * questionId: string,
+ * value: string | string[]
  * } | {
- *   type: 'captureIssue',
- *   questionId: string,
- *   fieldKey: string,
- *   value: string
+ * type: 'captureIssue',
+ * questionId: string,
+ * fieldKey: string,
+ * value: string
  * } | {
- *   type: 'selectRemediationAction',
- *   questionId: string,
- *   action: { id: string, text: string },
- *   selected?: boolean
+ * type: 'selectRemediationAction',
+ * questionId: string,
+ * action: { id: string, text: string },
+ * selected?: boolean
  * } | {
- *   type: 'freeFormRemediation',
- *   questionId: string,
- *   value: string
+ * type: 'freeFormRemediation',
+ * questionId: string,
+ * value: string
  * } | {
- *   type: 'setActionStatus',
- *   questionId: string,
- *   fieldKey: string,
- *   actionId: string,
- *   status: 'pending' | 'complete' | 'cancelled',
- *   cancelReason?: string
+ * type: 'setActionStatus',
+ * questionId: string,
+ * fieldKey: string,
+ * actionId: string,
+ * status: 'pending' | 'complete' | 'cancelled',
+ * cancelReason?: string
  * } | {
- *   type: 'clickCompleteCase'
+ * type: 'clickCompleteCase'
  * } | {
- *   type: 'flush'
+ * type: 'flush'
  * }} FlowAction
  *
  * @typedef {{
- *   persona?: string,
- *   actions: FlowAction[]
+ * persona?: string,
+ * actions: FlowAction[]
  * }} FlowScenario
  *
  * @typedef {{
- *   state: InMemoryListState,
- *   scenario: FlowScenario
+ * state: InMemoryListState,
+ * scenario: FlowScenario
  * }} FlowFixture
  *
  * @typedef {{
- *   client: MockSharePointClient,
- *   saveQueue: SaveQueue,
- *   viewModel: CaseReviewViewModel | null,
- *   snapshot: () => { cases: CaseRow[], lists: Record<string, CaseRow[]> },
- *   run: (actions: FlowAction[]) => Promise<{ cases: CaseRow[], lists: Record<string, CaseRow[]> }>
+ * client: MockSharePointClient,
+ * saveQueue: SaveQueue,
+ * viewModel: CaseReviewViewModel | null,
+ * snapshot: () => { cases: CaseRow[], lists: Record<string, CaseRow[]> },
+ * run: (actions: FlowAction[]) => Promise<{ cases: CaseRow[], lists: Record<string, CaseRow[]> }>
  * }} InMemoryFlowRunner
  */
 

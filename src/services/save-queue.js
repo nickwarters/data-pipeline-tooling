@@ -11,11 +11,11 @@ import { signal } from '../lib/signal.js';
 
 /**
  * @typedef {{
- *   etag: string,
- *   opts: CaseListOptions,
- *   baselineAnswers: Record<string, Answer> | null,
- *   pending: Record<string, { value: Partial<CaseRow>, timerId: ReturnType<typeof setTimeout> }>,
- *   inFlight: Set<Promise<boolean>>
+ * etag: string,
+ * opts: CaseListOptions,
+ * baselineAnswers: Record<string, Answer> | null,
+ * pending: Record<string, { value: Partial<CaseRow>, timerId: ReturnType<typeof setTimeout> }>,
+ * inFlight: Set<Promise<boolean>>
  * }} CaseState
  */
 
@@ -125,10 +125,10 @@ export class SaveQueue {
 
   /**
    * Enqueue several field mutations as a single atomic write: one debounce, one
-   * ETag-guarded PATCH carrying every field (ADR-0008). Use this when the fields
+   * ETag-guarded PATCH carrying every field. Use this when the fields
    * must stay consistent with each other — e.g. a case-level Amended Outcome
-   * (ADR-0026) re-stamping `effectiveOutcome` / `effectiveHadRemediation` /
-   * `outcomeOverridden` (ADR-0019) together; a per-field PATCH each could desync
+   * re-stamping `effectiveOutcome` / `effectiveHadRemediation` /
+   * `outcomeOverridden` together; a per-field PATCH each could desync
    * on a partial write.
    *
    * @param {string} caseId

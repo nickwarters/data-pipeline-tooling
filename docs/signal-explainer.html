@@ -247,13 +247,13 @@
         margin-bottom: 4px;
       }
 
-      .signal-node .node-type {
+      .signal-node.node-type {
         color: var(--signal);
       }
-      .computed-node .node-type {
+      .computed-node.node-type {
         color: var(--computed);
       }
-      .effect-node .node-type {
+      .effect-node.node-type {
         color: var(--effect);
       }
 
@@ -271,13 +271,13 @@
         transition: color 0.2s;
       }
 
-      .signal-node .node-value {
+      .signal-node.node-value {
         color: var(--signal);
       }
-      .computed-node .node-value {
+      .computed-node.node-value {
         color: var(--computed);
       }
-      .effect-node .node-value {
+      .effect-node.node-value {
         color: var(--effect);
       }
 
@@ -584,13 +584,13 @@
         margin-bottom: 8px;
       }
 
-      .signal-card .concept-name {
+      .signal-card.concept-name {
         color: var(--signal);
       }
-      .computed-card .concept-name {
+      .computed-card.concept-name {
         color: var(--computed);
       }
-      .effect-card .concept-name {
+      .effect-card.concept-name {
         color: var(--effect);
       }
 
@@ -876,13 +876,13 @@
         text-transform: uppercase;
         margin-bottom: 4px;
       }
-      .signal-node .wt-node-type {
+      .signal-node.wt-node-type {
         color: var(--signal);
       }
-      .computed-node .wt-node-type {
+      .computed-node.wt-node-type {
         color: var(--computed);
       }
-      .effect-node .wt-node-type {
+      .effect-node.wt-node-type {
         color: var(--effect);
       }
 
@@ -973,16 +973,16 @@
         transition: border-left-color 0.3s;
       }
 
-      .wt-arrow-col.wired-sig .wt-arrow-track {
+      .wt-arrow-col.wired-sig.wt-arrow-track {
         background: var(--signal);
       }
-      .wt-arrow-col.wired-sig .wt-arrow-track::after {
+      .wt-arrow-col.wired-sig.wt-arrow-track::after {
         border-left-color: var(--signal);
       }
-      .wt-arrow-col.wired-cmp .wt-arrow-track {
+      .wt-arrow-col.wired-cmp.wt-arrow-track {
         background: var(--computed);
       }
-      .wt-arrow-col.wired-cmp .wt-arrow-track::after {
+      .wt-arrow-col.wired-cmp.wt-arrow-track::after {
         border-left-color: var(--computed);
       }
 
@@ -996,10 +996,10 @@
         pointer-events: none;
       }
 
-      .wt-arrow-col.wired-sig .wt-pulse-dot {
+      .wt-arrow-col.wired-sig.wt-pulse-dot {
         background: var(--signal);
       }
-      .wt-arrow-col.wired-cmp .wt-pulse-dot {
+      .wt-arrow-col.wired-cmp.wt-pulse-dot {
         background: var(--computed);
       }
 
@@ -1259,10 +1259,10 @@
           <pre><span class="cmt">// 1. Create a signal</span>
 <span class="kw">const</span> count = <span class="fn">signal</span>(<span class="num">0</span>);
 
-<span class="cmt">// 2. An effect subscribes automatically when it calls .get()</span>
+<span class="cmt">// 2. An effect subscribes automatically when it calls.get()</span>
 <span class="ef">effect</span>(() => {
-  <span class="kw">const</span> val = count.<span class="fn">get</span>(); <span class="cmt">// ← tracked</span>
-  document.querySelector(<span class="str">'#display'</span>).textContent = val;
+ <span class="kw">const</span> val = count.<span class="fn">get</span>(); <span class="cmt">// ← tracked</span>
+ document.querySelector(<span class="str">'#display'</span>).textContent = val;
 });
 
 <span class="cmt">// 3. Setting triggers the effect</span>
@@ -1349,13 +1349,13 @@ count.<span class="fn">set</span>(count.<span class="fn">get</span>() + <span cl
 
 <span class="cmt">// computed: lazy, cached, auto-tracks celsius</span>
 <span class="kw">const</span> fahrenheit = <span class="fn">computed</span>(() =>
-  celsius.<span class="fn">get</span>() * <span class="num">9</span> / <span class="num">5</span> + <span class="num">32</span>
+ celsius.<span class="fn">get</span>() * <span class="num">9</span> / <span class="num">5</span> + <span class="num">32</span>
 );
 
 <span class="cmt">// effect reads computed (not signal directly)</span>
 <span class="ef">effect</span>(() => {
-  <span class="kw">const</span> f = fahrenheit.<span class="fn">get</span>(); <span class="cmt">// triggers lazy eval</span>
-  updateIndicator(f);
+ <span class="kw">const</span> f = fahrenheit.<span class="fn">get</span>(); <span class="cmt">// triggers lazy eval</span>
+ updateIndicator(f);
 });
 
 <span class="cmt">// Chain: celsius.set → computed.invalidate → effect.run</span>
@@ -1475,20 +1475,20 @@ celsius.<span class="fn">set</span>(<span class="num">37</span>); <span class="c
 
         <div class="code-panel">
           <div class="code-panel-title">Equivalent code</div>
-          <pre><span class="kw">const</span> price    = <span class="fn">signal</span>(<span class="num">10</span>);
+          <pre><span class="kw">const</span> price = <span class="fn">signal</span>(<span class="num">10</span>);
 <span class="kw">const</span> quantity = <span class="fn">signal</span>(<span class="num">1</span>);
 
 <span class="cmt">// computed reads BOTH signals — tracks both automatically</span>
 <span class="kw">const</span> total = <span class="fn">computed</span>(() =>
-  price.<span class="fn">get</span>() * quantity.<span class="fn">get</span>()
+ price.<span class="fn">get</span>() * quantity.<span class="fn">get</span>()
 );
 
 <span class="ef">effect</span>(() => {
-  renderReceipt(price.<span class="fn">get</span>(), quantity.<span class="fn">get</span>(), total.<span class="fn">get</span>());
+ renderReceipt(price.<span class="fn">get</span>(), quantity.<span class="fn">get</span>(), total.<span class="fn">get</span>());
 });
 
 <span class="cmt">// Either signal triggers the chain</span>
-price.<span class="fn">set</span>(<span class="num">25</span>);    <span class="cmt">// → total recomputes → effect re-runs</span>
+price.<span class="fn">set</span>(<span class="num">25</span>); <span class="cmt">// → total recomputes → effect re-runs</span>
 quantity.<span class="fn">set</span>(<span class="num">3</span>); <span class="cmt">// → same chain</span></pre>
         </div>
       </section>
@@ -1674,7 +1674,7 @@ quantity.<span class="fn">set</span>(<span class="num">3</span>); <span class="c
       }
 
       /* ─────────────────────────────────────────────────────────── */
-      /* SCENE 1: signal → effect                                    */
+      /* SCENE 1: signal → effect */
       /* ─────────────────────────────────────────────────────────── */
 
       const count1 = signal(0);
@@ -1731,7 +1731,7 @@ quantity.<span class="fn">set</span>(<span class="num">3</span>); <span class="c
       $('s1-reset').addEventListener('click', () => count1.set(0));
 
       /* ─────────────────────────────────────────────────────────── */
-      /* SCENE 2: signal → computed → effect (temperature)           */
+      /* SCENE 2: signal → computed → effect (temperature) */
       /* ─────────────────────────────────────────────────────────── */
 
       const celsius2 = signal(20);
@@ -1803,7 +1803,7 @@ quantity.<span class="fn">set</span>(<span class="num">3</span>); <span class="c
       );
 
       /* ─────────────────────────────────────────────────────────── */
-      /* SCENE 3: multi-signal → computed → effect                   */
+      /* SCENE 3: multi-signal → computed → effect */
       /* ─────────────────────────────────────────────────────────── */
 
       const price3 = signal(10);
@@ -1903,8 +1903,8 @@ quantity.<span class="fn">set</span>(<span class="num">3</span>); <span class="c
           'const count = signal(0);',
           '',
           'effect(() => {',
-          '  const v = count.get();',
-          '  el.textContent = v;',
+          ' const v = count.get();',
+          ' el.textContent = v;',
           '});',
           '',
           'count.set(1);',
@@ -1913,7 +1913,7 @@ quantity.<span class="fn">set</span>(<span class="num">3</span>); <span class="c
         var WT1 = [
           {
             title: '① signal(0) — reactive state created',
-            desc: 'signal() creates an object with .get() and .set(). Internally: value = 0 and subscribers = new Set(). The Set is empty — nothing is watching yet.',
+            desc: 'signal() creates an object with.get() and.set(). Internally: value = 0 and subscribers = new Set(). The Set is empty — nothing is watching yet.',
             hl: [0],
             ce: 'null',
             subs: [],
@@ -2034,13 +2034,13 @@ quantity.<span class="fn">set</span>(<span class="num">3</span>); <span class="c
 
         /* ── Walkthrough 2: signal → computed → effect ───────────────── */
         var WT2_CODE = [
-          'const count   = signal(0);',
+          'const count = signal(0);',
           'const doubled = computed(',
-          '  () => count.get() * 2',
+          ' () => count.get() * 2',
           ');',
           '',
           'effect(() => {',
-          '  el.textContent = doubled.get();',
+          ' el.textContent = doubled.get();',
           '});',
           '',
           'count.set(5);',
@@ -2049,7 +2049,7 @@ quantity.<span class="fn">set</span>(<span class="num">3</span>); <span class="c
         var WT2 = [
           {
             title: '① signal + computed created — computed is lazy',
-            desc: 'signal(0) created as before. computed() creates an invalidate closure and sets dirty = true, but does NOT evaluate its fn() yet. Lazy: it waits until .get() is called by someone.',
+            desc: 'signal(0) created as before. computed() creates an invalidate closure and sets dirty = true, but does NOT evaluate its fn() yet. Lazy: it waits until.get() is called by someone.',
             hl: [0, 1, 2, 3],
             ce: 'null',
             subs: [],
@@ -2061,7 +2061,7 @@ quantity.<span class="fn">set</span>(<span class="num">3</span>); <span class="c
           },
           {
             title: '② effect(fn) called — currentEffect = run',
-            desc: 'effect() is invoked. Before calling fn(), currentEffect = run. The tracking window is open. Any .get() call within fn() will register against this context.',
+            desc: 'effect() is invoked. Before calling fn(), currentEffect = run. The tracking window is open. Any.get() call within fn() will register against this context.',
             hl: [5],
             ce: 'run',
             ceActive: true,

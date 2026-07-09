@@ -11,7 +11,7 @@ import { loadKpiModel } from '../../evaluators/kpi-strip-model.js';
 
 /**
  * Render the mini list/bars revealed when a tile is drilled into. Case Type
- * rows carry a CSS-drawn bar (no charting lib, ADR-0001); reason rows are a
+ * rows carry a CSS-drawn bar (no charting lib, the architecture decision); reason rows are a
  * plain label/count pair. Everything is phrasing-level `span`s so it can live
  * inside the tile's `<button>`.
  *
@@ -150,11 +150,11 @@ function renderLane(lane, open, expandedTiles, onToggleTile, onToggleLane) {
  * from the element so it can be tested without a fetch.
  *
  * @param {{
- *   lanes: KpiLane[],
- *   openLanes: Set<string>,
- *   expandedTiles: Set<string>,
- *   onToggleLane: (role: string) => void,
- *   onToggleTile: (role: string, key: string) => void
+ * lanes: KpiLane[],
+ * openLanes: Set<string>,
+ * expandedTiles: Set<string>,
+ * onToggleLane: (role: string) => void,
+ * onToggleTile: (role: string, key: string) => void
  * }} state
  * @returns {HTMLElement}
  */
@@ -181,7 +181,7 @@ export function renderKpiStrip({
 }
 
 /**
- * `<cora-kpi-strip>` — the role-scoped KPI strip (issue #286). Self-fetches its
+ * `<cora-kpi-strip>` — the role-scoped KPI strip. Self-fetches its
  * model through the `SharePointClient` and renders collapsible role lanes with
  * per-Case-Type / sub-reason drilldown. Lane and tile open state is local UI
  * state, seeded from the model's data-driven defaults.

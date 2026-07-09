@@ -1,7 +1,7 @@
 // @ts-check
 
 /**
- * Owns Remediation *tracking* tab (ADR-0024) event forwarding: a reviewer
+ * Owns Remediation *tracking* tab event forwarding: a reviewer
  * resolving an action bubbles a `cora-action-status` that the view-model persists.
  * @param {import('./types.js').CaseReviewShellContext} context
  */

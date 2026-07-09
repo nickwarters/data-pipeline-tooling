@@ -2,9 +2,9 @@
 
 /**
  * @typedef {{
- *   bind: (context: import('./types.js').CaseReviewShellContext) => void,
- *   handleKeydown: (event: KeyboardEvent) => void,
- *   update: (context: import('./types.js').CaseReviewShellContext) => void,
+ * bind: (context: import('./types.js').CaseReviewShellContext) => void,
+ * handleKeydown: (event: KeyboardEvent) => void,
+ * update: (context: import('./types.js').CaseReviewShellContext) => void,
  * }} ConversationPanelBinding
  */
 

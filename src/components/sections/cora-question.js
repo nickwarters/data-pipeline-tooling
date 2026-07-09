@@ -106,7 +106,7 @@ function renderMultiChoice({ question, currentValue, access, onAnswer }) {
 
 /**
  * Read-only display of the Remediation Actions the Reviewer has *selected* for a
- * failed Answer (issue #250). This mirrors — read-only — what the Issues tab lets
+ * failed Answer. This mirrors — read-only — what the Issues tab lets
  * the Reviewer tick, so the Review tab shows only what persists (the selected
  * subset + any free-form entry), never the full configured catalogue. Populates
  * the supplied container in place so it can be refreshed without rebuilding the
@@ -151,7 +151,7 @@ export class CORAQuestion extends HTMLElement {
     /** @type {'edit'|'read-only'|'hidden'} */
     this.access = 'edit';
     /**
-     * Text of the Remediation Actions selected on this Answer (issue #250),
+     * Text of the Remediation Actions selected on this Answer,
      * shown read-only beneath the question. Set by the owning cora-question-list.
      * @type {string[]}
      */
@@ -202,7 +202,7 @@ export class CORAQuestion extends HTMLElement {
   }
 
   /**
-   * Refresh only the read-only selected-remediation display (issue #250) without
+   * Refresh only the read-only selected-remediation display without
    * re-rendering the question's inputs — so a selection made on the Issues tab is
    * reflected here on the Review tab without disturbing radio focus/state.
    *

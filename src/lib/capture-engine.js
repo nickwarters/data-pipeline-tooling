@@ -15,9 +15,9 @@ import { h } from './html.js';
  * @param {(value: string) => void} onChange
  * @param {string} [className]
  * @param {string} [namePrefix] Prefix for the radio-group `name`. Callers that
- *   render the same field for several rows (e.g. one per failed Answer) must pass
- *   a per-row prefix, otherwise every row's radios share a `name` and collapse
- *   into a single native radio group — selecting one clears the others.
+ * render the same field for several rows (e.g. one per failed Answer) must pass
+ * a per-row prefix, otherwise every row's radios share a `name` and collapse
+ * into a single native radio group — selecting one clears the others.
  * @returns {HTMLElement}
  */
 export function buildCaptureControl(

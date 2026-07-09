@@ -1,9 +1,9 @@
 # Case Type onboarding checklist
 
 Maintainer-facing runbook for provisioning a new Case Type end to end. It
-extends the scaffolding contract ([ADR-0028](./adr/0028-case-type-scaffolding.md))
+extends the scaffolding contract ()
 with the SharePoint list-provisioning steps and the **index-at-creation**
-requirement from [ADR-0031](./adr/0031-scaling-against-the-list-view-threshold.md).
+requirement from.
 
 The point of this doc is that provisioning a list is a **doc-driven task, not a
 code-reading exercise**: the required columns and which of them are indexed live
@@ -15,11 +15,11 @@ here, not reverse-engineered from the `CaseRow` typedef in
 **A SharePoint column index cannot be added once a list has grown past the List
 View Threshold (LVT, default 5,000 rows).** Every `Cases-{slug}` list must
 therefore be provisioned with its indexed columns created **while the list is
-still empty**, before any Cases are ingested (ADR-0031 §1).
+still empty**, before any Cases are ingested.
 
 Miss this on a high-volume Case Type — the upcoming ~900-Cases/day type crosses
 5,000 rows in ~17 days — and the list becomes unqueryable with **no fix short of
-rebuilding the list**. There is no automation tier to re-provision it (ADR-0030),
+rebuilding the list**. There is no automation tier to re-provision it,
 so getting it right up front is the whole game.
 
 - **Index these columns on the empty list, up front.** See
@@ -38,7 +38,7 @@ python3 scripts/scaffold_case_type.py --slug widget-review --display "Widget Rev
 ```
 
 This creates the Case Type module, manifest entry, permissions entry, mock
-personas, mock Cases, and a test file (ADR-0028). Work through the generated
+personas, mock Cases, and a test file. Work through the generated
 `TODO(case-type)` markers (Question Bank, Outcome vocabulary, appeal raiser, Case
 Details fields, SLA hours), then `npm run check && node --test`.
 
@@ -54,13 +54,13 @@ Details fields, SLA hours), then `npm run check && node --test`.
 - [ ] Confirm the index count is ≤ 20.
 - [ ] Set the Case Type module's `listName` to the new list once list-backed
       reads are wired in (until then the scaffold runs mock-only via `?mock=1`,
-      ADR-0028).
+      the architecture decision).
 
 ### 3. Provision groups and permissions
 
 - [ ] Create the per-Case-Type SharePoint groups derived from the permissions
       entry (`Reviewers - {display}`, `CaseTypeOwner - {display}`,
-      `JourneyOwner - {display}`, ADR-0022) and set the list ACLs (ADR-0010 —
+      `JourneyOwner - {display}`, the architecture decision) and set the list ACLs (the architecture decision —
       list permissions are the real security boundary).
 
 ## `Cases-{slug}` column schema
@@ -71,60 +71,60 @@ names** (what OData `$filter`/`$select` use); People columns expose an
 `…Id` field, which is the name to index and filter on.
 
 **Provenance** notes which columns the **app writes** as part of a lifecycle
-transition — in particular the ADR-0030 flag/clock pairs, hoisted onto queryable
+transition — in particular the the architecture decision flag/clock pairs, hoisted onto queryable
 columns rather than mined from the JSON blobs so live reads can lead with an
-indexed predicate (ADR-0031 §2).
+indexed predicate.
 
 ### Shared columns
 
-| Column (internal name) | Type | Indexed | Provenance / notes |
-| --- | --- | :---: | --- |
-| `Id` | Counter | (PK) | SharePoint built-in item id. |
-| `Title` | Single line of text | | Case title. |
-| `CaseType` | Single line of text | | Slug; constant per list, so not worth indexing. |
-| `Status` | Choice (`In-progress` / `Actions In Progress` / `Completed`) | **✓** | Lifecycle state (ADR-0023); leading predicate for most live reads. |
-| `AssignedReviewer` (`AssignedReviewerId`) | Person | **✓** | The Reviewer the Case is assigned to. |
-| `ResponsibleParty` (`ResponsiblePartyId`) | Person | **✓** | The Responsible Party. |
-| `AssignedReviewerManager` | Person | **✓** | Reviewer's manager; Reviewer-Manager team reads lead with it. |
-| `ResponsiblePartyManager` | Person | **✓** | Responsible Party's manager. |
-| `DueDate` | Date and Time | **✓** | Working-day SLA due date (ADR-0025); app-written on creation. |
-| `CompletedAt` | Date and Time | **✓** | Stamped at the final `Completed` transition (ADR-0023); app-written. |
-| `ReportableAt` | Date and Time | | Stamped at the reportable milestone (ADR-0023); app-written. |
-| `RemediationDueDate` | Date and Time | | Remediation SLA (ADR-0024/0025); app-written. |
-| `RelatedDate` | Date and Time | | Case Type–specific reference date. |
-| `Created` | Date and Time | | SharePoint built-in. |
-| `HasOpenAppeal` | Yes/No | **✓** | Action Centre reason flag (ADR-0030); app-written on appeal raise/resolve. |
-| `AppealRaisedAt` | Date and Time | | Clock paired with `HasOpenAppeal` (ADR-0030); app-written. |
-| `AwaitingResponsibleParty` | Yes/No | **✓** | Action Centre reason flag (ADR-0030); app-written. |
-| `AwaitingSince` | Date and Time | | Clock paired with `AwaitingResponsibleParty` (ADR-0030); app-written. |
-| `Reopened` | Yes/No | **✓** | Action Centre reason flag (ADR-0030); app-written. |
-| `ReopenedAt` | Date and Time | | Clock paired with `Reopened` (ADR-0030); app-written. |
-| `ReviewRequired` | Yes/No | **✓** | Action Centre reason flag (ADR-0030); app-written. |
-| `Outcome` | Single line of text | | Live working Outcome. |
-| `OutcomeAtCompletion` | Single line of text | | Frozen Outcome snapshot taken at reportable (ADR-0012); app-written. |
-| `HadRemediation` | Yes/No | | Frozen at reportable (ADR-0012); app-written. |
-| `EffectiveOutcome` | Single line of text | | Corrected Outcome for RP-team reporting (ADR-0019); app-written. |
-| `EffectiveHadRemediation` | Yes/No | | Corrected remediation flag (ADR-0019); app-written. |
-| `OutcomeOverridden` | Yes/No | | Set when an Amended Outcome diverges from the snapshot (ADR-0019). |
-| `QuestionBankVersion` | Single line of text | | Question-bank snapshot version for the Case (ADR-0021); app-written. |
-| `CaseJustification` | Multiple lines of text | | Case-level justification. |
-| `Notes` | Multiple lines of text (plain) | | Free-text notes (ADR-0007); never `innerHTML`. |
-| `Answers` | Multiple lines of text (JSON blob) | | All Answers (ADR-0007); field-level PATCH only. |
-| `Conversation` | Multiple lines of text (JSON blob) | | Conversation messages (ADR-0007). |
-| `Appeals` | Multiple lines of text (JSON blob) | | Appeal records (ADR-0027/0007); additive, never mutates the frozen Case. |
-| `AmendedOutcome` | Multiple lines of text (JSON blob) | | Case-level Amended Outcome record (ADR-0026). |
-| `Details` | Multiple lines of text (JSON blob) | | Case Details values keyed by the Case Type's `detailFields[].key` (ADR-0014); read-only. |
+| Column (internal name)                    | Type                                                         | Indexed | Provenance / notes                                                            |
+| ----------------------------------------- | ------------------------------------------------------------ | :-----: | ----------------------------------------------------------------------------- |
+| `Id`                                      | Counter                                                      |  (PK)   | SharePoint built-in item id.                                                  |
+| `Title`                                   | Single line of text                                          |         | Case title.                                                                   |
+| `CaseType`                                | Single line of text                                          |         | Slug; constant per list, so not worth indexing.                               |
+| `Status`                                  | Choice (`In-progress` / `Actions In Progress` / `Completed`) |  **✓**  | Lifecycle state; leading predicate for most live reads.                       |
+| `AssignedReviewer` (`AssignedReviewerId`) | Person                                                       |  **✓**  | The Reviewer the Case is assigned to.                                         |
+| `ResponsibleParty` (`ResponsiblePartyId`) | Person                                                       |  **✓**  | The Responsible Party.                                                        |
+| `AssignedReviewerManager`                 | Person                                                       |  **✓**  | Reviewer's manager; Reviewer-Manager team reads lead with it.                 |
+| `ResponsiblePartyManager`                 | Person                                                       |  **✓**  | Responsible Party's manager.                                                  |
+| `DueDate`                                 | Date and Time                                                |  **✓**  | Working-day SLA due date; app-written on creation.                            |
+| `CompletedAt`                             | Date and Time                                                |  **✓**  | Stamped at the final `Completed` transition; app-written.                     |
+| `ReportableAt`                            | Date and Time                                                |         | Stamped at the reportable milestone; app-written.                             |
+| `RemediationDueDate`                      | Date and Time                                                |         | Remediation SLA; app-written.                                                 |
+| `RelatedDate`                             | Date and Time                                                |         | Case Type–specific reference date.                                            |
+| `Created`                                 | Date and Time                                                |         | SharePoint built-in.                                                          |
+| `HasOpenAppeal`                           | Yes/No                                                       |  **✓**  | Action Centre reason flag; app-written on appeal raise/resolve.               |
+| `AppealRaisedAt`                          | Date and Time                                                |         | Clock paired with `HasOpenAppeal`; app-written.                               |
+| `AwaitingResponsibleParty`                | Yes/No                                                       |  **✓**  | Action Centre reason flag; app-written.                                       |
+| `AwaitingSince`                           | Date and Time                                                |         | Clock paired with `AwaitingResponsibleParty`; app-written.                    |
+| `Reopened`                                | Yes/No                                                       |  **✓**  | Action Centre reason flag; app-written.                                       |
+| `ReopenedAt`                              | Date and Time                                                |         | Clock paired with `Reopened`; app-written.                                    |
+| `ReviewRequired`                          | Yes/No                                                       |  **✓**  | Action Centre reason flag; app-written.                                       |
+| `Outcome`                                 | Single line of text                                          |         | Live working Outcome.                                                         |
+| `OutcomeAtCompletion`                     | Single line of text                                          |         | Frozen Outcome snapshot taken at reportable; app-written.                     |
+| `HadRemediation`                          | Yes/No                                                       |         | Frozen at reportable; app-written.                                            |
+| `EffectiveOutcome`                        | Single line of text                                          |         | Corrected Outcome for RP-team reporting; app-written.                         |
+| `EffectiveHadRemediation`                 | Yes/No                                                       |         | Corrected remediation flag; app-written.                                      |
+| `OutcomeOverridden`                       | Yes/No                                                       |         | Set when an Amended Outcome diverges from the snapshot.                       |
+| `QuestionBankVersion`                     | Single line of text                                          |         | Question-bank snapshot version for the Case; app-written.                     |
+| `CaseJustification`                       | Multiple lines of text                                       |         | Case-level justification.                                                     |
+| `Notes`                                   | Multiple lines of text (plain)                               |         | Free-text notes; never `innerHTML`.                                           |
+| `Answers`                                 | Multiple lines of text (JSON blob)                           |         | All Answers; field-level PATCH only.                                          |
+| `Conversation`                            | Multiple lines of text (JSON blob)                           |         | Conversation messages.                                                        |
+| `Appeals`                                 | Multiple lines of text (JSON blob)                           |         | Appeal records; additive, never mutates the frozen Case.                      |
+| `AmendedOutcome`                          | Multiple lines of text (JSON blob)                           |         | Case-level Amended Outcome record.                                            |
+| `Details`                                 | Multiple lines of text (JSON blob)                           |         | Case Details values keyed by the Case Type's `detailFields[].key`; read-only. |
 
 The JSON-blob columns (`Answers`, `Conversation`, `Appeals`, `AmendedOutcome`,
 `Details`) are **deliberately not indexed and never queried** — reason-defining
 data is hoisted onto the flag/date columns above precisely so live reads never
-have to scan a blob (ADR-0007, ADR-0031 §2).
+have to scan a blob.
 
 ### Per-Case-Type detail columns
 
 A Case Type declares its Case Details fields via `detailFields` in
 `case-types/{slug}.js` (`CaseDetailField` = `{ key, label }`). Their **values**
-live in the shared `Details` JSON blob keyed by `key` (ADR-0014) and are
+live in the shared `Details` JSON blob keyed by `key` and are
 read-only everywhere, so **by default a Case Type adds no new physical columns**
 for its details.
 
@@ -137,8 +137,8 @@ list is past the threshold.
 
 ## Indexed columns
 
-The 11 columns to index on the empty `Cases-{slug}` list (ADR-0031 §1) — the
-lifecycle/date columns and the ADR-0030 reason flags that live reads lead with:
+The 11 columns to index on the empty `Cases-{slug}` list — the
+lifecycle/date columns and the the architecture decision reason flags that live reads lead with:
 
 `Status`, `DueDate`, `CompletedAt`, `AssignedReviewer`, `ResponsibleParty`,
 `AssignedReviewerManager`, `ResponsiblePartyManager`, `HasOpenAppeal`,

@@ -13,7 +13,7 @@ import { MyPage } from '../pages/my-page.js';
 
 export function register(router, context) {
   router.register('#/my-page/:id', {
-    // :id → dynamic segment
+    //:id → dynamic segment
     mount(container, { id }) {
       // called when hash matches
       container.replaceChildren(MyPage({ client: context.client, caseId: id }));
