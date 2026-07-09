@@ -19,6 +19,11 @@ const windowListeners = {};
 const { Router } = await import('../src/lib/router.js');
 const { registerRoutes } = await import('../src/setup/register-routes.js');
 
+/** @returns {Promise<void>} */
+async function tick() {
+  await Promise.resolve();
+}
+
 /** @returns {import('../src/setup/register-routes.js').AppContext} */
 function makeContext() {
   return /** @type {any} */ ({
@@ -33,6 +38,7 @@ function makeContext() {
       appendChild() {},
       replaceChildren() {},
     },
+    loadQuestionBankEditor: () => Promise.resolve(),
   });
 }
 
@@ -225,7 +231,7 @@ test('registerRoutes: #/dashboard mount composes the dashboard page into the con
   }
 });
 
-test('registerRoutes: #/question-bank mount adds cora-fullbleed to appEl', () => {
+test('registerRoutes: #/question-bank mount adds cora-fullbleed to appEl', async () => {
   const router = new Router();
   const container = { replaceChildren() {} };
   router._container = /** @type {any} */ (container);
@@ -258,6 +264,7 @@ test('registerRoutes: #/question-bank mount adds cora-fullbleed to appEl', () =>
   };
   try {
     router.navigate('#/question-bank');
+    await tick();
     assert.ok(
       appEl.classList.added.includes('cora-fullbleed'),
       'cora-fullbleed added on mount'
@@ -378,7 +385,7 @@ test('registerRoutes: #/reports/reviewer-team redirects when the user is not a r
   }
 });
 
-test('registerRoutes: #/question-bank unmount removes cora-fullbleed from appEl', () => {
+test('registerRoutes: #/question-bank unmount removes cora-fullbleed from appEl', async () => {
   const router = new Router();
   const container = { replaceChildren() {} };
   router._container = /** @type {any} */ (container);
@@ -418,6 +425,7 @@ test('registerRoutes: #/question-bank unmount removes cora-fullbleed from appEl'
   };
   try {
     router.navigate('#/question-bank');
+    await tick();
     router.navigate('#/dashboard');
     assert.ok(
       removed.includes('cora-fullbleed'),
