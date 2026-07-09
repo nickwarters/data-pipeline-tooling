@@ -6,6 +6,7 @@ import {
   computeConfiguredOutcome,
   normaliseConfiguredActions,
   outcomeResponseOptions,
+  validateConfiguredOutcomeConfig,
 } from '../src/evaluators/configured-outcome.js';
 
 const PASS_REFER_FAIL = [
@@ -180,7 +181,7 @@ test('computeConfiguredOutcome: ignores questions without an option-outcome mapp
   assert.deepEqual(result, { outcome: 'pass' });
 });
 
-test('computeConfiguredOutcome: rejects question mappings to unknown outcome ids', () => {
+test('validateConfiguredOutcomeConfig: rejects question mappings to unknown outcome ids', () => {
   /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
   const questions = [
     {
@@ -195,26 +196,35 @@ test('computeConfiguredOutcome: rejects question mappings to unknown outcome ids
   ];
 
   assert.throws(
-    () =>
-      computeConfiguredOutcome(
-        questions,
-        { q1: { value: 'A' } },
-        PASS_REFER_FAIL,
-        'pass'
-      ),
+    () => validateConfiguredOutcomeConfig(questions, PASS_REFER_FAIL, 'pass'),
     /unknown outcome id "ghost"/
   );
 });
 
-test('computeConfiguredOutcome: rejects missing outcome configuration instead of falling back', () => {
-  assert.throws(() => computeConfiguredOutcome([], {}), /outcomeOptions/);
+test('validateConfiguredOutcomeConfig: rejects missing outcome configuration instead of falling back', () => {
   assert.throws(
-    () => computeConfiguredOutcome([], {}, PASS_REFER_FAIL),
+    () => validateConfiguredOutcomeConfig([], []),
+    /outcomeOptions/
+  );
+  assert.throws(
+    () => validateConfiguredOutcomeConfig([], PASS_REFER_FAIL),
     /defaultOutcomeId/
   );
   assert.throws(
-    () => computeConfiguredOutcome([], {}, PASS_REFER_FAIL, 'ghost'),
+    () => validateConfiguredOutcomeConfig([], PASS_REFER_FAIL, 'ghost'),
     /defaultOutcomeId "ghost"/
+  );
+});
+
+test('validateConfiguredOutcomeConfig: rejects a missing questions array clearly', () => {
+  assert.throws(
+    () =>
+      validateConfiguredOutcomeConfig(
+        /** @type {any} */ (undefined),
+        PASS_REFER_FAIL,
+        'pass'
+      ),
+    /questions must be an array/
   );
 });
 

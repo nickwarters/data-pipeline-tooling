@@ -49,6 +49,10 @@ test('case type manifest: rejects invalid outcome configuration before a Case Ty
   };
   const cases = [
     {
+      config: { ...baseConfig, questions: undefined },
+      message: /Case Type "invalid".*questions must be an array/,
+    },
+    {
       config: { ...baseConfig, outcomeOptions: [] },
       message: /Case Type "invalid".*outcomeOptions/,
     },

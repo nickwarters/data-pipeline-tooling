@@ -21,6 +21,7 @@ const config = {
   // Outcome vocabulary: required even for this perf harness so the
   // Outcome block resolves wording from config rather than a built-in fallback.
   outcomeOptions: bank.outcomeOptions ?? [],
+  // An absent bank field becomes an invalid load-time configuration, not a fallback.
   defaultOutcomeId: bank.defaultOutcomeId ?? '',
 
   /** @param {Record<string, Answer>} answers */

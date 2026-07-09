@@ -37,8 +37,11 @@ export class OutcomeConfigurationError extends Error {
 export function validateConfiguredOutcomeConfig(
   questions,
   outcomeOptions,
-  defaultOutcomeId
+  defaultOutcomeId = ''
 ) {
+  if (!Array.isArray(questions)) {
+    throw new OutcomeConfigurationError('questions must be an array.');
+  }
   if (!Array.isArray(outcomeOptions) || !outcomeOptions.length) {
     throw new OutcomeConfigurationError(
       'outcomeOptions must contain at least one option.'
@@ -149,11 +152,15 @@ export function computeConfiguredOutcome(
   outcomeOptions = [],
   defaultOutcomeId = ''
 ) {
-  validateConfiguredOutcomeConfig(questions, outcomeOptions, defaultOutcomeId);
   const optionById = outcomeOptionMap(outcomeOptions);
   let best = /** @type {{ outcome: string, severity: number }} */ (
     optionById.get(defaultOutcomeId)
   );
+  if (!best) {
+    throw new OutcomeConfigurationError(
+      `defaultOutcomeId "${defaultOutcomeId}" is not configured.`
+    );
+  }
 
   for (const question of questions) {
     const mapping = question.optionOutcomes;

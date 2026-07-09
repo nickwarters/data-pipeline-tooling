@@ -58,6 +58,7 @@ const config = {
   // configured default. Controls may still hand-set any of these via Amend Outcome.
   outcomeOptions: bank.outcomeOptions ?? [],
   labels: bank.labels,
+  // An absent bank field becomes an invalid load-time configuration, not a fallback.
   defaultOutcomeId: bank.defaultOutcomeId ?? '',
   questions: bank.questions,
 

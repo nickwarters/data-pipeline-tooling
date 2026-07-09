@@ -21,6 +21,7 @@ const config = {
   // configured default.
   // `severity` orders the outcomes (higher = worse).
   outcomeOptions: bank.outcomeOptions ?? [],
+  // An absent bank field becomes an invalid load-time configuration, not a fallback.
   defaultOutcomeId: bank.defaultOutcomeId ?? '',
 
   /** @param {Record<string, Answer>} answers */
