@@ -390,20 +390,6 @@ export class CORASummary extends HTMLElement {
       })
     );
   }
-
-  render() {
-    return Summary({
-      computeOutcome: this.computeOutcome,
-      answers: this.answers,
-      allAnswered: this.allAnswered,
-      caseRow: this.caseRow,
-      catalogue: this.catalogue,
-      summarySections: this.summarySections,
-      captureGroups: this.captureGroups,
-      detailFields: this.detailFields,
-      outcomeOptions: this.outcomeOptions,
-    });
-  }
 }
 
 customElements.define('cora-summary', CORASummary);
