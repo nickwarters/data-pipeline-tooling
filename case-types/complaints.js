@@ -1,8 +1,12 @@
 // @ts-check
 /** @typedef {import('../src/sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
+/** @typedef {import('../src/question-bank/question-bank-source.js').QuestionBank} QuestionBank */
 
 import { computeConfiguredOutcome } from '../src/evaluators/configured-outcome.js';
+import bankJson from './banks/complaints.json' with { type: 'json' };
+
+const bank = /** @type {QuestionBank} */ (bankJson);
 
 /**
  * The **Complaints** Case Type — a Complaints-style journey whose
@@ -53,85 +57,10 @@ const config = {
   // (question bank redesign): each mapped response option scores a configured
   // Outcome and the highest-scoring applicable Outcome wins, defaulting to
   // `pass`. Controls may still hand-set any of these via Amend Outcome.
-  outcomeOptions: [
-    { id: 'pass', wording: 'Pass', severity: 0 },
-    { id: 'refer', wording: 'Refer', severity: 50 },
-    { id: 'fail', wording: 'Fail', severity: 100 },
-  ],
-  labels: [
-    { id: 'lbl-sla', name: 'SLA', color: '#d97706' },
-    { id: 'lbl-regulatory', name: 'Regulatory', color: '#b91c1c' },
-  ],
-  defaultOutcomeId: 'pass',
-  questions: [
-    {
-      id: 'q-cm-ack',
-      text: 'Was the complaint acknowledged within the required timeframe?',
-      category: 'Acknowledgement',
-      labelIds: ['lbl-sla', 'lbl-regulatory'],
-      responseType: 'yes-no-na',
-      optionOutcomes: { No: 'fail' },
-      failureCriteria: 'No',
-      remediationActions: [
-        'Acknowledge the complaint in writing within the regulatory timeframe.',
-      ],
-      deprecated: false,
-    },
-    {
-      id: 'q-cm-investigated',
-      text: 'Was the complaint fully investigated?',
-      category: 'Investigation',
-      labelIds: ['lbl-regulatory'],
-      responseType: 'yes-no-na',
-      optionOutcomes: { No: 'fail' },
-      failureCriteria: 'No',
-      remediationActions: [
-        'Complete a full investigation covering every point the customer raised.',
-      ],
-      deprecated: false,
-    },
-    {
-      id: 'q-cm-root-cause',
-      text: 'Was the root cause of the complaint identified?',
-      category: 'Investigation',
-      labelIds: ['lbl-regulatory'],
-      responseType: 'yes-no-na',
-      showWhen: { 'q-cm-investigated': { equals: 'Yes' } },
-      optionOutcomes: { No: 'refer' },
-      failureCriteria: 'No',
-      deprecated: false,
-    },
-    {
-      id: 'q-cm-channel',
-      text: 'How was the complaint received?',
-      category: 'Resolution',
-      responseType: 'single-choice',
-      options: ['Phone', 'Email', 'Letter', 'In branch'],
-      deprecated: false,
-    },
-    {
-      id: 'q-cm-redress',
-      text: 'Where the complaint was upheld, was appropriate redress offered?',
-      category: 'Resolution',
-      responseType: 'yes-no-na',
-      optionOutcomes: { No: 'refer' },
-      failureCriteria: 'No',
-      remediationActions: [
-        'Recalculate and offer appropriate redress to the customer.',
-      ],
-      deprecated: false,
-    },
-    {
-      id: 'q-cm-final-response',
-      text: 'Was a final response issued to the customer?',
-      category: 'Communication',
-      labelIds: ['lbl-sla'],
-      responseType: 'yes-no-na',
-      optionOutcomes: { No: 'refer' },
-      failureCriteria: 'No',
-      deprecated: false,
-    },
-  ],
+  outcomeOptions: bank.outcomeOptions ?? [],
+  labels: bank.labels,
+  defaultOutcomeId: bank.defaultOutcomeId,
+  questions: bank.questions,
 
   /** @param {Record<string, Answer>} answers */
   computeOutcome(answers) {

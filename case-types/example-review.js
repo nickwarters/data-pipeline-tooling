@@ -1,8 +1,12 @@
 // @ts-check
 /** @typedef {import('../src/sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
+/** @typedef {import('../src/question-bank/question-bank-source.js').QuestionBank} QuestionBank */
 
 import { computeConfiguredOutcome } from '../src/evaluators/configured-outcome.js';
+import bankJson from './banks/example-review.json' with { type: 'json' };
+
+const bank = /** @type {QuestionBank} */ (bankJson);
 
 /** @type {CaseTypeConfig} */
 const config = {
@@ -38,19 +42,12 @@ const config = {
   // Outcome vocabulary. `computeOutcome` only yields pass/fail, but the
   // hand-set Amend Outcome verdict lets Controls also pick `refer`, so
   // the full set of selectable Outcomes is declared here.
-  outcomeOptions: [
-    { id: 'pass', wording: 'Pass', severity: 0 },
-    { id: 'refer', wording: 'Refer', severity: 50 },
-    { id: 'fail', wording: 'Fail', severity: 100 },
-  ],
-  labels: [
-    { id: 'lbl-coaching', name: 'Coaching', color: '#2563eb' },
-    { id: 'lbl-regulatory', name: 'Regulatory', color: '#b91c1c' },
-  ],
+  outcomeOptions: bank.outcomeOptions ?? [],
+  labels: bank.labels,
   // The Outcome is driven wholly by the responses (question bank redesign): each
   // mapped response option scores a configured Outcome and the highest-scoring
   // applicable Outcome wins, defaulting to `pass`.
-  defaultOutcomeId: 'pass',
+  defaultOutcomeId: bank.defaultOutcomeId,
   // Configurable per-failure capture fields. One shared set applies
   // to every failed Answer; captured inline as Answer.remediationDetails. Legacy:
   // superseded by captureGroups below but kept while both coexist.
@@ -155,55 +152,7 @@ const config = {
       ],
     },
   ],
-  questions: [
-    {
-      id: 'q-welcome',
-      text: 'Was the customer greeted professionally?',
-      category: 'Opening',
-      labelIds: ['lbl-coaching'],
-      responseType: 'yes-no-na',
-      optionOutcomes: { No: 'fail' },
-      failureCriteria: 'No',
-      deprecated: false,
-    },
-    {
-      id: 'q-needs',
-      text: "Were the customer's needs identified before proceeding?",
-      category: 'Discovery',
-      labelIds: ['lbl-coaching', 'lbl-regulatory'],
-      responseType: 'yes-no-na',
-      optionOutcomes: { No: 'fail' },
-      failureCriteria: 'No',
-      remediationActions: ['Retrain agent on needs-identification protocol.'],
-      deprecated: false,
-    },
-    {
-      id: 'q-resolve',
-      text: "Was the issue resolved to the customer's satisfaction?",
-      category: 'Resolution',
-      labelIds: ['lbl-regulatory'],
-      responseType: 'yes-no-na',
-      showWhen: { 'q-needs': { equals: 'Yes' } },
-      optionOutcomes: { No: 'fail' },
-      failureCriteria: 'No',
-      remediationActions: ['Escalate unresolved case to senior agent.'],
-      deprecated: false,
-    },
-    {
-      id: 'q-channel',
-      text: 'Which channel was the customer using?',
-      responseType: 'single-choice',
-      options: ['Phone', 'Email', 'Chat'],
-      deprecated: false,
-    },
-    {
-      id: 'q-products',
-      text: 'Which products were discussed during the interaction?',
-      responseType: 'multi-choice',
-      options: ['Account', 'Billing', 'Support'],
-      deprecated: false,
-    },
-  ],
+  questions: bank.questions,
 
   /** @param {Record<string, Answer>} answers */
   computeOutcome(answers) {

@@ -2,7 +2,7 @@
 /**
  * Compile pipeline for the Question Bank curator workbench.
  *
- * compileBank(bank) → string of a case-types/{slug}.js module body
+ * compileBank(bank) → string of a case-types/banks/{slug}.json current bank
  * highlight(code) → HTML with syntax-coloured spans
  * escapeHtml(s) → HTML-safe text
  * hashStr(s) → first 6 bytes of SHA-256, hex (browser crypto)
@@ -50,83 +50,22 @@ export function resolveCompiledOptions(q, outcomeOptions = []) {
  * @returns {string}
  */
 export function compileBank(bank) {
-  const lines = [];
-  lines.push(`// @ts-check`);
-  lines.push(
-    `/** @typedef {import('../src/sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */`
-  );
-  lines.push(
-    `/** @typedef {import('../src/sharepoint-client.js').Answer} Answer */`
-  );
-  lines.push('');
-  lines.push(
-    `import { computeConfiguredOutcome } from '../src/evaluators/configured-outcome.js';`
-  );
-  lines.push('');
-  lines.push(`/** @type {CaseTypeConfig} */`);
-  lines.push(`const config = {`);
-  lines.push(`  eligibleGroups: ${JSON.stringify(bank.eligibleGroups)},`);
-  if (bank.outcomeOptions && bank.outcomeOptions.length) {
-    lines.push(`  outcomeOptions: ${JSON.stringify(bank.outcomeOptions)},`);
-  }
-  if (bank.defaultOutcomeId) {
-    lines.push(`  defaultOutcomeId: ${JSON.stringify(bank.defaultOutcomeId)},`);
-  }
-  if (bank.labels && bank.labels.length) {
-    lines.push(`  labels: [`);
-    for (const l of bank.labels) {
-      lines.push(
-        `    { id: ${JSON.stringify(l.id)}, name: ${JSON.stringify(l.name)}, color: ${JSON.stringify(l.color)} },`
-      );
-    }
-    lines.push(`  ],`);
-  }
-  lines.push(`  questions: [`);
-  for (const q of bank.questions) {
-    lines.push(`    {`);
-    lines.push(`      id: ${JSON.stringify(q.id)},`);
-    lines.push(`      text: ${JSON.stringify(q.text)},`);
-    if (q.category)
-      lines.push(`      category: ${JSON.stringify(q.category)},`);
-    if (q.labelIds && q.labelIds.length)
-      lines.push(`      labelIds: ${JSON.stringify(q.labelIds)},`);
-    lines.push(`      responseType: ${JSON.stringify(q.responseType)},`);
-    const resolved = resolveCompiledOptions(q, bank.outcomeOptions ?? []);
-    if (resolved.options)
-      lines.push(`      options: ${JSON.stringify(resolved.options)},`);
-    if (resolved.optionOutcomes)
-      lines.push(
-        `      optionOutcomes: ${JSON.stringify(resolved.optionOutcomes)},`
-      );
-    if (q.showWhen)
-      lines.push(`      showWhen: ${JSON.stringify(q.showWhen)},`);
-    if (q.failureCriteria)
-      lines.push(
-        `      failureCriteria: ${JSON.stringify(q.failureCriteria)},`
-      );
-    if (q.remediationActions) {
-      lines.push(`      remediationActions: [`);
-      for (const r of q.remediationActions)
-        lines.push(`        ${JSON.stringify(r)},`);
-      lines.push(`      ],`);
-    }
-    if (q.allowFreeFormRemediation)
-      lines.push(`      allowFreeFormRemediation: true,`);
-    lines.push(`      deprecated: ${q.deprecated},`);
-    lines.push(`    },`);
-  }
-  lines.push(`  ],`);
-  lines.push('');
-  lines.push(`  /** @param {Record<string, Answer>} answers */`);
-  lines.push(`  computeOutcome(answers) {`);
-  lines.push(
-    `    return computeConfiguredOutcome(config.questions, answers, config.outcomeOptions, config.defaultOutcomeId);`
-  );
-  lines.push(`  },`);
-  lines.push(`};`);
-  lines.push('');
-  lines.push(`export default config;`);
-  return lines.join('\n');
+  return `${JSON.stringify(
+    {
+      slug: bank.slug,
+      label: bank.label,
+      questions: bank.questions,
+      ...(bank.labels?.length ? { labels: bank.labels } : {}),
+      ...(bank.outcomeOptions?.length
+        ? { outcomeOptions: bank.outcomeOptions }
+        : {}),
+      ...(bank.defaultOutcomeId
+        ? { defaultOutcomeId: bank.defaultOutcomeId }
+        : {}),
+    },
+    null,
+    2
+  )}\n`;
 }
 
 /**

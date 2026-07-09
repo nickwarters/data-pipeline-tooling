@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import {
   bankFromCaseTypeConfig,
   loadQuestionBanks,
+  normaliseQuestionBank,
   questionBanks,
 } from '../src/question-bank/question-bank-source.js';
 import { compileBank } from '../src/question-bank/question-bank-compile.js';
@@ -33,7 +34,6 @@ test('bankFromCaseTypeConfig: projects case type config into editable bank shape
 
   assert.equal(bank.slug, 'example-review');
   assert.equal(bank.label, 'Example Review');
-  assert.deepEqual(bank.eligibleGroups, ['Reviewers']);
   assert.deepEqual(bank.labels, [
     { id: 'lbl-a', name: 'Alpha', color: '#111111' },
   ]);
@@ -71,7 +71,6 @@ test('bankFromCaseTypeConfig: defaults omitted bank fields', () => {
   assert.deepEqual(bank, {
     label: 'Minimal Review',
     slug: 'minimal-review',
-    eligibleGroups: [],
     labels: [],
     outcomeOptions: [],
     defaultOutcomeId: undefined,
@@ -116,13 +115,11 @@ test('bankFromCaseTypeConfig: deep-clones editable arrays', () => {
     });
 
   const bank = bankFromCaseTypeConfig('example-review', config);
-  bank.eligibleGroups.push('Owners');
   bank.labels?.[0] && (bank.labels[0].name = 'Changed');
   bank.outcomeOptions?.[0] && (bank.outcomeOptions[0].wording = 'Changed');
   bank.questions[0].text = 'Changed?';
   bank.questions[0].labelIds?.push('lbl-b');
 
-  assert.deepEqual(config.eligibleGroups, ['Reviewers']);
   assert.deepEqual(config.labels, [
     { id: 'lbl-a', name: 'Alpha', color: '#111111' },
   ]);
@@ -162,7 +159,6 @@ test('bankFromCaseTypeConfig: keeps runtime case type fields out of the editable
 
   assert.deepEqual(Object.keys(bank).sort(), [
     'defaultOutcomeId',
-    'eligibleGroups',
     'label',
     'labels',
     'outcomeOptions',
@@ -179,12 +175,11 @@ test('bankFromCaseTypeConfig: keeps runtime case type fields out of the editable
   assert.equal('attributeFailures' in bank, false);
 });
 
-test('bankFromCaseTypeConfig: projects compileBank output back to the editable bank contract', async () => {
+test('compileBank: emits the standalone editable bank artifact', () => {
   const sourceBank =
     /** @type {import('../src/question-bank/question-bank-source.js').QuestionBank} */ ({
       label: 'Compiled Review',
       slug: 'compiled-review',
-      eligibleGroups: ['Reviewers'],
       labels: [{ id: 'lbl-a', name: 'Alpha', color: '#111111' }],
       outcomeOptions: [
         { id: 'pass', wording: 'Pass', severity: 0 },
@@ -204,25 +199,56 @@ test('bankFromCaseTypeConfig: projects compileBank output back to the editable b
         },
       ],
     });
-  const compiledSource = compileBank(sourceBank).replace(
-    `../src/evaluators/configured-outcome.js`,
-    new URL('../src/evaluators/configured-outcome.js', import.meta.url).href
-  );
-  const { default: compiledConfig } = await import(
-    `data:text/javascript,${encodeURIComponent(compiledSource)}`
-  );
 
-  const roundTripped = bankFromCaseTypeConfig(sourceBank.slug, compiledConfig);
+  const compiled = JSON.parse(compileBank(sourceBank));
 
-  assert.deepEqual(roundTripped, sourceBank);
+  assert.deepEqual(compiled, sourceBank);
 });
 
-test('loadQuestionBanks: builds the bank map from importer entries', async () => {
+test('normaliseQuestionBank: defaults omitted bank fields and deep-clones editable arrays', () => {
+  const source =
+    /** @type {import('../src/question-bank/question-bank-source.js').QuestionBank} */ ({
+      label: 'Alpha',
+      slug: 'alpha',
+      questions: [
+        {
+          id: 'q-alpha',
+          text: 'Alpha?',
+          responseType: 'yes-no-na',
+          /** @type {any} */
+          deprecated: undefined,
+        },
+      ],
+    });
+
+  const bank = normaliseQuestionBank(source);
+  bank.questions[0].text = 'Changed?';
+
+  assert.deepEqual(bank, {
+    label: 'Alpha',
+    slug: 'alpha',
+    labels: [],
+    outcomeOptions: [],
+    defaultOutcomeId: undefined,
+    questions: [
+      {
+        id: 'q-alpha',
+        text: 'Changed?',
+        responseType: 'yes-no-na',
+        deprecated: false,
+      },
+    ],
+  });
+  assert.equal(source.questions[0].text, 'Alpha?');
+});
+
+test('loadQuestionBanks: builds the bank map from standalone bank importer entries', async () => {
   const banks = await loadQuestionBanks({
     alpha: async () => ({
       default:
-        /** @type {import('../src/sharepoint-client.js').CaseTypeConfig} */ ({
-          eligibleGroups: ['Reviewers'],
+        /** @type {import('../src/question-bank/question-bank-source.js').QuestionBank} */ ({
+          label: 'Alpha',
+          slug: 'alpha',
           outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
           questions: [
             {
@@ -232,13 +258,13 @@ test('loadQuestionBanks: builds the bank map from importer entries', async () =>
               deprecated: false,
             },
           ],
-          computeOutcome: () => ({ outcome: 'pass' }),
         }),
     }),
     beta: async () => ({
       default:
-        /** @type {import('../src/sharepoint-client.js').CaseTypeConfig} */ ({
-          eligibleGroups: ['Owners'],
+        /** @type {import('../src/question-bank/question-bank-source.js').QuestionBank} */ ({
+          label: 'Beta',
+          slug: 'beta',
           outcomeOptions: [{ id: 'fail', wording: 'Fail', severity: 100 }],
           questions: [
             {
@@ -249,14 +275,13 @@ test('loadQuestionBanks: builds the bank map from importer entries', async () =>
               deprecated: false,
             },
           ],
-          computeOutcome: () => ({ outcome: 'fail' }),
         }),
     }),
   });
 
   assert.deepEqual(Object.keys(banks), ['alpha', 'beta']);
   assert.equal(banks.alpha.questions[0].id, 'q-alpha');
-  assert.equal(banks.beta.eligibleGroups[0], 'Owners');
+  assert.equal(banks.beta.outcomeOptions?.[0].id, 'fail');
 });
 
 test('questionBanks: every live case type carries label definitions', () => {

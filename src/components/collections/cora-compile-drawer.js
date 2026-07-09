@@ -16,7 +16,7 @@ import {
 } from '../../question-bank/question-bank-compile.js';
 
 /**
- * Slide-out drawer showing the compiled Case Type config. Reads the shared
+ * Slide-out drawer showing the compiled current Question Bank JSON. Reads the shared
  * question-bank signals (`drawerOpen`, `currentBank`, `diffCounts`), so it
  * re-renders whenever they change.
  *
@@ -51,12 +51,12 @@ export function CompileDrawer() {
         h(
           'div',
           {},
-          h('h3', {}, 'Compiled ', h('em', {}, 'config'), '.'),
+          h('h3', {}, 'Compiled ', h('em', {}, 'bank'), '.'),
           h(
             'p',
             {},
-            'Ready for review. This is the exact module body that will be PR’d into ',
-            h('code', { className: 'code-inline' }, 'case-types/'),
+            'Ready for review. This is the exact JSON artifact that will be PR’d into ',
+            h('code', { className: 'code-inline' }, 'case-types/banks/'),
             '.'
           )
         ),
@@ -93,7 +93,7 @@ export function CompileDrawer() {
                 const clip = /** @type {any} */ (globalThis).navigator
                   ?.clipboard;
                 if (clip?.writeText) await clip.writeText(code);
-                showToast('Config copied to clipboard');
+                showToast('Bank JSON copied to clipboard');
               },
             },
             'Copy'

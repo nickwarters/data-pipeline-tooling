@@ -68,7 +68,7 @@ test('initial state: example-review is active, not dirty, no diffs', () => {
   assert.ok(baselineBank.get().label);
 });
 
-test('initial state: question bank questions come from case type configs', async () => {
+test('initial state: question bank questions come from standalone bank artifacts', async () => {
   _resetStore();
   const { default: exampleReview } =
     await import('../case-types/example-review.js');
@@ -113,7 +113,6 @@ test('diffCounts: handles a slug with no baseline questions array', () => {
     types['brand-new'] = {
       label: 'B',
       slug: 'brand-new',
-      eligibleGroups: [],
       questions: [
         { id: 'q-x', text: 'x', responseType: 'yes-no-na', deprecated: false },
       ],

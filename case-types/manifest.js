@@ -1,6 +1,7 @@
 // @ts-check
 /**
  * @typedef {() => Promise<{ default: import('../src/sharepoint-client.js').CaseTypeConfig }>} CaseTypeImporter
+ * @typedef {() => Promise<{ default: import('../src/question-bank/question-bank-source.js').QuestionBank }>} QuestionBankImporter
  */
 
 /**
@@ -11,6 +12,40 @@ export const CASE_TYPE_IMPORTERS = {
   'product-sale-review': () => import('./product-sale-review.js'),
   'stress-review': () => import('./stress-review.js'),
   complaints: () => import('./complaints.js'),
+};
+
+/**
+ * @type {Record<string, QuestionBankImporter>}
+ */
+export const QUESTION_BANK_IMPORTERS = {
+  'example-review': () =>
+    import('./banks/example-review.json', { with: { type: 'json' } }).then(
+      (mod) =>
+        /** @type {{ default: import('../src/question-bank/question-bank-source.js').QuestionBank }} */ (
+          mod
+        )
+    ),
+  'product-sale-review': () =>
+    import('./banks/product-sale-review.json', { with: { type: 'json' } }).then(
+      (mod) =>
+        /** @type {{ default: import('../src/question-bank/question-bank-source.js').QuestionBank }} */ (
+          mod
+        )
+    ),
+  'stress-review': () =>
+    import('./banks/stress-review.json', { with: { type: 'json' } }).then(
+      (mod) =>
+        /** @type {{ default: import('../src/question-bank/question-bank-source.js').QuestionBank }} */ (
+          mod
+        )
+    ),
+  complaints: () =>
+    import('./banks/complaints.json', { with: { type: 'json' } }).then(
+      (mod) =>
+        /** @type {{ default: import('../src/question-bank/question-bank-source.js').QuestionBank }} */ (
+          mod
+        )
+    ),
 };
 
 export class UnknownCaseTypeError extends Error {

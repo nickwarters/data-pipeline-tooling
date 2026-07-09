@@ -1,143 +1,27 @@
 // @ts-check
 /** @typedef {import('../src/sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
+/** @typedef {import('../src/question-bank/question-bank-source.js').QuestionBank} QuestionBank */
 
 import { computeConfiguredOutcome } from '../src/evaluators/configured-outcome.js';
+import bankJson from './banks/product-sale-review.json' with { type: 'json' };
+
+const bank = /** @type {QuestionBank} */ (bankJson);
 
 /** @type {CaseTypeConfig} */
 const config = {
   listName: 'complaints',
   eligibleGroups: ['Reviewers'],
   attributeFailures: true,
-  labels: [
-    { id: 'lbl-verification', name: 'Verification', color: '#0f766e' },
-    { id: 'lbl-suitability', name: 'Suitability', color: '#7c3aed' },
-    { id: 'lbl-compliance', name: 'Compliance', color: '#b91c1c' },
-  ],
-  questions: [
-    // Customer Verification
-    {
-      id: 'q-cv-identity',
-      text: "Was the customer's identity verified before proceeding?",
-      category: 'Customer Verification',
-      labelIds: ['lbl-verification', 'lbl-compliance'],
-      responseType: 'yes-no-na',
-      optionOutcomes: { No: 'refer' },
-      failureCriteria: 'No',
-      remediationActions: [
-        'Re-verify customer identity using an approved verification method before continuing.',
-      ],
-      deprecated: false,
-    },
-    {
-      id: 'q-cv-method',
-      text: 'Which verification method was used?',
-      category: 'Customer Verification',
-      labelIds: ['lbl-verification'],
-      responseType: 'single-choice',
-      options: ['Knowledge-based', 'Document', 'Biometric'],
-      deprecated: false,
-    },
-    {
-      id: 'q-cv-repeat',
-      text: 'Was this a repeat contact requiring escalation?',
-      category: 'Customer Verification',
-      labelIds: ['lbl-verification'],
-      responseType: 'yes-no-na',
-      deprecated: false,
-    },
-    // Product Suitability
-    {
-      id: 'q-ps-needs',
-      text: "Were the customer's financial needs assessed before making a recommendation?",
-      category: 'Product Suitability',
-      labelIds: ['lbl-suitability'],
-      responseType: 'yes-no-na',
-      optionOutcomes: { No: 'fail' },
-      failureCriteria: 'No',
-      remediationActions: [
-        'Complete a full needs assessment before recommending any product.',
-      ],
-      deprecated: false,
-    },
-    {
-      id: 'q-ps-product',
-      text: 'Which product was recommended?',
-      category: 'Product Suitability',
-      labelIds: ['lbl-suitability'],
-      responseType: 'single-choice',
-      options: ['Basic', 'Standard', 'Premium'],
-      deprecated: false,
-    },
-    {
-      id: 'q-ps-suitable',
-      text: "Was the recommended product suitable for the customer's stated needs?",
-      category: 'Product Suitability',
-      labelIds: ['lbl-suitability', 'lbl-compliance'],
-      responseType: 'yes-no-na',
-      showWhen: { 'q-ps-needs': { equals: 'Yes' } },
-      optionOutcomes: { No: 'fail' },
-      failureCriteria: 'No',
-      remediationActions: [
-        'Review suitability criteria and document why the selected product meets customer needs.',
-      ],
-      deprecated: false,
-    },
-    {
-      id: 'q-ps-documented',
-      text: 'Was the recommendation and its rationale documented in the case notes?',
-      category: 'Product Suitability',
-      labelIds: ['lbl-suitability'],
-      responseType: 'yes-no-na',
-      optionOutcomes: { No: 'fail' },
-      failureCriteria: 'No',
-      deprecated: false,
-    },
-    // Compliance
-    {
-      id: 'q-co-disclosure',
-      text: 'Were all required product disclosures made to the customer?',
-      category: 'Compliance',
-      labelIds: ['lbl-compliance'],
-      responseType: 'yes-no-na',
-      optionOutcomes: { No: 'fail' },
-      failureCriteria: 'No',
-      remediationActions: [
-        'Deliver missing disclosures and record customer acknowledgement.',
-      ],
-      deprecated: false,
-    },
-    {
-      id: 'q-co-consent',
-      text: 'Was customer consent recorded prior to processing the sale?',
-      category: 'Compliance',
-      labelIds: ['lbl-compliance'],
-      responseType: 'yes-no-na',
-      optionOutcomes: { No: 'fail' },
-      failureCriteria: 'No',
-      deprecated: false,
-    },
-    {
-      id: 'q-co-channel',
-      text: 'Which sales channel was used?',
-      category: 'Compliance',
-      labelIds: ['lbl-compliance'],
-      responseType: 'single-choice',
-      options: ['Branch', 'Phone', 'Online', 'Broker'],
-      deprecated: false,
-    },
-  ],
+  labels: bank.labels,
+  questions: bank.questions,
 
   // Outcome vocabulary. The Outcome is driven wholly by the responses
   // (question bank redesign): each mapped response option scores a configured
   // Outcome and the highest-scoring applicable Outcome wins, defaulting to `pass`.
   // `severity` orders the outcomes (higher = worse).
-  outcomeOptions: [
-    { id: 'pass', wording: 'Pass', severity: 0 },
-    { id: 'refer', wording: 'Refer', severity: 50 },
-    { id: 'fail', wording: 'Fail', severity: 100 },
-  ],
-  defaultOutcomeId: 'pass',
+  outcomeOptions: bank.outcomeOptions ?? [],
+  defaultOutcomeId: bank.defaultOutcomeId,
 
   /** @param {Record<string, Answer>} answers */
   computeOutcome(answers) {

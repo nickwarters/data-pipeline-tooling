@@ -15,13 +15,21 @@ Accepted
 >
 > [the architecture decision]: ./0023-case-lifecycle-and-reportable-milestone.md
 
+> **Amendment (2026-07-09, issue #324).** The **Question Bank** is the
+> standalone, versionable content artifact. Runtime `case-types/{slug}.js`
+> modules keep operational wiring only and reference their bank content from
+> `case-types/banks/{slug}.json`; they do not own a second editable copy of
+> `questions`, labels, or Outcome vocabulary. The curator workbench reads and
+> compiles the same current-bank JSON artifact.
+
 ## Context
 
 A **Case** loads its **Question Bank** live: `CaseReviewViewModel.load()` imports the
-current `case-types/{slug}.js`, filters out `deprecated` questions, and recomputes
-the **Applicable Question** set from that catalogue against the Case's stored
-**Answers** every time the Case is opened. For an **In-progress Case** this is
-correct and intended ([the architecture decision], [the architecture decision]): bank edits propagate live, and the
+current `case-types/{slug}.js`, whose operational config references the current
+standalone `case-types/banks/{slug}.json`, filters out `deprecated` questions,
+and recomputes the **Applicable Question** set from that catalogue against the
+Case's stored **Answers** every time the Case is opened. For an **In-progress Case**
+this is correct and intended ([the architecture decision], [the architecture decision]): bank edits propagate live, and the
 CONTEXT.md example dialogue explicitly wants a newly-added Question Definition to
 make the Case In-progress again.
 
@@ -73,6 +81,13 @@ the module (`/Style Library/case-review/case-types/`):
 unhashed name is the "current" pointer). Versioned files and the manifest are
 **append-only**, consistent with the deprecate-don't-delete posture: a version any
 Completed Case might reference can never be removed.
+
+In the repo/dev loop before the publish writer exists, the editable current-bank
+artifact lives under `case-types/banks/{slug}.json`. A runtime Case Type module may
+import that artifact to expose `config.questions`, `config.labels`,
+`config.outcomeOptions`, and `config.defaultOutcomeId` through the existing
+`CaseTypeConfig` contract, but those fields are references to the standalone bank,
+not a second content home.
 
 ### The hash contract
 
@@ -184,10 +199,11 @@ The Python pipeline uses the **same** artifacts, gaining point-in-time stability
 
 - A Completed Case now needs a **second fetch** (the versioned export) on load —
   cheap and cacheable, since version files are immutable.
-- **Depends on the publish flow emitting JSON**, which is not yet built:
-  `compileBank()` currently emits only the `.js`. A `compileExport()` (function-free
-  projection + `hash`/`generatedAt` envelope), the content-addressed write, the
-  manifest append, and `{slug}.json` pointer update are all prerequisites.
+- **Depends on the publish flow writing JSON**, which is only partly built:
+  `compileBank()` emits the editable current-bank JSON and `compileExport()` emits
+  the function-free export envelope, but the SharePoint write flow, the
+  content-addressed write, the manifest append, and `{slug}.json` pointer update
+  remain prerequisites.
 - Versioned files and manifests are **append-only and never garbage-collected** — a
   version any Completed Case references can never be deleted, and that cannot be
   cheaply disproven. Accepted as immutable, cheap JSON.
@@ -197,13 +213,15 @@ The Python pipeline uses the **same** artifacts, gaining point-in-time stability
 
 ## Implementation order
 
-1. `compileExport()` emits the data-only `{slug}.json` ([the architecture decision], still unbuilt).
-2. Publish writes the content-addressed `{slug}.{hash}.json`, appends to
+1. `case-types/banks/{slug}.json` is the repo/dev-loop current bank and
+   `compileBank()` emits that same editable artifact.
+2. `compileExport()` emits the data-only `{slug}.json` ([the architecture decision]).
+3. Publish writes the content-addressed `{slug}.{hash}.json`, appends to
    `{slug}.history.json`, and updates the `{slug}.json` pointer.
-3. Completion stamps `questionBankVersion` on the Case row.
-4. `CaseReviewViewModel.load()` resolves a Completed Case's catalogue from the
+4. Completion stamps `questionBankVersion` on the Case row.
+5. `CaseReviewViewModel.load()` resolves a Completed Case's catalogue from the
    versioned file, with live fallback + warning on miss.
-5. Add `labelIds` (frozen) and the label table to the export; reporting resolves
+6. Add `labelIds` (frozen) and the label table to the export; reporting resolves
    label name/color from current.
 
 [the architecture decision]: ./0004-case-type-config-as-js-modules.md

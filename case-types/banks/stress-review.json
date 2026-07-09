@@ -1,0 +1,6531 @@
+{
+  "slug": "stress-review",
+  "label": "Stress Review",
+  "questions": [
+    {
+      "id": "q-stress-0",
+      "text": "Stress question 0: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-1",
+      "text": "Stress question 1: follow-up to q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-1."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-2",
+      "text": "Stress question 2: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-3",
+      "text": "Stress question 3: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-4",
+      "text": "Stress question 4: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-5",
+      "text": "Stress question 5: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-6",
+      "text": "Stress question 6: follow-up to q-stress-5",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-5": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-6."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-7",
+      "text": "Stress question 7: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-8",
+      "text": "Stress question 8: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-9",
+      "text": "Stress question 9: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-10",
+      "text": "Stress question 10: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-11",
+      "text": "Stress question 11: follow-up to q-stress-10",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-10": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-11."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-12",
+      "text": "Stress question 12: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-13",
+      "text": "Stress question 13: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-14",
+      "text": "Stress question 14: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-15",
+      "text": "Stress question 15: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-16",
+      "text": "Stress question 16: follow-up to q-stress-15",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-15": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-16."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-17",
+      "text": "Stress question 17: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-18",
+      "text": "Stress question 18: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-19",
+      "text": "Stress question 19: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-20",
+      "text": "Stress question 20: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-21",
+      "text": "Stress question 21: follow-up to q-stress-20",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-20": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-21."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-22",
+      "text": "Stress question 22: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-23",
+      "text": "Stress question 23: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-24",
+      "text": "Stress question 24: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-25",
+      "text": "Stress question 25: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-26",
+      "text": "Stress question 26: follow-up to q-stress-25",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-25": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-26."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-27",
+      "text": "Stress question 27: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-28",
+      "text": "Stress question 28: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-29",
+      "text": "Stress question 29: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-30",
+      "text": "Stress question 30: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-31",
+      "text": "Stress question 31: follow-up to q-stress-30",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-30": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-31."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-32",
+      "text": "Stress question 32: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-33",
+      "text": "Stress question 33: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-34",
+      "text": "Stress question 34: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-35",
+      "text": "Stress question 35: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-36",
+      "text": "Stress question 36: follow-up to q-stress-35",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-35": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-36."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-37",
+      "text": "Stress question 37: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-38",
+      "text": "Stress question 38: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-39",
+      "text": "Stress question 39: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-40",
+      "text": "Stress question 40: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-41",
+      "text": "Stress question 41: follow-up to q-stress-40",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-40": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-41."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-42",
+      "text": "Stress question 42: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-43",
+      "text": "Stress question 43: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-44",
+      "text": "Stress question 44: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-45",
+      "text": "Stress question 45: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-46",
+      "text": "Stress question 46: follow-up to q-stress-45",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-45": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-46."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-47",
+      "text": "Stress question 47: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-48",
+      "text": "Stress question 48: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-49",
+      "text": "Stress question 49: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-50",
+      "text": "Stress question 50: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-51",
+      "text": "Stress question 51: follow-up to q-stress-50",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-50": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-51."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-52",
+      "text": "Stress question 52: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-53",
+      "text": "Stress question 53: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-54",
+      "text": "Stress question 54: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-55",
+      "text": "Stress question 55: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-56",
+      "text": "Stress question 56: follow-up to q-stress-55",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-55": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-56."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-57",
+      "text": "Stress question 57: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-58",
+      "text": "Stress question 58: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-59",
+      "text": "Stress question 59: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-60",
+      "text": "Stress question 60: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-61",
+      "text": "Stress question 61: follow-up to q-stress-60",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-60": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-61."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-62",
+      "text": "Stress question 62: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-63",
+      "text": "Stress question 63: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-64",
+      "text": "Stress question 64: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-65",
+      "text": "Stress question 65: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-66",
+      "text": "Stress question 66: follow-up to q-stress-65",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-65": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-66."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-67",
+      "text": "Stress question 67: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-68",
+      "text": "Stress question 68: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-69",
+      "text": "Stress question 69: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-70",
+      "text": "Stress question 70: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-71",
+      "text": "Stress question 71: follow-up to q-stress-70",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-70": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-71."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-72",
+      "text": "Stress question 72: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-73",
+      "text": "Stress question 73: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-74",
+      "text": "Stress question 74: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-75",
+      "text": "Stress question 75: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-76",
+      "text": "Stress question 76: follow-up to q-stress-75",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-75": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-76."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-77",
+      "text": "Stress question 77: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-78",
+      "text": "Stress question 78: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-79",
+      "text": "Stress question 79: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-80",
+      "text": "Stress question 80: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-81",
+      "text": "Stress question 81: follow-up to q-stress-80",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-80": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-81."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-82",
+      "text": "Stress question 82: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-83",
+      "text": "Stress question 83: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-84",
+      "text": "Stress question 84: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-85",
+      "text": "Stress question 85: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-86",
+      "text": "Stress question 86: follow-up to q-stress-85",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-85": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-86."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-87",
+      "text": "Stress question 87: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-88",
+      "text": "Stress question 88: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-89",
+      "text": "Stress question 89: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-90",
+      "text": "Stress question 90: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-91",
+      "text": "Stress question 91: follow-up to q-stress-90",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-90": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-91."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-92",
+      "text": "Stress question 92: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-93",
+      "text": "Stress question 93: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-94",
+      "text": "Stress question 94: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-95",
+      "text": "Stress question 95: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-96",
+      "text": "Stress question 96: follow-up to q-stress-95",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-95": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-96."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-97",
+      "text": "Stress question 97: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-98",
+      "text": "Stress question 98: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-99",
+      "text": "Stress question 99: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-100",
+      "text": "Stress question 100: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-101",
+      "text": "Stress question 101: follow-up to q-stress-100",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-100": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-101."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-102",
+      "text": "Stress question 102: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-103",
+      "text": "Stress question 103: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-104",
+      "text": "Stress question 104: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-105",
+      "text": "Stress question 105: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-106",
+      "text": "Stress question 106: follow-up to q-stress-105",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-105": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-106."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-107",
+      "text": "Stress question 107: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-108",
+      "text": "Stress question 108: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-109",
+      "text": "Stress question 109: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-110",
+      "text": "Stress question 110: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-111",
+      "text": "Stress question 111: follow-up to q-stress-110",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-110": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-111."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-112",
+      "text": "Stress question 112: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-113",
+      "text": "Stress question 113: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-114",
+      "text": "Stress question 114: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-115",
+      "text": "Stress question 115: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-116",
+      "text": "Stress question 116: follow-up to q-stress-115",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-115": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-116."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-117",
+      "text": "Stress question 117: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-118",
+      "text": "Stress question 118: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-119",
+      "text": "Stress question 119: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-120",
+      "text": "Stress question 120: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-121",
+      "text": "Stress question 121: follow-up to q-stress-120",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-120": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-121."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-122",
+      "text": "Stress question 122: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-123",
+      "text": "Stress question 123: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-124",
+      "text": "Stress question 124: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-125",
+      "text": "Stress question 125: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-126",
+      "text": "Stress question 126: follow-up to q-stress-125",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-125": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-126."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-127",
+      "text": "Stress question 127: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-128",
+      "text": "Stress question 128: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-129",
+      "text": "Stress question 129: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-130",
+      "text": "Stress question 130: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-131",
+      "text": "Stress question 131: follow-up to q-stress-130",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-130": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-131."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-132",
+      "text": "Stress question 132: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-133",
+      "text": "Stress question 133: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-134",
+      "text": "Stress question 134: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-135",
+      "text": "Stress question 135: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-136",
+      "text": "Stress question 136: follow-up to q-stress-135",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-135": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-136."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-137",
+      "text": "Stress question 137: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-138",
+      "text": "Stress question 138: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-139",
+      "text": "Stress question 139: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-140",
+      "text": "Stress question 140: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-141",
+      "text": "Stress question 141: follow-up to q-stress-140",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-140": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-141."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-142",
+      "text": "Stress question 142: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-143",
+      "text": "Stress question 143: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-144",
+      "text": "Stress question 144: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-145",
+      "text": "Stress question 145: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-146",
+      "text": "Stress question 146: follow-up to q-stress-145",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-145": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-146."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-147",
+      "text": "Stress question 147: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-148",
+      "text": "Stress question 148: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-149",
+      "text": "Stress question 149: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-150",
+      "text": "Stress question 150: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-151",
+      "text": "Stress question 151: follow-up to q-stress-150",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-150": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-151."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-152",
+      "text": "Stress question 152: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-153",
+      "text": "Stress question 153: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-154",
+      "text": "Stress question 154: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-155",
+      "text": "Stress question 155: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-156",
+      "text": "Stress question 156: follow-up to q-stress-155",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-155": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-156."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-157",
+      "text": "Stress question 157: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-158",
+      "text": "Stress question 158: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-159",
+      "text": "Stress question 159: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-160",
+      "text": "Stress question 160: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-161",
+      "text": "Stress question 161: follow-up to q-stress-160",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-160": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-161."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-162",
+      "text": "Stress question 162: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-163",
+      "text": "Stress question 163: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-164",
+      "text": "Stress question 164: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-165",
+      "text": "Stress question 165: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-166",
+      "text": "Stress question 166: follow-up to q-stress-165",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-165": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-166."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-167",
+      "text": "Stress question 167: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-168",
+      "text": "Stress question 168: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-169",
+      "text": "Stress question 169: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-170",
+      "text": "Stress question 170: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-171",
+      "text": "Stress question 171: follow-up to q-stress-170",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-170": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-171."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-172",
+      "text": "Stress question 172: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-173",
+      "text": "Stress question 173: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-174",
+      "text": "Stress question 174: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-175",
+      "text": "Stress question 175: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-176",
+      "text": "Stress question 176: follow-up to q-stress-175",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-175": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-176."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-177",
+      "text": "Stress question 177: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-178",
+      "text": "Stress question 178: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-179",
+      "text": "Stress question 179: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-180",
+      "text": "Stress question 180: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-181",
+      "text": "Stress question 181: follow-up to q-stress-180",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-180": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-181."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-182",
+      "text": "Stress question 182: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-183",
+      "text": "Stress question 183: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-184",
+      "text": "Stress question 184: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-185",
+      "text": "Stress question 185: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-186",
+      "text": "Stress question 186: follow-up to q-stress-185",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-185": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-186."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-187",
+      "text": "Stress question 187: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-188",
+      "text": "Stress question 188: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-189",
+      "text": "Stress question 189: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-190",
+      "text": "Stress question 190: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-191",
+      "text": "Stress question 191: follow-up to q-stress-190",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-190": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-191."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-192",
+      "text": "Stress question 192: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-193",
+      "text": "Stress question 193: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-194",
+      "text": "Stress question 194: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-195",
+      "text": "Stress question 195: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-196",
+      "text": "Stress question 196: follow-up to q-stress-195",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-195": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-196."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-197",
+      "text": "Stress question 197: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-198",
+      "text": "Stress question 198: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-199",
+      "text": "Stress question 199: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-200",
+      "text": "Stress question 200: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-201",
+      "text": "Stress question 201: follow-up to q-stress-200",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-200": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-201."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-202",
+      "text": "Stress question 202: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-203",
+      "text": "Stress question 203: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-204",
+      "text": "Stress question 204: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-205",
+      "text": "Stress question 205: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-206",
+      "text": "Stress question 206: follow-up to q-stress-205",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-205": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-206."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-207",
+      "text": "Stress question 207: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-208",
+      "text": "Stress question 208: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-209",
+      "text": "Stress question 209: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-210",
+      "text": "Stress question 210: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-211",
+      "text": "Stress question 211: follow-up to q-stress-210",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-210": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-211."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-212",
+      "text": "Stress question 212: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-213",
+      "text": "Stress question 213: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-214",
+      "text": "Stress question 214: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-215",
+      "text": "Stress question 215: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-216",
+      "text": "Stress question 216: follow-up to q-stress-215",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-215": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-216."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-217",
+      "text": "Stress question 217: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-218",
+      "text": "Stress question 218: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-219",
+      "text": "Stress question 219: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-220",
+      "text": "Stress question 220: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-221",
+      "text": "Stress question 221: follow-up to q-stress-220",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-220": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-221."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-222",
+      "text": "Stress question 222: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-223",
+      "text": "Stress question 223: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-224",
+      "text": "Stress question 224: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-225",
+      "text": "Stress question 225: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-226",
+      "text": "Stress question 226: follow-up to q-stress-225",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-225": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-226."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-227",
+      "text": "Stress question 227: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-228",
+      "text": "Stress question 228: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-229",
+      "text": "Stress question 229: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-230",
+      "text": "Stress question 230: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-231",
+      "text": "Stress question 231: follow-up to q-stress-230",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-230": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-231."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-232",
+      "text": "Stress question 232: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-233",
+      "text": "Stress question 233: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-234",
+      "text": "Stress question 234: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-235",
+      "text": "Stress question 235: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-236",
+      "text": "Stress question 236: follow-up to q-stress-235",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-235": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-236."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-237",
+      "text": "Stress question 237: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-238",
+      "text": "Stress question 238: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-239",
+      "text": "Stress question 239: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-240",
+      "text": "Stress question 240: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-241",
+      "text": "Stress question 241: follow-up to q-stress-240",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-240": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-241."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-242",
+      "text": "Stress question 242: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-243",
+      "text": "Stress question 243: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-244",
+      "text": "Stress question 244: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-245",
+      "text": "Stress question 245: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-246",
+      "text": "Stress question 246: follow-up to q-stress-245",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-245": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-246."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-247",
+      "text": "Stress question 247: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-248",
+      "text": "Stress question 248: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-249",
+      "text": "Stress question 249: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-250",
+      "text": "Stress question 250: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-251",
+      "text": "Stress question 251: follow-up to q-stress-250",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-250": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-251."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-252",
+      "text": "Stress question 252: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-253",
+      "text": "Stress question 253: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-254",
+      "text": "Stress question 254: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-255",
+      "text": "Stress question 255: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-256",
+      "text": "Stress question 256: follow-up to q-stress-255",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-255": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-256."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-257",
+      "text": "Stress question 257: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-258",
+      "text": "Stress question 258: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-259",
+      "text": "Stress question 259: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-260",
+      "text": "Stress question 260: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-261",
+      "text": "Stress question 261: follow-up to q-stress-260",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-260": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-261."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-262",
+      "text": "Stress question 262: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-263",
+      "text": "Stress question 263: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-264",
+      "text": "Stress question 264: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-265",
+      "text": "Stress question 265: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-266",
+      "text": "Stress question 266: follow-up to q-stress-265",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-265": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-266."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-267",
+      "text": "Stress question 267: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-268",
+      "text": "Stress question 268: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-269",
+      "text": "Stress question 269: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-270",
+      "text": "Stress question 270: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-271",
+      "text": "Stress question 271: follow-up to q-stress-270",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-270": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-271."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-272",
+      "text": "Stress question 272: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-273",
+      "text": "Stress question 273: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-274",
+      "text": "Stress question 274: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-275",
+      "text": "Stress question 275: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-276",
+      "text": "Stress question 276: follow-up to q-stress-275",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-275": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-276."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-277",
+      "text": "Stress question 277: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-278",
+      "text": "Stress question 278: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-279",
+      "text": "Stress question 279: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-280",
+      "text": "Stress question 280: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-281",
+      "text": "Stress question 281: follow-up to q-stress-280",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-280": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-281."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-282",
+      "text": "Stress question 282: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-283",
+      "text": "Stress question 283: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-284",
+      "text": "Stress question 284: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-285",
+      "text": "Stress question 285: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-286",
+      "text": "Stress question 286: follow-up to q-stress-285",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-285": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-286."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-287",
+      "text": "Stress question 287: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-288",
+      "text": "Stress question 288: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-289",
+      "text": "Stress question 289: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-290",
+      "text": "Stress question 290: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-291",
+      "text": "Stress question 291: follow-up to q-stress-290",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-290": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-291."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-292",
+      "text": "Stress question 292: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-293",
+      "text": "Stress question 293: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-294",
+      "text": "Stress question 294: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-295",
+      "text": "Stress question 295: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-296",
+      "text": "Stress question 296: follow-up to q-stress-295",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-295": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-296."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-297",
+      "text": "Stress question 297: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-298",
+      "text": "Stress question 298: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-299",
+      "text": "Stress question 299: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-300",
+      "text": "Stress question 300: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-301",
+      "text": "Stress question 301: follow-up to q-stress-300",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-300": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-301."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-302",
+      "text": "Stress question 302: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-303",
+      "text": "Stress question 303: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-304",
+      "text": "Stress question 304: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-305",
+      "text": "Stress question 305: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-306",
+      "text": "Stress question 306: follow-up to q-stress-305",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-305": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-306."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-307",
+      "text": "Stress question 307: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-308",
+      "text": "Stress question 308: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-309",
+      "text": "Stress question 309: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-310",
+      "text": "Stress question 310: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-311",
+      "text": "Stress question 311: follow-up to q-stress-310",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-310": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-311."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-312",
+      "text": "Stress question 312: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-313",
+      "text": "Stress question 313: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-314",
+      "text": "Stress question 314: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-315",
+      "text": "Stress question 315: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-316",
+      "text": "Stress question 316: follow-up to q-stress-315",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-315": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-316."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-317",
+      "text": "Stress question 317: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-318",
+      "text": "Stress question 318: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-319",
+      "text": "Stress question 319: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-320",
+      "text": "Stress question 320: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-321",
+      "text": "Stress question 321: follow-up to q-stress-320",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-320": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-321."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-322",
+      "text": "Stress question 322: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-323",
+      "text": "Stress question 323: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-324",
+      "text": "Stress question 324: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-325",
+      "text": "Stress question 325: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-326",
+      "text": "Stress question 326: follow-up to q-stress-325",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-325": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-326."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-327",
+      "text": "Stress question 327: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-328",
+      "text": "Stress question 328: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-329",
+      "text": "Stress question 329: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-330",
+      "text": "Stress question 330: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-331",
+      "text": "Stress question 331: follow-up to q-stress-330",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-330": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-331."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-332",
+      "text": "Stress question 332: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-333",
+      "text": "Stress question 333: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-334",
+      "text": "Stress question 334: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-335",
+      "text": "Stress question 335: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-336",
+      "text": "Stress question 336: follow-up to q-stress-335",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-335": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-336."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-337",
+      "text": "Stress question 337: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-338",
+      "text": "Stress question 338: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-339",
+      "text": "Stress question 339: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-340",
+      "text": "Stress question 340: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-341",
+      "text": "Stress question 341: follow-up to q-stress-340",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-340": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-341."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-342",
+      "text": "Stress question 342: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-343",
+      "text": "Stress question 343: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-344",
+      "text": "Stress question 344: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-345",
+      "text": "Stress question 345: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-346",
+      "text": "Stress question 346: follow-up to q-stress-345",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-345": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-346."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-347",
+      "text": "Stress question 347: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-348",
+      "text": "Stress question 348: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-349",
+      "text": "Stress question 349: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-350",
+      "text": "Stress question 350: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-351",
+      "text": "Stress question 351: follow-up to q-stress-350",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-350": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-351."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-352",
+      "text": "Stress question 352: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-353",
+      "text": "Stress question 353: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-354",
+      "text": "Stress question 354: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-355",
+      "text": "Stress question 355: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-356",
+      "text": "Stress question 356: follow-up to q-stress-355",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-355": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-356."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-357",
+      "text": "Stress question 357: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-358",
+      "text": "Stress question 358: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-359",
+      "text": "Stress question 359: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-360",
+      "text": "Stress question 360: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-361",
+      "text": "Stress question 361: follow-up to q-stress-360",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-360": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-361."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-362",
+      "text": "Stress question 362: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-363",
+      "text": "Stress question 363: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-364",
+      "text": "Stress question 364: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-365",
+      "text": "Stress question 365: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-366",
+      "text": "Stress question 366: follow-up to q-stress-365",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-365": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-366."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-367",
+      "text": "Stress question 367: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-368",
+      "text": "Stress question 368: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-369",
+      "text": "Stress question 369: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-370",
+      "text": "Stress question 370: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-371",
+      "text": "Stress question 371: follow-up to q-stress-370",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-370": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-371."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-372",
+      "text": "Stress question 372: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-373",
+      "text": "Stress question 373: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-374",
+      "text": "Stress question 374: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-375",
+      "text": "Stress question 375: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-376",
+      "text": "Stress question 376: follow-up to q-stress-375",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-375": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-376."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-377",
+      "text": "Stress question 377: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-378",
+      "text": "Stress question 378: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-379",
+      "text": "Stress question 379: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-380",
+      "text": "Stress question 380: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-381",
+      "text": "Stress question 381: follow-up to q-stress-380",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-380": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-381."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-382",
+      "text": "Stress question 382: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-383",
+      "text": "Stress question 383: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-384",
+      "text": "Stress question 384: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-385",
+      "text": "Stress question 385: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-386",
+      "text": "Stress question 386: follow-up to q-stress-385",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-385": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-386."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-387",
+      "text": "Stress question 387: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-388",
+      "text": "Stress question 388: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-389",
+      "text": "Stress question 389: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-390",
+      "text": "Stress question 390: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-391",
+      "text": "Stress question 391: follow-up to q-stress-390",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-390": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-391."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-392",
+      "text": "Stress question 392: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-393",
+      "text": "Stress question 393: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-394",
+      "text": "Stress question 394: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-395",
+      "text": "Stress question 395: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-396",
+      "text": "Stress question 396: follow-up to q-stress-395",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-395": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-396."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-397",
+      "text": "Stress question 397: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-398",
+      "text": "Stress question 398: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-399",
+      "text": "Stress question 399: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-400",
+      "text": "Stress question 400: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-401",
+      "text": "Stress question 401: follow-up to q-stress-400",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-400": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-401."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-402",
+      "text": "Stress question 402: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-403",
+      "text": "Stress question 403: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-404",
+      "text": "Stress question 404: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-405",
+      "text": "Stress question 405: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-406",
+      "text": "Stress question 406: follow-up to q-stress-405",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-405": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-406."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-407",
+      "text": "Stress question 407: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-408",
+      "text": "Stress question 408: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-409",
+      "text": "Stress question 409: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-410",
+      "text": "Stress question 410: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-411",
+      "text": "Stress question 411: follow-up to q-stress-410",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-410": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-411."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-412",
+      "text": "Stress question 412: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-413",
+      "text": "Stress question 413: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-414",
+      "text": "Stress question 414: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-415",
+      "text": "Stress question 415: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-416",
+      "text": "Stress question 416: follow-up to q-stress-415",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-415": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-416."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-417",
+      "text": "Stress question 417: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-418",
+      "text": "Stress question 418: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-419",
+      "text": "Stress question 419: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-420",
+      "text": "Stress question 420: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-421",
+      "text": "Stress question 421: follow-up to q-stress-420",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-420": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-421."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-422",
+      "text": "Stress question 422: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-423",
+      "text": "Stress question 423: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-424",
+      "text": "Stress question 424: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-425",
+      "text": "Stress question 425: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-426",
+      "text": "Stress question 426: follow-up to q-stress-425",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-425": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-426."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-427",
+      "text": "Stress question 427: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-428",
+      "text": "Stress question 428: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-429",
+      "text": "Stress question 429: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-430",
+      "text": "Stress question 430: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-431",
+      "text": "Stress question 431: follow-up to q-stress-430",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-430": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-431."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-432",
+      "text": "Stress question 432: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-433",
+      "text": "Stress question 433: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-434",
+      "text": "Stress question 434: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-435",
+      "text": "Stress question 435: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-436",
+      "text": "Stress question 436: follow-up to q-stress-435",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-435": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-436."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-437",
+      "text": "Stress question 437: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-438",
+      "text": "Stress question 438: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-439",
+      "text": "Stress question 439: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-440",
+      "text": "Stress question 440: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-441",
+      "text": "Stress question 441: follow-up to q-stress-440",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-440": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-441."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-442",
+      "text": "Stress question 442: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-443",
+      "text": "Stress question 443: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-444",
+      "text": "Stress question 444: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-445",
+      "text": "Stress question 445: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-446",
+      "text": "Stress question 446: follow-up to q-stress-445",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-445": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-446."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-447",
+      "text": "Stress question 447: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-448",
+      "text": "Stress question 448: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-449",
+      "text": "Stress question 449: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-450",
+      "text": "Stress question 450: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-451",
+      "text": "Stress question 451: follow-up to q-stress-450",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-450": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-451."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-452",
+      "text": "Stress question 452: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-453",
+      "text": "Stress question 453: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-454",
+      "text": "Stress question 454: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-455",
+      "text": "Stress question 455: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-456",
+      "text": "Stress question 456: follow-up to q-stress-455",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-455": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-456."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-457",
+      "text": "Stress question 457: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-458",
+      "text": "Stress question 458: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-459",
+      "text": "Stress question 459: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-460",
+      "text": "Stress question 460: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-461",
+      "text": "Stress question 461: follow-up to q-stress-460",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-460": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-461."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-462",
+      "text": "Stress question 462: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-463",
+      "text": "Stress question 463: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-464",
+      "text": "Stress question 464: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-465",
+      "text": "Stress question 465: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-466",
+      "text": "Stress question 466: follow-up to q-stress-465",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-465": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-466."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-467",
+      "text": "Stress question 467: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-468",
+      "text": "Stress question 468: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-469",
+      "text": "Stress question 469: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-470",
+      "text": "Stress question 470: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-471",
+      "text": "Stress question 471: follow-up to q-stress-470",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-470": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-471."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-472",
+      "text": "Stress question 472: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-473",
+      "text": "Stress question 473: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-474",
+      "text": "Stress question 474: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-475",
+      "text": "Stress question 475: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-476",
+      "text": "Stress question 476: follow-up to q-stress-475",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-475": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-476."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-477",
+      "text": "Stress question 477: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-478",
+      "text": "Stress question 478: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-479",
+      "text": "Stress question 479: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-480",
+      "text": "Stress question 480: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-481",
+      "text": "Stress question 481: follow-up to q-stress-480",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-480": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-481."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-482",
+      "text": "Stress question 482: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-483",
+      "text": "Stress question 483: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-484",
+      "text": "Stress question 484: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-485",
+      "text": "Stress question 485: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-486",
+      "text": "Stress question 486: follow-up to q-stress-485",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-485": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-486."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-487",
+      "text": "Stress question 487: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-488",
+      "text": "Stress question 488: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-489",
+      "text": "Stress question 489: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-490",
+      "text": "Stress question 490: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-491",
+      "text": "Stress question 491: follow-up to q-stress-490",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-490": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-491."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-492",
+      "text": "Stress question 492: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-493",
+      "text": "Stress question 493: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-494",
+      "text": "Stress question 494: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-495",
+      "text": "Stress question 495: yes-no-na anchor",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-496",
+      "text": "Stress question 496: follow-up to q-stress-495",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-495": {
+          "equals": "Yes"
+        }
+      },
+      "remediationActions": ["Document remediation for q-stress-496."],
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    },
+    {
+      "id": "q-stress-497",
+      "text": "Stress question 497: single-choice",
+      "category": "Stress",
+      "responseType": "single-choice",
+      "options": ["Alpha", "Bravo", "Charlie", "Delta"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-498",
+      "text": "Stress question 498: multi-choice",
+      "category": "Stress",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support", "Other"],
+      "deprecated": false,
+      "labelIds": ["lbl-performance"]
+    },
+    {
+      "id": "q-stress-499",
+      "text": "Stress question 499: gated by q-stress-0",
+      "category": "Stress",
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "showWhen": {
+        "q-stress-0": {
+          "equals": "Yes"
+        }
+      },
+      "deprecated": false,
+      "labelIds": ["lbl-conditional"]
+    }
+  ],
+  "labels": [
+    {
+      "id": "lbl-performance",
+      "name": "Performance",
+      "color": "#0f766e"
+    },
+    {
+      "id": "lbl-conditional",
+      "name": "Conditional logic",
+      "color": "#7c3aed"
+    }
+  ],
+  "outcomeOptions": [
+    {
+      "id": "pass",
+      "wording": "Pass",
+      "severity": 0
+    },
+    {
+      "id": "fail",
+      "wording": "Fail",
+      "severity": 100
+    }
+  ],
+  "defaultOutcomeId": "pass"
+}

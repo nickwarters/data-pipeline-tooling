@@ -79,7 +79,7 @@ test('CORACompileDrawer: Copy writes code to clipboard + shows toast', async () 
   const foot = drawer._children[2];
   const copyBtn = foot._children[1]._children[0];
   await copyBtn._listeners.click[0]();
-  assert.equal(toastMsg.get(), 'Config copied to clipboard');
+  assert.equal(toastMsg.get(), 'Bank JSON copied to clipboard');
   e.disconnectedCallback();
 });
 
@@ -127,7 +127,6 @@ test('CORACompileDrawer: code preview uses explicit highlighted HTML that escape
     'example-review': {
       label: 'Example',
       slug: 'example-review',
-      eligibleGroups: [],
       questions: [
         {
           id: 'q-danger',

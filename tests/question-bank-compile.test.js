@@ -13,7 +13,7 @@ import {
 
 /** Tiny helper to build a bank with one question. */
 function bank(/** @type {any} */ q) {
-  return { label: 'L', slug: 's', eligibleGroups: ['G'], questions: [q] };
+  return { label: 'L', slug: 's', questions: [q] };
 }
 
 test('escapeHtml: escapes the five entities', () => {
@@ -27,36 +27,27 @@ test('escapeHtml: coerces non-string to string', () => {
   assert.equal(escapeHtml(/** @type {any} */ (123)), '123');
 });
 
-test('compileBank: emits header, eligibleGroups, computeOutcome, export', () => {
+test('compileBank: emits standalone current bank JSON', () => {
   const out = compileBank({
     label: 'L',
     slug: 's',
-    eligibleGroups: ['Reviewers'],
     questions: [
       { id: 'q1', text: 'T', responseType: 'yes-no-na', deprecated: false },
     ],
   });
-  assert.ok(out.startsWith('// @ts-check'));
-  assert.ok(
-    out.includes(
-      `import { computeConfiguredOutcome } from '../src/evaluators/configured-outcome.js';`
-    )
-  );
-  assert.ok(out.includes(`eligibleGroups: ["Reviewers"]`));
-  assert.ok(out.includes('computeOutcome(answers)'));
-  assert.ok(
-    out.includes(
-      'return computeConfiguredOutcome(config.questions, answers, config.outcomeOptions, config.defaultOutcomeId);'
-    )
-  );
-  assert.ok(out.endsWith('export default config;'));
+  assert.deepEqual(JSON.parse(out), {
+    label: 'L',
+    slug: 's',
+    questions: [
+      { id: 'q1', text: 'T', responseType: 'yes-no-na', deprecated: false },
+    ],
+  });
 });
 
-test('compileBank: compiled outcome is driven by per-option outcome mappings', async () => {
+test('compileBank: includes bank metadata and question content only', () => {
   const out = compileBank({
     label: 'L',
     slug: 's',
-    eligibleGroups: ['Reviewers'],
     outcomeOptions: [
       { id: 'pass', wording: 'Pass', severity: 0 },
       { id: 'fail', wording: 'Fail', severity: 100 },
@@ -76,189 +67,42 @@ test('compileBank: compiled outcome is driven by per-option outcome mappings', a
         responseType: 'yes-no-na',
         optionOutcomes: { No: 'fail' },
         failureCriteria: 'No',
+        labelIds: ['lbl-a'],
+        remediationActions: ['Customer impact identified'],
+        allowFreeFormRemediation: true,
         deprecated: false,
       },
     ],
+    labels: [{ id: 'lbl-a', name: 'Alpha', color: '#123456' }],
   });
-  assert.ok(!out.includes('Object.values(answers).some'));
-
-  const moduleUrl = `data:text/javascript,${encodeURIComponent(
-    out.replace(
-      `../src/evaluators/configured-outcome.js`,
-      new URL('../src/evaluators/configured-outcome.js', import.meta.url).href
-    )
-  )}`;
-  const { default: compiledConfig } = await import(moduleUrl);
-
-  // An answer with no mapped outcome contributes nothing → default pass.
-  assert.deepStrictEqual(
-    compiledConfig.computeOutcome({
-      'q-general-info': { value: 'No' },
-    }),
-    { outcome: 'pass', wording: 'Pass' }
-  );
-  // A mapped "No" scores fail.
-  assert.deepStrictEqual(
-    compiledConfig.computeOutcome({
-      'q-required-check': { value: 'No' },
-    }),
-    { outcome: 'fail', wording: 'Fail' }
-  );
-});
-
-test('compileBank: omits category when absent', () => {
-  const out = compileBank(
-    bank({ id: 'q1', text: 'T', responseType: 'yes-no-na', deprecated: false })
-  );
-  assert.ok(!out.includes('category:'));
-});
-
-test('compileBank: includes category when present', () => {
-  const out = compileBank(
-    bank({
-      id: 'q1',
-      text: 'T',
-      category: 'Opening',
-      responseType: 'yes-no-na',
-      deprecated: false,
-    })
-  );
-  assert.ok(out.includes('category: "Opening"'));
-});
-
-test('compileBank: includes options when present', () => {
-  const out = compileBank(
-    bank({
-      id: 'q1',
-      text: 'T',
-      responseType: 'single-choice',
-      options: ['A', 'B'],
-      deprecated: false,
-    })
-  );
-  assert.ok(out.includes('options: ["A","B"]'));
-});
-
-test('compileBank: includes showWhen when present', () => {
-  const out = compileBank(
-    bank({
-      id: 'q1',
-      text: 'T',
-      responseType: 'yes-no-na',
-      showWhen: { q0: { equals: 'Yes' } },
-      deprecated: false,
-    })
-  );
-  assert.ok(out.includes('showWhen:'));
-});
-
-test('compileBank: includes failureCriteria when present', () => {
-  const out = compileBank(
-    bank({
-      id: 'q1',
-      text: 'T',
-      responseType: 'yes-no-na',
-      failureCriteria: 'No',
-      deprecated: false,
-    })
-  );
-  assert.ok(out.includes('failureCriteria: "No"'));
-});
-
-test('compileBank: emits remediationActions array when present', () => {
-  const out = compileBank(
-    bank({
-      id: 'q1',
-      text: 'T',
-      responseType: 'yes-no-na',
-      remediationActions: ['Action 1', 'Action 2'],
-      deprecated: false,
-    })
-  );
-  assert.ok(out.includes('remediationActions: ['));
-  assert.ok(out.includes('"Action 1"'));
-  assert.ok(out.includes('"Action 2"'));
-});
-
-test('compileBank: emits shared outcome options and per-option outcome mappings', () => {
-  const out = compileBank({
-    ...bank({
-      id: 'q1',
-      text: 'T',
-      responseType: 'yes-no-na',
-      failureCriteria: 'No',
-      optionOutcomes: { No: 'fail' },
-      remediationActions: ['Customer impact identified'],
-      deprecated: false,
-    }),
-    outcomeOptions: [
-      { id: 'good', wording: 'Good Outcome', severity: 0 },
-      { id: 'fail', wording: 'Fail', severity: 100 },
-    ],
-    defaultOutcomeId: 'good',
+  const parsed = JSON.parse(out);
+  assert.deepEqual(parsed.outcomeOptions, [
+    { id: 'pass', wording: 'Pass', severity: 0 },
+    { id: 'fail', wording: 'Fail', severity: 100 },
+  ]);
+  assert.equal(parsed.defaultOutcomeId, 'pass');
+  assert.deepEqual(parsed.labels, [
+    { id: 'lbl-a', name: 'Alpha', color: '#123456' },
+  ]);
+  assert.deepEqual(parsed.questions[1], {
+    id: 'q-required-check',
+    text: 'Was the required check completed?',
+    responseType: 'yes-no-na',
+    optionOutcomes: { No: 'fail' },
+    failureCriteria: 'No',
+    labelIds: ['lbl-a'],
+    remediationActions: ['Customer impact identified'],
+    allowFreeFormRemediation: true,
+    deprecated: false,
   });
-  assert.ok(out.includes('outcomeOptions: ['));
-  assert.ok(out.includes('defaultOutcomeId: "good"'));
-  assert.ok(out.includes('optionOutcomes: {"No":"fail"}'));
-  // The response drives the outcome — actions no longer carry outcome ids.
-  assert.ok(!out.includes('outcomeId'));
-  assert.ok(!out.includes('noActionOutcomeId'));
-});
-
-test('compileBank: outcome-type question derives read-only options and mapping', () => {
-  const out = compileBank({
-    ...bank({
-      id: 'q1',
-      text: 'Overall assessment',
-      responseType: 'outcome',
-      deprecated: false,
-    }),
-    outcomeOptions: [
-      { id: 'pass', wording: 'Pass', severity: 0 },
-      { id: 'fail', wording: 'Fail', severity: 100 },
-    ],
-  });
-  assert.ok(out.includes('responseType: "outcome"'));
-  assert.ok(out.includes('options: ["Pass","Fail"]'));
-  assert.ok(out.includes('optionOutcomes: {"Pass":"pass","Fail":"fail"}'));
-});
-
-test('compileBank: emits allowFreeFormRemediation when truthy', () => {
-  const out = compileBank(
-    bank({
-      id: 'q1',
-      text: 'T',
-      responseType: 'yes-no-na',
-      allowFreeFormRemediation: true,
-      deprecated: false,
-    })
-  );
-  assert.ok(out.includes('allowFreeFormRemediation: true'));
-});
-
-test('compileBank: emits deprecated: true', () => {
-  const out = compileBank(
-    bank({ id: 'q1', text: 'T', responseType: 'yes-no-na', deprecated: true })
-  );
-  assert.ok(out.includes('deprecated: true'));
-});
-
-test('compileBank: empty questions still produces a valid module', () => {
-  const out = compileBank({
-    label: 'L',
-    slug: 's',
-    eligibleGroups: [],
-    questions: [],
-  });
-  assert.ok(out.includes('questions: ['));
-  assert.ok(out.includes('export default config;'));
+  assert.equal('eligibleGroups' in parsed, false);
+  assert.equal('computeOutcome' in parsed, false);
 });
 
 test('compileBank: preserves edited question order', () => {
   const out = compileBank({
     label: 'L',
     slug: 's',
-    eligibleGroups: [],
     questions: [
       {
         id: 'q-third',
@@ -275,60 +119,24 @@ test('compileBank: preserves edited question order', () => {
     ],
   });
 
-  assert.ok(out.indexOf('id: "q-third"') < out.indexOf('id: "q-first"'));
+  assert.deepEqual(
+    JSON.parse(out).questions.map((/** @type {any} */ q) => q.id),
+    ['q-third', 'q-first']
+  );
 });
 
-test('compileBank: emits a labels block when the bank has labels', () => {
+test('compileBank: omits empty optional tables', () => {
   const out = compileBank({
     label: 'L',
     slug: 's',
-    eligibleGroups: [],
-    labels: [
-      { id: 'lbl-a', name: 'Alpha', color: '#123456' },
-      { id: 'lbl-b', name: 'Beta', color: '#abcdef' },
-    ],
-    questions: [],
-  });
-  assert.ok(out.includes('labels: ['));
-  assert.ok(out.includes('{ id: "lbl-a", name: "Alpha", color: "#123456" },'));
-  assert.ok(out.includes('{ id: "lbl-b", name: "Beta", color: "#abcdef" },'));
-});
-
-test('compileBank: omits the labels block when there are none', () => {
-  const out = compileBank({
-    label: 'L',
-    slug: 's',
-    eligibleGroups: [],
     labels: [],
+    outcomeOptions: [],
     questions: [],
   });
-  assert.ok(!out.includes('labels: ['));
-});
-
-test('compileBank: emits labelIds on a question that carries them', () => {
-  const out = compileBank(
-    bank({
-      id: 'q1',
-      text: 'T',
-      labelIds: ['lbl-a', 'lbl-b'],
-      responseType: 'yes-no-na',
-      deprecated: false,
-    })
-  );
-  assert.ok(out.includes('labelIds: ["lbl-a","lbl-b"]'));
-});
-
-test('compileBank: omits labelIds when absent or empty', () => {
-  const out = compileBank(
-    bank({
-      id: 'q1',
-      text: 'T',
-      labelIds: [],
-      responseType: 'yes-no-na',
-      deprecated: false,
-    })
-  );
-  assert.ok(!out.includes('labelIds:'));
+  const parsed = JSON.parse(out);
+  assert.equal('labels' in parsed, false);
+  assert.equal('outcomeOptions' in parsed, false);
+  assert.deepEqual(parsed.questions, []);
 });
 
 test('highlight: wraps comments, strings, keywords, booleans, and property keys', () => {

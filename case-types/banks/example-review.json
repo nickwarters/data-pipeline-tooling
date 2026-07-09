@@ -1,0 +1,93 @@
+{
+  "slug": "example-review",
+  "label": "Example Review",
+  "questions": [
+    {
+      "id": "q-welcome",
+      "text": "Was the customer greeted professionally?",
+      "category": "Opening",
+      "labelIds": ["lbl-coaching"],
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "deprecated": false
+    },
+    {
+      "id": "q-needs",
+      "text": "Were the customer's needs identified before proceeding?",
+      "category": "Discovery",
+      "labelIds": ["lbl-coaching", "lbl-regulatory"],
+      "responseType": "yes-no-na",
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "remediationActions": ["Retrain agent on needs-identification protocol."],
+      "deprecated": false
+    },
+    {
+      "id": "q-resolve",
+      "text": "Was the issue resolved to the customer's satisfaction?",
+      "category": "Resolution",
+      "labelIds": ["lbl-regulatory"],
+      "responseType": "yes-no-na",
+      "showWhen": {
+        "q-needs": {
+          "equals": "Yes"
+        }
+      },
+      "optionOutcomes": {
+        "No": "fail"
+      },
+      "failureCriteria": "No",
+      "remediationActions": ["Escalate unresolved case to senior agent."],
+      "deprecated": false
+    },
+    {
+      "id": "q-channel",
+      "text": "Which channel was the customer using?",
+      "responseType": "single-choice",
+      "options": ["Phone", "Email", "Chat"],
+      "deprecated": false
+    },
+    {
+      "id": "q-products",
+      "text": "Which products were discussed during the interaction?",
+      "responseType": "multi-choice",
+      "options": ["Account", "Billing", "Support"],
+      "deprecated": false
+    }
+  ],
+  "labels": [
+    {
+      "id": "lbl-coaching",
+      "name": "Coaching",
+      "color": "#2563eb"
+    },
+    {
+      "id": "lbl-regulatory",
+      "name": "Regulatory",
+      "color": "#b91c1c"
+    }
+  ],
+  "outcomeOptions": [
+    {
+      "id": "pass",
+      "wording": "Pass",
+      "severity": 0
+    },
+    {
+      "id": "refer",
+      "wording": "Refer",
+      "severity": 50
+    },
+    {
+      "id": "fail",
+      "wording": "Fail",
+      "severity": 100
+    }
+  ],
+  "defaultOutcomeId": "pass"
+}

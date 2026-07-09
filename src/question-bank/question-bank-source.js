@@ -2,18 +2,13 @@
 /**
  * Synchronous Question Bank source for the curator workbench.
  *
- * The editor should reflect the live Case Type configs, not a parallel fixture
- * bank. These projections keep the workbench's editable shape while taking the
- * actual question definitions and Case Type metadata from case-types/.
- *
- * This is an interim adapter, not a replacement for ADR-0021's standalone,
- * versioned Question Bank artifact. Keep this projection limited to fields that
- * belong to the editable bank, plus eligibleGroups while compileBank still emits
- * case-types/{slug}.js modules. Runtime Case Type config fields must not become
- * editor source fields here.
+ * ADR-0021 treats the Question Bank as versionable content separate from the
+ * operational Case Type config. The editor therefore reads the standalone bank
+ * artifacts under case-types/banks/; runtime config fields stay in
+ * case-types/{slug}.js.
  */
 
-import { CASE_TYPE_IMPORTERS } from '../../case-types/manifest.js';
+import { QUESTION_BANK_IMPORTERS } from '../../case-types/manifest.js';
 
 /**
  * A reporting label that can be assigned to Question Definitions from the
@@ -50,7 +45,7 @@ import { CASE_TYPE_IMPORTERS } from '../../case-types/manifest.js';
  * @typedef {{
  *   label: string,
  *   slug: string,
- *   eligibleGroups: string[],
+ *   eligibleGroups?: string[],
  *   labels?: Label[],
  *   outcomeOptions?: OutcomeOption[],
  *   defaultOutcomeId?: string,
@@ -67,7 +62,6 @@ export function bankFromCaseTypeConfig(slug, config) {
   return {
     label: labelFromSlug(slug),
     slug,
-    eligibleGroups: [...(config.eligibleGroups ?? [])],
     labels: structuredClone(config.labels ?? []),
     outcomeOptions: structuredClone(config.outcomeOptions ?? []),
     defaultOutcomeId: config.defaultOutcomeId,
@@ -79,14 +73,32 @@ export function bankFromCaseTypeConfig(slug, config) {
 }
 
 /**
- * @param {Record<string, () => Promise<{ default: import('../sharepoint-client.js').CaseTypeConfig }>>} [importers]
+ * @param {QuestionBank} bank
+ * @returns {QuestionBank}
+ */
+export function normaliseQuestionBank(bank) {
+  return {
+    label: bank.label,
+    slug: bank.slug,
+    labels: structuredClone(bank.labels ?? []),
+    outcomeOptions: structuredClone(bank.outcomeOptions ?? []),
+    defaultOutcomeId: bank.defaultOutcomeId,
+    questions: structuredClone(bank.questions ?? []).map((question) => ({
+      ...question,
+      deprecated: question.deprecated ?? false,
+    })),
+  };
+}
+
+/**
+ * @param {Record<string, () => Promise<{ default: QuestionBank }>>} [importers]
  * @returns {Promise<Record<string, QuestionBank>>}
  */
-export async function loadQuestionBanks(importers = CASE_TYPE_IMPORTERS) {
+export async function loadQuestionBanks(importers = QUESTION_BANK_IMPORTERS) {
   const entries = await Promise.all(
     Object.entries(importers).map(async ([slug, importer]) => {
       const mod = await importer();
-      return [slug, bankFromCaseTypeConfig(slug, mod.default)];
+      return [slug, normaliseQuestionBank(mod.default)];
     })
   );
   return Object.fromEntries(entries);
