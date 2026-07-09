@@ -18,15 +18,17 @@ Accepted
 > **Amendment (2026-07-09, issue #324).** The **Question Bank** is the
 > standalone, versionable content artifact. Runtime `case-types/{slug}.js`
 > modules keep operational wiring only and reference their bank content from
-> `case-types/banks/{slug}.json`; they do not own a second editable copy of
+> `case-types/banks/{slug}.txt`; they do not own a second editable copy of
 > `questions`, labels, or Outcome vocabulary. The curator workbench reads and
-> compiles the same current-bank JSON artifact.
+> compiles the same current-bank JSON text artifact. The repo/dev-loop artifact
+> uses `.txt` because SharePoint SE can block or mis-serve `.json`; the content is
+> still JSON text and is parsed explicitly.
 
 ## Context
 
 A **Case** loads its **Question Bank** live: `CaseReviewViewModel.load()` imports the
 current `case-types/{slug}.js`, whose operational config references the current
-standalone `case-types/banks/{slug}.json`, filters out `deprecated` questions,
+standalone `case-types/banks/{slug}.txt`, filters out `deprecated` questions,
 and recomputes the **Applicable Question** set from that catalogue against the
 Case's stored **Answers** every time the Case is opened. For an **In-progress Case**
 this is correct and intended ([the architecture decision], [the architecture decision]): bank edits propagate live, and the
@@ -83,11 +85,13 @@ unhashed name is the "current" pointer). Versioned files and the manifest are
 Completed Case might reference can never be removed.
 
 In the repo/dev loop before the publish writer exists, the editable current-bank
-artifact lives under `case-types/banks/{slug}.json`. A runtime Case Type module may
+artifact lives under `case-types/banks/{slug}.txt`. A runtime Case Type module may
 import that artifact to expose `config.questions`, `config.labels`,
 `config.outcomeOptions`, and `config.defaultOutcomeId` through the existing
 `CaseTypeConfig` contract, but those fields are references to the standalone bank,
-not a second content home.
+not a second content home. The `.txt` extension is a deployment constraint only;
+the artifact body remains JSON so non-JavaScript tooling can parse the same
+content.
 
 ### The hash contract
 
@@ -213,7 +217,7 @@ The Python pipeline uses the **same** artifacts, gaining point-in-time stability
 
 ## Implementation order
 
-1. `case-types/banks/{slug}.json` is the repo/dev-loop current bank and
+1. `case-types/banks/{slug}.txt` is the repo/dev-loop current bank and
    `compileBank()` emits that same editable artifact.
 2. `compileExport()` emits the data-only `{slug}.json` ([the architecture decision]).
 3. Publish writes the content-addressed `{slug}.{hash}.json`, appends to

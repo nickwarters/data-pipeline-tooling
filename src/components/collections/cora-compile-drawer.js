@@ -56,7 +56,11 @@ export function CompileDrawer() {
             'p',
             {},
             'Ready for review. This is the exact JSON artifact that will be PR’d into ',
-            h('code', { className: 'code-inline' }, 'case-types/banks/'),
+            h(
+              'code',
+              { className: 'code-inline' },
+              'case-types/banks/{slug}.txt'
+            ),
             '.'
           )
         ),

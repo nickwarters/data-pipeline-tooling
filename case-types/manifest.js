@@ -4,6 +4,8 @@
  * @typedef {() => Promise<{ default: import('../src/question-bank/question-bank-source.js').QuestionBank }>} QuestionBankImporter
  */
 
+import { loadBank } from './load-bank.js';
+
 /**
  * @type {Record<string, CaseTypeImporter>}
  */
@@ -18,35 +20,20 @@ export const CASE_TYPE_IMPORTERS = {
  * @type {Record<string, QuestionBankImporter>}
  */
 export const QUESTION_BANK_IMPORTERS = {
-  'example-review': () =>
-    import('./banks/example-review.json', { with: { type: 'json' } }).then(
-      (mod) =>
-        /** @type {{ default: import('../src/question-bank/question-bank-source.js').QuestionBank }} */ (
-          mod
-        )
-    ),
+  'example-review': () => loadQuestionBank('./banks/example-review.txt'),
   'product-sale-review': () =>
-    import('./banks/product-sale-review.json', { with: { type: 'json' } }).then(
-      (mod) =>
-        /** @type {{ default: import('../src/question-bank/question-bank-source.js').QuestionBank }} */ (
-          mod
-        )
-    ),
-  'stress-review': () =>
-    import('./banks/stress-review.json', { with: { type: 'json' } }).then(
-      (mod) =>
-        /** @type {{ default: import('../src/question-bank/question-bank-source.js').QuestionBank }} */ (
-          mod
-        )
-    ),
-  complaints: () =>
-    import('./banks/complaints.json', { with: { type: 'json' } }).then(
-      (mod) =>
-        /** @type {{ default: import('../src/question-bank/question-bank-source.js').QuestionBank }} */ (
-          mod
-        )
-    ),
+    loadQuestionBank('./banks/product-sale-review.txt'),
+  'stress-review': () => loadQuestionBank('./banks/stress-review.txt'),
+  complaints: () => loadQuestionBank('./banks/complaints.txt'),
 };
+
+/**
+ * @param {string} path
+ * @returns {Promise<{ default: import('../src/question-bank/question-bank-source.js').QuestionBank }>}
+ */
+async function loadQuestionBank(path) {
+  return { default: await loadBank(path) };
+}
 
 export class UnknownCaseTypeError extends Error {
   /**

@@ -54,25 +54,6 @@ import { QUESTION_BANK_IMPORTERS } from '../../case-types/manifest.js';
  */
 
 /**
- * @param {string} slug
- * @param {import('../sharepoint-client.js').CaseTypeConfig} config
- * @returns {QuestionBank}
- */
-export function bankFromCaseTypeConfig(slug, config) {
-  return {
-    label: labelFromSlug(slug),
-    slug,
-    labels: structuredClone(config.labels ?? []),
-    outcomeOptions: structuredClone(config.outcomeOptions ?? []),
-    defaultOutcomeId: config.defaultOutcomeId,
-    questions: structuredClone(config.questions ?? []).map((question) => ({
-      ...question,
-      deprecated: question.deprecated ?? false,
-    })),
-  };
-}
-
-/**
  * @param {QuestionBank} bank
  * @returns {QuestionBank}
  */
@@ -106,14 +87,3 @@ export async function loadQuestionBanks(importers = QUESTION_BANK_IMPORTERS) {
 
 /** @type {Record<string, QuestionBank>} */
 export const questionBanks = await loadQuestionBanks();
-
-/**
- * @param {string} slug
- * @returns {string}
- */
-function labelFromSlug(slug) {
-  return slug
-    .split('-')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}

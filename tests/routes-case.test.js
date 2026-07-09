@@ -41,6 +41,13 @@ function makeClient(calls) {
   };
 }
 
+async function settleRouteLoad() {
+  for (let i = 0; i < 5; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flush();
+  }
+}
+
 /** @param {Array<{ id: string, opts: any }>} [calls] */
 function makeContext(calls = []) {
   return /** @type {any} */ ({
@@ -115,9 +122,8 @@ test('case route: source-key route passes caseType through to the page', async (
   register(router, makeContext(calls));
   router.navigate('#/case/example-review/456');
   // The source-key route resolves the Case Type config via dynamic import()
-  // before fetching, which needs a real macrotask turn to settle.
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  await flush();
+  // before fetching; the module also reads the bank artifact.
+  await settleRouteLoad();
 
   assert.equal(mounted.length, 1, 'route mounts a single page host');
   assert.equal(mounted[0].className, 'cora-case-review');

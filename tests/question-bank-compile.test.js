@@ -99,6 +99,34 @@ test('compileBank: includes bank metadata and question content only', () => {
   assert.equal('computeOutcome' in parsed, false);
 });
 
+test('compileBank: outcome-type questions bake derived options and mappings', () => {
+  const out = compileBank({
+    label: 'L',
+    slug: 's',
+    outcomeOptions: [
+      { id: 'pass', wording: 'Pass', severity: 0 },
+      { id: 'fail', wording: 'Fail', severity: 100 },
+    ],
+    questions: [
+      {
+        id: 'q-outcome',
+        text: 'Overall outcome',
+        responseType: 'outcome',
+        deprecated: false,
+      },
+    ],
+  });
+
+  assert.deepEqual(JSON.parse(out).questions[0], {
+    id: 'q-outcome',
+    text: 'Overall outcome',
+    responseType: 'outcome',
+    deprecated: false,
+    options: ['Pass', 'Fail'],
+    optionOutcomes: { Pass: 'pass', Fail: 'fail' },
+  });
+});
+
 test('compileBank: preserves edited question order', () => {
   const out = compileBank({
     label: 'L',

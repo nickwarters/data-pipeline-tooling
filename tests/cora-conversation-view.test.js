@@ -59,12 +59,12 @@ function makeStubClient(caseRow = BASE_CASE) {
 /** Flush the microtask queue enough times for fetchData()'s awaits to settle. */
 async function flush() {
   // loadCaseTypeConfig() performs a real dynamic import() of the case-type
-  // module, which resolves via the module loader (not just microtasks) —
-  // a macrotask tick is needed in addition to microtask flushes.
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  // module and the module performs a top-level bank-file read, so allow a few
+  // macrotask turns in addition to microtask flushes.
+  for (let i = 0; i < 5; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Promise.resolve();
+  }
 }
 
 // ===== TESTS =====

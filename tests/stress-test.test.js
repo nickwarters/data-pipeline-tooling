@@ -7,6 +7,7 @@ import {
   detectCycles,
 } from '../src/evaluators/applicability-evaluator.js';
 import { generateStressQuestions } from '../dev/fixtures/stress-questions.js';
+import stressConfig from '../case-types/stress-review.js';
 
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
@@ -34,6 +35,15 @@ test('stress fixture: contains conditional questions that depend on prior answer
 test('stress fixture: showWhen graph is acyclic', () => {
   const qs = generateStressQuestions(500);
   assert.equal(detectCycles(qs), false);
+});
+
+test('stress bank: standalone artifact stays aligned to the generated fixture', () => {
+  const generated = generateStressQuestions(500).map((question) => ({
+    ...question,
+    labelIds: question.showWhen ? ['lbl-conditional'] : ['lbl-performance'],
+  }));
+
+  assert.deepEqual(stressConfig.questions, generated);
 });
 
 test('stress fixture: applicability evaluation of 500 questions runs in under 50ms', () => {

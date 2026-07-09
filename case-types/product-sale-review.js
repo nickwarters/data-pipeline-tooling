@@ -1,12 +1,11 @@
 // @ts-check
 /** @typedef {import('../src/sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
 /** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
-/** @typedef {import('../src/question-bank/question-bank-source.js').QuestionBank} QuestionBank */
 
 import { computeConfiguredOutcome } from '../src/evaluators/configured-outcome.js';
-import bankJson from './banks/product-sale-review.json' with { type: 'json' };
+import { loadBank } from './load-bank.js';
 
-const bank = /** @type {QuestionBank} */ (bankJson);
+const bank = await loadBank('./banks/product-sale-review.txt');
 
 /** @type {CaseTypeConfig} */
 const config = {

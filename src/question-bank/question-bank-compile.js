@@ -2,7 +2,7 @@
 /**
  * Compile pipeline for the Question Bank curator workbench.
  *
- * compileBank(bank) → string of a case-types/banks/{slug}.json current bank
+ * compileBank(bank) → JSON text for case-types/banks/{slug}.txt current bank
  * highlight(code) → HTML with syntax-coloured spans
  * escapeHtml(s) → HTML-safe text
  * hashStr(s) → first 6 bytes of SHA-256, hex (browser crypto)
@@ -54,7 +54,7 @@ export function compileBank(bank) {
     {
       slug: bank.slug,
       label: bank.label,
-      questions: bank.questions,
+      questions: compileBankQuestions(bank),
       ...(bank.labels?.length ? { labels: bank.labels } : {}),
       ...(bank.outcomeOptions?.length
         ? { outcomeOptions: bank.outcomeOptions }
@@ -66,6 +66,24 @@ export function compileBank(bank) {
     null,
     2
   )}\n`;
+}
+
+/**
+ * @param {QuestionBank} bank
+ * @returns {DraftQuestion[]}
+ */
+function compileBankQuestions(bank) {
+  return bank.questions.map((question) => {
+    const resolved = resolveCompiledOptions(
+      question,
+      bank.outcomeOptions ?? []
+    );
+    return {
+      ...question,
+      options: resolved.options ?? undefined,
+      optionOutcomes: resolved.optionOutcomes ?? undefined,
+    };
+  });
 }
 
 /**

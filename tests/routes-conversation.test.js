@@ -30,6 +30,13 @@ function makeContext(opts = {}) {
   };
 }
 
+async function settleRouteLoad() {
+  for (let i = 0; i < 5; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Promise.resolve();
+  }
+}
+
 test('conversation route: register calls router.register with #/conversation/:id', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});
@@ -128,12 +135,8 @@ test('conversation route: source-key route passes caseType through to the fetche
   router.navigate('#/conversation/product-sale-review/123');
 
   // loadCaseTypeConfig() performs a real dynamic import() of the case-type
-  // module, which resolves via the module loader (not just microtasks) —
-  // a macrotask tick is needed in addition to microtask flushes.
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  // module, and the module now reads the bank artifact before export.
+  await settleRouteLoad();
 
   assert.equal(getCaseCalls.length, 1);
   assert.equal(getCaseCalls[0][0], '123');
