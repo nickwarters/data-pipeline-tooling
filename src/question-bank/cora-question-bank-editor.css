@@ -875,7 +875,7 @@ cora-bank-editor .opt-list {
 }
 cora-bank-editor .opt-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--cora-space-2);
 }
 cora-bank-editor .opt-label {
@@ -886,6 +886,8 @@ cora-bank-editor .opt-label {
   border-radius: var(--cora-radius-md);
   font-size: var(--cora-font-size-sm);
   color: var(--cora-color-on-surface);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 cora-bank-editor .opt-outcome-select {
   flex: 0 0 auto;

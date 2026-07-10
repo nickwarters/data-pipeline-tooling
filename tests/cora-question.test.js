@@ -395,6 +395,69 @@ test('CORAQuestion: focus() does nothing if no input found', () => {
   assert.equal(/** @type {any} */ (globalThis)._lastFocused, 'initial');
 });
 
+test('Question: single-choice with a long option adds the options-long class', () => {
+  const nodes = Question({
+    question: {
+      ...Q_YES_NO,
+      responseType: 'single-choice',
+      options: [
+        'Yes',
+        'No, this is a much longer option text that exceeds forty characters',
+      ],
+    },
+    currentValue: '',
+    access: 'edit',
+    onAnswer() {},
+  });
+  const fieldset = /** @type {any} */ (nodes[0]);
+  assert.equal(fieldset.className, 'cora-question cora-question-options-long');
+});
+
+test('Question: single-choice with only short options does not add the options-long class', () => {
+  const nodes = Question({
+    question: {
+      ...Q_YES_NO,
+      responseType: 'single-choice',
+      options: ['Yes', 'No'],
+    },
+    currentValue: '',
+    access: 'edit',
+    onAnswer() {},
+  });
+  const fieldset = /** @type {any} */ (nodes[0]);
+  assert.equal(fieldset.className, 'cora-question');
+});
+
+test('Question: single-choice option labels carry the cora-question-option class', () => {
+  const nodes = Question({
+    question: Q_YES_NO,
+    currentValue: '',
+    access: 'edit',
+    onAnswer() {},
+  });
+  const fieldset = /** @type {any} */ (nodes[0]);
+  const firstLabel = fieldset._children[1];
+  assert.equal(firstLabel.className, 'cora-question-option');
+});
+
+test('Question: outcome-type with a long option also gets the options-long class', () => {
+  const nodes = Question({
+    question: {
+      ...Q_OUTCOME,
+      options: [
+        'Pass',
+        'Refer for further review by the responsible party team',
+        'Fail',
+      ],
+    },
+    currentValue: '',
+    access: 'edit',
+    onAnswer() {},
+  });
+  const fieldset = /** @type {any} */ (nodes[0]);
+  assert.equal(fieldset.className, 'cora-question cora-question-options-long');
+});
+
 test('CORAQuestion: single-choice with no options renders empty fieldset (covers q.options ?? [])', () => {
   const el = new CORAQuestion();
   el.question = {

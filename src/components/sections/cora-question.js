@@ -6,6 +6,14 @@ import { h } from '../../lib/html.js';
 const YES_NO_NA = ['Yes', 'No', 'NA'];
 
 /**
+ * Option text longer than this many characters triggers the stacked-card
+ * layout (`cora-question-options-long`) instead of the default inline
+ * pill layout, so sentence-length single-choice options (e.g. `outcome`
+ * wordings) remain readable.
+ */
+const LONG_OPTION_THRESHOLD = 40;
+
+/**
  * @typedef {Object} QuestionProps
  * @property {QuestionDefinition | null} question
  * @property {string | string[]} currentValue
@@ -20,17 +28,31 @@ const YES_NO_NA = ['Yes', 'No', 'NA'];
 export function Question({ question, currentValue, access, onAnswer }) {
   if (!question) return [];
 
+  const isMultiChoice = question.responseType === 'multi-choice';
+  const singleChoiceOptions = isMultiChoice
+    ? []
+    : question.responseType === 'yes-no-na'
+      ? YES_NO_NA
+      : (question.options ?? []);
+  const hasLongOption = singleChoiceOptions.some(
+    (option) => option.length > LONG_OPTION_THRESHOLD
+  );
+  const fieldsetClass =
+    !isMultiChoice && hasLongOption
+      ? 'cora-question cora-question-options-long'
+      : 'cora-question';
+
   return [
     h(
       'fieldset',
       {
-        class: 'cora-question',
+        class: fieldsetClass,
         id: `cora-q-${question.id}`,
-        role: question.responseType === 'multi-choice' ? 'group' : 'radiogroup',
+        role: isMultiChoice ? 'group' : 'radiogroup',
         'aria-required': 'true',
       },
       h('legend', {}, question.text),
-      question.responseType === 'multi-choice'
+      isMultiChoice
         ? renderMultiChoice({ question, currentValue, access, onAnswer })
         : renderSingleChoice({ question, currentValue, access, onAnswer })
     ),
@@ -51,7 +73,7 @@ function renderSingleChoice({ question, currentValue, access, onAnswer }) {
   return options.map((option, index) =>
     h(
       'label',
-      {},
+      { class: 'cora-question-option' },
       h('input', {
         type: 'radio',
         name: `cora-q-${question.id}`,

@@ -9,6 +9,12 @@ import { outcomeResponseOptions } from '../../evaluators/configured-outcome.js';
 const YES_NO_NA = ['Yes', 'No', 'NA'];
 
 /**
+ * Single-option answers render as radio cards on the case review page, so
+ * they must stay to a sentence rather than growing into a paragraph.
+ */
+export const MAX_OPTION_LENGTH = 250;
+
+/**
  * Resolves the effective response options for a question plus whether the option
  * list and its Outcome mapping are editable:
  * - `yes-no-na` → fixed `Yes`/`No`/`NA`; outcome mapping editable.
@@ -174,13 +180,20 @@ export class CORAOptionsEditor extends HTMLElement {
       },
       onAddOption: () => {
         const value = /** @type {any} */ (globalThis).prompt?.(
-          'New option label:'
+          `New option label (max ${MAX_OPTION_LENGTH} characters):`
         );
-        if (value && value.trim()) {
-          commit(() => {
-            (this.question.options ||= []).push(value.trim());
-          });
+        if (!value) return;
+        const trimmed = value.trim();
+        if (!trimmed) return;
+        if (trimmed.length > MAX_OPTION_LENGTH) {
+          /** @type {any} */ (globalThis).alert?.(
+            `Option label is too long: it must be ${MAX_OPTION_LENGTH} characters or fewer.`
+          );
+          return;
         }
+        commit(() => {
+          (this.question.options ||= []).push(trimmed);
+        });
       },
       onSetOptionOutcome: (option, outcomeId) => {
         commit(() => {

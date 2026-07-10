@@ -4,8 +4,12 @@ import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 installDom();
 
-const { CORAOptionsEditor, OptionsEditor, effectiveOptions } =
-  await import('../src/components/base/cora-options-editor.js');
+const {
+  CORAOptionsEditor,
+  OptionsEditor,
+  effectiveOptions,
+  MAX_OPTION_LENGTH,
+} = await import('../src/components/base/cora-options-editor.js');
 const { _resetStore, currentBank, commit, activeSlug } =
   await import('../src/question-bank/question-bank-store.js');
 
@@ -224,6 +228,61 @@ test('CORAOptionsEditor: add button initialises options array if missing', () =>
   const addBtn = list._children[list._children.length - 1];
   addBtn._listeners.click[0]();
   assert.deepEqual(q.options, ['X']);
+});
+
+test('MAX_OPTION_LENGTH is exported as 250', () => {
+  assert.equal(MAX_OPTION_LENGTH, 250);
+});
+
+test('CORAOptionsEditor: add button rejects an option longer than 250 characters and alerts', () => {
+  seedOutcomes();
+  const tooLong = 'x'.repeat(MAX_OPTION_LENGTH + 1);
+  /** @type {any} */ (globalThis).prompt = () => tooLong;
+  /** @type {any[]} */
+  const alerts = [];
+  /** @type {any} */ (globalThis).alert = (/** @type {any} */ msg) =>
+    alerts.push(msg);
+  /** @type {any} */
+  const q = {
+    id: 'q1',
+    text: 'T',
+    responseType: 'single-choice',
+    options: ['A'],
+    deprecated: false,
+  };
+  const e = new CORAOptionsEditor();
+  e.question = q;
+  e.connectedCallback();
+  const list = /** @type {any} */ (e)._children[0]._children[1];
+  const addBtn = list._children[list._children.length - 1];
+  addBtn._listeners.click[0]();
+  assert.deepEqual(q.options, ['A']);
+  assert.equal(alerts.length, 1);
+  assert.match(alerts[0], /250/);
+});
+
+test('CORAOptionsEditor: add button accepts an option of exactly 250 characters', () => {
+  seedOutcomes();
+  const exactly250 = 'y'.repeat(MAX_OPTION_LENGTH);
+  /** @type {any} */ (globalThis).prompt = () => exactly250;
+  /** @type {any} */ (globalThis).alert = () => {
+    throw new Error('alert should not be called for a 250-char option');
+  };
+  /** @type {any} */
+  const q = {
+    id: 'q1',
+    text: 'T',
+    responseType: 'single-choice',
+    options: ['A'],
+    deprecated: false,
+  };
+  const e = new CORAOptionsEditor();
+  e.question = q;
+  e.connectedCallback();
+  const list = /** @type {any} */ (e)._children[0]._children[1];
+  const addBtn = list._children[list._children.length - 1];
+  addBtn._listeners.click[0]();
+  assert.deepEqual(q.options, ['A', exactly250]);
 });
 
 test('CORAOptionsEditor: tolerates missing global prompt', () => {
