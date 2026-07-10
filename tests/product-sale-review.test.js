@@ -142,3 +142,35 @@ test('product-sale-review computeOutcome: informational General question without
 test('product-sale-review: declares no Case Type-specific Case Details fields', () => {
   assert.equal(config.detailFields, undefined);
 });
+
+// --- dashboardColumns ---
+
+test('product-sale-review: declares a Responsible Party dashboard column', () => {
+  assert.ok(config.dashboardColumns, 'expected dashboardColumns');
+  const col = config.dashboardColumns.find((c) => c.key === 'responsibleParty');
+  assert.ok(col, 'expected a responsibleParty column');
+  assert.equal(col.label, 'Responsible Party');
+  assert.equal(col.sortable, true);
+});
+
+test('product-sale-review: dashboard column getValue reads the Case row Responsible Party', () => {
+  const col =
+    /** @type {NonNullable<typeof config.dashboardColumns>[number]} */ (
+      config.dashboardColumns?.find((c) => c.key === 'responsibleParty')
+    );
+  /** @type {import('../src/sharepoint-client.js').CaseRow} */
+  const caseRow = {
+    id: 'c1',
+    caseType: 'product-sale-review',
+    title: 'Case c1',
+    status: 'In-progress',
+    assignedReviewer: 'r',
+    responsibleParty: 'adviser-1',
+    answers: {},
+    conversation: [],
+    notes: '',
+    completedAt: null,
+    etag: 'e',
+  };
+  assert.equal(col.getValue?.(caseRow), 'adviser-1');
+});

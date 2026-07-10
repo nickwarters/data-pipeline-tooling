@@ -13,6 +13,8 @@ class ChildStubEl extends StubEl {
     this.cases = null;
     /** @type {any} */
     this.toolbar = null;
+    /** @type {any} */
+    this.columns = null;
     this.connectedCallbackCalled = false;
     /** @type {any} */
     this.client = null;
@@ -33,7 +35,8 @@ useElementClass(ChildStubEl);
 /** @type {string[]} */
 const createdTags = [];
 
-const { TeamCasesPage } = await import('../src/pages/cora-team-cases.js');
+const { TeamCasesPage, resolveDashboardColumns } =
+  await import('../src/pages/cora-team-cases.js');
 
 /** @param {any} node @param {string} text @returns {boolean} */
 function hasText(node, text) {
@@ -56,6 +59,20 @@ function findTag(node, tag) {
 }
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
+
+/**
+ * Flush enough turns for fetchData() to settle when the page also loads a
+ * Case Type config: loadCaseTypeConfig() performs a real dynamic import() of
+ * the case-type module, and the module performs a top-level bank-file read, so
+ * allow a few macrotask turns in addition to microtask flushes.
+ */
+async function flushDeep() {
+  for (let i = 0; i < 20; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Promise.resolve();
+  }
+}
+
 /** @param {string} id @param {string} caseType @returns {CaseRow} */
 const row = (id, caseType) => ({
   id,
@@ -182,6 +199,127 @@ test('cora-team-cases: renders heading and back link without fetching when clien
   assert.ok(
     !findTag(host, 'cora-case-table'),
     'should not render table when no client'
+  );
+});
+
+test('cora-team-cases: applies Case Type dashboardColumns when filtered to a single Case Type', async () => {
+  const cases = [row('c1', 'product-sale-review')];
+  const host = TeamCasesPage({
+    client: /** @type {any} */ ({
+      async listCases() {
+        return cases;
+      },
+    }),
+    currentUser: { id: 'u1', displayName: 'U' },
+    eligibleCaseTypes: ['example-review', 'product-sale-review'],
+    queryString:
+      '?manager=me&role=reviewer-manager&caseType=product-sale-review',
+  });
+
+  await flushDeep();
+  const table = findTag(host, 'cora-case-table');
+  assert.ok(table, 'should render cora-case-table');
+  assert.ok(
+    Array.isArray(table.columns),
+    'should pass a custom columns array when the Case Type declares dashboardColumns'
+  );
+  assert.ok(
+    table.columns.some((/** @type {any} */ c) => c.key === 'responsibleParty'),
+    'should include the product-sale-review dashboardColumns column'
+  );
+
+  // The appended columns follow the full default set, so the Actions column's
+  // Open button still navigates to the Case route.
+  const actionsCol = table.columns.find(
+    (/** @type {any} */ c) => c.key === 'actions'
+  );
+  assert.ok(actionsCol, 'default Actions column should still be present');
+  const btn = actionsCol.renderCell(cases[0]);
+  btn._fire('click');
+  assert.equal(
+    /** @type {any} */ (globalThis).location.hash,
+    '#/case/product-sale-review/c1',
+    'Open button should navigate to the Case route'
+  );
+});
+
+test('cora-team-cases: keeps default columns when the filtered Case Type declares no dashboardColumns', async () => {
+  const cases = [row('c1', 'example-review')];
+  const host = TeamCasesPage({
+    client: /** @type {any} */ ({
+      async listCases() {
+        return cases;
+      },
+    }),
+    currentUser: { id: 'u1', displayName: 'U' },
+    eligibleCaseTypes: ['example-review', 'product-sale-review'],
+    queryString: '?manager=me&role=reviewer-manager&caseType=example-review',
+  });
+
+  await flushDeep();
+  const table = findTag(host, 'cora-case-table');
+  assert.ok(table, 'should render cora-case-table');
+  assert.strictEqual(
+    table.columns,
+    null,
+    'a Case Type without dashboardColumns must be pixel-identical (no custom columns prop)'
+  );
+});
+
+test('cora-team-cases: ignores dashboardColumns lookup for an unknown Case Type slug', async () => {
+  const cases = [row('c1', 'nope')];
+  const host = TeamCasesPage({
+    client: /** @type {any} */ ({
+      async listCases() {
+        return cases;
+      },
+    }),
+    currentUser: { id: 'u1', displayName: 'U' },
+    eligibleCaseTypes: ['example-review'],
+    queryString: '?manager=me&role=reviewer-manager&caseType=nope',
+  });
+
+  await flushDeep();
+  const table = findTag(host, 'cora-case-table');
+  assert.ok(table, 'should still render cora-case-table');
+  assert.strictEqual(
+    table.columns,
+    null,
+    'unknown Case Type slug should fall back to default columns'
+  );
+});
+
+test('cora-team-cases: does NOT apply dashboardColumns in a mixed multi-Case-Type view', async () => {
+  const cases = [row('c1', 'product-sale-review'), row('c2', 'example-review')];
+  const host = TeamCasesPage({
+    client: /** @type {any} */ ({
+      async listCases() {
+        return cases;
+      },
+    }),
+    currentUser: { id: 'u1', displayName: 'U' },
+    eligibleCaseTypes: ['example-review', 'product-sale-review'],
+    // No caseType param: fans out across both eligible Case Types (mixed view).
+    queryString: '?manager=me&role=reviewer-manager',
+  });
+
+  await flushDeep();
+  const table = findTag(host, 'cora-case-table');
+  assert.ok(table, 'should render cora-case-table');
+  assert.strictEqual(
+    table.columns,
+    null,
+    'should not apply per-Case-Type dashboardColumns in a mixed view'
+  );
+});
+
+test('cora-team-cases: resolveDashboardColumns rethrows non-UnknownCaseTypeError failures', async () => {
+  const boom = new Error('config load failed');
+  await assert.rejects(
+    resolveDashboardColumns('example-review', async () => {
+      throw boom;
+    }),
+    boom
   );
 });
 

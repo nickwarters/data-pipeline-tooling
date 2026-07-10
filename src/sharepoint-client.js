@@ -319,6 +319,18 @@
 /**
  * Shape every Case Type module must satisfy.
  *
+ * `dashboardColumns`, if present, are extra columns a Case Type contributes to
+ * `cora-case-table` beyond the framework's `defaultCaseColumns` — data-plus-
+ * render-function compatible with `ColumnDef` (see
+ * `components/base/cora-data-table.js`), so a Case Type can add a column
+ * without touching any framework file. **Mixed-Case-Type-table semantics**:
+ * dashboard pages that list Cases across more than one Case Type at once
+ * (e.g. the Team Cases report with no `caseType` filter) must NOT apply any
+ * Case Type's `dashboardColumns` — a page only appends them once the table is
+ * scoped to a single Case Type (e.g. Team Cases filtered by `caseType`).
+ * Pages opt in explicitly via the existing `cora-case-table` `customColumns`
+ * prop; `cora-case-table` itself has no Case-Type awareness.
+ *
  * @typedef {{
  * questions: QuestionDefinition[],
  * computeOutcome: (answers: Record<string, Answer>) => OutcomeResult,
@@ -334,7 +346,8 @@
  * attributeFailures?: boolean,
  * remediationFields?: RemediationField[],
  * captureGroups?: CaptureGroup[],
- * detailFields?: CaseDetailField[]
+ * detailFields?: CaseDetailField[],
+ * dashboardColumns?: import('./components/base/cora-data-table.js').ColumnDef<CaseRow>[]
  * }} CaseTypeConfig
  */
 
