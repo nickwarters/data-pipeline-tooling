@@ -802,6 +802,11 @@ cora-bank-editor .field-select:focus {
   outline: none;
   border-bottom-color: var(--cora-color-accent);
 }
+cora-bank-editor .field-input {
+  /* A transparent native input can retain SharePoint's white control fill in
+     dark mode. Give it the same tokenised surface as .field-select below. */
+  background-color: var(--cora-color-surface);
+}
 cora-bank-editor .field-select {
   /* A transparent native select can retain SharePoint's white control fill in
      dark mode. Give the select an explicit tokenised surface instead. */
@@ -892,7 +897,21 @@ cora-bank-editor .opt-label {
 cora-bank-editor .opt-outcome-select {
   flex: 0 0 auto;
   min-width: 9rem;
+  border: none;
+  border-bottom: 1px solid var(--cora-color-border-strong);
+  padding: var(--cora-space-1) 0;
+  font-family: var(--cora-font-body);
   font-size: var(--cora-font-size-sm);
+  /* A transparent native select can retain SharePoint's white control fill in
+     dark mode. Give the select an explicit tokenised surface instead. */
+  color: var(--cora-color-on-surface);
+  background-color: var(--cora-color-surface);
+  appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%235C5C65' stroke-width='1.4'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
+  padding-right: var(--cora-space-5);
 }
 cora-bank-editor .opt-outcome-select:disabled {
   opacity: 0.7;

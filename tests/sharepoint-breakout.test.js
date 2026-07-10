@@ -116,6 +116,23 @@ test('Question Bank: field selects use the theme surface rather than a native wh
   assert.match(body, /background-color:\s*var\(--cora-color-surface\)/);
 });
 
+test('Question Bank: the Category field input uses the theme surface rather than a native white fill', () => {
+  const body = ruleBody(
+    questionBankStyles,
+    '}\ncora-bank-editor .field-input {'
+  );
+  assert.match(body, /background-color:\s*var\(--cora-color-surface\)/);
+});
+
+test('Question Bank: per-option outcome selects use the theme surface and text colour rather than native white chrome', () => {
+  const body = ruleBody(
+    questionBankStyles,
+    '}\ncora-bank-editor .opt-outcome-select {'
+  );
+  assert.match(body, /background-color:\s*var\(--cora-color-surface\)/);
+  assert.match(body, /color:\s*var\(--cora-color-on-surface\)/);
+});
+
 test('reset: tables collapse their borders, neutralising SP core table styling', () => {
   const body = ruleBody(styles, '[data-cora-root] :where(table) {');
   assert.match(body, /border-collapse:\s*collapse/);
