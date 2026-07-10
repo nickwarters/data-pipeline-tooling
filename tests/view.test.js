@@ -58,7 +58,9 @@ class StubEl extends EventTarget {
     return this._attrs[name] ?? null;
   }
 
-  focus() {
+  /** @param {{ preventScroll?: boolean }} [options] */
+  focus(options) {
+    this._focusOptions = options;
     /** @type {any} */ (globalThis).document._active = this;
   }
 
@@ -374,6 +376,11 @@ test('captureFocus/restoreFocus: preserves data-focus-key and selection', () => 
   assert.equal(document.activeElement, after);
   assert.equal(after.selectionStart, 2);
   assert.equal(after.selectionEnd, 5);
+  assert.deepEqual(
+    /** @type {any} */ (after)._focusOptions,
+    { preventScroll: true },
+    'restoreFocus must not let the browser scroll the refocused element into view'
+  );
 });
 
 test('reactive: preserves focus and selection across signal-driven re-render', () => {

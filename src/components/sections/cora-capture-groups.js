@@ -3,6 +3,7 @@ import { signal } from '../../lib/signal.js';
 import { defineView } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import { buildCaptureControl } from '../../lib/capture-engine.js';
+import { withPreservedScroll } from '../../lib/preserve-scroll.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaptureGroup} CaptureGroup */
 /** @typedef {import('../../sharepoint-client.js').CaptureField} CaptureField */
@@ -336,8 +337,15 @@ export const CaptureGroupsElement = defineView('cora-capture-groups', {
       namePrefix: state.namePrefix,
       collapsed: state.collapsed,
       onToggle: (key, collapsedNext) => {
-        state.collapsed.set(key, collapsedNext);
-        state.tick.set(state.tick.get() + 1);
+        // Toggling a header synchronously bumps the tick, which rebuilds the
+        // whole element (see the defineView render above). That rebuild both
+        // breaks native scroll anchoring and re-focuses the rebuilt header,
+        // which would otherwise scroll it into view — so hold the page scroll
+        // steady around the whole synchronous update.
+        withPreservedScroll(() => {
+          state.collapsed.set(key, collapsedNext);
+          state.tick.set(state.tick.get() + 1);
+        });
       },
       onCapture: (fieldKey, value) => {
         el.dispatchEvent(

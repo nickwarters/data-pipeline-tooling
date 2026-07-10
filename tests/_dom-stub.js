@@ -36,6 +36,8 @@ export class StubEl {
     this.readOnly = false;
     this.hidden = false;
     this._focused = false;
+    /** @type {{ preventScroll?: boolean } | undefined} */
+    this._focusOptions = undefined;
     /** @type {Record<string, string>} */
     this.dataset = {};
     /** @type {Record<string, string>} */
@@ -152,8 +154,10 @@ export class StubEl {
     this.selectionStart = a;
     this.selectionEnd = b;
   }
-  focus() {
+  /** @param {{ preventScroll?: boolean }} [options] */
+  focus(options) {
     this._focused = true;
+    this._focusOptions = options;
     const G = /** @type {any} */ (globalThis);
     G._lastFocused = this;
     if (G.document) G.document._active = this;

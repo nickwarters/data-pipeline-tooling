@@ -395,7 +395,7 @@ export function restoreFocus(root, snapshot) {
   );
   if (!next || typeof next.focus !== 'function') return;
 
-  next.focus();
+  next.focus({ preventScroll: true });
   if (
     typeof next.setSelectionRange === 'function' &&
     snapshot.selectionStart !== null &&

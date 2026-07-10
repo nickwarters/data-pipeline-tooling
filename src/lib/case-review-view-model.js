@@ -7,6 +7,7 @@
 // state layer reactive() reads — not a controller framework wrapped around it.
 
 import { signal, computed } from './signal.js';
+import { withPreservedScroll } from './preserve-scroll.js';
 import { evaluate } from '../evaluators/applicability-evaluator.js';
 import { materializeRemediationActions } from '../evaluators/failure-evaluator.js';
 import {
@@ -39,52 +40,6 @@ import {
 /** @typedef {import('../sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
 /** @typedef {import('../sharepoint-client.js').CaseListOptions} CaseListOptions */
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
-
-/**
- * The element that actually scrolls the app, or `window` where it does not, or
- * `null` outside a browser. The app root (`#app[data-cora-root]`) owns the
- * vertical scroll; only the styleguide/tests let the window scroll.
- *
- * @returns {Element | (Window & typeof globalThis) | null}
- */
-function scrollContainer() {
-  if (typeof document !== 'undefined' && document.querySelector) {
-    const root = document.querySelector('#app[data-cora-root]');
-    if (root) return root;
-  }
-  return typeof window !== 'undefined' ? window : null;
-}
-
-/**
- * Reads the scroll offset of a container, spanning both the window
- * (`scrollX`/`scrollY`) and element (`scrollLeft`/`scrollTop`) shapes. An
- * element exposes `scrollTop`; the window exposes `scrollY` instead.
- *
- * @param {Element | (Window & typeof globalThis)} target
- * @returns {{ left: number, top: number }}
- */
-function readScroll(target) {
-  if ('scrollTop' in target) {
-    return { left: target.scrollLeft, top: target.scrollTop };
-  }
-  return { left: target.scrollX, top: target.scrollY };
-}
-
-/**
- * Restores a scroll offset onto a container, spanning both container shapes.
- *
- * @param {Element | (Window & typeof globalThis)} target
- * @param {number} left
- * @param {number} top
- */
-function writeScroll(target, left, top) {
-  if ('scrollTop' in target) {
-    target.scrollLeft = left;
-    target.scrollTop = top;
-    return;
-  }
-  target.scrollTo(left, top);
-}
 
 /**
  * @param {unknown} error
@@ -391,24 +346,14 @@ export class CaseReviewViewModel {
    * synchronous re-render undoes both, so capturing an Issue detail leaves the
    * page exactly where it was.
    *
-   * The scroll lives on the app root (`#app[data-cora-root]` is `position: fixed`
-   * with its own `overflow-y: auto`), not the window — so we restore that
-   * container, falling back to the window where the app is not the scroll root
-   * (styleguide, tests). No-op outside a browser.
+   * Delegates to the shared `withPreservedScroll` helper (`./preserve-scroll.js`)
+   * so the same protection is available outside the view model (e.g. the
+   * capture-group collapse toggle).
    *
    * @param {() => void} mutate
    */
   _withPreservedScroll(mutate) {
-    const target = scrollContainer();
-    if (!target) {
-      mutate();
-      return;
-    }
-    const { left, top } = readScroll(target);
-    mutate();
-    const after = readScroll(target);
-    if (after.left !== left || after.top !== top)
-      writeScroll(target, left, top);
+    withPreservedScroll(mutate);
   }
 
   /**

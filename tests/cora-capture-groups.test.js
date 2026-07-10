@@ -1,7 +1,12 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom, findByClass, findAllByClass } from './_dom-stub.js';
+import {
+  installDom,
+  findByClass,
+  findAllByClass,
+  StubEl,
+} from './_dom-stub.js';
 
 installDom();
 
@@ -451,6 +456,36 @@ test('CORACaptureGroups: toggling a group keeps focus on its header so the scrol
     true,
     'focus is restored to the rebuilt header, holding the page scroll'
   );
+});
+
+test("CORACaptureGroups: toggling a group preserves the app scroll container's offsets", () => {
+  // Mirrors the real bug: focusing the rebuilt header without preventScroll
+  // scrolls the app's fixed-position scroll container. Simulate that side
+  // effect on every focus() call, then assert the toggle's scroll-preserving
+  // wrapper restores the container to where it was before the click.
+  const container = { getAttribute: () => '', scrollLeft: 0, scrollTop: 500 };
+  const originalQuerySelector = globalThis.document.querySelector;
+  globalThis.document.querySelector = (/** @type {string} */ sel) =>
+    sel === '#app[data-cora-root]' ? container : originalQuerySelector(sel);
+  const originalFocus = StubEl.prototype.focus;
+  StubEl.prototype.focus = function (/** @type {any} */ options) {
+    originalFocus.call(this, options);
+    container.scrollTop = 0; // the scroll jump the bug produces
+  };
+  try {
+    const el = mount(GROUPS, {}, true);
+    const header = findAllByClass(el, 'cora-capture-group-header')[1]; // Grading
+    header._fire('click'); // expand — rebuilds the element and refocuses the header
+
+    assert.equal(
+      container.scrollTop,
+      500,
+      'app scroll container restored after the toggle rebuild'
+    );
+  } finally {
+    globalThis.document.querySelector = originalQuerySelector;
+    StubEl.prototype.focus = originalFocus;
+  }
 });
 
 test('CORACaptureGroups: expanding a group builds its controls', () => {
