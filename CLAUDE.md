@@ -38,7 +38,6 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 ## Gotchas
 
 - **Question Bank artifacts are JSON stored in `.txt` files, on purpose.** `case-types/banks/*.txt` (loaded via `case-types/load-bank.js`) hold plain JSON text. This is intentional, not an oversight: SharePoint Subscription Edition has been unreliable at storing/serving `.json` files (MIME/blocking issues), so the artifact extension is `.txt` while the content stays JSON, parsed explicitly by the loader. A repo-wide search for `*.json` will not find the banks — search `case-types/banks/*.txt` instead.
-- **Two page-naming conventions coexist under `src/pages/` until MAINT-15 resolves it.** Most pages are a single `cora-*.js` file. A couple (`cora-home.js`, `cora-reports-index.js`) are thin re-export shims (`export { HomePage } from './home-page.js'`) over a same-directory `*-page.js` file (`home-page.js`, `reports-index-page.js`) that holds the real implementation. When editing "the home page" or "the reports index page," edit the `*-page.js` file, not the shim.
 
 ## Test discipline: Red-Green-Refactor, 100% coverage
 
@@ -134,14 +133,12 @@ src/
     cora-controls-dashboard.js
     cora-conversation-view.js
     cora-dashboard.js
-    cora-home.js                # thin re-export shim over home-page.js — see Gotchas
+    cora-home.js
     cora-journey-cases.js
-    cora-reports-index.js       # thin re-export shim over reports-index-page.js — see Gotchas
+    cora-reports-index.js
     cora-responsible-party-dashboard.js
     cora-reviewer-team-report.js
     cora-team-cases.js
-    home-page.js                # real HomePage implementation
-    reports-index-page.js       # real ReportsIndexPage implementation
 
   question-bank/                # question bank editor subsystem
     cora-bank-dock.js
