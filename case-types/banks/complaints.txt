@@ -18,6 +18,27 @@
       "deprecated": false
     },
     {
+      "id": "q-cm-letter-structure",
+      "text": "Is the complaint letter structure used?",
+      "category": "Acknowledgement",
+      "labelIds": ["lbl-regulatory"],
+      "responseType": "single-choice",
+      "options": [
+        "Correct letter structure has not been used, however this has no impact on the customer's understanding",
+        "Acknowledgement letter includes inaccurate information or incorrect structure used, which could impact the customer's understanding/actions and/or is a regulatory requirement",
+        "Acknowledgement letter includes inaccurate information or incorrect structure used, which could impact the customer's understanding/actions and/or is a regulatory requirement, and this led to harm"
+      ],
+      "optionOutcomes": {
+        "Acknowledgement letter includes inaccurate information or incorrect structure used, which could impact the customer's understanding/actions and/or is a regulatory requirement": "refer",
+        "Acknowledgement letter includes inaccurate information or incorrect structure used, which could impact the customer's understanding/actions and/or is a regulatory requirement, and this led to harm": "fail"
+      },
+      "failureCriteria": "Acknowledgement letter includes inaccurate information or incorrect structure used, which could impact the customer's understanding/actions and/or is a regulatory requirement, and this led to harm",
+      "remediationActions": [
+        "Reissue the acknowledgement letter using the correct complaint letter structure."
+      ],
+      "deprecated": false
+    },
+    {
       "id": "q-cm-investigated",
       "text": "Was the complaint fully investigated?",
       "category": "Investigation",

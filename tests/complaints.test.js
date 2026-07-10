@@ -166,6 +166,51 @@ test('complaints computeOutcome: the highest-scoring applicable outcome wins', (
   assert.deepStrictEqual(config.computeOutcome(answers).outcome, 'fail');
 });
 
+// --- q-cm-letter-structure (sentence-length single-choice options) ---
+
+test('complaints: letter-structure question offers three graded sentence-length options within the option cap', () => {
+  const q = config.questions.find((x) => x.id === 'q-cm-letter-structure');
+  assert.ok(q, 'expected q-cm-letter-structure in the catalogue');
+  assert.equal(q.text, 'Is the complaint letter structure used?');
+  assert.equal(q.responseType, 'single-choice');
+  const options = q.options ?? [];
+  assert.equal(options.length, 3);
+  for (const option of options) {
+    // MAX_OPTION_LENGTH (cora-options-editor): options are capped at 250 chars.
+    assert.ok(
+      option.length <= 250,
+      `option exceeds the 250-char cap (${option.length}): ${option}`
+    );
+  }
+  // Sentence-length wordings are the point of this question: it exercises the
+  // stacked-card layout, which triggers above the 40-char threshold.
+  assert.ok(
+    options.some((option) => option.length > 40),
+    'expected at least one sentence-length option'
+  );
+});
+
+test('complaints computeOutcome: letter-structure grades map to pass, refer and fail', () => {
+  const q = config.questions.find((x) => x.id === 'q-cm-letter-structure');
+  assert.ok(q && q.options);
+  const [noImpact, couldImpact, harm] = q.options;
+  assert.equal(
+    config.computeOutcome({ 'q-cm-letter-structure': ans(noImpact) }).outcome,
+    'pass'
+  );
+  assert.equal(
+    config.computeOutcome({ 'q-cm-letter-structure': ans(couldImpact) })
+      .outcome,
+    'refer'
+  );
+  assert.equal(
+    config.computeOutcome({ 'q-cm-letter-structure': ans(harm) }).outcome,
+    'fail'
+  );
+  // Only the harm grade flags a failed Answer for the Issues/Remediation flow.
+  assert.equal(q.failureCriteria, harm);
+});
+
 // --- fixtures ---
 
 test('complaints fixtures: an outstanding and a completed Complaints Case exist', () => {
