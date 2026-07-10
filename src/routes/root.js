@@ -1,5 +1,5 @@
 // @ts-check
-import { HomePage } from '../pages/home-page.js';
+import { HomePage } from '../pages/cora-home.js';
 
 /**
  * @param {import('../lib/router.js').Router} router

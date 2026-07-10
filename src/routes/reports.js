@@ -1,5 +1,5 @@
 // @ts-check
-import { ReportsIndexPage } from '../pages/reports-index-page.js';
+import { ReportsIndexPage } from '../pages/cora-reports-index.js';
 import { ReviewerTeamReportPage } from '../pages/cora-reviewer-team-report.js';
 
 /**
