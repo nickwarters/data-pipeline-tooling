@@ -1,5 +1,6 @@
 // @ts-check
 import { h } from '../../lib/html.js';
+import { CASE_STATUS } from '../../lib/case-statuses.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../../sharepoint-client.js').CaseDetailField} CaseDetailField */
@@ -31,7 +32,11 @@ export function caseDetailFields(caseRow, detailFields = []) {
     { field: 'dueDate', label: 'Due date', value: caseRow.dueDate },
     { field: 'relatedDate', label: 'Related date', value: caseRow.relatedDate },
     { field: 'created', label: 'Created', value: caseRow.created },
-    { field: 'completedAt', label: 'Completed', value: caseRow.completedAt },
+    {
+      field: 'completedAt',
+      label: CASE_STATUS.COMPLETED,
+      value: caseRow.completedAt,
+    },
     ...detailFields.map((f) => ({
       field: f.key,
       label: f.label,

@@ -25,6 +25,7 @@ import {
   ENGLAND_WALES_HOLIDAYS,
   REMEDIATION_SLA_WORKING_DAYS,
 } from '../config/working-days.js';
+import { CASE_STATUS } from './case-statuses.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
@@ -105,7 +106,7 @@ export class CaseMachine {
     return (
       this.access.remediation === 'edit' &&
       this.caseRow.assignedReviewer === this.currentUser.id &&
-      this.caseRow.status === 'Actions In Progress' &&
+      this.caseRow.status === CASE_STATUS.ACTIONS_IN_PROGRESS &&
       remediationTrackingComplete(
         this.caseRow.answers,
         this.config.captureGroups
@@ -162,7 +163,7 @@ export class CaseMachine {
   transitionToActionsInProgress(computeOutcome, answers, questionBankVersion) {
     const reportableAt = new Date().toISOString();
     return {
-      status: 'Actions In Progress',
+      status: CASE_STATUS.ACTIONS_IN_PROGRESS,
       reportableAt,
       // Remediation SLA due date, computed **once** here at Send Actions and
       // stored on the row — never recomputed on read. The reportable
@@ -190,7 +191,7 @@ export class CaseMachine {
   transitionToCompleted(computeOutcome, answers, questionBankVersion) {
     const now = new Date().toISOString();
     return {
-      status: 'Completed',
+      status: CASE_STATUS.COMPLETED,
       reportableAt: now,
       completedAt: now,
       ...this._reportableSnapshot(computeOutcome, answers, questionBankVersion),
@@ -207,7 +208,7 @@ export class CaseMachine {
    */
   transitionToFinalComplete() {
     return {
-      status: 'Completed',
+      status: CASE_STATUS.COMPLETED,
       completedAt: new Date().toISOString(),
     };
   }

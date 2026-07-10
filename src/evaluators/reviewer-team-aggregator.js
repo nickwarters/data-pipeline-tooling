@@ -1,4 +1,6 @@
 // @ts-check
+import { CASE_STATUS } from '../lib/case-statuses.js';
+
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('./time-windows.js').TimeWindows} TimeWindows */
 
@@ -59,7 +61,7 @@ export function aggregateReviewerTeamData(cases, windows) {
     }
     const bucket = result.byType[type];
 
-    if (c.status === 'Completed' && c.completedAt) {
+    if (c.status === CASE_STATUS.COMPLETED && c.completedAt) {
       const completedAt = new Date(c.completedAt);
       if (completedAt >= windows.sevenDaysAgo) {
         result.completedLast7d++;
@@ -69,7 +71,7 @@ export function aggregateReviewerTeamData(cases, windows) {
         result.completedLast30d++;
         bucket.completedLast30d++;
       }
-    } else if (c.status === 'In-progress') {
+    } else if (c.status === CASE_STATUS.IN_PROGRESS) {
       const isOverdue = !!c.dueDate && new Date(c.dueDate) < now;
       if (isOverdue) {
         result.overdue++;

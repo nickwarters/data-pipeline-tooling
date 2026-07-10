@@ -1,6 +1,7 @@
 // @ts-check
 import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
+import { CASE_STATUS } from '../../lib/case-statuses.js';
 
 /** @typedef {import('../../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
@@ -54,14 +55,14 @@ export async function loadOwnerSummaries({ client, ownedCaseTypes, now }) {
       // fetches the cumulative backlog.
       const inProgress = await client.listCases({
         caseType,
-        status: 'In-progress',
+        status: CASE_STATUS.IN_PROGRESS,
       });
 
       const sliceCounts = await Promise.all(
         slices.map((s) =>
           client.countCases({
             caseType,
-            status: 'Completed',
+            status: CASE_STATUS.COMPLETED,
             completedAfter: s.after,
             completedBefore: s.before,
           })

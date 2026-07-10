@@ -12,6 +12,7 @@ import { ControlsDashboard } from './cora-controls-dashboard.js';
 import { ActionCentre } from './cora-action-centre.js';
 import { reasonsForCapabilities } from '../services/action-centre-model.js';
 import { isOverdue } from '../evaluators/overdue-evaluator.js';
+import { CASE_STATUS } from '../lib/case-statuses.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
@@ -42,7 +43,7 @@ export function DashboardPage({
     if (!client) return;
     if (capabilities.isReviewer) {
       const raw = await client.listCases({
-        status: 'In-progress',
+        status: CASE_STATUS.IN_PROGRESS,
         assignedReviewer: currentUserId,
       });
       cases.set(raw.map((c) => ({ ...c, overdue: isOverdue(c) })));

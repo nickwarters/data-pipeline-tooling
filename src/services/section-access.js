@@ -13,6 +13,7 @@
 /** @typedef {import('./permissions.js').Capabilities} Capabilities */
 
 import { allSentActions } from '../evaluators/remediation-actions.js';
+import { CASE_STATUS } from '../lib/case-statuses.js';
 
 /**
  * A Case is **reportable** once it has passed the freeze milestone:
@@ -30,7 +31,10 @@ import { allSentActions } from '../evaluators/remediation-actions.js';
  * @returns {boolean}
  */
 export function isReportable(status) {
-  return status === 'Actions In Progress' || status === 'Completed';
+  return (
+    status === CASE_STATUS.ACTIONS_IN_PROGRESS ||
+    status === CASE_STATUS.COMPLETED
+  );
 }
 
 /** @type {Section[]} */
@@ -183,7 +187,7 @@ const MATRIX = {
     otherReviewer: 'read-only',
     responsibleParty: (c) => (isReportable(c.status) ? 'read-only' : 'hidden'),
     responsiblePartyManager: (c) =>
-      c.status === 'Completed' ? 'read-only' : 'hidden',
+      c.status === CASE_STATUS.COMPLETED ? 'read-only' : 'hidden',
     caseTypeOwner: 'read-only',
     journeyOwner: 'read-only',
     controls: 'read-only',
@@ -199,7 +203,9 @@ const MATRIX = {
   remediation: {
     assignedReviewer: (c, config) => {
       if (!hasSentActions(c, config)) return 'hidden';
-      return c.status === 'Actions In Progress' ? 'edit' : 'read-only';
+      return c.status === CASE_STATUS.ACTIONS_IN_PROGRESS
+        ? 'edit'
+        : 'read-only';
     },
     otherReviewer: (c, config) =>
       hasSentActions(c, config) ? 'read-only' : 'hidden',
@@ -218,7 +224,8 @@ const MATRIX = {
   // observe them read-only; the Journey Owner and Controls do not see them, nor
   // do the Adviser and their Manager.
   notes: {
-    assignedReviewer: (c) => (c.status === 'Completed' ? 'read-only' : 'edit'),
+    assignedReviewer: (c) =>
+      c.status === CASE_STATUS.COMPLETED ? 'read-only' : 'edit',
     otherReviewer: 'read-only',
     responsibleParty: 'hidden',
     responsiblePartyManager: 'hidden',
@@ -262,12 +269,13 @@ const MATRIX = {
     responsibleParty: 'hidden',
     responsiblePartyManager: (c, config) =>
       appealRaiser(config) === 'responsiblePartyManager' &&
-      c.status === 'Completed'
+      c.status === CASE_STATUS.COMPLETED
         ? 'edit'
         : 'hidden',
     caseTypeOwner: 'read-only',
     journeyOwner: (c, config) =>
-      appealRaiser(config) === 'journeyOwner' && c.status === 'Completed'
+      appealRaiser(config) === 'journeyOwner' &&
+      c.status === CASE_STATUS.COMPLETED
         ? 'edit'
         : 'read-only',
     controls: 'read-only',
@@ -286,7 +294,9 @@ const MATRIX = {
     caseTypeOwner: 'read-only',
     journeyOwner: 'read-only',
     controls: (c) =>
-      c.status === 'Completed' && hasOpenAppeal(c) ? 'edit' : 'read-only',
+      c.status === CASE_STATUS.COMPLETED && hasOpenAppeal(c)
+        ? 'edit'
+        : 'read-only',
     none: 'hidden',
   },
   // Amend Outcome — the case-level corrective Outcome. **Controls**
@@ -300,7 +310,7 @@ const MATRIX = {
     responsiblePartyManager: 'hidden',
     caseTypeOwner: 'hidden',
     journeyOwner: 'hidden',
-    controls: (c) => (c.status === 'Completed' ? 'edit' : 'hidden'),
+    controls: (c) => (c.status === CASE_STATUS.COMPLETED ? 'edit' : 'hidden'),
     none: 'hidden',
   },
 };

@@ -4,6 +4,7 @@ import { signal, computed, effect } from '../../lib/signal.js';
 import { h } from '../../lib/html.js';
 import { CORADataTable } from '../base/cora-data-table.js';
 import { caseRouteFor } from '../../lib/case-route-links.js';
+import { CASE_STATUS } from '../../lib/case-statuses.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../base/cora-data-table.js').ColumnDef<CaseRow>} CaseColumn */
@@ -104,8 +105,8 @@ export function CaseTableToolbar({ onFilterText, onStatusFilter }) {
           onStatusFilter(e.target?.value ?? ''),
       },
       h('option', { value: '' }, 'All statuses'),
-      h('option', { value: 'In-progress' }, 'In Progress'),
-      h('option', { value: 'Completed' }, 'Completed')
+      h('option', { value: CASE_STATUS.IN_PROGRESS }, 'In Progress'),
+      h('option', { value: CASE_STATUS.COMPLETED }, CASE_STATUS.COMPLETED)
     )
   );
 }

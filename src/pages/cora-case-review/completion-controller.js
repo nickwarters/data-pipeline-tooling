@@ -1,4 +1,5 @@
 // @ts-check
+import { CASE_STATUS } from '../../lib/case-statuses.js';
 
 /**
  * Whether the Case carries ≥1 Remediation Action across its (failed) Answers.
@@ -52,7 +53,7 @@ export function bindCompletion(context) {
             vm.exportHash ?? null
           )
         : {
-            status: /** @type {'Completed'} */ ('Completed'),
+            status: CASE_STATUS.COMPLETED,
             completedAt: new Date().toISOString(),
           };
     }
@@ -116,7 +117,7 @@ export async function completeCase(request) {
   if (!client || !saveQueue) return;
 
   const finalFields = patchFields || {
-    status: /** @type {'Completed'} */ ('Completed'),
+    status: CASE_STATUS.COMPLETED,
     completedAt: new Date().toISOString(),
   };
 

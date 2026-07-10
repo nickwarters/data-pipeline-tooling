@@ -1,4 +1,6 @@
 // @ts-check
+import { CASE_STATUS } from '../lib/case-statuses.js';
+
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
@@ -268,7 +270,7 @@ async function clickCompleteCase(vm) {
           vm.exportHash ?? null
         )
       : {
-          status: /** @type {'Completed'} */ ('Completed'),
+          status: CASE_STATUS.COMPLETED,
           completedAt: new Date().toISOString(),
         };
   }

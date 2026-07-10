@@ -4,6 +4,7 @@ import { reactive } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import '../components/collections/cora-case-table.js';
+import { CASE_STATUS } from '../lib/case-statuses.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
@@ -75,7 +76,7 @@ function computeDerived(cases, currentUserId) {
 
   const recentCompleted = cases.filter(
     (c) =>
-      c.status === 'Completed' &&
+      c.status === CASE_STATUS.COMPLETED &&
       c.completedAt != null &&
       /** @type {string} */ (c.completedAt) >= cutoff
   );

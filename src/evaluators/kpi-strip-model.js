@@ -1,6 +1,7 @@
 // @ts-check
 import { isOverdue } from './overdue-evaluator.js';
 import { permissions } from '../services/permissions.js';
+import { CASE_STATUS } from '../lib/case-statuses.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
@@ -68,7 +69,7 @@ export function caseTypeDisplayName(slug, config = permissions) {
  * @returns {boolean}
  */
 export function isBreachingWithin24h(caseRow, now = new Date()) {
-  if (caseRow.status === 'Completed') return false;
+  if (caseRow.status === CASE_STATUS.COMPLETED) return false;
   const due = caseRow.dueDate;
   if (!due) return false;
   const dueMs = new Date(due).getTime();
@@ -191,7 +192,7 @@ async function buildReviewerLane({
     ? capabilities.listAccessCaseTypes
     : eligibleCaseTypes;
   const raw = await client.listCases({
-    status: 'In-progress',
+    status: CASE_STATUS.IN_PROGRESS,
     assignedReviewer: currentUserId,
   });
   const pool = raw.filter((c) => scope.includes(c.caseType));
@@ -274,7 +275,9 @@ async function buildOwnerLane({ client, capabilities, now }) {
   // set is bounded by In-progress work, never the whole (unbounded) Case Type
   // history. The In-progress pool is what the tiles derive from.
   const fetched = await Promise.all(
-    owned.map((ct) => client.listCases({ caseType: ct, status: 'In-progress' }))
+    owned.map((ct) =>
+      client.listCases({ caseType: ct, status: CASE_STATUS.IN_PROGRESS })
+    )
   );
   const pool = fetched.flat();
 

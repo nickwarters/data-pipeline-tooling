@@ -1,6 +1,7 @@
 // @ts-check
 import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
+import { CASE_STATUS } from '../../lib/case-statuses.js';
 
 /** @typedef {import('../../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
@@ -32,7 +33,7 @@ export function Allocation({ isEmpty, onRequestNextCase }) {
  */
 export async function getUnassignedCases({ client, eligibleCaseTypes }) {
   if (!client) return [];
-  const all = await client.listCases({ status: 'In-progress' });
+  const all = await client.listCases({ status: CASE_STATUS.IN_PROGRESS });
   return all
     .filter(
       (c) => c.assignedReviewer === '' && eligibleCaseTypes.includes(c.caseType)

@@ -1,4 +1,6 @@
 // @ts-check
+import { CASE_STATUS } from '../lib/case-statuses.js';
+
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('../sharepoint-client.js').ListCasesFilter} ListCasesFilter */
@@ -195,7 +197,7 @@ export class MockSharePointClient {
       )
         return false;
       if (filter.overdue === true) {
-        if (c.status === 'Completed') return false;
+        if (c.status === CASE_STATUS.COMPLETED) return false;
         if (!c.dueDate) return false;
         if (new Date(c.dueDate) >= new Date()) return false;
       }

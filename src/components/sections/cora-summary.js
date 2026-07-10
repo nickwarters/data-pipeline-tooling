@@ -6,6 +6,7 @@ import { buildSummaryModel } from '../../evaluators/summary-model.js';
 import { isReportable } from '../../lib/case-machine.js';
 import { currentOutcome } from '../../evaluators/amended-outcome.js';
 import './cora-capture-groups.js';
+import { CASE_STATUS } from '../../lib/case-statuses.js';
 
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
 /** @typedef {import('../../sharepoint-client.js').OutcomeResult} OutcomeResult */
@@ -272,7 +273,7 @@ function renderCounts(props) {
 function renderKeyDates(caseRow) {
   const dates = [
     { label: 'Created', value: caseRow.created },
-    { label: 'Completed', value: caseRow.completedAt },
+    { label: CASE_STATUS.COMPLETED, value: caseRow.completedAt },
   ];
   return renderFieldBlock(
     'cora-summary-key-dates',

@@ -1,5 +1,6 @@
 // @ts-check
 import { toBareAccount, toClaimsLogin } from './account-name.js';
+import { CASE_STATUS } from '../lib/case-statuses.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').PersonResult} PersonResult */
@@ -546,7 +547,7 @@ function buildFilterExpr(filter) {
   }
   if (filter.overdue === true) {
     conds.push(`DueDate lt '${new Date().toISOString()}'`);
-    conds.push(`Status eq 'In-progress'`);
+    conds.push(`Status eq '${CASE_STATUS.IN_PROGRESS}'`);
   }
   // Action Centre reason flags — indexed boolean columns hoisted onto the Case
   // row so a reason count is a cheap `$count`, never a blob parse.
@@ -613,8 +614,8 @@ function rowFromItem(item, etag) {
     id: String(item?.Id ?? ''),
     caseType: String(item?.CaseType ?? ''),
     title: String(item?.Title ?? ''),
-    status: /** @type {'In-progress' | 'Actions In Progress' | 'Completed'} */ (
-      item?.Status ?? 'In-progress'
+    status: /** @type {import('../lib/case-statuses.js').CaseStatus} */ (
+      item?.Status ?? CASE_STATUS.IN_PROGRESS
     ),
     assignedReviewer: String(item?.AssignedReviewerId ?? ''),
     responsibleParty: String(item?.ResponsiblePartyId ?? ''),
@@ -686,7 +687,7 @@ function rowFromItem(item, etag) {
     // rule as the overdue `$filter` above, so the group filter and the "also
     // overdue" chip can never disagree.
     overdue:
-      item?.Status === 'In-progress' &&
+      item?.Status === CASE_STATUS.IN_PROGRESS &&
       typeof item?.DueDate === 'string' &&
       new Date(item.DueDate).getTime() < Date.now(),
     awaitingResponsibleParty:

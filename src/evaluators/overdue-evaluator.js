@@ -1,4 +1,6 @@
 // @ts-check
+import { CASE_STATUS } from '../lib/case-statuses.js';
+
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
 
@@ -12,7 +14,7 @@
  * @returns {boolean}
  */
 export function isOverdue(caseRow, _caseTypeConfig, now = new Date()) {
-  if (caseRow.status === 'Completed') return false;
+  if (caseRow.status === CASE_STATUS.COMPLETED) return false;
   const due = caseRow.dueDate;
   if (!due) return false;
   return new Date(due) < now;
