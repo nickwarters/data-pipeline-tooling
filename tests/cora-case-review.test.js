@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom, StubEl, useElementClass, flush } from './_dom-stub.js';
+import { assertAllCoraElementsDefined } from './helpers/assert-defined-elements.js';
 
 installDom();
 
@@ -232,6 +233,7 @@ test('CORACaseReview: renders a cora-tabs with Details · Review · Issues · Su
     .filter((/** @type {any} */ t) => t.hidden)
     .map((/** @type {any} */ t) => t.id);
   assert.deepEqual(hidden, ['remediation', 'amendOutcome']);
+  assertAllCoraElementsDefined(el);
 });
 
 test('CORACaseReview: there is no standalone Outcome tab', async () => {

@@ -13,6 +13,42 @@ export function unsafeHTML(html) {
 }
 
 /**
+ * Tags for which an undefined-custom-element check has already been
+ * scheduled, so a given `cora-*` tag only ever warns once no matter how many
+ * times `h()` is called for it.
+ * @type {Set<string>}
+ */
+const scheduledUndefinedElementChecks = new Set();
+
+/**
+ * Dev-mode guard against the most junior-hostile failure mode in the repo:
+ * rendering `h('cora-x', ...)` without a side-effect import of `cora-x.js`
+ * creates an inert, unregistered element that fails silently. Warn once per
+ * tag when that happens.
+ *
+ * The check is deferred to a microtask rather than run synchronously,
+ * because `h()` can legitimately run before the module that defines the
+ * element finishes `customElements.define()` in some import orders (e.g. a
+ * component building its own children during its own module evaluation). By
+ * the time the microtask runs, registration from the current synchronous
+ * work has had a chance to complete, so only elements that are still
+ * unregistered at that point are flagged.
+ * @param {string} tag
+ */
+function warnIfUnregisteredCoraElement(tag) {
+  if (!tag.startsWith('cora-')) return;
+  if (scheduledUndefinedElementChecks.has(tag)) return;
+  scheduledUndefinedElementChecks.add(tag);
+  queueMicrotask(() => {
+    if (customElements.get(tag) === undefined) {
+      console.warn(
+        `<${tag}> is not defined — missing a side-effect import of its module?`
+      );
+    }
+  });
+}
+
+/**
  * A lightweight hyperscript-style element builder to replace manual document.createElement.
  * @param {string} tag
  * @param {Record<string, any>} [props]
@@ -20,6 +56,7 @@ export function unsafeHTML(html) {
  * @returns {HTMLElement}
  */
 export function h(tag, props = {}, ...children) {
+  warnIfUnregisteredCoraElement(tag);
   const el = document.createElement(tag);
 
   // A form control's `value` can only be applied *after* its children exist —

@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom, StubEl, useElementClass, flush } from './_dom-stub.js';
+import { assertAllCoraElementsDefined } from './helpers/assert-defined-elements.js';
 
 installDom();
 
@@ -127,6 +128,7 @@ test('cora-team-cases: renders cora-case-table with cases when results returned'
   assert.ok(table, 'should render cora-case-table');
   assert.deepEqual(table.cases, cases, 'should pass cases to table');
   assert.strictEqual(table.toolbar, 'hidden', 'should hide toolbar');
+  assertAllCoraElementsDefined(host);
 });
 
 test('cora-team-cases: passes query-string params to fetcher (caseType scoping)', async () => {

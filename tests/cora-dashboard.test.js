@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import { assertAllCoraElementsDefined } from './helpers/assert-defined-elements.js';
 /** @typedef {import('./_dom-stub.js').StubEl} StubEl */
 
 installDom();
@@ -178,6 +179,7 @@ test('DashboardPage: admin capability — both reviewer and owner sections visib
     1,
     'should render owner summary'
   );
+  assertAllCoraElementsDefined(host);
 });
 
 test('DashboardPage: a worklist role renders the Action Centre worklist (issue #287)', async () => {
