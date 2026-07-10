@@ -1,6 +1,11 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+// Must be imported before src/lib/view.js: it installs globalThis.HTMLElement
+// (among other DOM stubs) as a side effect, and view.js resolves its
+// HTMLElement base class once at module-eval time. See _view-stub.js for why
+// this ordering matters.
+import { StubEl } from './_view-stub.js';
 import { h } from '../src/lib/html.js';
 import { signal } from '../src/lib/signal.js';
 import {
@@ -8,124 +13,13 @@ import {
   captureFocus,
   createLifecycle,
   defineView,
+  normalizeRenderResult,
   on,
   reactive,
+  replaceHostChildren,
   restoreFocus,
+  ShellElement,
 } from '../src/lib/view.js';
-
-// This file deliberately keeps its own stub rather than using
-// tests/_dom-stub.js: the view() primitive is exercised against real
-// EventTarget dispatch semantics, which the shared StubEl does not model.
-class StubEl extends EventTarget {
-  /** @param {string} tag */
-  constructor(tag = '') {
-    super();
-    this.tagName = tag.toUpperCase();
-    /** @type {StubEl[]} */
-    this._children = [];
-    /** @type {Record<string, string>} */
-    this._attrs = {};
-    /** @type {StubEl | null} */
-    this.parentNode = null;
-    this.textContent = '';
-    this.className = '';
-    this.value = '';
-    this.selectionStart = 0;
-    this.selectionEnd = 0;
-  }
-
-  appendChild(/** @type {StubEl} */ child) {
-    child.parentNode = this;
-    this._children.push(child);
-    return child;
-  }
-
-  append(/** @type {StubEl[]} */ ...children) {
-    for (const child of children) this.appendChild(child);
-  }
-
-  replaceChildren(/** @type {StubEl[]} */ ...children) {
-    for (const child of this._children) child.parentNode = null;
-    this._children = [];
-    for (const child of children) this.appendChild(child);
-  }
-
-  setAttribute(/** @type {string} */ name, /** @type {unknown} */ value) {
-    this._attrs[name] = String(value);
-  }
-
-  getAttribute(/** @type {string} */ name) {
-    return this._attrs[name] ?? null;
-  }
-
-  /** @param {{ preventScroll?: boolean }} [options] */
-  focus(options) {
-    this._focusOptions = options;
-    /** @type {any} */ (globalThis).document._active = this;
-  }
-
-  setSelectionRange(/** @type {number} */ start, /** @type {number} */ end) {
-    this.selectionStart = start;
-    this.selectionEnd = end;
-  }
-
-  /** @param {string} selector */
-  querySelector(selector) {
-    return findFirst(this, (node) => matches(node, selector));
-  }
-}
-
-/**
- * @param {StubEl} root
- * @param {(node: StubEl) => boolean} predicate
- * @returns {StubEl | null}
- */
-function findFirst(root, predicate) {
-  for (const child of root._children) {
-    if (predicate(child)) return child;
-    const found = findFirst(child, predicate);
-    if (found) return found;
-  }
-  return null;
-}
-
-/** @param {StubEl} node @param {string} selector */
-function matches(node, selector) {
-  if (selector.startsWith('[data-focus-key=')) {
-    const expected = selector.slice('[data-focus-key="'.length, -2);
-    return node.getAttribute('data-focus-key') === expected;
-  }
-  return node.tagName === selector.toUpperCase();
-}
-
-/** @type {any} */ (globalThis).HTMLElement = StubEl;
-/** @type {any} */ (globalThis).document = {
-  _active: null,
-  get activeElement() {
-    return this._active;
-  },
-  createElement(/** @type {string} */ tag) {
-    const ctor = /** @type {any} */ (globalThis).customElements?._registry[tag];
-    return ctor ? new ctor() : new StubEl(tag);
-  },
-  createTextNode(/** @type {string} */ text) {
-    const node = new StubEl('#text');
-    node.textContent = text;
-    return node;
-  },
-};
-/** @type {any} */ (globalThis).customElements = {
-  _registry: {},
-  define(
-    /** @type {string} */ tag,
-    /** @type {CustomElementConstructor} */ ctor
-  ) {
-    this._registry[tag] = ctor;
-  },
-};
-/** @type {any} */ (globalThis).CSS = {
-  escape: (/** @type {string} */ s) => String(s),
-};
 
 test('view API: exports the future framework primitives', () => {
   assert.equal(typeof defineView, 'function');
@@ -381,6 +275,133 @@ test('captureFocus/restoreFocus: preserves data-focus-key and selection', () => 
     { preventScroll: true },
     'restoreFocus must not let the browser scroll the refocused element into view'
   );
+});
+
+test('normalizeRenderResult: wraps a single node in an array', () => {
+  const node = new StubEl('p');
+  assert.deepEqual(normalizeRenderResult(/** @type {any} */ (node)), [node]);
+});
+
+test('normalizeRenderResult: passes arrays through unchanged', () => {
+  const a = new StubEl('span');
+  const b = new StubEl('span');
+  assert.deepEqual(normalizeRenderResult(/** @type {any} */ ([a, b])), [a, b]);
+});
+
+test('normalizeRenderResult: returns an empty array for undefined', () => {
+  assert.deepEqual(normalizeRenderResult(undefined), []);
+});
+
+test('replaceHostChildren: replaces the host children with the normalized result', () => {
+  const host = new StubEl('div');
+  host.replaceChildren(new StubEl('old'));
+  const next = new StubEl('p');
+
+  replaceHostChildren(/** @type {any} */ (host), /** @type {any} */ (next));
+
+  assert.equal(host._children.length, 1);
+  assert.equal(host._children[0], next);
+});
+
+test('replaceHostChildren: clears the host when the render result is undefined', () => {
+  const host = new StubEl('div');
+  host.replaceChildren(new StubEl('old'));
+
+  replaceHostChildren(/** @type {any} */ (host), undefined);
+
+  assert.equal(host._children.length, 0);
+});
+
+class ShellTestEl extends ShellElement {
+  /** @type {(props: any) => any} */
+  static renderer = () => undefined;
+  render() {
+    return ShellTestEl.renderer(this);
+  }
+}
+customElements.define('cora-shell-test', /** @type {any} */ (ShellTestEl));
+
+test('ShellElement.emit: dispatches a bubbling CustomEvent carrying the detail payload', () => {
+  ShellTestEl.renderer = () => undefined;
+  const el = /** @type {ShellTestEl} */ (
+    /** @type {unknown} */ (document.createElement('cora-shell-test'))
+  );
+  el.connectedCallback();
+
+  let received = /** @type {CustomEvent | null} */ (null);
+  el.addEventListener('cora-ping', (event) => {
+    received = /** @type {CustomEvent} */ (event);
+  });
+
+  el.emit('cora-ping', { value: 42 });
+
+  assert.ok(received);
+  assert.equal(/** @type {CustomEvent} */ (received).bubbles, true);
+  assert.deepEqual(/** @type {CustomEvent} */ (received).detail, {
+    value: 42,
+  });
+});
+
+test('ShellElement.update: assigns props and re-renders exactly once', () => {
+  let renders = 0;
+  ShellTestEl.renderer = (self) => {
+    renders++;
+    return h('p', {}, String(self.label ?? ''));
+  };
+  const el = /** @type {ShellTestEl & { label?: string }} */ (
+    /** @type {unknown} */ (document.createElement('cora-shell-test'))
+  );
+  el.connectedCallback();
+  assert.equal(renders, 1);
+
+  el.update({ label: 'updated' });
+
+  assert.equal(el.label, 'updated');
+  assert.equal(renders, 2);
+  assert.equal(/** @type {any} */ (el)._children[0].textContent, 'updated');
+});
+
+test('ShellElement.update: preserves focus and selection across the re-render', () => {
+  ShellTestEl.renderer = (self) =>
+    h('input', {
+      'data-focus-key': 'answer',
+      value: String(self.label ?? ''),
+    });
+  const el = /** @type {ShellTestEl & { label?: string }} */ (
+    /** @type {unknown} */ (document.createElement('cora-shell-test'))
+  );
+  el.connectedCallback();
+  const input = /** @type {any} */ (el)._children[0];
+  input.selectionStart = 1;
+  input.selectionEnd = 2;
+  input.focus();
+
+  el.update({ label: 'two' });
+
+  const nextInput = /** @type {any} */ (el)._children[0];
+  assert.notEqual(nextInput, input);
+  assert.equal(document.activeElement, nextInput);
+  assert.equal(nextInput.selectionStart, 1);
+  assert.equal(nextInput.selectionEnd, 2);
+});
+
+test('ShellElement.update: assigns props but is a render no-op before connectedCallback', () => {
+  let renders = 0;
+  ShellTestEl.renderer = () => {
+    renders++;
+    return undefined;
+  };
+  const el =
+    /** @type {ShellTestEl & { label?: string } & { _shellRenderNow: unknown }} */ (
+      /** @type {unknown} */ (document.createElement('cora-shell-test'))
+    );
+
+  assert.equal(/** @type {any} */ (el)._shellRenderNow, null);
+
+  el.update({ label: 'pre-connect' });
+
+  assert.equal(el.label, 'pre-connect');
+  assert.equal(renders, 0);
 });
 
 test('reactive: preserves focus and selection across signal-driven re-render', () => {

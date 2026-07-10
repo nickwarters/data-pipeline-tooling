@@ -100,19 +100,25 @@ const HTMLElementBase = /** @type {typeof HTMLElement} */ (
 );
 
 /**
+ * Normalize a view render result into a flat array of nodes, ready to be
+ * passed to `Node.replaceChildren()`. `undefined` renders as no children;
+ * a single node is wrapped; an array passes through unchanged.
+ *
  * @param {ViewRenderResult} content
  * @returns {Node[]}
  */
-function normalizeRenderResult(content) {
+export function normalizeRenderResult(content) {
   if (content === undefined) return [];
   return Array.isArray(content) ? content : [content];
 }
 
 /**
+ * Replace a host element's children with a normalized render result.
+ *
  * @param {HTMLElement} host
  * @param {ViewRenderResult} content
  */
-function replaceHostChildren(host, content) {
+export function replaceHostChildren(host, content) {
   host.replaceChildren(...normalizeRenderResult(content));
 }
 
@@ -204,6 +210,10 @@ export function createLifecycle() {
  * without classes, connectedCallback, disconnectedCallback, or manual render
  * effects.
  *
+ * Deliberately adopted (MAINT-06): although no `src/components/` module uses
+ * it, every route-level page in `src/pages/` mounts its view through
+ * reactive(), so it is a live, supported API — not dead code.
+ *
  * @param {ReactiveRender} render
  * @returns {HTMLElement}
  */
@@ -273,6 +283,41 @@ export class ShellElement extends HTMLElementBase {
    */
   subscribe(sig, cb) {
     this._shellDisposes.push(effect(() => cb(sig.get())));
+  }
+
+  /**
+   * Dispatch a bubbling CustomEvent from this element.
+   *
+   * @param {string} name
+   * @param {unknown} [detail]
+   */
+  emit(name, detail) {
+    this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
+  }
+
+  /**
+   * Assign props onto the instance, then re-render through the same path
+   * `connectedCallback()` uses on reconnect (captures/restores focus).
+   * Instance props are plain fields, not signals, so `effect(renderNow)`
+   * alone would not observe this assignment — `_shellRenderNow` is the
+   * element's only re-render entry point. Calling `update()` before the
+   * element has connected (`_shellRenderNow` is still `null`) assigns the
+   * props but is a render no-op; the eventual `connectedCallback()` render
+   * picks them up.
+   *
+   * Declared with a permissive rest-parameter signature (rather than a
+   * single typed `props` parameter) so this stays a structurally valid base
+   * for the pre-existing bespoke positional `update(...)` overrides in
+   * `cora-remediation-section.js` and `cora-remediation-tracking.js`, which
+   * predate this helper and are out of scope for this (additive-only)
+   * change. Only the first argument is used here.
+   *
+   * @param {...any} args
+   */
+  update(...args) {
+    const [props = {}] = args;
+    Object.assign(this, props);
+    this._shellRenderNow?.();
   }
 }
 
