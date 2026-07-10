@@ -416,3 +416,16 @@ test('CORANotes: each box has a visible label element', () => {
   assert.ok(labels.includes('Case notes'));
   assert.ok(labels.includes('Case Justification'));
 });
+
+// --- Case Type sectionLabels heading override (MAINT-11) ---
+
+test('CORANotes: heading prop overrides the default Notes heading', () => {
+  const el = new CORANotes();
+  el.notes = '';
+  el.saveQueue = /** @type {any} */ (makeQueue());
+  el.caseId = 'case-1';
+  el.heading = 'Case Notes';
+  el.connectedCallback();
+
+  assert.equal(/** @type {any} */ (el)._children[0].textContent, 'Case Notes');
+});

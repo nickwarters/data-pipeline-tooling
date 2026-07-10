@@ -1,6 +1,7 @@
 // @ts-check
 import { computeSectionProgress } from '../../evaluators/section-progress.js';
 import { h } from '../../lib/html.js';
+import { resolveSectionHeadings } from '../../lib/section-labels.js';
 
 /**
  * @param {import('./types.js').CaseReviewShellContext} context
@@ -82,7 +83,14 @@ export function updateQuestionPanel(context) {
     );
   }
 
-  const questionsChildren = [h('h2', {}, 'Questions'), questionList, progress];
+  // Prefer the view model's resolved headings; fall back to resolving from the
+  // config so the controller stays usable with minimal contexts.
+  const headings = vm.sectionHeadings ?? resolveSectionHeadings(config);
+  const questionsChildren = [
+    h('h2', {}, headings.questions),
+    questionList,
+    progress,
+  ];
 
   if (typeof questionsPanel.replaceChildren === 'function') {
     questionsPanel.replaceChildren(...questionsChildren);

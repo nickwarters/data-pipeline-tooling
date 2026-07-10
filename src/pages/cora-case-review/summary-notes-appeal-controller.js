@@ -1,4 +1,5 @@
 // @ts-check
+import { resolveSectionHeadings } from '../../lib/section-labels.js';
 
 /**
  * Owns property assignment for Summary, Notes, and Appeal tabs.
@@ -21,6 +22,9 @@ export function updateSummaryNotesAppeal(context) {
     return;
 
   const answers = answersSignal.get();
+  // Prefer the view model's resolved headings; fall back to resolving from
+  // the config so the controller stays usable with minimal contexts.
+  const headings = vm.sectionHeadings ?? resolveSectionHeadings(config);
   Object.assign(summary, {
     caseRow,
     catalogue,
@@ -28,6 +32,7 @@ export function updateSummaryNotesAppeal(context) {
     captureGroups: config.captureGroups ?? [],
     detailFields: config.detailFields ?? [],
     outcomeOptions: config.outcomeOptions ?? [],
+    sectionHeadings: headings,
   });
   if (/** @type {any} */ (summary)?.update) {
     /** @type {any} */ (summary).update(
@@ -42,6 +47,7 @@ export function updateSummaryNotesAppeal(context) {
     saveQueue: vm.saveQueue,
     caseId: caseRow.id,
     access: context.displayMode(access.notes),
+    heading: headings.notes,
   });
 
   Object.assign(appeal, {
@@ -52,5 +58,6 @@ export function updateSummaryNotesAppeal(context) {
     currentUser,
     catalogue,
     answers: caseRow.answers,
+    heading: headings.appealRequest,
   });
 }

@@ -26,6 +26,10 @@ import {
 } from '../services/section-access.js';
 import { CaseMachine, isReportable } from './case-machine.js';
 import {
+  resolveSectionHeadings,
+  resolveSectionLabels,
+} from './section-labels.js';
+import {
   InvalidCaseTypeConfigError,
   UnknownCaseTypeError,
   loadCaseTypeConfig,
@@ -97,6 +101,20 @@ export class CaseReviewViewModel {
     this.currentUser = null;
     /** @type {import('../sharepoint-client.js').CaseTypeConfig | null} */
     this.config = null;
+    /**
+     * Resolved Case Review tab labels / section headings for this Case Type —
+     * `DEFAULT_SECTION_LABELS` overridden by `config.sectionLabels` (MAINT-11).
+     * Populated once `config` loads; defaults until then so components have
+     * something to render before `load()` resolves.
+     * @type {Required<import('../sharepoint-client.js').SectionLabels>}
+     */
+    this.sectionLabels = resolveSectionLabels(null);
+    /**
+     * Resolved section headings (the in-panel `<h2>`/`<h3>` copy) — as
+     * `sectionLabels` but over `DEFAULT_SECTION_HEADINGS`.
+     * @type {Required<import('../sharepoint-client.js').SectionLabels>}
+     */
+    this.sectionHeadings = resolveSectionHeadings(null);
     /** @type {QuestionDefinition[]} */
     this.catalogue = [];
     /** @type {Map<string, QuestionDefinition>} */
@@ -197,6 +215,8 @@ export class CaseReviewViewModel {
       throw error;
     }
     this.config = config;
+    this.sectionLabels = resolveSectionLabels(config);
+    this.sectionHeadings = resolveSectionHeadings(config);
     this.exportHash = exportHash;
 
     validateCaptureGroups(config.captureGroups);

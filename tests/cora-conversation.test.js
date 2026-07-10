@@ -479,3 +479,25 @@ test('CORAConversation: send click with null textarea value treats body as empty
     'null textarea value must be treated as empty body'
   );
 });
+
+// --- Case Type sectionLabels heading override (MAINT-11) ---
+
+test('CORAConversation: renders the default Conversation heading', () => {
+  const el = new CORAConversation();
+  el._messages = [];
+  el.connectedCallback();
+
+  assert.equal(
+    /** @type {any} */ (el)._children[0].textContent,
+    'Conversation'
+  );
+});
+
+test('CORAConversation: heading prop overrides the default heading', () => {
+  const el = new CORAConversation();
+  el._messages = [];
+  el.heading = 'Dialogue';
+  el.connectedCallback();
+
+  assert.equal(/** @type {any} */ (el)._children[0].textContent, 'Dialogue');
+});

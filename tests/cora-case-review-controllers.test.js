@@ -1631,3 +1631,108 @@ test('updateCaseReviewHeader: tolerates a missing conversation toggle node', () 
   assert.equal(header._children[0].textContent, 'Case One');
   assert.equal(header._children[1].textContent, 'Reviewer: Alex Reviewer');
 });
+
+// --- Case Type sectionLabels routing (MAINT-11) ---
+
+test('buildCaseReviewTabs: a config sectionLabels override renames its tab, others keep defaults', () => {
+  const { context } = makeTabContext();
+  /** @type {any} */ (context.viewModel).config = {
+    sectionLabels: { questions: 'Assessment' },
+  };
+
+  const tabs = buildCaseReviewTabs(/** @type {any} */ (context));
+
+  assert.equal(tabs.find((t) => t.id === 'questions')?.label, 'Assessment');
+  assert.equal(tabs.find((t) => t.id === 'details')?.label, 'Details');
+  assert.equal(
+    tabs.find((t) => t.id === 'appealReview')?.label,
+    'Appeal Review'
+  );
+});
+
+test('buildCaseReviewTabs: prefers the view model resolved sectionLabels when present', () => {
+  const { context } = makeTabContext();
+  /** @type {any} */ (context.viewModel).sectionLabels = {
+    details: 'Details',
+    questions: 'Assessment',
+    issues: 'Issues',
+    remediation: 'Remediation',
+    summary: 'Summary',
+    notes: 'Notes',
+    appealRequest: 'Appeal',
+    appealReview: 'Appeal Review',
+    amendOutcome: 'Amend Outcome',
+    conversation: 'Conversation',
+  };
+
+  const tabs = buildCaseReviewTabs(/** @type {any} */ (context));
+
+  assert.equal(tabs.find((t) => t.id === 'questions')?.label, 'Assessment');
+  assert.equal(tabs.find((t) => t.id === 'notes')?.label, 'Notes');
+});
+
+test('updateQuestionPanel: a sectionLabels override renames the Questions panel heading', () => {
+  const { context, questionsPanel } = makeQuestionContext();
+  /** @type {any} */ (context.viewModel).config.sectionLabels = {
+    questions: 'Assessment',
+  };
+
+  updateQuestionPanel(/** @type {any} */ (context));
+
+  assert.equal(questionsPanel._children[0].textContent, 'Assessment');
+});
+
+test('updateSummaryNotesAppeal: threads resolved section headings to Summary, Notes, and Appeal', () => {
+  const { context, summary, notes, appeal } = makeSummaryNotesAppealContext();
+  /** @type {any} */ (context.viewModel).config.sectionLabels = {
+    notes: 'Case Notes',
+    appealRequest: 'Challenge',
+    questions: 'Assessment',
+  };
+
+  updateSummaryNotesAppeal(/** @type {any} */ (context));
+
+  assert.equal(/** @type {any} */ (notes).heading, 'Case Notes');
+  assert.equal(/** @type {any} */ (appeal).heading, 'Challenge');
+  const headings = /** @type {any} */ (summary).sectionHeadings;
+  assert.equal(headings.notes, 'Case Notes');
+  assert.equal(headings.questions, 'Assessment');
+  assert.equal(headings.summary, 'Summary');
+});
+
+test('updateSummaryNotesAppeal: defaults the section headings when no sectionLabels declared', () => {
+  const { context, summary, notes, appeal } = makeSummaryNotesAppealContext();
+
+  updateSummaryNotesAppeal(/** @type {any} */ (context));
+
+  assert.equal(/** @type {any} */ (notes).heading, 'Notes');
+  assert.equal(/** @type {any} */ (appeal).heading, 'Appeal');
+  assert.equal(
+    /** @type {any} */ (summary).sectionHeadings.questions,
+    'Questions'
+  );
+});
+
+test('updateRemediationTracking: threads the resolved Remediation heading', () => {
+  const { context, tracking } = makeTrackingContext();
+  /** @type {any} */ (context.viewModel).config.sectionLabels = {
+    remediation: 'Fix-up',
+  };
+
+  updateRemediationTracking(/** @type {any} */ (context));
+
+  assert.equal(/** @type {any} */ (tracking).heading, 'Fix-up');
+});
+
+test('conversation panel update: threads the resolved Conversation heading and toggle label', () => {
+  const setup = makeConversationContext();
+  /** @type {any} */ (setup.context.viewModel).config = {
+    sectionLabels: { conversation: 'Dialogue' },
+  };
+  const binding = createConversationPanelBinding();
+
+  binding.update(/** @type {any} */ (setup.context));
+
+  assert.equal(/** @type {any} */ (setup.conversation).heading, 'Dialogue');
+  assert.equal(setup.toggle.textContent, 'Dialogue');
+});

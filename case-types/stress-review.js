@@ -17,6 +17,11 @@ const bank = await loadBank('./banks/stress-review.txt');
 const config = {
   eligibleGroups: ['Reviewers'],
   labels: bank.labels,
+  // Demonstrative sectionLabels override (MAINT-11): renames the questions
+  // tab *and* its section headings; every other Section keeps the defaults
+  // from src/lib/section-labels.js. Distinct from `labels` above, which is
+  // the reporting Label catalogue.
+  sectionLabels: { questions: 'Assessment' },
   questions: bank.questions,
   // Outcome vocabulary: required even for this perf harness so the
   // Outcome block resolves wording from config rather than a built-in fallback.

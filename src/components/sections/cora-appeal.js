@@ -1,6 +1,7 @@
 // @ts-check
 import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
+import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
 import { isFailure } from '../../evaluators/failure-evaluator.js';
 import { buildCaptureControl } from '../../lib/capture-engine.js';
 
@@ -39,6 +40,7 @@ import { buildCaptureControl } from '../../lib/capture-engine.js';
  * @property {Record<string, Answer>} answers
  * @property {() => string} newAppealId
  * @property {() => void} render
+ * @property {string} [heading] Section heading; defaults to the standard copy so the component stays usable standalone.
  */
 
 /**
@@ -47,7 +49,9 @@ import { buildCaptureControl } from '../../lib/capture-engine.js';
  */
 export function AppealSection(props) {
   const children = [];
-  children.push(h('h2', {}, 'Appeal'));
+  children.push(
+    h('h2', {}, props.heading ?? DEFAULT_SECTION_HEADINGS.appealRequest)
+  );
 
   for (const appeal of appealsFrom(props)) {
     children.push(renderAppealItem(appeal));
@@ -253,6 +257,8 @@ export class CORAAppeal extends ShellElement {
     this.catalogue = [];
     /** @type {Record<string, Answer>} */
     this.answers = {};
+    /** @type {string} Section heading (overridable via `CaseTypeConfig.sectionLabels.appealRequest`). */
+    this.heading = DEFAULT_SECTION_HEADINGS.appealRequest;
   }
 
   _render() {
@@ -284,6 +290,7 @@ export class CORAAppeal extends ShellElement {
       answers: this.answers,
       newAppealId: () => this.newAppealId(),
       render: () => this._render(),
+      heading: this.heading,
     };
   }
 }

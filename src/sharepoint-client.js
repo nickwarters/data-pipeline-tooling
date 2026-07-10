@@ -183,6 +183,16 @@
  */
 
 /**
+ * Optional display-copy overrides for Case Review tab labels and section
+ * headings, keyed by Section id. Any key absent here falls back to
+ * `DEFAULT_SECTION_LABELS` (src/lib/section-labels.js). Distinct from
+ * `CaseTypeConfig.labels` above — that is the reporting Label catalogue
+ * assigned to Question Definitions, unrelated to this presentation copy.
+ *
+ * @typedef {{ details?: string, questions?: string, issues?: string, summary?: string, remediation?: string, notes?: string, conversation?: string, appealRequest?: string, appealReview?: string, amendOutcome?: string }} SectionLabels
+ */
+
+/**
  * `responseType` is one of `yes-no-na` | `single-choice` | `multi-choice` |
  * `outcome`. `yes-no-na` is single-choice with the fixed options `Yes`/`No`/`NA`;
  * `outcome` is single-choice whose options are the Case Type's configured
@@ -337,6 +347,7 @@
  * outcomeOptions: OutcomeOption[],
  * defaultOutcomeId: string,
  * labels?: Label[],
+ * sectionLabels?: SectionLabels,
  * eligibleGroups?: string[],
  * listName?: string,
  * reviewerGroup?: string,

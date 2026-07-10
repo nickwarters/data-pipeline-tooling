@@ -1,4 +1,5 @@
 // @ts-check
+import { resolveSectionHeadings } from '../../lib/section-labels.js';
 
 /**
  * @typedef {{
@@ -64,6 +65,9 @@ export function updateConversationPanel(context) {
   const { caseRow, currentUser, access } = vm;
   if (!conversation || !caseRow || !currentUser) return;
 
+  // Prefer the view model's resolved headings; fall back to resolving from
+  // the config so the controller stays usable with minimal contexts.
+  const headings = vm.sectionHeadings ?? resolveSectionHeadings(vm.config);
   Object.assign(conversation, {
     client: vm.client,
     saveQueue: vm.saveQueue,
@@ -71,6 +75,7 @@ export function updateConversationPanel(context) {
     currentUser,
     access: context.displayMode(access.conversation),
     hidden: vm.conversationHidden.get(),
+    heading: headings.conversation,
     _messages: caseRow.conversation.slice(),
   });
 
@@ -83,6 +88,6 @@ export function updateConversationPanel(context) {
       'aria-label',
       'Toggle conversation panel (⌥C / Alt+C)'
     );
-    nodes.conversationToggle.textContent = 'Conversation';
+    nodes.conversationToggle.textContent = headings.conversation;
   }
 }

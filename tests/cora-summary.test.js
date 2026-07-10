@@ -611,3 +611,63 @@ test('CORASummary: notes block is omitted by default (notes absent from summaryS
     null
   );
 });
+
+// --- Case Type sectionLabels heading overrides (MAINT-11) ---
+
+test('CORASummary: sectionHeadings prop overrides the Summary h2 and block h3s', () => {
+  const el = new CORASummary();
+  el.caseRow = makeCase({ notes: 'note text' });
+  el.catalogue = [];
+  el.summarySections = /** @type {any} */ ([
+    'questions',
+    'issues',
+    'remediation',
+    'notes',
+  ]);
+  el.sectionHeadings = {
+    details: 'Details',
+    questions: 'Assessment',
+    issues: 'Findings',
+    remediation: 'Fix-up',
+    summary: 'Wrap-up',
+    notes: 'Case Notes',
+    appealRequest: 'Appeal',
+    appealReview: 'Appeal Review',
+    amendOutcome: 'Amend Outcome',
+    conversation: 'Conversation',
+  };
+  el.connectedCallback();
+
+  assert.equal(/** @type {any} */ (el)._children[0].textContent, 'Wrap-up');
+  const text = allText(el);
+  assert.match(text, /Assessment/);
+  assert.match(text, /Findings/);
+  assert.match(text, /Fix-up/);
+  assert.match(text, /Case Notes/);
+});
+
+test('Summary: default headings are unchanged when no sectionHeadings passed', () => {
+  const nodes = Summary({
+    computeOutcome: null,
+    answers: {},
+    allAnswered: false,
+    caseRow: makeCase({ notes: 'n' }),
+    catalogue: [],
+    summarySections: /** @type {any} */ ([
+      'questions',
+      'issues',
+      'remediation',
+      'notes',
+    ]),
+    captureGroups: [],
+    detailFields: [],
+    outcomeOptions: [],
+  });
+
+  assert.equal(/** @type {any} */ (nodes[0]).textContent, 'Summary');
+  const text = nodes.map((n) => allText(n)).join(' ');
+  assert.match(text, /Questions/);
+  assert.match(text, /Issues/);
+  assert.match(text, /Remediation/);
+  assert.match(text, /Notes/);
+});

@@ -203,3 +203,20 @@ test('CORARemediationTracking: render() returns nodes and non-array render repla
   const out = el.render();
   assert.ok(Array.isArray(out));
 });
+
+// --- Case Type sectionLabels heading override (MAINT-11) ---
+
+test('CORARemediationTracking: heading prop overrides the default Remediation heading', () => {
+  const el = new CORARemediationTracking();
+  el.captureGroups = [];
+  el.heading = 'Fix-up';
+  el.update(CATALOGUE, {});
+  assert.equal(/** @type {any} */ (el)._children[0].textContent, 'Fix-up');
+});
+
+test('CORARemediationTracking: default heading is Remediation when no override', () => {
+  const el = new CORARemediationTracking();
+  el.captureGroups = [];
+  el.update(CATALOGUE, {});
+  assert.equal(/** @type {any} */ (el)._children[0].textContent, 'Remediation');
+});

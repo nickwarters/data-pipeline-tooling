@@ -1,6 +1,7 @@
 // @ts-check
 import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
+import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
 
 /** @typedef {import('../../services/save-queue.js').SaveQueue} SaveQueue */
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
@@ -13,6 +14,7 @@ import { h } from '../../lib/html.js';
  * @property {string} caseId
  * @property {'edit'|'read-only'|'hidden'} access
  * @property {CaseRow | null} [caseRow]
+ * @property {string} [heading] Section heading; defaults to the standard copy so the component stays usable standalone.
  */
 
 /**
@@ -21,7 +23,7 @@ import { h } from '../../lib/html.js';
  */
 export function Notes(props) {
   return [
-    h('h2', {}, 'Notes'),
+    h('h2', {}, props.heading ?? DEFAULT_SECTION_HEADINGS.notes),
     ...notesBox({
       label: 'Case notes',
       className: 'cora-notes-input',
@@ -106,6 +108,8 @@ export class CORANotes extends ShellElement {
      * @type {CaseRow | null}
      */
     this.caseRow = null;
+    /** @type {string} Section heading (overridable via `CaseTypeConfig.sectionLabels.notes`). */
+    this.heading = DEFAULT_SECTION_HEADINGS.notes;
   }
 
   render() {
@@ -119,6 +123,7 @@ export class CORANotes extends ShellElement {
       caseId: this.caseId,
       access: this.access,
       caseRow,
+      heading: this.heading,
     });
   }
 }

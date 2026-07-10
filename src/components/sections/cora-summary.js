@@ -5,6 +5,7 @@ import { caseDetailFields } from './cora-case-details.js';
 import { buildSummaryModel } from '../../evaluators/summary-model.js';
 import { isReportable } from '../../lib/case-machine.js';
 import { currentOutcome } from '../../evaluators/amended-outcome.js';
+import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
 import './cora-capture-groups.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
 
@@ -25,6 +26,7 @@ import { CASE_STATUS } from '../../lib/case-statuses.js';
  * @property {import('../../sharepoint-client.js').CaptureGroup[]} captureGroups
  * @property {import('../../sharepoint-client.js').CaseDetailField[]} detailFields
  * @property {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions
+ * @property {Required<import('../../sharepoint-client.js').SectionLabels>} [sectionHeadings] Resolved section headings; defaults to the standard copy so the component stays usable standalone.
  */
 
 /**
@@ -32,7 +34,8 @@ import { CASE_STATUS } from '../../lib/case-statuses.js';
  * @returns {Node[]}
  */
 export function Summary(props) {
-  const heading = h('h2', {}, 'Summary');
+  const headings = props.sectionHeadings ?? DEFAULT_SECTION_HEADINGS;
+  const heading = h('h2', {}, headings.summary);
   const outcomeEl = /** @type {import('./cora-outcome.js').CORAOutcome} */ (
     h('cora-outcome')
   );
@@ -81,6 +84,16 @@ export function Summary(props) {
 }
 
 /**
+ * The effective section headings for a render: the resolved map threaded by
+ * the page, or the defaults when the component is used standalone.
+ * @param {SummaryProps} props
+ * @returns {Required<import('../../sharepoint-client.js').SectionLabels>}
+ */
+function headingsOf(props) {
+  return props.sectionHeadings ?? DEFAULT_SECTION_HEADINGS;
+}
+
+/**
  * @param {SummaryProps} props
  * @param {Section} section
  * @param {CaseRow} caseRow
@@ -110,7 +123,7 @@ function renderSectionBlock(props, section, caseRow) {
     return h(
       'section',
       { class: 'cora-summary-notes' },
-      h('h3', {}, 'Notes'),
+      h('h3', {}, headingsOf(props).notes),
       h('p', {}, caseRow.notes)
     );
   }
@@ -133,7 +146,7 @@ function renderIssues(props) {
   return h(
     'section',
     { class: 'cora-summary-remediation' },
-    h('h3', {}, 'Issues'),
+    h('h3', {}, headingsOf(props).issues),
     h('p', {}, `Remediation Actions: ${remediationActionCount}`),
     failures.length === 0
       ? h('p', {}, 'No failures.')
@@ -160,7 +173,7 @@ function renderRemediationTracking(props) {
   return h(
     'section',
     { class: 'cora-summary-remediation-tracking' },
-    h('h3', {}, 'Remediation'),
+    h('h3', {}, headingsOf(props).remediation),
     h('p', {}, `Remediation due: ${dueDate ? dueDate : '—'}`),
     withActions.length === 0
       ? h('p', {}, 'No remediation actions sent.')
@@ -255,7 +268,7 @@ function renderCounts(props) {
   return h(
     'section',
     { class: 'cora-summary-counts' },
-    h('h3', {}, 'Questions'),
+    h('h3', {}, headingsOf(props).questions),
     h(
       'ul',
       {},
@@ -358,6 +371,12 @@ export class CORASummary extends HTMLElement {
      * @type {import('../../sharepoint-client.js').OutcomeOption[]}
      */
     this.outcomeOptions = [];
+    /**
+     * Resolved section headings (page-threaded from
+     * `CaseTypeConfig.sectionLabels`); defaults keep the component standalone.
+     * @type {Required<import('../../sharepoint-client.js').SectionLabels>}
+     */
+    this.sectionHeadings = DEFAULT_SECTION_HEADINGS;
   }
 
   connectedCallback() {
@@ -388,6 +407,7 @@ export class CORASummary extends HTMLElement {
         captureGroups: this.captureGroups,
         detailFields: this.detailFields,
         outcomeOptions: this.outcomeOptions,
+        sectionHeadings: this.sectionHeadings,
       })
     );
   }

@@ -1,4 +1,5 @@
 // @ts-check
+import { resolveSectionLabels } from '../../lib/section-labels.js';
 
 /**
  * @param {import('./types.js').CaseReviewShellContext} context
@@ -60,39 +61,50 @@ export class CaseReviewTabController {
  * @returns {import('./types.js').CaseReviewTab[]}
  */
 export function buildCaseReviewTabs(context) {
-  const { access } = context.viewModel;
+  const { access, config, sectionLabels } = context.viewModel;
+  // Prefer the view model's already-resolved labels; fall back to resolving
+  // from the config so the builder stays usable with minimal contexts.
+  const labels = sectionLabels ?? resolveSectionLabels(config);
   return [
-    { id: 'details', label: 'Details', hidden: access.details === 'hidden' },
+    {
+      id: 'details',
+      label: labels.details,
+      hidden: access.details === 'hidden',
+    },
     {
       id: 'questions',
-      label: 'Review',
+      label: labels.questions,
       hidden: access.questions === 'hidden',
     },
     {
       id: 'issues',
-      label: 'Issues',
+      label: labels.issues,
       hidden: access.issues === 'hidden',
     },
     {
       id: 'remediation',
-      label: 'Remediation',
+      label: labels.remediation,
       hidden: access.remediation === 'hidden',
     },
-    { id: 'summary', label: 'Summary', hidden: access.summary === 'hidden' },
-    { id: 'notes', label: 'Notes', hidden: access.notes === 'hidden' },
+    {
+      id: 'summary',
+      label: labels.summary,
+      hidden: access.summary === 'hidden',
+    },
+    { id: 'notes', label: labels.notes, hidden: access.notes === 'hidden' },
     {
       id: 'appealRequest',
-      label: 'Appeal',
+      label: labels.appealRequest,
       hidden: access.appealRequest === 'hidden',
     },
     {
       id: 'appealReview',
-      label: 'Appeal Review',
+      label: labels.appealReview,
       hidden: access.appealReview === 'hidden',
     },
     {
       id: 'amendOutcome',
-      label: 'Amend Outcome',
+      label: labels.amendOutcome,
       hidden: access.amendOutcome === 'hidden',
     },
   ];

@@ -128,6 +128,11 @@ const config = {{
     appealReview: {{}},
     amendOutcome: {{}},
   }},
+ // Optional (MAINT-11): rename Case Review tab labels / section headings for
+ // this Case Type. Omitted keys keep the defaults from
+ // src/lib/section-labels.js (DEFAULT_SECTION_LABELS / DEFAULT_SECTION_HEADINGS).
+ // Not the same as `labels`, which is the reporting Label catalogue.
+ // sectionLabels: {{ questions: 'Assessment' }},
  // TODO(case-type): Confirm who raises appeals for this Case Type.
   appeal: {{ raisedBy: 'responsiblePartyManager', resolvedBy: 'controls' }},
  // TODO(case-type): Replace the starter Outcome vocabulary with business wording.

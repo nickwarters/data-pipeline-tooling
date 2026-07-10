@@ -1,6 +1,7 @@
 // @ts-check
 import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
+import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
 import { evaluate } from '../../evaluators/applicability-evaluator.js';
 import { isFailure } from '../../evaluators/failure-evaluator.js';
 import {
@@ -27,6 +28,7 @@ import {
  * @property {CaptureGroup[]} captureGroups
  * @property {boolean} canResolve
  * @property {(questionId: string, fieldKey: string, actionId: string, status: 'pending' | 'complete' | 'cancelled', cancelReason: string) => void} dispatchStatus
+ * @property {string} [heading] Section heading; defaults to the standard copy so the component stays usable standalone.
  */
 
 /**
@@ -41,7 +43,11 @@ import {
  * @returns {Node[]}
  */
 export function RemediationTracking(props) {
-  const heading = h('h2', {}, 'Remediation');
+  const heading = h(
+    'h2',
+    {},
+    props.heading ?? DEFAULT_SECTION_HEADINGS.remediation
+  );
   const rows = collectRows(props);
 
   if (rows.length === 0) {
@@ -172,6 +178,8 @@ export class CORARemediationTracking extends ShellElement {
     this.captureGroups = [];
     /** @type {boolean} Whether the viewer may resolve actions (Assigned Reviewer, Actions In Progress). */
     this.canResolve = false;
+    /** @type {string} Section heading (overridable via `CaseTypeConfig.sectionLabels.remediation`). */
+    this.heading = DEFAULT_SECTION_HEADINGS.remediation;
   }
 
   /**
@@ -199,6 +207,7 @@ export class CORARemediationTracking extends ShellElement {
       answers: this.answers,
       captureGroups: this.captureGroups,
       canResolve: this.canResolve,
+      heading: this.heading,
       dispatchStatus: (questionId, fieldKey, actionId, status, cancelReason) =>
         this._dispatchStatus(
           questionId,

@@ -418,3 +418,12 @@ test('CORAAppeal: raising without a saveQueue or caseRow does not throw', () => 
 test('CORAAppeal: newAppealId yields a non-empty string', () => {
   assert.ok(new CORAAppeal().newAppealId().length > 0);
 });
+
+// --- Case Type sectionLabels heading override (MAINT-11) ---
+
+test('CORAAppeal: heading prop overrides the default Appeal heading', () => {
+  const el = new CORAAppeal();
+  el.heading = 'Challenge';
+  el.connectedCallback();
+  assert.equal(/** @type {any} */ (el)._children[0].textContent, 'Challenge');
+});

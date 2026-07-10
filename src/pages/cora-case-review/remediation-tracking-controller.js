@@ -1,4 +1,5 @@
 // @ts-check
+import { resolveSectionHeadings } from '../../lib/section-labels.js';
 
 /**
  * Owns Remediation *tracking* tab event forwarding: a reviewer
@@ -33,9 +34,13 @@ export function updateRemediationTracking(context) {
   if (!tracking || !caseRow || !config || !machine) return;
 
   const answers = answersSignal.get();
+  // Prefer the view model's resolved headings; fall back to resolving from
+  // the config so the controller stays usable with minimal contexts.
+  const headings = vm.sectionHeadings ?? resolveSectionHeadings(config);
   Object.assign(tracking, {
     captureGroups: config.captureGroups ?? [],
     canResolve: access.remediation === 'edit',
+    heading: headings.remediation,
   });
   if (/** @type {any} */ (tracking).update) {
     /** @type {any} */ (tracking).update(catalogue, answers);

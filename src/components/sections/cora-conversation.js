@@ -1,6 +1,7 @@
 // @ts-check
 import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
+import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
 
 /** @typedef {import('../../sharepoint-client.js').Message} Message */
 /** @typedef {import('../../sharepoint-client.js').SharePointClient} SharePointClient */
@@ -12,6 +13,7 @@ import { h } from '../../lib/html.js';
  * @property {Message[]} messages
  * @property {'edit'|'read-only'|'hidden'} access
  * @property {(body: string) => Promise<void>} sendMessage
+ * @property {string} [heading] Section heading; defaults to the standard copy so the component stays usable standalone.
  */
 
 /**
@@ -19,7 +21,9 @@ import { h } from '../../lib/html.js';
  * @returns {Node[]}
  */
 export function Conversation(props) {
-  const children = [h('h2', {}, 'Conversation')];
+  const children = [
+    h('h2', {}, props.heading ?? DEFAULT_SECTION_HEADINGS.conversation),
+  ];
 
   if (props.messages.length === 0) {
     children.push(
@@ -177,6 +181,8 @@ export class CORAConversation extends ShellElement {
     this._visibilityHandler = null;
     /** @type {'edit'|'read-only'|'hidden'} */
     this.access = 'edit';
+    /** @type {string} Section heading (overridable via `CaseTypeConfig.sectionLabels.conversation`). */
+    this.heading = DEFAULT_SECTION_HEADINGS.conversation;
   }
 
   connectedCallback() {
@@ -230,6 +236,7 @@ export class CORAConversation extends ShellElement {
       messages: this._messages,
       access: this.access,
       sendMessage: (body) => this._sendMessage(body),
+      heading: this.heading,
     });
   }
 

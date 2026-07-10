@@ -731,3 +731,59 @@ test('CaseReviewViewModel.load(): Completed Case without questionBankVersion fal
   assert.ok(liveIds.has('q-welcome'), 'legacy: live bank loaded');
   assert.equal(vm.versionWarning.get(), null, 'no warning for legacy cases');
 });
+
+// --- Case Type sectionLabels resolution (MAINT-11) ---
+
+/** @param {string} caseType */
+function makeLabelsVM(caseType) {
+  return new CaseReviewViewModel({
+    client: /** @type {any} */ ({
+      getCase: async () => ({
+        id: 'c1',
+        caseType,
+        title: 'T',
+        status: 'In-progress',
+        assignedReviewer: 'u1',
+        responsibleParty: 'u2',
+        answers: {},
+        conversation: [],
+        notes: '',
+        completedAt: null,
+        etag: 'e1',
+      }),
+      getCurrentUser: async () => ({ id: 'u1', displayName: 'User 1' }),
+      getExportHash: async () => null,
+      resolveUsers: async () => ({}),
+    }),
+    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: null,
+  });
+}
+
+test('CaseReviewViewModel: sectionLabels/sectionHeadings default before load()', () => {
+  const vm = makeLabelsVM('example-review');
+  assert.equal(vm.sectionLabels.questions, 'Review');
+  assert.equal(vm.sectionHeadings.questions, 'Questions');
+  assert.equal(vm.sectionLabels.notes, 'Notes');
+});
+
+test('CaseReviewViewModel.load(): a Case Type without sectionLabels keeps the defaults', async () => {
+  const vm = makeLabelsVM('example-review');
+  await vm.load();
+  assert.equal(vm.sectionLabels.questions, 'Review');
+  assert.equal(vm.sectionHeadings.questions, 'Questions');
+  assert.equal(vm.sectionLabels.appealReview, 'Appeal Review');
+});
+
+test('CaseReviewViewModel.load(): resolves a Case Type sectionLabels override into labels and headings', async () => {
+  // stress-review declares the demonstrative { questions: 'Assessment' } override.
+  const vm = makeLabelsVM('stress-review');
+  await vm.load();
+  assert.equal(vm.sectionLabels.questions, 'Assessment');
+  assert.equal(vm.sectionHeadings.questions, 'Assessment');
+  // Every other Section keeps the defaults.
+  assert.equal(vm.sectionLabels.notes, 'Notes');
+  assert.equal(vm.sectionHeadings.remediation, 'Remediation');
+});
