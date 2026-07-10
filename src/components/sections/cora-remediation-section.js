@@ -123,6 +123,13 @@ export function renderRemediationActions(props, li, q) {
     : configured.filter((action) => selectedIds.has(action.id));
 
   if (visible.length) {
+    li.appendChild(
+      h(
+        'p',
+        { class: 'cora-remediation-actions-heading' },
+        'Remediation Actions'
+      )
+    );
     const actions = h('ul', { class: 'cora-remediation-actions' });
     for (const action of visible) {
       actions.appendChild(

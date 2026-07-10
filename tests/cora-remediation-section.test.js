@@ -172,6 +172,28 @@ test('CORARemediationSection: read-only viewer with no selected actions shows no
   assert.equal(findByClass(el, 'cora-remediation-actions'), null);
 });
 
+test('CORARemediationSection: a "Remediation Actions" heading precedes the visible actions', () => {
+  const el = new CORARemediationSection();
+  el.catalogue = CATALOGUE;
+  el.canSelectRemediation = true;
+  el.answers = { 'q-needs': { value: 'No' } };
+  el.connectedCallback();
+
+  const heading = findByClass(el, 'cora-remediation-actions-heading');
+  assert.ok(heading, 'a heading is rendered above the actions');
+  assert.equal(heading.textContent, 'Remediation Actions');
+});
+
+test('CORARemediationSection: no actions heading when there are no visible actions', () => {
+  const el = new CORARemediationSection();
+  el.catalogue = CATALOGUE;
+  el.canSelectRemediation = false;
+  el.answers = { 'q-needs': { value: 'No' } };
+  el.connectedCallback();
+
+  assert.equal(findByClass(el, 'cora-remediation-actions-heading'), null);
+});
+
 test('CORARemediationSection: editable viewer renders an unticked checkbox per configured action', () => {
   const el = new CORARemediationSection();
   el.catalogue = CATALOGUE;

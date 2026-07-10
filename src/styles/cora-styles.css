@@ -1274,9 +1274,22 @@ cora-attribute-menu {
   outline: none;
 }
 
+/* The "Remediation Actions" caption that heads the reviewer-selectable
+   options on a failed item, separating them from the answer/detail rows above. */
+.cora-remediation-actions-heading {
+  font-size: var(--cora-font-size-xs);
+  font-weight: var(--cora-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--cora-tracking-wider);
+  color: var(--cora-color-text-muted);
+  margin: var(--cora-space-3) 0 var(--cora-space-2);
+}
+
 .cora-remediation-actions {
   margin: 0;
   padding-left: var(--cora-space-5);
+  display: grid;
+  gap: var(--cora-space-2);
 }
 
 /* Reviewer-selectable Remediation Actions: checkboxes replace the
@@ -1289,7 +1302,7 @@ cora-attribute-menu {
 .cora-remediation-action label {
   display: inline-flex;
   align-items: baseline;
-  gap: var(--cora-space-1);
+  gap: var(--cora-space-2);
 }
 
 .cora-remediation-freeform {
