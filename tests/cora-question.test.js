@@ -166,8 +166,7 @@ test('CORAQuestion: multi-choice change handler exercises both checked branches'
 
   // Branch: checkbox.checked = false
   // We need to re-render or update state to simulate the next state where 'A' is selected
-  el.currentValue = ['A'];
-  el._render();
+  el.update({ currentValue: ['A'] });
   const nextFieldset = /** @type {any} */ (el)._children[0];
   const nextCheckbox = nextFieldset._children[1]._children[0];
   nextCheckbox.checked = false;

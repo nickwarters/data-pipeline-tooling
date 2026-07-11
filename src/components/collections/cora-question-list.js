@@ -57,8 +57,15 @@ export function QuestionList({ questions, answers, access, existing = [] }) {
     element.currentValue = currentValue;
     element.selectedActions = selectedActions;
     element.freeFormRemediation = freeFormRemediation;
-    if (!existingElement) element._render();
-    else element.syncRemediation(selectedActions, freeFormRemediation);
+    if (!existingElement) {
+      element.update({
+        question,
+        access,
+        currentValue,
+        selectedActions,
+        freeFormRemediation,
+      });
+    } else element.syncRemediation(selectedActions, freeFormRemediation);
     return element;
   });
 }

@@ -1,4 +1,5 @@
 // @ts-check
+import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
@@ -163,7 +164,7 @@ export function renderSelectedRemediation(
   }
 }
 
-export class CORAQuestion extends HTMLElement {
+export class CORAQuestion extends ShellElement {
   constructor() {
     super();
     /** @type {QuestionDefinition | null} */
@@ -189,11 +190,8 @@ export class CORAQuestion extends HTMLElement {
     this._remediationNode = null;
   }
 
-  connectedCallback() {
-    this._render();
-  }
-
-  _render() {
+  /** @returns {Node[]} */
+  render() {
     const content = Question({
       question: this.question,
       currentValue: this.currentValue,
@@ -209,8 +207,7 @@ export class CORAQuestion extends HTMLElement {
     });
     if (!this.question) {
       this._remediationNode = null;
-      this.replaceChildren(...content);
-      return;
+      return content;
     }
     const node = document.createElement('div');
     node.className = 'cora-question-remediation';
@@ -220,7 +217,19 @@ export class CORAQuestion extends HTMLElement {
       this.selectedActions,
       this.freeFormRemediation
     );
-    this.replaceChildren(...content, node);
+    return [...content, node];
+  }
+
+  /**
+   * Replace one or more props and render immediately. `cora-question-list`
+   * composes fresh, not-yet-connected hosts (see `QuestionList()`), so this
+   * falls back to `connectedCallback()` when the shell hasn't mounted yet.
+   * @param {{ question?: QuestionDefinition | null, currentValue?: string | string[], access?: 'edit'|'read-only'|'hidden', selectedActions?: string[], freeFormRemediation?: string }} props
+   */
+  update(props) {
+    Object.assign(this, props);
+    if (this._shellRenderNow) this._shellRenderNow();
+    else this.connectedCallback();
   }
 
   /**
