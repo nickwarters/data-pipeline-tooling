@@ -1,6 +1,7 @@
 // @ts-check
 import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
+import { EmptyState } from '../../lib/empty-state.js';
 import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
 
 /** @typedef {import('../../sharepoint-client.js').Message} Message */
@@ -27,7 +28,7 @@ export function Conversation(props) {
 
   if (props.messages.length === 0) {
     children.push(
-      h('p', { class: 'cora-conversation-empty' }, 'No messages yet.')
+      EmptyState('No messages yet.', { className: 'cora-conversation-empty' })
     );
   } else {
     children.push(

@@ -65,7 +65,7 @@ test('CORAShowwhenEditor: selecting Conditional on an empty question reveals the
   const wrap = wrapOf(e);
   // header + empty-state note + group
   assert.equal(wrap._children.length, 3);
-  assert.equal(wrap._children[1].className, 'showwhen-empty');
+  assert.equal(wrap._children[1].className, 'cora-empty showwhen-empty');
   assert.equal(selectOf(e).value, 'conditional');
 });
 

@@ -168,7 +168,7 @@ test('CORAAppealReview: with no Appeals shows a placeholder', () => {
   const el = new CORAAppealReview();
   el.access = 'read-only';
   el.connectedCallback();
-  assert.ok(findByClass(el, 'cora-appeal-review-empty'));
+  assert.ok(findByClass(el, 'cora-empty cora-appeal-review-empty'));
 });
 
 test('CORAAppealReview: caseRow without an appeals property is treated as having no Appeals', () => {
@@ -184,7 +184,7 @@ test('CORAAppealReview: caseRow without an appeals property is treated as having
   });
   el.connectedCallback();
   assert.ok(
-    findByClass(el, 'cora-appeal-review-empty'),
+    findByClass(el, 'cora-empty cora-appeal-review-empty'),
     'placeholder shown when appeals is missing'
   );
 });
@@ -194,7 +194,7 @@ test('CORAAppealReview: with no caseRow shows an empty placeholder', () => {
   el.caseRow = null;
   el.access = 'edit';
   el.connectedCallback();
-  assert.ok(findByClass(el, 'cora-appeal-review-empty'));
+  assert.ok(findByClass(el, 'cora-empty cora-appeal-review-empty'));
 });
 
 // --- Appeal summary items ---

@@ -425,7 +425,7 @@ test('ActionCentre: an empty worklist shows a friendly note', async () => {
   ]);
   await settle();
 
-  assert.ok(findByClass(host, 'cora-ac-empty'));
+  assert.ok(findByClass(host, 'cora-empty cora-ac-empty'));
   assert.equal(findAllByClass(host, 'cora-ac-group').length, 0);
 });
 
@@ -437,7 +437,7 @@ test('ActionCentre: a client without countCases degrades to the empty note', asy
     now: NOW,
   });
   await settle();
-  assert.ok(findByClass(host, 'cora-ac-empty'));
+  assert.ok(findByClass(host, 'cora-empty cora-ac-empty'));
 });
 
 test('ActionCentre: a null client renders the empty note and its toggle stays inert', async () => {
@@ -448,17 +448,17 @@ test('ActionCentre: a null client renders the empty note and its toggle stays in
     now: NOW,
   });
   await settle();
-  assert.ok(findByClass(host, 'cora-ac-empty'));
+  assert.ok(findByClass(host, 'cora-empty cora-ac-empty'));
 
   assert.doesNotThrow(() => q(host, '.cora-ac-toggle-btn')[1]._fire('click'));
   await settle();
-  assert.ok(findByClass(host, 'cora-ac-empty'));
+  assert.ok(findByClass(host, 'cora-empty cora-ac-empty'));
 });
 
 test('ActionCentre: a visitor with no worklist reasons shows the empty note', async () => {
   const host = mount(caps({ isVisitor: true }));
   await settle();
-  assert.ok(findByClass(host, 'cora-ac-empty'));
+  assert.ok(findByClass(host, 'cora-empty cora-ac-empty'));
   assert.equal(findAllByClass(host, 'cora-ac-group').length, 0);
 });
 

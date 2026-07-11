@@ -1,6 +1,7 @@
 // @ts-check
 import { defineView } from '../../lib/view.js';
 import { h, unsafeHTML } from '../../lib/html.js';
+import { EmptyState } from '../../lib/empty-state.js';
 import {
   baseline,
   baselineBank,
@@ -155,10 +156,11 @@ export function SimulatePanel(publishedBank, draftBank, samples) {
       'section',
       { class: 'sim-panel' },
       head,
-      h(
-        'p',
-        { class: 'sim-empty' },
-        'No sample Cases loaded yet — impact simulation unavailable.'
+      EmptyState(
+        'No sample Cases loaded yet — impact simulation unavailable.',
+        {
+          className: 'sim-empty',
+        }
       )
     );
   }
@@ -192,7 +194,7 @@ export function SimulatePanel(publishedBank, draftBank, samples) {
     summary,
     rows.length
       ? h('ul', { class: 'sim-cases' }, ...rows)
-      : h('p', { class: 'sim-empty' }, 'No sample Case is affected.')
+      : EmptyState('No sample Case is affected.', { className: 'sim-empty' })
   );
 }
 

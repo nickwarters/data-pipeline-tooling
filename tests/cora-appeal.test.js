@@ -86,14 +86,17 @@ test('CORAAppeal: read-only access shows no form and a placeholder when there ar
     null,
     'no form for a read-only viewer'
   );
-  assert.ok(findByClass(el, 'cora-appeal-empty'), 'placeholder shown');
+  assert.ok(
+    findByClass(el, 'cora-empty cora-appeal-empty'),
+    'placeholder shown'
+  );
 });
 
 test('CORAAppeal: with no caseRow there are no Appeals to list', () => {
   const el = new CORAAppeal();
   el.access = 'read-only';
   el.connectedCallback();
-  assert.ok(findByClass(el, 'cora-appeal-empty'));
+  assert.ok(findByClass(el, 'cora-empty cora-appeal-empty'));
 });
 
 // --- Citations (failed Answers) ---

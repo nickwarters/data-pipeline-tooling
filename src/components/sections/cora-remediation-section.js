@@ -1,6 +1,7 @@
 // @ts-check
 import { ShellElement, replaceHostChildren } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
+import { EmptyState } from '../../lib/empty-state.js';
 import { evaluate } from '../../evaluators/applicability-evaluator.js';
 import { isFailure } from '../../evaluators/failure-evaluator.js';
 import { buildCaptureControl } from '../../lib/capture-engine.js';
@@ -48,7 +49,9 @@ export function RemediationSection(props) {
   const heading = h('h2', {}, 'Failures');
 
   if (failed.length === 0) {
-    const empty = h('p', { class: 'cora-remediation-empty' }, 'No failures.');
+    const empty = EmptyState('No failures.', {
+      className: 'cora-remediation-empty',
+    });
     return [heading, empty];
   }
 

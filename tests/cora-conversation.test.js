@@ -100,7 +100,7 @@ test('CORAConversation: empty conversation renders "No messages yet" empty state
   el._messages = [];
   el.connectedCallback();
 
-  const empty = findByClass(el, 'cora-conversation-empty');
+  const empty = findByClass(el, 'cora-empty cora-conversation-empty');
   assert.ok(empty, 'empty state element should exist');
   assert.equal(empty.textContent, 'No messages yet.');
 });
@@ -110,7 +110,7 @@ test('CORAConversation: non-empty conversation does not render empty state', () 
   el._messages = TWO_MESSAGES.slice();
   el.connectedCallback();
 
-  assert.equal(findByClass(el, 'cora-conversation-empty'), null);
+  assert.equal(findByClass(el, 'cora-empty cora-conversation-empty'), null);
 });
 
 test('CORAConversation: renders one li per message', () => {
@@ -278,10 +278,10 @@ test('CORAConversation: update() re-renders with new messages', () => {
   el._messages = [];
   el.connectedCallback();
 
-  assert.ok(findByClass(el, 'cora-conversation-empty'));
+  assert.ok(findByClass(el, 'cora-empty cora-conversation-empty'));
 
   el.update(TWO_MESSAGES.slice());
-  assert.equal(findByClass(el, 'cora-conversation-empty'), null);
+  assert.equal(findByClass(el, 'cora-empty cora-conversation-empty'), null);
   assert.equal(findAllByClass(el, 'cora-conversation-message').length, 2);
 });
 

@@ -1,6 +1,7 @@
 // @ts-check
 import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
+import { EmptyState } from '../../lib/empty-state.js';
 import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
 import { isFailure } from '../../evaluators/failure-evaluator.js';
 import { buildCaptureControl } from '../../lib/capture-engine.js';
@@ -87,11 +88,9 @@ export function openAppealFrom(props) {
 
 /** @returns {HTMLElement} */
 export function renderAppealEmpty() {
-  return h(
-    'p',
-    { className: 'cora-appeal-empty' },
-    'No Appeal has been raised.'
-  );
+  return EmptyState('No Appeal has been raised.', {
+    className: 'cora-appeal-empty',
+  });
 }
 
 /**

@@ -1,6 +1,7 @@
 // @ts-check
 import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
+import { EmptyState } from '../../lib/empty-state.js';
 import { commit } from '../../question-bank/question-bank-store.js';
 import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.js';
 
@@ -113,11 +114,10 @@ export function RemediationEditor(props) {
 
   if (count === 0 && !q.allowFreeFormRemediation) {
     wrap.appendChild(
-      h(
-        'div',
-        { class: 'rem-empty' },
-        '// no remediations — reviewers will see none on failure'
-      )
+      EmptyState('// no remediations — reviewers will see none on failure', {
+        tag: 'div',
+        className: 'rem-empty',
+      })
     );
   }
 

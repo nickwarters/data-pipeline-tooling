@@ -1,6 +1,7 @@
 // @ts-check
 import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
+import { EmptyState } from '../../lib/empty-state.js';
 import { buildAmendmentFields } from '../../evaluators/amended-outcome.js';
 
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
@@ -52,11 +53,9 @@ export function AppealReviewSection(props) {
     children.push(renderResolveForm(props, open));
   } else if (appeals.length === 0) {
     children.push(
-      h(
-        'p',
-        { className: 'cora-appeal-review-empty' },
-        'No Appeal has been raised for this Case.'
-      )
+      EmptyState('No Appeal has been raised for this Case.', {
+        className: 'cora-appeal-review-empty',
+      })
     );
   }
 

@@ -1,6 +1,7 @@
 // @ts-check
 import { ShellElement, replaceHostChildren } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
+import { EmptyState } from '../../lib/empty-state.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
 
 /** @typedef {import('../../sharepoint-client.js').SharePointClient} SharePointClient */
@@ -12,7 +13,9 @@ import { CASE_STATUS } from '../../lib/case-statuses.js';
  */
 export function Allocation({ isEmpty, onRequestNextCase }) {
   if (isEmpty) {
-    return h('p', { className: 'cora-allocation-empty' }, 'No Cases available');
+    return EmptyState('No Cases available', {
+      className: 'cora-allocation-empty',
+    });
   }
   return h(
     'button',

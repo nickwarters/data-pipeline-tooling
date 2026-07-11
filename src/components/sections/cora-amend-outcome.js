@@ -1,6 +1,7 @@
 // @ts-check
 import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
+import { EmptyState } from '../../lib/empty-state.js';
 import {
   currentOutcome,
   buildAmendmentFields,
@@ -54,11 +55,9 @@ export function AmendOutcomeSection(props) {
     children.push(renderAmendmentRecord(props.caseRow.amendedOutcome));
   } else {
     children.push(
-      h(
-        'p',
-        { className: 'cora-amend-outcome-empty' },
-        'No amendment has been made.'
-      )
+      EmptyState('No amendment has been made.', {
+        className: 'cora-amend-outcome-empty',
+      })
     );
   }
 

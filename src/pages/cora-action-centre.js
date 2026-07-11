@@ -2,6 +2,7 @@
 import { signal } from '../lib/signal.js';
 import { reactive } from '../lib/view.js';
 import { h } from '../lib/html.js';
+import { EmptyState } from '../lib/empty-state.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import {
   reasonsForCapabilities,
@@ -241,7 +242,9 @@ export function ActionCentreView(state, handlers) {
   );
 
   const body = empty
-    ? h('p', { class: 'cora-ac-empty' }, 'Nothing needs your action right now.')
+    ? EmptyState('Nothing needs your action right now.', {
+        className: 'cora-ac-empty',
+      })
     : state.reasons.map((reason) => Group(reason, state, handlers));
 
   return h('section', { class: 'cora-action-centre' }, header, body);

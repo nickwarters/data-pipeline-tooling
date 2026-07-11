@@ -2,6 +2,7 @@
 import { ShellElement } from '../../lib/view.js';
 import { signal } from '../../lib/signal.js';
 import { h } from '../../lib/html.js';
+import { EmptyState } from '../../lib/empty-state.js';
 import { commit } from '../../question-bank/question-bank-store.js';
 import {
   clearConditions,
@@ -60,11 +61,10 @@ export function ShowwhenEditor(props) {
 
   const empty =
     tree.children.length === 0
-      ? h(
-          'div',
-          { className: 'showwhen-empty' },
-          '// always shown — add a condition to gate this question'
-        )
+      ? EmptyState('// always shown — add a condition to gate this question', {
+          tag: 'div',
+          className: 'showwhen-empty',
+        })
       : null;
 
   const grp = /** @type {any} */ (

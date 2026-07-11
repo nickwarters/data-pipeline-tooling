@@ -22,7 +22,7 @@ test('CORARemediationEditor: empty actions + no free-form → empty hint', () =>
   const wrap = /** @type {any} */ (e)._children[0];
   // h4, free-row, empty hint, add button
   assert.equal(wrap._children.length, 4);
-  assert.equal(wrap._children[2].className, 'rem-empty');
+  assert.equal(wrap._children[2].className, 'cora-empty rem-empty');
 });
 
 test('CORARemediationEditor: actions + free-form preview show when toggle is on', () => {
@@ -125,7 +125,7 @@ test('CORARemediationEditor: failed questions get no Outcome selector (response 
   const wrap = /** @type {any} */ (e)._children[0];
   // h4, free-row, empty hint, add button — no Outcome block.
   assert.equal(wrap._children.length, 4);
-  assert.equal(wrap._children[2].className, 'rem-empty');
+  assert.equal(wrap._children[2].className, 'cora-empty rem-empty');
   assert.equal('outcome' in q, false);
 });
 

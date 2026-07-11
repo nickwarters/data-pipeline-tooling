@@ -1,6 +1,7 @@
 // @ts-check
 import { defineView } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
+import { EmptyState } from '../../lib/empty-state.js';
 import {
   activeSlug,
   commit,
@@ -65,7 +66,10 @@ export function QuestionLabels({ question: q }) {
     { class: 'label-row' },
     ...pills,
     pills.length === 0 &&
-      h('span', { class: 'label-empty' }, 'No labels assigned')
+      EmptyState('No labels assigned', {
+        tag: 'span',
+        className: 'label-empty',
+      })
   );
 
   const unassigned = labels.filter(

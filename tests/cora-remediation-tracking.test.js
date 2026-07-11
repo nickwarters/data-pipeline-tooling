@@ -50,7 +50,7 @@ test('CORARemediationTracking: no actions-typed capture fields → empty state',
   const el = new CORARemediationTracking();
   el.captureGroups = [];
   el.update(CATALOGUE, { q1: { value: 'No' } });
-  const empty = findByClass(el, 'cora-remediation-tracking-empty');
+  const empty = findByClass(el, 'cora-empty cora-remediation-tracking-empty');
   assert.ok(empty);
   assert.match(allText(el), /no remediation actions sent/i);
 });
@@ -65,7 +65,7 @@ test('CORARemediationTracking: sent actions with no failure are not listed', () 
       capture: { acts: [{ id: 'a', text: 'x', status: 'pending' }] },
     },
   });
-  assert.ok(findByClass(el, 'cora-remediation-tracking-empty'));
+  assert.ok(findByClass(el, 'cora-empty cora-remediation-tracking-empty'));
 });
 
 test('CORARemediationTracking: read-only lists each sent action with status and cancel reason', () => {

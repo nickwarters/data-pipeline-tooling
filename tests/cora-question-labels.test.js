@@ -79,7 +79,7 @@ test('CORAQuestionLabels: shows an empty hint when no labels assigned', () => {
   const e = mount(q);
   const { pillRow } = parts(e);
   assert.equal(pillRow._children.length, 1);
-  assert.equal(pillRow._children[0].className, 'label-empty');
+  assert.equal(pillRow._children[0].className, 'cora-empty label-empty');
 });
 
 test('CORAQuestionLabels: an unassigned bank label shows as an add chip', () => {
@@ -180,7 +180,7 @@ test('CORAQuestionLabels: ids referencing a missing label are skipped', () => {
   const e = mount(q);
   const { pillRow } = parts(e);
   assert.equal(pillRow._children.length, 1);
-  assert.equal(pillRow._children[0].className, 'label-empty');
+  assert.equal(pillRow._children[0].className, 'cora-empty label-empty');
 });
 
 test('CORAQuestionLabels: tolerates a bank with no labels array', () => {

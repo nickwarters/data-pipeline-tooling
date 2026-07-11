@@ -1,6 +1,7 @@
 // @ts-check
 import { ShellElement, replaceHostChildren } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
+import { EmptyState } from '../../lib/empty-state.js';
 import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
 import { evaluate } from '../../evaluators/applicability-evaluator.js';
 import { isFailure } from '../../evaluators/failure-evaluator.js';
@@ -53,11 +54,9 @@ export function RemediationTracking(props) {
   if (rows.length === 0) {
     return [
       heading,
-      h(
-        'p',
-        { class: 'cora-remediation-tracking-empty' },
-        'No remediation actions sent.'
-      ),
+      EmptyState('No remediation actions sent.', {
+        className: 'cora-remediation-tracking-empty',
+      }),
     ];
   }
 

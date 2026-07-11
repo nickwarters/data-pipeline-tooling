@@ -156,7 +156,10 @@ test('CORAAmendOutcome: read-only access shows a placeholder when nothing has be
   el.access = 'read-only';
   el.connectedCallback();
   assert.equal(findByClass(el, 'cora-amend-outcome-form'), null, 'no form');
-  assert.ok(findByClass(el, 'cora-amend-outcome-empty'), 'placeholder shown');
+  assert.ok(
+    findByClass(el, 'cora-empty cora-amend-outcome-empty'),
+    'placeholder shown'
+  );
 });
 
 test('CORAAmendOutcome: read-only access with no Case row shows the empty placeholder', () => {
@@ -164,7 +167,7 @@ test('CORAAmendOutcome: read-only access with no Case row shows the empty placeh
   el.caseRow = null;
   el.access = 'read-only';
   el.connectedCallback();
-  assert.ok(findByClass(el, 'cora-amend-outcome-empty'));
+  assert.ok(findByClass(el, 'cora-empty cora-amend-outcome-empty'));
 });
 
 test('CORAAmendOutcome: read-only access renders the existing amendment record', () => {

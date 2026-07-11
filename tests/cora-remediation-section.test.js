@@ -67,7 +67,7 @@ test('CORARemediationSection: empty answers renders "No failures"', () => {
   el.answers = {};
   el.connectedCallback();
 
-  const empty = findByClass(el, 'cora-remediation-empty');
+  const empty = findByClass(el, 'cora-empty cora-remediation-empty');
   assert.ok(empty);
   assert.equal(empty.textContent, 'No failures.');
 });
@@ -78,7 +78,7 @@ test('CORARemediationSection: only passing answers renders empty state', () => {
   el.answers = { 'q-welcome': { value: 'Yes' }, 'q-needs': { value: 'Yes' } };
   el.connectedCallback();
 
-  assert.ok(findByClass(el, 'cora-remediation-empty'));
+  assert.ok(findByClass(el, 'cora-empty cora-remediation-empty'));
 });
 
 test('CORARemediationSection: lists a failed answer that has no remediationActions', () => {
@@ -417,7 +417,7 @@ test('CORARemediationSection: update() re-renders with new state', () => {
 
   el.update(CATALOGUE, { 'q-needs': { value: 'Yes' } });
   assert.equal(findAllByClass(el, 'cora-remediation-item').length, 0);
-  assert.ok(findByClass(el, 'cora-remediation-empty'));
+  assert.ok(findByClass(el, 'cora-empty cora-remediation-empty'));
 });
 
 test('CORARemediationSection: multi-choice answer renders array as comma-joined', () => {
