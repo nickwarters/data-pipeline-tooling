@@ -1,5 +1,5 @@
 // @ts-check
-import { ShellElement } from '../../lib/view.js';
+import { ShellElement, replaceHostChildren } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
 
@@ -62,17 +62,10 @@ export class CORAAllocation extends ShellElement {
     super.disconnectedCallback();
   }
 
+  // Kept: tests call _renderEmpty()/_requestNextCase() before connect, where
+  // the base render entry (_shellRenderNow) is a no-op.
   _render() {
-    const content = this.render();
-    if (content) {
-      if (Array.isArray(content)) {
-        this.replaceChildren(...content);
-      } else {
-        this.replaceChildren(content);
-      }
-    } else {
-      this.replaceChildren();
-    }
+    replaceHostChildren(this, this.render());
   }
 
   render() {
