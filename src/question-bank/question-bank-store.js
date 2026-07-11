@@ -14,7 +14,13 @@
  */
 
 import { signal, computed } from '../lib/signal.js';
+import { toastMsg, showToast } from '../lib/toast.js';
 import { questionBanks } from './question-bank-source.js';
+
+// The transient toast primitive now lives in lib/toast.js (a framework concern,
+// not bank-editor state). Re-exported here so existing store callers are
+// unaffected.
+export { toastMsg, showToast };
 
 /** @typedef {import('./question-bank-source.js').QuestionBank} QuestionBank */
 /** @typedef {import('./question-bank-source.js').DraftQuestion} DraftQuestion */
@@ -48,7 +54,6 @@ export const drawerOpen = signal(false);
  * a static grid column and this flag is inert. See cora-bank-rail.js.
  */
 export const railOpen = signal(false);
-export const toastMsg = signal('');
 /**
  * Sample Cases for the impact simulator, keyed by bank slug. Populated by the
  * question-bank route from `SharePointClient.listCases` (read-only); empty
@@ -145,17 +150,6 @@ export function setSampleCases(slug, list) {
 /** @param {Partial<Filters>} patch */
 export function setFilters(patch) {
   filters.set({ ...filters.get(), ...patch });
-}
-
-/** @param {string} msg */
-export function showToast(msg) {
-  toastMsg.set(msg);
-  const timer = /** @type {any} */ (globalThis).setTimeout;
-  if (typeof timer === 'function') {
-    timer(() => {
-      if (toastMsg.get() === msg) toastMsg.set('');
-    }, 1800);
-  }
 }
 
 /**

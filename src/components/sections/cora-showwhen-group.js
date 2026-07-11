@@ -9,7 +9,7 @@ import {
   commitTreeFor,
   ensureTree,
   removeNode,
-} from '../../question-bank/question-bank-tree.js';
+} from '../../lib/showwhen-tree.js';
 
 /**
  * @param {{ question: any, group: any, isRoot: boolean, setClassName: (className: string) => void }} props

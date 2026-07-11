@@ -147,8 +147,7 @@ test('CORAShowwhenGroup: × group on non-root removes self from parent tree', as
       },
     ],
   };
-  const { ensureTree } =
-    await import('../src/question-bank/question-bank-tree.js');
+  const { ensureTree } = await import('../src/lib/showwhen-tree.js');
   const root = ensureTree(q);
   const innerOr = /** @type {any} */ (
     root.children.find((c) => c.type === 'group' && c.op === 'or')

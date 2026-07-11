@@ -15,7 +15,7 @@ import {
   commitTreeFor,
   clearConditions,
   _resetTreeCache,
-} from '../src/question-bank/question-bank-tree.js';
+} from '../src/lib/showwhen-tree.js';
 
 test('parseShowWhen: undefined → empty AND group', () => {
   assert.deepEqual(parseShowWhen(undefined), {

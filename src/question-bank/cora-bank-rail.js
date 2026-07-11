@@ -14,7 +14,7 @@ import {
   categoryKey,
   categoryOrder,
   moveCategory,
-} from './question-bank-order.js';
+} from '../lib/question-order.js';
 
 /**
  * @param {{ bank: any, filters: any, railOpen: boolean, setFilters: (patch: any) => void, moveCategory: (name: string, direction: -1 | 1) => void, onToggleRail: () => void, onCloseRail: () => void }} props

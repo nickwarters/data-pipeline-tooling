@@ -8,7 +8,7 @@ import {
   moveCategory,
   moveQuestion,
   moveQuestionWithinCategory,
-} from '../src/question-bank/question-bank-order.js';
+} from '../src/lib/question-order.js';
 
 test('categoryKey treats missing category as Uncategorised', () => {
   assert.equal(categoryKey({}), 'Uncategorised');

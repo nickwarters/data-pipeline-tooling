@@ -5,8 +5,7 @@ import { installDom } from './_dom-stub.js';
 installDom();
 
 const { CORAToast } = await import('../src/components/base/cora-toast.js');
-const { toastMsg } =
-  await import('../src/question-bank/question-bank-store.js');
+const { toastMsg } = await import('../src/lib/toast.js');
 
 test('CORAToast: hidden by default (no msg → no "show" class)', () => {
   toastMsg.set('');

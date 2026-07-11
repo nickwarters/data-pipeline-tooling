@@ -1,11 +1,15 @@
 // @ts-check
 import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
+// MAINT-16: this editor primitive still reads the bank-editor store singleton
+// (`commit`/`currentBank`). Injecting that state via props is not mechanical —
+// the whole editor tree is reactively bound to these signals — so the coupling
+// is documented and left in place (see the component-layering-contract test).
 import {
   commit,
   currentBank,
 } from '../../question-bank/question-bank-store.js';
-import { commitTreeFor } from '../../question-bank/question-bank-tree.js';
+import { commitTreeFor } from '../../lib/showwhen-tree.js';
 
 /**
  * @param {{ question: any, parent: any, leaf: any }} props

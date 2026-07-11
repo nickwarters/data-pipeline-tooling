@@ -9,7 +9,7 @@ import {
   countLeaves,
   ensureTree,
   treeDepth,
-} from '../../question-bank/question-bank-tree.js';
+} from '../../lib/showwhen-tree.js';
 
 /**
  * @param {{ question: any, mode: 'always' | 'conditional', onModeChange: (mode: 'always' | 'conditional') => void }} props

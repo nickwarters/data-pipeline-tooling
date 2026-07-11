@@ -11,7 +11,7 @@ import {
   canMoveQuestionWithinCategory,
   moveQuestion,
   moveQuestionWithinCategory,
-} from '../../question-bank/question-bank-order.js';
+} from '../../lib/question-order.js';
 
 /**
  * @param {{ question: any, bankQuestions: any[], questionIndex: number, categoryFilterActive: boolean, setClassName: (className: string) => void }} props

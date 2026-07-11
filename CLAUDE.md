@@ -65,8 +65,11 @@ src/
     case-review-view-model.js
     case-route-links.js
     html.js                     # h() / reactive() / defineView() plain-function view primitives
+    question-order.js           # generic question/category ordering helpers (was question-bank/)
     router.js                   # hash-based SPA router
+    showwhen-tree.js            # generic showWhen tree parse/serialise/mutate (was question-bank/)
     signal.js                   # home-grown signal/computed/effect (~50 LOC)
+    toast.js                    # transient toast primitive (toastMsg signal + showToast)
     view.js
 
   components/                   # reusable cora-* custom elements, layered by dependency
@@ -148,10 +151,8 @@ src/
     cora-outcome-options-editor.js
     cora-question-bank-editor.css
     question-bank-compile.js
-    question-bank-order.js
     question-bank-source.js
-    question-bank-store.js
-    question-bank-tree.js
+    question-bank-store.js       # bank-editor state singleton (re-exports lib/toast.js)
 
   routes/                       # route handler modules, one per hash route
     case.js
