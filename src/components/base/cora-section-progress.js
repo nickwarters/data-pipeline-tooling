@@ -1,6 +1,6 @@
 // @ts-check
 import { h } from '../../lib/html.js';
-import { ShellElement } from '../../lib/view.js';
+import { ShellElement, replaceHostChildren } from '../../lib/view.js';
 
 /** @typedef {import('../../evaluators/section-progress.js').SectionProgress} SectionProgress */
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
@@ -70,8 +70,12 @@ export class CORASectionProgress extends ShellElement {
     this._render();
   }
 
+  // Survivor: update() is a bespoke positional override called directly by
+  // callers/tests before connectedCallback() (when _shellRenderNow is still
+  // null), so it can't route through the base's _shellRenderNow re-render
+  // entry point — it needs a render path that works pre-connect.
   _render() {
-    this.replaceChildren(...this.render());
+    replaceHostChildren(this, this.render());
   }
 
   render() {
