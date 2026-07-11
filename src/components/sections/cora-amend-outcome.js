@@ -236,12 +236,8 @@ export class CORAAmendOutcome extends ShellElement {
     this.outcomeOptions = [];
   }
 
-  _render() {
-    this.replaceChildren(...this.render());
-  }
-
   render() {
-    return AmendOutcomeSection(this._props());
+    return AmendOutcomeSection(this._buildProps());
   }
 
   /**
@@ -253,7 +249,7 @@ export class CORAAmendOutcome extends ShellElement {
   }
 
   /** @returns {AmendOutcomeProps} */
-  _props() {
+  _buildProps() {
     return {
       caseRow: this.caseRow,
       saveQueue: this.saveQueue,
@@ -262,7 +258,7 @@ export class CORAAmendOutcome extends ShellElement {
       currentUser: this.currentUser,
       outcomeOptions: this.outcomeOptions,
       now: () => this.now(),
-      render: () => this._render(),
+      render: () => this._shellRenderNow?.(),
     };
   }
 }
