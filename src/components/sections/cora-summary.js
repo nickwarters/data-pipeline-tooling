@@ -52,21 +52,26 @@ export function Summary(props) {
     const result = {
       outcome: current,
     };
-    outcomeEl.update(() => result, {}, true, props.outcomeOptions);
+    outcomeEl.update({
+      computeOutcome: () => result,
+      answers: {},
+      allAnswered: true,
+      outcomeOptions: props.outcomeOptions,
+    });
   } else if (props.computeOutcome) {
-    outcomeEl.update(
-      props.computeOutcome,
-      props.answers,
-      props.allAnswered,
-      props.outcomeOptions
-    );
+    outcomeEl.update({
+      computeOutcome: props.computeOutcome,
+      answers: props.answers,
+      allAnswered: props.allAnswered,
+      outcomeOptions: props.outcomeOptions,
+    });
   } else {
-    outcomeEl.update(
-      () => /** @type {OutcomeResult} */ ({ outcome: 'pass' }),
-      {},
-      false,
-      props.outcomeOptions
-    );
+    outcomeEl.update({
+      computeOutcome: () => /** @type {OutcomeResult} */ ({ outcome: 'pass' }),
+      answers: {},
+      allAnswered: false,
+      outcomeOptions: props.outcomeOptions,
+    });
   }
 
   /** @type {Node[]} */

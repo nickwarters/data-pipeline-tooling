@@ -1,4 +1,5 @@
 // @ts-check
+import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 
 /** @typedef {import('../../sharepoint-client.js').Answer} Answer */
@@ -48,7 +49,7 @@ export function Outcome({
   return [h('h2', {}, 'Outcome'), h('p', { className }, textContent)];
 }
 
-export class CORAOutcome extends HTMLElement {
+export class CORAOutcome extends ShellElement {
   constructor() {
     super();
     /** @type {((answers: Record<string, Answer>) => OutcomeResult) | null} */
@@ -61,33 +62,26 @@ export class CORAOutcome extends HTMLElement {
     this.outcomeOptions = [];
   }
 
-  connectedCallback() {
-    this._render();
+  render() {
+    return Outcome({
+      computeOutcome: this.computeOutcome,
+      answers: this.answers,
+      allAnswered: this.allAnswered,
+      outcomeOptions: this.outcomeOptions,
+    });
   }
 
   /**
-   * @param {(answers: Record<string, Answer>) => OutcomeResult} computeOutcome
-   * @param {Record<string, Answer>} answers
-   * @param {boolean} allAnswered
-   * @param {OutcomeOption[]} [outcomeOptions]
+   * Replace one or more props and render immediately. Callers typically
+   * construct a fresh `cora-outcome` host and call this before it is ever
+   * attached to the DOM (see `cora-summary.js`'s Outcome block), so this
+   * falls back to `connectedCallback()` when the shell hasn't mounted yet.
+   * @param {Partial<OutcomeProps>} props
    */
-  update(computeOutcome, answers, allAnswered, outcomeOptions = []) {
-    this.computeOutcome = computeOutcome;
-    this.answers = answers;
-    this.allAnswered = allAnswered;
-    this.outcomeOptions = outcomeOptions;
-    this._render();
-  }
-
-  _render() {
-    this.replaceChildren(
-      ...Outcome({
-        computeOutcome: this.computeOutcome,
-        answers: this.answers,
-        allAnswered: this.allAnswered,
-        outcomeOptions: this.outcomeOptions,
-      })
-    );
+  update(props) {
+    Object.assign(this, props);
+    if (this._shellRenderNow) this._shellRenderNow();
+    else this.connectedCallback();
   }
 }
 

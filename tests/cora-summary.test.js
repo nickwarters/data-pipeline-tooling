@@ -16,11 +16,19 @@ installDom();
 class RecordingEl extends StubEl {
   constructor(tag = '') {
     super(tag);
-    /** @type {{ a1: any, a2: any, a3: any } | null} */
+    /** @type {any} */
     this._updateArgs = null;
   }
-  update(/** @type {any} */ a1, /** @type {any} */ a2, /** @type {any} */ a3) {
-    this._updateArgs = { a1, a2, a3 };
+  // Some `update()` callers (e.g. cora-outcome) now pass a single props
+  // object; others (still-unmigrated components like cora-capture-groups)
+  // still pass positional args. Record either shape faithfully: a lone
+  // object arg is stored as-is (so `.computeOutcome` etc. read naturally),
+  // multiple/positional args fall back to the old `.a1`/`.a2`/`.a3` shape.
+  update(/** @type {any[]} */ ...args) {
+    this._updateArgs =
+      args.length === 1 && args[0] !== null && typeof args[0] === 'object'
+        ? args[0]
+        : { a1: args[0], a2: args[1], a3: args[2] };
   }
 }
 
@@ -89,7 +97,7 @@ test('Summary: plain function renders heading and outcome block', () => {
   });
 
   assert.equal(/** @type {any} */ (nodes[0]).textContent, 'Summary');
-  assert.equal(/** @type {any} */ (nodes[1])._updateArgs.a3, false);
+  assert.equal(/** @type {any} */ (nodes[1])._updateArgs.allAnswered, false);
 });
 
 test('CORASummary: renders an Outcome block (cora-outcome) as the first content block', () => {
@@ -110,16 +118,20 @@ test('CORASummary: forwards live computeOutcome/answers/allAnswered to the Outco
 
   const block = /** @type {any} */ (el)._children[1];
   assert.equal(
-    block._updateArgs.a1,
+    block._updateArgs.computeOutcome,
     compute,
     'the live outcome function is passed through unchanged'
   );
   assert.equal(
-    block._updateArgs.a2,
+    block._updateArgs.answers,
     answers,
     'the current Answers are passed through'
   );
-  assert.equal(block._updateArgs.a3, true, 'allAnswered is passed through');
+  assert.equal(
+    block._updateArgs.allAnswered,
+    true,
+    'allAnswered is passed through'
+  );
 });
 
 test('CORASummary: reads the frozen outcomeAtCompletion snapshot once the Case is Completed', () => {
@@ -133,12 +145,12 @@ test('CORASummary: reads the frozen outcomeAtCompletion snapshot once the Case i
 
   const block = /** @type {any} */ (el)._children[1];
   assert.equal(
-    block._updateArgs.a3,
+    block._updateArgs.allAnswered,
     true,
     'frozen outcome is treated as answered'
   );
   assert.equal(
-    block._updateArgs.a1().outcome,
+    block._updateArgs.computeOutcome().outcome,
     'fail',
     'the frozen outcome is rendered, not a recomputation'
   );
@@ -161,7 +173,7 @@ test('CORASummary: the Outcome block shows the Current Outcome (amended) over th
 
   const block = /** @type {any} */ (el)._children[1];
   assert.equal(
-    block._updateArgs.a1().outcome,
+    block._updateArgs.computeOutcome().outcome,
     'pass',
     'the amended Outcome is rendered, not the frozen snapshot'
   );
@@ -181,12 +193,12 @@ test('CORASummary: reads the frozen snapshot from the reportable milestone (Acti
 
   const block = /** @type {any} */ (el)._children[1];
   assert.equal(
-    block._updateArgs.a3,
+    block._updateArgs.allAnswered,
     true,
     'frozen outcome is treated as answered'
   );
   assert.equal(
-    block._updateArgs.a1().outcome,
+    block._updateArgs.computeOutcome().outcome,
     'fail',
     'the frozen outcome is rendered from the reportable snapshot'
   );
@@ -203,7 +215,7 @@ test('CORASummary: falls back to live derivation when a Completed Case has no fr
 
   const block = /** @type {any} */ (el)._children[1];
   assert.equal(
-    block._updateArgs.a1,
+    block._updateArgs.computeOutcome,
     compute,
     'live function used when there is no snapshot to read'
   );
@@ -214,13 +226,13 @@ test('CORASummary: renders an indeterminate Outcome block before update() is cal
   el.connectedCallback();
   const block = /** @type {any} */ (el)._children[1];
   assert.equal(
-    block._updateArgs.a3,
+    block._updateArgs.allAnswered,
     false,
     'allAnswered is false until update supplies state'
   );
   // The placeholder outcome function resolves to a pass outcome, but allAnswered
   // is false so the Outcome block renders its indeterminate state regardless.
-  assert.equal(block._updateArgs.a1().outcome, 'pass');
+  assert.equal(block._updateArgs.computeOutcome().outcome, 'pass');
 });
 
 test('CORASummary: renders a Key dates block (Created, Completed) from the Case row', () => {
