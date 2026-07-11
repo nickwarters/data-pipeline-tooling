@@ -82,16 +82,6 @@ export class CORAShowwhenLeaf extends ShellElement {
     /** @type {any} */ this.leaf = null;
   }
 
-  _render() {
-    const content = this.render();
-    if (content !== undefined) {
-      if (Array.isArray(content)) this.replaceChildren(...content);
-      else this.replaceChildren(content);
-    } else {
-      this.replaceChildren();
-    }
-  }
-
   render() {
     return ShowwhenLeaf({
       question: this.question,
