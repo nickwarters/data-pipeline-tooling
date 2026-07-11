@@ -1,4 +1,5 @@
 // @ts-check
+import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
 
@@ -86,7 +87,7 @@ export function CaseDetails({ caseRow, detailFields = [] }) {
   ];
 }
 
-export class CORACaseDetails extends HTMLElement {
+export class CORACaseDetails extends ShellElement {
   constructor() {
     super();
     /** @type {CaseRow | null} */
@@ -101,19 +102,13 @@ export class CORACaseDetails extends HTMLElement {
     this.detailFields = [];
   }
 
-  connectedCallback() {
+  render() {
     this.setAttribute('data-access', this.access);
-    this._render();
-  }
-
-  _render() {
-    this.replaceChildren(
-      ...CaseDetails({
-        caseRow: this.caseRow,
-        access: this.access,
-        detailFields: this.detailFields,
-      })
-    );
+    return CaseDetails({
+      caseRow: this.caseRow,
+      access: this.access,
+      detailFields: this.detailFields,
+    });
   }
 }
 
