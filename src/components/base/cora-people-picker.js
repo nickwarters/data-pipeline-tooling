@@ -136,15 +136,6 @@ export class CORAPeoplePicker extends ShellElement {
     this._results = null;
   }
 
-  connectedCallback() {
-    super.connectedCallback();
-    this._render();
-  }
-
-  _render() {
-    this.replaceChildren(...this.render());
-  }
-
   render() {
     const nodes = PeoplePicker({
       placeholder: this.placeholder,
