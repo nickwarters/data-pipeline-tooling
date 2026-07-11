@@ -305,12 +305,8 @@ export class CORAAppealReview extends ShellElement {
     this.outcomeOptions = [];
   }
 
-  _render() {
-    this.replaceChildren(...this.render());
-  }
-
   render() {
-    return AppealReviewSection(this._props());
+    return AppealReviewSection(this._buildProps());
   }
 
   /**
@@ -322,7 +318,7 @@ export class CORAAppealReview extends ShellElement {
   }
 
   /** @returns {AppealReviewProps} */
-  _props() {
+  _buildProps() {
     return {
       caseRow: this.caseRow,
       saveQueue: this.saveQueue,
@@ -331,7 +327,7 @@ export class CORAAppealReview extends ShellElement {
       currentUser: this.currentUser,
       outcomeOptions: this.outcomeOptions,
       now: () => this.now(),
-      render: () => this._render(),
+      render: () => this._shellRenderNow?.(),
     };
   }
 }
