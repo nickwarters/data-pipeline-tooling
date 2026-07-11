@@ -1,5 +1,5 @@
 // @ts-check
-import { ShellElement } from '../../lib/view.js';
+import { ShellElement, replaceHostChildren } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import { evaluate } from '../../evaluators/applicability-evaluator.js';
 import { isFailure } from '../../evaluators/failure-evaluator.js';
@@ -400,15 +400,17 @@ export class CORARemediationSection extends ShellElement {
     this._render();
   }
 
+  /**
+   * Survives (not routed through `this._shellRenderNow`): several tests call
+   * `update()` before `connectedCallback()`, so this must render unconditionally
+   * rather than being a no-op pre-connection like the base `update()`.
+   */
   _render() {
-    const els = this.render();
-    if (Array.isArray(els)) this.replaceChildren(...els);
-    else if (els) this.replaceChildren(els);
-    else this.replaceChildren();
+    replaceHostChildren(this, this.render());
   }
 
   render() {
-    return RemediationSection(this._props());
+    return RemediationSection(this._buildProps());
   }
 
   /**
@@ -416,7 +418,7 @@ export class CORARemediationSection extends ShellElement {
    * @returns {HTMLElement}
    */
   _renderItem(q) {
-    return renderRemediationItem(this._props(), q);
+    return renderRemediationItem(this._buildProps(), q);
   }
 
   /**
@@ -432,7 +434,7 @@ export class CORARemediationSection extends ShellElement {
    * @param {QuestionDefinition} q
    */
   _renderAttribution(li, q) {
-    renderRemediationAttribution(this._props(), li, q);
+    renderRemediationAttribution(this._buildProps(), li, q);
   }
 
   /**
@@ -448,7 +450,7 @@ export class CORARemediationSection extends ShellElement {
    * @param {QuestionDefinition} q
    */
   _renderDetails(li, q) {
-    renderRemediationDetails(this._props(), li, q);
+    renderRemediationDetails(this._buildProps(), li, q);
   }
 
   /**
@@ -463,13 +465,17 @@ export class CORARemediationSection extends ShellElement {
    * @param {QuestionDefinition} q
    */
   _renderCapture(li, q) {
-    renderRemediationCapture(this._props(), li, q);
+    renderRemediationCapture(this._buildProps(), li, q);
   }
 
   /**
+   * Builds the plain props object consumed by the exported pure render
+   * functions above. Not named `_props` — kept as an ordinary private
+   * helper reused by `render()` and the tested `_render*` methods.
+   *
    * @returns {RemediationSectionProps}
    */
-  _props() {
+  _buildProps() {
     return {
       catalogue: this.catalogue,
       answers: this.answers,
@@ -484,92 +490,20 @@ export class CORARemediationSection extends ShellElement {
       captureEls: this._captureEls,
       canSelectRemediation: this.canSelectRemediation,
       dispatchCapture: (questionId, fieldKey, value) =>
-        this._dispatchCapture(questionId, fieldKey, value),
+        this.emit('cora-capture', { questionId, fieldKey, value }),
       dispatchDetail: (questionId, key, value) =>
-        this._dispatchDetail(questionId, key, value),
+        this.emit('cora-remediation-detail', { questionId, key, value }),
       dispatchAttribute: (questionId, attributedParty) =>
-        this._dispatchAttribute(questionId, attributedParty),
+        this.emit('cora-attribute', { questionId, attributedParty }),
       dispatchRemediationAction: (questionId, action, selected) =>
-        this._dispatchRemediationAction(questionId, action, selected),
+        this.emit('cora-remediation-action', {
+          questionId,
+          action,
+          selected,
+        }),
       dispatchRemediationFreeForm: (questionId, value) =>
-        this._dispatchRemediationFreeForm(questionId, value),
+        this.emit('cora-remediation-freeform', { questionId, value }),
     };
-  }
-
-  /**
-   * @param {string} questionId
-   * @param {string} fieldKey
-   * @param {string} value
-   */
-  _dispatchCapture(questionId, fieldKey, value) {
-    this.dispatchEvent(
-      new CustomEvent('cora-capture', {
-        detail: { questionId, fieldKey, value },
-        bubbles: true,
-      })
-    );
-  }
-
-  /**
-   * @param {string} questionId
-   * @param {string} key
-   * @param {string} value
-   */
-  _dispatchDetail(questionId, key, value) {
-    this.dispatchEvent(
-      new CustomEvent('cora-remediation-detail', {
-        detail: { questionId, key, value },
-        bubbles: true,
-      })
-    );
-  }
-
-  /**
-   * @param {string} questionId
-   * @param {{ loginName: string, displayName: string } | null} attributedParty
-   */
-  _dispatchAttribute(questionId, attributedParty) {
-    this.dispatchEvent(
-      new CustomEvent('cora-attribute', {
-        detail: { questionId, attributedParty },
-        bubbles: true,
-      })
-    );
-  }
-
-  /**
-   * Re-dispatches a reviewer's Remediation Action tick/untick as a bubbling
-   * `cora-remediation-action` carrying the question id, the toggled action, and
-   * whether it is now selected. Persistence is the page's job so
-   * the answers signal stays the single source of truth.
-   *
-   * @param {string} questionId
-   * @param {{ id: string, text: string }} action
-   * @param {boolean} selected
-   */
-  _dispatchRemediationAction(questionId, action, selected) {
-    this.dispatchEvent(
-      new CustomEvent('cora-remediation-action', {
-        detail: { questionId, action, selected },
-        bubbles: true,
-      })
-    );
-  }
-
-  /**
-   * Re-dispatches a reviewer's free-form Remediation entry as a bubbling
-   * `cora-remediation-freeform` carrying the question id and new text.
-   *
-   * @param {string} questionId
-   * @param {string} value
-   */
-  _dispatchRemediationFreeForm(questionId, value) {
-    this.dispatchEvent(
-      new CustomEvent('cora-remediation-freeform', {
-        detail: { questionId, value },
-        bubbles: true,
-      })
-    );
   }
 }
 
