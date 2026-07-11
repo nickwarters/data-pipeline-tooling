@@ -981,7 +981,9 @@ test('updateSummaryNotesAppeal: assigns Summary, Notes, and Appeal tab props', (
   assert.equal(/** @type {any} */ (summary).catalogue, QUESTIONS);
   assert.equal(/** @type {any} */ (summary).summarySections, summarySections);
   assert.equal(/** @type {any} */ (summary).captureGroups, captureGroups);
-  assert.deepEqual(summary._updateArgs, [computeOutcome, answers, true]);
+  assert.deepEqual(summary._updateArgs, [
+    { computeOutcome, answers, allAnswered: true },
+  ]);
 
   // Notes renders from and writes edits back onto the Case row (issue #317).
   assert.equal(/** @type {any} */ (notes).caseRow, caseRow);

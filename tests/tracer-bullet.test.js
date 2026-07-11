@@ -8,12 +8,20 @@ installDom();
 class RecordingEl extends StubEl {
   constructor(tag = '') {
     super(tag);
-    /** @type {{ a1: any, a2: any, a3: any } | null} */
+    /** @type {any} */
     this._updateArgs = null;
   }
-  // Stub for CORAQuestionList.update / CORARemediationSection.update / CORAOutcome.update
-  update(/** @type {any} */ a1, /** @type {any} */ a2, /** @type {any} */ a3) {
-    this._updateArgs = { a1, a2, a3 };
+  // Stub for CORAQuestionList.update / CORARemediationSection.update /
+  // CORASummary.update. Some `update()` callers (e.g. cora-summary, since
+  // MAINT-07b) now pass a single props object; others still pass positional
+  // args. Record either shape faithfully: a lone object arg is stored as-is
+  // (so `.computeOutcome`/`.allAnswered` etc. read naturally), multiple/
+  // positional args fall back to the old `.a1`/`.a2`/`.a3` shape.
+  update(/** @type {any[]} */ ...args) {
+    this._updateArgs =
+      args.length === 1 && args[0] !== null && typeof args[0] === 'object'
+        ? args[0]
+        : { a1: args[0], a2: args[1], a3: args[2] };
   }
 }
 
@@ -590,12 +598,12 @@ test('CORACaseReview: Summary panel is updated with computeOutcome (Outcome bloc
   );
   // case-1 has no answers so allAnswered is false
   assert.equal(
-    summaryEl._updateArgs.a3,
+    summaryEl._updateArgs.allAnswered,
     false,
     'allAnswered should be false for untouched case'
   );
   assert.equal(
-    typeof summaryEl._updateArgs.a1,
+    typeof summaryEl._updateArgs.computeOutcome,
     'function',
     'computeOutcome should be a function'
   );
@@ -616,7 +624,7 @@ test('CORACaseReview: Summary panel receives allAnswered=true when all applicabl
   // case-3 has all applicable questions answered (q-welcome + q-needs + q-channel + q-products)
   const summaryEl = summaryOf(el);
   assert.equal(
-    summaryEl._updateArgs.a3,
+    summaryEl._updateArgs.allAnswered,
     true,
     'allAnswered should be true for completable case'
   );

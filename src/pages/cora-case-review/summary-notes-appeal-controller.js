@@ -35,11 +35,11 @@ export function updateSummaryNotesAppeal(context) {
     sectionHeadings: headings,
   });
   if (/** @type {any} */ (summary)?.update) {
-    /** @type {any} */ (summary).update(
-      config.computeOutcome,
+    /** @type {any} */ (summary).update({
+      computeOutcome: config.computeOutcome,
       answers,
-      allAnswered.get()
-    );
+      allAnswered: allAnswered.get(),
+    });
   }
 
   Object.assign(notes, {

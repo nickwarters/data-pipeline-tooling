@@ -114,7 +114,7 @@ test('CORASummary: forwards live computeOutcome/answers/allAnswered to the Outco
 
   const answers = { 'q-welcome': { value: 'No' } };
   const compute = (/** @type {any} */ a) => makeComputeOutcome(a);
-  el.update(compute, answers, true);
+  el.update({ computeOutcome: compute, answers, allAnswered: true });
 
   const block = /** @type {any} */ (el)._children[1];
   assert.equal(
@@ -134,6 +134,23 @@ test('CORASummary: forwards live computeOutcome/answers/allAnswered to the Outco
   );
 });
 
+test('CORASummary: update() renders immediately even when the element was never connected', () => {
+  const el = new CORASummary();
+  el.caseRow = makeCase({ status: 'In-progress' });
+
+  const answers = { 'q-welcome': { value: 'Yes' } };
+  el.update({
+    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
+    answers,
+    allAnswered: true,
+  });
+
+  const heading = /** @type {any} */ (el)._children[0];
+  assert.equal(heading.textContent, 'Summary');
+  const block = /** @type {any} */ (el)._children[1];
+  assert.equal(block._updateArgs.answers, answers);
+});
+
 test('CORASummary: reads the frozen outcomeAtCompletion snapshot once the Case is Completed', () => {
   const el = new CORASummary();
   el.caseRow = makeCase({ status: 'Completed', outcomeAtCompletion: 'fail' });
@@ -141,7 +158,11 @@ test('CORASummary: reads the frozen outcomeAtCompletion snapshot once the Case i
 
   // Even with live Answers that would compute "pass", a Completed Case shows the
   // frozen outcome (ADR-0012).
-  el.update((/** @type {any} */ a) => makeComputeOutcome(a), {}, true);
+  el.update({
+    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
+    answers: {},
+    allAnswered: true,
+  });
 
   const block = /** @type {any} */ (el)._children[1];
   assert.equal(
@@ -169,7 +190,11 @@ test('CORASummary: the Outcome block shows the Current Outcome (amended) over th
     },
   });
   el.connectedCallback();
-  el.update((/** @type {any} */ a) => makeComputeOutcome(a), {}, true);
+  el.update({
+    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
+    answers: {},
+    allAnswered: true,
+  });
 
   const block = /** @type {any} */ (el)._children[1];
   assert.equal(
@@ -189,7 +214,11 @@ test('CORASummary: reads the frozen snapshot from the reportable milestone (Acti
 
   // The snapshot is stamped at reportable, so an Actions-In-Progress Case shows
   // the frozen outcome even though it is not yet Completed.
-  el.update((/** @type {any} */ a) => makeComputeOutcome(a), {}, true);
+  el.update({
+    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
+    answers: {},
+    allAnswered: true,
+  });
 
   const block = /** @type {any} */ (el)._children[1];
   assert.equal(
@@ -211,7 +240,7 @@ test('CORASummary: falls back to live derivation when a Completed Case has no fr
 
   const answers = { 'q-welcome': { value: 'No' } };
   const compute = (/** @type {any} */ a) => makeComputeOutcome(a);
-  el.update(compute, answers, true);
+  el.update({ computeOutcome: compute, answers, allAnswered: true });
 
   const block = /** @type {any} */ (el)._children[1];
   assert.equal(
@@ -327,11 +356,11 @@ test('CORASummary: renders a per-category pass/fail counts block when questions 
   el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
   el.summarySections = ['questions'];
   el.connectedCallback();
-  el.update(
-    (/** @type {any} */ a) => makeComputeOutcome(a),
-    { 'q-open': { value: 'No' }, 'q-needs': { value: 'Yes' } },
-    true
-  );
+  el.update({
+    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
+    answers: { 'q-open': { value: 'No' }, 'q-needs': { value: 'Yes' } },
+    allAnswered: true,
+  });
 
   const block = findByClass(/** @type {any} */ (el), 'cora-summary-counts');
   assert.ok(block, 'counts block rendered');
@@ -362,9 +391,9 @@ test('CORASummary: renders a remediation block with the action count and each fa
   el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
   el.summarySections = ['issues'];
   el.connectedCallback();
-  el.update(
-    (/** @type {any} */ a) => makeComputeOutcome(a),
-    {
+  el.update({
+    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
+    answers: {
       'q-open': { value: 'No' },
       // q-needs fails and the Reviewer selected its 'Retrain.' action (issue #250);
       // only selected actions surface in the Summary.
@@ -375,8 +404,8 @@ test('CORASummary: renders a remediation block with the action count and each fa
         ],
       },
     },
-    true
-  );
+    allAnswered: true,
+  });
 
   const block = findByClass(
     /** @type {any} */ (el),
@@ -415,14 +444,14 @@ test('CORASummary: renders read-only capture groups for a failed Answer that has
   el.captureGroups = SUMMARY_CAPTURE_GROUPS;
   el.summarySections = ['issues'];
   el.connectedCallback();
-  el.update(
-    (/** @type {any} */ a) => makeComputeOutcome(a),
-    {
+  el.update({
+    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
+    answers: {
       'q-open': { value: 'No', capture: { rootCause: 'Rushed' } },
       'q-needs': { value: 'No' },
     },
-    true
-  );
+    allAnswered: true,
+  });
 
   const caps = findAllByClass(/** @type {any} */ (el), 'cora-summary-capture');
   assert.equal(
@@ -445,11 +474,11 @@ test('CORASummary: renders no capture block when the Case Type declares no captu
   el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
   el.summarySections = ['issues'];
   el.connectedCallback();
-  el.update(
-    (/** @type {any} */ a) => makeComputeOutcome(a),
-    { 'q-open': { value: 'No', capture: { rootCause: 'x' } } },
-    true
-  );
+  el.update({
+    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
+    answers: { 'q-open': { value: 'No', capture: { rootCause: 'x' } } },
+    allAnswered: true,
+  });
   assert.equal(
     findAllByClass(/** @type {any} */ (el), 'cora-summary-capture').length,
     0
@@ -470,11 +499,11 @@ test('CORASummary: a failed Answer without a category renders just the question 
   ]);
   el.summarySections = ['issues'];
   el.connectedCallback();
-  el.update(
-    (/** @type {any} */ a) => makeComputeOutcome(a),
-    { 'q-bare': { value: 'No' } },
-    true
-  );
+  el.update({
+    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
+    answers: { 'q-bare': { value: 'No' } },
+    allAnswered: true,
+  });
 
   const block = findByClass(
     /** @type {any} */ (el),
@@ -489,11 +518,11 @@ test('CORASummary: remediation block reports no failures when there are none', (
   el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
   el.summarySections = ['issues'];
   el.connectedCallback();
-  el.update(
-    (/** @type {any} */ a) => makeComputeOutcome(a),
-    { 'q-open': { value: 'Yes' }, 'q-needs': { value: 'Yes' } },
-    true
-  );
+  el.update({
+    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
+    answers: { 'q-open': { value: 'Yes' }, 'q-needs': { value: 'Yes' } },
+    allAnswered: true,
+  });
 
   const block = findByClass(
     /** @type {any} */ (el),
@@ -534,9 +563,9 @@ test('CORASummary: remediation tracking block shows the due date and each sent a
   el.captureGroups = ACTIONS_GROUPS;
   el.summarySections = ['remediation'];
   el.connectedCallback();
-  el.update(
-    (/** @type {any} */ a) => makeComputeOutcome(a),
-    {
+  el.update({
+    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
+    answers: {
       'q-open': {
         value: 'No',
         capture: {
@@ -552,8 +581,8 @@ test('CORASummary: remediation tracking block shows the due date and each sent a
         },
       },
     },
-    true
-  );
+    allAnswered: true,
+  });
 
   const block = findByClass(
     /** @type {any} */ (el),
@@ -578,11 +607,11 @@ test('CORASummary: remediation tracking block states none sent and an em-dash du
   el.captureGroups = ACTIONS_GROUPS;
   el.summarySections = ['remediation'];
   el.connectedCallback();
-  el.update(
-    (/** @type {any} */ a) => makeComputeOutcome(a),
-    { 'q-open': { value: 'No' } },
-    true
-  );
+  el.update({
+    computeOutcome: (/** @type {any} */ a) => makeComputeOutcome(a),
+    answers: { 'q-open': { value: 'No' } },
+    allAnswered: true,
+  });
 
   const block = findByClass(
     /** @type {any} */ (el),

@@ -1,4 +1,5 @@
 // @ts-check
+import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import './cora-outcome.js';
 import { caseDetailFields } from './cora-case-details.js';
@@ -332,7 +333,7 @@ function renderFieldBlock(className, title, rows) {
  *
  * Summary is never editable — only `read-only` or `hidden` (see section-access).
  */
-export class CORASummary extends HTMLElement {
+export class CORASummary extends ShellElement {
   constructor() {
     super();
     /** @type {((answers: Record<string, Answer>) => OutcomeResult) | null} */
@@ -384,37 +385,32 @@ export class CORASummary extends HTMLElement {
     this.sectionHeadings = DEFAULT_SECTION_HEADINGS;
   }
 
-  connectedCallback() {
-    this._render();
+  render() {
+    return Summary({
+      computeOutcome: this.computeOutcome,
+      answers: this.answers,
+      allAnswered: this.allAnswered,
+      caseRow: this.caseRow,
+      catalogue: this.catalogue,
+      summarySections: this.summarySections,
+      captureGroups: this.captureGroups,
+      detailFields: this.detailFields,
+      outcomeOptions: this.outcomeOptions,
+      sectionHeadings: this.sectionHeadings,
+    });
   }
 
   /**
-   * @param {(answers: Record<string, Answer>) => OutcomeResult} computeOutcome
-   * @param {Record<string, Answer>} answers
-   * @param {boolean} allAnswered
+   * Replace one or more props and render immediately. Falls back to
+   * `connectedCallback()` when the shell hasn't mounted yet (defensive —
+   * unlike `cora-outcome`, callers only ever `update()` an already-connected
+   * `cora-summary`, but this keeps the contract consistent).
+   * @param {{ computeOutcome: (answers: Record<string, Answer>) => OutcomeResult, answers: Record<string, Answer>, allAnswered: boolean }} props
    */
-  update(computeOutcome, answers, allAnswered) {
-    this.computeOutcome = computeOutcome;
-    this.answers = answers;
-    this.allAnswered = allAnswered;
-    this._render();
-  }
-
-  _render() {
-    this.replaceChildren(
-      ...Summary({
-        computeOutcome: this.computeOutcome,
-        answers: this.answers,
-        allAnswered: this.allAnswered,
-        caseRow: this.caseRow,
-        catalogue: this.catalogue,
-        summarySections: this.summarySections,
-        captureGroups: this.captureGroups,
-        detailFields: this.detailFields,
-        outcomeOptions: this.outcomeOptions,
-        sectionHeadings: this.sectionHeadings,
-      })
-    );
+  update(props) {
+    Object.assign(this, props);
+    if (this._shellRenderNow) this._shellRenderNow();
+    else this.connectedCallback();
   }
 }
 
