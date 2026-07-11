@@ -215,20 +215,7 @@ export class CORAConversation extends ShellElement {
   /** @param {Message[]} messages */
   update(messages) {
     this._messages = messages;
-    this._render();
-  }
-
-  _render() {
-    const content = this.render();
-    if (content !== undefined) {
-      if (content && typeof content === 'object' && 'appendChild' in content) {
-        this.replaceChildren(/** @type {any} */ (content));
-      } else if (Array.isArray(content)) {
-        this.replaceChildren(...content);
-      } else {
-        this.replaceChildren();
-      }
-    }
+    this._shellRenderNow?.();
   }
 
   render() {
@@ -254,7 +241,7 @@ export class CORAConversation extends ShellElement {
         setMessages: (messages) => {
           this._messages = messages;
         },
-        render: () => this._render(),
+        render: () => this._shellRenderNow?.(),
       },
       body
     );
@@ -267,7 +254,7 @@ export class CORAConversation extends ShellElement {
       setMessages: (messages) => {
         this._messages = messages;
       },
-      render: () => this._render(),
+      render: () => this._shellRenderNow?.(),
     });
   }
 }
