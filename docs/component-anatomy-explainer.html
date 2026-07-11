@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Anatomy of a Component — CORA Framework Explainer</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        --bg: #101010;
+        --surface: #1d1d1d;
+        --surface-2: #161616;
+        --border: #404040;
+        --pure: #d4820a;
+        --pure-glow: rgba(212, 130, 10, 0.18);
+        --shell: #4d9eff;
+        --shell-glow: rgba(77, 158, 255, 0.15);
+        --event: #e31e22;
+        --event-glow: rgba(227, 30, 34, 0.15);
+        --text: #f3f3f3;
+        --muted: #9b9b9b;
+        --code-bg: #0c0c0c;
+        --kw: #c586c0;
+        --str: #ce9178;
+        --cmt: #6a9955;
+        --font-sans:
+          system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
+          sans-serif;
+        --font-mono:
+          'Cascadia Code', 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas,
+          'Liberation Mono', monospace;
+      }
+
+      html,
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font-mono);
+        overflow-x: hidden;
+      }
+
+      body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background-image: radial-gradient(circle, #212121 1px, transparent 1px);
+        background-size: 28px 28px;
+        opacity: 0.4;
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      header {
+        position: relative;
+        z-index: 10;
+        padding: 48px 48px 28px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      header h1 {
+        font-family: var(--font-sans);
+        font-weight: 800;
+        font-size: clamp(2.2rem, 5vw, 3.8rem);
+        letter-spacing: -0.02em;
+        line-height: 1.02;
+      }
+
+      header p.sub {
+        margin-top: 10px;
+        font-size: 0.78rem;
+        color: var(--muted);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .legend {
+        display: flex;
+        gap: 24px;
+        margin-top: 22px;
+        flex-wrap: wrap;
+      }
+
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.7rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+
+      main {
+        position: relative;
+        z-index: 1;
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 8px 24px 96px;
+      }
+
+      section.scene {
+        padding: 44px 0 8px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .scene-label {
+        font-family: var(--font-sans);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.22em;
+        color: var(--muted);
+        text-transform: uppercase;
+        margin-bottom: 6px;
+      }
+
+      .scene-title {
+        font-family: var(--font-sans);
+        font-weight: 700;
+        font-size: 1.7rem;
+        letter-spacing: -0.01em;
+        margin-bottom: 20px;
+      }
+
+      p.lede,
+      p.body {
+        font-family: var(--font-sans);
+        line-height: 1.65;
+        color: #dcdcdc;
+        max-width: 68ch;
+        margin-bottom: 16px;
+      }
+
+      p.lede {
+        font-size: 1.02rem;
+        color: var(--text);
+      }
+
+      strong {
+        color: var(--text);
+      }
+
+      code.inline {
+        font-family: var(--font-mono);
+        font-size: 0.86em;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 1px 6px;
+        color: #e6c07b;
+      }
+
+      a {
+        color: var(--shell);
+        text-decoration: none;
+        border-bottom: 1px dotted var(--shell);
+      }
+
+      a:hover {
+        border-bottom-style: solid;
+      }
+
+      /* Decision cards */
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px;
+        margin: 8px 0 28px;
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 20px;
+      }
+
+      .card.pure {
+        border-top: 3px solid var(--pure);
+        box-shadow: 0 0 0 1px var(--pure-glow);
+      }
+      .card.shell {
+        border-top: 3px solid var(--shell);
+        box-shadow: 0 0 0 1px var(--shell-glow);
+      }
+      .card.page {
+        border-top: 3px solid var(--event);
+        box-shadow: 0 0 0 1px var(--event-glow);
+      }
+
+      .card h3 {
+        font-family: var(--font-mono);
+        font-size: 0.95rem;
+        margin-bottom: 8px;
+      }
+
+      .card .when {
+        font-family: var(--font-sans);
+        font-size: 0.85rem;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .card .when b {
+        color: var(--text);
+        font-weight: 600;
+      }
+
+      /* Code blocks */
+      figure.code {
+        margin: 6px 0 28px;
+      }
+
+      figure.code figcaption {
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-bottom: none;
+        border-radius: 8px 8px 0 0;
+        padding: 8px 14px;
+      }
+
+      pre {
+        background: var(--code-bg);
+        border: 1px solid var(--border);
+        border-radius: 0 0 8px 8px;
+        padding: 18px 16px;
+        overflow-x: auto;
+        font-size: 0.82rem;
+        line-height: 1.6;
+      }
+
+      pre code {
+        font-family: var(--font-mono);
+        color: #d4d4d4;
+        white-space: pre;
+      }
+
+      ul.checklist,
+      ul.bullets {
+        list-style: none;
+        margin: 4px 0 24px;
+        max-width: 72ch;
+      }
+
+      ul.checklist li,
+      ul.bullets li {
+        font-family: var(--font-sans);
+        line-height: 1.6;
+        color: #dcdcdc;
+        padding: 8px 0 8px 30px;
+        position: relative;
+        border-bottom: 1px solid #262626;
+      }
+
+      ul.checklist li::before {
+        content: '\2713';
+        position: absolute;
+        left: 4px;
+        top: 8px;
+        color: var(--pure);
+        font-weight: 700;
+      }
+
+      ul.bullets li::before {
+        content: '\2192';
+        position: absolute;
+        left: 4px;
+        top: 8px;
+        color: var(--shell);
+        font-weight: 700;
+      }
+
+      .callout {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--pure);
+        border-radius: 6px;
+        padding: 16px 18px;
+        margin: 8px 0 26px;
+        font-family: var(--font-sans);
+        line-height: 1.6;
+        color: #dcdcdc;
+        max-width: 74ch;
+      }
+
+      .callout.warn {
+        border-left-color: var(--event);
+      }
+
+      .callout .tag {
+        display: inline-block;
+        font-family: var(--font-mono);
+        font-size: 0.66rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--pure);
+        margin-bottom: 6px;
+      }
+
+      .callout.warn .tag {
+        color: var(--event);
+      }
+
+      footer {
+        position: relative;
+        z-index: 1;
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 28px 24px 64px;
+        font-family: var(--font-sans);
+        font-size: 0.8rem;
+        color: var(--muted);
+      }
+
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #fbfbf9;
+          --surface: #ffffff;
+          --surface-2: #f2f2ee;
+          --border: #d8d8d2;
+          --text: #1a1a1a;
+          --muted: #6a6a66;
+          --code-bg: #1c1c1c;
+        }
+        body::before {
+          background-image: radial-gradient(
+            circle,
+            #e4e4dd 1px,
+            transparent 1px
+          );
+          opacity: 0.6;
+        }
+        p.lede,
+        p.body,
+        ul.checklist li,
+        ul.bullets li,
+        .callout {
+          color: #2b2b2b;
+        }
+        pre code {
+          color: #e4e4e4;
+        }
+      }
+    </style>
+  </head>
+
+  <header>
+    <h1>Anatomy of a Component</h1>
+    <p class="sub">
+      CORA framework · the one blessed pattern for cora-* elements
+    </p>
+    <div class="legend">
+      <span class="legend-item"
+        ><span class="legend-dot" style="background: var(--pure)"></span>Pure
+        view function</span
+      >
+      <span class="legend-item"
+        ><span class="legend-dot" style="background: var(--shell)"></span
+        >Custom-element shell</span
+      >
+      <span class="legend-item"
+        ><span class="legend-dot" style="background: var(--event)"></span>Events
+        &amp; pages</span
+      >
+    </div>
+  </header>
+
+  <main>
+    <!-- ─── 1. THE BLESSED PATTERN ─────────────────────────────── -->
+    <section class="scene">
+      <p class="scene-label">01 · The pattern</p>
+      <h2 class="scene-title">
+        One shape: a pure view, wrapped by a thin shell
+      </h2>
+
+      <p class="lede">
+        Every <code class="inline">cora-*</code> element in this codebase has
+        the same skeleton. The UI is a <strong>plain function</strong> that
+        takes props and returns <code class="inline">h()</code> nodes — no DOM,
+        no lifecycle, trivially testable. A
+        <strong>thin custom-element shell</strong>
+        then adapts that function to the browser so routes and other components
+        can mount it as a tag and re-render it reactively.
+      </p>
+
+      <p class="body">
+        You only ever choose <em>which shell</em>. There are three doors, and
+        the decision is mechanical:
+      </p>
+
+      <div class="cards">
+        <div class="card pure">
+          <h3>defineView()</h3>
+          <p class="when">
+            <b>Leaf / base components.</b> Little or no local state; the render
+            is essentially a pure function of props. defineView() wraps the
+            function in a custom element and wires reactive re-render for you.
+            Used by <code class="inline">cora-toast</code>,
+            <code class="inline">cora-status-banner</code>,
+            <code class="inline">cora-question-labels</code>.
+          </p>
+        </div>
+        <div class="card shell">
+          <h3>class X extends ShellElement</h3>
+          <p class="when">
+            <b>Stateful sections.</b> Holds props as instance fields, exposes
+            <code class="inline">update(props)</code>, and emits
+            <code class="inline">cora-</code> events back up. The dominant
+            pattern in <code class="inline">sections/</code> and
+            <code class="inline">collections/</code> — e.g.
+            <code class="inline">cora-notes</code>,
+            <code class="inline">cora-conversation</code>.
+          </p>
+        </div>
+        <div class="card page">
+          <h3>reactive()</h3>
+          <p class="when">
+            <b>Route-level pages.</b> Not a custom element at all — a plain
+            function returning a host
+            <code class="inline">&lt;div&gt;</code> that re-renders from
+            signals. Every page in <code class="inline">src/pages/</code> mounts
+            through it. See
+            <code class="inline">docs/guide/component-authoring.md</code>.
+          </p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="tag">The rule of thumb</span>
+        Write the pure function first, always. Reach for
+        <code class="inline">defineView()</code> if the element is basically
+        stateless; reach for <code class="inline">ShellElement</code> when it
+        owns mutable props and emits events. The shell should stay tiny — if
+        logic is piling up inside <code class="inline">render()</code>, push it
+        back into the pure function.
+      </div>
+    </section>
+
+    <!-- ─── 2. WORKED EXAMPLE: defineView ──────────────────────── -->
+    <section class="scene">
+      <p class="scene-label">02 · Worked example</p>
+      <h2 class="scene-title">A leaf component with defineView()</h2>
+
+      <p class="body">
+        A base-layer badge that renders a Case Outcome. The pure
+        <code class="inline">OutcomeBadge()</code> is the whole UI; the shell is
+        four lines that give it a tag and reactive re-render.
+      </p>
+
+      <figure class="code">
+        <figcaption>src/components/base/cora-outcome-badge.js</figcaption>
+        <pre><code>// @ts-check
+import { defineView } from '../../lib/view.js';
+import { h } from '../../lib/html.js';
+
+/**
+ * Pure view: an Outcome badge for a Case. Leaf/base layer &mdash; it composes no
+ * other cora-* element, only h() nodes.
+ * @param {{ outcome: string }} props
+ * @returns {HTMLElement}
+ */
+export function OutcomeBadge({ outcome }) {
+  return h(
+    'span',
+    { class: `cora-outcome-badge cora-outcome-${outcome}` },
+    outcome
+  );
+}
+
+/**
+ * Custom-element shell: `&lt;cora-outcome-badge outcome="pass"&gt;`. defineView()
+ * wires effect-driven re-render for free; render() just delegates to the pure
+ * view, so all the UI logic stays in a plain, testable function.
+ */
+export const CORAOutcomeBadge = defineView('cora-outcome-badge', {
+  props: { outcome: 'pending' },
+  render: ({ props }) =&gt; OutcomeBadge(props),
+});</code></pre>
+      </figure>
+
+      <p class="body">
+        Test the function, not the element:
+        <code class="inline">OutcomeBadge({ outcome: 'fail' })</code> returns a
+        <code class="inline">&lt;span&gt;</code> you can assert on directly,
+        with no custom-element registration or DOM shell in the test.
+      </p>
+    </section>
+
+    <!-- ─── 3. WORKED EXAMPLE: ShellElement ────────────────────── -->
+    <section class="scene">
+      <p class="scene-label">03 · Worked example</p>
+      <h2 class="scene-title">A stateful section with ShellElement</h2>
+
+      <p class="body">
+        A Section that lists Remediation Actions, shows an
+        <code class="inline">EmptyState()</code> when there are none, and emits
+        a bubbling <code class="inline">cora-</code> event when the Reviewer
+        adds one. Props live as instance fields; the parent calls
+        <code class="inline">update(props)</code> to hand new data in.
+      </p>
+
+      <figure class="code">
+        <figcaption>
+          src/components/sections/cora-remediation-list.js
+        </figcaption>
+        <pre><code>// @ts-check
+import { ShellElement } from '../../lib/view.js';
+import { h } from '../../lib/html.js';
+import { EmptyState } from '../../lib/empty-state.js';
+
+/**
+ * @typedef {object} RemediationListProps
+ * @property {string[]} actions Remediation Action labels for this Case.
+ * @property {() =&gt; void} onAdd Raised when the Reviewer adds an action.
+ */
+
+/**
+ * Pure view for the Section body: the list of Remediation Actions, or an
+ * EmptyState when there are none. The shell below delegates to this.
+ * @param {RemediationListProps} props
+ * @returns {Node[]}
+ */
+export function RemediationList({ actions, onAdd }) {
+  return [
+    h('h2', {}, 'Remediation Actions'),
+    actions.length
+      ? h('ul', {}, ...actions.map((label) =&gt; h('li', {}, label)))
+      : EmptyState('No Remediation Actions yet.', {
+          className: 'cora-remediation-empty',
+        }),
+    h('button', { type: 'button', onclick: onAdd }, 'Add action'),
+  ];
+}
+
+/**
+ * Stateful Section shell. Props are plain instance fields; update(props)
+ * reassigns them and re-renders through the same focus-preserving path as
+ * connectedCallback(). User intent leaves via a bubbling cora- event.
+ */
+export class CORARemediationList extends ShellElement {
+  constructor() {
+    super();
+    /** @type {string[]} */
+    this.actions = [];
+  }
+
+  render() {
+    return RemediationList({
+      actions: this.actions,
+      onAdd: () =&gt; this.emit('cora-remediation-add', { caseId: this.id }),
+    });
+  }
+}
+
+customElements.define('cora-remediation-list', CORARemediationList);</code></pre>
+      </figure>
+    </section>
+
+    <!-- ─── 4. REGISTRATION ────────────────────────────────────── -->
+    <section class="scene">
+      <p class="scene-label">04 · Registration</p>
+      <h2 class="scene-title">There is no central registry</h2>
+
+      <p class="body">
+        A component becomes available purely as a
+        <strong>module side effect</strong>. The last line of every shell module
+        is a <code class="inline">customElements.define(...)</code> call (or the
+        <code class="inline">defineView()</code> call, which defines
+        internally). There is no
+        <code class="inline">register-components.js</code> — the
+        <code class="inline">framework-contract</code> test asserts a global
+        registry never comes back.
+      </p>
+
+      <ul class="bullets">
+        <li>
+          <b>Import for the side effect.</b> Whatever mounts
+          <code class="inline">&lt;cora-remediation-list&gt;</code> must
+          <code class="inline">import</code> its module so the
+          <code class="inline">define</code> runs. If nothing imports it, the
+          tag is an inert, unregistered element that fails silently.
+        </li>
+        <li>
+          <b>The dev warning has your back.</b> Rendering
+          <code class="inline">h('cora-x', ...)</code> without a side-effect
+          import logs, once per tag:
+          <code class="inline"
+            >&lt;cora-x&gt; is not defined — missing a side-effect import of its
+            module?</code
+          >
+          (see <code class="inline">src/lib/html.js</code>). If you see that in
+          the console, add the missing <code class="inline">import</code>.
+        </li>
+      </ul>
+    </section>
+
+    <!-- ─── 5. LIFECYCLE ───────────────────────────────────────── -->
+    <section class="scene">
+      <p class="scene-label">05 · Lifecycle</p>
+      <h2 class="scene-title">What the shell gives you for free</h2>
+
+      <p class="body">
+        <code class="inline">ShellElement</code> and
+        <code class="inline">defineView()</code> both handle the reactive
+        plumbing, so you rarely touch lifecycle methods yourself:
+      </p>
+
+      <ul class="checklist">
+        <li>
+          <b>Reactive re-render.</b> On
+          <code class="inline">connectedCallback()</code> the shell runs your
+          <code class="inline">render()</code> inside
+          <code class="inline">effect(renderNow)</code>. Any
+          <code class="inline">signal</code> your render reads is tracked, and
+          the view re-renders automatically when it changes. No manual
+          subscriptions.
+        </li>
+        <li>
+          <b>Focus &amp; selection restore.</b> Every managed render is wrapped
+          by <code class="inline">captureFocus()</code> before and
+          <code class="inline">restoreFocus()</code> after (see
+          <code class="inline">src/lib/view.js</code>). Give an input a
+          <code class="inline">data-focus-key</code> and the caret survives an
+          autosave-driven repaint.
+        </li>
+        <li>
+          <b>Cleanup on disconnect.</b> Listeners registered through
+          <code class="inline">on()</code> and work scheduled with
+          <code class="inline">afterMount()</code> are torn down for you when
+          the element leaves the DOM.
+        </li>
+      </ul>
+
+      <div class="callout warn">
+        <span class="tag">Advanced escape hatch</span>
+        The framework replaces all children on every render, which is correct
+        but occasionally too coarse for a large, structurally-stable subtree.
+        When you genuinely need custom diffing, follow the
+        <b>structural-signature</b> approach in
+        <code class="inline"
+          >src/components/sections/cora-capture-groups.js</code
+        >: it computes a signature of its group/field shape and only rebuilds
+        the DOM when that signature changes. Reach for this <em>only</em> after
+        measuring — the default full re-render is the norm.
+      </div>
+    </section>
+
+    <!-- ─── 6. EVENTS ──────────────────────────────────────────── -->
+    <section class="scene">
+      <p class="scene-label">06 · Events</p>
+      <h2 class="scene-title">Talking to the parent</h2>
+
+      <p class="body">
+        Components never reach up into their parents. They emit
+        <strong>bubbling custom events</strong> and let whoever mounted them
+        listen. The conventions are uniform:
+      </p>
+
+      <ul class="bullets">
+        <li>
+          <b>Use <code class="inline">emit()</code>.</b> On a
+          <code class="inline">ShellElement</code>,
+          <code class="inline">this.emit(name, detail)</code> dispatches a
+          <code class="inline">CustomEvent</code> with
+          <code class="inline">{ detail, bubbles: true }</code> — the one
+          blessed way to raise an event.
+        </li>
+        <li>
+          <b>Name it <code class="inline">cora-*</code>.</b> Event names carry
+          the same prefix as the elements and CSS, e.g.
+          <code class="inline">cora-remediation-add</code>,
+          <code class="inline">cora-answer-change</code>. This keeps them from
+          colliding with SharePoint's own DOM events.
+        </li>
+        <li>
+          <b>Payload goes in <code class="inline">detail</code>.</b> Pass a
+          plain object — <code class="inline">{ caseId, value }</code> — never
+          mutate a parent's state directly.
+        </li>
+      </ul>
+    </section>
+
+    <!-- ─── 7. CHECKLIST ───────────────────────────────────────── -->
+    <section class="scene">
+      <p class="scene-label">07 · Checklist</p>
+      <h2 class="scene-title">Shipping a new component</h2>
+
+      <ul class="checklist">
+        <li>
+          <b>Pick the layer.</b> A leaf that composes no other
+          <code class="inline">cora-*</code> element goes in
+          <code class="inline">src/components/base/</code>. A domain-feature
+          unit that wires base components together goes in
+          <code class="inline">sections/</code>. A page/tab-level assembly
+          mounted directly by a route goes in
+          <code class="inline">collections/</code>.
+        </li>
+        <li>
+          <b>Write the pure function first (Red).</b> A failing test at the
+          smallest public seam — the plain function returning
+          <code class="inline">h()</code> nodes — before any shell exists.
+        </li>
+        <li>
+          <b>Add the thin shell.</b>
+          <code class="inline">defineView()</code> for a leaf;
+          <code class="inline">class extends ShellElement</code> for a stateful
+          section. End the module with
+          <code class="inline">customElements.define(...)</code>.
+        </li>
+        <li>
+          <b>Namespace everything <code class="inline">cora-</code>.</b> The
+          tag, the event names, and the CSS class hooks all share the prefix for
+          SharePoint isolation.
+        </li>
+        <li>
+          <b>Add the test file.</b> Flat in <code class="inline">tests/</code>,
+          one file per subject by filename (e.g.
+          <code class="inline">tests/cora-remediation-list.test.js</code>). Run
+          <code class="inline">node --test --experimental-test-coverage</code>
+          — every new line must be covered.
+        </li>
+        <li>
+          <b>Obey the hard rules.</b> No third-party runtime deps, no build
+          step, no <code class="inline">innerHTML</code> for user data, and
+          never call <code class="inline">fetch()</code> directly — all REST
+          goes through the
+          <code class="inline">SharePointClient</code> interface.
+        </li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    Companion to
+    <code class="inline">docs/signal-explainer.html</code>,
+    <code class="inline">docs/save-queue-explainer.html</code>, and
+    <code class="inline">docs/show-when-explainer.html</code>. For the
+    page-authoring (function-first) view, see
+    <code class="inline">docs/guide/component-authoring.md</code>.
+  </footer>
+</html>
