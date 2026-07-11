@@ -1,5 +1,6 @@
 // @ts-check
 import { h } from '../../lib/html.js';
+import { SECTION_REGISTRY } from '../../lib/section-registry.js';
 
 /** @typedef {import('./types.js').CaseReviewNodeRegistry} CaseReviewNodeRegistry */
 /**
@@ -42,18 +43,21 @@ export function createCaseReviewNodeRegistry() {
     completeButton: null,
     ensure() {
       registry.tabs ??= h('cora-tabs');
-      registry.details ??= h('cora-case-details');
+      // The per-Section panel nodes with a uniform custom-element tag are
+      // materialized from the Section registry (ADR-0032) — one source of truth
+      // for the id→component wiring. Bespoke nodes (the `questions` panel is a
+      // plain <section> wrapping the list + progress) and non-Section chrome
+      // (banner, header, buttons) stay hardcoded below.
+      for (const entry of SECTION_REGISTRY) {
+        if (!entry.componentTag) continue;
+        const node = /** @type {Record<string, Element | null>} */ (
+          /** @type {unknown} */ (registry)
+        );
+        node[entry.nodeKey] ??= h(entry.componentTag);
+      }
       registry.questionsPanel ??= h('section');
       registry.questionList ??= h('cora-question-list');
       registry.progress ??= h('cora-section-progress');
-      registry.issues ??= h('cora-remediation-section');
-      registry.remediation ??= h('cora-remediation-tracking');
-      registry.summary ??= h('cora-summary');
-      registry.notes ??= h('cora-notes');
-      registry.appeal ??= h('cora-appeal');
-      registry.appealReview ??= h('cora-appeal-review');
-      registry.amendOutcome ??= h('cora-amend-outcome');
-      registry.conversation ??= h('cora-conversation');
       registry.banner ??= h('cora-status-banner');
       registry.conversationToggle ??= /** @type {HTMLButtonElement} */ (
         h('button', { class: 'cora-conversation-toggle-btn' })

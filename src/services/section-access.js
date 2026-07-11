@@ -14,6 +14,11 @@
 
 import { allSentActions } from '../evaluators/remediation-actions.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
+import {
+  sectionIds,
+  summaryBlockIds,
+  sectionById,
+} from '../lib/section-registry.js';
 
 /**
  * A Case is **reportable** once it has passed the freeze milestone:
@@ -37,19 +42,13 @@ export function isReportable(status) {
   );
 }
 
-/** @type {Section[]} */
-export const SECTIONS = [
-  'details',
-  'questions',
-  'issues',
-  'summary',
-  'remediation',
-  'notes',
-  'conversation',
-  'appealRequest',
-  'appealReview',
-  'amendOutcome',
-];
+/**
+ * The Sections that exist on the Case Review page, in canonical order. Derived
+ * from the data-driven Section registry (ADR-0032) — the single source of truth
+ * for Section existence — rather than restated here.
+ * @type {Section[]}
+ */
+export const SECTIONS = sectionIds();
 
 /**
  * The role a Case Type routes appeal-raising to: the
@@ -94,16 +93,11 @@ function hasSentActions(caseRow, config) {
 /**
  * The Sections that can contribute a block to the read-only Summary Section
  *, in render order. Conversation (a floating overlay, never a tab)
- * and Summary itself never appear as Summary blocks.
+ * and Summary itself never appear as Summary blocks. Derived from the Section
+ * registry (ADR-0032) rather than restated here.
  * @type {Section[]}
  */
-export const SUMMARY_SECTIONS = [
-  'details',
-  'questions',
-  'issues',
-  'remediation',
-  'notes',
-];
+export const SUMMARY_SECTIONS = summaryBlockIds();
 
 /**
  * Whether a Section contributes a block to the Summary Section.
@@ -122,14 +116,18 @@ export function showInSummary(section, caseTypeConfig) {
   if (sections && !(section in sections)) return false;
   const explicit = sections?.[section]?.showInSummary;
   if (explicit !== undefined) return explicit;
-  return section !== 'notes';
+  return sectionById(section)?.showInSummaryDefault ?? true;
 }
 
 /**
  * Default access matrix. Function-valued cells receive the CaseRow and CaseTypeConfig and return a Mode.
+ * Keyed by the Section ids owned by the registry (ADR-0032); a contract test
+ * asserts `Object.keys(MATRIX)` equals the registry's Section ids so the two
+ * never drift. Exported for that assertion — the RBAC policy itself stays here,
+ * not in the registry.
  * @type {Record<Section, Record<Role, Mode | ((c: CaseRow, config: CaseTypeConfig) => Mode)>>}
  */
-const MATRIX = {
+export const MATRIX = {
   // Case Details. Observed read-only by the reviewing/owning/Controls
   // roles; the Responsible Party (Adviser) and their Manager no longer see a
   // standalone Details tab — those fields are folded into the Summary they read
