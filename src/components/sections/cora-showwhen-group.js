@@ -126,17 +126,6 @@ export class CORAShowwhenGroup extends ShellElement {
     this.isRoot = false;
   }
 
-  _render() {
-    const content = this.render();
-    if (content !== undefined) {
-      if (Array.isArray(content)) {
-        this.replaceChildren(...content);
-      } else {
-        this.replaceChildren(content);
-      }
-    }
-  }
-
   render() {
     return ShowwhenGroup({
       question: this.question,
