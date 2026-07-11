@@ -1,5 +1,5 @@
 // @ts-check
-import { ShellElement } from '../../lib/view.js';
+import { ShellElement, replaceHostChildren } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import { DEFAULT_SECTION_HEADINGS } from '../../lib/section-labels.js';
 import { evaluate } from '../../evaluators/applicability-evaluator.js';
@@ -192,16 +192,21 @@ export class CORARemediationTracking extends ShellElement {
     this._render();
   }
 
+  /**
+   * Survives (not routed through `this._shellRenderNow`): several tests call
+   * `update()` before `connectedCallback()`, so this must render unconditionally
+   * rather than being a no-op pre-connection like the base `update()`.
+   */
   _render() {
-    this.replaceChildren(...this.render());
+    replaceHostChildren(this, this.render());
   }
 
   render() {
-    return RemediationTracking(this._props());
+    return RemediationTracking(this._buildProps());
   }
 
   /** @returns {RemediationTrackingProps} */
-  _props() {
+  _buildProps() {
     return {
       catalogue: this.catalogue,
       answers: this.answers,
@@ -209,30 +214,14 @@ export class CORARemediationTracking extends ShellElement {
       canResolve: this.canResolve,
       heading: this.heading,
       dispatchStatus: (questionId, fieldKey, actionId, status, cancelReason) =>
-        this._dispatchStatus(
+        this.emit('cora-action-status', {
           questionId,
           fieldKey,
           actionId,
           status,
-          cancelReason
-        ),
+          cancelReason,
+        }),
     };
-  }
-
-  /**
-   * @param {string} questionId
-   * @param {string} fieldKey
-   * @param {string} actionId
-   * @param {'pending' | 'complete' | 'cancelled'} status
-   * @param {string} cancelReason
-   */
-  _dispatchStatus(questionId, fieldKey, actionId, status, cancelReason) {
-    this.dispatchEvent(
-      new CustomEvent('cora-action-status', {
-        detail: { questionId, fieldKey, actionId, status, cancelReason },
-        bubbles: true,
-      })
-    );
   }
 }
 
