@@ -116,17 +116,6 @@ export class CORAAppNav extends ShellElement {
     }
   }
 
-  _render() {
-    const content = this.render();
-    if (content !== undefined) {
-      if (Array.isArray(content)) this.replaceChildren(...content);
-      else this.replaceChildren(content);
-    } else {
-      this.replaceChildren();
-    }
-    // _updateActive is called within render now, or we can just call it here to be safe
-  }
-
   render() {
     const hash = typeof location !== 'undefined' ? location.hash || '#/' : '#/';
     const { node, navItems } = AppNav({
