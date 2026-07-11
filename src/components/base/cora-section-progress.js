@@ -1,5 +1,6 @@
 // @ts-check
 import { h } from '../../lib/html.js';
+import { ShellElement } from '../../lib/view.js';
 
 /** @typedef {import('../../evaluators/section-progress.js').SectionProgress} SectionProgress */
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
@@ -50,7 +51,7 @@ export function SectionProgress({ sections, onSectionJump, onJumpUnanswered }) {
   return [...rows, jumpBtn];
 }
 
-export class CORASectionProgress extends HTMLElement {
+export class CORASectionProgress extends ShellElement {
   constructor() {
     super();
     /** @type {SectionProgress[]} */
@@ -70,25 +71,27 @@ export class CORASectionProgress extends HTMLElement {
   }
 
   _render() {
-    this.replaceChildren(
-      ...SectionProgress({
-        sections: this._sections,
-        unansweredQuestions: this._unansweredQuestions,
-        onSectionJump: (section) => {
-          this.dispatchEvent(
-            new CustomEvent('cora-section-jump', {
-              detail: { section },
-              bubbles: true,
-            })
-          );
-        },
-        onJumpUnanswered: () => {
-          this.dispatchEvent(
-            new CustomEvent('cora-jump-unanswered', { bubbles: true })
-          );
-        },
-      })
-    );
+    this.replaceChildren(...this.render());
+  }
+
+  render() {
+    return SectionProgress({
+      sections: this._sections,
+      unansweredQuestions: this._unansweredQuestions,
+      onSectionJump: (section) => {
+        this.dispatchEvent(
+          new CustomEvent('cora-section-jump', {
+            detail: { section },
+            bubbles: true,
+          })
+        );
+      },
+      onJumpUnanswered: () => {
+        this.dispatchEvent(
+          new CustomEvent('cora-jump-unanswered', { bubbles: true })
+        );
+      },
+    });
   }
 }
 

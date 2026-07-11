@@ -1,5 +1,6 @@
 // @ts-check
 import { h } from '../../lib/html.js';
+import { ShellElement } from '../../lib/view.js';
 import {
   commit,
   currentBank,
@@ -147,21 +148,11 @@ export function OptionsEditor({
   );
 }
 
-export class CORAOptionsEditor extends HTMLElement {
+export class CORAOptionsEditor extends ShellElement {
   constructor() {
     super();
     /** @type {any} */
     this.question = null;
-  }
-
-  connectedCallback() {
-    this._render();
-  }
-
-  _render() {
-    const content = this.render();
-    if (content) this.replaceChildren(content);
-    else this.replaceChildren();
   }
 
   render() {
