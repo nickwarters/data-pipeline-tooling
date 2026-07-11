@@ -1,4 +1,5 @@
 // @ts-check
+import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import {
   baselineBank,
@@ -88,21 +89,11 @@ function wordingStatus(question, baselineQuestion) {
   return h('span', {}, '○ Unchanged');
 }
 
-export class CORAWordingEditor extends HTMLElement {
+export class CORAWordingEditor extends ShellElement {
   constructor() {
     super();
     /** @type {any} */
     this.question = null;
-  }
-
-  connectedCallback() {
-    this._render();
-  }
-
-  _render() {
-    const content = this.render();
-    if (content) this.replaceChildren(content);
-    else this.replaceChildren();
   }
 
   render() {
