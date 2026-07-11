@@ -261,12 +261,8 @@ export class CORAAppeal extends ShellElement {
     this.heading = DEFAULT_SECTION_HEADINGS.appealRequest;
   }
 
-  _render() {
-    this.replaceChildren(...this.render());
-  }
-
   render() {
-    return AppealSection(this._props());
+    return AppealSection(this._buildProps());
   }
 
   /**
@@ -279,7 +275,7 @@ export class CORAAppeal extends ShellElement {
   }
 
   /** @returns {AppealProps} */
-  _props() {
+  _buildProps() {
     return {
       caseRow: this.caseRow,
       saveQueue: this.saveQueue,
@@ -289,7 +285,7 @@ export class CORAAppeal extends ShellElement {
       catalogue: this.catalogue,
       answers: this.answers,
       newAppealId: () => this.newAppealId(),
-      render: () => this._render(),
+      render: () => this._shellRenderNow?.(),
       heading: this.heading,
     };
   }
