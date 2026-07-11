@@ -148,12 +148,6 @@ export class CORARemediationEditor extends ShellElement {
     this.question = null;
   }
 
-  _render() {
-    const el = this.render();
-    if (el) this.replaceChildren(el);
-    else this.replaceChildren();
-  }
-
   render() {
     return RemediationEditor({
       question: this.question,
