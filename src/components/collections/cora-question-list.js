@@ -1,5 +1,5 @@
 // @ts-check
-import { captureFocus, restoreFocus } from '../../lib/view.js';
+import { ShellElement, captureFocus, restoreFocus } from '../../lib/view.js';
 import { CORAQuestion } from '../sections/cora-question.js';
 import { isFailure } from '../../evaluators/failure-evaluator.js';
 
@@ -70,7 +70,7 @@ export function QuestionList({ questions, answers, access, existing = [] }) {
   });
 }
 
-export class CORAQuestionList extends HTMLElement {
+export class CORAQuestionList extends ShellElement {
   constructor() {
     super();
     /** @type {QuestionDefinition[]} */
@@ -127,15 +127,27 @@ export class CORAQuestionList extends HTMLElement {
     if (changed) restoreFocus(this, focusSnapshot);
   }
 
-  /** @returns {boolean} */
-  _render() {
-    const previousElements = [...this.questionElements];
-    const nextElements = QuestionList({
+  /**
+   * ShellElement render contract: compose the question hosts from current
+   * props, reusing existing hosts by id. Pure composition — DOM mutation and
+   * bookkeeping live in `_render()`, which callers (connectedCallback,
+   * update()) invoke directly since this component's re-renders are driven
+   * imperatively rather than by signal reactivity.
+   * @returns {CORAQuestion[]}
+   */
+  render() {
+    return QuestionList({
       questions: this.questions,
       answers: this.answers,
       access: this.access,
-      existing: previousElements,
+      existing: this.questionElements,
     });
+  }
+
+  /** @returns {boolean} */
+  _render() {
+    const previousElements = [...this.questionElements];
+    const nextElements = this.render();
 
     this.questionElements = nextElements;
     this._renderedIds = new Set(this.questions.map((question) => question.id));
