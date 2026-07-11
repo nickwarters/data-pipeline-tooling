@@ -161,15 +161,7 @@ export class CORAOwnerSummary extends ShellElement {
       ownedCaseTypes: this.ownedCaseTypes,
     });
 
-    this._render();
-  }
-
-  _render() {
-    const content = this.render();
-    if (content !== undefined) {
-      if (Array.isArray(content)) this.replaceChildren(...content);
-      else this.replaceChildren(content);
-    }
+    this._shellRenderNow?.();
   }
 
   render() {
