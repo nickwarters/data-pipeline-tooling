@@ -230,14 +230,14 @@ export class CORAKpiStrip extends ShellElement {
     }
 
     this._loaded = true;
-    this._render();
+    this._shellRenderNow?.();
   }
 
   /** @param {string} role */
   _toggleLane(role) {
     if (this._openLanes.has(role)) this._openLanes.delete(role);
     else this._openLanes.add(role);
-    this._render();
+    this._shellRenderNow?.();
   }
 
   /** @param {string} role @param {string} key */
@@ -245,13 +245,7 @@ export class CORAKpiStrip extends ShellElement {
     const id = `${role}:${key}`;
     if (this._expandedTiles.has(id)) this._expandedTiles.delete(id);
     else this._expandedTiles.add(id);
-    this._render();
-  }
-
-  _render() {
-    const content = this.render();
-    if (content === undefined) this.replaceChildren();
-    else this.replaceChildren(content);
+    this._shellRenderNow?.();
   }
 
   render() {
