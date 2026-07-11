@@ -162,16 +162,6 @@ export class CORAQuestionCard extends ShellElement {
     this.questionIndex = 0;
   }
 
-  _render() {
-    const content = this.render();
-    if (content !== undefined) {
-      if (Array.isArray(content)) this.replaceChildren(...content);
-      else this.replaceChildren(content);
-    } else {
-      this.replaceChildren();
-    }
-  }
-
   render() {
     return QuestionCard({
       question: this.question,
