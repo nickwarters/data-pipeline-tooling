@@ -621,6 +621,7 @@ function makeConversationContext(opts = {}) {
         },
         client,
         saveQueue,
+        caseListOptions: { listName: 'Cases-ExampleReview' },
       },
       nodes: {
         tabs: null,
@@ -1202,6 +1203,9 @@ test('createConversationPanelBinding: preserves click and Alt+C conversation tog
   assert.equal(/** @type {any} */ (conversation).client, client);
   assert.equal(/** @type {any} */ (conversation).saveQueue, saveQueue);
   assert.equal(/** @type {any} */ (conversation).caseId, 'case-1');
+  assert.deepEqual(/** @type {any} */ (conversation).caseListOptions, {
+    listName: 'Cases-ExampleReview',
+  });
   assert.equal(/** @type {any} */ (conversation).currentUser, currentUser);
   assert.equal(/** @type {any} */ (conversation).access, 'read-only');
   assert.equal(/** @type {any} */ (conversation).hidden, false);

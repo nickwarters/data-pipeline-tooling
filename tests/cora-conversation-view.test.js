@@ -356,6 +356,54 @@ test('ConversationView: resolves caseType config and passes listName as opts', a
   assert.ok(childrenOf(host).length >= 0);
 });
 
+test('ConversationView: cora-conversation element receives caseListOptions resolved from the Case Type config', async () => {
+  const client = makeStubClient();
+  const host = ConversationView({
+    client: /** @type {any} */ (client),
+    saveQueue: null,
+    caseId: 'case-1',
+    caseType: 'example-review',
+    currentUser: null,
+  });
+  await flush();
+
+  const conversationEl = childrenOf(host)[1];
+  assert.deepEqual(conversationEl.caseListOptions, {
+    listName: 'Cases-ExampleReview',
+  });
+});
+
+test('ConversationView: cora-conversation element caseListOptions defaults to {} for a Case Type with no declared listName', async () => {
+  const client = makeStubClient();
+  const host = ConversationView({
+    client: /** @type {any} */ (client),
+    saveQueue: null,
+    caseId: 'case-1',
+    // complaints deliberately declares no listName (case-types/complaints.js).
+    caseType: 'complaints',
+    currentUser: null,
+  });
+  await flush();
+
+  const conversationEl = childrenOf(host)[1];
+  assert.deepEqual(conversationEl.caseListOptions, {});
+});
+
+test('ConversationView: cora-conversation element caseListOptions defaults to {} when caseType is null', async () => {
+  const client = makeStubClient();
+  const host = ConversationView({
+    client: /** @type {any} */ (client),
+    saveQueue: null,
+    caseId: 'case-1',
+    caseType: null,
+    currentUser: null,
+  });
+  await flush();
+
+  const conversationEl = childrenOf(host)[1];
+  assert.deepEqual(conversationEl.caseListOptions, {});
+});
+
 test('ConversationView: renders nothing when caseType is unknown', async () => {
   const host = ConversationView({
     client: /** @type {any} */ (makeStubClient()),

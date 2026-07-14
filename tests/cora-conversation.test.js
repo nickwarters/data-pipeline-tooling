@@ -8,7 +8,7 @@ installDom();
 const docListeners = /** @type {any} */ (globalThis).document._listeners;
 
 // ===== IMPORTS (after stubs) =====
-const { CORAConversation } =
+const { CORAConversation, sendConversationMessage, refreshConversation } =
   await import('../src/components/sections/cora-conversation.js');
 
 /** @typedef {import('../src/sharepoint-client.js').Message} Message */
@@ -75,19 +75,24 @@ function makeStubClient({
   conversation = TWO_MESSAGES.slice(),
   etag = 'etag-new',
 } = {}) {
-  /** @type {{ id: string, fields: any, etag: string }[]} */
+  /** @type {{ id: string, fields: any, etag: string, opts: any }[]} */
   const patchCalls = [];
+  /** @type {{ id: string, opts: any }[]} */
+  const getCaseCalls = [];
   return {
     patchCalls,
-    async getCase(/** @type {string} */ _id) {
+    getCaseCalls,
+    async getCase(/** @type {string} */ id, /** @type {any} */ opts) {
+      getCaseCalls.push({ id, opts });
       return /** @type {CaseRow} */ ({ ...BASE_CASE, conversation, etag });
     },
     async patchCase(
       /** @type {string} */ id,
       /** @type {any} */ fields,
-      /** @type {string} */ e
+      /** @type {string} */ e,
+      /** @type {any} */ opts
     ) {
-      patchCalls.push({ id, fields, etag: e });
+      patchCalls.push({ id, fields, etag: e, opts });
       return { ok: true, status: 200, data: { ...BASE_CASE, ...fields, etag } };
     },
   };
@@ -183,6 +188,126 @@ test('CORAConversation: send appends new message and patches only conversation f
     1,
     'exactly one field patched'
   );
+});
+
+test('CORAConversation: send forwards caseListOptions to patchCase', async () => {
+  const client = makeStubClient({ conversation: [] });
+  const el = new CORAConversation();
+  el._messages = [];
+  el.caseId = 'case-2';
+  el.currentUser = CURRENT_USER;
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = /** @type {any} */ (makeStubSaveQueue());
+  el.caseListOptions = { listName: 'Cases-ExampleReview' };
+  el.connectedCallback();
+
+  const compose = findByClass(el, 'cora-conversation-compose');
+  const textarea = findByClass(compose, 'cora-conversation-input');
+  const btn = findByClass(compose, 'cora-conversation-send');
+  textarea.value = 'Hello!';
+  await btn._listeners['click'][0]();
+
+  assert.equal(client.patchCalls.length, 1);
+  assert.deepEqual(client.patchCalls[0].opts, {
+    listName: 'Cases-ExampleReview',
+  });
+});
+
+test('CORAConversation: send with no caseListOptions set defaults to {} on patchCase', async () => {
+  const client = makeStubClient({ conversation: [] });
+  const el = new CORAConversation();
+  el._messages = [];
+  el.caseId = 'case-2';
+  el.currentUser = CURRENT_USER;
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = /** @type {any} */ (makeStubSaveQueue());
+  el.connectedCallback();
+
+  const compose = findByClass(el, 'cora-conversation-compose');
+  const textarea = findByClass(compose, 'cora-conversation-input');
+  const btn = findByClass(compose, 'cora-conversation-send');
+  textarea.value = 'Hello!';
+  await btn._listeners['click'][0]();
+
+  assert.deepEqual(client.patchCalls[0].opts, {});
+});
+
+test('CORAConversation: _refresh forwards caseListOptions to getCase', async () => {
+  const client = makeStubClient({ conversation: TWO_MESSAGES.slice() });
+  const el = new CORAConversation();
+  el._messages = [];
+  el.caseId = 'case-2';
+  el.currentUser = CURRENT_USER;
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = /** @type {any} */ (makeStubSaveQueue());
+  el.caseListOptions = { listName: 'Cases-ExampleReview' };
+  el.connectedCallback();
+
+  await el._refresh();
+
+  assert.equal(client.getCaseCalls.length, 1);
+  assert.equal(client.getCaseCalls[0].id, 'case-2');
+  assert.deepEqual(client.getCaseCalls[0].opts, {
+    listName: 'Cases-ExampleReview',
+  });
+});
+
+test('CORAConversation: _refresh with no caseListOptions set defaults to {} on getCase', async () => {
+  const client = makeStubClient({ conversation: TWO_MESSAGES.slice() });
+  const el = new CORAConversation();
+  el._messages = [];
+  el.caseId = 'case-2';
+  el.currentUser = CURRENT_USER;
+  el.client = /** @type {any} */ (client);
+  el.saveQueue = /** @type {any} */ (makeStubSaveQueue());
+  el.connectedCallback();
+
+  await el._refresh();
+
+  assert.deepEqual(client.getCaseCalls[0].opts, {});
+});
+
+test('sendConversationMessage: a context with no caseListOptions key at all falls back to {} on patchCase', async () => {
+  const client = makeStubClient({ conversation: [] });
+  /** @type {Message[]} */
+  let messages = [];
+  await sendConversationMessage(
+    {
+      client: /** @type {any} */ (client),
+      saveQueue: /** @type {any} */ (makeStubSaveQueue()),
+      caseId: 'case-2',
+      currentUser: CURRENT_USER,
+      messages,
+      // caseListOptions deliberately omitted (not `undefined`-assigned, absent)
+      setMessages: (m) => {
+        messages = m;
+      },
+      render: () => {},
+    },
+    'Hello!'
+  );
+
+  assert.equal(client.patchCalls.length, 1);
+  assert.deepEqual(client.patchCalls[0].opts, {});
+});
+
+test('refreshConversation: a context with no caseListOptions key at all falls back to {} on getCase', async () => {
+  const client = makeStubClient({ conversation: TWO_MESSAGES.slice() });
+  /** @type {Message[]} */
+  let messages = [];
+  await refreshConversation({
+    client: /** @type {any} */ (client),
+    caseId: 'case-2',
+    // caseListOptions deliberately omitted (not `undefined`-assigned, absent)
+    setMessages: (m) => {
+      messages = m;
+    },
+    render: () => {},
+  });
+
+  assert.equal(client.getCaseCalls.length, 1);
+  assert.deepEqual(client.getCaseCalls[0].opts, {});
+  assert.deepEqual(messages, TWO_MESSAGES);
 });
 
 test('CORAConversation: send with empty body does not patch', async () => {

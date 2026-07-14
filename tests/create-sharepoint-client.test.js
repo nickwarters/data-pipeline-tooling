@@ -82,9 +82,10 @@ test('createSharePointClient: mock client serves list-backed Case Types (issue #
     'list-backed Case still appears in listCases'
   );
 
-  // Non-list-backed Case Types remain in the default store.
+  // Non-list-backed Case Types remain in the default store. (complaints
+  // deliberately declares no listName — see case-types/complaints.js.)
   assert.ok(
-    await client.getCase('case-1'),
+    await client.getCase('complaints-case-1'),
     'default-store Case still readable'
   );
 });

@@ -72,6 +72,7 @@ export function updateConversationPanel(context) {
     client: vm.client,
     saveQueue: vm.saveQueue,
     caseId: caseRow.id,
+    caseListOptions: vm.caseListOptions,
     currentUser,
     access: context.displayMode(access.conversation),
     hidden: vm.conversationHidden.get(),

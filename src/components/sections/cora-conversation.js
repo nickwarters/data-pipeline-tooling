@@ -113,7 +113,7 @@ export function bindConversationVisibility(target, refresh) {
 }
 
 /**
- * @param {{ client: SharePointClient | null, saveQueue: SaveQueue | null, caseId: string, currentUser: CurrentUser | null, messages: Message[], setMessages(messages: Message[]): void, render(): void }} context
+ * @param {{ client: SharePointClient | null, saveQueue: SaveQueue | null, caseId: string, currentUser: CurrentUser | null, messages: Message[], caseListOptions?: import('../../sharepoint-client.js').CaseListOptions, setMessages(messages: Message[]): void, render(): void }} context
  * @param {string} body
  * @returns {Promise<void>}
  */
@@ -142,7 +142,8 @@ export async function sendConversationMessage(context, body) {
   const result = await context.client.patchCase(
     context.caseId,
     { conversation: messages },
-    etag
+    etag,
+    context.caseListOptions ?? {}
   );
 
   if (result.ok && result.data) {
@@ -151,12 +152,15 @@ export async function sendConversationMessage(context, body) {
 }
 
 /**
- * @param {{ client: SharePointClient | null, caseId: string, setMessages(messages: Message[]): void, render(): void }} context
+ * @param {{ client: SharePointClient | null, caseId: string, caseListOptions?: import('../../sharepoint-client.js').CaseListOptions, setMessages(messages: Message[]): void, render(): void }} context
  * @returns {Promise<void>}
  */
 export async function refreshConversation(context) {
   if (!context.client || !context.caseId) return;
-  const fresh = await context.client.getCase(context.caseId);
+  const fresh = await context.client.getCase(
+    context.caseId,
+    context.caseListOptions ?? {}
+  );
   if (fresh) {
     context.setMessages(fresh.conversation);
     context.render();
@@ -176,6 +180,8 @@ export class CORAConversation extends ShellElement {
     this.caseId = '';
     /** @type {CurrentUser | null} */
     this.currentUser = null;
+    /** @type {import('../../sharepoint-client.js').CaseListOptions} List options (e.g. `{ listName }`) for the Case's declared SharePoint list; `{}` when the Case Type declares none. */
+    this.caseListOptions = {};
     /** @type {(() => void) | null} */
     this._unbindVisibility = null;
     /** @type {(() => void) | null} */
@@ -239,6 +245,7 @@ export class CORAConversation extends ShellElement {
         caseId: this.caseId,
         currentUser: this.currentUser,
         messages: this._messages,
+        caseListOptions: this.caseListOptions,
         setMessages: (messages) => {
           this._messages = messages;
         },
@@ -252,6 +259,7 @@ export class CORAConversation extends ShellElement {
     await refreshConversation({
       client: this.client,
       caseId: this.caseId,
+      caseListOptions: this.caseListOptions,
       setMessages: (messages) => {
         this._messages = messages;
       },

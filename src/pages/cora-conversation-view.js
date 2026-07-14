@@ -35,6 +35,10 @@ export function ConversationView({
 }) {
   /** @type {import('../lib/signal.js').Signal<CaseRow | null>} */
   const caseRow = signal(/** @type {CaseRow | null} */ (null));
+  /** @type {import('../lib/signal.js').Signal<import('../sharepoint-client.js').CaseListOptions>} */
+  const caseListOptions = signal(
+    /** @type {import('../sharepoint-client.js').CaseListOptions} */ ({})
+  );
 
   async function fetchData() {
     if (!client || !caseId) return;
@@ -49,6 +53,7 @@ export function ConversationView({
         throw error;
       }
     }
+    caseListOptions.set(opts);
     const row = await client.getCase(caseId, opts);
     if (!row) return;
     if (typeof saveQueue?.loadCase === 'function') {
@@ -64,6 +69,7 @@ export function ConversationView({
       caseId,
       currentUser,
       caseRow: caseRow.get(),
+      caseListOptions: caseListOptions.get(),
     })
   );
   fetchData();
@@ -77,6 +83,7 @@ export function ConversationView({
  * caseId: string,
  * currentUser: CurrentUser | null,
  * caseRow: CaseRow | null,
+ * caseListOptions: import('../sharepoint-client.js').CaseListOptions,
  * }} args
  * @returns {Node[]}
  */
@@ -86,6 +93,7 @@ function renderConversationView({
   caseId,
   currentUser,
   caseRow,
+  caseListOptions,
 }) {
   if (!caseRow) return [];
 
@@ -112,6 +120,7 @@ function renderConversationView({
       caseId,
       currentUser,
       messages: caseRow.conversation,
+      caseListOptions,
     }),
   ];
 }
