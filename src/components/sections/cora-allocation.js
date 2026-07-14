@@ -6,6 +6,16 @@ import { CASE_STATUS } from '../../lib/case-statuses.js';
 
 /** @typedef {import('../../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
+/** @typedef {import('../../sharepoint-client.js').CaseListOptions} CaseListOptions */
+/** @typedef {import('../../setup/resolve-eligible-case-types.js').AllocationSource} AllocationSource */
+
+/**
+ * An unassigned Case picked up from one allocation source, tagged with the
+ * `CaseListOptions` (namely `listName`) of the list it came from — so the
+ * later `patchCase` write lands on the same list the row was read from.
+ *
+ * @typedef {CaseRow & { _listOptions: CaseListOptions }} AllocationCandidate
+ */
 
 /**
  * @param {{ isEmpty: boolean, onRequestNextCase: () => void }} props
@@ -28,20 +38,67 @@ export function Allocation({ isEmpty, onRequestNextCase }) {
 }
 
 /**
+ * Sorts allocation candidates ascending by `created` (matching the previous
+ * string-comparator semantics: `created ?? ''`, so missing/null `created`
+ * sorts first). Candidates whose `created` is EXACTLY equal are ordered by a
+ * per-candidate draw from `random` — a fresh draw per candidate, taken once
+ * up front, so the tie-break is stable within a single call and swappable in
+ * tests by stubbing `random` (e.g. a queue of canned return values) to force
+ * either tied candidate to win.
+ *
+ * @param {AllocationCandidate[]} candidates
+ * @param {() => number} [random]
+ * @returns {AllocationCandidate[]}
+ */
+export function orderCandidatesByAge(candidates, random = Math.random) {
+  return candidates
+    .map((c) => ({ c, tieBreak: random() }))
+    .sort((a, b) => {
+      const av = a.c.created ?? '';
+      const bv = b.c.created ?? '';
+      if (av < bv) return -1;
+      if (av > bv) return 1;
+      return a.tieBreak - b.tieBreak;
+    })
+    .map(({ c }) => c);
+}
+
+/**
  * @param {{
  * client: SharePointClient | null,
- * eligibleCaseTypes: string[]
+ * allocationSources: AllocationSource[],
+ * random?: () => number
  * }} props
- * @returns {Promise<CaseRow[]>}
+ * @returns {Promise<AllocationCandidate[]>}
  */
-export async function getUnassignedCases({ client, eligibleCaseTypes }) {
+export async function getUnassignedCases({
+  client,
+  allocationSources,
+  random,
+}) {
   if (!client) return [];
-  const all = await client.listCases({ status: CASE_STATUS.IN_PROGRESS });
-  return all
-    .filter(
-      (c) => c.assignedReviewer === '' && eligibleCaseTypes.includes(c.caseType)
-    )
-    .sort((a, b) => ((a.created ?? '') < (b.created ?? '') ? -1 : 1));
+
+  const perSource = await Promise.all(
+    allocationSources.map(async (source) => {
+      /** @type {CaseListOptions} */
+      const listOptions = { listName: source.listName };
+      const rows = await client.listCases(
+        { status: CASE_STATUS.IN_PROGRESS, caseType: source.slug },
+        listOptions
+      );
+      return rows
+        .filter((c) => c.assignedReviewer === '')
+        .map(
+          (c) =>
+            /** @type {AllocationCandidate} */ ({
+              ...c,
+              _listOptions: listOptions,
+            })
+        );
+    })
+  );
+
+  return orderCandidatesByAge(perSource.flat(), random);
 }
 
 export class CORAAllocation extends ShellElement {
@@ -51,10 +108,12 @@ export class CORAAllocation extends ShellElement {
     this.client = null;
     /** @type {string} */
     this.currentUserId = '';
-    /** @type {string[]} */
-    this.eligibleCaseTypes = [];
+    /** @type {AllocationSource[]} */
+    this.allocationSources = [];
     /** @type {boolean} */
     this.isEmpty = false;
+    /** @type {() => number} */
+    this.random = Math.random;
   }
 
   connectedCallback() {
@@ -86,7 +145,8 @@ export class CORAAllocation extends ShellElement {
       const result = await this.client.patchCase(
         c.id,
         { assignedReviewer: this.currentUserId },
-        c.etag
+        c.etag,
+        c._listOptions
       );
       if (result.ok) {
         this.dispatchEvent(
@@ -97,16 +157,18 @@ export class CORAAllocation extends ShellElement {
         );
         return;
       }
-      // 412 — another reviewer won the race; try the next candidate
+      // 412 — another reviewer won the race; try the next candidate, which
+      // may live on a different list.
     }
     this._renderEmpty();
   }
 
-  /** @returns {Promise<CaseRow[]>} */
+  /** @returns {Promise<AllocationCandidate[]>} */
   async _getUnassignedCases() {
     return getUnassignedCases({
       client: this.client,
-      eligibleCaseTypes: this.eligibleCaseTypes,
+      allocationSources: this.allocationSources,
+      random: this.random,
     });
   }
 

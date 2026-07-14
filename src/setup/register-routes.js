@@ -16,6 +16,7 @@ import { register as registerJourneyCases } from '../routes/journey-cases.js';
  * @property {import('../sharepoint-client.js').CurrentUser} currentUser
  * @property {import('../services/permissions.js').Capabilities} capabilities
  * @property {string[]} eligibleCaseTypes
+ * @property {import('./resolve-eligible-case-types.js').AllocationSource[]} allocationSources
  * @property {Element} appEl
  * @property {() => Promise<unknown>} [loadQuestionBankEditor]
  * @property {() => Promise<unknown>} [loadQuestionBankSamples]

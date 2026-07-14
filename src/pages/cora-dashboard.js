@@ -17,6 +17,7 @@ import { CASE_STATUS } from '../lib/case-statuses.js';
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
+/** @typedef {import('../setup/resolve-eligible-case-types.js').AllocationSource} AllocationSource */
 
 /**
  * Reviewer/owner/adviser landing dashboard. Self-fetches the current
@@ -27,6 +28,7 @@ import { CASE_STATUS } from '../lib/case-statuses.js';
  * currentUserId: string,
  * capabilities: Capabilities,
  * eligibleCaseTypes: string[],
+ * allocationSources?: AllocationSource[],
  * }} props
  * @returns {HTMLElement}
  */
@@ -35,6 +37,7 @@ export function DashboardPage({
   currentUserId,
   capabilities,
   eligibleCaseTypes,
+  allocationSources = [],
 }) {
   /** @type {import('../lib/signal.js').Signal<CaseRow[]>} */
   const cases = signal(/** @type {CaseRow[]} */ ([]));
@@ -56,6 +59,7 @@ export function DashboardPage({
       currentUserId,
       capabilities,
       eligibleCaseTypes,
+      allocationSources,
       cases: cases.get(),
       onAllocated: fetchData,
     })
@@ -70,6 +74,7 @@ export function DashboardPage({
  * currentUserId: string,
  * capabilities: Capabilities,
  * eligibleCaseTypes: string[],
+ * allocationSources: AllocationSource[],
  * cases: CaseRow[],
  * onAllocated: () => void,
  * }} args
@@ -80,6 +85,7 @@ function renderDashboard({
   currentUserId,
   capabilities,
   eligibleCaseTypes,
+  allocationSources,
   cases,
   onAllocated,
 }) {
@@ -143,7 +149,7 @@ function renderDashboard({
       h('cora-allocation', {
         client,
         currentUserId,
-        eligibleCaseTypes,
+        allocationSources,
         'oncora-allocated': () => onAllocated(),
       })
     );

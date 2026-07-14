@@ -469,6 +469,28 @@ test('DashboardPage: open button in RP unread-messages section navigates to conv
   );
 });
 
+test('DashboardPage: cora-allocation element receives allocationSources from props', async () => {
+  const allocationSources = [
+    { slug: 'example-review', listName: 'Cases-ExampleReview' },
+    { slug: 'product-sale-review', listName: 'Cases-ProductSaleReview' },
+  ];
+  const host = DashboardPage({
+    client: /** @type {any} */ (makeClient()),
+    currentUserId: 'user-reviewer',
+    capabilities: defaultCapabilities({ isReviewer: true }),
+    eligibleCaseTypes: ['example-review'],
+    allocationSources,
+  });
+  await flush();
+
+  const allocationEls = findAll(host, 'cora-allocation');
+  assert.equal(allocationEls.length, 1);
+  assert.deepEqual(
+    /** @type {any} */ (allocationEls[0]).allocationSources,
+    allocationSources
+  );
+});
+
 test('DashboardPage: cora-allocation element listens for cora-allocated and re-fetches cases on allocation', async () => {
   let fetchCount = 0;
   const client = {

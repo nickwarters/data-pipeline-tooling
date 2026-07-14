@@ -86,6 +86,48 @@ test('routes-dashboard: mounts DashboardPage output for a reviewer', () => {
   assert.ok(findTag(mounted[0], 'h1'), 'should render the page heading');
 });
 
+test('routes-dashboard: passes allocationSources from context through to the cora-allocation element', () => {
+  const client = /** @type {any} */ ({
+    async listCases() {
+      return [];
+    },
+  });
+  const currentUser = { id: 'u1' };
+  const capabilities = /** @type {any} */ ({
+    isReviewer: true,
+    ownedCaseTypes: [],
+    isAdviser: false,
+  });
+  const allocationSources = [
+    { slug: 'example-review', listName: 'Cases-ExampleReview' },
+  ];
+
+  const router = new Router();
+  /** @type {any[]} */
+  let mounted = [];
+  const container = {
+    replaceChildren(/** @type {any} */ ...args) {
+      mounted = args;
+    },
+  };
+  router._container = /** @type {any} */ (container);
+  register(
+    router,
+    /** @type {any} */ ({
+      client,
+      currentUser,
+      capabilities,
+      eligibleCaseTypes: ['example-review'],
+      allocationSources,
+    })
+  );
+  router.navigate('#/dashboard');
+
+  const allocationEl = findTag(mounted[0], 'cora-allocation');
+  assert.ok(allocationEl, 'should render a cora-allocation element');
+  assert.deepEqual(allocationEl.allocationSources, allocationSources);
+});
+
 test('routes-dashboard: unmount is a no-op (does not throw)', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});

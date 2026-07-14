@@ -36,9 +36,10 @@ async function boot() {
   ]);
   const capabilities = resolveCapabilities(userGroups);
 
-  const { resolveEligibleCaseTypes } =
+  const { resolveEligibleCaseTypes, resolveAllocationSources } =
     await import('./setup/resolve-eligible-case-types.js');
   const eligibleCaseTypes = await resolveEligibleCaseTypes(userGroups);
+  const allocationSources = await resolveAllocationSources(userGroups);
 
   const appEl = /** @type {Element} */ (document.getElementById('app'));
   appEl.setAttribute('data-cora-root', '');
@@ -65,6 +66,7 @@ async function boot() {
     currentUser,
     capabilities,
     eligibleCaseTypes,
+    allocationSources,
     appEl,
   });
 
