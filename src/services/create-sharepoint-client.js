@@ -1,13 +1,19 @@
 // @ts-check
+import { resolveEnvironment } from '../config/environment.js';
+
 /**
  * Instantiates the correct SharePointClient for the current environment.
  * Pass `?mock=1` to get a MockSharePointClient backed by dev fixtures.
  * Pass `?asUser=<persona>` to select a fixture persona (default: 'reviewer').
  *
+ * `env` (ADR-0033) scopes the real HTTP client to the deployment
+ * environment's lists and export path; it never affects the mock client.
+ *
  * @param {URLSearchParams} params
+ * @param {import('../config/environment.js').Environment} [env]
  * @returns {Promise<import('../sharepoint-client.js').SharePointClient>}
  */
-export async function createSharePointClient(params) {
+export async function createSharePointClient(params, env = resolveEnvironment()) {
   if (params.get('mock') === '1') {
     const persona = params.get('asUser') ?? 'reviewer';
     const [
@@ -48,7 +54,10 @@ export async function createSharePointClient(params) {
   }
 
   const { HttpSharePointClient } = await import('./http-sharepoint-client.js');
-  return new HttpSharePointClient();
+  return new HttpSharePointClient({
+    listPrefix: env.listPrefix,
+    exportBasePath: env.exportBasePath,
+  });
 }
 
 /**

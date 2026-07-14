@@ -89,6 +89,43 @@ test('createSharePointClient: mock client serves list-backed Case Types (issue #
   );
 });
 
+test('createSharePointClient: passes the environment listPrefix and exportBasePath to the HTTP client (#366)', async () => {
+  const { resolveEnvironment } = await import('../src/config/environment.js');
+  const client = /** @type {any} */ (
+    await createSharePointClient(
+      new URLSearchParams(''),
+      resolveEnvironment('uat')
+    )
+  );
+  assert.equal(client._listPrefix, 'uat_');
+  assert.equal(
+    client._exportBasePath,
+    '/Style%20Library/case-review-uat/case-types'
+  );
+});
+
+test('createSharePointClient: defaults to the prod environment (#366)', async () => {
+  const client = /** @type {any} */ (
+    await createSharePointClient(new URLSearchParams(''))
+  );
+  assert.equal(client._listPrefix, '');
+  assert.equal(
+    client._exportBasePath,
+    '/Style%20Library/case-review/case-types'
+  );
+});
+
+test('createSharePointClient: environment does not affect the mock client (#366)', async () => {
+  const { MockSharePointClient } =
+    await import('../src/services/mock-sharepoint-client.js');
+  const { resolveEnvironment } = await import('../src/config/environment.js');
+  const client = await createSharePointClient(
+    new URLSearchParams('mock=1'),
+    resolveEnvironment('uat')
+  );
+  assert.ok(client instanceof MockSharePointClient);
+});
+
 test('createSharePointClient: mock client searchPeople is backed by the people fixture', async () => {
   const { people } = await import('../dev/fixtures/people.js');
   const client = await createSharePointClient(new URLSearchParams('mock=1'));
