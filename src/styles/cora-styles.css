@@ -2454,3 +2454,24 @@ cora-tabs {
   outline: var(--cora-focus-outline);
   outline-offset: var(--cora-focus-offset);
 }
+
+/* ── UAT environment banner (ADR-0033) ───────────────────────────────────
+   Fixed badge mounted by src/setup/uat-banner.js when the host page declares
+   a non-prod environment. Deliberately loud: nobody should mistake which
+   environment they are editing. Never rendered on prod. */
+
+.cora-uat-banner {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  padding: var(--cora-space-1, 4px) var(--cora-space-4, 16px);
+  background: var(--cora-color-warning);
+  color: var(--cora-color-accent-on);
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  border-radius: 0 0 var(--cora-radius-sm, 4px) var(--cora-radius-sm, 4px);
+  pointer-events: none;
+}

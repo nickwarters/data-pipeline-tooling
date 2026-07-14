@@ -14,10 +14,14 @@ async function boot() {
     import('./pages/cora-case-review.js'),
   ]);
 
+  const { resolveEnvironment } = await import('./config/environment.js');
+  const env = resolveEnvironment();
+
   const { createSharePointClient } =
     await import('./services/create-sharepoint-client.js');
   const client = await createSharePointClient(
-    new URLSearchParams(location.search)
+    new URLSearchParams(location.search),
+    env
   );
 
   const { Router } = await import('./lib/router.js');
@@ -38,6 +42,9 @@ async function boot() {
 
   const appEl = /** @type {Element} */ (document.getElementById('app'));
   appEl.setAttribute('data-cora-root', '');
+
+  const { mountUatBanner } = await import('./setup/uat-banner.js');
+  mountUatBanner(env, appEl);
 
   const nav =
     /** @type {import('./components/sections/cora-app-nav.js').CORAAppNav} */ (
