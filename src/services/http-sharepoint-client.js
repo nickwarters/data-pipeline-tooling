@@ -21,6 +21,8 @@ import { CASE_STATUS } from '../lib/case-statuses.js';
  * webUrl?: string,
  * caseListName?: string,
  * questionDefinitionsListName?: string,
+ * listPrefix?: string,
+ * exportBasePath?: string,
  * fetchImpl?: FetchImpl,
  * sleep?: (ms: number) => Promise<void>
  * }} HttpSharePointClientOptions
@@ -39,6 +41,12 @@ export class HttpSharePointClient {
     this._caseListName = opts.caseListName ?? 'Cases-ExampleReview';
     this._qDefListName =
       opts.questionDefinitionsListName ?? 'QuestionDefinitions';
+    // Environment scoping (ADR-0033): the prefix is applied centrally in
+    // _listItemUrl/_listItemsUrl so every list access — including per-Case-Type
+    // `opts.listName` overrides — lands in the environment's lists. Empty for prod.
+    this._listPrefix = opts.listPrefix ?? '';
+    this._exportBasePath =
+      opts.exportBasePath ?? '/Style%20Library/case-review/case-types';
     /** @type {FetchImpl} */
     this._fetch =
       opts.fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
@@ -269,7 +277,7 @@ export class HttpSharePointClient {
    */
   async getExportHash(slug) {
     const url = this._absolute(
-      `/Style%20Library/case-review/case-types/${encodeURIComponent(slug)}.json`
+      `${this._exportBasePath}/${encodeURIComponent(slug)}.json`
     );
     try {
       const body = await this._read(url);
@@ -292,7 +300,7 @@ export class HttpSharePointClient {
    */
   async getVersionedExport(slug, hash) {
     const url = this._absolute(
-      `/Style%20Library/case-review/case-types/${encodeURIComponent(slug)}.${encodeURIComponent(hash)}.json`
+      `${this._exportBasePath}/${encodeURIComponent(slug)}.${encodeURIComponent(hash)}.json`
     );
     try {
       const body = await this._read(url);
@@ -449,14 +457,14 @@ export class HttpSharePointClient {
   /** @param {string} listName @param {string} id */
   _listItemUrl(listName, id) {
     return this._absolute(
-      `/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items('${encodeURIComponent(id)}')`
+      `/_api/web/lists/getbytitle('${encodeURIComponent(this._listPrefix + listName)}')/items('${encodeURIComponent(id)}')`
     );
   }
 
   /** @param {string} listName */
   _listItemsUrl(listName) {
     return this._absolute(
-      `/_api/web/lists/getbytitle('${encodeURIComponent(listName)}')/items`
+      `/_api/web/lists/getbytitle('${encodeURIComponent(this._listPrefix + listName)}')/items`
     );
   }
 
