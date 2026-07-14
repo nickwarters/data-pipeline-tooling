@@ -96,6 +96,28 @@ test('h: a value-less <select> defaults to its first option', () => {
   assert.equal(/** @type {any} */ (select).value, 'a');
 });
 
+// ===== BUTTONS DEFAULT TO type="button" =====
+//
+// SharePoint hosts the app inside a page-wide <form>. A <button> with no
+// explicit type defaults to type="submit" in the DOM, so any click was
+// triggering a full-page form submission/postback. h() defaults <button>s to
+// type="button" so they behave as plain buttons unless a type is asked for.
+
+test('h: a <button> with no type defaults to type="button"', () => {
+  const btn = h('button', {}, 'Click me');
+  assert.equal(/** @type {any} */ (btn).getAttribute('type'), 'button');
+});
+
+test('h: an explicit button type is preserved', () => {
+  const btn = h('button', { type: 'submit' }, 'Submit');
+  assert.equal(/** @type {any} */ (btn).getAttribute('type'), 'submit');
+});
+
+test('h: non-button tags are not given a type', () => {
+  const div = h('div', {}, 'hi');
+  assert.equal(/** @type {any} */ (div).getAttribute('type'), null);
+});
+
 // ===== DEV-MODE WARNING FOR UNREGISTERED cora-* ELEMENTS =====
 
 test('h: warns once when a cora-* tag has no registered custom element', async () => {

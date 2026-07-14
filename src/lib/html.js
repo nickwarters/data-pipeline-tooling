@@ -59,6 +59,14 @@ export function h(tag, props = {}, ...children) {
   warnIfUnregisteredCoraElement(tag);
   const el = document.createElement(tag);
 
+  // SharePoint hosts the whole app inside a page-wide <form>, so a <button>
+  // with no explicit type (which defaults to type="submit") triggers a
+  // full-page postback on every click. Default buttons to type="button" so
+  // they behave as plain buttons; an explicit `type` prop below still wins.
+  if (tag.toLowerCase() === 'button' && props.type == null) {
+    el.setAttribute('type', 'button');
+  }
+
   // A form control's `value` can only be applied *after* its children exist —
   // setting `<select>.value` before its `<option>`s are appended is a no-op in a
   // real browser (the value silently resets to the first option). Defer it.
