@@ -9,7 +9,9 @@ const bank = await loadBank('./banks/example-review.txt');
 
 /** @type {CaseTypeConfig} */
 const config = {
+  displayName: 'Example Review',
   eligibleGroups: ['Reviewers'],
+  listName: 'Cases-ExampleReview',
   slaHours: 48,
   attributeFailures: true,
   // Case Type-specific Case Details fields. Values live

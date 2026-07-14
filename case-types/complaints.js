@@ -23,7 +23,8 @@ const bank = await loadBank('./banks/complaints.txt');
  * @type {CaseTypeConfig}
  */
 const config = {
-  eligibleGroups: ['Reviewers'],
+  displayName: 'Complaints',
+  eligibleGroups: ['Reviewers - Complaints'],
   slaHours: 72,
   attributeFailures: true,
   // Case Type-specific Case Details fields. Values live in the

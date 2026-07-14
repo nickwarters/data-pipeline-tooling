@@ -351,6 +351,7 @@
  * eligibleGroups?: string[],
  * listName?: string,
  * reviewerGroup?: string,
+ * displayName?: string,
  * sections?: Partial<Record<'details'|'questions'|'issues'|'summary'|'remediation'|'notes'|'conversation'|'appealRequest'|'appealReview'|'amendOutcome', SectionConfig>>,
  * appeal?: AppealConfig,
  * slaHours?: number,

@@ -10,8 +10,9 @@ const bank = await loadBank('./banks/product-sale-review.txt');
 
 /** @type {CaseTypeConfig} */
 const config = {
+  displayName: 'Product Sale Review',
   listName: 'complaints',
-  eligibleGroups: ['Reviewers'],
+  eligibleGroups: ['Reviewers - Product Sale Review'],
   attributeFailures: true,
   labels: bank.labels,
   questions: bank.questions,

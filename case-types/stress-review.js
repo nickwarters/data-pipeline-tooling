@@ -15,7 +15,8 @@ const bank = await loadBank('./banks/stress-review.txt');
  * @type {CaseTypeConfig}
  */
 const config = {
-  eligibleGroups: ['Reviewers'],
+  displayName: 'Stress Review',
+  eligibleGroups: ['Reviewers - Stress Review'],
   labels: bank.labels,
   // Demonstrative sectionLabels override (MAINT-11): renames the questions
   // tab *and* its section headings; every other Section keeps the defaults
