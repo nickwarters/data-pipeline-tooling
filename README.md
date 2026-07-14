@@ -28,6 +28,26 @@ The Content Editor's "Content Link" should point at the deployed
 `{{CORA_BASE}}` token that the deploy script expands to the target's server-relative base at upload time.
 For local development use `dev/index.html` (relative paths, `?mock=1`), not the host page.
 
+### UAT environment (ADR-0033)
+
+The same source tree can be deployed to a parallel **UAT** environment on the same site —
+live SharePoint (real auth, real REST, no `?mock=1`), but fully isolated from production:
+
+- **Code**: `python3 scripts/deploy_to_sharepoint.py --site-url <url> --env uat` syncs to
+  `Style Library/CODE/CORA-UAT` instead of `CODE/CORA`.
+- **Host page**: a separate page (e.g. `SitePages/uat.app.aspx`) whose Content Editor points at
+  the UAT copy's `host/index.html`. The deploy expands the host page's `{{CORA_ENV}}` token to
+  `uat` (`prod` for prod deploys), which the app reads back as `window.CORA_ENV` — the deployed
+  host page itself declares its environment; no query params.
+- **Data**: on UAT every list name is prefixed `uat_` (`uat_Cases-ExampleReview`,
+  `uat_QuestionDefinitions`, `uat_complaints`, …), and versioned Question Bank exports are read
+  from `Style Library/case-review-uat/case-types`. Production lists and exports are untouched.
+
+One-off manual setup per environment: create the UAT `.aspx` page and its Content Editor link,
+and create each `uat_*` list with the same schema as its prod counterpart (adding a new list
+later means adding its `uat_*` copy too). A fixed "UAT environment" banner renders at boot on
+any non-prod environment.
+
 ## Main Components
 
 ### Dashboard page

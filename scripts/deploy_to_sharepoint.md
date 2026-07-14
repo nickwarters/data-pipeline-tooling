@@ -40,6 +40,10 @@ SCRIPT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LIBRARY = "Style Library"
 DEFAULT_TARGET_FOLDER = "CODE/CORA"
 
+# Per-environment default target folders (ADR-0033). Each environment is a
+# fully independent code copy; `--target-folder` still overrides either.
+ENV_TARGET_FOLDERS = {"prod": DEFAULT_TARGET_FOLDER, "uat": "CODE/CORA-UAT"}
+
 # The deployable runtime tree. There is no build step, so source JS is deployed
 # JS. These roots deliberately exclude dev/, tests/, docs/,
 # node_modules/, and config/dotfiles — they simply live outside the roots.
@@ -47,17 +51,22 @@ DEFAULT_TARGET_FOLDER = "CODE/CORA"
 DEFAULT_INCLUDE_ROOTS = ("src", "case-types", "host")
 
 # Only ship browser-loadable assets. A stray tool artefact under an include root
-# (e.g. a generated.map or an editor backup) is not deployed.
+# (e.g. a generated .map or an editor backup) is not deployed.
 DEFAULT_INCLUDE_SUFFIXES = (".js", ".css", ".html", ".aspx")
 
 # Suffixes whose content is templated at deploy time (see HOST_BASE_TOKEN).
 TEMPLATED_SUFFIXES = (".html", ".aspx")
 
 # Placeholder in host HTML for the deploy target's server-relative base. A
-# Content Editor resolves relative URLs against the hosting.aspx page, not the
+# Content Editor resolves relative URLs against the hosting .aspx page, not the
 # Style Library, so host asset references must be absolute server-relative URLs —
 # and the base embeds the site name, which is only known at deploy time.
 HOST_BASE_TOKEN = "{{CORA_BASE}}"
+
+# Placeholder in host HTML for the environment name ('prod' or 'uat'). The
+# deployed host page is what declares its environment (ADR-0033): the app reads
+# it back as `window.CORA_ENV` and derives the list prefix and export path.
+ENV_TOKEN = "{{CORA_ENV}}"
 
 
 # --------------------------------------------------------------------------- #
@@ -67,7 +76,7 @@ HOST_BASE_TOKEN = "{{CORA_BASE}}"
 
 @dataclass(frozen=True)
 class RemoteFile:
- """A file already present under the target folder.
+    """A file already present under the target folder.
 
     ``path`` is POSIX, relative to the target folder (e.g. ``lib/signal.js``).
 
@@ -75,7 +84,7 @@ class RemoteFile:
     supply it cheaply (for example from a deployed manifest or a stored
     property). Leave it ``None`` and the engine falls back to
     :meth:`SharePointDeployClient.download_file` to compare content.
- """
+    """
 
     path: str
     sha256: Optional[str] = None
@@ -83,51 +92,51 @@ class RemoteFile:
 
 @runtime_checkable
 class SharePointDeployClient(Protocol):
- """The transport the deploy engine drives.
+    """The transport the deploy engine drives.
 
     An implementation owns the SharePoint site URL, the auth handshake, the
     request digest, and the REST surface. All paths are POSIX and **relative to
     the target folder** (``Style Library/CODE/CORA``); the implementation joins
     them onto the library's server-relative URL. Implementations must never
     resolve a path outside the target folder.
- """
+    """
 
     def ensure_folder(self, folder: str) -> None:
- """Ensure ``folder`` (and any missing parents) exists under the target.
+        """Ensure ``folder`` (and any missing parents) exists under the target.
 
         Called with ``""`` for the target folder root, then for each nested
         directory before its files are uploaded. Idempotent: a no-op when the
         folder already exists.
- """
+        """
         ...
 
     def list_files(self) -> Iterable[RemoteFile]:
- """Recursively list every file currently under the target folder.
+        """Recursively list every file currently under the target folder.
 
         Returns one :class:`RemoteFile` per file, with target-relative POSIX
         paths. Return an empty iterable when the target folder is absent or
         empty.
- """
+        """
         ...
 
     def download_file(self, path: str) -> bytes:
- """Return the raw bytes of the target-relative file at ``path``.
+        """Return the raw bytes of the target-relative file at ``path``.
 
         Only called for files whose :attr:`RemoteFile.sha256` was ``None``, to
         decide add-vs-update by content.
- """
+        """
         ...
 
     def upload_file(self, path: str, content: bytes) -> None:
- """Create or overwrite the target-relative file at ``path``.
+        """Create or overwrite the target-relative file at ``path``.
 
         The engine guarantees the parent folder was passed to
         :meth:`ensure_folder` first.
- """
+        """
         ...
 
     def delete_file(self, path: str) -> None:
- """Remove the target-relative file at ``path``."""
+        """Remove the target-relative file at ``path``."""
         ...
 
 
@@ -138,7 +147,7 @@ class SharePointDeployClient(Protocol):
 
 @dataclass(frozen=True)
 class LocalFile:
- """A deployable local file, keyed by its target-relative POSIX path."""
+    """A deployable local file, keyed by its target-relative POSIX path."""
 
     path: str
     content: bytes
@@ -150,7 +159,7 @@ class LocalFile:
 
 @dataclass
 class DeployPlan:
- """The add/update/delete work computed from a local/remote comparison."""
+    """The add/update/delete work computed from a local/remote comparison."""
 
     adds: list[str] = field(default_factory=list)
     updates: list[str] = field(default_factory=list)
@@ -169,35 +178,41 @@ class DeployPlan:
 
 
 def server_relative_base(site_url: str, library: str, target_folder: str) -> str:
- """Compute the server-relative base URL of the deploy target.
+    """Compute the server-relative base URL of the deploy target.
 
     ``https://sp.example.com/sites/cora`` + ``Style Library`` + ``CODE/CORA``
     -> ``/sites/cora/Style Library/CODE/CORA``. Spaces are kept literal (as in
     the working hand-deploy); the leading site path may be empty for a root-site
     URL. This is what :data:`HOST_BASE_TOKEN` expands to in host HTML.
- """
+    """
     site_path = urlsplit(site_url).path.strip("/")
     segments = [seg for seg in (site_path, library, target_folder) if seg]
     return "/" + "/".join(seg.strip("/") for seg in segments)
 
 
 def render_templated_files(
-    files: dict[str, "LocalFile"], cora_base: str
+    files: dict[str, "LocalFile"], tokens: dict[str, str]
 ) -> dict[str, "LocalFile"]:
- """Return ``files`` with:data:`HOST_BASE_TOKEN` expanded in host HTML.
+    """Return ``files`` with each ``tokens`` placeholder expanded in host HTML.
 
     The substitution happens *before* hashing and comparison so the local hash
     reflects exactly the bytes uploaded — keeping re-runs idempotent against the
     rendered content stored remotely. Non-templated files pass through unchanged.
- """
-    token = HOST_BASE_TOKEN.encode("utf-8")
-    base = cora_base.encode("utf-8")
+    """
+    encoded = {
+        token.encode("utf-8"): value.encode("utf-8")
+        for token, value in tokens.items()
+    }
     rendered: dict[str, LocalFile] = {}
     for rel, local_file in files.items():
-        if PurePosixPath(rel).suffix in TEMPLATED_SUFFIXES and token in local_file.content:
-            rendered[rel] = LocalFile(rel, local_file.content.replace(token, base))
-        else:
+        content = local_file.content
+        if PurePosixPath(rel).suffix in TEMPLATED_SUFFIXES:
+            for token, value in encoded.items():
+                content = content.replace(token, value)
+        if content is local_file.content:
             rendered[rel] = local_file
+        else:
+            rendered[rel] = LocalFile(rel, content)
     return rendered
 
 
@@ -206,12 +221,12 @@ def collect_local_files(
     include_roots: Iterable[str] = DEFAULT_INCLUDE_ROOTS,
     include_suffixes: Iterable[str] = DEFAULT_INCLUDE_SUFFIXES,
 ) -> dict[str, LocalFile]:
- """Gather the deployable tree, keyed by target-relative POSIX path.
+    """Gather the deployable tree, keyed by target-relative POSIX path.
 
     Files are read from ``root/<include_root>/**`` and keyed *including* the
     include-root prefix, so ``src/lib/signal.js`` deploys to
     ``<target>/src/lib/signal.js`` and the layout is preserved.
- """
+    """
     suffixes = tuple(include_suffixes)
     files: dict[str, LocalFile] = {}
     for include_root in include_roots:
@@ -231,11 +246,11 @@ def compute_plan(
     remote: dict[str, RemoteFile],
     download: Callable[[str], bytes],
 ) -> DeployPlan:
- """Compare local vs remote by content hash and return a:class:`DeployPlan`.
+    """Compare local vs remote by content hash and return a :class:`DeployPlan`.
 
     ``download`` is called only for remote files whose ``sha256`` is unknown, to
     resolve add-vs-update by content. Ordering is deterministic (sorted paths).
- """
+    """
     plan = DeployPlan()
 
     for rel in sorted(local):
@@ -263,11 +278,11 @@ def compute_plan(
 
 
 def parent_folders(path: str) -> list[str]:
- """Return the ancestor folders of ``path``, root-first (excluding ``path``).
+    """Return the ancestor folders of ``path``, root-first (excluding ``path``).
 
     ``src/lib/signal.js`` -> ``["src", "src/lib"]``. Used to ensure every
     directory exists before a file is uploaded into it.
- """
+    """
     parts = PurePosixPath(path).parts[:-1]
     return ["/".join(parts[: i + 1]) for i in range(len(parts))]
 
@@ -278,11 +293,11 @@ def execute_plan(
     client: SharePointDeployClient,
     log=print,
 ) -> None:
- """Apply ``plan`` through ``client``. Assumes ``plan`` is non-empty.
+    """Apply ``plan`` through ``client``. Assumes ``plan`` is non-empty.
 
     Folders are created before their uploads; a failure propagates (fail loudly
     on partial upload) rather than being swallowed.
- """
+    """
     client.ensure_folder("")
     ensured: set[str] = {""}
 
@@ -321,6 +336,7 @@ class DeployOptions:
     library: str
     target_folder: str
     dry_run: bool
+    env: str = "prod"
 
 
 def parse_args(argv: list[str]) -> DeployOptions:
@@ -347,9 +363,23 @@ def parse_args(argv: list[str]) -> DeployOptions:
         help=f'Document library. Defaults to "{DEFAULT_LIBRARY}".',
     )
     parser.add_argument(
+        "--env",
+        choices=sorted(ENV_TARGET_FOLDERS),
+        default="prod",
+        help=(
+            "Deployment environment (ADR-0033). Picks the default target "
+            "folder and the {{CORA_ENV}} substitution in host HTML. "
+            'Defaults to "prod".'
+        ),
+    )
+    parser.add_argument(
         "--target-folder",
-        default=DEFAULT_TARGET_FOLDER,
-        help=f'Folder within the library. Defaults to "{DEFAULT_TARGET_FOLDER}".',
+        default=None,
+        help=(
+            "Folder within the library. Defaults to the environment's folder "
+            f"({DEFAULT_TARGET_FOLDER} for prod, "
+            f"{ENV_TARGET_FOLDERS['uat']} for uat)."
+        ),
     )
     parser.add_argument(
         "--dry-run",
@@ -361,18 +391,19 @@ def parse_args(argv: list[str]) -> DeployOptions:
         root=args.root.resolve(),
         site_url=args.site_url,
         library=args.library,
-        target_folder=args.target_folder,
+        target_folder=args.target_folder or ENV_TARGET_FOLDERS[args.env],
         dry_run=args.dry_run,
+        env=args.env,
     )
 
 
 def build_client(opts: DeployOptions) -> SharePointDeployClient:
- """Construct the concrete client for ``opts``.
+    """Construct the concrete client for ``opts``.
 
     Implemented separately: wire up the SharePoint SE auth
     handshake (browser NTLM/Kerberos) and REST transport here, then
     delete this guard.
- """
+    """
     raise NotImplementedError(
         "SharePointDeployClient is not implemented yet. Implement it (auth + REST "
         "against Style Library/CODE/CORA) and construct it here, or run with "
@@ -383,19 +414,22 @@ def build_client(opts: DeployOptions) -> SharePointDeployClient:
 def run(opts: DeployOptions, client_factory=build_client, log=print) -> int:
     target = f"{opts.library}/{opts.target_folder}"
     cora_base = server_relative_base(opts.site_url, opts.library, opts.target_folder)
-    log(f"Deploy target: {opts.site_url} -> {target}")
+    log(f"Deploy target: {opts.site_url} -> {target} (env: {opts.env})")
     log(f"Host asset base ({HOST_BASE_TOKEN}): {cora_base}")
 
-    local = render_templated_files(collect_local_files(opts.root), cora_base)
+    local = render_templated_files(
+        collect_local_files(opts.root),
+        {HOST_BASE_TOKEN: cora_base, ENV_TOKEN: opts.env},
+    )
     if not local:
         log("No deployable files found. Nothing to do.")
         return 1
     log(f"Local deployable files: {len(local)}")
 
     if opts.dry_run:
- # A dry run still needs to read the remote side to produce a real plan.
- # When the client can't be built (not implemented / no creds), fall back
- # to an empty remote so the plan shows a full first-deploy.
+        # A dry run still needs to read the remote side to produce a real plan.
+        # When the client can't be built (not implemented / no creds), fall back
+        # to an empty remote so the plan shows a full first-deploy.
         try:
             client = client_factory(opts)
             remote = {rf.path: rf for rf in client.list_files()}
