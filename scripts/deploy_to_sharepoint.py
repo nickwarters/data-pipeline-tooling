@@ -39,6 +39,10 @@ SCRIPT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LIBRARY = "Style Library"
 DEFAULT_TARGET_FOLDER = "CODE/CORA"
 
+# Per-environment default target folders (ADR-0033). Each environment is a
+# fully independent code copy; `--target-folder` still overrides either.
+ENV_TARGET_FOLDERS = {"prod": DEFAULT_TARGET_FOLDER, "uat": "CODE/CORA-UAT"}
+
 # The deployable runtime tree. There is no build step, so source JS is deployed
 # JS. These roots deliberately exclude dev/, tests/, docs/,
 # node_modules/, and config/dotfiles — they simply live outside the roots.
@@ -57,6 +61,11 @@ TEMPLATED_SUFFIXES = (".html", ".aspx")
 # Style Library, so host asset references must be absolute server-relative URLs —
 # and the base embeds the site name, which is only known at deploy time.
 HOST_BASE_TOKEN = "{{CORA_BASE}}"
+
+# Placeholder in host HTML for the environment name ('prod' or 'uat'). The
+# deployed host page is what declares its environment (ADR-0033): the app reads
+# it back as `window.CORA_ENV` and derives the list prefix and export path.
+ENV_TOKEN = "{{CORA_ENV}}"
 
 
 # --------------------------------------------------------------------------- #
@@ -181,22 +190,28 @@ def server_relative_base(site_url: str, library: str, target_folder: str) -> str
 
 
 def render_templated_files(
-    files: dict[str, "LocalFile"], cora_base: str
+    files: dict[str, "LocalFile"], tokens: dict[str, str]
 ) -> dict[str, "LocalFile"]:
-    """Return ``files`` with :data:`HOST_BASE_TOKEN` expanded in host HTML.
+    """Return ``files`` with each ``tokens`` placeholder expanded in host HTML.
 
     The substitution happens *before* hashing and comparison so the local hash
     reflects exactly the bytes uploaded — keeping re-runs idempotent against the
     rendered content stored remotely. Non-templated files pass through unchanged.
     """
-    token = HOST_BASE_TOKEN.encode("utf-8")
-    base = cora_base.encode("utf-8")
+    encoded = {
+        token.encode("utf-8"): value.encode("utf-8")
+        for token, value in tokens.items()
+    }
     rendered: dict[str, LocalFile] = {}
     for rel, local_file in files.items():
-        if PurePosixPath(rel).suffix in TEMPLATED_SUFFIXES and token in local_file.content:
-            rendered[rel] = LocalFile(rel, local_file.content.replace(token, base))
-        else:
+        content = local_file.content
+        if PurePosixPath(rel).suffix in TEMPLATED_SUFFIXES:
+            for token, value in encoded.items():
+                content = content.replace(token, value)
+        if content is local_file.content:
             rendered[rel] = local_file
+        else:
+            rendered[rel] = LocalFile(rel, content)
     return rendered
 
 
@@ -320,6 +335,7 @@ class DeployOptions:
     library: str
     target_folder: str
     dry_run: bool
+    env: str = "prod"
 
 
 def parse_args(argv: list[str]) -> DeployOptions:
@@ -346,9 +362,23 @@ def parse_args(argv: list[str]) -> DeployOptions:
         help=f'Document library. Defaults to "{DEFAULT_LIBRARY}".',
     )
     parser.add_argument(
+        "--env",
+        choices=sorted(ENV_TARGET_FOLDERS),
+        default="prod",
+        help=(
+            "Deployment environment (ADR-0033). Picks the default target "
+            "folder and the {{CORA_ENV}} substitution in host HTML. "
+            'Defaults to "prod".'
+        ),
+    )
+    parser.add_argument(
         "--target-folder",
-        default=DEFAULT_TARGET_FOLDER,
-        help=f'Folder within the library. Defaults to "{DEFAULT_TARGET_FOLDER}".',
+        default=None,
+        help=(
+            "Folder within the library. Defaults to the environment's folder "
+            f"({DEFAULT_TARGET_FOLDER} for prod, "
+            f"{ENV_TARGET_FOLDERS['uat']} for uat)."
+        ),
     )
     parser.add_argument(
         "--dry-run",
@@ -360,8 +390,9 @@ def parse_args(argv: list[str]) -> DeployOptions:
         root=args.root.resolve(),
         site_url=args.site_url,
         library=args.library,
-        target_folder=args.target_folder,
+        target_folder=args.target_folder or ENV_TARGET_FOLDERS[args.env],
         dry_run=args.dry_run,
+        env=args.env,
     )
 
 
@@ -382,10 +413,13 @@ def build_client(opts: DeployOptions) -> SharePointDeployClient:
 def run(opts: DeployOptions, client_factory=build_client, log=print) -> int:
     target = f"{opts.library}/{opts.target_folder}"
     cora_base = server_relative_base(opts.site_url, opts.library, opts.target_folder)
-    log(f"Deploy target: {opts.site_url} -> {target}")
+    log(f"Deploy target: {opts.site_url} -> {target} (env: {opts.env})")
     log(f"Host asset base ({HOST_BASE_TOKEN}): {cora_base}")
 
-    local = render_templated_files(collect_local_files(opts.root), cora_base)
+    local = render_templated_files(
+        collect_local_files(opts.root),
+        {HOST_BASE_TOKEN: cora_base, ENV_TOKEN: opts.env},
+    )
     if not local:
         log("No deployable files found. Nothing to do.")
         return 1
