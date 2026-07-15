@@ -213,7 +213,6 @@ test('allApplicableAnswered: all applicable questions answered → true', () => 
 
 test('MockSharePointClient: getCurrentUser returns the persona userId and displayName', async () => {
   const client = new MockSharePointClient({
-    cases: [],
     questionDefinitions: [],
     personas,
     persona: 'reviewer',

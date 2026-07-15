@@ -20,11 +20,15 @@ const CASE_ROW = {
 
 test('in-memory flow runner loads a case, answers questions, completes, and snapshots the new list state', async () => {
   const snapshot = await runFlowFixture({
-    state: { cases: [CASE_ROW] },
+    state: { lists: { 'Cases-ExampleReview': [CASE_ROW] } },
     scenario: {
       persona: 'reviewer',
       actions: [
-        { type: 'loadCasePage', caseId: 'case-flow-1' },
+        {
+          type: 'loadCasePage',
+          caseId: 'case-flow-1',
+          caseType: 'example-review',
+        },
         { type: 'answer', questionId: 'q-welcome', value: 'Yes' },
         { type: 'answer', questionId: 'q-needs', value: 'Yes' },
         { type: 'answer', questionId: 'q-resolve', value: 'Yes' },
@@ -35,7 +39,9 @@ test('in-memory flow runner loads a case, answers questions, completes, and snap
     },
   });
 
-  const row = snapshot.cases.find((c) => c.id === 'case-flow-1');
+  const row = snapshot.lists['Cases-ExampleReview'].find(
+    (c) => c.id === 'case-flow-1'
+  );
   assert.ok(row);
   assert.equal(row.status, 'Completed');
   assert.equal(row.answers['q-welcome'].value, 'Yes');
@@ -71,7 +77,6 @@ test('in-memory flow runner preserves list-scoped case state when the route case
     },
   });
 
-  assert.equal(snapshot.cases.length, 0);
   assert.equal(
     snapshot.lists['Cases-ProductSaleReview'][0].answers['q-cv-identity'].value,
     'Yes'

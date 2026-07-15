@@ -257,13 +257,18 @@ function decodeFilterExpr(url) {
  * @typedef {{ cases?: CaseRow[], people?: PersonResult[], exportHashes?: Record<string,string>, versionedExports?: Record<string, unknown> }} Seed
  */
 
+// Every Case lives in a named per-Case-Type list store on both
+// implementations post-strictness-flip; 'Cases-Test' is this suite's
+// standard list name so every contract test targets the same store.
+const LIST = 'Cases-Test';
+
 /** @type {Array<[string, (seed: Seed) => import('../src/sharepoint-client.js').SharePointClient]>} */
 const clients = [
   [
     'MockSharePointClient',
     (seed) =>
       new MockSharePointClient({
-        cases: seed.cases ?? [],
+        lists: { [LIST]: seed.cases ?? [] },
         questionDefinitions: [],
         personas: { reviewer: { groups: [] } },
         people: seed.people ?? [],
@@ -284,7 +289,7 @@ for (const [name, makeClient] of clients) {
   describe(`SharePointClient contract: ${name}`, () => {
     test('getCase: unknown id resolves to null, never throws', async () => {
       const client = makeClient({ cases: seedCases() });
-      const row = await client.getCase('does-not-exist');
+      const row = await client.getCase('does-not-exist', { listName: LIST });
       assert.equal(row, null);
     });
 
@@ -293,24 +298,26 @@ for (const [name, makeClient] of clients) {
       const result = await client.patchCase(
         'case-1',
         { title: 'Attempted update' },
-        '"stale-etag-does-not-match"'
+        '"stale-etag-does-not-match"',
+        { listName: LIST }
       );
       assert.equal(result.ok, false);
       assert.equal(result.status, 412);
       assert.equal(result.data, undefined);
 
       // the write must not have applied
-      const unchanged = await client.getCase('case-1');
+      const unchanged = await client.getCase('case-1', { listName: LIST });
       assert.equal(unchanged?.title, 'Example Review #1');
     });
 
     test('patchCase: matching ETag succeeds with an {ok:true, status, data} result', async () => {
       const client = makeClient({ cases: seedCases() });
-      const before = await client.getCase('case-1');
+      const before = await client.getCase('case-1', { listName: LIST });
       const result = await client.patchCase(
         'case-1',
         { title: 'Updated title' },
-        /** @type {string} */ (before?.etag)
+        /** @type {string} */ (before?.etag),
+        { listName: LIST }
       );
       assert.equal(result.ok, true);
       assert.equal(result.data?.title, 'Updated title');
@@ -318,22 +325,31 @@ for (const [name, makeClient] of clients) {
 
     test('listCases: status filter returns the same row-id set from equivalent seed data', async () => {
       const client = makeClient({ cases: seedCases() });
-      const rows = await client.listCases({ status: 'In-progress' });
+      const rows = await client.listCases(
+        { status: 'In-progress' },
+        { listName: LIST }
+      );
       assert.deepEqual(rows.map((r) => r.id).sort(), ['case-1', 'case-2']);
     });
 
     test('listCases: assignedReviewer filter returns the same row-id set from equivalent seed data', async () => {
       const client = makeClient({ cases: seedCases() });
-      const rows = await client.listCases({ assignedReviewer: 'user-1' });
+      const rows = await client.listCases(
+        { assignedReviewer: 'user-1' },
+        { listName: LIST }
+      );
       assert.deepEqual(rows.map((r) => r.id).sort(), ['case-1', 'case-3']);
     });
 
     test('listCases: combined status + assignedReviewer filter ANDs the conditions identically', async () => {
       const client = makeClient({ cases: seedCases() });
-      const rows = await client.listCases({
-        status: 'In-progress',
-        assignedReviewer: 'user-1',
-      });
+      const rows = await client.listCases(
+        {
+          status: 'In-progress',
+          assignedReviewer: 'user-1',
+        },
+        { listName: LIST }
+      );
       assert.deepEqual(
         rows.map((r) => r.id),
         ['case-1']
@@ -343,8 +359,8 @@ for (const [name, makeClient] of clients) {
     test('countCases: stays consistent with listCases(...).length for the same filter', async () => {
       const client = makeClient({ cases: seedCases() });
       const filter = { status: 'In-progress' };
-      const rows = await client.listCases(filter);
-      const count = await client.countCases(filter);
+      const rows = await client.listCases(filter, { listName: LIST });
+      const count = await client.countCases(filter, { listName: LIST });
       assert.equal(count, rows.length);
     });
 
@@ -400,17 +416,13 @@ for (const [name, makeClient] of clients) {
 
 // --- known, documented divergences (not fixed in this ticket) -----------
 //
-// 0. `listCases`/`countCases` with `opts.listName`: HttpSharePointClient
-//    scopes the query to exactly the named SharePoint list, while
-//    MockSharePointClient deliberately IGNORES `listName` on reads-of-many
-//    and aggregates the default store plus every list-scoped store (see
-//    `_allCases()` and the "aggregates Cases from list-scoped stores" tests
-//    in tests/mock-sharepoint-client.test.js). This is an intentional mock
-//    convenience so the dashboard sees list-backed Case Types without
-//    fan-out, but it means `?mock=1` cannot catch a page passing the wrong
-//    `listName` to a list-scoped query. Not asserted here because
-//    equalising it is a behavioural product decision (aggregate vs scope)
-//    needing a real-SharePoint/UX check — follow-up filed in the PR notes.
+// 0. RESOLVED by the strictness flip: `listCases`/`countCases`/`getCase`/
+//    `patchCase` now require `opts.listName` on both implementations, and
+//    MockSharePointClient scopes strictly to the named list store (no more
+//    default-store aggregation via the old `_allCases()`). `?mock=1` now
+//    catches a page passing the wrong `listName` to a list-scoped query,
+//    same as the real HTTP client. See tests/mock-sharepoint-client.test.js
+//    for the scoping coverage.
 //
 // 1. `patchCase` against an id that does not exist at all: both
 //    implementations return `{ ok: false, status: 404 }` today (verified by

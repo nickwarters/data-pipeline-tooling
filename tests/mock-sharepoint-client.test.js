@@ -7,6 +7,11 @@ import { reasonFlagFields } from '../src/services/action-centre-flags.js';
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../src/sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 
+// Every Case lives in a named per-Case-Type list store — there is no default
+// store (strictness flip). 'Cases-Test' is the standard list name used
+// throughout this suite unless a test needs a second, distinctly-named list.
+const LIST = 'Cases-Test';
+
 /** @type {CaseRow[]} */
 const CASES = [
   {
@@ -81,7 +86,7 @@ const PERSONAS = {
 /** @param {string} [persona] */
 function makeClient(persona = 'reviewer') {
   return new MockSharePointClient({
-    cases: CASES,
+    lists: { [LIST]: CASES },
     questionDefinitions: QUESTION_DEFS,
     personas: PERSONAS,
     persona,
@@ -92,7 +97,7 @@ function makeClient(persona = 'reviewer') {
 
 test('MockSharePointClient: getCase returns the correct fixture Case', async () => {
   const client = makeClient();
-  const c = await client.getCase('case-1');
+  const c = await client.getCase('case-1', { listName: LIST });
   assert.equal(c?.id, 'case-1');
   assert.equal(c?.title, 'Example Review #1');
   assert.equal(c?.status, 'In-progress');
@@ -100,32 +105,34 @@ test('MockSharePointClient: getCase returns the correct fixture Case', async () 
 
 test('MockSharePointClient: getCase returns null for an unknown id', async () => {
   const client = makeClient();
-  const c = await client.getCase('case-999');
+  const c = await client.getCase('case-999', { listName: LIST });
   assert.equal(c, null);
 });
 
 test('MockSharePointClient: getCase round-trips the details JSON blob (issue #213)', async () => {
   const client = new MockSharePointClient({
-    cases: [
-      {
-        id: 'case-d',
-        caseType: 'example-review',
-        title: 'With details',
-        status: 'In-progress',
-        assignedReviewer: 'user-1',
-        responsibleParty: 'user-2',
-        answers: {},
-        conversation: [],
-        details: { customerName: 'Jordan Lee', accountNumber: 'ACC-4471' },
-        notes: '',
-        completedAt: null,
-        etag: 'etag-d',
-      },
-    ],
+    lists: {
+      [LIST]: [
+        {
+          id: 'case-d',
+          caseType: 'example-review',
+          title: 'With details',
+          status: 'In-progress',
+          assignedReviewer: 'user-1',
+          responsibleParty: 'user-2',
+          answers: {},
+          conversation: [],
+          details: { customerName: 'Jordan Lee', accountNumber: 'ACC-4471' },
+          notes: '',
+          completedAt: null,
+          etag: 'etag-d',
+        },
+      ],
+    },
     questionDefinitions: QUESTION_DEFS,
     personas: PERSONAS,
   });
-  const c = await client.getCase('case-d');
+  const c = await client.getCase('case-d', { listName: LIST });
   assert.deepEqual(c?.details, {
     customerName: 'Jordan Lee',
     accountNumber: 'ACC-4471',
@@ -135,10 +142,12 @@ test('MockSharePointClient: getCase round-trips the details JSON blob (issue #21
 test('MockSharePointClient: patchCase round-trips an updated details blob (issue #213)', async () => {
   const client = makeClient();
   const details = { customerName: 'Sam Rivera' };
-  const result = await client.patchCase('case-1', { details }, 'etag-1');
+  const result = await client.patchCase('case-1', { details }, 'etag-1', {
+    listName: LIST,
+  });
   assert.equal(result.ok, true);
   assert.deepEqual(result.data?.details, details);
-  const reread = await client.getCase('case-1');
+  const reread = await client.getCase('case-1', { listName: LIST });
   assert.deepEqual(reread?.details, details);
 });
 
@@ -149,7 +158,8 @@ test('MockSharePointClient: patchCase merges only the specified fields', async (
   const result = await client.patchCase(
     'case-1',
     { notes: 'test note' },
-    'etag-1'
+    'etag-1',
+    { listName: LIST }
   );
   assert.equal(result.ok, true);
   assert.equal(result.status, 200);
@@ -162,19 +172,40 @@ test('MockSharePointClient: patchCase merges only the specified fields', async (
 
 test('MockSharePointClient: patchCase ETag changes after each write', async () => {
   const client = makeClient();
-  const r1 = await client.patchCase('case-1', { notes: 'first' }, 'etag-1');
+  const r1 = await client.patchCase('case-1', { notes: 'first' }, 'etag-1', {
+    listName: LIST,
+  });
   assert.equal(r1.ok, true);
   const newEtag = r1.data?.etag ?? '';
   assert.notEqual(newEtag, 'etag-1');
 
-  const r2 = await client.patchCase('case-1', { notes: 'second' }, newEtag);
+  const r2 = await client.patchCase('case-1', { notes: 'second' }, newEtag, {
+    listName: LIST,
+  });
   assert.equal(r2.ok, true);
   assert.notEqual(r2.data?.etag, newEtag);
 });
 
+test('MockSharePointClient: patchCase against an unknown id returns 404', async () => {
+  const client = makeClient();
+  const result = await client.patchCase(
+    'case-does-not-exist',
+    { notes: 'x' },
+    'etag-1',
+    { listName: LIST }
+  );
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 404);
+});
+
 test('MockSharePointClient: patchCase with a stale ETag returns 412', async () => {
   const client = makeClient();
-  const result = await client.patchCase('case-1', { notes: 'x' }, 'wrong-etag');
+  const result = await client.patchCase(
+    'case-1',
+    { notes: 'x' },
+    'wrong-etag',
+    { listName: LIST }
+  );
   assert.equal(result.ok, false);
   assert.equal(result.status, 412);
 });
@@ -182,7 +213,9 @@ test('MockSharePointClient: patchCase with a stale ETag returns 412', async () =
 test('MockSharePointClient: injected 412 returns 412 without writing', async () => {
   const client = makeClient();
   client.inject412();
-  const result = await client.patchCase('case-1', { notes: 'x' }, 'etag-1');
+  const result = await client.patchCase('case-1', { notes: 'x' }, 'etag-1', {
+    listName: LIST,
+  });
   assert.equal(result.ok, false);
   assert.equal(result.status, 412);
 });
@@ -190,9 +223,13 @@ test('MockSharePointClient: injected 412 returns 412 without writing', async () 
 test('MockSharePointClient: patchCase succeeds normally after the injected 412 fires', async () => {
   const client = makeClient();
   client.inject412();
-  await client.patchCase('case-1', { notes: 'x' }, 'etag-1'); // 412, no write
+  await client.patchCase('case-1', { notes: 'x' }, 'etag-1', {
+    listName: LIST,
+  }); // 412, no write
   // Original etag is still valid because the 412 did not write
-  const result = await client.patchCase('case-1', { notes: 'y' }, 'etag-1');
+  const result = await client.patchCase('case-1', { notes: 'y' }, 'etag-1', {
+    listName: LIST,
+  });
   assert.equal(result.ok, true);
   assert.equal(result.data?.notes, 'y');
 });
@@ -201,31 +238,41 @@ test('MockSharePointClient: patchCase succeeds normally after the injected 412 f
 
 test('MockSharePointClient: listCases with status filter returns only matching Cases', async () => {
   const client = makeClient();
-  const cases = await client.listCases({ status: 'In-progress' });
+  const cases = await client.listCases(
+    { status: 'In-progress' },
+    { listName: LIST }
+  );
   assert.equal(cases.length, 2);
   assert.ok(cases.every((c) => c.status === 'In-progress'));
 });
 
 test('MockSharePointClient: listCases with Completed filter returns only Completed Cases', async () => {
   const client = makeClient();
-  const cases = await client.listCases({ status: 'Completed' });
+  const cases = await client.listCases(
+    { status: 'Completed' },
+    { listName: LIST }
+  );
   assert.equal(cases.length, 1);
   assert.equal(cases[0].id, 'case-3');
 });
 
-test('MockSharePointClient: listCases with empty filter returns all Cases', async () => {
+test('MockSharePointClient: listCases with empty filter returns all Cases in the named list', async () => {
   const client = makeClient();
-  const cases = await client.listCases({});
+  const cases = await client.listCases({}, { listName: LIST });
   assert.equal(cases.length, 3);
 });
 
-test('MockSharePointClient: listCases accepts a listName option without changing the in-memory store', async () => {
+test('MockSharePointClient: listCases scopes strictly to the named list — an unconfigured list returns no rows', async () => {
   const client = makeClient();
   const cases = await client.listCases({}, { listName: 'complaints' });
-  assert.equal(cases.length, 3);
+  assert.equal(
+    cases.length,
+    0,
+    'no default/aggregate store — an unrecognised listName is simply empty'
+  );
 });
 
-test('MockSharePointClient: listCases aggregates Cases from list-scoped stores', async () => {
+test('MockSharePointClient: listCases scopes to the named list — a Case in one list does not leak into another', async () => {
   const listCase = /** @type {CaseRow} */ ({
     ...CASES[0],
     id: 'psr-1',
@@ -234,26 +281,28 @@ test('MockSharePointClient: listCases aggregates Cases from list-scoped stores',
     status: 'In-progress',
   });
   const client = new MockSharePointClient({
-    cases: CASES,
+    lists: { [LIST]: CASES, complaints: [listCase] },
     questionDefinitions: QUESTION_DEFS,
     personas: PERSONAS,
-    lists: { complaints: [listCase] },
   });
 
-  // A list-backed Case surfaces through listCases (the dashboard entry point)
-  // even though it lives in a list-scoped store rather than the default one.
-  const all = await client.listCases({});
-  assert.equal(all.length, CASES.length + 1);
-  assert.ok(all.some((c) => c.id === 'psr-1'));
+  const fromDefault = await client.listCases({}, { listName: LIST });
+  assert.equal(fromDefault.length, CASES.length);
+  assert.ok(!fromDefault.some((c) => c.id === 'psr-1'));
 
-  // Filters still apply across the aggregated stores.
-  const forReviewer = await client.listCases({ assignedReviewer: 'user-1' });
-  assert.ok(forReviewer.some((c) => c.id === 'psr-1'));
+  const fromComplaints = await client.listCases({}, { listName: 'complaints' });
+  assert.deepEqual(
+    fromComplaints.map((c) => c.id),
+    ['psr-1']
+  );
 });
 
 test('MockSharePointClient: listCases filters by assignedReviewer', async () => {
   const client = makeClient();
-  const cases = await client.listCases({ assignedReviewer: 'user-2' });
+  const cases = await client.listCases(
+    { assignedReviewer: 'user-2' },
+    { listName: LIST }
+  );
   assert.equal(cases.length, 1);
   assert.equal(cases[0].id, 'case-3');
 });
@@ -290,44 +339,61 @@ test('MockSharePointClient: getQuestionDefinitions returns empty array for unkno
 
 test('MockSharePointClient: listCases filters by caseType', async () => {
   const client = makeClient();
-  const cases = await client.listCases({ caseType: 'example-review' });
+  const cases = await client.listCases(
+    { caseType: 'example-review' },
+    { listName: LIST }
+  );
   assert.equal(cases.length, 3);
 
   // A different caseType should return nothing
-  const none = await client.listCases({ caseType: 'other-type' });
+  const none = await client.listCases(
+    { caseType: 'other-type' },
+    { listName: LIST }
+  );
   assert.equal(none.length, 0);
 });
 
 test('MockSharePointClient: listCases filters by responsibleParty', async () => {
   const client = makeClient();
-  const cases = await client.listCases({ responsibleParty: 'user-2' });
+  const cases = await client.listCases(
+    { responsibleParty: 'user-2' },
+    { listName: LIST }
+  );
   assert.equal(cases.length, 1);
   assert.equal(cases[0].id, 'case-1');
 });
 
 test('MockSharePointClient: listCases filters by both caseType and responsibleParty', async () => {
   const client = makeClient();
-  const cases = await client.listCases({
-    caseType: 'example-review',
-    responsibleParty: 'user-3',
-  });
+  const cases = await client.listCases(
+    {
+      caseType: 'example-review',
+      responsibleParty: 'user-3',
+    },
+    { listName: LIST }
+  );
   assert.equal(cases.length, 1);
   assert.equal(cases[0].id, 'case-2');
 });
 
 test('MockSharePointClient: listCases filters by effectiveOutcome server-side (ADR-0019)', async () => {
   const client = new MockSharePointClient({
-    cases: [
-      { ...CASES[2], id: 'r-pass', effectiveOutcome: 'pass' },
-      { ...CASES[2], id: 'r-fail', effectiveOutcome: 'fail' },
-      { ...CASES[2], id: 'r-fail2', effectiveOutcome: 'fail' },
-    ],
+    lists: {
+      [LIST]: [
+        { ...CASES[2], id: 'r-pass', effectiveOutcome: 'pass' },
+        { ...CASES[2], id: 'r-fail', effectiveOutcome: 'fail' },
+        { ...CASES[2], id: 'r-fail2', effectiveOutcome: 'fail' },
+      ],
+    },
     questionDefinitions: QUESTION_DEFS,
     personas: PERSONAS,
     persona: 'reviewer',
   });
 
-  const failures = await client.listCases({ effectiveOutcome: 'fail' });
+  const failures = await client.listCases(
+    { effectiveOutcome: 'fail' },
+    { listName: LIST }
+  );
   assert.deepEqual(
     failures.map((c) => c.id).sort(),
     ['r-fail', 'r-fail2'],
@@ -337,16 +403,21 @@ test('MockSharePointClient: listCases filters by effectiveOutcome server-side (A
 
 test('MockSharePointClient: listCases filters by outcomeOverridden server-side (ADR-0019)', async () => {
   const client = new MockSharePointClient({
-    cases: [
-      { ...CASES[2], id: 'clean', outcomeOverridden: false },
-      { ...CASES[2], id: 'corrected', outcomeOverridden: true },
-    ],
+    lists: {
+      [LIST]: [
+        { ...CASES[2], id: 'clean', outcomeOverridden: false },
+        { ...CASES[2], id: 'corrected', outcomeOverridden: true },
+      ],
+    },
     questionDefinitions: QUESTION_DEFS,
     personas: PERSONAS,
     persona: 'reviewer',
   });
 
-  const corrected = await client.listCases({ outcomeOverridden: true });
+  const corrected = await client.listCases(
+    { outcomeOverridden: true },
+    { listName: LIST }
+  );
   assert.deepEqual(
     corrected.map((c) => c.id),
     ['corrected']
@@ -440,20 +511,25 @@ test('MockSharePointClient: listCases with overdue:true returns only In-progress
   });
 
   const client = new MockSharePointClient({
-    cases: [overdueCase, onTimeCase, completedLateCase, noDueDateCase],
+    lists: {
+      [LIST]: [overdueCase, onTimeCase, completedLateCase, noDueDateCase],
+    },
     questionDefinitions: [],
     personas: PERSONAS,
   });
 
-  const results = await client.listCases({ overdue: true });
+  const results = await client.listCases({ overdue: true }, { listName: LIST });
   assert.equal(results.length, 1);
   assert.equal(results[0].id, 'od-1');
 });
 
 test('MockSharePointClient: listCases with overdue:false returns all cases (no overdue filter applied)', async () => {
   const client = makeClient();
-  const all = await client.listCases({});
-  const sameWithFalse = await client.listCases({ overdue: false });
+  const all = await client.listCases({}, { listName: LIST });
+  const sameWithFalse = await client.listCases(
+    { overdue: false },
+    { listName: LIST }
+  );
   assert.equal(sameWithFalse.length, all.length);
 });
 
@@ -482,17 +558,20 @@ function completedCase(id, completedAt) {
 
 test('MockSharePointClient: completedAfter is an inclusive CompletedAt lower bound', async () => {
   const client = new MockSharePointClient({
-    cases: [
-      completedCase('a', '2026-07-01T00:00:00.000Z'),
-      completedCase('b', '2026-07-02T00:00:00.000Z'),
-      completedCase('c', '2026-07-03T00:00:00.000Z'),
-    ],
+    lists: {
+      [LIST]: [
+        completedCase('a', '2026-07-01T00:00:00.000Z'),
+        completedCase('b', '2026-07-02T00:00:00.000Z'),
+        completedCase('c', '2026-07-03T00:00:00.000Z'),
+      ],
+    },
     questionDefinitions: [],
     personas: PERSONAS,
   });
-  const rows = await client.listCases({
-    completedAfter: '2026-07-02T00:00:00.000Z',
-  });
+  const rows = await client.listCases(
+    { completedAfter: '2026-07-02T00:00:00.000Z' },
+    { listName: LIST }
+  );
   assert.deepEqual(
     rows.map((r) => r.id).sort(),
     ['b', 'c'],
@@ -502,17 +581,20 @@ test('MockSharePointClient: completedAfter is an inclusive CompletedAt lower bou
 
 test('MockSharePointClient: completedBefore is an exclusive CompletedAt upper bound', async () => {
   const client = new MockSharePointClient({
-    cases: [
-      completedCase('a', '2026-07-01T00:00:00.000Z'),
-      completedCase('b', '2026-07-02T00:00:00.000Z'),
-      completedCase('c', '2026-07-03T00:00:00.000Z'),
-    ],
+    lists: {
+      [LIST]: [
+        completedCase('a', '2026-07-01T00:00:00.000Z'),
+        completedCase('b', '2026-07-02T00:00:00.000Z'),
+        completedCase('c', '2026-07-03T00:00:00.000Z'),
+      ],
+    },
     questionDefinitions: [],
     personas: PERSONAS,
   });
-  const rows = await client.listCases({
-    completedBefore: '2026-07-02T00:00:00.000Z',
-  });
+  const rows = await client.listCases(
+    { completedBefore: '2026-07-02T00:00:00.000Z' },
+    { listName: LIST }
+  );
   assert.deepEqual(
     rows.map((r) => r.id),
     ['a'],
@@ -522,23 +604,27 @@ test('MockSharePointClient: completedBefore is an exclusive CompletedAt upper bo
 
 test('MockSharePointClient: a never-completed Case is excluded from any CompletedAt window', async () => {
   const client = new MockSharePointClient({
-    cases: [
-      completedCase('open', null),
-      completedCase('done', '2026-07-02T00:00:00.000Z'),
-    ],
+    lists: {
+      [LIST]: [
+        completedCase('open', null),
+        completedCase('done', '2026-07-02T00:00:00.000Z'),
+      ],
+    },
     questionDefinitions: [],
     personas: PERSONAS,
   });
-  const afterOnly = await client.listCases({
-    completedAfter: '2026-07-01T00:00:00.000Z',
-  });
+  const afterOnly = await client.listCases(
+    { completedAfter: '2026-07-01T00:00:00.000Z' },
+    { listName: LIST }
+  );
   assert.deepEqual(
     afterOnly.map((r) => r.id),
     ['done']
   );
-  const beforeOnly = await client.listCases({
-    completedBefore: '2026-07-03T00:00:00.000Z',
-  });
+  const beforeOnly = await client.listCases(
+    { completedBefore: '2026-07-03T00:00:00.000Z' },
+    { listName: LIST }
+  );
   assert.deepEqual(
     beforeOnly.map((r) => r.id),
     ['done']
@@ -547,19 +633,24 @@ test('MockSharePointClient: a never-completed Case is excluded from any Complete
 
 test('MockSharePointClient: countCases counts a bounded CompletedAt day-slice', async () => {
   const client = new MockSharePointClient({
-    cases: [
-      completedCase('a', '2026-07-02T08:00:00.000Z'),
-      completedCase('b', '2026-07-02T20:00:00.000Z'),
-      completedCase('c', '2026-07-03T00:00:00.000Z'),
-    ],
+    lists: {
+      [LIST]: [
+        completedCase('a', '2026-07-02T08:00:00.000Z'),
+        completedCase('b', '2026-07-02T20:00:00.000Z'),
+        completedCase('c', '2026-07-03T00:00:00.000Z'),
+      ],
+    },
     questionDefinitions: [],
     personas: PERSONAS,
   });
-  const n = await client.countCases({
-    status: 'Completed',
-    completedAfter: '2026-07-02T00:00:00.000Z',
-    completedBefore: '2026-07-03T00:00:00.000Z',
-  });
+  const n = await client.countCases(
+    {
+      status: 'Completed',
+      completedAfter: '2026-07-02T00:00:00.000Z',
+      completedBefore: '2026-07-03T00:00:00.000Z',
+    },
+    { listName: LIST }
+  );
   assert.equal(n, 2, 'both 2 Jul completions, not the 3 Jul one');
 });
 
@@ -583,7 +674,7 @@ const PEOPLE = [
 /** @param {Array<{ loginName: string, displayName: string, email?: string }>} [people] */
 function makePeopleClient(people = PEOPLE) {
   return new MockSharePointClient({
-    cases: CASES,
+    lists: { [LIST]: CASES },
     questionDefinitions: QUESTION_DEFS,
     personas: PERSONAS,
     people,
@@ -663,7 +754,7 @@ test('MockSharePointClient: resolveUsers returns an empty map for an empty list'
 
 test('MockSharePointClient: getExportHash returns the configured hash for a known slug', async () => {
   const client = new MockSharePointClient({
-    cases: CASES,
+    lists: { [LIST]: CASES },
     questionDefinitions: QUESTION_DEFS,
     personas: PERSONAS,
     exportHashes: { 'example-review': 'sha256:abc123' },
@@ -683,11 +774,12 @@ test('MockSharePointClient: patchCase with questionBankVersion round-trips the f
   const result = await client.patchCase(
     'case-1',
     { questionBankVersion: 'sha256:deadbeef' },
-    'etag-1'
+    'etag-1',
+    { listName: LIST }
   );
   assert.equal(result.ok, true);
   assert.equal(result.data?.questionBankVersion, 'sha256:deadbeef');
-  const stored = await client.getCase('case-1');
+  const stored = await client.getCase('case-1', { listName: LIST });
   assert.equal(stored?.questionBankVersion, 'sha256:deadbeef');
 });
 
@@ -700,13 +792,15 @@ test('MockSharePointClient: getCase and patchCase can target a supplied listName
     etag: 'complaints-etag-1',
   };
   const client = new MockSharePointClient({
-    cases: CASES,
+    lists: { [LIST]: CASES, complaints: [complaints] },
     questionDefinitions: QUESTION_DEFS,
     personas: PERSONAS,
-    lists: { complaints: [complaints] },
   });
 
-  assert.equal((await client.getCase('case-1'))?.title, 'Example Review #1');
+  assert.equal(
+    (await client.getCase('case-1', { listName: LIST }))?.title,
+    'Example Review #1'
+  );
   assert.equal(
     (await client.getCase('case-1', { listName: 'complaints' }))?.title,
     'Complaint Case'
@@ -723,7 +817,7 @@ test('MockSharePointClient: getCase and patchCase can target a supplied listName
     (await client.getCase('case-1', { listName: 'complaints' }))?.notes,
     'complaint note'
   );
-  assert.equal((await client.getCase('case-1'))?.notes, '');
+  assert.equal((await client.getCase('case-1', { listName: LIST }))?.notes, '');
 });
 
 // --- getVersionedExport (ADR-0021 Step 4) ---
@@ -749,7 +843,7 @@ const VERSIONED_EXPORT = {
 
 test('MockSharePointClient: getVersionedExport returns the matching export for a known hash (ADR-0021 Step 4)', async () => {
   const client = new MockSharePointClient({
-    cases: CASES,
+    lists: { [LIST]: CASES },
     questionDefinitions: QUESTION_DEFS,
     personas: PERSONAS,
     versionedExports: { [VERSIONED_EXPORT.hash]: VERSIONED_EXPORT },
@@ -805,27 +899,29 @@ function reasonCase(id, over = {}) {
 
 function makeReasonClient() {
   return new MockSharePointClient({
-    cases: [
-      reasonCase('await-1', {
-        awaitingResponsibleParty: true,
-        awaitingSince: '2026-06-01T00:00:00Z',
-      }),
-      reasonCase('await-2', {
-        awaitingResponsibleParty: true,
-        awaitingSince: '2026-06-20T00:00:00Z',
-      }),
-      reasonCase('appeal-1', {
-        status: 'Completed',
-        hasOpenAppeal: true,
-        appealRaisedAt: '2026-06-15T00:00:00Z',
-        completedAt: '2026-06-10T00:00:00Z',
-      }),
-      reasonCase('reopened-1', {
-        reopened: true,
-        reopenedAt: '2026-06-25T00:00:00Z',
-      }),
-      reasonCase('plain-1', {}),
-    ],
+    lists: {
+      [LIST]: [
+        reasonCase('await-1', {
+          awaitingResponsibleParty: true,
+          awaitingSince: '2026-06-01T00:00:00Z',
+        }),
+        reasonCase('await-2', {
+          awaitingResponsibleParty: true,
+          awaitingSince: '2026-06-20T00:00:00Z',
+        }),
+        reasonCase('appeal-1', {
+          status: 'Completed',
+          hasOpenAppeal: true,
+          appealRaisedAt: '2026-06-15T00:00:00Z',
+          completedAt: '2026-06-10T00:00:00Z',
+        }),
+        reasonCase('reopened-1', {
+          reopened: true,
+          reopenedAt: '2026-06-25T00:00:00Z',
+        }),
+        reasonCase('plain-1', {}),
+      ],
+    },
     questionDefinitions: [],
     personas: PERSONAS,
   });
@@ -833,14 +929,19 @@ function makeReasonClient() {
 
 test('MockSharePointClient: listCases filters by assignedReviewerManager', async () => {
   const client = new MockSharePointClient({
-    cases: [
-      reasonCase('m-1', { assignedReviewerManager: 'mgr-a' }),
-      reasonCase('m-2', { assignedReviewerManager: 'mgr-b' }),
-    ],
+    lists: {
+      [LIST]: [
+        reasonCase('m-1', { assignedReviewerManager: 'mgr-a' }),
+        reasonCase('m-2', { assignedReviewerManager: 'mgr-b' }),
+      ],
+    },
     questionDefinitions: [],
     personas: PERSONAS,
   });
-  const rows = await client.listCases({ assignedReviewerManager: 'mgr-a' });
+  const rows = await client.listCases(
+    { assignedReviewerManager: 'mgr-a' },
+    { listName: LIST }
+  );
   assert.deepEqual(
     rows.map((c) => c.id),
     ['m-1']
@@ -849,52 +950,76 @@ test('MockSharePointClient: listCases filters by assignedReviewerManager', async
 
 test('MockSharePointClient: countCases returns the count of matching cases', async () => {
   const client = makeReasonClient();
-  assert.equal(await client.countCases({ awaitingResponsibleParty: true }), 2);
-  assert.equal(await client.countCases({ hasOpenAppeal: true }), 1);
-  assert.equal(await client.countCases({ reopened: true }), 1);
-  assert.equal(await client.countCases({}), 5);
+  assert.equal(
+    await client.countCases(
+      { awaitingResponsibleParty: true },
+      { listName: LIST }
+    ),
+    2
+  );
+  assert.equal(
+    await client.countCases({ hasOpenAppeal: true }, { listName: LIST }),
+    1
+  );
+  assert.equal(
+    await client.countCases({ reopened: true }, { listName: LIST }),
+    1
+  );
+  assert.equal(await client.countCases({}, { listName: LIST }), 5);
 });
 
 test('MockSharePointClient: filters by the reviewRequired flag', async () => {
   const client = new MockSharePointClient({
-    cases: [
-      reasonCase('rr-1', { reviewRequired: true }),
-      reasonCase('rr-2', { reviewRequired: true }),
-      reasonCase('plain', {}),
-    ],
+    lists: {
+      [LIST]: [
+        reasonCase('rr-1', { reviewRequired: true }),
+        reasonCase('rr-2', { reviewRequired: true }),
+        reasonCase('plain', {}),
+      ],
+    },
     questionDefinitions: [],
     personas: PERSONAS,
   });
-  assert.equal(await client.countCases({ reviewRequired: true }), 2);
-  const rows = await client.listCases({ reviewRequired: false });
+  assert.equal(
+    await client.countCases({ reviewRequired: true }, { listName: LIST }),
+    2
+  );
+  const rows = await client.listCases(
+    { reviewRequired: false },
+    { listName: LIST }
+  );
   assert.deepEqual(
     rows.map((c) => c.id),
     ['plain']
   );
 });
 
-test('MockSharePointClient: countCases ignores listName option but still counts', async () => {
+test('MockSharePointClient: countCases with a listName that has no configured store counts zero', async () => {
   const client = makeReasonClient();
   assert.equal(
     await client.countCases({ reopened: true }, { listName: 'anything' }),
-    1
+    0
   );
 });
 
 test('MockSharePointClient: filters treat a missing reason flag as false', async () => {
   const client = makeReasonClient();
-  const notAwaiting = await client.listCases({
-    awaitingResponsibleParty: false,
-  });
+  const notAwaiting = await client.listCases(
+    { awaitingResponsibleParty: false },
+    { listName: LIST }
+  );
   assert.equal(notAwaiting.length, 3);
   assert.ok(!notAwaiting.some((c) => c.id.startsWith('await')));
 });
 
 test('MockSharePointClient: listCases pages with top and skip', async () => {
   const client = makeReasonClient();
-  const first = await client.listCases({}, { top: 2, skip: 0 });
+  const first = await client.listCases({}, { listName: LIST, top: 2, skip: 0 });
   assert.equal(first.length, 2);
-  const second = await client.listCases({}, { top: 2, skip: 2 });
+  const second = await client.listCases(
+    {},
+    { listName: LIST, top: 2, skip: 2 }
+  );
   assert.equal(second.length, 2);
   assert.notDeepEqual(
     first.map((c) => c.id),
@@ -906,7 +1031,7 @@ test('MockSharePointClient: listCases orders by a column ascending and descendin
   const client = makeReasonClient();
   const asc = await client.listCases(
     { awaitingResponsibleParty: true },
-    { orderBy: 'awaitingSince', orderDir: 'asc' }
+    { listName: LIST, orderBy: 'awaitingSince', orderDir: 'asc' }
   );
   assert.deepEqual(
     asc.map((c) => c.id),
@@ -914,7 +1039,7 @@ test('MockSharePointClient: listCases orders by a column ascending and descendin
   );
   const desc = await client.listCases(
     { awaitingResponsibleParty: true },
-    { orderBy: 'awaitingSince', orderDir: 'desc' }
+    { listName: LIST, orderBy: 'awaitingSince', orderDir: 'desc' }
   );
   assert.deepEqual(
     desc.map((c) => c.id),
@@ -926,7 +1051,7 @@ test('MockSharePointClient: listCases orderBy defaults to ascending', async () =
   const client = makeReasonClient();
   const rows = await client.listCases(
     { awaitingResponsibleParty: true },
-    { orderBy: 'awaitingSince' }
+    { listName: LIST, orderBy: 'awaitingSince' }
   );
   assert.deepEqual(
     rows.map((c) => c.id),
@@ -936,53 +1061,87 @@ test('MockSharePointClient: listCases orderBy defaults to ascending', async () =
 
 test('MockSharePointClient: orderBy sorts ties stably and treats a missing key as earliest', async () => {
   const client = new MockSharePointClient({
-    cases: [
-      reasonCase('tie-a', { reopenedAt: '2026-06-01T00:00:00Z' }),
-      reasonCase('tie-b', { reopenedAt: '2026-06-01T00:00:00Z' }),
-      reasonCase('no-key', {}), // no reopenedAt → sorts first ascending
-    ],
+    lists: {
+      [LIST]: [
+        reasonCase('tie-a', { reopenedAt: '2026-06-01T00:00:00Z' }),
+        reasonCase('tie-b', { reopenedAt: '2026-06-01T00:00:00Z' }),
+        reasonCase('no-key', {}), // no reopenedAt → sorts first ascending
+      ],
+    },
     questionDefinitions: [],
     personas: PERSONAS,
   });
-  const rows = await client.listCases({}, { orderBy: 'reopenedAt' });
+  const rows = await client.listCases(
+    {},
+    { listName: LIST, orderBy: 'reopenedAt' }
+  );
   assert.deepEqual(
     rows.map((c) => c.id),
     ['no-key', 'tie-a', 'tie-b']
   );
 });
 
+test('MockSharePointClient: orderBy treats two rows that both lack the sort key as equal', async () => {
+  const client = new MockSharePointClient({
+    lists: {
+      [LIST]: [reasonCase('no-key-a', {}), reasonCase('no-key-b', {})],
+    },
+    questionDefinitions: [],
+    personas: PERSONAS,
+  });
+  const rows = await client.listCases(
+    {},
+    { listName: LIST, orderBy: 'reopenedAt' }
+  );
+  assert.deepEqual(
+    rows.map((c) => c.id).sort(),
+    ['no-key-a', 'no-key-b'],
+    "neither row has reopenedAt — comparator falls back to '' on both sides"
+  );
+});
+
 test('MockSharePointClient: countCases with anyOf ORs sub-filters, deduped across reasons', async () => {
   const client = new MockSharePointClient({
-    cases: [
-      // Qualifies for two reasons — must be counted once by an OR-count.
-      reasonCase('multi', {
-        awaitingResponsibleParty: true,
-        reopened: true,
-      }),
-      reasonCase('await-only', { awaitingResponsibleParty: true }),
-      reasonCase('none', {}),
-    ],
+    lists: {
+      [LIST]: [
+        // Qualifies for two reasons — must be counted once by an OR-count.
+        reasonCase('multi', {
+          awaitingResponsibleParty: true,
+          reopened: true,
+        }),
+        reasonCase('await-only', { awaitingResponsibleParty: true }),
+        reasonCase('none', {}),
+      ],
+    },
     questionDefinitions: [],
     personas: PERSONAS,
   });
 
-  const orCount = await client.countCases({
-    anyOf: [{ awaitingResponsibleParty: true }, { reopened: true }],
-  });
+  const orCount = await client.countCases(
+    {
+      anyOf: [{ awaitingResponsibleParty: true }, { reopened: true }],
+    },
+    { listName: LIST }
+  );
   assert.equal(orCount, 2, 'the two-reason case is counted once');
 
   const sumOfGroups =
-    (await client.countCases({ awaitingResponsibleParty: true })) +
-    (await client.countCases({ reopened: true }));
+    (await client.countCases(
+      { awaitingResponsibleParty: true },
+      { listName: LIST }
+    )) + (await client.countCases({ reopened: true }, { listName: LIST }));
   assert.equal(sumOfGroups, 3, 'summing groups double-counts the overlap');
 });
 
 test('MockSharePointClient: anyOf combines with a base filter (AND of base, OR of anyOf)', async () => {
   const client = makeReasonClient();
-  const completedAppealsOrReopened = await client.countCases({
-    status: 'Completed',
-    anyOf: [{ hasOpenAppeal: true }, { reopened: true }],
-  });
+  const completedAppealsOrReopened = await client.countCases(
+    {
+      status: 'Completed',
+      anyOf: [{ hasOpenAppeal: true }, { reopened: true }],
+    },
+    { listName: LIST }
+  );
   // Only appeal-1 is Completed; reopened-1 is In-progress and excluded by base.
   assert.equal(completedAppealsOrReopened, 1);
 });
@@ -991,28 +1150,91 @@ test('MockSharePointClient: anyOf combines with a base filter (AND of base, OR o
 
 test('MockSharePointClient: a reasonFlagFields write persists and is queryable', async () => {
   const client = makeClient();
-  const before = await client.countCases({ awaitingResponsibleParty: true });
+  const before = await client.countCases(
+    { awaitingResponsibleParty: true },
+    { listName: LIST }
+  );
   assert.equal(before, 0);
 
-  const fresh = await client.getCase('case-1');
+  const fresh = await client.getCase('case-1', { listName: LIST });
   const res = await client.patchCase(
     'case-1',
     reasonFlagFields('awaitingFrontline', true, '2026-07-05T09:00:00Z'),
-    /** @type {string} */ (fresh?.etag)
+    /** @type {string} */ (fresh?.etag),
+    { listName: LIST }
   );
 
   assert.equal(res.ok, true);
   assert.equal(res.data?.awaitingResponsibleParty, true);
   assert.equal(res.data?.awaitingSince, '2026-07-05T09:00:00Z');
-  assert.equal(await client.countCases({ awaitingResponsibleParty: true }), 1);
+  assert.equal(
+    await client.countCases(
+      { awaitingResponsibleParty: true },
+      { listName: LIST }
+    ),
+    1
+  );
 
   // Clearing the flag drops it back out of the reason group.
   const cleared = await client.patchCase(
     'case-1',
     reasonFlagFields('awaitingFrontline', false),
-    /** @type {string} */ (res.data?.etag)
+    /** @type {string} */ (res.data?.etag),
+    { listName: LIST }
   );
   assert.equal(cleared.data?.awaitingResponsibleParty, false);
   assert.equal(cleared.data?.awaitingSince, null);
-  assert.equal(await client.countCases({ awaitingResponsibleParty: true }), 0);
+  assert.equal(
+    await client.countCases(
+      { awaitingResponsibleParty: true },
+      { listName: LIST }
+    ),
+    0
+  );
+});
+
+// --- strictness: listName is mandatory (no default Case store) ---
+
+test('MockSharePointClient: getCase throws when called without a listName', async () => {
+  const client = makeClient();
+  await assert.rejects(() => client.getCase('case-1'), /listName is required/);
+});
+
+test('MockSharePointClient: patchCase throws when called without a listName', async () => {
+  const client = makeClient();
+  await assert.rejects(
+    () => client.patchCase('case-1', { notes: 'x' }, 'etag-1'),
+    /listName is required/
+  );
+});
+
+test('MockSharePointClient: listCases throws when called without a listName', async () => {
+  const client = makeClient();
+  await assert.rejects(() => client.listCases({}), /listName is required/);
+});
+
+test('MockSharePointClient: countCases throws when called without a listName', async () => {
+  const client = makeClient();
+  await assert.rejects(() => client.countCases({}), /listName is required/);
+});
+
+// --- snapshot() ---
+
+test('MockSharePointClient: snapshot() returns a deep-cloned lists-only view of the case stores', async () => {
+  const client = makeClient();
+  await client.patchCase('case-1', { notes: 'snapshot me' }, 'etag-1', {
+    listName: LIST,
+  });
+
+  const snap = client.snapshot();
+  assert.deepEqual(Object.keys(snap), ['lists']);
+  assert.equal(
+    snap.lists[LIST].find((c) => c.id === 'case-1')?.notes,
+    'snapshot me'
+  );
+
+  // Deep-cloned: mutating the snapshot must not affect the live store.
+  snap.lists[LIST][0].notes = 'mutated';
+  const reread = await client.getCase('case-1', { listName: LIST });
+  assert.notEqual(reread?.notes, 'mutated');
 });

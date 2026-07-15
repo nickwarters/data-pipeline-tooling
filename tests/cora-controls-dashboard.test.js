@@ -182,7 +182,7 @@ test('ControlsDashboard: pages until a short page, accumulating every open appea
   cases.push(completedCase({ id: 'c-resolved', hasOpenAppeal: false }));
 
   const client = new MockSharePointClient({
-    cases,
+    lists: { 'Cases-Complaints': cases },
     questionDefinitions: [],
     personas: {},
   });

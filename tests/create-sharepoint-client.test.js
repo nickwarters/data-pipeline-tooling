@@ -69,54 +69,65 @@ test('createSharePointClient: mock client serves list-backed Case Types (issue #
   assert.ok(listScoped, 'list-backed Case is readable via its listName');
   assert.equal(listScoped?.caseType, 'product-sale-review');
 
-  // …and are partitioned OUT of the default store, matching production where
-  // a list-backed Case Type's rows live only in its own list.
-  const defaultRead = await client.getCase('psr-case-1');
-  assert.equal(
-    defaultRead,
-    null,
-    'list-backed Case is not served from the default store'
+  // …and reading a list surfaces it (there is no default store to fall back
+  // to — a read without listName now throws).
+  const inList = await client.listCases(
+    {},
+    { listName: 'Cases-ProductSaleReview' }
   );
-
-  // …but still surface through listCases so dashboards can reach them.
-  const all = await client.listCases({});
   assert.ok(
-    all.some((c) => c.id === 'psr-case-1'),
-    'list-backed Case still appears in listCases'
+    inList.some((c) => c.id === 'psr-case-1'),
+    'list-backed Case appears in its list-scoped listCases'
   );
 
-  // complaints now declares its own list (Cases-Complaints) too, so its Cases
-  // are read list-scoped rather than from a default store.
+  // complaints declares its own list (Cases-Complaints) too, so its Cases are
+  // read list-scoped.
   assert.ok(
     await client.getCase('complaints-case-1', { listName: 'Cases-Complaints' }),
     'complaints Case is readable via its listName'
   );
+
+  // There is no default store: a Case read without a listName fails loudly.
+  await assert.rejects(
+    () => client.getCase('psr-case-1'),
+    /listName is required/
+  );
 });
 
-test('partitionCasesByList: routes list-backed Cases to their list store and keeps list-less Cases in the default bucket', async () => {
+test('partitionCasesByList: routes every Case to its named list store (total, no default bucket)', async () => {
   /** @type {any} */
   const cases = [
-    { id: 'a', caseType: 'listed', answers: {} },
-    { id: 'b', caseType: 'listless', answers: {} },
+    { id: 'a', caseType: 'alpha', answers: {} },
+    { id: 'b', caseType: 'beta', answers: {} },
+    { id: 'a2', caseType: 'alpha', answers: {} },
   ];
   /** @param {string} slug */
   const loadCaseTypeConfig = async (slug) =>
-    /** @type {any} */ (slug === 'listed' ? { listName: 'Cases-Listed' } : {});
+    /** @type {any} */ ({
+      listName: slug === 'alpha' ? 'Cases-Alpha' : 'Cases-Beta',
+    });
 
-  const { cases: defaultCases, lists } = await partitionCasesByList(
-    cases,
-    loadCaseTypeConfig
-  );
+  const lists = await partitionCasesByList(cases, loadCaseTypeConfig);
 
   assert.deepEqual(
-    defaultCases.map((c) => c.id),
-    ['b'],
-    'a Case Type with no listName lands in the default bucket'
+    lists['Cases-Alpha'].map((c) => c.id),
+    ['a', 'a2']
   );
   assert.deepEqual(
-    lists['Cases-Listed'].map((c) => c.id),
-    ['a'],
-    'a list-backed Case lands in its named list store'
+    lists['Cases-Beta'].map((c) => c.id),
+    ['b']
+  );
+});
+
+test('partitionCasesByList: throws for a Case Type whose config declares no listName', async () => {
+  /** @type {any} */
+  const cases = [{ id: 'a', caseType: 'listless', answers: {} }];
+  /** @param {string} _slug */
+  const loadCaseTypeConfig = async (_slug) => /** @type {any} */ ({});
+
+  await assert.rejects(
+    () => partitionCasesByList(cases, loadCaseTypeConfig),
+    /declares no listName/
   );
 });
 

@@ -118,26 +118,24 @@ function reviewerCases() {
   return [...overdueOnly, both, ...awaitingOnly, ...reviewRequired, othersCase];
 }
 
-/** @param {CaseRow[]} cases */
-function makeClient(cases) {
-  return new MockSharePointClient({
-    cases,
-    questionDefinitions: [],
-    personas: { reviewer: { groups: [] } },
-  });
-}
-
 /**
  * The default single Case source for the existing (single-list) test
- * fixtures. `MockSharePointClient.listCases`/`countCases` aggregate across
- * `_cases` regardless of the `listName` passed in options, so a single source
- * here behaves exactly as the pre-fan-out unscoped reads did.
+ * fixtures.
  */
 const SOURCE = {
   slug: 'complaints',
   listName: 'Cases-Complaints',
   displayName: 'Complaints',
 };
+
+/** @param {CaseRow[]} cases */
+function makeClient(cases) {
+  return new MockSharePointClient({
+    lists: { [SOURCE.listName]: cases },
+    questionDefinitions: [],
+    personas: { reviewer: { groups: [] } },
+  });
+}
 
 /** @param {Capabilities} [capabilities] @param {CaseRow[]} [cases] */
 function mount(

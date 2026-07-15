@@ -49,7 +49,7 @@ function digestResponse() {
   return ok(JSON.stringify({ FormDigestValue: 'digest-1' }));
 }
 
-test('listPrefix: getCase targets the prefixed default Case list', async () => {
+test('listPrefix: getCase targets the prefixed named Case list', async () => {
   const { fetch, calls } = makeFetch(() => ok(itemJson));
   const client = new HttpSharePointClient({
     webUrl: WEB_URL,
@@ -57,7 +57,7 @@ test('listPrefix: getCase targets the prefixed default Case list', async () => {
     listPrefix: 'uat_',
   });
 
-  await client.getCase('c1');
+  await client.getCase('c1', { listName: 'Cases-ExampleReview' });
 
   assert.match(calls[0].url, /getbytitle\('uat_Cases-ExampleReview'\)/);
 });
@@ -85,7 +85,7 @@ test('listPrefix: listCases, countCases and getQuestionDefinitions are prefixed'
     listPrefix: 'uat_',
   });
 
-  await client.listCases({});
+  await client.listCases({}, { listName: 'Cases-ExampleReview' });
   await client.countCases({}, { listName: 'complaints' });
   await client.getQuestionDefinitions(['q1']);
 
@@ -104,7 +104,9 @@ test('listPrefix: patchCase writes to the prefixed list', async () => {
     listPrefix: 'uat_',
   });
 
-  await client.patchCase('c1', { notes: 'n' }, '"v1"');
+  await client.patchCase('c1', { notes: 'n' }, '"v1"', {
+    listName: 'Cases-ExampleReview',
+  });
 
   const patch = calls.find((c) => c.method === 'PATCH');
   assert.ok(patch);
@@ -113,9 +115,12 @@ test('listPrefix: patchCase writes to the prefixed list', async () => {
 
 test('listPrefix: defaults to empty — prod URLs are unchanged', async () => {
   const { fetch, calls } = makeFetch(() => ok(itemJson));
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
-  await client.getCase('c1');
+  await client.getCase('c1', { listName: 'Cases-ExampleReview' });
 
   assert.match(calls[0].url, /getbytitle\('Cases-ExampleReview'\)/);
 });
@@ -145,7 +150,10 @@ test('exportBasePath: getExportHash and getVersionedExport read the scoped path'
 
 test('exportBasePath: defaults to the prod Style Library path', async () => {
   const { fetch, calls } = makeFetch(() => ok(JSON.stringify({ hash: 'h' })));
-  const client = new HttpSharePointClient({ webUrl: WEB_URL, fetchImpl: fetch });
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
 
   await client.getExportHash('example-review');
 

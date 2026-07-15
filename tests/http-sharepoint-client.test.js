@@ -113,7 +113,9 @@ test('HttpSharePointClient: getCase parses the Details JSON blob into CaseRow.de
     fetchImpl: fetch,
   });
 
-  const row = await client.getCase('case-1');
+  const row = await client.getCase('case-1', {
+    listName: 'Cases-ExampleReview',
+  });
 
   assert.deepEqual(row?.details, {
     customerName: 'Jordan Lee',
@@ -158,7 +160,9 @@ test('HttpSharePointClient: patchCase serialises CaseRow.details to the Details 
   });
 
   const details = { customerName: 'Jordan Lee', accountNumber: 'ACC-4471' };
-  await client.patchCase('case-1', { details }, '"v1"');
+  await client.patchCase('case-1', { details }, '"v1"', {
+    listName: 'Cases-ExampleReview',
+  });
 
   const patch = calls.find((c) => c.method === 'PATCH');
   assert.ok(patch, 'PATCH was issued');
@@ -204,8 +208,12 @@ test('HttpSharePointClient: form digest is fetched lazily and reused across writ
     fetchImpl: fetch,
   });
 
-  await client.patchCase('case-1', { notes: 'first' }, '"old-etag"');
-  await client.patchCase('case-1', { notes: 'second' }, '"new-etag"');
+  await client.patchCase('case-1', { notes: 'first' }, '"old-etag"', {
+    listName: 'Cases-ExampleReview',
+  });
+  await client.patchCase('case-1', { notes: 'second' }, '"new-etag"', {
+    listName: 'Cases-ExampleReview',
+  });
 
   const digestCalls = calls.filter((c) => c.url.endsWith('/_api/contextinfo'));
   assert.equal(digestCalls.length, 1, 'digest should be fetched only once');
@@ -262,7 +270,9 @@ test('HttpSharePointClient: 403 on write triggers digest refresh and one retry',
     fetchImpl: fetch,
   });
 
-  const result = await client.patchCase('case-1', { notes: 'done' }, '"e1"');
+  const result = await client.patchCase('case-1', { notes: 'done' }, '"e1"', {
+    listName: 'Cases-ExampleReview',
+  });
 
   assert.equal(result.ok, true);
   assert.equal(digestCount, 2, 'digest fetched twice (initial + refresh)');
@@ -296,7 +306,9 @@ test('HttpSharePointClient: 403 retry that also fails is surfaced (no infinite l
     fetchImpl: fetch,
   });
 
-  const result = await client.patchCase('case-1', { notes: 'x' }, '"e1"');
+  const result = await client.patchCase('case-1', { notes: 'x' }, '"e1"', {
+    listName: 'Cases-ExampleReview',
+  });
 
   assert.equal(result.ok, false);
   assert.equal(result.status, 403);
@@ -341,7 +353,9 @@ test('HttpSharePointClient: PATCH sends If-Match header with the supplied ETag',
     fetchImpl: fetch,
   });
 
-  await client.patchCase('case-1', { notes: 'n' }, '"v1"');
+  await client.patchCase('case-1', { notes: 'n' }, '"v1"', {
+    listName: 'Cases-ExampleReview',
+  });
 
   const patch = calls.find((c) => c.method === 'PATCH');
   assert.ok(patch, 'PATCH was issued');
@@ -423,7 +437,8 @@ test('HttpSharePointClient: patchCase writes mutable CaseRow fields to SharePoin
       assignedReviewerManager: null,
       responsiblePartyManager: 'rp-manager',
     },
-    '"v1"'
+    '"v1"',
+    { listName: 'Cases-ExampleReview' }
   );
 
   const patch = calls.find((c) => c.method === 'PATCH');
@@ -502,7 +517,8 @@ test('HttpSharePointClient: patchCase writes Action Centre state flags + clocks 
       reopened: false,
       reopenedAt: null,
     },
-    '"v1"'
+    '"v1"',
+    { listName: 'Cases-ExampleReview' }
   );
 
   const patch = calls.find((c) => c.method === 'PATCH');
@@ -555,7 +571,9 @@ test('HttpSharePointClient: patchCase result.data.etag reflects the new ETag fro
     fetchImpl: fetch,
   });
 
-  const result = await client.patchCase('case-1', { notes: 'n' }, '"v1"');
+  const result = await client.patchCase('case-1', { notes: 'n' }, '"v1"', {
+    listName: 'Cases-ExampleReview',
+  });
 
   assert.equal(result.ok, true);
   assert.equal(result.data?.etag, '"server-new"');
@@ -581,7 +599,9 @@ test('HttpSharePointClient: 412 on PATCH returns {ok:false, status:412} without 
     fetchImpl: fetch,
   });
 
-  const result = await client.patchCase('case-1', { notes: 'n' }, '"stale"');
+  const result = await client.patchCase('case-1', { notes: 'n' }, '"stale"', {
+    listName: 'Cases-ExampleReview',
+  });
 
   assert.equal(result.ok, false);
   assert.equal(result.status, 412);
@@ -628,7 +648,9 @@ test('HttpSharePointClient: 429 with Retry-After waits the indicated seconds bef
     sleep,
   });
 
-  const row = await client.getCase('case-1');
+  const row = await client.getCase('case-1', {
+    listName: 'Cases-ExampleReview',
+  });
 
   assert.equal(row?.id, 'case-1');
   assert.equal(calls.filter((c) => c.method === 'GET').length, 2);
@@ -668,7 +690,7 @@ test('HttpSharePointClient: 429 without Retry-After falls back to a default dela
     sleep,
   });
 
-  await client.getCase('case-1');
+  await client.getCase('case-1', { listName: 'Cases-ExampleReview' });
 
   assert.equal(delays.length, 1);
   assert.ok(delays[0] >= 1000, 'fallback delay should be at least 1s');
@@ -713,7 +735,7 @@ test('HttpSharePointClient: 429 with garbage Retry-After string falls back to de
     sleep,
   });
 
-  await client.getCase('case-1');
+  await client.getCase('case-1', { listName: 'Cases-ExampleReview' });
 
   assert.equal(delays.length, 1);
   assert.ok(
@@ -749,7 +771,9 @@ test('HttpSharePointClient: getCase returns fallback empty objects when Answers/
     fetchImpl: fetch,
   });
 
-  const row = await client.getCase('case-bad');
+  const row = await client.getCase('case-bad', {
+    listName: 'Cases-ExampleReview',
+  });
 
   // parseJsonField catch block returns fallback for invalid JSON (lines 349-350)
   assert.deepEqual(row?.answers, {}, 'invalid Answers JSON falls back to {}');
@@ -832,7 +856,7 @@ test('HttpSharePointClient: listCases follows odata.nextLink across pages and co
     fetchImpl: fetch,
   });
 
-  const cases = await client.listCases({});
+  const cases = await client.listCases({}, { listName: 'Cases-ExampleReview' });
 
   assert.equal(cases.length, 3);
   assert.deepEqual(
@@ -855,7 +879,10 @@ test('HttpSharePointClient: listCases applies status and assignedReviewer filter
     fetchImpl: fetch,
   });
 
-  await client.listCases({ status: 'In-progress', assignedReviewer: 'user-1' });
+  await client.listCases(
+    { status: 'In-progress', assignedReviewer: 'user-1' },
+    { listName: 'Cases-ExampleReview' }
+  );
 
   assert.equal(calls.length, 1);
   const url = decodeURIComponent(calls[0].url);
@@ -863,7 +890,7 @@ test('HttpSharePointClient: listCases applies status and assignedReviewer filter
   assert.ok(url.includes('user-1'), 'should filter on assigned reviewer id');
 });
 
-test('HttpSharePointClient: listCases uses default case list when no list override is supplied', async () => {
+test('HttpSharePointClient: listCases targets the explicitly supplied listName (there is no default Case list)', async () => {
   const { fetch, calls } = makeFetch([
     {
       when: (c) => c.method === 'GET',
@@ -876,12 +903,23 @@ test('HttpSharePointClient: listCases uses default case list when no list overri
     fetchImpl: fetch,
   });
 
-  await client.listCases({});
+  await client.listCases({}, { listName: 'Cases-ExampleReview' });
 
   assert.ok(
     calls[0].url.includes("getbytitle('Cases-ExampleReview')"),
-    'should use the default case list'
+    'should use the supplied list name'
   );
+});
+
+test('HttpSharePointClient: listCases throws when called without a listName', async () => {
+  const { fetch, calls } = makeFetch([]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await assert.rejects(() => client.listCases({}), /listName is required/);
+  assert.equal(calls.length, 0, 'no fetch attempted');
 });
 
 test('HttpSharePointClient: listCases can target a supplied SharePoint list', async () => {
@@ -921,7 +959,9 @@ test('HttpSharePointClient: getCase returns null on 404', async () => {
     fetchImpl: fetch,
   });
 
-  const row = await client.getCase('case-missing');
+  const row = await client.getCase('case-missing', {
+    listName: 'Cases-ExampleReview',
+  });
   assert.equal(row, null);
 });
 
@@ -954,7 +994,9 @@ test('HttpSharePointClient: getCase parses Answers/Conversation JSON blobs and c
     fetchImpl: fetch,
   });
 
-  const row = await client.getCase('case-1');
+  const row = await client.getCase('case-1', {
+    listName: 'Cases-ExampleReview',
+  });
 
   assert.equal(row?.id, 'case-1');
   assert.equal(row?.etag, '"v7"');
@@ -1057,7 +1099,9 @@ test('HttpSharePointClient: getCase hydrates the full CaseRow contract', async (
     fetchImpl: fetch,
   });
 
-  const row = await client.getCase('case-1');
+  const row = await client.getCase('case-1', {
+    listName: 'Cases-ExampleReview',
+  });
 
   assert.equal(row?.caseJustification, 'documented rationale');
   assert.equal(row?.reportableAt, '2026-06-02T10:00:00.000Z');
@@ -1103,7 +1147,7 @@ async function overdueFor(fields) {
     webUrl: WEB_URL,
     fetchImpl: fetch,
   });
-  const row = await client.getCase('c');
+  const row = await client.getCase('c', { listName: 'Cases-ExampleReview' });
   return row?.overdue;
 }
 
@@ -1225,7 +1269,9 @@ test('HttpSharePointClient: patchCase handles 200 response with JSON body (no se
     fetchImpl: fetch,
   });
 
-  const result = await client.patchCase('case-1', { notes: 'n' }, '"v1"');
+  const result = await client.patchCase('case-1', { notes: 'n' }, '"v1"', {
+    listName: 'Cases-ExampleReview',
+  });
   assert.equal(result.ok, true);
   assert.equal(result.status, 200);
   assert.equal(result.data?.title, 'Updated');
@@ -1360,6 +1406,40 @@ test('HttpSharePointClient: getQuestionDefinitions with single-choice and multi-
   assert.deepEqual(mc?.options, ['X', 'Y']);
 });
 
+test('HttpSharePointClient: getQuestionDefinitions parses a non-empty RemediationActions array', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                QuestionId: 'q-rem',
+                QuestionText: 'Needs remediation?',
+                ResponseType: 'yes-no-na',
+                RemediationActions: JSON.stringify([
+                  { id: 'ra-1', text: 'Contact customer' },
+                ]),
+                Deprecated: false,
+              },
+            ],
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const [def] = await client.getQuestionDefinitions(['q-rem']);
+  assert.deepEqual(def.remediationActions, [
+    { id: 'ra-1', text: 'Contact customer' },
+  ]);
+});
+
 // --- legacy OData verbose format ---
 
 test('HttpSharePointClient: _getAllPages handles legacy d.results OData format', async () => {
@@ -1395,7 +1475,7 @@ test('HttpSharePointClient: _getAllPages handles legacy d.results OData format',
     fetchImpl: fetch,
   });
 
-  const cases = await client.listCases({});
+  const cases = await client.listCases({}, { listName: 'Cases-ExampleReview' });
   assert.equal(cases.length, 1, 'should parse d.results format');
   assert.equal(cases[0].id, 'case-1');
 });
@@ -1444,12 +1524,81 @@ test('HttpSharePointClient: 429 with HTTP-date Retry-After waits until that time
     sleep,
   });
 
-  await client.getCase('case-1');
+  await client.getCase('case-1', { listName: 'Cases-ExampleReview' });
 
   assert.equal(delays.length, 1, 'should have slept once');
   // The delay should be roughly 2 seconds (± some tolerance for test run time)
   assert.ok(delays[0] >= 0, 'delay should be non-negative');
   assert.ok(delays[0] <= 3000, 'delay should not be wildly large');
+});
+
+test('HttpSharePointClient: defaults to globalThis.fetch when fetchImpl is not supplied', async () => {
+  const originalFetch = globalThis.fetch;
+  /** @type {any[]} */
+  const calls = [];
+  globalThis.fetch = async (
+    /** @type {any} */ input,
+    /** @type {any} */ init
+  ) => {
+    calls.push({ input, init });
+    return new Response(
+      JSON.stringify({ Id: 'case-1', Title: 'T', Status: 'In-progress' }),
+      { status: 200 }
+    );
+  };
+  try {
+    const client = new HttpSharePointClient({ webUrl: WEB_URL });
+    const row = await client.getCase('case-1', {
+      listName: 'Cases-ExampleReview',
+    });
+    assert.equal(row?.id, 'case-1');
+    assert.equal(calls.length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('HttpSharePointClient: defaults to a real setTimeout-backed sleep when sleep is not supplied', async () => {
+  const originalSetTimeout = globalThis.setTimeout;
+  // Fire immediately so the default sleep implementation runs without
+  // actually waiting out the 429 retry delay in this test.
+  // @ts-ignore
+  globalThis.setTimeout = (/** @type {any} */ cb) => {
+    cb();
+    return /** @type {any} */ (0);
+  };
+  let getCount = 0;
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () => {
+        getCount++;
+        if (getCount === 1) {
+          return new Response('throttled', {
+            status: 429,
+            headers: { 'Retry-After': '0' },
+          });
+        }
+        return new Response(
+          JSON.stringify({ Id: 'case-1', Title: 'T', Status: 'In-progress' }),
+          { status: 200 }
+        );
+      },
+    },
+  ]);
+  try {
+    const client = new HttpSharePointClient({
+      webUrl: WEB_URL,
+      fetchImpl: fetch,
+    });
+    const row = await client.getCase('case-1', {
+      listName: 'Cases-ExampleReview',
+    });
+    assert.equal(row?.id, 'case-1');
+    assert.equal(getCount, 2, 'retried once after the default sleep resolved');
+  } finally {
+    globalThis.setTimeout = originalSetTimeout;
+  }
 });
 
 // --- type-shape compile-time check ---
@@ -1481,7 +1630,10 @@ test('HttpSharePointClient: listCases with overdue:true adds DueDate lt and Stat
     fetchImpl: fetch,
   });
 
-  await client.listCases({ overdue: true });
+  await client.listCases(
+    { overdue: true },
+    { listName: 'Cases-ExampleReview' }
+  );
 
   assert.equal(calls.length, 1);
   const url = decodeURIComponent(calls[0].url);
@@ -1505,7 +1657,7 @@ test('HttpSharePointClient: listCases without overdue filter omits DueDate condi
     fetchImpl: fetch,
   });
 
-  await client.listCases({});
+  await client.listCases({}, { listName: 'Cases-ExampleReview' });
 
   const url = decodeURIComponent(calls[0].url);
   assert.ok(
@@ -1527,7 +1679,10 @@ test('HttpSharePointClient: listCases with effectiveOutcome filters server-side 
     fetchImpl: fetch,
   });
 
-  await client.listCases({ effectiveOutcome: 'fail' });
+  await client.listCases(
+    { effectiveOutcome: 'fail' },
+    { listName: 'Cases-ExampleReview' }
+  );
 
   const url = decodeURIComponent(calls[0].url);
   assert.ok(
@@ -1549,7 +1704,10 @@ test('HttpSharePointClient: listCases with outcomeOverridden filters on the Outc
     fetchImpl: fetch,
   });
 
-  await client.listCases({ outcomeOverridden: true });
+  await client.listCases(
+    { outcomeOverridden: true },
+    { listName: 'Cases-ExampleReview' }
+  );
 
   const url = decodeURIComponent(calls[0].url);
   assert.ok(
@@ -1571,7 +1729,10 @@ test('HttpSharePointClient: listCases with responsibleParty filters server-side 
     fetchImpl: fetch,
   });
 
-  await client.listCases({ responsibleParty: 'rp-user' });
+  await client.listCases(
+    { responsibleParty: 'rp-user' },
+    { listName: 'Cases-ExampleReview' }
+  );
 
   const url = decodeURIComponent(calls[0].url);
   assert.ok(
@@ -1593,7 +1754,10 @@ test('HttpSharePointClient: listCases with assignedReviewerManager filters serve
     fetchImpl: fetch,
   });
 
-  await client.listCases({ assignedReviewerManager: 'mgr-user' });
+  await client.listCases(
+    { assignedReviewerManager: 'mgr-user' },
+    { listName: 'Cases-ExampleReview' }
+  );
 
   const url = decodeURIComponent(calls[0].url);
   assert.ok(
@@ -1617,11 +1781,14 @@ test('HttpSharePointClient: listCases with a CompletedAt window leads with the i
     fetchImpl: fetch,
   });
 
-  await client.listCases({
-    status: 'Completed',
-    completedAfter: '2026-07-02T00:00:00.000Z',
-    completedBefore: '2026-07-03T00:00:00.000Z',
-  });
+  await client.listCases(
+    {
+      status: 'Completed',
+      completedAfter: '2026-07-02T00:00:00.000Z',
+      completedBefore: '2026-07-03T00:00:00.000Z',
+    },
+    { listName: 'Cases-ExampleReview' }
+  );
 
   const url = decodeURIComponent(calls[0].url);
   assert.ok(
@@ -1651,12 +1818,15 @@ test('HttpSharePointClient: countCases sums a bounded CompletedAt day-slice via 
     fetchImpl: fetch,
   });
 
-  const n = await client.countCases({
-    caseType: 'example-review',
-    status: 'Completed',
-    completedAfter: '2026-07-02T00:00:00.000Z',
-    completedBefore: '2026-07-03T00:00:00.000Z',
-  });
+  const n = await client.countCases(
+    {
+      caseType: 'example-review',
+      status: 'Completed',
+      completedAfter: '2026-07-02T00:00:00.000Z',
+      completedBefore: '2026-07-03T00:00:00.000Z',
+    },
+    { listName: 'Cases-ExampleReview' }
+  );
 
   assert.equal(n, 42);
   const url = decodeURIComponent(calls[0].url);
@@ -1678,7 +1848,10 @@ test('HttpSharePointClient: listCases without a CompletedAt window omits the Com
     fetchImpl: fetch,
   });
 
-  await client.listCases({ status: 'In-progress' });
+  await client.listCases(
+    { status: 'In-progress' },
+    { listName: 'Cases-ExampleReview' }
+  );
 
   const url = decodeURIComponent(calls[0].url);
   assert.ok(!url.includes('CompletedAt'), 'no CompletedAt when unbounded');
@@ -1698,7 +1871,10 @@ test('HttpSharePointClient: countCases hits the $count endpoint and returns a ba
     fetchImpl: fetch,
   });
 
-  const n = await client.countCases({ overdue: true });
+  const n = await client.countCases(
+    { overdue: true },
+    { listName: 'Cases-ExampleReview' }
+  );
 
   assert.equal(n, 23);
   const url = decodeURIComponent(calls[0].url);
@@ -1723,7 +1899,7 @@ test('HttpSharePointClient: countCases with no filter omits $filter and defaults
     fetchImpl: fetch,
   });
 
-  const n = await client.countCases({});
+  const n = await client.countCases({}, { listName: 'Cases-ExampleReview' });
   assert.equal(n, 0);
   assert.ok(!calls[0].url.includes('$filter'), 'no filter in the URL');
   assert.ok(calls[0].url.endsWith('/items/$count'));
@@ -1741,12 +1917,15 @@ test('HttpSharePointClient: countCases maps the reason flags to indexed boolean 
     fetchImpl: fetch,
   });
 
-  await client.countCases({
-    awaitingResponsibleParty: true,
-    reviewRequired: true,
-    hasOpenAppeal: false,
-    reopened: true,
-  });
+  await client.countCases(
+    {
+      awaitingResponsibleParty: true,
+      reviewRequired: true,
+      hasOpenAppeal: false,
+      reopened: true,
+    },
+    { listName: 'Cases-ExampleReview' }
+  );
 
   const url = decodeURIComponent(calls[0].url);
   assert.ok(url.includes('AwaitingResponsibleParty eq 1'));
@@ -1767,13 +1946,16 @@ test('HttpSharePointClient: countCases with anyOf builds an OR of parenthesised 
     fetchImpl: fetch,
   });
 
-  await client.countCases({
-    anyOf: [
-      { overdue: true },
-      { awaitingResponsibleParty: true },
-      {}, // empty sub-filter contributes nothing and is dropped
-    ],
-  });
+  await client.countCases(
+    {
+      anyOf: [
+        { overdue: true },
+        { awaitingResponsibleParty: true },
+        {}, // empty sub-filter contributes nothing and is dropped
+      ],
+    },
+    { listName: 'Cases-ExampleReview' }
+  );
 
   const url = decodeURIComponent(calls[0].url);
   assert.ok(url.includes('(DueDate lt'), 'first sub-filter is parenthesised');
@@ -1802,7 +1984,13 @@ test('HttpSharePointClient: listCases with top/skip pages a single window withou
 
   const rows = await client.listCases(
     { awaitingResponsibleParty: true },
-    { top: 4, skip: 8, orderBy: 'awaitingSince', orderDir: 'asc' }
+    {
+      listName: 'Cases-ExampleReview',
+      top: 4,
+      skip: 8,
+      orderBy: 'awaitingSince',
+      orderDir: 'asc',
+    }
   );
 
   assert.equal(rows.length, 1);
@@ -1829,7 +2017,10 @@ test('HttpSharePointClient: a paged read parses the legacy verbose { d: { result
     fetchImpl: fetch,
   });
 
-  const rows = await client.listCases({}, { top: 5 });
+  const rows = await client.listCases(
+    {},
+    { listName: 'Cases-ExampleReview', top: 5 }
+  );
   assert.equal(rows.length, 1);
   assert.equal(rows[0].id, 'c9');
 });
@@ -1847,7 +2038,10 @@ test('HttpSharePointClient: a paged read of an unrecognised body yields no rows'
     fetchImpl: fetch,
   });
 
-  assert.deepEqual(await client.listCases({}, { top: 5 }), []);
+  assert.deepEqual(
+    await client.listCases({}, { listName: 'Cases-ExampleReview', top: 5 }),
+    []
+  );
 });
 
 test('HttpSharePointClient: listCases orderBy desc appends the desc direction', async () => {
@@ -1863,7 +2057,15 @@ test('HttpSharePointClient: listCases orderBy desc appends the desc direction', 
     fetchImpl: fetch,
   });
 
-  await client.listCases({}, { top: 1, orderBy: 'dueDate', orderDir: 'desc' });
+  await client.listCases(
+    {},
+    {
+      listName: 'Cases-ExampleReview',
+      top: 1,
+      orderBy: 'dueDate',
+      orderDir: 'desc',
+    }
+  );
 
   const url = decodeURIComponent(calls[0].url);
   assert.ok(url.includes('$orderby=dueDate desc'));
@@ -1900,7 +2102,10 @@ test('HttpSharePointClient: listCases maps the reason columns from SP into the C
     fetchImpl: fetch,
   });
 
-  const [row] = await client.listCases({}, { top: 10 });
+  const [row] = await client.listCases(
+    {},
+    { listName: 'Cases-ExampleReview', top: 10 }
+  );
   assert.equal(row.awaitingResponsibleParty, true);
   assert.equal(row.awaitingSince, '2026-06-01T00:00:00Z');
   assert.equal(row.reviewRequired, true);
@@ -1928,7 +2133,10 @@ test('HttpSharePointClient: listCases leaves reason columns undefined/null when 
     fetchImpl: fetch,
   });
 
-  const [row] = await client.listCases({}, { top: 10 });
+  const [row] = await client.listCases(
+    {},
+    { listName: 'Cases-ExampleReview', top: 10 }
+  );
   assert.equal(row.awaitingResponsibleParty, undefined);
   assert.equal(row.awaitingSince, null);
   assert.equal(row.reviewRequired, undefined);
@@ -1966,7 +2174,9 @@ test('HttpSharePointClient: getCase maps AssignedReviewerManager and Responsible
     webUrl: WEB_URL,
     fetchImpl: fetch,
   });
-  const row = await client.getCase('case-x');
+  const row = await client.getCase('case-x', {
+    listName: 'Cases-ExampleReview',
+  });
   assert.equal(row?.assignedReviewerManager, 'mgr-r');
   assert.equal(row?.responsiblePartyManager, 'mgr-rp');
 });
@@ -2006,7 +2216,8 @@ test('HttpSharePointClient: patchCase writes assignedReviewerManager and respons
   await client.patchCase(
     'case-x',
     { assignedReviewerManager: 'mgr-r', responsiblePartyManager: 'mgr-rp' },
-    '"etag-1"'
+    '"etag-1"',
+    { listName: 'Cases-ExampleReview' }
   );
   const patchCall = calls.find((c) => c.method === 'PATCH');
   const body = JSON.parse(patchCall?.body ?? '{}');
@@ -2406,4 +2617,647 @@ test('HttpSharePointClient: assignable to SharePointClient interface (includes g
   /** @type {import('../src/sharepoint-client.js').SharePointClient} */
   const c = new HttpSharePointClient({ webUrl: WEB_URL });
   assert.equal(typeof c.getVersionedExport, 'function');
+});
+
+// --- strictness: listName is mandatory (no default Case list) ---
+
+test('HttpSharePointClient: getCase throws when called without a listName', async () => {
+  const { fetch, calls } = makeFetch([]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await assert.rejects(() => client.getCase('case-1'), /listName is required/);
+  assert.equal(calls.length, 0, 'no fetch attempted');
+});
+
+test('HttpSharePointClient: patchCase throws when called without a listName', async () => {
+  const { fetch, calls } = makeFetch([]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await assert.rejects(
+    () => client.patchCase('case-1', { notes: 'x' }, '"v1"'),
+    /listName is required/
+  );
+  assert.equal(calls.length, 0, 'no fetch attempted');
+});
+
+test('HttpSharePointClient: countCases throws when called without a listName', async () => {
+  const { fetch, calls } = makeFetch([]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await assert.rejects(() => client.countCases({}), /listName is required/);
+  assert.equal(calls.length, 0, 'no fetch attempted');
+});
+
+// --- pre-existing branch-coverage gaps (unrelated to the strictness flip,
+// closed here because this file is in scope for the migration ticket) -----
+
+test('HttpSharePointClient: getCase rethrows a non-404 fetch error', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () => new Response('boom', { status: 500 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await assert.rejects(
+    () => client.getCase('case-1', { listName: 'Cases-ExampleReview' }),
+    /HTTP Error: 500/
+  );
+});
+
+test('HttpSharePointClient: patchCase returns 404 when the 204-write case has vanished on refetch', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () => digestResponse('d'),
+    },
+    {
+      when: (c) => c.method === 'PATCH',
+      respond: () => new Response(null, { status: 204 }),
+    },
+    {
+      when: (c) => c.method === 'GET',
+      respond: () => new Response('not found', { status: 404 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const result = await client.patchCase('case-1', { notes: 'n' }, '"v1"', {
+    listName: 'Cases-ExampleReview',
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 404);
+});
+
+test('HttpSharePointClient: patchCase 200 response with neither an ETag header nor an odata.etag field falls back through the || to the same empty row etag', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () => digestResponse('d'),
+    },
+    {
+      when: (c) => c.method === 'PATCH',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'T',
+            Status: 'In-progress',
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: 'n',
+            CompletedAt: null,
+            CaseType: 'example-review',
+          }),
+          { status: 200 } // no ETag header, no odata.etag field — readEtag(data) is ''
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const result = await client.patchCase('case-1', { notes: 'n' }, '"v1"', {
+    listName: 'Cases-ExampleReview',
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.data?.etag, '');
+});
+
+test('HttpSharePointClient: patchCase surfaces a network error without a status as {ok:false, status:500}', async () => {
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: async () => {
+      throw new Error('network down');
+    },
+  });
+
+  const result = await client.patchCase('case-1', { notes: 'n' }, '"v1"', {
+    listName: 'Cases-ExampleReview',
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 500);
+});
+
+test('HttpSharePointClient: getQuestionDefinitions with an empty ids array returns [] without calling fetch', async () => {
+  const { fetch, calls } = makeFetch([]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  assert.deepEqual(await client.getQuestionDefinitions([]), []);
+  assert.equal(calls.length, 0);
+});
+
+test('HttpSharePointClient: countCases defaults to 0 for a non-numeric (NaN) count body', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ not: 'a number' }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const n = await client.countCases({}, { listName: 'Cases-ExampleReview' });
+  assert.equal(n, 0);
+});
+
+test('HttpSharePointClient: countCases returns n for a well-formed numeric count body', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () => new Response('42', { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const n = await client.countCases({}, { listName: 'Cases-ExampleReview' });
+  assert.equal(n, 42);
+});
+
+test('HttpSharePointClient: getCurrentUserGroups falls back from Title to LoginName to empty string', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            value: [
+              { LoginName: 'domain\\bob' }, // no Title
+              {}, // neither Title nor LoginName
+            ],
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const groups = await client.getCurrentUserGroups();
+  assert.deepEqual(groups, ['domain\\bob', '']);
+});
+
+test('HttpSharePointClient: getCurrentUser falls back through LoginName/Title to empty strings', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () => new Response(JSON.stringify({}), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const u = await client.getCurrentUser();
+  assert.equal(u.id, '');
+  assert.equal(u.displayName, '');
+});
+
+test('HttpSharePointClient: getCurrentUser displayName falls back to LoginName when Title is absent', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ LoginName: 'i:0#.w|domain\\carol' }), {
+          status: 200,
+        }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const u = await client.getCurrentUser();
+  assert.equal(u.id, 'carol');
+  assert.equal(u.displayName, 'i:0#.w|domain\\carol');
+});
+
+test('HttpSharePointClient: getVersionedExport returns null when the parsed body is not an object', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: () => true,
+      respond: () =>
+        new Response(JSON.stringify('just a string'), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const result = await client.getVersionedExport(
+    'example-review',
+    'sha256:abc'
+  );
+  assert.equal(result, null);
+});
+
+test('HttpSharePointClient: _request defaults to an empty init object when none is supplied', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [] }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const body = await client._request(WEB_URL + '/_api/web/lists');
+  assert.deepEqual(body, { value: [] });
+  assert.equal(calls.length, 1);
+});
+
+test('HttpSharePointClient: _getAllPages falls back to [] for an unrecognised page shape', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ nothing: true }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  // listCases with no top/skip drives the unpaged _getAllPages walk.
+  const rows = await client.listCases({}, { listName: 'Cases-ExampleReview' });
+  assert.deepEqual(rows, []);
+});
+
+test('HttpSharePointClient: _refreshDigest reads the verbose d.GetContextWebInformation.FormDigestValue envelope', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            d: {
+              GetContextWebInformation: { FormDigestValue: 'verbose-digest' },
+            },
+          }),
+          { status: 200 }
+        ),
+    },
+    {
+      when: (c) => c.method === 'PATCH',
+      respond: () =>
+        new Response(null, { status: 204, headers: { ETag: '"v2"' } }),
+    },
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'T',
+            Status: 'In-progress',
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: 'n',
+            CompletedAt: null,
+            CaseType: 'example-review',
+          }),
+          { status: 200, headers: { ETag: '"v2"' } }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.patchCase('case-1', { notes: 'n' }, '"v1"', {
+    listName: 'Cases-ExampleReview',
+  });
+
+  const patch = calls.find((c) => c.method === 'PATCH');
+  assert.equal(patch?.headers['x-requestdigest'], 'verbose-digest');
+});
+
+test('HttpSharePointClient: _refreshDigest throws when the contextinfo response carries no FormDigestValue', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () => new Response(JSON.stringify({}), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  // patchCase's own try/catch would swallow the throw into {ok:false}, so
+  // exercise the digest refresh directly to assert the throw itself.
+  await assert.rejects(
+    () => client._refreshDigest(),
+    /FormDigestValue missing/
+  );
+});
+
+test('HttpSharePointClient: _absolute prefixes a relative path that does not start with a slash', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: () => true,
+      respond: () =>
+        new Response(JSON.stringify({ hash: 'h' }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+    exportBasePath: 'Style%20Library/case-review/case-types', // no leading slash
+  });
+
+  await client.getExportHash('example-review');
+
+  assert.equal(
+    calls[0].url,
+    `${WEB_URL}/Style%20Library/case-review/case-types/example-review.json`
+  );
+});
+
+test('HttpSharePointClient: countCases with every reason flag false renders every OData boolean as 0', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () => new Response('0', { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  await client.countCases(
+    {
+      awaitingResponsibleParty: false,
+      reviewRequired: false,
+      hasOpenAppeal: true,
+      reopened: false,
+      outcomeOverridden: false,
+    },
+    { listName: 'Cases-ExampleReview' }
+  );
+
+  const url = decodeURIComponent(calls[0].url);
+  assert.ok(url.includes('AwaitingResponsibleParty eq 0'));
+  assert.ok(url.includes('ReviewRequired eq 0'));
+  assert.ok(url.includes('HasOpenAppeal eq 1'));
+  assert.ok(url.includes('Reopened eq 0'));
+  assert.ok(url.includes('OutcomeOverridden eq 0'));
+});
+
+test('HttpSharePointClient: searchPeople handles an entity with no Key', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () => digestResponse('d1'),
+    },
+    {
+      when: (c) => c.method === 'POST',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            value: JSON.stringify([{ DisplayText: 'No Key' }]),
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const results = await client.searchPeople('x');
+  assert.deepEqual(results, [{ loginName: '', displayName: 'No Key' }]);
+});
+
+test('HttpSharePointClient: getCase falls back to an empty id when SP omits Id', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ Title: 'No Id' }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const row = await client.getCase('whatever', {
+    listName: 'Cases-ExampleReview',
+  });
+  assert.equal(row?.id, '');
+});
+
+test('HttpSharePointClient: patchCase writes status, assignedReviewer, responsibleParty, answers and conversation to SP columns', async () => {
+  const { fetch, calls } = makeFetch([
+    {
+      when: (c) => c.url.endsWith('/_api/contextinfo'),
+      respond: () => digestResponse('d'),
+    },
+    {
+      when: (c) => c.method === 'PATCH',
+      respond: () =>
+        new Response(null, { status: 204, headers: { ETag: '"v2"' } }),
+    },
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'T',
+            Status: 'Completed',
+            Answers: '{}',
+            Conversation: '[]',
+            Notes: 'n',
+            CompletedAt: null,
+            CaseType: 'example-review',
+          }),
+          { status: 200, headers: { ETag: '"v2"' } }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const answers = { 'q-1': { value: 'Yes' } };
+  const conversation = [{ author: 'u1', timestamp: 't', body: 'hi' }];
+  await client.patchCase(
+    'case-1',
+    {
+      status: 'Completed',
+      assignedReviewer: 'user-9',
+      responsibleParty: 'user-10',
+      answers,
+      conversation,
+    },
+    '"v1"',
+    { listName: 'Cases-ExampleReview' }
+  );
+
+  const patch = calls.find((c) => c.method === 'PATCH');
+  assert.ok(patch, 'PATCH was issued');
+  const body = JSON.parse(String(patch.body));
+  assert.equal(body.Status, 'Completed');
+  assert.equal(body.AssignedReviewerId, 'user-9');
+  assert.equal(body.ResponsiblePartyId, 'user-10');
+  assert.equal(body.Answers, JSON.stringify(answers));
+  assert.equal(body.Conversation, JSON.stringify(conversation));
+});
+
+test('HttpSharePointClient: getCase passes through an already-parsed (non-string) Answers value unchanged', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            Id: 'case-1',
+            Title: 'T',
+            Status: 'In-progress',
+            Answers: { 'q-1': { value: 'Yes' } },
+            Conversation: '[]',
+            Notes: '',
+            CompletedAt: null,
+            CaseType: 'example-review',
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const row = await client.getCase('case-1', {
+    listName: 'Cases-ExampleReview',
+  });
+  assert.deepEqual(row?.answers, { 'q-1': { value: 'Yes' } });
+});
+
+test('HttpSharePointClient: getQuestionDefinitions falls back from QuestionId to Id and from QuestionText to Title', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            value: [
+              { Id: 'fallback-id', Title: 'Fallback Title' }, // no QuestionId/QuestionText/Deprecated
+            ],
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const [def] = await client.getQuestionDefinitions(['fallback-id']);
+  assert.equal(def.id, 'fallback-id');
+  assert.equal(def.text, 'Fallback Title');
+  assert.equal(
+    def.deprecated,
+    false,
+    '?? false fallback when Deprecated is absent'
+  );
+});
+
+test('HttpSharePointClient: getQuestionDefinitions falls all the way to empty strings when QuestionId/Id and QuestionText/Title are all absent', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(JSON.stringify({ value: [{}] }), { status: 200 }),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const [def] = await client.getQuestionDefinitions(['whatever']);
+  assert.equal(def.id, '');
+  assert.equal(def.text, '');
+});
+
+test('HttpSharePointClient: getQuestionDefinitions parses OptionOutcomes, ShowWhen and FailureCriteria', async () => {
+  const { fetch } = makeFetch([
+    {
+      when: (c) => c.method === 'GET',
+      respond: () =>
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                QuestionId: 'q-full',
+                QuestionText: 'Full question',
+                ResponseType: 'outcome',
+                OptionOutcomes: JSON.stringify({ Yes: 'pass', No: 'fail' }),
+                ShowWhen: JSON.stringify({ questionId: 'q-x', equals: 'Yes' }),
+                FailureCriteria: 'No',
+                Deprecated: true,
+              },
+            ],
+          }),
+          { status: 200 }
+        ),
+    },
+  ]);
+  const client = new HttpSharePointClient({
+    webUrl: WEB_URL,
+    fetchImpl: fetch,
+  });
+
+  const [def] = await client.getQuestionDefinitions(['q-full']);
+  assert.deepEqual(def.optionOutcomes, { Yes: 'pass', No: 'fail' });
+  assert.deepEqual(def.showWhen, { questionId: 'q-x', equals: 'Yes' });
+  assert.equal(def.failureCriteria, 'No');
+  assert.equal(def.deprecated, true);
 });

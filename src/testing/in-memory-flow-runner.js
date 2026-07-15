@@ -18,7 +18,6 @@ import {
 
 /**
  * @typedef {{
- * cases?: CaseRow[],
  * lists?: Record<string, CaseRow[]>,
  * questionDefinitions?: QuestionDefinition[],
  * personas?: Record<string, { groups: string[], userId?: string, displayName?: string }>,
@@ -78,8 +77,8 @@ import {
  * client: MockSharePointClient,
  * saveQueue: SaveQueue,
  * viewModel: CaseReviewViewModel | null,
- * snapshot: () => { cases: CaseRow[], lists: Record<string, CaseRow[]> },
- * run: (actions: FlowAction[]) => Promise<{ cases: CaseRow[], lists: Record<string, CaseRow[]> }>
+ * snapshot: () => { lists: Record<string, CaseRow[]> },
+ * run: (actions: FlowAction[]) => Promise<{ lists: Record<string, CaseRow[]> }>
  * }} InMemoryFlowRunner
  */
 
@@ -97,7 +96,6 @@ const DEFAULT_PERSONAS = {
  */
 export function createMockClientFromState(state, opts = {}) {
   return new MockSharePointClient({
-    cases: state.cases ?? [],
     questionDefinitions: state.questionDefinitions ?? [],
     personas: state.personas ?? DEFAULT_PERSONAS,
     persona: opts.persona ?? 'reviewer',
@@ -286,7 +284,7 @@ async function clickCompleteCase(vm) {
 
 /**
  * @param {FlowFixture} fixture
- * @returns {Promise<{ cases: CaseRow[], lists: Record<string, CaseRow[]> }>}
+ * @returns {Promise<{ lists: Record<string, CaseRow[]> }>}
  */
 export async function runFlowFixture(fixture) {
   const runner = createInMemoryFlowRunner(fixture.state, {

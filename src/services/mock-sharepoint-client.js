@@ -13,7 +13,6 @@ import { CASE_STATUS } from '../lib/case-statuses.js';
 export class MockSharePointClient {
   /**
    * @param {{
-   * cases: CaseRow[],
    * questionDefinitions: QuestionDefinition[],
    * personas: Record<string, { groups: string[], userId?: string, displayName?: string }>,
    * persona?: string,
@@ -24,7 +23,6 @@ export class MockSharePointClient {
    * }} opts
    */
   constructor({
-    cases,
     questionDefinitions,
     personas,
     persona = 'reviewer',
@@ -33,14 +31,14 @@ export class MockSharePointClient {
     versionedExports = /** @type {Record<string, VersionedExport>} */ ({}),
     lists = /** @type {Record<string, CaseRow[]>} */ ({}),
   }) {
-    // Deep-clone cases so fixture arrays are not mutated across tests.
-    this._cases = cases.map((c) => ({ ...c, answers: { ...c.answers } }));
     this._questionDefinitions = questionDefinitions.slice();
     this._personas = personas;
     this._persona = persona;
     this._people = people.slice();
     this._exportHashes = exportHashes;
     this._versionedExports = versionedExports;
+    // Every Case lives in a named per-Case-Type list store — there is no
+    // default store. Deep-clone so fixture arrays are not mutated across tests.
     this._lists = Object.fromEntries(
       Object.entries(lists).map(([listName, rows]) => [
         listName,
@@ -52,14 +50,13 @@ export class MockSharePointClient {
   }
 
   /**
-   * Return a deep-cloned snapshot of the mutable Case stores. Intended for
-   * file-backed workflow tests that need to persist the resulting list state.
+   * Return a deep-cloned snapshot of the mutable per-list Case stores. Intended
+   * for file-backed workflow tests that need to persist the resulting state.
    *
-   * @returns {{ cases: CaseRow[], lists: Record<string, CaseRow[]> }}
+   * @returns {{ lists: Record<string, CaseRow[]> }}
    */
   snapshot() {
     return {
-      cases: this._cases.map(cloneCase),
       lists: Object.fromEntries(
         Object.entries(this._lists).map(([listName, rows]) => [
           listName,
@@ -111,9 +108,21 @@ export class MockSharePointClient {
     return { ok: true, status: 200, data: { ...cases[idx] } };
   }
 
-  /** @param {CaseListOptions} [opts] */
+  /**
+   * The named list's store. `listName` is mandatory — there is no default
+   * store, so a caller that omits it fails loudly.
+   *
+   * @param {CaseListOptions} [opts]
+   * @returns {CaseRow[]}
+   */
   _caseStore(opts = {}) {
-    return opts.listName ? (this._lists[opts.listName] ?? []) : this._cases;
+    if (!opts.listName) {
+      throw new Error(
+        'MockSharePointClient: opts.listName is required — every Case ' +
+          'read/write must name its list (there is no default Case store).'
+      );
+    }
+    return this._lists[opts.listName] ?? [];
   }
 
   /**
@@ -122,18 +131,6 @@ export class MockSharePointClient {
    */
   async getQuestionDefinitions(ids) {
     return this._questionDefinitions.filter((q) => ids.includes(q.id));
-  }
-
-  /**
-   * Every Case across the default store and every list-scoped store. Aggregated
-   * so list-backed Case Types partitioned into `_lists` still
-   * surface to unscoped callers such as the dashboard. Reads/writes of an
-   * individual Case remain list-scoped via `_caseStore`.
-   *
-   * @returns {CaseRow[]}
-   */
-  _allCases() {
-    return [this._cases, ...Object.values(this._lists)].flat();
   }
 
   /**
@@ -224,7 +221,7 @@ export class MockSharePointClient {
    * @returns {Promise<CaseRow[]>}
    */
   async listCases(filter, opts = {}) {
-    let rows = this._allCases().filter(this._predicate(filter));
+    let rows = this._caseStore(opts).filter(this._predicate(filter));
 
     if (opts.orderBy) {
       const key = /** @type {keyof CaseRow} */ (opts.orderBy);
@@ -249,11 +246,11 @@ export class MockSharePointClient {
    * without ever holding the matched rows in memory.
    *
    * @param {ListCasesFilter} filter
-   * @param {CaseListOptions} [_opts]
+   * @param {CaseListOptions} [opts]
    * @returns {Promise<number>}
    */
-  async countCases(filter, _opts = {}) {
-    return this._allCases().filter(this._predicate(filter)).length;
+  async countCases(filter, opts = {}) {
+    return this._caseStore(opts).filter(this._predicate(filter)).length;
   }
 
   /** @returns {Promise<string[]>} */

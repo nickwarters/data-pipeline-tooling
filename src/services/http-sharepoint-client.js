@@ -19,7 +19,6 @@ import { CASE_STATUS } from '../lib/case-statuses.js';
 /**
  * @typedef {{
  * webUrl?: string,
- * caseListName?: string,
  * questionDefinitionsListName?: string,
  * listPrefix?: string,
  * exportBasePath?: string,
@@ -36,9 +35,9 @@ export class HttpSharePointClient {
   /** @param {HttpSharePointClientOptions} [opts] */
   constructor(opts = {}) {
     this._webUrl = (opts.webUrl ?? '').replace(/\/+$/, '');
-    // List names are placeholders until the SharePoint list schema is decided
-    // Constructor opts let deployers override the default list and web URL.
-    this._caseListName = opts.caseListName ?? 'Cases-ExampleReview';
+    // There is no default Case list: every Case read/write must name its list
+    // explicitly via `opts.listName` (a Case Type's declared `listName`), so a
+    // caller that forgets fails loudly rather than silently hitting one list.
     this._qDefListName =
       opts.questionDefinitionsListName ?? 'QuestionDefinitions';
     // Environment scoping (ADR-0033): the prefix is applied centrally in
@@ -58,12 +57,29 @@ export class HttpSharePointClient {
   // --- SharePointClient interface ------------------------------------------
 
   /**
+   * The SharePoint list a Case read/write targets. There is no default list —
+   * `opts.listName` is mandatory, so a caller that omits it fails loudly.
+   *
+   * @param {CaseListOptions} opts
+   * @returns {string}
+   */
+  _requireListName(opts) {
+    if (!opts.listName) {
+      throw new Error(
+        'HttpSharePointClient: opts.listName is required — every Case ' +
+          'read/write must name its list (there is no default Case list).'
+      );
+    }
+    return opts.listName;
+  }
+
+  /**
    * @param {string} id
    * @param {CaseListOptions} [opts]
    * @returns {Promise<CaseRow|null>}
    */
   async getCase(id, opts = {}) {
-    const url = this._listItemUrl(opts.listName ?? this._caseListName, id);
+    const url = this._listItemUrl(this._requireListName(opts), id);
     try {
       const body = await this._read(url);
       return rowFromItem(body, readEtag(body));
@@ -81,7 +97,7 @@ export class HttpSharePointClient {
    * @returns {Promise<PatchResult>}
    */
   async patchCase(id, fields, etag, opts = {}) {
-    const url = this._listItemUrl(opts.listName ?? this._caseListName, id);
+    const url = this._listItemUrl(this._requireListName(opts), id);
     const body = JSON.stringify(itemFromRow(fields));
     try {
       const data = await this._write(url, 'PATCH', { 'If-Match': etag }, body);
@@ -122,7 +138,7 @@ export class HttpSharePointClient {
    * @returns {Promise<CaseRow[]>}
    */
   async listCases(filter, opts = {}) {
-    const listName = opts.listName ?? this._caseListName;
+    const listName = this._requireListName(opts);
     /** @type {string[]} */
     const query = [];
     const expr = buildFilterExpr(filter);
@@ -160,7 +176,7 @@ export class HttpSharePointClient {
    * @returns {Promise<number>}
    */
   async countCases(filter, opts = {}) {
-    const listName = opts.listName ?? this._caseListName;
+    const listName = this._requireListName(opts);
     const expr = buildFilterExpr(filter);
     let url = this._listItemsUrl(listName) + '/$count';
     if (expr) url += `?$filter=${encodeURIComponent(expr)}`;

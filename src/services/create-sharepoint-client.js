@@ -35,19 +35,13 @@ export async function createSharePointClient(
       import('../../dev/fixtures/people.js'),
     ]);
 
-    // A Case Type may declare its own SharePoint list via `listName`;
-    // its Cases are then read/written list-scoped. Partition the flat fixture
-    // array by each Case Type's `listName` so list-backed Cases land in the
-    // mock client's per-list stores instead of 404-ing in the mock dev loop
-    //. Cases whose Case Type declares no list stay in the default
-    // store.
-    const { cases: defaultCases, lists } = await partitionCasesByList(
-      cases,
-      loadCaseTypeConfig
-    );
+    // Every Case Type declares its own SharePoint list via `listName`; its
+    // Cases are read/written list-scoped. Partition the flat fixture array by
+    // each Case Type's `listName` into the mock client's per-list stores.
+    // There is no default store — the partition is total.
+    const lists = await partitionCasesByList(cases, loadCaseTypeConfig);
 
     return new MockSharePointClient({
-      cases: defaultCases,
       questionDefinitions,
       personas,
       persona,
@@ -64,30 +58,34 @@ export async function createSharePointClient(
 }
 
 /**
- * Split a flat fixture Case array into the default store plus per-list stores,
- * keyed by each Case Type's declared `listName`. Used to hydrate the mock
- * client so list-backed Case Types are openable under `?mock=1`.
+ * Partition a flat fixture Case array into per-list stores, keyed by each Case
+ * Type's declared `listName`. The partition is total — there is no default
+ * store — so a Case Type whose config declares no list is a fixture/config
+ * error and throws loudly rather than stranding its Cases.
  *
  * @param {import('../sharepoint-client.js').CaseRow[]} cases
  * @param {(slug: string) => Promise<import('../sharepoint-client.js').CaseTypeConfig>} loadCaseTypeConfig
- * @returns {Promise<{ cases: import('../sharepoint-client.js').CaseRow[], lists: Record<string, import('../sharepoint-client.js').CaseRow[]> }>}
+ * @returns {Promise<Record<string, import('../sharepoint-client.js').CaseRow[]>>}
  */
 export async function partitionCasesByList(cases, loadCaseTypeConfig) {
-  /** @type {Record<string, string | undefined>} */
+  /** @type {Record<string, string>} */
   const listNameByCaseType = {};
   for (const caseType of new Set(cases.map((c) => c.caseType))) {
     const config = await loadCaseTypeConfig(caseType);
+    if (!config.listName) {
+      throw new Error(
+        `partitionCasesByList: Case Type "${caseType}" declares no listName; ` +
+          `every fixture Case must map to a named list (there is no default store).`
+      );
+    }
     listNameByCaseType[caseType] = config.listName;
   }
 
-  /** @type {import('../sharepoint-client.js').CaseRow[]} */
-  const defaultCases = [];
   /** @type {Record<string, import('../sharepoint-client.js').CaseRow[]>} */
   const lists = {};
   for (const c of cases) {
     const listName = listNameByCaseType[c.caseType];
-    if (listName) (lists[listName] ??= []).push(c);
-    else defaultCases.push(c);
+    (lists[listName] ??= []).push(c);
   }
-  return { cases: defaultCases, lists };
+  return lists;
 }
