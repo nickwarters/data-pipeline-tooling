@@ -1,5 +1,5 @@
 // @ts-check
-import { caseTypeGroupNames } from '../services/permissions.js';
+import { caseTypeGroupNames, permissions } from '../services/permissions.js';
 
 /**
  * @typedef {{
@@ -75,7 +75,8 @@ async function loadCaseTypeSources(slugs, importers) {
  * - `CaseTypeOwner - <config.displayName>`
  * - `JourneyOwner - <config.displayName>`
  *
- * Controls, Reviewer-Managers, Advisers and ResponsibleParty-Managers span
+ * Controls, Reviewer-Managers, Advisers, ResponsibleParty-Managers and
+ * Maintainers span
  * every source. Adviser and manager consumers must still apply their
  * assignment filter to each per-list query. Configured `eligibleGroups` and
  * `reviewerGroup` remain aliases for a type's access groups.
@@ -87,10 +88,11 @@ async function loadCaseTypeSources(slugs, importers) {
 export function resolveCaseSourcesFromCaseTypes(userGroups, caseTypes) {
   const eligible = userGroups.some((group) =>
     [
-      'Reviewer-Managers',
-      'Controls',
-      'Advisers',
-      'ResponsibleParty-Managers',
+      permissions.reviewerManager,
+      permissions.controls,
+      permissions.adviser,
+      permissions.responsiblePartyManager,
+      permissions.maintainer,
     ].includes(group)
   )
     ? caseTypes
@@ -136,15 +138,12 @@ export async function resolveCaseSources(userGroups) {
 }
 
 /**
- * Resolve the source sets supplied to app routes. The compatibility name
- * `allCaseSources` means "all sources this user may span", never the whole
- * manifest for a type-scoped role.
+ * Resolve the source sets supplied to app routes.
  *
  * @param {string[]} userGroups
  * @param {string[]} ownedJourneyCaseTypes
  * @returns {Promise<{
  *   caseSources: CaseSource[],
- *   allCaseSources: CaseSource[],
  *   journeyCaseSources: CaseSource[]
  * }>}
  */
@@ -152,41 +151,8 @@ export async function resolveAppCaseSources(userGroups, ownedJourneyCaseTypes) {
   const caseSources = await resolveCaseSources(userGroups);
   return {
     caseSources,
-    allCaseSources: caseSources,
     journeyCaseSources: caseSources.filter((source) =>
       ownedJourneyCaseTypes.includes(source.slug)
     ),
   };
-}
-
-/**
- * Every Case Type in the manifest as an explicit source, independent of
- * eligibility. This low-level utility is not used to populate app routes;
- * `resolveAppCaseSources` supplies their role-authorized source set.
- *
- * @returns {Promise<CaseSource[]>}
- */
-export async function resolveAllCaseSources() {
-  const { CASE_TYPE_IMPORTERS } = await import('../../case-types/manifest.js');
-
-  return resolveSourcesForSlugs(Object.keys(CASE_TYPE_IMPORTERS));
-}
-
-/**
- * Resolve explicit `{ slug, listName, displayName }` sources for an arbitrary
- * set of manifest slugs, independent of the eligibility rule. Used where the
- * relevant slugs come from a different axis than group-derived eligibility —
- * e.g. a Journey Owner's `ownedJourneyCaseTypes`, which a pure Journey Owner
- * holds without any reviewer/list-access group, so they never appear in
- * `resolveCaseSources`.
- *
- * @param {string[]} slugs
- * @returns {Promise<CaseSource[]>}
- */
-export async function resolveSourcesForSlugs(slugs) {
-  const { CASE_TYPE_IMPORTERS } = await import('../../case-types/manifest.js');
-
-  const caseTypes = await loadCaseTypeSources(slugs, CASE_TYPE_IMPORTERS);
-
-  return caseTypes.map(toCaseSource);
 }

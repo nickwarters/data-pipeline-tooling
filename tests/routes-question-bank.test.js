@@ -279,7 +279,7 @@ test('question-bank route: default sample loader fetches through context.client'
         return [];
       },
     };
-    const allCaseSources = [
+    const caseSources = [
       {
         slug: 'example-review',
         listName: 'Cases-ExampleReview',
@@ -293,7 +293,7 @@ test('question-bank route: default sample loader fetches through context.client'
       /** @type {any} */ ({
         appEl,
         client,
-        allCaseSources,
+        caseSources,
         loadQuestionBankEditor: () => Promise.resolve(),
       })
     );

@@ -6,9 +6,8 @@ import {
   resolveCaseSourcesFromCaseTypes,
   resolveCaseSources,
   resolveAppCaseSources,
-  resolveSourcesForSlugs,
-  resolveAllCaseSources,
 } from '../src/setup/resolve-eligible-case-types.js';
+import { permissions } from '../src/services/permissions.js';
 import { CASE_TYPE_IMPORTERS } from '../case-types/manifest.js';
 
 /** @param {Partial<import('../src/sharepoint-client.js').CaseTypeConfig>} overrides */
@@ -335,6 +334,31 @@ test('resolveCaseSources: Reviewer-Managers are granted every manifest Case Type
   );
 });
 
+test('resolveCaseSources: Maintainers can sample Cases from every Question Bank source', async () => {
+  const sources = await resolveCaseSources([permissions.maintainer]);
+  assert.deepEqual(
+    sources.map((s) => s.slug).sort(),
+    Object.keys(CASE_TYPE_IMPORTERS).sort()
+  );
+});
+
+test('resolveCaseSourcesFromCaseTypes: broad roles come from the permissions config', () => {
+  const source = {
+    slug: 'example-review',
+    listName: 'Cases-ExampleReview',
+    config: minimalConfig({ displayName: 'Example Review' }),
+  };
+  for (const group of [
+    permissions.reviewerManager,
+    permissions.controls,
+    permissions.adviser,
+    permissions.responsiblePartyManager,
+    permissions.maintainer,
+  ]) {
+    assert.equal(resolveCaseSourcesFromCaseTypes([group], [source]).length, 1);
+  }
+});
+
 test('resolveCaseSources: stress-review carries its explicit Case list', async () => {
   const sources = await resolveCaseSources(['Reviewer-Managers']);
   const stress = sources.find((s) => s.slug === 'stress-review');
@@ -356,51 +380,5 @@ test('resolveAppCaseSources: threads only a Case Type Owner eligible source to a
     context.caseSources.map((source) => source.slug),
     ['complaints']
   );
-  assert.equal(context.allCaseSources, context.caseSources);
   assert.deepEqual(context.journeyCaseSources, []);
-});
-
-// ===== resolveAllCaseSources =====
-
-test('resolveAllCaseSources: resolves every manifest Case Type to an explicit source', async () => {
-  const sources = await resolveAllCaseSources();
-  assert.deepEqual(
-    sources.map((s) => s.slug).sort(),
-    Object.keys(CASE_TYPE_IMPORTERS).sort()
-  );
-  for (const s of sources) {
-    assert.ok(
-      typeof s.listName === 'string' && s.listName.length > 0,
-      `${s.slug} resolves an explicit listName`
-    );
-  }
-});
-
-// ===== resolveSourcesForSlugs (eligibility-independent) =====
-
-test('resolveSourcesForSlugs: resolves the given slugs to explicit sources regardless of eligibility', async () => {
-  const sources = await resolveSourcesForSlugs(['complaints']);
-  assert.deepEqual(sources, [
-    {
-      slug: 'complaints',
-      listName: 'Cases-Complaints',
-      displayName: 'Complaints',
-    },
-  ]);
-});
-
-test('resolveSourcesForSlugs: returns an empty array for no slugs', async () => {
-  const sources = await resolveSourcesForSlugs([]);
-  assert.deepEqual(sources, []);
-});
-
-test("resolveSourcesForSlugs: carries stress-review's explicit Case list", async () => {
-  const sources = await resolveSourcesForSlugs(['stress-review']);
-  assert.deepEqual(sources, [
-    {
-      slug: 'stress-review',
-      listName: 'Cases-StressReview',
-      displayName: 'Stress Review',
-    },
-  ]);
 });

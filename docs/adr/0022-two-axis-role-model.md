@@ -141,8 +141,9 @@ A user may fetch Case list **X** when they hold one of X's type-scoped roles:
 ```
 
 `config.eligibleGroups` and `config.reviewerGroup` remain supported aliases for
-a type's access groups. Controls, Reviewer-Managers, Advisers and
-ResponsibleParty-Managers span **every** source. Adviser and
+a type's access groups. Controls, Reviewer-Managers, Advisers,
+ResponsibleParty-Managers and Maintainers span **every** source. Maintainers
+need this access to preview sample Cases while editing every Question Bank. Adviser and
 ResponsibleParty-Manager reads remain query-filtered by the Case row's
 Responsible Party or Responsible Party Manager field; broad list eligibility
 does not make those reads unscoped. This is resolved in exactly one place —
@@ -164,13 +165,20 @@ an explicit `{ listName }` on every `getCase`/`patchCase`/`listCases`/`countCase
 
 - **Reviewer-scoped** reads (dashboard outstanding, KPI reviewer lane, team cases,
   reports, allocation) use the eligible `caseSources`.
-- **Broad-role** reads (Controls appeals, Adviser/RP dashboards and manager
-  reporting) receive every manifest source, while retaining their role-specific
+- **Broad-role** reads (Controls appeals, Adviser/RP dashboards, manager
+  reporting, and Maintainer Question Bank samples) receive every manifest
+  source, while retaining their role-specific
   server-side filters.
 - **Type-scoped owner** reads receive only sources derived from their
   `CaseTypeOwner - X` or `JourneyOwner - X` groups. The compatibility-named
-  `allCaseSources` app context therefore means every source the current user's
-  roles may span, not an unconditional manifest list.
+  `caseSources` app context therefore means every source the current user's
+  roles may span, not an unconditional manifest list. Components may call this
+  input `allCaseSources` when they fan out across the whole authorized set.
+
+SharePoint provisioning MUST grant each broad-role group read access to every
+Case Type list before that type is enabled. Multi-list reads deliberately fail
+as a unit if any authorized list is inaccessible: a 403 indicates broken ACL
+provisioning, not optional data that the UI may silently omit.
 
 Both `SharePointClient` implementations now **require** `opts.listName` and throw
 otherwise (#376); the mock is list-store-only (no default `_cases`), and fixture

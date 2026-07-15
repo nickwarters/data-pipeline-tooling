@@ -88,7 +88,7 @@ test('routes-my-cases: passes client and currentUserId through to the page witho
     },
   });
   const currentUser = { id: 'u99' };
-  const allCaseSources = [
+  const caseSources = [
     {
       slug: 'example-review',
       listName: 'Cases-ExampleReview',
@@ -105,10 +105,7 @@ test('routes-my-cases: passes client and currentUserId through to the page witho
     },
   };
   router._container = /** @type {any} */ (container);
-  register(
-    router,
-    /** @type {any} */ ({ client, currentUser, allCaseSources })
-  );
+  register(router, /** @type {any} */ ({ client, currentUser, caseSources }));
   router.navigate('#/my-cases');
 
   await Promise.resolve();
@@ -120,7 +117,7 @@ test('routes-my-cases: passes client and currentUserId through to the page witho
   assert.equal(calls[0].opts.listName, 'Cases-ExampleReview');
 });
 
-test('routes-my-cases: threads context.allCaseSources into the page (fans out across multiple sources)', async () => {
+test('routes-my-cases: threads context.caseSources into the page (fans out across multiple sources)', async () => {
   /** @type {any[]} */
   const calls = [];
   const client = /** @type {any} */ ({
@@ -130,7 +127,7 @@ test('routes-my-cases: threads context.allCaseSources into the page (fans out ac
     },
   });
   const currentUser = { id: 'u1' };
-  const allCaseSources = [
+  const caseSources = [
     {
       slug: 'example-review',
       listName: 'Cases-ExampleReview',
@@ -146,10 +143,7 @@ test('routes-my-cases: threads context.allCaseSources into the page (fans out ac
   const router = new Router();
   const container = { replaceChildren() {} };
   router._container = /** @type {any} */ (container);
-  register(
-    router,
-    /** @type {any} */ ({ client, currentUser, allCaseSources })
-  );
+  register(router, /** @type {any} */ ({ client, currentUser, caseSources }));
   router.navigate('#/my-cases');
 
   await Promise.resolve();
@@ -158,6 +152,6 @@ test('routes-my-cases: threads context.allCaseSources into the page (fans out ac
   assert.deepEqual(
     calls.map((c) => c.opts.listName).sort(),
     ['Cases-ExampleReview', 'Cases-StressReview'],
-    'one listCases per source in allCaseSources'
+    'one listCases per authorized source'
   );
 });

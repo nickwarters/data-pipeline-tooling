@@ -19,9 +19,12 @@ structurally like Complaints).
 ## 1. Per-Case-Type Cases list — `Cases-{CaseTypeSlug}`
 
 One SharePoint list per Case Type holds its Cases, one Case per row.
-The list name is the Case Type's `listName` (falls back to the
-`HttpSharePointClient` default when a type declares none — see the Complaints
-note in `case-types/complaints.js`). The column **internal names** below are
+The list name is the Case Type's required `listName`; there is no default Case
+list. Before enabling the Case Type, grant read access on this list to the
+configured Controls, Reviewer-Manager, Adviser, Responsible-Party-Manager and
+Maintainer groups. The app fans broad-role reads across every Case Type list and
+treats a 403 as a provisioning fault rather than silently showing partial data.
+The column **internal names** below are
 authoritative: they are exactly what `HttpSharePointClient`
 (`src/services/http-sharepoint-client.js`, `rowFromItem` / `itemFromRow`) reads
 and writes. Display names are free to differ.

@@ -83,7 +83,6 @@ Every route handler receives the same `AppContext` object:
  * @property {import('../services/save-queue.js').SaveQueue} saveQueue
  * @property {import('../sharepoint-client.js').CurrentUser} currentUser
  * @property {import('../services/permissions.js').Capabilities} capabilities
- * @property {string[]} eligibleCaseTypes
  * @property {Element} appEl
  */
 ```

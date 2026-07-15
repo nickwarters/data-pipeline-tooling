@@ -40,11 +40,12 @@ async function boot() {
     await import('./setup/resolve-eligible-case-types.js');
   // Every route receives only sources the current user's roles may span.
   // Type-scoped owners get their own types; broad roles (Controls,
-  // Reviewer-Managers, Advisers and ResponsibleParty-Managers) get the full
+  // Reviewer-Managers, Advisers, ResponsibleParty-Managers and Maintainers) get the full
   // manifest. RP surfaces retain their assigned-party query filters.
-  const { caseSources, allCaseSources, journeyCaseSources } =
-    await resolveAppCaseSources(userGroups, capabilities.ownedJourneyCaseTypes);
-  const eligibleCaseTypes = caseSources.map((s) => s.slug);
+  const { caseSources, journeyCaseSources } = await resolveAppCaseSources(
+    userGroups,
+    capabilities.ownedJourneyCaseTypes
+  );
   const allocationSources = caseSources.map(({ slug, listName }) => ({
     slug,
     listName,
@@ -75,9 +76,7 @@ async function boot() {
     currentUser,
     capabilities,
     caseSources,
-    allCaseSources,
     journeyCaseSources,
-    eligibleCaseTypes,
     allocationSources,
     appEl,
   });

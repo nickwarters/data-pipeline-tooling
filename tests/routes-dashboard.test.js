@@ -39,7 +39,7 @@ test('routes-dashboard: registers #/dashboard route', () => {
         ownedCaseTypes: [],
         isAdviser: false,
       },
-      eligibleCaseTypes: [],
+      caseSources: [],
     })
   );
   assert.ok(
@@ -60,7 +60,13 @@ test('routes-dashboard: mounts DashboardPage output for a reviewer', () => {
     ownedCaseTypes: [],
     isAdviser: false,
   });
-  const eligibleCaseTypes = ['example-review'];
+  const caseSources = [
+    {
+      slug: 'example-review',
+      listName: 'Cases-ExampleReview',
+      displayName: 'Example Review',
+    },
+  ];
 
   const router = new Router();
   /** @type {any[]} */
@@ -77,7 +83,7 @@ test('routes-dashboard: mounts DashboardPage output for a reviewer', () => {
       client,
       currentUser,
       capabilities,
-      eligibleCaseTypes,
+      caseSources,
     })
   );
   router.navigate('#/dashboard');
@@ -149,7 +155,7 @@ test('routes-dashboard: unmount is a no-op (does not throw)', () => {
   assert.doesNotThrow(() => route.handler.unmount());
 });
 
-test('routes-dashboard: passes currentUserId, capabilities, eligibleCaseTypes through to the page', () => {
+test('routes-dashboard: passes currentUserId and capabilities through to the page', () => {
   const client = /** @type {any} */ ({
     async listCases() {
       return [];
@@ -161,7 +167,6 @@ test('routes-dashboard: passes currentUserId, capabilities, eligibleCaseTypes th
     ownedCaseTypes: ['example-review'],
     isAdviser: false,
   });
-  const eligibleCaseTypes = ['example-review'];
 
   const router = new Router();
   /** @type {any[]} */
@@ -178,7 +183,7 @@ test('routes-dashboard: passes currentUserId, capabilities, eligibleCaseTypes th
       client,
       currentUser,
       capabilities,
-      eligibleCaseTypes,
+      caseSources: [],
     })
   );
   router.navigate('#/dashboard');

@@ -17,7 +17,7 @@ export function register(router, context) {
           currentUserId: context.currentUser.id,
           // Advisers span all Case Type sources, but the dashboard keeps every
           // per-list read scoped to this user's Responsible Party field.
-          allCaseSources: context.allCaseSources,
+          allCaseSources: context.caseSources,
         })
       );
     },
