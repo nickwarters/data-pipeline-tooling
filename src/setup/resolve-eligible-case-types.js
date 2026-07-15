@@ -5,65 +5,31 @@ import { caseTypeGroupNames } from '../services/permissions.js';
  * @typedef {{
  * slug: string,
  * listName: string,
+ * displayName?: string,
  * reviewerGroup?: string,
  * config: import('../sharepoint-client.js').CaseTypeConfig
  * }} CaseTypeSource
  */
 
 /**
- * An allocation source: one Case Type queue "Request next Case" can draw
- * from, resolved from the user's group membership. `listName` is the
+ * A Case source the current user may read from or write to, resolved from
+ * their group membership (the app-wide eligibility rule). `listName` is the
  * SharePoint list to query — always resolved explicitly (declared
- * `config.listName`, or the `Cases-{PascalSlug}` naming convention) so
- * "Request next Case" never falls back to a hidden default list.
+ * `config.listName`, or the `Cases-{PascalSlug}` naming convention) so no
+ * read/write ever falls back to a hidden default list. `displayName` is the
+ * Case Type's human name, carried so per-source consumers (dashboards,
+ * fetchers) need not re-resolve it.
+ *
+ * @typedef {{ slug: string, listName: string, displayName: string }} CaseSource
+ */
+
+/**
+ * The `{ slug, listName }` shape `cora-allocation` tags each drawn Case with,
+ * so the later write lands on the same list the row was read from. Structurally
+ * a `CaseSource` without the display name.
  *
  * @typedef {{ slug: string, listName: string }} AllocationSource
  */
-
-/**
- * @param {string[]} userGroups
- * @param {CaseTypeSource[]} caseTypes
- * @returns {CaseTypeSource[]}
- */
-export function resolveEligibleCaseSourcesFromCaseTypes(userGroups, caseTypes) {
-  // Reviewer Managers need all case types for fan-out reporting queries.
-  if (userGroups.includes('Reviewer-Managers')) {
-    return caseTypes;
-  }
-
-  return caseTypes.filter(({ config, reviewerGroup }) => {
-    const groups = [
-      ...(config.eligibleGroups ?? []),
-      ...(reviewerGroup ? [reviewerGroup] : []),
-    ];
-    return groups.some((g) => userGroups.includes(g));
-  });
-}
-
-/**
- * Case Types shown on dashboards (#/dashboard, #/team-cases,
- * #/reports/reviewer-team). Every slug in `CASE_TYPE_IMPORTERS`
- * (case-types/manifest.js) is URL-openable via `#/case/:caseType/:id`;
- * dashboard visibility is a separate, deliberate decision, tracked here.
- *
- * Enabling a Case Type for dashboards is adding its slug to this array —
- * `resolveEligibleCaseTypes` derives everything else from it.
- *
- * Slugs present in the manifest but NOT yet listed here (see
- * tests/case-type-eligibility-consistency.test.js for the current set and
- * why each one is staged, not an oversight):
- * - `product-sale-review` — Slice 8 "first real Case Type" is still rolling
- *   out; not yet ready for dashboard-driven queue/allocation flows.
- * - `stress-review` — a perf/hardening harness (see
- *   case-types/stress-review.js: "Not a production Case Type"), never meant
- *   to reach a dashboard.
- * - `complaints` — deliberately mock-only until list-backed Case Types are
- *   wired into the mock client (see case-types/complaints.js); premature on
- *   dashboards that assume list-backed querying.
- *
- * @type {string[]}
- */
-export const DASHBOARD_ENABLED_SLUGS = ['example-review'];
 
 /**
  * Kebab-case slug -> PascalCase, matching the `Cases-{PascalSlug}`
@@ -83,10 +49,19 @@ function defaultListNameForSlug(slug) {
 }
 
 /**
- * Loads and shapes the `CaseTypeSource` for each given slug via its
- * manifest importer. Shared by `resolveEligibleCaseTypes` (scoped to
- * `DASHBOARD_ENABLED_SLUGS`) and `resolveAllocationSources` (every manifest
- * slug) so the `listName` resolution rule lives in exactly one place.
+ * Project a resolved Case Type down to the public `CaseSource` shape, coercing
+ * an absent display name to an empty string in exactly one place.
+ *
+ * @param {{ slug: string, listName: string, displayName?: string }} source
+ * @returns {CaseSource}
+ */
+function toCaseSource({ slug, listName, displayName }) {
+  return { slug, listName, displayName: displayName ?? '' };
+}
+
+/**
+ * Loads and shapes the `CaseTypeSource` for each given slug via its manifest
+ * importer, resolving each `listName` in exactly one place.
  *
  * @param {string[]} slugs
  * @param {Record<string, import('../../case-types/manifest.js').CaseTypeImporter>} importers
@@ -99,6 +74,7 @@ async function loadCaseTypeSources(slugs, importers) {
       return /** @type {CaseTypeSource} */ ({
         slug,
         listName: config.listName ?? defaultListNameForSlug(slug),
+        displayName: config.displayName,
         reviewerGroup: config.reviewerGroup,
         config,
       });
@@ -107,45 +83,26 @@ async function loadCaseTypeSources(slugs, importers) {
 }
 
 /**
- * @param {string[]} userGroups
- * @returns {Promise<string[]>}
- */
-export async function resolveEligibleCaseTypes(userGroups) {
-  const { CASE_TYPE_IMPORTERS } = await import('../../case-types/manifest.js');
-
-  const caseTypes = await loadCaseTypeSources(
-    DASHBOARD_ENABLED_SLUGS,
-    CASE_TYPE_IMPORTERS
-  );
-
-  return resolveEligibleCaseSourcesFromCaseTypes(userGroups, caseTypes).map(
-    ({ slug }) => slug
-  );
-}
-
-/**
- * Pure core of `resolveAllocationSources`: which of the given Case Types the
- * user may draw a "Request next Case" allocation from, given every group a
- * Case Type can grant access through:
+ * Pure core of `resolveCaseSources`: which of the given Case Types the user
+ * may read from or write to. This is THE app-wide eligibility rule (#370 item
+ * 7 / grilling D2): a user may fetch list X iff they hold any of X's access
+ * groups —
  *
  * - `config.reviewerGroup`, if declared
  * - any of `config.eligibleGroups`, if declared
  * - the per-Case-Type list-access group (`Reviewers - <config.displayName>`,
  *   from `caseTypeGroupNames`), if the config declares a `displayName`
  *
- * Unlike `resolveEligibleCaseSourcesFromCaseTypes` (which is scoped to
- * `DASHBOARD_ENABLED_SLUGS`), this is meant to run over every Case Type in
- * the manifest — allocation is not gated by dashboard readiness.
- *
- * Reviewer-Managers mirrors `resolveEligibleCaseSourcesFromCaseTypes`: they
- * need every Case Type for fan-out reporting/allocation, regardless of its
- * own group configuration.
+ * Reviewer-Managers hold every source: they need all Case Types for fan-out
+ * reporting/allocation regardless of any type's own group configuration.
+ * Staging a Case Type out is therefore a per-type group nobody holds — never a
+ * slug list in code.
  *
  * @param {string[]} userGroups
  * @param {CaseTypeSource[]} caseTypes
- * @returns {AllocationSource[]}
+ * @returns {CaseSource[]}
  */
-export function resolveAllocationSourcesFromCaseTypes(userGroups, caseTypes) {
+export function resolveCaseSourcesFromCaseTypes(userGroups, caseTypes) {
   const eligible = userGroups.includes('Reviewer-Managers')
     ? caseTypes
     : caseTypes.filter(({ config, reviewerGroup }) => {
@@ -159,22 +116,22 @@ export function resolveAllocationSourcesFromCaseTypes(userGroups, caseTypes) {
         return groups.some((g) => userGroups.includes(g));
       });
 
-  return eligible.map(({ slug, listName }) => ({ slug, listName }));
+  return eligible.map(({ slug, listName, config }) =>
+    toCaseSource({ slug, listName, displayName: config.displayName })
+  );
 }
 
 /**
- * Resolves the Case Type sources "Request next Case" may allocate from,
- * derived from the user's group membership. Every slug in
- * `CASE_TYPE_IMPORTERS` (case-types/manifest.js) is considered — allocation
- * is not gated by `DASHBOARD_ENABLED_SLUGS`. Each returned source carries an
- * explicit `listName`, resolved from the Case Type's declared `listName` or
- * the `Cases-{PascalSlug}` naming convention: there is no hidden default
- * list to fall back to.
+ * Resolves every Case source the current user may read from or write to,
+ * derived from their group membership. Every slug in `CASE_TYPE_IMPORTERS`
+ * (case-types/manifest.js) is considered — eligibility is purely group-derived,
+ * never gated by a slug allow-list. Each returned source carries an explicit
+ * `listName`: there is no hidden default list to fall back to.
  *
  * @param {string[]} userGroups
- * @returns {Promise<AllocationSource[]>}
+ * @returns {Promise<CaseSource[]>}
  */
-export async function resolveAllocationSources(userGroups) {
+export async function resolveCaseSources(userGroups) {
   const { CASE_TYPE_IMPORTERS } = await import('../../case-types/manifest.js');
 
   const caseTypes = await loadCaseTypeSources(
@@ -182,5 +139,39 @@ export async function resolveAllocationSources(userGroups) {
     CASE_TYPE_IMPORTERS
   );
 
-  return resolveAllocationSourcesFromCaseTypes(userGroups, caseTypes);
+  return resolveCaseSourcesFromCaseTypes(userGroups, caseTypes);
+}
+
+/**
+ * Every Case Type in the manifest as an explicit source, independent of
+ * eligibility. Used by cross-type surfaces that read across all lists — the
+ * Controls appeals view (an appeal can live in any list), the Responsible
+ * Party dashboard, and the Action Centre — so each read still carries an
+ * explicit `listName` rather than a default store.
+ *
+ * @returns {Promise<CaseSource[]>}
+ */
+export async function resolveAllCaseSources() {
+  const { CASE_TYPE_IMPORTERS } = await import('../../case-types/manifest.js');
+
+  return resolveSourcesForSlugs(Object.keys(CASE_TYPE_IMPORTERS));
+}
+
+/**
+ * Resolve explicit `{ slug, listName, displayName }` sources for an arbitrary
+ * set of manifest slugs, independent of the eligibility rule. Used where the
+ * relevant slugs come from a different axis than group-derived eligibility —
+ * e.g. a Journey Owner's `ownedJourneyCaseTypes`, which a pure Journey Owner
+ * holds without any reviewer/list-access group, so they never appear in
+ * `resolveCaseSources`.
+ *
+ * @param {string[]} slugs
+ * @returns {Promise<CaseSource[]>}
+ */
+export async function resolveSourcesForSlugs(slugs) {
+  const { CASE_TYPE_IMPORTERS } = await import('../../case-types/manifest.js');
+
+  const caseTypes = await loadCaseTypeSources(slugs, CASE_TYPE_IMPORTERS);
+
+  return caseTypes.map(toCaseSource);
 }

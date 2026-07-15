@@ -2,7 +2,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createSharePointClient } from '../src/services/create-sharepoint-client.js';
+import {
+  createSharePointClient,
+  partitionCasesByList,
+} from '../src/services/create-sharepoint-client.js';
 
 test('createSharePointClient: returns a Promise', () => {
   const result = createSharePointClient(new URLSearchParams(''));
@@ -58,10 +61,10 @@ test('createSharePointClient: mock client defaults to reviewer persona when asUs
 test('createSharePointClient: mock client serves list-backed Case Types (issue #249)', async () => {
   const client = await createSharePointClient(new URLSearchParams('mock=1'));
 
-  // product-sale-review is the only fixture Case Type declaring a separate
-  // list (listName: 'complaints'). Its Cases must be readable list-scoped.
+  // product-sale-review declares its own list (Cases-ProductSaleReview). Its
+  // Cases must be readable list-scoped.
   const listScoped = await client.getCase('psr-case-1', {
-    listName: 'complaints',
+    listName: 'Cases-ProductSaleReview',
   });
   assert.ok(listScoped, 'list-backed Case is readable via its listName');
   assert.equal(listScoped?.caseType, 'product-sale-review');
@@ -82,11 +85,38 @@ test('createSharePointClient: mock client serves list-backed Case Types (issue #
     'list-backed Case still appears in listCases'
   );
 
-  // Non-list-backed Case Types remain in the default store. (complaints
-  // deliberately declares no listName — see case-types/complaints.js.)
+  // complaints now declares its own list (Cases-Complaints) too, so its Cases
+  // are read list-scoped rather than from a default store.
   assert.ok(
-    await client.getCase('complaints-case-1'),
-    'default-store Case still readable'
+    await client.getCase('complaints-case-1', { listName: 'Cases-Complaints' }),
+    'complaints Case is readable via its listName'
+  );
+});
+
+test('partitionCasesByList: routes list-backed Cases to their list store and keeps list-less Cases in the default bucket', async () => {
+  /** @type {any} */
+  const cases = [
+    { id: 'a', caseType: 'listed', answers: {} },
+    { id: 'b', caseType: 'listless', answers: {} },
+  ];
+  /** @param {string} slug */
+  const loadCaseTypeConfig = async (slug) =>
+    /** @type {any} */ (slug === 'listed' ? { listName: 'Cases-Listed' } : {});
+
+  const { cases: defaultCases, lists } = await partitionCasesByList(
+    cases,
+    loadCaseTypeConfig
+  );
+
+  assert.deepEqual(
+    defaultCases.map((c) => c.id),
+    ['b'],
+    'a Case Type with no listName lands in the default bucket'
+  );
+  assert.deepEqual(
+    lists['Cases-Listed'].map((c) => c.id),
+    ['a'],
+    'a list-backed Case lands in its named list store'
   );
 });
 

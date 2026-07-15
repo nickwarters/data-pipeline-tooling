@@ -13,7 +13,10 @@ import { resolveEnvironment } from '../config/environment.js';
  * @param {import('../config/environment.js').Environment} [env]
  * @returns {Promise<import('../sharepoint-client.js').SharePointClient>}
  */
-export async function createSharePointClient(params, env = resolveEnvironment()) {
+export async function createSharePointClient(
+  params,
+  env = resolveEnvironment()
+) {
   if (params.get('mock') === '1') {
     const persona = params.get('asUser') ?? 'reviewer';
     const [
@@ -69,7 +72,7 @@ export async function createSharePointClient(params, env = resolveEnvironment())
  * @param {(slug: string) => Promise<import('../sharepoint-client.js').CaseTypeConfig>} loadCaseTypeConfig
  * @returns {Promise<{ cases: import('../sharepoint-client.js').CaseRow[], lists: Record<string, import('../sharepoint-client.js').CaseRow[]> }>}
  */
-async function partitionCasesByList(cases, loadCaseTypeConfig) {
+export async function partitionCasesByList(cases, loadCaseTypeConfig) {
   /** @type {Record<string, string | undefined>} */
   const listNameByCaseType = {};
   for (const caseType of new Set(cases.map((c) => c.caseType))) {

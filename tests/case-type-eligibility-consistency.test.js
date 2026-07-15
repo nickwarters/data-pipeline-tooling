@@ -1,96 +1,103 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 import { CASE_TYPE_IMPORTERS } from '../case-types/manifest.js';
-import {
-  DASHBOARD_ENABLED_SLUGS,
-  resolveEligibleCaseTypes,
-} from '../src/setup/resolve-eligible-case-types.js';
+import { resolveCaseSources } from '../src/setup/resolve-eligible-case-types.js';
+import { permissions } from '../src/services/permissions.js';
 
-// Case Types known to be URL-openable (case-types/manifest.js) but not yet
-// surfaced on any dashboard (src/setup/resolve-eligible-case-types.js). Each
-// entry here is a conscious, reviewed staging decision — not drift — per the
-// comment on DASHBOARD_ENABLED_SLUGS:
-//
-// - 'product-sale-review' — Slice 8 "first real Case Type" is still rolling
-//   out; not yet ready for dashboard-driven queue/allocation flows.
-// - 'stress-review' — a perf/hardening harness (case-types/stress-review.js:
-//   "Not a production Case Type"), never meant to reach a dashboard.
-// - 'complaints' — deliberately mock-only until list-backed Case Types are
-//   wired into the mock client (case-types/complaints.js); premature on
-//   dashboards that assume list-backed querying.
-//
-// Adding a Case Type slug to CASE_TYPE_IMPORTERS without also either (a)
-// enabling it here or (b) adding it to NOT_YET_DASHBOARD_ENABLED below must
-// fail this test — see the "no undecided slugs" assertion.
-const NOT_YET_DASHBOARD_ENABLED = [
-  'product-sale-review',
-  'stress-review',
-  'complaints',
-];
+const here = dirname(fileURLToPath(import.meta.url));
+const srcRoot = join(here, '..', 'src');
 
-// Groups chosen so every Case Type's eligibleGroups/reviewerGroup matches:
-// Reviewer-Managers short-circuits resolveEligibleCaseSourcesFromCaseTypes
-// to return every dashboard-enabled Case Type regardless of its own group
-// configuration.
-const EVERYONE_ELIGIBLE_GROUPS = ['Reviewer-Managers'];
+/**
+ * Recursively collect every `.js` file under a directory.
+ * @param {string} dir
+ * @returns {string[]}
+ */
+function jsFilesUnder(dir) {
+  /** @type {string[]} */
+  const out = [];
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) out.push(...jsFilesUnder(full));
+    else if (entry.endsWith('.js')) out.push(full);
+  }
+  return out;
+}
 
-test('case type manifests: every dashboard-eligible slug is openable via CASE_TYPE_IMPORTERS', async () => {
-  const eligibleSlugs = await resolveEligibleCaseTypes(
-    EVERYONE_ELIGIBLE_GROUPS
-  );
+test('eligibility: Reviewer-Managers resolve every manifest slug to a source with an explicit listName', async () => {
+  const sources = await resolveCaseSources(['Reviewer-Managers']);
+  const bySlug = new Map(sources.map((s) => [s.slug, s]));
 
-  for (const slug of eligibleSlugs) {
+  for (const slug of Object.keys(CASE_TYPE_IMPORTERS)) {
+    const source = bySlug.get(slug);
     assert.ok(
-      Object.prototype.hasOwnProperty.call(CASE_TYPE_IMPORTERS, slug),
-      `resolveEligibleCaseTypes() returned "${slug}", which is eligible for ` +
-        `dashboards but has no importer in CASE_TYPE_IMPORTERS ` +
-        `(case-types/manifest.js). A Case Type must be openable via ` +
-        `#/case/:caseType/:id before it can appear on a dashboard.`
+      source,
+      `resolveCaseSources(['Reviewer-Managers']) did not resolve manifest ` +
+        `slug "${slug}". Every Case Type must be group-derivable — a manager ` +
+        `holds every source.`
+    );
+    assert.ok(
+      typeof source.listName === 'string' && source.listName.length > 0,
+      `Case source "${slug}" resolved without an explicit listName. Declare ` +
+        `config.listName or rely on the Cases-{PascalSlug} convention — there ` +
+        `is no hidden default list.`
     );
   }
 });
 
-test('case type manifests: DASHBOARD_ENABLED_SLUGS only names known Case Types', () => {
-  for (const slug of DASHBOARD_ENABLED_SLUGS) {
-    assert.ok(
-      Object.prototype.hasOwnProperty.call(CASE_TYPE_IMPORTERS, slug),
-      `DASHBOARD_ENABLED_SLUGS names "${slug}", which is not a key of ` +
-        `CASE_TYPE_IMPORTERS (case-types/manifest.js). Remove it or add a ` +
-        `matching entry to the manifest.`
-    );
-  }
-});
-
-test('case type manifests: every manifest slug has a conscious dashboard-eligibility decision', () => {
-  const manifestSlugs = Object.keys(CASE_TYPE_IMPORTERS).sort();
-  const decidedSlugs = [
-    ...DASHBOARD_ENABLED_SLUGS,
-    ...NOT_YET_DASHBOARD_ENABLED,
-  ].sort();
-
+test('eligibility: a user holding no groups resolves no sources (purely group-derived, no slug allow-list)', async () => {
+  const sources = await resolveCaseSources([]);
   assert.deepEqual(
-    manifestSlugs,
-    decidedSlugs,
-    'CASE_TYPE_IMPORTERS (case-types/manifest.js) and the combined ' +
-      'DASHBOARD_ENABLED_SLUGS + NOT_YET_DASHBOARD_ENABLED lists have ' +
-      'diverged. A new Case Type slug in the manifest must be added to ' +
-      'either DASHBOARD_ENABLED_SLUGS (src/setup/resolve-eligible-case-types.js) ' +
-      'to enable it on dashboards, or to NOT_YET_DASHBOARD_ENABLED in this ' +
-      'test file (with a comment explaining why it is staged) to record ' +
-      'that the omission is deliberate.'
-  );
-
-  // The two arrays must also be disjoint - a slug should not be both
-  // enabled and explicitly marked as not-yet-enabled.
-  const overlap = DASHBOARD_ENABLED_SLUGS.filter((slug) =>
-    NOT_YET_DASHBOARD_ENABLED.includes(slug)
-  );
-  assert.deepEqual(
-    overlap,
+    sources,
     [],
-    'A slug cannot be in both DASHBOARD_ENABLED_SLUGS and ' +
-      'NOT_YET_DASHBOARD_ENABLED.'
+    'With no group membership, no Case source should be eligible. Eligibility ' +
+      'must be derived from groups alone, never from a slug gate.'
   );
+});
+
+test('eligibility: no module references a removed slug-gate (DASHBOARD_ENABLED_SLUGS / resolveEligibleCaseTypes)', () => {
+  const offenders = [];
+  for (const file of jsFilesUnder(srcRoot)) {
+    const text = readFileSync(file, 'utf8');
+    if (
+      text.includes('DASHBOARD_ENABLED_SLUGS') ||
+      text.includes('resolveEligibleCaseTypes')
+    ) {
+      offenders.push(file);
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    'Dashboard/eligibility visibility is now purely group-derived. The slug ' +
+      'gate (DASHBOARD_ENABLED_SLUGS) and resolveEligibleCaseTypes were ' +
+      'removed — no module may reference them.'
+  );
+});
+
+test('permissions.caseTypes: names every manifest slug so its display name and derived groups resolve', () => {
+  const permissionSlugs = permissions.caseTypes.map((c) => c.slug).sort();
+  assert.deepEqual(
+    permissionSlugs,
+    Object.keys(CASE_TYPE_IMPORTERS).sort(),
+    'permissions.caseTypes (src/services/permissions.js) must list exactly the ' +
+      'manifest slugs, so per-Case-Type group names and display names resolve ' +
+      'for every Case Type.'
+  );
+});
+
+test('permissions.caseTypes: each displayName matches the Case Type config displayName', async () => {
+  for (const { slug, displayName } of permissions.caseTypes) {
+    const { default: config } = await CASE_TYPE_IMPORTERS[slug]();
+    assert.equal(
+      displayName,
+      config.displayName,
+      `permissions.caseTypes displayName for "${slug}" ("${displayName}") must ` +
+        `match its Case Type config displayName ("${config.displayName}").`
+    );
+  }
 });

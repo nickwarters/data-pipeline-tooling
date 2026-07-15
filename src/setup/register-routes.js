@@ -15,6 +15,9 @@ import { register as registerJourneyCases } from '../routes/journey-cases.js';
  * @property {import('../services/save-queue.js').SaveQueue} saveQueue
  * @property {import('../sharepoint-client.js').CurrentUser} currentUser
  * @property {import('../services/permissions.js').Capabilities} capabilities
+ * @property {import('./resolve-eligible-case-types.js').CaseSource[]} caseSources
+ * @property {import('./resolve-eligible-case-types.js').CaseSource[]} allCaseSources
+ * @property {import('./resolve-eligible-case-types.js').CaseSource[]} journeyCaseSources
  * @property {string[]} eligibleCaseTypes
  * @property {import('./resolve-eligible-case-types.js').AllocationSource[]} allocationSources
  * @property {Element} appEl

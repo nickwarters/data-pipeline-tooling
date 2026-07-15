@@ -83,8 +83,8 @@ test('complaints: slaHours is a positive number', () => {
 
 // --- Section / appeal / outcome config ---
 
-test('complaints: declares no listName so its Cases are openable in the mock store', () => {
-  assert.equal(config.listName, undefined);
+test('complaints: declares its own list (Cases-Complaints) like every Case Type', () => {
+  assert.equal(config.listName, 'Cases-Complaints');
 });
 
 test('complaints: sections enable the appeal/amend Section set', () => {

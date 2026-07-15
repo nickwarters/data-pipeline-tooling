@@ -31,7 +31,11 @@ function makeContext() {
     saveQueue: {},
     currentUser: { id: 'u1' },
     capabilities: {},
+    caseSources: [],
+    allCaseSources: [],
+    journeyCaseSources: [],
     eligibleCaseTypes: [],
+    allocationSources: [],
     appEl: {
       classList: { add() {}, remove() {} },
       setAttribute() {},

@@ -36,10 +36,26 @@ async function boot() {
   ]);
   const capabilities = resolveCapabilities(userGroups);
 
-  const { resolveEligibleCaseTypes, resolveAllocationSources } =
+  const { resolveCaseSources, resolveSourcesForSlugs, resolveAllCaseSources } =
     await import('./setup/resolve-eligible-case-types.js');
-  const eligibleCaseTypes = await resolveEligibleCaseTypes(userGroups);
-  const allocationSources = await resolveAllocationSources(userGroups);
+  // Eligible sources feed reviewer-scoped surfaces (dashboard outstanding, KPI
+  // reviewer lane, team cases, reports, allocation). Downstream consumers still
+  // awaiting their Wave 2 per-source fan-out keep receiving a slug array /
+  // allocation shape derived from the same `caseSources`.
+  const caseSources = await resolveCaseSources(userGroups);
+  // Cross-type surfaces (Controls appeals, RP dashboard, Action Centre) read
+  // across every list, so they get the full manifest source set.
+  const allCaseSources = await resolveAllCaseSources();
+  // Journey Owners reach their owned Case Type lists on a different axis than
+  // the eligibility rule, so their sources are resolved from the owned slugs.
+  const journeyCaseSources = await resolveSourcesForSlugs(
+    capabilities.ownedJourneyCaseTypes
+  );
+  const eligibleCaseTypes = caseSources.map((s) => s.slug);
+  const allocationSources = caseSources.map(({ slug, listName }) => ({
+    slug,
+    listName,
+  }));
 
   const appEl = /** @type {Element} */ (document.getElementById('app'));
   appEl.setAttribute('data-cora-root', '');
@@ -65,6 +81,9 @@ async function boot() {
     saveQueue,
     currentUser,
     capabilities,
+    caseSources,
+    allCaseSources,
+    journeyCaseSources,
     eligibleCaseTypes,
     allocationSources,
     appEl,

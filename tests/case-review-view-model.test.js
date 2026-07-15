@@ -448,10 +448,13 @@ test('CaseReviewViewModel.load() resolves route caseType to listName for getCase
 
   assert.deepEqual(getCaseCalls[0], {
     id: 'c1',
-    opts: { listName: 'complaints' },
+    opts: { listName: 'Cases-ProductSaleReview' },
   });
-  assert.deepEqual(loadCaseCalls[0], [row, { listName: 'complaints' }]);
-  assert.deepEqual(vm.caseListOptions, { listName: 'complaints' });
+  assert.deepEqual(loadCaseCalls[0], [
+    row,
+    { listName: 'Cases-ProductSaleReview' },
+  ]);
+  assert.deepEqual(vm.caseListOptions, { listName: 'Cases-ProductSaleReview' });
 });
 
 test('CaseReviewViewModel.load() stores null exportHash when getExportHash returns null', async () => {

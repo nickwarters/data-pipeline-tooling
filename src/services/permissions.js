@@ -66,8 +66,13 @@ export const permissions = {
   maintainer: 'CR-Maintainers',
   // Per-Case-Type group names derive from `displayName`: each entry
   // yields `Reviewers - X`, `CaseTypeOwner - X`, and `JourneyOwner - X`.
+  // Every slug in case-types/manifest.js is listed here so its display name
+  // and derived group names resolve consistently (each `displayName` matches
+  // the corresponding Case Type config's `displayName`).
   caseTypes: [
     { slug: 'example-review', displayName: 'Example Review' },
+    { slug: 'product-sale-review', displayName: 'Product Sale Review' },
+    { slug: 'stress-review', displayName: 'Stress Review' },
     { slug: 'complaints', displayName: 'Complaints' },
   ],
 };

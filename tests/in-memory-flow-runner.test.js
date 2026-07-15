@@ -47,7 +47,7 @@ test('in-memory flow runner preserves list-scoped case state when the route case
   const snapshot = await runFlowFixture({
     state: {
       lists: {
-        complaints: [
+        'Cases-ProductSaleReview': [
           {
             ...CASE_ROW,
             id: 'product-case-1',
@@ -73,8 +73,11 @@ test('in-memory flow runner preserves list-scoped case state when the route case
 
   assert.equal(snapshot.cases.length, 0);
   assert.equal(
-    snapshot.lists.complaints[0].answers['q-cv-identity'].value,
+    snapshot.lists['Cases-ProductSaleReview'][0].answers['q-cv-identity'].value,
     'Yes'
   );
-  assert.notEqual(snapshot.lists.complaints[0].etag, 'etag-product-1');
+  assert.notEqual(
+    snapshot.lists['Cases-ProductSaleReview'][0].etag,
+    'etag-product-1'
+  );
 });

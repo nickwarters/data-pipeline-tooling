@@ -379,14 +379,32 @@ test('ConversationView: cora-conversation element caseListOptions defaults to {}
     client: /** @type {any} */ (client),
     saveQueue: null,
     caseId: 'case-1',
-    // complaints deliberately declares no listName (case-types/complaints.js).
-    caseType: 'complaints',
+    // stress-review deliberately declares no listName (case-types/stress-review.js).
+    caseType: 'stress-review',
     currentUser: null,
   });
   await flush();
 
   const conversationEl = childrenOf(host)[1];
   assert.deepEqual(conversationEl.caseListOptions, {});
+});
+
+test('ConversationView: cora-conversation element caseListOptions carries the listName for a list-backed Case Type', async () => {
+  const client = makeStubClient();
+  const host = ConversationView({
+    client: /** @type {any} */ (client),
+    saveQueue: null,
+    caseId: 'case-1',
+    // complaints declares Cases-Complaints (case-types/complaints.js).
+    caseType: 'complaints',
+    currentUser: null,
+  });
+  await flush();
+
+  const conversationEl = childrenOf(host)[1];
+  assert.deepEqual(conversationEl.caseListOptions, {
+    listName: 'Cases-Complaints',
+  });
 });
 
 test('ConversationView: cora-conversation element caseListOptions defaults to {} when caseType is null', async () => {

@@ -14,16 +14,17 @@ const bank = await loadBank('./banks/complaints.txt');
  * `Reviewers - Complaints`, `CaseTypeOwner - Complaints`,
  * `JourneyOwner - Complaints`.
  *
- * NOTE (dev/mock): deliberately declares **no `listName`**, so its Cases live in
- * the default mock store and are openable via `?mock=1`. A production Complaints
- * list can be added once list-backed Case Types are wired into the mock client
- *; until then a `listName` here would 404 every Complaints Case in
- * the mock dev loop.
+ * Declares its own `listName` (`Cases-Complaints`) like every other Case Type,
+ * so its Cases are read/written list-scoped rather than from a default store.
+ * Under `?mock=1`, `create-sharepoint-client.js` partitions the fixture Cases
+ * into the matching per-list mock store, so Complaints Cases stay openable in
+ * the dev loop.
  *
  * @type {CaseTypeConfig}
  */
 const config = {
   displayName: 'Complaints',
+  listName: 'Cases-Complaints',
   eligibleGroups: ['Reviewers - Complaints'],
   slaHours: 72,
   attributeFailures: true,
