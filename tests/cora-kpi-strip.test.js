@@ -51,14 +51,23 @@ function defaultCapabilities(overrides = {}) {
   };
 }
 
-/** @param {(f: any) => CaseRow[]} handler */
+/** @param {(f: any, opts?: any) => CaseRow[]} handler */
 function makeClient(handler) {
   return {
-    /** @param {any} f */
-    async listCases(f) {
-      return handler(f).map((c) => ({ ...c }));
+    /** @param {any} f @param {any} [opts] */
+    async listCases(f, opts) {
+      return handler(f, opts).map((c) => ({ ...c }));
     },
   };
+}
+
+/**
+ * @param {string} slug
+ * @param {string} [listName]
+ * @returns {import('../src/setup/resolve-eligible-case-types.js').CaseSource}
+ */
+function source(slug, listName = `Cases-${slug}`) {
+  return { slug, listName, displayName: slug };
 }
 
 /** @param {any} el */
@@ -282,6 +291,7 @@ test('CORAKpiStrip: fetches, seeds default open/expanded state, and renders the 
   el.capabilities = /** @type {any} */ (
     defaultCapabilities({ ownedCaseTypes: ['lending'] })
   );
+  el.allCaseSources = [source('lending')];
   el.now = NOW;
   await el.connectedCallback();
   await flush();
@@ -307,6 +317,7 @@ test('CORAKpiStrip: clicking a lane header collapses it; clicking again re-opens
       listAccessCaseTypes: ['complaints'],
     })
   );
+  el.caseSources = [source('complaints')];
   el.now = NOW;
   await el.connectedCallback();
   await flush();
@@ -331,6 +342,7 @@ test('CORAKpiStrip: clicking a collapsed tile reveals its breakdown, then hides 
       listAccessCaseTypes: ['complaints', 'conduct'],
     })
   );
+  el.caseSources = [source('complaints'), source('conduct')];
   el.now = NOW;
   await el.connectedCallback();
   await flush();

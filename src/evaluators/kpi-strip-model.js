@@ -7,6 +7,7 @@ import { CASE_STATUS } from '../lib/case-statuses.js';
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
 /** @typedef {import('../services/permissions.js').PermissionsConfig} PermissionsConfig */
+/** @typedef {import('../setup/resolve-eligible-case-types.js').CaseSource} CaseSource */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -178,24 +179,23 @@ function assembleLane({ role, label, scopeLabel, specs, expandTiles }) {
 }
 
 /**
- * @param {{ client: SharePointClient, currentUserId: string, capabilities: Capabilities, eligibleCaseTypes: string[], now: Date }} ctx
+ * @param {{ client: SharePointClient, currentUserId: string, caseSources: CaseSource[], now: Date }} ctx
  * @returns {Promise<KpiLane>}
  */
-async function buildReviewerLane({
-  client,
-  currentUserId,
-  capabilities,
-  eligibleCaseTypes,
-  now,
-}) {
-  const scope = capabilities.listAccessCaseTypes.length
-    ? capabilities.listAccessCaseTypes
-    : eligibleCaseTypes;
-  const raw = await client.listCases({
-    status: CASE_STATUS.IN_PROGRESS,
-    assignedReviewer: currentUserId,
-  });
-  const pool = raw.filter((c) => scope.includes(c.caseType));
+async function buildReviewerLane({ client, currentUserId, caseSources, now }) {
+  // Each source is a distinct list, already scoped by eligibility; fan out and
+  // flatten rather than fetching unscoped and filtering in JS (issue: no
+  // default Case list — every read carries an explicit `listName`, and a Case
+  // lives in exactly one list, so per-list pools simply flatten together).
+  const fetched = await Promise.all(
+    caseSources.map((source) =>
+      client.listCases(
+        { status: CASE_STATUS.IN_PROGRESS, assignedReviewer: currentUserId },
+        { listName: source.listName }
+      )
+    )
+  );
+  const pool = fetched.flat();
 
   const overdue = pool.filter((c) => isOverdue(c, undefined, now));
   const awaiting = pool.filter(
@@ -210,7 +210,7 @@ async function buildReviewerLane({
   return assembleLane({
     role: 'reviewer',
     label: 'As Reviewer',
-    scopeLabel: scopeLabelOf(scope),
+    scopeLabel: scopeLabelOf(caseSources.map((s) => s.slug)),
     expandTiles: false,
     specs: [
       { key: 'overdue', label: 'Overdue', tone: 'overdue', matched: overdue },
@@ -239,11 +239,16 @@ async function buildReviewerLane({
  * which folds a matched-Case array): with only a count there are no rows to
  * split, so the tile carries no breakdown.
  *
- * @param {{ client: SharePointClient }} ctx
+ * @param {{ client: SharePointClient, allCaseSources: CaseSource[] }} ctx
  * @returns {Promise<KpiLane>}
  */
-async function buildControlsLane({ client }) {
-  const count = await client.countCases({ hasOpenAppeal: true });
+async function buildControlsLane({ client, allCaseSources }) {
+  const counts = await Promise.all(
+    allCaseSources.map((source) =>
+      client.countCases({ hasOpenAppeal: true }, { listName: source.listName })
+    )
+  );
+  const count = counts.reduce((sum, n) => sum + n, 0);
 
   return {
     role: 'controls',
@@ -266,18 +271,25 @@ async function buildControlsLane({ client }) {
 }
 
 /**
- * @param {{ client: SharePointClient, capabilities: Capabilities, now: Date }} ctx
+ * @param {{ client: SharePointClient, capabilities: Capabilities, allCaseSources: CaseSource[], now: Date }} ctx
  * @returns {Promise<KpiLane>}
  */
-async function buildOwnerLane({ client, capabilities, now }) {
+async function buildOwnerLane({ client, capabilities, allCaseSources, now }) {
   const owned = capabilities.ownedCaseTypes;
   // Lead each read with the indexed Case Type + Status columns so the working
   // set is bounded by In-progress work, never the whole (unbounded) Case Type
-  // history. The In-progress pool is what the tiles derive from.
+  // history. The In-progress pool is what the tiles derive from. Each owned
+  // slug resolves to its own list via `allCaseSources`; an owned slug with no
+  // matching source (stale config) is skipped rather than fetched unscoped.
   const fetched = await Promise.all(
-    owned.map((ct) =>
-      client.listCases({ caseType: ct, status: CASE_STATUS.IN_PROGRESS })
-    )
+    owned.map((caseType) => {
+      const source = allCaseSources.find((s) => s.slug === caseType);
+      if (!source) return [];
+      return client.listCases(
+        { caseType, status: CASE_STATUS.IN_PROGRESS },
+        { listName: source.listName }
+      );
+    })
   );
   const pool = fetched.flat();
 
@@ -331,7 +343,8 @@ async function buildOwnerLane({ client, capabilities, now }) {
  * client: SharePointClient | null,
  * currentUserId: string,
  * capabilities: Capabilities,
- * eligibleCaseTypes?: string[],
+ * caseSources?: CaseSource[],
+ * allCaseSources?: CaseSource[],
  * now?: Date
  * }} args
  * @returns {Promise<KpiLane[]>}
@@ -340,7 +353,8 @@ export async function loadKpiModel({
   client,
   currentUserId,
   capabilities,
-  eligibleCaseTypes = [],
+  caseSources = [],
+  allCaseSources = [],
   now = new Date(),
 }) {
   if (!client) return [];
@@ -352,17 +366,18 @@ export async function loadKpiModel({
       await buildReviewerLane({
         client,
         currentUserId,
-        capabilities,
-        eligibleCaseTypes,
+        caseSources,
         now,
       })
     );
   }
   if (capabilities.isControls) {
-    lanes.push(await buildControlsLane({ client }));
+    lanes.push(await buildControlsLane({ client, allCaseSources }));
   }
   if (capabilities.ownedCaseTypes.length > 0) {
-    lanes.push(await buildOwnerLane({ client, capabilities, now }));
+    lanes.push(
+      await buildOwnerLane({ client, capabilities, allCaseSources, now })
+    );
   }
 
   const primaryRole = lanes.length ? lanes[0].role : null;

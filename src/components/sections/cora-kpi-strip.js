@@ -221,7 +221,8 @@ export class CORAKpiStrip extends ShellElement {
       client: this.client,
       currentUserId: this.currentUserId,
       capabilities: this.capabilities,
-      eligibleCaseTypes: this.eligibleCaseTypes,
+      caseSources: this.caseSources,
+      allCaseSources: this.allCaseSources,
       now: this.now,
     });
 
