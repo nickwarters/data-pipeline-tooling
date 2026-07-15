@@ -197,6 +197,10 @@ export class CORAKpiStrip extends ShellElement {
     this.capabilities = null;
     /** @type {string[]} */
     this.eligibleCaseTypes = [];
+    /** @type {import('../../setup/resolve-eligible-case-types.js').CaseSource[]} */
+    this.caseSources = [];
+    /** @type {import('../../setup/resolve-eligible-case-types.js').CaseSource[]} */
+    this.allCaseSources = [];
     /** @type {Date | undefined} */
     this.now = undefined;
 

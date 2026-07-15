@@ -41,11 +41,12 @@ export function openAppealOf(caseRow) {
  *
  * @param {{
  * client: SharePointClient | null,
+ * allCaseSources?: import('../setup/resolve-eligible-case-types.js').CaseSource[],
  * onOpenCase?: (caseRow: CaseRow) => void,
  * }} props
  * @returns {HTMLElement}
  */
-export function ControlsDashboard({ client, onOpenCase }) {
+export function ControlsDashboard({ client, allCaseSources = [], onOpenCase }) {
   /** @type {import('../lib/signal.js').Signal<CaseRow[]>} */
   const appealCases = signal(/** @type {CaseRow[]} */ ([]));
 

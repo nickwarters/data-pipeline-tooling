@@ -24,6 +24,7 @@ import { CASE_STATUS } from '../lib/case-statuses.js';
  * @param {{
  * client: SharePointClient | null,
  * currentUserId: string,
+ * allCaseSources?: import('../setup/resolve-eligible-case-types.js').CaseSource[],
  * onOpenConversation?: (caseRow: CaseRow) => void,
  * }} props
  * @returns {HTMLElement}
@@ -31,6 +32,7 @@ import { CASE_STATUS } from '../lib/case-statuses.js';
 export function ResponsiblePartyDashboard({
   client,
   currentUserId,
+  allCaseSources = [],
   onOpenConversation,
 }) {
   /** @type {import('../lib/signal.js').Signal<CaseRow[]>} */

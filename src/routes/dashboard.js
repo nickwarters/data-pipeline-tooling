@@ -14,6 +14,8 @@ export function register(router, context) {
           currentUserId: context.currentUser.id,
           capabilities: context.capabilities,
           eligibleCaseTypes: context.eligibleCaseTypes,
+          caseSources: context.caseSources,
+          allCaseSources: context.allCaseSources,
           allocationSources: context.allocationSources,
         })
       );

@@ -145,6 +145,8 @@ export class CORAOwnerSummary extends ShellElement {
     this.client = null;
     /** @type {string[]} */
     this.ownedCaseTypes = [];
+    /** @type {import('../../setup/resolve-eligible-case-types.js').CaseSource[]} */
+    this.allCaseSources = [];
     /** @type {OwnerSummary[]} */
     this._summaries = [];
   }

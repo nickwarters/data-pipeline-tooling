@@ -505,6 +505,13 @@ test('DashboardPage: cora-allocation element listens for cora-allocated and re-f
     currentUserId: 'user-reviewer',
     capabilities: defaultCapabilities({ isReviewer: true }),
     eligibleCaseTypes: ['example-review'],
+    caseSources: [
+      {
+        slug: 'example-review',
+        listName: 'Cases-ExampleReview',
+        displayName: 'Example Review',
+      },
+    ],
   });
   await flush();
   const initialFetchCount = fetchCount;
@@ -616,6 +623,13 @@ test('DashboardPage: stamps overdue:true on rows whose dueDate is in the past', 
     currentUserId: 'u1',
     capabilities: defaultCapabilities({ isReviewer: true }),
     eligibleCaseTypes: [],
+    caseSources: [
+      {
+        slug: 'example-review',
+        listName: 'Cases-ExampleReview',
+        displayName: 'Example Review',
+      },
+    ],
   });
   await flush();
 
@@ -644,6 +658,87 @@ test('DashboardPage: stamps overdue:true on rows whose dueDate is in the past', 
     false,
     'no-dueDate row should not be overdue'
   );
+});
+
+test('DashboardPage: reviewer outstanding fetch fans out one listCases per source (with its listName) and merges', async () => {
+  /** @type {Array<{ filter: any, opts: any }>} */
+  const calls = [];
+  const client = {
+    async listCases(/** @type {any} */ filter, /** @type {any} */ opts = {}) {
+      calls.push({ filter, opts });
+      return [
+        {
+          id: `case-${opts.listName}`,
+          caseType: 'x',
+          title: 't',
+          status: 'In-progress',
+          assignedReviewer: 'u1',
+          responsibleParty: '',
+          answers: {},
+          conversation: [],
+          notes: '',
+          completedAt: null,
+          etag: 'e',
+        },
+      ];
+    },
+  };
+  const host = DashboardPage({
+    client: /** @type {any} */ (client),
+    currentUserId: 'u1',
+    capabilities: defaultCapabilities({ isReviewer: true }),
+    eligibleCaseTypes: [],
+    caseSources: [
+      { slug: 'a', listName: 'Cases-A', displayName: 'A' },
+      { slug: 'b', listName: 'Cases-B', displayName: 'B' },
+    ],
+  });
+  await flush();
+
+  assert.deepEqual(
+    calls.map((c) => c.opts.listName).sort(),
+    ['Cases-A', 'Cases-B'],
+    'one listCases per source, each carrying its listName'
+  );
+  for (const { filter } of calls) {
+    assert.equal(filter.assignedReviewer, 'u1');
+    assert.equal(filter.status, 'In-progress');
+  }
+
+  const caseTable = /** @type {any} */ (findAll(host, 'cora-case-table')[0]);
+  const rows = /** @type {any[]} */ (caseTable.cases);
+  assert.deepEqual(
+    rows.map((r) => r.id).sort(),
+    ['case-Cases-A', 'case-Cases-B'],
+    'merges rows from every source list'
+  );
+});
+
+test('DashboardPage: threads eligible caseSources and full allCaseSources to child sections', async () => {
+  const caseSources = [{ slug: 'a', listName: 'Cases-A', displayName: 'A' }];
+  const allCaseSources = [
+    { slug: 'a', listName: 'Cases-A', displayName: 'A' },
+    { slug: 'b', listName: 'Cases-B', displayName: 'B' },
+  ];
+  const host = DashboardPage({
+    client: /** @type {any} */ (makeClient()),
+    currentUserId: 'user-reviewer',
+    capabilities: defaultCapabilities({
+      isReviewer: true,
+      isControls: true,
+      ownedCaseTypes: ['a'],
+    }),
+    eligibleCaseTypes: ['a'],
+    caseSources,
+    allCaseSources,
+  });
+  await flush();
+
+  const kpi = /** @type {any} */ (findAll(host, 'cora-kpi-strip')[0]);
+  assert.deepEqual(kpi.caseSources, caseSources);
+  assert.deepEqual(kpi.allCaseSources, allCaseSources);
+  const owner = /** @type {any} */ (findAll(host, 'cora-owner-summary')[0]);
+  assert.deepEqual(owner.allCaseSources, allCaseSources);
 });
 
 test('DashboardPage: opening a case from the Action Centre routes to the case (issue #287)', async () => {
@@ -677,6 +772,13 @@ test('DashboardPage: opening a case from the Action Centre routes to the case (i
     currentUserId: 'user-reviewer',
     capabilities: defaultCapabilities({ isReviewer: true }),
     eligibleCaseTypes: ['complaints'],
+    allCaseSources: [
+      {
+        slug: 'complaints',
+        listName: 'Cases-Complaints',
+        displayName: 'Complaints',
+      },
+    ],
   });
   for (let i = 0; i < 25; i++) await Promise.resolve();
 

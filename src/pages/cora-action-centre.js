@@ -263,6 +263,7 @@ export function ActionCentreView(state, handlers) {
  * client: SharePointClient | null,
  * capabilities: Capabilities,
  * currentUserId?: string,
+ * allCaseSources?: import('../setup/resolve-eligible-case-types.js').CaseSource[],
  * onOpenCase?: (row: CaseRow) => void,
  * now?: Date,
  * }} props
@@ -272,6 +273,7 @@ export function ActionCentre({
   client,
   capabilities,
   currentUserId = '',
+  allCaseSources = [],
   onOpenCase,
   now = new Date(),
 }) {

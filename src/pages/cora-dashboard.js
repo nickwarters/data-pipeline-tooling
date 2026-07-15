@@ -18,16 +18,24 @@ import { CASE_STATUS } from '../lib/case-statuses.js';
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
 /** @typedef {import('../setup/resolve-eligible-case-types.js').AllocationSource} AllocationSource */
+/** @typedef {import('../setup/resolve-eligible-case-types.js').CaseSource} CaseSource */
 
 /**
  * Reviewer/owner/adviser landing dashboard. Self-fetches the current
  * reviewer's outstanding cases when `capabilities.isReviewer` is set.
+ *
+ * `caseSources` is the permission-derived list of Case sources (each carrying
+ * an explicit `listName`); every list read fans out over it and merges, so no
+ * fetch relies on a hidden default list. `allCaseSources` (every list) is
+ * threaded to the cross-type child sections (Controls, RP, Action Centre).
  *
  * @param {{
  * client: SharePointClient | null,
  * currentUserId: string,
  * capabilities: Capabilities,
  * eligibleCaseTypes: string[],
+ * caseSources?: CaseSource[],
+ * allCaseSources?: CaseSource[],
  * allocationSources?: AllocationSource[],
  * }} props
  * @returns {HTMLElement}
@@ -37,6 +45,8 @@ export function DashboardPage({
   currentUserId,
   capabilities,
   eligibleCaseTypes,
+  caseSources = [],
+  allCaseSources = [],
   allocationSources = [],
 }) {
   /** @type {import('../lib/signal.js').Signal<CaseRow[]>} */
@@ -45,10 +55,20 @@ export function DashboardPage({
   async function fetchData() {
     if (!client) return;
     if (capabilities.isReviewer) {
-      const raw = await client.listCases({
-        status: CASE_STATUS.IN_PROGRESS,
-        assignedReviewer: currentUserId,
-      });
+      // Fan out the outstanding-cases read across every accessible list and
+      // merge: a reviewer's assigned Cases can live in any list they hold.
+      const perList = await Promise.all(
+        caseSources.map((source) =>
+          client.listCases(
+            {
+              status: CASE_STATUS.IN_PROGRESS,
+              assignedReviewer: currentUserId,
+            },
+            { listName: source.listName }
+          )
+        )
+      );
+      const raw = perList.flat();
       cases.set(raw.map((c) => ({ ...c, overdue: isOverdue(c) })));
     }
   }
@@ -59,6 +79,8 @@ export function DashboardPage({
       currentUserId,
       capabilities,
       eligibleCaseTypes,
+      caseSources,
+      allCaseSources,
       allocationSources,
       cases: cases.get(),
       onAllocated: fetchData,
@@ -74,6 +96,8 @@ export function DashboardPage({
  * currentUserId: string,
  * capabilities: Capabilities,
  * eligibleCaseTypes: string[],
+ * caseSources: CaseSource[],
+ * allCaseSources: CaseSource[],
  * allocationSources: AllocationSource[],
  * cases: CaseRow[],
  * onAllocated: () => void,
@@ -85,6 +109,8 @@ function renderDashboard({
   currentUserId,
   capabilities,
   eligibleCaseTypes,
+  caseSources,
+  allCaseSources,
   allocationSources,
   cases,
   onAllocated,
@@ -104,6 +130,8 @@ function renderDashboard({
         currentUserId,
         capabilities,
         eligibleCaseTypes,
+        caseSources,
+        allCaseSources,
       })
     );
   }
@@ -117,6 +145,7 @@ function renderDashboard({
         client,
         capabilities,
         currentUserId,
+        allCaseSources,
         onOpenCase: (caseRow) => {
           location.hash = caseRouteFor(caseRow);
         },
@@ -129,6 +158,7 @@ function renderDashboard({
       h('cora-owner-summary', {
         client,
         ownedCaseTypes: capabilities.ownedCaseTypes,
+        allCaseSources,
       })
     );
   }
@@ -160,6 +190,7 @@ function renderDashboard({
       ResponsiblePartyDashboard({
         client,
         currentUserId,
+        allCaseSources,
         onOpenConversation: (caseRow) => {
           location.hash = conversationRouteFor(caseRow);
         },
@@ -171,6 +202,7 @@ function renderDashboard({
     children.push(
       ControlsDashboard({
         client,
+        allCaseSources,
         onOpenCase: (caseRow) => {
           location.hash = caseRouteFor(caseRow);
         },
