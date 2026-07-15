@@ -5,6 +5,10 @@ import { h } from '../lib/html.js';
 import { EmptyState } from '../lib/empty-state.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import {
+  listCasesPerSource,
+  countCasesAcrossSources,
+} from '../services/across-sources.js';
+import {
   reasonsForCapabilities,
   visibleReasons,
   activeFilter,
@@ -309,12 +313,7 @@ export function ActionCentre({
    */
   async function sumAcrossSources(filter) {
     const sp = /** @type {SharePointClient} */ (client);
-    const perSourceCounts = await Promise.all(
-      allCaseSources.map((source) =>
-        sp.countCases(filter, { listName: source.listName })
-      )
-    );
-    return perSourceCounts.reduce((total, n) => total + n, 0);
+    return countCasesAcrossSources(sp, allCaseSources, filter);
   }
 
   /** Load every group count, the worst-item peeks, and the deduped headline. */
@@ -333,16 +332,11 @@ export function ActionCentre({
 
         // One worst-first row from each list, then the single global worst
         // among those per-list winners (see pickGlobalWorst).
-        const perSourceWorst = await Promise.all(
-          allCaseSources.map(async (source) => {
-            const [row] = await sp.listCases(filter, {
-              ...worstFirstOrder(reason),
-              top: 1,
-              listName: source.listName,
-            });
-            return row ?? null;
-          })
-        );
+        const perSource = await listCasesPerSource(sp, allCaseSources, filter, {
+          ...worstFirstOrder(reason),
+          top: 1,
+        });
+        const perSourceWorst = perSource.map(({ rows }) => rows[0] ?? null);
         nextPeeks[reason.id] = pickGlobalWorst(perSourceWorst, reason);
       })
     );
@@ -377,16 +371,16 @@ export function ActionCentre({
   async function loadPage(reason, skip) {
     const sp = /** @type {SharePointClient} */ (client);
     const filter = activeFilter(reason, currentUserId);
-    const perSourceRows = await Promise.all(
-      allCaseSources.map((source) =>
-        sp.listCases(filter, {
-          ...worstFirstOrder(reason),
-          top: skip + PAGE_SIZE,
-          listName: source.listName,
-        })
-      )
+    const perSource = await listCasesPerSource(sp, allCaseSources, filter, {
+      ...worstFirstOrder(reason),
+      top: skip + PAGE_SIZE,
+    });
+    const rows = mergeWorstFirstWindow(
+      perSource.map(({ rows: sourceRows }) => sourceRows),
+      reason,
+      skip,
+      PAGE_SIZE
     );
-    const rows = mergeWorstFirstWindow(perSourceRows, reason, skip, PAGE_SIZE);
     const current = pages.get();
     const existing = skip === 0 ? [] : current[reason.id];
     const merged = [...existing, ...rows];

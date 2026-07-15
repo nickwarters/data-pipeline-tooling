@@ -1,4 +1,6 @@
 // @ts-check
+import { listCasesAcrossSources } from './across-sources.js';
+
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../setup/resolve-eligible-case-types.js').CaseSource} CaseSource */
@@ -15,11 +17,8 @@
  * @param {CaseSource[]} journeySources
  * @returns {Promise<CaseRow[]>}
  */
-export async function fetchJourneyCases(client, journeySources) {
-  const results = await Promise.all(
-    journeySources.map((source) =>
-      client.listCases({ caseType: source.slug }, { listName: source.listName })
-    )
-  );
-  return results.flat();
+export function fetchJourneyCases(client, journeySources) {
+  return listCasesAcrossSources(client, journeySources, (source) => ({
+    caseType: source.slug,
+  }));
 }

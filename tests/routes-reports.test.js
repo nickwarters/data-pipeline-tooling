@@ -173,7 +173,7 @@ test('reports/reviewer-team route: redirects to #/reports when not a Reviewer Ma
   }
 });
 
-test('reports/reviewer-team route: mounts ReviewerTeamReportPage with client, currentUser, eligibleCaseTypes for Reviewer Manager', () => {
+test('reports/reviewer-team route: mounts ReviewerTeamReportPage with client, currentUser, caseSources for Reviewer Manager', () => {
   makeDocSpy();
   try {
     const client = {

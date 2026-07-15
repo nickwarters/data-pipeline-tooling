@@ -3,6 +3,7 @@ import { ShellElement, replaceHostChildren } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
 import { CASE_STATUS } from '../../lib/case-statuses.js';
+import { listCasesPerSource } from '../../services/across-sources.js';
 
 /** @typedef {import('../../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
@@ -78,27 +79,24 @@ export async function getUnassignedCases({
 }) {
   if (!client) return [];
 
-  const perSource = await Promise.all(
-    allocationSources.map(async (source) => {
-      /** @type {CaseListOptions} */
-      const listOptions = { listName: source.listName };
-      const rows = await client.listCases(
-        { status: CASE_STATUS.IN_PROGRESS, caseType: source.slug },
-        listOptions
-      );
-      return rows
-        .filter((c) => c.assignedReviewer === '')
-        .map(
-          (c) =>
-            /** @type {AllocationCandidate} */ ({
-              ...c,
-              _listOptions: listOptions,
-            })
-        );
-    })
+  const perSource = await listCasesPerSource(
+    client,
+    allocationSources,
+    (source) => ({ status: CASE_STATUS.IN_PROGRESS, caseType: source.slug })
+  );
+  const candidates = perSource.flatMap(({ source, rows }) =>
+    rows
+      .filter((c) => c.assignedReviewer === '')
+      .map(
+        (c) =>
+          /** @type {AllocationCandidate} */ ({
+            ...c,
+            _listOptions: { listName: source.listName },
+          })
+      )
   );
 
-  return orderCandidatesByAge(perSource.flat(), random);
+  return orderCandidatesByAge(candidates, random);
 }
 
 export class CORAAllocation extends ShellElement {

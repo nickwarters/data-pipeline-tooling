@@ -54,7 +54,7 @@ test('routes-team-cases: registers #/team-cases route', () => {
   );
 });
 
-test('routes-team-cases: mounts TeamCasesPage output with client, currentUser, eligibleCaseTypes', () => {
+test('routes-team-cases: mounts TeamCasesPage output with client, currentUser, caseSources', () => {
   const client = /** @type {any} */ ({
     async listCases() {
       return [];

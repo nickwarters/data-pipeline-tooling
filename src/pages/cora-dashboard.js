@@ -13,6 +13,7 @@ import { ActionCentre } from './cora-action-centre.js';
 import { reasonsForCapabilities } from '../services/action-centre-model.js';
 import { isOverdue } from '../evaluators/overdue-evaluator.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
+import { listCasesAcrossSources } from '../services/across-sources.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
@@ -34,7 +35,6 @@ import { CASE_STATUS } from '../lib/case-statuses.js';
  * client: SharePointClient | null,
  * currentUserId: string,
  * capabilities: Capabilities,
- * eligibleCaseTypes?: string[],
  * caseSources?: CaseSource[],
  * allCaseSources?: CaseSource[],
  * allocationSources?: AllocationSource[],
@@ -57,18 +57,10 @@ export function DashboardPage({
     if (capabilities.isReviewer) {
       // Fan out the outstanding-cases read across every accessible list and
       // merge: a reviewer's assigned Cases can live in any list they hold.
-      const perList = await Promise.all(
-        caseSources.map((source) =>
-          client.listCases(
-            {
-              status: CASE_STATUS.IN_PROGRESS,
-              assignedReviewer: currentUserId,
-            },
-            { listName: source.listName }
-          )
-        )
-      );
-      const raw = perList.flat();
+      const raw = await listCasesAcrossSources(client, caseSources, {
+        status: CASE_STATUS.IN_PROGRESS,
+        assignedReviewer: currentUserId,
+      });
       cases.set(raw.map((c) => ({ ...c, overdue: isOverdue(c) })));
     }
   }

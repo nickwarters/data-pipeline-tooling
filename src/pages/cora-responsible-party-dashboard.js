@@ -5,6 +5,7 @@ import { h } from '../lib/html.js';
 import { caseRouteFor } from '../lib/case-route-links.js';
 import '../components/collections/cora-case-table.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
+import { listCasesAcrossSources } from '../services/across-sources.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
@@ -46,15 +47,12 @@ export function ResponsiblePartyDashboard({
     // fetching unscoped and filtering in JS — there is no default Case
     // list, and a Case lives in exactly one list, so per-list pools simply
     // merge together.
-    const fetched = await Promise.all(
-      allCaseSources.map((source) =>
-        /** @type {SharePointClient} */ (client).listCases(
-          { responsibleParty: currentUserId },
-          { listName: source.listName }
-        )
-      )
+    const fetched = await listCasesAcrossSources(
+      /** @type {SharePointClient} */ (client),
+      allCaseSources,
+      { responsibleParty: currentUserId }
     );
-    myCases.set(fetched.flat());
+    myCases.set(fetched);
   }
 
   const host = reactive(() => {

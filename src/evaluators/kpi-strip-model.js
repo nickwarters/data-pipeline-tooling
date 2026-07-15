@@ -2,6 +2,10 @@
 import { isOverdue } from './overdue-evaluator.js';
 import { permissions } from '../services/permissions.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';
+import {
+  listCasesAcrossSources,
+  countCasesAcrossSources,
+} from '../services/across-sources.js';
 
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
@@ -187,15 +191,10 @@ async function buildReviewerLane({ client, currentUserId, caseSources, now }) {
   // flatten rather than fetching unscoped and filtering in JS (issue: no
   // default Case list — every read carries an explicit `listName`, and a Case
   // lives in exactly one list, so per-list pools simply flatten together).
-  const fetched = await Promise.all(
-    caseSources.map((source) =>
-      client.listCases(
-        { status: CASE_STATUS.IN_PROGRESS, assignedReviewer: currentUserId },
-        { listName: source.listName }
-      )
-    )
-  );
-  const pool = fetched.flat();
+  const pool = await listCasesAcrossSources(client, caseSources, {
+    status: CASE_STATUS.IN_PROGRESS,
+    assignedReviewer: currentUserId,
+  });
 
   const overdue = pool.filter((c) => isOverdue(c, undefined, now));
   const awaiting = pool.filter(
@@ -243,12 +242,9 @@ async function buildReviewerLane({ client, currentUserId, caseSources, now }) {
  * @returns {Promise<KpiLane>}
  */
 async function buildControlsLane({ client, allCaseSources }) {
-  const counts = await Promise.all(
-    allCaseSources.map((source) =>
-      client.countCases({ hasOpenAppeal: true }, { listName: source.listName })
-    )
-  );
-  const count = counts.reduce((sum, n) => sum + n, 0);
+  const count = await countCasesAcrossSources(client, allCaseSources, {
+    hasOpenAppeal: true,
+  });
 
   return {
     role: 'controls',
@@ -281,17 +277,14 @@ async function buildOwnerLane({ client, capabilities, allCaseSources, now }) {
   // history. The In-progress pool is what the tiles derive from. Each owned
   // slug resolves to its own list via `allCaseSources`; an owned slug with no
   // matching source (stale config) is skipped rather than fetched unscoped.
-  const fetched = await Promise.all(
-    owned.map((caseType) => {
-      const source = allCaseSources.find((s) => s.slug === caseType);
-      if (!source) return [];
-      return client.listCases(
-        { caseType, status: CASE_STATUS.IN_PROGRESS },
-        { listName: source.listName }
-      );
-    })
-  );
-  const pool = fetched.flat();
+  const ownedSources = owned.flatMap((caseType) => {
+    const source = allCaseSources.find((s) => s.slug === caseType);
+    return source ? [source] : [];
+  });
+  const pool = await listCasesAcrossSources(client, ownedSources, (source) => ({
+    caseType: source.slug,
+    status: CASE_STATUS.IN_PROGRESS,
+  }));
 
   const atRisk = pool.filter(
     (c) => isOverdue(c, undefined, now) || isBreachingWithin24h(c, now)

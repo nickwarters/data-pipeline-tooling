@@ -1,4 +1,6 @@
 // @ts-check
+import { listCasesAcrossSources } from './across-sources.js';
+
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 /** @typedef {import('./team-cases-params.js').TeamCasesParams} TeamCasesParams */
@@ -16,18 +18,13 @@
  * @param {CaseSource[]} sources
  * @returns {Promise<CaseRow[]>}
  */
-export async function fetchTeamCases(client, params, managerId, sources) {
+export function fetchTeamCases(client, params, managerId, sources) {
   const targets = params.caseType
     ? sources.filter((s) => s.slug === params.caseType)
     : sources;
 
-  const results = await Promise.all(
-    targets.map((target) =>
-      client.listCases(
-        { caseType: target.slug, assignedReviewerManager: managerId },
-        { listName: target.listName }
-      )
-    )
-  );
-  return results.flat();
+  return listCasesAcrossSources(client, targets, (target) => ({
+    caseType: target.slug,
+    assignedReviewerManager: managerId,
+  }));
 }

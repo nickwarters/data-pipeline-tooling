@@ -123,7 +123,6 @@ test('routes-dashboard: passes allocationSources from context through to the cor
       client,
       currentUser,
       capabilities,
-      eligibleCaseTypes: ['example-review'],
       allocationSources,
     })
   );
@@ -147,7 +146,6 @@ test('routes-dashboard: unmount is a no-op (does not throw)', () => {
         ownedCaseTypes: [],
         isAdviser: false,
       },
-      eligibleCaseTypes: [],
     })
   );
   const route = router._routes.find((r) => r.re.test('#/dashboard'));

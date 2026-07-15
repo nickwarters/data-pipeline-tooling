@@ -34,7 +34,6 @@ function makeContext() {
     caseSources: [],
     allCaseSources: [],
     journeyCaseSources: [],
-    eligibleCaseTypes: [],
     allocationSources: [],
     appEl: {
       classList: { add() {}, remove() {} },

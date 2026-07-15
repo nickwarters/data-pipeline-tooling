@@ -77,7 +77,6 @@ test('DashboardPage: reviewer capability — outstanding Cases heading and alloc
     client: /** @type {any} */ (makeClient()),
     currentUserId: 'user-reviewer',
     capabilities: defaultCapabilities({ isReviewer: true }),
-    eligibleCaseTypes: ['example-review'],
   });
   await flush();
 
@@ -103,7 +102,6 @@ test('DashboardPage: reviewer capability — renders the role-scoped KPI strip',
     client: /** @type {any} */ (makeClient()),
     currentUserId: 'user-reviewer',
     capabilities: defaultCapabilities({ isReviewer: true }),
-    eligibleCaseTypes: ['example-review'],
   });
   await flush();
 
@@ -119,7 +117,6 @@ test('DashboardPage: visitor capability — no KPI strip is rendered', async () 
     client: /** @type {any} */ (makeClient()),
     currentUserId: 'user-visitor',
     capabilities: defaultCapabilities({ isVisitor: true }),
-    eligibleCaseTypes: [],
   });
   await flush();
 
@@ -131,7 +128,6 @@ test('DashboardPage: owner-only capability — owner summary visible, no outstan
     client: /** @type {any} */ (makeClient()),
     currentUserId: 'user-owner',
     capabilities: defaultCapabilities({ ownedCaseTypes: ['example-review'] }),
-    eligibleCaseTypes: [],
   });
   await flush();
 
@@ -160,7 +156,6 @@ test('DashboardPage: admin capability — both reviewer and owner sections visib
       isReviewer: true,
       ownedCaseTypes: ['example-review'],
     }),
-    eligibleCaseTypes: ['example-review'],
   });
   await flush();
 
@@ -187,7 +182,6 @@ test('DashboardPage: a worklist role renders the Action Centre worklist (issue #
     client: /** @type {any} */ (makeClient()),
     currentUserId: 'user-reviewer',
     capabilities: defaultCapabilities({ isReviewer: true }),
-    eligibleCaseTypes: ['example-review'],
   });
   await flush();
 
@@ -202,7 +196,6 @@ test('DashboardPage: an adviser-only user gets no Action Centre (no worklist rea
     client: /** @type {any} */ (makeClient()),
     currentUserId: 'user-rp',
     capabilities: defaultCapabilities({ isAdviser: true }),
-    eligibleCaseTypes: [],
   });
   await flush();
 
@@ -218,7 +211,6 @@ test('DashboardPage: reviewer with no ownedCaseTypes never renders owner section
     client: /** @type {any} */ (makeClient()),
     currentUserId: 'user-reviewer',
     capabilities: defaultCapabilities({ isReviewer: true }),
-    eligibleCaseTypes: ['example-review'],
   });
   // Must not throw.
   await flush();
@@ -231,7 +223,6 @@ test('DashboardPage: renders nothing and does not throw when client is null and 
     client: null,
     currentUserId: '',
     capabilities: defaultCapabilities(),
-    eligibleCaseTypes: [],
   });
   await flush();
   assert.equal(/** @type {any} */ (host)._children.length, 0);
@@ -242,7 +233,6 @@ test('DashboardPage: RP-only capability — responsible party dashboard rendered
     client: /** @type {any} */ (makeClient()),
     currentUserId: 'user-rp',
     capabilities: defaultCapabilities({ isAdviser: true }),
-    eligibleCaseTypes: [],
   });
   await flush();
 
@@ -280,7 +270,6 @@ test('DashboardPage: Controls capability — outstanding appeals section visible
     client: /** @type {any} */ (makeClient()),
     currentUserId: 'user-controls',
     capabilities: defaultCapabilities({ isControls: true }),
-    eligibleCaseTypes: [],
   });
   await flush();
 
@@ -310,7 +299,6 @@ test('DashboardPage: non-Controls user never sees the outstanding appeals sectio
     client: /** @type {any} */ (makeClient()),
     currentUserId: 'user-reviewer',
     capabilities: defaultCapabilities({ isReviewer: true }),
-    eligibleCaseTypes: ['example-review'],
   });
   await flush();
 
@@ -354,7 +342,6 @@ test('DashboardPage: Controls open button navigates to the case hash', async () 
     client: /** @type {any} */ (client),
     currentUserId: 'user-controls',
     capabilities: defaultCapabilities({ isControls: true }),
-    eligibleCaseTypes: [],
   });
   await flush();
 
@@ -378,7 +365,6 @@ test('DashboardPage: reviewer + RP capability — both reviewer and RP sections 
     client: /** @type {any} */ (makeClient()),
     currentUserId: 'user-reviewer-rp',
     capabilities: defaultCapabilities({ isReviewer: true, isAdviser: true }),
-    eligibleCaseTypes: ['example-review'],
   });
   await flush();
 
@@ -411,7 +397,6 @@ test('DashboardPage: RP dashboard fetches cases with responsibleParty filter usi
     client: /** @type {any} */ (client),
     currentUserId: 'user-rp',
     capabilities: defaultCapabilities({ isAdviser: true }),
-    eligibleCaseTypes: [],
     allCaseSources: [
       {
         slug: 'example-review',
@@ -456,7 +441,6 @@ test('DashboardPage: open button in RP unread-messages section navigates to conv
     client: /** @type {any} */ (client),
     currentUserId: 'user-rp',
     capabilities: defaultCapabilities({ isAdviser: true }),
-    eligibleCaseTypes: [],
   });
   await flush();
 
@@ -485,7 +469,6 @@ test('DashboardPage: cora-allocation element receives allocationSources from pro
     client: /** @type {any} */ (makeClient()),
     currentUserId: 'user-reviewer',
     capabilities: defaultCapabilities({ isReviewer: true }),
-    eligibleCaseTypes: ['example-review'],
     allocationSources,
   });
   await flush();
@@ -511,7 +494,6 @@ test('DashboardPage: cora-allocation element listens for cora-allocated and re-f
     client: /** @type {any} */ (client),
     currentUserId: 'user-reviewer',
     capabilities: defaultCapabilities({ isReviewer: true }),
-    eligibleCaseTypes: ['example-review'],
     caseSources: [
       {
         slug: 'example-review',
@@ -545,7 +527,6 @@ test('DashboardPage: cora-case-open event on case table navigates to #/case/{id}
     client: /** @type {any} */ (makeClient()),
     currentUserId: 'user-reviewer',
     capabilities: defaultCapabilities({ isReviewer: true }),
-    eligibleCaseTypes: [],
   });
   await flush();
 
@@ -629,7 +610,6 @@ test('DashboardPage: stamps overdue:true on rows whose dueDate is in the past', 
     client: /** @type {any} */ (client),
     currentUserId: 'u1',
     capabilities: defaultCapabilities({ isReviewer: true }),
-    eligibleCaseTypes: [],
     caseSources: [
       {
         slug: 'example-review',
@@ -694,7 +674,6 @@ test('DashboardPage: reviewer outstanding fetch fans out one listCases per sourc
     client: /** @type {any} */ (client),
     currentUserId: 'u1',
     capabilities: defaultCapabilities({ isReviewer: true }),
-    eligibleCaseTypes: [],
     caseSources: [
       { slug: 'a', listName: 'Cases-A', displayName: 'A' },
       { slug: 'b', listName: 'Cases-B', displayName: 'B' },
@@ -735,7 +714,6 @@ test('DashboardPage: threads eligible caseSources and full allCaseSources to chi
       isControls: true,
       ownedCaseTypes: ['a'],
     }),
-    eligibleCaseTypes: ['a'],
     caseSources,
     allCaseSources,
   });
@@ -778,7 +756,6 @@ test('DashboardPage: opening a case from the Action Centre routes to the case (i
     client: /** @type {any} */ (worklistClient),
     currentUserId: 'user-reviewer',
     capabilities: defaultCapabilities({ isReviewer: true }),
-    eligibleCaseTypes: ['complaints'],
     allCaseSources: [
       {
         slug: 'complaints',
@@ -886,7 +863,6 @@ test('DashboardPage: the Action Centre "All" toggle survives the dashboard rende
     client: /** @type {any} */ (client),
     currentUserId: 'me',
     capabilities: defaultCapabilities({ isReviewer: true }),
-    eligibleCaseTypes: ['complaints'],
     allCaseSources: [
       {
         slug: 'complaints',
