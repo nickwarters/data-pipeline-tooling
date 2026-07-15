@@ -115,3 +115,59 @@ three hand-written groups.
 [the architecture decision]: ./0011-section-level-role-based-access.md
 [the architecture decision]: ./0026-amend-outcome-case-level-and-qa-retirement.md
 [the architecture decision]: ./0027-appeal-flow-journeyowner-controls.md
+
+## Amendment (2026-07-15): app-wide eligibility rule, no default Case list (#370 / #373)
+
+Axis 2 above named `Reviewers - <type>` as the ACL boundary but left one thing
+implicit: **which Case Type lists a surface actually reads**. Before this change the
+frontend still leaned on a single default Case list (`HttpSharePointClient`'s
+`caseListName`, the mock's default `_cases` store), and dashboard visibility was gated
+by a hard-coded slug allow-list (`DASHBOARD_ENABLED_SLUGS`). Both are removed.
+
+### The rule (grilling D2, #370 item 7)
+
+A user may fetch Case list **X** iff they hold **any** of X's access groups:
+
+```
+config.eligibleGroups  ∪  config.reviewerGroup  ∪  ("Reviewers - " + config.displayName)
+```
+
+Reviewer-Managers hold **every** source (they need all Case Types for fan-out
+reporting/allocation). This is resolved in exactly one place —
+`resolveCaseSources(userGroups)` (`src/setup/resolve-eligible-case-types.js`) — which
+returns `{ slug, listName, displayName }[]`. `example-review` keeps a blanket
+`Reviewers` in its `eligibleGroups`, so a plain Reviewer still sees it; every other type
+requires a per-type group.
+
+**Staging a Case Type out is a per-type group nobody holds — never a slug list in
+code.** `DASHBOARD_ENABLED_SLUGS` and `resolveEligibleCaseTypes` are deleted; a contract
+test (`tests/case-type-eligibility-consistency.test.js`) asserts eligibility is purely
+group-derived and no module reintroduces a slug gate.
+
+### Every list is explicit — there is no default Case list
+
+Each Case Type declares its own `listName` (or the `Cases-{PascalSlug}` convention).
+Every surface fans out its reads over the sources it is entitled to and merges, passing
+an explicit `{ listName }` on every `getCase`/`patchCase`/`listCases`/`countCases`:
+
+- **Reviewer-scoped** reads (dashboard outstanding, KPI reviewer lane, team cases,
+  reports, allocation) use the eligible `caseSources`.
+- **Cross-type** reads (Controls appeals, Responsible Party dashboard, Action Centre)
+  use `allCaseSources` (every manifest source) — an appeal or RP Case can live in any
+  list.
+- **Journey Owners** reach their owned types via `resolveSourcesForSlugs`
+  (`ownedJourneyCaseTypes`): a pure Journey Owner holds no reviewer/list-access group,
+  so they never appear in `resolveCaseSources`.
+
+Both `SharePointClient` implementations now **require** `opts.listName` and throw
+otherwise (#376); the mock is list-store-only (no default `_cases`), and fixture
+partitioning is total. The strictness flip is the enforcement mechanism: any call site
+that forgets a list fails loudly in tests rather than silently reading the wrong one.
+
+### Merge-order note (Action Centre / Controls)
+
+Per-list counts SUM (a Case lives in exactly one list); paged "worst-first" rows are
+obtained by over-fetching each list's own `[0, skip+PAGE_SIZE)` window, merging, and
+re-slicing globally (`mergeWorstFirstWindow`) — the per-list server order only holds
+within a list. This trades extra reads for a guaranteed-correct global order; the
+"short merged page corrects the count" invariant is preserved.
