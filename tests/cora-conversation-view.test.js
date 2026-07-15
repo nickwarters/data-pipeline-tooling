@@ -373,20 +373,22 @@ test('ConversationView: cora-conversation element receives caseListOptions resol
   });
 });
 
-test('ConversationView: cora-conversation element caseListOptions defaults to {} for a Case Type with no declared listName', async () => {
+test("ConversationView: cora-conversation element carries stress-review's explicit listName", async () => {
   const client = makeStubClient();
   const host = ConversationView({
     client: /** @type {any} */ (client),
     saveQueue: null,
     caseId: 'case-1',
-    // stress-review deliberately declares no listName (case-types/stress-review.js).
+    // stress-review explicitly declares its Case list like every manifest type.
     caseType: 'stress-review',
     currentUser: null,
   });
   await flush();
 
   const conversationEl = childrenOf(host)[1];
-  assert.deepEqual(conversationEl.caseListOptions, {});
+  assert.deepEqual(conversationEl.caseListOptions, {
+    listName: 'Cases-StressReview',
+  });
 });
 
 test('ConversationView: cora-conversation element caseListOptions carries the listName for a list-backed Case Type', async () => {

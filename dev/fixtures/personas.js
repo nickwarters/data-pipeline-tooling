@@ -45,7 +45,7 @@ export const personas = {
   'responsible-party': {
     userId: 'user-rp',
     displayName: 'Jordan RP',
-    groups: ['CR-ResponsibleParty'],
+    groups: ['Advisers'],
   },
   'reviewer-manager': {
     userId: 'user-rm',

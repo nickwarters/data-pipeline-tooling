@@ -40,9 +40,15 @@ The two sides mirror each other: **Reviewing** = `Reviewers` (base) → `CaseTyp
 
 ### Axis 2 — per-Case-Type list access (which Case's list you can _open_)
 
-| Group                | Grants                                                                                                          |
-| -------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `Reviewers - <type>` | Access to that Case Type's Cases SharePoint list. **This is the real ACL boundary** for reviewing a given type. |
+| Group                    | Grants                                                                                                                 |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `Reviewers - <type>`     | Access to that Case Type's Cases SharePoint list for reviewing.                                                        |
+| `CaseTypeOwner - <type>` | Access to that Case Type's list for Question Bank ownership and reporting.                                             |
+| `JourneyOwner - <type>`  | Access to that Case Type's list for journey oversight and Appeals.                                                     |
+| Broad functional roles   | Controls, Reviewer-Managers, Advisers and ResponsibleParty-Managers span all Case Type lists, with assignment filters. |
+
+These grants describe the frontend's source selection; SharePoint list ACLs remain
+the real security boundary.
 
 **`Reviewers - <type>` implies `isReviewer`** (D2). A user in any `Reviewers - <type>`
 group is treated as a Reviewer without also needing standalone `Reviewers`; i.e.
@@ -126,14 +132,20 @@ by a hard-coded slug allow-list (`DASHBOARD_ENABLED_SLUGS`). Both are removed.
 
 ### The rule (grilling D2, #370 item 7)
 
-A user may fetch Case list **X** iff they hold **any** of X's access groups:
+A user may fetch Case list **X** when they hold one of X's type-scoped roles:
 
 ```
-config.eligibleGroups  ∪  config.reviewerGroup  ∪  ("Reviewers - " + config.displayName)
+"Reviewers - " + config.displayName
+"CaseTypeOwner - " + config.displayName
+"JourneyOwner - " + config.displayName
 ```
 
-Reviewer-Managers hold **every** source (they need all Case Types for fan-out
-reporting/allocation). This is resolved in exactly one place —
+`config.eligibleGroups` and `config.reviewerGroup` remain supported aliases for
+a type's access groups. Controls, Reviewer-Managers, Advisers and
+ResponsibleParty-Managers span **every** source. Adviser and
+ResponsibleParty-Manager reads remain query-filtered by the Case row's
+Responsible Party or Responsible Party Manager field; broad list eligibility
+does not make those reads unscoped. This is resolved in exactly one place —
 `resolveCaseSources(userGroups)` (`src/setup/resolve-eligible-case-types.js`) — which
 returns `{ slug, listName, displayName }[]`. `example-review` keeps a blanket
 `Reviewers` in its `eligibleGroups`, so a plain Reviewer still sees it; every other type
@@ -146,18 +158,19 @@ group-derived and no module reintroduces a slug gate.
 
 ### Every list is explicit — there is no default Case list
 
-Each Case Type declares its own `listName` (or the `Cases-{PascalSlug}` convention).
+Each Case Type declares its own `listName`; the resolver has no naming fallback.
 Every surface fans out its reads over the sources it is entitled to and merges, passing
 an explicit `{ listName }` on every `getCase`/`patchCase`/`listCases`/`countCases`:
 
 - **Reviewer-scoped** reads (dashboard outstanding, KPI reviewer lane, team cases,
   reports, allocation) use the eligible `caseSources`.
-- **Cross-type** reads (Controls appeals, Responsible Party dashboard, Action Centre)
-  use `allCaseSources` (every manifest source) — an appeal or RP Case can live in any
-  list.
-- **Journey Owners** reach their owned types via `resolveSourcesForSlugs`
-  (`ownedJourneyCaseTypes`): a pure Journey Owner holds no reviewer/list-access group,
-  so they never appear in `resolveCaseSources`.
+- **Broad-role** reads (Controls appeals, Adviser/RP dashboards and manager
+  reporting) receive every manifest source, while retaining their role-specific
+  server-side filters.
+- **Type-scoped owner** reads receive only sources derived from their
+  `CaseTypeOwner - X` or `JourneyOwner - X` groups. The compatibility-named
+  `allCaseSources` app context therefore means every source the current user's
+  roles may span, not an unconditional manifest list.
 
 Both `SharePointClient` implementations now **require** `opts.listName` and throw
 otherwise (#376); the mock is list-store-only (no default `_cases`), and fixture

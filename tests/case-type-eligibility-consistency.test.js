@@ -8,6 +8,7 @@ import { dirname, join } from 'node:path';
 import { CASE_TYPE_IMPORTERS } from '../case-types/manifest.js';
 import { resolveCaseSources } from '../src/setup/resolve-eligible-case-types.js';
 import { permissions } from '../src/services/permissions.js';
+import { personas } from '../dev/fixtures/personas.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const srcRoot = join(here, '..', 'src');
@@ -100,4 +101,21 @@ test('permissions.caseTypes: each displayName matches the Case Type config displ
         `match its Case Type config displayName ("${config.displayName}").`
     );
   }
+});
+
+test('case types: every manifest config explicitly declares its Case list', async () => {
+  for (const [slug, importer] of Object.entries(CASE_TYPE_IMPORTERS)) {
+    const { default: config } = await importer();
+    assert.ok(
+      config.listName,
+      `Case Type "${slug}" must declare listName; runtime naming fallbacks hide provisioning mistakes.`
+    );
+  }
+});
+
+test('mock responsible-party persona uses the current Adviser group', () => {
+  assert.ok(personas['responsible-party'].groups.includes('Advisers'));
+  assert.ok(
+    !personas['responsible-party'].groups.includes('CR-ResponsibleParty')
+  );
 });

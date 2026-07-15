@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import {
   resolveCaseSourcesFromCaseTypes,
   resolveCaseSources,
+  resolveAppCaseSources,
   resolveSourcesForSlugs,
   resolveAllCaseSources,
 } from '../src/setup/resolve-eligible-case-types.js';
@@ -42,6 +43,61 @@ test('resolveCaseSourcesFromCaseTypes: grants via the list-access group derived 
       displayName: 'Product Sale Review',
     },
   ]);
+});
+
+test('resolveCaseSourcesFromCaseTypes: a Case Type Owner gets only their Case Type source', () => {
+  const sources = resolveCaseSourcesFromCaseTypes(
+    ['CaseTypeOwner - Complaints'],
+    [
+      {
+        slug: 'complaints',
+        listName: 'Cases-Complaints',
+        config: minimalConfig({ displayName: 'Complaints' }),
+      },
+      {
+        slug: 'example-review',
+        listName: 'Cases-ExampleReview',
+        config: minimalConfig({ displayName: 'Example Review' }),
+      },
+    ]
+  );
+
+  assert.deepEqual(sources, [
+    {
+      slug: 'complaints',
+      listName: 'Cases-Complaints',
+      displayName: 'Complaints',
+    },
+  ]);
+});
+
+test('resolveCaseSourcesFromCaseTypes: a Journey Owner gets only their Case Type source', () => {
+  const caseTypes = [
+    {
+      slug: 'complaints',
+      listName: 'Cases-Complaints',
+      config: minimalConfig({ displayName: 'Complaints' }),
+    },
+    {
+      slug: 'example-review',
+      listName: 'Cases-ExampleReview',
+      config: minimalConfig({ displayName: 'Example Review' }),
+    },
+  ];
+
+  assert.deepEqual(
+    resolveCaseSourcesFromCaseTypes(
+      ['JourneyOwner - Example Review'],
+      caseTypes
+    ),
+    [
+      {
+        slug: 'example-review',
+        listName: 'Cases-ExampleReview',
+        displayName: 'Example Review',
+      },
+    ]
+  );
 });
 
 test('resolveCaseSourcesFromCaseTypes: grants via a blanket eligibleGroups entry', () => {
@@ -167,6 +223,73 @@ test('resolveCaseSourcesFromCaseTypes: Reviewer-Managers get every source (with 
   ]);
 });
 
+test('resolveCaseSourcesFromCaseTypes: Controls get every Case Type source', () => {
+  const caseTypes = [
+    {
+      slug: 'complaints',
+      listName: 'Cases-Complaints',
+      config: minimalConfig({ displayName: 'Complaints' }),
+    },
+    {
+      slug: 'example-review',
+      listName: 'Cases-ExampleReview',
+      config: minimalConfig({ displayName: 'Example Review' }),
+    },
+  ];
+
+  assert.deepEqual(
+    resolveCaseSourcesFromCaseTypes(['Controls'], caseTypes).map(
+      (source) => source.slug
+    ),
+    ['complaints', 'example-review']
+  );
+});
+
+test('resolveCaseSourcesFromCaseTypes: Advisers get every Case Type source', () => {
+  const caseTypes = [
+    {
+      slug: 'complaints',
+      listName: 'Cases-Complaints',
+      config: minimalConfig({ displayName: 'Complaints' }),
+    },
+    {
+      slug: 'example-review',
+      listName: 'Cases-ExampleReview',
+      config: minimalConfig({ displayName: 'Example Review' }),
+    },
+  ];
+
+  assert.deepEqual(
+    resolveCaseSourcesFromCaseTypes(['Advisers'], caseTypes).map(
+      (source) => source.slug
+    ),
+    ['complaints', 'example-review']
+  );
+});
+
+test('resolveCaseSourcesFromCaseTypes: Responsible Party Managers get every Case Type source', () => {
+  const caseTypes = [
+    {
+      slug: 'complaints',
+      listName: 'Cases-Complaints',
+      config: minimalConfig({ displayName: 'Complaints' }),
+    },
+    {
+      slug: 'example-review',
+      listName: 'Cases-ExampleReview',
+      config: minimalConfig({ displayName: 'Example Review' }),
+    },
+  ];
+
+  assert.deepEqual(
+    resolveCaseSourcesFromCaseTypes(
+      ['ResponsibleParty-Managers'],
+      caseTypes
+    ).map((source) => source.slug),
+    ['complaints', 'example-review']
+  );
+});
+
 // ===== resolveCaseSources (manifest-loading wrapper) =====
 
 test('resolveCaseSources: returns a Promise', async () => {
@@ -212,9 +335,7 @@ test('resolveCaseSources: Reviewer-Managers are granted every manifest Case Type
   );
 });
 
-test('resolveCaseSources: a Case Type declaring no listName falls back to the Cases-{PascalSlug} convention', async () => {
-  // stress-review declares no `listName`; Reviewer-Managers see every source,
-  // so this exercises the naming-convention fallback.
+test('resolveCaseSources: stress-review carries its explicit Case list', async () => {
   const sources = await resolveCaseSources(['Reviewer-Managers']);
   const stress = sources.find((s) => s.slug === 'stress-review');
   assert.equal(stress?.listName, 'Cases-StressReview');
@@ -223,6 +344,20 @@ test('resolveCaseSources: a Case Type declaring no listName falls back to the Ca
 test('resolveCaseSources: returns no sources when the user holds no matching group', async () => {
   const sources = await resolveCaseSources(['SomeOtherGroup']);
   assert.deepEqual(sources, []);
+});
+
+test('resolveAppCaseSources: threads only a Case Type Owner eligible source to app surfaces', async () => {
+  const context = await resolveAppCaseSources(
+    ['CaseTypeOwner - Complaints'],
+    []
+  );
+
+  assert.deepEqual(
+    context.caseSources.map((source) => source.slug),
+    ['complaints']
+  );
+  assert.equal(context.allCaseSources, context.caseSources);
+  assert.deepEqual(context.journeyCaseSources, []);
 });
 
 // ===== resolveAllCaseSources =====
@@ -259,7 +394,7 @@ test('resolveSourcesForSlugs: returns an empty array for no slugs', async () => 
   assert.deepEqual(sources, []);
 });
 
-test('resolveSourcesForSlugs: falls back to the Cases-{PascalSlug} convention for a list-less Case Type', async () => {
+test("resolveSourcesForSlugs: carries stress-review's explicit Case list", async () => {
   const sources = await resolveSourcesForSlugs(['stress-review']);
   assert.deepEqual(sources, [
     {

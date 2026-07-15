@@ -14,9 +14,8 @@ import { caseTypeGroupNames } from '../services/permissions.js';
 /**
  * A Case source the current user may read from or write to, resolved from
  * their group membership (the app-wide eligibility rule). `listName` is the
- * SharePoint list to query — always resolved explicitly (declared
- * `config.listName`, or the `Cases-{PascalSlug}` naming convention) so no
- * read/write ever falls back to a hidden default list. `displayName` is the
+ * SharePoint list to query — always declared explicitly as `config.listName`
+ * so no read/write ever falls back to a hidden default list. `displayName` is the
  * Case Type's human name, carried so per-source consumers (dashboards,
  * fetchers) need not re-resolve it.
  *
@@ -30,23 +29,6 @@ import { caseTypeGroupNames } from '../services/permissions.js';
  *
  * @typedef {{ slug: string, listName: string }} AllocationSource
  */
-
-/**
- * Kebab-case slug -> PascalCase, matching the `Cases-{PascalSlug}`
- * SharePoint list naming convention (e.g. `example-review` ->
- * `Cases-ExampleReview`). Used only as a fallback when a Case Type config
- * doesn't declare its own `listName`.
- *
- * @param {string} slug
- * @returns {string}
- */
-function defaultListNameForSlug(slug) {
-  const pascal = slug
-    .split('-')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join('');
-  return `Cases-${pascal}`;
-}
 
 /**
  * Project a resolved Case Type down to the public `CaseSource` shape, coercing
@@ -73,7 +55,7 @@ async function loadCaseTypeSources(slugs, importers) {
       const { default: config } = await importers[slug]();
       return /** @type {CaseTypeSource} */ ({
         slug,
-        listName: config.listName ?? defaultListNameForSlug(slug),
+        listName: /** @type {string} */ (config.listName),
         displayName: config.displayName,
         reviewerGroup: config.reviewerGroup,
         config,
@@ -85,32 +67,43 @@ async function loadCaseTypeSources(slugs, importers) {
 /**
  * Pure core of `resolveCaseSources`: which of the given Case Types the user
  * may read from or write to. This is THE app-wide eligibility rule (#370 item
- * 7 / grilling D2): a user may fetch list X iff they hold any of X's access
- * groups —
+ * 7 / grilling D2). Type-scoped roles grant only their matching source:
  *
  * - `config.reviewerGroup`, if declared
  * - any of `config.eligibleGroups`, if declared
- * - the per-Case-Type list-access group (`Reviewers - <config.displayName>`,
- *   from `caseTypeGroupNames`), if the config declares a `displayName`
+ * - `Reviewers - <config.displayName>`
+ * - `CaseTypeOwner - <config.displayName>`
+ * - `JourneyOwner - <config.displayName>`
  *
- * Reviewer-Managers hold every source: they need all Case Types for fan-out
- * reporting/allocation regardless of any type's own group configuration.
- * Staging a Case Type out is therefore a per-type group nobody holds — never a
- * slug list in code.
+ * Controls, Reviewer-Managers, Advisers and ResponsibleParty-Managers span
+ * every source. Adviser and manager consumers must still apply their
+ * assignment filter to each per-list query. Configured `eligibleGroups` and
+ * `reviewerGroup` remain aliases for a type's access groups.
  *
  * @param {string[]} userGroups
  * @param {CaseTypeSource[]} caseTypes
  * @returns {CaseSource[]}
  */
 export function resolveCaseSourcesFromCaseTypes(userGroups, caseTypes) {
-  const eligible = userGroups.includes('Reviewer-Managers')
+  const eligible = userGroups.some((group) =>
+    [
+      'Reviewer-Managers',
+      'Controls',
+      'Advisers',
+      'ResponsibleParty-Managers',
+    ].includes(group)
+  )
     ? caseTypes
     : caseTypes.filter(({ config, reviewerGroup }) => {
         const groups = [
           ...(config.eligibleGroups ?? []),
           ...(reviewerGroup ? [reviewerGroup] : []),
           ...(config.displayName
-            ? [caseTypeGroupNames(config.displayName).listAccess]
+            ? [
+                caseTypeGroupNames(config.displayName).listAccess,
+                caseTypeGroupNames(config.displayName).caseTypeOwner,
+                caseTypeGroupNames(config.displayName).journeyOwner,
+              ]
             : []),
         ];
         return groups.some((g) => userGroups.includes(g));
@@ -143,11 +136,33 @@ export async function resolveCaseSources(userGroups) {
 }
 
 /**
+ * Resolve the source sets supplied to app routes. The compatibility name
+ * `allCaseSources` means "all sources this user may span", never the whole
+ * manifest for a type-scoped role.
+ *
+ * @param {string[]} userGroups
+ * @param {string[]} ownedJourneyCaseTypes
+ * @returns {Promise<{
+ *   caseSources: CaseSource[],
+ *   allCaseSources: CaseSource[],
+ *   journeyCaseSources: CaseSource[]
+ * }>}
+ */
+export async function resolveAppCaseSources(userGroups, ownedJourneyCaseTypes) {
+  const caseSources = await resolveCaseSources(userGroups);
+  return {
+    caseSources,
+    allCaseSources: caseSources,
+    journeyCaseSources: caseSources.filter((source) =>
+      ownedJourneyCaseTypes.includes(source.slug)
+    ),
+  };
+}
+
+/**
  * Every Case Type in the manifest as an explicit source, independent of
- * eligibility. Used by cross-type surfaces that read across all lists — the
- * Controls appeals view (an appeal can live in any list), the Responsible
- * Party dashboard, and the Action Centre — so each read still carries an
- * explicit `listName` rather than a default store.
+ * eligibility. This low-level utility is not used to populate app routes;
+ * `resolveAppCaseSources` supplies their role-authorized source set.
  *
  * @returns {Promise<CaseSource[]>}
  */

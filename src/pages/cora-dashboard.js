@@ -26,7 +26,8 @@ import { CASE_STATUS } from '../lib/case-statuses.js';
  *
  * `caseSources` is the permission-derived list of Case sources (each carrying
  * an explicit `listName`); every list read fans out over it and merges, so no
- * fetch relies on a hidden default list. `allCaseSources` (every list) is
+ * fetch relies on a hidden default list. `allCaseSources` (every list this
+ * user's roles authorize them to span) is
  * threaded to the cross-type child sections (Controls, RP, Action Centre).
  *
  * @param {{

@@ -16,6 +16,7 @@ const bank = await loadBank('./banks/stress-review.txt');
  */
 const config = {
   displayName: 'Stress Review',
+  listName: 'Cases-StressReview',
   eligibleGroups: ['Reviewers - Stress Review'],
   labels: bank.labels,
   // Demonstrative sectionLabels override (MAINT-11): renames the questions
