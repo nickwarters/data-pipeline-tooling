@@ -9,22 +9,24 @@ import '../components/collections/cora-case-table.js';
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
 
+/** @typedef {import('../setup/resolve-eligible-case-types.js').CaseSource} CaseSource */
+
 /**
  * Journey Owner cross-case Summary view. Lists every Case of
- * the Journey Owner's Case Type(s) (`ownedJourneyCaseTypes`), each row linking
+ * the Journey Owner's Case Type(s) (`journeyCaseSources`), each row linking
  * into that Case's read-only Summary. The per-Case `summary` matrix cell grants
  * `journeyOwner: read-only`, so the links resolve without any per-Case ACL row.
  *
- * @param {{ client: SharePointClient|null, ownedJourneyCaseTypes: string[] }} props
+ * @param {{ client: SharePointClient|null, journeyCaseSources: CaseSource[] }} props
  * @returns {HTMLElement}
  */
-export function JourneyCasesPage({ client, ownedJourneyCaseTypes }) {
+export function JourneyCasesPage({ client, journeyCaseSources }) {
   /** @type {import('../lib/signal.js').Signal<CaseRow[] | null>} */
   const cases = signal(/** @type {CaseRow[] | null} */ (null));
 
   async function fetchData() {
     if (!client) return;
-    cases.set(await fetchJourneyCases(client, ownedJourneyCaseTypes));
+    cases.set(await fetchJourneyCases(client, journeyCaseSources));
   }
 
   const host = reactive(() =>

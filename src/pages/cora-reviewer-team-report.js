@@ -9,19 +9,17 @@ import { computeTimeWindows } from '../evaluators/time-windows.js';
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
 /** @typedef {import('../sharepoint-client.js').CurrentUser} CurrentUser */
 
+/** @typedef {import('../setup/resolve-eligible-case-types.js').CaseSource} CaseSource */
+
 /**
  * @param {{
  * client: SharePointClient | null,
  * currentUser: CurrentUser | null,
- * eligibleCaseTypes: string[],
+ * caseSources: CaseSource[],
  * }} props
  * @returns {HTMLElement}
  */
-export function ReviewerTeamReportPage({
-  client,
-  currentUser,
-  eligibleCaseTypes,
-}) {
+export function ReviewerTeamReportPage({ client, currentUser, caseSources }) {
   /** @type {import('../lib/signal.js').Signal<import('../evaluators/reviewer-team-aggregator.js').AggregateResult | null>} */
   const data = signal(
     /** @type {import('../evaluators/reviewer-team-aggregator.js').AggregateResult | null} */ (
@@ -40,7 +38,7 @@ export function ReviewerTeamReportPage({
     const cases = await fetchReviewerTeamCases(
       client,
       currentUser.id,
-      eligibleCaseTypes
+      caseSources
     );
     const computedWindows = computeTimeWindows(new Date());
     windows.set(computedWindows);

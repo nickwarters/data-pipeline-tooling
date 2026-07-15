@@ -45,11 +45,13 @@ export async function resolveDashboardColumns(
   }
 }
 
+/** @typedef {import('../setup/resolve-eligible-case-types.js').CaseSource} CaseSource */
+
 /**
  * @param {{
  * client: SharePointClient|null,
  * currentUser: CurrentUser|null,
- * eligibleCaseTypes: string[],
+ * caseSources: CaseSource[],
  * queryString: string,
  * }} props
  * @returns {HTMLElement}
@@ -57,7 +59,7 @@ export async function resolveDashboardColumns(
 export function TeamCasesPage({
   client,
   currentUser,
-  eligibleCaseTypes,
+  caseSources,
   queryString,
 }) {
   /** @type {import('../lib/signal.js').Signal<CaseRow[] | null>} */
@@ -74,7 +76,7 @@ export function TeamCasesPage({
       client,
       params,
       currentUser.id,
-      eligibleCaseTypes
+      caseSources
     );
     cases.set(result);
     dashboardColumns.set(await resolveDashboardColumns(params.caseType));

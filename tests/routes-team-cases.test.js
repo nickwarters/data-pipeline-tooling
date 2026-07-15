@@ -16,6 +16,17 @@ const windowListeners = {};
 const { Router } = await import('../src/lib/router.js');
 const { register } = await import('../src/routes/team-cases.js');
 
+/**
+ * @param {string} slug
+ * @param {string} [listName]
+ * @returns {import('../src/setup/resolve-eligible-case-types.js').CaseSource}
+ */
+const src = (slug, listName = `${slug}-list`) => ({
+  slug,
+  listName,
+  displayName: slug,
+});
+
 /** @param {any} node @param {string} tag @returns {any|null} */
 function findTag(node, tag) {
   if (node.tagName === tag.toUpperCase()) return node;
@@ -34,7 +45,7 @@ test('routes-team-cases: registers #/team-cases route', () => {
     /** @type {any} */ ({
       client: {},
       currentUser: { id: 'u1' },
-      eligibleCaseTypes: [],
+      caseSources: [].map((s) => src(s)),
     })
   );
   assert.ok(
@@ -50,7 +61,7 @@ test('routes-team-cases: mounts TeamCasesPage output with client, currentUser, e
     },
   });
   const currentUser = { id: 'u1', displayName: 'U' };
-  const eligibleCaseTypes = ['example-review'];
+  const caseSources = [src('example-review')];
 
   const router = new Router();
   /** @type {any[]} */
@@ -61,10 +72,7 @@ test('routes-team-cases: mounts TeamCasesPage output with client, currentUser, e
     },
   };
   router._container = /** @type {any} */ (container);
-  register(
-    router,
-    /** @type {any} */ ({ client, currentUser, eligibleCaseTypes })
-  );
+  register(router, /** @type {any} */ ({ client, currentUser, caseSources }));
   router.navigate('#/team-cases');
 
   assert.equal(mounted.length, 1, 'should mount a single host element');
@@ -79,7 +87,7 @@ test('routes-team-cases: unmount is a no-op (does not throw)', () => {
     /** @type {any} */ ({
       client: {},
       currentUser: { id: 'u1' },
-      eligibleCaseTypes: [],
+      caseSources: [].map((s) => src(s)),
     })
   );
   const route = router._routes.find((r) => r.re.test('#/team-cases'));
@@ -115,7 +123,7 @@ test('routes-team-cases: passes query string from location hash to the page', as
     /** @type {any} */ ({
       client,
       currentUser: { id: 'u1' },
-      eligibleCaseTypes: ['example-review'],
+      caseSources: ['example-review'].map((s) => src(s)),
     })
   );
   router.navigate('#/team-cases?manager=me&status=overdue');

@@ -412,6 +412,13 @@ test('DashboardPage: RP dashboard fetches cases with responsibleParty filter usi
     currentUserId: 'user-rp',
     capabilities: defaultCapabilities({ isAdviser: true }),
     eligibleCaseTypes: [],
+    allCaseSources: [
+      {
+        slug: 'example-review',
+        listName: 'Cases-ExampleReview',
+        displayName: 'Example Review',
+      },
+    ],
   });
   await flush();
 
@@ -880,6 +887,13 @@ test('DashboardPage: the Action Centre "All" toggle survives the dashboard rende
     currentUserId: 'me',
     capabilities: defaultCapabilities({ isReviewer: true }),
     eligibleCaseTypes: ['complaints'],
+    allCaseSources: [
+      {
+        slug: 'complaints',
+        listName: 'Cases-Complaints',
+        displayName: 'Complaints',
+      },
+    ],
   });
   for (let i = 0; i < 60; i++) await Promise.resolve();
 

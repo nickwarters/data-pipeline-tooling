@@ -13,6 +13,9 @@ import {
   waitingInfo,
   matchedReasonIds,
   secondaryReasons,
+  reasonOrderComparator,
+  pickGlobalWorst,
+  mergeWorstFirstWindow,
 } from '../src/services/action-centre-model.js';
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
@@ -307,6 +310,64 @@ test('matchedReasonIds: reads the hoisted flags in priority order', () => {
     'reopened',
   ]);
   assert.deepEqual(matchedReasonIds(caseRow()), []);
+});
+
+test('reasonOrderComparator: ascending on the reason clock, missing clock sorts first', () => {
+  const cmp = reasonOrderComparator(reason('overdue'));
+  const early = caseRow({ id: 'e', dueDate: '2020-01-01T00:00:00Z' });
+  const late = caseRow({ id: 'l', dueDate: '2020-06-01T00:00:00Z' });
+  const missing = caseRow({ id: 'm', dueDate: null });
+  assert.ok(cmp(early, late) < 0);
+  assert.ok(cmp(late, early) > 0);
+  assert.equal(cmp(early, /** @type {CaseRow} */ ({ ...early })), 0);
+  assert.ok(cmp(missing, early) < 0, 'a missing clock sorts as earliest');
+  assert.ok(cmp(late, missing) > 0, 'missing clock on the right side too');
+});
+
+test('pickGlobalWorst: the earliest candidate on the reason clock wins', () => {
+  const r = reason('overdue');
+  const a = caseRow({ id: 'a', dueDate: '2020-01-05T00:00:00Z' });
+  const b = caseRow({ id: 'b', dueDate: '2020-01-01T00:00:00Z' });
+  const c = caseRow({ id: 'c', dueDate: '2020-01-03T00:00:00Z' });
+  assert.equal(pickGlobalWorst([a, b, c], r)?.id, 'b');
+});
+
+test('pickGlobalWorst: null candidates (an empty list) are skipped', () => {
+  const r = reason('overdue');
+  const a = caseRow({ id: 'a', dueDate: '2020-01-05T00:00:00Z' });
+  assert.equal(pickGlobalWorst([null, a, null], r)?.id, 'a');
+});
+
+test('pickGlobalWorst: all-null candidates yield null', () => {
+  assert.equal(pickGlobalWorst([null, null], reason('overdue')), null);
+});
+
+test('pickGlobalWorst: an empty candidate list yields null', () => {
+  assert.equal(pickGlobalWorst([], reason('overdue')), null);
+});
+
+test('mergeWorstFirstWindow: merges per-source rows, sorts worst-first, and slices the window', () => {
+  const r = reason('overdue');
+  const a = [
+    caseRow({ id: 'a1', dueDate: '2020-01-01T00:00:00Z' }),
+    caseRow({ id: 'a2', dueDate: '2020-01-05T00:00:00Z' }),
+  ];
+  const b = [
+    caseRow({ id: 'b1', dueDate: '2020-01-03T00:00:00Z' }),
+    caseRow({ id: 'b2', dueDate: '2020-01-02T00:00:00Z' }),
+  ];
+  assert.deepEqual(
+    mergeWorstFirstWindow([a, b], r, 0, 4).map((c) => c.id),
+    ['a1', 'b2', 'b1', 'a2']
+  );
+  assert.deepEqual(
+    mergeWorstFirstWindow([a, b], r, 2, 4).map((c) => c.id),
+    ['b1', 'a2']
+  );
+});
+
+test('mergeWorstFirstWindow: an empty set of sources yields an empty window', () => {
+  assert.deepEqual(mergeWorstFirstWindow([], reason('overdue'), 0, 4), []);
 });
 
 test('secondaryReasons: the other reasons a case qualifies for', () => {

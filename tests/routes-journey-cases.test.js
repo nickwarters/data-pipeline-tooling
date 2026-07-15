@@ -26,8 +26,19 @@ function findTag(node, tag) {
   return null;
 }
 
-/** @param {string[]} ownedJourneyCaseTypes */
-const ctx = (ownedJourneyCaseTypes) =>
+/**
+ * @param {string} slug
+ * @param {string} [listName]
+ * @returns {import('../src/setup/resolve-eligible-case-types.js').CaseSource}
+ */
+const src = (slug, listName = `${slug}-list`) => ({
+  slug,
+  listName,
+  displayName: slug,
+});
+
+/** @param {string[]} journeySlugs */
+const ctx = (journeySlugs) =>
   /** @type {any} */ ({
     client: {
       id: 'mock',
@@ -35,7 +46,7 @@ const ctx = (ownedJourneyCaseTypes) =>
         return [];
       },
     },
-    capabilities: { ownedJourneyCaseTypes },
+    journeyCaseSources: journeySlugs.map((s) => src(s)),
   });
 
 test('routes-journey-cases: registers #/journey-cases route', () => {

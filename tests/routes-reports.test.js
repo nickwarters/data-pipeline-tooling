@@ -47,6 +47,17 @@ function makeDocSpy() {
 import { Router } from '../src/lib/router.js';
 import { register } from '../src/routes/reports.js';
 
+/**
+ * @param {string} slug
+ * @param {string} [listName]
+ * @returns {import('../src/setup/resolve-eligible-case-types.js').CaseSource}
+ */
+const src = (slug, listName = `${slug}-list`) => ({
+  slug,
+  listName,
+  displayName: slug,
+});
+
 test('reports route: registers #/reports and #/reports/reviewer-team', () => {
   const router = new Router();
   router._container = /** @type {any} */ ({});
@@ -56,7 +67,7 @@ test('reports route: registers #/reports and #/reports/reviewer-team', () => {
       capabilities: { isReviewerManager: false },
       client: {},
       currentUser: { id: 'u1' },
-      eligibleCaseTypes: [],
+      caseSources: [].map((s) => src(s)),
     })
   );
   assert.ok(
@@ -78,7 +89,7 @@ test('reports route: #/reports unmount is a no-op (does not throw)', () => {
       capabilities: { isReviewerManager: false },
       client: {},
       currentUser: { id: 'u1' },
-      eligibleCaseTypes: [],
+      caseSources: [].map((s) => src(s)),
     })
   );
   const route = router._routes.find((r) => r.re.test('#/reports'));
@@ -95,7 +106,7 @@ test('reports route: #/reports/reviewer-team unmount is a no-op (does not throw)
       capabilities: { isReviewerManager: false },
       client: {},
       currentUser: { id: 'u1' },
-      eligibleCaseTypes: [],
+      caseSources: [].map((s) => src(s)),
     })
   );
   const route = router._routes.find((r) =>
@@ -122,7 +133,7 @@ test('reports route: #/reports renders ReportsIndexPage directly', () => {
       capabilities: { isReviewerManager: true, ownedCaseTypes: [] },
       client: {},
       currentUser: { id: 'u1' },
-      eligibleCaseTypes: [],
+      caseSources: [].map((s) => src(s)),
     })
   );
 
@@ -148,7 +159,7 @@ test('reports/reviewer-team route: redirects to #/reports when not a Reviewer Ma
         capabilities: { isReviewerManager: false },
         client: {},
         currentUser: { id: 'u1' },
-        eligibleCaseTypes: [],
+        caseSources: [].map((s) => src(s)),
       })
     );
     router.navigate('#/reports/reviewer-team');
@@ -172,7 +183,7 @@ test('reports/reviewer-team route: mounts ReviewerTeamReportPage with client, cu
       },
     };
     const currentUser = { id: 'user-rm', displayName: 'Morgan Manager' };
-    const eligibleCaseTypes = ['example-review'];
+    const caseSources = [src('example-review')];
     const rendered = /** @type {any[]} */ ([]);
 
     const router = new Router();
@@ -188,7 +199,7 @@ test('reports/reviewer-team route: mounts ReviewerTeamReportPage with client, cu
         capabilities: { isReviewerManager: true },
         client,
         currentUser,
-        eligibleCaseTypes,
+        caseSources,
       })
     );
     router.navigate('#/reports/reviewer-team');

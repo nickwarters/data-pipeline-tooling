@@ -16,8 +16,8 @@ class ChildStubEl extends StubEl {
     this.columns = null;
     /** @type {any} */
     this.client = null;
-    /** @type {string[]} */
-    this.ownedJourneyCaseTypes = [];
+    /** @type {import('../src/setup/resolve-eligible-case-types.js').CaseSource[]} */
+    this.journeyCaseSources = [];
   }
   connectedCallback() {}
 }
@@ -62,6 +62,17 @@ const row = (id, caseType) => ({
   etag: 'e',
 });
 
+/**
+ * @param {string} slug
+ * @param {string} [listName]
+ * @returns {import('../src/setup/resolve-eligible-case-types.js').CaseSource}
+ */
+const src = (slug, listName = `${slug}-list`) => ({
+  slug,
+  listName,
+  displayName: slug,
+});
+
 test('cora-journey-cases: renders heading', async () => {
   const host = JourneyCasesPage({
     client: /** @type {any} */ ({
@@ -69,7 +80,7 @@ test('cora-journey-cases: renders heading', async () => {
         return [];
       },
     }),
-    ownedJourneyCaseTypes: ['complaints'],
+    journeyCaseSources: ['complaints'].map((s) => src(s)),
   });
 
   await flush();
@@ -83,7 +94,7 @@ test('cora-journey-cases: renders empty state when no cases', async () => {
         return [];
       },
     }),
-    ownedJourneyCaseTypes: ['complaints'],
+    journeyCaseSources: ['complaints'].map((s) => src(s)),
   });
 
   await flush();
@@ -108,7 +119,7 @@ test('cora-journey-cases: fans out across owned Case Types and lists cases', asy
         return cases.filter((c) => c.caseType === f.caseType);
       },
     }),
-    ownedJourneyCaseTypes: ['complaints', 'example-review'],
+    journeyCaseSources: ['complaints', 'example-review'].map((s) => src(s)),
   });
 
   await flush();
@@ -119,6 +130,28 @@ test('cora-journey-cases: fans out across owned Case Types and lists cases', asy
   assert.strictEqual(table.toolbar, 'hidden', 'should hide toolbar');
 });
 
+test('cora-journey-cases: passes an explicit { listName } for every listCases call', async () => {
+  /** @type {import('../src/sharepoint-client.js').CaseListOptions[]} */
+  const opts = [];
+  const host = JourneyCasesPage({
+    client: /** @type {any} */ ({
+      async listCases(/** @type {any} */ f, /** @type {any} */ o) {
+        opts.push(o);
+        return [];
+      },
+    }),
+    journeyCaseSources: [
+      src('complaints', 'Complaints'),
+      src('example-review', 'ExampleReviews'),
+    ],
+  });
+
+  await flush();
+  assert.equal(opts.length, 2);
+  assert.ok(opts.some((o) => o.listName === 'Complaints'));
+  assert.ok(opts.some((o) => o.listName === 'ExampleReviews'));
+});
+
 test('cora-journey-cases: columns expose reference/caseType/status and Summary link', async () => {
   const host = JourneyCasesPage({
     client: /** @type {any} */ ({
@@ -126,7 +159,7 @@ test('cora-journey-cases: columns expose reference/caseType/status and Summary l
         return [row('c1', 'complaints')];
       },
     }),
-    ownedJourneyCaseTypes: ['complaints'],
+    journeyCaseSources: ['complaints'].map((s) => src(s)),
   });
 
   await flush();
@@ -152,7 +185,7 @@ test('cora-journey-cases: Reference falls back to id when title is empty', async
         return [{ ...row('c9', 'complaints'), title: '' }];
       },
     }),
-    ownedJourneyCaseTypes: ['complaints'],
+    journeyCaseSources: ['complaints'].map((s) => src(s)),
   });
 
   await flush();
@@ -168,7 +201,7 @@ test('cora-journey-cases: Reference falls back to id when title is empty', async
 test('cora-journey-cases: renders heading without fetching when client is null', async () => {
   const host = JourneyCasesPage({
     client: null,
-    ownedJourneyCaseTypes: ['complaints'],
+    journeyCaseSources: ['complaints'].map((s) => src(s)),
   });
 
   await flush();

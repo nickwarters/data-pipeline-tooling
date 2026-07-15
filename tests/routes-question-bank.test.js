@@ -270,12 +270,22 @@ test('question-bank route: default sample loader fetches through context.client'
   try {
     /** @type {string[]} */
     const asked = [];
+    /** @type {any[]} */
+    const opts = [];
     const client = {
-      async listCases(/** @type {any} */ filter) {
+      async listCases(/** @type {any} */ filter, /** @type {any} */ o) {
         asked.push(filter.caseType);
+        opts.push(o);
         return [];
       },
     };
+    const allCaseSources = [
+      {
+        slug: 'example-review',
+        listName: 'Cases-ExampleReview',
+        displayName: 'Example Review',
+      },
+    ];
     const router = new Router();
     router._container = /** @type {any} */ ({ replaceChildren() {} });
     register(
@@ -283,6 +293,7 @@ test('question-bank route: default sample loader fetches through context.client'
       /** @type {any} */ ({
         appEl,
         client,
+        allCaseSources,
         loadQuestionBankEditor: () => Promise.resolve(),
       })
     );
@@ -292,6 +303,11 @@ test('question-bank route: default sample loader fetches through context.client'
       await new Promise((resolve) => setImmediate(resolve));
     }
     assert.ok(asked.includes('example-review'));
+    assert.equal(
+      opts[0]?.listName,
+      'Cases-ExampleReview',
+      'the read carries the source listName'
+    );
   } finally {
     /** @type {any} */ (globalThis).document = origDoc;
     /** @type {any} */ (globalThis).location.search = origSearch;

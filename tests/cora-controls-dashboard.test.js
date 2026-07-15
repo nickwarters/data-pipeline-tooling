@@ -81,6 +81,15 @@ function completedCase(overrides = {}) {
   };
 }
 
+/** Single-source list, for tests that don't care about fan-out. */
+const oneSource = [
+  {
+    slug: 'complaints',
+    listName: 'Cases-Complaints',
+    displayName: 'Complaints',
+  },
+];
+
 // ===== PREDICATE TESTS =====
 
 test('openAppealOf: returns the open appeal, ignoring resolved ones', () => {
@@ -109,6 +118,7 @@ test('ControlsDashboard: reads the indexed open-appeal set server-side, oldest r
 
   const host = ControlsDashboard({
     client: /** @type {any} */ (client),
+    allCaseSources: oneSource,
     onOpenCase: () => {},
   });
   await flush();
@@ -131,6 +141,11 @@ test('ControlsDashboard: reads the indexed open-appeal set server-side, oldest r
   assert.equal(opts.orderDir, 'asc', 'oldest raised first');
   assert.equal(opts.top, PAGE_SIZE, 'pages the read');
   assert.equal(opts.skip, 0, 'first page starts at zero');
+  assert.equal(
+    opts.listName,
+    'Cases-Complaints',
+    'each page carries the source listName'
+  );
 
   const section = findSection(host, 'cora-controls-appeals');
   assert.ok(section, 'should render the outstanding appeals section');
@@ -174,6 +189,7 @@ test('ControlsDashboard: pages until a short page, accumulating every open appea
 
   const host = ControlsDashboard({
     client: /** @type {any} */ (client),
+    allCaseSources: oneSource,
     onOpenCase: () => {},
   });
   await flush();
@@ -191,6 +207,121 @@ test('ControlsDashboard: pages until a short page, accumulating every open appea
     rows.map((r) => r.id),
     cases.slice(0, PAGE_SIZE + 1).map((c) => c.id),
     'rows arrive oldest-raised first'
+  );
+});
+
+test('ControlsDashboard: fans out across multiple sources, pages each to exhaustion, and merges by appealRaisedAt asc', async () => {
+  const sources = [
+    {
+      slug: 'complaints',
+      listName: 'Cases-Complaints',
+      displayName: 'Complaints',
+    },
+    {
+      slug: 'stress-review',
+      listName: 'Cases-StressReview',
+      displayName: 'Stress Review',
+    },
+  ];
+  /** @type {Record<string, CaseRow[]>} */
+  const byList = {
+    'Cases-Complaints': [
+      completedCase({
+        id: 'c-mid',
+        appeals: [appeal({ at: '2026-06-15T00:00:00Z' })],
+      }),
+    ],
+    'Cases-StressReview': [
+      completedCase({
+        id: 's-early',
+        appeals: [appeal({ at: '2026-06-01T00:00:00Z' })],
+      }),
+      completedCase({
+        id: 's-late',
+        appeals: [appeal({ at: '2026-06-30T00:00:00Z' })],
+      }),
+    ],
+  };
+  /** @type {any[]} */
+  const calls = [];
+  const client = {
+    async listCases(/** @type {any} */ f, /** @type {any} */ opts) {
+      calls.push({ filter: f, opts });
+      const rows = byList[opts.listName] ?? [];
+      // Emulate server-side paging: a short page (< top) ends the loop.
+      return rows.slice(opts.skip, opts.skip + opts.top);
+    },
+  };
+
+  const host = ControlsDashboard({
+    client: /** @type {any} */ (client),
+    allCaseSources: sources,
+    onOpenCase: () => {},
+  });
+  await flush();
+  await flush();
+
+  assert.deepEqual(
+    [...new Set(calls.map((c) => c.opts.listName))].sort(),
+    ['Cases-Complaints', 'Cases-StressReview'],
+    'pages each source list'
+  );
+
+  const section = findSection(host, 'cora-controls-appeals');
+  const table = /** @type {any} */ (findAll(section, 'cora-case-table')[0]);
+  const rows = /** @type {CaseRow[]} */ (table.cases);
+  assert.deepEqual(
+    rows.map((r) => r.id),
+    ['s-early', 'c-mid', 's-late'],
+    'rows from every source merge, sorted oldest-appealRaisedAt-first'
+  );
+});
+
+test('ControlsDashboard: merge sort covers equal timestamps and a row with no open appeal', async () => {
+  const sources = [
+    { slug: 'a', listName: 'Cases-A', displayName: 'A' },
+    { slug: 'b', listName: 'Cases-B', displayName: 'B' },
+  ];
+  /** @type {Record<string, CaseRow[]>} */
+  const byList = {
+    'Cases-A': [
+      // Same `at` as the row from Cases-B below, exercising the
+      // comparator's equal branch (both `<` and `>` are false).
+      completedCase({
+        id: 'a-same',
+        appeals: [appeal({ at: '2026-06-10T00:00:00Z' })],
+      }),
+      // No open appeal at all — `openAppealOf` returns null, exercising the
+      // `?? ''` fallback in the sort key.
+      completedCase({ id: 'a-no-appeal', appeals: [] }),
+    ],
+    'Cases-B': [
+      completedCase({
+        id: 'b-same',
+        appeals: [appeal({ at: '2026-06-10T00:00:00Z' })],
+      }),
+    ],
+  };
+  const client = {
+    async listCases(/** @type {any} */ f, /** @type {any} */ opts) {
+      return byList[opts.listName] ?? [];
+    },
+  };
+
+  const host = ControlsDashboard({
+    client: /** @type {any} */ (client),
+    allCaseSources: sources,
+    onOpenCase: () => {},
+  });
+  await flush();
+
+  const section = findSection(host, 'cora-controls-appeals');
+  const table = /** @type {any} */ (findAll(section, 'cora-case-table')[0]);
+  const rows = /** @type {CaseRow[]} */ (table.cases);
+  assert.equal(rows.length, 3, 'every row from every source is present');
+  assert.deepEqual(
+    new Set(rows.map((r) => r.id)),
+    new Set(['a-same', 'a-no-appeal', 'b-same'])
   );
 });
 
@@ -215,6 +346,7 @@ test('ControlsDashboard: columns expose appeal detail and render reference/raise
   const opened = [];
   const host = ControlsDashboard({
     client: /** @type {any} */ (client),
+    allCaseSources: oneSource,
     onOpenCase: (/** @type {CaseRow} */ c) => opened.push(c),
   });
   await flush();
@@ -264,6 +396,7 @@ test('ControlsDashboard: appeal columns fall back to empty/em-dash when no open 
   };
   const host = ControlsDashboard({
     client: /** @type {any} */ (client),
+    allCaseSources: oneSource,
     onOpenCase: () => {},
   });
   await flush();
@@ -296,7 +429,10 @@ test('ControlsDashboard: reference getValue falls back to id, and open is a no-o
     },
   };
   // No onOpenCase provided — the optional-chained handlers must not throw.
-  const host = ControlsDashboard({ client: /** @type {any} */ (client) });
+  const host = ControlsDashboard({
+    client: /** @type {any} */ (client),
+    allCaseSources: oneSource,
+  });
   await flush();
 
   const section = findSection(host, 'cora-controls-appeals');
@@ -331,6 +467,7 @@ test('ControlsDashboard: Open button invokes onOpenCase with the case row', asyn
 
   const host = ControlsDashboard({
     client: /** @type {any} */ (client),
+    allCaseSources: oneSource,
     onOpenCase: (/** @type {CaseRow} */ c) => opened.push(c),
   });
   await flush();

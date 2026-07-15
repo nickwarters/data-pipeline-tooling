@@ -10,14 +10,14 @@ export function register(router, context) {
     mount(container) {
       // List-scope Journey Owner capability: only a user who
       // owns at least one Case Type as a Journey Owner may see this view.
-      if (context.capabilities.ownedJourneyCaseTypes.length === 0) {
+      if (context.journeyCaseSources.length === 0) {
         location.hash = '#/';
         return;
       }
       container.replaceChildren(
         JourneyCasesPage({
           client: context.client,
-          ownedJourneyCaseTypes: context.capabilities.ownedJourneyCaseTypes,
+          journeyCaseSources: context.journeyCaseSources,
         })
       );
     },

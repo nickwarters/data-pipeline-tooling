@@ -12,6 +12,8 @@ import {
   worstFirstOrder,
   waitingInfo,
   secondaryReasons,
+  pickGlobalWorst,
+  mergeWorstFirstWindow,
 } from '../services/action-centre-model.js';
 
 /** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
@@ -259,6 +261,14 @@ export function ActionCentreView(state, handlers) {
  * The highest-priority reason group auto-expands. Degrades to nothing when the
  * client predates `countCases`.
  *
+ * A user's action items can live in any Case source, so every read fans out
+ * across `allCaseSources`, each carrying its own explicit `{ listName }`
+ * (there is no default list). Per-list counts are summed (a Case lives in
+ * exactly one list, so no double-count risk); the collapsed-group peek and a
+ * page's rows are merged worst-first across lists — see
+ * `pickGlobalWorst`/`mergeWorstFirstWindow` in `action-centre-model.js` for the
+ * merge order and its correctness argument.
+ *
  * @param {{
  * client: SharePointClient | null,
  * capabilities: Capabilities,
@@ -293,10 +303,25 @@ export function ActionCentre({
   /** @type {import('../lib/signal.js').Signal<Record<string, CaseRow[]>>} */
   const pages = signal({});
 
+  /**
+   * Sum one filter's per-list `countCases` across every Case source.
+   * @param {import('../sharepoint-client.js').ListCasesFilter} filter
+   */
+  async function sumAcrossSources(filter) {
+    const sp = /** @type {SharePointClient} */ (client);
+    const perSourceCounts = await Promise.all(
+      allCaseSources.map((source) =>
+        sp.countCases(filter, { listName: source.listName })
+      )
+    );
+    return perSourceCounts.reduce((total, n) => total + n, 0);
+  }
+
   /** Load every group count, the worst-item peeks, and the deduped headline. */
   async function loadCounts() {
     if (!client) return;
     const reasons = currentReasons();
+    const sp = /** @type {SharePointClient} */ (client);
     /** @type {Record<string, number>} */
     const nextCounts = {};
     /** @type {Record<string, CaseRow | null>} */
@@ -304,36 +329,64 @@ export function ActionCentre({
     await Promise.all(
       reasons.map(async (reason) => {
         const filter = activeFilter(reason, currentUserId);
-        nextCounts[reason.id] = await client.countCases(filter);
-        const [worst] = await client.listCases(filter, {
-          ...worstFirstOrder(reason),
-          top: 1,
-        });
-        nextPeeks[reason.id] = worst ?? null;
+        nextCounts[reason.id] = await sumAcrossSources(filter);
+
+        // One worst-first row from each list, then the single global worst
+        // among those per-list winners (see pickGlobalWorst).
+        const perSourceWorst = await Promise.all(
+          allCaseSources.map(async (source) => {
+            const [row] = await sp.listCases(filter, {
+              ...worstFirstOrder(reason),
+              top: 1,
+              listName: source.listName,
+            });
+            return row ?? null;
+          })
+        );
+        nextPeeks[reason.id] = pickGlobalWorst(perSourceWorst, reason);
       })
     );
     headline.set(
-      await client.countCases(headlineFilter(reasons, currentUserId))
+      await sumAcrossSources(headlineFilter(reasons, currentUserId))
     );
     counts.set(nextCounts);
     peeks.set(nextPeeks);
   }
 
   /**
-   * Fetch one page of a group's rows, worst-first. `skip === 0` replaces the
-   * group's rows (fresh open / toggle); otherwise it appends ("Show N more").
-   * A short final page yields the exact count, correcting any count/page drift.
+   * Fetch one page of a group's rows, worst-first, across every Case source.
+   * `skip === 0` replaces the group's rows (fresh open / toggle); otherwise it
+   * appends ("Show N more"). A short final page yields the exact count,
+   * correcting any count/page drift.
+   *
+   * To get the global worst-first window `[skip, skip + PAGE_SIZE)` across N
+   * lists, over-fetch worst-first `top: skip + PAGE_SIZE` rows from EACH list
+   * (its own top `skip + PAGE_SIZE`, from that list's start — not a
+   * continuation of a previous fetch), then merge and re-sort by the same
+   * worst-first order and slice the window (`mergeWorstFirstWindow`). This
+   * re-fetches an increasing prefix of every list on every page, trading some
+   * repeated reads for a global order guarantee regardless of how Cases are
+   * distributed across lists; group sizes here are small worklists, not the
+   * whole backlog, so the extra reads are cheap. The short-final-page/"corrects
+   * the count" behaviour still holds: a merged window shorter than PAGE_SIZE
+   * means the true global remainder (summed across all lists) is exhausted.
    *
    * @param {Reason} reason
    * @param {number} skip
    */
   async function loadPage(reason, skip) {
     const sp = /** @type {SharePointClient} */ (client);
-    const rows = await sp.listCases(activeFilter(reason, currentUserId), {
-      ...worstFirstOrder(reason),
-      top: PAGE_SIZE,
-      skip,
-    });
+    const filter = activeFilter(reason, currentUserId);
+    const perSourceRows = await Promise.all(
+      allCaseSources.map((source) =>
+        sp.listCases(filter, {
+          ...worstFirstOrder(reason),
+          top: skip + PAGE_SIZE,
+          listName: source.listName,
+        })
+      )
+    );
+    const rows = mergeWorstFirstWindow(perSourceRows, reason, skip, PAGE_SIZE);
     const current = pages.get();
     const existing = skip === 0 ? [] : current[reason.id];
     const merged = [...existing, ...rows];

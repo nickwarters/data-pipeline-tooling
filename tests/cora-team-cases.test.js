@@ -20,8 +20,8 @@ class ChildStubEl extends StubEl {
     this.client = null;
     /** @type {any} */
     this.currentUser = null;
-    /** @type {string[]} */
-    this.eligibleCaseTypes = [];
+    /** @type {import('../src/setup/resolve-eligible-case-types.js').CaseSource[]} */
+    this.caseSources = [];
     this.queryString = '';
     this.currentUserId = '';
   }
@@ -88,6 +88,17 @@ const row = (id, caseType) => ({
   etag: 'e',
 });
 
+/**
+ * @param {string} slug
+ * @param {string} [listName]
+ * @returns {import('../src/setup/resolve-eligible-case-types.js').CaseSource}
+ */
+const src = (slug, listName = `${slug}-list`) => ({
+  slug,
+  listName,
+  displayName: slug,
+});
+
 test('cora-team-cases: renders heading', async () => {
   const host = TeamCasesPage({
     client: /** @type {any} */ ({
@@ -96,7 +107,7 @@ test('cora-team-cases: renders heading', async () => {
       },
     }),
     currentUser: { id: 'u1', displayName: 'U' },
-    eligibleCaseTypes: ['example-review'],
+    caseSources: [src('example-review')],
     queryString: '?manager=me&role=reviewer-manager',
   });
 
@@ -112,7 +123,7 @@ test('cora-team-cases: renders empty state when no cases returned', async () => 
       },
     }),
     currentUser: { id: 'u1', displayName: 'U' },
-    eligibleCaseTypes: ['example-review'],
+    caseSources: [src('example-review')],
     queryString: '?manager=me&role=reviewer-manager',
   });
 
@@ -136,7 +147,7 @@ test('cora-team-cases: renders cora-case-table with cases when results returned'
       },
     }),
     currentUser: { id: 'u1', displayName: 'U' },
-    eligibleCaseTypes: ['example-review'],
+    caseSources: [src('example-review')],
     queryString: '?manager=me&role=reviewer-manager',
   });
 
@@ -159,13 +170,33 @@ test('cora-team-cases: passes query-string params to fetcher (caseType scoping)'
       },
     }),
     currentUser: { id: 'u1', displayName: 'U' },
-    eligibleCaseTypes: ['example-review', 'product-sale-review'],
+    caseSources: [src('example-review'), src('product-sale-review')],
     queryString: '?manager=me&role=reviewer-manager&caseType=example-review',
   });
 
   await flush();
   assert.equal(calls.length, 1, 'should query only the specified caseType');
   assert.equal(calls[0].caseType, 'example-review');
+});
+
+test('cora-team-cases: passes an explicit { listName } to the fetcher', async () => {
+  /** @type {import('../src/sharepoint-client.js').CaseListOptions[]} */
+  const opts = [];
+  const host = TeamCasesPage({
+    client: /** @type {any} */ ({
+      async listCases(/** @type {any} */ f, /** @type {any} */ o) {
+        opts.push(o);
+        return [];
+      },
+    }),
+    currentUser: { id: 'u1', displayName: 'U' },
+    caseSources: [src('example-review', 'ExampleReviews')],
+    queryString: '?manager=me&role=reviewer-manager',
+  });
+
+  await flush();
+  assert.equal(opts.length, 1);
+  assert.equal(opts[0].listName, 'ExampleReviews');
 });
 
 test('cora-team-cases: renders back link to #/reports', async () => {
@@ -176,7 +207,7 @@ test('cora-team-cases: renders back link to #/reports', async () => {
       },
     }),
     currentUser: { id: 'u1', displayName: 'U' },
-    eligibleCaseTypes: [],
+    caseSources: [],
     queryString: '',
   });
 
@@ -190,7 +221,7 @@ test('cora-team-cases: renders heading and back link without fetching when clien
   const host = TeamCasesPage({
     client: null,
     currentUser: { id: 'u1', displayName: 'U' },
-    eligibleCaseTypes: [],
+    caseSources: [],
     queryString: '',
   });
 
@@ -211,7 +242,7 @@ test('cora-team-cases: applies Case Type dashboardColumns when filtered to a sin
       },
     }),
     currentUser: { id: 'u1', displayName: 'U' },
-    eligibleCaseTypes: ['example-review', 'product-sale-review'],
+    caseSources: [src('example-review'), src('product-sale-review')],
     queryString:
       '?manager=me&role=reviewer-manager&caseType=product-sale-review',
   });
@@ -252,7 +283,7 @@ test('cora-team-cases: keeps default columns when the filtered Case Type declare
       },
     }),
     currentUser: { id: 'u1', displayName: 'U' },
-    eligibleCaseTypes: ['example-review', 'product-sale-review'],
+    caseSources: [src('example-review'), src('product-sale-review')],
     queryString: '?manager=me&role=reviewer-manager&caseType=example-review',
   });
 
@@ -275,7 +306,7 @@ test('cora-team-cases: ignores dashboardColumns lookup for an unknown Case Type 
       },
     }),
     currentUser: { id: 'u1', displayName: 'U' },
-    eligibleCaseTypes: ['example-review'],
+    caseSources: [src('example-review'), src('nope')],
     queryString: '?manager=me&role=reviewer-manager&caseType=nope',
   });
 
@@ -298,7 +329,7 @@ test('cora-team-cases: does NOT apply dashboardColumns in a mixed multi-Case-Typ
       },
     }),
     currentUser: { id: 'u1', displayName: 'U' },
-    eligibleCaseTypes: ['example-review', 'product-sale-review'],
+    caseSources: [src('example-review'), src('product-sale-review')],
     // No caseType param: fans out across both eligible Case Types (mixed view).
     queryString: '?manager=me&role=reviewer-manager',
   });
@@ -331,7 +362,7 @@ test('cora-team-cases: renders heading and back link without fetching when curre
       },
     }),
     currentUser: null,
-    eligibleCaseTypes: [],
+    caseSources: [],
     queryString: '',
   });
 

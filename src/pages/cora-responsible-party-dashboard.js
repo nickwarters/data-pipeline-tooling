@@ -42,10 +42,19 @@ export function ResponsiblePartyDashboard({
 
   async function fetchData() {
     if (!client || !currentUserId) return;
-    const cases = await client.listCases({
-      responsibleParty: currentUserId,
-    });
-    myCases.set(cases);
+    // Each source is a distinct list; fan out and flatten rather than
+    // fetching unscoped and filtering in JS — there is no default Case
+    // list, and a Case lives in exactly one list, so per-list pools simply
+    // merge together.
+    const fetched = await Promise.all(
+      allCaseSources.map((source) =>
+        /** @type {SharePointClient} */ (client).listCases(
+          { responsibleParty: currentUserId },
+          { listName: source.listName }
+        )
+      )
+    );
+    myCases.set(fetched.flat());
   }
 
   const host = reactive(() => {

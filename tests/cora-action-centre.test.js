@@ -127,6 +127,18 @@ function makeClient(cases) {
   });
 }
 
+/**
+ * The default single Case source for the existing (single-list) test
+ * fixtures. `MockSharePointClient.listCases`/`countCases` aggregate across
+ * `_cases` regardless of the `listName` passed in options, so a single source
+ * here behaves exactly as the pre-fan-out unscoped reads did.
+ */
+const SOURCE = {
+  slug: 'complaints',
+  listName: 'Cases-Complaints',
+  displayName: 'Complaints',
+};
+
 /** @param {Capabilities} [capabilities] @param {CaseRow[]} [cases] */
 function mount(
   capabilities = caps({ isReviewer: true }),
@@ -136,6 +148,7 @@ function mount(
     client: makeClient(cases),
     capabilities,
     currentUserId: ME,
+    allCaseSources: [SOURCE],
     now: NOW,
   });
 }
@@ -389,6 +402,7 @@ test('ActionCentre: Open dispatches the case to onOpenCase', async () => {
     client: makeClient(reviewerCases()),
     capabilities: caps({ isReviewer: true }),
     currentUserId: ME,
+    allCaseSources: [SOURCE],
     onOpenCase: (row) => {
       opened = row;
     },
@@ -503,6 +517,199 @@ test('ActionCentre: reopened within SLA is not styled as breached', async () => 
   const within = findAllByClass(g, 'cora-ac-wait');
   assert.equal(breached.length, 1);
   assert.equal(within.length, 1);
+});
+
+// ===== Multi-source fan-out (Cases spread across several lists) =====
+
+/**
+ * A hand-rolled fake client — like the other per-list fetcher test suites
+ * (`team-cases-fetcher.test.js`, `journey-cases-fetcher.test.js`) — that
+ * actually scopes `listCases`/`countCases` to `opts.listName`, unlike
+ * `MockSharePointClient` (which aggregates every list regardless of
+ * `listName`). Needed here because the behaviour under test — summing counts
+ * and merging worst-first rows across lists — only shows up when each list's
+ * query really is list-scoped.
+ *
+ * @param {Record<string, CaseRow[]>} listsByName
+ */
+function makeMultiListClient(listsByName) {
+  /** @param {CaseRow} row @param {any} filter @returns {boolean} */
+  function matches(row, filter) {
+    if (filter.anyOf)
+      return filter.anyOf.some(/** @param {any} f */ (f) => matches(row, f));
+    if (filter.overdue === true) {
+      if (row.status === 'Completed') return false;
+      if (!row.dueDate) return false;
+      if (new Date(row.dueDate) >= NOW) return false;
+    }
+    const anyRow = /** @type {any} */ (row);
+    for (const key of [
+      'assignedReviewer',
+      'awaitingResponsibleParty',
+      'reviewRequired',
+      'hasOpenAppeal',
+      'reopened',
+    ]) {
+      if (filter[key] === undefined) continue;
+      const actual =
+        key === 'assignedReviewer' ? anyRow[key] : Boolean(anyRow[key]);
+      if (actual !== filter[key]) return false;
+    }
+    return true;
+  }
+
+  return {
+    /** @param {any} filter @param {any} opts */
+    async countCases(filter, opts = {}) {
+      const rows = listsByName[opts.listName] ?? [];
+      return rows.filter((r) => matches(r, filter)).length;
+    },
+    /** @param {any} filter @param {any} opts */
+    async listCases(filter, opts = {}) {
+      let rows = (listsByName[opts.listName] ?? []).filter((r) =>
+        matches(r, filter)
+      );
+      if (opts.orderBy) {
+        const key = opts.orderBy;
+        const dir = opts.orderDir === 'desc' ? -1 : 1;
+        rows = rows.slice().sort((a, b) => {
+          const av = /** @type {any} */ (a)[key] ?? '';
+          const bv = /** @type {any} */ (b)[key] ?? '';
+          if (av < bv) return -1 * dir;
+          if (av > bv) return 1 * dir;
+          return 0;
+        });
+      }
+      const skip = opts.skip ?? 0;
+      const end = opts.top !== undefined ? skip + opts.top : undefined;
+      return rows.slice(skip, end).map((c) => ({ ...c }));
+    },
+  };
+}
+
+const SOURCE_A = { slug: 'a', listName: 'ListA', displayName: 'A' };
+const SOURCE_B = { slug: 'b', listName: 'ListB', displayName: 'B' };
+
+test('ActionCentre: per-reason and headline counts sum across every Case source', async () => {
+  const client = makeMultiListClient({
+    ListA: [
+      caseRow('a1', { dueDate: '2020-01-01T00:00:00Z' }),
+      caseRow('a2', { dueDate: '2020-01-05T00:00:00Z' }),
+    ],
+    ListB: [
+      caseRow('b1', { dueDate: '2020-01-03T00:00:00Z' }),
+      caseRow('b2', { dueDate: '2020-01-02T00:00:00Z' }),
+    ],
+  });
+  const host = ActionCentre({
+    client: /** @type {any} */ (client),
+    capabilities: caps({ isReviewer: true }),
+    currentUserId: ME,
+    allCaseSources: [SOURCE_A, SOURCE_B],
+    now: NOW,
+  });
+  await settle();
+
+  assert.equal(
+    group(host, 'overdue').querySelector('.cora-ac-count--overdue').textContent,
+    '4',
+    'a1+a2+b1+b2, summed across both lists'
+  );
+  assert.ok(
+    findByClass(host, 'cora-ac-subtitle').textContent.startsWith('4 cases')
+  );
+});
+
+test("ActionCentre: the collapsed-group peek is the global worst across lists, not just the first list's", async () => {
+  const client = makeMultiListClient({
+    // ListA's own worst is a1 (2020-01-01); ListB's own worst is b2
+    // (2020-01-02). The global worst is still a1 — verifies the peek isn't
+    // just "first source's worst" or "last source's worst".
+    ListA: [
+      caseRow('a1', { dueDate: '2020-01-01T00:00:00Z' }),
+      caseRow('a2', { dueDate: '2020-01-05T00:00:00Z' }),
+    ],
+    ListB: [
+      caseRow('b1', { dueDate: '2020-01-03T00:00:00Z' }),
+      caseRow('b2', { dueDate: '2020-01-02T00:00:00Z' }),
+    ],
+  });
+  const host = ActionCentre({
+    client: /** @type {any} */ (client),
+    capabilities: caps({ isReviewer: true }),
+    currentUserId: ME,
+    allCaseSources: [SOURCE_A, SOURCE_B],
+    now: NOW,
+  });
+  await settle();
+
+  // Collapse the auto-expanded overdue group to see its peek.
+  findByClass(group(host, 'overdue'), 'cora-ac-group-header')._fire('click');
+  await settle();
+
+  const peek = findByClass(group(host, 'overdue'), 'cora-ac-peek');
+  assert.ok(peek);
+  assert.ok(textOf(peek).includes('a1'), `expected a1, got: ${textOf(peek)}`);
+});
+
+test('ActionCentre: a page over-fetches, merges, and slices worst-first across lists; a short merged page still corrects the count', async () => {
+  const client = makeMultiListClient({
+    ListA: [
+      caseRow('a1', { dueDate: '2020-01-01T00:00:00Z' }), // rank 1
+      caseRow('a2', { dueDate: '2020-01-05T00:00:00Z' }), // rank 4
+      caseRow('a3', { dueDate: '2020-01-07T00:00:00Z' }), // rank 6
+    ],
+    ListB: [
+      caseRow('b1', { dueDate: '2020-01-03T00:00:00Z' }), // rank 3
+      caseRow('b2', { dueDate: '2020-01-02T00:00:00Z' }), // rank 2
+      caseRow('b3', { dueDate: '2020-01-06T00:00:00Z' }), // rank 5
+    ],
+  });
+  const host = ActionCentre({
+    client: /** @type {any} */ (client),
+    capabilities: caps({ isReviewer: true }),
+    currentUserId: ME,
+    allCaseSources: [SOURCE_A, SOURCE_B],
+    now: NOW,
+  });
+  await settle();
+
+  // First page (PAGE_SIZE = 4): global worst-first order across both lists.
+  assert.deepEqual(rowRefs(group(host, 'overdue')), ['a1', 'b2', 'b1', 'a2']);
+
+  // "Show more": only 2 Cases remain (b3, a3) — fewer than PAGE_SIZE, so the
+  // merged page is short and corrects the header count to the true total (6).
+  const more = findByClass(group(host, 'overdue'), 'cora-ac-more');
+  assert.equal(more.textContent, 'Show 2 more overdue →');
+  more._fire('click');
+  await settle();
+
+  assert.deepEqual(rowRefs(group(host, 'overdue')), [
+    'a1',
+    'b2',
+    'b1',
+    'a2',
+    'b3',
+    'a3',
+  ]);
+  assert.equal(findByClass(group(host, 'overdue'), 'cora-ac-more'), null);
+  assert.equal(
+    group(host, 'overdue').querySelector('.cora-ac-count--overdue').textContent,
+    '6'
+  );
+});
+
+test('ActionCentre: with no eligible Case sources, degrades to zero counts and no rows', async () => {
+  const host = ActionCentre({
+    client: /** @type {any} */ (makeMultiListClient({})),
+    capabilities: caps({ isReviewer: true }),
+    currentUserId: ME,
+    allCaseSources: [],
+    now: NOW,
+  });
+  await settle();
+
+  assert.ok(findByClass(host, 'cora-empty cora-ac-empty'));
 });
 
 // ===== Pure view tests (branches awkward to reach via the orchestrator) =====

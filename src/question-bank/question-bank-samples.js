@@ -9,7 +9,7 @@
  * simulator works in the mock-first dev loop with no extra wiring.
  */
 
-import { cases, setSampleCases } from './question-bank-store.js';
+import { setSampleCases } from './question-bank-store.js';
 
 /** Cap per bank so the drawer stays a preview, not a full report. */
 export const SAMPLE_CASE_LIMIT = 25;
@@ -24,25 +24,25 @@ function toSampleCase(row) {
 
 /**
  * @param {Pick<import('../sharepoint-client.js').SharePointClient, 'listCases'>} client
- * @param {string[]} [slugs] bank slugs to sample; defaults to every bank in the store
+ * @param {import('../setup/resolve-eligible-case-types.js').CaseSource[]} [sources] Case sources to sample; defaults to none
  * @returns {Promise<void>}
  */
-export async function loadSampleCases(
-  client,
-  slugs = Object.keys(cases.get())
-) {
+export async function loadSampleCases(client, sources = []) {
   await Promise.all(
-    slugs.map(async (slug) => {
+    sources.map(async (source) => {
       try {
-        const rows = await client.listCases({ caseType: slug });
+        const rows = await client.listCases(
+          { caseType: source.slug },
+          { listName: source.listName }
+        );
         setSampleCases(
-          slug,
+          source.slug,
           rows.slice(0, SAMPLE_CASE_LIMIT).map(toSampleCase)
         );
       } catch {
         // A bank without a reachable Case list simply has no samples; the
         // drawer shows its empty state rather than the editor failing.
-        setSampleCases(slug, []);
+        setSampleCases(source.slug, []);
       }
     })
   );

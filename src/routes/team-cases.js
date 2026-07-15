@@ -15,7 +15,7 @@ export function register(router, context) {
         TeamCasesPage({
           client: context.client,
           currentUser: context.currentUser,
-          eligibleCaseTypes: context.eligibleCaseTypes,
+          caseSources: context.caseSources,
           queryString,
         })
       );

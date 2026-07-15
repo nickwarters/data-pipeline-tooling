@@ -96,14 +96,23 @@ function makeCase(/** @type {Partial<CaseRow>} */ overrides = {}) {
   };
 }
 
+/** Single-source case list, used by tests that don't care about fan-out. */
+const oneSource = [
+  {
+    slug: 'example-review',
+    listName: 'Cases-ExampleReview',
+    displayName: 'Example Review',
+  },
+];
+
 /**
  * @param {CaseRow[]} rows
- * @param {ListCasesFilter[]} [callLog]
+ * @param {Array<{ filter: ListCasesFilter, opts: any }>} [callLog]
  */
 function makeClient(rows, callLog) {
   return {
-    async listCases(/** @type {ListCasesFilter} */ f) {
-      callLog?.push(f);
+    async listCases(/** @type {ListCasesFilter} */ f, /** @type {any} */ opts) {
+      callLog?.push({ filter: f, opts });
       return rows.map((c) => ({ ...c }));
     },
   };
@@ -115,6 +124,7 @@ test('ResponsiblePartyDashboard: renders nothing when client is null', async () 
   const host = ResponsiblePartyDashboard({
     client: null,
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
   assert.equal(/** @type {any} */ (host)._children.length, 0);
@@ -129,22 +139,66 @@ test('ResponsiblePartyDashboard: renders nothing when currentUserId is empty', a
   assert.equal(/** @type {any} */ (host)._children.length, 0);
 });
 
-test('ResponsiblePartyDashboard: calls listCases with responsibleParty filter', async () => {
-  /** @type {ListCasesFilter[]} */
+test('ResponsiblePartyDashboard: calls listCases with responsibleParty filter and the source listName', async () => {
+  /** @type {Array<{ filter: ListCasesFilter, opts: any }>} */
   const calls = [];
   ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient([], calls)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
   assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0], { responsibleParty: 'user-rp' });
+  assert.deepEqual(calls[0].filter, { responsibleParty: 'user-rp' });
+  assert.equal(calls[0].opts.listName, 'Cases-ExampleReview');
+});
+
+test('ResponsiblePartyDashboard: fans out one listCases per source (with its listName) and merges', async () => {
+  /** @type {Array<{ filter: ListCasesFilter, opts: any }>} */
+  const calls = [];
+  const sources = [
+    {
+      slug: 'example-review',
+      listName: 'Cases-ExampleReview',
+      displayName: 'Example Review',
+    },
+    {
+      slug: 'stress-review',
+      listName: 'Cases-StressReview',
+      displayName: 'Stress Review',
+    },
+  ];
+  const client = {
+    async listCases(/** @type {any} */ f, /** @type {any} */ opts) {
+      calls.push({ filter: f, opts });
+      return [
+        makeCase({ id: `case-${opts.listName}`, caseType: opts.listName }),
+      ];
+    },
+  };
+  const host = ResponsiblePartyDashboard({
+    client: /** @type {any} */ (client),
+    currentUserId: 'user-rp',
+    allCaseSources: sources,
+  });
+  await flush();
+
+  assert.deepEqual(
+    calls.map((c) => c.opts.listName).sort(),
+    ['Cases-ExampleReview', 'Cases-StressReview'],
+    'one listCases per source, each carrying its listName'
+  );
+  const table = caseTableInSection(host, 'cora-rp-messages');
+  // no unread messages so nothing shows here, but the outcome section
+  // reflects both merged rows regardless of source
+  assert.equal(table.cases.length, 0);
 });
 
 test('ResponsiblePartyDashboard: renders 3 sections after fetch resolves', async () => {
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient([])),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
   // outcome section + remediation section + messages section
@@ -210,6 +264,7 @@ test('ResponsiblePartyDashboard: outcome summary includes completed cases within
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
   assert.equal(outcomeTotal(host), 2);
@@ -237,6 +292,7 @@ test('ResponsiblePartyDashboard: outcome summary excludes completed cases older 
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
   assert.equal(outcomeTotal(host), 1, 'only the recent case counts');
@@ -255,6 +311,7 @@ test('ResponsiblePartyDashboard: outcome summary excludes in-progress cases', as
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
   assert.equal(outcomeTotal(host), 1);
@@ -284,6 +341,7 @@ test('ResponsiblePartyDashboard: outcome summary groups by outcome type', async 
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
   assert.equal(outcomeCount(host, 'Pass'), 2);
@@ -310,6 +368,7 @@ test('ResponsiblePartyDashboard: remediation table includes cases with uncomplet
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
   const table = caseTableInSection(host, 'cora-rp-remediation');
@@ -335,6 +394,7 @@ test('ResponsiblePartyDashboard: remediation table excludes cases where all acti
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
   const table = caseTableInSection(host, 'cora-rp-remediation');
@@ -372,6 +432,7 @@ test('ResponsiblePartyDashboard: remediation table renders row for each case wit
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
   const rows = findAll(host, 'tr').filter((r) =>
@@ -412,6 +473,7 @@ test('ResponsiblePartyDashboard: remediation row is flagged as overdue when dueD
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
   const rows = findAll(host, 'tr').filter((r) =>
@@ -451,6 +513,7 @@ test('ResponsiblePartyDashboard: remediation table filterable by case type via s
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
 
@@ -507,6 +570,7 @@ test('ResponsiblePartyDashboard: sort by due date ascending puts earliest due fi
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
   const rows = findAll(host, 'tr').filter((r) =>
@@ -539,6 +603,7 @@ test('ResponsiblePartyDashboard: unread messages includes cases with reviewer me
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
   const table = caseTableInSection(host, 'cora-rp-messages');
@@ -563,6 +628,7 @@ test('ResponsiblePartyDashboard: unread messages includes cases with reviewer me
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
   const table = caseTableInSection(host, 'cora-rp-messages');
@@ -591,6 +657,7 @@ test('ResponsiblePartyDashboard: unread messages excludes cases where RP replied
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
   const table = caseTableInSection(host, 'cora-rp-messages');
@@ -603,6 +670,7 @@ test('ResponsiblePartyDashboard: unread messages excludes cases with empty conve
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
   const table = caseTableInSection(host, 'cora-rp-messages');
@@ -639,6 +707,7 @@ test('ResponsiblePartyDashboard: unread messages section uses cora-case-table wi
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
   const allTables = findCaseTables(host);
@@ -674,6 +743,7 @@ test('ResponsiblePartyDashboard: cora-case-open on unread table invokes onOpenCo
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
     onOpenConversation: (caseRow) => opened.push(caseRow),
   });
   await flush();
@@ -704,6 +774,7 @@ test('ResponsiblePartyDashboard: cora-case-open with no onOpenConversation prop 
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
 
@@ -732,6 +803,7 @@ test('ResponsiblePartyDashboard: Open button click invokes onOpenConversation wi
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
     onOpenConversation: (caseRow) => opened.push(caseRow),
   });
   await flush();
@@ -769,6 +841,7 @@ test('ResponsiblePartyDashboard: Open button click with no onOpenConversation pr
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
 
@@ -804,6 +877,7 @@ test('ResponsiblePartyDashboard: select change with null e.target falls back to 
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
 
@@ -849,6 +923,7 @@ test('ResponsiblePartyDashboard: two completed cases in same month+outcome incre
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
 
@@ -883,6 +958,7 @@ test('ResponsiblePartyDashboard: case with null outcome uses "Unknown" label', a
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
 
@@ -938,6 +1014,7 @@ test('ResponsiblePartyDashboard: months are sorted chronologically and a month m
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
 
@@ -990,6 +1067,7 @@ test('ResponsiblePartyDashboard: remediation and messages tables fall back to ca
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
 
@@ -1029,6 +1107,7 @@ test('ResponsiblePartyDashboard: lastMessage column falls back to null/em-dash w
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
 
@@ -1059,6 +1138,7 @@ test('ResponsiblePartyDashboard: getOpenActions treats an answer with no remedia
   const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient(cases)),
     currentUserId: 'user-rp',
+    allCaseSources: oneSource,
   });
   await flush();
 

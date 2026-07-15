@@ -79,15 +79,22 @@ test('routes-my-cases: unmount is a no-op (does not throw)', () => {
 });
 
 test('routes-my-cases: passes client and currentUserId through to the page without wiring onOpenConversation (matches previous behaviour)', async () => {
-  /** @type {any[]} */
+  /** @type {Array<{ filter: any, opts: any }>} */
   const calls = [];
   const client = /** @type {any} */ ({
-    async listCases(/** @type {any} */ filter) {
-      calls.push(filter);
+    async listCases(/** @type {any} */ filter, /** @type {any} */ opts) {
+      calls.push({ filter, opts });
       return [];
     },
   });
   const currentUser = { id: 'u99' };
+  const allCaseSources = [
+    {
+      slug: 'example-review',
+      listName: 'Cases-ExampleReview',
+      displayName: 'Example Review',
+    },
+  ];
 
   const router = new Router();
   /** @type {any[]} */
@@ -98,7 +105,10 @@ test('routes-my-cases: passes client and currentUserId through to the page witho
     },
   };
   router._container = /** @type {any} */ (container);
-  register(router, /** @type {any} */ ({ client, currentUser }));
+  register(
+    router,
+    /** @type {any} */ ({ client, currentUser, allCaseSources })
+  );
   router.navigate('#/my-cases');
 
   await Promise.resolve();
@@ -106,5 +116,48 @@ test('routes-my-cases: passes client and currentUserId through to the page witho
 
   assert.equal(mounted.length, 1);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].responsibleParty, 'u99');
+  assert.equal(calls[0].filter.responsibleParty, 'u99');
+  assert.equal(calls[0].opts.listName, 'Cases-ExampleReview');
+});
+
+test('routes-my-cases: threads context.allCaseSources into the page (fans out across multiple sources)', async () => {
+  /** @type {any[]} */
+  const calls = [];
+  const client = /** @type {any} */ ({
+    async listCases(/** @type {any} */ filter, /** @type {any} */ opts) {
+      calls.push({ filter, opts });
+      return [];
+    },
+  });
+  const currentUser = { id: 'u1' };
+  const allCaseSources = [
+    {
+      slug: 'example-review',
+      listName: 'Cases-ExampleReview',
+      displayName: 'Example Review',
+    },
+    {
+      slug: 'stress-review',
+      listName: 'Cases-StressReview',
+      displayName: 'Stress Review',
+    },
+  ];
+
+  const router = new Router();
+  const container = { replaceChildren() {} };
+  router._container = /** @type {any} */ (container);
+  register(
+    router,
+    /** @type {any} */ ({ client, currentUser, allCaseSources })
+  );
+  router.navigate('#/my-cases');
+
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.deepEqual(
+    calls.map((c) => c.opts.listName).sort(),
+    ['Cases-ExampleReview', 'Cases-StressReview'],
+    'one listCases per source in allCaseSources'
+  );
 });

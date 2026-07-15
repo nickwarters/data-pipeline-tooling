@@ -62,10 +62,22 @@ function findByClass(node, cls) {
 
 /** @typedef {import('../src/sharepoint-client.js').CaseRow} CaseRow */
 
-/** @param {CaseRow[]} cases @returns {any} */
-function makeClient(cases = []) {
+/**
+ * @param {string} slug
+ * @param {string} [listName]
+ * @returns {import('../src/setup/resolve-eligible-case-types.js').CaseSource}
+ */
+const src = (slug, listName = `${slug}-list`) => ({
+  slug,
+  listName,
+  displayName: slug,
+});
+
+/** @param {CaseRow[]} cases @param {any[]} [optsLog] @returns {any} */
+function makeClient(cases = [], optsLog) {
   return {
-    async listCases() {
+    async listCases(/** @type {any} */ filter, /** @type {any} */ opts) {
+      optsLog?.push(opts);
       return cases.map((c) => ({ ...c }));
     },
   };
@@ -101,7 +113,7 @@ test('ReviewerTeamReportPage: renders a heading', async () => {
   const host = ReviewerTeamReportPage({
     client: makeClient(),
     currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
-    eligibleCaseTypes: [],
+    caseSources: [].map((s) => src(s)),
   });
   await flush();
   assert.ok(
@@ -114,7 +126,7 @@ test('ReviewerTeamReportPage: renders nothing extra when client is null', async 
   const host = ReviewerTeamReportPage({
     client: null,
     currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
-    eligibleCaseTypes: [],
+    caseSources: [].map((s) => src(s)),
   });
   await flush();
   assert.ok(hasText(host, 'Reviewer Team Performance'));
@@ -125,7 +137,7 @@ test('ReviewerTeamReportPage: renders nothing extra when currentUser is null', a
   const host = ReviewerTeamReportPage({
     client: makeClient(),
     currentUser: null,
-    eligibleCaseTypes: [],
+    caseSources: [].map((s) => src(s)),
   });
   await flush();
   assert.ok(hasText(host, 'Reviewer Team Performance'));
@@ -136,7 +148,7 @@ test('ReviewerTeamReportPage: renders a back link to #/reports', async () => {
   const host = ReviewerTeamReportPage({
     client: makeClient(),
     currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
-    eligibleCaseTypes: [],
+    caseSources: [].map((s) => src(s)),
   });
   await flush();
   assert.ok(
@@ -171,7 +183,7 @@ test('ReviewerTeamReportPage: renders 4 KPI tiles with correct counts', async ()
   const host = ReviewerTeamReportPage({
     client: makeClient(cases),
     currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
-    eligibleCaseTypes: ['example-review'],
+    caseSources: ['example-review'].map((s) => src(s)),
   });
   await flush();
 
@@ -202,7 +214,7 @@ test('ReviewerTeamReportPage: renders breakdown table rows per case type', async
   const host = ReviewerTeamReportPage({
     client: makeClient(cases),
     currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
-    eligibleCaseTypes: ['example-review', 'product-sale-review'],
+    caseSources: ['example-review', 'product-sale-review'].map((s) => src(s)),
   });
   await flush();
 
@@ -230,7 +242,7 @@ test('ReviewerTeamReportPage: drill-through links navigate to #/team-cases with 
   const host = ReviewerTeamReportPage({
     client: makeClient(cases),
     currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
-    eligibleCaseTypes: ['example-review'],
+    caseSources: ['example-review'].map((s) => src(s)),
   });
   await flush();
 
@@ -247,11 +259,24 @@ test('ReviewerTeamReportPage: drill-through links navigate to #/team-cases with 
   );
 });
 
+test('ReviewerTeamReportPage: passes an explicit { listName } to the fetcher', async () => {
+  /** @type {any[]} */
+  const optsLog = [];
+  const host = ReviewerTeamReportPage({
+    client: makeClient([], optsLog),
+    currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
+    caseSources: [src('example-review', 'ExampleReviews')],
+  });
+  await flush();
+  assert.equal(optsLog.length, 1);
+  assert.equal(optsLog[0].listName, 'ExampleReviews');
+});
+
 test('ReviewerTeamReportPage: empty state when no cases', async () => {
   const host = ReviewerTeamReportPage({
     client: makeClient([]),
     currentUser: { id: 'user-rm', displayName: 'Morgan Manager' },
-    eligibleCaseTypes: ['example-review'],
+    caseSources: ['example-review'].map((s) => src(s)),
   });
   await flush();
 

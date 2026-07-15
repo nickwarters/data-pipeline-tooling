@@ -18,6 +18,35 @@ import '../components/collections/cora-case-table.js';
 export const PAGE_SIZE = 50;
 
 /**
+ * Pages a single source list's open-Appeal set to exhaustion (a short final
+ * page ends the loop), oldest-raised-first. One list's worth of the merge
+ * `fetchData` performs across every source.
+ *
+ * @param {SharePointClient} client
+ * @param {import('../setup/resolve-eligible-case-types.js').CaseSource} source
+ * @returns {Promise<CaseRow[]>}
+ */
+async function fetchAllOpenAppeals(client, source) {
+  /** @type {CaseRow[]} */
+  const all = [];
+  for (let skip = 0; ; skip += PAGE_SIZE) {
+    const page = await client.listCases(
+      { hasOpenAppeal: true },
+      {
+        top: PAGE_SIZE,
+        skip,
+        orderBy: 'appealRaisedAt',
+        orderDir: 'asc',
+        listName: source.listName,
+      }
+    );
+    all.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
+  return all;
+}
+
+/**
  * The single open **Appeal** on a Case, or null. An Appeal is "open" — i.e. not
  * yet worked by **Controls** — while its `state` is anything other than
  * `resolved` (`raised` or `underReview`). At most one Appeal is open at a time
@@ -52,16 +81,22 @@ export function ControlsDashboard({ client, allCaseSources = [], onOpenCase }) {
 
   async function fetchData() {
     if (!client) return;
-    /** @type {CaseRow[]} */
-    const all = [];
-    for (let skip = 0; ; skip += PAGE_SIZE) {
-      const page = await client.listCases(
-        { hasOpenAppeal: true },
-        { top: PAGE_SIZE, skip, orderBy: 'appealRaisedAt', orderDir: 'asc' }
-      );
-      all.push(...page);
-      if (page.length < PAGE_SIZE) break;
-    }
+    // No default Case list, and Controls is not scoped to a single Case
+    // Type, so this pages each source list to exhaustion (leading with the
+    // indexed `hasOpenAppeal` flag, same as before) and then merges the
+    // per-list pages by sorting the combined set on `appealRaisedAt asc` —
+    // the per-list `orderBy` only guarantees order within a single list's
+    // pages, not across lists, so the final sort is what preserves the
+    // oldest-raised-first order the table relies on.
+    const perList = await Promise.all(
+      allCaseSources.map((source) => fetchAllOpenAppeals(client, source))
+    );
+    const all = perList.flat();
+    all.sort((a, b) => {
+      const aAt = openAppealOf(a)?.at ?? '';
+      const bAt = openAppealOf(b)?.at ?? '';
+      return aAt < bAt ? -1 : aAt > bAt ? 1 : 0;
+    });
     appealCases.set(all);
   }
 

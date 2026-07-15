@@ -26,7 +26,7 @@ export function register(router, context) {
         ReviewerTeamReportPage({
           client: context.client,
           currentUser: context.currentUser,
-          eligibleCaseTypes: context.eligibleCaseTypes,
+          caseSources: context.caseSources,
         })
       );
     },

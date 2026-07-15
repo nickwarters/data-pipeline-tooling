@@ -19,7 +19,7 @@ export function register(router, context) {
         context.loadQuestionBankSamples ??
         (() =>
           import('../question-bank/question-bank-samples.js').then((m) =>
-            m.loadSampleCases(context.client)
+            m.loadSampleCases(context.client, context.allCaseSources)
           ));
       loadEditor().then(() => {
         const el = document.createElement('cora-bank-editor');

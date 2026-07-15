@@ -15,6 +15,7 @@ export function register(router, context) {
         ResponsiblePartyDashboard({
           client: context.client,
           currentUserId: context.currentUser.id,
+          allCaseSources: context.allCaseSources,
         })
       );
     },

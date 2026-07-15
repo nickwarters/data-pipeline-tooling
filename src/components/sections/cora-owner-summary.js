@@ -23,11 +23,17 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * @param {{
  * client: SharePointClient,
  * ownedCaseTypes: string[],
+ * allCaseSources?: import('../../setup/resolve-eligible-case-types.js').CaseSource[],
  * now?: Date
  * }} props
  * @returns {Promise<OwnerSummary[]>}
  */
-export async function loadOwnerSummaries({ client, ownedCaseTypes, now }) {
+export async function loadOwnerSummaries({
+  client,
+  ownedCaseTypes,
+  allCaseSources = [],
+  now,
+}) {
   const currentTime = now ?? new Date();
   const todayStart = new Date(
     currentTime.getFullYear(),
@@ -48,24 +54,38 @@ export async function loadOwnerSummaries({ client, ownedCaseTypes, now }) {
         : new Date(todayStart.getTime() - (k - 1) * DAY_MS).toISOString(),
   }));
 
+  // Each owned slug resolves to its own list via `allCaseSources`; an owned
+  // slug with no matching source (stale config) is skipped entirely rather
+  // than fetched unscoped — there is no default Case list.
+  const ownedWithSource = ownedCaseTypes
+    .map((caseType) => ({
+      caseType,
+      source: allCaseSources.find((s) => s.slug === caseType),
+    }))
+    .filter((entry) => entry.source != null);
+
   return Promise.all(
-    ownedCaseTypes.map(async (caseType) => {
+    ownedWithSource.map(async ({ caseType, source }) => {
+      const listName = /** @type {{ listName: string }} */ (source).listName;
       // In-progress: bounded by open work and led by the indexed Status column
       //, so the outstanding/assigned/overdue derivation never
       // fetches the cumulative backlog.
-      const inProgress = await client.listCases({
-        caseType,
-        status: CASE_STATUS.IN_PROGRESS,
-      });
+      const inProgress = await client.listCases(
+        { caseType, status: CASE_STATUS.IN_PROGRESS },
+        { listName }
+      );
 
       const sliceCounts = await Promise.all(
         slices.map((s) =>
-          client.countCases({
-            caseType,
-            status: CASE_STATUS.COMPLETED,
-            completedAfter: s.after,
-            completedBefore: s.before,
-          })
+          client.countCases(
+            {
+              caseType,
+              status: CASE_STATUS.COMPLETED,
+              completedAfter: s.after,
+              completedBefore: s.before,
+            },
+            { listName }
+          )
         )
       );
 
@@ -161,6 +181,7 @@ export class CORAOwnerSummary extends ShellElement {
     this._summaries = await loadOwnerSummaries({
       client: /** @type {SharePointClient} */ (this.client),
       ownedCaseTypes: this.ownedCaseTypes,
+      allCaseSources: this.allCaseSources,
     });
 
     this._shellRenderNow?.();

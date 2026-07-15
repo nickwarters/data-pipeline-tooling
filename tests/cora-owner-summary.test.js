@@ -70,6 +70,18 @@ function caseRow(over) {
   });
 }
 
+/** Sources covering the two case types the tests own by default. */
+const exampleSource = {
+  slug: 'example-review',
+  listName: 'Cases-ExampleReview',
+  displayName: 'Example Review',
+};
+const auditSource = {
+  slug: 'audit-review',
+  listName: 'Cases-AuditReview',
+  displayName: 'Audit Review',
+};
+
 // ===== TESTS =====
 
 test('CORAOwnerSummary: connectedCallback does nothing when ownedCaseTypes is empty', async () => {
@@ -88,15 +100,16 @@ test('CORAOwnerSummary: connectedCallback does nothing when client is null', asy
   assert.equal(/** @type {any} */ (el)._children.length, 0);
 });
 
-test('CORAOwnerSummary: leads with an In-progress, per-Case-Type listCases (no whole-type fetch)', async () => {
-  /** @type {import('../src/sharepoint-client.js').ListCasesFilter[]} */
+test('CORAOwnerSummary: leads with an In-progress, per-Case-Type listCases (no whole-type fetch), each carrying its source listName', async () => {
+  /** @type {Array<{ filter: import('../src/sharepoint-client.js').ListCasesFilter, opts: any }>} */
   const listCalls = [];
   const el = new CORAOwnerSummary();
   el.client = /** @type {any} */ ({
     async listCases(
-      /** @type {import('../src/sharepoint-client.js').ListCasesFilter} */ f
+      /** @type {import('../src/sharepoint-client.js').ListCasesFilter} */ f,
+      /** @type {any} */ opts
     ) {
-      listCalls.push(f);
+      listCalls.push({ filter: f, opts });
       return [];
     },
     async countCases() {
@@ -104,34 +117,43 @@ test('CORAOwnerSummary: leads with an In-progress, per-Case-Type listCases (no w
     },
   });
   el.ownedCaseTypes = ['example-review', 'audit-review'];
+  el.allCaseSources = [exampleSource, auditSource];
   await el.connectedCallback();
   assert.equal(listCalls.length, 2);
-  assert.deepEqual(listCalls[0], {
+  assert.deepEqual(listCalls[0].filter, {
     caseType: 'example-review',
     status: 'In-progress',
   });
-  assert.deepEqual(listCalls[1], {
+  assert.equal(listCalls[0].opts.listName, 'Cases-ExampleReview');
+  assert.deepEqual(listCalls[1].filter, {
     caseType: 'audit-review',
     status: 'In-progress',
   });
+  assert.equal(listCalls[1].opts.listName, 'Cases-AuditReview');
 });
 
-test('CORAOwnerSummary: completed metrics come from bounded CompletedAt-window counts (ADR-0031)', async () => {
+test('CORAOwnerSummary: completed metrics come from bounded CompletedAt-window counts (ADR-0031), each carrying the source listName', async () => {
   /** @type {import('../src/sharepoint-client.js').ListCasesFilter[]} */
   const countCalls = [];
+  /** @type {any[]} */
+  const countOpts = [];
   const el = new CORAOwnerSummary();
   el.client = /** @type {any} */ ({
     async listCases() {
       return [];
     },
     async countCases(
-      /** @type {import('../src/sharepoint-client.js').ListCasesFilter} */ f
+      /** @type {import('../src/sharepoint-client.js').ListCasesFilter} */ f,
+      /** @type {any} */ opts
     ) {
       countCalls.push(f);
+      countOpts.push(opts);
       return 0;
     },
   });
   el.ownedCaseTypes = ['example-review'];
+  el.allCaseSources = [exampleSource];
+  el.allCaseSources = [exampleSource];
   await el.connectedCallback();
 
   // 8 per-day slices (today + 7 prior days), each a bounded Completed window.
@@ -141,6 +163,9 @@ test('CORAOwnerSummary: completed metrics come from bounded CompletedAt-window c
     assert.equal(f.status, 'Completed');
     assert.ok(f.completedAfter, 'every slice bounds CompletedAt from below');
     assert.ok(f.completedBefore, 'every slice bounds CompletedAt from above');
+  }
+  for (const opts of countOpts) {
+    assert.equal(opts.listName, 'Cases-ExampleReview');
   }
   // Slices are adjacent (each slice's upper bound is the next slice's lower
   // bound) and cover exactly [todayStart - 7 days, now].
@@ -159,6 +184,7 @@ test('CORAOwnerSummary: stores summaries on _summaries after _refresh', async ()
   const el = new CORAOwnerSummary();
   el.client = /** @type {any} */ (makeClient([]));
   el.ownedCaseTypes = ['example-review'];
+  el.allCaseSources = [exampleSource];
   await el.connectedCallback();
   assert.ok(Array.isArray(el._summaries), '_summaries should be set');
   assert.equal(el._summaries.length, 1);
@@ -173,6 +199,7 @@ test('CORAOwnerSummary: outstanding count = unassigned in-progress cases', async
   const el = new CORAOwnerSummary();
   el.client = /** @type {any} */ (makeClient(fixtureCases));
   el.ownedCaseTypes = ['example-review'];
+  el.allCaseSources = [exampleSource];
   await el.connectedCallback();
   assert.equal(el._summaries[0].outstanding, 1);
 });
@@ -186,6 +213,7 @@ test('CORAOwnerSummary: assigned count = in-progress cases with an assigned revi
   const el = new CORAOwnerSummary();
   el.client = /** @type {any} */ (makeClient(fixtureCases));
   el.ownedCaseTypes = ['example-review'];
+  el.allCaseSources = [exampleSource];
   await el.connectedCallback();
   assert.equal(el._summaries[0].assigned, 2);
 });
@@ -208,6 +236,7 @@ test('CORAOwnerSummary: completedToday count = completed cases with completedAt 
   const el = new CORAOwnerSummary();
   el.client = /** @type {any} */ (makeClient(fixtureCases));
   el.ownedCaseTypes = ['example-review'];
+  el.allCaseSources = [exampleSource];
   await el.connectedCallback();
   assert.equal(el._summaries[0].completedToday, 1);
 });
@@ -236,6 +265,7 @@ test('CORAOwnerSummary: completedLast7Days sums the per-day slices within 7 days
   const el = new CORAOwnerSummary();
   el.client = /** @type {any} */ (makeClient(fixtureCases));
   el.ownedCaseTypes = ['example-review'];
+  el.allCaseSources = [exampleSource];
   await el.connectedCallback();
   assert.equal(
     el._summaries[0].completedLast7Days,
@@ -259,6 +289,7 @@ test('CORAOwnerSummary: overdue count = in-progress cases with dueDate in the pa
   const el = new CORAOwnerSummary();
   el.client = /** @type {any} */ (makeClient(fixtureCases));
   el.ownedCaseTypes = ['example-review'];
+  el.allCaseSources = [exampleSource];
   await el.connectedCallback();
   assert.equal(el._summaries[0].overdue, 1);
 });
@@ -267,6 +298,7 @@ test('CORAOwnerSummary: renders heading and one card per owned case type', async
   const el = new CORAOwnerSummary();
   el.client = /** @type {any} */ (makeClient([]));
   el.ownedCaseTypes = ['example-review', 'audit-review'];
+  el.allCaseSources = [exampleSource, auditSource];
   await el.connectedCallback();
   // _children: [h2, card-0, card-1]
   assert.equal(/** @type {any} */ (el)._children.length, 3);
@@ -277,6 +309,7 @@ test('CORAOwnerSummary: renders correct counts for example-review fixture data',
   const el = new CORAOwnerSummary();
   el.client = /** @type {any} */ (makeClient(cases));
   el.ownedCaseTypes = ['example-review'];
+  el.allCaseSources = [exampleSource];
   await el.connectedCallback();
 
   const s = el._summaries[0];
@@ -289,4 +322,69 @@ test('CORAOwnerSummary: renders correct counts for example-review fixture data',
   assert.equal(s.assigned, 9, 'assigned: 9 assigned in-progress cases');
   assert.equal(s.completedToday, 2, 'completed today: 2');
   assert.equal(s.completedLast7Days, 4, 'completed last 7 days: 4');
+});
+
+test('CORAOwnerSummary: an owned slug with no matching source in allCaseSources is skipped rather than fetched unscoped', async () => {
+  /** @type {any[]} */
+  const listCalls = [];
+  const el = new CORAOwnerSummary();
+  el.client = /** @type {any} */ ({
+    async listCases(/** @type {any} */ f, /** @type {any} */ opts) {
+      listCalls.push({ f, opts });
+      return [];
+    },
+    async countCases() {
+      return 0;
+    },
+  });
+  el.ownedCaseTypes = ['example-review', 'stale-case-type'];
+  // Only example-review has a matching source; stale-case-type has none.
+  el.allCaseSources = [exampleSource];
+  await el.connectedCallback();
+
+  assert.equal(
+    el._summaries.length,
+    1,
+    'only the owned slug with a matching source produces a summary'
+  );
+  assert.equal(el._summaries[0].caseType, 'example-review');
+  assert.ok(
+    listCalls.every((c) => c.f.caseType !== 'stale-case-type'),
+    'the unmatched slug is never fetched'
+  );
+});
+
+test('CORAOwnerSummary: maps each owned slug to its own source listName (multi-source fan-out)', async () => {
+  /** @type {Array<{ filter: any, opts: any }>} */
+  const listCalls = [];
+  /** @type {Array<{ filter: any, opts: any }>} */
+  const countCalls = [];
+  const el = new CORAOwnerSummary();
+  el.client = /** @type {any} */ ({
+    async listCases(/** @type {any} */ f, /** @type {any} */ opts) {
+      listCalls.push({ filter: f, opts });
+      return [];
+    },
+    async countCases(/** @type {any} */ f, /** @type {any} */ opts) {
+      countCalls.push({ filter: f, opts });
+      return 0;
+    },
+  });
+  el.ownedCaseTypes = ['example-review', 'audit-review'];
+  el.allCaseSources = [exampleSource, auditSource];
+  await el.connectedCallback();
+
+  assert.equal(el._summaries.length, 2);
+  const listNamesUsed = listCalls.map((c) => c.opts.listName);
+  assert.deepEqual(
+    listNamesUsed,
+    ['Cases-ExampleReview', 'Cases-AuditReview'],
+    'each owned slug reads from its own source list'
+  );
+  assert.ok(
+    countCalls.every((c) =>
+      ['Cases-ExampleReview', 'Cases-AuditReview'].includes(c.opts.listName)
+    ),
+    'every countCases call also carries a source listName'
+  );
 });

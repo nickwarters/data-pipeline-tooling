@@ -234,6 +234,76 @@ export function worstFirstOrder(reason) {
 }
 
 /**
+ * The worst-first comparator for a reason: ascending on the reason's own
+ * clock field (oldest/most-overdue first), matching `worstFirstOrder`'s
+ * `orderBy`/`orderDir`. A missing clock sorts as `''`, i.e. first — same
+ * convention `MockSharePointClient`/`HttpSharePointClient` use for `orderBy`.
+ * Shared by the single-list `listCases({ orderBy, orderDir })` request and the
+ * client-side merge of several lists' results, so both agree on "worst".
+ *
+ * @param {Reason} reason
+ * @returns {(a: CaseRow, b: CaseRow) => number}
+ */
+export function reasonOrderComparator(reason) {
+  return (a, b) => {
+    const av = /** @type {string} */ (a[reason.clockField] ?? '');
+    const bv = /** @type {string} */ (b[reason.clockField] ?? '');
+    if (av < bv) return -1;
+    if (av > bv) return 1;
+    return 0;
+  };
+}
+
+/**
+ * The single global worst Case among several per-list "worst" candidates — one
+ * per Case source, each already the worst item of its own list (or `null` if
+ * that list had no match). A Case lives in exactly one list, so the global
+ * worst is simply the earliest, by the reason's clock, among these per-list
+ * winners: no case can be worse than its own list's worst, so comparing just
+ * the per-list winners is enough to find the true global worst without
+ * fetching every row.
+ *
+ * @param {(CaseRow | null)[]} candidates
+ * @param {Reason} reason
+ * @returns {CaseRow | null}
+ */
+export function pickGlobalWorst(candidates, reason) {
+  const cmp = reasonOrderComparator(reason);
+  return candidates.reduce(
+    /** @param {CaseRow | null} worst @param {CaseRow | null} candidate */
+    (worst, candidate) => {
+      if (!candidate) return worst;
+      if (!worst) return candidate;
+      return cmp(candidate, worst) < 0 ? candidate : worst;
+    },
+    /** @type {CaseRow | null} */ (null)
+  );
+}
+
+/**
+ * The global worst-first window `[skip, skip + top)` across several lists,
+ * given each list's own worst-first rows **over-fetched to `skip + top`**
+ * (i.e. each list's own top `skip + top`, from its own start). Because a
+ * Case's rank within its own list can never exceed its rank across every
+ * list combined (adding more lists' Cases to the comparison can only push a
+ * Case's global rank down, never up), every Case that belongs in the true
+ * global top `skip + top` is guaranteed to appear in *some* list's local top
+ * `skip + top` — so concatenating those per-list prefixes, re-sorting by the
+ * same worst-first order, and slicing `[skip, skip + top)` yields exactly the
+ * true global window, with no need to fetch every row of every list.
+ *
+ * @param {CaseRow[][]} perSourceRows
+ * @param {Reason} reason
+ * @param {number} skip
+ * @param {number} top
+ * @returns {CaseRow[]}
+ */
+export function mergeWorstFirstWindow(perSourceRows, reason, skip, top) {
+  const merged = perSourceRows.flat().sort(reasonOrderComparator(reason));
+  return merged.slice(skip, skip + top);
+}
+
+/**
  * Whole days a Case has been waiting on a reason's clock. Never negative; a
  * missing clock reads as 0.
  *
