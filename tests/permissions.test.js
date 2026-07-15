@@ -163,11 +163,11 @@ test('resolveCapabilities: defaults to exported permissions config when none pas
 
 test('resolveCapabilities: default config resolves derived per-type group names', () => {
   const caps = resolveCapabilities(
-    ['Reviewers - Example Review', 'JourneyOwner - Complaints'],
+    ['Reviewers - Complaints', 'JourneyOwner - Complaints'],
     permissions
   );
   assert.equal(caps.isReviewer, true);
-  assert.deepEqual(caps.listAccessCaseTypes, ['example-review']);
+  assert.deepEqual(caps.listAccessCaseTypes, ['complaints']);
   assert.deepEqual(caps.ownedJourneyCaseTypes, ['complaints']);
 });
 
@@ -184,7 +184,7 @@ test('permissions: exported config exposes the functional group names and Case T
   assert.ok(Array.isArray(permissions.caseTypes));
   assert.ok(
     permissions.caseTypes.some(
-      (t) => t.slug === 'example-review' && t.displayName === 'Example Review'
+      (t) => t.slug === 'complaints' && t.displayName === 'Complaints'
     )
   );
 });

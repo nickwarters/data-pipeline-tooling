@@ -1,4 +1,5 @@
 // @ts-check
+import { resetStoreWithExampleReview } from './_bank-store-fixture.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
@@ -9,7 +10,7 @@ const { _resetStore, cases, activeSlug, filters } =
   await import('../src/question-bank/question-bank-store.js');
 
 test('CORABankList: renders dirty pill + question cards + add button', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const e = new CORABankList();
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
@@ -25,7 +26,7 @@ test('CORABankList: renders dirty pill + question cards + add button', () => {
 });
 
 test('CORABankList: empty-state when no question passes filters', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   // showDeprecated off + a slug whose questions are all deprecated
   filters.set({
     category: null,
@@ -56,7 +57,7 @@ test('CORABankList: empty-state when no question passes filters', () => {
 });
 
 test('CORABankList: category filter hides non-matching questions', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   filters.set({
     category: 'Opening',
     showDeprecated: true,
@@ -72,7 +73,7 @@ test('CORABankList: category filter hides non-matching questions', () => {
 });
 
 test('CORABankList: conditionalOnly hides unconditional questions', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   filters.set({ category: null, showDeprecated: true, conditionalOnly: true });
   const e = new CORABankList();
   e.connectedCallback();
@@ -84,7 +85,7 @@ test('CORABankList: conditionalOnly hides unconditional questions', () => {
 });
 
 test('CORABankList: + Draft a new question appends a draft', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   activeSlug.set('example-review');
   const before = cases.get()['example-review'].questions.length;
   const e = new CORABankList();
@@ -97,7 +98,7 @@ test('CORABankList: + Draft a new question appends a draft', () => {
 });
 
 test('CORABankList: + Draft falls back to immediate scroll when no rAF', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   activeSlug.set('example-review');
   const saved = /** @type {any} */ (globalThis).requestAnimationFrame;
   /** @type {any} */ (globalThis).requestAnimationFrame = undefined;
@@ -111,7 +112,7 @@ test('CORABankList: + Draft falls back to immediate scroll when no rAF', () => {
 });
 
 test('CORABankList: dirty pill reflects isDirty', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const e = new CORABankList();
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
@@ -123,7 +124,7 @@ test('CORABankList: dirty pill reflects isDirty', () => {
 });
 
 test('CORABankList: bank label and slug render as text, not HTML', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   activeSlug.set('example-review');
   cases.set({
     'example-review': {

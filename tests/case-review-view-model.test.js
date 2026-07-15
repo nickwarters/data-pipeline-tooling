@@ -1,8 +1,10 @@
 // @ts-check
+import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CaseReviewViewModel } from '../src/lib/case-review-view-model.js';
 import { signal, effect } from '../src/lib/signal.js';
+import { CASE_TYPE_IMPORTERS } from '../case-types/manifest.js';
 
 /**
  * Builds a view model wired just enough to exercise handleCapture: an editable
@@ -407,7 +409,7 @@ test('CaseReviewViewModel.load() resolves route caseType to listName for getCase
   const loadCaseCalls = [];
   const row = {
     id: 'c1',
-    caseType: 'product-sale-review',
+    caseType: 'example-review',
     title: 'T',
     status: 'In-progress',
     assignedReviewer: 'u1',
@@ -441,20 +443,20 @@ test('CaseReviewViewModel.load() resolves route caseType to listName for getCase
     caseId: 'c1',
     currentUserId: 'u1',
     capabilities: null,
-    caseType: 'product-sale-review',
+    caseType: 'example-review',
   });
 
   await vm.load();
 
   assert.deepEqual(getCaseCalls[0], {
     id: 'c1',
-    opts: { listName: 'Cases-ProductSaleReview' },
+    opts: { listName: 'Cases-ExampleReview' },
   });
   assert.deepEqual(loadCaseCalls[0], [
     row,
-    { listName: 'Cases-ProductSaleReview' },
+    { listName: 'Cases-ExampleReview' },
   ]);
-  assert.deepEqual(vm.caseListOptions, { listName: 'Cases-ProductSaleReview' });
+  assert.deepEqual(vm.caseListOptions, { listName: 'Cases-ExampleReview' });
 });
 
 test('CaseReviewViewModel.load() stores null exportHash when getExportHash returns null', async () => {
@@ -781,12 +783,31 @@ test('CaseReviewViewModel.load(): a Case Type without sectionLabels keeps the de
 });
 
 test('CaseReviewViewModel.load(): resolves a Case Type sectionLabels override into labels and headings', async () => {
-  // stress-review declares the demonstrative { questions: 'Assessment' } override.
-  const vm = makeLabelsVM('stress-review');
-  await vm.load();
-  assert.equal(vm.sectionLabels.questions, 'Assessment');
-  assert.equal(vm.sectionHeadings.questions, 'Assessment');
-  // Every other Section keeps the defaults.
-  assert.equal(vm.sectionLabels.notes, 'Notes');
-  assert.equal(vm.sectionHeadings.remediation, 'Remediation');
+  // No live Case Type declares a sectionLabels override (stress-review, which
+  // did, was retired in #383). Register a fixture importer that carries the
+  // demonstrative { questions: 'Assessment' } override for this test.
+  const slug = 'section-labels-fixture';
+  CASE_TYPE_IMPORTERS[slug] = async () => ({
+    default: /** @type {any} */ ({
+      displayName: 'Section Labels Fixture',
+      listName: 'Cases-SectionLabelsFixture',
+      sectionLabels: { questions: 'Assessment' },
+      questions: [],
+      computeOutcome: () => ({ outcome: 'pass' }),
+      outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
+      defaultOutcomeId: 'pass',
+    }),
+  });
+
+  try {
+    const vm = makeLabelsVM(slug);
+    await vm.load();
+    assert.equal(vm.sectionLabels.questions, 'Assessment');
+    assert.equal(vm.sectionHeadings.questions, 'Assessment');
+    // Every other Section keeps the defaults.
+    assert.equal(vm.sectionLabels.notes, 'Notes');
+    assert.equal(vm.sectionHeadings.remediation, 'Remediation');
+  } finally {
+    delete CASE_TYPE_IMPORTERS[slug];
+  }
 });

@@ -1,4 +1,5 @@
 // @ts-check
+import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
@@ -132,7 +133,7 @@ test('conversation route: source-key route passes caseType through to the fetche
       currentUser: { id: 'u42' },
     })
   );
-  router.navigate('#/conversation/product-sale-review/123');
+  router.navigate('#/conversation/example-review/123');
 
   // loadCaseTypeConfig() performs a real dynamic import() of the case-type
   // module, and the module now reads the bank artifact before export.

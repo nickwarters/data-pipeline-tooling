@@ -61,9 +61,9 @@ function makeEl(/** @type {string} */ key) {
   };
 }
 
-test('initial state: example-review is active, not dirty, no diffs', () => {
+test('initial state: the first manifest bank is active, not dirty, no diffs', () => {
   _resetStore();
-  assert.equal(activeSlug.get(), 'example-review');
+  assert.equal(activeSlug.get(), 'complaints');
   assert.equal(isDirty.get(), false);
   assert.deepEqual(diffCounts.get(), { added: 0, changed: 0, deprecated: 0 });
   assert.ok(currentBank.get().label);
@@ -72,18 +72,17 @@ test('initial state: example-review is active, not dirty, no diffs', () => {
 
 test('initial state: question bank questions come from standalone bank artifacts', async () => {
   _resetStore();
-  const { default: exampleReview } =
-    await import('../case-types/example-review.js');
+  const { default: complaints } = await import('../case-types/complaints.js');
   assert.deepEqual(
     currentBank.get().questions.map((q) => q.text),
-    exampleReview.questions.map((q) => q.text)
+    complaints.questions.map((q) => q.text)
   );
 });
 
 test('commit: mutates cases and marks dirty', () => {
   _resetStore();
   commit((types) => {
-    types['example-review'].questions[0].text = 'CHANGED';
+    types['complaints'].questions[0].text = 'CHANGED';
   });
   assert.equal(isDirty.get(), true);
   assert.equal(currentBank.get().questions[0].text, 'CHANGED');
@@ -92,7 +91,7 @@ test('commit: mutates cases and marks dirty', () => {
 test('diffCounts: counts added / changed / deprecated', () => {
   _resetStore();
   commit((types) => {
-    const b = types['example-review'];
+    const b = types['complaints'];
     b.questions[0].text = 'edited'; // changed
     b.questions[1].deprecated = true; // deprecated (from active)
     b.questions.push({
@@ -176,7 +175,7 @@ test('commit: with no active element, runs cleanly', () => {
   activeStub = null;
   lookupStub = null;
   commit((t) => {
-    t['example-review'].label = 'x';
+    t['complaints'].label = 'x';
   });
   assert.equal(currentBank.get().label, 'x');
 });
@@ -192,7 +191,7 @@ test('commit: restores focus + selection on a re-found element', () => {
   const replacement = makeEl('wording:q-welcome');
   lookupStub = { key: 'wording:q-welcome', el: replacement };
   commit((t) => {
-    t['example-review'].questions[0].text = 'edited';
+    t['complaints'].questions[0].text = 'edited';
   });
   assert.deepEqual(focusLog, ['wording:q-welcome']);
   assert.deepEqual(setSelLog, [[3, 5]]);
@@ -205,7 +204,7 @@ test('commit: skips re-focus when same element is still active', () => {
   activeStub = stable;
   lookupStub = { key: 'wording:q-welcome', el: stable };
   commit((t) => {
-    t['example-review'].questions[0].text = 'x';
+    t['complaints'].questions[0].text = 'x';
   });
   assert.deepEqual(focusLog, []);
 });
@@ -220,7 +219,7 @@ test('commit: tolerates setSelectionRange throwing', () => {
   };
   lookupStub = { key: 'wording:q-welcome', el: replacement };
   commit((t) => {
-    t['example-review'].label = 'y';
+    t['complaints'].label = 'y';
   });
   // Should not throw.
 });
@@ -232,7 +231,7 @@ test('commit: skips focus restore when no replacement is found', () => {
   activeStub = old;
   lookupStub = null;
   commit((t) => {
-    t['example-review'].label = 'z';
+    t['complaints'].label = 'z';
   });
   assert.deepEqual(focusLog, []);
 });
@@ -250,7 +249,7 @@ test('commit: uses native CSS.escape when available', () => {
   activeStub = old;
   lookupStub = { key: 'wording:q-welcome', el: makeEl('wording:q-welcome') };
   commit((t) => {
-    t['example-review'].label = 'q';
+    t['complaints'].label = 'q';
   });
   assert.equal(escaped, 'wording:q-welcome');
 });
@@ -262,7 +261,7 @@ test('commit: falls back when CSS.escape is missing', () => {
   activeStub = old;
   lookupStub = { key: 'wording:q-welcome', el: makeEl('wording:q-welcome') };
   commit((t) => {
-    t['example-review'].label = 'r';
+    t['complaints'].label = 'r';
   });
   // No throw means the fallback path was exercised.
 });
@@ -272,7 +271,7 @@ test('commit: handles missing global document gracefully', () => {
   const savedDoc = /** @type {any} */ (globalThis).document;
   /** @type {any} */ (globalThis).document = undefined;
   commit((t) => {
-    t['example-review'].label = 'p';
+    t['complaints'].label = 'p';
   });
   /** @type {any} */ (globalThis).document = savedDoc;
   assert.equal(currentBank.get().label, 'p');

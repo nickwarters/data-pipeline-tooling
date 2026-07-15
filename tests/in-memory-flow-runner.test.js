@@ -1,4 +1,5 @@
 // @ts-check
+import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runFlowFixture } from '../src/testing/in-memory-flow-runner.js';
@@ -50,16 +51,17 @@ test('in-memory flow runner loads a case, answers questions, completes, and snap
 });
 
 test('in-memory flow runner preserves list-scoped case state when the route case type has a listName', async () => {
+  // example-review declares an explicit listName (Cases-ExampleReview), so it
+  // exercises the list-scoped routing this test guards.
   const snapshot = await runFlowFixture({
     state: {
       lists: {
-        'Cases-ProductSaleReview': [
+        'Cases-ExampleReview': [
           {
             ...CASE_ROW,
-            id: 'product-case-1',
-            caseType: 'product-sale-review',
-            title: 'Product sale case',
-            etag: 'etag-product-1',
+            id: 'scoped-case-1',
+            title: 'List-scoped case',
+            etag: 'etag-scoped-1',
           },
         ],
       },
@@ -69,20 +71,20 @@ test('in-memory flow runner preserves list-scoped case state when the route case
       actions: [
         {
           type: 'loadCasePage',
-          caseId: 'product-case-1',
-          caseType: 'product-sale-review',
+          caseId: 'scoped-case-1',
+          caseType: 'example-review',
         },
-        { type: 'answer', questionId: 'q-cv-identity', value: 'Yes' },
+        { type: 'answer', questionId: 'q-welcome', value: 'Yes' },
       ],
     },
   });
 
   assert.equal(
-    snapshot.lists['Cases-ProductSaleReview'][0].answers['q-cv-identity'].value,
+    snapshot.lists['Cases-ExampleReview'][0].answers['q-welcome'].value,
     'Yes'
   );
   assert.notEqual(
-    snapshot.lists['Cases-ProductSaleReview'][0].etag,
-    'etag-product-1'
+    snapshot.lists['Cases-ExampleReview'][0].etag,
+    'etag-scoped-1'
   );
 });

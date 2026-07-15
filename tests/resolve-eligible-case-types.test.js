@@ -1,4 +1,5 @@
 // @ts-check
+import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -315,13 +316,13 @@ test('resolveCaseSources: example-review source carries its declared listName an
   });
 });
 
-test('resolveCaseSources: a Reviewers - Product Sale Review user is granted the product-sale-review source', async () => {
-  const sources = await resolveCaseSources(['Reviewers - Product Sale Review']);
+test('resolveCaseSources: a Reviewers - Complaints user is granted the complaints source via its derived list-access group', async () => {
+  const sources = await resolveCaseSources(['Reviewers - Complaints']);
   assert.deepEqual(sources, [
     {
-      slug: 'product-sale-review',
-      listName: 'Cases-ProductSaleReview',
-      displayName: 'Product Sale Review',
+      slug: 'complaints',
+      listName: 'Cases-Complaints',
+      displayName: 'Complaints',
     },
   ]);
 });
@@ -359,10 +360,10 @@ test('resolveCaseSourcesFromCaseTypes: broad roles come from the permissions con
   }
 });
 
-test('resolveCaseSources: stress-review carries its explicit Case list', async () => {
+test('resolveCaseSources: complaints carries its explicit Case list', async () => {
   const sources = await resolveCaseSources(['Reviewer-Managers']);
-  const stress = sources.find((s) => s.slug === 'stress-review');
-  assert.equal(stress?.listName, 'Cases-StressReview');
+  const complaints = sources.find((s) => s.slug === 'complaints');
+  assert.equal(complaints?.listName, 'Cases-Complaints');
 });
 
 test('resolveCaseSources: returns no sources when the user holds no matching group', async () => {

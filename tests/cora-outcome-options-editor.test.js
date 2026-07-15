@@ -1,4 +1,5 @@
 // @ts-check
+import { resetStoreWithExampleReview } from './_bank-store-fixture.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
@@ -10,7 +11,7 @@ const { _resetStore, cases } =
   await import('../src/question-bank/question-bank-store.js');
 
 test('CORAOutcomeOptionsEditor: renders one row per case-type outcome option', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const e = new CORAOutcomeOptionsEditor();
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
@@ -22,7 +23,7 @@ test('CORAOutcomeOptionsEditor: renders one row per case-type outcome option', (
 });
 
 test('CORAOutcomeOptionsEditor: edits the case-type default outcome', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const e = new CORAOutcomeOptionsEditor();
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
@@ -34,7 +35,7 @@ test('CORAOutcomeOptionsEditor: edits the case-type default outcome', () => {
 });
 
 test('CORAOutcomeOptionsEditor: edits wording on the shared outcome option', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const e = new CORAOutcomeOptionsEditor();
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
@@ -48,7 +49,7 @@ test('CORAOutcomeOptionsEditor: edits wording on the shared outcome option', () 
 });
 
 test('CORAOutcomeOptionsEditor: edits severity on the shared outcome option', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const e = new CORAOutcomeOptionsEditor();
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];
@@ -62,7 +63,7 @@ test('CORAOutcomeOptionsEditor: edits severity on the shared outcome option', ()
 });
 
 test('CORAOutcomeOptionsEditor: renaming an outcome id updates option-outcome mappings and the default', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const bank = cases.get()['example-review'];
   bank.questions[0].optionOutcomes = { No: 'fail' };
   bank.questions[1].optionOutcomes = { No: 'fail', 'N/A': 'pass' };
@@ -85,7 +86,7 @@ test('CORAOutcomeOptionsEditor: renaming an outcome id updates option-outcome ma
 });
 
 test('CORAOutcomeOptionsEditor: adds an outcome option to the active case type', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const before = cases.get()['example-review'].outcomeOptions?.length ?? 0;
   const e = new CORAOutcomeOptionsEditor();
   e.connectedCallback();
@@ -102,7 +103,7 @@ test('CORAOutcomeOptionsEditor: adds an outcome option to the active case type',
 });
 
 test('CORAOutcomeOptionsEditor: removes an outcome option', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const bank = cases.get()['example-review'];
   const before = bank.outcomeOptions?.length ?? 0;
   bank.questions[0].optionOutcomes = { No: 'pass' };

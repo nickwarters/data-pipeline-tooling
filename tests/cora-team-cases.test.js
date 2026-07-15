@@ -37,6 +37,7 @@ const createdTags = [];
 
 const { TeamCasesPage, resolveDashboardColumns } =
   await import('../src/pages/cora-team-cases.js');
+const { CASE_TYPE_IMPORTERS } = await import('../case-types/manifest.js');
 
 /** @param {any} node @param {string} text @returns {boolean} */
 function hasText(node, text) {
@@ -234,44 +235,73 @@ test('cora-team-cases: renders heading and back link without fetching when clien
 });
 
 test('cora-team-cases: applies Case Type dashboardColumns when filtered to a single Case Type', async () => {
-  const cases = [row('c1', 'product-sale-review')];
-  const host = TeamCasesPage({
-    client: /** @type {any} */ ({
-      async listCases() {
-        return cases;
-      },
+  // No live Case Type declares dashboardColumns (product-sale-review, which
+  // did, was retired in #383), so register a fixture importer that does for the
+  // duration of this test — the same manifest-injection pattern used in
+  // case-type-manifest.test.js.
+  const fixtureSlug = 'dashboard-columns-fixture';
+  CASE_TYPE_IMPORTERS[fixtureSlug] = async () => ({
+    default: /** @type {any} */ ({
+      displayName: 'Dashboard Columns Fixture',
+      listName: 'Cases-DashboardColumnsFixture',
+      questions: [],
+      computeOutcome: () => ({ outcome: 'pass' }),
+      outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
+      defaultOutcomeId: 'pass',
+      dashboardColumns: [
+        {
+          key: 'responsibleParty',
+          label: 'Responsible Party',
+          sortable: true,
+          getValue: (/** @type {CaseRow} */ r) => r.responsibleParty,
+        },
+      ],
     }),
-    currentUser: { id: 'u1', displayName: 'U' },
-    caseSources: [src('example-review'), src('product-sale-review')],
-    queryString:
-      '?manager=me&role=reviewer-manager&caseType=product-sale-review',
   });
 
-  await flushDeep();
-  const table = findTag(host, 'cora-case-table');
-  assert.ok(table, 'should render cora-case-table');
-  assert.ok(
-    Array.isArray(table.columns),
-    'should pass a custom columns array when the Case Type declares dashboardColumns'
-  );
-  assert.ok(
-    table.columns.some((/** @type {any} */ c) => c.key === 'responsibleParty'),
-    'should include the product-sale-review dashboardColumns column'
-  );
+  try {
+    const cases = [row('c1', fixtureSlug)];
+    const host = TeamCasesPage({
+      client: /** @type {any} */ ({
+        async listCases() {
+          return cases;
+        },
+      }),
+      currentUser: { id: 'u1', displayName: 'U' },
+      caseSources: [src('complaints'), src(fixtureSlug)],
+      queryString: `?manager=me&role=reviewer-manager&caseType=${fixtureSlug}`,
+    });
 
-  // The appended columns follow the full default set, so the Actions column's
-  // Open button still navigates to the Case route.
-  const actionsCol = table.columns.find(
-    (/** @type {any} */ c) => c.key === 'actions'
-  );
-  assert.ok(actionsCol, 'default Actions column should still be present');
-  const btn = actionsCol.renderCell(cases[0]);
-  btn._fire('click');
-  assert.equal(
-    /** @type {any} */ (globalThis).location.hash,
-    '#/case/product-sale-review/c1',
-    'Open button should navigate to the Case route'
-  );
+    await flushDeep();
+    const table = findTag(host, 'cora-case-table');
+    assert.ok(table, 'should render cora-case-table');
+    assert.ok(
+      Array.isArray(table.columns),
+      'should pass a custom columns array when the Case Type declares dashboardColumns'
+    );
+    assert.ok(
+      table.columns.some(
+        (/** @type {any} */ c) => c.key === 'responsibleParty'
+      ),
+      'should include the fixture dashboardColumns column'
+    );
+
+    // The appended columns follow the full default set, so the Actions column's
+    // Open button still navigates to the Case route.
+    const actionsCol = table.columns.find(
+      (/** @type {any} */ c) => c.key === 'actions'
+    );
+    assert.ok(actionsCol, 'default Actions column should still be present');
+    const btn = actionsCol.renderCell(cases[0]);
+    btn._fire('click');
+    assert.equal(
+      /** @type {any} */ (globalThis).location.hash,
+      `#/case/${fixtureSlug}/c1`,
+      'Open button should navigate to the Case route'
+    );
+  } finally {
+    delete CASE_TYPE_IMPORTERS[fixtureSlug];
+  }
 });
 
 test('cora-team-cases: keeps default columns when the filtered Case Type declares no dashboardColumns', async () => {

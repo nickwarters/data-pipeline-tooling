@@ -1,7 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import config from '../case-types/example-review.js';
+import config from '../dev/fixtures/example-review-case-type.js';
 import { detectCycles } from '../src/evaluators/applicability-evaluator.js';
 import { cases } from '../dev/fixtures/cases.js';
 import { isOverdue } from '../src/evaluators/overdue-evaluator.js';

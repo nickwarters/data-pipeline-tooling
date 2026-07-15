@@ -14,9 +14,6 @@ import {
  * @type {Record<string, CaseTypeImporter>}
  */
 export const CASE_TYPE_IMPORTERS = {
-  'example-review': () => import('./example-review.js'),
-  'product-sale-review': () => import('./product-sale-review.js'),
-  'stress-review': () => import('./stress-review.js'),
   complaints: () => import('./complaints.js'),
 };
 
@@ -24,10 +21,6 @@ export const CASE_TYPE_IMPORTERS = {
  * @type {Record<string, QuestionBankImporter>}
  */
 export const QUESTION_BANK_IMPORTERS = {
-  'example-review': () => loadQuestionBank('./banks/example-review.txt'),
-  'product-sale-review': () =>
-    loadQuestionBank('./banks/product-sale-review.txt'),
-  'stress-review': () => loadQuestionBank('./banks/stress-review.txt'),
   complaints: () => loadQuestionBank('./banks/complaints.txt'),
 };
 

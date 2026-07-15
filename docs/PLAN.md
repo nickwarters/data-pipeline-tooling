@@ -4,6 +4,8 @@ This document is the execution roadmap. The architectural decisions it depends o
 
 **Status:** Slices 1–10 are done. Current work is **Slice 11 — User groups & remediation workflow** (below). Slice numbers below are historical/sequential, not a live "next up" queue — check the tracking issues under Slice 11 for what's actually in flight.
 
+> **Case Type inventory (#383):** `complaints` is now the only live Case Type. The `example-review` throwaway referenced throughout this roadmap has been retired from the production manifest and relocated to `dev/fixtures/example-review-case-type.js`, where it survives purely as a test fixture; `product-sale-review` and `stress-review` were removed outright. References below are kept for historical context.
+
 ## Approach
 
 Build the framework via **vertical tracer-bullet slices**. Slice 1 exercises every architectural layer end-to-end against a tiny throwaway Case Type (`example-review`). Slices 2–7 add capability against that same throwaway. Slice 8 is the first real Case Type — the moment "the framework" becomes "an actual review tool."

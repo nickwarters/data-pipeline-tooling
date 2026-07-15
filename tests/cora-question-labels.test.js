@@ -1,4 +1,5 @@
 // @ts-check
+import { resetStoreWithExampleReview } from './_bank-store-fixture.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
@@ -39,7 +40,7 @@ test('CORAQuestionLabels: no question → nothing renders', () => {
 });
 
 test('CORAQuestionLabels: renders a pill per assigned label', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   activeSlug.set('example-review');
   const q = cases.get()['example-review'].questions[1]; // two labels
   const e = mount(q);
@@ -52,7 +53,7 @@ test('CORAQuestionLabels: renders a pill per assigned label', () => {
 });
 
 test('CORAQuestionLabels: label names render as text, not HTML', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   activeSlug.set('example-review');
   const bank = cases.get()['example-review'];
   bank.labels = [
@@ -73,7 +74,7 @@ test('CORAQuestionLabels: label names render as text, not HTML', () => {
 });
 
 test('CORAQuestionLabels: shows an empty hint when no labels assigned', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   activeSlug.set('example-review');
   const q = cases.get()['example-review'].questions[3]; // q-channel, no labels
   const e = mount(q);
@@ -83,7 +84,7 @@ test('CORAQuestionLabels: shows an empty hint when no labels assigned', () => {
 });
 
 test('CORAQuestionLabels: an unassigned bank label shows as an add chip', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   activeSlug.set('example-review');
   const q = cases.get()['example-review'].questions[0]; // only lbl-coaching
   const e = mount(q);
@@ -100,7 +101,7 @@ test('CORAQuestionLabels: an unassigned bank label shows as an add chip', () => 
 });
 
 test('CORAQuestionLabels: pill × unassigns and drops empty labelIds', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   activeSlug.set('example-review');
   const q = cases.get()['example-review'].questions[0]; // single label
   const e = mount(q);
@@ -111,7 +112,7 @@ test('CORAQuestionLabels: pill × unassigns and drops empty labelIds', () => {
 });
 
 test('CORAQuestionLabels: editing a pill colour recolours the shared label', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   activeSlug.set('example-review');
   const q = cases.get()['example-review'].questions[1];
   const e = mount(q);
@@ -125,7 +126,7 @@ test('CORAQuestionLabels: editing a pill colour recolours the shared label', () 
 });
 
 test('CORAQuestionLabels: creating a label adds it to the bank and assigns it', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   activeSlug.set('example-review');
   const q = cases.get()['example-review'].questions[3]; // no labels
   const e = mount(q);
@@ -146,7 +147,7 @@ test('CORAQuestionLabels: creating a label adds it to the bank and assigns it', 
 });
 
 test('CORAQuestionLabels: creating with a blank name is a no-op', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   activeSlug.set('example-review');
   const q = cases.get()['example-review'].questions[3];
   const e = mount(q);
@@ -159,7 +160,7 @@ test('CORAQuestionLabels: creating with a blank name is a no-op', () => {
 });
 
 test('CORAQuestionLabels: a created label falls back to the default colour', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   activeSlug.set('example-review');
   const q = cases.get()['example-review'].questions[3];
   const e = mount(q);
@@ -173,7 +174,7 @@ test('CORAQuestionLabels: a created label falls back to the default colour', () 
 });
 
 test('CORAQuestionLabels: ids referencing a missing label are skipped', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   activeSlug.set('example-review');
   const q = cases.get()['example-review'].questions[3];
   q.labelIds = ['lbl-ghost'];
@@ -210,7 +211,7 @@ test('CORAQuestionLabels: tolerates a bank with no labels array', () => {
   nameInput.value = 'First';
   addBtn._listeners.click[0]();
   assert.equal(labels().length, 1);
-  _resetStore();
+  resetStoreWithExampleReview();
 });
 
 test('makeLabelId: slugifies a display name', () => {

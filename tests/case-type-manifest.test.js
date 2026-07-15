@@ -9,12 +9,7 @@ import {
 import { CaseReviewViewModel } from '../src/lib/case-review-view-model.js';
 
 test('case type manifest: known Case Type slugs resolve to their static import functions', async () => {
-  const knownSlugs = [
-    'complaints',
-    'example-review',
-    'product-sale-review',
-    'stress-review',
-  ];
+  const knownSlugs = ['complaints'];
   assert.deepEqual(Object.keys(CASE_TYPE_IMPORTERS).sort(), knownSlugs);
 
   for (const slug of knownSlugs) {
@@ -33,10 +28,9 @@ test('case type manifest: unknown Case Type slugs reject with a developer-useful
       error instanceof UnknownCaseTypeError &&
       error.name === 'UnknownCaseTypeError' &&
       error.slug === slug &&
-      error.knownSlugs.join(',') ===
-        'complaints,example-review,product-sale-review,stress-review' &&
+      error.knownSlugs.join(',') === 'complaints' &&
       error.message ===
-        `Unsupported Case Type slug "${slug}". Known Case Type slugs: complaints, example-review, product-sale-review, stress-review.`
+        `Unsupported Case Type slug "${slug}". Known Case Type slugs: complaints.`
   );
 });
 
@@ -147,12 +141,7 @@ test('CaseReviewViewModel.load(): unknown primary Case Type slug sets a clear us
     assert.equal(errors.length, 1);
     assert.ok(errors[0][0] instanceof UnknownCaseTypeError);
     assert.equal(errors[0][0].slug, '../unexpected');
-    assert.deepEqual(errors[0][0].knownSlugs, [
-      'complaints',
-      'example-review',
-      'product-sale-review',
-      'stress-review',
-    ]);
+    assert.deepEqual(errors[0][0].knownSlugs, ['complaints']);
   } finally {
     console.error = originalConsoleError;
   }

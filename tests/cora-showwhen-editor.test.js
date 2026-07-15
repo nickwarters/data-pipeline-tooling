@@ -1,4 +1,5 @@
 // @ts-check
+import { resetStoreWithExampleReview } from './_bank-store-fixture.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
@@ -38,7 +39,7 @@ test('CORAShowwhenEditor: no question → renders nothing', () => {
 });
 
 test('CORAShowwhenEditor: question without conditions defaults to Always and hides the section', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[0];
   const e = mount(q);
   const wrap = wrapOf(e);
@@ -47,7 +48,7 @@ test('CORAShowwhenEditor: question without conditions defaults to Always and hid
 });
 
 test('CORAShowwhenEditor: question with conditions defaults to Conditional and shows the section', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[2]; // has showWhen
   const e = mount(q);
   const wrap = wrapOf(e);
@@ -56,7 +57,7 @@ test('CORAShowwhenEditor: question with conditions defaults to Conditional and s
 });
 
 test('CORAShowwhenEditor: selecting Conditional on an empty question reveals the section', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[0]; // no conditions
   const e = mount(q);
 
@@ -70,7 +71,7 @@ test('CORAShowwhenEditor: selecting Conditional on an empty question reveals the
 });
 
 test('CORAShowwhenEditor: selecting Always clears the conditions and hides the section', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[2]; // has showWhen
   const e = mount(q);
 
@@ -83,7 +84,7 @@ test('CORAShowwhenEditor: selecting Always clears the conditions and hides the s
 });
 
 test('CORAShowwhenEditor: toggling Conditional then back to Always hides an empty section again', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[0]; // no conditions
   const e = mount(q);
 
@@ -96,7 +97,7 @@ test('CORAShowwhenEditor: toggling Conditional then back to Always hides an empt
 });
 
 test('CORAShowwhenEditor: nested tree reports depth in header desc when conditional', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['complaints'].questions[2];
   q.showWhen = {
     $and: [

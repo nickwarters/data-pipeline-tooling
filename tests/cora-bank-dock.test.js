@@ -1,4 +1,5 @@
 // @ts-check
+import { resetStoreWithExampleReview } from './_bank-store-fixture.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
@@ -9,7 +10,7 @@ const { _resetStore, drawerOpen, commit } =
   await import('../src/question-bank/question-bank-store.js');
 
 test('CORABankDock: shows active / deprecated / conditional / pending stats', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const e = new CORABankDock();
   e.connectedCallback();
   const dock = /** @type {any} */ (e)._children[0];
@@ -19,7 +20,7 @@ test('CORABankDock: shows active / deprecated / conditional / pending stats', ()
 });
 
 test('CORABankDock: 0 changes → "0 changes"; >1 → plural', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const e = new CORABankDock();
   e.connectedCallback();
   let dock = /** @type {any} */ (e)._children[0];
@@ -48,7 +49,7 @@ test('CORABankDock: 0 changes → "0 changes"; >1 → plural', () => {
 });
 
 test('CORABankDock: Preview + Submit buttons open the drawer', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const e = new CORABankDock();
   e.connectedCallback();
   const dock = /** @type {any} */ (e)._children[0];
@@ -63,7 +64,7 @@ test('CORABankDock: Preview + Submit buttons open the drawer', () => {
 });
 
 test('CORABankDock: pluralises "change" with singular form on 1', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   commit((t) => {
     t['example-review'].questions[0].text = 'edited just once';
   });

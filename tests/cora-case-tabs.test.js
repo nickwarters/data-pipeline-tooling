@@ -1,4 +1,5 @@
 // @ts-check
+import { resetStoreWithExampleReview } from './_bank-store-fixture.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
@@ -35,12 +36,14 @@ test('CaseTabs: plain function renders one tab per case type', () => {
 });
 
 test('CORACaseTabs: one tab per case type; clicking switches activeSlug', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const e = new CORACaseTabs();
   e.connectedCallback();
   const nav = /** @type {any} */ (e)._children[0];
   const tabsContainer = nav._children[1];
-  assert.equal(tabsContainer._children.length, 4);
+  // The store now holds two banks: the live complaints Case Type plus the
+  // seeded example-review fixture.
+  assert.equal(tabsContainer._children.length, 2);
   const complaintsIndex = Object.keys(cases.get()).indexOf('complaints');
   assert.notEqual(complaintsIndex, -1);
   tabsContainer._children[complaintsIndex]._listeners.click[0]();
@@ -64,7 +67,7 @@ test('CORACaseTabs: Revert with clean state shows "Nothing to revert" toast', ()
 });
 
 test('CORACaseTabs: Revert with dirty state + confirmed reverts to baseline', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   cases.set({
     ...cases.get(),
     'example-review': { ...cases.get()['example-review'], label: 'CHANGED' },
@@ -85,7 +88,7 @@ test('CORACaseTabs: Revert with dirty state + confirmed reverts to baseline', ()
 });
 
 test('CORACaseTabs: Revert with cancelled confirm is a no-op', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   cases.set({
     ...cases.get(),
     'example-review': { ...cases.get()['example-review'], label: 'NEW' },

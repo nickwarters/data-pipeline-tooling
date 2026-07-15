@@ -1,4 +1,5 @@
 // @ts-check
+import { resetStoreWithExampleReview } from './_bank-store-fixture.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
@@ -16,7 +17,7 @@ test('CORAQuestionCard: no question → nothing renders', () => {
 });
 
 test('CORAQuestionCard: yes-no-na shows failure-criteria field + fixed-option outcome mapping', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[0];
   const e = new CORAQuestionCard();
   e.question = q;
@@ -33,7 +34,7 @@ test('CORAQuestionCard: yes-no-na shows failure-criteria field + fixed-option ou
 });
 
 test('CORAQuestionCard: outcome response type derives read-only options, drops stored options', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[3]; // q-channel single-choice
   const e = new CORAQuestionCard();
   e.question = q;
@@ -50,7 +51,7 @@ test('CORAQuestionCard: outcome response type derives read-only options, drops s
 });
 
 test('CORAQuestionCard: single-choice renders options-editor + no failure-criteria', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[3]; // q-channel
   const e = new CORAQuestionCard();
   e.question = q;
@@ -63,7 +64,7 @@ test('CORAQuestionCard: single-choice renders options-editor + no failure-criter
 });
 
 test('CORAQuestionCard: changing response-type to non-yes-no-na initialises options', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[0];
   const e = new CORAQuestionCard();
   e.question = q;
@@ -78,7 +79,7 @@ test('CORAQuestionCard: changing response-type to non-yes-no-na initialises opti
 });
 
 test('CORAQuestionCard: changing response-type to yes-no-na deletes options', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[3]; // q-channel single-choice
   const e = new CORAQuestionCard();
   e.question = q;
@@ -93,7 +94,7 @@ test('CORAQuestionCard: changing response-type to yes-no-na deletes options', ()
 });
 
 test('CORAQuestionCard: id-input commits trimmed value (falls back to old on empty)', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[0];
   const oldId = q.id;
   const e = new CORAQuestionCard();
@@ -110,7 +111,7 @@ test('CORAQuestionCard: id-input commits trimmed value (falls back to old on emp
 });
 
 test('CORAQuestionCard: category text commits to undefined when emptied', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[0];
   const e = new CORAQuestionCard();
   e.question = q;
@@ -125,7 +126,7 @@ test('CORAQuestionCard: category text commits to undefined when emptied', () => 
 });
 
 test('CORAQuestionCard: failure-criteria — selecting "—" clears the field', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[0]; // failureCriteria: 'No'
   const e = new CORAQuestionCard();
   e.question = q;
@@ -140,7 +141,7 @@ test('CORAQuestionCard: failure-criteria — selecting "—" clears the field', 
 });
 
 test('CORAQuestionCard: deprecate / undeprecate icon toggles state', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[0];
   const e = new CORAQuestionCard();
   e.question = q;
@@ -155,7 +156,7 @@ test('CORAQuestionCard: deprecate / undeprecate icon toggles state', () => {
 });
 
 test('CORAQuestionCard: move buttons reorder questions globally and mark dirty', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   activeSlug.set('example-review');
   const questions = cases.get()['example-review'].questions;
   const q = questions[1];
@@ -178,7 +179,7 @@ test('CORAQuestionCard: move buttons reorder questions globally and mark dirty',
 });
 
 test('CORAQuestionCard: filtered move skips questions from other categories', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   activeSlug.set('example-review');
   cases.set({
     'example-review': {
@@ -227,7 +228,7 @@ test('CORAQuestionCard: filtered move skips questions from other categories', ()
 });
 
 test('CORAQuestionCard: boundary move buttons are disabled', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   activeSlug.set('example-review');
   const questions = cases.get()['example-review'].questions;
   const e = new CORAQuestionCard();
@@ -241,7 +242,7 @@ test('CORAQuestionCard: boundary move buttons are disabled', () => {
 });
 
 test('CORAQuestionCard: duplicate inserts a copy with -copy id', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   activeSlug.set('example-review');
   const q = cases.get()['example-review'].questions[0];
   const e = new CORAQuestionCard();
@@ -258,7 +259,7 @@ test('CORAQuestionCard: duplicate inserts a copy with -copy id', () => {
 });
 
 test('CORAQuestionCard: delete removes after confirm; cancelled confirm is a no-op', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   activeSlug.set('example-review');
   const q = cases.get()['example-review'].questions[0];
   const e = new CORAQuestionCard();
@@ -281,7 +282,7 @@ test('CORAQuestionCard: delete removes after confirm; cancelled confirm is a no-
 });
 
 test('CORAQuestionCard: showWhen + active marks card-stripe with ochre', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[2]; // has showWhen
   const e = new CORAQuestionCard();
   e.question = q;
@@ -292,7 +293,7 @@ test('CORAQuestionCard: showWhen + active marks card-stripe with ochre', () => {
 });
 
 test('CORAQuestionCard: deprecated adds "deprecated" class to the card', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[0];
   q.deprecated = true;
   const e = new CORAQuestionCard();
@@ -303,7 +304,7 @@ test('CORAQuestionCard: deprecated adds "deprecated" class to the card', () => {
 });
 
 test('CORAQuestionCard: tolerates missing confirm() global', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   /** @type {any} */ (globalThis).confirm = undefined;
   const q = cases.get()['example-review'].questions[0];
   const e = new CORAQuestionCard();

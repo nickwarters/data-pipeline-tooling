@@ -33,13 +33,18 @@ const initial = /** @type {Record<string, QuestionBank>} */ (
   structuredClone(questionBanks)
 );
 
+// The bank the curator lands on by default. Derived from the loaded banks (the
+// first manifest slug) rather than hardcoded, so retiring a Case Type never
+// leaves the store pointing at a slug that no longer exists.
+const defaultSlug = Object.keys(initial)[0];
+
 export const cases = signal(
   /** @type {Record<string, QuestionBank>} */ (structuredClone(initial))
 );
 export const baseline = signal(
   /** @type {Record<string, QuestionBank>} */ (structuredClone(initial))
 );
-export const activeSlug = signal(/** @type {string} */ ('example-review'));
+export const activeSlug = signal(/** @type {string} */ (defaultSlug));
 export const filters = signal(
   /** @type {Filters} */ ({
     category: null,
@@ -170,7 +175,7 @@ function cssEscape(s) {
 export function _resetStore() {
   cases.set(structuredClone(initial));
   baseline.set(structuredClone(initial));
-  activeSlug.set('example-review');
+  activeSlug.set(defaultSlug);
   filters.set({ category: null, showDeprecated: true, conditionalOnly: false });
   drawerOpen.set(false);
   railOpen.set(false);

@@ -1,4 +1,5 @@
 // @ts-check
+import { resetStoreWithExampleReview } from './_bank-store-fixture.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
@@ -19,7 +20,7 @@ const {
 /** @type {any} */ (globalThis).setTimeout = () => 0;
 
 test('CORACompileDrawer: renders backdrop + drawer (closed by default)', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   drawerOpen.set(false);
   const e = new CORACompileDrawer();
   e.connectedCallback();
@@ -30,7 +31,7 @@ test('CORACompileDrawer: renders backdrop + drawer (closed by default)', () => {
 });
 
 test('CORACompileDrawer: open state adds .open to backdrop and drawer', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   drawerOpen.set(true);
   const e = new CORACompileDrawer();
   e.connectedCallback();
@@ -41,7 +42,7 @@ test('CORACompileDrawer: open state adds .open to backdrop and drawer', () => {
 });
 
 test('CORACompileDrawer: backdrop click closes drawer', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   drawerOpen.set(true);
   const e = new CORACompileDrawer();
   e.connectedCallback();
@@ -52,7 +53,7 @@ test('CORACompileDrawer: backdrop click closes drawer', () => {
 });
 
 test('CORACompileDrawer: close × button closes drawer', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   drawerOpen.set(true);
   const e = new CORACompileDrawer();
   e.connectedCallback();
@@ -65,7 +66,7 @@ test('CORACompileDrawer: close × button closes drawer', () => {
 });
 
 test('CORACompileDrawer: Copy writes code to clipboard + shows toast', async () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   drawerOpen.set(true);
   /** @type {any} */
   let written = null;
@@ -91,7 +92,7 @@ test('CORACompileDrawer: Copy writes code to clipboard + shows toast', async () 
 });
 
 test('CORACompileDrawer: Send for Review snapshots baseline + closes', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   drawerOpen.set(true);
   commit((t) => {
     t['example-review'].label = 'AFTER';
@@ -109,7 +110,7 @@ test('CORACompileDrawer: Send for Review snapshots baseline + closes', () => {
 });
 
 test('CORACompileDrawer: diff cards render added / changed / removed counts', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   commit((t) => {
     t['example-review'].questions.push({
       id: 'new',
@@ -129,7 +130,7 @@ test('CORACompileDrawer: diff cards render added / changed / removed counts', ()
 });
 
 test('CORACompileDrawer: code preview uses explicit highlighted HTML that escapes question text', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   cases.set({
     'example-review': {
       label: 'Example',
@@ -177,7 +178,7 @@ function withSimulatorFlag(/** @type {() => void} */ fn) {
 }
 
 test('CORACompileDrawer: simulate panel is hidden without the ?simulate=1 flag', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   setSampleCases('example-review', [
     { id: 'case-1', title: 'First Case', answers: {} },
   ]);
@@ -194,7 +195,7 @@ test('CORACompileDrawer: simulate panel is hidden without the ?simulate=1 flag',
 });
 
 test('CORACompileDrawer: simulate panel shows empty state without sample Cases', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   drawerOpen.set(true);
   withSimulatorFlag(() => {
     const e = new CORACompileDrawer();
@@ -209,7 +210,7 @@ test('CORACompileDrawer: simulate panel shows empty state without sample Cases',
 });
 
 test('CORACompileDrawer: simulate panel reports impact per sample Case', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   setSampleCases('example-review', [
     {
       id: 'case-1',
@@ -243,7 +244,7 @@ test('CORACompileDrawer: simulate panel reports impact per sample Case', () => {
 });
 
 test('CORACompileDrawer: simulate panel with samples but no changes says so', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   setSampleCases('example-review', [
     { id: 'case-1', title: 'First Case', answers: {} },
   ]);
@@ -259,7 +260,7 @@ test('CORACompileDrawer: simulate panel with samples but no changes says so', ()
 });
 
 test('CORACompileDrawer: simulate panel reports Outcome changes with attribution', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   setSampleCases('example-review', [
     {
       id: 'case-1',

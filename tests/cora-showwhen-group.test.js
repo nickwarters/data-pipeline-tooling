@@ -1,4 +1,5 @@
 // @ts-check
+import { resetStoreWithExampleReview } from './_bank-store-fixture.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
@@ -21,7 +22,7 @@ test('CORAShowwhenGroup: missing question/group → no children', () => {
 });
 
 test('CORAShowwhenGroup: empty AND group renders head + empty children container', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[2];
   const g = mkGroup();
   const e = new CORAShowwhenGroup();
@@ -34,7 +35,7 @@ test('CORAShowwhenGroup: empty AND group renders head + empty children container
 });
 
 test('CORAShowwhenGroup: + condition appends a leaf, alerts when no other questions', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   /** @type {any} */
   const lonely = {
     id: 'q-only',
@@ -70,7 +71,7 @@ test('CORAShowwhenGroup: + condition appends a leaf, alerts when no other questi
 });
 
 test('CORAShowwhenGroup: + condition appends a leaf when others exist', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const bank = cases.get()['example-review'];
   const q = bank.questions[2];
   const g = mkGroup();
@@ -87,7 +88,7 @@ test('CORAShowwhenGroup: + condition appends a leaf when others exist', () => {
 });
 
 test('CORAShowwhenGroup: + group adds a flipped-op sub-group', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[2];
   const g = mkGroup({ op: 'and' });
   const e = new CORAShowwhenGroup();
@@ -103,7 +104,7 @@ test('CORAShowwhenGroup: + group adds a flipped-op sub-group', () => {
 });
 
 test('CORAShowwhenGroup: op toggle flips AND ↔ OR', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[2];
   const g = mkGroup();
   const e = new CORAShowwhenGroup();
@@ -118,7 +119,7 @@ test('CORAShowwhenGroup: op toggle flips AND ↔ OR', () => {
 });
 
 test('CORAShowwhenGroup: non-root shows × group button', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[2];
   const g = mkGroup();
   const e = new CORAShowwhenGroup();
@@ -133,7 +134,7 @@ test('CORAShowwhenGroup: non-root shows × group button', () => {
 });
 
 test('CORAShowwhenGroup: × group on non-root removes self from parent tree', async () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const storeMod = await import('../src/question-bank/question-bank-store.js');
   const q = storeMod.cases.get()['complaints'].questions[2];
   q.showWhen = {
@@ -166,7 +167,7 @@ test('CORAShowwhenGroup: × group on non-root removes self from parent tree', as
 });
 
 test('CORAShowwhenGroup: renders conjunctions between children + leaf/group mix', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[2];
   const g = mkGroup({
     op: 'or',

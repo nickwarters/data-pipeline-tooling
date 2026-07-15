@@ -1,4 +1,5 @@
 // @ts-check
+import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom, flush } from './_dom-stub.js';

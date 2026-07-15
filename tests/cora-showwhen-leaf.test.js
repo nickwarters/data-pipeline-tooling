@@ -1,4 +1,5 @@
 // @ts-check
+import { resetStoreWithExampleReview } from './_bank-store-fixture.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
@@ -26,7 +27,7 @@ test('CORAShowwhenLeaf: no question/leaf → renders nothing', () => {
 });
 
 test('CORAShowwhenLeaf: equals op renders qId select, op select, and value input', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const others = cases.get()['example-review'].questions;
   /** @type {any} */
   const parent = { children: [] };
@@ -43,7 +44,7 @@ test('CORAShowwhenLeaf: equals op renders qId select, op select, and value input
 });
 
 test('CORAShowwhenLeaf: answered op renders hint instead of value input', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const others = cases.get()['example-review'].questions;
   /** @type {any} */
   const parent = { children: [] };
@@ -60,7 +61,7 @@ test('CORAShowwhenLeaf: answered op renders hint instead of value input', () => 
 });
 
 test('CORAShowwhenLeaf: in op renders comma-joined value', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const others = cases.get()['example-review'].questions;
   /** @type {any} */
   const parent = { children: [] };
@@ -77,7 +78,7 @@ test('CORAShowwhenLeaf: in op renders comma-joined value', () => {
 });
 
 test('CORAShowwhenLeaf: changing qId select updates leaf.qId', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const others = cases.get()['example-review'].questions;
   /** @type {any} */
   const parent = { children: [] };
@@ -95,7 +96,7 @@ test('CORAShowwhenLeaf: changing qId select updates leaf.qId', () => {
 });
 
 test('CORAShowwhenLeaf: changing op to answered, in, equals normalises value', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const others = cases.get()['example-review'].questions;
   /** @type {any} */
   const parent = { children: [] };
@@ -124,7 +125,7 @@ test('CORAShowwhenLeaf: changing op to answered, in, equals normalises value', (
 });
 
 test('CORAShowwhenLeaf: in→in change preserves array; equals→in coerces string', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const others = cases.get()['example-review'].questions;
   /** @type {any} */
   const parent = { children: [] };
@@ -142,7 +143,7 @@ test('CORAShowwhenLeaf: in→in change preserves array; equals→in coerces stri
 });
 
 test('CORAShowwhenLeaf: typed value commits — split for in, plain for equals', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const others = cases.get()['example-review'].questions;
   /** @type {any} */
   const parent = { children: [] };
@@ -173,7 +174,7 @@ test('CORAShowwhenLeaf: typed value commits — split for in, plain for equals',
 });
 
 test('CORAShowwhenLeaf: × removes self from parent', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const others = cases.get()['example-review'].questions;
   /** @type {any} */
   const parent = { children: [] };
@@ -191,7 +192,7 @@ test('CORAShowwhenLeaf: × removes self from parent', () => {
 });
 
 test('CORAShowwhenLeaf: leaf.value undefined falls through to empty string', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const others = cases.get()['example-review'].questions;
   /** @type {any} */
   const parent = { children: [] };

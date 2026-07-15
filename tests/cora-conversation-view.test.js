@@ -1,4 +1,5 @@
 // @ts-check
+import './_register-example-review.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
@@ -370,24 +371,6 @@ test('ConversationView: cora-conversation element receives caseListOptions resol
   const conversationEl = childrenOf(host)[1];
   assert.deepEqual(conversationEl.caseListOptions, {
     listName: 'Cases-ExampleReview',
-  });
-});
-
-test("ConversationView: cora-conversation element carries stress-review's explicit listName", async () => {
-  const client = makeStubClient();
-  const host = ConversationView({
-    client: /** @type {any} */ (client),
-    saveQueue: null,
-    caseId: 'case-1',
-    // stress-review explicitly declares its Case list like every manifest type.
-    caseType: 'stress-review',
-    currentUser: null,
-  });
-  await flush();
-
-  const conversationEl = childrenOf(host)[1];
-  assert.deepEqual(conversationEl.caseListOptions, {
-    listName: 'Cases-StressReview',
   });
 });
 

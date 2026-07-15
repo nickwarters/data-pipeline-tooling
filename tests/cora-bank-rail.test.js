@@ -1,4 +1,5 @@
 // @ts-check
+import { resetStoreWithExampleReview } from './_bank-store-fixture.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
@@ -9,7 +10,7 @@ const { _resetStore, filters, cases, isDirty, railOpen } =
   await import('../src/question-bank/question-bank-store.js');
 
 test('CORABankRail: renders 4 sections: stat, categories, view, legend', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const e = new CORABankRail();
   e.connectedCallback();
   const aside = /** @type {any} */ (e)._children[0];
@@ -18,7 +19,7 @@ test('CORABankRail: renders 4 sections: stat, categories, view, legend', () => {
 });
 
 test('CORABankRail: clicking the "All" chip resets category', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   filters.set({
     category: 'Opening',
     showDeprecated: true,
@@ -36,7 +37,7 @@ test('CORABankRail: clicking the "All" chip resets category', () => {
 });
 
 test('CORABankRail: clicking a category chip sets category', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const e = new CORABankRail();
   e.connectedCallback();
   const aside = /** @type {any} */ (e)._children[0];
@@ -50,7 +51,7 @@ test('CORABankRail: clicking a category chip sets category', () => {
 });
 
 test('CORABankRail: uncategorised questions get an "Uncategorised" chip', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   cases.set({
     'example-review': {
       label: 'L',
@@ -76,7 +77,7 @@ test('CORABankRail: uncategorised questions get an "Uncategorised" chip', () => 
 });
 
 test('CORABankRail: toggles flip filter state', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const e = new CORABankRail();
   e.connectedCallback();
   const aside = /** @type {any} */ (e)._children[0];
@@ -91,7 +92,7 @@ test('CORABankRail: toggles flip filter state', () => {
 });
 
 test('CORABankRail: category chips expose move controls but All does not', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const e = new CORABankRail();
   e.connectedCallback();
   const aside = /** @type {any} */ (e)._children[0];
@@ -105,7 +106,7 @@ test('CORABankRail: category chips expose move controls but All does not', () =>
 });
 
 test('CORABankRail: category move buttons reorder category blocks and mark dirty', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   cases.set({
     'example-review': {
       label: 'L',
@@ -162,7 +163,7 @@ test('CORABankRail: category move buttons reorder category blocks and mark dirty
 });
 
 test('CORABankRail: category move-down reorders category blocks and marks dirty', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   cases.set({
     'example-review': {
       label: 'L',
@@ -203,7 +204,7 @@ test('CORABankRail: category move-down reorders category blocks and marks dirty'
 });
 
 test('CORABankRail: first and last category move controls are disabled', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const e = new CORABankRail();
   e.connectedCallback();
   const aside = /** @type {any} */ (e)._children[0];
@@ -218,7 +219,7 @@ test('CORABankRail: first and last category move controls are disabled', () => {
 });
 
 test('CORABankRail: renders a pop-over toggle button and backdrop', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const e = new CORABankRail();
   e.connectedCallback();
   const toggle = /** @type {any} */ (e)._children[1];
@@ -230,7 +231,7 @@ test('CORABankRail: renders a pop-over toggle button and backdrop', () => {
 });
 
 test('CORABankRail: toggle button opens the pop-over and reflects aria-expanded', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const e = new CORABankRail();
   e.connectedCallback();
   let toggle = /** @type {any} */ (e)._children[1];
@@ -251,7 +252,7 @@ test('CORABankRail: toggle button opens the pop-over and reflects aria-expanded'
 });
 
 test('CORABankRail: backdrop click closes the pop-over', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   railOpen.set(true);
   const e = new CORABankRail();
   e.connectedCallback();
@@ -263,7 +264,7 @@ test('CORABankRail: backdrop click closes the pop-over', () => {
 });
 
 test('CORABankRail: backdrop click is a no-op when already closed', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const e = new CORABankRail();
   e.connectedCallback();
   const backdrop = /** @type {any} */ (e)._children[2];
@@ -273,7 +274,7 @@ test('CORABankRail: backdrop click is a no-op when already closed', () => {
 });
 
 test('CORABankRail: selecting a category closes the pop-over', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   railOpen.set(true);
   const e = new CORABankRail();
   e.connectedCallback();
@@ -286,7 +287,7 @@ test('CORABankRail: selecting a category closes the pop-over', () => {
 });
 
 test('CORABankRail: the "All" chip also closes the pop-over', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   filters.set({
     category: 'Opening',
     showDeprecated: true,

@@ -69,12 +69,7 @@ export const permissions = {
   // Every slug in case-types/manifest.js is listed here so its display name
   // and derived group names resolve consistently (each `displayName` matches
   // the corresponding Case Type config's `displayName`).
-  caseTypes: [
-    { slug: 'example-review', displayName: 'Example Review' },
-    { slug: 'product-sale-review', displayName: 'Product Sale Review' },
-    { slug: 'stress-review', displayName: 'Stress Review' },
-    { slug: 'complaints', displayName: 'Complaints' },
-  ],
+  caseTypes: [{ slug: 'complaints', displayName: 'Complaints' }],
 };
 
 /**

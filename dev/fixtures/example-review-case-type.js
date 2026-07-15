@@ -1,11 +1,20 @@
 // @ts-check
-/** @typedef {import('../src/sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
-/** @typedef {import('../src/sharepoint-client.js').Answer} Answer */
+// Test-only fixture Case Type. `example-review` was retired from the production
+// manifest in issue #383 (complaints is the only live Case Type), but its rich
+// showWhen graph, capture groups and Outcome vocabulary remain the de-facto
+// canonical fixture across the test suite. It lives under dev/fixtures/ (not
+// deployed, absent from case-types/manifest.js) so nothing production-facing
+// carries it. Tests that need a manifest-shaped importer build one from this
+// module.
+/** @typedef {import('../../src/sharepoint-client.js').CaseTypeConfig} CaseTypeConfig */
+/** @typedef {import('../../src/sharepoint-client.js').Answer} Answer */
 
-import { computeConfiguredOutcome } from '../src/evaluators/configured-outcome.js';
-import { loadBank } from './load-bank.js';
+import { computeConfiguredOutcome } from '../../src/evaluators/configured-outcome.js';
+import { loadBank } from '../../case-types/load-bank.js';
 
-const bank = await loadBank('./banks/example-review.txt');
+// `loadBank` resolves relative paths against case-types/load-bank.js, not this
+// module, so the fixture bank is addressed relative to case-types/.
+const bank = await loadBank('../dev/fixtures/example-review-bank.txt');
 
 /** @type {CaseTypeConfig} */
 const config = {

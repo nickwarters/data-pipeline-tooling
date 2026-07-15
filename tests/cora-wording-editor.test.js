@@ -1,4 +1,5 @@
 // @ts-check
+import { resetStoreWithExampleReview } from './_bank-store-fixture.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
@@ -48,7 +49,7 @@ test('CORAWordingEditor: no question → renders nothing', () => {
 });
 
 test('CORAWordingEditor: renders edit mark, textarea, status pill, char count', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[0];
   const e = new CORAWordingEditor();
   e.question = q;
@@ -64,7 +65,7 @@ test('CORAWordingEditor: renders edit mark, textarea, status pill, char count', 
 });
 
 test('CORAWordingEditor: shows "Edited" when text diverges from baseline', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   // Mutate the question text after baseline snapshot
   commit((t) => {
     t['example-review'].questions[0].text = 'CHANGED';
@@ -79,7 +80,7 @@ test('CORAWordingEditor: shows "Edited" when text diverges from baseline', () =>
 });
 
 test('CORAWordingEditor: shows "New draft" when no baseline match', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   /** @type {any} */
   const q = {
     id: 'q-never-baseline',
@@ -97,7 +98,7 @@ test('CORAWordingEditor: shows "New draft" when no baseline match', () => {
 });
 
 test('CORAWordingEditor: char count warns over 180', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   /** @type {any} */
   const q = {
     id: 'q-long',
@@ -115,7 +116,7 @@ test('CORAWordingEditor: char count warns over 180', () => {
 });
 
 test('CORAWordingEditor: deprecated question adds deprecated-text class', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   /** @type {any} */
   const q = {
     id: 'q-d',
@@ -132,7 +133,7 @@ test('CORAWordingEditor: deprecated question adds deprecated-text class', () => 
 });
 
 test('CORAWordingEditor: focus/blur toggle "focused" class; input commits text', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const q = cases.get()['example-review'].questions[0];
   const e = new CORAWordingEditor();
   e.question = q;
@@ -149,7 +150,7 @@ test('CORAWordingEditor: focus/blur toggle "focused" class; input commits text',
 });
 
 test('CORAWordingEditor: long baseline text gets ellipsis', () => {
-  _resetStore();
+  resetStoreWithExampleReview();
   const long = 'A'.repeat(100);
   commit((t) => {
     t['example-review'].questions[0].text = long;
