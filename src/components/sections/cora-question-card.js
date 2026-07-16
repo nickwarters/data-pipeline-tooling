@@ -98,7 +98,11 @@ export function QuestionCard(props) {
       onCommit: commit,
     }),
     h('cora-question-labels', { question: q }),
-    h('cora-showwhen-editor', { question: q }),
+    h('cora-showwhen-editor', {
+      question: q,
+      bankQuestions,
+      onCommit: commit,
+    }),
     h('cora-remediation-editor', { question: q, onCommit: commit }),
   ];
 

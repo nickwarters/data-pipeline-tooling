@@ -81,7 +81,18 @@ export function h(tag, props = {}, ...children) {
       );
     }
     if (k.startsWith('on') && typeof v === 'function') {
-      el.addEventListener(k.slice(2).toLowerCase(), v);
+      // Component callback props (props-down / callbacks-up, issue #382):
+      // a camelCase `on[A-Z]…` key that matches a property the element
+      // declares (e.g. a custom-element shell's `onCommit` field) is a plain
+      // callback, assigned as a property. Native handler IDL attributes are
+      // all-lowercase (`onclick`), so they never match `/^on[A-Z]/` + `in el`
+      // and keep flowing to addEventListener, as do camelCase keys on plain
+      // elements (`onClick` on a <button>).
+      if (/^on[A-Z]/.test(k) && k in el) {
+        /** @type {any} */ (el)[k] = v;
+      } else {
+        el.addEventListener(k.slice(2).toLowerCase(), v);
+      }
     } else if (k === 'class' || k === 'className') {
       el.className = v;
     } else if (k === 'value' && 'value' in el) {

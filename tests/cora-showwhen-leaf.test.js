@@ -1,14 +1,15 @@
 // @ts-check
-import { resetStoreWithExampleReview } from './_bank-store-fixture.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import {
+  freshExampleReviewBank,
+  commitSpy,
+} from './_example-review-fixture.js';
 installDom();
 
 const { CORAShowwhenLeaf } =
   await import('../src/components/base/cora-showwhen-leaf.js');
-const { _resetStore, cases } =
-  await import('../src/question-bank/question-bank-store.js');
 
 function mkLeaf(over = {}) {
   return {
@@ -27,8 +28,7 @@ test('CORAShowwhenLeaf: no question/leaf → renders nothing', () => {
 });
 
 test('CORAShowwhenLeaf: equals op renders qId select, op select, and value input', () => {
-  resetStoreWithExampleReview();
-  const others = cases.get()['example-review'].questions;
+  const others = freshExampleReviewBank().questions;
   /** @type {any} */
   const parent = { children: [] };
   const leaf = mkLeaf();
@@ -44,14 +44,15 @@ test('CORAShowwhenLeaf: equals op renders qId select, op select, and value input
 });
 
 test('CORAShowwhenLeaf: answered op renders hint instead of value input', () => {
-  resetStoreWithExampleReview();
-  const others = cases.get()['example-review'].questions;
+  const others = freshExampleReviewBank().questions;
   /** @type {any} */
   const parent = { children: [] };
   const leaf = mkLeaf({ op: 'answered', value: true });
   parent.children.push(leaf);
   const e = new CORAShowwhenLeaf();
   e.question = others[1];
+  e.bankQuestions = others;
+  e.onCommit = commitSpy();
   e.parent = parent;
   e.leaf = leaf;
   e.connectedCallback();
@@ -61,14 +62,15 @@ test('CORAShowwhenLeaf: answered op renders hint instead of value input', () => 
 });
 
 test('CORAShowwhenLeaf: in op renders comma-joined value', () => {
-  resetStoreWithExampleReview();
-  const others = cases.get()['example-review'].questions;
+  const others = freshExampleReviewBank().questions;
   /** @type {any} */
   const parent = { children: [] };
   const leaf = mkLeaf({ op: 'in', value: ['A', 'B'] });
   parent.children.push(leaf);
   const e = new CORAShowwhenLeaf();
   e.question = others[1];
+  e.bankQuestions = others;
+  e.onCommit = commitSpy();
   e.parent = parent;
   e.leaf = leaf;
   e.connectedCallback();
@@ -78,14 +80,15 @@ test('CORAShowwhenLeaf: in op renders comma-joined value', () => {
 });
 
 test('CORAShowwhenLeaf: changing qId select updates leaf.qId', () => {
-  resetStoreWithExampleReview();
-  const others = cases.get()['example-review'].questions;
+  const others = freshExampleReviewBank().questions;
   /** @type {any} */
   const parent = { children: [] };
   const leaf = mkLeaf();
   parent.children.push(leaf);
   const e = new CORAShowwhenLeaf();
   e.question = others[1];
+  e.bankQuestions = others;
+  e.onCommit = commitSpy();
   e.parent = parent;
   e.leaf = leaf;
   e.connectedCallback();
@@ -96,14 +99,15 @@ test('CORAShowwhenLeaf: changing qId select updates leaf.qId', () => {
 });
 
 test('CORAShowwhenLeaf: changing op to answered, in, equals normalises value', () => {
-  resetStoreWithExampleReview();
-  const others = cases.get()['example-review'].questions;
+  const others = freshExampleReviewBank().questions;
   /** @type {any} */
   const parent = { children: [] };
   const leaf = mkLeaf();
   parent.children.push(leaf);
   const e = new CORAShowwhenLeaf();
   e.question = others[1];
+  e.bankQuestions = others;
+  e.onCommit = commitSpy();
   e.parent = parent;
   e.leaf = leaf;
   e.connectedCallback();
@@ -125,14 +129,15 @@ test('CORAShowwhenLeaf: changing op to answered, in, equals normalises value', (
 });
 
 test('CORAShowwhenLeaf: in→in change preserves array; equals→in coerces string', () => {
-  resetStoreWithExampleReview();
-  const others = cases.get()['example-review'].questions;
+  const others = freshExampleReviewBank().questions;
   /** @type {any} */
   const parent = { children: [] };
   const leaf = mkLeaf({ op: 'in', value: ['A'] });
   parent.children.push(leaf);
   const e = new CORAShowwhenLeaf();
   e.question = others[1];
+  e.bankQuestions = others;
+  e.onCommit = commitSpy();
   e.parent = parent;
   e.leaf = leaf;
   e.connectedCallback();
@@ -143,14 +148,15 @@ test('CORAShowwhenLeaf: in→in change preserves array; equals→in coerces stri
 });
 
 test('CORAShowwhenLeaf: typed value commits — split for in, plain for equals', () => {
-  resetStoreWithExampleReview();
-  const others = cases.get()['example-review'].questions;
+  const others = freshExampleReviewBank().questions;
   /** @type {any} */
   const parent = { children: [] };
   const leaf = mkLeaf({ op: 'in', value: [] });
   parent.children.push(leaf);
   const e = new CORAShowwhenLeaf();
   e.question = others[1];
+  e.bankQuestions = others;
+  e.onCommit = commitSpy();
   e.parent = parent;
   e.leaf = leaf;
   e.connectedCallback();
@@ -164,6 +170,8 @@ test('CORAShowwhenLeaf: typed value commits — split for in, plain for equals',
   parent.children = [leaf2];
   const e2 = new CORAShowwhenLeaf();
   e2.question = others[1];
+  e2.bankQuestions = others;
+  e2.onCommit = commitSpy();
   e2.parent = parent;
   e2.leaf = leaf2;
   e2.connectedCallback();
@@ -174,14 +182,15 @@ test('CORAShowwhenLeaf: typed value commits — split for in, plain for equals',
 });
 
 test('CORAShowwhenLeaf: × removes self from parent', () => {
-  resetStoreWithExampleReview();
-  const others = cases.get()['example-review'].questions;
+  const others = freshExampleReviewBank().questions;
   /** @type {any} */
   const parent = { children: [] };
   const leaf = mkLeaf();
   parent.children.push(leaf);
   const e = new CORAShowwhenLeaf();
   e.question = others[1];
+  e.bankQuestions = others;
+  e.onCommit = commitSpy();
   e.parent = parent;
   e.leaf = leaf;
   e.connectedCallback();
@@ -192,18 +201,39 @@ test('CORAShowwhenLeaf: × removes self from parent', () => {
 });
 
 test('CORAShowwhenLeaf: leaf.value undefined falls through to empty string', () => {
-  resetStoreWithExampleReview();
-  const others = cases.get()['example-review'].questions;
+  const others = freshExampleReviewBank().questions;
   /** @type {any} */
   const parent = { children: [] };
   const leaf = mkLeaf({ value: undefined });
   parent.children.push(leaf);
   const e = new CORAShowwhenLeaf();
   e.question = others[1];
+  e.bankQuestions = others;
+  e.onCommit = commitSpy();
   e.parent = parent;
   e.leaf = leaf;
   e.connectedCallback();
   const row = /** @type {any} */ (e)._children[0];
   const valInput = row._children[2];
   assert.equal(valInput.value, '');
+});
+
+test('CORAShowwhenLeaf: mutations flow through the onCommit prop', () => {
+  const others = freshExampleReviewBank().questions;
+  /** @type {any} */
+  const parent = { children: [] };
+  const leaf = mkLeaf();
+  parent.children.push(leaf);
+  const e = new CORAShowwhenLeaf();
+  e.question = others[1];
+  e.bankQuestions = others;
+  e.onCommit = commitSpy();
+  e.parent = parent;
+  e.leaf = leaf;
+  e.connectedCallback();
+  const row = /** @type {any} */ (e)._children[0];
+  const qSel = row._children[0];
+  qSel._listeners.change[0]({ target: { value: 'q-channel' } });
+  assert.equal(/** @type {any} */ (e.onCommit).calls, 1);
+  assert.equal(leaf.qId, 'q-channel');
 });

@@ -3,7 +3,6 @@ import { ShellElement } from '../../lib/view.js';
 import { signal } from '../../lib/signal.js';
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
-import { commit } from '../../question-bank/question-bank-store.js';
 import {
   clearConditions,
   countLeaves,
@@ -12,7 +11,7 @@ import {
 } from '../../lib/showwhen-tree.js';
 
 /**
- * @param {{ question: any, mode: 'always' | 'conditional', onModeChange: (mode: 'always' | 'conditional') => void }} props
+ * @param {{ question: any, mode: 'always' | 'conditional', onModeChange: (mode: 'always' | 'conditional') => void, bankQuestions: any[], onCommit: (fn: () => void) => void }} props
  * @returns {HTMLElement | undefined}
  */
 export function ShowwhenEditor(props) {
@@ -72,6 +71,8 @@ export function ShowwhenEditor(props) {
       question: q,
       group: tree,
       isRoot: true,
+      bankQuestions: props.bankQuestions,
+      onCommit: props.onCommit,
     })
   );
 
@@ -83,6 +84,17 @@ export class CORAShowwhenEditor extends ShellElement {
     super();
     /** @type {any} */
     this.question = null;
+    /**
+     * The active bank's questions, forwarded to the condition tree.
+     * @type {any[]}
+     */
+    this.bankQuestions = [];
+    /**
+     * Mutation sink. Defaults to "just apply the mutation" so the component
+     * works standalone; the bank editor injects the store's `commit()`.
+     * @type {(fn: () => void) => void}
+     */
+    this.onCommit = (fn) => fn();
     /**
      * Transient reveal state for the "Conditional" editor. A question with
      * conditions is always shown; this only matters while a curator has opted
@@ -110,9 +122,11 @@ export class CORAShowwhenEditor extends ShellElement {
     return ShowwhenEditor({
       question: q,
       mode: conditional ? 'conditional' : 'always',
+      bankQuestions: this.bankQuestions,
+      onCommit: this.onCommit,
       onModeChange: (next) => {
         if (next === 'always') {
-          commit(() => clearConditions(q));
+          this.onCommit(() => clearConditions(q));
           reveal.set(false);
         } else {
           reveal.set(true);

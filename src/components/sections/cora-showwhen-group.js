@@ -2,27 +2,28 @@
 import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import {
-  commit,
-  currentBank,
-} from '../../question-bank/question-bank-store.js';
-import {
   commitTreeFor,
   ensureTree,
   removeNode,
 } from '../../lib/showwhen-tree.js';
 
 /**
- * @param {{ question: any, group: any, isRoot: boolean, setClassName: (className: string) => void }} props
+ * An AND/OR group of showWhen conditions. The candidate questions and the
+ * mutation sink arrive as props (`bankQuestions`, `onCommit`) and are
+ * forwarded to child leaves and nested groups; this component has no store
+ * dependency.
+ *
+ * @param {{ question: any, group: any, isRoot: boolean, bankQuestions: any[], onCommit: (fn: () => void) => void, setClassName: (className: string) => void }} props
  * @returns {Node[] | undefined}
  */
 export function ShowwhenGroup(props) {
   const q = props.question,
     group = props.group,
-    isRoot = !!props.isRoot;
+    isRoot = !!props.isRoot,
+    onCommit = props.onCommit;
   if (!q || !group) return undefined;
-  const others = currentBank
-    .get()
-    .questions.filter((/** @type {any} */ x) => x.id !== q.id);
+  const bankQuestions = props.bankQuestions ?? [];
+  const others = bankQuestions.filter((/** @type {any} */ x) => x.id !== q.id);
 
   const opLabel = group.op === 'and' ? 'ALL OF' : 'ANY OF';
   const opQual =
@@ -35,7 +36,7 @@ export function ShowwhenGroup(props) {
     {
       className: `op-toggle op-${group.op}`,
       title: 'Click to switch between AND / OR',
-      onclick: () => toggleShowwhenGroup(q, group),
+      onclick: () => toggleShowwhenGroup(onCommit, q, group),
     },
     h('span', { className: 'label' }, opLabel),
     h('span', { className: 'arrow' }, '⇅'),
@@ -49,7 +50,7 @@ export function ShowwhenGroup(props) {
       'button',
       {
         className: 'mini-btn',
-        onclick: () => addShowwhenCondition(q, group, others),
+        onclick: () => addShowwhenCondition(onCommit, q, group, others),
       },
       '+ condition'
     ),
@@ -57,7 +58,7 @@ export function ShowwhenGroup(props) {
       'button',
       {
         className: 'mini-btn',
-        onclick: () => addShowwhenGroup(q, group),
+        onclick: () => addShowwhenGroup(onCommit, q, group),
       },
       '+ ' + (group.op === 'and' ? 'OR group' : 'AND group')
     ),
@@ -67,7 +68,7 @@ export function ShowwhenGroup(props) {
         {
           className: 'mini-btn danger',
           title: 'Remove this group',
-          onclick: () => removeShowwhenGroup(q, group),
+          onclick: () => removeShowwhenGroup(onCommit, q, group),
         },
         '× group'
       )
@@ -92,6 +93,8 @@ export function ShowwhenGroup(props) {
             question: q,
             parent: group,
             leaf: child,
+            bankQuestions,
+            onCommit,
           })
         );
       } else {
@@ -99,6 +102,8 @@ export function ShowwhenGroup(props) {
           h('cora-showwhen-group', {
             question: q,
             group: child,
+            bankQuestions,
+            onCommit,
           })
         );
       }
@@ -124,6 +129,18 @@ export class CORAShowwhenGroup extends ShellElement {
     /** @type {any} */ this.question = null;
     /** @type {any} */ this.group = null;
     this.isRoot = false;
+    /**
+     * The active bank's questions (candidates for new conditions), passed
+     * down by the mounting site and forwarded to children.
+     * @type {any[]}
+     */
+    this.bankQuestions = [];
+    /**
+     * Mutation sink. Defaults to "just apply the mutation" so the component
+     * works standalone; the bank editor injects the store's `commit()`.
+     * @type {(fn: () => void) => void}
+     */
+    this.onCommit = (fn) => fn();
   }
 
   render() {
@@ -131,6 +148,8 @@ export class CORAShowwhenGroup extends ShellElement {
       question: this.question,
       group: this.group,
       isRoot: this.isRoot,
+      bankQuestions: this.bankQuestions,
+      onCommit: this.onCommit,
       setClassName: (className) => {
         this.className = className;
       },
@@ -138,16 +157,16 @@ export class CORAShowwhenGroup extends ShellElement {
   }
 }
 
-/** @param {any} q @param {any} group */
-export function toggleShowwhenGroup(q, group) {
-  commit(() => {
+/** @param {(fn: () => void) => void} onCommit @param {any} q @param {any} group */
+export function toggleShowwhenGroup(onCommit, q, group) {
+  onCommit(() => {
     group.op = group.op === 'and' ? 'or' : 'and';
     commitTreeFor(q);
   });
 }
 
-/** @param {any} q @param {any} group @param {any[]} others */
-export function addShowwhenCondition(q, group, others) {
+/** @param {(fn: () => void) => void} onCommit @param {any} q @param {any} group @param {any[]} others */
+export function addShowwhenCondition(onCommit, q, group, others) {
   const target = others[0]?.id;
   if (!target) {
     /** @type {any} */ (globalThis).alert?.(
@@ -155,7 +174,7 @@ export function addShowwhenCondition(q, group, others) {
     );
     return;
   }
-  commit(() => {
+  onCommit(() => {
     group.children.push({
       type: 'leaf',
       qId: target,
@@ -166,9 +185,9 @@ export function addShowwhenCondition(q, group, others) {
   });
 }
 
-/** @param {any} q @param {any} group */
-export function addShowwhenGroup(q, group) {
-  commit(() => {
+/** @param {(fn: () => void) => void} onCommit @param {any} q @param {any} group */
+export function addShowwhenGroup(onCommit, q, group) {
+  onCommit(() => {
     group.children.push({
       type: 'group',
       op: group.op === 'and' ? 'or' : 'and',
@@ -178,9 +197,9 @@ export function addShowwhenGroup(q, group) {
   });
 }
 
-/** @param {any} q @param {any} group */
-export function removeShowwhenGroup(q, group) {
-  commit(() => {
+/** @param {(fn: () => void) => void} onCommit @param {any} q @param {any} group */
+export function removeShowwhenGroup(onCommit, q, group) {
+  onCommit(() => {
     removeNode(ensureTree(q), group);
     commitTreeFor(q);
   });

@@ -211,3 +211,27 @@ test('h: a cora-* element registered before the microtask check runs is not warn
   }
   assert.equal(calls.length, 0);
 });
+
+test('h: a camelCase on* prop matching a declared element property is set as a callback, not a listener', () => {
+  class WithCallback extends StubEl {
+    constructor() {
+      super('cora-cb-host');
+      /** @type {(fn: () => void) => void} */
+      this.onCommit = (fn) => fn();
+    }
+  }
+  /** @type {any} */ (globalThis).customElements.define(
+    'cora-cb-host',
+    WithCallback
+  );
+  const sink = () => {};
+  const el = /** @type {any} */ (h('cora-cb-host', { onCommit: sink }));
+  assert.equal(el.onCommit, sink);
+  assert.equal(el._listeners.commit, undefined);
+});
+
+test('h: a camelCase on* prop with no matching property still becomes a listener', () => {
+  const fn = () => {};
+  const el = /** @type {any} */ (h('div', { onClick: fn }));
+  assert.deepEqual(el._listeners.click, [fn]);
+});

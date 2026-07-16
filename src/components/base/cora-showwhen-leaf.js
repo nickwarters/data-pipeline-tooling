@@ -1,28 +1,25 @@
 // @ts-check
 import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
-// MAINT-16: this editor primitive still reads the bank-editor store singleton
-// (`commit`/`currentBank`). Injecting that state via props is not mechanical —
-// the whole editor tree is reactively bound to these signals — so the coupling
-// is documented and left in place (see the component-layering-contract test).
-import {
-  commit,
-  currentBank,
-} from '../../question-bank/question-bank-store.js';
 import { commitTreeFor } from '../../lib/showwhen-tree.js';
 
 /**
- * @param {{ question: any, parent: any, leaf: any }} props
+ * A single showWhen condition row. The candidate questions and the mutation
+ * sink arrive as props (`bankQuestions`, `onCommit`); this component has no
+ * store dependency.
+ *
+ * @param {{ question: any, parent: any, leaf: any, bankQuestions: any[], onCommit: (fn: () => void) => void }} props
  * @returns {HTMLElement | undefined}
  */
 export function ShowwhenLeaf(props) {
   const q = props.question,
     parent = props.parent,
-    leaf = props.leaf;
+    leaf = props.leaf,
+    onCommit = props.onCommit;
   if (!q || !leaf) return;
-  const others = currentBank
-    .get()
-    .questions.filter((/** @type {any} */ x) => x.id !== q.id);
+  const others = (props.bankQuestions ?? []).filter(
+    (/** @type {any} */ x) => x.id !== q.id
+  );
 
   return h(
     'div',
@@ -31,7 +28,7 @@ export function ShowwhenLeaf(props) {
       'select',
       {
         onchange: (/** @type {any} */ e) =>
-          setShowwhenLeafQuestion(q, leaf, e.target.value),
+          setShowwhenLeafQuestion(onCommit, q, leaf, e.target.value),
       },
       ...others.map((/** @type {any} */ o) =>
         h(
@@ -46,7 +43,7 @@ export function ShowwhenLeaf(props) {
       {
         class: 'leaf-op',
         onchange: (/** @type {any} */ e) =>
-          setShowwhenLeafOperator(q, leaf, e.target.value),
+          setShowwhenLeafOperator(onCommit, q, leaf, e.target.value),
       },
       ...[
         ['equals', '='],
@@ -64,14 +61,14 @@ export function ShowwhenLeaf(props) {
             ? leaf.value.join(', ')
             : (leaf.value ?? ''),
           onchange: (/** @type {any} */ e) =>
-            setShowwhenLeafValue(q, leaf, e.target.value),
+            setShowwhenLeafValue(onCommit, q, leaf, e.target.value),
         })
       : h('span', { class: 'leaf-answered-hint' }, '— any non-empty answer'),
     h(
       'span',
       {
         class: 'leaf-x',
-        onclick: () => removeShowwhenLeaf(q, parent, leaf),
+        onclick: () => removeShowwhenLeaf(onCommit, q, parent, leaf),
       },
       '×'
     )
@@ -84,6 +81,18 @@ export class CORAShowwhenLeaf extends ShellElement {
     /** @type {any} */ this.question = null;
     /** @type {any} */ this.parent = null;
     /** @type {any} */ this.leaf = null;
+    /**
+     * The active bank's questions (candidates for the condition's subject),
+     * passed down by the mounting site.
+     * @type {any[]}
+     */
+    this.bankQuestions = [];
+    /**
+     * Mutation sink. Defaults to "just apply the mutation" so the component
+     * works standalone; the bank editor injects the store's `commit()`.
+     * @type {(fn: () => void) => void}
+     */
+    this.onCommit = (fn) => fn();
   }
 
   render() {
@@ -91,21 +100,23 @@ export class CORAShowwhenLeaf extends ShellElement {
       question: this.question,
       parent: this.parent,
       leaf: this.leaf,
+      bankQuestions: this.bankQuestions,
+      onCommit: this.onCommit,
     });
   }
 }
 
-/** @param {any} q @param {any} leaf @param {string} qId */
-export function setShowwhenLeafQuestion(q, leaf, qId) {
-  commit(() => {
+/** @param {(fn: () => void) => void} onCommit @param {any} q @param {any} leaf @param {string} qId */
+export function setShowwhenLeafQuestion(onCommit, q, leaf, qId) {
+  onCommit(() => {
     leaf.qId = qId;
     commitTreeFor(q);
   });
 }
 
-/** @param {any} q @param {any} leaf @param {string} op */
-export function setShowwhenLeafOperator(q, leaf, op) {
-  commit(() => {
+/** @param {(fn: () => void) => void} onCommit @param {any} q @param {any} leaf @param {string} op */
+export function setShowwhenLeafOperator(onCommit, q, leaf, op) {
+  onCommit(() => {
     leaf.op = op;
     if (leaf.op === 'answered') leaf.value = true;
     else if (leaf.op === 'in')
@@ -115,9 +126,9 @@ export function setShowwhenLeafOperator(q, leaf, op) {
   });
 }
 
-/** @param {any} q @param {any} leaf @param {string} value */
-export function setShowwhenLeafValue(q, leaf, value) {
-  commit(() => {
+/** @param {(fn: () => void) => void} onCommit @param {any} q @param {any} leaf @param {string} value */
+export function setShowwhenLeafValue(onCommit, q, leaf, value) {
+  onCommit(() => {
     if (leaf.op === 'in')
       leaf.value = value
         .split(',')
@@ -128,9 +139,9 @@ export function setShowwhenLeafValue(q, leaf, value) {
   });
 }
 
-/** @param {any} q @param {any} parent @param {any} leaf */
-export function removeShowwhenLeaf(q, parent, leaf) {
-  commit(() => {
+/** @param {(fn: () => void) => void} onCommit @param {any} q @param {any} parent @param {any} leaf */
+export function removeShowwhenLeaf(onCommit, q, parent, leaf) {
+  onCommit(() => {
     const i = parent.children.indexOf(leaf);
     if (i >= 0) parent.children.splice(i, 1);
     commitTreeFor(q);
