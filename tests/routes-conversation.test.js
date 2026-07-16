@@ -88,11 +88,7 @@ test('conversation route: mount renders ConversationView output into the contain
   router._container = /** @type {any} */ (container);
 
   register(router, /** @type {any} */ ({ client, saveQueue, currentUser }));
-  router.navigate('#/conversation/123');
-
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  await router.navigate('#/conversation/123');
 
   assert.equal(rendered.length, 1, 'container should receive one host node');
   const host = /** @type {any} */ (rendered[0]);
@@ -102,6 +98,33 @@ test('conversation route: mount renders ConversationView output into the contain
   assert.equal(conversationEl.saveQueue, saveQueue);
   assert.equal(conversationEl.caseId, '123');
   assert.equal(conversationEl.currentUser, currentUser);
+});
+
+test('conversation route: renders a cora-route-error panel when the page module fails to load', async () => {
+  const origConsoleError = console.error;
+  console.error = () => {};
+  try {
+    /** @type {any[]} */
+    let mounted = [];
+    const container = {
+      replaceChildren(/** @type {any} */ ...args) {
+        mounted = args;
+      },
+    };
+
+    const router = new Router();
+    router._container = /** @type {any} */ (container);
+
+    register(router, /** @type {any} */ (makeContext()), () =>
+      Promise.reject(new Error('boom'))
+    );
+    await router.navigate('#/conversation/99');
+
+    assert.equal(mounted.length, 1);
+    assert.equal(mounted[0].className, 'cora-route-error');
+  } finally {
+    console.error = origConsoleError;
+  }
 });
 
 test('conversation route: source-key route passes caseType through to the fetched case', async () => {

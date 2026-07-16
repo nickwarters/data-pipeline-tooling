@@ -1,14 +1,19 @@
 // @ts-check
-import { ConversationView } from '../pages/cora-conversation-view.js';
 
 /**
  * @param {import('../lib/router.js').Router} router
  * @param {import('../setup/register-routes.js').AppContext} context
+ * @param {() => Promise<typeof import('../pages/cora-conversation-view.js')>} [loadPage]
  */
-export function register(router, context) {
+export function register(
+  router,
+  context,
+  loadPage = () => import('../pages/cora-conversation-view.js')
+) {
   /** @type {import('../lib/router.js').RouteHandler} */
   const handler = {
-    mount(container, params) {
+    async mount(container, params) {
+      const { ConversationView } = await loadPage();
       container.replaceChildren(
         ConversationView({
           client: context.client,
