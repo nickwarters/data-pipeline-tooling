@@ -92,7 +92,7 @@ test('case route: mount composes CaseReviewPage and fetches the id from the rout
   });
 
   register(router, makeContext(calls));
-  router.navigate('#/case/456');
+  await router.navigate('#/case/456');
   await flush();
 
   assert.equal(mounted.length, 1, 'route mounts a single page host');
@@ -106,6 +106,29 @@ test('case route: mount composes CaseReviewPage and fetches the id from the rout
     ['456'],
     'the :id param reaches the view-model fetch'
   );
+});
+
+test('case route: renders a cora-route-error panel when the page module fails to load', async () => {
+  const origConsoleError = console.error;
+  console.error = () => {};
+  try {
+    /** @type {any[]} */
+    let mounted = [];
+    const router = new Router();
+    router._container = /** @type {any} */ ({
+      replaceChildren(/** @type {any} */ ...args) {
+        mounted = args;
+      },
+    });
+
+    register(router, makeContext(), () => Promise.reject(new Error('boom')));
+    await router.navigate('#/case/99');
+
+    assert.equal(mounted.length, 1);
+    assert.equal(mounted[0].className, 'cora-route-error');
+  } finally {
+    console.error = origConsoleError;
+  }
 });
 
 test('case route: source-key route passes caseType through to the page', async () => {

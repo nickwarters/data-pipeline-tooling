@@ -1,14 +1,19 @@
 // @ts-check
-import { CaseReviewPage } from '../pages/cora-case-review.js';
 
 /**
  * @param {import('../lib/router.js').Router} router
  * @param {import('../setup/register-routes.js').AppContext} context
+ * @param {() => Promise<typeof import('../pages/cora-case-review.js')>} [loadPage]
  */
-export function register(router, context) {
+export function register(
+  router,
+  context,
+  loadPage = () => import('../pages/cora-case-review.js')
+) {
   /** @type {import('../lib/router.js').RouteHandler} */
   const handler = {
-    mount(container, params) {
+    async mount(container, params) {
+      const { CaseReviewPage } = await loadPage();
       container.replaceChildren(
         CaseReviewPage({
           client: context.client,
