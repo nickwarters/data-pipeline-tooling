@@ -4,8 +4,12 @@ import assert from 'node:assert/strict';
 import { installDom, StubEl } from './_dom-stub.js';
 import {
   fireEvent,
+  getByTag,
+  getByTestId,
+  getByText,
   getByRole,
   queryAllByRole,
+  queryAllByTag,
   queryByRole,
 } from './helpers/semantic-dom.js';
 
@@ -63,4 +67,35 @@ test('fireEvent dispatches through the public event API', () => {
 
   assert.equal(clicks, 1);
   assert.equal(event.bubbles, true);
+});
+
+test('semantic DOM helpers query table structure by role and tag', () => {
+  const root = /** @type {any} */ (
+    h(
+      'table',
+      {},
+      h('tbody', {}, h('tr', {}, h('td', {}, h('span', {}, 'Case A'))))
+    )
+  );
+
+  assert.equal(queryAllByRole(root, 'rowgroup').length, 1);
+  assert.equal(queryAllByRole(root, 'row').length, 1);
+  assert.equal(queryAllByRole(root, 'cell').length, 1);
+  assert.equal(getByTag(root, 'tbody').tagName, 'TBODY');
+  assert.equal(queryAllByTag(root, 'span').length, 1);
+  assert.equal(getByText(root, 'Case A').tagName, 'SPAN');
+});
+
+test('semantic DOM helpers use title as a fallback name and query test ids', () => {
+  const root = new StubEl('div');
+  root.append(
+    /** @type {any} */ (h('button', { title: 'Duplicate question' })),
+    /** @type {any} */ (h('div', { 'data-testid': 'conditional-indicator' }))
+  );
+
+  assert.equal(
+    getByRole(root, 'button', { name: 'Duplicate question' }).title,
+    'Duplicate question'
+  );
+  assert.equal(getByTestId(root, 'conditional-indicator').tagName, 'DIV');
 });

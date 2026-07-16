@@ -104,6 +104,9 @@ export class StubEl {
   set placeholder(v) {
     this._attrs['placeholder'] = String(v);
   }
+  get childElementCount() {
+    return this._children.filter((child) => child.tagName !== '#text').length;
+  }
   appendChild(/** @type {StubEl} */ c) {
     c.parentNode = this;
     this._children.push(c);
@@ -379,6 +382,13 @@ export function installDom() {
       this._listeners[t] = (this._listeners[t] ?? []).filter(
         (/** @type {Function} */ fn) => fn !== h
       );
+    },
+    dispatchEvent(/** @type {any} */ event) {
+      event.target ??= this;
+      for (const handler of [...(this._listeners[event.type] ?? [])]) {
+        handler(event);
+      }
+      return true;
     },
     /** Fire document-level listeners as if the user triggered the event. */
     _fire(/** @type {string} */ t, /** @type {any} */ ev) {

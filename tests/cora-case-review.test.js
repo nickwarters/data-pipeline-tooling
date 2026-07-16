@@ -4,6 +4,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom, StubEl, useElementClass, flush } from './_dom-stub.js';
 import { assertAllCoraElementsDefined } from './helpers/assert-defined-elements.js';
+import {
+  fireEvent,
+  getByRole,
+  getByTag,
+  queryAllByTag,
+} from './helpers/semantic-dom.js';
 
 installDom();
 
@@ -68,10 +74,9 @@ async function settle() {
 /**
  * Thin test harness around the CaseReviewPage function component. The page is a
  * plain function returning a reactive() host; this adapter keeps the historic
- * "set fields, then connect" ergonomics (and proxies the observable host) so
- * the behaviour assertions below read against rendered output, not page
- * internals. `_children`, `getAttribute`, and `disconnectedCallback` are the
- * reactive host's own.
+ * "set fields, then connect" ergonomics while exposing the rendered host as a
+ * public query root. Behaviour assertions read semantic output, not page
+ * internals.
  */
 class CaseReviewHarness {
   constructor() {
@@ -101,8 +106,8 @@ class CaseReviewHarness {
     await settle();
   }
 
-  get _children() {
-    return this._host ? this._host._children : [];
+  get root() {
+    return this._host;
   }
 
   /** @param {string} name */
@@ -161,16 +166,20 @@ function makeClient({
   };
 }
 
-// ===== STRUCTURAL ACCESSORS =====
-// The tabbed layout (ADR-0014) renders persistent chrome as direct children and
-// the five Section panels inside a cora-tabs primitive. These accessors locate
-// elements by role/panel id rather than raw child index so the assertions
-// survive incidental layout shuffling.
-const bannerOf = (/** @type {any} */ el) => el._children[0];
-const headerOf = (/** @type {any} */ el) => el._children[1];
-const tabsOf = (/** @type {any} */ el) => el._children[2];
-const conversationOf = (/** @type {any} */ el) => el._children[3];
-const completeBtnOf = (/** @type {any} */ el) => el._children[4];
+// ===== SEMANTIC ACCESSORS =====
+// Persistent chrome is queried by role/tag. Section panels are addressed by
+// the public `cora-tabs` panel id contract from ADR-0014.
+const rootOf = (/** @type {CaseReviewHarness} */ el) => el.root;
+const bannerOf = (/** @type {CaseReviewHarness} */ el) =>
+  getByTag(rootOf(el), 'cora-status-banner');
+const headerOf = (/** @type {CaseReviewHarness} */ el) =>
+  getByRole(rootOf(el), 'banner');
+const tabsOf = (/** @type {CaseReviewHarness} */ el) =>
+  getByTag(rootOf(el), 'cora-tabs');
+const conversationOf = (/** @type {CaseReviewHarness} */ el) =>
+  getByTag(rootOf(el), 'cora-conversation');
+const completeBtnOf = (/** @type {CaseReviewHarness} */ el) =>
+  getByRole(rootOf(el), 'button', { name: /^(Complete Case|Send Actions)$/ });
 const panelOf = (/** @type {any} */ el, /** @type {string} */ id) =>
   tabsOf(el).panels[id];
 const tabFor = (/** @type {any} */ el, /** @type {string} */ id) =>
@@ -314,12 +323,10 @@ test('CORACaseReview: each tab panel carries the matching Section content node',
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  // The Questions panel is the <section> that holds qList + section-progress and
-  // owns the cora-answer listener; the others are their respective custom elements.
-  assert.ok(
-    Array.isArray(questionSectionOf(el)._listeners['cora-answer']),
-    'questions panel owns the cora-answer listener'
-  );
+  // The Questions panel holds the public question-list and progress elements;
+  // the others are their respective custom elements.
+  assert.ok(getByTag(questionSectionOf(el), 'cora-question-list'));
+  assert.ok(getByTag(questionSectionOf(el), 'cora-group-progress'));
   assert.equal(
     detailsOf(el).caseRow,
     BASE_ROW,
@@ -486,7 +493,7 @@ test('CORACaseReview: the selected tab updates on cora-tab-change, never the URL
 
   assert.equal(tabsOf(el).selected, 'details', 'starts on the default tab');
 
-  tabsOf(el)._listeners['cora-tab-change'][0]({ detail: { id: 'notes' } });
+  fireEvent(tabsOf(el), 'cora-tab-change', { detail: { id: 'notes' } });
 
   assert.equal(
     tabsOf(el).selected,
@@ -516,14 +523,14 @@ test('CORACaseReview: switching tabs does not refetch the Case and preserves the
 
   // Edit an answer, then switch tabs.
   const section = questionSectionOf(el);
-  section._listeners['cora-answer'][0]({
+  fireEvent(section, 'cora-answer', {
     detail: { questionId: 'q-welcome', value: 'Yes' },
   });
-  tabsOf(el)._listeners['cora-tab-change'][0]({ detail: { id: 'summary' } });
+  fireEvent(tabsOf(el), 'cora-tab-change', { detail: { id: 'summary' } });
 
   assert.equal(getCaseCalls, 1, 'switching tabs must not refetch the Case');
   // The same qList element keeps receiving updates: the answers signal survived.
-  const qList = section._children[1];
+  const qList = getByTag(section, 'cora-question-list');
   assert.equal(
     qList._update[1]['q-welcome'].value,
     'Yes',
@@ -556,9 +563,9 @@ test('CORACaseReview: persistent chrome (banner, conversation toggle, complete b
     'status banner is wired and sits in the persistent chrome'
   );
   // Conversation toggle lives in the header (direct child), reachable from any tab.
-  const toggleBtn = headerOf(el)._children.find(
-    (/** @type {any} */ c) => c.className === 'cora-conversation-toggle-btn'
-  );
+  const toggleBtn = getByRole(headerOf(el), 'button', {
+    name: /Toggle conversation panel/,
+  });
   assert.ok(
     toggleBtn,
     'conversation toggle is in the header, outside the tabs'
@@ -606,7 +613,7 @@ test('CORACaseReview: connectedCallback returns early if missing deps', async ()
   const el = new CaseReviewHarness();
   // No client, saveQueue, or caseId
   await el.connectedCallback();
-  assert.equal(/** @type {any} */ (el)._children.length, 0);
+  assert.equal(rootOf(el).childElementCount, 0);
 });
 
 test('CORACaseReview: connectedCallback handles case not found', async () => {
@@ -623,7 +630,7 @@ test('CORACaseReview: connectedCallback handles case not found', async () => {
   el.caseId = 'missing';
   await el.connectedCallback();
 
-  const msg = /** @type {any} */ (el)._children[0];
+  const msg = getByTag(rootOf(el), 'p');
   assert.equal(msg.textContent, 'Case not found.');
 });
 
@@ -652,7 +659,7 @@ test('CORACaseReview: connectedCallback handles access denied', async () => {
 
   await el.connectedCallback();
 
-  const panel = /** @type {any} */ (el)._children[0];
+  const panel = getByTag(rootOf(el), 'section');
   assert.equal(panel.className, 'cora-access-denied');
 });
 
@@ -907,7 +914,7 @@ test('CORACaseReview: complete button feeds the live answers + computeOutcome in
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  completeBtnOf(el)._listeners['click'][0]();
+  fireEvent(completeBtnOf(el), 'click');
   await flush();
 
   assert.equal(
@@ -1014,12 +1021,10 @@ test('CORACaseReview: no inline cora-save-status paragraph in rendered children'
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  const children = /** @type {any[]} */ (/** @type {any} */ (el)._children);
-  const hasStatusPara = children.some(
-    (c) => c.className === 'cora-save-status'
-  );
   assert.equal(
-    hasStatusPara,
+    queryAllByTag(rootOf(el), 'p').some(
+      (paragraph) => paragraph.className === 'cora-save-status'
+    ),
     false,
     'inline save-status paragraph must not appear; cora-status-banner handles display'
   );
@@ -1084,7 +1089,7 @@ test('CORACaseReview: cora-answer handles unmapped question', async () => {
 
   const section = questionSectionOf(el);
   // Dispatch answer for an ID not in the catalogue
-  section._listeners['cora-answer'][0]({
+  fireEvent(section, 'cora-answer', {
     detail: { questionId: 'unknown', value: 'Yes' },
   });
 
@@ -1108,14 +1113,15 @@ test('CORACaseReview: cora-answer clears answers for questions that become non-a
   await el.connectedCallback();
 
   const section = questionSectionOf(el);
-  const handler = section._listeners['cora-answer'][0];
+  const answer = (/** @type {string} */ questionId, /** @type {any} */ value) =>
+    fireEvent(section, 'cora-answer', { detail: { questionId, value } });
 
   // 1. q-needs = Yes (triggers q-resolve)
-  handler({ detail: { questionId: 'q-needs', value: 'Yes' } });
+  answer('q-needs', 'Yes');
   // 2. q-resolve = Yes
-  handler({ detail: { questionId: 'q-resolve', value: 'Yes' } });
+  answer('q-resolve', 'Yes');
   // 3. q-needs = No (q-resolve hidden)
-  handler({ detail: { questionId: 'q-needs', value: 'No' } });
+  answer('q-needs', 'No');
 
   const lastAnswers = enqueued[2][2];
   assert.equal(lastAnswers['q-needs'].value, 'No');
@@ -1162,7 +1168,7 @@ test('CORACaseReview: cora-answer is ignored when questions access is read-only 
 
   // For RP, access.questions = 'read-only', so the cora-answer handler must early-return.
   const section = questionSectionOf(el);
-  section._listeners['cora-answer'][0]({
+  fireEvent(section, 'cora-answer', {
     detail: { questionId: 'q-welcome', value: 'Yes' },
   });
 
@@ -1245,7 +1251,7 @@ test('CORACaseReview: complete button click is no-op when button is already disa
   const completeBtn = completeBtnOf(el);
   completeBtn.disabled = true; // pre-disable
 
-  completeBtn._listeners['click'][0]();
+  fireEvent(completeBtn, 'click');
   await flush();
   assert.equal(
     patchCalled,
@@ -1284,7 +1290,7 @@ test('CORACaseReview: complete button click drives the completion PATCH', async 
   const completeBtn = completeBtnOf(el);
   assert.equal(completeBtn.hidden, false, 'Complete button should be visible');
 
-  completeBtn._listeners['click'][0]();
+  fireEvent(completeBtn, 'click');
   await flush();
   assert.equal(
     patchCalled,
@@ -1303,8 +1309,7 @@ test('CORACaseReview: cora-group-progress is mounted inside the question section
   await el.connectedCallback();
 
   const section = questionSectionOf(el);
-  // section._children: [h2, qList, cora-group-progress]
-  const progressEl = section._children[2];
+  const progressEl = getByTag(section, 'cora-group-progress');
   assert.ok(
     progressEl,
     'cora-group-progress should be mounted inside the question section'
@@ -1323,7 +1328,7 @@ test('CORACaseReview: cora-group-progress.update is called with group data on in
   await el.connectedCallback();
 
   const section = questionSectionOf(el);
-  const progressEl = section._children[2];
+  const progressEl = getByTag(section, 'cora-group-progress');
 
   /** @type {any[]} */
   const calls = [];
@@ -1331,7 +1336,7 @@ test('CORACaseReview: cora-group-progress.update is called with group data on in
     calls.push(args);
 
   // Trigger viewState update by simulating a cora-answer event
-  section._listeners['cora-answer'][0]({
+  fireEvent(section, 'cora-answer', {
     detail: { questionId: 'q-welcome', value: 'Yes' },
   });
 
@@ -1358,7 +1363,7 @@ test('CORACaseReview: cora-group-progress.update answered count increases after 
   await el.connectedCallback();
 
   const section = questionSectionOf(el);
-  const progressEl = section._children[2];
+  const progressEl = getByTag(section, 'cora-group-progress');
 
   /** @type {any[][]} */
   const calls = [];
@@ -1366,7 +1371,7 @@ test('CORACaseReview: cora-group-progress.update answered count increases after 
     calls.push(args);
 
   // Answer q-welcome (questionGroup: 'Opening')
-  section._listeners['cora-answer'][0]({
+  fireEvent(section, 'cora-answer', {
     detail: { questionId: 'q-welcome', value: 'Yes' },
   });
   const groups = calls[0][0];
@@ -1384,14 +1389,14 @@ test('CORACaseReview: cora-group-progress receives unanswered applicable questio
   await el.connectedCallback();
 
   const section = questionSectionOf(el);
-  const progressEl = section._children[2];
+  const progressEl = getByTag(section, 'cora-group-progress');
 
   /** @type {any[][]} */
   const calls = [];
   /** @type {any} */ (progressEl).update = (/** @type {any[]} */ ...args) =>
     calls.push(args);
 
-  section._listeners['cora-answer'][0]({
+  fireEvent(section, 'cora-answer', {
     detail: { questionId: 'q-welcome', value: 'Yes' },
   });
   const [, unanswered] = calls[0];
@@ -1414,36 +1419,22 @@ test('CORACaseReview: cora-group-jump event scrolls first question of that group
   await el.connectedCallback();
 
   const section = questionSectionOf(el);
-  // Check the event listener is registered for cora-section-jump
-  assert.ok(
-    Array.isArray(section._listeners['cora-group-jump']) &&
-      section._listeners['cora-group-jump'].length > 0,
-    'section should have a cora-group-jump listener'
-  );
-  // Fire it without throwing
-  assert.doesNotThrow(() => {
-    section._listeners['cora-group-jump'][0]({
-      detail: { group: 'Opening' },
-    });
-  });
-});
+  const questionList = getByTag(section, 'cora-question-list');
+  let scrolled = false;
+  questionList.questionElements = [
+    {
+      question: { questionGroup: 'Opening' },
+      scrollIntoView() {
+        scrolled = true;
+      },
+    },
+  ];
 
-test('CORACaseReview: cora-jump-unanswered event scrolls to first unanswered applicable question', async () => {
-  const el = new CaseReviewHarness();
-  el.client = /** @type {any} */ (makeClient());
-  el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
-  el.caseId = 'c1';
-  await el.connectedCallback();
-
-  const section = questionSectionOf(el);
-  assert.ok(
-    Array.isArray(section._listeners['cora-jump-unanswered']) &&
-      section._listeners['cora-jump-unanswered'].length > 0,
-    'section should have a cora-jump-unanswered listener'
-  );
-  assert.doesNotThrow(() => {
-    section._listeners['cora-jump-unanswered'][0]({});
+  fireEvent(section, 'cora-group-jump', {
+    detail: { group: 'Opening' },
   });
+
+  assert.equal(scrolled, true, 'the matching question is scrolled into view');
 });
 
 // ===== CONVERSATION PANEL TOGGLE =====
@@ -1496,9 +1487,9 @@ test('CORACaseReview: toggle button is in the header when conversation access is
   await el.connectedCallback();
 
   const header = headerOf(el);
-  const toggleBtn = /** @type {any} */ (header)._children.find(
-    (/** @type {any} */ c) => c.className === 'cora-conversation-toggle-btn'
-  );
+  const toggleBtn = getByRole(header, 'button', {
+    name: /Toggle conversation panel/,
+  });
   assert.ok(toggleBtn, 'toggle button should be in the header');
   assert.equal(
     toggleBtn.getAttribute('aria-expanded'),
@@ -1516,11 +1507,11 @@ test('CORACaseReview: toggle button click shows then hides conversation', async 
 
   const conversationEl = conversationOf(el);
   const header = headerOf(el);
-  const toggleBtn = /** @type {any} */ (header)._children.find(
-    (/** @type {any} */ c) => c.className === 'cora-conversation-toggle-btn'
-  );
+  const toggleBtn = getByRole(header, 'button', {
+    name: /Toggle conversation panel/,
+  });
 
-  toggleBtn._listeners['click'][0]();
+  fireEvent(toggleBtn, 'click');
   assert.equal(
     conversationEl.hidden,
     false,
@@ -1528,7 +1519,7 @@ test('CORACaseReview: toggle button click shows then hides conversation', async 
   );
   assert.equal(toggleBtn.getAttribute('aria-expanded'), 'true');
 
-  toggleBtn._listeners['click'][0]();
+  fireEvent(toggleBtn, 'click');
   assert.equal(
     conversationEl.hidden,
     true,
@@ -1572,7 +1563,7 @@ test('CORACaseReview: an Alt+C keydown on the document toggles the conversation 
   const conversationEl = conversationOf(el);
   assert.equal(conversationEl.hidden, true, 'conversation starts hidden');
 
-  /** @type {any} */ (globalThis).document._fire('keydown', {
+  fireEvent(globalThis.document, 'keydown', {
     altKey: true,
     code: 'KeyC',
   });
@@ -1604,8 +1595,7 @@ test('CORACaseReview: cora-jump-unanswered handler calls scrollIntoView on first
   await el.connectedCallback();
 
   const section = questionSectionOf(el);
-  // section._children: [h2, qList, cora-group-progress]
-  const qList = section._children[1];
+  const qList = getByTag(section, 'cora-question-list');
 
   // Simulate cora-question-list having rendered its child question elements.
   // Production wires them via qList.questionElements; the test stub does not
@@ -1627,11 +1617,11 @@ test('CORACaseReview: cora-jump-unanswered handler calls scrollIntoView on first
   ];
 
   // Answer q-welcome so the first unanswered applicable question is q-needs.
-  section._listeners['cora-answer'][0]({
+  fireEvent(section, 'cora-answer', {
     detail: { questionId: 'q-welcome', value: 'Yes' },
   });
 
-  section._listeners['cora-jump-unanswered'][0]({});
+  fireEvent(section, 'cora-jump-unanswered');
 
   assert.equal(
     scrollCalls.length,
@@ -1680,7 +1670,7 @@ test('CORACaseReview: Assigned Reviewer can set an Attributed Party, persisting 
     'client is handed to the section for the picker'
   );
 
-  remediation._listeners['cora-attribute'][0]({
+  fireEvent(remediation, 'cora-attribute', {
     detail: {
       questionId: 'q-needs',
       attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
@@ -1768,7 +1758,7 @@ test('CORACaseReview: clearing an Attributed Party strips it from the Answer and
   await el.connectedCallback();
 
   const remediation = remediationOf(el);
-  remediation._listeners['cora-attribute'][0]({
+  fireEvent(remediation, 'cora-attribute', {
     detail: { questionId: 'q-needs', attributedParty: null },
   });
 
@@ -1804,7 +1794,7 @@ test('CORACaseReview: cora-attribute is ignored when the referenced Answer is mi
   await el.connectedCallback();
 
   const remediation = remediationOf(el);
-  remediation._listeners['cora-attribute'][0]({
+  fireEvent(remediation, 'cora-attribute', {
     detail: {
       questionId: 'q-nonexistent',
       attributedParty: { loginName: 'x', displayName: 'X' },
@@ -1870,7 +1860,7 @@ test('CORACaseReview: a cora-capture event records the value into Answer.capture
   await el.connectedCallback();
 
   const remediation = remediationOf(el);
-  remediation._listeners['cora-capture'][0]({
+  fireEvent(remediation, 'cora-capture', {
     detail: {
       questionId: 'q-needs',
       fieldKey: 'rootCause',
@@ -1907,10 +1897,10 @@ test('CORACaseReview: a cora-capture for an unknown field key is ignored', async
   await el.connectedCallback();
 
   const remediation = remediationOf(el);
-  remediation._listeners['cora-capture'][0]({
+  fireEvent(remediation, 'cora-capture', {
     detail: { questionId: 'q-needs', fieldKey: 'ghost', value: 'x' },
   });
-  remediation._listeners['cora-capture'][0]({
+  fireEvent(remediation, 'cora-capture', {
     detail: { questionId: 'q-missing', fieldKey: 'rootCause', value: 'x' },
   });
 
@@ -1950,7 +1940,7 @@ test('CORACaseReview: capture is frozen (ignored) on a Completed case', async ()
     false,
     'capture is frozen at completion'
   );
-  remediation._listeners['cora-capture'][0]({
+  fireEvent(remediation, 'cora-capture', {
     detail: { questionId: 'q-needs', fieldKey: 'rootCause', value: 'x' },
   });
   assert.equal(enqueued.length, 0, 'no persistence when capture is frozen');
@@ -1986,7 +1976,7 @@ test('CORACaseReview: attribution is frozen (read-only) on a Completed case', as
     'Completed case freezes attribution'
   );
 
-  remediation._listeners['cora-attribute'][0]({
+  fireEvent(remediation, 'cora-attribute', {
     detail: {
       questionId: 'q-needs',
       attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
@@ -2040,7 +2030,7 @@ test('CORACaseReview: non-assigned viewer cannot attribute (read-only)', async (
     'Responsible Party cannot attribute'
   );
 
-  remediation._listeners['cora-attribute'][0]({
+  fireEvent(remediation, 'cora-attribute', {
     detail: {
       questionId: 'q-needs',
       attributedParty: { loginName: 'jsmith', displayName: 'Jane Smith' },
@@ -2528,7 +2518,7 @@ test('CORACaseReview: complete button passes exportHash as questionBankVersion t
   el.caseId = 'c1';
   await el.connectedCallback();
 
-  completeBtnOf(el)._listeners['click'][0]();
+  fireEvent(completeBtnOf(el), 'click');
   await flush();
 
   assert.equal(

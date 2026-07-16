@@ -12,6 +12,7 @@ const PATTERNS = [
   /\._listeners\b/g,
   /\._[A-Za-z][A-Za-z0-9_]*\s*\(/g,
 ];
+const ROUTER_INTERNAL_PATTERN = /\._(?:routes|container)\b/g;
 
 /**
  * Existing debt only. Lower a count when a test is migrated; do not increase a
@@ -35,7 +36,6 @@ const BASELINE = {
   'tests/cora-capture-groups.test.js': [1, 0, 14],
   'tests/cora-case-details.test.js': [7, 2, 0],
   'tests/cora-case-review-controllers.test.js': [14, 17, 0],
-  'tests/cora-case-review.test.js': [21, 33, 1],
   'tests/cora-case-table.test.js': [5, 19, 0],
   'tests/cora-case-tabs.test.js': [18, 3, 0],
   'tests/cora-command-palette.test.js': [5, 2, 0],
@@ -44,7 +44,6 @@ const BASELINE = {
   'tests/cora-conversation-view.test.js': [8, 1, 0],
   'tests/cora-conversation.test.js': [2, 8, 6],
   'tests/cora-dashboard.test.js': [3, 4, 2],
-  'tests/cora-data-table.test.js': [56, 15, 0],
   'tests/cora-home.test.js': [1, 0, 0],
   'tests/cora-journey-cases.test.js': [2, 0, 0],
   'tests/cora-kpi-strip.test.js': [3, 0, 6],
@@ -54,7 +53,6 @@ const BASELINE = {
   'tests/cora-outcome.test.js': [17, 0, 0],
   'tests/cora-owner-summary.test.js': [3, 0, 0],
   'tests/cora-people-picker.test.js': [11, 0, 13],
-  'tests/cora-question-card.test.js': [64, 16, 0],
   'tests/cora-question-labels.test.js': [28, 7, 0],
   'tests/cora-question-list.test.js': [0, 1, 0],
   'tests/cora-question.test.js': [67, 7, 0],
@@ -75,7 +73,6 @@ const BASELINE = {
   'tests/cora-wording-editor.test.js': [28, 3, 0],
   'tests/html.test.js': [1, 2, 0],
   'tests/http-sharepoint-client.test.js': [0, 0, 2],
-  'tests/register-routes.test.js': [4, 0, 0],
   'tests/router.test.js': [3, 0, 0],
   'tests/routes-conversation.test.js': [2, 0, 0],
   'tests/routes-dashboard.test.js': [1, 0, 0],
@@ -88,6 +85,20 @@ const BASELINE = {
   'tests/tracer-bullet.test.js': [4, 4, 0],
   'tests/uat-banner.test.js': [2, 0, 0],
   'tests/view.test.js': [19, 0, 0],
+};
+
+const ROUTER_INTERNAL_BASELINE = {
+  'tests/app-fullbleed.test.js': 3,
+  'tests/router.test.js': 16,
+  'tests/routes-case.test.js': 8,
+  'tests/routes-conversation.test.js': 9,
+  'tests/routes-dashboard.test.js': 8,
+  'tests/routes-journey-cases.test.js': 7,
+  'tests/routes-my-cases.test.js': 8,
+  'tests/routes-question-bank.test.js': 9,
+  'tests/routes-reports.test.js': 12,
+  'tests/routes-root.test.js': 5,
+  'tests/routes-team-cases.test.js': 7,
 };
 
 /**
@@ -126,10 +137,34 @@ function currentDebt() {
   );
 }
 
+function currentRouterInternalDebt() {
+  return Object.fromEntries(
+    findTestFiles(TESTS_DIRECTORY)
+      .filter((path) => path !== THIS_FILE)
+      .sort()
+      .map((path) => {
+        const source = readFileSync(
+          new URL(path.slice('tests/'.length), TESTS_DIRECTORY),
+          'utf8'
+        );
+        return [path, countMatches(source, ROUTER_INTERNAL_PATTERN)];
+      })
+      .filter(([, count]) => Number(count) > 0)
+  );
+}
+
 test('white-box debt contract: structural coupling does not grow', () => {
   assert.deepEqual(
     currentDebt(),
     BASELINE,
     'White-box test debt changed. Replace new private access with semantic helpers; if debt was removed, lower the baseline in the same change.'
+  );
+});
+
+test('white-box debt contract: router-internal coupling does not grow', () => {
+  assert.deepEqual(
+    currentRouterInternalDebt(),
+    ROUTER_INTERNAL_BASELINE,
+    'Router-internal test debt changed. Use register(), init(), navigate(), or a public router spy; if debt was removed, lower the baseline in the same change.'
   );
 });

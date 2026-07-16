@@ -39,8 +39,8 @@ boundary.
 ## White-box Debt Guardrail
 
 `tests/white-box-debt-contract.test.js` records the remaining direct uses of DOM
-stub internals and underscore-prefixed methods in test files. It is a migration
-baseline, not an approved-pattern list:
+stub internals, underscore-prefixed methods, and Router internals in test files.
+It is a migration baseline, not an approved-pattern list:
 
 - New test files must not add these patterns.
 - Existing test files must not increase their recorded counts.
@@ -52,6 +52,8 @@ baseline, not an approved-pattern list:
 Prefer `getByRole()`, `queryByRole()`, and `fireEvent()` from
 `tests/helpers/semantic-dom.js`. A stable field key or narrowly scoped
 `data-testid` is acceptable when the UI has no user-facing semantic to query.
+Route tests should use `register()`, `init()`, and `navigate()`, or a public
+registration spy; do not inspect `_routes` or assign `_container` directly.
 
 ## Function Component Tests
 

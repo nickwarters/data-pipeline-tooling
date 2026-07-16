@@ -43,6 +43,7 @@ export function QuestionCard(props) {
     ),
     h('input', {
       class: 'id-input',
+      'aria-label': 'Question ID',
       value: q.id,
       onchange: (/** @type {any} */ e) =>
         renameQuestion(onCommit, q, e.target.value),
@@ -157,6 +158,7 @@ export function QuestionCard(props) {
       {
         class: 'icon-btn',
         title: q.deprecated ? 'Restore' : 'Mark deprecated',
+        'aria-label': q.deprecated ? 'Restore question' : 'Mark deprecated',
         onclick: () => toggleQuestionDeprecated(onCommit, q),
       },
       q.deprecated ? '↩' : '⌀'
@@ -166,6 +168,7 @@ export function QuestionCard(props) {
       {
         class: 'icon-btn',
         title: 'Duplicate',
+        'aria-label': 'Duplicate question',
         onclick: () => duplicateQuestion(onCommit, bankQuestions, q),
       },
       '⎘'
@@ -175,13 +178,18 @@ export function QuestionCard(props) {
       {
         class: 'icon-btn danger',
         title: 'Remove draft',
+        'aria-label': 'Remove draft question',
         onclick: () => removeQuestionDraft(onCommit, bankQuestions, q),
       },
       '×'
     )
   );
 
-  const stripe = h('div', { class: 'card-stripe' });
+  const stripe = h('div', {
+    class: 'card-stripe',
+    'data-testid': 'conditional-indicator',
+    'aria-hidden': 'true',
+  });
   if (q.showWhen && !q.deprecated)
     stripe.style.cssText = 'background: var(--ochre);';
 
@@ -244,6 +252,9 @@ export class CORAQuestionCard extends ShellElement {
 
 /** @param {string} label @param {any} control */
 export function questionCardField(label, control) {
+  if (!control.getAttribute?.('aria-label')) {
+    control.setAttribute?.('aria-label', label);
+  }
   return h('div', { class: 'field' }, h('label', {}, label), control);
 }
 

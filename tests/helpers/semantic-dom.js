@@ -8,6 +8,13 @@ function implicitRole(element) {
   if (element.tagName === 'BUTTON') return 'button';
   if (element.tagName === 'TEXTAREA') return 'textbox';
   if (element.tagName === 'SELECT') return 'combobox';
+  if (element.tagName === 'TABLE') return 'table';
+  if (element.tagName === 'THEAD' || element.tagName === 'TBODY')
+    return 'rowgroup';
+  if (element.tagName === 'TR') return 'row';
+  if (element.tagName === 'TH') return 'columnheader';
+  if (element.tagName === 'TD') return 'cell';
+  if (element.tagName === 'HEADER') return 'banner';
   if (element.tagName !== 'INPUT') return null;
 
   const type = String(element.type || 'text').toLowerCase();
@@ -18,7 +25,7 @@ function implicitRole(element) {
 }
 
 /** @param {any} element */
-function textContent(element) {
+export function textContent(element) {
   const parts = [element.textContent || ''];
   for (const child of element._children ?? []) parts.push(textContent(child));
   return parts.join(' ').replace(/\s+/g, ' ').trim();
@@ -26,7 +33,12 @@ function textContent(element) {
 
 /** @param {any} element */
 function accessibleName(element) {
-  return element.getAttribute?.('aria-label') || textContent(element);
+  return (
+    element.getAttribute?.('aria-label') ||
+    textContent(element) ||
+    element.getAttribute?.('title') ||
+    ''
+  );
 }
 
 /** @param {string} actual @param {NameMatcher | undefined} expected */
@@ -85,6 +97,77 @@ export function getByRole(root, role, options = {}) {
     throw new Error(`Unable to find an element with role "${role}"${named}`);
   }
   return match;
+}
+
+/**
+ * Query custom elements and structural HTML landmarks without depending on
+ * their position in a parent's child list.
+ *
+ * @param {any} root
+ * @param {string} tag
+ */
+export function queryAllByTag(root, tag) {
+  const wanted = tag.toUpperCase();
+  /** @type {any[]} */
+  const matches = [];
+  walk(root, (element) => {
+    if (wanted === '*' || element.tagName === wanted) matches.push(element);
+  });
+  return matches;
+}
+
+/** @param {any} root @param {string} tag */
+export function queryByTag(root, tag) {
+  const matches = queryAllByTag(root, tag);
+  if (matches.length > 1) {
+    throw new Error(`Found multiple elements with tag "${tag}"`);
+  }
+  return matches[0] ?? null;
+}
+
+/** @param {any} root @param {string} tag */
+export function getByTag(root, tag) {
+  const match = queryByTag(root, tag);
+  if (!match) throw new Error(`Unable to find an element with tag "${tag}"`);
+  return match;
+}
+
+/** @param {any} root @param {NameMatcher} expected */
+export function queryAllByText(root, expected) {
+  /** @type {any[]} */
+  const matches = [];
+  walk(root, (element) => {
+    if (
+      element.tagName !== '#text' &&
+      nameMatches(textContent(element), expected)
+    ) {
+      matches.push(element);
+    }
+  });
+  return matches;
+}
+
+/** @param {any} root @param {NameMatcher} expected */
+export function getByText(root, expected) {
+  const matches = queryAllByText(root, expected);
+  const leaf = matches.find(
+    (element) => !queryAllByText(element, expected).length
+  );
+  if (!leaf) throw new Error(`Unable to find text "${String(expected)}"`);
+  return leaf;
+}
+
+/** @param {any} root @param {string} testId */
+export function getByTestId(root, testId) {
+  const matches = queryAllByTag(root, '*').filter(
+    (element) => element.getAttribute?.('data-testid') === testId
+  );
+  if (matches.length !== 1) {
+    throw new Error(
+      `Expected one element with data-testid "${testId}", found ${matches.length}`
+    );
+  }
+  return matches[0];
 }
 
 /**

@@ -2,7 +2,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
-/** @typedef {import('./_dom-stub.js').StubEl} StubEl */
+import {
+  fireEvent,
+  getByRole,
+  getByTag,
+  queryAllByRole,
+  queryAllByTag,
+  textContent,
+} from './helpers/semantic-dom.js';
 
 installDom();
 
@@ -33,37 +40,38 @@ function makeTable() {
   return t;
 }
 
-/** Walk the tree and collect all elements matching a tagName. @returns {StubEl[]} */
-function findAll(/** @type {any} */ root, /** @type {string} */ tag) {
-  /** @type {StubEl[]} */
-  const out = [];
-  /** @param {any} n */
-  function walk(n) {
-    if (n.tagName === tag.toUpperCase()) out.push(n);
-    for (const c of n._children ?? []) walk(c);
-  }
-  walk(root);
-  return out;
+/** @param {any} table */
+function rows(table) {
+  return queryAllByRole(getByTag(table, 'tbody'), 'row');
+}
+
+/** @param {any} row */
+function cells(row) {
+  return queryAllByRole(row, 'cell');
+}
+
+/** @param {any} table */
+function firstColumnValues(table) {
+  return rows(table).map((row) => textContent(cells(row)[0]));
 }
 
 // ===== TESTS =====
 
 test('CORADataTable: renders a table with thead and tbody', () => {
   const t = makeTable();
-  assert.equal(findAll(t, 'table').length, 1);
-  assert.equal(findAll(t, 'thead').length, 1);
-  assert.equal(findAll(t, 'tbody').length, 1);
+  assert.equal(queryAllByRole(t, 'grid').length, 1);
+  assert.equal(queryAllByTag(t, 'thead').length, 1);
+  assert.equal(queryAllByTag(t, 'tbody').length, 1);
 });
 
 test('CORADataTable: renders one th per column', () => {
   const t = makeTable();
-  assert.equal(findAll(t, 'th').length, 2);
+  assert.equal(queryAllByRole(t, 'columnheader').length, 2);
 });
 
 test('CORADataTable: renders one tr per row in tbody', () => {
   const t = makeTable();
-  const tbody = findAll(t, 'tbody')[0];
-  assert.equal(tbody._children.length, 3);
+  assert.equal(rows(t).length, 3);
 });
 
 test('CORADataTable: set sort(null) clears sort key', () => {
@@ -73,64 +81,37 @@ test('CORADataTable: set sort(null) clears sort key', () => {
   // Now clear it
   t.sort = null;
   // Rows should be in original order
-  const tbody = findAll(t, 'tbody')[0];
-  const names = tbody._children.map(
-    (/** @type {any} */ tr) => tr._children[0].textContent
-  );
-  assert.deepEqual(names, ['Alice', 'Bob', 'Carol']);
+  assert.deepEqual(firstColumnValues(t), ['Alice', 'Bob', 'Carol']);
 });
 
 test('CORADataTable: set sort with desc direction sorts descending', () => {
   const t = makeTable();
   t.sort = { key: 'name', dir: 'desc' };
-  const tbody = findAll(t, 'tbody')[0];
-  const names = tbody._children.map(
-    (/** @type {any} */ tr) => tr._children[0].textContent
-  );
-  assert.deepEqual(names, ['Carol', 'Bob', 'Alice']);
+  assert.deepEqual(firstColumnValues(t), ['Carol', 'Bob', 'Alice']);
 });
 
 test('CORADataTable: set sort without dir defaults to asc', () => {
   const t = makeTable();
   t.sort = { key: 'name' };
-  const tbody = findAll(t, 'tbody')[0];
-  const names = tbody._children.map(
-    (/** @type {any} */ tr) => tr._children[0].textContent
-  );
-  assert.deepEqual(names, ['Alice', 'Bob', 'Carol']);
+  assert.deepEqual(firstColumnValues(t), ['Alice', 'Bob', 'Carol']);
 });
 
 test('CORADataTable: clicking header sorts and second click reverses', () => {
   const t = makeTable();
-  const headerBtns = findAll(t, 'button').filter(
-    (b) => b.textContent === 'Name'
-  );
-  assert.equal(headerBtns.length, 1);
+  const header = getByRole(t, 'button', { name: 'Name' });
 
-  headerBtns[0]._listeners['click'][0]();
-  const tbody1 = findAll(t, 'tbody')[0];
-  const names1 = tbody1._children.map(
-    (/** @type {any} */ tr) => tr._children[0].textContent
-  );
-  assert.deepEqual(names1, ['Alice', 'Bob', 'Carol']);
+  fireEvent(header, 'click');
+  assert.deepEqual(firstColumnValues(t), ['Alice', 'Bob', 'Carol']);
 
-  headerBtns[0]._listeners['click'][0]();
-  const tbody2 = findAll(t, 'tbody')[0];
-  const names2 = tbody2._children.map(
-    (/** @type {any} */ tr) => tr._children[0].textContent
-  );
-  assert.deepEqual(names2, ['Carol', 'Bob', 'Alice']);
+  fireEvent(header, 'click');
+  assert.deepEqual(firstColumnValues(t), ['Carol', 'Bob', 'Alice']);
 });
 
 test('CORADataTable: connectedCallback is idempotent (second call is no-op)', () => {
   const t = makeTable();
-  const firstChild = /** @type {any} */ (t)._children[0];
+  const firstGrid = getByRole(t, 'grid');
   t.connectedCallback();
-  assert.equal(
-    /** @type {any} */ (t)._children[0],
-    firstChild,
-    'second connectedCallback must not rebuild'
-  );
+  assert.equal(getByRole(t, 'grid'), firstGrid, 'must not rebuild');
 });
 
 test('CORADataTable: renderCell used when provided, else getValue', () => {
@@ -154,12 +135,15 @@ test('CORADataTable: renderCell used when provided, else getValue', () => {
   ];
   t.rows = [{ name: 'X', val: 42 }];
   t.connectedCallback();
-  const tbody = findAll(t, 'tbody')[0];
-  const cells = tbody._children[0]._children;
-  assert.equal(cells[0].textContent, 'cell:X', 'renderCell string used');
-  assert.equal(cells[1].textContent, '42', 'getValue used');
+  const renderedCells = cells(rows(t)[0]);
   assert.equal(
-    cells[2].textContent,
+    renderedCells[0].textContent,
+    'cell:X',
+    'renderCell string used'
+  );
+  assert.equal(renderedCells[1].textContent, '42', 'getValue used');
+  assert.equal(
+    renderedCells[2].textContent,
     '—',
     'null/undefined getValue shows em-dash'
   );
@@ -180,9 +164,8 @@ test('CORADataTable: renderCell returning a non-string node appends it', () => {
   ];
   t.rows = [{}];
   t.connectedCallback();
-  const tbody = findAll(t, 'tbody')[0];
-  const td = tbody._children[0]._children[0];
-  assert.equal(td._children[0].textContent, 'child');
+  const cell = cells(rows(t)[0])[0];
+  assert.equal(getByTag(cell, 'span').textContent, 'child');
 });
 
 test('CORADataTable: renderCell returning null does not append anything', () => {
@@ -196,9 +179,11 @@ test('CORADataTable: renderCell returning null does not append anything', () => 
   ];
   t.rows = [{}];
   t.connectedCallback();
-  const tbody = findAll(t, 'tbody')[0];
-  const td = tbody._children[0]._children[0];
-  assert.equal(td._children.length, 0, 'null renderCell appends nothing');
+  assert.equal(
+    cells(rows(t)[0])[0].childElementCount,
+    0,
+    'null renderCell appends nothing'
+  );
 });
 
 test('CORADataTable: rowClass is applied', () => {
@@ -212,9 +197,8 @@ test('CORADataTable: rowClass is applied', () => {
     { n: 2, flag: false },
   ];
   t.connectedCallback();
-  const tbody = findAll(t, 'tbody')[0];
-  assert.equal(tbody._children[0].className, 'flagged');
-  assert.equal(tbody._children[1].className, '');
+  assert.equal(rows(t)[0].className, 'flagged');
+  assert.equal(rows(t)[1].className, '');
 });
 
 test('CORADataTable: onRowActivate fires on Enter keydown', () => {
@@ -227,34 +211,27 @@ test('CORADataTable: onRowActivate fires on Enter keydown', () => {
   t.onRowActivate = (r) => activated.push(r);
   t.rows = [{ n: 1 }, { n: 2 }];
   t.connectedCallback();
-  const tbody = findAll(t, 'tbody')[0];
-  const tr = tbody._children[0];
-  tr._listeners['keydown'][0]({ key: 'Enter' });
+  fireEvent(rows(t)[0], 'keydown', { key: 'Enter' });
   assert.equal(activated.length, 1);
   assert.equal(activated[0].n, 1);
 });
 
-// --- _onKeydown grid navigation ---
+// --- grid keyboard navigation ---
 
-test('CORADataTable: _onKeydown ignores non-arrow keys', () => {
+test('CORADataTable: grid ignores non-arrow keys', () => {
   const t = makeTable();
-  const table = findAll(t, 'table')[0];
   // Should not throw or change focus
   /** @type {any} */ (globalThis)._lastFocused = null;
-  table._listeners['keydown'][0]({ key: 'Tab' });
+  fireEvent(getByRole(t, 'grid'), 'keydown', { key: 'Tab' });
   assert.equal(/** @type {any} */ (globalThis)._lastFocused, null);
 });
 
-test('CORADataTable: _onKeydown ArrowRight moves to next cell in row', () => {
+test('CORADataTable: ArrowRight moves to next cell in row', () => {
   const t = makeTable();
-  const table = findAll(t, 'table')[0];
-  const tbody = findAll(t, 'tbody')[0];
-  const row0 = tbody._children[0];
-  const cell0 = row0._children[0];
-  const cell1 = row0._children[1];
+  const [cell0, cell1] = cells(rows(t)[0]);
 
   /** @type {any} */ (globalThis)._lastFocused = cell0;
-  table._listeners['keydown'][0]({ key: 'ArrowRight', preventDefault() {} });
+  fireEvent(getByRole(t, 'grid'), 'keydown', { key: 'ArrowRight' });
   assert.equal(
     /** @type {any} */ (globalThis)._lastFocused,
     cell1,
@@ -262,16 +239,12 @@ test('CORADataTable: _onKeydown ArrowRight moves to next cell in row', () => {
   );
 });
 
-test('CORADataTable: _onKeydown ArrowLeft moves to previous cell in row', () => {
+test('CORADataTable: ArrowLeft moves to previous cell in row', () => {
   const t = makeTable();
-  const table = findAll(t, 'table')[0];
-  const tbody = findAll(t, 'tbody')[0];
-  const row0 = tbody._children[0];
-  const cell1 = row0._children[1];
-  const cell0 = row0._children[0];
+  const [cell0, cell1] = cells(rows(t)[0]);
 
   /** @type {any} */ (globalThis)._lastFocused = cell1;
-  table._listeners['keydown'][0]({ key: 'ArrowLeft', preventDefault() {} });
+  fireEvent(getByRole(t, 'grid'), 'keydown', { key: 'ArrowLeft' });
   assert.equal(
     /** @type {any} */ (globalThis)._lastFocused,
     cell0,
@@ -279,17 +252,13 @@ test('CORADataTable: _onKeydown ArrowLeft moves to previous cell in row', () => 
   );
 });
 
-test('CORADataTable: _onKeydown ArrowDown moves to cell below', () => {
+test('CORADataTable: ArrowDown moves to cell below', () => {
   const t = makeTable();
-  const table = findAll(t, 'table')[0];
-  const tbody = findAll(t, 'tbody')[0];
-  const row0 = tbody._children[0];
-  const row1 = tbody._children[1];
-  const cell00 = row0._children[0];
-  const cell10 = row1._children[0];
+  const cell00 = cells(rows(t)[0])[0];
+  const cell10 = cells(rows(t)[1])[0];
 
   /** @type {any} */ (globalThis)._lastFocused = cell00;
-  table._listeners['keydown'][0]({ key: 'ArrowDown', preventDefault() {} });
+  fireEvent(getByRole(t, 'grid'), 'keydown', { key: 'ArrowDown' });
   assert.equal(
     /** @type {any} */ (globalThis)._lastFocused,
     cell10,
@@ -297,17 +266,13 @@ test('CORADataTable: _onKeydown ArrowDown moves to cell below', () => {
   );
 });
 
-test('CORADataTable: _onKeydown ArrowUp moves to cell above', () => {
+test('CORADataTable: ArrowUp moves to cell above', () => {
   const t = makeTable();
-  const table = findAll(t, 'table')[0];
-  const tbody = findAll(t, 'tbody')[0];
-  const row0 = tbody._children[0];
-  const row1 = tbody._children[1];
-  const cell00 = row0._children[0];
-  const cell10 = row1._children[0];
+  const cell00 = cells(rows(t)[0])[0];
+  const cell10 = cells(rows(t)[1])[0];
 
   /** @type {any} */ (globalThis)._lastFocused = cell10;
-  table._listeners['keydown'][0]({ key: 'ArrowUp', preventDefault() {} });
+  fireEvent(getByRole(t, 'grid'), 'keydown', { key: 'ArrowUp' });
   assert.equal(
     /** @type {any} */ (globalThis)._lastFocused,
     cell00,
@@ -315,15 +280,13 @@ test('CORADataTable: _onKeydown ArrowUp moves to cell above', () => {
   );
 });
 
-test('CORADataTable: _onKeydown ArrowRight at last cell in row does not move', () => {
+test('CORADataTable: ArrowRight at last cell in row does not move', () => {
   const t = makeTable();
-  const table = findAll(t, 'table')[0];
-  const tbody = findAll(t, 'tbody')[0];
-  const row0 = tbody._children[0];
-  const lastCell = row0._children[row0._children.length - 1];
+  const rowCells = cells(rows(t)[0]);
+  const lastCell = rowCells[rowCells.length - 1];
 
   /** @type {any} */ (globalThis)._lastFocused = lastCell;
-  table._listeners['keydown'][0]({ key: 'ArrowRight', preventDefault() {} });
+  fireEvent(getByRole(t, 'grid'), 'keydown', { key: 'ArrowRight' });
   assert.equal(
     /** @type {any} */ (globalThis)._lastFocused,
     lastCell,
@@ -331,14 +294,12 @@ test('CORADataTable: _onKeydown ArrowRight at last cell in row does not move', (
   );
 });
 
-test('CORADataTable: _onKeydown ArrowLeft at first cell does not move', () => {
+test('CORADataTable: ArrowLeft at first cell does not move', () => {
   const t = makeTable();
-  const table = findAll(t, 'table')[0];
-  const tbody = findAll(t, 'tbody')[0];
-  const firstCell = tbody._children[0]._children[0];
+  const firstCell = cells(rows(t)[0])[0];
 
   /** @type {any} */ (globalThis)._lastFocused = firstCell;
-  table._listeners['keydown'][0]({ key: 'ArrowLeft', preventDefault() {} });
+  fireEvent(getByRole(t, 'grid'), 'keydown', { key: 'ArrowLeft' });
   assert.equal(
     /** @type {any} */ (globalThis)._lastFocused,
     firstCell,
@@ -346,14 +307,12 @@ test('CORADataTable: _onKeydown ArrowLeft at first cell does not move', () => {
   );
 });
 
-test('CORADataTable: _onKeydown ArrowUp at first row does not move', () => {
+test('CORADataTable: ArrowUp at first row does not move', () => {
   const t = makeTable();
-  const table = findAll(t, 'table')[0];
-  const tbody = findAll(t, 'tbody')[0];
-  const firstCell = tbody._children[0]._children[0];
+  const firstCell = cells(rows(t)[0])[0];
 
   /** @type {any} */ (globalThis)._lastFocused = firstCell;
-  table._listeners['keydown'][0]({ key: 'ArrowUp', preventDefault() {} });
+  fireEvent(getByRole(t, 'grid'), 'keydown', { key: 'ArrowUp' });
   assert.equal(
     /** @type {any} */ (globalThis)._lastFocused,
     firstCell,
@@ -361,15 +320,13 @@ test('CORADataTable: _onKeydown ArrowUp at first row does not move', () => {
   );
 });
 
-test('CORADataTable: _onKeydown ArrowDown at last row does not move', () => {
+test('CORADataTable: ArrowDown at last row does not move', () => {
   const t = makeTable();
-  const table = findAll(t, 'table')[0];
-  const tbody = findAll(t, 'tbody')[0];
-  const lastRowCells = tbody._children[tbody._children.length - 1]._children;
-  const lastCell = lastRowCells[0];
+  const tableRows = rows(t);
+  const lastCell = cells(tableRows[tableRows.length - 1])[0];
 
   /** @type {any} */ (globalThis)._lastFocused = lastCell;
-  table._listeners['keydown'][0]({ key: 'ArrowDown', preventDefault() {} });
+  fireEvent(getByRole(t, 'grid'), 'keydown', { key: 'ArrowDown' });
   assert.equal(
     /** @type {any} */ (globalThis)._lastFocused,
     lastCell,
@@ -377,12 +334,11 @@ test('CORADataTable: _onKeydown ArrowDown at last row does not move', () => {
   );
 });
 
-test('CORADataTable: _onKeydown when no cell is focused does nothing', () => {
+test('CORADataTable: arrow key with no focused cell does nothing', () => {
   const t = makeTable();
-  const table = findAll(t, 'table')[0];
 
   /** @type {any} */ (globalThis)._lastFocused = null;
-  table._listeners['keydown'][0]({ key: 'ArrowRight', preventDefault() {} });
+  fireEvent(getByRole(t, 'grid'), 'keydown', { key: 'ArrowRight' });
   assert.equal(
     /** @type {any} */ (globalThis)._lastFocused,
     null,
@@ -390,14 +346,13 @@ test('CORADataTable: _onKeydown when no cell is focused does nothing', () => {
   );
 });
 
-test('CORADataTable: _onKeydown with no columns is a no-op', () => {
+test('CORADataTable: arrow key with no columns is a no-op', () => {
   const t = new CORADataTable();
   t.columns = [];
   t.rows = [];
   t.connectedCallback();
-  const table = findAll(t, 'table')[0];
   /** @type {any} */ (globalThis)._lastFocused = null;
-  table._listeners['keydown'][0]({ key: 'ArrowDown' });
+  fireEvent(getByRole(t, 'grid'), 'keydown', { key: 'ArrowDown' });
   assert.equal(/** @type {any} */ (globalThis)._lastFocused, null);
 });
 
@@ -408,9 +363,8 @@ test('CORADataTable: sort with null getValue col is unsortable', () => {
   t.rows = [{ x: 3 }, { x: 1 }, { x: 2 }];
   t.sort = { key: 'x' };
   t.connectedCallback();
-  const tbody = findAll(t, 'tbody')[0];
   // Without getValue, rows are unsorted (original order preserved)
-  assert.equal(tbody._children.length, 3);
+  assert.equal(rows(t).length, 3);
 });
 
 test('CORADataTable: sort comparator handles null values (nulls sort last)', () => {
@@ -426,10 +380,7 @@ test('CORADataTable: sort comparator handles null values (nulls sort last)', () 
   t.rows = [{ n: 5 }, { n: null }, { n: 2 }];
   t.sort = { key: 'n', dir: 'asc' };
   t.connectedCallback();
-  const tbody = findAll(t, 'tbody')[0];
-  const vals = tbody._children.map(
-    (/** @type {any} */ tr) => tr._children[0].textContent
-  );
+  const vals = firstColumnValues(t);
   assert.equal(vals[0], '2', 'smallest non-null first');
   assert.equal(vals[vals.length - 1], '—', 'null last');
 });
@@ -447,8 +398,7 @@ test('CORADataTable: sort comparator where both values are null keeps order stab
   t.rows = [{ n: null }, { n: null }];
   t.sort = { key: 'n', dir: 'asc' };
   t.connectedCallback();
-  const tbody = findAll(t, 'tbody')[0];
-  assert.equal(tbody._children.length, 2, 'both-null comparison returns 0');
+  assert.equal(rows(t).length, 2, 'both-null comparison returns 0');
 });
 
 test('CORADataTable: sort comparator returns 0 for equal non-null values (stable)', () => {
@@ -467,13 +417,8 @@ test('CORADataTable: sort comparator returns 0 for equal non-null values (stable
   ];
   t.sort = { key: 'n', dir: 'asc' };
   t.connectedCallback();
-  const tbody = findAll(t, 'tbody')[0];
   // Both have equal value 5; comparator returns 0 — order is implementation-defined but no crash
-  assert.equal(
-    tbody._children.length,
-    2,
-    'equal non-null values: both rows remain'
-  );
+  assert.equal(rows(t).length, 2, 'equal non-null values: both rows remain');
 });
 
 test('CORADataTable: set rowClass to null falls back to no-op class function', () => {
@@ -484,10 +429,9 @@ test('CORADataTable: set rowClass to null falls back to no-op class function', (
   t.rowClass = /** @type {any} */ (null); // covers `fn || (() => '')` when fn is falsy
   t.rows = [{ n: 1 }];
   t.connectedCallback();
-  const tbody = findAll(t, 'tbody')[0];
   // Fallback (() => '') called during _renderBody — tr.className stays ''
   assert.equal(
-    tbody._children[0].className,
+    rows(t)[0].className,
     '',
     'null rowClass must leave className empty'
   );
@@ -503,9 +447,7 @@ test('CORADataTable: row keydown with non-Enter key is a no-op when onRowActivat
   t.onRowActivate = (r) => activated.push(r);
   t.rows = [{ n: 1 }];
   t.connectedCallback();
-  const tbody = findAll(t, 'tbody')[0];
-  const tr = tbody._children[0];
-  tr._listeners['keydown'][0]({ key: 'Space' }); // non-Enter key
+  fireEvent(rows(t)[0], 'keydown', { key: 'Space' });
   assert.equal(
     activated.length,
     0,

@@ -47,6 +47,27 @@ function makeContext() {
   });
 }
 
+/** @param {{ replaceChildren: (...children: any[]) => void }} [container] */
+function makeRouter(container = { replaceChildren() {} }) {
+  const router = new Router();
+  // init() is the public container seam. It runs before registration here, so
+  // its initial navigation intentionally finds no route.
+  router.init(/** @type {any} */ (container));
+  return router;
+}
+
+function registeredPatterns() {
+  /** @type {string[]} */
+  const patterns = [];
+  const router = {
+    register(/** @type {string} */ pattern) {
+      patterns.push(pattern);
+    },
+  };
+  registerRoutes(/** @type {any} */ (router), makeContext());
+  return patterns;
+}
+
 test('safeRegister: a throwing registration function does not propagate and is logged', () => {
   const router = new Router();
   const context = makeContext();
@@ -99,74 +120,21 @@ test('safeRegister: a succeeding registration function runs with router + contex
   assert.equal(calls[0][1], context, 'context is passed through');
 });
 
-test('registerRoutes: registers #/ route', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
-  registerRoutes(router, makeContext());
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/')),
-    '#/ should be registered'
-  );
-});
-
-test('registerRoutes: registers #/dashboard route', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
-  registerRoutes(router, makeContext());
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/dashboard')),
-    '#/dashboard should be registered'
-  );
-});
-
-test('registerRoutes: registers #/conversation/:id route', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
-  registerRoutes(router, makeContext());
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/conversation/99')),
-    '#/conversation/:id should be registered'
-  );
-});
-
-test('registerRoutes: registers source-key conversation route', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
-  registerRoutes(router, makeContext());
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/conversation/example-review/99')),
-    '#/conversation/:caseType/:id should be registered'
-  );
-});
-
-test('registerRoutes: registers #/question-bank route', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
-  registerRoutes(router, makeContext());
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/question-bank')),
-    '#/question-bank should be registered'
-  );
-});
-
-test('registerRoutes: registers #/case/:id route', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
-  registerRoutes(router, makeContext());
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/case/99')),
-    '#/case/:id should be registered'
-  );
-});
-
-test('registerRoutes: registers source-key case route', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
-  registerRoutes(router, makeContext());
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/case/example-review/99')),
-    '#/case/:caseType/:id should be registered'
-  );
+test('registerRoutes: registers the complete public route contract', () => {
+  assert.deepEqual(registeredPatterns(), [
+    '#/',
+    '#/dashboard',
+    '#/conversation/:caseType/:id',
+    '#/conversation/:id',
+    '#/question-bank',
+    '#/case/:caseType/:id',
+    '#/case/:id',
+    '#/reports',
+    '#/reports/reviewer-team',
+    '#/team-cases',
+    '#/my-cases',
+    '#/journey-cases',
+  ]);
 });
 
 test('registerRoutes: #/ mount renders home route directly (no redirect)', async () => {
@@ -179,9 +147,9 @@ test('registerRoutes: #/ mount renders home route directly (no redirect)', async
         textContent: '',
         className: '',
         href: '',
-        _children: /** @type {any[]} */ ([]),
+        children: /** @type {any[]} */ ([]),
         appendChild(/** @type {any} */ child) {
-          this._children.push(child);
+          this.children.push(child);
           return child;
         },
         setAttribute() {},
@@ -191,7 +159,7 @@ test('registerRoutes: #/ mount renders home route directly (no redirect)', async
       return /** @type {any} */ ({
         tagName: '#text',
         textContent: text,
-        _children: [],
+        children: [],
       });
     },
     createTreeWalker() {
@@ -215,8 +183,7 @@ test('registerRoutes: #/ mount renders home route directly (no redirect)', async
   };
 
   try {
-    const router = new Router();
-    router._container = /** @type {any} */ ({});
+    const router = makeRouter();
     const context = makeContext();
     context.capabilities = {
       isReviewer: false,
@@ -252,9 +219,9 @@ test('registerRoutes: #/dashboard mount composes the dashboard page into the con
     createElement(/** @type {string} */ tag) {
       return {
         tagName: tag.toUpperCase(),
-        _children: /** @type {any[]} */ ([]),
+        children: /** @type {any[]} */ ([]),
         replaceChildren(/** @type {any[]} */ ...cs) {
-          this._children = cs;
+          this.children = cs;
         },
         setAttribute() {},
       };
@@ -262,13 +229,12 @@ test('registerRoutes: #/dashboard mount composes the dashboard page into the con
   };
 
   try {
-    const router = new Router();
     const container = {
       replaceChildren(/** @type {any[]} */ ...children) {
         rendered.splice(0, rendered.length, ...children);
       },
     };
-    router._container = /** @type {any} */ (container);
+    const router = makeRouter(container);
     const context = makeContext();
     // All-false capabilities: the page renders without hitting the client.
     context.capabilities = /** @type {any} */ ({
@@ -289,9 +255,8 @@ test('registerRoutes: #/dashboard mount composes the dashboard page into the con
 });
 
 test('registerRoutes: #/question-bank mount adds cora-fullbleed to appEl', async () => {
-  const router = new Router();
   const container = { replaceChildren() {} };
-  router._container = /** @type {any} */ (container);
+  const router = makeRouter(container);
   const appEl = {
     classList: {
       added: /** @type {string[]} */ ([]),
@@ -331,16 +296,6 @@ test('registerRoutes: #/question-bank mount adds cora-fullbleed to appEl', async
   }
 });
 
-test('registerRoutes: registers #/reports route', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
-  registerRoutes(router, makeContext());
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/reports')),
-    '#/reports should be registered'
-  );
-});
-
 test('registerRoutes: #/reports mount renders reports index directly', async () => {
   const rendered = /** @type {any[]} */ ([]);
   const origCreate = /** @type {any} */ (globalThis).document;
@@ -351,9 +306,9 @@ test('registerRoutes: #/reports mount renders reports index directly', async () 
         textContent: '',
         className: '',
         href: '',
-        _children: /** @type {any[]} */ ([]),
+        children: /** @type {any[]} */ ([]),
         appendChild(/** @type {any} */ child) {
-          this._children.push(child);
+          this.children.push(child);
           return child;
         },
         setAttribute() {},
@@ -369,13 +324,12 @@ test('registerRoutes: #/reports mount renders reports index directly', async () 
   };
 
   try {
-    const router = new Router();
     const container = {
       replaceChildren(/** @type {any[]} */ ...children) {
         rendered.splice(0, rendered.length, ...children);
       },
     };
-    router._container = /** @type {any} */ (container);
+    const router = makeRouter(container);
     const context = makeContext();
     context.capabilities = {
       isReviewer: false,
@@ -402,16 +356,6 @@ test('registerRoutes: #/reports mount renders reports index directly', async () 
   }
 });
 
-test('registerRoutes: registers #/reports/reviewer-team route', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
-  registerRoutes(router, makeContext());
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/reports/reviewer-team')),
-    '#/reports/reviewer-team should be registered'
-  );
-});
-
 test('registerRoutes: #/reports/reviewer-team redirects when the user is not a reviewer manager', async () => {
   const locations = /** @type {string[]} */ ([]);
   const origLocation = globalThis.location;
@@ -425,9 +369,8 @@ test('registerRoutes: #/reports/reviewer-team redirects when the user is not a r
   };
 
   try {
-    const router = new Router();
     const container = { replaceChildren() {} };
-    router._container = /** @type {any} */ (container);
+    const router = makeRouter(container);
     registerRoutes(
       router,
       /** @type {any} */ ({
@@ -447,9 +390,8 @@ test('registerRoutes: #/reports/reviewer-team redirects when the user is not a r
 });
 
 test('registerRoutes: #/question-bank unmount removes cora-fullbleed from appEl', async () => {
-  const router = new Router();
   const container = { replaceChildren() {} };
-  router._container = /** @type {any} */ (container);
+  const router = makeRouter(container);
   const removed = /** @type {string[]} */ ([]);
   const appEl = {
     classList: {
@@ -476,9 +418,9 @@ test('registerRoutes: #/question-bank unmount removes cora-fullbleed from appEl'
     createElement(/** @type {string} */ tag) {
       return {
         tagName: tag.toUpperCase(),
-        _children: /** @type {any[]} */ ([]),
+        children: /** @type {any[]} */ ([]),
         replaceChildren(/** @type {any[]} */ ...cs) {
-          this._children = cs;
+          this.children = cs;
         },
         setAttribute() {},
       };
@@ -495,34 +437,4 @@ test('registerRoutes: #/question-bank unmount removes cora-fullbleed from appEl'
   } finally {
     /** @type {any} */ (globalThis).document = origCreate;
   }
-});
-
-test('registerRoutes: registers #/team-cases route', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
-  registerRoutes(router, makeContext());
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/team-cases')),
-    '#/team-cases should be registered'
-  );
-});
-
-test('registerRoutes: registers #/my-cases route', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
-  registerRoutes(router, makeContext());
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/my-cases')),
-    '#/my-cases should be registered'
-  );
-});
-
-test('registerRoutes: registers #/journey-cases route', () => {
-  const router = new Router();
-  router._container = /** @type {any} */ ({});
-  registerRoutes(router, makeContext());
-  assert.ok(
-    router._routes.some((r) => r.re.test('#/journey-cases')),
-    '#/journey-cases should be registered'
-  );
 });
