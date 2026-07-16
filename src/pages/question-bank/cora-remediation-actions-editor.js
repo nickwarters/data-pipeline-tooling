@@ -38,8 +38,11 @@ export function RemediationActionsEditor(props) {
         'Reviewers can write their own remediation alongside any canned actions.'
       )
     ),
-    h('div', {
+    h('button', {
       class: 'toggle' + (q.allowFreeFormRemediation ? ' on' : ''),
+      role: 'switch',
+      'aria-checked': String(Boolean(q.allowFreeFormRemediation)),
+      'aria-label': 'Allow free-form remediation',
       onclick: () =>
         commit(() => {
           q.allowFreeFormRemediation = !q.allowFreeFormRemediation;
@@ -87,6 +90,7 @@ export function RemediationActionsEditor(props) {
       const inp = /** @type {any} */ (
         h('input', {
           value: action.text,
+          'aria-label': `Remediation action ${idx + 1}`,
           onchange: (/** @type {any} */ e) =>
             commit(() => {
               props.ensureActionObjects(q);
@@ -100,9 +104,10 @@ export function RemediationActionsEditor(props) {
           { class: 'rem-item' },
           inp,
           h(
-            'span',
+            'button',
             {
               class: 'x',
+              'aria-label': `Remove remediation action ${idx + 1}`,
               onclick: () =>
                 commit(() => {
                   q.remediationActions.splice(idx, 1);

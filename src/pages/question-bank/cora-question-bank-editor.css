@@ -321,6 +321,7 @@ cora-bank-editor .toggle {
   background: var(--cora-color-surface-2);
   border: 1px solid var(--cora-color-border-strong);
   border-radius: var(--cora-radius-pill);
+  padding: 0;
   cursor: pointer;
   transition:
     background var(--cora-duration-base) var(--cora-easing-standard),
@@ -1372,6 +1373,9 @@ cora-bank-editor .rem-item .x {
   cursor: pointer;
   color: var(--cora-color-text-muted);
   font-family: var(--cora-font-mono);
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 cora-bank-editor .rem-item .x:hover {
   color: var(--cora-color-danger);
