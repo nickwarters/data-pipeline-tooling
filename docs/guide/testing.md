@@ -14,6 +14,8 @@ testing a browser/custom-element boundary.
 node --test # run all tests
 node --test tests/view.test.js # single file
 npm run test:coverage # all production files + enforced thresholds
+npm run test:security # focused local security/domain contracts
+npm run test:security:mutation # mutation gate for critical kernels
 node --test --watch # re-run on file change
 ```
 
@@ -35,6 +37,35 @@ methods, walk numeric child positions, or invoke a DOM stub's private listener
 registry solely to cover a line. Exact assertions remain appropriate for an
 external request, persisted data shape, security guard, or accepted architecture
 boundary.
+
+## Selective Security Assurance
+
+`npm run test:security:mutation` runs Stryker only against the small set where a
+false green is expensive: the HTML injection guard, capability mapping,
+section-access policy, failure evaluation, and configured Outcome calculation.
+It deliberately does not mutate every component or protocol adapter. The gate
+enforces a 95% mutation score; generated reports live under ignored
+`reports/mutation/`.
+
+Client-side capability and section-access tests remain UX contracts, not proof
+of authorization. Before a production release, run the non-mutating UAT ACL
+persona smoke gate against the real `uat_*` SharePoint lists:
+
+1. Copy `scripts/uat-acl-smoke.example.json` outside the repository and list
+   every UAT Case list that the release can touch.
+2. For each persona, create a JSON file containing the request headers needed
+   for that person's authenticated SharePoint session, for example
+   `{ "Authorization": "Bearer …" }`. Keep these files outside the repository.
+3. Set each configured `headersFileEnv` variable to its headers-file path.
+4. Run
+   `npm run test:security:uat -- /secure/path/uat-acl-smoke.json`.
+
+For every list, configuration validation requires an allowed reader (which
+proves the list exists), a denied reader, and a read-allowed/write-denied
+persona. The runner performs GET requests only. It verifies read denial through
+the real list-items endpoint and write denial through the list's
+`EffectiveBasePermissions`; it never creates, updates, or deletes UAT data. It
+also refuses list names without the configured `uat_` prefix.
 
 ## Capability-Sized Suites
 

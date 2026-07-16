@@ -59,6 +59,13 @@ test('isFailure: returns false when string value does not match', () => {
   assert.equal(isFailure(Q_FAIL_NO, { value: 'NA' }), false);
 });
 
+test('isFailure: scalar values require equality rather than substring matching', () => {
+  assert.equal(
+    isFailure({ ...Q_FAIL_NO, failureCriteria: 'N' }, { value: 'No' }),
+    false
+  );
+});
+
 test('isFailure: returns true when array value includes failureCriteria', () => {
   assert.equal(isFailure(Q_MULTI, { value: ['Account', 'Billing'] }), true);
 });

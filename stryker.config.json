@@ -1,0 +1,32 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "mutate": [
+    "src/lib/html.js:11-13",
+    "src/lib/html.js:78-82",
+    "src/lib/html.js:117-119",
+    "src/services/permissions.js",
+    "src/services/section-access.js:329-385",
+    "src/evaluators/configured-outcome.js:37-94",
+    "src/evaluators/configured-outcome.js:149-178",
+    "src/evaluators/failure-evaluator.js"
+  ],
+  "testRunner": "command",
+  "commandRunner": {
+    "command": "node --test tests/html.test.js tests/permissions.test.js tests/section-access.test.js tests/configured-outcome.test.js tests/failure-evaluator.test.js"
+  },
+  "coverageAnalysis": "off",
+  "concurrency": 4,
+  "reporters": ["clear-text", "progress", "html", "json"],
+  "htmlReporter": {
+    "fileName": "reports/mutation/index.html"
+  },
+  "jsonReporter": {
+    "fileName": "reports/mutation/mutation.json"
+  },
+  "thresholds": {
+    "high": 95,
+    "low": 95,
+    "break": 95
+  },
+  "timeoutMS": 10000
+}

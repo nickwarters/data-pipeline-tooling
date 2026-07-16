@@ -29,6 +29,12 @@ authoritative: they are exactly what `HttpSharePointClient`
 (`src/services/http-sharepoint-client.js`, `rowFromItem` / `itemFromRow`) reads
 and writes. Display names are free to differ.
 
+For UAT, provision the matching `uat_`-prefixed list and include it in the ACL
+persona matrix described in the [testing guide](testing.md#selective-security-assurance).
+The pre-release smoke gate must demonstrate that the list exists for an allowed
+reader, is hidden from an unrelated persona, and denies write permissions to a
+read-only persona.
+
 ### Columns
 
 | Internal name             | SharePoint type                | Purpose                                                                                                                                                                                                   |

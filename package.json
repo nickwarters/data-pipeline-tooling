@@ -8,10 +8,14 @@
     "flow:run": "node scripts/run_in_memory_flow.js",
     "test": "node --test",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.js' --test-coverage-include='case-types/**/*.js' --test-coverage-lines=95 --test-coverage-branches=95 --test-coverage-functions=95",
+    "test:security": "node --test tests/html.test.js tests/permissions.test.js tests/section-access.test.js tests/failure-evaluator.test.js tests/configured-outcome.test.js tests/uat-acl-smoke.test.js",
+    "test:security:mutation": "stryker run",
+    "test:security:uat": "node scripts/uat_acl_smoke.js",
     "prepare": "husky"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@stryker-mutator/core": "^9.6.1",
     "@types/node": "^25.6.1",
     "eslint": "^10.5.0",
     "eslint-config-prettier": "^10.1.8",
@@ -32,5 +36,8 @@
     "case-types/banks/*.txt": [
       "prettier --write"
     ]
+  },
+  "overrides": {
+    "qs": "6.15.3"
   }
 }

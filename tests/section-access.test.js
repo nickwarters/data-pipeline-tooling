@@ -810,6 +810,19 @@ test('most-permissive: RP + assignedReviewer → edit on notes', () => {
   );
 });
 
+test('most-permissive: role order cannot let a later hidden role reduce access', () => {
+  const cfg = makeConfig();
+  assert.equal(
+    evaluateAccess(
+      'notes',
+      ['assignedReviewer', 'responsibleParty'],
+      makeCase(),
+      cfg
+    ),
+    'edit'
+  );
+});
+
 test('most-permissive: otherReviewer + RP → conversation edit', () => {
   const cfg = makeConfig();
   assert.equal(

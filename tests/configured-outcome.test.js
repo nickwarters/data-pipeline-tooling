@@ -228,6 +228,142 @@ test('validateConfiguredOutcomeConfig: rejects a missing questions array clearly
   );
 });
 
+test('validateConfiguredOutcomeConfig: accepts a complete valid configuration', () => {
+  assert.doesNotThrow(() =>
+    validateConfiguredOutcomeConfig([], PASS_REFER_FAIL, 'pass')
+  );
+});
+
+test('validateConfiguredOutcomeConfig: rejects malformed outcome options', () => {
+  const option = (/** @type {Record<string, unknown>} */ overrides) => [
+    { id: 'pass', wording: 'Pass', severity: 0, ...overrides },
+  ];
+
+  for (const [outcomes, message] of [
+    [/** @type {any} */ ([null]), /requires an id/],
+    [/** @type {any} */ (option({ id: 42 })), /requires an id/],
+    [option({ id: '' }), /requires an id/],
+    [
+      [
+        { id: 'pass', wording: 'Pass', severity: 0 },
+        { id: 'pass', wording: 'Again', severity: 1 },
+      ],
+      /duplicate outcome id "pass"/,
+    ],
+    [option({ wording: '' }), /requires wording/],
+    [option({ wording: 42 }), /requires wording/],
+    [option({ severity: Number.NaN }), /requires a finite severity/],
+  ]) {
+    assert.throws(
+      () =>
+        validateConfiguredOutcomeConfig(
+          [],
+          /** @type {any} */ (outcomes),
+          'pass'
+        ),
+      /** @type {RegExp} */ (message)
+    );
+  }
+});
+
+test('OutcomeConfigurationError: exposes a stable error type and message', () => {
+  assert.throws(
+    () => validateConfiguredOutcomeConfig([], [], 'pass'),
+    (error) => {
+      assert.ok(error instanceof Error);
+      assert.equal(error.name, 'OutcomeConfigurationError');
+      assert.match(
+        error.message,
+        /^Case Type outcome configuration is invalid:/
+      );
+      return true;
+    }
+  );
+});
+
+test('computeConfiguredOutcome: rejects an unconfigured default', () => {
+  assert.throws(
+    () => computeConfiguredOutcome([], {}, PASS_REFER_FAIL, 'ghost'),
+    /defaultOutcomeId "ghost" is not configured/
+  );
+});
+
+test('computeConfiguredOutcome: ignores empty, unmapped, and unknown mappings', () => {
+  /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
+  const questions = [
+    {
+      id: 'empty',
+      text: 'Empty',
+      responseType: 'single-choice',
+      optionOutcomes: { No: 'fail' },
+      deprecated: false,
+    },
+    {
+      id: 'unmapped',
+      text: 'Unmapped',
+      responseType: 'single-choice',
+      optionOutcomes: { No: 'fail' },
+      deprecated: false,
+    },
+    {
+      id: 'unknown',
+      text: 'Unknown',
+      responseType: 'single-choice',
+      optionOutcomes: { No: 'ghost' },
+      deprecated: false,
+    },
+  ];
+
+  assert.deepEqual(
+    computeConfiguredOutcome(
+      questions,
+      {
+        empty: { value: '' },
+        unmapped: { value: 'Yes' },
+        unknown: { value: 'No' },
+      },
+      PASS_REFER_FAIL,
+      'pass'
+    ),
+    { outcome: 'pass' }
+  );
+});
+
+test('computeConfiguredOutcome: equal severity uses the later specific mapping', () => {
+  /** @type {import('../src/sharepoint-client.js').QuestionDefinition[]} */
+  const questions = [
+    {
+      id: 'q1',
+      text: 'Q1',
+      responseType: 'single-choice',
+      optionOutcomes: { A: 'refer-a' },
+      deprecated: false,
+    },
+    {
+      id: 'q2',
+      text: 'Q2',
+      responseType: 'single-choice',
+      optionOutcomes: { B: 'refer-b' },
+      deprecated: false,
+    },
+  ];
+  const outcomes = [
+    { id: 'pass', wording: 'Pass', severity: 0 },
+    { id: 'refer-a', wording: 'Refer A', severity: 50 },
+    { id: 'refer-b', wording: 'Refer B', severity: 50 },
+  ];
+
+  assert.deepEqual(
+    computeConfiguredOutcome(
+      questions,
+      { q1: { value: 'A' }, q2: { value: 'B' } },
+      outcomes,
+      'pass'
+    ),
+    { outcome: 'refer-b' }
+  );
+});
+
 test('outcomeResponseOptions: derives read-only labels and mapping from the outcome vocabulary', () => {
   assert.deepEqual(outcomeResponseOptions(PASS_REFER_FAIL), {
     options: ['Pass', 'Refer', 'Fail'],
