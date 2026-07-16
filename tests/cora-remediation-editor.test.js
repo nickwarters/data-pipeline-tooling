@@ -2,10 +2,32 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import { commitSpy } from './_example-review-fixture.js';
 installDom();
 
 const { CORARemediationEditor } =
   await import('../src/components/sections/cora-remediation-editor.js');
+
+test('CORARemediationEditor: mutations flow through the onCommit prop', () => {
+  /** @type {any} */
+  const q = { id: 'q', text: '', responseType: 'yes-no-na', deprecated: false };
+  const onCommit = commitSpy();
+  const e = new CORARemediationEditor();
+  e.question = q;
+  e.onCommit = onCommit;
+  e.connectedCallback();
+  const wrap = /** @type {any} */ (e)._children[0];
+  const freeRow = wrap._children[1];
+  const toggle = freeRow._children[1];
+  toggle._listeners.click[0]();
+  assert.equal(onCommit.calls, 1);
+  assert.equal(q.allowFreeFormRemediation, true);
+
+  const addBtn = wrap._children[wrap._children.length - 1];
+  addBtn._listeners.click[0]();
+  assert.equal(onCommit.calls, 2);
+  assert.equal(q.remediationActions.length, 1);
+});
 
 test('CORARemediationEditor: no question → renders nothing', () => {
   const e = new CORARemediationEditor();

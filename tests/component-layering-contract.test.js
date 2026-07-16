@@ -75,7 +75,6 @@ test('layering: components→question-bank couplings match the documented allowl
     'src/components/base/cora-question-labels.js',
     'src/components/base/cora-showwhen-leaf.js',
     'src/components/sections/cora-question-card.js',
-    'src/components/sections/cora-remediation-editor.js',
     'src/components/sections/cora-showwhen-editor.js',
     'src/components/sections/cora-showwhen-group.js',
     'src/components/sections/cora-wording-editor.js',

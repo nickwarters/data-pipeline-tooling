@@ -2,7 +2,6 @@
 import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
-import { commit } from '../../question-bank/question-bank-store.js';
 import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.js';
 
 /**
@@ -11,10 +10,14 @@ import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.
  * the Outcome — the response does (question bank redesign) — so there is no
  * per-action or no-action Outcome selector here.
  *
- * @param {{ question: any, ensureActionObjects: (q: any) => void, nextActionId: (q: any) => string }} props
+ * Mutations flow up through `onCommit` (the mounting page passes the bank
+ * editor's `commit`); this component has no store dependency.
+ *
+ * @param {{ question: any, onCommit: (fn: () => void) => void, ensureActionObjects: (q: any) => void, nextActionId: (q: any) => string }} props
  * @returns {HTMLElement | undefined}
  */
 export function RemediationEditor(props) {
+  const commit = props.onCommit;
   const q = props.question;
   if (!q) return;
 
@@ -146,11 +149,19 @@ export class CORARemediationEditor extends ShellElement {
     super();
     /** @type {any} */
     this.question = null;
+    /**
+     * Mutation sink. Defaults to "just apply the mutation" so the component
+     * works standalone; the bank editor injects the store's `commit()` to add
+     * re-render broadcast and focus preservation.
+     * @type {(fn: () => void) => void}
+     */
+    this.onCommit = (fn) => fn();
   }
 
   render() {
     return RemediationEditor({
       question: this.question,
+      onCommit: this.onCommit,
       ensureActionObjects: (q) => this._ensureActionObjects(q),
       nextActionId: (q) => this._nextActionId(q),
     });

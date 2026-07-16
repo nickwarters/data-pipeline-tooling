@@ -87,7 +87,7 @@ export function QuestionCard(props) {
     h('cora-options-editor', { question: q }),
     h('cora-question-labels', { question: q }),
     h('cora-showwhen-editor', { question: q }),
-    h('cora-remediation-editor', { question: q }),
+    h('cora-remediation-editor', { question: q, onCommit: commit }),
   ];
 
   const body = h('div', { class: 'card-body' }, ...bodyChildren);
