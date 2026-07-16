@@ -59,7 +59,7 @@ test('routes-journey-cases: registers #/journey-cases route', () => {
   );
 });
 
-test('routes-journey-cases: mounts JourneyCasesPage output when owned types exist', () => {
+test('routes-journey-cases: mounts JourneyCasesPage output when owned types exist', async () => {
   const router = new Router();
   /** @type {any[]} */
   let mounted = [];
@@ -70,7 +70,7 @@ test('routes-journey-cases: mounts JourneyCasesPage output when owned types exis
   };
   router._container = /** @type {any} */ (container);
   register(router, ctx(['complaints', 'example-review']));
-  router.navigate('#/journey-cases');
+  await router.navigate('#/journey-cases');
 
   assert.equal(mounted.length, 1, 'should mount a single host element');
   assert.ok(findTag(mounted[0], 'h1'), 'should render the page heading');
@@ -102,4 +102,33 @@ test('routes-journey-cases: unmount is a no-op (does not throw)', () => {
   const route = router._routes.find((r) => r.re.test('#/journey-cases'));
   assert.ok(route, 'route should exist');
   assert.doesNotThrow(() => route.handler.unmount());
+});
+
+test('routes-journey-cases: a rejecting page load renders a cora-route-error panel', async () => {
+  const originalConsoleError = console.error;
+  console.error = () => {};
+  try {
+    const router = new Router();
+    /** @type {any[]} */
+    let mounted = [];
+    const container = {
+      replaceChildren(/** @type {any} */ ...args) {
+        mounted = args;
+      },
+    };
+    router._container = /** @type {any} */ (container);
+    register(router, ctx(['complaints']), () =>
+      Promise.reject(new Error('boom'))
+    );
+    await router.navigate('#/journey-cases');
+
+    assert.equal(mounted.length, 1, 'should mount the error panel');
+    assert.equal(
+      mounted[0].className,
+      'cora-route-error',
+      'should render the router error panel'
+    );
+  } finally {
+    console.error = originalConsoleError;
+  }
 });
