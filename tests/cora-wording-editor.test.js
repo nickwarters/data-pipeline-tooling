@@ -1,14 +1,28 @@
 // @ts-check
-import { resetStoreWithExampleReview } from './_bank-store-fixture.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import {
+  freshExampleReviewBank,
+  commitSpy,
+} from './_example-review-fixture.js';
 installDom();
 
 const { CORAWordingEditor, WordingEditor } =
   await import('../src/components/sections/cora-wording-editor.js');
-const { _resetStore, cases, activeSlug, commit } =
-  await import('../src/question-bank/question-bank-store.js');
+
+/**
+ * Mount a CORAWordingEditor with props and an onCommit spy (no store).
+ * @param {any} q @param {any} [baselineQuestion]
+ */
+function mount(q, baselineQuestion) {
+  const e = new CORAWordingEditor();
+  e.question = q;
+  e.baselineQuestion = baselineQuestion;
+  e.onCommit = commitSpy();
+  e.connectedCallback();
+  return e;
+}
 
 test('WordingEditor: plain function renders nothing without a question', () => {
   assert.equal(
@@ -49,11 +63,8 @@ test('CORAWordingEditor: no question → renders nothing', () => {
 });
 
 test('CORAWordingEditor: renders edit mark, textarea, status pill, char count', () => {
-  resetStoreWithExampleReview();
-  const q = cases.get()['example-review'].questions[0];
-  const e = new CORAWordingEditor();
-  e.question = q;
-  e.connectedCallback();
+  const q = freshExampleReviewBank().questions[0];
+  const e = mount(q, structuredClone(q));
   const wrap = /** @type {any} */ (e)._children[0];
   assert.equal(wrap.className, 'wording');
   // edit-mark span, textarea, wording-foot
@@ -65,22 +76,16 @@ test('CORAWordingEditor: renders edit mark, textarea, status pill, char count', 
 });
 
 test('CORAWordingEditor: shows "Edited" when text diverges from baseline', () => {
-  resetStoreWithExampleReview();
-  // Mutate the question text after baseline snapshot
-  commit((t) => {
-    t['example-review'].questions[0].text = 'CHANGED';
-  });
-  const q = cases.get()['example-review'].questions[0];
-  const e = new CORAWordingEditor();
-  e.question = q;
-  e.connectedCallback();
+  const baseline = freshExampleReviewBank().questions[0];
+  const q = structuredClone(baseline);
+  q.text = 'CHANGED';
+  const e = mount(q, baseline);
   const wrap = /** @type {any} */ (e)._children[0];
   const foot = wrap._children[2];
   assert.ok(foot._children[0]._children[0].textContent.includes('Edited'));
 });
 
 test('CORAWordingEditor: shows "New draft" when no baseline match', () => {
-  resetStoreWithExampleReview();
   /** @type {any} */
   const q = {
     id: 'q-never-baseline',
@@ -88,17 +93,13 @@ test('CORAWordingEditor: shows "New draft" when no baseline match', () => {
     responseType: 'yes-no-na',
     deprecated: false,
   };
-  activeSlug.set('example-review');
-  const e = new CORAWordingEditor();
-  e.question = q;
-  e.connectedCallback();
+  const e = mount(q, undefined);
   const wrap = /** @type {any} */ (e)._children[0];
   const foot = wrap._children[2];
   assert.ok(foot._children[0]._children[0].textContent.includes('New draft'));
 });
 
 test('CORAWordingEditor: char count warns over 180', () => {
-  resetStoreWithExampleReview();
   /** @type {any} */
   const q = {
     id: 'q-long',
@@ -106,9 +107,7 @@ test('CORAWordingEditor: char count warns over 180', () => {
     responseType: 'yes-no-na',
     deprecated: false,
   };
-  const e = new CORAWordingEditor();
-  e.question = q;
-  e.connectedCallback();
+  const e = mount(q, undefined);
   const wrap = /** @type {any} */ (e)._children[0];
   const foot = wrap._children[2];
   const cc = foot._children[1];
@@ -116,7 +115,6 @@ test('CORAWordingEditor: char count warns over 180', () => {
 });
 
 test('CORAWordingEditor: deprecated question adds deprecated-text class', () => {
-  resetStoreWithExampleReview();
   /** @type {any} */
   const q = {
     id: 'q-d',
@@ -124,47 +122,35 @@ test('CORAWordingEditor: deprecated question adds deprecated-text class', () => 
     responseType: 'yes-no-na',
     deprecated: true,
   };
-  const e = new CORAWordingEditor();
-  e.question = q;
-  e.connectedCallback();
+  const e = mount(q, undefined);
   const wrap = /** @type {any} */ (e)._children[0];
   const txt = wrap._children[1];
   assert.ok(txt.className.includes('deprecated-text'));
 });
 
-test('CORAWordingEditor: focus/blur toggle "focused" class; input commits text', () => {
-  resetStoreWithExampleReview();
-  const q = cases.get()['example-review'].questions[0];
-  const e = new CORAWordingEditor();
-  e.question = q;
-  e.connectedCallback();
+test('CORAWordingEditor: focus/blur toggle "focused" class; input commits via onCommit', () => {
+  const q = freshExampleReviewBank().questions[0];
+  const e = mount(q, structuredClone(q));
   const wrap = /** @type {any} */ (e)._children[0];
   const txt = wrap._children[1];
   txt._listeners.focus[0]();
   assert.equal(wrap.className, 'wording focused');
   txt._listeners.blur[0]();
   assert.equal(wrap.className, 'wording');
-  // Input event commits the new text
+  // Input event commits the new text through the onCommit prop
   txt._listeners.input[0]({ target: { value: 'new wording' } });
   assert.equal(q.text, 'new wording');
+  assert.equal(/** @type {any} */ (e.onCommit).calls, 1);
 });
 
 test('CORAWordingEditor: long baseline text gets ellipsis', () => {
-  resetStoreWithExampleReview();
-  const long = 'A'.repeat(100);
-  commit((t) => {
-    t['example-review'].questions[0].text = long;
-  });
-  // Now baseline still has the original short text, current has long — wait,
-  // we want the *opposite*: baseline is long, current is different.
-  // Easier: directly test the ellipsis branch with a hand-rolled question.
-  const e = new CORAWordingEditor();
-  // Force baseline lookup: not in baseline → branch already covered above.
-  // Instead set the question to one *in* baseline but with current text differing,
-  // and a baseline text >60 chars.
-  const q = cases.get()['example-review'].questions[0];
+  const baseline = freshExampleReviewBank().questions[0];
+  baseline.text = 'A'.repeat(100);
+  const q = structuredClone(baseline);
   q.text = 'short';
-  e.question = q;
-  e.connectedCallback();
-  // No assert needed beyond not throwing; this exercises the slice(0,60)+'…' branch.
+  const e = mount(q, baseline);
+  const wrap = /** @type {any} */ (e)._children[0];
+  const foot = wrap._children[2];
+  const status = foot._children[0]._children[0].textContent;
+  assert.ok(status.includes('…'));
 });

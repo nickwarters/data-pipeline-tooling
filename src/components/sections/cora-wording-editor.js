@@ -1,10 +1,6 @@
 // @ts-check
 import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
-import {
-  baselineBank,
-  commit,
-} from '../../question-bank/question-bank-store.js';
 
 /**
  * @typedef {Object} WordingEditorProps
@@ -94,18 +90,26 @@ export class CORAWordingEditor extends ShellElement {
     super();
     /** @type {any} */
     this.question = null;
+    /**
+     * The question's counterpart in the last-synced baseline bank (or
+     * undefined for a new draft), passed down by the mounting site.
+     * @type {any}
+     */
+    this.baselineQuestion = undefined;
+    /**
+     * Mutation sink. Defaults to "just apply the mutation" so the component
+     * works standalone; the bank editor injects the store's `commit()`.
+     * @type {(fn: () => void) => void}
+     */
+    this.onCommit = (fn) => fn();
   }
 
   render() {
-    const baselineQuestion = (baselineBank.get()?.questions || []).find(
-      (/** @type {any} */ candidate) => candidate.id === this.question?.id
-    );
-
     return WordingEditor({
       question: this.question,
-      baselineQuestion,
+      baselineQuestion: this.baselineQuestion,
       onTextInput: (value) => {
-        commit(() => {
+        this.onCommit(() => {
           this.question.text = value;
         });
       },

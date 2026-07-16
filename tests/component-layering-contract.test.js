@@ -76,7 +76,6 @@ test('layering: components→question-bank couplings match the documented allowl
     'src/components/sections/cora-question-card.js',
     'src/components/sections/cora-showwhen-editor.js',
     'src/components/sections/cora-showwhen-group.js',
-    'src/components/sections/cora-wording-editor.js',
     'src/components/collections/cora-case-tabs.js',
     'src/components/collections/cora-compile-drawer.js',
   ]);

@@ -3,6 +3,7 @@ import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import {
   activeSlug,
+  baselineBank,
   commit,
   currentBank,
   filters,
@@ -46,7 +47,13 @@ export function QuestionCard(props) {
     })
   );
 
-  const wording = h('cora-wording-editor', { question: q });
+  const wording = h('cora-wording-editor', {
+    question: q,
+    baselineQuestion: (baselineBank.get()?.questions || []).find(
+      (/** @type {any} */ candidate) => candidate.id === q.id
+    ),
+    onCommit: commit,
+  });
 
   const grid = h(
     'div',
