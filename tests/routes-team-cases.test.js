@@ -54,7 +54,7 @@ test('routes-team-cases: registers #/team-cases route', () => {
   );
 });
 
-test('routes-team-cases: mounts TeamCasesPage output with client, currentUser, caseSources', () => {
+test('routes-team-cases: mounts TeamCasesPage output with client, currentUser, caseSources', async () => {
   const client = /** @type {any} */ ({
     async listCases() {
       return [];
@@ -73,7 +73,7 @@ test('routes-team-cases: mounts TeamCasesPage output with client, currentUser, c
   };
   router._container = /** @type {any} */ (container);
   register(router, /** @type {any} */ ({ client, currentUser, caseSources }));
-  router.navigate('#/team-cases');
+  await router.navigate('#/team-cases');
 
   assert.equal(mounted.length, 1, 'should mount a single host element');
   assert.ok(findTag(mounted[0], 'h1'), 'should render the page heading');
@@ -126,7 +126,7 @@ test('routes-team-cases: passes query string from location hash to the page', as
       caseSources: ['example-review'].map((s) => src(s)),
     })
   );
-  router.navigate('#/team-cases?manager=me&status=overdue');
+  await router.navigate('#/team-cases?manager=me&status=overdue');
 
   await Promise.resolve();
   await Promise.resolve();
@@ -136,4 +136,36 @@ test('routes-team-cases: passes query string from location hash to the page', as
   assert.equal(calls[0].assignedReviewerManager, 'u1');
 
   /** @type {any} */ (globalThis).location = { hash: '' };
+});
+
+test('routes-team-cases: rejecting loadPage renders a route error panel', async () => {
+  const router = new Router();
+  /** @type {any[]} */
+  let mounted = [];
+  const container = {
+    replaceChildren(/** @type {any} */ ...args) {
+      mounted = args;
+    },
+  };
+  router._container = /** @type {any} */ (container);
+  register(
+    router,
+    /** @type {any} */ ({
+      client: {},
+      currentUser: { id: 'u1' },
+      caseSources: [],
+    }),
+    () => Promise.reject(new Error('boom'))
+  );
+
+  const origError = console.error;
+  console.error = () => {};
+  try {
+    await router.navigate('#/team-cases');
+  } finally {
+    console.error = origError;
+  }
+
+  assert.equal(mounted.length, 1);
+  assert.equal(mounted[0].className, 'cora-route-error');
 });
