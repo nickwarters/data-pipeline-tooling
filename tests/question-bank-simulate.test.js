@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   diffBanks,
   simulateBankImpact,
-} from '../src/question-bank/question-bank-simulate.js';
+} from '../src/pages/question-bank/question-bank-simulate.js';
 
 /**
  * Baseline bank used across the scenarios: q-a gates q-b via showWhen; q-a

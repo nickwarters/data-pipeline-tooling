@@ -3,9 +3,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const { loadSampleCases, SAMPLE_CASE_LIMIT } =
-  await import('../src/question-bank/question-bank-samples.js');
+  await import('../src/pages/question-bank/question-bank-samples.js');
 const { sampleCases, _resetStore } =
-  await import('../src/question-bank/question-bank-store.js');
+  await import('../src/pages/question-bank/question-bank-store.js');
 
 /** @param {string} id @param {Record<string, any>} [answers] */
 function row(id, answers) {

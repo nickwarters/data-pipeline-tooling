@@ -6,9 +6,9 @@ import { installDom } from './_dom-stub.js';
 installDom();
 
 const { CORAOutcomeOptionsEditor } =
-  await import('../src/question-bank/cora-outcome-options-editor.js');
+  await import('../src/pages/question-bank/cora-outcome-options-editor.js');
 const { _resetStore, cases } =
-  await import('../src/question-bank/question-bank-store.js');
+  await import('../src/pages/question-bank/question-bank-store.js');
 
 test('CORAOutcomeOptionsEditor: renders one row per case-type outcome option', () => {
   resetStoreWithExampleReview();

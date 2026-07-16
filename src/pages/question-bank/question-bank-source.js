@@ -8,7 +8,7 @@
  * case-types/{slug}.js.
  */
 
-import { QUESTION_BANK_IMPORTERS } from '../../case-types/manifest.js';
+import { QUESTION_BANK_IMPORTERS } from '../../../case-types/manifest.js';
 
 /**
  * A reporting label that can be assigned to Question Definitions from the
@@ -19,9 +19,9 @@ import { QUESTION_BANK_IMPORTERS } from '../../case-types/manifest.js';
  */
 
 /**
- * @typedef {import('../sharepoint-client.js').OutcomeOption} OutcomeOption
- * @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition
- * @typedef {import('../sharepoint-client.js').RemediationActionDefinition} RemediationActionDefinition
+ * @typedef {import('../../sharepoint-client.js').OutcomeOption} OutcomeOption
+ * @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition
+ * @typedef {import('../../sharepoint-client.js').RemediationActionDefinition} RemediationActionDefinition
  */
 
 /**

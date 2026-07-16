@@ -42,7 +42,7 @@ const {
   sampleCases,
   setSampleCases,
   _resetStore,
-} = await import('../src/question-bank/question-bank-store.js');
+} = await import('../src/pages/question-bank/question-bank-store.js');
 
 function makeEl(/** @type {string} */ key) {
   return {

@@ -1,6 +1,6 @@
 // @ts-check
-import { ShellElement } from '../lib/view.js';
-import { h } from '../lib/html.js';
+import { ShellElement } from '../../lib/view.js';
+import { h } from '../../lib/html.js';
 import {
   activeSlug,
   baseline,
@@ -20,21 +20,21 @@ import { simulatorEnabled } from './question-bank-flags.js';
 import { SimulatePanel } from './simulate-panel.js';
 
 // Side-effect imports: register all child custom elements.
-import '../components/collections/cora-case-tabs.js';
+import '../../components/collections/cora-case-tabs.js';
 import './cora-bank-rail.js';
 import './cora-bank-list.js';
 import './cora-outcome-options-editor.js';
-import '../components/sections/cora-question-card.js';
-import '../components/base/cora-question-labels.js';
-import '../components/sections/cora-wording-editor.js';
-import '../components/base/cora-options-editor.js';
-import '../components/sections/cora-showwhen-editor.js';
-import '../components/sections/cora-showwhen-group.js';
-import '../components/base/cora-showwhen-leaf.js';
-import '../components/sections/cora-remediation-editor.js';
+import '../../components/sections/cora-question-card.js';
+import '../../components/base/cora-question-labels.js';
+import '../../components/sections/cora-wording-editor.js';
+import '../../components/base/cora-options-editor.js';
+import '../../components/sections/cora-showwhen-editor.js';
+import '../../components/sections/cora-showwhen-group.js';
+import '../../components/base/cora-showwhen-leaf.js';
+import '../../components/sections/cora-remediation-editor.js';
 import './cora-bank-dock.js';
-import '../components/collections/cora-compile-drawer.js';
-import '../components/base/cora-toast.js';
+import '../../components/collections/cora-compile-drawer.js';
+import '../../components/base/cora-toast.js';
 
 /**
  * Switch the workbench to another Case Type's bank (clears the category
@@ -72,7 +72,7 @@ export function submitBankForReview() {
  * Store wiring for the `cora-case-tabs` collection: state flows down as
  * signals, interactions flow back up into the store the page owns.
  *
- * @returns {Partial<import('../components/collections/cora-case-tabs.js').CORACaseTabs>}
+ * @returns {Partial<import('../../components/collections/cora-case-tabs.js').CORACaseTabs>}
  */
 export function caseTabsProps() {
   return {
@@ -90,7 +90,7 @@ export function caseTabsProps() {
  * collection. The drawer itself is a props-driven component; the bank-editor
  * page owns the assembly (issue #382).
  *
- * @returns {import('../components/collections/cora-compile-drawer.js').CompileDrawerProps}
+ * @returns {import('../../components/collections/cora-compile-drawer.js').CompileDrawerProps}
  */
 export function compileDrawerProps() {
   return {

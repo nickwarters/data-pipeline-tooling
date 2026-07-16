@@ -40,7 +40,7 @@ function jsFilesUnder(dir) {
   return out;
 }
 
-/** @param {string} rel @returns {boolean} whether the file imports from src/question-bank/ */
+/** @param {string} rel @returns {boolean} whether the file imports from src/pages/question-bank/ */
 function importsQuestionBank(rel) {
   const src = readFileSync(new URL(rel, ROOT), 'utf8');
   return /from\s+['"][^'"]*question-bank\//.test(src);
@@ -56,7 +56,7 @@ test('layering: no component imports the relocated generic helpers from question
   assert.deepEqual(
     offenders,
     [],
-    'these files must import showWhen-tree/order helpers from src/lib/, not src/question-bank/'
+    'these files must import showWhen-tree/order helpers from src/lib/, not src/pages/question-bank/'
   );
 });
 

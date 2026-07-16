@@ -17,13 +17,13 @@
  * that explain it, walking showWhen references upstream for indirect effects.
  */
 
-/** @typedef {import('../sharepoint-client.js').Answer} Answer */
-/** @typedef {import('../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
+/** @typedef {import('../../sharepoint-client.js').Answer} Answer */
+/** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 /** @typedef {import('./question-bank-source.js').QuestionBank} QuestionBank */
 
-import { evaluate } from '../evaluators/applicability-evaluator.js';
-import { isFailure } from '../evaluators/failure-evaluator.js';
-import { computeConfiguredOutcome } from '../evaluators/configured-outcome.js';
+import { evaluate } from '../../evaluators/applicability-evaluator.js';
+import { isFailure } from '../../evaluators/failure-evaluator.js';
+import { computeConfiguredOutcome } from '../../evaluators/configured-outcome.js';
 import { resolveCompiledOptions } from './question-bank-compile.js';
 
 /**

@@ -1,6 +1,6 @@
 // @ts-check
-import { h } from '../lib/html.js';
-import { EmptyState } from '../lib/empty-state.js';
+import { h } from '../../lib/html.js';
+import { EmptyState } from '../../lib/empty-state.js';
 import { simulateBankImpact } from './question-bank-simulate.js';
 
 /**

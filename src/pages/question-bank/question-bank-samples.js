@@ -15,7 +15,7 @@ import { setSampleCases } from './question-bank-store.js';
 export const SAMPLE_CASE_LIMIT = 25;
 
 /**
- * @param {import('../sharepoint-client.js').CaseRow} row
+ * @param {import('../../sharepoint-client.js').CaseRow} row
  * @returns {import('./question-bank-simulate.js').SampleCase}
  */
 function toSampleCase(row) {
@@ -23,8 +23,8 @@ function toSampleCase(row) {
 }
 
 /**
- * @param {Pick<import('../sharepoint-client.js').SharePointClient, 'listCases'>} client
- * @param {import('../setup/resolve-eligible-case-types.js').CaseSource[]} [sources] Case sources to sample; defaults to none
+ * @param {Pick<import('../../sharepoint-client.js').SharePointClient, 'listCases'>} client
+ * @param {import('../../setup/resolve-eligible-case-types.js').CaseSource[]} [sources] Case sources to sample; defaults to none
  * @returns {Promise<void>}
  */
 export async function loadSampleCases(client, sources = []) {

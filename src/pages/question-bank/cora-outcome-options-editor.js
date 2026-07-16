@@ -1,10 +1,10 @@
 // @ts-check
-import { ShellElement } from '../lib/view.js';
-import { h } from '../lib/html.js';
+import { ShellElement } from '../../lib/view.js';
+import { h } from '../../lib/html.js';
 import { activeSlug, commit, currentBank } from './question-bank-store.js';
 
 /**
- * @param {{ bank: import('./question-bank-source.js').QuestionBank, addOutcome: () => void, setDefaultOutcome: (id: string) => void, renameOutcome: (option: import('../sharepoint-client.js').OutcomeOption, id: string) => void, setWording: (option: import('../sharepoint-client.js').OutcomeOption, wording: string) => void, setSeverity: (option: import('../sharepoint-client.js').OutcomeOption, severity: string) => void, removeOutcome: (option: import('../sharepoint-client.js').OutcomeOption, index: number) => void }} props
+ * @param {{ bank: import('./question-bank-source.js').QuestionBank, addOutcome: () => void, setDefaultOutcome: (id: string) => void, renameOutcome: (option: import('../../sharepoint-client.js').OutcomeOption, id: string) => void, setWording: (option: import('../../sharepoint-client.js').OutcomeOption, wording: string) => void, setSeverity: (option: import('../../sharepoint-client.js').OutcomeOption, severity: string) => void, removeOutcome: (option: import('../../sharepoint-client.js').OutcomeOption, index: number) => void }} props
  * @returns {HTMLElement}
  */
 export function OutcomeOptionsEditor(props) {
@@ -140,7 +140,7 @@ export class CORAOutcomeOptionsEditor extends ShellElement {
 
   /**
    * @param {import('./question-bank-source.js').QuestionBank} bank
-   * @returns {import('../sharepoint-client.js').OutcomeOption}
+   * @returns {import('../../sharepoint-client.js').OutcomeOption}
    */
   _newOutcomeOption(bank) {
     const existing = new Set((bank.outcomeOptions ?? []).map((o) => o.id));
@@ -199,7 +199,7 @@ export class CORAOutcomeOptionsEditor extends ShellElement {
 
   /**
    * @param {string} value
-   * @param {import('../sharepoint-client.js').OutcomeOption[]} outcomeOptions
+   * @param {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions
    * @param {(id: string) => void} onChange
    */
   _outcomeSelect(value, outcomeOptions, onChange) {
@@ -222,7 +222,7 @@ export function outcomeField(label, control) {
 
 /**
  * @param {string} value
- * @param {import('../sharepoint-client.js').OutcomeOption[]} outcomeOptions
+ * @param {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions
  * @param {(id: string) => void} onChange
  */
 export function outcomeOptionsSelect(value, outcomeOptions, onChange) {

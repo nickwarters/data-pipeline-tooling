@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { installDom, StubEl } from './_dom-stub.js';
 installDom();
 
-await import('../src/question-bank/cora-bank-editor.js');
+await import('../src/pages/question-bank/cora-bank-editor.js');
 
 const G = /** @type {any} */ (globalThis);
 
@@ -60,9 +60,9 @@ test('cora-bank-editor: mounts shell and registers keydown handler', () => {
 
 test('cora-bank-editor: Escape closes both the drawer and the rail pop-over', async () => {
   const { bindBankEditorKeys } =
-    await import('../src/question-bank/cora-bank-editor.js');
+    await import('../src/pages/question-bank/cora-bank-editor.js');
   const { drawerOpen, railOpen, _resetStore } =
-    await import('../src/question-bank/question-bank-store.js');
+    await import('../src/pages/question-bank/question-bank-store.js');
   _resetStore();
   drawerOpen.set(true);
   railOpen.set(true);
@@ -119,9 +119,9 @@ test('StubEl: basic DOM shape sanity', () => {
 
 test('bank editor: selectBank switches the active slug and clears the category filter', async () => {
   const { selectBank } =
-    await import('../src/question-bank/cora-bank-editor.js');
+    await import('../src/pages/question-bank/cora-bank-editor.js');
   const { activeSlug, filters, setFilters, _resetStore } =
-    await import('../src/question-bank/question-bank-store.js');
+    await import('../src/pages/question-bank/question-bank-store.js');
   _resetStore();
   setFilters({ category: 'Opening' });
   selectBank('complaints');
@@ -131,9 +131,9 @@ test('bank editor: selectBank switches the active slug and clears the category f
 
 test('bank editor: revertBank with clean state shows "Nothing to revert" toast', async () => {
   const { revertBank } =
-    await import('../src/question-bank/cora-bank-editor.js');
+    await import('../src/pages/question-bank/cora-bank-editor.js');
   const { toastMsg, isDirty, _resetStore } =
-    await import('../src/question-bank/question-bank-store.js');
+    await import('../src/pages/question-bank/question-bank-store.js');
   _resetStore();
   /** @type {any} */ (globalThis).setTimeout = () => 0;
   revertBank();
@@ -143,9 +143,9 @@ test('bank editor: revertBank with clean state shows "Nothing to revert" toast',
 
 test('bank editor: revertBank with dirty state + confirmed reverts to baseline', async () => {
   const { revertBank } =
-    await import('../src/question-bank/cora-bank-editor.js');
+    await import('../src/pages/question-bank/cora-bank-editor.js');
   const { cases, baseline, activeSlug, _resetStore } =
-    await import('../src/question-bank/question-bank-store.js');
+    await import('../src/pages/question-bank/question-bank-store.js');
   _resetStore();
   const slug = activeSlug.get();
   cases.set({
@@ -160,9 +160,9 @@ test('bank editor: revertBank with dirty state + confirmed reverts to baseline',
 
 test('bank editor: revertBank with cancelled confirm is a no-op', async () => {
   const { revertBank } =
-    await import('../src/question-bank/cora-bank-editor.js');
+    await import('../src/pages/question-bank/cora-bank-editor.js');
   const { cases, activeSlug, _resetStore } =
-    await import('../src/question-bank/question-bank-store.js');
+    await import('../src/pages/question-bank/question-bank-store.js');
   _resetStore();
   const slug = activeSlug.get();
   cases.set({
@@ -176,16 +176,9 @@ test('bank editor: revertBank with cancelled confirm is a no-op', async () => {
 
 test('bank editor: submitBankForReview snapshots baseline, closes the drawer, toasts', async () => {
   const { submitBankForReview } =
-    await import('../src/question-bank/cora-bank-editor.js');
-  const {
-    cases,
-    baseline,
-    activeSlug,
-    drawerOpen,
-    toastMsg,
-    commit,
-    _resetStore,
-  } = await import('../src/question-bank/question-bank-store.js');
+    await import('../src/pages/question-bank/cora-bank-editor.js');
+  const { baseline, activeSlug, drawerOpen, toastMsg, commit, _resetStore } =
+    await import('../src/pages/question-bank/question-bank-store.js');
   _resetStore();
   const slug = activeSlug.get();
   commit((t) => {
@@ -201,9 +194,9 @@ test('bank editor: submitBankForReview snapshots baseline, closes the drawer, to
 
 test('bank editor: caseTabsProps wires store signals and the compile drawer opener', async () => {
   const { caseTabsProps } =
-    await import('../src/question-bank/cora-bank-editor.js');
+    await import('../src/pages/question-bank/cora-bank-editor.js');
   const { cases, activeSlug, isDirty, drawerOpen, _resetStore } =
-    await import('../src/question-bank/question-bank-store.js');
+    await import('../src/pages/question-bank/question-bank-store.js');
   _resetStore();
   const props = /** @type {any} */ (caseTabsProps());
   assert.equal(props.cases, cases);
@@ -217,11 +210,11 @@ test('bank editor: caseTabsProps wires store signals and the compile drawer open
 
 test('bank editor: compileDrawerProps wires compile + store; simulate panel gated by flag', async () => {
   const { compileDrawerProps } =
-    await import('../src/question-bank/cora-bank-editor.js');
+    await import('../src/pages/question-bank/cora-bank-editor.js');
   const { currentBank, drawerOpen, toastMsg, _resetStore } =
-    await import('../src/question-bank/question-bank-store.js');
+    await import('../src/pages/question-bank/question-bank-store.js');
   const { compileBank } =
-    await import('../src/question-bank/question-bank-compile.js');
+    await import('../src/pages/question-bank/question-bank-compile.js');
   _resetStore();
   const props = /** @type {any} */ (compileDrawerProps());
   assert.equal(props.open, drawerOpen);

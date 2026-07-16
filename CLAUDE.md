@@ -143,17 +143,17 @@ src/
     cora-responsible-party-dashboard.js
     cora-reviewer-team-report.js
     cora-team-cases.js
-
-  question-bank/                # question bank editor subsystem
-    cora-bank-dock.js
-    cora-bank-editor.js
-    cora-bank-list.js
-    cora-bank-rail.js
-    cora-outcome-options-editor.js
-    cora-question-bank-editor.css
-    question-bank-compile.js
-    question-bank-source.js
-    question-bank-store.js       # bank-editor state singleton (re-exports lib/toast.js)
+    question-bank/              # question bank editor subsystem ("just another page", #382)
+      cora-bank-dock.js
+      cora-bank-editor.js       # page shell; owns the ONLY store imports + child wiring
+      cora-bank-list.js
+      cora-bank-rail.js
+      cora-outcome-options-editor.js
+      cora-question-bank-editor.css
+      question-bank-compile.js
+      question-bank-source.js
+      question-bank-store.js    # bank-editor state singleton (re-exports lib/toast.js)
+      simulate-panel.js         # impact-simulation panel fed to cora-compile-drawer via props
 
   routes/                       # route handler modules, one per hash route
     case.js

@@ -1,7 +1,7 @@
 // @ts-check
 /**
  * @typedef {() => Promise<{ default: import('../src/sharepoint-client.js').CaseTypeConfig }>} CaseTypeImporter
- * @typedef {() => Promise<{ default: import('../src/question-bank/question-bank-source.js').QuestionBank }>} QuestionBankImporter
+ * @typedef {() => Promise<{ default: import('../src/pages/question-bank/question-bank-source.js').QuestionBank }>} QuestionBankImporter
  */
 
 import { loadBank } from './load-bank.js';
@@ -26,7 +26,7 @@ export const QUESTION_BANK_IMPORTERS = {
 
 /**
  * @param {string} path
- * @returns {Promise<{ default: import('../src/question-bank/question-bank-source.js').QuestionBank }>}
+ * @returns {Promise<{ default: import('../src/pages/question-bank/question-bank-source.js').QuestionBank }>}
  */
 async function loadQuestionBank(path) {
   return { default: await loadBank(path) };

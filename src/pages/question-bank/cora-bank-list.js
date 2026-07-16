@@ -1,6 +1,6 @@
 // @ts-check
-import { ShellElement } from '../lib/view.js';
-import { h } from '../lib/html.js';
+import { ShellElement } from '../../lib/view.js';
+import { h } from '../../lib/html.js';
 import {
   activeSlug,
   baselineBank,

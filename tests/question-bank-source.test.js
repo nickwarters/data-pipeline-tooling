@@ -6,12 +6,12 @@ import {
   loadQuestionBanks,
   normaliseQuestionBank,
   questionBanks,
-} from '../src/question-bank/question-bank-source.js';
-import { compileBank } from '../src/question-bank/question-bank-compile.js';
+} from '../src/pages/question-bank/question-bank-source.js';
+import { compileBank } from '../src/pages/question-bank/question-bank-compile.js';
 
 test('compileBank: emits the standalone editable bank artifact', () => {
   const sourceBank =
-    /** @type {import('../src/question-bank/question-bank-source.js').QuestionBank} */ ({
+    /** @type {import('../src/pages/question-bank/question-bank-source.js').QuestionBank} */ ({
       label: 'Compiled Review',
       slug: 'compiled-review',
       labels: [{ id: 'lbl-a', name: 'Alpha', color: '#111111' }],
@@ -41,7 +41,7 @@ test('compileBank: emits the standalone editable bank artifact', () => {
 
 test('normaliseQuestionBank: defaults omitted bank fields and deep-clones editable arrays', () => {
   const source =
-    /** @type {import('../src/question-bank/question-bank-source.js').QuestionBank} */ ({
+    /** @type {import('../src/pages/question-bank/question-bank-source.js').QuestionBank} */ ({
       label: 'Alpha',
       slug: 'alpha',
       questions: [
@@ -80,7 +80,7 @@ test('loadQuestionBanks: builds the bank map from standalone bank importer entri
   const banks = await loadQuestionBanks({
     alpha: async () => ({
       default:
-        /** @type {import('../src/question-bank/question-bank-source.js').QuestionBank} */ ({
+        /** @type {import('../src/pages/question-bank/question-bank-source.js').QuestionBank} */ ({
           label: 'Alpha',
           slug: 'alpha',
           outcomeOptions: [{ id: 'pass', wording: 'Pass', severity: 0 }],
@@ -96,7 +96,7 @@ test('loadQuestionBanks: builds the bank map from standalone bank importer entri
     }),
     beta: async () => ({
       default:
-        /** @type {import('../src/question-bank/question-bank-source.js').QuestionBank} */ ({
+        /** @type {import('../src/pages/question-bank/question-bank-source.js').QuestionBank} */ ({
           label: 'Beta',
           slug: 'beta',
           outcomeOptions: [{ id: 'fail', wording: 'Fail', severity: 100 }],

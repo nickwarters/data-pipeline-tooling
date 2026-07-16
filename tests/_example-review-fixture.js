@@ -8,7 +8,7 @@
 // bleed and without importing `question-bank-store.js`.
 
 import { loadBank } from '../case-types/load-bank.js';
-import { normaliseQuestionBank } from '../src/question-bank/question-bank-source.js';
+import { normaliseQuestionBank } from '../src/pages/question-bank/question-bank-source.js';
 
 const exampleReviewBank = normaliseQuestionBank(
   await loadBank(new URL('./_example-review-bank.txt', import.meta.url))
@@ -17,7 +17,7 @@ const exampleReviewBank = normaliseQuestionBank(
 /**
  * A fresh deep clone of the normalised example-review bank.
  *
- * @returns {import('../src/question-bank/question-bank-source.js').QuestionBank}
+ * @returns {import('../src/pages/question-bank/question-bank-source.js').QuestionBank}
  */
 export function freshExampleReviewBank() {
   return structuredClone(exampleReviewBank);

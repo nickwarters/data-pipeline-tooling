@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { simulatorEnabled } from '../src/question-bank/question-bank-flags.js';
+import { simulatorEnabled } from '../src/pages/question-bank/question-bank-flags.js';
 
 test('simulatorEnabled: true only for simulate=1', () => {
   assert.equal(simulatorEnabled('?simulate=1'), true);

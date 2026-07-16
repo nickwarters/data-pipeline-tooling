@@ -6,7 +6,7 @@ import { freshExampleReviewBank } from './_example-review-fixture.js';
 installDom();
 
 const { SimulatePanel } =
-  await import('../src/question-bank/simulate-panel.js');
+  await import('../src/pages/question-bank/simulate-panel.js');
 
 /** Recursively collect all text in a stub element tree. */
 function allText(/** @type {any} */ el) {

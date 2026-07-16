@@ -2,7 +2,7 @@
 // The Question Bank editor is a full-bleed browser-integration shell, so this
 // route legitimately mounts the `cora-bank-editor` custom element directly.
 
-import { simulatorEnabled } from '../question-bank/question-bank-flags.js';
+import { simulatorEnabled } from '../pages/question-bank/question-bank-flags.js';
 
 /**
  * @param {import('../lib/router.js').Router} router
@@ -14,11 +14,11 @@ export function register(router, context) {
       context.appEl.classList.add('cora-fullbleed');
       const loadEditor =
         context.loadQuestionBankEditor ??
-        (() => import('../question-bank/cora-bank-editor.js'));
+        (() => import('../pages/question-bank/cora-bank-editor.js'));
       const loadSamples =
         context.loadQuestionBankSamples ??
         (() =>
-          import('../question-bank/question-bank-samples.js').then((m) =>
+          import('../pages/question-bank/question-bank-samples.js').then((m) =>
             m.loadSampleCases(context.client, context.caseSources)
           ));
       loadEditor().then(() => {

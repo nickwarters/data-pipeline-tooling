@@ -5,9 +5,10 @@ import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 installDom();
 
-const { CORABankDock } = await import('../src/question-bank/cora-bank-dock.js');
+const { CORABankDock } =
+  await import('../src/pages/question-bank/cora-bank-dock.js');
 const { _resetStore, drawerOpen, commit } =
-  await import('../src/question-bank/question-bank-store.js');
+  await import('../src/pages/question-bank/question-bank-store.js');
 
 test('CORABankDock: shows active / deprecated / conditional / pending stats', () => {
   resetStoreWithExampleReview();

@@ -5,9 +5,10 @@ import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 installDom();
 
-const { CORABankList } = await import('../src/question-bank/cora-bank-list.js');
+const { CORABankList } =
+  await import('../src/pages/question-bank/cora-bank-list.js');
 const { _resetStore, cases, activeSlug, filters } =
-  await import('../src/question-bank/question-bank-store.js');
+  await import('../src/pages/question-bank/question-bank-store.js');
 
 test('CORABankList: renders dirty pill + question cards + add button', () => {
   resetStoreWithExampleReview();

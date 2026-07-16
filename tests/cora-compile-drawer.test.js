@@ -9,7 +9,7 @@ const { CORACompileDrawer } =
   await import('../src/components/collections/cora-compile-drawer.js');
 const { signal } = await import('../src/lib/signal.js');
 const { compileBank, highlight } =
-  await import('../src/question-bank/question-bank-compile.js');
+  await import('../src/pages/question-bank/question-bank-compile.js');
 
 /**
  * Mount a CORACompileDrawer with props + spies (no store).

@@ -1,6 +1,6 @@
 // @ts-check
 
-/** @typedef {import('../src/question-bank/question-bank-source.js').QuestionBank} QuestionBank */
+/** @typedef {import('../src/pages/question-bank/question-bank-source.js').QuestionBank} QuestionBank */
 
 /**
  * Load a standalone Question Bank artifact as JSON text.

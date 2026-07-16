@@ -14,7 +14,7 @@
 /** @typedef {import('./question-bank-source.js').QuestionBank} QuestionBank */
 /** @typedef {import('./question-bank-source.js').DraftQuestion} DraftQuestion */
 
-import { outcomeResponseOptions } from '../evaluators/configured-outcome.js';
+import { outcomeResponseOptions } from '../../evaluators/configured-outcome.js';
 
 /**
  * Resolves the response options and their Outcome mapping for a compiled/exported
@@ -23,7 +23,7 @@ import { outcomeResponseOptions } from '../evaluators/configured-outcome.js';
  * the caller can omit them.
  *
  * @param {DraftQuestion} q
- * @param {import('../sharepoint-client.js').OutcomeOption[]} outcomeOptions
+ * @param {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions
  * @returns {{ options: string[] | null, optionOutcomes: Record<string, string> | null }}
  */
 export function resolveCompiledOptions(q, outcomeOptions = []) {
@@ -180,12 +180,12 @@ function canonicalise(value) {
  * optionOutcomes: Record<string, string> | null,
  * showWhen: Record<string, unknown> | null,
  * failureCriteria: string | null,
- * remediationActions: Array<import('../sharepoint-client.js').RemediationActionDefinition> | null,
+ * remediationActions: Array<import('../../sharepoint-client.js').RemediationActionDefinition> | null,
  * deprecated: boolean,
  * labelIds?: string[],
  * }>,
  * labels: Array<{ id: string, name: string, color: string }>,
- * outcomeOptions: import('../sharepoint-client.js').OutcomeOption[],
+ * outcomeOptions: import('../../sharepoint-client.js').OutcomeOption[],
  * defaultOutcomeId: string | null,
  * }>}
  */
@@ -193,7 +193,7 @@ export async function compileExport(bank) {
   const outcomeOptions = bank.outcomeOptions ?? [];
   const questions = bank.questions.map((q) => {
     const resolved = resolveCompiledOptions(q, outcomeOptions);
-    /** @type {{ id: string, text: string, category: string|null, responseType: string, options: string[]|null, optionOutcomes: Record<string, string>|null, showWhen: Record<string,unknown>|null, failureCriteria: string|null, remediationActions: Array<import('../sharepoint-client.js').RemediationActionDefinition>|null, deprecated: boolean, labelIds?: string[] }} */
+    /** @type {{ id: string, text: string, category: string|null, responseType: string, options: string[]|null, optionOutcomes: Record<string, string>|null, showWhen: Record<string,unknown>|null, failureCriteria: string|null, remediationActions: Array<import('../../sharepoint-client.js').RemediationActionDefinition>|null, deprecated: boolean, labelIds?: string[] }} */
     const out = {
       id: q.id,
       text: q.text,

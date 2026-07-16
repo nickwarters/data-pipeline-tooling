@@ -1,6 +1,6 @@
 // @ts-check
-import { ShellElement } from '../lib/view.js';
-import { h } from '../lib/html.js';
+import { ShellElement } from '../../lib/view.js';
+import { h } from '../../lib/html.js';
 import {
   activeSlug,
   commit,
@@ -14,7 +14,7 @@ import {
   categoryKey,
   categoryOrder,
   moveCategory,
-} from '../lib/question-order.js';
+} from '../../lib/question-order.js';
 
 /**
  * @param {{ bank: any, filters: any, railOpen: boolean, setFilters: (patch: any) => void, moveCategory: (name: string, direction: -1 | 1) => void, onToggleRail: () => void, onCloseRail: () => void }} props

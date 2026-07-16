@@ -5,9 +5,10 @@ import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
 installDom();
 
-const { CORABankRail } = await import('../src/question-bank/cora-bank-rail.js');
+const { CORABankRail } =
+  await import('../src/pages/question-bank/cora-bank-rail.js');
 const { _resetStore, filters, cases, isDirty, railOpen } =
-  await import('../src/question-bank/question-bank-store.js');
+  await import('../src/pages/question-bank/question-bank-store.js');
 
 test('CORABankRail: renders 4 sections: stat, categories, view, legend', () => {
   resetStoreWithExampleReview();

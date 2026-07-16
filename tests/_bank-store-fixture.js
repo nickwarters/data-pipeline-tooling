@@ -14,13 +14,13 @@ import { loadBank } from '../case-types/load-bank.js';
 import {
   questionBanks,
   normaliseQuestionBank,
-} from '../src/question-bank/question-bank-source.js';
+} from '../src/pages/question-bank/question-bank-source.js';
 import {
   cases,
   baseline,
   activeSlug,
   _resetStore,
-} from '../src/question-bank/question-bank-store.js';
+} from '../src/pages/question-bank/question-bank-store.js';
 
 const exampleReviewBank = normaliseQuestionBank(
   await loadBank(new URL('./_example-review-bank.txt', import.meta.url))

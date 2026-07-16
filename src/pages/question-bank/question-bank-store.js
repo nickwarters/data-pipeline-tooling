@@ -13,8 +13,8 @@
  * selection around the mutation.
  */
 
-import { signal, computed } from '../lib/signal.js';
-import { toastMsg, showToast } from '../lib/toast.js';
+import { signal, computed } from '../../lib/signal.js';
+import { toastMsg, showToast } from '../../lib/toast.js';
 import { questionBanks } from './question-bank-source.js';
 
 // The transient toast primitive now lives in lib/toast.js (a framework concern,
@@ -64,7 +64,7 @@ export const railOpen = signal(false);
  * question-bank route from `SharePointClient.listCases` (read-only); empty
  * until loaded, in which case the drawer shows its empty state.
  *
- * @type {import('../lib/signal.js').Signal<Record<string, import('./question-bank-simulate.js').SampleCase[]>>}
+ * @type {import('../../lib/signal.js').Signal<Record<string, import('./question-bank-simulate.js').SampleCase[]>>}
  */
 export const sampleCases = signal({});
 

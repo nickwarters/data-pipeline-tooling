@@ -9,7 +9,7 @@ import {
   hashStr,
   compileExport,
   buildPublishArtifacts,
-} from '../src/question-bank/question-bank-compile.js';
+} from '../src/pages/question-bank/question-bank-compile.js';
 
 /** Tiny helper to build a bank with one question. */
 function bank(/** @type {any} */ q) {

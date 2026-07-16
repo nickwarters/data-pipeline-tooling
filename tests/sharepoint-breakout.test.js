@@ -19,7 +19,7 @@ function read(path) {
 
 const styles = read('src/styles/cora-styles.css');
 const questionBankStyles = read(
-  'src/question-bank/cora-question-bank-editor.css'
+  'src/pages/question-bank/cora-question-bank-editor.css'
 );
 const tokens = read('src/styles/cora-design-tokens.css');
 
