@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import { commitSpy } from './_example-review-fixture.js';
 installDom();
 
 const {
@@ -10,20 +11,23 @@ const {
   effectiveOptions,
   MAX_OPTION_LENGTH,
 } = await import('../src/components/base/cora-options-editor.js');
-const { _resetStore, currentBank, commit, activeSlug } =
-  await import('../src/question-bank/question-bank-store.js');
-
 const OUTCOMES = [
   { id: 'pass', wording: 'Pass', severity: 0 },
   { id: 'fail', wording: 'Fail', severity: 100 },
 ];
 
-/** Seed the active bank's outcome vocabulary so the editor can offer it. */
-function seedOutcomes() {
-  _resetStore();
-  commit((types) => {
-    types[activeSlug.get()].outcomeOptions = OUTCOMES.map((o) => ({ ...o }));
-  });
+/**
+ * Mount a CORAOptionsEditor with the outcome vocabulary and an onCommit spy
+ * passed as props (no store involved).
+ * @param {any} q
+ */
+function mount(q) {
+  const e = new CORAOptionsEditor();
+  e.question = q;
+  e.outcomeOptions = OUTCOMES.map((o) => ({ ...o }));
+  e.onCommit = commitSpy();
+  e.connectedCallback();
+  return e;
 }
 
 test('OptionsEditor: renders nothing when no question set', () => {
@@ -104,14 +108,12 @@ test('OptionsEditor: outcome-type outcome selects are disabled (read-only)', () 
 });
 
 test('CORAOptionsEditor: renders nothing when no question set', () => {
-  seedOutcomes();
   const e = new CORAOptionsEditor();
   e.connectedCallback();
   assert.equal(/** @type {any} */ (e)._children.length, 0);
 });
 
 test('CORAOptionsEditor: clicking tag-x removes the option and its outcome mapping', () => {
-  seedOutcomes();
   /** @type {any} */
   const q = {
     id: 'q1',
@@ -121,9 +123,7 @@ test('CORAOptionsEditor: clicking tag-x removes the option and its outcome mappi
     optionOutcomes: { A: 'fail' },
     deprecated: false,
   };
-  const e = new CORAOptionsEditor();
-  e.question = q;
-  e.connectedCallback();
+  const e = mount(q);
   const list = /** @type {any} */ (e)._children[0]._children[1];
   const firstRow = list._children[0];
   const xSpan = firstRow._children[2];
@@ -133,7 +133,6 @@ test('CORAOptionsEditor: clicking tag-x removes the option and its outcome mappi
 });
 
 test('CORAOptionsEditor: selecting an option outcome writes optionOutcomes', () => {
-  seedOutcomes();
   /** @type {any} */
   const q = {
     id: 'q1',
@@ -142,9 +141,7 @@ test('CORAOptionsEditor: selecting an option outcome writes optionOutcomes', () 
     options: ['A', 'B'],
     deprecated: false,
   };
-  const e = new CORAOptionsEditor();
-  e.question = q;
-  e.connectedCallback();
+  const e = mount(q);
   const list = /** @type {any} */ (e)._children[0]._children[1];
   const select = list._children[0]._children[1];
   select._listeners.change[0]({ target: { value: 'fail' } });
@@ -152,7 +149,6 @@ test('CORAOptionsEditor: selecting an option outcome writes optionOutcomes', () 
 });
 
 test('CORAOptionsEditor: clearing an option outcome deletes the mapping', () => {
-  seedOutcomes();
   /** @type {any} */
   const q = {
     id: 'q1',
@@ -162,9 +158,7 @@ test('CORAOptionsEditor: clearing an option outcome deletes the mapping', () => 
     optionOutcomes: { A: 'fail' },
     deprecated: false,
   };
-  const e = new CORAOptionsEditor();
-  e.question = q;
-  e.connectedCallback();
+  const e = mount(q);
   const list = /** @type {any} */ (e)._children[0]._children[1];
   const select = list._children[0]._children[1];
   select._listeners.change[0]({ target: { value: '' } });
@@ -172,7 +166,6 @@ test('CORAOptionsEditor: clearing an option outcome deletes the mapping', () => 
 });
 
 test('CORAOptionsEditor: add button calls prompt and appends', () => {
-  seedOutcomes();
   /** @type {any} */ (globalThis).prompt = () => 'Maybe';
   /** @type {any} */
   const q = {
@@ -182,9 +175,7 @@ test('CORAOptionsEditor: add button calls prompt and appends', () => {
     options: ['A'],
     deprecated: false,
   };
-  const e = new CORAOptionsEditor();
-  e.question = q;
-  e.connectedCallback();
+  const e = mount(q);
   const list = /** @type {any} */ (e)._children[0]._children[1];
   const addBtn = list._children[list._children.length - 1];
   addBtn._listeners.click[0]();
@@ -192,7 +183,6 @@ test('CORAOptionsEditor: add button calls prompt and appends', () => {
 });
 
 test('CORAOptionsEditor: add button ignores empty prompt value', () => {
-  seedOutcomes();
   /** @type {any} */ (globalThis).prompt = () => '   ';
   /** @type {any} */
   const q = {
@@ -202,9 +192,7 @@ test('CORAOptionsEditor: add button ignores empty prompt value', () => {
     options: ['A'],
     deprecated: false,
   };
-  const e = new CORAOptionsEditor();
-  e.question = q;
-  e.connectedCallback();
+  const e = mount(q);
   const list = /** @type {any} */ (e)._children[0]._children[1];
   const addBtn = list._children[list._children.length - 1];
   addBtn._listeners.click[0]();
@@ -212,7 +200,6 @@ test('CORAOptionsEditor: add button ignores empty prompt value', () => {
 });
 
 test('CORAOptionsEditor: add button initialises options array if missing', () => {
-  seedOutcomes();
   /** @type {any} */ (globalThis).prompt = () => 'X';
   /** @type {any} */
   const q = {
@@ -221,9 +208,7 @@ test('CORAOptionsEditor: add button initialises options array if missing', () =>
     responseType: 'single-choice',
     deprecated: false,
   };
-  const e = new CORAOptionsEditor();
-  e.question = q;
-  e.connectedCallback();
+  const e = mount(q);
   const list = /** @type {any} */ (e)._children[0]._children[1];
   const addBtn = list._children[list._children.length - 1];
   addBtn._listeners.click[0]();
@@ -235,7 +220,6 @@ test('MAX_OPTION_LENGTH is exported as 250', () => {
 });
 
 test('CORAOptionsEditor: add button rejects an option longer than 250 characters and alerts', () => {
-  seedOutcomes();
   const tooLong = 'x'.repeat(MAX_OPTION_LENGTH + 1);
   /** @type {any} */ (globalThis).prompt = () => tooLong;
   /** @type {any[]} */
@@ -250,9 +234,7 @@ test('CORAOptionsEditor: add button rejects an option longer than 250 characters
     options: ['A'],
     deprecated: false,
   };
-  const e = new CORAOptionsEditor();
-  e.question = q;
-  e.connectedCallback();
+  const e = mount(q);
   const list = /** @type {any} */ (e)._children[0]._children[1];
   const addBtn = list._children[list._children.length - 1];
   addBtn._listeners.click[0]();
@@ -262,7 +244,6 @@ test('CORAOptionsEditor: add button rejects an option longer than 250 characters
 });
 
 test('CORAOptionsEditor: add button accepts an option of exactly 250 characters', () => {
-  seedOutcomes();
   const exactly250 = 'y'.repeat(MAX_OPTION_LENGTH);
   /** @type {any} */ (globalThis).prompt = () => exactly250;
   /** @type {any} */ (globalThis).alert = () => {
@@ -276,9 +257,7 @@ test('CORAOptionsEditor: add button accepts an option of exactly 250 characters'
     options: ['A'],
     deprecated: false,
   };
-  const e = new CORAOptionsEditor();
-  e.question = q;
-  e.connectedCallback();
+  const e = mount(q);
   const list = /** @type {any} */ (e)._children[0]._children[1];
   const addBtn = list._children[list._children.length - 1];
   addBtn._listeners.click[0]();
@@ -286,7 +265,6 @@ test('CORAOptionsEditor: add button accepts an option of exactly 250 characters'
 });
 
 test('CORAOptionsEditor: tolerates missing global prompt', () => {
-  seedOutcomes();
   /** @type {any} */ (globalThis).prompt = undefined;
   /** @type {any} */
   const q = {
@@ -296,11 +274,26 @@ test('CORAOptionsEditor: tolerates missing global prompt', () => {
     options: [],
     deprecated: false,
   };
-  const e = new CORAOptionsEditor();
-  e.question = q;
-  e.connectedCallback();
+  const e = mount(q);
   const list = /** @type {any} */ (e)._children[0]._children[1];
   const addBtn = list._children[list._children.length - 1];
   addBtn._listeners.click[0](); // does not throw
   assert.deepEqual(q.options, []);
+});
+
+test('CORAOptionsEditor: mutations flow through the onCommit prop', () => {
+  /** @type {any} */
+  const q = {
+    id: 'q1',
+    text: 'T',
+    responseType: 'single-choice',
+    options: ['A'],
+    deprecated: false,
+  };
+  const e = mount(q);
+  const list = /** @type {any} */ (e)._children[0]._children[1];
+  const select = list._children[0]._children[1];
+  select._listeners.change[0]({ target: { value: 'fail' } });
+  assert.equal(/** @type {any} */ (e.onCommit).calls, 1);
+  assert.deepEqual(q.optionOutcomes, { A: 'fail' });
 });

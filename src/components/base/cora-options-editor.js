@@ -1,14 +1,6 @@
 // @ts-check
 import { h } from '../../lib/html.js';
 import { ShellElement } from '../../lib/view.js';
-// MAINT-16: this editor primitive still reads the bank-editor store singleton
-// (`commit`/`currentBank`). Injecting that state via props is not mechanical —
-// the whole editor tree is reactively bound to these signals — so the coupling
-// is documented and left in place (see the component-layering-contract test).
-import {
-  commit,
-  currentBank,
-} from '../../question-bank/question-bank-store.js';
 import { outcomeResponseOptions } from '../../evaluators/configured-outcome.js';
 
 const YES_NO_NA = ['Yes', 'No', 'NA'];
@@ -157,12 +149,24 @@ export class CORAOptionsEditor extends ShellElement {
     super();
     /** @type {any} */
     this.question = null;
+    /**
+     * The Case Type's configured Outcomes, passed down by the mounting site.
+     * @type {import('../../sharepoint-client.js').OutcomeOption[]}
+     */
+    this.outcomeOptions = [];
+    /**
+     * Mutation sink. Defaults to "just apply the mutation" so the component
+     * works standalone; the bank editor injects the store's `commit()`.
+     * @type {(fn: () => void) => void}
+     */
+    this.onCommit = (fn) => fn();
   }
 
   render() {
+    const commit = this.onCommit;
     return OptionsEditor({
       question: this.question,
-      outcomeOptions: currentBank.get()?.outcomeOptions ?? [],
+      outcomeOptions: this.outcomeOptions ?? [],
       onRemoveOption: (index, option) => {
         commit(() => {
           this.question.options.splice(index, 1);

@@ -4,6 +4,7 @@ import { h } from '../../lib/html.js';
 import {
   activeSlug,
   commit,
+  currentBank,
   filters,
 } from '../../question-bank/question-bank-store.js';
 import {
@@ -84,7 +85,11 @@ export function QuestionCard(props) {
   const bodyChildren = [
     wording,
     grid,
-    h('cora-options-editor', { question: q }),
+    h('cora-options-editor', {
+      question: q,
+      outcomeOptions: currentBank.get()?.outcomeOptions ?? [],
+      onCommit: commit,
+    }),
     h('cora-question-labels', { question: q }),
     h('cora-showwhen-editor', { question: q }),
     h('cora-remediation-editor', { question: q, onCommit: commit }),
