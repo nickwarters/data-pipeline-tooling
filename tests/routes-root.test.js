@@ -24,7 +24,7 @@ test('root route: register calls router.register with #/', () => {
   );
 });
 
-test('root route: mount renders HomePage sections with capabilities from context (no redirect)', () => {
+test('root route: mount renders HomePage sections with capabilities from context (no redirect)', async () => {
   const origDoc = /** @type {any} */ (globalThis).document;
   /** @type {any} */ (globalThis).document = {
     createElement(/** @type {string} */ tag) {
@@ -85,7 +85,7 @@ test('root route: mount renders HomePage sections with capabilities from context
     const router = new Router();
     router._container = /** @type {any} */ ({});
     register(router, /** @type {any} */ ({ capabilities, appEl }));
-    router.navigate('#/');
+    await router.navigate('#/');
 
     assert.equal(rendered.length, 1, 'one home section rendered');
     assert.equal(rendered[0].tagName, 'SECTION');
@@ -97,7 +97,56 @@ test('root route: mount renders HomePage sections with capabilities from context
   }
 });
 
-test('root route: unmount clears appEl', () => {
+test('root route: rejecting loadPage renders cora-route-error into the router container', async () => {
+  const origConsoleError = console.error;
+  console.error = () => {};
+
+  const origDoc = /** @type {any} */ (globalThis).document;
+  /** @type {any} */ (globalThis).document = {
+    createElement(/** @type {string} */ tag) {
+      return /** @type {any} */ ({
+        tagName: tag.toUpperCase(),
+        textContent: '',
+        className: '',
+        _children: /** @type {any[]} */ ([]),
+        appendChild(/** @type {any} */ child) {
+          this._children.push(child);
+          return child;
+        },
+      });
+    },
+  };
+
+  const containerChildren = /** @type {any[]} */ ([]);
+  const container = {
+    replaceChildren(/** @type {any[]} */ ...children) {
+      containerChildren.splice(0, containerChildren.length, ...children);
+    },
+  };
+
+  try {
+    const router = new Router();
+    router._container = /** @type {any} */ (container);
+    const appEl = { replaceChildren() {} };
+    const capabilities = {
+      isVisitor: true,
+      ownedCaseTypes: [],
+      ownedJourneyCaseTypes: [],
+    };
+    register(router, /** @type {any} */ ({ appEl, capabilities }), () =>
+      Promise.reject(new Error('boom'))
+    );
+    await router.navigate('#/');
+
+    assert.equal(containerChildren.length, 1);
+    assert.equal(containerChildren[0].className, 'cora-route-error');
+  } finally {
+    console.error = origConsoleError;
+    /** @type {any} */ (globalThis).document = origDoc;
+  }
+});
+
+test('root route: unmount clears appEl', async () => {
   const origDoc = /** @type {any} */ (globalThis).document;
   /** @type {any} */ (globalThis).document = {
     createElement() {
@@ -130,10 +179,10 @@ test('root route: unmount clears appEl', () => {
         appEl,
       })
     );
-    router.navigate('#/');
+    await router.navigate('#/');
     // Navigating elsewhere triggers the root handler's unmount.
     router.register('#/other', { mount() {}, unmount() {} });
-    router.navigate('#/other');
+    await router.navigate('#/other');
 
     assert.deepEqual(
       replaceCalls,

@@ -168,7 +168,7 @@ test('registerRoutes: registers source-key case route', () => {
   );
 });
 
-test('registerRoutes: #/ mount renders home route directly (no redirect)', () => {
+test('registerRoutes: #/ mount renders home route directly (no redirect)', async () => {
   const rendered = /** @type {any[]} */ ([]);
   const origDoc = /** @type {any} */ (globalThis).document;
   /** @type {any} */ (globalThis).document = {
@@ -233,7 +233,7 @@ test('registerRoutes: #/ mount renders home route directly (no redirect)', () =>
       rendered.splice(0, rendered.length, ...children);
     };
     registerRoutes(router, context);
-    router.navigate('#/');
+    await router.navigate('#/');
     assert.equal(rendered.length, 1, 'home route should render one section');
     assert.equal(rendered[0].tagName, 'SECTION');
     assert.deepEqual(locations, [], 'should not redirect away from #/');

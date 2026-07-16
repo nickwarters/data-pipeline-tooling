@@ -1,13 +1,18 @@
 // @ts-check
-import { HomePage } from '../pages/cora-home.js';
 
 /**
  * @param {import('../lib/router.js').Router} router
  * @param {import('../setup/register-routes.js').AppContext} context
+ * @param {() => Promise<typeof import('../pages/cora-home.js')>} [loadPage]
  */
-export function register(router, context) {
+export function register(
+  router,
+  context,
+  loadPage = () => import('../pages/cora-home.js')
+) {
   router.register('#/', {
-    mount() {
+    async mount() {
+      const { HomePage } = await loadPage();
       context.appEl.replaceChildren(
         ...HomePage({ capabilities: context.capabilities })
       );
