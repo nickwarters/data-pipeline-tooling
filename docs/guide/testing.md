@@ -36,6 +36,21 @@ registry solely to cover a line. Exact assertions remain appropriate for an
 external request, persisted data shape, security guard, or accepted architecture
 boundary.
 
+## Capability-Sized Suites
+
+Split large suites around behavior a developer can own and review independently,
+not around arbitrary line counts. Keep protocol concerns such as authentication,
+retries, queries, mapping, and serialization in separate files even when they
+exercise one production module. Put reusable fake clients, response builders,
+and DOM harnesses in `tests/helpers/` rather than copying them between suites.
+
+DOM capability modules that rely on one shared global stub use the
+`*.tests.js` suffix and are imported by a small `*.test.js` entry point. This
+keeps Node's test-runner isolation boundary equivalent to the original suite
+while making each capability independently searchable and reviewable. Do not
+use an entry point merely to hide an oversized suite; the imported modules
+should each represent a named capability.
+
 ## White-box Debt Guardrail
 
 `tests/white-box-debt-contract.test.js` records the remaining direct uses of DOM

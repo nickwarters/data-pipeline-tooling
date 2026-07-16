@@ -35,7 +35,12 @@ const BASELINE = {
   'tests/cora-bank-rail.test.js': [63, 12, 0],
   'tests/cora-capture-groups.test.js': [1, 0, 14],
   'tests/cora-case-details.test.js': [7, 2, 0],
-  'tests/cora-case-review-controllers.test.js': [14, 17, 0],
+  'tests/cora-case-review-controllers-completion.tests.js': [0, 6, 0],
+  'tests/cora-case-review-controllers-conversation.tests.js': [0, 1, 0],
+  'tests/cora-case-review-controllers-issues.tests.js': [0, 4, 0],
+  'tests/cora-case-review-controllers-questions.tests.js': [5, 3, 0],
+  'tests/cora-case-review-controllers-remediation-tracking.tests.js': [0, 1, 0],
+  'tests/cora-case-review-controllers-shell.tests.js': [9, 1, 0],
   'tests/cora-case-table.test.js': [5, 19, 0],
   'tests/cora-case-tabs.test.js': [18, 3, 0],
   'tests/cora-command-palette.test.js': [5, 2, 0],
@@ -72,7 +77,7 @@ const BASELINE = {
   'tests/cora-toast.test.js': [4, 0, 0],
   'tests/cora-wording-editor.test.js': [28, 3, 0],
   'tests/html.test.js': [1, 2, 0],
-  'tests/http-sharepoint-client.test.js': [0, 0, 2],
+  'tests/http-sharepoint-client-protocol.test.js': [0, 0, 2],
   'tests/router.test.js': [3, 0, 0],
   'tests/routes-conversation.test.js': [2, 0, 0],
   'tests/routes-dashboard.test.js': [1, 0, 0],
@@ -112,7 +117,10 @@ function findTestFiles(directory, prefix = 'tests') {
     if (entry.isDirectory()) {
       return findTestFiles(new URL(`${entry.name}/`, directory), path);
     }
-    return entry.isFile() && entry.name.endsWith('.test.js') ? [path] : [];
+    return entry.isFile() &&
+      (entry.name.endsWith('.test.js') || entry.name.endsWith('.tests.js'))
+      ? [path]
+      : [];
   });
 }
 
