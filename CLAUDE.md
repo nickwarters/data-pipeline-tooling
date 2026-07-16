@@ -40,9 +40,9 @@ Vanilla JavaScript, HTML, and CSS framework for a Case Review Platform frontend 
 
 - **Question Bank artifacts are JSON stored in `.txt` files, on purpose.** `case-types/banks/*.txt` (loaded via `case-types/load-bank.js`) hold plain JSON text. This is intentional, not an oversight: SharePoint Subscription Edition has been unreliable at storing/serving `.json` files (MIME/blocking issues), so the artifact extension is `.txt` while the content stays JSON, parsed explicitly by the loader. A repo-wide search for `*.json` will not find the banks — search `case-types/banks/*.txt` instead.
 
-## Test discipline: Red-Green-Refactor, 100% coverage
+## Test discipline: Red-Green-Refactor, risk-based coverage
 
-**Every line of production code must be covered by a test.** No exceptions.
+**Every behaviour change must be covered at the smallest useful public seam.**
 
 Workflow for all new code:
 
@@ -50,7 +50,17 @@ Workflow for all new code:
 2. **Green** — write the minimum production code to make it pass.
 3. **Refactor** — clean up, keeping tests green.
 
-Never merge production code without a corresponding test. Run `node --test --experimental-test-coverage` to verify coverage before committing. A branch, line, or function that appears in the coverage report as uncovered is a bug in the development process, not just the code.
+Never merge a production behaviour change without a corresponding test. Run
+`npm run test:coverage` before committing. The command explicitly includes all
+JavaScript under `src/` and `case-types/` and enforces a global floor of 98% line,
+95% branch, and 95% function coverage.
+
+The global floor is a backstop, not a quota. Keep security, SharePoint protocol,
+concurrency, permissions, and outcome/applicability code at 100% line and branch
+coverage wherever practical. Test exact external contracts there. Elsewhere,
+prefer public behaviour over child positions, private listener registries, or
+private methods; do not add white-box assertions solely to cover a syntactic
+line.
 
 ## Directory layout
 

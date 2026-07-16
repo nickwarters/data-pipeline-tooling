@@ -733,8 +733,8 @@ customElements.define('cora-remediation-list', CORARemediationList);</code></pre
           <b>Add the test file.</b> Flat in <code class="inline">tests/</code>,
           one file per subject by filename (e.g.
           <code class="inline">tests/cora-remediation-list.test.js</code>). Run
-          <code class="inline">node --test --experimental-test-coverage</code>
-          — every new line must be covered.
+          <code class="inline">npm run test:coverage</code> — cover the
+          behaviour at its smallest useful public seam.
         </li>
         <li>
           <b>Obey the hard rules.</b> No third-party runtime deps, no build

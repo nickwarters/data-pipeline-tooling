@@ -7,7 +7,7 @@
     "check": "tsc --noEmit --checkJs --allowJs",
     "flow:run": "node scripts/run_in_memory_flow.js",
     "test": "node --test",
-    "test:coverage": "node --test --experimental-test-coverage",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.js' --test-coverage-include='case-types/**/*.js' --test-coverage-lines=98 --test-coverage-branches=95 --test-coverage-functions=95",
     "prepare": "husky"
   },
   "devDependencies": {

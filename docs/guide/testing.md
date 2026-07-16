@@ -13,9 +13,30 @@ testing a browser/custom-element boundary.
 ```sh
 node --test # run all tests
 node --test tests/view.test.js # single file
-node --test --experimental-test-coverage # with coverage
+npm run test:coverage # all production files + enforced thresholds
 node --test --watch # re-run on file change
 ```
+
+## Coverage Policy
+
+`npm run test:coverage` explicitly includes every JavaScript file under `src/`
+and `case-types/`; the default Node coverage command otherwise reports only
+modules loaded by the tests. The command enforces these repository-wide floors:
+
+- 98% line coverage.
+- 95% branch coverage.
+- 95% function coverage.
+
+These floors prevent silent coverage regression without making incidental
+implementation structure part of the contract. Security, SharePoint protocol,
+concurrency, permissions, and outcome/applicability code should retain 100% line
+and branch coverage wherever practical.
+
+Coverage must come through the smallest useful public seam. Do not call private
+methods, walk numeric child positions, or invoke a DOM stub's private listener
+registry solely to cover a line. Exact assertions remain appropriate for an
+external request, persisted data shape, security guard, or accepted architecture
+boundary.
 
 ## Function Component Tests
 
@@ -134,6 +155,9 @@ When a test must cover a custom-element shell, keep it narrow:
   shell module.
 - Prefer asserting the shell forwards props/events correctly.
 - Do not test private lifecycle bookkeeping.
+- Do not navigate `_children` by numeric position or call `_listeners` directly
+  when a role, accessible name, stable field key, or public event expresses the
+  behaviour.
 - Do not use shell tests as the default pattern for new feature UI.
 
 ## Red-Green-Refactor
