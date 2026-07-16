@@ -39,8 +39,8 @@ live SharePoint (real auth, real REST, no `?mock=1`), but fully isolated from pr
   the UAT copy's `host/index.html`. The deploy expands the host page's `{{CORA_ENV}}` token to
   `uat` (`prod` for prod deploys), which the app reads back as `window.CORA_ENV` — the deployed
   host page itself declares its environment; no query params.
-- **Data**: on UAT every list name is prefixed `uat_` (`uat_Cases-ExampleReview`,
-  `uat_QuestionDefinitions`, `uat_complaints`, …), and versioned Question Bank exports are read
+- **Data**: on UAT every Case list name is prefixed (`uat_Cases-ExampleReview`,
+  `uat_complaints`, …), and Question Bank text artifacts plus versioned exports are read
   from `Style Library/case-review-uat/case-types`. Production lists and exports are untouched.
 
 One-off manual setup per environment: create the UAT `.aspx` page and its Content Editor link,

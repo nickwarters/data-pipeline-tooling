@@ -3,7 +3,7 @@
 /** @typedef {import('../src/pages/question-bank/question-bank-source.js').QuestionBank} QuestionBank */
 
 /**
- * Load a standalone Question Bank artifact as JSON text.
+ * Load a SharePoint-hosted Question Bank artifact as JSON text.
  *
  * SharePoint can be unreliable for `.json` storage/MIME behavior, so bank
  * artifacts are stored as `.txt` and parsed explicitly. Node tests import Case

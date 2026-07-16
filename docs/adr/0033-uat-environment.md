@@ -37,10 +37,11 @@ An environment is the combination of three things, all on the same site:
    copy's. No query params: **the deployed host page declares its
    environment**, via a `{{CORA_ENV}}` deploy-time token that becomes
    `window.CORA_ENV` — the same templating mechanism as `{{CORA_BASE}}`.
-3. **Data location** — every SharePoint list name carries an environment
-   prefix: `uat_Cases-ExampleReview`, `uat_QuestionDefinitions`,
-   `uat_complaints`. Prod is unprefixed, so existing deployments are
-   untouched.
+3. **Data location** — every SharePoint Case list name carries an environment
+   prefix: `uat_Cases-ExampleReview`, `uat_complaints`. Question Bank text
+   artifacts and versioned exports are isolated by the environment's Style
+   Library path rather than by list-name prefix. Prod is unprefixed, so existing
+   deployments are untouched.
 
 In code:
 
@@ -50,9 +51,8 @@ In code:
   unsubstituted token — resolves to prod. Nothing else in the codebase may
   branch on the environment name.
 - `HttpSharePointClient` applies `listPrefix` centrally in its two URL
-  builders, so **every** list access is scoped — the default Case list,
-  `QuestionDefinitions`, and per-Case-Type `listName` overrides alike. Case
-  Type modules stay environment-agnostic.
+  builders, so **every** Case-list access is scoped, including per-Case-Type
+  `listName` values. Case Type modules stay environment-agnostic.
 - The versioned Question Bank export path (ADR-0021) is likewise
   environment-scoped (`Style Library/case-review-uat/case-types` on UAT), so
   a UAT Case completion never reads prod's point-in-time bank snapshots.

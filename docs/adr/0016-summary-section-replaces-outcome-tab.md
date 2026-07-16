@@ -12,17 +12,17 @@ The `sections` config is a per-Section config object carrying both membership an
 
 ## Derivation is hybrid
 
-- **In-progress:** every block is computed live from the current **Answers** (consistent with live Question Definition edits).
-- **Completed:** the Outcome block reads the frozen `outcomeAtCompletion`; counts and the failed-Answer list recompute from the Case's _frozen_ Answers against current Question Definitions.
+- **In-progress:** every block is computed from the current **Answers** and the current per-Case-Type Question Bank artifact.
+- **Reportable:** the Outcome block reads the frozen `outcomeAtCompletion`; counts and the failed-Answer list use the Case's frozen Answers and its `questionBankVersion` export (ADR-0021).
 
-This is faithful in the common case — a Completed Case's Answers don't change — and only drifts if a shared Question Definition's `failureCriteria`/`category` is edited later, which is rare. No new storage (unlike a full summary snapshot, considered and rejected below). **Key dates** show only the lifecycle timestamps already on the Case row (`Created` = selected, `completedAt` = review completed); further milestones get explicit timestamp fields when genuinely needed — we do **not** mine SharePoint version history.
+This keeps the Summary faithful to the bank version used for the review without duplicating the whole bank on the Case row. **Key dates** show only the lifecycle timestamps already on the Case row (`Created` = selected, `completedAt` = review completed); further milestones get explicit timestamp fields when genuinely needed — we do **not** mine SharePoint version history.
 
 ## Considered alternatives
 
 - **Keep Outcome as its own tab alongside Summary.** Rejected: two places showing the same verdict invites divergence and confusion.
 - **Summary as a fixed always-on view (not a Section).** Rejected: loses per-role gating, so the Responsible Party would see failed-question detail mid-review unless special-cased anyway.
 - **Snapshot the entire Summary at completion** (counts, failed-Answers, dates, outcome stamped onto the row). Rejected for now: perfectly faithful but a sizeable frozen blob extending the architecture decision/0012 with freezing logic to test; the hybrid approach is faithful enough given Answers are frozen.
-- **Always-live derivation** (ignore `outcomeAtCompletion`). Rejected: a Completed Case's summary could change retroactively when shared Question Definitions or the outcome function are edited — exactly what the architecture decision exists to prevent.
+- **Always-current derivation** (ignore `outcomeAtCompletion` and `questionBankVersion`). Rejected: a reportable Case's summary could change retroactively when the current bank artifact or outcome function is edited — exactly what the architecture decision exists to prevent.
 
 ## Consequences
 

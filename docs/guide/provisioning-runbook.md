@@ -66,23 +66,17 @@ and writes. Display names are free to differ.
 
 ---
 
-## 2. Shared Question Definitions list — `QuestionDefinitions`
+## 2. Question Bank artifacts
 
-One list shared across all Case Types; live edits propagate to
-in-progress Cases. Read by `HttpSharePointClient.getQuestionDefinitions`
-(`qDefFromItem`).
+Do **not** provision a `QuestionDefinitions` list. Each Case Type owns a
+`case-types/banks/{slug}.txt` file containing JSON text. The deployment uploads
+that file to the SharePoint Style Library alongside the Case Type module, and
+`case-types/load-bank.js` loads it as part of the config. Keep the `.txt`
+extension: SharePoint SE can block or mis-serve `.json` files.
 
-| Internal name        | SharePoint type                | Purpose                                                                     |
-| -------------------- | ------------------------------ | --------------------------------------------------------------------------- |
-| `QuestionId`         | Single line of text            | Stable question id.                                                         |
-| `QuestionText`       | Multiple lines of text         | Question wording.                                                           |
-| `ResponseType`       | Choice                         | `yes-no-na` / `single-choice` / `multi-choice`.                             |
-| `Options`            | Multiple lines of text (plain) | JSON array for choice questions.                                            |
-| `ShowWhen`           | Multiple lines of text (plain) | JSON applicability graph.                                                   |
-| `FailureCriteria`    | Single line of text            | Value that marks the Answer a failure.                                      |
-| `RemediationActions` | Multiple lines of text (plain) | JSON array of remediation-action definitions.                               |
-| `Outcome`            | Multiple lines of text (plain) | JSON per-question outcome config.                                           |
-| `Deprecated`         | Yes/No                         | Question Definitions are **never deleted** — deprecate instead (CLAUDE.md). |
+The Question Bank editor compiles the same artifact. Publish immutable versioned
+exports as described by ADR-0021 so reportable Cases can resolve their
+as-reviewed question catalogue.
 
 ---
 

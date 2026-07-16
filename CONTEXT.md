@@ -82,7 +82,7 @@ _Avoid_: Outcome (now a block inside Summary, not a standalone Section), Overvie
 ### Questions & answers
 
 **Question Definition**:
-The canonical question — stable ID, text, response type, options, conditional triggers, failure criteria, attached remediation actions. **Shared across Case Types**: the same definition can appear in many catalogues. Edits are live: in-progress Cases see updates immediately.
+The canonical question — stable ID, text, response type, options, conditional triggers, failure criteria, attached remediation actions. It is owned by one per-**Case Type** Question Bank text artifact in SharePoint and loaded through that Case Type's config. A stable definition ID may be reused deliberately, but there is no shared Question Definitions list or runtime join. In-progress Cases use the current published artifact when reloaded; reportable Cases resolve their stamped version.
 _Avoid_: Question (ambiguous between definition and instance), QuestionTemplate
 
 **Question Bank**:

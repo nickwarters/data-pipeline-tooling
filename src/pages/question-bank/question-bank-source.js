@@ -1,11 +1,12 @@
 // @ts-check
 /**
- * Synchronous Question Bank source for the curator workbench.
+ * Question Bank source for the curator workbench.
  *
  * ADR-0021 treats the Question Bank as versionable content separate from the
  * operational Case Type config. The editor therefore reads the standalone bank
- * artifacts under case-types/banks/; runtime config fields stay in
- * case-types/{slug}.js.
+ * JSON text artifacts under case-types/banks/. Those files are hosted in
+ * SharePoint and loaded asynchronously through the Case Type manifest; runtime
+ * config fields stay in case-types/{slug}.js.
  */
 
 import { QUESTION_BANK_IMPORTERS } from '../../../case-types/manifest.js';

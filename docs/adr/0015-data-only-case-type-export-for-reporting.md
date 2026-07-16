@@ -35,13 +35,11 @@ Two framings were rejected:
   persisted as the frozen `outcomeAtCompletion` snapshot on the Case row
   ([the architecture decision]) precisely so reporting never re-runs the outcome function. Python
   never needs the function.
-- **Point Python at the live Question Definitions SharePoint list** ([the architecture decision]).
-  That list holds the _shared_ half of a question (text, response type, options),
-  but per [the architecture decision] `showWhen` — and, as compiled, the per-Case-Type
-  `failureCriteria` wiring — is **per-Case-Type**, assembled by the compile step.
-  The live list alone cannot tell Python "for `complaint-review`, `q-rootcause`
-  fails on `No`." Only the compile step has the full per-Case-Type catalogue as
-  data.
+- **Point Python at a Question Definitions SharePoint list.** There is no such
+  runtime list: each Case Type's complete Question Bank is stored as JSON text in
+  `case-types/banks/{slug}.txt` and loaded with its config. Reporting consumes the
+  function-free current or versioned export produced from that same bank artifact,
+  which contains the complete per-Case-Type catalogue as data.
 
 ## Decision
 
@@ -70,13 +68,12 @@ of that Case Type's **Question Bank**, intended as the contract for external
   `isFailure()` (`failure-evaluator.js`): for scalar values
   (`yes-no-na` / `single-choice`) failure is `value === failureCriteria`; for
   `multi-choice` it is array-_includes_. Reports branch on `responseType`.
-- **Latest-export semantics for v1.** Python always reads the current
-  `{slug}.json`. Because the **Question Bank** is live-edited, failure derivation
-  uses _current_ `failureCriteria` against historical Answers, so historical
-  per-question reports can shift if the bank is re-curated. This is accepted for
-  v1 and documented as a caveat (see `docs/reporting-data-contract.md`). For
-  point-in-time-stable _case verdicts_, reports use the frozen
-  `outcomeAtCompletion` snapshot ([the architecture decision]) rather than re-deriving.
+- **Version-aware semantics.** In-progress work may use the current export.
+  Reportable Cases stamp `questionBankVersion`, so Python reads
+  `{slug}.{hash}.json` and derives per-question results against the as-reviewed
+  bank (ADR-0021). Case-level verdicts still come from the frozen
+  `outcomeAtCompletion` snapshot ([the architecture decision]) rather than being
+  re-derived.
 
 > **Dependency note.** [the architecture decision] is Accepted but **not yet implemented**: the
 > completion write (`cora-case-review.js`, `_completeCase`) currently stamps only

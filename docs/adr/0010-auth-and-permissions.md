@@ -4,7 +4,7 @@ The framework assumes **standard SharePoint SE browser authentication** — NTLM
 
 ### Security boundary
 
-**SharePoint list-level permissions are the real security boundary.** Cases lists, the Question Definitions list, and the Answers data are all gated by SharePoint group membership configured at the list level. The framework's client-side group checks are **UX-only** — they decide which dashboard sections render and which buttons appear, but they're not authoritative. A user who bypasses the UI still hits SharePoint's 403 at the REST layer.
+**SharePoint permissions are the real security boundary.** Case rows and Answers are gated by permissions on each Case Type's Cases list. Question Bank JSON text and its versioned exports are files in the SharePoint Style Library, governed by SharePoint file/library permissions rather than a Question Definitions list. The framework's client-side group checks are **UX-only** — they decide which dashboard sections render and which buttons appear, but they're not authoritative. A user who bypasses the UI still hits SharePoint's 403 at the REST layer.
 
 ### Permissions config
 

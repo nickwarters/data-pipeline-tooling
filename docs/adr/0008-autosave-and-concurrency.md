@@ -27,9 +27,9 @@ Recomputed client-side after each save by invoking the Case Type's `outcome`/app
 
 ### Polling
 
-**Refresh on tab focus** for Conversation and Question Definitions. No periodic polling in v1.
+**Refresh on tab focus** for Conversation. Question Definitions come from the per-Case-Type bank text artifact loaded with the Case Type config; changing that artifact requires the normal publish/deploy path and a reload, not list polling. No periodic polling in v1.
 
 ### Behavioural rules worth being explicit about
 
 - An answer to a now-orphaned question (its trigger was un-toggled) **stays in the blob**; the UI just hides it. Preserves intent if the trigger flips back.
-- Admin adds a Question Definition mid-review → next focus refresh, the new question becomes applicable, "Complete Case" hides, a subtle "new question added" hint shows.
+- A newly published bank version is used when an In-progress Case next reloads its Case Type config. Any newly-applicable Question Definition then blocks completion until answered. Reportable Cases remain pinned to their stamped version (ADR-0021).
