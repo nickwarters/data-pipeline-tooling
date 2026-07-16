@@ -1,19 +1,14 @@
 // @ts-check
-// The app shell wires shared services once and eagerly loads only the custom
-// elements that are genuine route/browser-integration shells (the nav, command
-// palette, and Case Review page). The Question Bank editor is route-loaded
-// because it imports every Case Type config to build the editable bank map.
-// Ordinary screens are plain function components that their route modules import
-// directly, so they need no custom-element registration here.
+// The app shell wires shared services once. Every page loads on demand inside
+// its route's `mount()` (see src/routes/*), guarded by the router's error
+// boundary (lib/router.js) — a broken page module renders an in-page
+// `cora-route-error` panel instead of taking down the app. The nav and
+// command palette are mounted here via `setup/app-chrome.js`: a broken nav is
+// fatal-with-message (the app is unusable without it), a broken palette is
+// logged and skipped.
 
 /** @returns {Promise<void>} */
 async function boot() {
-  await Promise.all([
-    import('./components/sections/cora-app-nav.js'),
-    import('./components/sections/cora-command-palette.js'),
-    import('./pages/cora-case-review.js'),
-  ]);
-
   const { resolveEnvironment } = await import('./config/environment.js');
   const env = resolveEnvironment();
 
@@ -57,13 +52,9 @@ async function boot() {
   const { mountUatBanner } = await import('./setup/uat-banner.js');
   mountUatBanner(env, appEl);
 
-  const nav =
-    /** @type {import('./components/sections/cora-app-nav.js').CORAAppNav} */ (
-      document.createElement('cora-app-nav')
-    );
-  nav.capabilities = capabilities;
-  appEl.appendChild(nav);
-  document.body.appendChild(document.createElement('cora-command-palette'));
+  const { mountAppChrome } = await import('./setup/app-chrome.js');
+  const ok = await mountAppChrome(appEl, capabilities);
+  if (!ok) return;
 
   const routerContainer = document.createElement('div');
   routerContainer.className = 'cora-page-content';
