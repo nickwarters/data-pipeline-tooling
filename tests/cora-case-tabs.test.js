@@ -1,5 +1,4 @@
 // @ts-check
-import { resetStoreWithExampleReview } from './_bank-store-fixture.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
@@ -7,22 +6,42 @@ installDom();
 
 const { CORACaseTabs, CaseTabs } =
   await import('../src/components/collections/cora-case-tabs.js');
-const {
-  _resetStore,
-  activeSlug,
-  cases,
-  baseline,
-  drawerOpen,
-  isDirty,
-  toastMsg,
-} = await import('../src/question-bank/question-bank-store.js');
+const { signal } = await import('../src/lib/signal.js');
+
+const TYPES = {
+  alpha: { label: 'Alpha', questions: [{ id: 'a' }] },
+  beta: { label: 'Beta', questions: [{ id: 'b' }, { id: 'c' }] },
+};
+
+/** Mount a CORACaseTabs with signal props + callback spies (no store). */
+function mount() {
+  const e = new CORACaseTabs();
+  e.cases = signal(structuredClone(TYPES));
+  e.active = signal('beta');
+  e.dirty = signal(false);
+  /** @type {string[]} */
+  const selected = [];
+  let reverted = 0;
+  let compiled = 0;
+  e.onSelect = (slug) => selected.push(slug);
+  e.onRevert = () => {
+    reverted += 1;
+  };
+  e.onCompile = () => {
+    compiled += 1;
+  };
+  e.connectedCallback();
+  return {
+    e,
+    selected,
+    reverted: () => reverted,
+    compiled: () => compiled,
+  };
+}
 
 test('CaseTabs: plain function renders one tab per case type', () => {
   const nav = CaseTabs({
-    types: {
-      alpha: { label: 'Alpha', questions: [{ id: 'a' }] },
-      beta: { label: 'Beta', questions: [{ id: 'b' }, { id: 'c' }] },
-    },
+    types: TYPES,
     active: 'beta',
     dirty: false,
     onSelect: () => {},
@@ -35,83 +54,42 @@ test('CaseTabs: plain function renders one tab per case type', () => {
   assert.equal(tabsContainer._children[1].className, 'case-tab active');
 });
 
-test('CORACaseTabs: one tab per case type; clicking switches activeSlug', () => {
-  resetStoreWithExampleReview();
+test('CORACaseTabs: renders from signal props; clicking a tab reports the slug', () => {
+  const { e, selected } = mount();
+  const nav = /** @type {any} */ (e)._children[0];
+  const tabsContainer = nav._children[1];
+  assert.equal(tabsContainer._children.length, 2);
+  assert.equal(tabsContainer._children[1].className, 'case-tab active');
+  tabsContainer._children[0]._listeners.click[0]();
+  assert.deepEqual(selected, ['alpha']);
+  e.disconnectedCallback();
+});
+
+test('CORACaseTabs: re-renders when a passed signal changes', () => {
+  const { e } = mount();
+  /** @type {any} */ (e.active).set('alpha');
+  const nav = /** @type {any} */ (e)._children[0];
+  const tabsContainer = nav._children[1];
+  assert.equal(tabsContainer._children[0].className, 'case-tab active');
+  e.disconnectedCallback();
+});
+
+test('CORACaseTabs: Revert and Compile buttons call the supplied callbacks', () => {
+  const { e, reverted, compiled } = mount();
+  const nav = /** @type {any} */ (e)._children[0];
+  const right = nav._children[2];
+  right._children[0]._listeners.click[0]();
+  assert.equal(reverted(), 1);
+  right._children[1]._listeners.click[0]();
+  assert.equal(compiled(), 1);
+  e.disconnectedCallback();
+});
+
+test('CORACaseTabs: renders empty without props (no store fallback)', () => {
   const e = new CORACaseTabs();
   e.connectedCallback();
   const nav = /** @type {any} */ (e)._children[0];
   const tabsContainer = nav._children[1];
-  // The store now holds two banks: the live complaints Case Type plus the
-  // seeded example-review fixture.
-  assert.equal(tabsContainer._children.length, 2);
-  const complaintsIndex = Object.keys(cases.get()).indexOf('complaints');
-  assert.notEqual(complaintsIndex, -1);
-  tabsContainer._children[complaintsIndex]._listeners.click[0]();
-  assert.equal(activeSlug.get(), 'complaints');
-  e.disconnectedCallback();
-});
-
-test('CORACaseTabs: Revert with clean state shows "Nothing to revert" toast', () => {
-  _resetStore();
-  const e = new CORACaseTabs();
-  e.connectedCallback();
-  const nav = /** @type {any} */ (e)._children[0];
-  const right = nav._children[2];
-  const revertBtn = right._children[0];
-  // Stub setTimeout so showToast doesn't loop
-  /** @type {any} */ (globalThis).setTimeout = () => 0;
-  revertBtn._listeners.click[0]();
-  assert.equal(toastMsg.get(), 'Nothing to revert');
-  assert.equal(isDirty.get(), false);
-  e.disconnectedCallback();
-});
-
-test('CORACaseTabs: Revert with dirty state + confirmed reverts to baseline', () => {
-  resetStoreWithExampleReview();
-  cases.set({
-    ...cases.get(),
-    'example-review': { ...cases.get()['example-review'], label: 'CHANGED' },
-  });
-  /** @type {any} */ (globalThis).confirm = () => true;
-  /** @type {any} */ (globalThis).setTimeout = () => 0;
-  const e = new CORACaseTabs();
-  e.connectedCallback();
-  const nav = /** @type {any} */ (e)._children[0];
-  const right = nav._children[2];
-  const revertBtn = right._children[0];
-  revertBtn._listeners.click[0]();
-  assert.equal(
-    cases.get()['example-review'].label,
-    baseline.get()['example-review'].label
-  );
-  e.disconnectedCallback();
-});
-
-test('CORACaseTabs: Revert with cancelled confirm is a no-op', () => {
-  resetStoreWithExampleReview();
-  cases.set({
-    ...cases.get(),
-    'example-review': { ...cases.get()['example-review'], label: 'NEW' },
-  });
-  /** @type {any} */ (globalThis).confirm = () => false;
-  const e = new CORACaseTabs();
-  e.connectedCallback();
-  const nav = /** @type {any} */ (e)._children[0];
-  const right = nav._children[2];
-  const revertBtn = right._children[0];
-  revertBtn._listeners.click[0]();
-  assert.equal(cases.get()['example-review'].label, 'NEW');
-  e.disconnectedCallback();
-});
-
-test('CORACaseTabs: Compile button opens the drawer', () => {
-  _resetStore();
-  const e = new CORACaseTabs();
-  e.connectedCallback();
-  const nav = /** @type {any} */ (e)._children[0];
-  const right = nav._children[2];
-  const compileBtn = right._children[1];
-  compileBtn._listeners.click[0]();
-  assert.equal(drawerOpen.get(), true);
+  assert.equal(tabsContainer._children.length, 0);
   e.disconnectedCallback();
 });

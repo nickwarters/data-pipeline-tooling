@@ -1,73 +1,80 @@
 // @ts-check
-import { resetStoreWithExampleReview } from './_bank-store-fixture.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom } from './_dom-stub.js';
+import { installDom, flush } from './_dom-stub.js';
+import { freshExampleReviewBank } from './_example-review-fixture.js';
 installDom();
 
 const { CORACompileDrawer } =
   await import('../src/components/collections/cora-compile-drawer.js');
-const {
-  _resetStore,
-  drawerOpen,
-  baseline,
-  cases,
-  toastMsg,
-  commit,
-  setSampleCases,
-} = await import('../src/question-bank/question-bank-store.js');
+const { signal } = await import('../src/lib/signal.js');
+const { compileBank, highlight } =
+  await import('../src/question-bank/question-bank-compile.js');
 
-/** @type {any} */ (globalThis).setTimeout = () => 0;
+/**
+ * Mount a CORACompileDrawer with props + spies (no store).
+ * @param {{ open?: boolean, bank?: any, diff?: any, highlight?: any, hashCode?: any, simulatePanel?: any }} [over]
+ */
+function mount(over = {}) {
+  const e = /** @type {any} */ (new CORACompileDrawer());
+  e.open = signal(over.open ?? false);
+  e.bank = signal(over.bank ?? freshExampleReviewBank());
+  e.diff = signal(over.diff ?? { added: 0, changed: 0, deprecated: 0 });
+  e.compile = compileBank;
+  e.highlight = 'highlight' in over ? over.highlight : highlight;
+  e.hashCode = 'hashCode' in over ? over.hashCode : async () => 'deadbeef';
+  e.simulatePanel = over.simulatePanel ?? null;
+  const calls = { closed: 0, copied: 0, submitted: 0 };
+  e.onClose = () => {
+    calls.closed += 1;
+  };
+  e.onCopied = () => {
+    calls.copied += 1;
+  };
+  e.onSubmit = () => {
+    calls.submitted += 1;
+  };
+  e.connectedCallback();
+  return { e, calls };
+}
 
 test('CORACompileDrawer: renders backdrop + drawer (closed by default)', () => {
-  resetStoreWithExampleReview();
-  drawerOpen.set(false);
-  const e = new CORACompileDrawer();
-  e.connectedCallback();
-  const kids = /** @type {any} */ (e)._children;
+  const { e } = mount();
+  const kids = e._children;
   assert.equal(kids.length, 2);
   assert.ok(!kids[0].className.includes('open'));
   e.disconnectedCallback();
 });
 
-test('CORACompileDrawer: open state adds .open to backdrop and drawer', () => {
-  resetStoreWithExampleReview();
-  drawerOpen.set(true);
-  const e = new CORACompileDrawer();
-  e.connectedCallback();
-  const kids = /** @type {any} */ (e)._children;
+test('CORACompileDrawer: open signal adds .open to backdrop and drawer', () => {
+  const { e } = mount({ open: true });
+  const kids = e._children;
   assert.ok(kids[0].className.includes('open'));
   assert.ok(kids[1].className.includes('open'));
   e.disconnectedCallback();
 });
 
-test('CORACompileDrawer: backdrop click closes drawer', () => {
-  resetStoreWithExampleReview();
-  drawerOpen.set(true);
-  const e = new CORACompileDrawer();
-  e.connectedCallback();
-  const backdrop = /** @type {any} */ (e)._children[0];
-  backdrop._listeners.click[0]();
-  assert.equal(drawerOpen.get(), false);
+test('CORACompileDrawer: re-renders when the open signal flips', () => {
+  const { e } = mount({ open: false });
+  e.open.set(true);
+  assert.ok(e._children[0].className.includes('open'));
   e.disconnectedCallback();
 });
 
-test('CORACompileDrawer: close × button closes drawer', () => {
-  resetStoreWithExampleReview();
-  drawerOpen.set(true);
-  const e = new CORACompileDrawer();
-  e.connectedCallback();
-  const drawer = /** @type {any} */ (e)._children[1];
+test('CORACompileDrawer: backdrop click and × button call onClose', () => {
+  const { e, calls } = mount({ open: true });
+  const backdrop = e._children[0];
+  backdrop._listeners.click[0]();
+  assert.equal(calls.closed, 1);
+  const drawer = e._children[1];
   const head = drawer._children[0];
   const closeBtn = head._children[1];
   closeBtn._listeners.click[0]();
-  assert.equal(drawerOpen.get(), false);
+  assert.equal(calls.closed, 2);
   e.disconnectedCallback();
 });
 
-test('CORACompileDrawer: Copy writes code to clipboard + shows toast', async () => {
-  resetStoreWithExampleReview();
-  drawerOpen.set(true);
+test('CORACompileDrawer: Copy writes code to clipboard + reports onCopied', async () => {
   /** @type {any} */
   let written = null;
   try {
@@ -81,75 +88,56 @@ test('CORACompileDrawer: Copy writes code to clipboard + shows toast', async () 
   } catch {
     /* read-only navigator on some runtimes */
   }
-  const e = new CORACompileDrawer();
-  e.connectedCallback();
-  const drawer = /** @type {any} */ (e)._children[1];
+  const bank = freshExampleReviewBank();
+  const { e, calls } = mount({ open: true, bank });
+  const drawer = e._children[1];
   const foot = drawer._children[2];
   const copyBtn = foot._children[1]._children[0];
   await copyBtn._listeners.click[0]();
-  assert.equal(toastMsg.get(), 'Bank JSON copied to clipboard');
+  assert.equal(calls.copied, 1);
+  if (written !== null) assert.equal(written, compileBank(bank));
   e.disconnectedCallback();
 });
 
-test('CORACompileDrawer: Send for Review snapshots baseline + closes', () => {
-  resetStoreWithExampleReview();
-  drawerOpen.set(true);
-  commit((t) => {
-    t['example-review'].label = 'AFTER';
-  });
-  const e = new CORACompileDrawer();
-  e.connectedCallback();
-  const drawer = /** @type {any} */ (e)._children[1];
+test('CORACompileDrawer: Send for Review calls onSubmit', () => {
+  const { e, calls } = mount({ open: true });
+  const drawer = e._children[1];
   const foot = drawer._children[2];
   const sendBtn = foot._children[1]._children[1];
   sendBtn._listeners.click[0]();
-  assert.equal(baseline.get()['example-review'].label, 'AFTER');
-  assert.equal(drawerOpen.get(), false);
-  assert.equal(toastMsg.get(), 'Submitted for review');
+  assert.equal(calls.submitted, 1);
   e.disconnectedCallback();
 });
 
-test('CORACompileDrawer: diff cards render added / changed / removed counts', () => {
-  resetStoreWithExampleReview();
-  commit((t) => {
-    t['example-review'].questions.push({
-      id: 'new',
-      text: '',
-      responseType: 'yes-no-na',
-      deprecated: false,
-    });
+test('CORACompileDrawer: diff cards render the counts from the diff signal', () => {
+  const { e } = mount({
+    open: true,
+    diff: { added: 1, changed: 2, deprecated: 3 },
   });
-  drawerOpen.set(true);
-  const e = new CORACompileDrawer();
-  e.connectedCallback();
-  const drawer = /** @type {any} */ (e)._children[1];
-  const body = drawer._children[1];
+  const body = e._children[1]._children[1];
   const diffSummary = body._children[0];
   assert.equal(diffSummary._children.length, 3);
+  assert.equal(diffSummary._children[0]._children[0].textContent, '1');
+  assert.equal(diffSummary._children[1]._children[0].textContent, '2');
+  assert.equal(diffSummary._children[2]._children[0].textContent, '3');
   e.disconnectedCallback();
 });
 
 test('CORACompileDrawer: code preview uses explicit highlighted HTML that escapes question text', () => {
-  resetStoreWithExampleReview();
-  cases.set({
-    'example-review': {
-      label: 'Example',
-      slug: 'example-review',
-      questions: [
-        {
-          id: 'q-danger',
-          text: '<img src=x onerror=alert(1)>',
-          responseType: 'yes-no-na',
-          deprecated: false,
-        },
-      ],
-    },
-  });
-  drawerOpen.set(true);
-  const e = new CORACompileDrawer();
-  e.connectedCallback();
-  const drawer = /** @type {any} */ (e)._children[1];
-  const body = drawer._children[1];
+  const bank = {
+    label: 'Example',
+    slug: 'example-review',
+    questions: [
+      {
+        id: 'q-danger',
+        text: '<img src=x onerror=alert(1)>',
+        responseType: 'yes-no-na',
+        deprecated: false,
+      },
+    ],
+  };
+  const { e } = mount({ open: true, bank });
+  const body = e._children[1]._children[1];
   const codeBlock = body._children[1];
 
   assert.ok(codeBlock.innerHTML.includes('&lt;img src=x onerror=alert(1)&gt;'));
@@ -158,131 +146,58 @@ test('CORACompileDrawer: code preview uses explicit highlighted HTML that escape
   e.disconnectedCallback();
 });
 
-/** Recursively collect all text in a stub element tree. */
-function allText(/** @type {any} */ el) {
-  let out = el.textContent || '';
-  for (const child of el._children ?? []) out += ' ' + allText(child);
-  return out;
-}
+test('CORACompileDrawer: without a highlighter the code renders as plain text', () => {
+  const { e } = mount({ open: true, highlight: null });
+  const body = e._children[1]._children[1];
+  const codeBlock = body._children[1];
+  assert.equal(codeBlock.innerHTML, '');
+  assert.ok(codeBlock.textContent.includes('"slug"'));
+  e.disconnectedCallback();
+});
 
-/** Run `fn` with the simulator URL flag (?simulate=1) switched on. */
-function withSimulatorFlag(/** @type {() => void} */ fn) {
-  const loc = /** @type {any} */ (globalThis).location;
-  const origSearch = loc.search;
-  loc.search = '?simulate=1';
-  try {
-    fn();
-  } finally {
-    loc.search = origSearch;
-  }
-}
+test('CORACompileDrawer: hash meta reflects hashCode; missing hashCode says unavailable', async () => {
+  const { e } = mount({ open: true });
+  await flush();
+  const foot = e._children[1]._children[2];
+  assert.ok(foot._children[0].textContent.startsWith('sha256:deadbeef'));
+  e.disconnectedCallback();
 
-test('CORACompileDrawer: simulate panel is hidden without the ?simulate=1 flag', () => {
-  resetStoreWithExampleReview();
-  setSampleCases('example-review', [
-    { id: 'case-1', title: 'First Case', answers: {} },
-  ]);
-  drawerOpen.set(true);
-  const e = new CORACompileDrawer();
-  e.connectedCallback();
-  const body = /** @type {any} */ (e)._children[1]._children[1];
+  const { e: e2 } = mount({ open: true, hashCode: null });
+  await flush();
+  const foot2 = e2._children[1]._children[2];
+  assert.equal(foot2._children[0].textContent, 'hash: unavailable');
+  e2.disconnectedCallback();
+});
+
+test('CORACompileDrawer: renders the simulate panel the page supplies', () => {
+  /** @type {any[]} */
+  const askedBanks = [];
+  const bank = freshExampleReviewBank();
+  const { e } = mount({
+    open: true,
+    bank,
+    simulatePanel: (/** @type {any} */ b) => {
+      askedBanks.push(b);
+      const el = /** @type {any} */ (
+        globalThis.document.createElement('section')
+      );
+      el.className = 'sim-panel';
+      return el;
+    },
+  });
+  const body = e._children[1]._children[1];
+  assert.equal(body._children[1].className, 'sim-panel');
+  assert.deepEqual(askedBanks, [bank]);
+  e.disconnectedCallback();
+});
+
+test('CORACompileDrawer: no simulate panel when the page passes none', () => {
+  const { e } = mount({ open: true });
+  const body = e._children[1]._children[1];
   assert.ok(
     body._children.every(
       (/** @type {any} */ child) => child.className !== 'sim-panel'
     )
   );
   e.disconnectedCallback();
-});
-
-test('CORACompileDrawer: simulate panel shows empty state without sample Cases', () => {
-  resetStoreWithExampleReview();
-  drawerOpen.set(true);
-  withSimulatorFlag(() => {
-    const e = new CORACompileDrawer();
-    e.connectedCallback();
-    const body = /** @type {any} */ (e)._children[1]._children[1];
-    const panel = body._children[1];
-    assert.equal(panel.className, 'sim-panel');
-    assert.ok(allText(panel).includes('Impact simulation'));
-    assert.ok(allText(panel).includes('No sample Cases loaded yet'));
-    e.disconnectedCallback();
-  });
-});
-
-test('CORACompileDrawer: simulate panel reports impact per sample Case', () => {
-  resetStoreWithExampleReview();
-  setSampleCases('example-review', [
-    {
-      id: 'case-1',
-      title: 'First Case',
-      answers: { 'q-welcome': { value: 'NA' } },
-    },
-    { id: 'case-2', title: 'Second Case', answers: {} },
-  ]);
-  commit((t) => {
-    const q = /** @type {any} */ (
-      t['example-review'].questions.find(
-        (/** @type {any} */ x) => x.id === 'q-welcome'
-      )
-    );
-    q.failureCriteria = 'NA';
-    q.optionOutcomes = { NA: 'fail' };
-  });
-  drawerOpen.set(true);
-  withSimulatorFlag(() => {
-    const e = new CORACompileDrawer();
-    e.connectedCallback();
-    const body = /** @type {any} */ (e)._children[1]._children[1];
-    const panel = body._children[1];
-    const text = allText(panel);
-    assert.ok(text.includes('1 of 2 sample Cases affected'));
-    assert.ok(text.includes('First Case'));
-    assert.ok(text.includes('New Issue: q-welcome (caused by q-welcome)'));
-    assert.ok(!text.includes('Second Case'));
-    e.disconnectedCallback();
-  });
-});
-
-test('CORACompileDrawer: simulate panel with samples but no changes says so', () => {
-  resetStoreWithExampleReview();
-  setSampleCases('example-review', [
-    { id: 'case-1', title: 'First Case', answers: {} },
-  ]);
-  drawerOpen.set(true);
-  withSimulatorFlag(() => {
-    const e = new CORACompileDrawer();
-    e.connectedCallback();
-    const body = /** @type {any} */ (e)._children[1]._children[1];
-    const panel = body._children[1];
-    assert.ok(allText(panel).includes('No sample Case is affected.'));
-    e.disconnectedCallback();
-  });
-});
-
-test('CORACompileDrawer: simulate panel reports Outcome changes with attribution', () => {
-  resetStoreWithExampleReview();
-  setSampleCases('example-review', [
-    {
-      id: 'case-1',
-      title: 'First Case',
-      answers: { 'q-welcome': { value: 'No' } },
-    },
-  ]);
-  commit((t) => {
-    const q = /** @type {any} */ (
-      t['example-review'].questions.find(
-        (/** @type {any} */ x) => x.id === 'q-welcome'
-      )
-    );
-    q.optionOutcomes = {};
-  });
-  drawerOpen.set(true);
-  withSimulatorFlag(() => {
-    const e = new CORACompileDrawer();
-    e.connectedCallback();
-    const body = /** @type {any} */ (e)._children[1]._children[1];
-    const text = allText(body._children[1]);
-    assert.ok(text.includes('Outcome: fail → pass (caused by q-welcome)'));
-    e.disconnectedCallback();
-  });
 });

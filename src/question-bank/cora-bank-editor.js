@@ -1,7 +1,23 @@
 // @ts-check
 import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
-import { drawerOpen, railOpen } from './question-bank-store.js';
+import {
+  activeSlug,
+  baseline,
+  baselineBank,
+  cases,
+  currentBank,
+  diffCounts,
+  drawerOpen,
+  isDirty,
+  railOpen,
+  sampleCases,
+  setFilters,
+  showToast,
+} from './question-bank-store.js';
+import { compileBank, hashStr, highlight } from './question-bank-compile.js';
+import { simulatorEnabled } from './question-bank-flags.js';
+import { SimulatePanel } from './simulate-panel.js';
 
 // Side-effect imports: register all child custom elements.
 import '../components/collections/cora-case-tabs.js';
@@ -19,6 +35,84 @@ import '../components/sections/cora-remediation-editor.js';
 import './cora-bank-dock.js';
 import '../components/collections/cora-compile-drawer.js';
 import '../components/base/cora-toast.js';
+
+/**
+ * Switch the workbench to another Case Type's bank (clears the category
+ * filter, which is per-bank).
+ *
+ * @param {string} slug
+ */
+export function selectBank(slug) {
+  activeSlug.set(slug);
+  setFilters({ category: null });
+}
+
+/** Discard all uncommitted edits and return to the last synced state. */
+export function revertBank() {
+  if (!isDirty.get()) {
+    showToast('Nothing to revert');
+    return;
+  }
+  const ok = /** @type {any} */ (globalThis).confirm?.(
+    'Discard all uncommitted edits and return to the last synced state?'
+  );
+  if (!ok) return;
+  cases.set(structuredClone(baseline.get()));
+  showToast('Reverted to baseline');
+}
+
+/** Snapshot the draft as the new baseline and close the drawer. */
+export function submitBankForReview() {
+  baseline.set(structuredClone(cases.get()));
+  drawerOpen.set(false);
+  showToast('Submitted for review');
+}
+
+/**
+ * Store wiring for the `cora-case-tabs` collection: state flows down as
+ * signals, interactions flow back up into the store the page owns.
+ *
+ * @returns {Partial<import('../components/collections/cora-case-tabs.js').CORACaseTabs>}
+ */
+export function caseTabsProps() {
+  return {
+    cases,
+    active: activeSlug,
+    dirty: isDirty,
+    onSelect: selectBank,
+    onRevert: revertBank,
+    onCompile: () => drawerOpen.set(true),
+  };
+}
+
+/**
+ * Store + compile/flags/simulate wiring for the `cora-compile-drawer`
+ * collection. The drawer itself is a props-driven component; the bank-editor
+ * page owns the assembly (issue #382).
+ *
+ * @returns {import('../components/collections/cora-compile-drawer.js').CompileDrawerProps}
+ */
+export function compileDrawerProps() {
+  return {
+    open: drawerOpen,
+    bank: currentBank,
+    diff: diffCounts,
+    compile: compileBank,
+    highlight,
+    hashCode: hashStr,
+    simulatePanel: (/** @type {any} */ bank) =>
+      simulatorEnabled()
+        ? SimulatePanel(
+            baselineBank.get(),
+            bank,
+            sampleCases.get()[bank.slug] ?? []
+          )
+        : null,
+    onClose: () => drawerOpen.set(false),
+    onCopied: () => showToast('Bank JSON copied to clipboard'),
+    onSubmit: submitBankForReview,
+  };
+}
 
 /**
  * @returns {Node[]}
@@ -50,7 +144,7 @@ export function BankEditor() {
         h('strong', {}, 'questions.v3')
       )
     ),
-    /** @type {any} */ (document.createElement('cora-case-tabs')),
+    h('cora-case-tabs', caseTabsProps()),
     h(
       'main',
       { className: 'bank-main' },
@@ -58,7 +152,7 @@ export function BankEditor() {
       /** @type {any} */ (document.createElement('cora-bank-list'))
     ),
     /** @type {any} */ (document.createElement('cora-bank-dock')),
-    /** @type {any} */ (document.createElement('cora-compile-drawer')),
+    h('cora-compile-drawer', compileDrawerProps()),
     /** @type {any} */ (document.createElement('cora-toast')),
   ];
 }

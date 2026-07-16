@@ -1,15 +1,6 @@
 // @ts-check
 import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
-import {
-  activeSlug,
-  baseline,
-  cases,
-  drawerOpen,
-  isDirty,
-  setFilters,
-  showToast,
-} from '../../question-bank/question-bank-store.js';
 
 /**
  * @typedef {Object} CaseTabsProps
@@ -78,32 +69,38 @@ export function CaseTabs({
   );
 }
 
+/**
+ * Case Type tab bar shell. State arrives as **signals** passed as properties
+ * (`cases`, `active`, `dirty`) — the render effect subscribes to whatever it
+ * is given, so fine-grained reactivity is unchanged — and interactions flow
+ * up through the `onSelect` / `onRevert` / `onCompile` callbacks supplied by
+ * the mounting page. No store dependency.
+ */
 export class CORACaseTabs extends ShellElement {
-  render() {
-    const types = cases.get();
-    const active = activeSlug.get();
+  constructor() {
+    super();
+    /** @type {{ get(): Record<string, any> } | null} */
+    this.cases = null;
+    /** @type {{ get(): string } | null} */
+    this.active = null;
+    /** @type {{ get(): boolean } | null} */
+    this.dirty = null;
+    /** @type {(slug: string) => void} */
+    this.onSelect = () => {};
+    /** @type {() => void} */
+    this.onRevert = () => {};
+    /** @type {() => void} */
+    this.onCompile = () => {};
+  }
 
+  render() {
     return CaseTabs({
-      types,
-      active,
-      dirty: isDirty.get(),
-      onSelect: (slug) => {
-        activeSlug.set(slug);
-        setFilters({ category: null });
-      },
-      onRevert: () => {
-        if (!isDirty.get()) {
-          showToast('Nothing to revert');
-          return;
-        }
-        const ok = /** @type {any} */ (globalThis).confirm?.(
-          'Discard all uncommitted edits and return to the last synced state?'
-        );
-        if (!ok) return;
-        cases.set(structuredClone(baseline.get()));
-        showToast('Reverted to baseline');
-      },
-      onCompile: () => drawerOpen.set(true),
+      types: this.cases?.get() ?? {},
+      active: this.active?.get() ?? '',
+      dirty: this.dirty?.get() ?? false,
+      onSelect: this.onSelect,
+      onRevert: this.onRevert,
+      onCompile: this.onCompile,
     });
   }
 }

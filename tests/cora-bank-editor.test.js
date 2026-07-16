@@ -116,3 +116,133 @@ test('StubEl: basic DOM shape sanity', () => {
   a.cloneNode();
   a.focus();
 });
+
+test('bank editor: selectBank switches the active slug and clears the category filter', async () => {
+  const { selectBank } =
+    await import('../src/question-bank/cora-bank-editor.js');
+  const { activeSlug, filters, setFilters, _resetStore } =
+    await import('../src/question-bank/question-bank-store.js');
+  _resetStore();
+  setFilters({ category: 'Opening' });
+  selectBank('complaints');
+  assert.equal(activeSlug.get(), 'complaints');
+  assert.equal(filters.get().category, null);
+});
+
+test('bank editor: revertBank with clean state shows "Nothing to revert" toast', async () => {
+  const { revertBank } =
+    await import('../src/question-bank/cora-bank-editor.js');
+  const { toastMsg, isDirty, _resetStore } =
+    await import('../src/question-bank/question-bank-store.js');
+  _resetStore();
+  /** @type {any} */ (globalThis).setTimeout = () => 0;
+  revertBank();
+  assert.equal(toastMsg.get(), 'Nothing to revert');
+  assert.equal(isDirty.get(), false);
+});
+
+test('bank editor: revertBank with dirty state + confirmed reverts to baseline', async () => {
+  const { revertBank } =
+    await import('../src/question-bank/cora-bank-editor.js');
+  const { cases, baseline, activeSlug, _resetStore } =
+    await import('../src/question-bank/question-bank-store.js');
+  _resetStore();
+  const slug = activeSlug.get();
+  cases.set({
+    ...cases.get(),
+    [slug]: { ...cases.get()[slug], label: 'CHANGED' },
+  });
+  /** @type {any} */ (globalThis).confirm = () => true;
+  /** @type {any} */ (globalThis).setTimeout = () => 0;
+  revertBank();
+  assert.equal(cases.get()[slug].label, baseline.get()[slug].label);
+});
+
+test('bank editor: revertBank with cancelled confirm is a no-op', async () => {
+  const { revertBank } =
+    await import('../src/question-bank/cora-bank-editor.js');
+  const { cases, activeSlug, _resetStore } =
+    await import('../src/question-bank/question-bank-store.js');
+  _resetStore();
+  const slug = activeSlug.get();
+  cases.set({
+    ...cases.get(),
+    [slug]: { ...cases.get()[slug], label: 'NEW' },
+  });
+  /** @type {any} */ (globalThis).confirm = () => false;
+  revertBank();
+  assert.equal(cases.get()[slug].label, 'NEW');
+});
+
+test('bank editor: submitBankForReview snapshots baseline, closes the drawer, toasts', async () => {
+  const { submitBankForReview } =
+    await import('../src/question-bank/cora-bank-editor.js');
+  const {
+    cases,
+    baseline,
+    activeSlug,
+    drawerOpen,
+    toastMsg,
+    commit,
+    _resetStore,
+  } = await import('../src/question-bank/question-bank-store.js');
+  _resetStore();
+  const slug = activeSlug.get();
+  commit((t) => {
+    t[slug].label = 'AFTER';
+  });
+  drawerOpen.set(true);
+  /** @type {any} */ (globalThis).setTimeout = () => 0;
+  submitBankForReview();
+  assert.equal(baseline.get()[slug].label, 'AFTER');
+  assert.equal(drawerOpen.get(), false);
+  assert.equal(toastMsg.get(), 'Submitted for review');
+});
+
+test('bank editor: caseTabsProps wires store signals and the compile drawer opener', async () => {
+  const { caseTabsProps } =
+    await import('../src/question-bank/cora-bank-editor.js');
+  const { cases, activeSlug, isDirty, drawerOpen, _resetStore } =
+    await import('../src/question-bank/question-bank-store.js');
+  _resetStore();
+  const props = /** @type {any} */ (caseTabsProps());
+  assert.equal(props.cases, cases);
+  assert.equal(props.active, activeSlug);
+  assert.equal(props.dirty, isDirty);
+  drawerOpen.set(false);
+  props.onCompile();
+  assert.equal(drawerOpen.get(), true);
+  drawerOpen.set(false);
+});
+
+test('bank editor: compileDrawerProps wires compile + store; simulate panel gated by flag', async () => {
+  const { compileDrawerProps } =
+    await import('../src/question-bank/cora-bank-editor.js');
+  const { currentBank, drawerOpen, toastMsg, _resetStore } =
+    await import('../src/question-bank/question-bank-store.js');
+  const { compileBank } =
+    await import('../src/question-bank/question-bank-compile.js');
+  _resetStore();
+  const props = /** @type {any} */ (compileDrawerProps());
+  assert.equal(props.open, drawerOpen);
+  assert.equal(props.bank, currentBank);
+  assert.equal(props.compile, compileBank);
+
+  // Flag off → no simulate panel.
+  const loc = /** @type {any} */ (globalThis).location;
+  const origSearch = loc.search;
+  loc.search = '';
+  assert.equal(props.simulatePanel(currentBank.get()), null);
+  // Flag on → a rendered sim-panel node.
+  loc.search = '?simulate=1';
+  const panel = props.simulatePanel(currentBank.get());
+  assert.equal(panel.className, 'sim-panel');
+  loc.search = origSearch;
+
+  drawerOpen.set(true);
+  props.onClose();
+  assert.equal(drawerOpen.get(), false);
+  /** @type {any} */ (globalThis).setTimeout = () => 0;
+  props.onCopied();
+  assert.equal(toastMsg.get(), 'Bank JSON copied to clipboard');
+});

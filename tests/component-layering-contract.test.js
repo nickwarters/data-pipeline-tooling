@@ -1,22 +1,23 @@
 // @ts-check
 
 /**
- * Layering contract for MAINT-16: the "question bank editor subsystem" under
- * `src/question-bank/` must stay an optional bolt-on, not a dependency the rest
- * of `src/components/` reaches into.
+ * Layering contract (MAINT-16, completed by the store inversion in #382): the
+ * question bank editor subsystem must stay an optional bolt-on, not a
+ * dependency anything under `src/components/` reaches into.
  *
- * Two rules are enforced, at the level actually achieved by MAINT-16:
+ * Two rules are enforced:
  *
  *  1. Generic helpers were relocated to `src/lib/` (showWhen-tree manipulation →
  *     `lib/showwhen-tree.js`; question/category ordering → `lib/question-order.js`;
  *     the transient toast primitive → `lib/toast.js`). No component may import
- *     those concerns from `src/question-bank/` any more.
+ *     those concerns from the question-bank subsystem any more.
  *
- *  2. The only remaining `src/components/` → `src/question-bank/` couplings are a
- *     small, explicit allowlist of editor primitives that read the bank-editor
- *     *store singleton* (`commit`/`currentBank`/`activeSlug`/`filters` etc.). That
- *     coupling is genuine (not mechanical to inject as props) and is documented in
- *     each file; the allowlist can only shrink, never grow.
+ *  2. No component imports from the question-bank subsystem at all. The last
+ *     ten couplings (editor primitives reading the bank-editor *store
+ *     singleton*) were inverted in issue #382: state flows down as properties
+ *     (signals allowed as property values) and mutations flow up through
+ *     `onCommit` callbacks, with the bank editor page owning the only store
+ *     imports.
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
@@ -67,28 +68,15 @@ test('layering: cora-toast (a base primitive) does not import from question-bank
   );
 });
 
-test('layering: components→question-bank couplings match the documented allowlist', () => {
-  // Editor primitives that still read the bank-editor store singleton. Genuine
-  // coupling (documented in each file); this list may shrink but must not grow.
-  const ALLOWED = new Set([
-    'src/components/collections/cora-case-tabs.js',
-    'src/components/collections/cora-compile-drawer.js',
-  ]);
-
-  const actual = componentFiles.filter(importsQuestionBank);
-  const unexpected = actual.filter((rel) => !ALLOWED.has(rel));
+test('layering: no component imports from the question-bank subsystem', () => {
+  // The last ten couplings (editor primitives reading the bank-editor store
+  // singleton) were inverted in issue #382: state flows down as properties
+  // (signals allowed as property values) and mutations flow up through
+  // `onCommit` callbacks; the bank editor page owns the only store imports.
+  const offenders = componentFiles.filter(importsQuestionBank);
   assert.deepEqual(
-    unexpected,
+    offenders,
     [],
-    'new component→question-bank coupling: inject the state via props or relocate the helper to src/lib/'
-  );
-
-  // The allowlist may only shrink: flag entries that no longer couple so the
-  // list is trimmed as decoupling progresses.
-  const stale = [...ALLOWED].filter((rel) => !actual.includes(rel));
-  assert.deepEqual(
-    stale,
-    [],
-    'these files no longer import from question-bank/ — remove them from ALLOWED'
+    'components must receive question-bank state via props and report mutations via onCommit — see issue #382 and docs/question-bank-store-inversion-explainer.html'
   );
 });

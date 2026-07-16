@@ -1,40 +1,42 @@
 // @ts-check
 import { defineView } from '../../lib/view.js';
 import { h, unsafeHTML } from '../../lib/html.js';
-import { EmptyState } from '../../lib/empty-state.js';
-import {
-  baseline,
-  baselineBank,
-  cases,
-  currentBank,
-  diffCounts,
-  drawerOpen,
-  sampleCases,
-  showToast,
-} from '../../question-bank/question-bank-store.js';
-import {
-  compileBank,
-  hashStr,
-  highlight,
-} from '../../question-bank/question-bank-compile.js';
-import { simulateBankImpact } from '../../question-bank/question-bank-simulate.js';
-import { simulatorEnabled } from '../../question-bank/question-bank-flags.js';
 
 /**
- * Slide-out drawer showing the compiled current Question Bank JSON. Reads the shared
- * question-bank signals (`drawerOpen`, `currentBank`, `diffCounts`), so it
- * re-renders whenever they change.
+ * @typedef {Object} CompileDrawerProps
+ * @property {{ get(): boolean } | null} open open/closed state signal
+ * @property {{ get(): any } | null} bank the bank to compile (signal)
+ * @property {{ get(): { added: number, changed: number, deprecated: number } } | null} diff diff counts signal
+ * @property {(bank: any) => string} compile compiles the bank to its artifact JSON
+ * @property {((code: string) => string) | null} highlight syntax-highlights code to reviewed HTML
+ * @property {((code: string) => Promise<string>) | null} hashCode hashes the compiled artifact
+ * @property {((bank: any) => Node | null) | null} simulatePanel renders the impact-simulation panel (or null)
+ * @property {() => void} onClose
+ * @property {() => void} onCopied
+ * @property {() => void} onSubmit
+ */
+
+/**
+ * Slide-out drawer showing the compiled current Question Bank JSON. All state
+ * arrives as props — signals for the reactive parts (`open`, `bank`, `diff`)
+ * and plain functions for the bank-editor concerns (`compile`, `highlight`,
+ * `hashCode`, `simulatePanel`) — so the component has no store dependency;
+ * the bank editor page supplies the wiring (issue #382).
  *
+ * @param {CompileDrawerProps} props
  * @returns {HTMLElement[]}
  */
-export function CompileDrawer() {
-  const open = drawerOpen.get();
-  const bank = currentBank.get();
-  const code = compileBank(bank);
-  const d = diffCounts.get();
+export function CompileDrawer(props) {
+  const open = props.open?.get() ?? false;
+  const bank = props.bank?.get();
+  const code = props.compile(bank);
+  const d = props.diff?.get() ?? { added: 0, changed: 0, deprecated: 0 };
 
   const hashMeta = h('small', {}, 'hash: …');
-  hashStr(code)
+  const hashed = props.hashCode
+    ? props.hashCode(code)
+    : Promise.reject(new Error('no hashCode prop'));
+  hashed
     .then((hash) => {
       hashMeta.textContent = `sha256:${hash} · ${code.length} chars · ${code.split('\n').length} lines`;
     })
@@ -42,10 +44,15 @@ export function CompileDrawer() {
       hashMeta.textContent = 'hash: unavailable';
     });
 
+  // Without a highlighter the code renders as plain text (never raw HTML).
+  const codeBlock = props.highlight
+    ? h('div', { class: 'code-block' }, unsafeHTML(props.highlight(code)))
+    : h('div', { class: 'code-block' }, code);
+
   return [
     h('div', {
       class: 'drawer-backdrop' + (open ? ' open' : ''),
-      onclick: () => drawerOpen.set(false),
+      onclick: () => props.onClose(),
     }),
     h(
       'aside',
@@ -71,7 +78,7 @@ export function CompileDrawer() {
         ),
         h(
           'button',
-          { class: 'drawer-close', onclick: () => drawerOpen.set(false) },
+          { class: 'drawer-close', onclick: () => props.onClose() },
           '×'
         )
       ),
@@ -85,14 +92,8 @@ export function CompileDrawer() {
           diffCard('diff-card changed', String(d.changed), 'Changed'),
           diffCard('diff-card removed', String(d.deprecated), 'Deprecated')
         ),
-        simulatorEnabled()
-          ? SimulatePanel(
-              baselineBank.get(),
-              bank,
-              sampleCases.get()[bank.slug] ?? []
-            )
-          : null,
-        h('div', { class: 'code-block' }, unsafeHTML(highlight(code)))
+        props.simulatePanel ? props.simulatePanel(bank) : null,
+        codeBlock
       ),
       h(
         'div',
@@ -109,7 +110,7 @@ export function CompileDrawer() {
                 const clip = /** @type {any} */ (globalThis).navigator
                   ?.clipboard;
                 if (clip?.writeText) await clip.writeText(code);
-                showToast('Bank JSON copied to clipboard');
+                props.onCopied();
               },
             },
             'Copy'
@@ -118,11 +119,7 @@ export function CompileDrawer() {
             'button',
             {
               class: 'pill-btn primary',
-              onclick: () => {
-                baseline.set(structuredClone(cases.get()));
-                drawerOpen.set(false);
-                showToast('Submitted for review');
-              },
+              onclick: () => props.onSubmit(),
             },
             'Send for Review'
           )
@@ -133,102 +130,22 @@ export function CompileDrawer() {
 }
 
 export const CORACompileDrawer = defineView('cora-compile-drawer', {
-  render() {
-    return CompileDrawer();
+  props: /** @type {CompileDrawerProps} */ ({
+    open: null,
+    bank: null,
+    diff: null,
+    compile: () => '',
+    highlight: null,
+    hashCode: null,
+    simulatePanel: null,
+    onClose: () => {},
+    onCopied: () => {},
+    onSubmit: () => {},
+  }),
+  render({ props }) {
+    return CompileDrawer(props);
   },
 });
-
-/**
- * Read-only impact simulation of the draft bank against sample Cases (issue
- * #202): applicability changes, newly required Answers, Issue changes, and
- * Outcome changes, each attributed to the Question Definitions that caused
- * them. Simulation never mutates Cases or publishes the bank.
- *
- * @param {import('../../question-bank/question-bank-source.js').QuestionBank} publishedBank
- * @param {import('../../question-bank/question-bank-source.js').QuestionBank} draftBank
- * @param {import('../../question-bank/question-bank-simulate.js').SampleCase[]} samples
- * @returns {HTMLElement}
- */
-export function SimulatePanel(publishedBank, draftBank, samples) {
-  const head = h('h4', {}, 'Impact simulation');
-  if (!samples.length) {
-    return h(
-      'section',
-      { class: 'sim-panel' },
-      head,
-      EmptyState(
-        'No sample Cases loaded yet — impact simulation unavailable.',
-        {
-          className: 'sim-empty',
-        }
-      )
-    );
-  }
-
-  const result = simulateBankImpact(publishedBank, draftBank, samples);
-  const t = result.totals;
-  const summary = h(
-    'p',
-    { class: 'sim-summary' },
-    `${t.casesChanged} of ${samples.length} sample Cases affected · ` +
-      `${t.newlyRequired} newly required Answers · ` +
-      `${t.issuesAdded} Issues added · ${t.issuesRemoved} Issues removed · ` +
-      `${t.outcomesChanged} Outcome changes`
-  );
-
-  const rows = result.cases
-    .filter((c) => c.changed)
-    .map((c) =>
-      h(
-        'li',
-        { class: 'sim-case' },
-        h('strong', {}, c.title),
-        h('ul', {}, ...caseImpactLines(c).map((line) => h('li', {}, line)))
-      )
-    );
-
-  return h(
-    'section',
-    { class: 'sim-panel' },
-    head,
-    summary,
-    rows.length
-      ? h('ul', { class: 'sim-cases' }, ...rows)
-      : EmptyState('No sample Case is affected.', { className: 'sim-empty' })
-  );
-}
-
-/**
- * @param {import('../../question-bank/question-bank-simulate.js').CaseImpact} c
- * @returns {string[]}
- */
-function caseImpactLines(c) {
-  /** @type {string[]} */
-  const lines = [];
-  /** @param {string} label @param {import('../../question-bank/question-bank-simulate.js').AttributedChange[]} changes */
-  const push = (label, changes) => {
-    for (const change of changes) {
-      const cause = change.causedBy.length
-        ? ` (caused by ${change.causedBy.join(', ')})`
-        : '';
-      lines.push(`${label}: ${change.id}${cause}`);
-    }
-  };
-  push('Now applicable', c.applicabilityGained);
-  push('No longer applicable', c.applicabilityLost);
-  push('Newly required Answer', c.newlyRequired);
-  push('New Issue', c.issuesAdded);
-  push('Issue removed', c.issuesRemoved);
-  if (c.outcome.changed) {
-    const cause = c.outcome.causedBy.length
-      ? ` (caused by ${c.outcome.causedBy.join(', ')})`
-      : '';
-    lines.push(
-      `Outcome: ${c.outcome.before ?? '—'} → ${c.outcome.after ?? '—'}${cause}`
-    );
-  }
-  return lines;
-}
 
 /**
  * @param {string} className
