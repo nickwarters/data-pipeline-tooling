@@ -2,13 +2,6 @@
 import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import {
-  activeSlug,
-  baselineBank,
-  commit,
-  currentBank,
-  filters,
-} from '../../question-bank/question-bank-store.js';
-import {
   canMoveQuestion,
   canMoveQuestionWithinCategory,
   moveQuestion,
@@ -16,14 +9,21 @@ import {
 } from '../../lib/question-order.js';
 
 /**
- * @param {{ question: any, bankQuestions: any[], questionIndex: number, categoryFilterActive: boolean, setClassName: (className: string) => void }} props
+ * One Question Definition's editing card. The active bank, the baseline
+ * questions (for the wording diff), the category-filter state, and the
+ * mutation sink all arrive as props and are forwarded to the child editors;
+ * this component has no store dependency.
+ *
+ * @param {{ question: any, questionIndex: number, bank: any, baselineQuestions: any[], categoryFilterActive: boolean, onCommit: (fn: () => void) => void, setClassName: (className: string) => void }} props
  * @returns {Node[] | undefined}
  */
 export function QuestionCard(props) {
   const q = props.question;
   if (!q) return;
   const i = props.questionIndex ?? 0;
-  const bankQuestions = props.bankQuestions ?? [];
+  const onCommit = props.onCommit;
+  const bank = props.bank;
+  const bankQuestions = bank?.questions ?? [];
   const categoryFilterActive = props.categoryFilterActive;
   const canMoveUp = categoryFilterActive
     ? canMoveQuestionWithinCategory(bankQuestions, q, -1)
@@ -43,16 +43,17 @@ export function QuestionCard(props) {
     h('input', {
       class: 'id-input',
       value: q.id,
-      onchange: (/** @type {any} */ e) => renameQuestion(q, e.target.value),
+      onchange: (/** @type {any} */ e) =>
+        renameQuestion(onCommit, q, e.target.value),
     })
   );
 
   const wording = h('cora-wording-editor', {
     question: q,
-    baselineQuestion: (baselineBank.get()?.questions || []).find(
+    baselineQuestion: (props.baselineQuestions ?? []).find(
       (/** @type {any} */ candidate) => candidate.id === q.id
     ),
-    onCommit: commit,
+    onCommit,
   });
 
   const grid = h(
@@ -61,7 +62,7 @@ export function QuestionCard(props) {
     questionCardField(
       'Category',
       questionCardText(q.category || '', (/** @type {string} */ v) =>
-        setQuestionCategory(q, v)
+        setQuestionCategory(onCommit, q, v)
       )
     ),
     questionCardField(
@@ -69,7 +70,7 @@ export function QuestionCard(props) {
       questionCardSelect(
         ['yes-no-na', 'single-choice', 'multi-choice', 'outcome'],
         q.responseType,
-        (/** @type {string} */ v) => setQuestionResponseType(q, v)
+        (/** @type {string} */ v) => setQuestionResponseType(onCommit, q, v)
       )
     )
   );
@@ -80,7 +81,8 @@ export function QuestionCard(props) {
         questionCardSelect(
           ['—', 'Yes', 'No', 'N/A'],
           q.failureCriteria || '—',
-          (/** @type {string} */ v) => setQuestionFailureCriteria(q, v)
+          (/** @type {string} */ v) =>
+            setQuestionFailureCriteria(onCommit, q, v)
         )
       )
     );
@@ -94,16 +96,16 @@ export function QuestionCard(props) {
     grid,
     h('cora-options-editor', {
       question: q,
-      outcomeOptions: currentBank.get()?.outcomeOptions ?? [],
-      onCommit: commit,
+      outcomeOptions: bank?.outcomeOptions ?? [],
+      onCommit,
     }),
-    h('cora-question-labels', { question: q }),
+    h('cora-question-labels', { question: q, bank, onCommit }),
     h('cora-showwhen-editor', {
       question: q,
       bankQuestions,
-      onCommit: commit,
+      onCommit,
     }),
-    h('cora-remediation-editor', { question: q, onCommit: commit }),
+    h('cora-remediation-editor', { question: q, onCommit }),
   ];
 
   const body = h('div', { class: 'card-body' }, ...bodyChildren);
@@ -118,7 +120,14 @@ export function QuestionCard(props) {
         title: 'Move question up',
         'aria-label': 'Move question up',
         disabled: !canMoveUp,
-        onclick: () => moveQuestionInDraft(q, -1),
+        onclick: () =>
+          moveQuestionInDraft(
+            onCommit,
+            bankQuestions,
+            categoryFilterActive,
+            q,
+            -1
+          ),
       },
       '↑'
     ),
@@ -129,7 +138,14 @@ export function QuestionCard(props) {
         title: 'Move question down',
         'aria-label': 'Move question down',
         disabled: !canMoveDown,
-        onclick: () => moveQuestionInDraft(q, 1),
+        onclick: () =>
+          moveQuestionInDraft(
+            onCommit,
+            bankQuestions,
+            categoryFilterActive,
+            q,
+            1
+          ),
       },
       '↓'
     ),
@@ -138,7 +154,7 @@ export function QuestionCard(props) {
       {
         class: 'icon-btn',
         title: q.deprecated ? 'Restore' : 'Mark deprecated',
-        onclick: () => toggleQuestionDeprecated(q),
+        onclick: () => toggleQuestionDeprecated(onCommit, q),
       },
       q.deprecated ? '↩' : '⌀'
     ),
@@ -147,7 +163,7 @@ export function QuestionCard(props) {
       {
         class: 'icon-btn',
         title: 'Duplicate',
-        onclick: () => duplicateQuestion(q),
+        onclick: () => duplicateQuestion(onCommit, bankQuestions, q),
       },
       '⎘'
     ),
@@ -156,7 +172,7 @@ export function QuestionCard(props) {
       {
         class: 'icon-btn danger',
         title: 'Remove draft',
-        onclick: () => removeQuestionDraft(q),
+        onclick: () => removeQuestionDraft(onCommit, bankQuestions, q),
       },
       '×'
     )
@@ -174,16 +190,36 @@ export class CORAQuestionCard extends ShellElement {
   constructor() {
     super();
     /** @type {any} */ this.question = null;
-    /** @type {any[]} */ this.bankQuestions = [];
+    /**
+     * The active Question Bank (questions, labels, outcomeOptions), passed
+     * down by the mounting site.
+     * @type {any}
+     */
+    this.bank = null;
+    /**
+     * The last-synced baseline bank's questions, for the wording diff.
+     * @type {any[]}
+     */
+    this.baselineQuestions = [];
     this.questionIndex = 0;
+    /** Whether a category filter is active (moves stay within category). */
+    this.categoryFilterActive = false;
+    /**
+     * Mutation sink. Defaults to "just apply the mutation" so the component
+     * works standalone; the bank editor injects the store's `commit()`.
+     * @type {(fn: () => void) => void}
+     */
+    this.onCommit = (fn) => fn();
   }
 
   render() {
     return QuestionCard({
       question: this.question,
-      bankQuestions: this.bankQuestions,
       questionIndex: this.questionIndex,
-      categoryFilterActive: Boolean(filters.get().category),
+      bank: this.bank,
+      baselineQuestions: this.baselineQuestions,
+      categoryFilterActive: this.categoryFilterActive,
+      onCommit: this.onCommit,
       setClassName: (className) => {
         this.className = className;
       },
@@ -235,23 +271,23 @@ export function questionCardSelect(options, value, onChange) {
   return s;
 }
 
-/** @param {any} q @param {string} id */
-export function renameQuestion(q, id) {
-  commit(() => {
+/** @param {(fn: () => void) => void} onCommit @param {any} q @param {string} id */
+export function renameQuestion(onCommit, q, id) {
+  onCommit(() => {
     q.id = id.trim() || q.id;
   });
 }
 
-/** @param {any} q @param {string} category */
-export function setQuestionCategory(q, category) {
-  commit(() => {
+/** @param {(fn: () => void) => void} onCommit @param {any} q @param {string} category */
+export function setQuestionCategory(onCommit, q, category) {
+  onCommit(() => {
     q.category = category || undefined;
   });
 }
 
-/** @param {any} q @param {string} responseType */
-export function setQuestionResponseType(q, responseType) {
-  commit(() => {
+/** @param {(fn: () => void) => void} onCommit @param {any} q @param {string} responseType */
+export function setQuestionResponseType(onCommit, q, responseType) {
+  onCommit(() => {
     q.responseType = responseType;
     // `yes-no-na` (fixed Yes/No/NA) and `outcome` (derived from the Case Type's
     // Outcomes) don't carry their own option list; single/multi-choice do.
@@ -263,50 +299,53 @@ export function setQuestionResponseType(q, responseType) {
   });
 }
 
-/** @param {any} q @param {string} failureCriteria */
-export function setQuestionFailureCriteria(q, failureCriteria) {
-  commit(() => {
+/** @param {(fn: () => void) => void} onCommit @param {any} q @param {string} failureCriteria */
+export function setQuestionFailureCriteria(onCommit, q, failureCriteria) {
+  onCommit(() => {
     q.failureCriteria = failureCriteria === '—' ? undefined : failureCriteria;
   });
 }
 
-/** @param {any} q @param {-1 | 1} direction */
-export function moveQuestionInDraft(q, direction) {
-  commit((types) => {
-    const b = types[activeSlug.get()];
-    if (filters.get().category)
-      moveQuestionWithinCategory(b.questions, q, direction);
-    else moveQuestion(b.questions, q, direction);
+/** @param {(fn: () => void) => void} onCommit @param {any[]} questions @param {boolean} categoryFilterActive @param {any} q @param {-1 | 1} direction */
+export function moveQuestionInDraft(
+  onCommit,
+  questions,
+  categoryFilterActive,
+  q,
+  direction
+) {
+  onCommit(() => {
+    if (categoryFilterActive)
+      moveQuestionWithinCategory(questions, q, direction);
+    else moveQuestion(questions, q, direction);
   });
 }
 
-/** @param {any} q */
-export function toggleQuestionDeprecated(q) {
-  commit(() => {
+/** @param {(fn: () => void) => void} onCommit @param {any} q */
+export function toggleQuestionDeprecated(onCommit, q) {
+  onCommit(() => {
     q.deprecated = !q.deprecated;
   });
 }
 
-/** @param {any} q */
-export function duplicateQuestion(q) {
-  commit((types) => {
-    const b = types[activeSlug.get()];
-    const idx = b.questions.indexOf(q);
+/** @param {(fn: () => void) => void} onCommit @param {any[]} questions @param {any} q */
+export function duplicateQuestion(onCommit, questions, q) {
+  onCommit(() => {
+    const idx = questions.indexOf(q);
     const copy = structuredClone(q);
     copy.id = q.id + '-copy';
-    b.questions.splice(idx + 1, 0, copy);
+    questions.splice(idx + 1, 0, copy);
   });
 }
 
-/** @param {any} q */
-export function removeQuestionDraft(q) {
+/** @param {(fn: () => void) => void} onCommit @param {any[]} questions @param {any} q */
+export function removeQuestionDraft(onCommit, questions, q) {
   const ok = /** @type {any} */ (globalThis).confirm?.(
     `Remove "${q.id}" from the draft? (Prefer "deprecate" to preserve history.)`
   );
   if (!ok) return;
-  commit((types) => {
-    const b = types[activeSlug.get()];
-    b.questions.splice(b.questions.indexOf(q), 1);
+  onCommit(() => {
+    questions.splice(questions.indexOf(q), 1);
   });
 }
 

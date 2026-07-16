@@ -298,9 +298,12 @@ test('question-bank route: default sample loader fetches through context.client'
       })
     );
     router.navigate('#/question-bank');
-    // Let the dynamic import + listCases round-trips settle.
-    for (let i = 0; i < 20 && asked.length === 0; i++) {
-      await new Promise((resolve) => setImmediate(resolve));
+    // Let the dynamic import + listCases round-trips settle. The import chain
+    // includes real file I/O (the bank artifact behind question-bank-source),
+    // so wait on a deadline rather than a fixed number of ticks.
+    const deadline = Date.now() + 2000;
+    while (asked.length === 0 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
     assert.ok(asked.includes('example-review'));
     assert.equal(

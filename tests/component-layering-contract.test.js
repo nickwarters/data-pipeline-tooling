@@ -71,8 +71,6 @@ test('layering: components→question-bank couplings match the documented allowl
   // Editor primitives that still read the bank-editor store singleton. Genuine
   // coupling (documented in each file); this list may shrink but must not grow.
   const ALLOWED = new Set([
-    'src/components/base/cora-question-labels.js',
-    'src/components/sections/cora-question-card.js',
     'src/components/collections/cora-case-tabs.js',
     'src/components/collections/cora-compile-drawer.js',
   ]);

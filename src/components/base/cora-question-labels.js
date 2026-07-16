@@ -2,16 +2,6 @@
 import { defineView } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import { EmptyState } from '../../lib/empty-state.js';
-// MAINT-16: this editor primitive still reads the bank-editor store singleton
-// (`activeSlug`/`commit`/`currentBank`). Injecting that state via props is not
-// mechanical — the whole editor tree is reactively bound to these signals — so
-// the coupling is documented and left in place (see the
-// component-layering-contract test).
-import {
-  activeSlug,
-  commit,
-  currentBank,
-} from '../../question-bank/question-bank-store.js';
 
 /** Colour a freshly-created label gets until the curator edits it. */
 export const DEFAULT_LABEL_COLOR = '#2563eb';
@@ -42,21 +32,22 @@ export function makeLabelId(name, existingIds) {
  *
  * Labels are a bank-side concept: they are assigned here and rendered as colour
  * pills, but they never travel to a Case and have no effect on how a question is
- * presented to a Reviewer. Reads the active bank's label set
- * (`currentBank().labels`), lets the curator assign/unassign labels on the
- * question, recolour a label inline (the colour is shared across every question
- * carrying it), and mint a brand-new label.
+ * presented to a Reviewer. The active bank arrives as a prop (`bank`) and
+ * mutations flow up through `onCommit`; this component has no store
+ * dependency. The editor reads the bank's label set (`bank.labels`), lets the
+ * curator assign/unassign labels on the question, recolour a label inline (the
+ * colour is shared across every question carrying it), and mint a brand-new
+ * label.
  *
- * @param {{ question: any }} props
+ * @param {{ question: any, bank: any, onCommit: (fn: () => void) => void }} props
  * @returns {Node | undefined}
  */
-export function QuestionLabels({ question: q }) {
+export function QuestionLabels({ question: q, bank, onCommit }) {
   if (!q) return undefined;
 
-  const bank = currentBank.get();
   const labels = bank?.labels ?? [];
   const assignedIds = q.labelIds ?? [];
-  /** @type {Record<string, import('../../question-bank/question-bank-source.js').Label>} */
+  /** @type {Record<string, any>} */
   const byId = Object.fromEntries(
     labels.map((/** @type {any} */ l) => [l.id, l])
   );
@@ -64,7 +55,7 @@ export function QuestionLabels({ question: q }) {
   const pills = assignedIds
     .map((/** @type {string} */ id) => byId[id])
     .filter(Boolean)
-    .map((/** @type {any} */ label) => pill(q, label));
+    .map((/** @type {any} */ label) => pill(onCommit, bank, q, label));
 
   const pillRow = h(
     'div',
@@ -90,7 +81,7 @@ export function QuestionLabels({ question: q }) {
           class: 'label-add-chip',
           style: `--pill: ${l.color};`,
           onclick: () =>
-            commit(() => {
+            onCommit(() => {
               (q.labelIds ||= []).push(l.id);
             }),
         },
@@ -98,7 +89,7 @@ export function QuestionLabels({ question: q }) {
         h('span', {}, l.name)
       )
     ),
-    createControl(q)
+    createControl(onCommit, bank, q)
   );
 
   return h(
@@ -116,10 +107,12 @@ export function QuestionLabels({ question: q }) {
 }
 
 /**
+ * @param {(fn: () => void) => void} onCommit
+ * @param {any} bank
  * @param {any} q
- * @param {import('../../question-bank/question-bank-source.js').Label} label
+ * @param {any} label
  */
-function pill(q, label) {
+function pill(onCommit, bank, q, label) {
   const color = /** @type {any} */ (
     h('input', {
       type: 'color',
@@ -129,7 +122,7 @@ function pill(q, label) {
     })
   );
   color.addEventListener('change', (/** @type {any} */ e) =>
-    recolour(label.id, e.target.value)
+    recolour(onCommit, bank, label.id, e.target.value)
   );
 
   return h(
@@ -143,7 +136,7 @@ function pill(q, label) {
         class: 'label-pill-x',
         title: 'Remove label',
         onclick: () =>
-          commit(() => {
+          onCommit(() => {
             q.labelIds = (q.labelIds ?? []).filter(
               (/** @type {string} */ id) => id !== label.id
             );
@@ -155,8 +148,12 @@ function pill(q, label) {
   );
 }
 
-/** @param {any} q */
-function createControl(q) {
+/**
+ * @param {(fn: () => void) => void} onCommit
+ * @param {any} bank
+ * @param {any} q
+ */
+function createControl(onCommit, bank, q) {
   const name = /** @type {any} */ (
     h('input', { class: 'label-new-name', placeholder: 'New label…' })
   );
@@ -176,14 +173,13 @@ function createControl(q) {
         const text = String(name.value).trim();
         if (!text) return;
         const chosen = color.value || DEFAULT_LABEL_COLOR;
-        commit((types) => {
-          const b = types[activeSlug.get()];
-          b.labels ||= [];
+        onCommit(() => {
+          bank.labels ||= [];
           const id = makeLabelId(
             text,
-            b.labels.map((/** @type {any} */ l) => l.id)
+            bank.labels.map((/** @type {any} */ l) => l.id)
           );
-          b.labels.push({ id, name: text, color: chosen });
+          bank.labels.push({ id, name: text, color: chosen });
           (q.labelIds ||= []).push(id);
         });
       },
@@ -194,20 +190,32 @@ function createControl(q) {
 }
 
 /**
+ * @param {(fn: () => void) => void} onCommit
+ * @param {any} bank
  * @param {string} id
  * @param {string} color
  */
-function recolour(id, color) {
-  commit((types) => {
-    const b = types[activeSlug.get()];
-    const l = (b.labels ?? []).find((/** @type {any} */ x) => x.id === id);
+function recolour(onCommit, bank, id, color) {
+  onCommit(() => {
+    const l = (bank?.labels ?? []).find((/** @type {any} */ x) => x.id === id);
     if (l) l.color = color;
   });
 }
 
 export const CORAQuestionLabels = defineView('cora-question-labels', {
-  props: /** @type {{ question: any }} */ ({ question: null }),
+  props:
+    /** @type {{ question: any, bank: any, onCommit: (fn: () => void) => void }} */ ({
+      question: null,
+      bank: null,
+      // Mutation sink. Defaults to "just apply the mutation" so the component
+      // works standalone; the bank editor injects the store's `commit()`.
+      onCommit: (fn) => fn(),
+    }),
   render({ props }) {
-    return QuestionLabels({ question: props.question });
+    return QuestionLabels({
+      question: props.question,
+      bank: props.bank,
+      onCommit: props.onCommit,
+    });
   },
 });

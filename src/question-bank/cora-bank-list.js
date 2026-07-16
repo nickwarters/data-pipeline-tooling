@@ -3,6 +3,7 @@ import { ShellElement } from '../lib/view.js';
 import { h } from '../lib/html.js';
 import {
   activeSlug,
+  baselineBank,
   commit,
   currentBank,
   filters,
@@ -10,7 +11,7 @@ import {
 } from './question-bank-store.js';
 
 /**
- * @param {{ bank: any, filters: any, dirty: boolean, addQuestion: () => void }} props
+ * @param {{ bank: any, baselineQuestions: any[], filters: any, dirty: boolean, onCommit: (fn: () => void) => void, addQuestion: () => void }} props
  * @returns {HTMLElement}
  */
 export function BankList(props) {
@@ -60,8 +61,11 @@ export function BankList(props) {
         document.createElement('cora-question-card')
       );
       card.question = q;
-      card.bankQuestions = bank.questions;
+      card.bank = bank;
+      card.baselineQuestions = props.baselineQuestions;
       card.questionIndex = bank.questions.indexOf(q);
+      card.categoryFilterActive = Boolean(f.category);
+      card.onCommit = props.onCommit;
       listRoot.appendChild(card);
     });
   }
@@ -90,8 +94,10 @@ export class CORABankList extends ShellElement {
   render() {
     return BankList({
       bank: currentBank.get(),
+      baselineQuestions: baselineBank.get()?.questions ?? [],
       filters: filters.get(),
       dirty: isDirty.get(),
+      onCommit: commit,
       addQuestion: () => this._addQuestion(),
     });
   }
