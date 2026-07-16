@@ -116,7 +116,7 @@ test('reports route: #/reports/reviewer-team unmount is a no-op (does not throw)
   assert.doesNotThrow(() => route.handler.unmount());
 });
 
-test('reports route: #/reports renders ReportsIndexPage directly', () => {
+test('reports route: #/reports renders ReportsIndexPage directly', async () => {
   makeDocSpy();
   const rendered = /** @type {any[]} */ ([]);
 
@@ -137,7 +137,7 @@ test('reports route: #/reports renders ReportsIndexPage directly', () => {
     })
   );
 
-  router.navigate('#/reports');
+  await router.navigate('#/reports');
 
   assert.equal(rendered.length, 1, 'reports index should render one card');
   assert.equal(rendered[0].tagName, 'DIV');
@@ -147,7 +147,7 @@ test('reports route: #/reports renders ReportsIndexPage directly', () => {
   );
 });
 
-test('reports/reviewer-team route: redirects to #/reports when not a Reviewer Manager', () => {
+test('reports/reviewer-team route: redirects to #/reports when not a Reviewer Manager', async () => {
   makeDocSpy();
   try {
     const router = new Router();
@@ -162,7 +162,7 @@ test('reports/reviewer-team route: redirects to #/reports when not a Reviewer Ma
         caseSources: [].map((s) => src(s)),
       })
     );
-    router.navigate('#/reports/reviewer-team');
+    await router.navigate('#/reports/reviewer-team');
     assert.equal(
       /** @type {any} */ (globalThis).location.hash,
       '#/reports',
@@ -173,7 +173,41 @@ test('reports/reviewer-team route: redirects to #/reports when not a Reviewer Ma
   }
 });
 
-test('reports/reviewer-team route: mounts ReviewerTeamReportPage with client, currentUser, caseSources for Reviewer Manager', () => {
+test('reports route: #/reports renders a cora-route-error panel when the index page module fails to load', async () => {
+  makeDocSpy();
+  const origConsoleError = console.error;
+  console.error = () => {};
+  const rendered = /** @type {any[]} */ ([]);
+
+  try {
+    const router = new Router();
+    const container = {
+      replaceChildren(/** @type {any[]} */ ...children) {
+        rendered.splice(0, rendered.length, ...children);
+      },
+    };
+    router._container = /** @type {any} */ (container);
+    register(
+      router,
+      /** @type {any} */ ({
+        capabilities: { isReviewerManager: true, ownedCaseTypes: [] },
+        client: {},
+        currentUser: { id: 'u1' },
+        caseSources: [].map((s) => src(s)),
+      }),
+      { loadIndex: () => Promise.reject(new Error('boom')) }
+    );
+
+    await router.navigate('#/reports');
+
+    assert.equal(rendered.length, 1);
+    assert.equal(rendered[0].className, 'cora-route-error');
+  } finally {
+    console.error = origConsoleError;
+  }
+});
+
+test('reports/reviewer-team route: mounts ReviewerTeamReportPage with client, currentUser, caseSources for Reviewer Manager', async () => {
   makeDocSpy();
   try {
     const client = {
@@ -202,7 +236,7 @@ test('reports/reviewer-team route: mounts ReviewerTeamReportPage with client, cu
         caseSources,
       })
     );
-    router.navigate('#/reports/reviewer-team');
+    await router.navigate('#/reports/reviewer-team');
 
     assert.equal(
       rendered.length,
@@ -211,6 +245,40 @@ test('reports/reviewer-team route: mounts ReviewerTeamReportPage with client, cu
     );
     assert.equal(rendered[0].tagName, 'DIV');
   } finally {
+    /** @type {any} */ (globalThis).location = { hash: '' };
+  }
+});
+
+test('reports/reviewer-team route: renders a cora-route-error panel when the reviewer-team page module fails to load', async () => {
+  makeDocSpy();
+  const origConsoleError = console.error;
+  console.error = () => {};
+  try {
+    const rendered = /** @type {any[]} */ ([]);
+
+    const router = new Router();
+    const container = {
+      replaceChildren(/** @type {any[]} */ ...children) {
+        rendered.splice(0, rendered.length, ...children);
+      },
+    };
+    router._container = /** @type {any} */ (container);
+    register(
+      router,
+      /** @type {any} */ ({
+        capabilities: { isReviewerManager: true },
+        client: {},
+        currentUser: { id: 'u1' },
+        caseSources: [].map((s) => src(s)),
+      }),
+      { loadReviewerTeam: () => Promise.reject(new Error('boom')) }
+    );
+    await router.navigate('#/reports/reviewer-team');
+
+    assert.equal(rendered.length, 1);
+    assert.equal(rendered[0].className, 'cora-route-error');
+  } finally {
+    console.error = origConsoleError;
     /** @type {any} */ (globalThis).location = { hash: '' };
   }
 });

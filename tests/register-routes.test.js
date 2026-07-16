@@ -340,7 +340,7 @@ test('registerRoutes: registers #/reports route', () => {
   );
 });
 
-test('registerRoutes: #/reports mount renders reports index directly', () => {
+test('registerRoutes: #/reports mount renders reports index directly', async () => {
   const rendered = /** @type {any[]} */ ([]);
   const origCreate = /** @type {any} */ (globalThis).document;
   /** @type {any} */ (globalThis).document = {
@@ -389,7 +389,7 @@ test('registerRoutes: #/reports mount renders reports index directly', () => {
       isVisitor: false,
     };
     registerRoutes(router, context);
-    router.navigate('#/reports');
+    await router.navigate('#/reports');
     assert.equal(rendered.length, 1, 'reports index should render one card');
     assert.equal(rendered[0].tagName, 'DIV');
   } finally {
@@ -407,7 +407,7 @@ test('registerRoutes: registers #/reports/reviewer-team route', () => {
   );
 });
 
-test('registerRoutes: #/reports/reviewer-team redirects when the user is not a reviewer manager', () => {
+test('registerRoutes: #/reports/reviewer-team redirects when the user is not a reviewer manager', async () => {
   const locations = /** @type {string[]} */ ([]);
   const origLocation = globalThis.location;
   /** @type {any} */ (globalThis).location = {
@@ -430,7 +430,7 @@ test('registerRoutes: #/reports/reviewer-team redirects when the user is not a r
         capabilities: { isReviewerManager: false },
       })
     );
-    router.navigate('#/reports/reviewer-team');
+    await router.navigate('#/reports/reviewer-team');
     assert.deepEqual(
       locations,
       ['#/reports'],
