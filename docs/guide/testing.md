@@ -36,6 +36,23 @@ registry solely to cover a line. Exact assertions remain appropriate for an
 external request, persisted data shape, security guard, or accepted architecture
 boundary.
 
+## White-box Debt Guardrail
+
+`tests/white-box-debt-contract.test.js` records the remaining direct uses of DOM
+stub internals and underscore-prefixed methods in test files. It is a migration
+baseline, not an approved-pattern list:
+
+- New test files must not add these patterns.
+- Existing test files must not increase their recorded counts.
+- When a migration reduces a count, lower the baseline in the same change so
+  the debt cannot return later.
+- Increase a baseline only when the private structure is itself an intentional,
+  named contract. Explain that exception next to the baseline entry.
+
+Prefer `getByRole()`, `queryByRole()`, and `fireEvent()` from
+`tests/helpers/semantic-dom.js`. A stable field key or narrowly scoped
+`data-testid` is acceptable when the UI has no user-facing semantic to query.
+
 ## Function Component Tests
 
 Prefer importing a plain function and asserting the DOM nodes it returns.
@@ -93,6 +110,7 @@ import assert from 'node:assert/strict';
 import { h } from '../src/lib/html.js';
 import { signal } from '../src/lib/signal.js';
 import { reactive } from '../src/lib/view.js';
+import { fireEvent, getByRole } from './helpers/semantic-dom.js';
 
 function Counter() {
   const count = signal(0);
@@ -107,11 +125,11 @@ function Counter() {
 
 test('Counter: updates when clicked', () => {
   const host = Counter();
-  const button = host._children[0];
+  const button = getByRole(host, 'button');
 
   assert.equal(button.textContent, '0');
-  button.dispatchEvent(new Event('click'));
-  assert.equal(host._children[0].textContent, '1');
+  fireEvent(button, 'click');
+  assert.equal(getByRole(host, 'button').textContent, '1');
 });
 ```
 
@@ -171,7 +189,9 @@ action/binding function, not a class instance.
 ## DOM Stubs
 
 Tests run in Node.js, which has no browser DOM. Stub only the DOM methods your
-test needs. Keep stubs small so test failures point at the missing behavior.
+test needs. Keep stubs small so test failures point at the missing behavior. A
+stub may use private arrays internally to emulate the DOM; tests using that stub
+should interact with its public DOM methods and semantic helpers.
 
 ## Case Type Tests
 
