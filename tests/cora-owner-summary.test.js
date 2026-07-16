@@ -305,7 +305,8 @@ test('CORAOwnerSummary: renders heading and one card per owned case type', async
 });
 
 test('CORAOwnerSummary: renders correct counts for example-review fixture data', async () => {
-  const { cases } = await import('../dev/fixtures/cases.js');
+  const { exampleReviewCases: cases } =
+    await import('./_example-review-cases.js');
   const el = new CORAOwnerSummary();
   el.client = /** @type {any} */ (makeClient(cases));
   el.ownedCaseTypes = ['example-review'];

@@ -21,7 +21,7 @@ export async function createSharePointClient(
     const persona = params.get('asUser') ?? 'reviewer';
     const [
       { MockSharePointClient },
-      { CASE_TYPE_IMPORTERS, loadCaseTypeConfig },
+      { loadCaseTypeConfig },
       { cases },
       { questionDefinitions },
       { personas },
@@ -35,22 +35,14 @@ export async function createSharePointClient(
       import('../../dev/fixtures/people.js'),
     ]);
 
-    // `example-review` was retired from the production manifest (#383) but its
-    // demo Cases remain in the dev fixtures as a rich exemplar. The mock client
-    // is dev-only tooling that already lives on dev/fixtures, so it resolves the
-    // fixture's config here without reintroducing it to the production manifest.
-    const mockImporters = {
-      ...CASE_TYPE_IMPORTERS,
-      'example-review': () =>
-        import('../../dev/fixtures/example-review-case-type.js'),
-    };
-
     // Every Case Type declares its own SharePoint list via `listName`; its
     // Cases are read/written list-scoped. Partition the flat fixture array by
     // each Case Type's `listName` into the mock client's per-list stores.
-    // There is no default store — the partition is total.
+    // There is no default store — the partition is total. The fixture Cases are
+    // complaints-only (issue #383); example-review is a test-only fixture and is
+    // not served by the mock client.
     const lists = await partitionCasesByList(cases, (slug) =>
-      loadCaseTypeConfig(slug, mockImporters)
+      loadCaseTypeConfig(slug)
     );
 
     return new MockSharePointClient({

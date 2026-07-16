@@ -61,34 +61,27 @@ test('createSharePointClient: mock client defaults to reviewer persona when asUs
 test('createSharePointClient: mock client serves list-backed Case Types (issue #249)', async () => {
   const client = await createSharePointClient(new URLSearchParams('mock=1'));
 
-  // example-review declares its own list (Cases-ExampleReview). Its Cases must
-  // be readable list-scoped.
-  const listScoped = await client.getCase('case-1', {
-    listName: 'Cases-ExampleReview',
+  // complaints declares its own list (Cases-Complaints). Its Cases must be
+  // readable list-scoped.
+  const listScoped = await client.getCase('complaints-case-1', {
+    listName: 'Cases-Complaints',
   });
   assert.ok(listScoped, 'list-backed Case is readable via its listName');
-  assert.equal(listScoped?.caseType, 'example-review');
+  assert.equal(listScoped?.caseType, 'complaints');
 
   // …and reading a list surfaces it (there is no default store to fall back
   // to — a read without listName now throws).
-  const inList = await client.listCases(
-    {},
-    { listName: 'Cases-ExampleReview' }
-  );
+  const inList = await client.listCases({}, { listName: 'Cases-Complaints' });
   assert.ok(
-    inList.some((c) => c.id === 'case-1'),
+    inList.some((c) => c.id === 'complaints-case-1'),
     'list-backed Case appears in its list-scoped listCases'
   );
 
-  // complaints declares its own list (Cases-Complaints) too, so its Cases are
-  // read list-scoped.
-  assert.ok(
-    await client.getCase('complaints-case-1', { listName: 'Cases-Complaints' }),
-    'complaints Case is readable via its listName'
-  );
-
   // There is no default store: a Case read without a listName fails loudly.
-  await assert.rejects(() => client.getCase('case-1'), /listName is required/);
+  await assert.rejects(
+    () => client.getCase('complaints-case-1'),
+    /listName is required/
+  );
 });
 
 test('partitionCasesByList: routes every Case to its named list store (total, no default bucket)', async () => {

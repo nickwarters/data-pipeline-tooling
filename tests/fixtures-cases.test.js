@@ -1,12 +1,17 @@
 // @ts-check
-// Guards the storage/provisioning contract (issue #239, ADR-0007 amend): the dev
+// Guards the storage/provisioning contract (issue #239, ADR-0007 amend): the
 // fixtures must exercise every lifecycle status and the fields stamped at the
 // reportable milestone, and a Remediation Action stored in the Answers blob must
 // coerce from both the new object shape and a legacy bare string (ADR-0024).
+//
+// These assertions run against the example-review test fixture, which carries
+// the full lifecycle set (including Actions In Progress) and the legacy-shaped
+// capture data. example-review was retired from the mock client in issue #383;
+// the mock-served complaints fixtures no longer cover Actions In Progress.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cases } from '../dev/fixtures/cases.js';
+import { exampleReviewCases as cases } from './_example-review-cases.js';
 import { coerceRemediationActions } from '../src/evaluators/remediation-actions.js';
 
 test('fixtures exercise all three lifecycle statuses (ADR-0023)', () => {

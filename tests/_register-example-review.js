@@ -20,10 +20,10 @@ import {
 import { loadBank } from '../case-types/load-bank.js';
 
 CASE_TYPE_IMPORTERS['example-review'] = () =>
-  import('../dev/fixtures/example-review-case-type.js');
+  import('./_example-review-case-type.js');
 
 QUESTION_BANK_IMPORTERS['example-review'] = async () => ({
   default: await loadBank(
-    new URL('../dev/fixtures/example-review-bank.txt', import.meta.url)
+    new URL('./_example-review-bank.txt', import.meta.url)
   ),
 });

@@ -82,7 +82,8 @@ class CaseReviewHarness {
     return this._host ? this._host._children : [];
   }
 }
-const { cases } = await import('../dev/fixtures/cases.js');
+const { exampleReviewCases: cases } =
+  await import('./_example-review-cases.js');
 const { questionDefinitions } =
   await import('../dev/fixtures/question-definitions.js');
 const { personas } = await import('../dev/fixtures/personas.js');

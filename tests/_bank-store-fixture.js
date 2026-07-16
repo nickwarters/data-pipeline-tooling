@@ -23,9 +23,7 @@ import {
 } from '../src/question-bank/question-bank-store.js';
 
 const exampleReviewBank = normaliseQuestionBank(
-  await loadBank(
-    new URL('../dev/fixtures/example-review-bank.txt', import.meta.url)
-  )
+  await loadBank(new URL('./_example-review-bank.txt', import.meta.url))
 );
 
 /**
