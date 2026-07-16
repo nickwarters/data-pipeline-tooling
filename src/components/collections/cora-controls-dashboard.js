@@ -2,6 +2,7 @@
 import { signal } from '../../lib/signal.js';
 import { reactive } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
+import { trackAsyncTasks } from '../../lib/async-tasks.js';
 import { caseRouteFor } from '../../lib/case-route-links.js';
 import './cora-case-table.js';
 
@@ -105,7 +106,7 @@ export function ControlsDashboard({ client, allCaseSources = [], onOpenCase }) {
     return [buildAppealsSection(appealCases.get(), onOpenCase)];
   });
 
-  fetchData();
+  trackAsyncTasks(host)(fetchData());
   return host;
 }
 

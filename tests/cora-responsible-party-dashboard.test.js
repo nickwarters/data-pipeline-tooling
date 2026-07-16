@@ -1,7 +1,12 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom, ConnectingStubEl, useElementClass } from './_dom-stub.js';
+import {
+  installDom,
+  ConnectingStubEl,
+  useElementClass,
+  whenIdle,
+} from './_dom-stub.js';
 /** @typedef {import('./_dom-stub.js').StubEl} StubEl */
 
 installDom();
@@ -68,13 +73,6 @@ function findAll(root, tag) {
   return out;
 }
 
-/** Flush a couple of microtask turns so post-fetch renders have happened. */
-async function flush() {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
-}
-
 const now = new Date();
 const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -126,7 +124,7 @@ test('ResponsiblePartyDashboard: renders nothing when client is null', async () 
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
   assert.equal(/** @type {any} */ (host)._children.length, 0);
 });
 
@@ -135,19 +133,19 @@ test('ResponsiblePartyDashboard: renders nothing when currentUserId is empty', a
     client: /** @type {any} */ (makeClient([])),
     currentUserId: '',
   });
-  await flush();
+  await whenIdle(host);
   assert.equal(/** @type {any} */ (host)._children.length, 0);
 });
 
 test('ResponsiblePartyDashboard: calls listCases with responsibleParty filter and the source listName', async () => {
   /** @type {Array<{ filter: ListCasesFilter, opts: any }>} */
   const calls = [];
-  ResponsiblePartyDashboard({
+  const host = ResponsiblePartyDashboard({
     client: /** @type {any} */ (makeClient([], calls)),
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].filter, { responsibleParty: 'user-rp' });
   assert.equal(calls[0].opts.listName, 'Cases-ExampleReview');
@@ -181,7 +179,7 @@ test('ResponsiblePartyDashboard: fans out one listCases per source (with its lis
     currentUserId: 'user-rp',
     allCaseSources: sources,
   });
-  await flush();
+  await whenIdle(host);
 
   assert.deepEqual(
     calls.map((c) => c.opts.listName).sort(),
@@ -200,7 +198,7 @@ test('ResponsiblePartyDashboard: renders 3 sections after fetch resolves', async
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
   // outcome section + remediation section + messages section
   assert.equal(/** @type {any} */ (host)._children.length, 3);
 });
@@ -266,7 +264,7 @@ test('ResponsiblePartyDashboard: outcome summary includes completed cases within
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
   assert.equal(outcomeTotal(host), 2);
 });
 
@@ -294,7 +292,7 @@ test('ResponsiblePartyDashboard: outcome summary excludes completed cases older 
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
   assert.equal(outcomeTotal(host), 1, 'only the recent case counts');
 });
 
@@ -313,7 +311,7 @@ test('ResponsiblePartyDashboard: outcome summary excludes in-progress cases', as
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
   assert.equal(outcomeTotal(host), 1);
 });
 
@@ -343,7 +341,7 @@ test('ResponsiblePartyDashboard: outcome summary groups by outcome type', async 
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
   assert.equal(outcomeCount(host, 'Pass'), 2);
   assert.equal(outcomeCount(host, 'Fail'), 1);
 });
@@ -370,7 +368,7 @@ test('ResponsiblePartyDashboard: remediation table includes cases with uncomplet
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
   const table = caseTableInSection(host, 'cora-rp-remediation');
   assert.ok(table, 'remediation table should exist');
   assert.equal(table.cases.length, 1);
@@ -396,7 +394,7 @@ test('ResponsiblePartyDashboard: remediation table excludes cases where all acti
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
   const table = caseTableInSection(host, 'cora-rp-remediation');
   assert.ok(table, 'remediation table should exist');
   assert.equal(table.cases.length, 0);
@@ -434,7 +432,7 @@ test('ResponsiblePartyDashboard: remediation table renders row for each case wit
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
   const rows = findAll(host, 'tr').filter((r) =>
     r.className.includes('cora-remediation-row')
   );
@@ -475,7 +473,7 @@ test('ResponsiblePartyDashboard: remediation row is flagged as overdue when dueD
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
   const rows = findAll(host, 'tr').filter((r) =>
     r.className.includes('cora-remediation-row')
   );
@@ -515,7 +513,7 @@ test('ResponsiblePartyDashboard: remediation table filterable by case type via s
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
 
   const select = /** @type {any} */ (
     findAll(host, 'select').find(
@@ -572,7 +570,7 @@ test('ResponsiblePartyDashboard: sort by due date ascending puts earliest due fi
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
   const rows = findAll(host, 'tr').filter((r) =>
     r.className.includes('cora-remediation-row')
   );
@@ -605,7 +603,7 @@ test('ResponsiblePartyDashboard: unread messages includes cases with reviewer me
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
   const table = caseTableInSection(host, 'cora-rp-messages');
   assert.ok(table);
   assert.equal(table.cases.length, 1);
@@ -630,7 +628,7 @@ test('ResponsiblePartyDashboard: unread messages includes cases with reviewer me
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
   const table = caseTableInSection(host, 'cora-rp-messages');
   assert.ok(table);
   assert.equal(table.cases.length, 1);
@@ -659,7 +657,7 @@ test('ResponsiblePartyDashboard: unread messages excludes cases where RP replied
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
   const table = caseTableInSection(host, 'cora-rp-messages');
   assert.ok(table);
   assert.equal(table.cases.length, 0);
@@ -672,7 +670,7 @@ test('ResponsiblePartyDashboard: unread messages excludes cases with empty conve
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
   const table = caseTableInSection(host, 'cora-rp-messages');
   assert.ok(table);
   assert.equal(table.cases.length, 0);
@@ -709,7 +707,7 @@ test('ResponsiblePartyDashboard: unread messages section uses cora-case-table wi
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
   const allTables = findCaseTables(host);
   assert.equal(
     allTables.length,
@@ -746,7 +744,7 @@ test('ResponsiblePartyDashboard: cora-case-open on unread table invokes onOpenCo
     allCaseSources: oneSource,
     onOpenConversation: (caseRow) => opened.push(caseRow),
   });
-  await flush();
+  await whenIdle(host);
 
   const unreadTable = caseTableInSection(host, 'cora-rp-messages');
   assert.ok(unreadTable, 'unread section should contain a cora-case-table');
@@ -776,7 +774,7 @@ test('ResponsiblePartyDashboard: cora-case-open with no onOpenConversation prop 
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
 
   const unreadTable = caseTableInSection(host, 'cora-rp-messages');
   const handler = unreadTable._listeners['cora-case-open']?.[0];
@@ -806,7 +804,7 @@ test('ResponsiblePartyDashboard: Open button click invokes onOpenConversation wi
     allCaseSources: oneSource,
     onOpenConversation: (caseRow) => opened.push(caseRow),
   });
-  await flush();
+  await whenIdle(host);
 
   const messagesSection = findAll(host, 'section').find(
     (s) => s.className === 'cora-rp-messages'
@@ -843,7 +841,7 @@ test('ResponsiblePartyDashboard: Open button click with no onOpenConversation pr
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
 
   const messagesSection = findAll(host, 'section').find(
     (s) => s.className === 'cora-rp-messages'
@@ -879,7 +877,7 @@ test('ResponsiblePartyDashboard: select change with null e.target falls back to 
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
 
   const select = /** @type {any} */ (
     findAll(host, 'select').find(
@@ -925,7 +923,7 @@ test('ResponsiblePartyDashboard: two completed cases in same month+outcome incre
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
 
   assert.equal(outcomeTotal(host), 2);
   assert.equal(
@@ -960,7 +958,7 @@ test('ResponsiblePartyDashboard: case with null outcome uses "Unknown" label', a
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
 
   assert.equal(
     outcomeCount(host, 'Unknown'),
@@ -1016,7 +1014,7 @@ test('ResponsiblePartyDashboard: months are sorted chronologically and a month m
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
 
   const middleRow = outcomeMonthRow(
     host,
@@ -1069,7 +1067,7 @@ test('ResponsiblePartyDashboard: remediation and messages tables fall back to ca
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
 
   const remediationTable = caseTableInSection(host, 'cora-rp-remediation');
   assert.ok(remediationTable, 'remediation table should exist');
@@ -1109,7 +1107,7 @@ test('ResponsiblePartyDashboard: lastMessage column falls back to null/em-dash w
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
 
   const messagesTable = caseTableInSection(host, 'cora-rp-messages');
   assert.ok(messagesTable, 'messages table should exist');
@@ -1140,7 +1138,7 @@ test('ResponsiblePartyDashboard: getOpenActions treats an answer with no remedia
     currentUserId: 'user-rp',
     allCaseSources: oneSource,
   });
-  await flush();
+  await whenIdle(host);
 
   const remediationTable = caseTableInSection(host, 'cora-rp-remediation');
   assert.ok(remediationTable, 'remediation table should exist');

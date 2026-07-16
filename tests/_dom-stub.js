@@ -310,6 +310,39 @@ export async function flush() {
 }
 
 /**
+ * Await every explicit async-view completion signal in a stub DOM subtree.
+ * Repeat after each wait because a parent load may replace its children with
+ * newly-created async views.
+ *
+ * @param {any} root
+ */
+export async function whenIdle(root) {
+  /** @returns {any[]} */
+  const collect = () => {
+    /** @type {any[]} */
+    const nodes = typeof root.whenIdle === 'function' ? [root] : [];
+    walk(root, (node) => {
+      const candidate = /** @type {any} */ (node);
+      if (typeof candidate.whenIdle === 'function') nodes.push(candidate);
+    });
+    return nodes;
+  };
+
+  let nodes = collect();
+  while (true) {
+    await Promise.all(nodes.map((node) => node.whenIdle()));
+    const next = collect();
+    if (
+      next.length === nodes.length &&
+      next.every((node, index) => node === nodes[index])
+    ) {
+      return;
+    }
+    nodes = next;
+  }
+}
+
+/**
  * Route `document.createElement` (and `HTMLElement`) through a custom StubEl
  * subclass, for tests that need extra behaviour on every created element
  * (e.g. recording `update()` calls from a parent component). Every created

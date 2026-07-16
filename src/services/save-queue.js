@@ -14,7 +14,7 @@ import { signal } from '../lib/signal.js';
  * etag: string,
  * opts: CaseListOptions,
  * baselineAnswers: Record<string, Answer> | null,
- * pending: Record<string, { value: Partial<CaseRow>, timerId: ReturnType<typeof setTimeout> }>,
+ * pending: Record<string, { value: Partial<CaseRow>, timerId: unknown }>,
  * inFlight: Set<Promise<boolean>>
  * }} CaseState
  */
@@ -22,26 +22,58 @@ import { signal } from '../lib/signal.js';
 export class SaveQueue {
   /**
    * @param {SharePointClient} client
-   * @param {{ debounceMs?: number, backoffSchedule?: number[] }} [opts]
+   * @param {{
+   * debounceMs?: number,
+   * backoffSchedule?: number[],
+   * setTimer?: (callback: () => void, delay: number) => unknown,
+   * clearTimer?: (timerId: unknown) => void,
+   * sleep?: (delay: number) => Promise<void>
+   * }} [opts]
    */
   constructor(
     client,
     {
       debounceMs = 1500,
       backoffSchedule = [1000, 2000, 4000, 8000, 16000, 30000],
+      setTimer = (callback, delay) => setTimeout(callback, delay),
+      clearTimer = (timerId) =>
+        clearTimeout(/** @type {ReturnType<typeof setTimeout>} */ (timerId)),
+      sleep,
     } = {}
   ) {
     this._client = client;
     this._debounceMs = debounceMs;
     this._backoffSchedule = backoffSchedule;
+    this._setTimer = setTimer;
+    this._clearTimer = clearTimer;
+    this._sleep =
+      sleep ??
+      ((delay) =>
+        new Promise((resolve) => {
+          this._setTimer(resolve, delay);
+        }));
     /** @type {Record<string, CaseState>} */
     this._state = {};
     this._statusSignal = signal(/** @type {SaveStatus} */ ('saved'));
+    /** @type {Set<() => void>} */
+    this._idleWaiters = new Set();
   }
 
   /** @returns {{ get: () => SaveStatus }} */
   get status() {
     return this._statusSignal;
+  }
+
+  /**
+   * Wait until every pending debounce, in-flight write, conflict check, and
+   * retry has completed. This is an observation seam: it does not force an
+   * early flush or change the queue's debounce behaviour.
+   *
+   * @returns {Promise<void>}
+   */
+  whenIdle() {
+    if (!this._hasWork()) return Promise.resolve();
+    return new Promise((resolve) => this._idleWaiters.add(resolve));
   }
 
   /**
@@ -92,7 +124,7 @@ export class SaveQueue {
 
     const pendingEntries = Object.entries(state.pending);
     for (const [pendingKey, pending] of pendingEntries) {
-      clearTimeout(pending.timerId);
+      this._clearTimer(pending.timerId);
       delete state.pending[pendingKey];
     }
 
@@ -151,11 +183,11 @@ export class SaveQueue {
     const state = this._ensureState(caseId);
 
     const existing = state.pending[pendingKey];
-    if (existing) clearTimeout(existing.timerId);
+    if (existing) this._clearTimer(existing.timerId);
 
     state.pending[pendingKey] = {
       value: fields,
-      timerId: setTimeout(() => {
+      timerId: this._setTimer(() => {
         delete state.pending[pendingKey];
         this._flush(caseId, fields, 0);
       }, this._debounceMs),
@@ -223,7 +255,7 @@ export class SaveQueue {
         Math.min(retryIdx, this._backoffSchedule.length - 1)
       ];
     this._statusSignal.set('reconnecting');
-    await new Promise((resolve) => setTimeout(resolve, delay));
+    await this._sleep(delay);
     return await this._flushAttempt(caseId, fields, retryIdx + 1);
   }
 
@@ -255,13 +287,19 @@ export class SaveQueue {
     return await this._flushAttempt(caseId, fields, retryIdx);
   }
 
-  _markSavedIfIdle() {
-    const hasWork = Object.values(this._state).some(
+  _hasWork() {
+    return Object.values(this._state).some(
       (state) =>
         state.inFlight.size > 0 || Object.keys(state.pending).length > 0
     );
-    if (!hasWork && this.status.get() !== 'conflict') {
+  }
+
+  _markSavedIfIdle() {
+    if (this._hasWork()) return;
+    if (this.status.get() !== 'conflict') {
       this._statusSignal.set('saved');
     }
+    for (const resolve of this._idleWaiters) resolve();
+    this._idleWaiters.clear();
   }
 }

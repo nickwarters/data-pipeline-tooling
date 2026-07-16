@@ -1,7 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { installDom } from './_dom-stub.js';
+import { installDom, whenIdle } from './_dom-stub.js';
 import { assertAllCoraElementsDefined } from './helpers/assert-defined-elements.js';
 /** @typedef {import('./_dom-stub.js').StubEl} StubEl */
 
@@ -17,13 +17,6 @@ function makeClient() {
       return [];
     },
   };
-}
-
-/** Flush a couple of microtask turns so post-fetch renders have happened. */
-async function flush() {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
 }
 
 /**
@@ -78,7 +71,7 @@ test('DashboardPage: reviewer capability — outstanding Cases heading and alloc
     currentUserId: 'user-reviewer',
     capabilities: defaultCapabilities({ isReviewer: true }),
   });
-  await flush();
+  await whenIdle(host);
 
   assert.equal(
     hasOutstandingCasesHeading(host),
@@ -103,7 +96,7 @@ test('DashboardPage: reviewer capability — renders the role-scoped KPI strip',
     currentUserId: 'user-reviewer',
     capabilities: defaultCapabilities({ isReviewer: true }),
   });
-  await flush();
+  await whenIdle(host);
 
   assert.equal(
     findAll(host, 'cora-kpi-strip').length,
@@ -118,7 +111,7 @@ test('DashboardPage: visitor capability — no KPI strip is rendered', async () 
     currentUserId: 'user-visitor',
     capabilities: defaultCapabilities({ isVisitor: true }),
   });
-  await flush();
+  await whenIdle(host);
 
   assert.equal(findAll(host, 'cora-kpi-strip').length, 0);
 });
@@ -129,7 +122,7 @@ test('DashboardPage: owner-only capability — owner summary visible, no outstan
     currentUserId: 'user-owner',
     capabilities: defaultCapabilities({ ownedCaseTypes: ['example-review'] }),
   });
-  await flush();
+  await whenIdle(host);
 
   assert.equal(
     hasOutstandingCasesHeading(host),
@@ -157,7 +150,7 @@ test('DashboardPage: admin capability — both reviewer and owner sections visib
       ownedCaseTypes: ['example-review'],
     }),
   });
-  await flush();
+  await whenIdle(host);
 
   assert.equal(
     hasOutstandingCasesHeading(host),
@@ -183,7 +176,7 @@ test('DashboardPage: a worklist role renders the Action Centre worklist (issue #
     currentUserId: 'user-reviewer',
     capabilities: defaultCapabilities({ isReviewer: true }),
   });
-  await flush();
+  await whenIdle(host);
 
   assert.ok(
     findSection(host, 'cora-action-centre'),
@@ -197,7 +190,7 @@ test('DashboardPage: an adviser-only user gets no Action Centre (no worklist rea
     currentUserId: 'user-rp',
     capabilities: defaultCapabilities({ isAdviser: true }),
   });
-  await flush();
+  await whenIdle(host);
 
   assert.equal(
     findSection(host, 'cora-action-centre'),
@@ -213,7 +206,7 @@ test('DashboardPage: reviewer with no ownedCaseTypes never renders owner section
     capabilities: defaultCapabilities({ isReviewer: true }),
   });
   // Must not throw.
-  await flush();
+  await whenIdle(host);
 
   assert.equal(findAll(host, 'cora-owner-summary').length, 0);
 });
@@ -224,7 +217,7 @@ test('DashboardPage: renders nothing and does not throw when client is null and 
     currentUserId: '',
     capabilities: defaultCapabilities(),
   });
-  await flush();
+  await whenIdle(host);
   assert.equal(/** @type {any} */ (host)._children.length, 0);
 });
 
@@ -234,7 +227,7 @@ test('DashboardPage: RP-only capability — responsible party dashboard rendered
     currentUserId: 'user-rp',
     capabilities: defaultCapabilities({ isAdviser: true }),
   });
-  await flush();
+  await whenIdle(host);
 
   assert.ok(
     findSection(host, 'cora-rp-outcome-summary'),
@@ -271,7 +264,7 @@ test('DashboardPage: Controls capability — outstanding appeals section visible
     currentUserId: 'user-controls',
     capabilities: defaultCapabilities({ isControls: true }),
   });
-  await flush();
+  await whenIdle(host);
 
   assert.ok(
     findSection(host, 'cora-controls-appeals'),
@@ -300,7 +293,7 @@ test('DashboardPage: non-Controls user never sees the outstanding appeals sectio
     currentUserId: 'user-reviewer',
     capabilities: defaultCapabilities({ isReviewer: true }),
   });
-  await flush();
+  await whenIdle(host);
 
   assert.equal(
     findSection(host, 'cora-controls-appeals'),
@@ -343,7 +336,7 @@ test('DashboardPage: Controls open button navigates to the case hash', async () 
     currentUserId: 'user-controls',
     capabilities: defaultCapabilities({ isControls: true }),
   });
-  await flush();
+  await whenIdle(host);
 
   const section = findSection(host, 'cora-controls-appeals');
   assert.ok(section, 'appeals section should exist');
@@ -366,7 +359,7 @@ test('DashboardPage: reviewer + RP capability — both reviewer and RP sections 
     currentUserId: 'user-reviewer-rp',
     capabilities: defaultCapabilities({ isReviewer: true, isAdviser: true }),
   });
-  await flush();
+  await whenIdle(host);
 
   assert.equal(
     hasOutstandingCasesHeading(host),
@@ -393,7 +386,7 @@ test('DashboardPage: RP dashboard fetches cases with responsibleParty filter usi
       return [];
     },
   };
-  DashboardPage({
+  const host = DashboardPage({
     client: /** @type {any} */ (client),
     currentUserId: 'user-rp',
     capabilities: defaultCapabilities({ isAdviser: true }),
@@ -405,7 +398,7 @@ test('DashboardPage: RP dashboard fetches cases with responsibleParty filter usi
       },
     ],
   });
-  await flush();
+  await whenIdle(host);
 
   assert.ok(
     calls.some(
@@ -442,7 +435,7 @@ test('DashboardPage: open button in RP unread-messages section navigates to conv
     currentUserId: 'user-rp',
     capabilities: defaultCapabilities({ isAdviser: true }),
   });
-  await flush();
+  await whenIdle(host);
 
   const messagesSection = findSection(host, 'cora-rp-messages');
   assert.ok(messagesSection, 'messages section should exist');
@@ -471,7 +464,7 @@ test('DashboardPage: cora-allocation element receives allocationSources from pro
     capabilities: defaultCapabilities({ isReviewer: true }),
     allocationSources,
   });
-  await flush();
+  await whenIdle(host);
 
   const allocationEls = findAll(host, 'cora-allocation');
   assert.equal(allocationEls.length, 1);
@@ -502,7 +495,7 @@ test('DashboardPage: cora-allocation element listens for cora-allocated and re-f
       },
     ],
   });
-  await flush();
+  await whenIdle(host);
   const initialFetchCount = fetchCount;
 
   const allocationEls = findAll(host, 'cora-allocation');
@@ -528,7 +521,7 @@ test('DashboardPage: cora-case-open event on case table navigates to #/case/{id}
     currentUserId: 'user-reviewer',
     capabilities: defaultCapabilities({ isReviewer: true }),
   });
-  await flush();
+  await whenIdle(host);
 
   const caseTable = findAll(host, 'cora-case-table')[0];
   assert.ok(caseTable, 'should have a case table');
@@ -618,7 +611,7 @@ test('DashboardPage: stamps overdue:true on rows whose dueDate is in the past', 
       },
     ],
   });
-  await flush();
+  await whenIdle(host);
 
   const caseTable = /** @type {any} */ (findAll(host, 'cora-case-table')[0]);
   const rows = /** @type {import('../src/sharepoint-client.js').CaseRow[]} */ (
@@ -679,7 +672,7 @@ test('DashboardPage: reviewer outstanding fetch fans out one listCases per sourc
       { slug: 'b', listName: 'Cases-B', displayName: 'B' },
     ],
   });
-  await flush();
+  await whenIdle(host);
 
   assert.deepEqual(
     calls.map((c) => c.opts.listName).sort(),
@@ -717,7 +710,7 @@ test('DashboardPage: threads eligible caseSources and full allCaseSources to chi
     caseSources,
     allCaseSources,
   });
-  await flush();
+  await whenIdle(host);
 
   const kpi = /** @type {any} */ (findAll(host, 'cora-kpi-strip')[0]);
   assert.deepEqual(kpi.caseSources, caseSources);
@@ -764,7 +757,7 @@ test('DashboardPage: opening a case from the Action Centre routes to the case (i
       },
     ],
   });
-  for (let i = 0; i < 25; i++) await Promise.resolve();
+  await whenIdle(host);
 
   /** @type {any} */
   let openBtn = null;
@@ -871,7 +864,7 @@ test('DashboardPage: the Action Centre "All" toggle survives the dashboard rende
       },
     ],
   });
-  for (let i = 0; i < 60; i++) await Promise.resolve();
+  await whenIdle(host);
 
   const reasonIds = () =>
     findAll(host, 'section')
@@ -890,7 +883,7 @@ test('DashboardPage: the Action Centre "All" toggle survives the dashboard rende
     (/** @type {any} */ b) => b.textContent === 'All'
   );
   allBtn._fire('click');
-  for (let i = 0; i < 60; i++) await Promise.resolve();
+  await whenIdle(host);
 
   assert.ok(
     reasonIds().includes('reviewRequired'),

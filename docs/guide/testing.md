@@ -165,6 +165,20 @@ test('root route: renders home sections', () => {
 });
 ```
 
+## Deterministic Async Tests
+
+Await the operation that represents completion. Do not settle a test with a
+fixed delay or by guessing how many microtasks an implementation needs.
+
+- Async views should expose `whenIdle()` through `trackAsyncTasks()`; DOM tests
+  can await the subtree with `whenIdle(host)` from `tests/_dom-stub.js`.
+- `SaveQueue.whenIdle()` observes the real debounce/retry chain without forcing
+  an early flush. Inject `setTimer`, `clearTimer`, or `sleep` when a test needs
+  to control a debounce or retry boundary precisely.
+- Use deferred promises to assert an intermediate state such as
+  `reconnecting`, then release the operation and await its completion signal.
+- Keep a real-timer assertion only for the timer adapter itself.
+
 ## Legacy Shell Tests
 
 When a test must cover a custom-element shell, keep it narrow:
