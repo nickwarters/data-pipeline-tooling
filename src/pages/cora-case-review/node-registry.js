@@ -57,7 +57,7 @@ export function createCaseReviewNodeRegistry() {
       }
       registry.questionsPanel ??= h('section');
       registry.questionList ??= h('cora-question-list');
-      registry.progress ??= h('cora-section-progress');
+      registry.progress ??= h('cora-group-progress');
       registry.banner ??= h('cora-status-banner');
       registry.conversationToggle ??= /** @type {HTMLButtonElement} */ (
         h('button', { class: 'cora-conversation-toggle-btn' })

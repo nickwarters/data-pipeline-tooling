@@ -79,7 +79,7 @@ src/
       cora-options-editor.js
       cora-people-picker.js
       cora-question-labels.js
-      cora-section-progress.js
+      cora-group-progress.js      # per-Question-Group progress strip (was cora-section-progress, #390)
       cora-showwhen-leaf.js
       cora-status-banner.js
       cora-tabs.js
@@ -193,7 +193,7 @@ src/
     remediation-actions.js
     remediation-details.js
     reviewer-team-aggregator.js
-    section-progress.js
+    question-group-progress.js   # per-Question-Group answered/total (was section-progress.js, #390)
     summary-model.js
     time-windows.js
 

@@ -334,7 +334,7 @@ const COUNT_CATALOGUE = [
   {
     id: 'q-open',
     text: 'Greeted?',
-    category: 'Opening',
+    questionGroup: 'Opening',
     responseType: 'yes-no-na',
     failureCriteria: 'No',
     deprecated: false,
@@ -342,7 +342,7 @@ const COUNT_CATALOGUE = [
   {
     id: 'q-needs',
     text: 'Needs found?',
-    category: 'Discovery',
+    questionGroup: 'Discovery',
     responseType: 'yes-no-na',
     failureCriteria: 'No',
     remediationActions: ['Retrain.'],
@@ -350,7 +350,7 @@ const COUNT_CATALOGUE = [
   },
 ];
 
-test('CORASummary: renders a per-category pass/fail counts block when questions is opted in', () => {
+test('CORASummary: renders a per-Question-Group pass/fail counts block when questions is opted in', () => {
   const el = new CORASummary();
   el.caseRow = makeCase();
   el.catalogue = /** @type {any} */ (COUNT_CATALOGUE);
@@ -485,7 +485,7 @@ test('CORASummary: renders no capture block when the Case Type declares no captu
   );
 });
 
-test('CORASummary: a failed Answer without a category renders just the question text', () => {
+test('CORASummary: a failed Answer without a Question Group renders just the question text', () => {
   const el = new CORASummary();
   el.caseRow = makeCase();
   el.catalogue = /** @type {any} */ ([

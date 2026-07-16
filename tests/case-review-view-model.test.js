@@ -811,3 +811,85 @@ test('CaseReviewViewModel.load(): resolves a Case Type sectionLabels override in
     delete CASE_TYPE_IMPORTERS[slug];
   }
 });
+
+test('CaseReviewViewModel.load(): a pre-#390 versioned export maps its category to questionGroup', async () => {
+  // Exports published before the two-level grouping rename carry no
+  // `questionGroup` key, and their `category` meant the inner grouping.
+  const vm = new CaseReviewViewModel({
+    client: makeStep4Client({
+      status: 'Completed',
+      questionBankVersion: 'sha256:abc123',
+      versionedExport: {
+        slug: 'example-review',
+        questions: [
+          {
+            id: 'q1',
+            text: 'T',
+            category: 'Context',
+            responseType: 'yes-no-na',
+            options: null,
+            showWhen: null,
+            failureCriteria: null,
+            deprecated: false,
+          },
+        ],
+      },
+    }),
+    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: null,
+  });
+
+  await vm.load();
+
+  assert.equal(vm.catalogue[0].questionGroup, 'Context');
+  assert.equal(vm.catalogue[0].category, undefined);
+});
+
+test('CaseReviewViewModel.load(): a #390 versioned export keeps category and questionGroup distinct', async () => {
+  const vm = new CaseReviewViewModel({
+    client: makeStep4Client({
+      status: 'Completed',
+      questionBankVersion: 'sha256:abc123',
+      versionedExport: {
+        slug: 'example-review',
+        questions: [
+          {
+            id: 'q1',
+            text: 'T',
+            category: 'COGG A',
+            questionGroup: 'Acknowledgement',
+            responseType: 'yes-no-na',
+            options: null,
+            showWhen: null,
+            failureCriteria: null,
+            deprecated: false,
+          },
+          {
+            id: 'q2',
+            text: 'T2',
+            category: null,
+            questionGroup: null,
+            responseType: 'yes-no-na',
+            options: null,
+            showWhen: null,
+            failureCriteria: null,
+            deprecated: false,
+          },
+        ],
+      },
+    }),
+    saveQueue: /** @type {any} */ ({ loadCase: () => {}, enqueue: () => {} }),
+    caseId: 'c1',
+    currentUserId: 'u1',
+    capabilities: null,
+  });
+
+  await vm.load();
+
+  assert.equal(vm.catalogue[0].category, 'COGG A');
+  assert.equal(vm.catalogue[0].questionGroup, 'Acknowledgement');
+  assert.equal(vm.catalogue[1].category, undefined);
+  assert.equal(vm.catalogue[1].questionGroup, undefined);
+});

@@ -207,10 +207,18 @@
  * `labelIds` references the owning Case Type's `labels` by id. It is
  * reporting metadata only and does not affect how a question is presented.
  *
+ * Grouping is two-level (#390): `category` is the top, presentation-only
+ * level (displayed to Reviewers under whatever name the Case Type gives it,
+ * e.g. "COGG Section") and never touches applicability or Outcome;
+ * `questionGroup` is the inner level (what `category` meant before the
+ * rename) — progress, Summary counts and bulk-marking operate per Question
+ * Group. Both are optional.
+ *
  * @typedef {{
  * id: string,
  * text: string,
  * category?: string,
+ * questionGroup?: string,
  * labelIds?: string[],
  * responseType: 'yes-no-na' | 'single-choice' | 'multi-choice' | 'outcome',
  * options?: string[],
@@ -270,6 +278,7 @@
  * id: string,
  * text: string,
  * category: string | null,
+ * questionGroup?: string | null,
  * responseType: string,
  * options: string[] | null,
  * optionOutcomes?: Record<string, string> | null,
@@ -329,6 +338,16 @@
  */
 
 /**
+ * Per-Question-Group configuration declared by a Case Type, keyed by the
+ * `questionGroup` name (#390 Part 3). `allowBulkOutcome` opts the group into
+ * the Reviewer-facing bulk-verdict control: one selection writes the chosen
+ * Outcome wording (or the universal N/A) to every applicable, non-deprecated
+ * `outcome`-type question in the group, through the normal answer path.
+ *
+ * @typedef {{ allowBulkOutcome?: boolean }} QuestionGroupConfig
+ */
+
+/**
  * Shape every Case Type module must satisfy.
  *
  * `dashboardColumns`, if present, are extra columns a Case Type contributes to
@@ -355,6 +374,7 @@
  * reviewerGroup?: string,
  * displayName?: string,
  * sections?: Partial<Record<'details'|'questions'|'issues'|'summary'|'remediation'|'notes'|'conversation'|'appealRequest'|'appealReview'|'amendOutcome', SectionConfig>>,
+ * questionGroups?: Record<string, QuestionGroupConfig>,
  * appeal?: AppealConfig,
  * slaHours?: number,
  * attributeFailures?: boolean,

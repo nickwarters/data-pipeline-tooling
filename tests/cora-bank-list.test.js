@@ -31,6 +31,7 @@ test('CORABankList: empty-state when no question passes filters', () => {
   // showDeprecated off + a slug whose questions are all deprecated
   filters.set({
     category: null,
+    questionGroup: null,
     showDeprecated: false,
     conditionalOnly: false,
   });
@@ -57,10 +58,11 @@ test('CORABankList: empty-state when no question passes filters', () => {
   e.disconnectedCallback();
 });
 
-test('CORABankList: category filter hides non-matching questions', () => {
+test('CORABankList: Question Group filter hides non-matching questions', () => {
   resetStoreWithExampleReview();
   filters.set({
-    category: 'Opening',
+    category: null,
+    questionGroup: 'Opening',
     showDeprecated: true,
     conditionalOnly: false,
   });
@@ -75,7 +77,12 @@ test('CORABankList: category filter hides non-matching questions', () => {
 
 test('CORABankList: conditionalOnly hides unconditional questions', () => {
   resetStoreWithExampleReview();
-  filters.set({ category: null, showDeprecated: true, conditionalOnly: true });
+  filters.set({
+    category: null,
+    questionGroup: null,
+    showDeprecated: true,
+    conditionalOnly: true,
+  });
   const e = new CORABankList();
   e.connectedCallback();
   const section = /** @type {any} */ (e)._children[0];

@@ -26,7 +26,7 @@ export { toastMsg, showToast };
 /** @typedef {import('./question-bank-source.js').DraftQuestion} DraftQuestion */
 
 /**
- * @typedef {{ category: string|null, showDeprecated: boolean, conditionalOnly: boolean }} Filters
+ * @typedef {{ category: string|null, questionGroup: string|null, showDeprecated: boolean, conditionalOnly: boolean }} Filters
  */
 
 const initial = /** @type {Record<string, QuestionBank>} */ (
@@ -48,6 +48,7 @@ export const activeSlug = signal(/** @type {string} */ (defaultSlug));
 export const filters = signal(
   /** @type {Filters} */ ({
     category: null,
+    questionGroup: null,
     showDeprecated: true,
     conditionalOnly: false,
   })
@@ -176,7 +177,12 @@ export function _resetStore() {
   cases.set(structuredClone(initial));
   baseline.set(structuredClone(initial));
   activeSlug.set(defaultSlug);
-  filters.set({ category: null, showDeprecated: true, conditionalOnly: false });
+  filters.set({
+    category: null,
+    questionGroup: null,
+    showDeprecated: true,
+    conditionalOnly: false,
+  });
   drawerOpen.set(false);
   railOpen.set(false);
   toastMsg.set('');

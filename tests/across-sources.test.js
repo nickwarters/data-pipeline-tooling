@@ -99,11 +99,9 @@ test('listCasesPerSource fans out one scoped call per source and pairs rows with
 test('listCasesPerSource accepts a per-source filter function', async () => {
   const { client, listCalls } = makeClient({});
 
-  await listCasesPerSource(
-    client,
-    [source('alpha'), source('beta')],
-    (s) => ({ caseType: s.slug })
-  );
+  await listCasesPerSource(client, [source('alpha'), source('beta')], (s) => ({
+    caseType: s.slug,
+  }));
 
   assert.deepEqual(listCalls[0].filter, { caseType: 'alpha' });
   assert.deepEqual(listCalls[1].filter, { caseType: 'beta' });
@@ -112,11 +110,16 @@ test('listCasesPerSource accepts a per-source filter function', async () => {
 test('listCasesPerSource merges extra list options under the per-source listName', async () => {
   const { client, listCalls } = makeClient({});
 
-  await listCasesPerSource(client, [source('alpha')], {}, {
-    top: 5,
-    orderBy: 'dueDate',
-    orderDir: 'asc',
-  });
+  await listCasesPerSource(
+    client,
+    [source('alpha')],
+    {},
+    {
+      top: 5,
+      orderBy: 'dueDate',
+      orderDir: 'asc',
+    }
+  );
 
   assert.deepEqual(listCalls[0].opts, {
     top: 5,
@@ -190,9 +193,13 @@ test('countCasesAcrossSources sums one scoped count per source', async () => {
 test('countCasesAcrossSources accepts a per-source filter function and sums zero sources to 0', async () => {
   const { client, countCalls } = makeClient({}, { 'alpha Cases': 4 });
 
-  const total = await countCasesAcrossSources(client, [source('alpha')], (s) => ({
-    caseType: s.slug,
-  }));
+  const total = await countCasesAcrossSources(
+    client,
+    [source('alpha')],
+    (s) => ({
+      caseType: s.slug,
+    })
+  );
 
   assert.equal(total, 4);
   assert.deepEqual(countCalls[0].filter, { caseType: 'alpha' });

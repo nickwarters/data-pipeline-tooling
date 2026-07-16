@@ -57,7 +57,7 @@ const QUESTIONS = [
   {
     id: 'q-a',
     text: 'A',
-    category: 'Basics',
+    questionGroup: 'Basics',
     responseType: 'yes-no-na',
     deprecated: false,
   },
@@ -65,7 +65,7 @@ const QUESTIONS = [
   {
     id: 'q-c',
     text: 'C',
-    category: 'Basics',
+    questionGroup: 'Basics',
     responseType: 'multi-choice',
     deprecated: false,
   },
@@ -678,7 +678,7 @@ test('CaseReviewNodeRegistry: creates and reuses the long-lived page nodes curre
   assert.equal(firstNodes.details?.tagName, 'CORA-CASE-DETAILS');
   assert.equal(firstNodes.questionsPanel?.tagName, 'SECTION');
   assert.equal(firstNodes.questionList?.tagName, 'CORA-QUESTION-LIST');
-  assert.equal(firstNodes.progress?.tagName, 'CORA-SECTION-PROGRESS');
+  assert.equal(firstNodes.progress?.tagName, 'CORA-GROUP-PROGRESS');
   assert.equal(firstNodes.issues?.tagName, 'CORA-REMEDIATION-SECTION');
   assert.equal(firstNodes.remediation?.tagName, 'CORA-REMEDIATION-TRACKING');
   assert.equal(firstNodes.summary?.tagName, 'CORA-SUMMARY');
@@ -795,12 +795,12 @@ test('bindQuestionPanel: forwards answer and jump events to the view model and v
   const unansweredQuestionEl = new RecordingEl();
   /** @type {any} */ (unansweredQuestionEl).question = {
     id: 'q-c',
-    category: 'Basics',
+    questionGroup: 'Basics',
   };
   const answeredQuestionEl = new RecordingEl();
   /** @type {any} */ (answeredQuestionEl).question = {
     id: 'q-a',
-    category: 'Basics',
+    questionGroup: 'Basics',
   };
   /** @type {any} */ (questionList).questionElements = [
     answeredQuestionEl,
@@ -813,8 +813,8 @@ test('bindQuestionPanel: forwards answer and jump events to the view model and v
   questionsPanel._listeners['cora-answer'][0]({
     detail: { questionId: 'q-a', value: 'No' },
   });
-  questionsPanel._listeners['cora-section-jump'][0]({
-    detail: { section: 'General' },
+  questionsPanel._listeners['cora-group-jump'][0]({
+    detail: { group: 'General' },
   });
   questionsPanel._listeners['cora-jump-unanswered'][0]();
 
@@ -1741,4 +1741,89 @@ test('conversation panel update: threads the resolved Conversation heading and t
 
   assert.equal(/** @type {any} */ (setup.conversation).heading, 'Dialogue');
   assert.equal(setup.toggle.textContent, 'Dialogue');
+});
+
+test('bindQuestionPanel: cora-group-verdict writes to applicable outcome-type questions only', () => {
+  const outcomeQuestions = [
+    {
+      id: 'q-out-1',
+      questionGroup: 'Basics',
+      responseType: 'outcome',
+      deprecated: false,
+    },
+    {
+      id: 'q-out-2',
+      questionGroup: 'Basics',
+      responseType: 'outcome',
+      deprecated: false,
+    },
+    {
+      id: 'q-yn',
+      questionGroup: 'Basics',
+      responseType: 'yes-no-na',
+      deprecated: false,
+    },
+    {
+      id: 'q-other-group',
+      questionGroup: 'Other',
+      responseType: 'outcome',
+      deprecated: false,
+    },
+  ];
+  const { context, questionsPanel, answerCalls } = makeQuestionContext({
+    questions: /** @type {any} */ (outcomeQuestions),
+  });
+
+  bindQuestionPanel(/** @type {any} */ (context));
+  questionsPanel._listeners['cora-group-verdict'][0]({
+    detail: { group: 'Basics', value: 'Fail' },
+  });
+
+  assert.deepEqual(answerCalls, [
+    { questionId: 'q-out-1', value: 'Fail' },
+    { questionId: 'q-out-2', value: 'Fail' },
+  ]);
+});
+
+test('bindQuestionPanel: a N/A group verdict also writes only outcome-type questions', () => {
+  const outcomeQuestions = [
+    {
+      id: 'q-out',
+      questionGroup: 'G',
+      responseType: 'outcome',
+      deprecated: false,
+    },
+    {
+      id: 'q-multi',
+      questionGroup: 'G',
+      responseType: 'multi-choice',
+      deprecated: false,
+    },
+  ];
+  const { context, questionsPanel, answerCalls } = makeQuestionContext({
+    questions: /** @type {any} */ (outcomeQuestions),
+  });
+
+  bindQuestionPanel(/** @type {any} */ (context));
+  questionsPanel._listeners['cora-group-verdict'][0]({
+    detail: { group: 'G', value: 'NA' },
+  });
+
+  assert.deepEqual(answerCalls, [{ questionId: 'q-out', value: 'NA' }]);
+});
+
+test('bindQuestionPanel: an ungrouped outcome question answers to the General verdict', () => {
+  const outcomeQuestions = [
+    { id: 'q-loose', responseType: 'outcome', deprecated: false },
+  ];
+  const { context, questionsPanel, answerCalls } = makeQuestionContext({
+    questions: /** @type {any} */ (outcomeQuestions),
+  });
+
+  bindQuestionPanel(/** @type {any} */ (context));
+  questionsPanel._listeners['cora-group-verdict'][0]({
+    detail: { group: 'General', value: 'Pass' },
+  });
+
+  assert.deepEqual(answerCalls, [{ questionId: 'q-loose', value: 'Pass' }]);
 });

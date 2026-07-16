@@ -3,19 +3,19 @@ import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
 import {
   canMoveQuestion,
-  canMoveQuestionWithinCategory,
+  canMoveQuestionWithinGroup,
   moveQuestion,
-  moveQuestionWithinCategory,
+  moveQuestionWithinGroup,
 } from '../../lib/question-order.js';
 import { NA_VALUE } from '../../lib/response-options.js';
 
 /**
  * One Question Definition's editing card. The active bank, the baseline
- * questions (for the wording diff), the category-filter state, and the
+ * questions (for the wording diff), the group-filter state, and the
  * mutation sink all arrive as props and are forwarded to the child editors;
  * this component has no store dependency.
  *
- * @param {{ question: any, questionIndex: number, bank: any, baselineQuestions: any[], categoryFilterActive: boolean, onCommit: (fn: () => void) => void, setClassName: (className: string) => void }} props
+ * @param {{ question: any, questionIndex: number, bank: any, baselineQuestions: any[], groupFilterActive: boolean, onCommit: (fn: () => void) => void, setClassName: (className: string) => void }} props
  * @returns {Node[] | undefined}
  */
 export function QuestionCard(props) {
@@ -25,12 +25,12 @@ export function QuestionCard(props) {
   const onCommit = props.onCommit;
   const bank = props.bank;
   const bankQuestions = bank?.questions ?? [];
-  const categoryFilterActive = props.categoryFilterActive;
-  const canMoveUp = categoryFilterActive
-    ? canMoveQuestionWithinCategory(bankQuestions, q, -1)
+  const groupFilterActive = props.groupFilterActive;
+  const canMoveUp = groupFilterActive
+    ? canMoveQuestionWithinGroup(bankQuestions, q, -1)
     : canMoveQuestion(bankQuestions, q, -1);
-  const canMoveDown = categoryFilterActive
-    ? canMoveQuestionWithinCategory(bankQuestions, q, 1)
+  const canMoveDown = groupFilterActive
+    ? canMoveQuestionWithinGroup(bankQuestions, q, 1)
     : canMoveQuestion(bankQuestions, q, 1);
 
   const num = h(
@@ -64,6 +64,12 @@ export function QuestionCard(props) {
       'Category',
       questionCardText(q.category || '', (/** @type {string} */ v) =>
         setQuestionCategory(onCommit, q, v)
+      )
+    ),
+    questionCardField(
+      'Question Group',
+      questionCardText(q.questionGroup || '', (/** @type {string} */ v) =>
+        setQuestionGroup(onCommit, q, v)
       )
     ),
     questionCardField(
@@ -127,7 +133,7 @@ export function QuestionCard(props) {
           moveQuestionInDraft(
             onCommit,
             bankQuestions,
-            categoryFilterActive,
+            groupFilterActive,
             q,
             -1
           ),
@@ -142,13 +148,7 @@ export function QuestionCard(props) {
         'aria-label': 'Move question down',
         disabled: !canMoveDown,
         onclick: () =>
-          moveQuestionInDraft(
-            onCommit,
-            bankQuestions,
-            categoryFilterActive,
-            q,
-            1
-          ),
+          moveQuestionInDraft(onCommit, bankQuestions, groupFilterActive, q, 1),
       },
       '↓'
     ),
@@ -205,8 +205,8 @@ export class CORAQuestionCard extends ShellElement {
      */
     this.baselineQuestions = [];
     this.questionIndex = 0;
-    /** Whether a category filter is active (moves stay within category). */
-    this.categoryFilterActive = false;
+    /** Whether a Question Group filter is active (moves stay within group). */
+    this.groupFilterActive = false;
     /**
      * Mutation sink. Defaults to "just apply the mutation" so the component
      * works standalone; the bank editor injects the store's `commit()`.
@@ -221,7 +221,7 @@ export class CORAQuestionCard extends ShellElement {
       questionIndex: this.questionIndex,
       bank: this.bank,
       baselineQuestions: this.baselineQuestions,
-      categoryFilterActive: this.categoryFilterActive,
+      groupFilterActive: this.groupFilterActive,
       onCommit: this.onCommit,
       setClassName: (className) => {
         this.className = className;
@@ -288,6 +288,13 @@ export function setQuestionCategory(onCommit, q, category) {
   });
 }
 
+/** @param {(fn: () => void) => void} onCommit @param {any} q @param {string} questionGroup */
+export function setQuestionGroup(onCommit, q, questionGroup) {
+  onCommit(() => {
+    q.questionGroup = questionGroup || undefined;
+  });
+}
+
 /** @param {(fn: () => void) => void} onCommit @param {any} q @param {string} responseType */
 export function setQuestionResponseType(onCommit, q, responseType) {
   onCommit(() => {
@@ -309,17 +316,16 @@ export function setQuestionFailureCriteria(onCommit, q, failureCriteria) {
   });
 }
 
-/** @param {(fn: () => void) => void} onCommit @param {any[]} questions @param {boolean} categoryFilterActive @param {any} q @param {-1 | 1} direction */
+/** @param {(fn: () => void) => void} onCommit @param {any[]} questions @param {boolean} groupFilterActive @param {any} q @param {-1 | 1} direction */
 export function moveQuestionInDraft(
   onCommit,
   questions,
-  categoryFilterActive,
+  groupFilterActive,
   q,
   direction
 ) {
   onCommit(() => {
-    if (categoryFilterActive)
-      moveQuestionWithinCategory(questions, q, direction);
+    if (groupFilterActive) moveQuestionWithinGroup(questions, q, direction);
     else moveQuestion(questions, q, direction);
   });
 }

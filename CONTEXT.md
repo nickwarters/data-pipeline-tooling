@@ -76,7 +76,7 @@ renders no tab, so the visible tab set differs by role (e.g. the **Adviser** see
 Summary + Conversation).
 
 **Summary**:
-A read-only Section that rolls up the whole Case onto one page: the **Case Details** fields, pass/fail counts per question category, **Remediation Action** counts, each _failed_ **Answer** with its actions, key dates, and the computed **Outcome**. Composed from the other Sections by their per-Section `showInSummary` flag (**Notes** is excluded by default; **Case Details** is folded in, so the **Adviser**/Responsible Party needs no separate Details tab — the architecture decision). Never editable — only `read-only` or `hidden`. **Responsible Party gating widened**: hidden while **`In-progress`**, visible `read-only` once the Case is **Reportable** (`Actions In Progress` _or_ `Completed`), so the Adviser can see the Summary while remediation is underway. Derivation is _hybrid_ and freezes at **Reportable**: live from current **Answers** while In-progress; once Reportable, the Outcome block reads the **Current Outcome** (`amendedOutcome?.outcome ?? outcomeAtCompletion`, the architecture decision/0026) while counts and the failed-Answer list recompute from the Case's frozen Answers, showing each action's `status`/`cancelReason` and the **Remediation Due Date**. **Outcome** is a block _within_ Summary, not its own Section or tab.
+A read-only Section that rolls up the whole Case onto one page: the **Case Details** fields, pass/fail counts per **Question Group**, **Remediation Action** counts, each _failed_ **Answer** with its actions, key dates, and the computed **Outcome**. Composed from the other Sections by their per-Section `showInSummary` flag (**Notes** is excluded by default; **Case Details** is folded in, so the **Adviser**/Responsible Party needs no separate Details tab — the architecture decision). Never editable — only `read-only` or `hidden`. **Responsible Party gating widened**: hidden while **`In-progress`**, visible `read-only` once the Case is **Reportable** (`Actions In Progress` _or_ `Completed`), so the Adviser can see the Summary while remediation is underway. Derivation is _hybrid_ and freezes at **Reportable**: live from current **Answers** while In-progress; once Reportable, the Outcome block reads the **Current Outcome** (`amendedOutcome?.outcome ?? outcomeAtCompletion`, the architecture decision/0026) while counts and the failed-Answer list recompute from the Case's frozen Answers, showing each action's `status`/`cancelReason` and the **Remediation Due Date**. **Outcome** is a block _within_ Summary, not its own Section or tab.
 _Avoid_: Outcome (now a block inside Summary, not a standalone Section), Overview, Report
 
 ### Questions & answers
@@ -88,6 +88,18 @@ _Avoid_: Question (ambiguous between definition and instance), QuestionTemplate
 **Question Bank**:
 The curated, per-**Case Type** working set of **Question Definitions** — their text, response types, options, conditional triggers (`showWhen`), and failure criteria — assembled and edited in the question bank editor (`#/question-bank`) by **Case Type Owners**, then compiled into that Case Type's module and into its function-free **reporting export**. One per Case Type.
 _Avoid_: Catalogue (reserve for the runtime form — the bank joined to **Answers** to compute applicability), Question pool
+
+**Question Group**:
+The inner of the two grouping levels on a **Question Definition** (`questionGroup` — what the `category` field meant before #390). Progress counts, **Summary** pass/fail counts, and the bulk **Group Verdict** all operate per Question Group. Optional; ungrouped questions fall back to `General` on the case review page and `Uncategorised` in the bank editor.
+_Avoid_: Section (reserved for the role-gated tab areas), Category (now the level above)
+
+**Category**:
+The top, presentation-only grouping level on a **Question Definition** (`category`, #390). Displayed to **Reviewers** under whatever name the **Case Type** gives it (e.g. "COGG Section") as a heading above its nested **Question Groups**. Never touches applicability or the **Outcome**. Optional.
+_Avoid_: COGG Section (a per-Case-Type display label, not a code/domain term), Section
+
+**Group Verdict**:
+The bulk-marking control on a **Question Group** a **Case Type** has opted in via `questionGroups: { <group>: { allowBulkOutcome: true } }`. One selection — a configured **Outcome** wording or N/A — writes that value to every applicable, non-deprecated `outcome`-type **Question Definition** in the group, through the normal **Answer** path. A write shortcut, not a lock: no group-level state is stored on the Case, and each Answer stays individually editable afterwards.
+_Avoid_: Bulk outcome (the verdict can also be N/A), Group answer
 
 **Applicable Question**:
 A **Question Definition** that, given the current state of a Case's **Answers**, should be presented to the **Reviewer**. Computed live by evaluating conditional triggers — not a stored set.

@@ -1,5 +1,5 @@
 // @ts-check
-import { computeSectionProgress } from '../../evaluators/section-progress.js';
+import { computeQuestionGroupProgress } from '../../evaluators/question-group-progress.js';
 import { h } from '../../lib/html.js';
 import { resolveSectionHeadings } from '../../lib/section-labels.js';
 
@@ -19,16 +19,32 @@ export function bindQuestionPanel(context) {
       /** @type {any} */ (event).detail.value
     );
   });
-  questionsPanel.addEventListener('cora-section-jump', (ev) => {
+  questionsPanel.addEventListener('cora-group-jump', (ev) => {
     const event = /** @type {CustomEvent} */ (ev);
-    const sectionName = /** @type {any} */ (event).detail.section;
+    const groupName = /** @type {any} */ (event).detail.group;
     const children = questionList.questionElements ?? [];
     const target = children.find(
       (/** @type {any} */ c) =>
-        c.question?.category === sectionName ||
-        (!c.question?.category && sectionName === 'General')
+        c.question?.questionGroup === groupName ||
+        (!c.question?.questionGroup && groupName === 'General')
     );
     target?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  });
+  questionsPanel.addEventListener('cora-group-verdict', (ev) => {
+    const event = /** @type {CustomEvent} */ (ev);
+    const { group, value } = /** @type {any} */ (event).detail;
+    // The verdict is a write shortcut over ordinary Answers: apply it to
+    // every applicable `outcome`-type question in the group (the view model's
+    // applicable set is already non-deprecated). Other response types are
+    // left exactly as the Reviewer set them.
+    const targets = vm.applicableQuestions
+      .get()
+      .filter(
+        (/** @type {any} */ q) =>
+          (q.questionGroup || 'General') === group &&
+          q.responseType === 'outcome'
+      );
+    for (const q of targets) vm.handleAnswer(q.id, value);
   });
   questionsPanel.addEventListener('cora-jump-unanswered', () => {
     const children = questionList.questionElements ?? [];
@@ -66,6 +82,8 @@ export function updateQuestionPanel(context) {
     access: context.displayMode(access.questions),
     questions,
     answers,
+    questionGroups: config.questionGroups ?? {},
+    outcomeOptions: config.outcomeOptions ?? [],
   });
   if (/** @type {any} */ (questionList).update) {
     /** @type {any} */ (questionList).update(questions, answers);
@@ -78,7 +96,7 @@ export function updateQuestionPanel(context) {
   });
   if (/** @type {any} */ (progress).update) {
     /** @type {any} */ (progress).update(
-      computeSectionProgress(catalogue, answers),
+      computeQuestionGroupProgress(catalogue, answers),
       unanswered
     );
   }

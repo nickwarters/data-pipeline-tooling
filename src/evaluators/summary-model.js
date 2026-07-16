@@ -12,9 +12,9 @@ import {
 /** @typedef {import('../sharepoint-client.js').RemediationAction} RemediationAction */
 
 /**
- * @typedef {{ category: string, pass: number, fail: number }} CategoryCount
- * @typedef {{ id: string, category: string | undefined, text: string, answer: string, actions: string[], sentActions: RemediationAction[] }} SummaryFailure
- * @typedef {{ categoryCounts: CategoryCount[], remediationActionCount: number, failures: SummaryFailure[] }} SummaryModel
+ * @typedef {{ group: string, pass: number, fail: number }} GroupCount
+ * @typedef {{ id: string, questionGroup: string | undefined, text: string, answer: string, actions: string[], sentActions: RemediationAction[] }} SummaryFailure
+ * @typedef {{ groupCounts: GroupCount[], remediationActionCount: number, failures: SummaryFailure[] }} SummaryModel
  */
 
 /**
@@ -35,7 +35,7 @@ export function buildSummaryModel(catalogue, answers, captureGroups = []) {
   const applicableIds = evaluate(active, answers);
   const applicable = active.filter((q) => applicableIds.has(q.id));
 
-  /** @type {Map<string, CategoryCount>} */
+  /** @type {Map<string, GroupCount>} */
   const counts = new Map();
   for (const q of applicable) {
     // Only failure-scorable questions (those with a failureCriteria) contribute
@@ -45,10 +45,9 @@ export function buildSummaryModel(catalogue, answers, captureGroups = []) {
     const v = answer?.value;
     const answered = Array.isArray(v) ? v.length > 0 : !!v;
     if (!answered) continue;
-    const category = q.category || 'General';
-    if (!counts.has(category))
-      counts.set(category, { category, pass: 0, fail: 0 });
-    const entry = /** @type {CategoryCount} */ (counts.get(category));
+    const group = q.questionGroup || 'General';
+    if (!counts.has(group)) counts.set(group, { group, pass: 0, fail: 0 });
+    const entry = /** @type {GroupCount} */ (counts.get(group));
     if (isFailure(q, answer)) entry.fail += 1;
     else entry.pass += 1;
   }
@@ -86,7 +85,7 @@ export function buildSummaryModel(catalogue, answers, captureGroups = []) {
     if (answer.freeFormRemediation) actions.push(answer.freeFormRemediation);
     return {
       id: q.id,
-      category: q.category,
+      questionGroup: q.questionGroup,
       text: q.text,
       answer: Array.isArray(v) ? v.join(', ') : v,
       actions,
@@ -95,7 +94,7 @@ export function buildSummaryModel(catalogue, answers, captureGroups = []) {
   });
 
   return {
-    categoryCounts: [...counts.values()],
+    groupCounts: [...counts.values()],
     remediationActionCount,
     failures,
   };

@@ -5,7 +5,7 @@
     {
       "id": "q-cm-ack",
       "text": "Was the complaint acknowledged within the required timeframe?",
-      "category": "Acknowledgement",
+      "questionGroup": "Acknowledgement",
       "labelIds": ["lbl-sla", "lbl-regulatory"],
       "responseType": "yes-no-na",
       "optionOutcomes": {
@@ -20,7 +20,7 @@
     {
       "id": "q-cm-letter-structure",
       "text": "Is the complaint letter structure used?",
-      "category": "Acknowledgement",
+      "questionGroup": "Acknowledgement",
       "labelIds": ["lbl-regulatory"],
       "responseType": "single-choice",
       "options": [
@@ -41,7 +41,7 @@
     {
       "id": "q-cm-investigated",
       "text": "Was the complaint fully investigated?",
-      "category": "Investigation",
+      "questionGroup": "Investigation",
       "labelIds": ["lbl-regulatory"],
       "responseType": "yes-no-na",
       "optionOutcomes": {
@@ -56,7 +56,7 @@
     {
       "id": "q-cm-root-cause",
       "text": "Was the root cause of the complaint identified?",
-      "category": "Investigation",
+      "questionGroup": "Investigation",
       "labelIds": ["lbl-regulatory"],
       "responseType": "yes-no-na",
       "showWhen": {
@@ -73,7 +73,7 @@
     {
       "id": "q-cm-channel",
       "text": "How was the complaint received?",
-      "category": "Resolution",
+      "questionGroup": "Resolution",
       "responseType": "single-choice",
       "options": ["Phone", "Email", "Letter", "In branch"],
       "deprecated": false
@@ -81,7 +81,7 @@
     {
       "id": "q-cm-redress",
       "text": "Where the complaint was upheld, was appropriate redress offered?",
-      "category": "Resolution",
+      "questionGroup": "Resolution",
       "responseType": "yes-no-na",
       "optionOutcomes": {
         "No": "refer"
@@ -95,7 +95,7 @@
     {
       "id": "q-cm-final-response",
       "text": "Was a final response issued to the customer?",
-      "category": "Communication",
+      "questionGroup": "Communication",
       "labelIds": ["lbl-sla"],
       "responseType": "yes-no-na",
       "optionOutcomes": {

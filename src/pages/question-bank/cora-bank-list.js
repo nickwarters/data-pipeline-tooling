@@ -19,7 +19,13 @@ export function BankList(props) {
   const f = props.filters;
   const visible = bank.questions.filter((/** @type {any} */ q) => {
     if (!f.showDeprecated && q.deprecated) return false;
-    if (f.category && q.category !== f.category) return false;
+    if (f.category && (q.category || 'Uncategorised') !== f.category)
+      return false;
+    if (
+      f.questionGroup &&
+      (q.questionGroup || 'Uncategorised') !== f.questionGroup
+    )
+      return false;
     if (f.conditionalOnly && !q.showWhen) return false;
     return true;
   });
@@ -64,7 +70,7 @@ export function BankList(props) {
       card.bank = bank;
       card.baselineQuestions = props.baselineQuestions;
       card.questionIndex = bank.questions.indexOf(q);
-      card.categoryFilterActive = Boolean(f.category);
+      card.groupFilterActive = Boolean(f.questionGroup);
       card.onCommit = props.onCommit;
       listRoot.appendChild(card);
     });
@@ -109,7 +115,7 @@ export class CORABankList extends ShellElement {
         /** @type {any} */ ({
           id: `q-new-${b.questions.length + 1}`,
           text: 'New question — click to edit',
-          category: 'Uncategorised',
+          questionGroup: 'Uncategorised',
           responseType: 'yes-no-na',
           deprecated: false,
         })

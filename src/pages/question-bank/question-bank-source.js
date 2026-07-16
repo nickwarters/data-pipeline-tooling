@@ -30,6 +30,7 @@ import { QUESTION_BANK_IMPORTERS } from '../../../case-types/manifest.js';
  *   id: string,
  *   text: string,
  *   category?: string,
+ *   questionGroup?: string,
  *   labelIds?: string[],
  *   responseType: 'yes-no-na' | 'single-choice' | 'multi-choice' | 'outcome',
  *   options?: string[],

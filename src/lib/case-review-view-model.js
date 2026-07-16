@@ -228,7 +228,19 @@ export class CaseReviewViewModel {
         .map((q) => ({
           id: q.id,
           text: q.text,
-          ...(q.category !== null ? { category: q.category } : {}),
+          // Exports published before #390 carry no `questionGroup` key and
+          // their `category` meant the inner grouping level — remap it so a
+          // frozen Case keeps its as-reviewed grouping.
+          ...(!('questionGroup' in q)
+            ? q.category !== null
+              ? { questionGroup: q.category }
+              : {}
+            : {
+                ...(q.category !== null ? { category: q.category } : {}),
+                ...(q.questionGroup != null
+                  ? { questionGroup: q.questionGroup }
+                  : {}),
+              }),
           responseType:
             /** @type {'yes-no-na'|'single-choice'|'multi-choice'|'outcome'} */ (
               q.responseType

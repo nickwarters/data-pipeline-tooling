@@ -22,7 +22,8 @@ test('CORABankRail: renders 4 sections: stat, categories, view, legend', () => {
 test('CORABankRail: clicking the "All" chip resets category', () => {
   resetStoreWithExampleReview();
   filters.set({
-    category: 'Opening',
+    category: null,
+    questionGroup: 'Opening',
     showDeprecated: true,
     conditionalOnly: false,
   });
@@ -37,17 +38,19 @@ test('CORABankRail: clicking the "All" chip resets category', () => {
   e.disconnectedCallback();
 });
 
-test('CORABankRail: clicking a category chip sets category', () => {
+test('CORABankRail: clicking a group chip sets the questionGroup filter', () => {
   resetStoreWithExampleReview();
   const e = new CORABankRail();
   e.connectedCallback();
   const aside = /** @type {any} */ (e)._children[0];
   const catSection = aside._children[1];
   const catList = catSection._children[1];
-  // The first non-"All" chip is the first category
-  const firstCat = catList._children[1];
-  firstCat._listeners.click[0]();
-  assert.ok(filters.get().category);
+  // The example bank has Question Groups but no categories, so the first
+  // non-"All" chip is the first Question Group.
+  const firstGroup = catList._children[1];
+  firstGroup._listeners.click[0]();
+  assert.ok(filters.get().questionGroup);
+  assert.equal(filters.get().category, null);
   e.disconnectedCallback();
 });
 
@@ -274,15 +277,15 @@ test('CORABankRail: backdrop click is a no-op when already closed', () => {
   e.disconnectedCallback();
 });
 
-test('CORABankRail: selecting a category closes the pop-over', () => {
+test('CORABankRail: selecting a group chip closes the pop-over', () => {
   resetStoreWithExampleReview();
   railOpen.set(true);
   const e = new CORABankRail();
   e.connectedCallback();
   const catList = /** @type {any} */ (e)._children[0]._children[1]._children[1];
-  const firstCat = catList._children[1];
-  firstCat._listeners.click[0]();
-  assert.ok(filters.get().category);
+  const firstGroup = catList._children[1];
+  firstGroup._listeners.click[0]();
+  assert.ok(filters.get().questionGroup);
   assert.equal(railOpen.get(), false);
   e.disconnectedCallback();
 });
@@ -290,7 +293,8 @@ test('CORABankRail: selecting a category closes the pop-over', () => {
 test('CORABankRail: the "All" chip also closes the pop-over', () => {
   resetStoreWithExampleReview();
   filters.set({
-    category: 'Opening',
+    category: null,
+    questionGroup: 'Opening',
     showDeprecated: true,
     conditionalOnly: false,
   });
@@ -301,5 +305,101 @@ test('CORABankRail: the "All" chip also closes the pop-over', () => {
   catList._children[0]._listeners.click[0]();
   assert.equal(filters.get().category, null);
   assert.equal(railOpen.get(), false);
+  e.disconnectedCallback();
+});
+
+test('CORABankRail: group move buttons reorder groups within their category and mark dirty', () => {
+  resetStoreWithExampleReview();
+  // The example bank has Question Groups only (no categories): Opening,
+  // Discovery, Resolution. Move Discovery up within the implicit category.
+  const e = new CORABankRail();
+  e.connectedCallback();
+  const catList = /** @type {any} */ (e)._children[0]._children[1]._children[1];
+  const discoveryMeta = catList._children[2]._children[1];
+  const moveUp = discoveryMeta._children[1];
+  assert.equal(moveUp.disabled, false);
+
+  moveUp._listeners.click[0]({ stopPropagation() {} });
+  const groups = cases
+    .get()
+    ['example-review'].questions.map((/** @type {any} */ q) => q.questionGroup);
+  assert.equal(groups[0], 'Discovery');
+  assert.equal(isDirty.get(), true);
+  e.disconnectedCallback();
+});
+
+test('CORABankRail: with categories only, no redundant Uncategorised group chips render', () => {
+  resetStoreWithExampleReview();
+  cases.set({
+    'example-review': {
+      label: 'L',
+      slug: 'example-review',
+      eligibleGroups: [],
+      questions: [
+        /** @type {any} */ ({
+          id: 'a1',
+          text: 'A1',
+          category: 'A',
+          responseType: 'yes-no-na',
+          deprecated: false,
+        }),
+        /** @type {any} */ ({
+          id: 'b1',
+          text: 'B1',
+          category: 'B',
+          responseType: 'yes-no-na',
+          deprecated: false,
+        }),
+      ],
+    },
+  });
+  const e = new CORABankRail();
+  e.connectedCallback();
+  const catList = /** @type {any} */ (e)._children[0]._children[1]._children[1];
+  // All + category A + category B, no group chips
+  assert.equal(catList._children.length, 3);
+  e.disconnectedCallback();
+});
+
+test('CORABankRail: nested category and group chips filter by the pair', () => {
+  resetStoreWithExampleReview();
+  cases.set({
+    'example-review': {
+      label: 'L',
+      slug: 'example-review',
+      eligibleGroups: [],
+      questions: [
+        /** @type {any} */ ({
+          id: 'a1',
+          text: 'A1',
+          category: 'Cat1',
+          questionGroup: 'G1',
+          responseType: 'yes-no-na',
+          deprecated: false,
+        }),
+        /** @type {any} */ ({
+          id: 'b1',
+          text: 'B1',
+          category: 'Cat2',
+          questionGroup: 'G2',
+          responseType: 'yes-no-na',
+          deprecated: false,
+        }),
+      ],
+    },
+  });
+  const e = new CORABankRail();
+  e.connectedCallback();
+  const catList = /** @type {any} */ (e)._children[0]._children[1]._children[1];
+  // [All, Cat1, G1, Cat2, G2]
+  assert.equal(catList._children.length, 5);
+  // Clicking the Cat1 heading filters by category only.
+  catList._children[1]._listeners.click[0]();
+  assert.equal(filters.get().category, 'Cat1');
+  assert.equal(filters.get().questionGroup, null);
+  // Clicking G2 filters by its category + group pair.
+  catList._children[4]._listeners.click[0]();
+  assert.equal(filters.get().category, 'Cat2');
+  assert.equal(filters.get().questionGroup, 'G2');
   e.disconnectedCallback();
 });

@@ -70,8 +70,10 @@ export function RemediationSection(props) {
 export function renderRemediationItem(props, q) {
   const li = h('li', { class: 'cora-remediation-item' });
 
-  if (q.category) {
-    li.appendChild(h('p', { class: 'cora-remediation-category' }, q.category));
+  if (q.questionGroup) {
+    li.appendChild(
+      h('p', { class: 'cora-remediation-group' }, q.questionGroup)
+    );
   }
 
   li.appendChild(h('p', { class: 'cora-remediation-question' }, q.text));

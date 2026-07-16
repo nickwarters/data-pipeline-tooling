@@ -5,7 +5,7 @@
     {
       "id": "q-welcome",
       "text": "Was the customer greeted professionally?",
-      "category": "Opening",
+      "questionGroup": "Opening",
       "labelIds": ["lbl-coaching"],
       "responseType": "yes-no-na",
       "optionOutcomes": {
@@ -17,7 +17,7 @@
     {
       "id": "q-needs",
       "text": "Were the customer's needs identified before proceeding?",
-      "category": "Discovery",
+      "questionGroup": "Discovery",
       "labelIds": ["lbl-coaching", "lbl-regulatory"],
       "responseType": "yes-no-na",
       "optionOutcomes": {
@@ -30,7 +30,7 @@
     {
       "id": "q-resolve",
       "text": "Was the issue resolved to the customer's satisfaction?",
-      "category": "Resolution",
+      "questionGroup": "Resolution",
       "labelIds": ["lbl-regulatory"],
       "responseType": "yes-no-na",
       "showWhen": {

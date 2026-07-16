@@ -1054,6 +1054,47 @@ cora-status-banner {
 
 /* ── Question list ───────────────────────────────────────────────────────── */
 
+/* Two-level grouping headings (#390): a `category` (top, presentation-only)
+   heading above its nested Question Group headings. */
+.cora-question-category-heading {
+  margin: var(--cora-space-5) 0 var(--cora-space-2);
+  padding-bottom: var(--cora-space-1);
+  border-bottom: 2px solid var(--cora-color-border);
+  font-size: var(--cora-font-size-lg, 1.125rem);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cora-question-group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cora-space-3);
+  margin: var(--cora-space-4) 0 var(--cora-space-2);
+}
+
+.cora-question-group-heading h4 {
+  margin: 0;
+  font-weight: var(--cora-font-weight-semibold);
+  color: var(--cora-color-text-muted, inherit);
+}
+
+/* Bulk-verdict control on groups configured with allowBulkOutcome (#390). */
+.cora-group-verdict-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cora-space-2);
+  font-size: var(--cora-font-size-sm, 0.875rem);
+}
+
+.cora-group-verdict {
+  font: inherit;
+  padding: var(--cora-space-1) var(--cora-space-2);
+  border: 1px solid var(--cora-color-border);
+  border-radius: var(--cora-radius-sm, 4px);
+  background: var(--cora-color-surface);
+}
+
 /* Review-tab question cards. Brought in line with the other Sections' card
    language: a surface fill and the shared small elevation, so they read as
    raised cards rather than flat outlined boxes on the page canvas. */
@@ -1161,7 +1202,7 @@ cora-status-banner {
   padding: var(--cora-space-3) var(--cora-space-4);
 }
 
-.cora-remediation-category {
+.cora-remediation-group {
   font-size: var(--cora-font-size-xs);
   font-weight: var(--cora-font-weight-semibold);
   text-transform: uppercase;
@@ -2135,7 +2176,7 @@ cora-attribute-menu {
 
 /* ── Section progress sidebar ────────────────────────────────────────────── */
 
-[data-cora-root] section:has(cora-section-progress) {
+[data-cora-root] section:has(cora-group-progress) {
   display: grid;
   grid-template-columns: 1fr 14rem;
   grid-template-rows: auto 1fr;
@@ -2143,11 +2184,11 @@ cora-attribute-menu {
   align-items: start;
 }
 
-[data-cora-root] section:has(cora-section-progress) > h2 {
+[data-cora-root] section:has(cora-group-progress) > h2 {
   grid-column: 1 / -1;
 }
 
-[data-cora-root] cora-section-progress {
+[data-cora-root] cora-group-progress {
   position: sticky;
   top: var(--cora-space-5);
   background: var(--cora-color-surface);
@@ -2156,7 +2197,7 @@ cora-attribute-menu {
   padding: var(--cora-space-3);
 }
 
-.cora-section-progress-row {
+.cora-group-progress-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2168,24 +2209,24 @@ cora-attribute-menu {
   transition: background var(--cora-duration-fast) var(--cora-easing-standard);
 }
 
-.cora-section-progress-row:hover {
+.cora-group-progress-row:hover {
   background: var(--cora-color-surface-2);
 }
 
-.cora-section-progress-row.complete {
+.cora-group-progress-row.complete {
   color: var(--cora-color-success);
 }
 
-.cora-section-progress-label {
+.cora-group-progress-label {
   font-weight: var(--cora-font-weight-medium);
 }
 
-.cora-section-progress-count {
+.cora-group-progress-count {
   font-variant-numeric: tabular-nums;
   color: var(--cora-color-text-muted);
 }
 
-.cora-section-progress-row.complete .cora-section-progress-count {
+.cora-group-progress-row.complete .cora-group-progress-count {
   color: var(--cora-color-success);
 }
 

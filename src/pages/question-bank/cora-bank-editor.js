@@ -37,14 +37,14 @@ import '../../components/collections/cora-compile-drawer.js';
 import '../../components/base/cora-toast.js';
 
 /**
- * Switch the workbench to another Case Type's bank (clears the category
+ * Switch the workbench to another Case Type's bank (clears the grouping
  * filter, which is per-bank).
  *
  * @param {string} slug
  */
 export function selectBank(slug) {
   activeSlug.set(slug);
-  setFilters({ category: null });
+  setFilters({ category: null, questionGroup: null });
 }
 
 /** Discard all uncommitted edits and return to the last synced state. */

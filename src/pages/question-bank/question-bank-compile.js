@@ -160,7 +160,7 @@ function canonicalise(value) {
  *
  * Returns the function-free projection of the bank: slug, label, generatedAt,
  * a full SHA-256 hash (stable over questions+slug only, including labelIds),
- * a questions array that carries id/text/category/responseType/options/
+ * a questions array that carries id/text/category/questionGroup/responseType/options/
  * optionOutcomes/showWhen/failureCriteria/remediationActions/labelIds/deprecated,
  * case-type outcomeOptions/defaultOutcomeId, and a labels table. Excluded: computeOutcome,
  * allowFreeFormRemediation, eligibleGroups.
@@ -175,6 +175,7 @@ function canonicalise(value) {
  * id: string,
  * text: string,
  * category: string | null,
+ * questionGroup: string | null,
  * responseType: string,
  * options: string[] | null,
  * optionOutcomes: Record<string, string> | null,
@@ -193,11 +194,12 @@ export async function compileExport(bank) {
   const outcomeOptions = bank.outcomeOptions ?? [];
   const questions = bank.questions.map((q) => {
     const resolved = resolveCompiledOptions(q, outcomeOptions);
-    /** @type {{ id: string, text: string, category: string|null, responseType: string, options: string[]|null, optionOutcomes: Record<string, string>|null, showWhen: Record<string,unknown>|null, failureCriteria: string|null, remediationActions: Array<import('../../sharepoint-client.js').RemediationActionDefinition>|null, deprecated: boolean, labelIds?: string[] }} */
+    /** @type {{ id: string, text: string, category: string|null, questionGroup: string|null, responseType: string, options: string[]|null, optionOutcomes: Record<string, string>|null, showWhen: Record<string,unknown>|null, failureCriteria: string|null, remediationActions: Array<import('../../sharepoint-client.js').RemediationActionDefinition>|null, deprecated: boolean, labelIds?: string[] }} */
     const out = {
       id: q.id,
       text: q.text,
       category: q.category ?? null,
+      questionGroup: q.questionGroup ?? null,
       responseType: q.responseType,
       options: resolved.options,
       optionOutcomes: resolved.optionOutcomes,

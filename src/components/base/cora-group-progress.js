@@ -2,38 +2,42 @@
 import { h } from '../../lib/html.js';
 import { ShellElement, replaceHostChildren } from '../../lib/view.js';
 
-/** @typedef {import('../../evaluators/section-progress.js').SectionProgress} SectionProgress */
+/** @typedef {import('../../evaluators/question-group-progress.js').QuestionGroupProgress} QuestionGroupProgress */
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
 
 /**
- * @typedef {Object} SectionProgressProps
- * @property {SectionProgress[]} sections
+ * @typedef {Object} GroupProgressProps
+ * @property {QuestionGroupProgress[]} groups
  * @property {QuestionDefinition[]} unansweredQuestions
- * @property {(section: string) => void} onSectionJump
+ * @property {(group: string) => void} onGroupJump
  * @property {() => void} onJumpUnanswered
  */
 
 /**
- * @param {SectionProgressProps} props
+ * Per-Question-Group answered/total progress strip. (Renamed from
+ * `cora-section-progress` — "section" is reserved for the role-gated tab
+ * areas, see #390.)
+ *
+ * @param {GroupProgressProps} props
  * @returns {Node[]}
  */
-export function SectionProgress({ sections, onSectionJump, onJumpUnanswered }) {
-  const rows = sections.map(({ section, answered, total }) => {
+export function GroupProgress({ groups, onGroupJump, onJumpUnanswered }) {
+  const rows = groups.map(({ group, answered, total }) => {
     const className =
       answered === total && total > 0
-        ? 'cora-section-progress-row complete'
-        : 'cora-section-progress-row';
+        ? 'cora-group-progress-row complete'
+        : 'cora-group-progress-row';
 
     return h(
       'div',
       {
         className,
-        onclick: () => onSectionJump(section),
+        onclick: () => onGroupJump(group),
       },
-      h('span', { className: 'cora-section-progress-label' }, section),
+      h('span', { className: 'cora-group-progress-label' }, group),
       h(
         'span',
-        { className: 'cora-section-progress-count' },
+        { className: 'cora-group-progress-count' },
         `${answered}/${total}`
       )
     );
@@ -51,21 +55,21 @@ export function SectionProgress({ sections, onSectionJump, onJumpUnanswered }) {
   return [...rows, jumpBtn];
 }
 
-export class CORASectionProgress extends ShellElement {
+export class CORAGroupProgress extends ShellElement {
   constructor() {
     super();
-    /** @type {SectionProgress[]} */
-    this._sections = [];
+    /** @type {QuestionGroupProgress[]} */
+    this._groups = [];
     /** @type {QuestionDefinition[]} */
     this._unansweredQuestions = [];
   }
 
   /**
-   * @param {SectionProgress[]} sections
+   * @param {QuestionGroupProgress[]} groups
    * @param {QuestionDefinition[]} unansweredQuestions - applicable questions without an answer, in order
    */
-  update(sections, unansweredQuestions) {
-    this._sections = sections;
+  update(groups, unansweredQuestions) {
+    this._groups = groups;
     this._unansweredQuestions = unansweredQuestions;
     this._render();
   }
@@ -79,13 +83,13 @@ export class CORASectionProgress extends ShellElement {
   }
 
   render() {
-    return SectionProgress({
-      sections: this._sections,
+    return GroupProgress({
+      groups: this._groups,
       unansweredQuestions: this._unansweredQuestions,
-      onSectionJump: (section) => {
+      onGroupJump: (group) => {
         this.dispatchEvent(
-          new CustomEvent('cora-section-jump', {
-            detail: { section },
+          new CustomEvent('cora-group-jump', {
+            detail: { group },
             bubbles: true,
           })
         );
@@ -99,4 +103,4 @@ export class CORASectionProgress extends ShellElement {
   }
 }
 
-customElements.define('cora-section-progress', CORASectionProgress);
+customElements.define('cora-group-progress', CORAGroupProgress);

@@ -1293,9 +1293,9 @@ test('CORACaseReview: complete button click drives the completion PATCH', async 
   );
 });
 
-// ===== SECTION PROGRESS INTEGRATION =====
+// ===== GROUP PROGRESS INTEGRATION =====
 
-test('CORACaseReview: cora-section-progress is mounted inside the question section', async () => {
+test('CORACaseReview: cora-group-progress is mounted inside the question section', async () => {
   const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
@@ -1303,19 +1303,19 @@ test('CORACaseReview: cora-section-progress is mounted inside the question secti
   await el.connectedCallback();
 
   const section = questionSectionOf(el);
-  // section._children: [h2, qList, cora-section-progress]
+  // section._children: [h2, qList, cora-group-progress]
   const progressEl = section._children[2];
   assert.ok(
     progressEl,
-    'cora-section-progress should be mounted inside the question section'
+    'cora-group-progress should be mounted inside the question section'
   );
   assert.ok(
     typeof progressEl.update === 'function',
-    'cora-section-progress should have an update method'
+    'cora-group-progress should have an update method'
   );
 });
 
-test('CORACaseReview: cora-section-progress.update is called with section data on initial render', async () => {
+test('CORACaseReview: cora-group-progress.update is called with group data on initial render', async () => {
   const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
@@ -1336,24 +1336,21 @@ test('CORACaseReview: cora-section-progress.update is called with section data o
   });
 
   assert.ok(calls.length > 0, 'update should be called after an answer change');
-  const [sections] = calls[0];
+  const [groups] = calls[0];
   assert.ok(
-    Array.isArray(sections),
-    'first arg should be an array of section progress entries'
+    Array.isArray(groups),
+    'first arg should be an array of group progress entries'
   );
-  assert.ok(sections.length > 0, 'should have at least one section');
+  assert.ok(groups.length > 0, 'should have at least one group');
+  assert.ok('group' in groups[0], 'each entry should have a group property');
   assert.ok(
-    'section' in sections[0],
-    'each entry should have a section property'
-  );
-  assert.ok(
-    'answered' in sections[0],
+    'answered' in groups[0],
     'each entry should have an answered count'
   );
-  assert.ok('total' in sections[0], 'each entry should have a total count');
+  assert.ok('total' in groups[0], 'each entry should have a total count');
 });
 
-test('CORACaseReview: cora-section-progress.update answered count increases after cora-answer', async () => {
+test('CORACaseReview: cora-group-progress.update answered count increases after cora-answer', async () => {
   const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
@@ -1368,20 +1365,18 @@ test('CORACaseReview: cora-section-progress.update answered count increases afte
   /** @type {any} */ (progressEl).update = (/** @type {any[]} */ ...args) =>
     calls.push(args);
 
-  // Answer q-welcome (category: 'Opening')
+  // Answer q-welcome (questionGroup: 'Opening')
   section._listeners['cora-answer'][0]({
     detail: { questionId: 'q-welcome', value: 'Yes' },
   });
-  const sections = calls[0][0];
-  const opening = sections.find(
-    (/** @type {any} */ s) => s.section === 'Opening'
-  );
-  assert.ok(opening, 'Opening section should be present');
+  const groups = calls[0][0];
+  const opening = groups.find((/** @type {any} */ s) => s.group === 'Opening');
+  assert.ok(opening, 'Opening group should be present');
   assert.equal(opening.answered, 1);
   assert.equal(opening.total, 1);
 });
 
-test('CORACaseReview: cora-section-progress receives unanswered applicable questions list', async () => {
+test('CORACaseReview: cora-group-progress receives unanswered applicable questions list', async () => {
   const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
@@ -1411,7 +1406,7 @@ test('CORACaseReview: cora-section-progress receives unanswered applicable quest
   );
 });
 
-test('CORACaseReview: cora-section-jump event on section scrolls first question of that section', async () => {
+test('CORACaseReview: cora-group-jump event scrolls first question of that group', async () => {
   const el = new CaseReviewHarness();
   el.client = /** @type {any} */ (makeClient());
   el.saveQueue = new SaveQueue(/** @type {any} */ (el.client));
@@ -1421,14 +1416,14 @@ test('CORACaseReview: cora-section-jump event on section scrolls first question 
   const section = questionSectionOf(el);
   // Check the event listener is registered for cora-section-jump
   assert.ok(
-    Array.isArray(section._listeners['cora-section-jump']) &&
-      section._listeners['cora-section-jump'].length > 0,
-    'section should have a cora-section-jump listener'
+    Array.isArray(section._listeners['cora-group-jump']) &&
+      section._listeners['cora-group-jump'].length > 0,
+    'section should have a cora-group-jump listener'
   );
   // Fire it without throwing
   assert.doesNotThrow(() => {
-    section._listeners['cora-section-jump'][0]({
-      detail: { section: 'Opening' },
+    section._listeners['cora-group-jump'][0]({
+      detail: { group: 'Opening' },
     });
   });
 });
@@ -1609,7 +1604,7 @@ test('CORACaseReview: cora-jump-unanswered handler calls scrollIntoView on first
   await el.connectedCallback();
 
   const section = questionSectionOf(el);
-  // section._children: [h2, qList, cora-section-progress]
+  // section._children: [h2, qList, cora-group-progress]
   const qList = section._children[1];
 
   // Simulate cora-question-list having rendered its child question elements.

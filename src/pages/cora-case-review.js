@@ -31,7 +31,7 @@ import {
 } from './cora-case-review/completion-controller.js';
 
 import '../components/collections/cora-question-list.js';
-import '../components/base/cora-section-progress.js';
+import '../components/base/cora-group-progress.js';
 import '../components/sections/cora-remediation-section.js';
 import '../components/sections/cora-remediation-tracking.js';
 import '../components/sections/cora-conversation.js';

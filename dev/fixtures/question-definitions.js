@@ -11,7 +11,7 @@ export const questionDefinitions = [
   {
     id: 'q-welcome',
     text: 'Was the customer greeted professionally?',
-    category: 'Opening',
+    questionGroup: 'Opening',
     responseType: 'yes-no-na',
     optionOutcomes: { No: 'fail' },
     failureCriteria: 'No',
@@ -20,7 +20,7 @@ export const questionDefinitions = [
   {
     id: 'q-needs',
     text: "Were the customer's needs identified before proceeding?",
-    category: 'Discovery',
+    questionGroup: 'Discovery',
     responseType: 'yes-no-na',
     optionOutcomes: { No: 'fail' },
     failureCriteria: 'No',
@@ -30,7 +30,7 @@ export const questionDefinitions = [
   {
     id: 'q-resolve',
     text: "Was the issue resolved to the customer's satisfaction?",
-    category: 'Resolution',
+    questionGroup: 'Resolution',
     responseType: 'yes-no-na',
     showWhen: { 'q-needs': { equals: 'Yes' } },
     optionOutcomes: { No: 'fail' },

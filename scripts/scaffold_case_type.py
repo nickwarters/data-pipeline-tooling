@@ -150,7 +150,7 @@ const config = {{
     {{
       id: 'q-{prefix}-evidence',
       text: 'Was the required evidence present?',
-      category: 'Evidence',
+      questionGroup: 'Evidence',
       responseType: 'yes-no-na',
       optionOutcomes: {{ No: 'fail' }},
       failureCriteria: 'No',
@@ -160,7 +160,7 @@ const config = {{
     {{
       id: 'q-{prefix}-rationale',
       text: 'Was the case rationale clearly documented?',
-      category: 'Decisioning',
+      questionGroup: 'Decisioning',
       responseType: 'yes-no-na',
       optionOutcomes: {{ No: 'refer' }},
       failureCriteria: 'No',
@@ -170,7 +170,7 @@ const config = {{
     {{
       id: 'q-{prefix}-method',
       text: 'Which review method was used?',
-      category: 'Decisioning',
+      questionGroup: 'Decisioning',
       responseType: 'single-choice',
       options: ['Desktop review', 'Customer contact', 'Manager escalation'],
       deprecated: false,

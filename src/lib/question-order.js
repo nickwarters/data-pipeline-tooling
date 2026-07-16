@@ -1,6 +1,16 @@
 // @ts-check
 /**
- * @param {{ category?: string | null }} q
+ * Generic ordering helpers for the two-level question grouping (#390 Part 1):
+ * `category` is the top, presentation-only level; `questionGroup` is the inner
+ * level (what `category` meant before the rename). Question order in the
+ * catalogue array is the single source of display order — these helpers
+ * reorder that array.
+ *
+ * @typedef {{ category?: string | null, questionGroup?: string | null }} Groupable
+ */
+
+/**
+ * @param {Groupable} q
  * @returns {string}
  */
 export function categoryKey(q) {
@@ -8,14 +18,42 @@ export function categoryKey(q) {
 }
 
 /**
- * @param {Array<{ category?: string | null }>} questions
+ * @param {Groupable} q
+ * @returns {string}
+ */
+export function groupKey(q) {
+  return q.questionGroup || 'Uncategorised';
+}
+
+/**
+ * First-seen category order across the catalogue.
+ * @param {Groupable[]} questions
  * @returns {string[]}
  */
 export function categoryOrder(questions) {
+  return firstSeenOrder(questions, categoryKey);
+}
+
+/**
+ * First-seen Question Group order across the supplied questions (callers
+ * scope to one category when the two-level structure matters).
+ * @param {Groupable[]} questions
+ * @returns {string[]}
+ */
+export function groupOrder(questions) {
+  return firstSeenOrder(questions, groupKey);
+}
+
+/**
+ * @param {Groupable[]} questions
+ * @param {(q: Groupable) => string} keyOf
+ * @returns {string[]}
+ */
+function firstSeenOrder(questions, keyOf) {
   const seen = new Set();
   const order = [];
   for (const q of questions) {
-    const key = categoryKey(q);
+    const key = keyOf(q);
     if (!seen.has(key)) {
       seen.add(key);
       order.push(key);
@@ -52,45 +90,45 @@ export function moveQuestion(questions, question, direction) {
 }
 
 /**
- * @param {Array<{ category?: string | null }>} questions
+ * @param {Groupable[]} questions
  * @param {object} question
  * @param {-1 | 1} direction
  * @returns {number}
  */
-export function adjacentCategoryQuestionIndex(questions, question, direction) {
-  const from = questions.indexOf(question);
+export function adjacentGroupQuestionIndex(questions, question, direction) {
+  const from = questions.indexOf(/** @type {Groupable} */ (question));
   if (from < 0) return -1;
 
-  const key = categoryKey(questions[from]);
+  const key = groupKey(questions[from]);
   for (
     let to = from + direction;
     to >= 0 && to < questions.length;
     to += direction
   ) {
-    if (categoryKey(questions[to]) === key) return to;
+    if (groupKey(questions[to]) === key) return to;
   }
   return -1;
 }
 
 /**
- * @param {Array<{ category?: string | null }>} questions
+ * @param {Groupable[]} questions
  * @param {object} question
  * @param {-1 | 1} direction
  * @returns {boolean}
  */
-export function canMoveQuestionWithinCategory(questions, question, direction) {
-  return adjacentCategoryQuestionIndex(questions, question, direction) !== -1;
+export function canMoveQuestionWithinGroup(questions, question, direction) {
+  return adjacentGroupQuestionIndex(questions, question, direction) !== -1;
 }
 
 /**
- * @param {Array<{ category?: string | null }>} questions
+ * @param {Groupable[]} questions
  * @param {object} question
  * @param {-1 | 1} direction
  * @returns {boolean}
  */
-export function moveQuestionWithinCategory(questions, question, direction) {
-  const from = questions.indexOf(question);
-  const to = adjacentCategoryQuestionIndex(questions, question, direction);
+export function moveQuestionWithinGroup(questions, question, direction) {
+  const from = questions.indexOf(/** @type {Groupable} */ (question));
+  const to = adjacentGroupQuestionIndex(questions, question, direction);
   if (from < 0 || to < 0) return false;
 
   const [item] = questions.splice(from, 1);
@@ -99,7 +137,58 @@ export function moveQuestionWithinCategory(questions, question, direction) {
 }
 
 /**
- * @param {Array<{ category?: string | null }>} questions
+ * Whether a Question Group can move up/down among its category's groups.
+ * @param {Groupable[]} questions
+ * @param {string} category
+ * @param {string} group
+ * @param {-1 | 1} direction
+ * @returns {boolean}
+ */
+export function canMoveGroup(questions, category, group, direction) {
+  const inCategory = questions.filter((q) => categoryKey(q) === category);
+  const order = groupOrder(inCategory);
+  const from = order.indexOf(group);
+  const to = from + direction;
+  return from >= 0 && to >= 0 && to < order.length;
+}
+
+/**
+ * Reorders a Question Group among its category's groups. Only the target
+ * category's questions change position — they are rewritten into their own
+ * index slots, so questions in other categories are untouched.
+ *
+ * @param {Groupable[]} questions
+ * @param {string} category
+ * @param {string} group
+ * @param {-1 | 1} direction
+ * @returns {boolean}
+ */
+export function moveGroup(questions, category, group, direction) {
+  if (!canMoveGroup(questions, category, group, direction)) return false;
+
+  const slots = [];
+  for (const [index, q] of questions.entries()) {
+    if (categoryKey(q) === category) slots.push(index);
+  }
+  const inCategory = slots.map((index) => questions[index]);
+
+  const order = groupOrder(inCategory);
+  const from = order.indexOf(group);
+  const nextOrder = order.slice();
+  const [moved] = nextOrder.splice(from, 1);
+  nextOrder.splice(from + direction, 0, moved);
+
+  /** @type {Map<string, Groupable[]>} */
+  const byGroup = new Map(nextOrder.map((key) => [key, []]));
+  for (const q of inCategory) byGroup.get(groupKey(q))?.push(q);
+
+  const reordered = nextOrder.flatMap((key) => byGroup.get(key) || []);
+  for (const [i, index] of slots.entries()) questions[index] = reordered[i];
+  return true;
+}
+
+/**
+ * @param {Groupable[]} questions
  * @param {string} category
  * @param {-1 | 1} direction
  * @returns {boolean}
@@ -112,22 +201,24 @@ export function canMoveCategory(questions, category, direction) {
 }
 
 /**
- * @param {Array<{ category?: string | null }>} questions
+ * Reorders a whole category (with its questions, in their current order)
+ * among the catalogue's categories.
+ *
+ * @param {Groupable[]} questions
  * @param {string} category
  * @param {-1 | 1} direction
  * @returns {boolean}
  */
 export function moveCategory(questions, category, direction) {
+  if (!canMoveCategory(questions, category, direction)) return false;
+
   const order = categoryOrder(questions);
   const from = order.indexOf(category);
-  const to = from + direction;
-  if (from < 0 || to < 0 || to >= order.length) return false;
-
   const nextOrder = order.slice();
   const [moved] = nextOrder.splice(from, 1);
-  nextOrder.splice(to, 0, moved);
+  nextOrder.splice(from + direction, 0, moved);
 
-  /** @type {Map<string, Array<{ category?: string | null }>>} */
+  /** @type {Map<string, Groupable[]>} */
   const byCategory = new Map(nextOrder.map((key) => [key, []]));
   for (const q of questions) {
     byCategory.get(categoryKey(q))?.push(q);

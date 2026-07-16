@@ -11,91 +11,173 @@ import {
 } from './question-bank-store.js';
 import {
   canMoveCategory,
+  canMoveGroup,
   categoryKey,
   categoryOrder,
+  groupKey,
+  groupOrder,
   moveCategory,
+  moveGroup,
 } from '../../lib/question-order.js';
 
 /**
- * @param {{ bank: any, filters: any, railOpen: boolean, setFilters: (patch: any) => void, moveCategory: (name: string, direction: -1 | 1) => void, onToggleRail: () => void, onCloseRail: () => void }} props
+ * A move up/down button pair for a rail chip.
+ *
+ * @param {string} label
+ * @param {boolean} canUp
+ * @param {boolean} canDown
+ * @param {(direction: -1 | 1) => void} onMove
+ * @returns {Node[]}
+ */
+function moveButtons(label, canUp, canDown, onMove) {
+  return [
+    h(
+      'button',
+      {
+        className: 'icon-btn chip-move',
+        title: `Move ${label} up`,
+        'aria-label': `Move ${label} up`,
+        disabled: !canUp,
+        onClick: (/** @type {Event} */ e) => {
+          e.stopPropagation?.();
+          onMove(-1);
+        },
+      },
+      '↑'
+    ),
+    h(
+      'button',
+      {
+        className: 'icon-btn chip-move',
+        title: `Move ${label} down`,
+        'aria-label': `Move ${label} down`,
+        disabled: !canDown,
+        onClick: (/** @type {Event} */ e) => {
+          e.stopPropagation?.();
+          onMove(1);
+        },
+      },
+      '↓'
+    ),
+  ];
+}
+
+/**
+ * The filter rail: groups the bank's questions by `category` (top level,
+ * shown only when any question declares one), then by `questionGroup` within
+ * it (#390 Part 1). Selecting a chip filters the list; move buttons reorder
+ * categories among themselves and Question Groups within their category.
+ *
+ * @param {{ bank: any, filters: any, railOpen: boolean, setFilters: (patch: any) => void, moveCategory: (name: string, direction: -1 | 1) => void, moveGroup: (category: string, name: string, direction: -1 | 1) => void, onToggleRail: () => void, onCloseRail: () => void }} props
  * @returns {Node[]}
  */
 export function BankRail(props) {
   const bank = props.bank;
   const f = props.filters;
-  // Selecting a category is the primary navigation action, so on narrow
+  // Selecting a chip is the primary navigation action, so on narrow
   // viewports it dismisses the pop-over to reveal the filtered list.
-  const selectCategory = (/** @type {string|null} */ category) => {
-    props.setFilters({ category });
+  const select = (
+    /** @type {string|null} */ category,
+    /** @type {string|null} */ questionGroup
+  ) => {
+    props.setFilters({ category, questionGroup });
     props.onCloseRail();
   };
-  const order = categoryOrder(bank.questions);
-  /** @type {Map<string, number>} */
-  const cats = new Map(order.map((name) => [name, 0]));
-  for (const q of bank.questions) {
-    const c = categoryKey(q);
-    cats.set(c, (cats.get(c) || 0) + 1);
-  }
+
+  const questions = bank.questions;
+  const hasCategories = questions.some((/** @type {any} */ q) => q.category);
+  // Group chips render whenever any question declares a Question Group — or
+  // when there are no categories either, so a flat bank still gets its
+  // 'Uncategorised' chip. With categories only, per-category 'Uncategorised'
+  // group chips would be pure noise.
+  const hasGroups = questions.some((/** @type {any} */ q) => q.questionGroup);
+  const showGroups = hasGroups || !hasCategories;
   const catList = h('div');
   catList.appendChild(
     h(
       'div',
       {
-        className: 'filter-chip' + (f.category === null ? ' active' : ''),
-        onClick: () => selectCategory(null),
+        className:
+          'filter-chip' +
+          (f.category === null && f.questionGroup === null ? ' active' : ''),
+        onClick: () => select(null, null),
       },
       h('span', {}, 'All'),
-      h('span', { className: 'chip-count' }, String(bank.questions.length))
+      h('span', { className: 'chip-count' }, String(questions.length))
     )
   );
-  for (const [i, name] of order.entries()) {
-    const n = cats.get(name) || 0;
-    catList.appendChild(
-      h(
-        'div',
-        {
-          className: 'filter-chip' + (f.category === name ? ' active' : ''),
-          onClick: () => selectCategory(name),
-        },
-        h('span', {}, name),
+
+  const categories = categoryOrder(questions);
+  for (const [i, catName] of categories.entries()) {
+    const inCategory = questions.filter(
+      (/** @type {any} */ q) => categoryKey(q) === catName
+    );
+
+    if (hasCategories) {
+      catList.appendChild(
         h(
-          'span',
-          { className: 'chip-meta' },
-          h('span', { className: 'chip-count' }, String(n)),
+          'div',
+          {
+            className:
+              'filter-chip chip-category' +
+              (f.category === catName && f.questionGroup === null
+                ? ' active'
+                : ''),
+            onClick: () => select(catName, null),
+          },
+          h('span', {}, catName),
           h(
-            'button',
-            {
-              className: 'icon-btn chip-move',
-              title: `Move ${name} category up`,
-              'aria-label': `Move ${name} category up`,
-              disabled: i === 0 || !canMoveCategory(bank.questions, name, -1),
-              onClick: (/** @type {Event} */ e) => {
-                e.stopPropagation?.();
-                props.moveCategory(name, -1);
-              },
-            },
-            '↑'
-          ),
-          h(
-            'button',
-            {
-              className: 'icon-btn chip-move',
-              title: `Move ${name} category down`,
-              'aria-label': `Move ${name} category down`,
-              disabled:
-                i === order.length - 1 ||
-                !canMoveCategory(bank.questions, name, 1),
-              onClick: (/** @type {Event} */ e) => {
-                e.stopPropagation?.();
-                props.moveCategory(name, 1);
-              },
-            },
-            '↓'
+            'span',
+            { className: 'chip-meta' },
+            h('span', { className: 'chip-count' }, String(inCategory.length)),
+            ...moveButtons(
+              `${catName} category`,
+              i !== 0 && canMoveCategory(questions, catName, -1),
+              i !== categories.length - 1 &&
+                canMoveCategory(questions, catName, 1),
+              (direction) => props.moveCategory(catName, direction)
+            )
           )
         )
-      )
-    );
+      );
+    }
+
+    const groups = showGroups ? groupOrder(inCategory) : [];
+    for (const [j, groupName] of groups.entries()) {
+      const n = inCategory.filter(
+        (/** @type {any} */ q) => groupKey(q) === groupName
+      ).length;
+      catList.appendChild(
+        h(
+          'div',
+          {
+            className:
+              'filter-chip' +
+              (hasCategories ? ' chip-group' : '') +
+              (f.questionGroup === groupName &&
+              (!hasCategories || f.category === catName)
+                ? ' active'
+                : ''),
+            onClick: () => select(hasCategories ? catName : null, groupName),
+          },
+          h('span', {}, groupName),
+          h(
+            'span',
+            { className: 'chip-meta' },
+            h('span', { className: 'chip-count' }, String(n)),
+            ...moveButtons(
+              `${groupName} question group`,
+              j !== 0 && canMoveGroup(questions, catName, groupName, -1),
+              j !== groups.length - 1 &&
+                canMoveGroup(questions, catName, groupName, 1),
+              (direction) => props.moveGroup(catName, groupName, direction)
+            )
+          )
+        )
+      );
+    }
   }
+
   const tDep = h('div', {
     className: 'toggle' + (f.showDeprecated ? ' on' : ''),
     onClick: () => props.setFilters({ showDeprecated: !f.showDeprecated }),
@@ -118,14 +200,14 @@ export function BankRail(props) {
       h(
         'div',
         { className: 'rail-stat' },
-        String(bank.questions.length).padStart(2, '0')
+        String(questions.length).padStart(2, '0')
       ),
       h('div', { className: 'rail-stat-label' }, 'Total Questions')
     ),
     h(
       'div',
       { className: 'rail-section' },
-      h('h3', {}, 'Filter by Category'),
+      h('h3', {}, 'Filter by Grouping'),
       catList
     ),
     h(
@@ -205,6 +287,15 @@ export class CORABankRail extends ShellElement {
       moveCategory: (name, direction) =>
         commit((types) =>
           moveCategory(types[activeSlug.get()].questions, name, direction)
+        ),
+      moveGroup: (category, name, direction) =>
+        commit((types) =>
+          moveGroup(
+            types[activeSlug.get()].questions,
+            category,
+            name,
+            direction
+          )
         ),
       onToggleRail: () => railOpen.set(!railOpen.get()),
       onCloseRail: () => {

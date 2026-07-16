@@ -21,8 +21,10 @@ test('complaints: catalogue has at least 5 questions', () => {
   assert.ok(config.questions.length >= 5, `got ${config.questions.length}`);
 });
 
-test('complaints: catalogue spans at least 2 distinct sections (category)', () => {
-  const cats = new Set(config.questions.map((q) => q.category).filter(Boolean));
+test('complaints: catalogue spans at least 2 distinct Question Groups', () => {
+  const cats = new Set(
+    config.questions.map((q) => q.questionGroup).filter(Boolean)
+  );
   assert.ok(cats.size >= 2, `got categories: ${[...cats].join(', ')}`);
 });
 

@@ -17,7 +17,7 @@ const CATALOGUE = [
   {
     id: 'q-welcome',
     text: 'Greeted professionally?',
-    category: 'Opening',
+    questionGroup: 'Opening',
     responseType: 'yes-no-na',
     failureCriteria: 'No',
     remediationActions: ['Refresh greeting training.'],
@@ -26,7 +26,7 @@ const CATALOGUE = [
   {
     id: 'q-needs',
     text: 'Needs identified?',
-    category: 'Discovery',
+    questionGroup: 'Discovery',
     responseType: 'yes-no-na',
     failureCriteria: 'No',
     remediationActions: ['Retrain agent.', 'Update script.'],
@@ -383,13 +383,13 @@ test('CORARemediationSection: read-only viewer with no free-form value renders n
   assert.equal(findByClass(el, 'cora-remediation-freeform-value'), null);
 });
 
-test('CORARemediationSection: renders category when defined on QuestionDefinition', () => {
+test('CORARemediationSection: renders the Question Group when defined on QuestionDefinition', () => {
   const el = new CORARemediationSection();
   el.catalogue = CATALOGUE;
   el.answers = { 'q-needs': { value: 'No' } };
   el.connectedCallback();
 
-  const cat = findByClass(el, 'cora-remediation-category');
+  const cat = findByClass(el, 'cora-remediation-group');
   assert.ok(cat);
   assert.equal(cat.textContent, 'Discovery');
 });

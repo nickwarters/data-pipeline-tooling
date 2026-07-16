@@ -202,7 +202,9 @@ function renderTrackedFailure(failure) {
     h(
       'p',
       {},
-      failure.category ? `${failure.category}: ${failure.text}` : failure.text
+      failure.questionGroup
+        ? `${failure.questionGroup}: ${failure.text}`
+        : failure.text
     ),
     h(
       'ul',
@@ -232,7 +234,9 @@ function renderFailure(props, failure) {
     h(
       'p',
       {},
-      failure.category ? `${failure.category}: ${failure.text}` : failure.text
+      failure.questionGroup
+        ? `${failure.questionGroup}: ${failure.text}`
+        : failure.text
     ),
     h('p', {}, `Answer: ${failure.answer}`),
     failure.actions.length
@@ -270,7 +274,7 @@ function renderCapture(props, questionId) {
  * @returns {HTMLElement}
  */
 function renderCounts(props) {
-  const { categoryCounts } = buildSummaryModel(props.catalogue, props.answers);
+  const { groupCounts } = buildSummaryModel(props.catalogue, props.answers);
   return h(
     'section',
     { class: 'cora-summary-counts' },
@@ -278,8 +282,8 @@ function renderCounts(props) {
     h(
       'ul',
       {},
-      ...categoryCounts.map(({ category, pass, fail }) =>
-        h('li', {}, `${category}: ${pass} pass, ${fail} fail`)
+      ...groupCounts.map(({ group, pass, fail }) =>
+        h('li', {}, `${group}: ${pass} pass, ${fail} fail`)
       )
     )
   );

@@ -11,7 +11,7 @@ const catalogue = [
   {
     id: 'q-open',
     text: 'Greeted?',
-    category: 'Opening',
+    questionGroup: 'Opening',
     responseType: 'yes-no-na',
     failureCriteria: 'No',
     deprecated: false,
@@ -19,7 +19,7 @@ const catalogue = [
   {
     id: 'q-needs',
     text: 'Needs found?',
-    category: 'Discovery',
+    questionGroup: 'Discovery',
     responseType: 'yes-no-na',
     failureCriteria: 'No',
     remediationActions: ['Retrain agent.'],
@@ -28,7 +28,7 @@ const catalogue = [
   {
     id: 'q-resolve',
     text: 'Resolved?',
-    category: 'Discovery',
+    questionGroup: 'Discovery',
     responseType: 'yes-no-na',
     showWhen: { 'q-needs': { equals: 'Yes' } },
     failureCriteria: 'No',
@@ -39,14 +39,14 @@ const catalogue = [
   {
     id: 'q-channel',
     text: 'Channel?',
-    category: 'Opening',
+    questionGroup: 'Opening',
     responseType: 'single-choice',
     options: ['Phone'],
     deprecated: false,
   },
 ];
 
-test('buildSummaryModel: pass/fail counts per category over answered, applicable, failure-scorable questions', () => {
+test('buildSummaryModel: pass/fail counts per Question Group over answered, applicable, failure-scorable questions', () => {
   const answers = /** @type {Record<string, Answer>} */ ({
     'q-open': { value: 'No' }, // Opening: fail
     'q-needs': { value: 'Yes' }, // Discovery: pass (also makes q-resolve applicable)
@@ -54,9 +54,9 @@ test('buildSummaryModel: pass/fail counts per category over answered, applicable
     'q-channel': { value: 'Phone' }, // not scorable — ignored
   });
   const model = buildSummaryModel(catalogue, answers);
-  assert.deepEqual(model.categoryCounts, [
-    { category: 'Opening', pass: 0, fail: 1 },
-    { category: 'Discovery', pass: 1, fail: 1 },
+  assert.deepEqual(model.groupCounts, [
+    { group: 'Opening', pass: 0, fail: 1 },
+    { group: 'Discovery', pass: 1, fail: 1 },
   ]);
 });
 
@@ -66,7 +66,7 @@ test('buildSummaryModel: excludes deprecated questions and unanswered scorable q
     {
       id: 'q-live',
       text: 'Live?',
-      category: 'A',
+      questionGroup: 'A',
       responseType: 'yes-no-na',
       failureCriteria: 'No',
       deprecated: false,
@@ -74,7 +74,7 @@ test('buildSummaryModel: excludes deprecated questions and unanswered scorable q
     {
       id: 'q-old',
       text: 'Old?',
-      category: 'A',
+      questionGroup: 'A',
       responseType: 'yes-no-na',
       failureCriteria: 'No',
       deprecated: true,
@@ -82,7 +82,7 @@ test('buildSummaryModel: excludes deprecated questions and unanswered scorable q
     {
       id: 'q-blank',
       text: 'Blank?',
-      category: 'A',
+      questionGroup: 'A',
       responseType: 'yes-no-na',
       failureCriteria: 'No',
       deprecated: false,
@@ -90,7 +90,7 @@ test('buildSummaryModel: excludes deprecated questions and unanswered scorable q
   ];
   // q-live answered, q-old deprecated (dropped), q-blank applicable but unanswered.
   const model = buildSummaryModel(cat, { 'q-live': { value: 'Yes' } });
-  assert.deepEqual(model.categoryCounts, [{ category: 'A', pass: 1, fail: 0 }]);
+  assert.deepEqual(model.groupCounts, [{ group: 'A', pass: 1, fail: 0 }]);
 });
 
 test('buildSummaryModel: remediationActionCount sums selected actions + free-form across failed answers (issue #250)', () => {
@@ -134,7 +134,7 @@ test('buildSummaryModel: failures list each failed Answer with its selected acti
   assert.deepEqual(model.failures, [
     {
       id: 'q-open',
-      category: 'Opening',
+      questionGroup: 'Opening',
       text: 'Greeted?',
       answer: 'No',
       actions: [],
@@ -142,7 +142,7 @@ test('buildSummaryModel: failures list each failed Answer with its selected acti
     },
     {
       id: 'q-resolve',
-      category: 'Discovery',
+      questionGroup: 'Discovery',
       text: 'Resolved?',
       answer: 'No',
       // Only the selected canned action, then the free-form entry — not the
@@ -177,7 +177,7 @@ test('buildSummaryModel: failure with a multi-choice value joins selections for 
   assert.deepEqual(model.failures, [
     {
       id: 'q-prod',
-      category: undefined,
+      questionGroup: undefined,
       text: 'Defects?',
       answer: 'A, B',
       actions: ['Fix B.'],
