@@ -100,7 +100,6 @@ src/
       cora-owner-summary.js
       cora-question.js
       cora-question-card.js
-      cora-remediation-editor.js
       cora-remediation-section.js
       cora-remediation-tracking.js
       cora-showwhen-editor.js
@@ -150,6 +149,7 @@ src/
       cora-bank-rail.js
       cora-outcome-options-editor.js
       cora-question-bank-editor.css
+      cora-remediation-actions-editor.js # edits a Question Definition's Remediation Actions (moved from components/sections, #381)
       question-bank-compile.js
       question-bank-source.js
       question-bank-store.js    # bank-editor state singleton (re-exports lib/toast.js)

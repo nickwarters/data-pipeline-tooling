@@ -22,7 +22,7 @@ test('cora-bank-editor: all 16 custom elements register', () => {
     'cora-showwhen-editor',
     'cora-showwhen-group',
     'cora-showwhen-leaf',
-    'cora-remediation-editor',
+    'cora-remediation-actions-editor',
     'cora-bank-dock',
     'cora-compile-drawer',
     'cora-toast',

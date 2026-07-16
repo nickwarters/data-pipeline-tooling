@@ -105,7 +105,7 @@ export function QuestionCard(props) {
       bankQuestions,
       onCommit,
     }),
-    h('cora-remediation-editor', { question: q, onCommit }),
+    h('cora-remediation-actions-editor', { question: q, onCommit }),
   ];
 
   const body = h('div', { class: 'card-body' }, ...bodyChildren);

@@ -16,7 +16,7 @@ await import('../src/components/sections/cora-wording-editor.js');
 await import('../src/components/base/cora-options-editor.js');
 await import('../src/components/base/cora-question-labels.js');
 await import('../src/components/sections/cora-showwhen-editor.js');
-await import('../src/components/sections/cora-remediation-editor.js');
+await import('../src/pages/question-bank/cora-remediation-actions-editor.js');
 
 /**
  * Mount a question card with props + an onCommit spy (no store).
@@ -46,7 +46,7 @@ test('CORAQuestionCard: yes-no-na shows failure-criteria field + fixed-option ou
   const head = /** @type {any} */ (e)._children[1];
   const body = head._children[1];
   // body kids: wording-editor, grid, options-editor (fixed Yes/No/NA outcome
-  // mapping), labels-editor, showwhen-editor, remediation-editor
+  // mapping), labels-editor, showwhen-editor, remediation-actions-editor
   assert.equal(body._children.length, 6);
   // grid has 3 fields: category, response-type, failure-criteria
   const grid = body._children[1];

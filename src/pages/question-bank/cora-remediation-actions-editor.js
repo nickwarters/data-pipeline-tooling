@@ -5,7 +5,9 @@ import { EmptyState } from '../../lib/empty-state.js';
 import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.js';
 
 /**
- * Editor for a question's attached **Remediation Actions**. Actions attach to
+ * Bank-editor widget: edits the **Remediation Actions** attached to a Question
+ * Definition. Not to be confused with the case-review remediation section
+ * (`components/sections/cora-remediation-section.js`). Actions attach to
  * the question and are surfaced against failed Answers, but they do **not** drive
  * the Outcome — the response does (question bank redesign) — so there is no
  * per-action or no-action Outcome selector here.
@@ -16,7 +18,7 @@ import { normaliseConfiguredActions } from '../../evaluators/configured-outcome.
  * @param {{ question: any, onCommit: (fn: () => void) => void, ensureActionObjects: (q: any) => void, nextActionId: (q: any) => string }} props
  * @returns {HTMLElement | undefined}
  */
-export function RemediationEditor(props) {
+export function RemediationActionsEditor(props) {
   const commit = props.onCommit;
   const q = props.question;
   if (!q) return;
@@ -144,7 +146,7 @@ export function RemediationEditor(props) {
   return wrap;
 }
 
-export class CORARemediationEditor extends ShellElement {
+export class CORARemediationActionsEditor extends ShellElement {
   constructor() {
     super();
     /** @type {any} */
@@ -159,7 +161,7 @@ export class CORARemediationEditor extends ShellElement {
   }
 
   render() {
-    return RemediationEditor({
+    return RemediationActionsEditor({
       question: this.question,
       onCommit: this.onCommit,
       ensureActionObjects: (q) => this._ensureActionObjects(q),
@@ -192,4 +194,7 @@ export class CORARemediationEditor extends ShellElement {
   }
 }
 
-customElements.define('cora-remediation-editor', CORARemediationEditor);
+customElements.define(
+  'cora-remediation-actions-editor',
+  CORARemediationActionsEditor
+);

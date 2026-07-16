@@ -5,14 +5,14 @@ import { installDom } from './_dom-stub.js';
 import { commitSpy } from './_example-review-fixture.js';
 installDom();
 
-const { CORARemediationEditor } =
-  await import('../src/components/sections/cora-remediation-editor.js');
+const { CORARemediationActionsEditor } =
+  await import('../src/pages/question-bank/cora-remediation-actions-editor.js');
 
-test('CORARemediationEditor: mutations flow through the onCommit prop', () => {
+test('CORARemediationActionsEditor: mutations flow through the onCommit prop', () => {
   /** @type {any} */
   const q = { id: 'q', text: '', responseType: 'yes-no-na', deprecated: false };
   const onCommit = commitSpy();
-  const e = new CORARemediationEditor();
+  const e = new CORARemediationActionsEditor();
   e.question = q;
   e.onCommit = onCommit;
   e.connectedCallback();
@@ -29,16 +29,16 @@ test('CORARemediationEditor: mutations flow through the onCommit prop', () => {
   assert.equal(q.remediationActions.length, 1);
 });
 
-test('CORARemediationEditor: no question → renders nothing', () => {
-  const e = new CORARemediationEditor();
+test('CORARemediationActionsEditor: no question → renders nothing', () => {
+  const e = new CORARemediationActionsEditor();
   e.connectedCallback();
   assert.equal(/** @type {any} */ (e)._children.length, 0);
 });
 
-test('CORARemediationEditor: empty actions + no free-form → empty hint', () => {
+test('CORARemediationActionsEditor: empty actions + no free-form → empty hint', () => {
   /** @type {any} */
   const q = { id: 'q', text: '', responseType: 'yes-no-na', deprecated: false };
-  const e = new CORARemediationEditor();
+  const e = new CORARemediationActionsEditor();
   e.question = q;
   e.connectedCallback();
   const wrap = /** @type {any} */ (e)._children[0];
@@ -47,7 +47,7 @@ test('CORARemediationEditor: empty actions + no free-form → empty hint', () =>
   assert.equal(wrap._children[2].className, 'cora-empty rem-empty');
 });
 
-test('CORARemediationEditor: actions + free-form preview show when toggle is on', () => {
+test('CORARemediationActionsEditor: actions + free-form preview show when toggle is on', () => {
   /** @type {any} */
   const q = {
     id: 'q',
@@ -57,7 +57,7 @@ test('CORARemediationEditor: actions + free-form preview show when toggle is on'
     allowFreeFormRemediation: true,
     remediationActions: ['A', 'B'],
   };
-  const e = new CORARemediationEditor();
+  const e = new CORARemediationActionsEditor();
   e.question = q;
   e.connectedCallback();
   const wrap = /** @type {any} */ (e)._children[0];
@@ -65,10 +65,10 @@ test('CORARemediationEditor: actions + free-form preview show when toggle is on'
   assert.equal(wrap._children.length, 6);
 });
 
-test('CORARemediationEditor: free-form toggle flips state', () => {
+test('CORARemediationActionsEditor: free-form toggle flips state', () => {
   /** @type {any} */
   const q = { id: 'q', text: '', responseType: 'yes-no-na', deprecated: false };
-  const e = new CORARemediationEditor();
+  const e = new CORARemediationActionsEditor();
   e.question = q;
   e.connectedCallback();
   const wrap = /** @type {any} */ (e)._children[0];
@@ -78,7 +78,7 @@ test('CORARemediationEditor: free-form toggle flips state', () => {
   assert.equal(q.allowFreeFormRemediation, true);
 });
 
-test('CORARemediationEditor: edit a remediation action via change event', () => {
+test('CORARemediationActionsEditor: edit a remediation action via change event', () => {
   /** @type {any} */
   const q = {
     id: 'q',
@@ -87,7 +87,7 @@ test('CORARemediationEditor: edit a remediation action via change event', () => 
     deprecated: false,
     remediationActions: ['Old action'],
   };
-  const e = new CORARemediationEditor();
+  const e = new CORARemediationActionsEditor();
   e.question = q;
   e.connectedCallback();
   const wrap = /** @type {any} */ (e)._children[0];
@@ -99,7 +99,7 @@ test('CORARemediationEditor: edit a remediation action via change event', () => 
   ]);
 });
 
-test('CORARemediationEditor: × removes action; deletes field when empty', () => {
+test('CORARemediationActionsEditor: × removes action; deletes field when empty', () => {
   /** @type {any} */
   const q = {
     id: 'q',
@@ -108,7 +108,7 @@ test('CORARemediationEditor: × removes action; deletes field when empty', () =>
     deprecated: false,
     remediationActions: ['only'],
   };
-  const e = new CORARemediationEditor();
+  const e = new CORARemediationActionsEditor();
   e.question = q;
   e.connectedCallback();
   const wrap = /** @type {any} */ (e)._children[0];
@@ -118,10 +118,10 @@ test('CORARemediationEditor: × removes action; deletes field when empty', () =>
   assert.equal('remediationActions' in q, false);
 });
 
-test('CORARemediationEditor: + canned action initialises array if missing', () => {
+test('CORARemediationActionsEditor: + canned action initialises array if missing', () => {
   /** @type {any} */
   const q = { id: 'q', text: '', responseType: 'yes-no-na', deprecated: false };
-  const e = new CORARemediationEditor();
+  const e = new CORARemediationActionsEditor();
   e.question = q;
   e.connectedCallback();
   const wrap = /** @type {any} */ (e)._children[0];
@@ -132,7 +132,7 @@ test('CORARemediationEditor: + canned action initialises array if missing', () =
   ]);
 });
 
-test('CORARemediationEditor: failed questions get no Outcome selector (response drives outcome)', () => {
+test('CORARemediationActionsEditor: failed questions get no Outcome selector (response drives outcome)', () => {
   /** @type {any} */
   const q = {
     id: 'q',
@@ -141,7 +141,7 @@ test('CORARemediationEditor: failed questions get no Outcome selector (response 
     failureCriteria: 'No',
     deprecated: false,
   };
-  const e = new CORARemediationEditor();
+  const e = new CORARemediationActionsEditor();
   e.question = q;
   e.connectedCallback();
   const wrap = /** @type {any} */ (e)._children[0];
@@ -151,7 +151,7 @@ test('CORARemediationEditor: failed questions get no Outcome selector (response 
   assert.equal('outcome' in q, false);
 });
 
-test('CORARemediationEditor: an action row is just its text input and remove control', () => {
+test('CORARemediationActionsEditor: an action row is just its text input and remove control', () => {
   /** @type {any} */
   const q = {
     id: 'q',
@@ -160,7 +160,7 @@ test('CORARemediationEditor: an action row is just its text input and remove con
     deprecated: false,
     remediationActions: ['Legacy action'],
   };
-  const e = new CORARemediationEditor();
+  const e = new CORARemediationActionsEditor();
   e.question = q;
   e.connectedCallback();
   const wrap = /** @type {any} */ (e)._children[0];

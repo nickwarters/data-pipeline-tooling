@@ -31,7 +31,7 @@ import '../../components/base/cora-options-editor.js';
 import '../../components/sections/cora-showwhen-editor.js';
 import '../../components/sections/cora-showwhen-group.js';
 import '../../components/base/cora-showwhen-leaf.js';
-import '../../components/sections/cora-remediation-editor.js';
+import './cora-remediation-actions-editor.js';
 import './cora-bank-dock.js';
 import '../../components/collections/cora-compile-drawer.js';
 import '../../components/base/cora-toast.js';
