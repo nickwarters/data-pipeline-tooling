@@ -7,9 +7,11 @@ import '../components/collections/cora-case-table.js';
 import '../components/sections/cora-allocation.js';
 import '../components/sections/cora-owner-summary.js';
 import '../components/sections/cora-kpi-strip.js';
+// Accepted cross-page static import (#384 phase 4/5 allowlist entry):
+// cora-responsible-party-dashboard.js remains a routed page (my-cases).
 import { ResponsiblePartyDashboard } from './cora-responsible-party-dashboard.js';
-import { ControlsDashboard } from './cora-controls-dashboard.js';
-import { ActionCentre } from './cora-action-centre.js';
+import { ControlsDashboard } from '../components/collections/cora-controls-dashboard.js';
+import { ActionCentre } from '../components/collections/cora-action-centre.js';
 import { reasonsForCapabilities } from '../services/action-centre-model.js';
 import { isOverdue } from '../evaluators/overdue-evaluator.js';
 import { CASE_STATUS } from '../lib/case-statuses.js';

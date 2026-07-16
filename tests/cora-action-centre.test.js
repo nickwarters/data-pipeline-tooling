@@ -6,7 +6,7 @@ import { installDom, findByClass, findAllByClass, walk } from './_dom-stub.js';
 installDom();
 
 const { ActionCentre, ActionCentreView, PAGE_SIZE } =
-  await import('../src/pages/cora-action-centre.js');
+  await import('../src/components/collections/cora-action-centre.js');
 const { MockSharePointClient } =
   await import('../src/services/mock-sharepoint-client.js');
 

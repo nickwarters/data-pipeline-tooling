@@ -8,7 +8,7 @@ installDom();
 
 // ===== IMPORTS (after stubs) =====
 const { ControlsDashboard, PAGE_SIZE, openAppealOf } =
-  await import('../src/pages/cora-controls-dashboard.js');
+  await import('../src/components/collections/cora-controls-dashboard.js');
 const { MockSharePointClient } =
   await import('../src/services/mock-sharepoint-client.js');
 

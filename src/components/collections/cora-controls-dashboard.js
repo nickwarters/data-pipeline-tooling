@@ -1,13 +1,13 @@
 // @ts-check
-import { signal } from '../lib/signal.js';
-import { reactive } from '../lib/view.js';
-import { h } from '../lib/html.js';
-import { caseRouteFor } from '../lib/case-route-links.js';
-import '../components/collections/cora-case-table.js';
+import { signal } from '../../lib/signal.js';
+import { reactive } from '../../lib/view.js';
+import { h } from '../../lib/html.js';
+import { caseRouteFor } from '../../lib/case-route-links.js';
+import './cora-case-table.js';
 
-/** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
-/** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
-/** @typedef {import('../sharepoint-client.js').Appeal} Appeal */
+/** @typedef {import('../../sharepoint-client.js').SharePointClient} SharePointClient */
+/** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
+/** @typedef {import('../../sharepoint-client.js').Appeal} Appeal */
 
 /**
  * How many rows a page pulls from the indexed open-Appeal set. The worklist
@@ -23,7 +23,7 @@ export const PAGE_SIZE = 50;
  * `fetchData` performs across every source.
  *
  * @param {SharePointClient} client
- * @param {import('../setup/resolve-eligible-case-types.js').CaseSource} source
+ * @param {import('../../setup/resolve-eligible-case-types.js').CaseSource} source
  * @returns {Promise<CaseRow[]>}
  */
 async function fetchAllOpenAppeals(client, source) {
@@ -70,13 +70,13 @@ export function openAppealOf(caseRow) {
  *
  * @param {{
  * client: SharePointClient | null,
- * allCaseSources?: import('../setup/resolve-eligible-case-types.js').CaseSource[],
+ * allCaseSources?: import('../../setup/resolve-eligible-case-types.js').CaseSource[],
  * onOpenCase?: (caseRow: CaseRow) => void,
  * }} props
  * @returns {HTMLElement}
  */
 export function ControlsDashboard({ client, allCaseSources = [], onOpenCase }) {
-  /** @type {import('../lib/signal.js').Signal<CaseRow[]>} */
+  /** @type {import('../../lib/signal.js').Signal<CaseRow[]>} */
   const appealCases = signal(/** @type {CaseRow[]} */ ([]));
 
   async function fetchData() {

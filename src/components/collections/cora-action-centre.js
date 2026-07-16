@@ -1,13 +1,13 @@
 // @ts-check
-import { signal } from '../lib/signal.js';
-import { reactive } from '../lib/view.js';
-import { h } from '../lib/html.js';
-import { EmptyState } from '../lib/empty-state.js';
-import { caseRouteFor } from '../lib/case-route-links.js';
+import { signal } from '../../lib/signal.js';
+import { reactive } from '../../lib/view.js';
+import { h } from '../../lib/html.js';
+import { EmptyState } from '../../lib/empty-state.js';
+import { caseRouteFor } from '../../lib/case-route-links.js';
 import {
   listCasesPerSource,
   countCasesAcrossSources,
-} from '../services/across-sources.js';
+} from '../../services/across-sources.js';
 import {
   reasonsForCapabilities,
   visibleReasons,
@@ -18,12 +18,12 @@ import {
   secondaryReasons,
   pickGlobalWorst,
   mergeWorstFirstWindow,
-} from '../services/action-centre-model.js';
+} from '../../services/action-centre-model.js';
 
-/** @typedef {import('../sharepoint-client.js').SharePointClient} SharePointClient */
-/** @typedef {import('../sharepoint-client.js').CaseRow} CaseRow */
-/** @typedef {import('../services/permissions.js').Capabilities} Capabilities */
-/** @typedef {import('../services/action-centre-model.js').Reason} Reason */
+/** @typedef {import('../../sharepoint-client.js').SharePointClient} SharePointClient */
+/** @typedef {import('../../sharepoint-client.js').CaseRow} CaseRow */
+/** @typedef {import('../../services/permissions.js').Capabilities} Capabilities */
+/** @typedef {import('../../services/action-centre-model.js').Reason} Reason */
 
 /**
  * How many rows a group holds per page. "Show N more" fetches the next page, so
@@ -277,7 +277,7 @@ export function ActionCentreView(state, handlers) {
  * client: SharePointClient | null,
  * capabilities: Capabilities,
  * currentUserId?: string,
- * allCaseSources?: import('../setup/resolve-eligible-case-types.js').CaseSource[],
+ * allCaseSources?: import('../../setup/resolve-eligible-case-types.js').CaseSource[],
  * onOpenCase?: (row: CaseRow) => void,
  * now?: Date,
  * }} props
@@ -297,19 +297,19 @@ export function ActionCentre({
 
   /** Reasons shown under the current toggle (hides the within-SLA tail). */
   const currentReasons = () => visibleReasons(allReasons, needsActionNow.get());
-  /** @type {import('../lib/signal.js').Signal<Record<string, number>>} */
+  /** @type {import('../../lib/signal.js').Signal<Record<string, number>>} */
   const counts = signal({});
   const headline = signal(0);
-  /** @type {import('../lib/signal.js').Signal<Record<string, CaseRow | null>>} */
+  /** @type {import('../../lib/signal.js').Signal<Record<string, CaseRow | null>>} */
   const peeks = signal({});
-  /** @type {import('../lib/signal.js').Signal<Set<string>>} */
+  /** @type {import('../../lib/signal.js').Signal<Set<string>>} */
   const expanded = signal(new Set());
-  /** @type {import('../lib/signal.js').Signal<Record<string, CaseRow[]>>} */
+  /** @type {import('../../lib/signal.js').Signal<Record<string, CaseRow[]>>} */
   const pages = signal({});
 
   /**
    * Sum one filter's per-list `countCases` across every Case source.
-   * @param {import('../sharepoint-client.js').ListCasesFilter} filter
+   * @param {import('../../sharepoint-client.js').ListCasesFilter} filter
    */
   async function sumAcrossSources(filter) {
     const sp = /** @type {SharePointClient} */ (client);
