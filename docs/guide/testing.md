@@ -23,9 +23,7 @@ node --test --watch # re-run on file change
 and `case-types/`; the default Node coverage command otherwise reports only
 modules loaded by the tests. The command enforces these repository-wide floors:
 
-- 98% line coverage.
-- 95% branch coverage.
-- 95% function coverage.
+- 95% line, branch, and function coverage.
 
 These floors prevent silent coverage regression without making incidental
 implementation structure part of the contract. Security, SharePoint protocol,

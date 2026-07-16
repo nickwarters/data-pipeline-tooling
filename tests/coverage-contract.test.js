@@ -34,10 +34,15 @@ test('coverage contract: all production JavaScript is explicitly included', () =
   assert.match(command, /--test-coverage-include='case-types\/\*\*\/\*\.js'/);
 });
 
-test('coverage contract: high global thresholds are enforced', () => {
+test('coverage contract: consistent global thresholds are enforced', () => {
   const command = coverageCommand();
 
-  assert.ok(threshold(command, 'lines') >= 98);
-  assert.ok(threshold(command, 'branches') >= 95);
-  assert.ok(threshold(command, 'functions') >= 95);
+  assert.deepEqual(
+    {
+      lines: threshold(command, 'lines'),
+      branches: threshold(command, 'branches'),
+      functions: threshold(command, 'functions'),
+    },
+    { lines: 95, branches: 95, functions: 95 }
+  );
 });

@@ -52,8 +52,8 @@ Workflow for all new code:
 
 Never merge a production behaviour change without a corresponding test. Run
 `npm run test:coverage` before committing. The command explicitly includes all
-JavaScript under `src/` and `case-types/` and enforces a global floor of 98% line,
-95% branch, and 95% function coverage.
+JavaScript under `src/` and `case-types/` and enforces a consistent global floor
+of 95% for line, branch, and function coverage.
 
 The global floor is a backstop, not a quota. Keep security, SharePoint protocol,
 concurrency, permissions, and outcome/applicability code at 100% line and branch
