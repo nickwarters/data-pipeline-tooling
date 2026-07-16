@@ -13,23 +13,36 @@ const windowListeners = {};
 
 import { Router } from '../src/lib/router.js';
 
-test('Router: mount is called when navigating to a registered static hash', () => {
+test('Router: mount is called with a forwarding container handle and the route params', () => {
   const router = new Router();
-  router._container = /** @type {any} */ ({});
+  /** @type {any[]} */
+  const writes = [];
+  router._container = /** @type {any} */ ({
+    tagName: 'DIV',
+    replaceChildren(/** @type {any[]} */ ...els) {
+      writes.push(...els);
+    },
+  });
   const calls =
-    /** @type {Array<{el: unknown, params: Record<string, string>}>} */ ([]);
+    /** @type {Array<{el: any, params: Record<string, string>, tag: string}>} */ ([]);
 
   router.register('#/dashboard', {
     mount: (el, params) => {
-      calls.push({ el, params });
+      // Read a non-function property (passes through the guard) and call a
+      // method (forwarded while current).
+      calls.push({ el, params, tag: el.tagName });
+      el.replaceChildren('X');
     },
     unmount: () => {},
   });
 
   router.navigate('#/dashboard');
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].el, router._container);
   assert.deepEqual(calls[0].params, {});
+  assert.equal(calls[0].tag, 'DIV');
+  // mount receives a guarded handle, not the raw container, but writes through
+  // it reach the real container while the navigation is current.
+  assert.deepEqual(writes, ['X']);
 });
 
 test('Router: named param is extracted from hash pattern', () => {
@@ -370,6 +383,101 @@ test('Router: a stale rejecting navigate does not clobber a newer successful nav
     assert.equal(children.length, 1);
     assert.equal(children[0].tagName, 'FAST');
     assert.notEqual(children[0].className, 'cora-route-error');
+  } finally {
+    console.error = origConsoleError;
+  }
+});
+
+test('Router: a stale resolving navigate does not clobber a newer successful navigate', async () => {
+  const router = new Router();
+  /** @type {any[]} */
+  const children = [];
+  const container = /** @type {any} */ ({
+    replaceChildren(/** @type {any[]} */ ...els) {
+      children.splice(0, children.length, ...els);
+    },
+  });
+  router._container = container;
+
+  /** @type {() => void} */
+  let releaseSlow = () => {};
+  const slowGate = new Promise((resolve) => {
+    releaseSlow = /** @type {() => void} */ (resolve);
+  });
+
+  router.register('#/slow', {
+    // Mirrors a real lazy route: await the (slow) page load, then render.
+    mount: async (/** @type {any} */ el) => {
+      await slowGate;
+      el.replaceChildren({ tagName: 'SLOW' });
+    },
+    unmount: () => {},
+  });
+  router.register('#/fast', {
+    mount: async (/** @type {any} */ el) => {
+      el.replaceChildren({ tagName: 'FAST' });
+    },
+    unmount: () => {},
+  });
+
+  const p1 = router.navigate('#/slow');
+  await router.navigate('#/fast');
+
+  assert.equal(children.length, 1);
+  assert.equal(children[0].tagName, 'FAST');
+
+  // The slow page module now resolves and its mount renders — but the user has
+  // already navigated on, so this stale write must be discarded.
+  releaseSlow();
+  await p1;
+
+  assert.equal(children.length, 1);
+  assert.equal(
+    children[0].tagName,
+    'FAST',
+    'a stale resolving mount must not overwrite the newer route'
+  );
+});
+
+test('Router: a throwing unmount is isolated and does not block the next mount', async () => {
+  const router = new Router();
+  /** @type {any[]} */
+  const children = [];
+  const container = /** @type {any} */ ({
+    replaceChildren(/** @type {any[]} */ ...els) {
+      children.splice(0, children.length, ...els);
+    },
+  });
+  router._container = container;
+  const origConsoleError = console.error;
+  /** @type {any[]} */
+  const errorCalls = [];
+  console.error = (/** @type {any[]} */ ...args) => errorCalls.push(args);
+
+  try {
+    router.register('#/leaky', {
+      mount: async (/** @type {any} */ el) => {
+        el.replaceChildren({ tagName: 'LEAKY' });
+      },
+      unmount: () => {
+        throw new Error('unmount boom');
+      },
+    });
+    router.register('#/next', {
+      mount: async (/** @type {any} */ el) => {
+        el.replaceChildren({ tagName: 'NEXT' });
+      },
+      unmount: () => {},
+    });
+
+    await router.navigate('#/leaky');
+    // Navigating away triggers the leaky unmount; it must not throw or stop the
+    // next route from mounting.
+    await router.navigate('#/next');
+
+    assert.equal(children.length, 1);
+    assert.equal(children[0].tagName, 'NEXT');
+    assert.equal(errorCalls.length, 1, 'the failed unmount is logged');
   } finally {
     console.error = origConsoleError;
   }

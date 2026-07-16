@@ -141,6 +141,8 @@ test('reports route: #/reports renders ReportsIndexPage directly', async () => {
 
   assert.equal(rendered.length, 1, 'reports index should render one card');
   assert.equal(rendered[0].tagName, 'DIV');
+  // The router error panel is also a DIV; assert this is the real page.
+  assert.notEqual(rendered[0].className, 'cora-route-error');
   assert.equal(
     rendered[0]._children[0].textContent,
     'Reviewer Team Performance'
@@ -244,6 +246,8 @@ test('reports/reviewer-team route: mounts ReviewerTeamReportPage with client, cu
       'ReviewerTeamReportPage host should be mounted'
     );
     assert.equal(rendered[0].tagName, 'DIV');
+    // The router error panel is also a DIV; assert this is the real page.
+    assert.notEqual(rendered[0].className, 'cora-route-error');
   } finally {
     /** @type {any} */ (globalThis).location = { hash: '' };
   }

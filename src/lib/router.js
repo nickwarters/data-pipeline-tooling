@@ -67,11 +67,21 @@ export class Router {
     this._navSeq += 1;
     const token = this._navSeq;
 
-    if (this._current) this._current.handler.unmount();
+    if (this._current) {
+      // A failing unmount must not block the next route from mounting; isolate
+      // it the same way registration and mount failures are isolated.
+      try {
+        this._current.handler.unmount();
+      } catch (err) {
+        console.error('[CORA] route unmount failed', err);
+      }
+    }
     this._current = matched;
+
+    const container = /** @type {Element} */ (this._container);
     try {
       await matched.handler.mount(
-        /** @type {Element} */ (this._container),
+        this._guardContainer(container, token),
         matched.params
       );
     } catch (err) {
@@ -86,8 +96,35 @@ export class Router {
         'Use the navigation to go somewhere else, or reload to retry.';
       panel.appendChild(heading);
       panel.appendChild(body);
-      /** @type {Element} */ (this._container).replaceChildren(panel);
+      container.replaceChildren(panel);
     }
+  }
+
+  /**
+   * Wrap the route container so a stale mount cannot write to it. Because mount
+   * is async and a page module may resolve after the user has navigated on, the
+   * route's own `container.replaceChildren(...)` (which runs after its `await`)
+   * could otherwise overwrite the newer page. The returned proxy forwards every
+   * container method only while this navigation is still current; once a newer
+   * `navigate()` has bumped `_navSeq`, the call becomes a no-op. Routes that
+   * render outside the container (root writes to `context.appEl`) are the
+   * documented exception — see the page-independence plan §4.1.
+   *
+   * @param {Element} container
+   * @param {number} token
+   * @returns {Element}
+   */
+  _guardContainer(container, token) {
+    return new Proxy(container, {
+      get: (obj, prop) => {
+        const value = Reflect.get(obj, prop);
+        if (typeof value !== 'function') return value;
+        return (/** @type {any[]} */ ...args) => {
+          if (token !== this._navSeq) return undefined;
+          return value.apply(obj, args);
+        };
+      },
+    });
   }
 
   /** @param {Element} container */

@@ -108,17 +108,18 @@ src/
       cora-summary.js
       cora-wording-editor.js
     collections/                # page/tab-level assemblies mounted directly by pages
+      cora-action-centre.js       # dashboard panel (moved from pages/, #384)
       cora-appeal-review.js
       cora-case-table.js
       cora-case-tabs.js
       cora-compile-drawer.js
+      cora-controls-dashboard.js   # dashboard panel (moved from pages/, #384)
       cora-question-list.js
 
   config/
     working-days.js
 
   pages/                        # top-level view components, mostly one per route
-    cora-action-centre.js
     cora-case-review.js
     cora-case-review/          # page shell + per-tab controllers (13 files, ~900 lines)
       tab-controller.js
@@ -134,7 +135,6 @@ src/
       remediation-tracking-controller.js
       summary-notes-appeal-controller.js
       types.js
-    cora-controls-dashboard.js
     cora-conversation-view.js
     cora-dashboard.js
     cora-home.js
@@ -198,6 +198,7 @@ src/
     time-windows.js
 
   setup/                        # app startup helpers
+    app-chrome.js                 # guarded nav + command-palette mount (fatal nav / skipped palette)
     register-routes.js
     resolve-eligible-case-types.js
                                  # NOTE: no register-components.js — components register via

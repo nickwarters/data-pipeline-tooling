@@ -79,6 +79,31 @@ test('case route: registers source-key case route', () => {
   );
 });
 
+test('case route: navigating away runs the case route unmount cleanly', async () => {
+  const router = new Router();
+  router._container = /** @type {any} */ ({ replaceChildren() {} });
+  register(router, makeContext());
+  let elsewhereMounted = false;
+  router.register('#/elsewhere', {
+    mount() {
+      elsewhereMounted = true;
+    },
+    unmount() {},
+  });
+
+  await router.navigate('#/case/456');
+  await flush();
+  // Navigating away invokes the case route's (no-op) unmount(); it must run
+  // cleanly and let the next route mount.
+  await router.navigate('#/elsewhere');
+
+  assert.equal(
+    elsewhereMounted,
+    true,
+    'the next route mounts after case unmounts'
+  );
+});
+
 test('case route: mount composes CaseReviewPage and fetches the id from the route', async () => {
   /** @type {Array<{ id: string, opts: any }>} */
   const calls = [];

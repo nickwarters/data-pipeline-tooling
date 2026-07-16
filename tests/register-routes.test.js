@@ -393,6 +393,10 @@ test('registerRoutes: #/reports mount renders reports index directly', async () 
     await router.navigate('#/reports');
     assert.equal(rendered.length, 1, 'reports index should render one card');
     assert.equal(rendered[0].tagName, 'DIV');
+    // Note: this file is the page-agnostic boot/registration proof (it must stay
+    // green even with a page file deleted — see the #384 DoD), so it does NOT
+    // assert this is the real page vs. the cora-route-error panel. That
+    // distinction is made in tests/routes-reports.test.js.
   } finally {
     /** @type {any} */ (globalThis).document = origCreate;
   }

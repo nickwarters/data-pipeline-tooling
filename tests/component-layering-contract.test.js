@@ -162,32 +162,58 @@ test('layering: src/routes/* is imported only by setup/register-routes.js', () =
   );
 });
 
+/** Repo-relative path a relative import specifier resolves to, or null. */
+function resolveRelative(
+  /** @type {string} */ fromRel,
+  /** @type {string} */ spec
+) {
+  if (!spec.startsWith('.')) return null;
+  const resolved = new URL(spec, new URL(fromRel, ROOT));
+  return resolved.pathname.slice(ROOT.pathname.length);
+}
+
+/** Every import/dynamic-import specifier in a file (comment lines stripped). */
+function importSpecifiers(/** @type {string} */ rel) {
+  const re = /(?:from\s+|import\s+|import\(\s*)['"]([^'"]+)['"]/g;
+  /** @type {string[]} */
+  const specs = [];
+  for (const [, spec] of readCode(rel).matchAll(re)) specs.push(spec);
+  return specs;
+}
+
 /**
  * Rule (c): the only accepted cross-import between top-level page modules is
  * `cora-dashboard.js` → `cora-responsible-party-dashboard.js` (the dashboard
  * embeds the responsible-party panel, which is itself routed by my-cases). All
  * other top-level pages must stay independent so deleting one cannot break
- * another. Intra-subsystem imports (src/pages/<sub>/*) are unrestricted.
+ * another. Intra-subsystem imports (src/pages/<sub>/*) are unrestricted. This
+ * resolves every specifier (static, side-effect, and dynamic) so the coupling
+ * cannot slip back in via `import '…'`, `../pages/…`, or a subsystem file.
  */
-test('layering: top-level pages do not import sibling top-level pages (one documented exception)', () => {
-  /** @type {Record<string, string[]>} */
+test('layering: no file under src/pages/ imports another top-level page (one documented exception)', () => {
+  /** @type {Record<string, string[]>} rel -> allowed target rels */
   const CROSS_PAGE_ALLOWLIST = {
-    'src/pages/cora-dashboard.js': ['./cora-responsible-party-dashboard.js'],
+    'src/pages/cora-dashboard.js': [
+      'src/pages/cora-responsible-party-dashboard.js',
+    ],
   };
-  const siblingPage = /from\s+['"](\.\/cora-[a-z0-9-]+\.js)['"]/g;
+  const topLevelPage = /^src\/pages\/[^/]+\.js$/;
   /** @type {string[]} */
   const offenders = [];
   for (const rel of srcFiles) {
-    if (!/^src\/pages\/[^/]+\.js$/.test(rel)) continue; // top-level pages only
+    if (!rel.startsWith('src/pages/')) continue;
     const allowed = CROSS_PAGE_ALLOWLIST[rel] ?? [];
-    const code = readCode(rel);
-    for (const [, spec] of code.matchAll(siblingPage)) {
-      if (!allowed.includes(spec)) offenders.push(`${rel} -> ${spec}`);
+    for (const spec of importSpecifiers(rel)) {
+      const target = resolveRelative(rel, spec);
+      if (!target || target === rel) continue;
+      if (topLevelPage.test(target) && !allowed.includes(target)) {
+        offenders.push(`${rel} -> ${target}`);
+      }
     }
   }
   assert.deepEqual(
     offenders,
     [],
-    'top-level pages must not import each other (extend CROSS_PAGE_ALLOWLIST only with a documented reason)'
+    'files under src/pages/ must not import another top-level page module (extend CROSS_PAGE_ALLOWLIST only with a documented reason)'
   );
 });
