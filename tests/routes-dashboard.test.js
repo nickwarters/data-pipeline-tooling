@@ -48,7 +48,7 @@ test('routes-dashboard: registers #/dashboard route', () => {
   );
 });
 
-test('routes-dashboard: mounts DashboardPage output for a reviewer', () => {
+test('routes-dashboard: mounts DashboardPage output for a reviewer', async () => {
   const client = /** @type {any} */ ({
     async listCases() {
       return [];
@@ -86,13 +86,13 @@ test('routes-dashboard: mounts DashboardPage output for a reviewer', () => {
       caseSources,
     })
   );
-  router.navigate('#/dashboard');
+  await router.navigate('#/dashboard');
 
   assert.equal(mounted.length, 1, 'should mount a single host element');
   assert.ok(findTag(mounted[0], 'h1'), 'should render the page heading');
 });
 
-test('routes-dashboard: passes allocationSources from context through to the cora-allocation element', () => {
+test('routes-dashboard: passes allocationSources from context through to the cora-allocation element', async () => {
   const client = /** @type {any} */ ({
     async listCases() {
       return [];
@@ -126,7 +126,7 @@ test('routes-dashboard: passes allocationSources from context through to the cor
       allocationSources,
     })
   );
-  router.navigate('#/dashboard');
+  await router.navigate('#/dashboard');
 
   const allocationEl = findTag(mounted[0], 'cora-allocation');
   assert.ok(allocationEl, 'should render a cora-allocation element');
@@ -153,7 +153,42 @@ test('routes-dashboard: unmount is a no-op (does not throw)', () => {
   assert.doesNotThrow(() => route.handler.unmount());
 });
 
-test('routes-dashboard: passes currentUserId and capabilities through to the page', () => {
+test('routes-dashboard: renders a cora-route-error panel when the page module fails to load', async () => {
+  const origConsoleError = console.error;
+  console.error = () => {};
+  try {
+    const router = new Router();
+    /** @type {any[]} */
+    let mounted = [];
+    const container = {
+      replaceChildren(/** @type {any} */ ...args) {
+        mounted = args;
+      },
+    };
+    router._container = /** @type {any} */ (container);
+    register(
+      router,
+      /** @type {any} */ ({
+        client: {},
+        currentUser: { id: 'u1' },
+        capabilities: {
+          isReviewer: false,
+          ownedCaseTypes: [],
+          isAdviser: false,
+        },
+      }),
+      () => Promise.reject(new Error('boom'))
+    );
+    await router.navigate('#/dashboard');
+
+    assert.equal(mounted.length, 1);
+    assert.equal(mounted[0].className, 'cora-route-error');
+  } finally {
+    console.error = origConsoleError;
+  }
+});
+
+test('routes-dashboard: passes currentUserId and capabilities through to the page', async () => {
   const client = /** @type {any} */ ({
     async listCases() {
       return [];
@@ -184,7 +219,7 @@ test('routes-dashboard: passes currentUserId and capabilities through to the pag
       caseSources: [],
     })
   );
-  router.navigate('#/dashboard');
+  await router.navigate('#/dashboard');
 
   assert.equal(mounted.length, 1, 'should mount a single host element');
   assert.ok(

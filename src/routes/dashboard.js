@@ -1,13 +1,18 @@
 // @ts-check
-import { DashboardPage } from '../pages/cora-dashboard.js';
 
 /**
  * @param {import('../lib/router.js').Router} router
  * @param {import('../setup/register-routes.js').AppContext} context
+ * @param {() => Promise<typeof import('../pages/cora-dashboard.js')>} [loadPage]
  */
-export function register(router, context) {
+export function register(
+  router,
+  context,
+  loadPage = () => import('../pages/cora-dashboard.js')
+) {
   router.register('#/dashboard', {
-    mount(container) {
+    async mount(container) {
+      const { DashboardPage } = await loadPage();
       container.replaceChildren(
         DashboardPage({
           client: context.client,

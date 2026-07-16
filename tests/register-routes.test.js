@@ -243,7 +243,7 @@ test('registerRoutes: #/ mount renders home route directly (no redirect)', async
   }
 });
 
-test('registerRoutes: #/dashboard mount composes the dashboard page into the container', () => {
+test('registerRoutes: #/dashboard mount composes the dashboard page into the container', async () => {
   const rendered = /** @type {any[]} */ ([]);
   const origDoc = /** @type {any} */ (globalThis).document;
   /** @type {any} */ (globalThis).document = {
@@ -276,7 +276,7 @@ test('registerRoutes: #/dashboard mount composes the dashboard page into the con
       isAdviser: false,
     });
     registerRoutes(router, context);
-    router.navigate('#/dashboard');
+    await router.navigate('#/dashboard');
     assert.equal(
       rendered.length,
       1,
@@ -482,7 +482,7 @@ test('registerRoutes: #/question-bank unmount removes cora-fullbleed from appEl'
   try {
     router.navigate('#/question-bank');
     await tick();
-    router.navigate('#/dashboard');
+    await router.navigate('#/dashboard');
     assert.ok(
       removed.includes('cora-fullbleed'),
       'cora-fullbleed removed on unmount'
