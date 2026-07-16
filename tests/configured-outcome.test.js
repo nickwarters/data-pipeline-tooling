@@ -282,3 +282,53 @@ test('normaliseConfiguredActions: coerces strings and strips any legacy outcome'
     ]
   );
 });
+
+test('computeConfiguredOutcome: an N/A Answer scores no Outcome and falls back to the default', () => {
+  // N/A is absent from every optionOutcomes mapping (the editor never offers
+  // one), so it must contribute nothing to the Outcome (#390 Part 2).
+  const questions = [
+    {
+      id: 'q-na',
+      text: 'Q',
+      responseType: /** @type {const} */ ('outcome'),
+      options: ['Pass', 'Fail'],
+      optionOutcomes: { Pass: 'pass', Fail: 'fail' },
+      deprecated: false,
+    },
+  ];
+  const outcomeOptions = [
+    { id: 'pass', wording: 'Pass', severity: 0 },
+    { id: 'fail', wording: 'Fail', severity: 100 },
+  ];
+  const result = computeConfiguredOutcome(
+    /** @type {any} */ (questions),
+    { 'q-na': { value: 'NA' } },
+    outcomeOptions,
+    'pass'
+  );
+  assert.deepEqual(result, { outcome: 'pass' });
+});
+
+test('computeConfiguredOutcome: multi-choice N/A value scores no Outcome', () => {
+  const questions = [
+    {
+      id: 'q-mc',
+      text: 'Q',
+      responseType: /** @type {const} */ ('multi-choice'),
+      options: ['A'],
+      optionOutcomes: { A: 'fail' },
+      deprecated: false,
+    },
+  ];
+  const outcomeOptions = [
+    { id: 'pass', wording: 'Pass', severity: 0 },
+    { id: 'fail', wording: 'Fail', severity: 100 },
+  ];
+  const result = computeConfiguredOutcome(
+    /** @type {any} */ (questions),
+    { 'q-mc': { value: ['NA'] } },
+    outcomeOptions,
+    'pass'
+  );
+  assert.deepEqual(result, { outcome: 'pass' });
+});

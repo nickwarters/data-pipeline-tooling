@@ -1,10 +1,12 @@
 // @ts-check
 import { ShellElement } from '../../lib/view.js';
 import { h } from '../../lib/html.js';
+import {
+  NA_VALUE,
+  reviewerResponseOptions,
+} from '../../lib/response-options.js';
 
 /** @typedef {import('../../sharepoint-client.js').QuestionDefinition} QuestionDefinition */
-
-const YES_NO_NA = ['Yes', 'No', 'NA'];
 
 /**
  * Option text longer than this many characters triggers the stacked-card
@@ -32,9 +34,7 @@ export function Question({ question, currentValue, access, onAnswer }) {
   const isMultiChoice = question.responseType === 'multi-choice';
   const singleChoiceOptions = isMultiChoice
     ? []
-    : question.responseType === 'yes-no-na'
-      ? YES_NO_NA
-      : (question.options ?? []);
+    : reviewerResponseOptions(question);
   const hasLongOption = singleChoiceOptions.some(
     (option) => option.length > LONG_OPTION_THRESHOLD
   );
@@ -65,10 +65,7 @@ export function Question({ question, currentValue, access, onAnswer }) {
  * @returns {HTMLElement[]}
  */
 function renderSingleChoice({ question, currentValue, access, onAnswer }) {
-  const options =
-    question.responseType === 'yes-no-na'
-      ? YES_NO_NA
-      : (question.options ?? []);
+  const options = reviewerResponseOptions(question);
   const current = typeof currentValue === 'string' ? currentValue : '';
 
   return options.map((option, index) =>
@@ -97,7 +94,7 @@ function renderSingleChoice({ question, currentValue, access, onAnswer }) {
  * @returns {HTMLElement[]}
  */
 function renderMultiChoice({ question, currentValue, access, onAnswer }) {
-  const options = question.options ?? [];
+  const options = reviewerResponseOptions(question);
   const selected = new Set(Array.isArray(currentValue) ? currentValue : []);
 
   return options.map((option, index) =>
@@ -116,6 +113,16 @@ function renderMultiChoice({ question, currentValue, access, onAnswer }) {
           const next = new Set(selected);
           if (event.target.checked) next.add(option);
           else next.delete(option);
+          // N/A is exclusive: selecting it clears any real answers, and
+          // selecting a real answer clears N/A.
+          if (event.target.checked) {
+            if (option === NA_VALUE) {
+              next.clear();
+              next.add(NA_VALUE);
+            } else {
+              next.delete(NA_VALUE);
+            }
+          }
           onAnswer({
             questionId: question.id,
             value: options.filter((item) => next.has(item)),

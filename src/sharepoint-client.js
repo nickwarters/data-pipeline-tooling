@@ -194,9 +194,11 @@
 
 /**
  * `responseType` is one of `yes-no-na` | `single-choice` | `multi-choice` |
- * `outcome`. `yes-no-na` is single-choice with the fixed options `Yes`/`No`/`NA`;
+ * `outcome`. `yes-no-na` is single-choice with the fixed options `Yes`/`No`;
  * `outcome` is single-choice whose options are the Case Type's configured
- * Outcomes (read-only). `optionOutcomes` maps each response option label to a
+ * Outcomes (read-only). Every response type additionally offers the universal
+ * `NA` option to the Reviewer (`src/lib/response-options.js`); it is never
+ * authorable and never maps to an Outcome. `optionOutcomes` maps each response option label to a
  * configured Outcome id (`OutcomeOption.id`); it is what drives the Outcome —
  * the highest-scoring applicable mapped Outcome wins. `failureCriteria` is
  * unrelated to the Outcome: it flags a failed Answer for the Issues/Remediation

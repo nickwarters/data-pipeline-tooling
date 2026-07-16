@@ -63,7 +63,8 @@ test('effectiveOptions: yes-no-na has fixed options and no add/remove', () => {
     { responseType: 'yes-no-na', optionOutcomes: { No: 'fail' } },
     OUTCOMES
   );
-  assert.deepEqual(eff.options, ['Yes', 'No', 'NA']);
+  // N/A is universal, not part of the fixed yes-no-na options (#390 Part 2).
+  assert.deepEqual(eff.options, ['Yes', 'No']);
   assert.equal(eff.editable, false);
   assert.equal(eff.outcomeReadOnly, false);
   assert.equal(eff.mapping.No, 'fail');
@@ -86,8 +87,8 @@ test('OptionsEditor: yes-no-na shows no add button but editable outcome selects'
     onSetOptionOutcome: () => {},
   });
   const list = /** @type {any} */ (node)._children[1];
-  // exactly the 3 fixed options, no add button
-  assert.equal(list._children.length, 3);
+  // exactly the 2 fixed options (N/A is universal, never authorable), no add button
+  assert.equal(list._children.length, 2);
   // row: label + outcome select only (no remove x)
   assert.equal(list._children[0]._children.length, 2);
   const select = list._children[0]._children[1];

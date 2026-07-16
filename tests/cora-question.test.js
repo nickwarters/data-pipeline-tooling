@@ -49,8 +49,8 @@ test('Question: outcome-type renders a radiogroup of outcome options and emits t
   });
   const fieldset = /** @type {any} */ (nodes[0]);
   assert.equal(fieldset.role, 'radiogroup');
-  // legend + 3 option labels
-  assert.equal(fieldset._children.length, 4);
+  // legend + 3 option labels + universal N/A
+  assert.equal(fieldset._children.length, 5);
   const referRadio = fieldset._children[2]._children[0];
   assert.equal(referRadio.checked, true);
   const failRadio = fieldset._children[3]._children[0];
@@ -115,8 +115,8 @@ test('CORAQuestion: renders multi-choice options', () => {
 
   const fieldset = /** @type {any} */ (el)._children[0];
   assert.equal(fieldset.getAttribute('role'), 'group');
-  // legend + 2 labels
-  assert.equal(fieldset._children.length, 3);
+  // legend + 2 labels + universal N/A
+  assert.equal(fieldset._children.length, 4);
 });
 
 test('CORAQuestion: single-choice radio change dispatches event', () => {
@@ -291,8 +291,8 @@ test('CORAQuestion: renders single-choice with custom options', () => {
 
   const fieldset = /** @type {any} */ (el)._children[0];
   assert.equal(fieldset.getAttribute('role'), 'radiogroup');
-  // legend + 1 label
-  assert.equal(fieldset._children.length, 2);
+  // legend + 1 label + universal N/A
+  assert.equal(fieldset._children.length, 3);
   // label text is in the second child (span) of the label
   const label = fieldset._children[1];
   const span = label._children[1];
@@ -345,8 +345,8 @@ test('CORAQuestion: _renderMultiChoice handles missing options', () => {
   el.connectedCallback();
 
   const fieldset = /** @type {any} */ (el)._children[0];
-  // legend only
-  assert.equal(fieldset._children.length, 1);
+  // legend + universal N/A
+  assert.equal(fieldset._children.length, 2);
 });
 
 test('CORAQuestion: _renderMultiChoice handles non-array currentValue', () => {
@@ -465,12 +465,83 @@ test('CORAQuestion: single-choice with no options renders empty fieldset (covers
     options: undefined,
   };
   el.connectedCallback();
-  // With options: undefined, falls back to [], so fieldset has only the legend (no label children)
+  // With options: undefined, falls back to [], leaving only the universal N/A
   const fieldset = /** @type {any} */ (el)._children[0];
-  // Only the legend child; no radio labels added
   assert.equal(
     fieldset._children.length,
-    1,
-    'undefined options falls back to [] → only legend in fieldset'
+    2,
+    'undefined options falls back to [] → legend + universal N/A'
   );
+});
+
+test('CORAQuestion: multi-choice N/A is exclusive — selecting it clears real answers', () => {
+  const el = new CORAQuestion();
+  el.question = Q_MULTI;
+  el.currentValue = ['A', 'B'];
+  el.connectedCallback();
+
+  /** @type {any[]} */
+  const events = [];
+  el.dispatchEvent = (e) => {
+    events.push(e);
+    return true;
+  };
+
+  const fieldset = /** @type {any} */ (el)._children[0];
+  // legend, A, B, NA
+  const naCheckbox = fieldset._children[3]._children[0];
+  naCheckbox.checked = true;
+  naCheckbox._listeners['change'][0]({ target: naCheckbox });
+  assert.deepEqual(events[0].detail.value, ['NA']);
+});
+
+test('CORAQuestion: multi-choice selecting a real answer clears N/A', () => {
+  const el = new CORAQuestion();
+  el.question = Q_MULTI;
+  el.currentValue = ['NA'];
+  el.connectedCallback();
+
+  /** @type {any[]} */
+  const events = [];
+  el.dispatchEvent = (e) => {
+    events.push(e);
+    return true;
+  };
+
+  const fieldset = /** @type {any} */ (el)._children[0];
+  const aCheckbox = fieldset._children[1]._children[0];
+  aCheckbox.checked = true;
+  aCheckbox._listeners['change'][0]({ target: aCheckbox });
+  assert.deepEqual(events[0].detail.value, ['A']);
+});
+
+test('CORAQuestion: multi-choice unticking N/A leaves an empty answer', () => {
+  const el = new CORAQuestion();
+  el.question = Q_MULTI;
+  el.currentValue = ['NA'];
+  el.connectedCallback();
+
+  /** @type {any[]} */
+  const events = [];
+  el.dispatchEvent = (e) => {
+    events.push(e);
+    return true;
+  };
+
+  const fieldset = /** @type {any} */ (el)._children[0];
+  const naCheckbox = fieldset._children[3]._children[0];
+  naCheckbox.checked = false;
+  naCheckbox._listeners['change'][0]({ target: naCheckbox });
+  assert.deepEqual(events[0].detail.value, []);
+});
+
+test('CORAQuestion: yes-no-na renders Yes/No/NA exactly as before (universal N/A)', () => {
+  const el = new CORAQuestion();
+  el.question = Q_YES_NO;
+  el.connectedCallback();
+  const fieldset = /** @type {any} */ (el)._children[0];
+  const labels = fieldset._children
+    .slice(1)
+    .map((/** @type {any} */ l) => l._children[1].textContent);
+  assert.deepEqual(labels, [' Yes', ' No', ' NA']);
 });

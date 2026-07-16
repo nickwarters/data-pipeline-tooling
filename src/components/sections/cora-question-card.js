@@ -7,6 +7,7 @@ import {
   moveQuestion,
   moveQuestionWithinCategory,
 } from '../../lib/question-order.js';
+import { NA_VALUE } from '../../lib/response-options.js';
 
 /**
  * One Question Definition's editing card. The active bank, the baseline
@@ -79,7 +80,9 @@ export function QuestionCard(props) {
       questionCardField(
         'Failure Criteria',
         questionCardSelect(
-          ['—', 'Yes', 'No', 'N/A'],
+          // NA_VALUE is the canonical stored literal — the Reviewer's option
+          // stores 'NA', so the criteria must too or it can never match (#391).
+          ['—', 'Yes', 'No', NA_VALUE],
           q.failureCriteria || '—',
           (/** @type {string} */ v) =>
             setQuestionFailureCriteria(onCommit, q, v)

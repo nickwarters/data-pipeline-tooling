@@ -2,8 +2,7 @@
 import { h } from '../../lib/html.js';
 import { ShellElement } from '../../lib/view.js';
 import { outcomeResponseOptions } from '../../evaluators/configured-outcome.js';
-
-const YES_NO_NA = ['Yes', 'No', 'NA'];
+import { YES_NO } from '../../lib/response-options.js';
 
 /**
  * Single-option answers render as radio cards on the case review page, so
@@ -14,10 +13,13 @@ export const MAX_OPTION_LENGTH = 250;
 /**
  * Resolves the effective response options for a question plus whether the option
  * list and its Outcome mapping are editable:
- * - `yes-no-na` → fixed `Yes`/`No`/`NA`; outcome mapping editable.
+ * - `yes-no-na` → fixed `Yes`/`No`; outcome mapping editable.
  * - `outcome` → the Case Type's configured Outcomes (read-only), each mapped
  * to itself (read-only).
  * - single/multi → the question's own `options`; both list and mapping editable.
+ *
+ * The universal N/A never appears here: it is offered to the Reviewer on every
+ * question but is not authorable and never maps to an Outcome (#390 Part 2).
  *
  * @param {any} question
  * @param {import('../../sharepoint-client.js').OutcomeOption[]} outcomeOptions
@@ -26,7 +28,7 @@ export const MAX_OPTION_LENGTH = 250;
 export function effectiveOptions(question, outcomeOptions) {
   if (question.responseType === 'yes-no-na') {
     return {
-      options: YES_NO_NA,
+      options: YES_NO,
       editable: false,
       outcomeReadOnly: false,
       mapping: question.optionOutcomes || {},
@@ -140,7 +142,12 @@ export function OptionsEditor({
     'div',
     { style: 'margin-top:14px;' },
     h('label', { class: 'options-label' }, 'Options'),
-    h('div', { class: 'opt-list' }, ...list)
+    h('div', { class: 'opt-list' }, ...list),
+    h(
+      'p',
+      { class: 'opt-na-note' },
+      'N/A is always offered to the Reviewer and never maps to an Outcome.'
+    )
   );
 }
 
