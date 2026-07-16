@@ -57,13 +57,41 @@ test('routes-my-cases: mounts ResponsiblePartyDashboard output', async () => {
   };
   router._container = /** @type {any} */ (container);
   register(router, /** @type {any} */ ({ client, currentUser }));
-  router.navigate('#/my-cases');
-
-  await Promise.resolve();
-  await Promise.resolve();
+  await router.navigate('#/my-cases');
 
   assert.equal(mounted.length, 1, 'should mount a single host element');
   assert.ok(findTag(mounted[0], 'section'), 'should render the page sections');
+});
+
+test('routes-my-cases: a rejecting loadPage renders cora-route-error via the router boundary', async () => {
+  const router = new Router();
+  /** @type {any[]} */
+  let mounted = [];
+  const container = {
+    replaceChildren(/** @type {any} */ ...args) {
+      mounted = args;
+    },
+  };
+  router._container = /** @type {any} */ (container);
+  register(
+    router,
+    /** @type {any} */ ({ client: {}, currentUser: { id: 'u1' } }),
+    () => Promise.reject(new Error('boom'))
+  );
+
+  const originalConsoleError = console.error;
+  /** @type {any[]} */
+  const errors = [];
+  console.error = (/** @type {any[]} */ ...args) => errors.push(args);
+  try {
+    await router.navigate('#/my-cases');
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  assert.equal(mounted.length, 1);
+  assert.equal(mounted[0].className, 'cora-route-error');
+  assert.ok(errors.length > 0, 'console.error should have been called');
 });
 
 test('routes-my-cases: unmount is a no-op (does not throw)', () => {
@@ -106,10 +134,7 @@ test('routes-my-cases: passes client and currentUserId through to the page witho
   };
   router._container = /** @type {any} */ (container);
   register(router, /** @type {any} */ ({ client, currentUser, caseSources }));
-  router.navigate('#/my-cases');
-
-  await Promise.resolve();
-  await Promise.resolve();
+  await router.navigate('#/my-cases');
 
   assert.equal(mounted.length, 1);
   assert.equal(calls.length, 1);
@@ -144,10 +169,7 @@ test('routes-my-cases: threads context.caseSources into the page (fans out acros
   const container = { replaceChildren() {} };
   router._container = /** @type {any} */ (container);
   register(router, /** @type {any} */ ({ client, currentUser, caseSources }));
-  router.navigate('#/my-cases');
-
-  await Promise.resolve();
-  await Promise.resolve();
+  await router.navigate('#/my-cases');
 
   assert.deepEqual(
     calls.map((c) => c.opts.listName).sort(),

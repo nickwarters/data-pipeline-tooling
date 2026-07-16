@@ -1,13 +1,18 @@
 // @ts-check
-import { ResponsiblePartyDashboard } from '../pages/cora-responsible-party-dashboard.js';
 
 /**
  * @param {import('../lib/router.js').Router} router
  * @param {import('../setup/register-routes.js').AppContext} context
+ * @param {() => Promise<typeof import('../pages/cora-responsible-party-dashboard.js')>} [loadPage]
  */
-export function register(router, context) {
+export function register(
+  router,
+  context,
+  loadPage = () => import('../pages/cora-responsible-party-dashboard.js')
+) {
   router.register('#/my-cases', {
-    mount(container) {
+    async mount(container) {
+      const { ResponsiblePartyDashboard } = await loadPage();
       // Note: no onOpenConversation is wired here, matching the previous
       // behaviour where the element's 'cora-open-conversation' event had no
       // listener on this route (only cora-dashboard listened for it).
