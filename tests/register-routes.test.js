@@ -10,9 +10,10 @@ const windowListeners = {};
   },
 };
 /** @type {any} */ (globalThis).location = { hash: '' };
-// The route modules now statically import their page functions, which pull in
-// components that call customElements.define at module-eval time. Install the
-// stubs before a dynamic import so that hoisted static imports can't run first.
+// Route modules load their page functions lazily (dynamic import() inside
+// mount()), and those page modules call customElements.define at module-eval
+// time. Install the stubs before navigating so that a mount-time dynamic import
+// has them available.
 /** @type {any} */ (globalThis).HTMLElement = class {};
 /** @type {any} */ (globalThis).customElements = { define() {} };
 

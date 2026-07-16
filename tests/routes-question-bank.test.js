@@ -30,6 +30,60 @@ test('question-bank route: register calls router.register with #/question-bank',
   );
 });
 
+test('question-bank route: a rejecting editor loader yields cora-route-error', async () => {
+  const appEl = { classList: { add() {}, remove() {} } };
+
+  const origDoc = /** @type {any} */ (globalThis).document;
+  /** @type {any} */ (globalThis).document = {
+    createElement(/** @type {string} */ tag) {
+      return {
+        tagName: tag,
+        className: '',
+        textContent: '',
+        setAttribute() {},
+        appendChild(/** @type {any} */ child) {
+          return child;
+        },
+      };
+    },
+    createTreeWalker() {
+      return {
+        nextNode() {
+          return null;
+        },
+      };
+    },
+  };
+  const origError = console.error;
+  console.error = () => {};
+
+  try {
+    /** @type {any[]} */
+    const rendered = [];
+    const router = new Router();
+    router._container = /** @type {any} */ ({
+      replaceChildren(/** @type {any} */ ...els) {
+        rendered.push(...els);
+      },
+    });
+    register(
+      router,
+      /** @type {any} */ ({
+        appEl,
+        loadQuestionBankEditor: () => Promise.reject(new Error('boom')),
+      })
+    );
+    await router.navigate('#/question-bank');
+    assert.ok(
+      rendered.some((el) => el.className === 'cora-route-error'),
+      'a cora-route-error panel should be rendered'
+    );
+  } finally {
+    /** @type {any} */ (globalThis).document = origDoc;
+    console.error = origError;
+  }
+});
+
 test('question-bank route: mount adds cora-fullbleed to appEl', async () => {
   const added = /** @type {string[]} */ ([]);
   const appEl = {
@@ -199,8 +253,7 @@ test('question-bank route: mount loads simulator sample cases after the editor',
         },
       })
     );
-    router.navigate('#/question-bank');
-    await tick();
+    await router.navigate('#/question-bank');
     assert.equal(samplesLoaded, 1);
   } finally {
     /** @type {any} */ (globalThis).document = origDoc;

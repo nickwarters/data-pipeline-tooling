@@ -1,8 +1,9 @@
 // @ts-check
 // The Question Bank editor is a full-bleed browser-integration shell, so this
 // route legitimately mounts the `cora-bank-editor` custom element directly.
-
-import { simulatorEnabled } from '../pages/question-bank/question-bank-flags.js';
+// Like every other route, its page code (editor + feature flags) loads inside
+// mount() via dynamic import(), so a broken editor surfaces only here — the
+// router error boundary renders the cora-route-error panel.
 
 /**
  * @param {import('../lib/router.js').Router} router
@@ -10,7 +11,7 @@ import { simulatorEnabled } from '../pages/question-bank/question-bank-flags.js'
  */
 export function register(router, context) {
   router.register('#/question-bank', {
-    mount(container) {
+    async mount(container) {
       context.appEl.classList.add('cora-fullbleed');
       const loadEditor =
         context.loadQuestionBankEditor ??
@@ -21,13 +22,14 @@ export function register(router, context) {
           import('../pages/question-bank/question-bank-samples.js').then((m) =>
             m.loadSampleCases(context.client, context.caseSources)
           ));
-      loadEditor().then(() => {
-        const el = document.createElement('cora-bank-editor');
-        container.replaceChildren(el);
-        // Read-only sample fetch for the impact simulator (behind
-        // ?simulate=1); the editor is usable while (or if never) it resolves.
-        if (simulatorEnabled()) loadSamples();
-      });
+      await loadEditor();
+      const el = document.createElement('cora-bank-editor');
+      container.replaceChildren(el);
+      // Read-only sample fetch for the impact simulator (behind ?simulate=1);
+      // the editor is usable while (or if never) it resolves.
+      const { simulatorEnabled } =
+        await import('../pages/question-bank/question-bank-flags.js');
+      if (simulatorEnabled()) loadSamples();
     },
     unmount() {
       context.appEl.classList.remove('cora-fullbleed');

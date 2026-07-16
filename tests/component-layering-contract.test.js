@@ -26,6 +26,7 @@ import assert from 'node:assert/strict';
 
 const ROOT = new URL('../', import.meta.url);
 const COMPONENTS = new URL('src/components/', ROOT);
+const SRC = new URL('src/', ROOT);
 
 /** @param {URL} dir @returns {string[]} repo-relative paths of every .js file */
 function jsFilesUnder(dir) {
@@ -46,7 +47,22 @@ function importsQuestionBank(rel) {
   return /from\s+['"][^'"]*question-bank\//.test(src);
 }
 
+/**
+ * Read a source file with whole-line comments removed, so JSDoc type references
+ * like `@param {() => Promise<typeof import('../pages/cora-home.js')>}` and
+ * `// import('../pages/…')` do not trip the page/route import rules below. Only
+ * real (non-comment) import statements remain.
+ * @param {string} rel @returns {string}
+ */
+function readCode(rel) {
+  return readFileSync(new URL(rel, ROOT), 'utf8')
+    .split('\n')
+    .filter((line) => !/^\s*(\*|\/\/|\/\*)/.test(line))
+    .join('\n');
+}
+
 const componentFiles = jsFilesUnder(COMPONENTS);
+const srcFiles = jsFilesUnder(SRC);
 
 test('layering: no component imports the relocated generic helpers from question-bank/', () => {
   const offenders = componentFiles.filter((rel) => {
@@ -78,5 +94,100 @@ test('layering: no component imports from the question-bank subsystem', () => {
     offenders,
     [],
     'components must receive question-bank state via props and report mutations via onCommit — see issue #382 and docs/question-bank-store-inversion-explainer.html'
+  );
+});
+
+/**
+ * Page-independence layering (issue #384). Pages load on demand inside their
+ * route's `mount()` via dynamic `import()`, guarded by the router error
+ * boundary, so a broken page file cannot break the boot graph.
+ *
+ * Rule (a): no file outside `src/pages/` statically imports a page module, and
+ * only route modules may `import()` a page dynamically. `tests/*` is outside
+ * this scan by construction.
+ */
+test('layering: no static page import outside src/pages/; dynamic page import() only in src/routes/', () => {
+  // Files that legitimately reach a page module by static import. The in-memory
+  // flow runner is a dev/test harness (scripts/run_in_memory_flow.js + tests),
+  // not part of the boot graph.
+  const STATIC_PAGE_ALLOWLIST = new Set([
+    'src/testing/in-memory-flow-runner.js',
+  ]);
+  // `from '…'` and side-effect `import '…'` are static; `import('…')` is dynamic.
+  const staticPage = /(?:from\s+|import\s+)['"][^'"]*\bpages\//;
+  const dynamicPage = /import\(\s*['"][^'"]*\bpages\//;
+
+  const staticOffenders = srcFiles.filter((rel) => {
+    if (rel.startsWith('src/pages/')) return false;
+    if (STATIC_PAGE_ALLOWLIST.has(rel)) return false;
+    return staticPage.test(readCode(rel));
+  });
+  assert.deepEqual(
+    staticOffenders,
+    [],
+    'these files statically import a page — move the import into a route module and `await import()` it inside mount() (see src/routes/*.js)'
+  );
+
+  // Dynamic page import() belongs to routes (page loading) or a page composing
+  // its own subsystem — never to generic src/ modules, services, or components.
+  const dynamicOffenders = srcFiles.filter((rel) => {
+    if (rel.startsWith('src/routes/')) return false;
+    if (rel.startsWith('src/pages/')) return false;
+    return dynamicPage.test(readCode(rel));
+  });
+  assert.deepEqual(
+    dynamicOffenders,
+    [],
+    'only src/routes/* may dynamically import a page module'
+  );
+});
+
+/**
+ * Rule (b): route modules are `setup/register-routes.js`'s private detail —
+ * nothing else imports them (statically or dynamically).
+ */
+test('layering: src/routes/* is imported only by setup/register-routes.js', () => {
+  // Catches `from '…'`, side-effect `import '…'`, and dynamic `import('…')`.
+  const routeRef =
+    /(?:from\s+|import\s+|import\(\s*)['"][^'"]*\broutes\/[^'"]+\.js/;
+  const offenders = srcFiles.filter((rel) => {
+    if (rel === 'src/setup/register-routes.js') return false;
+    if (rel.startsWith('src/routes/')) return false;
+    return routeRef.test(readCode(rel));
+  });
+  assert.deepEqual(
+    offenders,
+    [],
+    'route modules must be registered only through setup/register-routes.js'
+  );
+});
+
+/**
+ * Rule (c): the only accepted cross-import between top-level page modules is
+ * `cora-dashboard.js` → `cora-responsible-party-dashboard.js` (the dashboard
+ * embeds the responsible-party panel, which is itself routed by my-cases). All
+ * other top-level pages must stay independent so deleting one cannot break
+ * another. Intra-subsystem imports (src/pages/<sub>/*) are unrestricted.
+ */
+test('layering: top-level pages do not import sibling top-level pages (one documented exception)', () => {
+  /** @type {Record<string, string[]>} */
+  const CROSS_PAGE_ALLOWLIST = {
+    'src/pages/cora-dashboard.js': ['./cora-responsible-party-dashboard.js'],
+  };
+  const siblingPage = /from\s+['"](\.\/cora-[a-z0-9-]+\.js)['"]/g;
+  /** @type {string[]} */
+  const offenders = [];
+  for (const rel of srcFiles) {
+    if (!/^src\/pages\/[^/]+\.js$/.test(rel)) continue; // top-level pages only
+    const allowed = CROSS_PAGE_ALLOWLIST[rel] ?? [];
+    const code = readCode(rel);
+    for (const [, spec] of code.matchAll(siblingPage)) {
+      if (!allowed.includes(spec)) offenders.push(`${rel} -> ${spec}`);
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    'top-level pages must not import each other (extend CROSS_PAGE_ALLOWLIST only with a documented reason)'
   );
 });
