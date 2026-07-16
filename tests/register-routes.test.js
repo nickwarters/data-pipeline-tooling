@@ -17,7 +17,8 @@ const windowListeners = {};
 /** @type {any} */ (globalThis).customElements = { define() {} };
 
 const { Router } = await import('../src/lib/router.js');
-const { registerRoutes } = await import('../src/setup/register-routes.js');
+const { registerRoutes, safeRegister } =
+  await import('../src/setup/register-routes.js');
 
 /** @returns {Promise<void>} */
 async function tick() {
@@ -44,6 +45,58 @@ function makeContext() {
     loadQuestionBankEditor: () => Promise.resolve(),
   });
 }
+
+test('safeRegister: a throwing registration function does not propagate and is logged', () => {
+  const router = new Router();
+  const context = makeContext();
+  /** @type {any[]} */
+  const errorCalls = [];
+  const origConsoleError = console.error;
+  console.error = (/** @type {any[]} */ ...args) => errorCalls.push(args);
+
+  try {
+    assert.doesNotThrow(() => {
+      safeRegister(
+        'boom-route',
+        () => {
+          throw new Error('registration boom');
+        },
+        router,
+        context
+      );
+    });
+    assert.equal(errorCalls.length, 1, 'the failure should be logged once');
+    assert.ok(
+      errorCalls[0].some(
+        (/** @type {any} */ arg) =>
+          typeof arg === 'string' && arg.includes('boom-route')
+      ),
+      'console.error should mention the failing route name'
+    );
+  } finally {
+    console.error = origConsoleError;
+  }
+});
+
+test('safeRegister: a succeeding registration function runs with router + context', () => {
+  const router = new Router();
+  const context = makeContext();
+  /** @type {any[]} */
+  const calls = [];
+
+  safeRegister(
+    'ok-route',
+    (/** @type {any} */ r, /** @type {any} */ c) => {
+      calls.push([r, c]);
+    },
+    router,
+    context
+  );
+
+  assert.equal(calls.length, 1, 'the registration function should run once');
+  assert.equal(calls[0][0], router, 'router is passed through');
+  assert.equal(calls[0][1], context, 'context is passed through');
+});
 
 test('registerRoutes: registers #/ route', () => {
   const router = new Router();

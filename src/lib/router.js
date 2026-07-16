@@ -4,7 +4,7 @@
 // never owns a custom element per route.
 
 /**
- * @typedef {{ mount: (el: Element, params: Record<string, string>) => void, unmount: () => void }} RouteHandler
+ * @typedef {{ mount: (el: Element, params: Record<string, string>) => void | Promise<void>, unmount: () => void }} RouteHandler
  */
 
 export class Router {
@@ -17,6 +17,9 @@ export class Router {
 
     /** @type {Element | null} */
     this._container = null;
+
+    /** @type {number} */
+    this._navSeq = 0;
   }
 
   /**
@@ -53,23 +56,46 @@ export class Router {
     return null;
   }
 
-  /** @param {string} hash */
-  navigate(hash) {
+  /**
+   * @param {string} hash
+   * @returns {Promise<void>}
+   */
+  async navigate(hash) {
     const matched = this._match(hash);
     if (!matched) return;
 
+    this._navSeq += 1;
+    const token = this._navSeq;
+
     if (this._current) this._current.handler.unmount();
     this._current = matched;
-    matched.handler.mount(
-      /** @type {Element} */ (this._container),
-      matched.params
-    );
+    try {
+      await matched.handler.mount(
+        /** @type {Element} */ (this._container),
+        matched.params
+      );
+    } catch (err) {
+      if (token !== this._navSeq) return;
+      console.error(`[CORA] route mount failed for "${hash}"`, err);
+      const panel = document.createElement('div');
+      panel.className = 'cora-route-error';
+      const heading = document.createElement('p');
+      heading.textContent = 'This page failed to load';
+      const body = document.createElement('p');
+      body.textContent =
+        'Use the navigation to go somewhere else, or reload to retry.';
+      panel.appendChild(heading);
+      panel.appendChild(body);
+      /** @type {Element} */ (this._container).replaceChildren(panel);
+    }
   }
 
   /** @param {Element} container */
   init(container) {
     this._container = container;
-    window.addEventListener('hashchange', () => this.navigate(location.hash));
-    this.navigate(location.hash || '#/');
+    window.addEventListener('hashchange', () => {
+      void this.navigate(location.hash);
+    });
+    void this.navigate(location.hash || '#/');
   }
 }

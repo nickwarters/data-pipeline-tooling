@@ -24,17 +24,37 @@ import { register as registerJourneyCases } from '../routes/journey-cases.js';
  */
 
 /**
+ * Register one route in isolation: a route module that throws during
+ * registration costs only its own route, not the whole app. The try/catch is
+ * exposed as a named helper (rather than inlined) so it is directly testable —
+ * the `registerX` functions are static imports that cannot be made to throw
+ * from a test.
+ *
+ * @param {string} name - route identifier, for the log message
+ * @param {(router: import('../lib/router.js').Router, context: AppContext) => void} fn
+ * @param {import('../lib/router.js').Router} router
+ * @param {AppContext} context
+ */
+export function safeRegister(name, fn, router, context) {
+  try {
+    fn(router, context);
+  } catch (err) {
+    console.error(`[CORA] route registration failed: ${name}`, err);
+  }
+}
+
+/**
  * @param {import('../lib/router.js').Router} router
  * @param {AppContext} context
  */
 export function registerRoutes(router, context) {
-  registerRoot(router, context);
-  registerDashboard(router, context);
-  registerConversation(router, context);
-  registerQuestionBank(router, context);
-  registerCase(router, context);
-  registerReports(router, context);
-  registerTeamCases(router, context);
-  registerMyCases(router, context);
-  registerJourneyCases(router, context);
+  safeRegister('root', registerRoot, router, context);
+  safeRegister('dashboard', registerDashboard, router, context);
+  safeRegister('conversation', registerConversation, router, context);
+  safeRegister('question-bank', registerQuestionBank, router, context);
+  safeRegister('case', registerCase, router, context);
+  safeRegister('reports', registerReports, router, context);
+  safeRegister('team-cases', registerTeamCases, router, context);
+  safeRegister('my-cases', registerMyCases, router, context);
+  safeRegister('journey-cases', registerJourneyCases, router, context);
 }

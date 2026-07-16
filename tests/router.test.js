@@ -20,7 +20,9 @@ test('Router: mount is called when navigating to a registered static hash', () =
     /** @type {Array<{el: unknown, params: Record<string, string>}>} */ ([]);
 
   router.register('#/dashboard', {
-    mount: (el, params) => calls.push({ el, params }),
+    mount: (el, params) => {
+      calls.push({ el, params });
+    },
     unmount: () => {},
   });
 
@@ -88,11 +90,15 @@ test('Router: navigating away calls unmount before the next mount', () => {
   const log = [];
 
   router.register('#/dashboard', {
-    mount: () => log.push('mount:dashboard'),
+    mount: () => {
+      log.push('mount:dashboard');
+    },
     unmount: () => log.push('unmount:dashboard'),
   });
   router.register('#/case/:id', {
-    mount: (_, p) => log.push(`mount:case:${p.id}`),
+    mount: (_, p) => {
+      log.push(`mount:case:${p.id}`);
+    },
     unmount: () => log.push('unmount:case'),
   });
 
@@ -119,7 +125,9 @@ test('Router: unregistered hash does not unmount the current view', () => {
   const log = [];
 
   router.register('#/dashboard', {
-    mount: () => log.push('mount'),
+    mount: () => {
+      log.push('mount');
+    },
     unmount: () => log.push('unmount'),
   });
 
@@ -135,7 +143,9 @@ test('Router: init sets container, registers hashchange listener, and navigates 
   const log = [];
 
   router.register('#/', {
-    mount: (el, params) => log.push(`mount:root`),
+    mount: (el, params) => {
+      log.push(`mount:root`);
+    },
     unmount: () => log.push('unmount:root'),
   });
 
@@ -157,7 +167,9 @@ test('Router: init with empty hash navigates to #/', () => {
   const log = [];
 
   router.register('#/', {
-    mount: () => log.push('mount:root'),
+    mount: () => {
+      log.push('mount:root');
+    },
     unmount: () => {},
   });
 
@@ -174,12 +186,245 @@ test('Router: route matches hash that has query params appended', () => {
     /** @type {Array<{el: unknown, params: Record<string, string>}>} */ ([]);
 
   router.register('#/team-cases', {
-    mount: (el, params) => calls.push({ el, params }),
+    mount: (el, params) => {
+      calls.push({ el, params });
+    },
     unmount: () => {},
   });
 
   router.navigate('#/team-cases?manager=me&status=overdue');
   assert.equal(calls.length, 1, 'should match even with query params in hash');
+});
+
+test('Router: a rejecting async mount renders a cora-route-error panel into the container', async () => {
+  const router = new Router();
+  /** @type {any[]} */
+  const children = [];
+  const container = /** @type {any} */ ({
+    replaceChildren(/** @type {any[]} */ ...els) {
+      children.splice(0, children.length, ...els);
+    },
+  });
+  router._container = container;
+  const origCreateElement = /** @type {any} */ (globalThis).document
+    ?.createElement;
+  /** @type {any} */ (globalThis).document = {
+    createElement(/** @type {string} */ tag) {
+      return {
+        tagName: tag.toUpperCase(),
+        className: '',
+        textContent: '',
+        _children: /** @type {any[]} */ ([]),
+        appendChild(/** @type {any} */ child) {
+          this._children.push(child);
+          return child;
+        },
+      };
+    },
+  };
+  const origConsoleError = console.error;
+  console.error = () => {};
+
+  try {
+    router.register('#/broken', {
+      mount: async () => {
+        throw new Error('boom');
+      },
+      unmount: () => {},
+    });
+
+    await router.navigate('#/broken');
+
+    assert.equal(children.length, 1);
+    assert.equal(children[0].className, 'cora-route-error');
+  } finally {
+    console.error = origConsoleError;
+    if (origCreateElement) {
+      /** @type {any} */ (globalThis).document.createElement =
+        origCreateElement;
+    } else {
+      delete (/** @type {any} */ (globalThis).document);
+    }
+  }
+});
+
+test('Router: a rejecting async mount logs the failure via console.error mentioning the hash', async () => {
+  const router = new Router();
+  const container = /** @type {any} */ ({ replaceChildren() {} });
+  router._container = container;
+  const origCreateElement = /** @type {any} */ (globalThis).document
+    ?.createElement;
+  /** @type {any} */ (globalThis).document = {
+    createElement(/** @type {string} */ tag) {
+      return {
+        tagName: tag.toUpperCase(),
+        className: '',
+        textContent: '',
+        _children: /** @type {any[]} */ ([]),
+        appendChild(/** @type {any} */ child) {
+          this._children.push(child);
+          return child;
+        },
+      };
+    },
+  };
+  /** @type {any[]} */
+  const errorCalls = [];
+  const origConsoleError = console.error;
+  console.error = (/** @type {any[]} */ ...args) => errorCalls.push(args);
+
+  try {
+    router.register('#/broken', {
+      mount: async () => {
+        throw new Error('boom');
+      },
+      unmount: () => {},
+    });
+
+    await router.navigate('#/broken');
+
+    assert.equal(errorCalls.length, 1);
+    assert.ok(
+      errorCalls[0].some(
+        (/** @type {any} */ arg) =>
+          typeof arg === 'string' && arg.includes('#/broken')
+      ),
+      'console.error should mention the failing hash'
+    );
+  } finally {
+    console.error = origConsoleError;
+    if (origCreateElement) {
+      /** @type {any} */ (globalThis).document.createElement =
+        origCreateElement;
+    } else {
+      delete (/** @type {any} */ (globalThis).document);
+    }
+  }
+});
+
+test('Router: an async mount that resolves renders normally with no error panel', async () => {
+  const router = new Router();
+  /** @type {any[]} */
+  const children = [];
+  const container = /** @type {any} */ ({
+    replaceChildren(/** @type {any[]} */ ...els) {
+      children.splice(0, children.length, ...els);
+    },
+  });
+  router._container = container;
+
+  router.register('#/ok', {
+    mount: async (el) => {
+      await Promise.resolve();
+      /** @type {any} */ (el).replaceChildren({ tagName: 'SECTION' });
+    },
+    unmount: () => {},
+  });
+
+  await router.navigate('#/ok');
+
+  assert.equal(children.length, 1);
+  assert.equal(children[0].tagName, 'SECTION');
+});
+
+test('Router: a stale rejecting navigate does not clobber a newer successful navigate', async () => {
+  const router = new Router();
+  /** @type {any[]} */
+  const children = [];
+  const container = /** @type {any} */ ({
+    replaceChildren(/** @type {any[]} */ ...els) {
+      children.splice(0, children.length, ...els);
+    },
+  });
+  router._container = container;
+  const origConsoleError = console.error;
+  console.error = () => {};
+
+  /** @type {{ reject: (err: Error) => void } | null} */
+  let slowReject = null;
+
+  try {
+    router.register('#/slow', {
+      mount: () =>
+        new Promise((_resolve, reject) => {
+          slowReject = { reject };
+        }),
+      unmount: () => {},
+    });
+    router.register('#/fast', {
+      mount: async (el) => {
+        /** @type {any} */ (el).replaceChildren({ tagName: 'FAST' });
+      },
+      unmount: () => {},
+    });
+
+    const p1 = router.navigate('#/slow');
+    await router.navigate('#/fast');
+
+    assert.equal(children.length, 1);
+    assert.equal(children[0].tagName, 'FAST');
+
+    /** @type {any} */ (slowReject).reject(new Error('stale boom'));
+    await p1;
+
+    assert.equal(children.length, 1);
+    assert.equal(children[0].tagName, 'FAST');
+    assert.notEqual(children[0].className, 'cora-route-error');
+  } finally {
+    console.error = origConsoleError;
+  }
+});
+
+test('Router: a mount that throws synchronously also renders a cora-route-error panel', async () => {
+  const router = new Router();
+  /** @type {any[]} */
+  const children = [];
+  const container = /** @type {any} */ ({
+    replaceChildren(/** @type {any[]} */ ...els) {
+      children.splice(0, children.length, ...els);
+    },
+  });
+  router._container = container;
+  const origCreateElement = /** @type {any} */ (globalThis).document
+    ?.createElement;
+  /** @type {any} */ (globalThis).document = {
+    createElement(/** @type {string} */ tag) {
+      return {
+        tagName: tag.toUpperCase(),
+        className: '',
+        textContent: '',
+        _children: /** @type {any[]} */ ([]),
+        appendChild(/** @type {any} */ child) {
+          this._children.push(child);
+          return child;
+        },
+      };
+    },
+  };
+  const origConsoleError = console.error;
+  console.error = () => {};
+
+  try {
+    router.register('#/sync-throw', {
+      mount: () => {
+        throw new Error('sync boom');
+      },
+      unmount: () => {},
+    });
+
+    await router.navigate('#/sync-throw');
+
+    assert.equal(children.length, 1);
+    assert.equal(children[0].className, 'cora-route-error');
+  } finally {
+    console.error = origConsoleError;
+    if (origCreateElement) {
+      /** @type {any} */ (globalThis).document.createElement =
+        origCreateElement;
+    } else {
+      delete (/** @type {any} */ (globalThis).document);
+    }
+  }
 });
 
 test('Router: hashchange event triggers navigation', () => {
@@ -189,7 +434,9 @@ test('Router: hashchange event triggers navigation', () => {
   const log = [];
 
   router.register('#/dashboard', {
-    mount: () => log.push('mount:dashboard'),
+    mount: () => {
+      log.push('mount:dashboard');
+    },
     unmount: () => log.push('unmount:dashboard'),
   });
 
