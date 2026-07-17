@@ -1,6 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 import {
   BASE_ROW,
   CaseReviewHarness,
@@ -14,6 +15,8 @@ import {
   makeClient,
   tabFor,
 } from './helpers/cora-case-review.js';
+
+isolateBrowserGlobals();
 
 // Capability: conversation mounting, toggling, and keyboard interaction.
 

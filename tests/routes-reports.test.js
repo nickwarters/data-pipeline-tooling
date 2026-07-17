@@ -1,6 +1,9 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { isolateBrowserGlobals } from './helpers/browser-globals.js';
+
+isolateBrowserGlobals();
 
 /** @type {Record<string, Function[]>} */
 const windowListeners = {};

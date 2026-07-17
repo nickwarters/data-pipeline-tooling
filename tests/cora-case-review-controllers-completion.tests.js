@@ -1,6 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 import {
   ACTIONS_ANSWERS,
   bindCompletion,
@@ -9,6 +10,8 @@ import {
   makeCompletionContext,
   updateCompletion,
 } from './helpers/cora-case-review-controllers.js';
+
+isolateBrowserGlobals();
 
 // Capability: completion presentation and transitions.
 

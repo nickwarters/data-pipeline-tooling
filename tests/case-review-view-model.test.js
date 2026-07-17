@@ -5,6 +5,9 @@ import assert from 'node:assert/strict';
 import { CaseReviewViewModel } from '../src/lib/case-review-view-model.js';
 import { signal, effect } from '../src/lib/signal.js';
 import { CASE_TYPE_IMPORTERS } from '../case-types/manifest.js';
+import { isolateBrowserGlobals } from './helpers/browser-globals.js';
+
+isolateBrowserGlobals();
 
 /**
  * Builds a view model wired just enough to exercise handleCapture: an editable

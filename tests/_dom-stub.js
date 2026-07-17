@@ -1,4 +1,6 @@
 // @ts-check
+import { isolateBrowserGlobals } from './helpers/browser-globals.js';
+
 /**
  * Shared DOM stub for tests of `cora-*` components and route modules.
  *
@@ -371,6 +373,7 @@ let installed = false;
 export function installDom() {
   if (installed) return;
   installed = true;
+  isolateBrowserGlobals();
   const G = /** @type {any} */ (globalThis);
   G.HTMLElement = StubEl;
   G.CustomEvent = StubCustomEvent;

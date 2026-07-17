@@ -1,6 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 import {
   BASE_ROW,
   CaseMachine,
@@ -15,6 +16,8 @@ import {
   makeClient,
   makeRecordingClient,
 } from './helpers/cora-case-review.js';
+
+isolateBrowserGlobals();
 
 // Capability: completion orchestration and frozen outcome snapshots.
 

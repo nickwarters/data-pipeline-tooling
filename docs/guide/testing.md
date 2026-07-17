@@ -109,33 +109,9 @@ Prefer importing a plain function and asserting the DOM nodes it returns.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { h } from '../src/lib/html.js';
+import { installDom } from './_dom-stub.js';
 
-class StubEl {
-  constructor(tag = '') {
-    this.tagName = tag.toUpperCase();
-    this._children = [];
-    this.textContent = '';
-  }
-  appendChild(child) {
-    this._children.push(child);
-    return child;
-  }
-  replaceChildren(...children) {
-    this._children = children;
-  }
-  setAttribute() {}
-}
-
-globalThis.document = {
-  createElement(tag) {
-    return new StubEl(tag);
-  },
-  createTextNode(text) {
-    const node = new StubEl('#text');
-    node.textContent = text;
-    return node;
-  },
-};
+installDom();
 
 function Greeting({ name }) {
   return h('p', {}, `Hello, ${name}`);
@@ -254,6 +230,20 @@ Tests run in Node.js, which has no browser DOM. Stub only the DOM methods your
 test needs. Keep stubs small so test failures point at the missing behavior. A
 stub may use private arrays internally to emulate the DOM; tests using that stub
 should interact with its public DOM methods and semantic helpers.
+
+`installDom()` also isolates browser-global state per test. It captures the
+file-level DOM after component imports and restores global replacements,
+`location`, and document listeners after every test. Custom-element definitions
+remain append-only, matching the browser and allowing lazy module imports to be
+cached safely. This means a test may customise the shared stub without making
+later tests depend on its cleanup or execution order.
+
+Suites that need hand-built browser stubs instead of `installDom()` must call
+`isolateBrowserGlobals()` from `tests/helpers/browser-globals.js` during
+top-level setup. The browser-global isolation contract rejects new direct
+global writes that use neither harness. Keep tests within a file sequential
+when they replace globals; concurrent tests must use dependency injection
+instead of sharing `globalThis`.
 
 ## Case Type Tests
 

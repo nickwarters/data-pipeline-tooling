@@ -1,8 +1,11 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 
 import { loadBank } from '../case-types/load-bank.js';
+
+isolateBrowserGlobals();
 
 test('loadBank: reads a repo bank artifact in the Node file-url test environment', async () => {
   const bank = await loadBank('./banks/complaints.txt');

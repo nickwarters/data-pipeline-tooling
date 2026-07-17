@@ -1,4 +1,8 @@
 // @ts-check
+import { isolateBrowserGlobals } from './helpers/browser-globals.js';
+
+isolateBrowserGlobals();
+
 // Minimal DOM stub for tests/view.test.js, split into its own module so it
 // can be imported (and its globals installed) *before* src/lib/view.js is
 // imported. view.js resolves its HTMLElement base class once at module-eval

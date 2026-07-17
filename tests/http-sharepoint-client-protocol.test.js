@@ -8,6 +8,9 @@ import {
   makeFetch,
   makeSleep,
 } from './helpers/http-sharepoint-client.js';
+import { isolateBrowserGlobals } from './helpers/browser-globals.js';
+
+isolateBrowserGlobals();
 
 // Capability: authentication, retries, throttling, and HTTP adapters.
 

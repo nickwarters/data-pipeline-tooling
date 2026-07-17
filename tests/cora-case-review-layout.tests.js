@@ -1,6 +1,7 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 import {
   BASE_ROW,
   CaseReviewHarness,
@@ -21,6 +22,8 @@ import {
   tabFor,
   tabsOf,
 } from './helpers/cora-case-review.js';
+
+isolateBrowserGlobals();
 
 // Capability: page loading, access, tabs, panels, and persistent chrome.
 

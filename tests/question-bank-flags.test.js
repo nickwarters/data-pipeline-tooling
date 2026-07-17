@@ -1,8 +1,11 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { isolateBrowserGlobals } from './helpers/browser-globals.js';
 
 import { simulatorEnabled } from '../src/pages/question-bank/question-bank-flags.js';
+
+isolateBrowserGlobals();
 
 test('simulatorEnabled: true only for simulate=1', () => {
   assert.equal(simulatorEnabled('?simulate=1'), true);

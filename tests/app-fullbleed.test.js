@@ -1,6 +1,9 @@
 // @ts-check
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { isolateBrowserGlobals } from './helpers/browser-globals.js';
+
+isolateBrowserGlobals();
 
 // Minimal DOM stubs so Router can run without a browser.
 /** @type {Record<string, Function[]>} */

@@ -7,6 +7,9 @@ import {
   writeScroll,
   withPreservedScroll,
 } from '../src/lib/preserve-scroll.js';
+import { isolateBrowserGlobals } from './helpers/browser-globals.js';
+
+isolateBrowserGlobals();
 
 test('scrollContainer: returns the app root when present', () => {
   const root = { getAttribute: () => '' };
