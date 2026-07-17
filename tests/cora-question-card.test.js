@@ -16,8 +16,12 @@ import {
 } from './_example-review-fixture.js';
 installDom();
 
-const { CORAQuestionCard } =
-  await import('../src/components/sections/cora-question-card.js');
+const {
+  CORAQuestionCard,
+  questionCardField,
+  questionCardSelect,
+  questionCardText,
+} = await import('../src/components/sections/cora-question-card.js');
 // Register the child editors so they upgrade to real instances and the
 // forwarding assertions below can read their properties.
 await import('../src/components/sections/cora-wording-editor.js');
@@ -292,12 +296,15 @@ test('CORAQuestionCard: question-group text commits and clears to undefined', ()
   assert.equal(q.questionGroup, undefined);
 });
 
-test('CORAQuestionCard: _field/_text/_select helpers delegate to the shared builders', () => {
-  const e = new CORAQuestionCard();
-  const control = e._text('v', () => {});
-  const field = e._field('Label', control);
+test('question-card builders create labelled controls and select the current option', () => {
+  const control = questionCardText('v', () => {});
+  const field = questionCardField('Label', control);
   assert.equal(field.className, 'field');
-  const select = e._select(['a', 'b'], 'b', () => {});
-  assert.equal(select._children.length, 2);
-  assert.equal(select._children[1].selected, true);
+  assert.equal(control.getAttribute('aria-label'), 'Label');
+  const select = questionCardSelect(['a', 'b'], 'b', () => {});
+  assert.equal(queryAllByTag(select, 'option').length, 2);
+  assert.equal(
+    queryAllByTag(select, 'option').find((option) => option.selected)?.value,
+    'b'
+  );
 });

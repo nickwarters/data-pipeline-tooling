@@ -319,7 +319,7 @@ test('CORABankRail: group move buttons reorder groups within their category and 
   });
   assert.equal(moveUp.disabled, false);
 
-  moveUp._listeners.click[0]({ stopPropagation() {} });
+  fireEvent(moveUp, 'click', { stopPropagation() {} });
   const groups = cases
     .get()
     ['example-review'].questions.map((/** @type {any} */ q) => q.questionGroup);
@@ -358,8 +358,7 @@ test('CORABankRail: with categories only, no redundant Uncategorised group chips
   assert.equal(getByText(e, 'A').textContent, 'A');
   assert.equal(getByText(e, 'B').textContent, 'B');
   assert.equal(
-    queryAllByRole(e, 'button', { name: /question group (?:up|down)$/ })
-      .length,
+    queryAllByRole(e, 'button', { name: /question group (?:up|down)$/ }).length,
     0
   );
   e.disconnectedCallback();

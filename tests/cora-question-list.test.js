@@ -2,6 +2,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { installDom } from './_dom-stub.js';
+import {
+  fireEvent,
+  getByRole,
+  queryAllByRole,
+  queryAllByTag,
+  queryByRole,
+} from './helpers/semantic-dom.js';
 installDom();
 
 const { CORAQuestionList, QuestionList, currentGroupVerdict } =
@@ -136,9 +143,7 @@ test('QuestionList: composed question hosts dispatch answer events', () => {
   const input = /** @type {any} */ (
     el.questionElements[0].querySelector('[data-focus-key="answer:q1:1"]')
   );
-  input._listeners.change[0]({
-    target: input,
-  });
+  fireEvent(input, 'change');
 
   assert.deepEqual(detail, { questionId: 'q1', value: 'No' });
 });
@@ -191,19 +196,18 @@ function mountGrouped(props = {}) {
 
 test('CORAQuestionList: renders category headings with nested group headings', () => {
   const el = mountGrouped();
-  const children = /** @type {any[]} */ (/** @type {any} */ (el)._children);
-  const classNames = children.map((c) => c.className ?? '');
-  assert.deepEqual(classNames, [
-    'cora-question-category-heading',
-    'cora-question-group-heading',
-    '', // g1 host
-    '', // g2 host
-    'cora-question-category-heading',
-    'cora-question-group-heading',
-    '', // g3 host
-  ]);
-  assert.equal(children[0].textContent, 'Handling');
-  assert.equal(children[1]._children[0].textContent, 'Acknowledgement');
+  assert.deepEqual(
+    queryAllByTag(el, 'h3').map((heading) => heading.textContent),
+    ['Handling', 'Treatment']
+  );
+  assert.deepEqual(
+    queryAllByTag(el, 'h4').map((heading) => heading.textContent),
+    ['Acknowledgement', 'Resolution']
+  );
+  assert.deepEqual(
+    el.questionElements.map((question) => question.question?.id),
+    ['g1', 'g2', 'g3']
+  );
 });
 
 test('CORAQuestionList: no category on any question → no category headings', () => {
@@ -213,14 +217,10 @@ test('CORAQuestionList: no category on any question → no category headings', (
       return rest;
     }),
   });
-  const children = /** @type {any[]} */ (/** @type {any} */ (el)._children);
-  assert.ok(
-    !children.some((c) => c.className === 'cora-question-category-heading')
-  );
-  assert.equal(
-    children.filter((c) => c.className === 'cora-question-group-heading')
-      .length,
-    2
+  assert.equal(queryAllByTag(el, 'h3').length, 0);
+  assert.deepEqual(
+    queryAllByTag(el, 'h4').map((heading) => heading.textContent),
+    ['Acknowledgement', 'Resolution']
   );
 });
 
@@ -230,17 +230,18 @@ test('CORAQuestionList: flat questions render no headings at all', () => {
       { id: 'p1', text: 'P1', responseType: 'yes-no-na', deprecated: false },
     ],
   });
-  const children = /** @type {any[]} */ (/** @type {any} */ (el)._children);
-  assert.equal(children.length, 1);
+  assert.equal(queryAllByTag(el, 'h3').length, 0);
+  assert.equal(queryAllByTag(el, 'h4').length, 0);
+  assert.equal(el.questionElements.length, 1);
 });
 
 test('CORAQuestionList: heading nodes are reused across updates (no churn)', () => {
   const el = mountGrouped();
-  const first = /** @type {any[]} */ (/** @type {any} */ (el)._children);
+  const firstCategory = queryAllByTag(el, 'h3')[0];
+  const firstGroup = queryAllByTag(el, 'h4')[0];
   el.update(GROUPED_QUESTIONS, { g2: { value: 'Yes' } });
-  const second = /** @type {any[]} */ (/** @type {any} */ (el)._children);
-  assert.equal(first[0], second[0]);
-  assert.equal(first[1], second[1]);
+  assert.equal(firstCategory, queryAllByTag(el, 'h3')[0]);
+  assert.equal(firstGroup, queryAllByTag(el, 'h4')[0]);
 });
 
 test('CORAQuestionList: configured group shows a verdict control listing outcomes + N/A', () => {
@@ -248,15 +249,20 @@ test('CORAQuestionList: configured group shows a verdict control listing outcome
     questionGroups: { Acknowledgement: { allowBulkOutcome: true } },
     outcomeOptions: OUTCOMES,
   });
-  const children = /** @type {any[]} */ (/** @type {any} */ (el)._children);
-  const ackHeading = children[1];
-  const verdict = ackHeading._verdictSelect;
-  assert.ok(verdict, 'configured group should carry a verdict select');
-  const optionValues = verdict._children.map((/** @type {any} */ o) => o.value);
+  const verdict = getByRole(el, 'combobox', {
+    name: 'Mark all Acknowledgement outcome questions',
+  });
+  const optionValues = queryAllByTag(verdict, 'option').map(
+    (option) => option.value
+  );
   assert.deepEqual(optionValues, ['', 'Pass', 'Fail', 'NA']);
   // The unconfigured group shows no control.
-  const resHeading = children[5];
-  assert.equal(resHeading._verdictSelect, undefined);
+  assert.equal(
+    queryByRole(el, 'combobox', {
+      name: 'Mark all Resolution outcome questions',
+    }),
+    null
+  );
 });
 
 test('CORAQuestionList: read-only access shows no verdict control', () => {
@@ -265,8 +271,7 @@ test('CORAQuestionList: read-only access shows no verdict control', () => {
     questionGroups: { Acknowledgement: { allowBulkOutcome: true } },
     outcomeOptions: OUTCOMES,
   });
-  const children = /** @type {any[]} */ (/** @type {any} */ (el)._children);
-  assert.equal(children[1]._verdictSelect, undefined);
+  assert.equal(queryAllByRole(el, 'combobox').length, 0);
 });
 
 test('CORAQuestionList: selecting a verdict dispatches cora-group-verdict', () => {
@@ -274,14 +279,13 @@ test('CORAQuestionList: selecting a verdict dispatches cora-group-verdict', () =
     questionGroups: { Acknowledgement: { allowBulkOutcome: true } },
     outcomeOptions: OUTCOMES,
   });
-  /** @type {any[]} */
-  const events = [];
-  el.dispatchEvent = (/** @type {any} */ e) => {
-    events.push(e);
-    return true;
-  };
-  const verdict = /** @type {any} */ (el)._children[1]._verdictSelect;
-  verdict._listeners['change'][0]({ target: { value: 'Fail' } });
+  /** @type {any[]} */ const events = [];
+  el.addEventListener('cora-group-verdict', (event) => events.push(event));
+  const verdict = getByRole(el, 'combobox', {
+    name: 'Mark all Acknowledgement outcome questions',
+  });
+  verdict.value = 'Fail';
+  fireEvent(verdict, 'change');
   assert.equal(events.length, 1);
   assert.equal(events[0].type, 'cora-group-verdict');
   assert.deepEqual(events[0].detail, {
@@ -295,14 +299,13 @@ test('CORAQuestionList: selecting the placeholder dispatches nothing', () => {
     questionGroups: { Acknowledgement: { allowBulkOutcome: true } },
     outcomeOptions: OUTCOMES,
   });
-  /** @type {any[]} */
-  const events = [];
-  el.dispatchEvent = (/** @type {any} */ e) => {
-    events.push(e);
-    return true;
-  };
-  const verdict = /** @type {any} */ (el)._children[1]._verdictSelect;
-  verdict._listeners['change'][0]({ target: { value: '' } });
+  /** @type {any[]} */ const events = [];
+  el.addEventListener('cora-group-verdict', (event) => events.push(event));
+  const verdict = getByRole(el, 'combobox', {
+    name: 'Mark all Acknowledgement outcome questions',
+  });
+  verdict.value = '';
+  fireEvent(verdict, 'change');
   assert.equal(events.length, 0);
 });
 
@@ -339,6 +342,8 @@ test('CORAQuestionList: verdict select value tracks the shared group answer', ()
     outcomeOptions: OUTCOMES,
   });
   el.update(GROUPED_QUESTIONS, { g1: { value: 'Pass' } });
-  const verdict = /** @type {any} */ (el)._children[1]._verdictSelect;
+  const verdict = getByRole(el, 'combobox', {
+    name: 'Mark all Acknowledgement outcome questions',
+  });
   assert.equal(verdict.value, 'Pass');
 });
